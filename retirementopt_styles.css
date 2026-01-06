@@ -1,0 +1,165 @@
+/* v6i */
+:root { --primary: #2c3e50; --accent: #27ae60; --bg: #f4f7f6; --card: #ffffff; }
+body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: #333; margin: 0; padding: 20px; font-size: 14px; }
+.container { max-width: 1800px; margin: 0 auto; display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+
+/* Sidebar */
+.sidebar { background: var(--card); padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); height: fit-content; overflow-y: auto; }
+
+.sidebar input[type="number"], 
+.sidebar select {
+    width: 100%;       /* Flexible up to... */
+    max-width: 120px;  /* ...this specific limit */
+    padding: 4px;
+    margin-top: 2px;
+}
+
+/* Adds a small 'external link' emoji after links that open in new tabs */
+a[target="_blank"]::after {
+    content: " ↗";
+    font-size: 0.8em;
+    color: #888;
+}
+
+a:hover {
+    text-decoration: underline;
+    color: #0056b3;
+}
+
+
+/* Target the dropdown specifically */
+#stratMode {
+    width: 100% !important;   /* Force it to fill the container width */
+    max-width: 100% !important; /* Override the 120px limit you set for numbers */
+    box-sizing: border-box;
+    display: block;
+    margin-top: 5px;
+}
+
+.input-group { margin-bottom: 12px; }
+.input-group label { display: block; font-size: 0.75rem; font-weight: bold; color: #666; margin-bottom: 3px; }
+.input-group input, .input-group select { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+.row { display: flex; gap: 8px; margin-bottom: 8px; }
+.row > div { flex: 1; }
+h3 { border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 15px; font-size: 1rem; color: var(--primary); }
+
+/* Make the label bold and red */
+.important-label {
+    color: #e74c3c !important; /* A nice shade of Red */
+    font-weight: bold !important;
+    text-transform: uppercase; /* Optional: makes it stand out more */
+    font-size: 0.7rem;
+}
+
+/* Make the input box stand out */
+.highlight-input {
+    border: 2px solid #e74c3c !important;
+    font-weight: bold;
+}
+
+/* Main Content */
+.main { display: flex; flex-direction: column; gap: 15px; }
+.top-bar { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.card { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+button { background: #2980b9; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 1rem; }
+button:hover { background: #3498db; }
+button.opt-btn { background: #8e44ad; }
+
+/* Table Styling */
+.table-wrap { 
+    max-height: none; /* Removes the 500px limit */
+    overflow-x: auto; /* Keeps horizontal scrolling for wide tables */
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.75rem; text-align: right; }
+th { background: #f8f9fa; position: sticky; top: 0; padding: 10px; border-bottom: 2px solid #dee2e6; z-index: 5; }
+td { padding: 8px; border-bottom: 1px solid #eee; }
+tr.single-year { background-color: #fff9e6; }
+.neg { color: #e74c3c; font-weight: bold; }
+
+.tabs { display: flex; gap: 10px; margin-bottom: 10px; }
+.tab-btn { background: #ddd; color: #333; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+.tab-btn.active { background: #2980b9; color: white; }
+.hidden { display: none; }
+
+.drawer-container { width: 100%; position: relative; z-index: 1000; margin-bottom: 20px; }
+details { background: #fff; border-bottom: 2px solid #2980b9; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+summary {
+	list-style: none;
+	background: #2980b9;
+	color: white;
+	text-align: center;
+	padding: 5px 20px;
+	width: 120px;
+	margin: 0 auto;
+	border-radius: 0 0 10px 10px;
+	cursor: pointer;
+	font-weight: bold;
+	font-size: 0.8rem;
+	transition: background 0.3s;
+}
+summary:hover { background: #3498db; }
+summary::-webkit-details-marker { display: none; }
+
+
+/* Container for all drawers */
+.header-drawers {
+    display: flex;
+    gap: 10px;          /* Space between the drawer buttons */
+    margin-bottom: 20px;
+    z-index: 1000;
+    position: relative;
+}
+
+/* Individual Drawer Styling */
+.top-drawer {
+    flex: 1;            /* Makes all drawers equal width */
+    background: #fff;
+    border-bottom: 2px solid #2980b9;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+/* was color #2980b9; */
+.top-drawer summary {
+    list-style: none;
+    background: #90EE90;
+    color: black;
+    text-align: center;
+    padding: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.8rem;
+    transition: background 0.3s;
+}
+
+/* was  #3498db; */
+.top-drawer summary:hover {
+    background: #2980b9;
+}
+
+.top-drawer[open] {
+    position: absolute; /* Allows content to float OVER the main app */
+    width: 48%;        /* Keeps it from covering the whole screen */
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+
+/* Specific content styling */
+.drawer-content {
+    padding: 20px;
+    max-height: 400px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #ddd;
+}
+
+.drawer-content { padding: 20px; background: #fff; max-height: 400px; overflow-y: auto; }
+.drawer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+.drawer-section h4 { border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 0; color: #2c3e50; }
+.drawer-section ul { padding-left: 20px; }
+.drawer-section li { margin-bottom: 10px; line-height: 1.4; color: #555; }
+
+
+
+
+.log-entry { font-size: 0.8rem; margin-bottom: 12px; padding-left: 10px; border-left: 3px solid #eee; }
+.log-entry strong { color: #2980b9; }

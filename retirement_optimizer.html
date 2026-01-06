@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retirement Optimizer V6k</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<link rel="stylesheet" href="retirementopt_styles.css">
+	<base target="_blank">		
+</head>
+<body>
+
+
+
+<div class="container">
+    <div class="sidebar">
+        <h3>1. Profile & Ages</h3>
+        <div class="row">
+            <div><label>Your Age <B>at year end</B></label><input type="number" id="age1" value="65"></div>
+            <div><label>Life Expectancy</label><input type="number" id="die1" value="88"></div>
+        </div>
+        <div class="row">
+            <div><label>Spouse Age <B>at year end</B></label><input type="number" id="age2" value="73"></div>
+            <div><label>Spouse Life Expectancy</label><input type="number" id="die2" value="98"></div>
+        </div>
+
+        <h3>2. Assets</h3>
+        <div class="row">
+            <div><label>Your IRA</label>  <input type="number" id="balIRA1" value="2000000"></div>
+            <div><label>Spouse IRA</label><input type="number" id="balIRA2"  value="400000"></div>
+        </div>
+        <div class="row">
+            <div><label>Brokerage</label><input type="number" id="balBrok" value="400000"></div>
+            <div><label>Brokerage Basis</label><input type="number" id="basisBrok" value="200000"></div>
+        </div>
+        <div class="row">
+            <div><label>Roth IRA</label><input type="number" id="balRoth" value="200000"></div>
+            <div><label>Cash</label><input type="number" id="balCash" value="100000"></div>
+        </div>
+
+        <h3>3. Income & Spend</h3>
+        <div class="row">
+            <div><label>Your Social Security Amt</label><input type="number" id="ss1" value="48000"></div>
+            <div><label>Start Age</label><input type="number" id="ss1Age" value="70"></div>
+        </div>
+        <div class="row">
+            <div><label>Spouse SS Amt</label><input type="number" id="ss2" value="29000"></div>
+            <div><label>Spouse Start Age</label><input type="number" id="ss2Age" value="70"></div>
+        </div>
+        <div class="row">
+            <div><label>Your Pension</label><input type="number" id="penTot" value="16900"></div>
+            <div><label>Survivorship</label><input type="number" id="survPct" value="75">%</div>
+        </div>
+        <div class="row">
+            <div><label>After-Tax Spending Goal</label>
+            <input type="number" id="spendGoal" value="180000" class="highlight-input"></div>
+            <div><label>Spending Delta </label>
+            <input type="number" id="spendChange" value="99.5">% (100 means no change)</div>
+		</div>
+
+        <h3>4. Assumptions</h3>
+        <div class="row">
+            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)</label><input type="number" id="inf" value="0">%</div>
+            <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)</label><input type="number" id="cpi" value="0">%</div>
+        </div>
+        <div class="row">
+            <div><label>Growth (6?)</label><input type="number" id="growth" value="6.0">%</div>
+            <div><label>Cash Interest (2.5)?</label><input type="number" id="yield" value="3.0">%</div>
+        </div>
+
+        <h3>5. Strategy</h3>
+        <div class="input-group">
+            <select id="stratMode" onchange="toggleStratUI()">
+                <option value="baseline">Withdraw to meet spend goal</option>
+                <option value="fixed">Reduce IRA in N Years</option>
+                <option value="bracket">Fill Federal Tax Bracket</option>
+                <option value="minlimit">Lesser of IRMAA or TaxBracket (NOT IMPLEMENTED)</option>
+            </select>
+        </div>
+        <div id="ui-fixed" class="input-group hidden">
+            <label>Target Years (N)</label>
+            <input type="number" id="stratN" value="10">
+        </div>
+        <div id="ui-bracket" class="input-group hidden">
+            <label>Fill Bracket Up To:</label>
+            <select id="stratBrk">
+                <option value="12">12% / 15%</option>
+                <option value="22">22%</option>
+                <option value="24" selected>24%</option>
+                <option value="32">32%</option>
+                <option value="35">35%</option>
+            </select>
+        </div>
+        <div class="row"><label>IRA Reduction Goal</label>
+            <input type="number" id="iraBaseGoal" value="150000">
+		</div>		
+    </div>
+
+    <div class="main">
+	
+		<div class="header-drawers">
+			<details class="top-drawer"><summary>Change Log</summary>
+				<div class="log-entry">
+					<strong>v6.k:</strong> Reworked tax brackets for sanity ease of update. Added more instructions. WARNING: calculations have not all be fixed.
+				</div>	
+				<div class="log-entry">
+					<strong>v6.j:</strong> Move style sheet out for readability.
+				</div>					
+				<div class="log-entry">
+					<strong>v6.i:</strong> Remove the Recalculate and Optimize buttons. Use the similarly named tabs as the buttons. 
+				</div>
+				<div class="log-entry">
+					<strong>v5.hp (Current):</strong> Integrated Federal SS "Tax Torpedo" logic, California HSA add-backs, and IRMAA cliff surcharges. This logic is present, but not yet being used.  The older logic is "close".
+				</div>
+				<div class="log-entry">
+					<strong>v5h</strong> Added change log and instructions
+				</div>
+				<div class="log-entry">
+					<strong>v4g</strong> Do rate limit lookups based on inflation. Add suggested values.
+				</div>					
+				<div class="log-entry">
+					<strong>v4f</strong> Use cpi% to adjust taxation (brackets)
+				</div>
+				<div class="log-entry">
+					<strong>v4e</strong> Use calculated birthyear for correct RMDs
+				</div>
+			</details>
+
+			<details class="top-drawer">
+				<summary>How to Use</summary>
+				<div class="drawer-content">
+					<ul>
+						<li><strong>1. Profile &amp; Ages:</strong> Enter current ages as of <B>the END of the current year</B> and estimated life expectancy for both partners. To model a single taxpayer, set the <I>Spouse age</I> and life expectancy to zero for spouse.</li>
+						<li><strong>2. Assets:</strong> Enter balances. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Brokerage withdrawals will be assumed to be part subject to capital gains. Total all after tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the living spouse.</li>
+						<li><strong>3. Income &amp; Spend:</strong> Input annual Social Security and pensions. Set the start ages to see the impact of delaying benefits. Amounts you enter for <i>Social Security Amt</i> will be adjusted annually by the <i>CPI/COLA</i>. Set the <i>After-Tax Sending Goal</i> to the amount of after-tax income you need per year. And set the <i>Spend Delta</i> percentage. A Spend Delta of 100 means no change, while a 98.5 would reduce spending by 1.5% each year. To have spending grow, use a number greater than 100%</li>
+						<li><strong>4. Assumptions:</strong> choose the Inflation rate, the CPI rate (which is the expected change in tax brackets rather than actual inflation), the <i>Growth</i> rate for the IRA/401K, Brokerage &amp; ROTH.  <i>Cash Interest</i> is the expected interest on cash and cash-like investments (e.g. Mutual Funds/Bonds). To make these numbers accurate, it's best to separate all investments into "Brokerage" and cash into Cash.</li>
+						<li><strong>5. Strategy:</strong> 
+							<ul><li>In <em>Withdraw to meet spend goal</em> it withdraws enough from the IRAs (and others sources if available) to reach <i>After-tax Spending Goal</i>.</li>
+							<li>Compare with <em>Reduce IRA in N Years</em> to amortize your IRAs in a fixed number of years (they won't be emptied, they will be drawn down to <i>IRA Reduction Goal</i>.</li>
+							<li><i>Fill Federal Tax Bracket</i> withdraws enough to max out the chosen federal tax bracket.</li>
+							<li><i>Lesser of IRMAA or ...</i> is not yet implemented, but here it's like <i>Fill Federal Tax Bracket</i>, but reduces the amount withdrawn to stay under the (next) IRMAA tier.</li></ul>
+						<li><strong>After Changes...</strong> selecting the Annual Details, Visual Analysis or Optimizer will cause a recalculation and show the page. 
+						<I>Optimizer</I> finds the mathematical "sweet spot" for emptying IRAs to minimize lifetime total tax and maximize total spendable value. It checks different drawdown years - that is the same thing as the <i>Reduce IRA in N Years</i> but it loops through from 1 to 30 years.</li>
+						</li>
+					</ul>
+					
+					<h4>What is Missing</h4>
+					<p>This tool does not (currently) model <b>annuities</b>, multiple pensions, additional w2 (taxable) income</b>. The tool intentionally keeps the number of options low.  Currently the "optimize" option focuses on depleting the IRA balance(s) to the point where future RMDs will not force excess taxation (Federal, State and IRMAA). An additional optimization is planned that will iterate to maximize spendable.
+					<ol><li>There is no Monte Carlo or other fancy strength test</li>
+					<li>The RMD tables are the standard one, not the one that might apply if there is a 10 year or more difference in spouse ages</li>
+					<li>It only uses the MFJ and Single tax brackets. (No head of household)</li>
+					<li>Because ROTH assets are not taxable, it merges all ROTH funds into one account</li>
+					</ol>
+				</div>
+			</details>
+				<details class="top-drawer"><summary>Planned</summary>
+				<div class="drawer-content"><B>Planned Enhancements</B>
+					<ol>
+						<li>Improve accuracy of the tax calculations - apply NIIT, properly handle income stacking</li>
+						<li>Add back the post <A HREF="https://www.ssa.gov/oact/trsum/">2033 Social Security 77% reduction</A> (See Table 1) modeling</li>						
+						<li>Track NetWealth/FinalWealth by applying tax adjustments to make the number meaningful.e.g. 1000 in a ROTH is worth 1000, but 1000 in an IRA is not due to taxation.</li>
+						<li>Clearly highlight out of money scenarios. For this purpose "out of money" means that remaining assets are less than or equal to 2x spendable goal. </li>
+						<li>Create an "optimize spendable income" tool (like the current optimizer, but for spendable goal). I.e. iterate with higher or lower target spend amounts.</li>
+						<li>Create an export/import of inputs.</li>
+						<li>Add elements to graphs. Reorder and expand the Annual Details table (e.g. group balances, tax info, income and net income)
+						<li>Add an option to maximize ROTH conversions by using cash/brokerage assets to pay taxes. Currently it manages IRA withdrawals, and targets excess funds for placement in the ROTH.
+						</ol>
+				</div>
+			</details>
+			<details class="top-drawer">
+				<summary>Background</summary>
+				<div class=drawer-content"><div class="drawer-section">
+		<h3>Who is this For, What are the Caveats</h3>
+		<p>A California resident built this with <a HREF="https://gemini.google.com" target="_blank">Google gemini AI assistance</A> because he is in retirement and has an unhealthy IRA balance to manage. The purpose of this tool, therefore, is to model as accurately as possible the remaining years of life with respect to spendable cash and taxation - and to determine how to optimize spendable cash. This tool may be useful to you are in or very near retirement.  Signficantly more analysis is needed to do pre-retirement optimization.
+		
+		Many focus on <i>Roth Conversions</i> and that's not wrong thinking, but such a view misses the big picture of WHY to do conversions. Also from the time one stops getting regular W2 income until the time one starts receiving pensions or social security is known as the "valley of opportunity".  During this otherwise low income period, strategic withdrawals and movement is possible. Ultimately you are in a better place if you have <i>degrees of freedom</i> in your assets - more on this in a moment. It also does not make sense to pay more tax than necessary. I do not see taxation as evil, but it does not feel "right" to pay up to 14,000/year in IRMAA fees for no net benefit in Medicare - but that is one of the many pitfalls of having too much forced income.
+		
+		<p>Having a large tax deferred balance has many consequences, the worst being taking forced income (RMDs) at higher tax rates and incurring IRMAA penalties - as just described - as well.  In this tool, we lump IRMAA together with California state and Federal taxes (including NIIT and capital gains) to show the big picture: net taxes/net spendable income.
+		
+		<p>There are three ways I can think of where doing a ROTH conversion could make the financial landscape worse and all are easily avoidable. That means in most situations one is better off having assets in Tax deferred (IRA/401k), Tax Free (ROTH), and Taxable (Brokerage/cash) - this is how to obtain <b><i>degrees of freedom</i></b>.  
+		<h4>About State Taxation</h4>
+		33 of 50 states tax capital gains at the same rate as regular income. Unfortunately many tools and many discussions neglect this aspect, which is another reason I wrote this tool. 9 states have no taxation or do not tax capital gains (as of 2025), and 9 more states have preferential treatment of capital gains. <A HREF="https://www.theentrustgroup.com/blog/state-capital-gains-tax" target="_blank">[Source]</A>
+		If you live in, or plan to move in a different state and you want to use this tool, you can!  Once I knock off some of my other key features, I may add a feature to import tax brackets from other states. In the meanwhile, you can 
+		<p>
+		<h4>ROTH Conversion Gotchas</h4>
+		<p>The bad scenarios for ROTH conversions are these:
+		<ol><li>You withdraw/convert now at a higher tax rate than you will face in your future.</li><li>You withdraw + convert in an amount that pushes your taxation up (this is a specific case of 1)</li><li>You convert before you're 59.5 and do not have funds to pay the taxes AND/or that conversion pushes you into a higher taxation situation.</li></ol>
+		There are more than a dozen ways that not doing a conversion (to ROTH or brokerage) can result in less spendable money and reduce spendable asset value.  These scenarios mostly affect those with proportionately larger IRA/401K balances. Even modest IRA/401K balances can significantly improve their asset balance and spendable cash through thoughtful withdrawals.
+		Here are some of the harms of having or accruing a large IRA/401K:
+		<ol>
+		<li>Growth in or size of the IRA/401K balance reaches a point where you end up in a higher tax bracket before or after RMDs start.</li>
+		<li>RMDs cause you to have little to no room for managing your desired spend (i.e. avoiding higher taxes and/or IRMAA and/or NIIT).</li>
+		<li>If the bulk of your assets remain in an IRA/401K, any large extra expenditure will result in a corresponding hit to your taxation (think remodeling, buying a fancy car, or a vacation home).</li>
+		<li>Tax rates could go up significantly in the future (I argue they will go up!).</li>
+		<li>To spend more, you have to withdraw more and pay more tax.</li>
+		<li>Social security bottoms out in 2033 (as it is on track to do), and you have to withdraw more to cover the loss of Social Security funds... increasing your taxation.</li>
+		<li>Your spouse passes away. Now you're in a single tax bracket paying 30% more taxes for the same income (unless you remarry).</li>
+		<li>Your IRA (not 401K) crosses about 1.5m - in that case you could be forced to surrender some of it in a lawsuit.  (401Ks have stronger protection). ROTHs are similarly exposed, but because ROTH is not taxed, a smaller balance has greater value to you.</li>
+		<li>You and your spouse pass away. Your heirs will be forced to liquidate the IRA/401K balance within 10 years at THEIR tax rate.  (ROTHs must be liquidated, too, but there is no tax).</li>
+		<li>If you or your spouse pass away, usually the most effective way to manage this is for the survivor to "take over" the deceased's IRA/401K balance.  The now larger balance will be subject to the survivors RMD requirements.  This might be better if the surviving spouse is younger, but could go the other way.</li>
+		<li>As your IRA/401K grows, your RMDs will also grow. At some point this causes 85% of your social security to become taxable, AND causes IRMAA taxes, AND possibly NIIT.</li>
+		<li>IRA/401K withdrawals are taxable income in MOST states. ROTH withdrawals are not taxable in any state.</li>
+		</ol>
+			</details>
+		</div>	
+        <div class="top-bar">
+            <div id="summary-stats" style="display:flex; gap:30px;">
+                <div><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong></div>
+                <div><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong></div>
+                <div><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
+                <div><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
+            </div>
+            </div>
+
+        <div class="tabs">
+            <button id="btn-tbl" class="tab-btn active" onclick="{runSim(); showTab('tab-tbl')}">Annual Details</button>
+            <button id="btn-cht" class="tab-btn" onclick="{showTab('tab-chart')}">Visual Analysis</button>
+            <button id="btn-opt" class="tab-btn" onclick="{runOpt(); showTab('tab-opt')}">Optimizer</button>
+        </div>
+
+
+		<div id="tab-tbl" class="card table-wrap">
+			<table id="main-table">
+				<thead></thead> <tbody></tbody>
+			</table>
+		</div>
+
+        <div id="tab-chart" class="card hidden">
+            <canvas id="chartAssets" style="max-height:350px;"></canvas>
+            <hr>
+            <canvas id="chartTaxSpend" style="max-height:350px;"></canvas>
+        </div>
+
+        <div id="tab-opt" class="card hidden table-wrap">
+            <table id="opt-table">
+                <thead>
+                    <tr>
+                        <th>Strategy (N Years)</th>
+                        <th>Total Lifetime Tax</th>
+                        <th>Final Wealth</th>
+                        <th>Effective Tax Rate</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+/** TAX CONSTANTS **/
+const TAX_LATEST = {
+	// 2025 values.
+    FED_MFJ: [{l:23850, r:0.10}, {l:96950, r:0.12}, {l:206700, r:0.22}, {l:394600, r:0.24}, {l:1e9, r:0.37}],
+    FED_SGL: [{l:11925, r:0.10}, {l:48475, r:0.12}, {l:103350, r:0.22}, {l:197300, r:0.24}, {l:1e9, r:0.37}],
+    IRMAA_MFJ: [212000, 266000, 334000, 400000, 750000],
+    IRMAA_COST: [0, 1000, 2500, 4000, 5500, 6800],
+    STATE_MFJ: [{l:20824, r:0.01}
+		, {l:49368, r:0.02}
+		, {l:77918, r:0.04}
+		, {l:108162, r:0.06}
+		, {l:136700, r:0.08}
+		, {l:698274, r:0.093}
+		, {l:837922, r:0.103}
+		, {l:1000000, r:0.123}
+		, {l:1e9, r:0.133}],
+    STATE_SGL: [{l:10412, r:0.01}
+		, {l:24684, r:0.02}
+		, {l:38959, r:0.04}
+		, {l:54081, r:0.06}
+		, {l:68350, r:0.08}
+		, {l:349137, r:0.093}
+		, {l:418961, r:0.103}
+		, {l:698271, r:0.123}
+		, {l:1e9, r:0.133}],
+	STATE_STD: {"MFJ": 10804, "SGL": 5402}
+	};
+
+
+const TAXData = {
+    STATE: {
+		YEAR: 2025,
+        MFJ: {
+            std: 10804,
+            brackets: [
+                { l: 20824, r: 0.01 }, { l: 49368, r: 0.02 }, { l: 77918, r: 0.04 },
+                { l: 108162, r: 0.06 }, { l: 136700, r: 0.08 }, { l: 698274, r: 0.093 },
+                { l: 837922, r: 0.103 }, { l: 1000000, r: 0.123 }, { l: 1e9, r: 0.133 }
+            ]
+        },
+        SGL: {
+            std: 5402,
+            brackets: [
+                { l: 10412, r: 0.01 }, { l: 24684, r: 0.02 }, { l: 38959, r: 0.04 },
+                { l: 54081, r: 0.06 }, { l: 68350, r: 0.08 }, { l: 349137, r: 0.093 },
+                { l: 418961, r: 0.103 }, { l: 698271, r: 0.123 }, { l: 1e9, r: 0.133 }
+            ]
+        }
+    },
+    FEDERAL: {
+		YEAR: 2026,  // Estimated
+        MFJ: {
+            std: 30000, 
+			age: 65,
+			stdbump: 1550,
+            brackets: [
+                { l: 23200, r: 0.10 }, { l: 94300, r: 0.12 }, { l: 201050, r: 0.22 },
+                { l: 383900, r: 0.24 }, { l: 487450, r: 0.32 }, { l: 609350, r: 0.35 },
+                { l: 1e9, r: 0.37 }
+            ]
+        },
+        SGL: {
+            std: 15000,
+			age: 65,
+			stdbump: 1550,
+            brackets: [
+                { l: 11600, r: 0.10 }, { l: 47150, r: 0.12 }, { l: 100525, r: 0.22 },
+                { l: 191950, r: 0.24 }, { l: 243725, r: 0.32 }, { l: 304675, r: 0.35 },
+                { l: 1e9, r: 0.37 }
+            ]
+        }
+    },
+	
+	IRMAA: {
+		YEAR: 2026,
+		LOOKBACK: 2024,  // Based on 2024 tax return
+		standardPartB: 202.90,
+		partBDeductible: 283,
+		
+		MFJ: {
+			brackets: [
+				{ l: 218000 - 1, r: 0}, 
+				{ l: 218000, r: 202.90 },
+				{ l: 274000, r: 284.10 + 14.50 },
+				{ l: 348000, r: 405.90 + 37.60 },
+				{ l: 410000, r: 527.70 + 60.60 },
+				{ l: 750000, r: 649.50 + 83.70 },
+				{ l: 1e9, r: 689.90 + 91.00 }
+			]
+		},
+		
+		SGL: {
+			brackets: [
+				{ l: 109000 - 1, r: 0}, 
+				{ l: 109000, r: 202.90 +0 },
+				{ l: 137000, r: 284.10 +14.50 },
+				{ l: 174000, r: 405.90 + 37.60 },
+				{ l: 205000, r: 527.70 + 60.60 },
+				{ l: 500000, r: 649.50 + 83.70 },
+				{ l: 1e9, r: 689.90 + 91.00 }
+			]
+		},
+		
+		MFS: {
+			brackets: [
+				{ l: 109000 - 1, r: 0}, 
+				{ l: 109000, r: 202.90 + 0 },
+				{ l: 403000, r: 649.50 + 83.70 },
+				{ l: 1e9, r: 689.90 + 91.00 }
+			]
+		}
+	}	
+};
+
+// Uniform Lifetime Table (Simplified)
+const RMD_TABLE = {
+    72: 27.4, 73: 26.5, 74: 25.5, 75: 24.6, 76: 23.7, 77: 22.9, 78: 22.0, 79: 21.1,
+    80: 20.2, 81: 19.4, 82: 18.5, 83: 17.7, 84: 16.8, 85: 16.0, 86: 15.2, 87: 14.4,
+    88: 13.7, 89: 12.9, 90: 12.2, 91: 11.5, 92: 10.8, 93: 10.1, 94: 9.5, 95: 8.9,
+    96: 8.4, 97: 7.8, 98: 7.3, 99: 6.8, 100: 6.4, 101: 6.0, 102: 5.6, 103: 5.2,
+	104: 4.9, 105: 4.6, 106: 4.3, 107: 4.1, 108: 3.9, 109: 3.7, 110: 3.5, 111: 3.4,
+	112: 3.3, 113: 3.1, 114: 3.0, 115: 2.9, 116: 2.8, 117: 2.7, 118: 2.5, 119: 2.3, 120: 2.0
+};
+
+function getRMDPercentage(age, birthYear) {
+const startAge = (birthYear >= 1960) ? 75 : 73;
+    if (age < startAge) return 0;
+    if (age > 120) return 1/RMD_TABLE[120];
+    return 1/(RMD_TABLE[age]);
+}
+
+
+
+// Find the top amount in the provided brackets. If the bracket isn't found, it finds 
+// the limit in the next lower bracket.  This doesn't check to be sure any values are reasonable.
+
+function findLimitByRate( entity, status, tgtrate, inflation) {
+    let brks = TAXData[entity][status].brackets;
+
+    let limit = 0;
+	let rate = 0;
+	
+    for (let b of brks) {
+        if (b.r <= tgtrate ) {
+			limit = b.l * inflation;
+			rate = b.r;
+        }
+    }
+	return { limit, rate: rate }
+}
+
+
+let fedLimit = findLimitbyRate('FEDERAL', 'MFJ', 0.24, 1);
+
+
+// Find the lower limit corresponding to the tgtlimit. 
+// This doesn't check to be sure any values are reasonable.
+
+function findLowerLimitByLimit( entity, status, tgtlimit, inflation) {
+    let limit = 0;
+	let rate = 0;
+	
+    for (let b of TAXData[entity][status].brackets) {
+        if (b.l * inflation <= tgtlimit ) {
+			limit = b.l * inflation;
+			rate = b.r;
+        }
+    }
+	return { limit, rate: rate }
+}
+
+
+/** SIMULATION ENGINE **/
+function simulate(inputs) {
+    let state = {
+        ira1: inputs.ira1, ira2: inputs.ira2, roth: inputs.roth,
+        brok: inputs.brok, basis: inputs.basis, cash: inputs.cash,
+        magiHistory: [0, 0]
+    };
+    
+    let log = [];
+    let totals = { tax: 0, gross: 0, spend: 0 };
+    let startYear = 2026;
+    let maxYears = Math.max(inputs.die1 - inputs.age1, inputs.die2 - inputs.age2) + 1;
+	let birthyear1 = startYear - inputs.age1 - 1
+	let birthyear2 = startYear - inputs.age2 - 1
+	let cpiRate = 1
+	let inflation = 1
+
+    for (let y = 0; y < maxYears; y++) {
+		cpiRate = (1 + inputs.cpi) * cpiRate
+		inflation = (1 + inputs.inflation) * inflation
+        let age1 = inputs.age1 + y;
+        let age2 = inputs.age2 + y;
+        let alive1 = age1 <= inputs.die1;
+        let alive2 = age2 <= inputs.die2;
+        if (!alive1 && !alive2) break;
+
+        let status = (alive1 && alive2) ? 'MFJ' : 'SGL';
+
+        // 1. Inherit IRA
+        if (!alive1 && state.ira1 > 0) { state.ira2 += state.ira1; state.ira1 = 0; }
+        if (!alive2 && state.ira2 > 0) { state.ira1 += state.ira2; state.ira2 = 0; }
+
+        // 2. Base Income
+        let s1 = (alive1 && age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate : 0;
+        let s2 = (alive2 && age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate : 0;
+        let pen = inputs.penTot;
+        if (!alive1 || !alive2) {
+            // Survivor Logic: Max of SS + Survivorship % of Pension
+            s1 = Math.max(s1, s2);
+            s2 = 0;
+            pen = pen * (inputs.survPct/100);
+        }
+        let fixedInc = s1 + s2;
+		let taxableInc = pen;
+
+        // 3. RMDs
+        let rmd1 = alive1 ? state.ira1 * getRMDPercentage(age1, birthyear1) || 0 : 0;
+        let rmd2 = alive2 ? state.ira2 * getRMDPercentage(age2, birthyear2) || 0 : 0;
+		
+		// Immediately remove RMDs from the respective IRAs because they MUST be taken first.
+		state.ira1 = Math.max(0, state.ira1 - rmd1);
+		state.ira2 = Math.max(0, state.ira2 - rmd2);
+		
+        let totalRMD = rmd1 + rmd2;
+		taxableInc += totalRMD
+
+        // 4. Determine IRA Withdrawal Amount based on Strategy
+        let targetSpend = inputs.spendGoal * cpiRate;
+        let iraWD = 0;
+
+		//!!! Find the income federal limit. TODO: use that limit, to refine down to the next lower IRMAA limit and next lower State Limit.
+		let fedRate = 0.12 // For now...
+		let stateRate = 0.06 // For now... !!TODO
+
+
+        if (inputs.strat === 'fixed') {
+            let remYears = Math.max(1, inputs.stratN - y);
+			//!!! Doesn't have a floor to map to.
+			let curIRA = state.ira1 + state.ira2 - inputs.iraBaseGoal;
+			let amortized = (1 + inputs.growth) ** remYears * curIRA / remYears;
+            iraWD = Math.max(totalRMD, Math.max(0,amortized));
+        } else if (inputs.strat === 'bracket') {
+			//!!! This code has flaws.  Withdraws too much.
+
+			let fedLimit = findLimitbyRate('FEDERAL', status, inputs.stratVal/100.0, cpiRate);
+			let limit = fedLimit.limit - taxableInc - fixedInc;
+			fedRate = fedLimit.rate;	
+
+			//!!!TODO Find the state rate and limit that corresponds to the fedLimit.fedLimit
+			//!!!TODO Find the IRMAA limit that corresponds to the fedLimit.fedLimit
+			let stLimit = findLowerLimitByLimit('FEDERAL', status, fedLimit.limit, cpiRate);
+			stateRate = stLimit.rate;
+			stateLimit = stLimit.limit;
+			
+            let currentTaxableGuess = limit - fixedInc - taxableInc;
+            iraWD = Math.max(totalRMD, currentTaxableGuess);
+        } else {
+	       // Must be "baseline" strategy.  Withdraw enough to pay taxes.
+		   iraWD = targetSpend / (1-fedRate-stateRate);
+		}
+        
+        // Ensure we don't withdraw more than exists
+        iraWD = Math.min(iraWD, state.ira1 + state.ira2);
+
+        // 5. Tax Calc (Including IRMAA lag)
+        let irmaa = calcIRMAA(state.magiHistory[state.magiHistory.length-2], status);
+		//!!! Assumes capital gains is zero. Not tracking cap gains.
+        let tax = calculateTax(fixedInc, iraWD + totalRMD, 0, status, age1, age2, cpiRate);
+        let totalTax = tax.fed + tax.state + irmaa;
+
+        // 6. Cash Flow Gap
+        let netCash = (fixedInc + iraWD) - totalTax;
+        let gap = targetSpend - netCash;
+        
+        let rothWD = 0;
+        let brokWD = 0;
+		let cashWD = 0;
+
+        if (gap > 0) {
+            // Need more money - Order: Cash -> Brokerage -> Roth
+            cashWD = Math.min(gap, state.cash);
+            state.cash -= cashWD; gap -= cashWD;
+            
+            if (gap > 0) {
+                brokWD = Math.min(gap, state.brok);
+                state.brok -= brokWD; gap -= brokWD;
+            }
+            if (gap > 0) {
+                rothWD = Math.min(gap, state.roth);
+                state.roth -= rothWD; gap -= rothWD;
+            }
+            // If Gap still > 0, we take more IRA (Baseline behavior)
+			// NOTE: From earlier we already know the marginal state and federal brackets.
+            if (gap > 0 && (state.ira1 + state.ira2) > 0) {
+                let extraIRA = Math.min(gap * (1+tax.bracket+tax.stbracket), state.ira1 + state.ira2);
+                iraWD += extraIRA;
+                // Re-calculate tax for new IRA WD
+                tax = calculateTax(fixedInc, iraWD + totalRMD, 0, status, age1, age2, cpiRate);
+                totalTax = tax.fed + tax.state + irmaa;
+                netCash = (fixedInc + iraWD) - totalTax;
+                gap = targetSpend - (netCash + rothWD + brokWD + cashWD);
+            }
+        } else if (gap < -100 && (inputs.strat !== 'baseline')) {
+            // Surplus logic (Conversions)
+            let surplus = Math.abs(gap);
+            state.roth += surplus;
+			rothWD -= surplus
+        }
+
+        // 7. Updates
+		//!!! Remove withdrawals proportionately but this is not correct because of RMDs which are IRA specific.
+        state.ira1 = Math.max(0, state.ira1 - (iraWD * (state.ira1/(state.ira1+state.ira2||1))));
+        state.ira2 = Math.max(0, state.ira2 - (iraWD * (state.ira2/(state.ira1+state.ira2||1))));
+        state.ira1 *= (1 + inputs.growth);
+        state.ira2 *= (1 + inputs.growth);
+        state.roth *= (1 + inputs.growth);
+        state.brok *= (1 + inputs.growth);
+        state.cash *= (1 + inputs.yield);
+        state.magiHistory.push(tax.magi);
+
+        totals.tax += totalTax;
+        totals.gross += (fixedInc + iraWD);
+        totals.spend += (targetSpend - Math.max(0, gap));
+
+        log.push({
+            year: startYear + y,
+            age1: alive1 ? age1 : '—',
+            age2: alive2 ? age2 : '—',
+            spendGoal: targetSpend,
+            fixed: fixedInc+pen,
+            rmd: totalRMD,
+            iraWD: iraWD,
+            rothWD: rothWD,
+            brokWD: brokWD,
+            cashWD: cashWD,
+			totalIncome: iraWD + rothWD + brokWD + cashWD + fixedInc + pen,
+			irmaa: irmaa,
+            tax: totalTax,
+			fedtax: tax.fed,
+			statetax: tax.state,
+            bracket: tax.bracket,
+            stbracket: tax.stbracket,
+			netInc: iraWD + rothWD + brokWD + cashWD + fixedInc - totalTax,
+            ira1Bal: state.ira1,
+			ira2Bal: state.ira2,
+			iraBal: state.ira1 + state.ira2,
+			cashBal: state.cash,
+			rothBal: state.roth,
+            brokBal: state.brok + state.cash,
+            totalWealth: state.ira1 + state.ira2 + state.roth + state.brok + state.cash,
+            netIncome: (fixedInc + iraWD + rothWD + brokWD + cashWD) - totalTax
+        });
+    }
+
+    return { log, totals, finalNW: log[log.length-1].totalWealth };
+}
+
+
+/**
+ * Calculates Federal, California State, and IRMAA taxes.
+ * * @param {Object} params - Input parameters
+ * @param {number} params.yearOffset - Number of years from base (2026) to adjust for cpi/Inflation.
+ * @param {string} params.filingStatus - 'MFJ' (Married Filing Jointly) or 'Single'.
+ * @param {Array}  params.ages - Array of ages [age1, age2] or [age1] if single.
+ * @param {number} params.earnedIncome - Total of W2, IRA/401k withdrawals, and RMDs.
+ * @param {number} params.ss1 - Social Security for Person 1.
+ * @param {number} params.ss2 - Social Security for Person 2 (0 if Single).
+ * @param {number} params.ordDivInterest - Interest and Ordinary Dividends.
+ * @param {number} params.qualifiedDiv - Qualified Dividends (taxed at lower rates Federally).
+ * @param {number} params.capGains - Net Long Term Capital Gains.
+ * @param {number} params.taxExemptInterest - Muni bond interest (non-taxable but used for SS/IRMAA/CA).
+ * @param {number} params.hsaContrib - Total HSA contributions (deductible Fed, taxable CA).
+ * @param {number} params.cpi - Annual cpi/Inflation rate (e.g., 0.025 for 2.5%).
+ */
+function calculateTaxes(params) {
+    const { 
+        yearOffset, filingStatus, ages, earnedIncome, ss1, ss2, 
+        ordDivInterest, qualifiedDiv, capGains, taxExemptInterest, 
+        hsaContrib, cpi 
+    } = params;
+
+    const inflationFactor = Math.pow(1 + cpi, yearOffset);
+    const totalSS = ss1 + ss2;
+
+    // --- 1. FEDERAL SOCIAL SECURITY TAXABILITY ---
+    // Formula: Provisional Income = AGI (excluding SS) + TaxExemptInterest + 50% of SS
+    const provisionalIncome = earnedIncome + ordDivInterest + qualifiedDiv + capGains + taxExemptInterest - hsaContrib + (totalSS * 0.5);
+    
+    let taxableSS = 0;
+    const ssThreshold1 = (filingStatus === 'MFJ' ? 32000 : 25000) * inflationFactor;
+    const ssThreshold2 = (filingStatus === 'MFJ' ? 44000 : 34000) * inflationFactor;
+
+    if (provisionalIncome > ssThreshold2) {
+        taxableSS = Math.min(0.85 * totalSS, (0.85 * (provisionalIncome - ssThreshold2)) + Math.min(6000 * inflationFactor, 0.5 * (ssThreshold2 - ssThreshold1)));
+    } else if (provisionalIncome > ssThreshold1) {
+        taxableSS = Math.min(0.5 * totalSS, 0.5 * (provisionalIncome - ssThreshold1));
+    }
+
+    // --- 2. FEDERAL TAX CALCULATION ---
+    const fedAGI = earnedIncome + ordDivInterest + qualifiedDiv + capGains + taxableSS - hsaContrib;
+    
+    // Standard Deduction with Age 65+ bump
+    let fedStdDeduct = (filingStatus === 'MFJ' ? 30000 : 15000) * inflationFactor;
+    ages.forEach(age => { if (age >= 65) fedStdDeduct += (1550 * inflationFactor); });
+
+    const fedTaxableIncome = Math.max(0, fedAGI - fedStdDeduct);
+    const prefIncome = qualifiedDiv + capGains; // Income taxed at 0/15/20%
+    const ordinaryTaxable = Math.max(0, fedTaxableIncome - prefIncome);
+
+    const fedOrdinaryTax = calcProgressive(ordinaryTaxable, getFedBrackets(filingStatus, inflationFactor));
+    const fedPrefTax = calcPrefTax(ordinaryTaxable, prefIncome, filingStatus, inflationFactor);
+    const totalFedTax = fedOrdinaryTax + fedPrefTax;
+
+    // --- 3. (CALIFORNIA) STATE TAX CALCULATION ---
+    // CA Add-backs: HSA is taxable. Muni interest is taxable (assuming out-of-state for conservative estimate).
+    // CA Subtractions: Social Security is 100% exempt.
+    const caAGI = (fedAGI - taxableSS) + hsaContrib + taxExemptInterest;
+    const caStdDeduct = (filingStatus === 'MFJ' ? TAX_LATEST.STATE_STD_MFJ : TAX_LATEST.STATE_STD_SGL) * inflationFactor;
+    const caTaxableIncome = Math.max(0, caAGI - caStdDeduct);
+    const caTax = calcProgressive(caTaxableIncome, getCABrackets(filingStatus, inflationFactor));
+
+    // --- 4. IRMAA CALCULATION ---
+    // MAGI for IRMAA = Fed AGI + Tax-Exempt Interest
+    const irmaaMAGI = fedAGI + taxExemptInterest;
+    const irmaaAnnualSurcharge = calcIRMAA(irmaaMAGI, filingStatus, inflationFactor);
+
+    return {
+        fedAGI: Math.round(fedAGI),
+        fedTax: Math.round(totalFedTax),
+        caTax: Math.round(caTax),
+        irmaa: Math.round(irmaaAnnualSurcharge),
+        totalTax: Math.round(totalFedTax + caTax + irmaaAnnualSurcharge),
+        effectiveRate: ((totalFedTax + caTax + irmaaAnnualSurcharge) / (fedAGI + totalSS + taxExemptInterest) * 100).toFixed(2) + '%'
+    };
+}
+
+// --- HELPER FUNCTIONS ---
+
+function calcProgressive(taxable, brackets) {
+    let tax = 0;
+    let previousLimit = 0;
+    for (const b of brackets) {
+        if (taxable > previousLimit) {
+            const amountInBracket = Math.min(taxable, b.limit) - previousLimit;
+            tax += amountInBracket * b.rate;
+            previousLimit = b.limit;
+        }
+    }
+    return tax;
+}
+
+function calcPrefTax(ordTaxable, prefIncome, status, idx) {
+    // Simplified Fed Capital Gains Brackets (0%, 15%, 20%)
+    const thresholds = (status === 'MFJ' ? [94050, 583750] : [47025, 518900]).map(v => v * idx);
+    let tax = 0;
+    let remainingPref = prefIncome;
+    let currentLevel = ordTaxable;
+
+    // 0% tier
+    const zeroCap = Math.max(0, thresholds[0] - currentLevel);
+    remainingPref -= Math.min(remainingPref, zeroCap);
+    currentLevel += Math.min(prefIncome, zeroCap);
+
+    // 15% tier
+    if (remainingPref > 0) {
+        const fifteenCap = Math.max(0, thresholds[1] - currentLevel);
+        const amountAtFifteen = Math.min(remainingPref, fifteenCap);
+        tax += amountAtFifteen * 0.15;
+        remainingPref -= amountAtFifteen;
+    }
+    // 20% tier
+    if (remainingPref > 0) tax += remainingPref * 0.20;
+    return tax;
+}
+
+function calcIRMAA(magI, status, idx) {
+    const brackets = (status === 'MFJ' ? [212000, 266000, 332000, 398000, 750000] : [106000, 133000, 166000, 199000, 500000]).map(v => v * idx);
+    const surcharges = [0, 850, 2100, 3400, 4700, 5100]; // Annualized estimate
+    for (let i = brackets.length - 1; i >= 0; i--) {
+        if (magI > brackets[i]) return surcharges[i + 1] * (status === 'MFJ' ? 2 : 1);
+    }
+    return 0;
+}
+
+function getFedBrackets(status, idx) {
+    return status === 'MFJ' 
+        ? [{limit: 23850*idx, rate: 0.1}, {limit: 96950*idx, rate: 0.12}, {limit: 206700*idx, rate: 0.22}, {limit: 394600*idx, rate: 0.24}, {limit: 1e9, rate: 0.32}]
+        : [{limit: 11925*idx, rate: 0.1}, {limit: 48475*idx, rate: 0.12}, {limit: 103350*idx, rate: 0.22}, {limit: 197300*idx, rate: 0.24}, {limit: 1e9, rate: 0.32}];
+}
+
+function getCABrackets(status, idx) {
+    const base = [{limit: 10412, rate: 0.01}, {limit: 24684, rate: 0.02}, {limit: 38959, rate: 0.04}, {limit: 54081, rate: 0.06}, {limit: 68348, rate: 0.08}, {limit: 349137, rate: 0.093}, {limit: 418961, rate: 0.103}, {limit: 698271, rate: 0.113}, {limit: 1e9, rate: 0.123}];
+    return base.map(b => ({ limit: b.limit * (status === 'MFJ' ? 2 : 1) * idx, rate: b.rate }));
+}
+
+
+
+function calculateTax(fixed, ira, gains, status, a1, a2, inflation) {
+    let std = TAXData["FEDERAL"][status].std;
+	// status === 'MFJ' ? TAX_LATEST.STD_MFJ : TAX_LATEST.STD_SGL);
+    if (a1 >= TAXData["FEDERAL"][status].age) std += TAXData["FEDERAL"][status].stdbump * inflation;
+    if (a2 >= TAXData["FEDERAL"][status].age && status === 'MFJ') std += TAXData["FEDERAL"][status].stdbump * inflation;
+
+    let agi = fixed + ira + gains;
+    let taxable = Math.max(0, agi - std);
+    let fed = 0;
+    let brks = TAXData["FEDERAL"][status].brackets;
+    let marginalRate = 0;
+
+    let prevLimit = 0;
+    for (let b of brks) {
+        if (taxable > prevLimit) {
+            fed += (Math.min(taxable, b.l * inflation) - prevLimit) * b.r;
+            marginalRate = b.r;
+            prevLimit = b.l * inflation;
+        }
+    }
+	
+	// Calculate (CA) State Tax
+	let stTax = 0;
+	let stMarginalRate = 0;
+	brks = TAXData["STATE"][status].brackets
+    let stPrevLimit = 0;
+    for (let s of brks) {
+        if (taxable > stPrevLimit) {
+            stTax += (Math.min(taxable, s.l * inflation) - stPrevLimit) * s.r;
+            stMarginalRate = s.r;
+            stPrevLimit = s.l * inflation;
+        }
+    }
+	
+    return { fed, state: stTax, magi: agi, bracket: marginalRate, stbracket: stMarginalRate};
+}
+
+function calcIRMAA(magi, status) {
+    let tiers = TAX_LATEST.IRMAA_MFJ;
+    if (status === 'SGL') tiers = tiers.map(t => t/2);
+    for (let i = 0; i < tiers.length; i++) {
+        if (magi < tiers[i]) return TAX_LATEST.IRMAA_COST[i];
+    }
+    return TAX_LATEST.IRMAA_COST[5];
+}
+
+/** UI CONTROLS **/
+function getInputs() {
+    return {
+        age1: +val('age1'), die1: +val('die1'), age2: +val('age2'), die2: +val('die2'),
+        ira1: +val('balIRA1'), ira2: +val('balIRA2'), roth: +val('balRoth'),
+        brok: +val('balBrok'), basis: +val('basisBrok'), cash: +val('balCash'),
+        ss1: +val('ss1'), ss1Age: +val('ss1Age'), ss2: +val('ss2'), ss2Age: +val('ss2Age'),
+        penTot: +val('penTot'), survPct: +val('survPct'), spendGoal: +val('spendGoal'),
+		iraBaseGoal: +val('iraBaseGoal'),
+        inflation: +val('inf')/100, cpi: +val('cpi')/100, growth: +val('growth')/100, yield: +val('yield')/100,
+        strat: val('stratMode'), stratN: +val('stratN'), stratVal: +val('stratBrk')
+    };
+}
+
+function runSim() {
+    let res = simulate(getInputs());
+    updateTable(res.log);
+    updateStats(res.totals, res.finalNW);
+    updateCharts(res.log);
+}
+
+function runOpt() {
+    let base = getInputs();
+    let results = [];
+    for (let n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25, 30]) {
+        base.strat = 'fixed';
+        base.stratN = n;
+        results.push({ n, ...simulate(base) });
+    }
+    let html = results.map(r => `
+        <tr>
+            <td>${r.n}</td>
+            <td>$${Math.round(r.totals.tax).toLocaleString()}</td>
+            <td>$${Math.round(r.finalNW).toLocaleString()}</td>
+            <td>${(r.totals.tax/r.totals.gross*100).toFixed(1)}%</td>
+        </tr>
+    `).join('');
+    document.querySelector('#opt-table tbody').innerHTML = html;
+    showTab('tab-opt');
+}
+
+function updateTable(log) {
+    const table = document.getElementById('main-table');
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+
+    // 1. Define Headers in one place
+    const headers = [  // "Spend Goal",
+        "Year", "Ages",  "SS+Pen", "RMDs", "IRA WD", 
+        "Roth &Delta;", "Cash &Delta;", "Brokerage &Delta;", "Total Income", "State Tax", "IRMAA",
+        "Total Tax", "Fed Marginal", "Net Income", "IRA(you)", 
+        "IRA(spouse)", "Roth", "Brokerage", "Cash"
+    ];
+
+    // 2. Render Headers
+    thead.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+
+    // 3. Render Body Rows
+    tbody.innerHTML = log.map(r => `
+        <tr class="${r.age2 === '—' || r.age1 === '—' ? 'single-year' : ''}">
+            <td>${r.year}</td>
+            <td>${r.age1}/${r.age2}</td>
+            <!--<td>${Math.round(r.spendGoal).toLocaleString()}</td> -->
+            <td>${Math.round(r.fixed).toLocaleString()}</td>
+            <td>${Math.round(r.rmd).toLocaleString()}</td>
+            <td>${Math.round(r.iraWD).toLocaleString()}</td>
+            <td>${Math.round(-r.rothWD).toLocaleString()}</td>
+            <td>${Math.round(-r.cashWD).toLocaleString()}</td>
+            <td>${Math.round(-r.brokWD).toLocaleString()}</td>
+            <td>${Math.round(r.totalIncome).toLocaleString()}</td>
+            <td>${Math.round(r.statetax).toLocaleString()}</td>
+            <td>${Math.round(r.irmaa).toLocaleString()}</td>
+            <td class="neg">${Math.round(r.tax).toLocaleString()}</td>
+            <td>${(r.bracket * 100).toFixed(1)}%</td> <td>${Math.round(r.netInc).toLocaleString()}</td>
+            <td>${Math.round(r.ira1Bal).toLocaleString()}</td>
+            <td>${Math.round(r.ira2Bal).toLocaleString()}</td>
+            <td>${Math.round(r.rothBal).toLocaleString()}</td>
+            <td>${Math.round(r.brokBal).toLocaleString()}</td>
+            <td>${Math.round(r.cashBal).toLocaleString()}</td>
+        </tr>
+    `).join('');
+}
+
+function updateStats(totals, finalNW) {
+    document.getElementById('stat-rate').innerText = (totals.tax / totals.gross * 100).toFixed(1) + '%';
+    document.getElementById('stat-spend').innerText = '$' + Math.round(totals.spend).toLocaleString();
+    document.getElementById('stat-tax').innerText = '$' + Math.round(totals.tax).toLocaleString();
+    document.getElementById('stat-nw').innerText = '$' + Math.round(finalNW).toLocaleString();
+}
+
+let assetChart, taxChart;
+function updateCharts(log) {
+    const ctxA = document.getElementById('chartAssets').getContext('2d');
+    if (assetChart) assetChart.destroy();
+    assetChart = new Chart(ctxA, {
+        type: 'line',
+        data: {
+            labels: log.map(r => r.year),
+            datasets: [
+                { label: 'IRAs', data: log.map(r => r.iraBal), borderColor: '#e67e22', fill: false },
+                { label: 'Roth', data: log.map(r => r.rothBal), borderColor: '#000000', fill: false },
+                { label: 'Brokerage', data: log.map(r => r.brokBal), borderColor: '#2980b9', fill: false },
+                { label: 'Cash', data: log.map(r => r.cashBal), borderColor: '#27ae60', fill: false }
+
+            ]
+        }
+    });
+
+    const ctxT = document.getElementById('chartTaxSpend').getContext('2d');
+    if (taxChart) taxChart.destroy();
+    taxChart = new Chart(ctxT, {
+        type: 'line',
+        data: {
+            labels: log.map(r => r.year),
+            datasets: [
+                { label: 'Fed Tax', data: log.map(r => r.fedtax), borderColor: '#e74c3c', type: 'bar', backgroundColor: '#e74c3c', stacked: true},
+                { label: 'State Tax', data: log.map(r => r.statetax), borderColor: '#e74c3c', type: 'bar', backgroundColor: 'rgba(75, 192, 192, 0.7)', stacked: true},
+                { label: 'IRMAA', data: log.map(r => r.irmaa), borderColor: '#e74c3c', type: 'bar', backgroundColor: 'rgba(0, 0, 0, 1)', stacked: true },
+                { label: 'Spendable Income', data: log.map(r => r.netIncome), borderColor: '#27ae60', fill: false, borderWidth: 3 }
+            ]
+        },
+		options: {
+			scales: {
+				x: {
+					stacked: true  // Enable stacking on x-axis
+				},
+				y: {
+					stacked: true  // Enable stacking on y-axis
+				}
+			}
+		}
+    });
+}
+//                 { label: 'Total Tax', data: log.map(r => r.tax), borderColor: '#e74c3c', type: 'bar', backgroundColor: '#e74c3c', stacked: true},
+
+
+function val(id) { return document.getElementById(id).value; }
+
+function showTab(id) {
+    // 1. Hide all tab content cards
+    document.querySelectorAll('.tab-content, .card').forEach(c => { 
+        if(c.id.startsWith('tab-')) c.classList.add('hidden'); 
+    });
+    // 2. Show the selected card
+    document.getElementById(id).classList.remove('hidden');
+
+    // 3. Update the active button styling (Fixed Selector)
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    const activeBtn = document.querySelector(`.tab-btn[onclick*="${id}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+}
+
+
+function toggleStratUI() {
+    let m = val('stratMode');
+    document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
+    document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket');
+}
+
+runSim();
+</script>
+</body>
+</html>

@@ -403,7 +403,6 @@ function findLimitByRate( entity, status, tgtrate, inflation) {
         if (b.r <= tgtrate ) {
 			limit = b.l * inflation;
 			rate = b.r;
-			break;
         }
     }
 	return { limit, rate: rate }
@@ -421,7 +420,6 @@ function findLowerLimitByLimit( entity, status, tgtlimit, inflation) {
         if (b.l * inflation <= tgtlimit ) {
 			limit = b.l * inflation;
 			rate = b.r;
-			break;
         }
     }
 	return { limit, rate: rate }
@@ -433,7 +431,7 @@ function simulate(inputs) {
     let state = {
         ira1: inputs.ira1, ira2: inputs.ira2, roth: inputs.roth,
         brok: inputs.brok, basis: inputs.basis, cash: inputs.cash,
-        magiHistory: [0, 0]
+        magiHistory: []
     };
     
     let log = [];
@@ -500,7 +498,7 @@ function simulate(inputs) {
             let remYears = Math.max(1, inputs.stratN - y);
 			//!!! Doesn't have a floor to map to.
 			let curIRA = state.ira1 + state.ira2 - inputs.iraBaseGoal;
-			let amortized = fixedWithdrawal
+			let amortized = fixedWithdrawal - totalRMD;
             iraWD = Math.max(totalRMD, Math.max(0,amortized));
         } else if (inputs.strat === 'bracket') {
 			//!!! This code has flaws.  Withdraws too much.
@@ -524,11 +522,19 @@ function simulate(inputs) {
         
         // Ensure we don't withdraw more than exists
         iraWD = Math.min(iraWD, state.ira1 + state.ira2);
+		
+		
 
         // 5. Tax Calc (Including IRMAA lag)
-        let irmaa = calcIRMAA(state.magiHistory[state.magiHistory.length-2], status, cpiRate);
 		//!!! Assumes capital gains is zero. Not tracking cap gains.
         let tax = calculateTax(fixedInc, iraWD + totalRMD, 0, status, age1, age2, cpiRate);
+		//!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
+		let magiHistoryLength = state.magiHistory.length
+		if (magiHistoryLength < 1) {
+			state.magiHistory.push(tax.magi);
+			state.magiHistory.push(tax.magi);
+		}
+        let irmaa = calcIRMAA(state.magiHistory[state.magiHistory.length-2], status, cpiRate);
         let totalTax = tax.total + irmaa;
 
         // 6. Cash Flow Gap
@@ -571,6 +577,8 @@ function simulate(inputs) {
         }
 
         // 7. Updates
+		
+
 		//!!! Remove withdrawals proportionately but this is not correct because of RMDs which are IRA specific.
         state.ira1 = Math.max(0, state.ira1 - (iraWD * (state.ira1/(state.ira1+state.ira2||1))));
         state.ira2 = Math.max(0, state.ira2 - (iraWD * (state.ira2/(state.ira1+state.ira2||1))));
@@ -689,7 +697,7 @@ function calculateTaxes(params) {
     // --- 4. IRMAA CALCULATION ---
     // MAGI for IRMAA = Fed AGI + Tax-Exempt Interest
     const irmaaMAGI = fedAGI + taxExemptInterest;
-    const irmaaAnnualSurcharge = calcIRMAA(irmaaMAGI, filingStatus, inflationFactor);
+    const irmaaAnnualSurcharge = calcIRMAA(irmaaMAGI, filingStatus, inflationFactor) * 12;
 
     return {
         fedAGI: Math.round(fedAGI),
@@ -817,7 +825,7 @@ function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=
 
 function calcIRMAA(magi, status, inflation) {
 	let irmaalimit = findLowerLimitByLimit( 'IRMAA', status, magi, inflation)
-	return irmaalimit.rate * inflation
+	return irmaalimit.rate * inflation * 12
 }
 
 /** UI CONTROLS **/
@@ -1055,8 +1063,12 @@ function runTests() {
 		'calculateProgressive(TEST,SGL,72000) ok')
 		
 	assertEqual(calculateProgressive('NONEXISTENT','SGL',72000), 
-		{cumulative: 0, limit: 0, marginal: 0, total: 0, error: "Invalid entity or status"}, 
+		{cumulative: 0, total: 0, marginal: 0, limit: 0, error: 'Invalid entity or status'}, 
 		'calculateProgressive(NONEXISTENT,...) ok')
+
+	assertEqual(calculateProgressive('TEST','NONEXISTENT',72000), 
+		{cumulative: 0, total: 0, marginal: 0, limit: 0, error: 'Invalid entity or status'}, 
+		'calculateProgressive(TEST,NONEXISTENT,...) ok')
 
     
     console.log('\n========================================');

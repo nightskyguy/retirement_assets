@@ -365,12 +365,36 @@ const startAge = (birthYear >= 1960) ? 75 : 73;
     return 1/(RMD_TABLE[age]);
 }
 
+// Calculate the withdrawal rate to reduce an account from currentIRA to targetIRA
+function calculateSystematicWithdrawal(currentIRA, targetIRA, years, growthRate) {
+    // Amount that needs to be withdrawn
+    const excessAmount = currentIRA - targetIRA;
+    
+    // Grow the target to its future value
+    const targetFV = targetIRA * Math.pow(1 + growthRate, years);
+    
+    // Calculate required annual withdrawal (amortization of excess)
+    const r = growthRate;
+    const n = years;
+    
+    if (r === 0) {
+        return excessAmount / n;
+    }
+    
+    const withdrawal = excessAmount * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+    
+    return withdrawal;
+}
+
+// Example: $1M IRA, want to get down to $200K over 10 years, 6% growth
+const withdrawal = calculateSystematicWithdrawal(1000000, 200000, 10, 0.06);
+
 
 // Find the top amount in the provided brackets. If the bracket isn't found, it finds 
 // the limit in the next lower bracket.  This doesn't check to be sure any values are reasonable.
 
 function findLimitByRate( entity, status, tgtrate, inflation) {
-    let brks = TAXData[entity][status].brackets;
+    let brks = TAXData?.[entity]?.[status]?.brackets;
 
     let limit = 0;
 	let rate = 0;
@@ -379,6 +403,7 @@ function findLimitByRate( entity, status, tgtrate, inflation) {
         if (b.r <= tgtrate ) {
 			limit = b.l * inflation;
 			rate = b.r;
+			break;
         }
     }
 	return { limit, rate: rate }
@@ -392,10 +417,11 @@ function findLowerLimitByLimit( entity, status, tgtlimit, inflation) {
     let limit = 0;
 	let rate = 0;
 	
-    for (let b of TAXData[entity][status].brackets) {
+    for (let b of TAXData?.[entity]?.[status]?.brackets) {
         if (b.l * inflation <= tgtlimit ) {
 			limit = b.l * inflation;
 			rate = b.r;
+			break;
         }
     }
 	return { limit, rate: rate }
@@ -420,6 +446,7 @@ function simulate(inputs) {
     let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear1 + inputs.die2) - startYear + 1;
 	let cpiRate = 1
 	let inflation = 1
+	let fixedWithdrawal = calculateSystematicWithdrawal(state.ira1 + state.ira2, inputs.iraBaseGoal, inputs.stratN,inputs.growth)
 
     for (let y = 0; y < maxYears; y++) {
 		cpiRate = (1 + inputs.cpi) * cpiRate
@@ -467,13 +494,13 @@ function simulate(inputs) {
 		//!!! Find the income federal limit. TODO: use that limit, to refine down to the next lower IRMAA limit and next lower State Limit.
 		let fedRate = 0.12 // For now...
 		let stateRate = 0.06 // For now... !!TODO
-
+		
 
         if (inputs.strat === 'fixed') {
             let remYears = Math.max(1, inputs.stratN - y);
 			//!!! Doesn't have a floor to map to.
 			let curIRA = state.ira1 + state.ira2 - inputs.iraBaseGoal;
-			let amortized = (1 + inputs.growth) ** remYears * curIRA / remYears;
+			let amortized = fixedWithdrawal
             iraWD = Math.max(totalRMD, Math.max(0,amortized));
         } else if (inputs.strat === 'bracket') {
 			//!!! This code has flaws.  Withdraws too much.
@@ -502,7 +529,7 @@ function simulate(inputs) {
         let irmaa = calcIRMAA(state.magiHistory[state.magiHistory.length-2], status, cpiRate);
 		//!!! Assumes capital gains is zero. Not tracking cap gains.
         let tax = calculateTax(fixedInc, iraWD + totalRMD, 0, status, age1, age2, cpiRate);
-        let totalTax = tax.fed + tax.state + irmaa;
+        let totalTax = tax.total + irmaa;
 
         // 6. Cash Flow Gap
         let netCash = (fixedInc + iraWD) - totalTax;
@@ -574,8 +601,10 @@ function simulate(inputs) {
             tax: totalTax,
 			fedtax: tax.fed,
 			statetax: tax.state,
-            bracket: tax.bracket,
-            stbracket: tax.stbracket,
+            bracket: tax.fedLimit,
+			stbracket: tax.stLimit,
+			fedRate: tax.fedRate,
+			stRate: tax.stRate,
 			netInc: iraWD + rothWD + brokWD + cashWD + fixedInc - totalTax,
             ira1Bal: state.ira1,
 			ira2Bal: state.ira2,
@@ -724,9 +753,8 @@ function getCABrackets(status, idx) {
 }
 
 // Do a progressive calculation on the bracket.
-function calculateProgressive(entity, status, amount, options = {}) {
-    const { inflation = 1, ratecreep = 1 } = options;
-    
+function calculateProgressive(entity, status, amount, inflation=1, ratecreep=1) {
+ 
     let brks = TAXData[entity]?.[status]?.brackets;
     
     if (!brks) {
@@ -756,33 +784,35 @@ function calculateProgressive(entity, status, amount, options = {}) {
     return { cumulative, total: cumulative, marginal: marginalRate, limit: prevLimit }
 }
 
-function calculateTax(fixed, ira, gains, status, a1, a2, inflation) {
-    let std = TAXData["FEDERAL"][status].std;
-    if (a1 >= TAXData["FEDERAL"][status].age) std += TAXData["FEDERAL"][status].stdbump * inflation;
-    if (a2 >= TAXData["FEDERAL"][status].age && status === 'MFJ') std += TAXData["FEDERAL"][status].stdbump * inflation;
+function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=1) {
+    let std = TAXData["FEDERAL"]?.[status]?.std;
+    if (a1 >= TAXData["FEDERAL"]?.[status]?.age) std += TAXData["FEDERAL"][status].stdbump * inflation;
+    if (a2 >= TAXData["FEDERAL"]?.[status]?.age && status === 'MFJ') std += TAXData["FEDERAL"][status].stdbump * inflation;
 
     let agi = fixed + ira + gains;
     let taxable = Math.max(0, agi - std);
-    let fed = 0;
-    let brks = TAXData["FEDERAL"][status].brackets;
-    let marginalRate = 0;
-
-
+	
+	let calc = calculateProgressive('FEDERAL', status, taxable, inflation);
+	let fedTax = calc.cumulative;
+	let fedRate = calc.marginal;
+	let fedLimit = calc.limit;
+	
 	
 	// Calculate (CA) State Tax
-	let stTax = 0;
-	let stMarginalRate = 0;
-	brks = TAXData["STATE"][status].brackets
-    let stPrevLimit = 0;
-    for (let s of brks) {
-        if (taxable > stPrevLimit) {
-            stTax += (Math.min(taxable, s.l * inflation) - stPrevLimit) * s.r;
-            stMarginalRate = s.r;
-            stPrevLimit = s.l * inflation;
-        }
-    }
+	// State basis is calculated differently.
+	let stStd = TAXData["STATE"]?.[status]?.std;
 	
-    return { fed, state: stTax, magi: agi, bracket: marginalRate, stbracket: stMarginalRate};
+	//!!!TODO: This is wrong. It should be calculated with the state deduction(s).
+	let stAGI = taxable;
+	calc = calculateProgressive('STATE', status, agi, inflation);
+	let stTax = calc.cumulative;
+	let stLimit = calc.limit;
+	let stRate = calc.marginal;
+	
+	let totalTax = fedTax + stTax
+	
+    return { total: totalTax, fed: fedTax, state: stTax, magi: agi, stagi: stAGI, 
+			fedLimit: fedLimit, stLimit: stLimit, fedRate: fedRate, stRate: stRate};
 }
 
 function calcIRMAA(magi, status, inflation) {
@@ -863,7 +893,7 @@ function updateTable(log) {
             <td>${Math.round(r.statetax).toLocaleString()}</td>
             <td>${Math.round(r.irmaa).toLocaleString()}</td>
             <td class="neg">${Math.round(r.tax).toLocaleString()}</td>
-            <td>${(r.bracket * 100).toFixed(1)}%</td> <td>${Math.round(r.netInc).toLocaleString()}</td>
+            <td>${(r.fedRate * 100).toFixed(1)}%</td> <td>${Math.round(r.netInc).toLocaleString()}</td>
             <td>${Math.round(r.ira1Bal).toLocaleString()}</td>
             <td>${Math.round(r.ira2Bal).toLocaleString()}</td>
             <td>${Math.round(r.rothBal).toLocaleString()}</td>
@@ -1025,7 +1055,7 @@ function runTests() {
 		'calculateProgressive(TEST,SGL,72000) ok')
 		
 	assertEqual(calculateProgressive('NONEXISTENT','SGL',72000), 
-		{cumulative: 15350, total: 15350, marginal: 0.8, limit: 20000}, 
+		{cumulative: 0, limit: 0, marginal: 0, total: 0, error: "Invalid entity or status"}, 
 		'calculateProgressive(NONEXISTENT,...) ok')
 
     

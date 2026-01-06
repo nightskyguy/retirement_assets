@@ -131,7 +131,7 @@
 				<div class="drawer-content">
 					<ul>
 						<li><strong>1. Profile &amp; Ages:</strong> Enter current ages as of <B>the END of the current year</B> and estimated life expectancy for both partners. To model a single taxpayer, set the <I>Spouse age</I> and life expectancy to zero for spouse.</li>
-						<li><strong>2. Assets:</strong> Enter balances. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Brokerage withdrawals will be assumed to be part subject to capital gains. Total all after tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the living spouse.</li>
+						<li><strong>2. Assets:</strong> Enter balances. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Brokerage withdrawals will be assumed to be part subject to capital gains. Total all after tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. <i>For Roth</i>, sum the existing ROTH balances into one total.</li>
 						<li><strong>3. Income &amp; Spend:</strong> Input annual Social Security and pensions. Set the start ages to see the impact of delaying benefits. Amounts you enter for <i>Social Security Amt</i> will be adjusted annually by the <i>CPI/COLA</i>. Set the <i>After-Tax Sending Goal</i> to the amount of after-tax income you need per year. And set the <i>Spend Delta</i> percentage. A Spend Delta of 100 means no change, while a 98.5 would reduce spending by 1.5% each year. To have spending grow, use a number greater than 100%</li>
 						<li><strong>4. Assumptions:</strong> choose the Inflation rate, the CPI rate (which is the expected change in tax brackets rather than actual inflation), the <i>Growth</i> rate for the IRA/401K, Brokerage &amp; ROTH.  <i>Cash Interest</i> is the expected interest on cash and cash-like investments (e.g. Mutual Funds/Bonds). To make these numbers accurate, it's best to separate all investments into "Brokerage" and cash into Cash.</li>
 						<li><strong>5. Strategy:</strong> 
@@ -139,7 +139,7 @@
 							<li>Compare with <em>Reduce IRA in N Years</em> to amortize your IRAs in a fixed number of years (they won't be emptied, they will be drawn down to <i>IRA Reduction Goal</i>.</li>
 							<li><i>Fill Federal Tax Bracket</i> withdraws enough to max out the chosen federal tax bracket.</li>
 							<li><i>Lesser of IRMAA or ...</i> is not yet implemented, but here it's like <i>Fill Federal Tax Bracket</i>, but reduces the amount withdrawn to stay under the (next) IRMAA tier.</li></ul>
-						<li><strong>After Changes...</strong> selecting the Annual Details, Visual Analysis or Optimizer will cause a recalculation and show the page. 
+						<li><strong>After Changes...</strong> selecting the Annual Details, Chart or Optimizer will cause a recalculation and show the page. 
 						<I>Optimizer</I> finds the mathematical "sweet spot" for emptying IRAs to minimize lifetime total tax and maximize total spendable value. It checks different drawdown years - that is the same thing as the <i>Reduce IRA in N Years</i> but it loops through from 1 to 30 years.</li>
 						</li>
 					</ul>
@@ -171,7 +171,7 @@
 				<summary>Background</summary>
 				<div class=drawer-content"><div class="drawer-section">
 		<h3>Who is this For, What are the Caveats</h3>
-		<p>A California resident built this with <a HREF="https://gemini.google.com" target="_blank">Google gemini AI assistance</A> because he is in retirement and has an unhealthy IRA balance to manage. The purpose of this tool, therefore, is to model as accurately as possible the remaining years of life with respect to spendable cash and taxation - and to determine how to optimize spendable cash. This tool may be useful to you are in or very near retirement.  Signficantly more analysis is needed to do pre-retirement optimization.
+		<p>A California resident built this with <a HREF="https://gemini.google.com" target="_blank">Google gemini AI assistance</A> because he is in retirement and has an unhealthy IRA balance to manage. The purpose of this tool, therefore, is to model as accurately as possible the remaining years of life with respect to spendable cash and taxation - and to determine how to optimize spendable cash. This tool may be useful to you if are in or very near retirement.  Signficantly more analysis is needed to do pre-retirement optimization. Nor is the goal of this tool to optimize asset location or asset allocation.
 		
 		Many focus on <i>Roth Conversions</i> and that's not wrong thinking, but such a view misses the big picture of WHY to do conversions. Also from the time one stops getting regular W2 income until the time one starts receiving pensions or social security is known as the "valley of opportunity".  During this otherwise low income period, strategic withdrawals and movement is possible. Ultimately you are in a better place if you have <i>degrees of freedom</i> in your assets - more on this in a moment. It also does not make sense to pay more tax than necessary. I do not see taxation as evil, but it does not feel "right" to pay up to 14,000/year in IRMAA fees for no net benefit in Medicare - but that is one of the many pitfalls of having too much forced income.
 		
@@ -214,7 +214,7 @@
 
         <div class="tabs">
             <button id="btn-tbl" class="tab-btn active" onclick="{runSim(); showTab('tab-tbl')}">Annual Details</button>
-            <button id="btn-cht" class="tab-btn" onclick="{showTab('tab-chart')}">Visual Analysis</button>
+            <button id="btn-cht" class="tab-btn" onclick="{showTab('tab-chart')}">Chart</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOpt(); showTab('tab-opt')}">Optimizer</button>
         </div>
 
@@ -249,34 +249,6 @@
 
 <script>
 /** TAX CONSTANTS **/
-const TAX_LATEST = {
-	// 2025 values.
-    FED_MFJ: [{l:23850, r:0.10}, {l:96950, r:0.12}, {l:206700, r:0.22}, {l:394600, r:0.24}, {l:1e9, r:0.37}],
-    FED_SGL: [{l:11925, r:0.10}, {l:48475, r:0.12}, {l:103350, r:0.22}, {l:197300, r:0.24}, {l:1e9, r:0.37}],
-    IRMAA_MFJ: [212000, 266000, 334000, 400000, 750000],
-    IRMAA_COST: [0, 1000, 2500, 4000, 5500, 6800],
-    STATE_MFJ: [{l:20824, r:0.01}
-		, {l:49368, r:0.02}
-		, {l:77918, r:0.04}
-		, {l:108162, r:0.06}
-		, {l:136700, r:0.08}
-		, {l:698274, r:0.093}
-		, {l:837922, r:0.103}
-		, {l:1000000, r:0.123}
-		, {l:1e9, r:0.133}],
-    STATE_SGL: [{l:10412, r:0.01}
-		, {l:24684, r:0.02}
-		, {l:38959, r:0.04}
-		, {l:54081, r:0.06}
-		, {l:68350, r:0.08}
-		, {l:349137, r:0.093}
-		, {l:418961, r:0.103}
-		, {l:698271, r:0.123}
-		, {l:1e9, r:0.133}],
-	STATE_STD: {"MFJ": 10804, "SGL": 5402}
-	};
-
-
 const TAXData = {
     STATE: {
 		YEAR: 2025,
@@ -330,12 +302,12 @@ const TAXData = {
 		MFJ: {
 			brackets: [
 				{ l: 218000 - 1, r: 0}, 
-				{ l: 218000, r: 202.90 },
-				{ l: 274000, r: 284.10 + 14.50 },
-				{ l: 348000, r: 405.90 + 37.60 },
-				{ l: 410000, r: 527.70 + 60.60 },
-				{ l: 750000, r: 649.50 + 83.70 },
-				{ l: 1e9, r: 689.90 + 91.00 }
+				{ l: 218000, r: (2 * 202.90) },
+				{ l: 274000, r: 2 * (284.10 + 14.50) },
+				{ l: 348000, r: 2 * (405.90 + 37.60) },
+				{ l: 410000, r: 2 * (527.70 + 60.60) },
+				{ l: 750000, r: 2 * (649.50 + 83.70) },
+				{ l: 1e9, r: 2 * (689.90 + 91.00) }
 			]
 		},
 		
@@ -380,7 +352,6 @@ const startAge = (birthYear >= 1960) ? 75 : 73;
 }
 
 
-
 // Find the top amount in the provided brackets. If the bracket isn't found, it finds 
 // the limit in the next lower bracket.  This doesn't check to be sure any values are reasonable.
 
@@ -398,9 +369,6 @@ function findLimitByRate( entity, status, tgtrate, inflation) {
     }
 	return { limit, rate: rate }
 }
-
-
-let fedLimit = findLimitbyRate('FEDERAL', 'MFJ', 0.24, 1);
 
 
 // Find the lower limit corresponding to the tgtlimit. 
@@ -494,7 +462,7 @@ function simulate(inputs) {
         } else if (inputs.strat === 'bracket') {
 			//!!! This code has flaws.  Withdraws too much.
 
-			let fedLimit = findLimitbyRate('FEDERAL', status, inputs.stratVal/100.0, cpiRate);
+			let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratVal/100.0, cpiRate);
 			let limit = fedLimit.limit - taxableInc - fixedInc;
 			fedRate = fedLimit.rate;	
 
@@ -515,7 +483,7 @@ function simulate(inputs) {
         iraWD = Math.min(iraWD, state.ira1 + state.ira2);
 
         // 5. Tax Calc (Including IRMAA lag)
-        let irmaa = calcIRMAA(state.magiHistory[state.magiHistory.length-2], status);
+        let irmaa = calcIRMAA(state.magiHistory[state.magiHistory.length-2], status, cpiRate);
 		//!!! Assumes capital gains is zero. Not tracking cap gains.
         let tax = calculateTax(fixedInc, iraWD + totalRMD, 0, status, age1, age2, cpiRate);
         let totalTax = tax.fed + tax.state + irmaa;
@@ -652,8 +620,8 @@ function calculateTaxes(params) {
     const fedAGI = earnedIncome + ordDivInterest + qualifiedDiv + capGains + taxableSS - hsaContrib;
     
     // Standard Deduction with Age 65+ bump
-    let fedStdDeduct = (filingStatus === 'MFJ' ? 30000 : 15000) * inflationFactor;
-    ages.forEach(age => { if (age >= 65) fedStdDeduct += (1550 * inflationFactor); });
+    let fedStdDeduct = TAXData['FEDERAL'][filingStatus].std * inflationFactor;
+    ages.forEach(age => { if (age >= TAXData['FEDERAL'][filingStatus].age) fedStdDeduct += (TAXData['FEDERAL'][filingStatus].stdbump * inflationFactor); });
 
     const fedTaxableIncome = Math.max(0, fedAGI - fedStdDeduct);
     const prefIncome = qualifiedDiv + capGains; // Income taxed at 0/15/20%
@@ -667,7 +635,7 @@ function calculateTaxes(params) {
     // CA Add-backs: HSA is taxable. Muni interest is taxable (assuming out-of-state for conservative estimate).
     // CA Subtractions: Social Security is 100% exempt.
     const caAGI = (fedAGI - taxableSS) + hsaContrib + taxExemptInterest;
-    const caStdDeduct = (filingStatus === 'MFJ' ? TAX_LATEST.STATE_STD_MFJ : TAX_LATEST.STATE_STD_SGL) * inflationFactor;
+    const caStdDeduct = TAXData['STATE'][filingStatus].std * inflationFactor;
     const caTaxableIncome = Math.max(0, caAGI - caStdDeduct);
     const caTax = calcProgressive(caTaxableIncome, getCABrackets(filingStatus, inflationFactor));
 
@@ -725,14 +693,6 @@ function calcPrefTax(ordTaxable, prefIncome, status, idx) {
     return tax;
 }
 
-function calcIRMAA(magI, status, idx) {
-    const brackets = (status === 'MFJ' ? [212000, 266000, 332000, 398000, 750000] : [106000, 133000, 166000, 199000, 500000]).map(v => v * idx);
-    const surcharges = [0, 850, 2100, 3400, 4700, 5100]; // Annualized estimate
-    for (let i = brackets.length - 1; i >= 0; i--) {
-        if (magI > brackets[i]) return surcharges[i + 1] * (status === 'MFJ' ? 2 : 1);
-    }
-    return 0;
-}
 
 function getFedBrackets(status, idx) {
     return status === 'MFJ' 
@@ -749,7 +709,6 @@ function getCABrackets(status, idx) {
 
 function calculateTax(fixed, ira, gains, status, a1, a2, inflation) {
     let std = TAXData["FEDERAL"][status].std;
-	// status === 'MFJ' ? TAX_LATEST.STD_MFJ : TAX_LATEST.STD_SGL);
     if (a1 >= TAXData["FEDERAL"][status].age) std += TAXData["FEDERAL"][status].stdbump * inflation;
     if (a2 >= TAXData["FEDERAL"][status].age && status === 'MFJ') std += TAXData["FEDERAL"][status].stdbump * inflation;
 
@@ -784,13 +743,9 @@ function calculateTax(fixed, ira, gains, status, a1, a2, inflation) {
     return { fed, state: stTax, magi: agi, bracket: marginalRate, stbracket: stMarginalRate};
 }
 
-function calcIRMAA(magi, status) {
-    let tiers = TAX_LATEST.IRMAA_MFJ;
-    if (status === 'SGL') tiers = tiers.map(t => t/2);
-    for (let i = 0; i < tiers.length; i++) {
-        if (magi < tiers[i]) return TAX_LATEST.IRMAA_COST[i];
-    }
-    return TAX_LATEST.IRMAA_COST[5];
+function calcIRMAA(magi, status, inflation) {
+	let irmaalimit = findLowerLimitByLimit( 'IRMAA', status, magi, inflation)
+	return irmaalimit.rate * inflation
 }
 
 /** UI CONTROLS **/
@@ -926,8 +881,6 @@ function updateCharts(log) {
 		}
     });
 }
-//                 { label: 'Total Tax', data: log.map(r => r.tax), borderColor: '#e74c3c', type: 'bar', backgroundColor: '#e74c3c', stacked: true},
-
 
 function val(id) { return document.getElementById(id).value; }
 
@@ -952,6 +905,90 @@ function toggleStratUI() {
     document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket');
 }
 
+
+// ===== UNIT TESTS =====
+function runTests() {
+    console.log('========================================');
+    console.log('   RUNNING UNIT TESTS');
+    console.log('========================================\n');
+    
+    let passed = 0;
+    let failed = 0;
+    
+    // Helper function to assert equality
+    function assertEqual(actual, expected, testName) {
+        if (JSON.stringify(actual) === JSON.stringify(expected)) {
+            console.log(`✅ PASS: ${testName}`);
+            passed++;
+        } else {
+            console.log(`❌ FAIL: ${testName}`);
+            console.log(`   Expected:`, expected);
+            console.log(`   Got:`, actual);
+            failed++;
+        }
+    }
+    
+    // Test 1: findLimitByRate - basic case
+    let result1 = findLimitByRate('FEDERAL', 'MFJ', 0.24, 1);
+    assertEqual(result1, { limit: 383900, rate: 0.24 }, 
+                'findLimitByRate: Federal MFJ 24% bracket');
+    
+    // Test 2: findLimitByRate - with inflation
+    let result2 = findLimitByRate('FEDERAL', 'MFJ', 0.24, 1.03);
+    assertEqual(result2, { limit: 395417, rate: 0.24 }, 
+                'findLimitByRate: Federal MFJ 24% bracket with 3% inflation');
+    
+    // Test 3: findLimitByRate - rate not found (should return next lower)
+    let result3 = findLimitByRate('FEDERAL', 'SGL', 0.25, 1);
+    assertEqual(result3, { limit: 191950, rate: 0.24 }, 
+                'findLimitByRate: 0.25 Rate not found, returns next lower 0.24');
+    
+    // Test 4: State brackets
+    let result4 = findLimitByRate('STATE', 'SGL', 0.06, 1);
+    assertEqual(result4, { limit: 54081, rate: 0.06 }, 
+                'findLimitByRate: State SGL 6% bracket');
+	
+
+
+	assertEqual(getRMDPercentage(74, 1960), 0,
+			'getRMDPercentage for age 74, birth year 1960 correct (0)');	
+
+	assertEqual(getRMDPercentage(76, 1950), 0.04219409282700422,
+			'getRMDPercentage for age 76, birth year 1950 correct (4.2%)');
+
+	assertEqual(calcIRMAA(100, 'SGL', 1), 0,
+				'calcIRMAA returned 0 for SGL at 100 income');
+
+	assertEqual(calcIRMAA(109001, 'SGL', 1), 202.9,
+				'calcIRMAA returned 202.9 for SGL at 109001 income');
+
+
+	assertEqual(calcIRMAA(273999, 'MFJ', 1), (2 * 202.90),
+				'calcIRMAA returned (2 * 202.90) for 273999 MFJ income');    
+
+	assertEqual(calcIRMAA(274000, 'MFJ', 1), 2 * (284.10 + 14.50),
+				'calcIRMAA returned 2 * (284.10 + 14.50) for 274000 MFJ income');
+	
+
+	
+    // RMD percentage lookup
+    if (typeof getRMDPercentage !== 'undefined') {
+        let rmd73 = getRMDPercentage(73, 1952);
+        assertEqual(rmd73 > 0.037 && rmd73 < 0.038, true,
+                    'RMD: Age 73 should be ~3.77% (divisor 26.5)');
+    }
+    
+    console.log('\n========================================');
+    console.log(`   RESULTS: ${passed} passed, ${failed} failed`);
+    console.log('========================================');
+    
+    return failed === 0;
+}
+
+// Auto-run tests when page loads (comment out if you don't want auto-run)
+// window.addEventListener('DOMContentLoaded', runTests);
+
+runTests();
 runSim();
 </script>
 </body>

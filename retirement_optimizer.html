@@ -10,17 +10,15 @@
 </head>
 <body>
 
-
-
 <div class="container">
     <div class="sidebar">
         <h3>1. Profile & Ages</h3>
         <div class="row">
-            <div><label>Your Age <B>at year end</B></label><input type="number" id="age1" value="65"></div>
+            <div><label>Your Birth Year</label><input type="number" id="birthyear1" value="1960"></div>
             <div><label>Life Expectancy</label><input type="number" id="die1" value="88"></div>
         </div>
         <div class="row">
-            <div><label>Spouse Age <B>at year end</B></label><input type="number" id="age2" value="73"></div>
+            <div><label>Spouse Birth Year</B></label><input type="number" id="birthyear2" value="1952"></div>
             <div><label>Spouse Life Expectancy</label><input type="number" id="die2" value="98"></div>
         </div>
 
@@ -97,12 +95,12 @@
     </div>
 
     <div class="main">
-	
-		<div class="header-drawers">
+			<div class="header-drawers">
 			<details class="top-drawer"><summary>Change Log</summary>
 				<div class="log-entry">
 					<strong>v6.m:</strong> More self tests, some rework. WARNING: calculations have not all be fixed.
 				</div>	
+				<div>
 					<strong>v6.k:</strong> Reworked tax brackets for sanity ease of update. Added more instructions. 
 				</div>	
 				<div class="log-entry">
@@ -414,18 +412,20 @@ function simulate(inputs) {
     
     let log = [];
     let totals = { tax: 0, gross: 0, spend: 0 };
+	//!!!TODO Remove hardcoded start year!
     let startYear = 2026;
-    let maxYears = Math.max(inputs.die1 - inputs.age1, inputs.die2 - inputs.age2) + 1;
-	let birthyear1 = startYear - inputs.age1 - 1
-	let birthyear2 = startYear - inputs.age2 - 1
+	let birthyear1 = inputs.birthyear1;
+	let birthyear2 = inputs.birthyear2;
+
+    let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear1 + inputs.die2) - startYear + 1;
 	let cpiRate = 1
 	let inflation = 1
 
     for (let y = 0; y < maxYears; y++) {
 		cpiRate = (1 + inputs.cpi) * cpiRate
 		inflation = (1 + inputs.inflation) * inflation
-        let age1 = inputs.age1 + y;
-        let age2 = inputs.age2 + y;
+        let age1 = startYear - birthyear1 + y;
+        let age2 = startYear - birthyear2 + y;
         let alive1 = age1 <= inputs.die1;
         let alive2 = age2 <= inputs.die2;
         if (!alive1 && !alive2) break;
@@ -793,7 +793,7 @@ function calcIRMAA(magi, status, inflation) {
 /** UI CONTROLS **/
 function getInputs() {
     return {
-        age1: +val('age1'), die1: +val('die1'), age2: +val('age2'), die2: +val('die2'),
+        birthyear1: +val('birthyear1'), die1: +val('die1'), birthyear2: +val('birthyear2'), die2: +val('die2'),
         ira1: +val('balIRA1'), ira2: +val('balIRA2'), roth: +val('balRoth'),
         brok: +val('balBrok'), basis: +val('basisBrok'), cash: +val('balCash'),
         ss1: +val('ss1'), ss1Age: +val('ss1Age'), ss2: +val('ss2'), ss2Age: +val('ss2Age'),

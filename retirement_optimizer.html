@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer V6k</title>
+    <title>Retirement Optimizer V6m</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles.css">
 	<base target="_blank">		
@@ -101,7 +101,9 @@
 		<div class="header-drawers">
 			<details class="top-drawer"><summary>Change Log</summary>
 				<div class="log-entry">
-					<strong>v6.k:</strong> Reworked tax brackets for sanity ease of update. Added more instructions. WARNING: calculations have not all be fixed.
+					<strong>v6.m:</strong> More self tests, some rework. WARNING: calculations have not all be fixed.
+				</div>	
+					<strong>v6.k:</strong> Reworked tax brackets for sanity ease of update. Added more instructions. 
 				</div>	
 				<div class="log-entry">
 					<strong>v6.j:</strong> Move style sheet out for readability.
@@ -250,6 +252,14 @@
 <script>
 /** TAX CONSTANTS **/
 const TAXData = {
+	TEST: {
+		// Data used for testing only.
+		YEAR: 2026,
+		MFJ: {
+			std: 100, brackets: [{l: 1000, r: 0.1},  {l: 2000, r: 0.2}, {l: 40000, r: 0.8} ]	},
+		SGL: {
+			std: 100/2, brackets: [{l: 1000/2, r: 0.1},  {l: 2000/2, r: 0.2}, {l: 40000/2, r: 0.8} ]}
+	},
     STATE: {
 		YEAR: 2025,
         MFJ: {
@@ -293,6 +303,12 @@ const TAXData = {
         }
     },
 	
+	SOCIALSECURITY: {
+		Year: 2025,
+		MFJ: { brackets: [{ l:32000-1, r: 0.0}, { l:32000, r: 0.5}, {l: 44000, r: 0.85}] },
+		MFJ: { brackets: [{ l:32000-1, r: 0.0}, { l:32000, r: 0.5}, {l: 44000, r: 0.85}] }
+		},
+
 	IRMAA: {
 		YEAR: 2026,
 		LOOKBACK: 2024,  // Based on 2024 tax return
@@ -607,6 +623,8 @@ function calculateTaxes(params) {
     const provisionalIncome = earnedIncome + ordDivInterest + qualifiedDiv + capGains + taxExemptInterest - hsaContrib + (totalSS * 0.5);
     
     let taxableSS = 0;
+	//!!! TODO This logic can be replace with calculateProgressive using the provisionalIncome?!
+	taxableSS = calculateProgressive('SOCIALSECURITY', filingStatus, provisionalIncome, inflationFactor).cumulative
     const ssThreshold1 = (filingStatus === 'MFJ' ? 32000 : 25000) * inflationFactor;
     const ssThreshold2 = (filingStatus === 'MFJ' ? 44000 : 34000) * inflationFactor;
 
@@ -705,7 +723,38 @@ function getCABrackets(status, idx) {
     return base.map(b => ({ limit: b.limit * (status === 'MFJ' ? 2 : 1) * idx, rate: b.rate }));
 }
 
-
+// Do a progressive calculation on the bracket.
+function calculateProgressive(entity, status, amount, options = {}) {
+    const { inflation = 1, ratecreep = 1 } = options;
+    
+    let brks = TAXData[entity]?.[status]?.brackets;
+    
+    if (!brks) {
+        console.error(`Invalid tax data: entity="${entity}", status="${status}"`);
+        return { cumulative: 0, total: 0, marginal: 0, limit: 0, error: 'Invalid entity or status' };
+    }
+    
+    let prevLimit = 0;
+    let cumulative = 0;
+    let marginalRate = 0;
+    
+    for (let b of brks) {
+        let currentLimit = b.l * inflation;
+        
+        if (amount <= currentLimit) {
+            cumulative += (amount - prevLimit) * b.r * ratecreep;
+            marginalRate = b.r * ratecreep;
+            prevLimit = currentLimit;
+            break;
+        } else {
+            cumulative += (currentLimit - prevLimit) * b.r * ratecreep;
+            marginalRate = b.r * ratecreep;
+            prevLimit = currentLimit;
+        }
+    }
+    
+    return { cumulative, total: cumulative, marginal: marginalRate, limit: prevLimit }
+}
 
 function calculateTax(fixed, ira, gains, status, a1, a2, inflation) {
     let std = TAXData["FEDERAL"][status].std;
@@ -718,14 +767,7 @@ function calculateTax(fixed, ira, gains, status, a1, a2, inflation) {
     let brks = TAXData["FEDERAL"][status].brackets;
     let marginalRate = 0;
 
-    let prevLimit = 0;
-    for (let b of brks) {
-        if (taxable > prevLimit) {
-            fed += (Math.min(taxable, b.l * inflation) - prevLimit) * b.r;
-            marginalRate = b.r;
-            prevLimit = b.l * inflation;
-        }
-    }
+
 	
 	// Calculate (CA) State Tax
 	let stTax = 0;
@@ -927,56 +969,65 @@ function runTests() {
             failed++;
         }
     }
+
+	// These use TEST data and should NOT need to be changed.
+    let result1 = findLimitByRate('TEST', 'MFJ', 0.2, 1);
+    assertEqual(result1, {limit: 2000, rate: 0.2}, 
+                'findLimitByRate: TEST MFJ 20% rate correct');
     
-    // Test 1: findLimitByRate - basic case
-    let result1 = findLimitByRate('FEDERAL', 'MFJ', 0.24, 1);
-    assertEqual(result1, { limit: 383900, rate: 0.24 }, 
-                'findLimitByRate: Federal MFJ 24% bracket');
+    assertEqual(findLimitByRate('TEST', 'SGL', 0.2, 3), {limit: 3000, rate: 0.2}, 
+                'findLimitByRate: TEST SGL 20% rate w/ 300% inflation');	
+
+    assertEqual(findLimitByRate('TEST', 'SGL', 0.9, 1), {limit: 20000, rate: 0.8}, 
+                'findLimitByRate: TEST SGL 90% - finds lower rate: 80%');	
     
-    // Test 2: findLimitByRate - with inflation
-    let result2 = findLimitByRate('FEDERAL', 'MFJ', 0.24, 1.03);
-    assertEqual(result2, { limit: 395417, rate: 0.24 }, 
-                'findLimitByRate: Federal MFJ 24% bracket with 3% inflation');
-    
-    // Test 3: findLimitByRate - rate not found (should return next lower)
-    let result3 = findLimitByRate('FEDERAL', 'SGL', 0.25, 1);
-    assertEqual(result3, { limit: 191950, rate: 0.24 }, 
-                'findLimitByRate: 0.25 Rate not found, returns next lower 0.24');
-    
-    // Test 4: State brackets
-    let result4 = findLimitByRate('STATE', 'SGL', 0.06, 1);
-    assertEqual(result4, { limit: 54081, rate: 0.06 }, 
+    assertEqual(findLimitByRate('TEST', 'SGL', 0.05, 1), {limit: 0, rate: 0}, 
+                'findLimitByRate: TEST SGL 5% finds no limit or rate (0)');	
+				
+				
+	// NOTE NOTE NOTE: All of the following tests are sensitive to the real TAXData.
+    assertEqual(findLimitByRate('STATE', 'SGL', 0.06, 1), { limit: 54081, rate: 0.06 }, 
                 'findLimitByRate: State SGL 6% bracket');
-	
 
-
-	assertEqual(getRMDPercentage(74, 1960), 0,
-			'getRMDPercentage for age 74, birth year 1960 correct (0)');	
-
-	assertEqual(getRMDPercentage(76, 1950), 0.04219409282700422,
-			'getRMDPercentage for age 76, birth year 1950 correct (4.2%)');
-
-	assertEqual(calcIRMAA(100, 'SGL', 1), 0,
-				'calcIRMAA returned 0 for SGL at 100 income');
-
-	assertEqual(calcIRMAA(109001, 'SGL', 1), 202.9,
-				'calcIRMAA returned 202.9 for SGL at 109001 income');
-
-
-	assertEqual(calcIRMAA(273999, 'MFJ', 1), (2 * 202.90),
-				'calcIRMAA returned (2 * 202.90) for 273999 MFJ income');    
-
-	assertEqual(calcIRMAA(274000, 'MFJ', 1), 2 * (284.10 + 14.50),
-				'calcIRMAA returned 2 * (284.10 + 14.50) for 274000 MFJ income');
-	
-
-	
+	// RMD Percentages.  First should be 0, second should match.
     // RMD percentage lookup
     if (typeof getRMDPercentage !== 'undefined') {
         let rmd73 = getRMDPercentage(73, 1952);
         assertEqual(rmd73 > 0.037 && rmd73 < 0.038, true,
                     'RMD: Age 73 should be ~3.77% (divisor 26.5)');
     }
+
+	assertEqual(getRMDPercentage(74, 1960), 0,
+			'getRMDPercentage for age 74, birth year 1960 correct (0)');	
+
+	assertEqual(getRMDPercentage(74, 1950), 0.0392156862745098,
+			'getRMDPercentage for age 76, birth year 1950 correct (4.2%)');
+
+	assertEqual(calcIRMAA(100, 'SGL', 1), 0,
+				'calcIRMAA  0 for SGL at 100 income');
+
+	assertEqual(calcIRMAA(109001, 'SGL', 1), 202.9,
+				'calcIRMAA  202.9 for 109001 SGL income');
+
+
+	assertEqual(calcIRMAA(273999, 'MFJ', 1), (2 * 202.90),
+				'calcIRMAA  (2 * 202.90) for 273999 MFJ income');    
+
+	assertEqual(calcIRMAA(274000, 'MFJ', 1), 2 * (284.10 + 14.50),
+				'calcIRMAA  2 * (284.10 + 14.50) for 274000 MFJ income');
+
+	assertEqual(calculateProgressive('TEST','MFJ',72000), 
+		{cumulative: 30700, total: 30700, marginal: 0.8, limit: 40000}, 
+		'calculateProgressive(TEST, MFJ, 72000) ok')	
+
+	assertEqual(calculateProgressive('TEST','SGL',72000), 
+		{cumulative: 15350, total: 15350, marginal: 0.8, limit: 20000}, 
+		'calculateProgressive(TEST,SGL,72000) ok')
+		
+	assertEqual(calculateProgressive('NONEXISTENT','SGL',72000), 
+		{cumulative: 15350, total: 15350, marginal: 0.8, limit: 20000}, 
+		'calculateProgressive(NONEXISTENT,...) ok')
+
     
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`);

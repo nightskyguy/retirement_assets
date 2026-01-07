@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer V6m</title>
+    <title>Retirement Optimizer V6p</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles.css">
 	<base target="_blank">		
@@ -91,37 +91,30 @@
             <div><label>Growth (6?)</label><input type="number" id="growth" value="6.0">%</div>
             <div><label>Cash Interest (2.5)?</label><input type="number" id="yield" value="3.0">%</div>
         </div>
+        <div class="row">
+			<div><label>Dividend Rate (0.5)?</label><input type="number" id="dividendrate" value="0.5">%</div>
+		</div>
+
     </div>
 
     <div class="main">
 			<div class="header-drawers">
 			<details class="top-drawer"><summary>Change Log</summary>
 				<div class="log-entry">
-					<strong>v6.m:</strong> More self tests, some rework. WARNING: calculations have not all be fixed.
-				</div>	
-				<div>
-					<strong>v6.k:</strong> Reworked tax brackets for sanity ease of update. Added more instructions. 
-				</div>	
-				<div class="log-entry">
-					<strong>v6.j:</strong> Move style sheet out for readability.
-				</div>					
-				<div class="log-entry">
-					<strong>v6.i:</strong> Remove the Recalculate and Optimize buttons. Use the similarly named tabs as the buttons. 
-				</div>
-				<div class="log-entry">
-					<strong>v5.hp (Current):</strong> Integrated Federal SS "Tax Torpedo" logic, California HSA add-backs, and IRMAA cliff surcharges. This logic is present, but not yet being used.  The older logic is "close".
-				</div>
-				<div class="log-entry">
-					<strong>v5h</strong> Added change log and instructions
-				</div>
-				<div class="log-entry">
-					<strong>v4g</strong> Do rate limit lookups based on inflation. Add suggested values.
-				</div>					
-				<div class="log-entry">
-					<strong>v4f</strong> Use cpi% to adjust taxation (brackets)
-				</div>
-				<div class="log-entry">
-					<strong>v4e</strong> Use calculated birthyear for correct RMDs
+				<ul>
+				<li><b>6p</b> Corrected instructions for Single filer usage. Fixed error in brokerage tracking. Added brokerage dividend rate. Dividends automatically accrue to Cash.
+				</li><li><strong>6n</strong> Calculation fixes. WARNING: detailed calculations not done - but current calcs are accurate.
+				</li><li><strong>6m</strong> More self tests, some rework.
+				</li><li><strong>6k</strong> Reworked tax brackets for sanity ease of update. Added more instructions. 
+				</li><li><strong>6j</strong> Move style sheet out for readability.
+				</li><li><strong>6i</strong> Remove the Recalculate and Optimize buttons. Use the similarly named tabs as the buttons. 
+				</li><li><strong>5hp</strong> Integrated Federal SS "Tax Torpedo" logic, California HSA add-backs, and IRMAA cliff surcharges. This logic is present, but not yet being used.  The older logic is "close".
+				</li><li><strong>5h</strong> Added change log and instructions
+				</li><li><strong>4g</strong> Do rate limit lookups based on inflation. Add suggested values.
+				</li><li><strong>4f</strong> Use cpi% to adjust taxation (brackets)
+				</li><li><strong>4e</strong> Use calculated birthyear for correct RMDs
+				</li>
+				</ul>
 				</div>
 			</details>
 
@@ -129,7 +122,7 @@
 				<summary>How to Use</summary>
 				<div class="drawer-content">
 					<ul>
-						<li><strong>1. Profile &amp; Ages:</strong> Enter current ages as of <B>the END of the current year</B> and estimated life expectancy for both partners. To model a single taxpayer, set the <I>Spouse age</I> and life expectancy to zero for spouse.</li>
+						<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year of each person and estimated life expectancy for both partners. To model a single taxpayer, set the <I>Spouse Birth Year</I>, <i>Spouse  Life expectancy</i> and <i>Spouse IRA</i> to zero.</li>
 						<li><strong>2. Assets:</strong> Enter balances. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Brokerage withdrawals will be assumed to be part subject to capital gains. Total all after tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. <i>For Roth</i>, sum the existing ROTH balances into one total.</li>
 						<li><strong>3. Income &amp; Spend:</strong> Input annual Social Security and pensions. Set the start ages to see the impact of delaying benefits. Amounts you enter for <i>Social Security Amt</i> will be adjusted annually by the <i>CPI/COLA</i>. Set the <i>After-Tax Sending Goal</i> to the amount of after-tax income you need per year. And set the <i>Spend Delta</i> percentage. A Spend Delta of 100 means no change, while a 98.5 would reduce spending by 1.5% each year. To have spending grow, use a number greater than 100%</li>
 						<li><strong>4. Assumptions:</strong> choose the Inflation rate, the CPI rate (which is the expected change in tax brackets rather than actual inflation), the <i>Growth</i> rate for the IRA/401K, Brokerage &amp; ROTH.  <i>Cash Interest</i> is the expected interest on cash and cash-like investments (e.g. Mutual Funds/Bonds). To make these numbers accurate, it's best to separate all investments into "Brokerage" and cash into Cash.</li>
@@ -145,20 +138,23 @@
 					
 					<h4>What is Missing</h4>
 					<p>This tool does not (currently) model <b>annuities</b>, multiple pensions, additional w2 (taxable) income</b>. The tool intentionally keeps the number of options low.  Currently the "optimize" option focuses on depleting the IRA balance(s) to the point where future RMDs will not force excess taxation (Federal, State and IRMAA). An additional optimization is planned that will iterate to maximize spendable.
-					<ol><li>There is no Monte Carlo or other fancy strength test</li>
+					<ol><li>There is no Monte Carlo or other fancy strength tests.</li>
 					<li>The RMD tables are the standard one, not the one that might apply if there is a 10 year or more difference in spouse ages</li>
 					<li>It only uses the MFJ and Single tax brackets. (No head of household)</li>
-					<li>Because ROTH assets are not taxable, it merges all ROTH funds into one account</li>
+					<li>Because ROTH assets are not taxable, it merges all ROTH funds into one account. In real life, conversions/withdraws and earnings would occur in separate accounts.</li>
 					</ol>
 				</div>
 			</details>
 				<details class="top-drawer"><summary>Planned</summary>
-				<div class="drawer-content"><B>Planned Enhancements</B>
+				<div class="drawer-content"><B>Planned Enhancements &amp; Bug Fixes</B>
 					<ol>
+						<li><STRONG>BUG</STRONG> An error occurs when using, e.g. the "Fill Federal Bracket" with a bracket that is too small to contain the <i>After-Tax Spending Goal</i>. Under these circumstances, <strong>NaN</strong> (not a number) may appear.</li>
+						<li><STRONG>BUG</STRONG> Does not calculate the tax on interest from cash or capital gains/withdrawals from Brokerage or dividends from Brokerage (does not account for tax drag).</li>
+						<li>Add option to boost ROTH conversion with cash withdrawals.</li>
 						<li>Improve accuracy of the tax calculations - apply NIIT, properly handle income stacking</li>
 						<li>Add back the post <A HREF="https://www.ssa.gov/oact/trsum/">2033 Social Security 77% reduction</A> (See Table 1) modeling</li>						
 						<li>Track NetWealth/FinalWealth by applying tax adjustments to make the number meaningful.e.g. 1000 in a ROTH is worth 1000, but 1000 in an IRA is not due to taxation.</li>
-						<li>Clearly highlight out of money scenarios. For this purpose "out of money" means that remaining assets are less than or equal to 2x spendable goal. </li>
+						<li>Clearly highlight out of money scenarios. For this purpose "out of money" means that remaining assets are less than or equal to 2x spendable goal.</li>
 						<li>Create an "optimize spendable income" tool (like the current optimizer, but for spendable goal). I.e. iterate with higher or lower target spend amounts.</li>
 						<li>Create an export/import of inputs.</li>
 						<li>Add elements to graphs. Reorder and expand the Annual Details table (e.g. group balances, tax info, income and net income)
@@ -170,21 +166,24 @@
 				<summary>Background</summary>
 				<div class=drawer-content"><div class="drawer-section">
 		<h3>Who is this For, What are the Caveats</h3>
-		<p>A California resident built this with <a HREF="https://gemini.google.com" target="_blank">Google gemini AI assistance</A> because he is in retirement and has an unhealthy IRA balance to manage. The purpose of this tool, therefore, is to model as accurately as possible the remaining years of life with respect to spendable cash and taxation - and to determine how to optimize spendable cash. This tool may be useful to you if are in or very near retirement.  Signficantly more analysis is needed to do pre-retirement optimization. Nor is the goal of this tool to optimize asset location or asset allocation.
+		<p>A California resident built this with <a HREF="https://gemini.google.com">Google gemini </A>(and <A HREF="https://claude.ai/">claude.ai</A> and <A HREF="https://chatgpt.com/">ChatGPT</a> AI assistance because he is in retirement and has an unhealthy IRA balance to manage. <strong>The purpose of this tool, therefore, is to model as accurately as possible the remaining years of life with respect to spendable cash and taxation - and to determine how to optimize spendable cash.</strong> This tool may be useful to you if are in or very near retirement.  Signficantly more analysis is needed to do pre-retirement optimization. Nor is the goal of this tool to optimize <a HREF="https://en.wikipedia.org/wiki/Asset_location">asset location</a> or <A HREF="https://en.wikipedia.org/wiki/Asset_allocation">asset allocation</A>.
 		
-		Many focus on <i>Roth Conversions</i> and that's not wrong thinking, but such a view misses the big picture of WHY to do conversions. Also from the time one stops getting regular W2 income until the time one starts receiving pensions or social security is known as the "valley of opportunity".  During this otherwise low income period, strategic withdrawals and movement is possible. Ultimately you are in a better place if you have <i>degrees of freedom</i> in your assets - more on this in a moment. It also does not make sense to pay more tax than necessary. I do not see taxation as evil, but it does not feel "right" to pay up to 14,000/year in IRMAA fees for no net benefit in Medicare - but that is one of the many pitfalls of having too much forced income.
+		Many focus on <i>Roth Conversions</i> and that's not wrong thinking, but such a view misses the big picture of WHY to do conversions. Also from the time one stops getting regular W2 income until the time one starts receiving pensions or social security is known as the "valley of opportunity".  During this otherwise low income period, strategic withdrawals and movement is possible. Ultimately you are in a better place if you have <i>degrees of freedom</i> in your assets - more on this in a moment. It also does not make sense to pay more tax than necessary. I do not see taxation as evil, but it does not feel <i>right</i> to pay up to 14,000/year in IRMAA fees for no net benefit in Medicare - but that is one of the many pitfalls of having too much forced income.
 		
-		<p>Having a large tax deferred balance has many consequences, the worst being taking forced income (RMDs) at higher tax rates and incurring IRMAA penalties - as just described - as well.  In this tool, we lump IRMAA together with California state and Federal taxes (including NIIT and capital gains) to show the big picture: net taxes/net spendable income.
+		<p>Having a large tax deferred balance has many consequences, the worst being taking forced income (RMDs) at higher tax rates and incurring IRMAA penalties.  In this tool, we lump IRMAA together with California state and Federal taxes (<i>including NIIT and capital gains</i> in the future) to show the big picture: net taxes/net spendable income.
 		
 		<p>There are three ways I can think of where doing a ROTH conversion could make the financial landscape worse and all are easily avoidable. That means in most situations one is better off having assets in Tax deferred (IRA/401k), Tax Free (ROTH), and Taxable (Brokerage/cash) - this is how to obtain <b><i>degrees of freedom</i></b>.  
 		<h4>About State Taxation</h4>
-		33 of 50 states tax capital gains at the same rate as regular income. Unfortunately many tools and many discussions neglect this aspect, which is another reason I wrote this tool. 9 states have no taxation or do not tax capital gains (as of 2025), and 9 more states have preferential treatment of capital gains. <A HREF="https://www.theentrustgroup.com/blog/state-capital-gains-tax" target="_blank">[Source]</A>
-		If you live in, or plan to move in a different state and you want to use this tool, you can!  Once I knock off some of my other key features, I may add a feature to import tax brackets from other states. In the meanwhile, you can 
+		33 of 50 states tax capital gains the same as regular income. Unfortunately many tools and many discussions neglect this aspect, which is another reason I wrote this tool. 9 states have no taxation or do not tax capital gains (as of 2025), and 9 more states have preferential treatment of capital gains. <A HREF="https://www.theentrustgroup.com/blog/state-capital-gains-tax">[Source]</A>
+		If you live in, or plan to move in a different state and you want to use this tool, you can!  Once I knock off some of my other key features, I may add a feature to import tax brackets from other states. In the meanwhile, you can get creative and ask AI to add your state to the <i>TAXdata</i> embedded in the html.
 		<p>
 		<h4>ROTH Conversion Gotchas</h4>
 		<p>The bad scenarios for ROTH conversions are these:
-		<ol><li>You withdraw/convert now at a higher tax rate than you will face in your future.</li><li>You withdraw + convert in an amount that pushes your taxation up (this is a specific case of 1)</li><li>You convert before you're 59.5 and do not have funds to pay the taxes AND/or that conversion pushes you into a higher taxation situation.</li></ol>
-		There are more than a dozen ways that not doing a conversion (to ROTH or brokerage) can result in less spendable money and reduce spendable asset value.  These scenarios mostly affect those with proportionately larger IRA/401K balances. Even modest IRA/401K balances can significantly improve their asset balance and spendable cash through thoughtful withdrawals.
+		<ol><li>You withdraw/convert now at a higher tax rate than you will face in your future.</li>
+		<li>You withdraw + convert in an amount that pushes your taxation up (this is a specific case of 1)</li>
+		<li>You convert before you're 59.5 and do not have funds to pay the taxes AND/or that conversion pushes you into a higher taxation situation.</li>
+		</ol>
+		There are more than a dozen ways that not doing a conversion (to ROTH or brokerage) can result in less spendable money and reduce spendable asset value.  These scenarios mostly affect those with proportionately large IRA/401K balances. Even modest IRA/401K balances can significantly improve their asset balance and spendable cash through thoughtful withdrawals.
 		Here are some of the harms of having or accruing a large IRA/401K:
 		<ol>
 		<li>Growth in or size of the IRA/401K balance reaches a point where you end up in a higher tax bracket before or after RMDs start.</li>
@@ -252,10 +251,8 @@ const TAXData = {
 	TEST: {
 		// Data used for testing only.
 		YEAR: 2026,
-		MFJ: {
-			std: 100, brackets: [{l: 1000, r: 0.1},  {l: 2000, r: 0.2}, {l: 40000, r: 0.8} ]	},
-		SGL: {
-			std: 100/2, brackets: [{l: 1000/2, r: 0.1},  {l: 2000/2, r: 0.2}, {l: 40000/2, r: 0.8} ]}
+		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1},  {l: 2000, r: 0.2}, {l: 40000, r: 0.8} ]	},
+		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1},  {l: 2000/2, r: 0.2}, {l: 40000/2, r: 0.8} ]}
 	},
     STATE: {
 		YEAR: 2025,
@@ -445,6 +442,8 @@ function simulate(inputs) {
 	let cpiRate = 1
 	let inflation = 1
 	let fixedWithdrawal = calculateSystematicWithdrawal(state.ira1 + state.ira2, inputs.iraBaseGoal, inputs.stratN,inputs.growth)
+	let currentTaxableGuess = 0;
+
 	
 
     for (let y = 0; y < maxYears; y++) {
@@ -463,11 +462,13 @@ function simulate(inputs) {
 		let tgtBracketLimit = findLimitByRate('FEDERAL',status,inputs.stratRate)
 		
 		// Find federal & state rates and limits by spending goal:
-		let goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', status, inputs.spendGoal)
-		let goalStateBracketLimit = findUpperLimitByAmount('STATE', status, inputs.spendGoal)
+		let goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', status, inputs.spendGoal * cpiRate, cpiRate)
+		let goalStateBracketLimit = findUpperLimitByAmount('STATE', status, inputs.spendGoal * cpiRate, cpiRate)
 		let goalLimit = Math.min(goalFedBracketLimit.limit, goalStateBracketLimit.limit)
-		let irmaaBracket = findUpperLimitByAmount('IRMAA', status, goalLimit)
+		let irmaaBracket = findUpperLimitByAmount('IRMAA', status, goalLimit, cpiRate)
 		let irmaLimit = Math.min(goalLimit, irmaaBracket.limit);
+		
+		//!!! TODO: if strategy is "bracket" but spendGoal is > bracket we have a problem.
 
         // 1. Inherit IRA
         if (!alive1 && state.ira1 > 0) { state.ira2 += state.ira1; state.ira1 = 0; }
@@ -477,14 +478,19 @@ function simulate(inputs) {
         let s1 = (alive1 && age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate : 0;
         let s2 = (alive2 && age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate : 0;
         let pen = inputs.penTot;
+		
+		// One is deceased (if both decease, it won't get here)
         if (!alive1 || !alive2) {
             // Survivor Logic: Max of SS + Survivorship % of Pension
             s1 = Math.max(s1, s2);
             s2 = 0;
-            pen = pen * (inputs.survPct/100);
+            if (!alive1) { pen = pen * (inputs.survPct/100) }
         }
         let fixedInc = s1 + s2;
 		let taxableInc = pen;
+		let taxableInterest = state.cash * inputs.yield
+		let taxableDividends = state.brok * inputs.dividendRate
+		
 
         // 3. RMDs
         let rmd1 = alive1 ? state.ira1 * getRMDPercentage(age1, birthyear1) || 0 : 0;
@@ -498,7 +504,7 @@ function simulate(inputs) {
 		taxableInc += totalRMD
 
         // 4. Determine IRA Withdrawal Amount based on Strategy
-        let targetSpend = inputs.spendGoal * cpiRate;
+        let targetSpend = Math.min(inputs.spendGoal, goalLimit);
         let iraWD = 0;
 
 		//!!! Find the income federal limit. TODO: use that limit, to refine down to the next lower IRMAA limit and next lower State Limit.
@@ -511,7 +517,9 @@ function simulate(inputs) {
 			//!!! Doesn't have a floor to map to.
 			let curIRA = state.ira1 + state.ira2 - inputs.iraBaseGoal;
 			let amortized = fixedWithdrawal - totalRMD;
-            iraWD = Math.max(totalRMD, Math.max(0,amortized));
+			
+			//!!!TODO totalRMD has has already been removed...
+            iraWD = Math.max(0,amortized);
         } else if (inputs.strat === 'bracket' || inputs.strat === 'minlimit') {
 			//!!! This code has flaws.  Withdraws too much.
 			let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
@@ -524,25 +532,29 @@ function simulate(inputs) {
 			stateRate = stLimit.rate;
 			stateLimit = stLimit.limit;
 			
-			// pick whatever is smaller (state of Federal limit for the amount desired)
+			// pick whatever is smaller (state or Federal limit for the amount desired)
 			limit = Math.min(stateLimit, limit)
 			
+			if (inputs.strat === 'minlimit') {
+				limit = Math.min(limit, irmaLimit)
+			}
 			
-            let currentTaxableGuess = limit - fixedInc - taxableInc;
-            iraWD = Math.max(totalRMD, currentTaxableGuess);
+            currentTaxableGuess = limit - fixedInc - taxableInc - totalRMD;
+            iraWD = Math.max(0, currentTaxableGuess);
         } else {
 	       // Must be "baseline" strategy.  Withdraw enough to pay taxes.
-		   iraWD = targetSpend / (1-fedRate-stateRate);
+		   iraWD = Math.max(0, targetSpend / (1-fedRate-stateRate) - totalRMD);
 		}
         
-        // Ensure we don't withdraw more than exists
+        // Ensure we don't withdraw more than exists - we've already removed the totalRMD
         iraWD = Math.min(iraWD, state.ira1 + state.ira2);
 		
 		
 
         // 5. Tax Calc (Including IRMAA lag)
-		//!!! Assumes capital gains is zero. Not tracking cap gains.
-        let tax = calculateTax(fixedInc, iraWD + totalRMD, 0, status, age1, age2, cpiRate);
+		//!!!TODO Assumes capital gains is zero. Not tracking cap gains.
+		//!!!TODO Must also calculate the interest gained on cash.
+        let tax = calculateTax(fixedInc, iraWD + totalRMD + taxableInterest, taxableDividends, status, age1, age2, cpiRate);
 		//!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
 		let magiHistoryLength = state.magiHistory.length
 		if (magiHistoryLength < 1) {
@@ -567,7 +579,8 @@ function simulate(inputs) {
             
             if (gap > 0) {
                 brokWD = Math.min(gap, state.brok);
-                state.brok -= brokWD; gap -= brokWD;
+                state.brok -= brokWD; 
+				gap -= brokWD;
             }
             if (gap > 0) {
                 rothWD = Math.min(gap, state.roth);
@@ -594,14 +607,16 @@ function simulate(inputs) {
         // 7. Updates
 		
 
-		//!!! Remove withdrawals proportionately but this is not correct because of RMDs which are IRA specific.
+		//!!! Remove withdrawals proportionately. RMDs have already been withdrawn.
         state.ira1 = Math.max(0, state.ira1 - (iraWD * (state.ira1/(state.ira1+state.ira2||1))));
         state.ira2 = Math.max(0, state.ira2 - (iraWD * (state.ira2/(state.ira1+state.ira2||1))));
         state.ira1 *= (1 + inputs.growth);
         state.ira2 *= (1 + inputs.growth);
         state.roth *= (1 + inputs.growth);
         state.brok *= (1 + inputs.growth);
-        state.cash *= (1 + inputs.yield);
+		
+		// Accrue dividends to cash
+        state.cash = state.cash * (1 + inputs.yield) + taxableDividends;
         state.magiHistory.push(tax.magi);
 
         totals.tax += totalTax;
@@ -619,7 +634,7 @@ function simulate(inputs) {
             rothWD: rothWD,
             brokWD: brokWD,
             cashWD: cashWD,
-			totalIncome: iraWD + rothWD + brokWD + cashWD + fixedInc + pen,
+			totalIncome: iraWD + rothWD + brokWD + cashWD + fixedInc + pen + taxableInterest + taxableDividends,
 			irmaa: irmaa,
             tax: totalTax,
 			fedtax: tax.fed,
@@ -628,15 +643,15 @@ function simulate(inputs) {
 			stbracket: tax.stLimit,
 			fedRate: tax.fedRate,
 			stRate: tax.stRate,
-			netInc: iraWD + rothWD + brokWD + cashWD + fixedInc - totalTax,
+			netInc: iraWD - rothWD + brokWD + cashWD + fixedInc + pen + taxableInterest + taxableDividends - totalTax,
             ira1Bal: state.ira1,
 			ira2Bal: state.ira2,
 			iraBal: state.ira1 + state.ira2,
 			cashBal: state.cash,
 			rothBal: state.roth,
-            brokBal: state.brok + state.cash,
+            brokBal: state.brok,
             totalWealth: state.ira1 + state.ira2 + state.roth + state.brok + state.cash,
-            netIncome: (fixedInc + iraWD + rothWD + brokWD + cashWD) - totalTax
+            netIncome: (fixedInc + pen + iraWD + rothWD + brokWD + cashWD) - totalTax
         });
     }
 
@@ -844,6 +859,7 @@ function calcIRMAA(magi, status, inflation) {
 }
 
 /** UI CONTROLS **/
+//!!! TODO Add "dividendRate" right now it's assuming it's 1/3 of interest.
 function getInputs() {
     return {
         birthyear1: +val('birthyear1'), die1: +val('die1'), birthyear2: +val('birthyear2'), die2: +val('die2'),
@@ -851,9 +867,11 @@ function getInputs() {
         brok: +val('balBrok'), basis: +val('basisBrok'), cash: +val('balCash'),
         ss1: +val('ss1'), ss1Age: +val('ss1Age'), ss2: +val('ss2'), ss2Age: +val('ss2Age'),
         penTot: +val('penTot'), survPct: +val('survPct'), spendGoal: +val('spendGoal'),
+		spendChange: +val('spendChange')/100.0, 
 		iraBaseGoal: +val('iraBaseGoal'),
         inflation: +val('inf')/100.0, cpi: +val('cpi')/100.0, growth: +val('growth')/100.0, yield: +val('yield')/100.0,
-        strat: val('stratMode'), stratN: +val('stratN'), stratRate: +val('stratRate')/100.0
+        strat: val('stratMode'), stratN: +val('stratN'), stratRate: +val('stratRate')/100.0,
+		dividendRate: val('dividendrate')/100.0
     };
 }
 
@@ -893,7 +911,7 @@ function updateTable(log) {
     const headers = [  // "Spend Goal",
         "Year", "Ages",  "SS+Pen", "RMDs", "IRA WD", 
         "Roth &Delta;", "Cash &Delta;", "Brokerage &Delta;", "Total Income", "State Tax", "IRMAA",
-        "Total Tax", "Fed Marginal", "Net Income", "IRA(you)", 
+        "Total Tax", "Fed Marginal", "State Marginal", "Net Income", "IRA(you)", 
         "IRA(spouse)", "Roth", "Brokerage", "Cash"
     ];
 
@@ -916,7 +934,9 @@ function updateTable(log) {
             <td>${Math.round(r.statetax).toLocaleString()}</td>
             <td>${Math.round(r.irmaa).toLocaleString()}</td>
             <td class="neg">${Math.round(r.tax).toLocaleString()}</td>
-            <td>${(r.fedRate * 100).toFixed(1)}%</td> <td>${Math.round(r.netInc).toLocaleString()}</td>
+            <td>${(r.fedRate * 100).toFixed(1)}%</td> 
+            <td>${(r.stRate * 100).toFixed(1)}%</td> 
+			<td>${Math.round(r.netInc).toLocaleString()}</td>
             <td>${Math.round(r.ira1Bal).toLocaleString()}</td>
             <td>${Math.round(r.ira2Bal).toLocaleString()}</td>
             <td>${Math.round(r.rothBal).toLocaleString()}</td>

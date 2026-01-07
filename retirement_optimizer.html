@@ -12,6 +12,32 @@
 
 <div class="container">
     <div class="sidebar">
+        <h3>5. Strategy</h3>
+        <div class="input-group">
+            <select id="stratMode" onchange="toggleStratUI()">
+                <option value="baseline">Withdraw to meet spend goal</option>
+                <option value="fixed">Reduce IRA in <i>N</i> Years</option>
+                <option value="bracket">Fill Federal Tax Bracket</option>
+                <option value="minlimit">Lesser of IRMAA or TaxBracket (NOT IMPLEMENTED)</option>
+            </select>
+        </div>
+        <div id="ui-fixed" class="input-group hidden">
+            <label>Target Years (N)</label>
+            <input type="number" id="stratN" value="10">
+        </div>
+        <div id="ui-bracket" class="input-group hidden">
+            <label>Fill Bracket Up To:</label>
+            <select id="stratRate">
+                <option value="12">12%(94/47)k</option>
+                <option value="22">22%(201/100)k</option>
+                <option value="24" selected>24%(384/192)k</option>
+                <option value="32">32%(487/243)k(</option>
+                <option value="35">35%(60k/304)k)</option>
+            </select>
+        </div>
+        <div class="row"><label>IRA Reduction Goal</label>
+            <input type="number" id="iraBaseGoal" value="150000">
+		</div>	
         <h3>1. Profile & Ages</h3>
         <div class="row">
             <div><label>Your Birth Year</label><input type="number" id="birthyear1" value="1960"></div>
@@ -65,33 +91,6 @@
             <div><label>Growth (6?)</label><input type="number" id="growth" value="6.0">%</div>
             <div><label>Cash Interest (2.5)?</label><input type="number" id="yield" value="3.0">%</div>
         </div>
-
-        <h3>5. Strategy</h3>
-        <div class="input-group">
-            <select id="stratMode" onchange="toggleStratUI()">
-                <option value="baseline">Withdraw to meet spend goal</option>
-                <option value="fixed">Reduce IRA in N Years</option>
-                <option value="bracket">Fill Federal Tax Bracket</option>
-                <option value="minlimit">Lesser of IRMAA or TaxBracket (NOT IMPLEMENTED)</option>
-            </select>
-        </div>
-        <div id="ui-fixed" class="input-group hidden">
-            <label>Target Years (N)</label>
-            <input type="number" id="stratN" value="10">
-        </div>
-        <div id="ui-bracket" class="input-group hidden">
-            <label>Fill Bracket Up To:</label>
-            <select id="stratBrk">
-                <option value="12">12% / 15%</option>
-                <option value="22">22%</option>
-                <option value="24" selected>24%</option>
-                <option value="32">32%</option>
-                <option value="35">35%</option>
-            </select>
-        </div>
-        <div class="row"><label>IRA Reduction Goal</label>
-            <input type="number" id="iraBaseGoal" value="150000">
-		</div>		
     </div>
 
     <div class="main">
@@ -393,7 +392,7 @@ const withdrawal = calculateSystematicWithdrawal(1000000, 200000, 10, 0.06);
 // Find the top amount in the provided brackets. If the bracket isn't found, it finds 
 // the limit in the next lower bracket.  This doesn't check to be sure any values are reasonable.
 
-function findLimitByRate( entity, status, tgtrate, inflation) {
+function findLimitByRate( entity, status, tgtrate, inflation=1) {
     let brks = TAXData?.[entity]?.[status]?.brackets;
 
     let limit = 0;
@@ -403,28 +402,29 @@ function findLimitByRate( entity, status, tgtrate, inflation) {
         if (b.r <= tgtrate ) {
 			limit = b.l * inflation;
 			rate = b.r;
-        }
+        } else break;
     }
 	return { limit, rate: rate }
 }
 
 
-// Find the lower limit corresponding to the tgtlimit. 
-// This doesn't check to be sure any values are reasonable.
-
-function findLowerLimitByLimit( entity, status, tgtlimit, inflation) {
+// We want to find the limit of the next bracket HIGHER than the amount given (that is the upper limit).
+// For example if the limits are 10, 100, 1000 and the amount is 150 - we want the 1000 (less 1).
+// If amount is 99, we want 100.
+function findUpperLimitByAmount( entity, status, amount, inflation=1) {
     let limit = 0;
 	let rate = 0;
 	
     for (let b of TAXData?.[entity]?.[status]?.brackets) {
-        if (b.l * inflation <= tgtlimit ) {
-			limit = b.l * inflation;
+        if (b.l * inflation <= amount ) {
 			rate = b.r;
-        }
+        } else {
+			limit = b.l * inflation - 1;
+			break;
+		}
     }
 	return { limit, rate: rate }
 }
-
 
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
@@ -445,6 +445,7 @@ function simulate(inputs) {
 	let cpiRate = 1
 	let inflation = 1
 	let fixedWithdrawal = calculateSystematicWithdrawal(state.ira1 + state.ira2, inputs.iraBaseGoal, inputs.stratN,inputs.growth)
+	
 
     for (let y = 0; y < maxYears; y++) {
 		cpiRate = (1 + inputs.cpi) * cpiRate
@@ -456,6 +457,17 @@ function simulate(inputs) {
         if (!alive1 && !alive2) break;
 
         let status = (alive1 && alive2) ? 'MFJ' : 'SGL';
+		
+		
+		// Calculate the bracket limits based on: stated limit.
+		let tgtBracketLimit = findLimitByRate('FEDERAL',status,inputs.stratRate)
+		
+		// Find federal & state rates and limits by spending goal:
+		let goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', status, inputs.spendGoal)
+		let goalStateBracketLimit = findUpperLimitByAmount('STATE', status, inputs.spendGoal)
+		let goalLimit = Math.min(goalFedBracketLimit.limit, goalStateBracketLimit.limit)
+		let irmaaBracket = findUpperLimitByAmount('IRMAA', status, goalLimit)
+		let irmaLimit = Math.min(goalLimit, irmaaBracket.limit);
 
         // 1. Inherit IRA
         if (!alive1 && state.ira1 > 0) { state.ira2 += state.ira1; state.ira1 = 0; }
@@ -490,8 +502,8 @@ function simulate(inputs) {
         let iraWD = 0;
 
 		//!!! Find the income federal limit. TODO: use that limit, to refine down to the next lower IRMAA limit and next lower State Limit.
-		let fedRate = 0.12 // For now...
-		let stateRate = 0.06 // For now... !!TODO
+		let fedRate = goalFedBracketLimit.rate
+		let stateRate = goalStateBracketLimit.rate
 		
 
         if (inputs.strat === 'fixed') {
@@ -500,18 +512,21 @@ function simulate(inputs) {
 			let curIRA = state.ira1 + state.ira2 - inputs.iraBaseGoal;
 			let amortized = fixedWithdrawal - totalRMD;
             iraWD = Math.max(totalRMD, Math.max(0,amortized));
-        } else if (inputs.strat === 'bracket') {
+        } else if (inputs.strat === 'bracket' || inputs.strat === 'minlimit') {
 			//!!! This code has flaws.  Withdraws too much.
-
-			let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratVal/100.0, cpiRate);
-			let limit = fedLimit.limit - taxableInc - fixedInc;
+			let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
+			let limit = fedLimit.limit;
 			fedRate = fedLimit.rate;	
 
-			//!!!TODO Find the state rate and limit that corresponds to the fedLimit.fedLimit
+			//!!!TODO Find the state rate and limit that corresponds to the limit (fedLimit.fedLimit)
 			//!!!TODO Find the IRMAA limit that corresponds to the fedLimit.fedLimit
-			let stLimit = findLowerLimitByLimit('FEDERAL', status, fedLimit.limit, cpiRate);
+			let stLimit = findUpperLimitByAmount('STATE', status, fedLimit.limit, cpiRate);
 			stateRate = stLimit.rate;
 			stateLimit = stLimit.limit;
+			
+			// pick whatever is smaller (state of Federal limit for the amount desired)
+			limit = Math.min(stateLimit, limit)
+			
 			
             let currentTaxableGuess = limit - fixedInc - taxableInc;
             iraWD = Math.max(totalRMD, currentTaxableGuess);
@@ -824,7 +839,7 @@ function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=
 }
 
 function calcIRMAA(magi, status, inflation) {
-	let irmaalimit = findLowerLimitByLimit( 'IRMAA', status, magi, inflation)
+	let irmaalimit = findUpperLimitByAmount( 'IRMAA', status, magi, inflation)
 	return irmaalimit.rate * inflation * 12
 }
 
@@ -837,8 +852,8 @@ function getInputs() {
         ss1: +val('ss1'), ss1Age: +val('ss1Age'), ss2: +val('ss2'), ss2Age: +val('ss2Age'),
         penTot: +val('penTot'), survPct: +val('survPct'), spendGoal: +val('spendGoal'),
 		iraBaseGoal: +val('iraBaseGoal'),
-        inflation: +val('inf')/100, cpi: +val('cpi')/100, growth: +val('growth')/100, yield: +val('yield')/100,
-        strat: val('stratMode'), stratN: +val('stratN'), stratVal: +val('stratBrk')
+        inflation: +val('inf')/100.0, cpi: +val('cpi')/100.0, growth: +val('growth')/100.0, yield: +val('yield')/100.0,
+        strat: val('stratMode'), stratN: +val('stratN'), stratRate: +val('stratRate')/100.0
     };
 }
 
@@ -1021,9 +1036,16 @@ function runTests() {
     
     assertEqual(findLimitByRate('TEST', 'SGL', 0.05, 1), {limit: 0, rate: 0}, 
                 'findLimitByRate: TEST SGL 5% finds no limit or rate (0)');	
-				
+
+    assertEqual(findUpperLimitByAmount('TEST', 'SGL', 998, 1), {limit: 999, rate: 0.1}, 
+                'findUpperLimitByAmount: TEST SGL 998 finds limit: 999, rate: 0.1');	
+								
 				
 	// NOTE NOTE NOTE: All of the following tests are sensitive to the real TAXData.
+
+    assertEqual(findLimitByRate('FEDERAL', 'MFJ', 0.24, 1), { limit: 383900, rate: 0.24 }, 
+                'findLimitByRate: FEDERAL MFJ 24% bracket');
+	
     assertEqual(findLimitByRate('STATE', 'SGL', 0.06, 1), { limit: 54081, rate: 0.06 }, 
                 'findLimitByRate: State SGL 6% bracket');
 
@@ -1044,14 +1066,14 @@ function runTests() {
 	assertEqual(calcIRMAA(100, 'SGL', 1), 0,
 				'calcIRMAA  0 for SGL at 100 income');
 
-	assertEqual(calcIRMAA(109001, 'SGL', 1), 202.9,
+	assertEqual(calcIRMAA(109001, 'SGL', 1), 12 * 202.9,
 				'calcIRMAA  202.9 for 109001 SGL income');
 
 
-	assertEqual(calcIRMAA(273999, 'MFJ', 1), (2 * 202.90),
+	assertEqual(calcIRMAA(273999, 'MFJ', 1), (12 * 2 * 202.90),
 				'calcIRMAA  (2 * 202.90) for 273999 MFJ income');    
 
-	assertEqual(calcIRMAA(274000, 'MFJ', 1), 2 * (284.10 + 14.50),
+	assertEqual(calcIRMAA(274000, 'MFJ', 1), 12 * 2 * (284.10 + 14.50),
 				'calcIRMAA  2 * (284.10 + 14.50) for 274000 MFJ income');
 
 	assertEqual(calculateProgressive('TEST','MFJ',72000), 

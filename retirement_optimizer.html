@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer V6p</title>
+    <title>Retirement Optimizer V6q</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles.css">
 	<base target="_blank">		
@@ -12,30 +12,29 @@
 
 <div class="container">
     <div class="sidebar">
-        <h3>5. Strategy</h3>
         <div class="input-group">
             <select id="stratMode" onchange="toggleStratUI()">
-                <option value="baseline">Withdraw to meet spend goal</option>
-                <option value="fixed">Reduce IRA in <i>N</i> Years</option>
+                <option value="baseline">Withdraw to meet spend</option>
+                <option value="fixed">Reduce IRA in &#120393; Years</option>
                 <option value="bracket">Fill Federal Tax Bracket</option>
-                <option value="minlimit">Lesser of IRMAA or TaxBracket (NOT IMPLEMENTED)</option>
+                <option value="minlimit">🛑Lesser of IRMAA or TaxBracket</option>
             </select>
         </div>
         <div id="ui-fixed" class="input-group hidden">
-            <label>Target Years (N)</label>
+            <label>Target Years (&#120393;)</label>
             <input type="number" id="nYears" value="10">
         </div>
         <div id="ui-bracket" class="input-group hidden">
             <label>Fill Bracket Up To:</label>
             <select id="stratRate">
-                <option value="12">12%(94/47)k</option>
-                <option value="22">22%(201/100)k</option>
-                <option value="24" selected>24%(384/192)k</option>
-                <option value="32">32%(487/243)k(</option>
-                <option value="35">35%(60k/304)k)</option>
+                <option value="12">12%(100/50)k</option>
+                <option value="22">22%(211/105)k</option>
+                <option value="24" selected>24%(403/201)k</option>
+                <option value="32">32%(512/256)k(</option>
+                <option value="35">35%(768/640)k)</option>
             </select>
         </div>
-        <div class="row"><label>IRA Reduction Goal</label>
+        <div class="row"><label title="This is the goal to draw the total IRAs down to.">IRA Reduction Goal</label>
             <input type="number" id="iraBaseGoal" value="150000">
 		</div>	
         <h3>1. Profile & Ages</h3>
@@ -69,7 +68,7 @@
         </div>
         <div class="row">
             <div><label>Spouse SS Amt</label><input type="number" id="ss2" value="29000"></div>
-            <div><label>Spouse Start Age</label><input type="number" id="ss2Age" value="70"></div>
+            <div><label>Spouse Start Age</label><input type="number" id="ss2Age" value="70"></div><BR>
         </div>
         <div class="row">
             <div><label>Your Pension</label><input type="number" id="pensionAnnual" value="16900"></div>
@@ -78,7 +77,7 @@
         <div class="row">
             <div><label>After-Tax Spending Goal</label>
             <input type="number" id="spendGoal" value="180000" class="highlight-input"></div>
-            <div><label>Spending Delta </label>
+            <div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. 98% means you spend 2% less each year. 100 means no change.">Spending Delta </label>
             <input type="number" id="spendChange" value="99.5">% (100 means no change)</div>
 		</div>
 
@@ -88,12 +87,16 @@
             <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)</label><input type="number" id="cpi" value="0">%</div>
         </div>
         <div class="row">
-            <div><label>Growth (6?)</label><input type="number" id="growth" value="6.0">%</div>
-            <div><label>Cash Interest (2.5)?</label><input type="number" id="yield" value="3.0">%</div>
+            <div><label title="Your asset mix will dictate what growth rate to expect. In a brokerage, your basis doesn't grow at the rate the account does.">Growth (6?)</label><input type="number" id="growth" value="6.0">%</div>
+            <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)?</label><input type="number" id="cashYield" value="3.0">%</div>
         </div>
         <div class="row">
-			<div><label>Dividend Rate (0.5)?</label><input type="number" id="dividendrate" value="0.5">%</div>
+			<div><label title="This is the rate that your asset mix emits dividends.">Dividend Rate (0.5)?</label><BR><input type="number" id="dividendrate" value="0.5">%</div>
 		</div>
+        <div class="row">
+			<div><label>🛑Social Security Fail</label> <input type="number" id="ssFailYear" value="2033"></div>
+            <div><label>🛑SSecurity Reduction </label><input type="number" id="ssFailPct" value="77.3">%</div>
+        </div>
 
     </div>
 
@@ -102,7 +105,8 @@
 			<details class="top-drawer"><summary>Change Log</summary>
 				<div class="log-entry">
 				<ul>
-				<li><b>6p</b> Corrected instructions for Single filer usage. Fixed error in brokerage tracking. Added brokerage dividend rate. Dividends automatically accrue to Cash.
+				<li><b>61</b> Beautifications and hover notes. More self tests with an indicator on screen if they fail. Started the Social Security "meltdown" implementation. Added (empty) Insights tab.
+				</li><li><b>6p</b> Corrected instructions for Single filer usage. Fixed error in brokerage tracking. Added brokerage dividend rate. Dividends automatically accrue to Cash.
 				</li><li><strong>6n</strong> Calculation fixes. WARNING: detailed calculations not done - but current calcs are accurate.
 				</li><li><strong>6m</strong> More self tests, some rework.
 				</li><li><strong>6k</strong> Reworked tax brackets for sanity ease of update. Added more instructions. 
@@ -167,7 +171,7 @@
 				<summary>Background</summary>
 				<div class=drawer-content"><div class="drawer-section">
 		<h3>Who is this For, What are the Caveats</h3>
-		<p>A California resident built this with <a HREF="https://gemini.google.com">Google gemini </A>(and <A HREF="https://claude.ai/">claude.ai</A> and <A HREF="https://chatgpt.com/">ChatGPT</a> AI assistance because he is in retirement and has an unhealthy IRA balance to manage. <strong>The purpose of this tool, therefore, is to model as accurately as possible the remaining years of life with respect to spendable cash and taxation - and to determine how to optimize spendable cash.</strong> This tool may be useful to you if are in or very near retirement.  Signficantly more analysis is needed to do pre-retirement optimization. Nor is the goal of this tool to optimize <a HREF="https://en.wikipedia.org/wiki/Asset_location">asset location</a> or <A HREF="https://en.wikipedia.org/wiki/Asset_allocation">asset allocation</A>.
+		<p>A California resident built this with <a HREF="https://gemini.google.com">Google gemini</A> (and <A HREF="https://claude.ai/">claude.ai</A> and <A HREF="https://chatgpt.com/">ChatGPT</a>) AI assistance because he is in retirement and has an unhealthy IRA balance to manage. <strong>The purpose of this tool, therefore, is to model the remaining years of life with respect to spendable cash and taxation - and to determine how to optimize spendable cash.</strong> This tool may be useful to you if are in or very near retirement.  Signficantly more analysis is needed to do pre-retirement optimization. Nor is the goal of this tool to optimize <a HREF="https://en.wikipedia.org/wiki/Asset_location">asset location</a> or <A HREF="https://en.wikipedia.org/wiki/Asset_allocation">asset allocation</A>.
 		
 		Many focus on <i>Roth Conversions</i> and that's not wrong thinking, but such a view misses the big picture of WHY to do conversions. Also from the time one stops getting regular W2 income until the time one starts receiving pensions or social security is known as the "valley of opportunity".  During this otherwise low income period, strategic withdrawals and movement is possible. Ultimately you are in a better place if you have <i>degrees of freedom</i> in your assets - more on this in a moment. It also does not make sense to pay more tax than necessary. I do not see taxation as evil, but it does not feel <i>right</i> to pay up to 14,000/year in IRMAA fees for no net benefit in Medicare - but that is one of the many pitfalls of having too much forced income.
 		
@@ -204,18 +208,33 @@
 		</div>	
         <div class="top-bar">
             <div id="summary-stats" style="display:flex; gap:30px;">
+				<div><small>Years of Life</small><br><strong id="stat-years">0</strong></div>
+				<div><small>Funded Years</small><br><strong id="stat-yearsfunded">0</strong></div>
                 <div><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong></div>
                 <div><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong></div>
                 <div><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
                 <div><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
+                <div><br><strong id="testsFailed">🟢</strong></div>
             </div>
             </div>
 
         <div class="tabs">
             <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details</button>
             <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Chart</button>
+            <button id="btn-opt" class="tab-btn" onclick="{showTab('tab-insight')}">🛑Show Insights</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer</button>
+
         </div>
+		<div id="tab-insight" class="card hidden">
+			Some pithy insights will appear here. Right now it's not implemented.
+			<table id="insights-table">
+				<thead>
+					<tr id="groupRow"></tr>
+					<tr id="headerRow"></tr>
+				</thead>
+				<tbody id="tableBody"></tbody>
+			</table>
+		</div>
 
 
 		<div id="tab-tbl" class="card table-wrap">
@@ -242,6 +261,8 @@
                         <th>Total Lifetime Tax</th>
                         <th>Final Wealth</th>
                         <th>Effective Tax Rate</th>
+                        <th>Years Funded</th>
+						<th>Success/Fail</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -289,11 +310,11 @@ const TAXData = {
 			stdbump: 1650,
 			brackets: [ 
 				{ l: 24800, r: 0.10 }, 
-				{ l: 100525, r: 0.12 }, 
-				{ l: 214150, r: 0.22 },
-				{ l: 409850, r: 0.24 }, 
-				{ l: 520600, r: 0.32 }, 
-				{ l: 768600, r: 0.35 },
+				{ l: 100800, r: 0.12 }, 
+				{ l: 211400, r: 0.22 },
+				{ l: 403550, r: 0.24 }, 
+				{ l: 512450, r: 0.32 }, 
+				{ l: 768700, r: 0.35 },
 				{ l: 1e9, r: 0.37 }	]
 			},
 		SGL: {
@@ -302,10 +323,10 @@ const TAXData = {
 			stdbump: 2050,
 			brackets: [
 				{ l: 12400, r: 0.10 }, 
-				{ l: 50263, r: 0.12 }, 
-				{ l: 107075, r: 0.22 },
-				{ l: 204925, r: 0.24 }, 
-				{ l: 260300, r: 0.32 }, 
+				{ l: 50400, r: 0.12 }, 
+				{ l: 105700, r: 0.22 },
+				{ l: 201775, r: 0.24 }, 
+				{ l: 256225, r: 0.32 }, 
 				{ l: 640600, r: 0.35 },
 				{ l: 1e9, r: 0.37 }	]
 			},
@@ -323,6 +344,28 @@ const TAXData = {
 				{ l: 1e9, r: 0.37 }	]
 			},
 		},
+		
+	FED_CAP_GAINS: {
+		YEAR: 2026,
+		REFERENCE: 'none - Claude.ai created it.',
+		NOTE: 'This bracket combines capital gains and NIIT - strictly speaking its not correct', 
+		MFJ: {
+			brackets: [
+				{ l: 98900, r: 0.00 },      // 0% cap gains
+				{ l: 250000, r: 0.15 },     // 15% cap gains, no NIIT
+				{ l: 613700, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
+				{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
+			]
+		},
+		SGL: {
+			brackets: [
+				{ l: 49450, r: 0.00 },      // 0% cap gains
+				{ l: 200000, r: 0.15 },     // 15% cap gains, no NIIT
+				{ l: 306850, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
+				{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
+			]
+		}
+	},
 	
 	SOCIALSECURITY: {
 		Year: 2025,
@@ -524,7 +567,7 @@ function simulate(inputs) {
         }
         let fixedInc = s1 + s2;
 		let taxableInc = pen;
-		let taxableInterest = balance.cash * inputs.yield
+		let taxableInterest = balance.cash * inputs.cashYield
 		let taxableDividends = balance.brokerage * inputs.dividendRate
 		
 
@@ -655,7 +698,7 @@ function simulate(inputs) {
         balance.brokerage *= (1 + inputs.growth);
 		
 		// Accrue dividends to cash
-        balance.cash = balance.cash * (1 + inputs.yield) + taxableDividends;
+        balance.cash = balance.cash * (1 + inputs.cashYield) + taxableDividends;
         balance.magiHistory.push(tax.magi);
 
         totals.tax += totalTax;
@@ -668,36 +711,30 @@ function simulate(inputs) {
             age2: alive2 ? age2 : '—',
 			// 'spendDelta%': spendDelta,
             spendGoal: targetSpend,
-			'-INCOME': " ",
             SSincome: fixedInc,
 			pension: pen,
 			'-RMD1-': rmd1,
 			'-RMD2-': rmd2,
-            'RMD-': -totalRMD,
-            'IRA-': -iraWD,
+            'RMDwd': -totalRMD,
+            'IRAΔ': -iraWD,
             'BrokerageΔ': -brokerageWD,
 			'-CapGains': 0,
-			cashDividends: taxableDividends,
-			cashInterest: taxableInterest,
-			'-NONTAXABLE': " ",
+			cashDiv: taxableDividends,
+			cashInt: taxableInterest,
             'RothΔ': -rothWD,
             'CashΔ': -cashWD,
 			// totalIncome: iraWD + rothWD + brokerageWD + cashWD + fixedInc + pen + taxableInterest + taxableDividends,
 			netCash: taxableDividends + taxableInterest - cashWD,
-			'-TAXES': " ",
 			IRMAA: irmaa,
 			FedTax: tax.fed,
 			StateTax: tax.state,
             totalTax: totalTax,
-			'-LIMITS': " ",
             '-fedLimit': tax.fedLimit,
 			'-stateLimit': tax.stLimit,
 			'-fedRate%': tax.fedRate,
 			'-stateRate%': tax.stRate,
 			'NominalTax%': nominalTaxRate,
-			// netInc: iraWD - rothWD + brokerageWD + cashWD + fixedInc + pen + taxableInterest + taxableDividends - totalTax,
-			'-SumTaxes': cumulativeTaxes,
-			'-BALANCES': " ",
+			'SumTaxes': cumulativeTaxes,
             IRA1Bal: balance.ira1,
 			IRA2Bal: balance.ira2,
 			TotalIRA: balance.ira1 + balance.ira2,
@@ -785,6 +822,7 @@ function findRequiredWithdrawals(
   brokerageBasis
 ) {
   
+  let iterations = 0;
   // Extract all income sources from taxParams
   const { ss1, ss2, ordDivInterest, qualifiedDiv, taxExemptInterest, pensionIncome } = taxParams;
   const ssIncome = (ss1 || 0) + (ss2 || 0);
@@ -797,6 +835,7 @@ function findRequiredWithdrawals(
     capGains: 0
   };
   const taxResultOtherOnly = calculateTaxes(taxParamsOtherOnly);
+  iterations += 1;
   const afterTaxFromOtherOnly = ssIncome + otherIncome - taxResultOtherOnly.totalTax;
   
   if (afterTaxFromOtherOnly >= targetAfterTaxSpending) {
@@ -844,6 +883,8 @@ function findRequiredWithdrawals(
       };
       
       const taxResult = calculateTaxes(currentTaxParams);
+		iterations += 1;
+	  
       
       // Include all income sources
       let afterTax = totalGrossNeeded + ssIncome + otherIncome - taxResult.totalTax;
@@ -867,6 +908,8 @@ function findRequiredWithdrawals(
     };
     
     const taxResult = calculateTaxes(currentTaxParams);
+    iterations += 1;
+
     let afterTax = totalGrossNeeded + ssIncome + otherIncome - taxResult.totalTax;
     
     // Verify solution works and is better
@@ -876,6 +919,7 @@ function findRequiredWithdrawals(
       let brokerageBasisUsed = fromBrokerage * (brokerageBasis / brokerageBalance);
       
       bestSolution = {
+	    iterations: iterations,
         iraWithdrawal: Math.round(fromIRA),
         brokerageSale: Math.round(fromBrokerage),
         brokerageBasisReduction: Math.round(brokerageBasisUsed),
@@ -950,6 +994,7 @@ function calculateTaxes(params) {
     const ordinaryTaxable = Math.max(0, fedTaxableIncome - prefIncome);
 
     const fedOrdinaryTax = calcProgressive(ordinaryTaxable, getFedBrackets(filingStatus, inflationFactor));
+	let testFedTax = calculateProgressive('FEDERAL', filingStatus, ordinaryTaxable, inflationFactor).cumulative
     const fedPrefTax = calcPrefTax(ordinaryTaxable, prefIncome, filingStatus, inflationFactor);
     const totalFedTax = fedOrdinaryTax + fedPrefTax;
 
@@ -960,6 +1005,8 @@ function calculateTaxes(params) {
     const caStdDeduct = TAXData['STATE'][filingStatus].std * inflationFactor;
     const caTaxableIncome = Math.max(0, caAGI - caStdDeduct);
     const caTax = calcProgressive(caTaxableIncome, getCABrackets(filingStatus, inflationFactor));
+	let testCAResult = calculateProgressive('STATE', filingStatus, caTaxableIncome, inflationFactor).cumulative
+	
 
     // --- 4. IRMAA CALCULATION ---
     // MAGI for IRMAA = Fed AGI + Tax-Exempt Interest
@@ -1098,6 +1145,7 @@ function calcIRMAA(magi, status, inflation) {
 /** UI CONTROLS **/
 function getInputs() {
     return {
+		startInYear: +val('startInYear'),
         birthyear1: +val('birthyear1'), die1: +val('die1'), birthyear2: +val('birthyear2'), die2: +val('die2'),
         ira1: +val('balIRA1'), ira2: +val('balIRA2'), roth: +val('balRoth'),
         brokerage: +val('balBrokerage'), basis: +val('basisBrokerage'), cash: +val('balCash'),
@@ -1105,9 +1153,10 @@ function getInputs() {
         pensionAnnual: +val('pensionAnnual'), survivorPct: +val('survivorPct'), spendGoal: +val('spendGoal'),
 		spendChange: +val('spendChange')/100.0, 
 		iraBaseGoal: +val('iraBaseGoal'),
-        inflation: +val('inflation')/100.0, cpi: +val('cpi')/100.0, growth: +val('growth')/100.0, yield: +val('yield')/100.0,
-        strat: val('stratMode'), nYears: +val('nYears'), stratRate: +val('stratRate')/100.0,
-		dividendRate: val('dividendrate')/100.0
+        inflation: +val('inflation')/100.0, cpi: +val('cpi')/100.0, growth: +val('growth')/100.0, cashYield: +val('cashYield')/100.0,
+        strat: +val('stratMode'), nYears: +val('nYears'), stratRate: +val('stratRate')/100.0,
+		dividendRate: +val('dividendrate')/100.0,
+		ssFailYear: +val('ssFailYear'), ssFailPct: +val('ssFailPct')/100.0
     };
 }
 
@@ -1224,6 +1273,29 @@ function updateTable(log) {
   return table;
 }
 
+/*calculateInflationAdjustedWithdrawal:
+* given the parameters, determines the first year withdrawal (subsequent years are 
+* adjusted for inflation).  At that rate, the asset would reach zero in *years*
+*/
+function calculateInflationAdjustedWithdrawal(principal, growthRate, inflationRate, years) {
+    // Calculate real growth rate
+    const realRate = growthRate - inflationRate;
+	
+	// Special case: principal is negative.
+	if (principal <= 0) return 0;
+    
+    // Special case: when real growth is zero
+    if (Math.abs(realRate) < 1e-10) {
+        return principal / years;
+    }
+    
+    // General case: first year withdrawal in today's dollars
+    const denominator = 1 - Math.pow(1 + realRate, -years);
+    const firstYearWithdrawal = principal * (realRate / denominator);
+    
+    return firstYearWithdrawal;
+}
+
 
 function updateStats(totals, finalNW) {
     document.getElementById('stat-rate').innerText = (totals.tax / totals.gross * 100).toFixed(1) + '%';
@@ -1302,7 +1374,7 @@ function updateCharts(log) {
     });
 }
 
-function val(id) { return document.getElementById(id).value; }
+function val(id) { return document.getElementById(id)?.value; }
 
 function showTab(id) {
     // 1. Hide all tab content cards
@@ -1337,20 +1409,21 @@ function runTests() {
     
     // Helper function to assert equality
     function assertEqual(actual, expected, testName) {
+		const pretty = obj => JSON.stringify(obj, null, 2);
+
         if (JSON.stringify(actual) === JSON.stringify(expected)) {
             console.log(`✅ PASS: ${testName}`);
             passed++;
         } else {
             console.log(`❌ FAIL: ${testName}`);
-            console.log(`   Expected:`, expected);
-            console.log(`   Got:`, actual);
+            console.log(`   Expected:`, pretty(expected));
+            console.log(`   Got:`, pretty(actual));
             failed++;
         }
     }
 
 	// These use TEST data and should NOT need to be changed.
-    let result1 = findLimitByRate('TEST', 'MFJ', 0.2, 1);
-    assertEqual(result1, {limit: 2000, rate: 0.2}, 
+    assertEqual(findLimitByRate('TEST', 'MFJ', 0.2, 1), {limit: 2000, rate: 0.2}, 
                 'findLimitByRate: TEST MFJ 20% rate correct');
     
     assertEqual(findLimitByRate('TEST', 'SGL', 0.2, 3), {limit: 3000, rate: 0.2}, 
@@ -1363,16 +1436,30 @@ function runTests() {
                 'findLimitByRate: TEST SGL 5% finds no limit or rate (0)');	
 
     assertEqual(findUpperLimitByAmount('TEST', 'SGL', 998, 1), {limit: 999, rate: 0.1}, 
-                'findUpperLimitByAmount: TEST SGL 998 finds limit: 999, rate: 0.1');	
+                'findUpperLimitByAmount: TEST SGL 998 finds limit: 999, rate: 0.1');
+				
+	assertEqual(getInputs(), 
+		{"startInYear": null, "birthyear1": 1960, "die1": 88, "birthyear2": 1952, "die2": 98,
+			"ira1": 2000000, "ira2": 400000, "roth": 200000, "brokerage": 400000, "basis": 200000,
+			"cash": 100000, "ss1": 48000, "ss1Age": 70, "ss2": 29000, "ss2Age": 70, "pensionAnnual": 16900,
+			"survivorPct": 75, "spendGoal": 180000, "spendChange": 0.995, "iraBaseGoal": 150000, "inflation": 0,
+			"cpi": 0, "growth": 0.06, "cashYield": 0.03, "strat": null, "nYears": 10, "stratRate": 0.24, "dividendRate": 0.005,
+			"ssFailYear": 2033, "ssFailPct": 0.773 },
+				'getInputs()')
 								
 				
-	// NOTE NOTE NOTE: All of the following tests are sensitive to the real TAXData.
+	// 😭😭😭 NOTE NOTE NOTE: All of the following tests are sensitive to the real TAXData. 😭😭😭
 
-    assertEqual(findLimitByRate('FEDERAL', 'MFJ', 0.24, 1), {limit: 409850, rate: 0.24}, 
-                'findLimitByRate: FEDERAL MFJ 24% bracket');
+    assertEqual(findLimitByRate('FEDERAL', 'MFJ', 0.24, 1), {limit: 403550, rate: 0.24}, 
+                '😭findLimitByRate: FEDERAL MFJ 24% bracket');
 	
     assertEqual(findLimitByRate('STATE', 'SGL', 0.06, 1), { limit: 54081, rate: 0.06 }, 
-                'findLimitByRate: State SGL 6% bracket');
+                '😭findLimitByRate: State SGL 6% bracket');
+
+		
+	assertEqual(calculateProgressive('SOCIALSECURITY', 'MFJ', 55000).marginal, 
+		0.85,
+		'😭calculateProgressive(SOCIALSECURITY, MFJ, 55000) CHANGES with SOCIALSECURITY data.')
 
 	// RMD Percentages.  First should be 0, second should match.
     // RMD percentage lookup
@@ -1389,17 +1476,16 @@ function runTests() {
 			'getRMDPercentage for age 76, birth year 1950 correct (4.2%)');
 
 	assertEqual(calcIRMAA(100, 'SGL', 1), 0,
-				'calcIRMAA  0 for SGL at 100 income');
+				'😭calcIRMAA  0 for SGL at 100 income');
 
 	assertEqual(calcIRMAA(109001, 'SGL', 1), 12 * 202.9,
-				'calcIRMAA  202.9 for 109001 SGL income');
-
+				'😭calcIRMAA  202.9 for 109001 SGL income');
 
 	assertEqual(calcIRMAA(273999, 'MFJ', 1), (12 * 2 * 202.90),
-				'calcIRMAA  (2 * 202.90) for 273999 MFJ income');    
+				'😭calcIRMAA  (2 * 202.90) for 273999 MFJ income');    
 
 	assertEqual(calcIRMAA(274000, 'MFJ', 1), 12 * 2 * (284.10 + 14.50),
-				'calcIRMAA  2 * (284.10 + 14.50) for 274000 MFJ income');
+				'😭calcIRMAA  2 * (284.10 + 14.50) for 274000 MFJ income');
 
 	assertEqual(calculateProgressive('TEST','MFJ',72000), 
 		{cumulative: 30700, total: 30700, marginal: 0.8, limit: 40000}, 
@@ -1416,12 +1502,45 @@ function runTests() {
 	assertEqual(calculateProgressive('TEST','NONEXISTENT',72000), 
 		{cumulative: 0, total: 0, marginal: 0, limit: 0, error: 'Invalid entity or status'}, 
 		'calculateProgressive(TEST,NONEXISTENT,...) ok')
+		
+	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30),0), 57830,
+		'calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30) (growth > inflation)')
 
-    
+	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, 0.03, 0.03, 30),0), 33333,
+		'calculateInflationAdjustedWithdrawal(1000000, 0.03, 0.03, 30) (growth=inflation)')
+
+	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, 0.03, -0.03, 30),0), 72649,
+		'calculateInflationAdjustedWithdrawal(1000000, 0.03, -0.03, 30) (Deflation)')	
+
+	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, -0.03, 0.00, 30),0), 20084,
+		'calculateInflationAdjustedWithdrawal(1000000, -0.03, 0.00, 30) (growth is negative)')
+
+	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(-1000, -0.03, 0.00, 30),0), 0,
+		'calculateInflationAdjustedWithdrawal(-1000, 0.07, 0.03, 30) (principal < 0)')		
+
+/*
+    assertEqual(findRequiredWithdrawals(150000, { yearOffset: 0, filingStatus: 'MFJ', ages: [65, 63], ss1: 30000, ss2: 20000,
+					ordDivInterest: 5000, qualifiedDiv: 3000, taxExemptInterest: 0, 
+					pensionIncome: 0, hsaContrib: 0, cpi: 0.03 },
+					500000,  // $500k brokerage balance
+					250000   // $250k cost basis (50% gains)
+				),   
+			{},
+			'findRequiredWithdrawals(complicated arguments)!')
+*/	
+	
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`);
     console.log('========================================');
-    
+	
+    const statusElement = document.getElementById('testsFailed');
+    if (failed === 0) {
+        statusElement.textContent = '🟢';
+		statusElement.title = `All ${failed+passed} tests passed`;
+    } else {
+        statusElement.textContent = '❌ tests failed';
+		statusElement.title = `${failed} test${failed !== 1 ? 's' : ''} failed out of ${failed+passed}.`;
+    }
     return failed === 0;
 }
 

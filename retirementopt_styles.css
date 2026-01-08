@@ -1,21 +1,56 @@
-/* v6i */
+/* v7 - Fixed layout */
 :root { --primary: #2c3e50; --accent: #27ae60; --bg: #f4f7f6; --card: #ffffff; }
-body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: #333; margin: 0; padding: 20px; font-size: 14px; }
-.container { max-width: 1800px; margin: 0 auto; display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+body { 
+    font-family: -apple-system, system-ui, sans-serif; 
+    background: var(--bg); 
+    color: #333; 
+    margin: 0; 
+    padding: 0;
+    font-size: 14px; 
+}
 
-/* Sidebar */
-.sidebar { background: var(--card); padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); height: fit-content; overflow-y: auto; }
+/* Container uses flex layout */
+.container { 
+    display: flex;
+    gap: 0;
+    min-height: 100vh;
+}
+
+/* Sidebar sticks to left */
+.sidebar { 
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 350px;
+    background: var(--card); 
+    padding: 15px; 
+    box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+    height: 100vh;
+    overflow-y: auto; 
+    z-index: 100;
+}
+
+/* Main content area accounts for fixed sidebar */
+.main { 
+    margin-left: 350px;
+    flex: 1;
+    display: flex; 
+    flex-direction: column; 
+    gap: 15px;
+    padding: 20px;
+    width: calc(100% - 350px);
+    box-sizing: border-box;
+}
 
 .sidebar input[type="number"], 
 .sidebar select {
-    width: 100%;       /* Flexible up to... */
-    max-width: 120px;  /* ...this specific limit */
+    width: 100%;
+    max-width: 120px;
     padding: 4px;
     margin-top: 2px;
 }
 
-/* Adds a small 'external link' emoji after links that open in new tabs */
-a[]::after {
+a[target="_blank"]::after {
     content: "↗";
     font-size: 0.8em;
     color: #888;
@@ -26,11 +61,9 @@ a:hover {
     color: #0056b3;
 }
 
-
-/* Target the dropdown specifically */
 #stratMode {
-    width: 100% !important;   /* Force it to fill the container width */
-    max-width: 100% !important; /* Override the 120px limit you set for numbers */
+    width: 100% !important;
+    max-width: 100% !important;
     box-sizing: border-box;
     display: block;
     margin-top: 5px;
@@ -43,124 +76,199 @@ a:hover {
 .row > div { flex: 1; }
 h3 { border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 15px; font-size: 1rem; color: var(--primary); }
 
-/* Make the label bold and red */
 .important-label {
-    color: #e74c3c !important; /* A nice shade of Red */
+    color: #e74c3c !important;
     font-weight: bold !important;
-    text-transform: uppercase; /* Optional: makes it stand out more */
+    text-transform: uppercase;
     font-size: 0.7rem;
 }
 
-/* Make the input box stand out */
 .highlight-input {
     border: 2px solid #e74c3c !important;
     font-weight: bold;
 }
 
-/* Main Content */
-.main { display: flex; flex-direction: column; gap: 15px; }
-.top-bar { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.card { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.top-bar { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    background: #fff; 
+    padding: 15px; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+}
 
-button { background: #2980b9; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 1rem; }
+.card { 
+    background: #fff; 
+    padding: 15px; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+}
+
+button { 
+    background: #2980b9; 
+    color: white; 
+    border: none; 
+    padding: 12px 20px; 
+    border-radius: 5px; 
+    cursor: pointer; 
+    font-weight: bold; 
+    font-size: 1rem; 
+}
 button:hover { background: #3498db; }
 button.opt-btn { background: #8e44ad; }
 
-/* Table Styling */
+/* Table wrapper with horizontal scroll */
 .table-wrap { 
-    max-height: none; /* Removes the 500px limit */
-    overflow-x: auto; /* Keeps horizontal scrolling for wide tables */
+    overflow-x: auto;
+    overflow-y: visible;
+    max-width: 100%;
 }
-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; text-align: right; }
+
+table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    font-size: 0.75rem; 
+    text-align: right; 
+}
+
 th { background: #f8f9fa; position: sticky; top: 0; padding: 10px; border-bottom: 2px solid #dee2e6; z-index: 5; }
 td { padding: 8px; border-bottom: 1px solid #eee; }
 tr.single-year { background-color: #fff9e6; }
 .neg { color: #e74c3c; font-weight: bold; }
 th[title] { cursor: help; text-decoration: underline dotted; color: green }
 
-.tabs { display: flex; gap: 10px; margin-bottom: 10px; }
-.tab-btn { background: #ddd; color: #333; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
-.tab-btn.active { background: #2980b9; color: white; }
+/* Tabs styling - FIXED */
+.tabs { 
+    display: flex; 
+    gap: 10px; 
+    margin-bottom: 10px; 
+}
+
+.tab-btn { 
+    background: #ddd; 
+    color: #333; 
+    padding: 8px 15px; 
+    border: none; 
+    border-radius: 4px; 
+    cursor: pointer; 
+    font-size: 0.9rem; 
+}
+
+.tab-btn.active { 
+    background: #2980b9; 
+    color: white; 
+}
+
+.tab-btn:hover {
+    background: #bbb;
+}
+
+.tab-btn.active:hover {
+    background: #3498db;
+}
+
 .hidden { display: none; }
 
-.drawer-container { width: 100%; position: relative; z-index: 1000; margin-bottom: 20px; }
-details { background: #fff; border-bottom: 2px solid #2980b9; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-summary {
-	list-style: none;
-	background: #2980b9;
-	color: white;
-	text-align: center;
-	padding: 5px 20px;
-	width: 120px;
-	margin: 0 auto;
-	border-radius: 0 0 10px 10px;
-	cursor: pointer;
-	font-weight: bold;
-	font-size: 0.8rem;
-	transition: background 0.3s;
-}
-summary:hover { background: #3498db; }
-summary::-webkit-details-marker { display: none; }
-
-
-/* Container for all drawers */
+/* Header drawers - FIXED with proper styling */
 .header-drawers {
     display: flex;
-    gap: 10px;          /* Space between the drawer buttons */
+    gap: 10px;
     margin-bottom: 20px;
-    z-index: 1000;
     position: relative;
+    flex-wrap: wrap;
 }
 
-/* Individual Drawer Styling */
+/* Individual drawer styling - RESTORED */
 .top-drawer {
-    flex: 1;            /* Makes all drawers equal width */
     background: #fff;
     border-bottom: 2px solid #2980b9;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    width: auto;
+    min-width: 150px;
 }
 
-/* was color #2980b9; */
 .top-drawer summary {
     list-style: none;
-    background: #90EE90;
+    background: #90EE90;  /* Light green background */
     color: black;
     text-align: center;
-    padding: 8px;
+    padding: 8px 15px;
     cursor: pointer;
     font-weight: bold;
     font-size: 0.8rem;
     transition: background 0.3s;
+    white-space: nowrap;
+    border-radius: 0 0 10px 10px;  /* RESTORED rounded bottom corners */
 }
 
-/* was  #3498db; */
 .top-drawer summary:hover {
-    background: #2980b9;
+    background: #2980b9;  /* Blue on hover */
+    color: white;
 }
 
+.top-drawer summary::-webkit-details-marker { 
+    display: none; 
+}
+
+.top-drawer summary::-moz-list-bullet {
+    list-style-type: none;
+}
+
+/* When drawer is open */
 .top-drawer[open] {
-    position: absolute; /* Allows content to float OVER the main app */
-    width: 48%;        /* Keeps it from covering the whole screen */
+    position: absolute;
+    left: 0;
+    top: 100%;
+    width: 100%;
+    max-width: none;
     box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    z-index: 1000;
+    margin-top: 5px;
 }
 
-/* Specific content styling */
-.drawer-content {
-    padding: 20px;
-    max-height: 400px;
-    overflow-y: auto;
-    background: white;
+.top-drawer[open] summary {
+    border-radius: 10px 10px 0 0;  /* Round top corners when open */
+}
+
+.drawer-content { 
+    padding: 20px; 
+    background: #fff; 
+    max-height: 400px; 
+    overflow-y: auto; 
     border: 1px solid #ddd;
 }
 
-.drawer-content { padding: 20px; background: #fff; max-height: 400px; overflow-y: auto; }
-.drawer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
-.drawer-section h4 { border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 0; color: #2c3e50; }
-.drawer-section ul { padding-left: 20px; }
-.drawer-section li { margin-bottom: 10px; line-height: 1.4; color: #555; }
+.drawer-grid { 
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 40px; 
+}
 
+.drawer-section h4 { 
+    border-bottom: 1px solid #eee; 
+    padding-bottom: 5px; 
+    margin-top: 0; 
+    color: #2c3e50; 
+}
 
+.drawer-section ul { 
+    padding-left: 20px; 
+}
 
+.drawer-section li { 
+    margin-bottom: 10px; 
+    line-height: 1.4; 
+    color: #555; 
+}
 
-.log-entry { font-size: 0.8rem; margin-bottom: 12px; padding-left: 10px; border-left: 3px solid #eee; }
-.log-entry strong { color: #2980b9; }
+.log-entry { 
+    font-size: 0.8rem; 
+    margin-bottom: 12px; 
+    padding-left: 10px; 
+    border-left: 3px solid #eee; 
+}
+
+.log-entry strong { 
+    color: #2980b9; 
+}

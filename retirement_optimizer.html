@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer V6q</title>
+    <title>Retirement Optimizer V6r</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles.css">
-	<base target="_blank">		
+	<base target="_blank">	
+	<script src="retirement_optimizer_longtext.js"></script>	
 </head>
 <body>
 
@@ -58,7 +59,7 @@
         </div>
         <div class="row">
             <div><label>Roth IRA</label><input type="number" id="balRoth" value="200000"></div>
-            <div><label>Cash</label><input type="number" id="balCash" value="100000"></div>
+            <div><label>Cash Balance</label><input type="number" id="balCash" value="100000"></div>
         </div>
 
         <h3>3. Income & Spend</h3>
@@ -105,7 +106,9 @@
 			<details class="top-drawer"><summary>Change Log</summary>
 				<div class="log-entry">
 				<ul>
-				<li><b>61</b> Beautifications and hover notes. More self tests with an indicator on screen if they fail. Started the Social Security "meltdown" implementation. Added (empty) Insights tab.
+				<li><b>6r</b> Moved the heavy text (top drawers) into a separate file.
+				</li>
+				<li><b>6q</b> Beautifications and hover notes. More self tests with an indicator on screen if they fail. Started the Social Security "meltdown" implementation. Added (empty) Insights tab.
 				</li><li><b>6p</b> Corrected instructions for Single filer usage. Fixed error in brokerage tracking. Added brokerage dividend rate. Dividends automatically accrue to Cash.
 				</li><li><strong>6n</strong> Calculation fixes. WARNING: detailed calculations not done - but current calcs are accurate.
 				</li><li><strong>6m</strong> More self tests, some rework.
@@ -124,7 +127,7 @@
 
 			<details class="top-drawer">
 				<summary>How to Use</summary>
-				<div class="drawer-content">
+				<div class="drawer-content" id="drawer-howto">
 					<ul>
 						<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year of each person and estimated life expectancy for both partners. To model a single taxpayer, set the <I>Spouse Birth Year</I>, <i>Spouse  Life expectancy</i> and <i>Spouse IRA</i> to zero.</li>
 						<li><strong>2. Assets:</strong> Enter balances. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Brokerage withdrawals will be assumed to be part subject to capital gains. Total all after tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. <i>For Roth</i>, sum the existing ROTH balances into one total.</li>
@@ -151,7 +154,7 @@
 				</div>
 			</details>
 				<details class="top-drawer"><summary>Planned</summary>
-				<div class="drawer-content"><B>Planned Enhancements &amp; Bug Fixes</B>
+				<div class="drawer-content" id="drawer-planned"><B>Planned Enhancements &amp; Bug Fixes</B>
 					<ol>
 						<li><STRONG>BUG</STRONG> An error occurs when using, e.g. the "Fill Federal Bracket" with a bracket that is too small to contain the <i>After-Tax Spending Goal</i>. Under these circumstances, <strong>NaN</strong> (not a number) may appear.</li>
 						<li><STRONG>BUG</STRONG> Does not calculate the tax on interest from cash or capital gains/withdrawals from Brokerage or dividends from Brokerage (does not account for tax drag).</li>
@@ -167,9 +170,8 @@
 						</ol>
 				</div>
 			</details>
-			<details class="top-drawer">
-				<summary>Background</summary>
-				<div class=drawer-content"><div class="drawer-section">
+			<details class="top-drawer"><summary>Background</summary>
+				<div class=drawer-content" id="drawer-background">
 		<h3>Who is this For, What are the Caveats</h3>
 		<p>A California resident built this with <a HREF="https://gemini.google.com">Google gemini</A> (and <A HREF="https://claude.ai/">claude.ai</A> and <A HREF="https://chatgpt.com/">ChatGPT</a>) AI assistance because he is in retirement and has an unhealthy IRA balance to manage. <strong>The purpose of this tool, therefore, is to model the remaining years of life with respect to spendable cash and taxation - and to determine how to optimize spendable cash.</strong> This tool may be useful to you if are in or very near retirement.  Signficantly more analysis is needed to do pre-retirement optimization. Nor is the goal of this tool to optimize <a HREF="https://en.wikipedia.org/wiki/Asset_location">asset location</a> or <A HREF="https://en.wikipedia.org/wiki/Asset_allocation">asset allocation</A>.
 		
@@ -263,6 +265,7 @@
                         <th>Effective Tax Rate</th>
                         <th>Years Funded</th>
 						<th>Success/Fail</th>
+						<th>Years Tested</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -272,6 +275,14 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    // document.getElementById('drawer-changelog').innerHTML = drawerContent.changelog;
+    document.getElementById('drawer-howto').innerHTML = drawerContent.howToUse;
+    document.getElementById('drawer-planned').innerHTML = drawerContent.planned;
+    document.getElementById('drawer-background').innerHTML = drawerContent.background;
+});
+
+
 /** TAX CONSTANTS **/
 const TAXData = {
 	TEST: {
@@ -503,13 +514,14 @@ function simulate(inputs) {
     };
     
     let log = [];
-    let totals = { tax: 0, gross: 0, spend: 0 };
 	//!!!TODO Remove hardcoded start year!
     let startYear = 2026;
 	let birthyear1 = inputs.birthyear1;
 	let birthyear2 = inputs.birthyear2;
 
     let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear1 + inputs.die2) - startYear + 1;
+    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: false, yearstested: maxYears };
+
 	let cpiRate = 1
 	let inflation = 1
 	let fixedWithdrawal = calculateSystematicWithdrawal(balance.ira1 + balance.ira2, inputs.iraBaseGoal, inputs.nYears,inputs.growth)
@@ -1181,6 +1193,9 @@ function runOptimizer() {
             <td>$${Math.round(r.totals.tax).toLocaleString()}</td>
             <td>$${Math.round(r.finalNW).toLocaleString()}</td>
             <td>${(r.totals.tax/r.totals.gross*100).toFixed(1)}%</td>
+			<td>${r.totals.yearsfunded}</td>
+			<td>${r.totals.success}</td>
+			<td>${r.totals.yearstested}</td>
         </tr>
     `).join('');
     document.querySelector('#opt-table tbody').innerHTML = html;

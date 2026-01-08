@@ -15,8 +15,8 @@ body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg);
 }
 
 /* Adds a small 'external link' emoji after links that open in new tabs */
-a[target="_blank"]::after {
-    content: " ↗";
+a[]::after {
+    content: "↗";
     font-size: 0.8em;
     color: #888;
 }
@@ -76,6 +76,7 @@ th { background: #f8f9fa; position: sticky; top: 0; padding: 10px; border-bottom
 td { padding: 8px; border-bottom: 1px solid #eee; }
 tr.single-year { background-color: #fff9e6; }
 .neg { color: #e74c3c; font-weight: bold; }
+th[title] { cursor: help; text-decoration: underline dotted; color: green }
 
 .tabs { display: flex; gap: 10px; margin-bottom: 10px; }
 .tab-btn { background: #ddd; color: #333; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }

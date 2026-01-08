@@ -220,7 +220,11 @@
 
 		<div id="tab-tbl" class="card table-wrap">
 			<table id="main-table">
-				<thead></thead> <tbody></tbody>
+				<thead>
+					<tr id="groupRow"></tr>
+					<tr id="headerRow"></tr>
+				</thead>
+				<tbody id="tableBody"></tbody>
 			</table>
 		</div>
 
@@ -667,17 +671,17 @@ function simulate(inputs) {
 			'-INCOME': " ",
             SSincome: fixedInc,
 			pension: pen,
-			'RMD1-': rmd1,
-			'RMD2-': rmd2,
-            '-RMD-': totalRMD,
+			'-RMD1-': rmd1,
+			'-RMD2-': rmd2,
+            'RMD-': -totalRMD,
             'IRA-': -iraWD,
-            'brokerageWD': -brokerageWD,
+            'BrokerageΔ': -brokerageWD,
 			'-CapGains': 0,
 			cashDividends: taxableDividends,
 			cashInterest: taxableInterest,
 			'-NONTAXABLE': " ",
-            rothWD: -rothWD,
-            'cashWD': -cashWD,
+            'RothΔ': -rothWD,
+            'CashΔ': -cashWD,
 			// totalIncome: iraWD + rothWD + brokerageWD + cashWD + fixedInc + pen + taxableInterest + taxableDividends,
 			netCash: taxableDividends + taxableInterest - cashWD,
 			'-TAXES': " ",
@@ -1155,10 +1159,25 @@ function updateTable(log) {
 	const thead = table.createTHead();
 	const headerRow = thead.insertRow();
 	
+	const tooltips = {
+		'RMD-': 'Total of all RMDs (positive indicate withdrawals)',
+		'BrokerageΔ': 'Withdrawals are negative',
+		'IRMAA': 'First two years are presumed the same as the 3rd year on.',
+		'SpendGoal': 'With inflation, this amount increases.',
+		'RothΔ': 'Positive amounts are deposits, negative are withdrawals',
+		'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA are all included.',
+		'NominalTax%': 'TotalTax/TotalGrossIncome'
+	};
+
 	keys.forEach(key => {
 		if (!key.startsWith('-')) {
 			const th = document.createElement('th');
-			th.textContent = key;
+			th.textContent = key.endsWith('!') ? key.slice(0, -1) : key;
+			
+			if (tooltips[key]) {
+				th.title = tooltips[key];
+			}
+			
 			headerRow.appendChild(th);
 		}
 	});
@@ -1205,49 +1224,6 @@ function updateTable(log) {
   return table;
 }
 
-function updateTableOld(log) {
-    const table = document.getElementById('main-table');
-    const thead = table.querySelector('thead');
-    const tbody = table.querySelector('tbody');
-
-    // 1. Define Headers in one place
-    const headers = [  // "Spend Goal",
-        "Year", "Ages",  "SS+Pen", "RMDs", "IRA WD", 
-        "Roth &Delta;", "Cash &Delta;", "Brokerage &Delta;", "Total Income", "State Tax", "IRMAA",
-        "Total Tax", "Fed Marginal", "State Marginal", "Net Income", "IRA(you)", 
-        "IRA(spouse)", "Roth", "Brokerage", "Cash"
-    ];
-
-    // 2. Render Headers
-    thead.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
-
-    // 3. Render Body Rows
-    tbody.innerHTML = log.map(r => `
-        <tr class="${r.age2 === '—' || r.age1 === '—' ? 'single-year' : ''}">
-            <td>${r.year}</td>
-            <td>${r.age1}/${r.age2}</td>
-            <!--<td>${Math.round(r.spendGoal).toLocaleString()}</td> -->
-            <td>${Math.round(r.fixed).toLocaleString()}</td>
-            <td>${Math.round(r.rmd).toLocaleString()}</td>
-            <td>${Math.round(r.iraWD).toLocaleString()}</td>
-            <td>${Math.round(-r.rothWD).toLocaleString()}</td>
-            <td>${Math.round(-r.cashWD).toLocaleString()}</td>
-            <td>${Math.round(-r.brokerageWD).toLocaleString()}</td>
-            <td>${Math.round(r.totalIncome).toLocaleString()}</td>
-            <td>${Math.round(r.statetax).toLocaleString()}</td>
-            <td>${Math.round(r.irmaa).toLocaleString()}</td>
-            <td class="neg">${Math.round(r.tax).toLocaleString()}</td>
-            <td>${(r.fedRate * 100).toFixed(1)}%</td> 
-            <td>${(r.stRate * 100).toFixed(1)}%</td> 
-			<td>${Math.round(r.netInc).toLocaleString()}</td>
-            <td>${Math.round(r.ira1Bal).toLocaleString()}</td>
-            <td>${Math.round(r.ira2Bal).toLocaleString()}</td>
-            <td>${Math.round(r.rothBal).toLocaleString()}</td>
-            <td>${Math.round(r.brokerageBal).toLocaleString()}</td>
-            <td>${Math.round(r.cashBal).toLocaleString()}</td>
-        </tr>
-    `).join('');
-}
 
 function updateStats(totals, finalNW) {
     document.getElementById('stat-rate').innerText = (totals.tax / totals.gross * 100).toFixed(1) + '%';
@@ -1269,11 +1245,22 @@ function updateCharts(log) {
                 { label: 'Roth', data: log.map(r => r.RothBal), borderColor: '#000000', fill: false },
                 { label: 'Brokerage', data: log.map(r => r.brokerageBal), borderColor: '#2980b9', fill: false },
                 { label: 'Cash', data: log.map(r => r.CashBal), borderColor: '#27ae60', fill: false }
-
             ]
+        },
+        options: {
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + 
+                                   Math.round(context.parsed.y).toLocaleString();
+                        }
+                    }
+                }
+            }
         }
     });
-
+    
     const ctxT = document.getElementById('chartTaxSpend').getContext('2d');
     if (taxChart) taxChart.destroy();
     taxChart = new Chart(ctxT, {
@@ -1287,31 +1274,31 @@ function updateCharts(log) {
                 { label: 'Spendable Income', data: log.map(r => r.netIncome), borderColor: '#27ae60', fill: false, borderWidth: 3 }
             ]
         },
-		options: {
-			scales: {
-				x: {
-					stacked: true  // Enable stacking on x-axis
-				},
-				y: {
-					stacked: true,  // Enable stacking on y-axis
-					ticks: {
-					  callback: function(value) {
-						return Math.round(value).toLocaleString();
-					  }
-					}
-				}
-			}
-		},
-		plugins: {
-		  tooltip: {
-			callbacks: {
-			  label: function(context) {
-				return context.dataset.label + ': ' + 
-					   Math.round(context.parsed.y).toLocaleString();
-			  }
-			}
-		  }
-		}		
+        options: {
+            scales: {
+                x: {
+                    stacked: true
+                },
+                y: {
+                    stacked: true,
+                    ticks: {
+                        callback: function(value) {
+                            return Math.round(value).toLocaleString();
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + 
+                                   Math.round(context.parsed.y).toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
     });
 }
 

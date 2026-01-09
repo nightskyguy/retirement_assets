@@ -62,8 +62,17 @@ a:hover {
 }
 
 
-#stratMode {
-	width: 100% !important;   
+.input-group { margin-bottom: 12px; }
+.input-group label { display: block; font-size: 0.75rem; font-weight: bold; color: #666; margin-bottom: 3px; }
+.input-group input, .input-group select { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+.row { display: flex; gap: 8px; margin-bottom: 8px; }
+.row > div { flex: 1; }
+h3 { border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 15px; font-size: 1rem; color: var(--primary); }
+
+
+
+#stratMode, #ui-fixed, #ui-bracket, #spending {
+	// width: 100% !important;   
 	max-width: 100% !important;
 	border: 2px solid #ff9800;
 	box-shadow: 0 0 8px rgba(255, 152, 0, 0.8);
@@ -71,13 +80,6 @@ a:hover {
 	border-radius: 6px;
 	font-weight: 600;
 }
-
-.input-group { margin-bottom: 12px; }
-.input-group label { display: block; font-size: 0.75rem; font-weight: bold; color: #666; margin-bottom: 3px; }
-.input-group input, .input-group select { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-.row { display: flex; gap: 8px; margin-bottom: 8px; }
-.row > div { flex: 1; }
-h3 { border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 15px; font-size: 1rem; color: var(--primary); }
 
 .important-label {
     color: #e74c3c !important;

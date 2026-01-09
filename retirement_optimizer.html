@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer V6t</title>
+    <title>Retirement Optimizer V6u</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles.css">
 	<base target="_blank">	
@@ -13,6 +13,13 @@
 
 <div class="container">
     <div class="sidebar">
+	    <div class="row"><div  id="spending">
+            <div><label>After-Tax Spending Goal&nbsp;</label>
+            <input type="number" id="spendGoal" value="180000"></div>
+            <div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. 98% means you spend 2% less each year. 100 means no change.">Spending Delta &nbsp;&nbsp;&nbsp;</label>
+            <input type="number" id="spendChange" value="99.5" step="0.1" min="-25" placeholder="0.0">%<BR>(100 means no change)</div>
+			</div>
+		</div>	
         <div class="input-group">
             <select id="stratMode" onchange="toggleStratUI()">
                 <option value="baseline">Withdraw to meet spend</option>
@@ -35,8 +42,9 @@
                 <option value="35">35%(768/640)k)</option>
             </select>
         </div>
+	
         <div class="row"><label title="This is the goal to draw the total IRAs down to.">IRA Reduction Goal</label>
-            <input type="number" id="iraBaseGoal" value="150000">
+            <input type="number" id="iraBaseGoal" value="350000">
 		</div>	
         <h3>1. Profile & Ages</h3>
         <div class="row">
@@ -62,7 +70,7 @@
             <div><label>Cash Balance</label><input type="number" id="balCash" value="100000"></div>
         </div>
 
-        <h3>3. Income & Spend</h3>
+        <h3>3. Income</h3>
         <div class="row">
             <div><label>Your Social Security Amt</label><input type="number" id="ss1" value="48000"></div>
             <div><label>Start Age</label><input type="number" id="ss1Age" value="70"></div>
@@ -75,28 +83,23 @@
             <div><label>Your Pension</label><input type="number" id="pensionAnnual" value="16900"></div>
             <div><label>Survivorship</label><input type="number" id="survivorPct" value="75">%</div>
         </div>
-        <div class="row">
-            <div><label>After-Tax Spending Goal</label>
-            <input type="number" id="spendGoal" value="180000" class="highlight-input"></div>
-            <div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. 98% means you spend 2% less each year. 100 means no change.">Spending Delta </label>
-            <input type="number" id="spendChange" value="99.5">% (100 means no change)</div>
-		</div>
+
 
         <h3>4. Assumptions</h3>
         <div class="row">
-            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)</label><input type="number" id="inflation" value="0">%</div>
-            <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)</label><input type="number" id="cpi" value="0">%</div>
+            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)</label><input type="number" id="inflation" value="0" step="0.01" min="0" placeholder="0.00">%</div>
+            <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)</label><input type="number" id="cpi" value="0" step="0.01" min="0" placeholder="0.00">%</div>
         </div>
         <div class="row">
             <div><label title="Your asset mix will dictate what growth rate to expect. In a brokerage, your basis doesn't grow at the rate the account does.">Growth (6?)</label><input type="number" id="growth" value="6.0">%</div>
-            <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)?</label><input type="number" id="cashYield" value="3.0">%</div>
+            <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)?</label><input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00">%</div>
         </div>
         <div class="row">
-			<div><label title="This is the rate that your asset mix emits dividends.">Dividend Rate (0.5)?</label><BR><input type="number" id="dividendrate" value="0.5">%</div>
+			<div><label title="This is the rate that your asset mix emits dividends.">Dividend Rate (0.5)?</label><BR><input type="number" id="dividendrate" value="0.5" step="0.01" min="0" placeholder="0.00">%</div>
 		</div>
         <div class="row">
-			<div><label>🛑Social Security Fail</label> <input type="number" id="ssFailYear" value="2033"></div>
-            <div><label>🛑SSecurity Reduction </label><input type="number" id="ssFailPct" value="77.3">%</div>
+			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail</label> <input type="number" id="ssFailYear" value="2033"></div>
+            <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SSecurity Net Payout</label><input type="number" id="ssFailPct" value="77.3">%</div>
         </div>
 
     </div>
@@ -106,13 +109,13 @@
 			<details class="top-drawer"><summary>Change Log</summary><div><br>
 				<div class="log-entry">
 				<strong id="testsFailed">🟢</strong></div>
+				
 				<ul>
-				<li><b>6t</b> Solved a math issue causing NaN to occur. Cleaned up the visuals.
-				</li>				
-				<li><b>6s</b> Some more fancy highlighting of the tables. Fixed broken strategy changer. Tests moved into separate file, too.
-				</li>				
-				<li><b>6r</b> Moved the heavy text (top drawers) into a separate file.
-				</li>
+				<ul>
+				<li><b>6u</b> Implemented SS Fail. More UI fixes. Moved all strategy items to the top.</li>	
+				<li><b>6t</b> Solved a math issue causing NaN to occur. Cleaned up the visuals.</li>				
+				<li><b>6s</b> Some more fancy highlighting of the tables. Fixed broken strategy changer. Tests moved into separate file, too.</li>				
+				<li><b>6r</b> Moved the heavy text (top drawers) into a separate file.</li>
 				<li><b>6q</b> Beautifications and hover notes. More self tests with an indicator on screen if they fail. Started the Social Security "meltdown" implementation. Added (empty) Insights tab.
 				</li><li><b>6p</b> Corrected instructions for Single filer usage. Fixed error in brokerage tracking. Added brokerage dividend rate. Dividends automatically accrue to Cash.
 				</li><li><strong>6n</strong> Calculation fixes. WARNING: detailed calculations not done - but current calcs are accurate.
@@ -140,25 +143,25 @@
 		</div>	
         <div class="top-bar">
             <div id="summary-stats" style="display:flex; gap:30px;">
+				<div id="stat-success">  </div>
 				<div><small>Years of Life</small><br><strong id="stat-years">0</strong></div>
 				<div><small>Funded Years</small><br><strong id="stat-yearsfunded">0</strong></div>
                 <div><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong></div>
                 <div><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong></div>
                 <div><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
                 <div><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
-               
             </div>
             </div>
 
         <div class="tabs">
             <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details</button>
             <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Chart</button>
-            <button id="btn-opt" class="tab-btn" onclick="{showTab('tab-insight')}">🛑Show Insights</button>
+            <button id="btn-opt" class="tab-btn" onclick="{showTab('tab-insight')}">Show Insights</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer</button>
 
         </div>
 		<div id="tab-insight" class="card hidden">
-			Some pithy insights will appear here. Right now it's not implemented.
+			🛑 Some pithy insights will appear here. Right now it's not implemented.
 			<h4>Where is the Code</h4>
 			This might be useful to know: you can run this locally (download the 3 pieces from github) 
 			<A HREF="https://github.com/nightskyguy/retirement_assets">https://github.com/nightskyguy/retirement_assets</a>.
@@ -472,9 +475,6 @@ function simulate(inputs) {
 	let spendGoal = inputs.spendGoal;
 	let cumulativeTaxes = 0;
 	let nominalTaxRate = 0.20; // Just a guess.
-	let currentYear = startYear;
-
-
 	
 
     for (let y = 0; y < maxYears; y++) {
@@ -512,8 +512,9 @@ function simulate(inputs) {
         if (!alive2 && balance.ira2 > 0) { balance.ira1 += balance.ira2; balance.ira2 = 0; }
 
         // 2. Base Income
-        let s1 = (alive1 && age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate : 0;
-        let s2 = (alive2 && age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate : 0;
+		let ssReduction = (inputs.ssFailYear > 2000 && startYear + y >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
+        let s1 = (alive1 && age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate * ssReduction : 0;
+        let s2 = (alive2 && age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate * ssReduction : 0;
         let pen = inputs.pensionAnnual;
 		
 		// One is deceased (if both decease, it won't get here)
@@ -1290,13 +1291,18 @@ function calculateInflationAdjustedWithdrawal(principal, growthRate, inflationRa
 }
 
 
-function updateStats(totals, finalNW) {
+function updateStats(totals, finalNW, minNetWorth = 100000) {
     document.getElementById('stat-rate').innerText = (totals.tax / totals.gross * 100).toFixed(1) + '%';
     document.getElementById('stat-spend').innerText = '$' + Math.round(totals.spend).toLocaleString();
     document.getElementById('stat-tax').innerText = '$' + Math.round(totals.tax).toLocaleString();
     document.getElementById('stat-nw').innerText = '$' + Math.round(finalNW).toLocaleString();
     document.getElementById('stat-years').innerText = totals.yearstested;
     document.getElementById('stat-yearsfunded').innerText = totals.yearsfunded;
+	let indicator = '🛑 FAILED ';
+	if (totals.yearsfunded >= totals.yearstested && finalNW > minNetWorth) {
+		indicator = '🟢 SUCCESS ';
+	}
+    document.getElementById('stat-success').innerText = indicator;
 
 }
 

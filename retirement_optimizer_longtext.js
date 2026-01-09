@@ -3,10 +3,11 @@ const drawerContent = {
 	<div class="log-entry"><ul>
 		<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year of each person and estimated life expectancy for both partners. To model a single taxpayer, set the <I>Spouse Birth Year</I>, <i>Spouse  Life expectancy</i> and <i>Spouse IRA</i> to zero.</li>
 		<li><strong>2. Assets:</strong> Enter balances. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Brokerage withdrawals will be assumed to be part subject to capital gains. Total all after tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. <i>For Roth</i>, sum the existing ROTH balances into one total.</li>
-		<li><strong>3. Income &amp; Spend:</strong> Input annual Social Security and pensions. Set the start ages to see the impact of delaying benefits. Amounts you enter for <i>Social Security Amt</i> will be adjusted annually by the <i>CPI/COLA</i>. Set the <i>After-Tax Sending Goal</i> to the amount of after-tax income you need per year. And set the <i>Spend Delta</i> percentage. A Spend Delta of 100 means no change, while a 98.5 would reduce spending by 1.5% each year. To have spending grow, use a number greater than 100%</li>
-		<li><strong>4. Assumptions:</strong> choose the Inflation rate, the CPI rate (which is the expected change in tax brackets rather than actual inflation), the <i>Growth</i> rate for the IRA/401K, Brokerage &amp; ROTH.  <i>Cash Interest</i> is the expected interest on cash and cash-like investments (e.g. Mutual Funds/Bonds). To make these numbers accurate, it's best to separate all investments into "Brokerage" and cash into Cash.</li>
+		<li><strong>3. Income</strong> Input annual Social Security and pensions. Set the start ages to see the impact of delaying benefits. Amounts you enter for <i>Social Security Amt</i> will be adjusted annually by the <i>CPI/COLA</i>. </li>
+		<li><strong>4. Assumptions:</strong> choose the Inflation rate, the CPI rate (which is the expected change in tax brackets rather than actual inflation), the <i>Growth</i> rate for the IRA/401K, Brokerage &amp; ROTH.  <i>Cash Interest</i> is the expected interest on cash and cash-like investments (e.g. Mutual Funds/Bonds). To make these numbers accurate, it's best to separate all investments into "Brokerage" and cash into Cash.</li>. <i>Social Security Fail</i> &amp; <i>SSecurity Net Payout</i>.
 		<li><strong>Strategy:</strong> 
 			Find this unlabeled item at the top left of the display.
+			Set the <i>After-Tax Sending Goal</i> to the amount of after-tax income you need per year. And set the <i>Spend Delta</i> percentage. A Spend Delta of 100 means no change, while a 98.5 would reduce spending by 1.5% each year. To have spending grow, use a number greater than 100%
 			<ul><li>In <em>Withdraw to meet spend goal</em> it withdraws enough from the IRAs (and others sources if available) to reach <i>After-tax Spending Goal</i>.</li>
 			<li>Compare with <em>Reduce IRA in N Years</em> to amortize your IRAs in a fixed number of years (they won't be emptied, they will be drawn down to <i>IRA Reduction Goal</i>.</li>
 			<li><i>Fill Federal Tax Bracket</i> withdraws enough to max out the chosen federal tax bracket.</li>
@@ -29,14 +30,13 @@ const drawerContent = {
   planned: `
 	<div class="drawer-content" id="drawer-planned"><B>Planned Enhancements &amp; Bug Fixes</B>
 	<ol>
-		<li><STRONG>BUG</STRONG> An error occurs when using, e.g. the "Fill Federal Bracket" with a bracket that is too small to contain the <i>After-Tax Spending Goal</i>. Under these circumstances, <strong>NaN</strong> (not a number) may appear.</li>
 		<li><STRONG>BUG</STRONG> Does not calculate the tax on interest from cash or capital gains/withdrawals from Brokerage or dividends from Brokerage (does not account for tax drag).</li>
 		<li>Add option to boost ROTH conversion with cash withdrawals.</li>
 		<li>Improve accuracy of the tax calculations - apply NIIT, properly handle income stacking</li>
-		<li>Add back the post <A HREF="https://www.ssa.gov/oact/trsum/">2033 Social Security 77% reduction</A> (See Table 1) modeling</li>						
-		<li>Track NetWealth/FinalWealth by applying tax adjustments to make the number meaningful.e.g. 1000 in a ROTH is worth 1000, but 1000 in an IRA is not due to taxation.</li>
+		<li>Add back the post <A HREF="https://www.ssa.gov/oact/trsum/">2033 Social Security 77% reduction</A> (See Table 1) modeling <strong>DONE</strong></li>						
+		<li>Track NetWealth/FinalWealth by applying tax adjustments to make the number meaningful.e.g. 1000 in a ROTH is worth 1000, but 1000 in an IRA is not due to taxation. <strong>DONE</strong></li>
 		<li>Clearly highlight out of money scenarios. For this purpose "out of money" means that remaining assets are less than or equal to 2x spendable goal.</li>
-		<li>Create an "optimize spendable income" tool (like the current optimizer, but for spendable goal). I.e. iterate with higher or lower target spend amounts.</li>
+		<li>Create an "optimize spendable income" tool (like the current optimizer, but for spendable goal). I.e. iterate with higher or lower target spend amounts. It may get even fancier and try all of the strategies.</li>
 		<li>Create an export/import of inputs.</li>
 		<li>Add elements to graphs. Reorder and expand the Annual Details table (e.g. group balances, tax info, income and net income)
 		<li>Add an option to maximize ROTH conversions by using cash/brokerage assets to pay taxes. Currently it manages IRA withdrawals, and targets excess funds for placement in the ROTH.
@@ -127,38 +127,38 @@ function runTests() {
 				
 	assertEqual(getInputs(), 
 				{
-		  "strategy": "baseline",
-		  "strat": "baseline",
-		  "nYears": 10,
-		  "stratRate": 0.24,
-		  "birthyear1": 1960,
-		  "die1": 88,
-		  "birthyear2": 1952,
-		  "die2": 98,
-		  "ira1": 2000000,
-		  "ira2": 400000,
-		  "roth": 200000,
-		  "brokerage": 400000,
-		  "basis": 200000,
-		  "cash": 100000,
-		  "ss1": 48000,
-		  "ss1Age": 70,
-		  "ss2": 29000,
-		  "ss2Age": 70,
-		  "pensionAnnual": 16900,
-		  "survivorPct": 75,
-		  "spendGoal": 180000,
-		  "spendChange": 0.995,
-		  "iraBaseGoal": 150000,
-		  "inflation": 0,
-		  "cpi": 0,
-		  "growth": 0.06,
-		  "cashYield": 0.03,
-		  "dividendRate": 0.005,
-		  "ssFailYear": 2033,
-		  "ssFailPct": 0.773,
-		  "startInYear": null
-		},
+			  "strategy": "baseline",
+			  "strat": "baseline",
+			  "nYears": 10,
+			  "stratRate": 0.24,
+			  "birthyear1": 1960,
+			  "die1": 88,
+			  "birthyear2": 1952,
+			  "die2": 98,
+			  "ira1": 2000000,
+			  "ira2": 400000,
+			  "roth": 200000,
+			  "brokerage": 400000,
+			  "basis": 200000,
+			  "cash": 100000,
+			  "ss1": 48000,
+			  "ss1Age": 70,
+			  "ss2": 29000,
+			  "ss2Age": 70,
+			  "pensionAnnual": 16900,
+			  "survivorPct": 75,
+			  "spendGoal": 180000,
+			  "spendChange": 0.995,
+			  "iraBaseGoal": 350000,
+			  "inflation": 0,
+			  "cpi": 0,
+			  "growth": 0.06,
+			  "cashYield": 0.03,
+			  "dividendRate": 0.005,
+			  "ssFailYear": 2033,
+			  "ssFailPct": 0.773,
+			  "startInYear": null
+			},
 		'getInputs()')
 								
 				

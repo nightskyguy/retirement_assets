@@ -83,3 +83,177 @@ const drawerContent = {
 	</div>
 	`
 }	
+
+
+// ===== UNIT TESTS =====
+function runTests() {
+    console.log('========================================');
+    console.log('   RUNNING UNIT TESTS');
+    console.log('========================================\n');
+    
+    let passed = 0;
+    let failed = 0;
+    
+    // Helper function to assert equality
+    function assertEqual(actual, expected, testName) {
+		const pretty = obj => JSON.stringify(obj, null, 2);
+
+        if (JSON.stringify(actual) === JSON.stringify(expected)) {
+            console.log(`✅ PASS: ${testName}`);
+            passed++;
+        } else {
+            console.log(`❌ FAIL: ${testName}`);
+            console.log(`   Expected:`, pretty(expected));
+            console.log(`   Got:`, pretty(actual));
+            failed++;
+        }
+    }
+
+	// These use TEST data and should NOT need to be changed.
+    assertEqual(findLimitByRate('TEST', 'MFJ', 0.2, 1), {limit: 2000, rate: 0.2}, 
+                'findLimitByRate: TEST MFJ 20% rate correct');
+    
+    assertEqual(findLimitByRate('TEST', 'SGL', 0.2, 3), {limit: 3000, rate: 0.2}, 
+                'findLimitByRate: TEST SGL 20% rate w/ 300% inflation');	
+
+    assertEqual(findLimitByRate('TEST', 'SGL', 0.9, 1), {limit: 20000, rate: 0.8}, 
+                'findLimitByRate: TEST SGL 90% - finds lower rate: 80%');	
+    
+    assertEqual(findLimitByRate('TEST', 'SGL', 0.05, 1), {limit: 0, rate: 0}, 
+                'findLimitByRate: TEST SGL 5% finds no limit or rate (0)');	
+
+    assertEqual(findUpperLimitByAmount('TEST', 'SGL', 998, 1), {limit: 999, rate: 0.1}, 
+                'findUpperLimitByAmount: TEST SGL 998 finds limit: 999, rate: 0.1');
+				
+	assertEqual(getInputs(), 
+				{
+		  "strategy": "baseline",
+		  "strat": "baseline",
+		  "nYears": 10,
+		  "stratRate": 0.24,
+		  "birthyear1": 1960,
+		  "die1": 88,
+		  "birthyear2": 1952,
+		  "die2": 98,
+		  "ira1": 2000000,
+		  "ira2": 400000,
+		  "roth": 200000,
+		  "brokerage": 400000,
+		  "basis": 200000,
+		  "cash": 100000,
+		  "ss1": 48000,
+		  "ss1Age": 70,
+		  "ss2": 29000,
+		  "ss2Age": 70,
+		  "pensionAnnual": 16900,
+		  "survivorPct": 75,
+		  "spendGoal": 180000,
+		  "spendChange": 0.995,
+		  "iraBaseGoal": 150000,
+		  "inflation": 0,
+		  "cpi": 0,
+		  "growth": 0.06,
+		  "cashYield": 0.03,
+		  "dividendRate": 0.005,
+		  "ssFailYear": 2033,
+		  "ssFailPct": 0.773,
+		  "startInYear": null
+		},
+		'getInputs()')
+								
+				
+	// 😭😭😭 NOTE NOTE NOTE: All of the following tests are sensitive to the real TAXData. 😭😭😭
+
+    assertEqual(findLimitByRate('FEDERAL', 'MFJ', 0.24, 1), {limit: 403550, rate: 0.24}, 
+                '😭findLimitByRate: FEDERAL MFJ 24% bracket');
+	
+    assertEqual(findLimitByRate('STATE', 'SGL', 0.06, 1), { limit: 54081, rate: 0.06 }, 
+                '😭findLimitByRate: State SGL 6% bracket');
+
+		
+	assertEqual(calculateProgressive('SOCIALSECURITY', 'MFJ', 55000).marginal, 
+		0.85,
+		'😭calculateProgressive(SOCIALSECURITY, MFJ, 55000) CHANGES with SOCIALSECURITY data.')
+
+	// RMD Percentages.  First should be 0, second should match.
+    // RMD percentage lookup
+    if (typeof getRMDPercentage !== 'undefined') {
+        let rmd73 = getRMDPercentage(73, 1952);
+        assertEqual(rmd73 > 0.037 && rmd73 < 0.038, true,
+                    'RMD: Age 73 should be ~3.77% (divisor 26.5)');
+    }
+
+	assertEqual(getRMDPercentage(74, 1960), 0,
+			'getRMDPercentage for age 74, birth year 1960 correct (0)');	
+
+	assertEqual(getRMDPercentage(74, 1950), 0.0392156862745098,
+			'getRMDPercentage for age 76, birth year 1950 correct (4.2%)');
+
+	assertEqual(calcIRMAA(100, 'SGL', 1), 0,
+				'😭calcIRMAA  0 for SGL at 100 income');
+
+	assertEqual(calcIRMAA(109001, 'SGL', 1), 12 * 202.9,
+				'😭calcIRMAA  202.9 for 109001 SGL income');
+
+	assertEqual(calcIRMAA(273999, 'MFJ', 1), (12 * 2 * 202.90),
+				'😭calcIRMAA  (2 * 202.90) for 273999 MFJ income');    
+
+	assertEqual(calcIRMAA(274000, 'MFJ', 1), 12 * 2 * (284.10 + 14.50),
+				'😭calcIRMAA  2 * (284.10 + 14.50) for 274000 MFJ income');
+
+	assertEqual(calculateProgressive('TEST','MFJ',72000), 
+		{cumulative: 30700, total: 30700, marginal: 0.8, limit: 40000}, 
+		'calculateProgressive(TEST, MFJ, 72000) ok')	
+
+	assertEqual(calculateProgressive('TEST','SGL',72000), 
+		{cumulative: 15350, total: 15350, marginal: 0.8, limit: 20000}, 
+		'calculateProgressive(TEST,SGL,72000) ok')
+		
+	assertEqual(calculateProgressive('NONEXISTENT','SGL',72000), 
+		{cumulative: 0, total: 0, marginal: 0, limit: 0, error: 'Invalid entity or status'}, 
+		'calculateProgressive(NONEXISTENT,...) ok')
+
+	assertEqual(calculateProgressive('TEST','NONEXISTENT',72000), 
+		{cumulative: 0, total: 0, marginal: 0, limit: 0, error: 'Invalid entity or status'}, 
+		'calculateProgressive(TEST,NONEXISTENT,...) ok')
+		
+	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30),0), 57830,
+		'calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30) (growth > inflation)')
+
+	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, 0.03, 0.03, 30),0), 33333,
+		'calculateInflationAdjustedWithdrawal(1000000, 0.03, 0.03, 30) (growth=inflation)')
+
+	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, 0.03, -0.03, 30),0), 72649,
+		'calculateInflationAdjustedWithdrawal(1000000, 0.03, -0.03, 30) (Deflation)')	
+
+	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, -0.03, 0.00, 30),0), 20084,
+		'calculateInflationAdjustedWithdrawal(1000000, -0.03, 0.00, 30) (growth is negative)')
+
+	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(-1000, -0.03, 0.00, 30),0), 0,
+		'calculateInflationAdjustedWithdrawal(-1000, 0.07, 0.03, 30) (principal < 0)')		
+
+/*
+    assertEqual(findRequiredWithdrawals(150000, { yearOffset: 0, filingStatus: 'MFJ', ages: [65, 63], ss1: 30000, ss2: 20000,
+					ordDivInterest: 5000, qualifiedDiv: 3000, taxExemptInterest: 0, 
+					pensionIncome: 0, hsaContrib: 0, cpi: 0.03 },
+					500000,  // $500k brokerage balance
+					250000   // $250k cost basis (50% gains)
+				),   
+			{},
+			'findRequiredWithdrawals(complicated arguments)!')
+*/	
+	
+    console.log('\n========================================');
+    console.log(`   RESULTS: ${passed} passed, ${failed} failed`);
+    console.log('========================================');
+	
+    const statusElement = document.getElementById('testsFailed');
+    if (failed === 0) {
+        statusElement.textContent = '🟢';
+		statusElement.title = `All ${failed+passed} tests passed`;
+    } else {
+        statusElement.textContent = '❌ tests failed';
+		statusElement.title = `${failed} test${failed !== 1 ? 's' : ''} failed out of ${failed+passed}.`;
+    }
+    return failed === 0;
+}

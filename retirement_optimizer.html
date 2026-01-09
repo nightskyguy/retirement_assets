@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer V6r</title>
+    <title>Retirement Optimizer V6t</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles.css">
 	<base target="_blank">	
@@ -103,9 +103,12 @@
 
     <div class="main">
 			<div class="header-drawers">
-			<details class="top-drawer"><summary>Change Log</summary>
+			<details class="top-drawer"><summary>Change Log</summary><div><br>
 				<div class="log-entry">
+				<strong id="testsFailed">🟢</strong></div>
 				<ul>
+				<li><b>6t</b> Solved a math issue causing NaN to occur. Cleaned up the visuals.
+				</li>				
 				<li><b>6s</b> Some more fancy highlighting of the tables. Fixed broken strategy changer. Tests moved into separate file, too.
 				</li>				
 				<li><b>6r</b> Moved the heavy text (top drawers) into a separate file.
@@ -143,7 +146,7 @@
                 <div><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong></div>
                 <div><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
                 <div><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
-                <div><br><strong id="testsFailed">🟢</strong></div>
+               
             </div>
             </div>
 
@@ -197,7 +200,7 @@
             <table id="opt-table">
                 <thead>
                     <tr>
-                        <th>Strategy (N Years)</th>
+                        <th>Strategy</th>
                         <th>Total Lifetime Tax</th>
                         <th>Final Wealth</th>
                         <th>Effective Tax Rate</th>
@@ -553,7 +556,7 @@ function simulate(inputs) {
 			let amortized = fixedWithdrawal - totalRMD;
 			
 			//!!!TODO totalRMD has has already been removed...
-            iraWD = Math.max(0,amortized);
+            iraWD = Math.max(0, amortized);
         } else if (inputs.strat === 'bracket' || inputs.strat === 'minlimit') {
 			//!!! This code has flaws.  Withdraws too much.
 			let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
@@ -583,7 +586,9 @@ function simulate(inputs) {
         // Ensure we don't withdraw more than exists - we've already removed the totalRMD
         iraWD = Math.min(iraWD, balance.ira1 + balance.ira2);
 		
-		
+		// if (Number.isNaN(iraWD)) {
+		//   throw new Error('iraWD is NaN');
+		// }
 
         // 5. Tax Calc (Including IRMAA lag)
 		//!!!TODO Assumes capital gains is zero. Not tracking cap gains.
@@ -624,7 +629,7 @@ function simulate(inputs) {
             // If Gap still > 0, we take more IRA (Baseline behavior)
 			// NOTE: From earlier we already know the marginal state and federal brackets.
             if (gap > 0 && (balance.ira1 + balance.ira2) > 0) {
-                let extraIRA = Math.min(gap * (1+tax.bracket+tax.stbracket), balance.ira1 + balance.ira2);
+                let extraIRA = Math.min(gap / (1-tax.fedRate+tax.stRate), balance.ira1 + balance.ira2);
                 iraWD += extraIRA;
                 // Re-calculate tax for new IRA WD
                 tax = calculateTax(fixedInc, iraWD + totalRMD, 0, status, age1, age2, cpiRate);
@@ -1137,19 +1142,20 @@ function runSimulation() {
 function runOptimizer() {
     let base = getInputs();
     let results = [];
-    for (let n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25, 30]) {
+    for (let n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
         base.strat = 'fixed';
         base.nYears = n;
-        results.push({ n, ...simulate(base) });
+        results.push({ 
+		strategy: "Fixed", parameter: n, unit: "years", ...simulate(base) });
     }
     let html = results.map(r => `
         <tr>
-            <td>${r.n}</td>
+            <td>${r.strategy} ${r.parameter} ${r.unit}</td>
             <td>$${Math.round(r.totals.tax).toLocaleString()}</td>
             <td>$${Math.round(r.finalNW).toLocaleString()}</td>
             <td>${(r.totals.tax/r.totals.gross*100).toFixed(1)}%</td>
 			<td>${r.totals.yearsfunded}</td>
-			<td>${r.totals.success}</td>
+			<td>${r.totals.success ? '🟢' : '🚨'}</td>
 			<td>${r.totals.yearstested}</td>
         </tr>
     `).join('');

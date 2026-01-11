@@ -35,7 +35,7 @@ const drawerContent = {
 		<li>Improve accuracy of the tax calculations - apply NIIT, properly handle income stacking</li>
 		<li>Add back the post <A HREF="https://www.ssa.gov/oact/trsum/">2033 Social Security 77% reduction</A> (See Table 1) modeling <strong>DONE</strong></li>						
 		<li>Track NetWealth/FinalWealth by applying tax adjustments to make the number meaningful.e.g. 1000 in a ROTH is worth 1000, but 1000 in an IRA is not due to taxation. <strong>DONE</strong></li>
-		<li>Clearly highlight out of money scenarios. For this purpose "out of money" means that remaining assets are less than or equal to 2x spendable goal.</li>
+		<li>Clearly highlight out of money scenarios. For this purpose "out of money" means that remaining assets are less than or equal to 2x spendable goal.<strong>DONE</strong></li>
 		<li>Create an "optimize spendable income" tool (like the current optimizer, but for spendable goal). I.e. iterate with higher or lower target spend amounts. It may get even fancier and try all of the strategies.</li>
 		<li>Create an export/import of inputs.</li>
 		<li>Add elements to graphs. Reorder and expand the Annual Details table (e.g. group balances, tax info, income and net income)
@@ -96,18 +96,57 @@ function runTests() {
     
     // Helper function to assert equality
     function assertEqual(actual, expected, testName) {
+		const error = new Error();
+		const stack = error.stack.split('\n');
+		const callerLine = stack[2]; // The line that called this function
+
+		
 		const pretty = obj => JSON.stringify(obj, null, 2);
 
         if (JSON.stringify(actual) === JSON.stringify(expected)) {
             console.log(`✅ PASS: ${testName}`);
             passed++;
         } else {
-            console.log(`❌ FAIL: ${testName}`);
+            console.log(`❌ FAIL @ ${callerLine.split('/').pop()}:  ${testName} `);
             console.log(`   Expected:`, pretty(expected));
             console.log(`   Got:`, pretty(actual));
             failed++;
         }
     }
+	
+	// !!! TODO: This function doesn't work if keys in actual are not in expected.
+	function assertApproxEqual(actual, expected, testName, tolerance = 0.01) {
+		let failcount = 0;
+		let resultstring = "";
+		for (const [key, expectedValue] of Object.entries(expected)) {
+			const actualValue = actual[key];
+			
+			if (typeof expectedValue === 'number') {
+				if (Math.abs(actualValue - expectedValue) > tolerance) {
+					resultstring += `${key}: $expectedValue} != ${actualValue}`;
+					failcount++
+				}
+			} else {
+				if (actualValue !== expectedValue) {
+					resultstring += `${key}: $expectedValue} != ${actualValue}`;
+					failcount++				
+				}
+			}
+		}
+		if (failcount) {
+			console.log(`✅ PASS: ${testName}`);
+            passed++;
+			}
+		else {
+			console.log(`❌ FAIL: ${testName}`);
+			console.log(`          ${resultstring}`);
+			failed++
+			}
+	} // assertApproxEqual
+	 
+	 
+	assertEqual( calculateProgressive('STATE', "SGL", 0, 1)?.cumulative, 0,
+		'should be no state tax: calculateProgressive(STATE, SGL, 0, 1)');
 
 	// These use TEST data and should NOT need to be changed.
     assertEqual(findLimitByRate('TEST', 'MFJ', 0.2, 1), {limit: 2000, rate: 0.2}, 
@@ -126,40 +165,156 @@ function runTests() {
                 'findUpperLimitByAmount: TEST SGL 998 finds limit: 999, rate: 0.1');
 				
 	assertEqual(getInputs(), 
-				{
-			  "strategy": "baseline",
-			  "strat": "baseline",
-			  "nYears": 10,
-			  "stratRate": 0.24,
-			  "birthyear1": 1960,
-			  "die1": 88,
-			  "birthyear2": 1952,
-			  "die2": 98,
-			  "ira1": 2000000,
-			  "ira2": 400000,
-			  "roth": 200000,
-			  "brokerage": 400000,
-			  "basis": 200000,
-			  "cash": 100000,
-			  "ss1": 48000,
-			  "ss1Age": 70,
-			  "ss2": 29000,
-			  "ss2Age": 70,
-			  "pensionAnnual": 16900,
-			  "survivorPct": 75,
-			  "spendGoal": 180000,
-			  "spendChange": 0.995,
-			  "iraBaseGoal": 350000,
-			  "inflation": 0,
-			  "cpi": 0,
-			  "growth": 0.06,
-			  "cashYield": 0.03,
-			  "dividendRate": 0.005,
-			  "ssFailYear": 2033,
-			  "ssFailPct": 0.773,
-			  "startInYear": null
-			},
+{
+  "strategy": "baseline",
+  "nYears": 10,
+  "stratRate": 0.24,
+  "birthyear1": 1960,
+  "die1": 88,
+  "birthyear2": 1952,
+  "die2": 98,
+  "ira1": 2000000,
+  "ira2": 400000,
+  "roth": 200000,
+  "brokerage": 400000,
+  "basis": 200000,
+  "cash": 100000,
+  "ss1": 48000,
+  "ss1Age": 70,
+  "ss2": 29000,
+  "ss2Age": 70,
+  "pensionAnnual": 16900,
+  "survivorPct": 75,
+  "spendGoal": 180000,
+  "spendChange": 0.995,
+  "iraBaseGoal": 350000,
+  "inflation": 0,
+  "cpi": 0,
+  "growth": 0.06,
+  "cashYield": 0.03,
+  "dividendRate": 0.005,
+  "ssFailYear": 2033,
+  "ssFailPct": 0.773,
+  "startInYear": null
+},
 		'getInputs()')
+		
+	// Test case 1: Normal withdrawal with sufficient funds
+	assertEqual( 
+		calculateBrokerageWithdrawalForNet(50000, 500000, 300000, 0.15), 
+		{ 
+  "brokerWD": "53191.49",
+  "capitalGains": "21276.60",
+  "capGainsTax": "3191.49",
+  "netAmount": 50000,
+  "shortfall": 0,
+  "newBrokerageBal": 446808.51,
+  "newBrokerageBasis": 268085.11,
+  "basisWithdrawn": 31914.89,
+  "insufficientFunds": false
+		}, 
+		'1. normal withdraw: calculateBrokerageWithdrawalForNet(50000, 500000, 300000, 0.15)'
+	);
+
+	// Test case 2: Insufficient funds - need more than available
+	assertEqual( 
+		calculateBrokerageWithdrawalForNet(500000, 100000, 60000, 0.15), 
+		{ 
+  "brokerWD": 100000,
+  "capitalGains": 40000,
+  "capGainsTax": 6000,
+  "netAmount": 94000,
+  "shortfall": 406000,
+  "newBrokerageBal": 0,
+  "newBrokerageBasis": 0,
+  "basisWithdrawn": 60000,
+  "insufficientFunds": true
+		}, 
+		'2. calculateBrokerageWithdrawalForNet(500000, 100000, 60000, 0.15)'
+	);
+
+	// Test case 3: Withdrawing exactly what nets to the full account value
+	assertEqual( 
+		calculateBrokerageWithdrawalForNet(94000, 100000, 60000, 0.15), 
+		{ 
+  "brokerWD": "100000.00",
+  "capitalGains": "40000.00",
+  "capGainsTax": "6000.00",
+  "netAmount": 94000,
+  "shortfall": 0,
+  "newBrokerageBal": 0,
+  "newBrokerageBasis": 0,
+  "basisWithdrawn": 60000,
+  "insufficientFunds": false
+		}, 
+		'3. Exact withdraw: calculateBrokerageWithdrawalForNet(94000, 100000, 60000, 0.15)'
+	);
+
+	// Test case 4: Zero capital gains (basis equals balance)
+	assertEqual( 
+		calculateBrokerageWithdrawalForNet(50000, 100000, 100000, 0.15), 
+		{ 
+  "brokerWD": "50000.00",
+  "capitalGains": "0.00",
+  "capGainsTax": "0.00",
+  "netAmount": 50000,
+  "shortfall": 0,
+  "newBrokerageBal": 50000,
+  "newBrokerageBasis": 50000,
+  "basisWithdrawn": 50000,
+  "insufficientFunds": false
+		}, 
+		'4. basis=balance: calculateBrokerageWithdrawalForNet(50000, 100000, 100000, 0.15)'
+	);
+
+	// Test case 5: Very small withdrawal
+	assertEqual( 
+		calculateBrokerageWithdrawalForNet(1000, 500000, 300000, 0.15), 
+		{ 
+  "brokerWD": "1063.83",
+  "capitalGains": "425.53",
+  "capGainsTax": "63.83",
+  "netAmount": 1000,
+  "shortfall": 0,
+  "newBrokerageBal": 498936.17,
+  "newBrokerageBasis": 299361.7,
+  "basisWithdrawn": 638.3,
+  "insufficientFunds": false
+		}, 
+		'5. calculateBrokerageWithdrawalForNet(1000, 500000, 300000, 0.15)'
+	);
+
+	// Test case 6: Edge case - zero gap amount
+	assertEqual( 
+		calculateBrokerageWithdrawalForNet(0, 500000, 300000, 0.15), 
+		{ 
+  "brokerWD": 0,
+  "capitalGains": 0,
+  "capGainsTax": 0,
+  "netAmount": 0,
+  "newBrokerageBal": 500000,
+  "newBrokerageBasis": 300000,
+  "basisWithdrawn": 0,
+  "insufficientFunds": false
+		}, 
+		'6. zero needed calculateBrokerageWithdrawalForNet(0, 500000, 300000, 0.15)'
+	);
+
+	// Test case 7: Edge case - zero balance
+	assertEqual( 
+		calculateBrokerageWithdrawalForNet(50000, 0, 0, 0.15), 
+		{ 
+  "brokerWD": 0,
+  "capitalGains": 0,
+  "capGainsTax": 0,
+  "netAmount": 0,
+  "newBrokerageBal": 0,
+  "newBrokerageBasis": 0,
+  "basisWithdrawn": 0,
+  "insufficientFunds": false
+		}, 
+		'7. zero balance calculateBrokerageWithdrawalForNet(50000, 0, 0, 0.15)'
+);
 								
 				
 	// 😭😭😭 NOTE NOTE NOTE: All of the following tests are sensitive to the real TAXData. 😭😭😭
@@ -210,11 +365,19 @@ function runTests() {
 		'calculateProgressive(TEST,SGL,72000) ok')
 		
 	assertEqual(calculateProgressive('NONEXISTENT','SGL',72000), 
-		{cumulative: 0, total: 0, marginal: 0, limit: 0, error: 'Invalid entity or status'}, 
+		{  "cumulative": 0,
+  "total": 0,
+  "marginal": 0,
+  "limit": 0,
+  "error": "Invalid entity (NONEXISTENT) or status (SGL)"}, 
 		'calculateProgressive(NONEXISTENT,...) ok')
 
 	assertEqual(calculateProgressive('TEST','NONEXISTENT',72000), 
-		{cumulative: 0, total: 0, marginal: 0, limit: 0, error: 'Invalid entity or status'}, 
+		{  "cumulative": 0,
+  "total": 0,
+  "marginal": 0,
+  "limit": 0,
+  "error": "Invalid entity (TEST) or status (NONEXISTENT)"}, 
 		'calculateProgressive(TEST,NONEXISTENT,...) ok')
 		
 	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30),0), 57830,
@@ -245,6 +408,7 @@ function runTests() {
 	
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`);
+	console.log(`   chart.js version ${Chart.version}`);
     console.log('========================================');
 	
     const statusElement = document.getElementById('testsFailed');
@@ -257,3 +421,616 @@ function runTests() {
     }
     return failed === 0;
 }
+
+///////////////////////////////////////////////
+// ============================================================================
+
+// CONFIGURATION CONSTANTS
+// ============================================================================
+
+// Version constant - increment this when data structure changes
+const SCENARIO_VERSION = 2;
+
+// New storage key for current version scenarios
+const STORAGE_KEY = 'SLCRetireOptimizeScenario';
+
+// Old storage key from previous version
+const OLD_STORAGE_KEY = 'retirementScenarios';
+
+// ============================================================================
+// MESSAGE DISPLAY FUNCTIONS
+// ============================================================================
+
+/**
+ * Displays a colored message in the scenario message area
+ * @param {string} message - The text message to display
+ * @param {string} type - Message type: 'success' (green), 'error' (red), or 'warning' (yellow)
+ *                        Default is 'success'
+ * Auto-hides the message after 5 seconds
+ */
+function showMessage(message, type = 'success') {
+    const messageDiv = document.getElementById('scenarioMessage');
+    messageDiv.textContent = message;
+    messageDiv.className = `scenario-message ${type}`;
+    messageDiv.style.display = 'block';
+    
+    // Auto-hide after 15 seconds
+    setTimeout(() => {
+        messageDiv.style.display = 'none';
+    }, 15000);
+}
+
+/**
+ * Manually clears and hides the message display area
+ * No parameters
+ */
+function clearMessage() {
+    const messageDiv = document.getElementById('scenarioMessage');
+    messageDiv.style.display = 'none';
+}
+
+// ============================================================================
+// STORAGE ACCESS FUNCTIONS
+// ============================================================================
+
+/**
+ * Retrieves all scenarios from the new storage key
+ * No parameters
+ * @returns {Object} Object containing scenario data keyed by scenario name
+ *                   Returns empty object {} if no scenarios exist
+ */
+function getSavedScenarios() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : {};
+}
+
+/**
+ * Retrieves all scenarios from the old storage key (previous version)
+ * No parameters
+ * @returns {Object} Object containing old scenario data keyed by scenario name
+ *                   Returns empty object {} if no old scenarios exist
+ */
+function getOldScenarios() {
+    const oldSaved = localStorage.getItem(OLD_STORAGE_KEY);
+    return oldSaved ? JSON.parse(oldSaved) : {};
+}
+
+/**
+ * Retrieves and merges scenarios from both old and new storage locations
+ * Old scenarios are marked with isOldStorage flag and version 1
+ * No parameters
+ * @returns {Object} Merged object containing all scenarios from both storage keys
+ *                   Old scenarios have isOldStorage: true property added
+ */
+function getAllScenarios() {
+    const newScenarios = getSavedScenarios();
+    const oldScenarios = getOldScenarios();
+    
+    // Merge old scenarios, marking them as version 1
+    const allScenarios = { ...newScenarios };
+    
+    for (const [name, scenario] of Object.entries(oldScenarios)) {
+        // If scenario doesn't have a version property, it's from old version
+        if (!scenario.version) {
+            allScenarios[name] = {
+                version: 1,
+                data: scenario.data || scenario, // Handle different old formats
+                savedAt: scenario.savedAt || 'Unknown',
+                isOldStorage: true // Flag to identify old storage scenarios
+            };
+        }
+    }
+    
+    return allScenarios;
+}
+
+// ============================================================================
+// SCENARIO VALIDATION FUNCTIONS
+// ============================================================================
+
+/**
+ * Checks if a scenario is compatible with the current version
+ * @param {Object} scenario - Scenario object with version property
+ * @returns {boolean} True if scenario.version matches SCENARIO_VERSION, false otherwise
+ */
+function isCompatibleScenario(scenario) {
+    return scenario.version === SCENARIO_VERSION;
+}
+
+/**
+ * Escapes single and double quotes in a string for safe use in HTML attributes
+ * @param {string} str - String to escape
+ * @returns {string} String with ' replaced by \' and " replaced by \"
+ */
+function escapeQuotes(str) {
+    return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+// ============================================================================
+// INITIALIZATION FUNCTION
+// ============================================================================
+
+/**
+ * Checks for old scenarios on page load and displays warning if found
+ * Called automatically on DOMContentLoaded event
+ * Does not auto-delete - user must use Manage Scenarios to delete
+ * No parameters
+ */
+function migrateOldScenarios() {
+    const oldScenarios = localStorage.getItem(OLD_STORAGE_KEY);
+    
+    if (oldScenarios) {
+        try {
+            const parsed = JSON.parse(oldScenarios);
+            const scenarioCount = Object.keys(parsed).length;
+            
+            if (scenarioCount > 0) {
+                showMessage(
+                    `Found ${scenarioCount} old scenario(s) from previous version. These are incompatible. Use "Manage Scenarios" to review and delete them.`,
+                    'warning'
+                );
+            }
+        } catch (e) {
+            localStorage.removeItem(OLD_STORAGE_KEY);
+        }
+    }
+}
+
+// ============================================================================
+// MAIN USER ACTION FUNCTIONS
+// ============================================================================
+
+/**
+ * Saves current form inputs as a named scenario to new storage
+ * Uses scenario name from input field #scenarioName, or generates timestamp name if empty
+ * Calls getInputs() to retrieve current form values
+ * Displays success or error message
+ * No parameters
+ */
+function saveScenario() {
+    const inputs = getInputs();
+	const scenarioName = document.getElementById('scenarioName').value.trim() || 
+                    `${new Date().toISOString().slice(0, 19).replace('T', ' ')}`;
+    
+    try {
+        const scenarios = getSavedScenarios();
+        
+        scenarios[scenarioName] = {
+            version: SCENARIO_VERSION,
+            data: inputs,
+            savedAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+        
+        showMessage(`Scenario "${scenarioName}" saved successfully!`, 'success');
+        document.getElementById('scenarioName').value = '';
+    } catch (error) {
+        showMessage(`Failed to save scenario: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Prompts user to select and load a compatible scenario
+ * Filters out incompatible versions before displaying list
+ * Shows error if no compatible scenarios exist
+ * No parameters
+ */
+function loadScenario() {
+    try {
+        const scenarios = getSavedScenarios();
+        const scenarioNames = Object.keys(scenarios);
+        
+        if (scenarioNames.length === 0) {
+            showMessage('No saved scenarios found.', 'error');
+            return;
+        }
+        
+        const compatibleScenarios = scenarioNames.filter(name => 
+            scenarios[name].version === SCENARIO_VERSION
+        );
+        
+        if (compatibleScenarios.length === 0) {
+            showMessage('No compatible scenarios found. All saved scenarios are from an older version.', 'error');
+            return;
+        }
+        
+        let selection = prompt('Enter scenario name to load:\n\n' + compatibleScenarios.join('\n'));
+        
+        if (selection && scenarios[selection]) {
+            if (scenarios[selection].version !== SCENARIO_VERSION) {
+                showMessage('This scenario is from an incompatible version and cannot be loaded.', 'error');
+                return;
+            }
+            applyScenario(scenarios[selection].data);
+            showMessage(`Scenario "${selection}" loaded successfully!`, 'success');
+        } else if (selection) {
+            showMessage('Scenario not found.', 'error');
+        }
+    } catch (error) {
+        showMessage(`Failed to load scenario: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Applies scenario data to form input fields
+ * Handles percentage conversions for specific fields (multiplies by 100 for display)
+ * Triggers recalculate() function if it exists
+ * @param {Object} data - Scenario data object with keys matching form input IDs
+ */
+function applyScenario(data) {
+    for (const [key, value] of Object.entries(data)) {
+        const element = document.getElementById(key);
+        if (element) {
+            // Handle percentage values (multiply by 100 for display)
+            if (['stratRate', 'spendChange', 'inflation', 'cpi', 'growth', 
+                 'cashYield', 'dividendrate', 'ssFailPct'].includes(key)) {
+                element.value = (value * 100).toFixed(2);
+            } else {
+                element.value = value;
+            }
+        }
+    }
+    
+    // Trigger any recalculations your app needs
+    if (typeof recalculate === 'function') {
+        recalculate();
+    }
+}
+
+// ============================================================================
+// SCENARIO MANAGEMENT FUNCTIONS
+// ============================================================================
+
+/**
+ * Opens modal dialog showing all scenarios from both storage locations
+ * Displays table with Name, Saved Date, Version, Storage location, and Actions
+ * Shows compatibility status with color coding (green=compatible, red=incompatible)
+ * Shows bulk action buttons if incompatible or old scenarios exist
+ * No parameters
+ */
+function manageScenarios() {
+    const scenarios = getAllScenarios();
+    const modal = document.getElementById('scenarioModal');
+    const content = document.getElementById('scenarioListContent');
+    
+    if (Object.keys(scenarios).length === 0) {
+        content.innerHTML = '<p>No saved scenarios.</p>';
+    } else {
+        let html = '<table style="width: 100%; border-collapse: collapse;">';
+        html += '<tr><th style="text-align: left; padding: 8px; border-bottom: 2px solid #ddd;">Name</th>';
+        html += '<th style="text-align: left; padding: 8px; border-bottom: 2px solid #ddd;">Saved</th>';
+        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Version</th>';
+        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Storage</th>';
+        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Actions</th></tr>';
+        
+        for (const [name, scenario] of Object.entries(scenarios)) {
+            const savedDate = scenario.savedAt !== 'Unknown' 
+                ? new Date(scenario.savedAt).toLocaleString() 
+                : 'Unknown';
+            const version = scenario.version || 1;
+            const isCurrent = version === SCENARIO_VERSION;
+            const isOldStorage = scenario.isOldStorage || false;
+            
+            const versionBadge = isCurrent 
+                ? `<span style="color: green; font-weight: bold;">v${version} ✓</span>` 
+                : `<span style="color: red;">v${version} ✗</span>`;
+            
+            const storageBadge = isOldStorage
+                ? `<span style="color: orange; font-size: 0.9em;">OLD</span>`
+                : `<span style="color: blue; font-size: 0.9em;">NEW</span>`;
+            
+            const rowStyle = isCurrent ? '' : 'background-color: #ffeeee;';
+            
+            html += `<tr style="${rowStyle}">
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${name}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${savedDate}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${versionBadge}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${storageBadge}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+                    <button onclick="loadScenarioByName('${escapeQuotes(name)}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
+                    <button onclick="deleteScenario('${escapeQuotes(name)}')">Delete</button>
+                    <button onclick="exportScenario('${escapeQuotes(name)}')">Export</button>
+                </td>
+            </tr>`;
+        }
+        html += '</table>';
+        
+        const incompatibleCount = Object.values(scenarios).filter(s => !isCompatibleScenario(s)).length;
+        const oldStorageCount = Object.values(scenarios).filter(s => s.isOldStorage).length;
+        
+        if (incompatibleCount > 0 || oldStorageCount > 0) {
+            html += `<div style="margin-top: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">`;
+            
+            if (incompatibleCount > 0) {
+                html += `<strong>⚠️ ${incompatibleCount} incompatible scenario(s) found</strong><br>`;
+            }
+            if (oldStorageCount > 0) {
+                html += `<strong>📦 ${oldStorageCount} scenario(s) in old storage format</strong><br>`;
+            }
+            
+            html += `<button onclick="deleteIncompatibleScenarios()" style="margin-top: 5px;">Delete All Incompatible Scenarios</button>`;
+            
+            if (oldStorageCount > 0) {
+                html += ` <button onclick="deleteOldStorageKey()" style="margin-top: 5px;">Clear Old Storage</button>`;
+            }
+            
+            html += `</div>`;
+        }
+        
+        content.innerHTML = html;
+    }
+    
+    modal.style.display = 'block';
+}
+
+/**
+ * Loads a specific scenario by name from either storage location
+ * Validates version compatibility before loading
+ * Closes modal and shows success/error message
+ * @param {string} name - Name of the scenario to load
+ */
+function loadScenarioByName(name) {
+    try {
+        const scenarios = getAllScenarios();
+        if (scenarios[name]) {
+            if (!isCompatibleScenario(scenarios[name])) {
+                showMessage(`Scenario "${name}" is from an incompatible version (v${scenarios[name].version || 1}) and cannot be loaded. Current version: v${SCENARIO_VERSION}`, 'error');
+                return;
+            }
+            applyScenario(scenarios[name].data);
+            closeScenarioModal();
+            showMessage(`Scenario "${name}" loaded successfully!`, 'success');
+        }
+    } catch (error) {
+        showMessage(`Failed to load scenario: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Deletes a specific scenario from appropriate storage location
+ * Determines whether scenario is in old or new storage and deletes from correct location
+ * Prompts for confirmation before deletion
+ * Updates the management view and shows message
+ * @param {string} name - Name of the scenario to delete
+ */
+function deleteScenario(name) {
+    if (confirm(`Are you sure you want to delete "${name}"?`)) {
+        try {
+            const allScenarios = getAllScenarios();
+            const scenario = allScenarios[name];
+            
+            if (scenario.isOldStorage) {
+                // Delete from old storage
+                const oldScenarios = getOldScenarios();
+                delete oldScenarios[name];
+                if (Object.keys(oldScenarios).length > 0) {
+                    localStorage.setItem(OLD_STORAGE_KEY, JSON.stringify(oldScenarios));
+                } else {
+                    localStorage.removeItem(OLD_STORAGE_KEY);
+                }
+            } else {
+                // Delete from new storage
+                const scenarios = getSavedScenarios();
+                delete scenarios[name];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+            }
+            
+            manageScenarios();
+            showMessage(`Scenario "${name}" deleted successfully.`, 'success');
+        } catch (error) {
+            showMessage(`Failed to delete scenario: ${error.message}`, 'error');
+        }
+    }
+}
+
+/**
+ * Closes the scenario management modal dialog
+ * No parameters
+ */
+function closeScenarioModal() {
+    document.getElementById('scenarioModal').style.display = 'none';
+}
+
+// ============================================================================
+// BULK OPERATIONS
+// ============================================================================
+
+/**
+ * Deletes all scenarios that don't match SCENARIO_VERSION
+ * Works across both old and new storage locations
+ * Prompts for confirmation showing count and names of scenarios to delete
+ * Removes old storage key if all old scenarios are deleted
+ * Shows success/error message
+ * No parameters
+ */
+function deleteIncompatibleScenarios() {
+    const scenarios = getAllScenarios();
+    const incompatibleNames = Object.keys(scenarios).filter(name => 
+        !isCompatibleScenario(scenarios[name])
+    );
+    
+    if (incompatibleNames.length === 0) {
+        showMessage('No incompatible scenarios found.', 'warning');
+        return;
+    }
+    
+    if (confirm(`Delete ${incompatibleNames.length} incompatible scenario(s)?\n\n${incompatibleNames.join('\n')}`)) {
+        try {
+            const newScenarios = getSavedScenarios();
+            const oldScenarios = getOldScenarios();
+            
+            // Delete from both storage locations
+            incompatibleNames.forEach(name => {
+                delete newScenarios[name];
+                delete oldScenarios[name];
+            });
+            
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(newScenarios));
+            
+            // Only save old scenarios if there are any left
+            if (Object.keys(oldScenarios).length > 0) {
+                localStorage.setItem(OLD_STORAGE_KEY, JSON.stringify(oldScenarios));
+            } else {
+                localStorage.removeItem(OLD_STORAGE_KEY);
+            }
+            
+            manageScenarios();
+            showMessage(`${incompatibleNames.length} incompatible scenario(s) deleted.`, 'success');
+        } catch (error) {
+            showMessage(`Failed to delete scenarios: ${error.message}`, 'error');
+        }
+    }
+}
+
+/**
+ * Completely removes OLD_STORAGE_KEY and all its scenarios
+ * Prompts for confirmation showing count of scenarios to delete
+ * Shows success/error message
+ * No parameters
+ */
+function deleteOldStorageKey() {
+    const oldScenarios = getOldScenarios();
+    const oldCount = Object.keys(oldScenarios).length;
+    
+    if (oldCount === 0) {
+        showMessage('No old storage scenarios found.', 'warning');
+        return;
+    }
+    
+    if (confirm(`This will permanently delete the old storage key and all ${oldCount} scenario(s) in it.\n\nAre you sure?`)) {
+        try {
+            localStorage.removeItem(OLD_STORAGE_KEY);
+            manageScenarios();
+            showMessage(`Old storage key removed (${oldCount} scenarios deleted).`, 'success');
+        } catch (error) {
+            showMessage(`Failed to remove old storage: ${error.message}`, 'error');
+        }
+    }
+}
+
+// ============================================================================
+// IMPORT/EXPORT FUNCTIONS
+// ============================================================================
+
+/**
+ * Exports a single scenario to JSON file
+ * Works with scenarios from either storage location
+ * Downloads file with scenario name as filename
+ * Shows success or error message
+ * @param {string} name - Name of the scenario to export
+ */
+function exportScenario(name) {
+    try {
+        const scenarios = getAllScenarios();
+        const scenario = scenarios[name];
+        
+        const dataStr = JSON.stringify(scenario, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${name}.json`;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+        showMessage(`Scenario "${name}" exported successfully.`, 'success');
+    } catch (error) {
+        showMessage(`Failed to export scenario: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Opens file picker to import scenario from JSON file
+ * Warns about version incompatibility if versions don't match
+ * Prompts for scenario name (defaults to filename without extension)
+ * Adds imported scenario to new storage location
+ * Shows success, warning, or error message
+ * No parameters
+ */
+function importScenario() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+            try {
+                const scenario = JSON.parse(event.target.result);
+                
+                if (scenario.version && scenario.version !== SCENARIO_VERSION) {
+                    if (!confirm(`Warning: This scenario is from version ${scenario.version}, current version is ${SCENARIO_VERSION}.\n\nIt may not load correctly. Continue anyway?`)) {
+                        showMessage('Import cancelled.', 'warning');
+                        return;
+                    }
+                }
+                
+                const name = prompt('Enter name for imported scenario:', file.name.replace('.json', ''));
+                
+                if (name) {
+                    const scenarios = getSavedScenarios();
+                    scenarios[name] = scenario;
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+                    showMessage(`Scenario "${name}" imported successfully!`, 'success');
+                } else {
+                    showMessage('Import cancelled.', 'warning');
+                }
+            } catch (error) {
+                showMessage(`Error importing scenario: ${error.message}`, 'error');
+            }
+        };
+        
+        reader.onerror = () => {
+            showMessage('Failed to read file.', 'error');
+        };
+        
+        reader.readAsText(file);
+    };
+    
+    input.click();
+}
+
+/**
+ * Exports all scenarios from new storage to single JSON file
+ * Downloads with date-stamped filename (format: all-scenarios-YYYY-MM-DD.json)
+ * Shows warning if no scenarios exist, otherwise shows success or error message
+ * No parameters
+ */
+function exportAllScenarios() {
+    try {
+        const scenarios = getSavedScenarios();
+        
+        if (Object.keys(scenarios).length === 0) {
+            showMessage('No scenarios to export.', 'warning');
+            return;
+        }
+        
+        const dataStr = JSON.stringify(scenarios, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `all-scenarios-${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+        showMessage(`All scenarios exported successfully.`, 'success');
+    } catch (error) {
+        showMessage(`Failed to export scenarios: ${error.message}`, 'error');
+    }
+}
+
+// ============================================================================
+// INITIALIZATION - Call on page load
+// ============================================================================
+
+window.addEventListener('DOMContentLoaded', function() {
+    migrateOldScenarios();
+});

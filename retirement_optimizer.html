@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer V6u</title>
+    <title>Retirement Optimizer 6v</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles.css">
 	<base target="_blank">	
@@ -14,14 +14,14 @@
 <div class="container">
     <div class="sidebar">
 	    <div class="row"><div  id="spending">
-            <div><label>After-Tax Spending Goal&nbsp;</label>
+            <div><label>After-Tax Spend Goal&nbsp;</label>
             <input type="number" id="spendGoal" value="180000"></div>
             <div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. 98% means you spend 2% less each year. 100 means no change.">Spending Delta &nbsp;&nbsp;&nbsp;</label>
             <input type="number" id="spendChange" value="99.5" step="0.1" min="-25" placeholder="0.0">%<BR>(100 means no change)</div>
 			</div>
 		</div>	
         <div class="input-group">
-            <select id="stratMode" onchange="toggleStratUI()">
+            <select id="strategy" onchange="toggleStrategyUI()">
                 <option value="baseline">Withdraw to meet spend</option>
                 <option value="fixed">Reduce IRA in &#120393; Years</option>
                 <option value="bracket">Fill Federal Tax Bracket</option>
@@ -43,7 +43,7 @@
             </select>
         </div>
 	
-        <div class="row"><label title="This is the goal to draw the total IRAs down to.">IRA Reduction Goal</label>
+        <div class="row"><label title="Draw down IRA to this amount or less.">IRA Reduction Goal</label>
             <input type="number" id="iraBaseGoal" value="350000">
 		</div>	
         <h3>1. Profile & Ages</h3>
@@ -58,16 +58,16 @@
 
         <h3>2. Assets</h3>
         <div class="row">
-            <div><label>Your IRA</label>  <input type="number" id="balIRA1" value="2000000"></div>
-            <div><label>Spouse IRA</label><input type="number" id="balIRA2"  value="400000"></div>
+            <div><label>Your IRA</label>  <input type="number" id="ira1" value="2000000"></div>
+            <div><label>Spouse IRA</label><input type="number" id="ira2"  value="400000"></div>
         </div>
         <div class="row">
-            <div><label>Brokerage</label><input type="number" id="balBrokerage" value="400000"></div>
-            <div><label>Brokerage Basis</label><input type="number" id="basisBrokerage" value="200000"></div>
+            <div><label>Brokerage</label><input type="number" id="brokerage" value="400000"></div>
+            <div><label>Brokerage Basis</label><input type="number" id="basis" value="200000"></div>
         </div>
         <div class="row">
-            <div><label>Roth IRA</label><input type="number" id="balRoth" value="200000"></div>
-            <div><label>Cash Balance</label><input type="number" id="balCash" value="100000"></div>
+            <div><label>Roth IRA</label><input type="number" id="roth" value="200000"></div>
+            <div><label>Cash Balance</label><input type="number" id="cash" value="100000"></div>
         </div>
 
         <h3>3. Income</h3>
@@ -95,7 +95,7 @@
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)?</label><input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00">%</div>
         </div>
         <div class="row">
-			<div><label title="This is the rate that your asset mix emits dividends.">Dividend Rate (0.5)?</label><BR><input type="number" id="dividendrate" value="0.5" step="0.01" min="0" placeholder="0.00">%</div>
+			<div><label title="This is the rate that your asset mix emits dividends.">Dividend Rate (0.5)?</label><BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00">%</div>
 		</div>
         <div class="row">
 			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail</label> <input type="number" id="ssFailYear" value="2033"></div>
@@ -112,6 +112,7 @@
 				
 				<ul>
 				<ul>
+				<li><b>6v</b> Implemented Save/Load/Export/Delete Scenarios.</li>	
 				<li><b>6u</b> Implemented SS Fail. More UI fixes. Moved all strategy items to the top.</li>	
 				<li><b>6t</b> Solved a math issue causing NaN to occur. Cleaned up the visuals.</li>				
 				<li><b>6s</b> Some more fancy highlighting of the tables. Fixed broken strategy changer. Tests moved into separate file, too.</li>				
@@ -156,8 +157,10 @@
         <div class="tabs">
             <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details</button>
             <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Chart</button>
-            <button id="btn-opt" class="tab-btn" onclick="{showTab('tab-insight')}">Show Insights</button>
+            <button id="btn-opt" class="tab-btn" onclick="{showTab('tab-insight')}">Insights</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer</button>
+		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export</button>
+
 
         </div>
 		<div id="tab-insight" class="card hidden">
@@ -181,7 +184,29 @@
 				<tbody id="tableBody"></tbody>
 			</table>
 		</div>
+		<div id="tab-fileio" class="card hidden">
+			<div class="scenario-controls">
+				<div class="scenario-row">
+					<input type="text" id="scenarioName" placeholder="Scenario name (optional)" style="flex: 1; margin-right: 10px;">
+					<button onclick="saveScenario()">Save Scenario</button>
+					<button onclick="manageScenarios()">Manage Scenarios (Load, Delete, Export)</button>
+					<button onclick="importScenario()">Import</button>
+				</div>
+				<div id="scenarioMessage" class="scenario-message"></div>
+				<div id="scenarioList" style="display: none; margin-top: 10px;">
+					<!-- Scenario list will be populated here -->
+				</div>
+			</div>
 
+			<!-- Modal for managing scenarios -->
+			<div id="scenarioModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+				<div style="background: white; margin: 50px auto; padding: 20px; max-width: 600px; border-radius: 8px; max-height: 80vh; overflow-y: auto;">
+					<h3>Saved Scenarios</h3>
+					<div id="scenarioListContent"></div>
+					<button onclick="closeScenarioModal()" style="margin-top: 10px;">Close</button>
+				</div>
+			</div>	
+		</div>
 
 		<div id="tab-tbl" class="card table-wrap">
 			<table id="main-table">
@@ -448,13 +473,99 @@ function findUpperLimitByAmount( entity, status, amount, inflation=1) {
 	return { limit, rate: rate }
 }
 
+///
+
+// Calculate and return the amount needed from "brokerageBal" to achieve "gapAmount" after tax.
+function calculateBrokerageWithdrawalForNet(gapAmount, brokerageBal, brokerageBasis, capGainsTaxRate) {
+    // Handle edge cases
+    if (brokerageBal <= 0 || gapAmount <= 0) {
+        return {
+            brokerWD: 0,
+            capitalGains: 0,
+            capGainsTax: 0,
+            netAmount: 0,
+            newBrokerageBal: brokerageBal,
+            newBrokerageBasis: brokerageBasis,
+            basisWithdrawn: 0,		
+            insufficientFunds: false
+        };
+    }
+    
+    // Calculate gain percentage in the account
+    const gainPct = (brokerageBal - brokerageBasis) / brokerageBal;
+    
+    // Calculate after-tax percentage (portion you keep per dollar)
+    const afterTaxPct = 1 - (gainPct * capGainsTaxRate);
+    
+    // Calculate gross withdrawal needed to net the gap amount
+    let brokerWD = gapAmount / afterTaxPct;
+    
+    // Check if we're trying to withdraw more than available
+    if (brokerWD > brokerageBal) {
+        // Can only withdraw what's available
+        brokerWD = brokerageBal;
+        
+        const basisWithdrawn = brokerageBasis;  // All of it
+        const capitalGains = brokerageBal - brokerageBasis;
+        const capGainsTax = capitalGains * capGainsTaxRate;
+        const netAmount = brokerWD - capGainsTax;
+        
+        return {
+            brokerWD: brokerWD,			// .toFixed(2),
+            capitalGains: capitalGains,
+            capGainsTax: capGainsTax,
+            netAmount: netAmount,
+            shortfall: (gapAmount - netAmount),
+            newBrokerageBal: 0,                    // Explicitly 0
+            newBrokerageBasis: 0,                  // Explicitly 0
+            basisWithdrawn: basisWithdrawn,
+            insufficientFunds: true
+        };
+    }
+    
+    // Normal case - sufficient funds
+    const withdrawalPct = brokerWD / brokerageBal;
+    const basisWithdrawn = brokerageBasis * withdrawalPct;
+    const capitalGains = brokerWD - basisWithdrawn;
+    const capGainsTax = capitalGains * capGainsTaxRate;
+    
+    // Calculate new balances with safety checks
+    let newBrokerageBal = brokerageBal - brokerWD;
+    let newBrokerageBasis = brokerageBasis - basisWithdrawn;
+    
+    // Safety: prevent negative balances (in case of floating point errors)
+    if (newBrokerageBal < 0) newBrokerageBal = 0;
+    if (newBrokerageBasis < 0) newBrokerageBasis = 0;
+    
+    // If balance is effectively zero, set both to zero
+    if (newBrokerageBal < 0.01) {
+        newBrokerageBal = 0;
+        newBrokerageBasis = 0;
+    }
+    
+    return {
+        brokerWD: brokerWD.toFixed(2),
+        capitalGains: capitalGains.toFixed(2),
+        capGainsTax: capGainsTax.toFixed(2),
+        netAmount: +(brokerWD - capGainsTax).toFixed(2),
+        shortfall: 0,
+        newBrokerageBal: +newBrokerageBal.toFixed(2),
+        newBrokerageBasis: +newBrokerageBasis.toFixed(2),
+        basisWithdrawn: +basisWithdrawn.toFixed(2),
+        insufficientFunds: false
+    };
+} // calculateBrokerageWithdrawalForNet
+
+/////////////////////////////
+
+
 let simulationCount = 0;
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
     let balance = {
         ira1: inputs.ira1, ira2: inputs.ira2, roth: inputs.roth,
         brokerage: inputs.brokerage, basis: inputs.basis, cash: inputs.cash,
-		basisBrokerage: inputs.basisBrokerage,
+		basis: inputs.basis,
         magiHistory: []
     };
     simulationCount += 1;
@@ -504,6 +615,8 @@ function simulate(inputs) {
 		let goalLimit = Math.min(goalFedBracketLimit.limit, goalStateBracketLimit.limit)
 		let irmaaBracket = findUpperLimitByAmount('IRMAA', status, goalLimit, cpiRate)
 		let irmaLimit = Math.min(goalLimit, irmaaBracket.limit);
+		let totalIncome = 0;
+		let capitalGains = 0;		
 		
 		//!!! TODO: if strategy is "bracket" but spendGoal is > bracket we have a problem.
 
@@ -550,7 +663,7 @@ function simulate(inputs) {
 		let stateRate = goalStateBracketLimit.rate
 		
 
-        if (inputs.strat === 'fixed') {
+        if (inputs.strategy === 'fixed') {
             let remYears = Math.max(1, inputs.nYears - y);
 			//!!! Doesn't have a floor to map to.
 			let curIRA = balance.ira1 + balance.ira2 - inputs.iraBaseGoal;
@@ -558,7 +671,7 @@ function simulate(inputs) {
 			
 			//!!!TODO totalRMD has has already been removed...
             iraWD = Math.max(0, amortized);
-        } else if (inputs.strat === 'bracket' || inputs.strat === 'minlimit') {
+        } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit') {
 			//!!! This code has flaws.  Withdraws too much.
 			let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
 			let limit = fedLimit.limit;
@@ -573,7 +686,7 @@ function simulate(inputs) {
 			// pick whatever is smaller (state or Federal limit for the amount desired)
 			limit = Math.min(stateLimit, limit)
 			
-			if (inputs.strat === 'minlimit') {
+			if (inputs.strategy === 'minlimit') {
 				limit = Math.min(limit, irmaLimit)
 			}
 			
@@ -592,9 +705,8 @@ function simulate(inputs) {
 		// }
 
         // 5. Tax Calc (Including IRMAA lag)
-		//!!!TODO Assumes capital gains is zero. Not tracking cap gains.
-		//!!!TODO Must also calculate the interest gained on cash.
-        let tax = calculateTax(fixedInc, iraWD + totalRMD + taxableInterest, taxableDividends, status, age1, age2, cpiRate);
+        let tax = calculateTax(fixedInc, iraWD + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
+		
 		//!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
 		let magiHistoryLength = balance.magiHistory.length
 		if (magiHistoryLength < 1) {
@@ -612,6 +724,7 @@ function simulate(inputs) {
         let rothWD = 0;
         let brokerageWD = 0;
 		let cashWD = 0;
+		let basisWithdrawn = 0;
 
         if (gap > 0) {
             // Need more money - Order: Cash -> Brokerage -> Roth
@@ -619,8 +732,21 @@ function simulate(inputs) {
             balance.cash -= cashWD; gap -= cashWD;
             
             if (gap > 0) {
-                brokerageWD = Math.min(gap, balance.brokerage);
+				let withdrawlogic = calculateBrokerageWithdrawalForNet(gap, balance.brokerage, balance.basis)
+                brokerageWD = withdrawlogic.brokerWD;
+				capitalGains = withdrawlogic.capitalGains;
+				basisWithdrawn = withdrawlogic.basisWithdrawn;
+				
+				// Calculate new balances after withdrawal
                 balance.brokerage -= brokerageWD; 
+                balance.basis -= basisWithdrawn; 
+				
+				if (balance.brokerage != withdrawlogic.newBrokerageBal || 
+					withdrawlogic.newBrokerageBasis != balance.basis)
+				{	
+					;
+				}
+
 				gap -= brokerageWD;
             }
             if (gap > 0) {
@@ -633,23 +759,24 @@ function simulate(inputs) {
                 let extraIRA = Math.min(gap / (1-tax.fedRate+tax.stRate), balance.ira1 + balance.ira2);
                 iraWD += extraIRA;
                 // Re-calculate tax for new IRA WD
-                tax = calculateTax(fixedInc, iraWD + totalRMD, 0, status, age1, age2, cpiRate);
+                tax = calculateTax(fixedInc, iraWD + totalRMD, capitalGains + taxableDividends, status, age1, age2, cpiRate);
                 totalTax = tax.fed + tax.state + irmaa;
                 netCash = (fixedInc + iraWD) - totalTax;
                 gap = targetSpend - (netCash + rothWD + brokerageWD + cashWD);
             }
-        } else if (gap < -100 && (inputs.strat !== 'baseline')) {
+        } else if (gap < -100 && (inputs.strategy !== 'baseline')) {
             // Surplus logic (Conversions)
             let surplus = Math.abs(gap);
             balance.roth += surplus;
 			rothWD -= surplus
         }
 		
-		nominalTaxRate = totalTax / (fixedInc + iraWD + pen + taxableDividends + taxableInterest + 0.01)		
+		totalIncome = Math.max(1, fixedInc + iraWD + pen + taxableDividends + taxableInterest + capitalGains);
+		nominalTaxRate = totalTax / totalIncome		
 
         // 7. Updates
 		
-		let netIncome = (fixedInc + pen + iraWD + rothWD + brokerageWD + cashWD) - totalTax
+		let netIncome = totalIncome - totalTax;
 		
 		//!!! Remove withdrawals proportionately. RMDs have already been withdrawn.
         balance.ira1 = Math.max(0, balance.ira1 - (iraWD * (balance.ira1/(balance.ira1+balance.ira2||1))));
@@ -667,7 +794,7 @@ function simulate(inputs) {
         totals.gross += (fixedInc + iraWD);
         totals.spend += (targetSpend - Math.max(0, gap));
 		
-		let totalWealth = (balance.ira1 + balance.ira2) * nominalTaxRate + balance.roth + (balance.brokerage) * nominalTaxRate + balance.cash
+		let totalWealth = (balance.ira1 + balance.ira2 + Math.max(0,balance.brokerage - balance.basis)) * (1-nominalTaxRate) + balance.roth + balance.cash + balance.basis
 
 		if (netIncome < targetSpend || totalWealth < 10000) {
 			totals.success = false;
@@ -681,18 +808,19 @@ function simulate(inputs) {
             age1: alive1 ? age1 : '—',
             age2: alive2 ? age2 : '—',
 			// 'spendDelta%': spendDelta,
-            spendGoal: targetSpend,
             SSincome: fixedInc,
 			pension: pen,
+            spendGoal: targetSpend,
+            netIncome: netIncome,
 			'-RMD1-': rmd1,
 			'-RMD2-': rmd2,
             'RMDwd': -totalRMD,
             'IRAΔ': -iraWD,
             'BrokerageΔ': -brokerageWD,
-			'-CapGains': 0,
+			'-CapGains': capitalGains,
+            'RothΔ': -rothWD,
 			cashDiv: taxableDividends,
 			cashInt: taxableInterest,
-            'RothΔ': -rothWD,
             'CashΔ': -cashWD,
 			// totalIncome: iraWD + rothWD + brokerageWD + cashWD + fixedInc + pen + taxableInterest + taxableDividends,
 			netCash: taxableDividends + taxableInterest - cashWD,
@@ -712,8 +840,8 @@ function simulate(inputs) {
 			CashBal: balance.cash,
 			RothBal: balance.roth,
             brokerageBal: balance.brokerage,
-            totalWealth: totalWealth,
-            netIncome: netIncome
+            basisBal: balance.basis,
+            totalWealth: totalWealth
         });
 
     } // end large for for year by year.
@@ -823,7 +951,7 @@ function findRequiredWithdrawals(
       irmaa: taxResultOtherOnly.irmaa,
       totalTax: taxResultOtherOnly.totalTax,
       effectiveRate: taxResultOtherOnly.effectiveRate,
-      afterTaxSpending: Math.round(afterTaxFromOtherOnly),
+      afterTaxSpending: +afterTaxFromOtherOnly.toFixed(2),
       cashNeeded: 0,
       rothNeeded: 0
     };
@@ -1053,7 +1181,7 @@ function calculateProgressive(entity, status, amount, inflation=1, ratecreep=1) 
     
     if (!brks) {
         console.error(`Invalid tax data: entity="${entity}", status="${status}"`);
-        return { cumulative: 0, total: 0, marginal: 0, limit: 0, error: 'Invalid entity or status' };
+        return { cumulative: 0, total: 0, marginal: 0, limit: 0, error: `Invalid entity (${entity}) or status (${status})` };
     }
     
     let prevLimit = 0;
@@ -1098,7 +1226,7 @@ function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=
 	
 	//!!!TODO: This is wrong. It should be calculated with the state deduction(s).
 	let stAGI = taxable;
-	calc = calculateProgressive('STATE', status, agi, inflation);
+	calc = calculateProgressive('STATE', status, stAGI, inflation);
 	let stTax = calc.cumulative;
 	let stLimit = calc.limit;
 	let stRate = calc.marginal;
@@ -1117,18 +1245,35 @@ function calcIRMAA(magi, status, inflation) {
 /** UI CONTROLS **/
 function getInputs() {
     return {
-		strategy: val('stratMode'), 	
-        strat: val('stratMode'), nYears: +val('nYears'), stratRate: +val('stratRate')/100.0,
-        birthyear1: +val('birthyear1'), die1: +val('die1'), birthyear2: +val('birthyear2'), die2: +val('die2'),
-        ira1: +val('balIRA1'), ira2: +val('balIRA2'), roth: +val('balRoth'),
-        brokerage: +val('balBrokerage'), basis: +val('basisBrokerage'), cash: +val('balCash'),
-        ss1: +val('ss1'), ss1Age: +val('ss1Age'), ss2: +val('ss2'), ss2Age: +val('ss2Age'),
-        pensionAnnual: +val('pensionAnnual'), survivorPct: +val('survivorPct'), spendGoal: +val('spendGoal'),
+		strategy: val('strategy'), 	
+		nYears: +val('nYears'), 
+		stratRate: +val('stratRate')/100.0,
+        birthyear1: +val('birthyear1'), 
+		die1: +val('die1'), 
+		birthyear2: +val('birthyear2'), 
+		die2: +val('die2'),
+        ira1: +val('ira1'), 
+		ira2: +val('ira2'), 
+		roth: +val('roth'),
+        brokerage: +val('brokerage'), 
+		basis: +val('basis'), 
+		cash: +val('cash'),
+        ss1: +val('ss1'), 
+		ss1Age: +val('ss1Age'), 
+		ss2: +val('ss2'), 
+		ss2Age: +val('ss2Age'),
+        pensionAnnual: +val('pensionAnnual'), 
+		survivorPct: +val('survivorPct'), 
+		spendGoal: +val('spendGoal'),
 		spendChange: +val('spendChange')/100.0, 
 		iraBaseGoal: +val('iraBaseGoal'),
-        inflation: +val('inflation')/100.0, cpi: +val('cpi')/100.0, growth: +val('growth')/100.0, cashYield: +val('cashYield')/100.0,
-		dividendRate: +val('dividendrate')/100.0,
-		ssFailYear: +val('ssFailYear'), ssFailPct: +val('ssFailPct')/100.0,
+        inflation: +val('inflation')/100.0, 
+		cpi: +val('cpi')/100.0, 
+		growth: +val('growth')/100.0, 
+		cashYield: +val('cashYield')/100.0,
+		dividendRate: +val('dividendRate')/100.0,
+		ssFailYear: +val('ssFailYear'), 
+		ssFailPct: +val('ssFailPct')/100.0,
 		startInYear: +val('startInYear')
     };
 }
@@ -1144,7 +1289,7 @@ function runOptimizer() {
     let base = getInputs();
     let results = [];
     for (let n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
-        base.strat = 'fixed';
+        base.strategy = 'fixed';
         base.nYears = n;
         results.push({ 
 		strategy: "Fixed", parameter: n, unit: "years", ...simulate(base) });
@@ -1318,7 +1463,8 @@ function updateCharts(log) {
                 { label: 'IRAs', data: log.map(r => r.TotalIRA), borderColor: '#e67e22', fill: false },
                 { label: 'Roth', data: log.map(r => r.RothBal), borderColor: '#000000', fill: false },
                 { label: 'Brokerage', data: log.map(r => r.brokerageBal), borderColor: '#2980b9', fill: false },
-                { label: 'Cash', data: log.map(r => r.CashBal), borderColor: '#27ae60', fill: false }
+                { label: 'Cash', data: log.map(r => r.CashBal), borderColor: '#27ae60', fill: false },
+                { label: 'TotalWealth', data: log.map(r => r.totalWealth), borderColor: '#888888', fill: false }
             ]
         },
         options: {
@@ -1331,49 +1477,117 @@ function updateCharts(log) {
                         }
                     }
                 }
-            }
-        }
+/*				,
+			  legend: {
+				labels: {
+				  usePointStyle: true,
+				  pointStyle: 'circle',
+					fill: false,
+				  boxWidth: 10,
+				  boxHeight: 10,
+
+				  padding: 16
+					}
+				} // legend
+*/
+            } // plugins
+        } // options
     });
     
     const ctxT = document.getElementById('chartTaxSpend').getContext('2d');
     if (taxChart) taxChart.destroy();
-    taxChart = new Chart(ctxT, {
-        type: 'line',
-        data: {
-            labels: log.map(r => r.year),
-            datasets: [
-                { label: 'Fed Tax', data: log.map(r => r.FedTax), borderColor: '#e74c3c', type: 'bar', backgroundColor: '#e74c3c', stacked: true},
-                { label: 'State Tax', data: log.map(r => r.StateTax), borderColor: '#e74c3c', type: 'bar', backgroundColor: 'rgba(75, 192, 192, 0.7)', stacked: true},
-                { label: 'IRMAA', data: log.map(r => r.IRMAA), borderColor: '#e74c3c', type: 'bar', backgroundColor: 'rgba(0, 0, 0, 1)', stacked: true },
-                { label: 'Spendable Income', data: log.map(r => r.netIncome), borderColor: '#27ae60', fill: false, borderWidth: 3 }
-            ]
-        },
-        options: {
-            scales: {
-                x: {
-                    stacked: true
-                },
-                y: {
-                    stacked: true,
-                    ticks: {
-                        callback: function(value) {
-                            return Math.round(value).toLocaleString();
-                        }
-                    }
-                }
+taxChart = new Chart(ctxT, {
+    data: {  // Removed type from here
+        labels: log.map(r => r.year),
+        datasets: [
+            { 
+                label: 'Fed Tax', 
+                data: log.map(r => r.FedTax),
+                type: 'bar',  // Type on dataset
+                backgroundColor: '#e74c3c80',
+                stack: 'taxes',
+                order: 2
             },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + 
-                                   Math.round(context.parsed.y).toLocaleString();
-                        }
+            { 
+                label: 'State Tax', 
+                data: log.map(r => r.StateTax),
+                type: 'bar',  // Type on dataset
+                backgroundColor: '#4BC0C0B3',
+                stack: 'taxes',
+                order: 2
+            },
+            { 
+                label: 'IRMAA', 
+                data: log.map(r => r.IRMAA),
+                type: 'bar',  // Type on dataset
+                backgroundColor: '#000000D0',
+                stack: 'taxes',
+                order: 2
+            },
+
+/*			
+            { 
+                label: 'Fixed Income', 
+                data: log.map(r => r.pension + r.SSincome),
+                type: 'line',  // Type on dataset
+                borderColor: '#272727', 
+                fill: false, 
+				stack: false,
+                borderWidth: 3,
+                order: 1
+                // NO stack property
+            },
+*/			
+            { 
+                label: 'Spendable Income', 
+                data: log.map(r => r.netIncome),
+                type: 'line',  // Type on dataset
+                borderColor: '#27ae60', 
+                fill: false, 
+				stack: false,
+                borderWidth: 3,
+                order: 1
+                // NO stack property
+            }
+        ]
+    },
+    options: {
+        scales: {
+            x: {
+                stacked: true
+            },
+            y: {
+                stacked: true,
+                ticks: {
+                    callback: function(value) {
+                        return Math.round(value).toLocaleString();
                     }
                 }
             }
-        }
-    });
+        },
+        plugins: {
+			tooltip: {
+				callbacks: {
+					label: function(context) {
+						return context.dataset.label + ': ' + 
+							   Math.round(context.parsed.y).toLocaleString();
+					}
+				}
+			},
+		  legend: {
+			labels: {
+			  usePointStyle: true,
+			  pointStyle: 'circle',
+
+			  boxWidth: 10,
+			  boxHeight: 10,
+
+			  padding: 16
+				}
+			} // legend
+		} // plugins
+	} // options
+	});	// chart
 }
 
 function val(id) { return document.getElementById(id)?.value; }
@@ -1393,13 +1607,15 @@ function showTab(id) {
 }
 
 
-function toggleStratUI() {
-    let m = val('stratMode');
+function toggleStrategyUI() {
+    let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
     document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket');
 }
 
 
+/* Save, Import and Export settings/Scenarios
+*/
 
 // Auto-run tests when page loads (comment out if you don't want auto-run)
 // window.addEventListener('DOMContentLoaded', runTests);

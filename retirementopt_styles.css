@@ -71,7 +71,7 @@ h3 { border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 15px; font-
 
 
 
-#stratMode, #ui-fixed, #ui-bracket, #spending {
+#strategy, #ui-fixed, #ui-bracket, #spending {
 	// width: 100% !important;   
 	max-width: 100% !important;
 	border: 2px solid #ff9800;
@@ -276,4 +276,63 @@ th[title] { cursor: help; text-decoration: underline dotted; color: green }
 
 .log-entry strong { 
     color: #2980b9; 
+}
+
+.scenario-controls {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f5f5f5;
+    border-radius: 5px;
+}
+
+.scenario-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.scenario-message {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    min-height: 20px;
+    display: none;
+    font-weight: 500;
+}
+
+.scenario-message.success {
+    display: block;
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.scenario-message.error {
+    display: block;
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.scenario-message.warning {
+    display: block;
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.scenario-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    margin: 5px 0;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.scenario-item button {
+    margin-left: 5px;
 }

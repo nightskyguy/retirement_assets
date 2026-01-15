@@ -2,11 +2,11 @@
 
 You can [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool offline in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tool from Github Pages here:
 
-	** [nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html) **
+** [nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html) **
 
 **There is no SUPPORT for this tool** and no guarantee of accuracy, or appropriateness of use. There is also no charge. **USE AT YOUR OWN RISK**
 
-A California resident built this with <a HREF="https://gemini.google.com" target="_blank">Google gemini</a> <A HREF="https://claude.ai>claude.ai> and <A HREF="https://chatgpt.com">ChatGPT</A> AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, Javascript, and Groovy. See **Key Features** below for a non-exhaustive list of what the tool can do - and be sure to look at *What the Tool IGNOREs* so you understand the limitations.
+A California resident built this with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, Javascript, and Groovy. See **Key Features** below for a non-exhaustive list of what the tool can do - and be sure to look at *What the Tool IGNOREs* so you understand the limitations.
 
 #### Why This Tool?
 Because he is in retirement, and has an unhealthy IRA balance to manage - it became obvious that no tool he could find offered the flexibility and ease of use he desired.  He and his wife are of different ages (so have different IRAs, RMD timings, Social Security amounts, etc.)  Some really powerful tools didn't offer California tax calculations (California is a high tax state), didn't provide for life expectancy, and more.

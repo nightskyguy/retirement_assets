@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Retirement Optimizer 6v</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-	<link rel="stylesheet" href="retirementopt_styles.css">
+	<!-- <link rel="stylesheet" href="retirementopt_styles.css"> -->
+	<link rel="stylesheet" href="retirementopt_styles_responsive.css">	
 	<base target="_blank">	
-	<script src="retirement_optimizer_longtext.js"></script>	
+	<script src="retirement_optimizer_tests.js"></script>	
+	<script src="retirement_optimizer_text.js"></script>	
+	<script src="retirement_optimizer_taxdata.js"></script>	
 </head>
 <body>
 
@@ -16,8 +19,8 @@
 	    <div class="row"><div  id="spending">
             <div><label>After-Tax Spend Goal&nbsp;</label>
             <input type="number" id="spendGoal" value="180000"></div>
-            <div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. 98% means you spend 2% less each year. 100 means no change.">Spending Delta &nbsp;&nbsp;&nbsp;</label>
-            <input type="number" id="spendChange" value="99.5" step="0.1" min="-25" placeholder="0.0">%<BR>(100 means no change)</div>
+            <div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. 98% means you spend 2% less each year. 100 means no change.">Spend Delta &nbsp;&nbsp;&nbsp;</label>
+            <input type="number" id="spendChange" value="99.0" step="0.1" min="-25" placeholder="0.0">%<BR>(100 means no change)</div>
 			</div>
 		</div>	
         <div class="input-group">
@@ -43,9 +46,17 @@
             </select>
         </div>
 	
-        <div class="row"><label title="Draw down IRA to this amount or less.">IRA Reduction Goal</label>
-            <input type="number" id="iraBaseGoal" value="350000">
+        <div class="row">
+			<label title="Draw down IRA to this amount or less.">IRA Reduction Goal</label>
+            <input type="number" id="iraBaseGoal" value="350000" width="50%"><BR>
+			<label>
+			  <input type="checkbox" id="maxConversion" name="maxConversion" checked>
+			  Maximize Conversion
+			</label>
+			
 		</div>	
+	
+		
         <h3>1. Profile & Ages</h3>
         <div class="row">
             <div><label>Your Birth Year</label><input type="number" id="birthyear1" value="1960"></div>
@@ -53,7 +64,7 @@
         </div>
         <div class="row">
             <div><label>Spouse Birth Year</B></label><input type="number" id="birthyear2" value="1952"></div>
-            <div><label>Spouse Life Expectancy</label><input type="number" id="die2" value="98"></div>
+            <div><label>Spouse Expectancy</label><input type="number" id="die2" value="98"></div>
         </div>
 
         <h3>2. Assets</h3>
@@ -76,11 +87,11 @@
             <div><label>Start Age</label><input type="number" id="ss1Age" value="70"></div>
         </div>
         <div class="row">
-            <div><label>Spouse SS Amt</label><input type="number" id="ss2" value="29000"></div>
+            <div><label>Spouse SS Amt</label><input type="number" id="ss2" value="24000"></div>
             <div><label>Spouse Start Age</label><input type="number" id="ss2Age" value="70"></div><BR>
         </div>
         <div class="row">
-            <div><label>Your Pension</label><input type="number" id="pensionAnnual" value="16900"></div>
+            <div><label>Your Pension</label><input type="number" id="pensionAnnual" value="15000"></div>
             <div><label>Survivorship</label><input type="number" id="survivorPct" value="75">%</div>
         </div>
 
@@ -96,6 +107,18 @@
         </div>
         <div class="row">
 			<div><label title="This is the rate that your asset mix emits dividends.">Dividend Rate (0.5)?</label><BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00">%</div>
+			<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation</label><BR>
+            <select id="STATEname"">
+                <option   value="CA" selected>California</option>
+                <option   value="DC">Washington,DC</option>
+                <option   value="MI">Michigan</option>
+                <option   value="NONE">No State Tax</option>
+                <option   value="NY">New York</option>
+                <option   value="NC">North Carolina</option>
+                <option   value="OR">Oregon</option>
+                <option   value="PA">Pennsylvania</option>
+            </select>
+			</div>			
 		</div>
         <div class="row">
 			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail</label> <input type="number" id="ssFailYear" value="2033"></div>
@@ -108,9 +131,7 @@
 			<div class="header-drawers">
 			<details class="top-drawer"><summary>Change Log</summary><div><br>
 				<div class="log-entry">
-				<strong id="testsFailed">🟢</strong></div>
-				
-				<ul>
+				</div>
 				<ul>
 				<li><b>6v</b> Implemented Save/Load/Export/Delete Scenarios.</li>	
 				<li><b>6u</b> Implemented SS Fail. More UI fixes. Moved all strategy items to the top.</li>	
@@ -137,7 +158,7 @@
 			<details class="top-drawer">
 				<summary>How to Use</summary><div class="drawer-content" id="drawer-howto"></div>
 			</details>
-			<details class="top-drawer"><summary>Planned</summary><div class="drawer-content" id="drawer-planned"></div>
+			<details class="top-drawer"><summary>Planned <strong id="testsFailed">🟢</strong></summary><div class="drawer-content" id="drawer-planned"></div>
 			</details>
 			<details class="top-drawer"><summary>Background</summary><div class=drawer-content" id="drawer-background"></div>
 			</details>
@@ -251,158 +272,42 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('drawer-background').innerHTML = drawerContent.background;
 });
 
+// CONFIGURATION CONSTANTS
+// ============================================================================
+
+// Version constant - increment this when data structure changes
+const SCENARIO_VERSION = 3;
+
+// New storage key for current version scenarios
+const STORAGE_KEY = 'SLCRetireOptimizeScenario';
+
+// Old storage key from previous version
+const OLD_STORAGE_KEY = 'retirementScenarios';
+
+
 
 /** TAX CONSTANTS **/
-const TAXData = {
-	TEST: {
-		// Data used for testing only.
-		YEAR: 2026,
-		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1},  {l: 2000, r: 0.2}, {l: 40000, r: 0.8} ]	},
-		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1},  {l: 2000/2, r: 0.2}, {l: 40000/2, r: 0.8} ]}
-	},
-    STATE: {
-		YEAR: 2025,
-        MFJ: {
-            std: 10804,
-            brackets: [
-                { l: 20824, r: 0.01 }, { l: 49368, r: 0.02 }, { l: 77918, r: 0.04 },
-                { l: 108162, r: 0.06 }, { l: 136700, r: 0.08 }, { l: 698274, r: 0.093 },
-                { l: 837922, r: 0.103 }, { l: 1000000, r: 0.123 }, { l: 1e9, r: 0.133 }
-            ]
-        },
-        SGL: {
-            std: 5402,
-            brackets: [
-                { l: 10412, r: 0.01 }, { l: 24684, r: 0.02 }, { l: 38959, r: 0.04 },
-                { l: 54081, r: 0.06 }, { l: 68350, r: 0.08 }, { l: 349137, r: 0.093 },
-                { l: 418961, r: 0.103 }, { l: 698271, r: 0.123 }, { l: 1e9, r: 0.133 }
-            ]
-        }
-    },
+// Find these in retirement_optimizer_taxdata.js
 
-	FEDERAL: {
-		YEAR: 2026,  // Official IRS Revenue Procedure 2025-32
-		REFERENCE: 'https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill',
-		REF_2: 'https://taxfoundation.org/data/all/federal/2026-tax-brackets/',
-		MFJ: {
-			std: 32200, 
-			age: 65,
-			stdbump: 1650,
-			brackets: [ 
-				{ l: 24800, r: 0.10 }, 
-				{ l: 100800, r: 0.12 }, 
-				{ l: 211400, r: 0.22 },
-				{ l: 403550, r: 0.24 }, 
-				{ l: 512450, r: 0.32 }, 
-				{ l: 768700, r: 0.35 },
-				{ l: 1e9, r: 0.37 }	]
-			},
-		SGL: {
-			std: 16100,
-			age: 65,
-			stdbump: 2050,
-			brackets: [
-				{ l: 12400, r: 0.10 }, 
-				{ l: 50400, r: 0.12 }, 
-				{ l: 105700, r: 0.22 },
-				{ l: 201775, r: 0.24 }, 
-				{ l: 256225, r: 0.32 }, 
-				{ l: 640600, r: 0.35 },
-				{ l: 1e9, r: 0.37 }	]
-			},
-		HOH: {
-			std: 24150,
-			age: 65,
-			stdbump: 2050,
-			brackets: [
-				{ l: 17700, r: 0.10 }, 
-				{ l: 75350, r: 0.12 }, 
-				{ l: 160600, r: 0.22 },
-				{ l: 213000, r: 0.24 }, 
-				{ l: 265700, r: 0.32 }, 
-				{ l: 580250, r: 0.35 },
-				{ l: 1e9, r: 0.37 }	]
-			},
-		},
-		
-	FED_CAP_GAINS: {
-		YEAR: 2026,
-		REFERENCE: 'none - Claude.ai created it.',
-		NOTE: 'This bracket combines capital gains and NIIT - strictly speaking its not correct', 
-		MFJ: {
-			brackets: [
-				{ l: 98900, r: 0.00 },      // 0% cap gains
-				{ l: 250000, r: 0.15 },     // 15% cap gains, no NIIT
-				{ l: 613700, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
-				{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
-			]
-		},
-		SGL: {
-			brackets: [
-				{ l: 49450, r: 0.00 },      // 0% cap gains
-				{ l: 200000, r: 0.15 },     // 15% cap gains, no NIIT
-				{ l: 306850, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
-				{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
-			]
+// The default state to use for STATE calculations.
+let STATEname = 'CA'
+
+function inspectForErrors(inputs) {
+	for (const [name, value] of Object.entries(inputs)) {
+		if (value === undefined) {
+			console.error(`❌ ${name} is undefined`);
+			debugger;
 		}
-	},
-	
-	SOCIALSECURITY: {
-		Year: 2025,
-		MFJ: { brackets: [{ l:32000-1, r: 0.0}, { l:32000, r: 0.5}, {l: 44000, r: 0.85}] },
-		MFJ: { brackets: [{ l:32000-1, r: 0.0}, { l:32000, r: 0.5}, {l: 44000, r: 0.85}] }
-		},
-
-	IRMAA: {
-		YEAR: 2026,
-		LOOKBACK: 2024,  // Based on 2024 tax return
-		standardPartB: 202.90,
-		partBDeductible: 283,
-		
-		MFJ: {
-			brackets: [
-				{ l: 218000 - 1, r: 0}, 
-				{ l: 218000, r: (2 * 202.90) },
-				{ l: 274000, r: 2 * (284.10 + 14.50) },
-				{ l: 348000, r: 2 * (405.90 + 37.60) },
-				{ l: 410000, r: 2 * (527.70 + 60.60) },
-				{ l: 750000, r: 2 * (649.50 + 83.70) },
-				{ l: 1e9, r: 2 * (689.90 + 91.00) }
-			]
-		},
-		
-		SGL: {
-			brackets: [
-				{ l: 109000 - 1, r: 0}, 
-				{ l: 109000, r: 202.90 +0 },
-				{ l: 137000, r: 284.10 +14.50 },
-				{ l: 174000, r: 405.90 + 37.60 },
-				{ l: 205000, r: 527.70 + 60.60 },
-				{ l: 500000, r: 649.50 + 83.70 },
-				{ l: 1e9, r: 689.90 + 91.00 }
-			]
-		},
-		
-		MFS: {
-			brackets: [
-				{ l: 109000 - 1, r: 0}, 
-				{ l: 109000, r: 202.90 + 0 },
-				{ l: 403000, r: 649.50 + 83.70 },
-				{ l: 1e9, r: 689.90 + 91.00 }
-			]
+		if (isNaN(value)) {
+			console.error(`❌ ${name} is NaN`);
+			debugger;
 		}
-	}	
-};
-
-// Uniform Lifetime Table (Simplified)
-const RMD_TABLE = {
-    72: 27.4, 73: 26.5, 74: 25.5, 75: 24.6, 76: 23.7, 77: 22.9, 78: 22.0, 79: 21.1,
-    80: 20.2, 81: 19.4, 82: 18.5, 83: 17.7, 84: 16.8, 85: 16.0, 86: 15.2, 87: 14.4,
-    88: 13.7, 89: 12.9, 90: 12.2, 91: 11.5, 92: 10.8, 93: 10.1, 94: 9.5, 95: 8.9,
-    96: 8.4, 97: 7.8, 98: 7.3, 99: 6.8, 100: 6.4, 101: 6.0, 102: 5.6, 103: 5.2,
-	104: 4.9, 105: 4.6, 106: 4.3, 107: 4.1, 108: 3.9, 109: 3.7, 110: 3.5, 111: 3.4,
-	112: 3.3, 113: 3.1, 114: 3.0, 115: 2.9, 116: 2.8, 117: 2.7, 118: 2.5, 119: 2.3, 120: 2.0
-};
+		if (!isFinite(value) && value !== 0) {
+			console.error(`❌ ${name} is Infinity`);
+			debugger;
+		}
+	}
+}
 
 function getRMDPercentage(age, birthYear) {
 const startAge = (birthYear >= 1960) ? 75 : 73;
@@ -411,8 +316,19 @@ const startAge = (birthYear >= 1960) ? 75 : 73;
     return 1/(RMD_TABLE[age]);
 }
 
+function getRateBracket(entity, status) {
+    let brks = TAXData?.[entity]?.[status]?.brackets;
+
+    if (!brks) {
+        console.error(`Invalid tax data: entity="${entity}", status="${status}"`);
+        return null
+	};
+		
+	return brks
+}
+
 // Calculate the withdrawal rate to reduce an account from currentIRA to targetIRA
-function calculateSystematicWithdrawal(currentIRA, targetIRA, years, growthRate) {
+function calculateAmortizedWithdrawal(currentIRA, targetIRA, years, growthRate) {
     // Amount that needs to be withdrawn
     const excessAmount = currentIRA - targetIRA;
     
@@ -432,15 +348,12 @@ function calculateSystematicWithdrawal(currentIRA, targetIRA, years, growthRate)
     return withdrawal;
 }
 
-// Example: $1M IRA, want to get down to $200K over 10 years, 6% growth
-const withdrawal = calculateSystematicWithdrawal(1000000, 200000, 10, 0.06);
-
 
 // Find the top amount in the provided brackets. If the bracket isn't found, it finds 
 // the limit in the next lower bracket.  This doesn't check to be sure any values are reasonable.
 
 function findLimitByRate( entity, status, tgtrate, inflation=1) {
-    let brks = TAXData?.[entity]?.[status]?.brackets;
+    let brks = getRateBracket(entity, status)
 
     let limit = 0;
 	let rate = 0;
@@ -461,8 +374,9 @@ function findLimitByRate( entity, status, tgtrate, inflation=1) {
 function findUpperLimitByAmount( entity, status, amount, inflation=1) {
     let limit = 0;
 	let rate = 0;
+    let brks = getRateBracket(entity, status)
 	
-    for (let b of TAXData?.[entity]?.[status]?.brackets) {
+    for (let b of brks) {
         if (b.l * inflation <= amount ) {
 			rate = b.r;
         } else {
@@ -475,86 +389,226 @@ function findUpperLimitByAmount( entity, status, amount, inflation=1) {
 
 ///
 
-// Calculate and return the amount needed from "brokerageBal" to achieve "gapAmount" after tax.
-function calculateBrokerageWithdrawalForNet(gapAmount, brokerageBal, brokerageBasis, capGainsTaxRate) {
-    // Handle edge cases
-    if (brokerageBal <= 0 || gapAmount <= 0) {
-        return {
-            brokerWD: 0,
-            capitalGains: 0,
-            capGainsTax: 0,
-            netAmount: 0,
-            newBrokerageBal: brokerageBal,
-            newBrokerageBasis: brokerageBasis,
-            basisWithdrawn: 0,		
-            insufficientFunds: false
-        };
-    }
-    
-    // Calculate gain percentage in the account
-    const gainPct = (brokerageBal - brokerageBasis) / brokerageBal;
-    
-    // Calculate after-tax percentage (portion you keep per dollar)
-    const afterTaxPct = 1 - (gainPct * capGainsTaxRate);
-    
-    // Calculate gross withdrawal needed to net the gap amount
-    let brokerWD = gapAmount / afterTaxPct;
-    
-    // Check if we're trying to withdraw more than available
-    if (brokerWD > brokerageBal) {
-        // Can only withdraw what's available
-        brokerWD = brokerageBal;
-        
-        const basisWithdrawn = brokerageBasis;  // All of it
-        const capitalGains = brokerageBal - brokerageBasis;
-        const capGainsTax = capitalGains * capGainsTaxRate;
-        const netAmount = brokerWD - capGainsTax;
-        
-        return {
-            brokerWD: brokerWD,			// .toFixed(2),
-            capitalGains: capitalGains,
-            capGainsTax: capGainsTax,
-            netAmount: netAmount,
-            shortfall: (gapAmount - netAmount),
-            newBrokerageBal: 0,                    // Explicitly 0
-            newBrokerageBasis: 0,                  // Explicitly 0
-            basisWithdrawn: basisWithdrawn,
-            insufficientFunds: true
-        };
-    }
-    
-    // Normal case - sufficient funds
-    const withdrawalPct = brokerWD / brokerageBal;
-    const basisWithdrawn = brokerageBasis * withdrawalPct;
-    const capitalGains = brokerWD - basisWithdrawn;
-    const capGainsTax = capitalGains * capGainsTaxRate;
-    
-    // Calculate new balances with safety checks
-    let newBrokerageBal = brokerageBal - brokerWD;
-    let newBrokerageBasis = brokerageBasis - basisWithdrawn;
-    
-    // Safety: prevent negative balances (in case of floating point errors)
-    if (newBrokerageBal < 0) newBrokerageBal = 0;
-    if (newBrokerageBasis < 0) newBrokerageBasis = 0;
-    
-    // If balance is effectively zero, set both to zero
-    if (newBrokerageBal < 0.01) {
-        newBrokerageBal = 0;
-        newBrokerageBasis = 0;
-    }
-    
-    return {
-        brokerWD: brokerWD.toFixed(2),
-        capitalGains: capitalGains.toFixed(2),
-        capGainsTax: capGainsTax.toFixed(2),
-        netAmount: +(brokerWD - capGainsTax).toFixed(2),
-        shortfall: 0,
-        newBrokerageBal: +newBrokerageBal.toFixed(2),
-        newBrokerageBasis: +newBrokerageBasis.toFixed(2),
-        basisWithdrawn: +basisWithdrawn.toFixed(2),
-        insufficientFunds: false
+/**
+ * Calculates withdrawal amounts from multiple accounts based on strategy, accounting for taxes
+ * @param {Object} balances - Account balances
+ * @param {number} balances.IRA - IRA balance
+ * @param {number} balances.Brokerage - Brokerage account balance
+ * @param {number} balances.BrokerageBasis - Brokerage cost basis
+ * @param {number} balances.Cash - Cash balance
+ * @param {number} balances.Roth - Roth IRA balance
+ * @param {number} gapAmount - Total NET amount needed (after taxes)
+ * @param {Object} withdrawStrategy - Withdrawal strategy definition
+ * @param {Array<string>} withdrawStrategy.order - Order of ALL accounts (including zero-weight)
+ * @param {Array<number>} withdrawStrategy.weight - Relative weights for each account in order if null, weights are based on account balances.
+ * @param {Array<number>} withdrawStrategy.taxrate - Tax rates for each account (0.0 to 1.0)
+ * @returns {Object} Withdrawal amounts (gross), taxes paid, net amounts, and remaining shortfall
+ */
+function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
+    // Initialize result structure
+    const result = {
+        totalTax: 0,
+        netAmount: 0,
+        shortfall: 0
     };
-} // calculateBrokerageWithdrawalForNet
+    
+
+	// Check edge cases.
+	let errors = []
+
+	gapAmount == null || (gapAmount <= 0) && errors.push("gapAmount is null or <= 0");
+	(withdrawStrategy == null || Object.keys(withdrawStrategy).length === 0 ) && errors.push("withdrawStrategy is nullor empty");
+	(balances == null || Object.keys(balances).length === 0) && errors.push("balances is null or empty");
+	(withdrawStrategy?.order == null || Object.keys(withdrawStrategy.order).length === 0) && errors.push("withdrawal.order is null or empty");
+	
+	if (errors.length > 0) {
+		// All good.
+		result.errors = errors;
+		return result
+	}
+    
+  
+    const order = withdrawStrategy.order;
+    const taxrates = withdrawStrategy.taxrate;
+    const originalGapAmount = gapAmount;
+	
+	
+	const {BrokerageBasis, ...rest} = balances;
+	let totalFunds = Object.values(rest).reduce((sum, v) => sum + v, 0)	
+	
+	// Normalize the weights (if they exist - or create weights from balances if not.
+	if (withdrawStrategy.weight?.length > 0) {
+	  const sum = withdrawStrategy.weight.reduce((a, b) => a + b, 0);
+	  normalizedWeight = withdrawStrategy.weight.map(w => w / sum);
+	} else {
+	  const orderBalances = withdrawStrategy.order.map(acct => balances[acct]);
+	  const sum = orderBalances.reduce((a, b) => a + b, 0);
+	  normalizedWeight = orderBalances.map(bal => bal / sum);
+	}	// withdrawStrategy.weight exists or not.
+		
+	
+    let netRemaining = gapAmount; // This is the NET amount we still need
+    
+    // Phase 1: Process weighted accounts (weight > 0)
+    // Calculate NET targets based on original gap amount
+    const netTargets = {};
+	
+    
+    for (let i = 0; i < order.length; i++) {
+        const account = order[i];
+        const weight = normalizedWeight[i];
+        
+        if (weight > 0) {
+			// This assumes the weight is a percentage e.g. 50 for 50% but that's not desireable.
+            netTargets[account] = (originalGapAmount * weight) ;
+        } else {
+            netTargets[account] = 0;
+        } // if weight > 0
+    } // for each account in order
+    
+    // Withdraw from weighted accounts up to their targets
+    for (let i = 0; i < order.length; i++) {
+        if (netRemaining <= 0.01) break;
+        
+        const account = order[i];
+        const taxRate = taxrates[i];
+        
+        if (netTargets[account] <= 0) continue; // Skip zero-weight accounts for now
+        
+        const available = balances[account] || 0;
+        const netTarget = netTargets[account];
+        
+        // Calculate gross withdrawal needed to achieve net target
+        const grossTarget = netTarget / (1 - taxRate);
+        
+        // Can't withdraw more than available or more than needed (in gross terms)
+        const grossNeeded = netRemaining / (1 - taxRate);
+        const grossWithdrawal = Math.min(grossTarget, available, grossNeeded);
+        
+        if (grossWithdrawal > 0.01) {
+            const netWithdrawal = grossWithdrawal * (1 - taxRate);
+            const tax = grossWithdrawal * taxRate;
+            
+            result[account] = grossWithdrawal;
+            result[account + 'Tax'] = tax;
+            netRemaining -= netWithdrawal;
+            
+            // Handle brokerage basis
+            if (account === 'Brokerage' && balances.BrokerageBasis > 0 && balances.Brokerage > 0) {
+                const basisRatio = balances.BrokerageBasis / balances.Brokerage;
+                result.BrokerageBasis = grossWithdrawal * basisRatio;
+            } // if Brokerage
+        } // if grossWithdrawal > 0.01
+    } // for each account in order
+	
+	
+    //!!! I suspect this does NOTHING.
+	//	NOTE: This probably only makes sense if the accounts haven't been depleted already.
+    // Phase 2: If gap not satisfied, iterate with increased weights on weighted accounts
+    let maxIterations = 10;
+    let iteration = 0;
+    
+    while (netRemaining > 0.01 && iteration < maxIterations) {
+        iteration++;
+        
+        let progressMade = false;
+        
+        // Increase targets for weighted accounts
+        for (let i = 0; i < order.length; i++) {
+            if (netRemaining <= 0.01) break;
+            
+            const account = order[i];
+            const taxRate = taxrates[i];
+            
+            if (netTargets[account] === 0) continue; // Still skip zero-weight accounts
+            
+            const available = (balances[account] || 0) - result[account];
+            
+            if (available <= 0.01) continue;
+            
+            // Increase target by 10% of original gap
+            const additionalNetTarget = originalGapAmount * 0.10;
+            const additionalGrossTarget = additionalNetTarget / (1 - taxRate);
+            
+            const grossNeeded = netRemaining / (1 - taxRate);
+            const grossWithdrawal = Math.min(additionalGrossTarget, available, grossNeeded);
+            
+            if (grossWithdrawal > 0.01) {
+                const netWithdrawal = grossWithdrawal * (1 - taxRate);
+                const tax = grossWithdrawal * taxRate;
+                
+                result[account] += grossWithdrawal;
+                result[account + 'Tax'] += tax;
+                netRemaining -= netWithdrawal;
+                progressMade = true;
+                
+                // Update brokerage basis
+                if (account === 'Brokerage' && balances.BrokerageBasis > 0 && balances.Brokerage > 0) {
+                    const basisRatio = balances.BrokerageBasis / balances.Brokerage;
+                    result.BrokerageBasis = result[account] * basisRatio;
+                } // if Brokerage
+            } // if grossWithdrawal > 0.01
+        } // for each account in order
+        
+        if (!progressMade) break; // All weighted accounts depleted
+    } // while netRemaining > 0.01
+    
+    // Phase 3: Fall back to zero-weight accounts if gap still not satisfied
+    if (netRemaining > 0.01) {
+        for (let i = 0; i < order.length; i++) {
+            if (netRemaining <= 0.01) break;
+            
+            const account = order[i] ?? 'NONE';
+            const taxRate = taxrates[i] ?? 0;
+			if (!Object.hasOwn(result, account)) {
+				result[account] = 0;
+			}
+            const available = (balances[account] || 0) - result[account];
+            
+            if (available <= 0.01) continue;
+            
+            const grossNeeded = netRemaining / (1 - taxRate);
+            const grossWithdrawal = Math.min(available, grossNeeded);
+            
+            if (grossWithdrawal > 0.01) {
+                const netWithdrawal = grossWithdrawal * (1 - taxRate);
+                const tax = grossWithdrawal * taxRate;
+                
+                result[account] += grossWithdrawal;
+                result[account + 'Tax'] = tax + (result[account + 'Tax'] ?? 0);
+                netRemaining -= netWithdrawal;
+				
+				// Calculate new basis
+                if (account === 'Brokerage' && balances.BrokerageBasis > 0 && balances.Brokerage > 0) {
+                    const basisRatio = balances.BrokerageBasis / balances.Brokerage;
+                    result.BrokerageBasis = result[account] * basisRatio;
+                } // if Brokerage
+            } // if grossWithdrawal > 0.01
+        } // for each account in order
+    } // if netRemaining > 0.01
+    
+    // Calculate totals
+	
+	// Sum the non-tax, non Basis entries (totalWithdrawals)
+	let totalWithdrawals = 0;
+	totalWithdrawals = 	Object.entries(result).filter(([k]) => !k.endsWith('Tax') && !k.endsWith('Basis')).reduce((totalWithdrawals, [, v]) => totalWithdrawals + v, 0)
+
+	// Now sum the taxes
+    result.totalTax = Object.entries(result).filter(([k]) => k.endsWith('Tax')).reduce((sum, [, v]) => sum + v, 0)
+
+	// Compute the net amount		
+    result.netAmount = totalWithdrawals - result.totalTax;
+	
+	// Calculate any shortfall
+	result.shortfall = gapAmount - result.netAmount
+
+    // Round all results to 3 decimals (mutate result)
+	Object.keys(result).forEach(k => result[k] = +result[k].toFixed(3))
+	
+    
+    return result;
+} // function calculateWithdrawals
+
 
 /////////////////////////////
 
@@ -569,6 +623,7 @@ function simulate(inputs) {
         magiHistory: []
     };
     simulationCount += 1;
+	STATEname = inputs.STATEname;
     let log = [];
 	//!!!TODO Remove hardcoded start year!
     let startYear = 2026;
@@ -580,13 +635,46 @@ function simulate(inputs) {
 
 	let cpiRate = 1
 	let inflation = 1
-	let fixedWithdrawal = calculateSystematicWithdrawal(balance.ira1 + balance.ira2, inputs.iraBaseGoal, inputs.nYears,inputs.growth)
+	let fixedWithdrawal = calculateAmortizedWithdrawal(balance.ira1 + balance.ira2, inputs.iraBaseGoal, inputs.nYears,inputs.growth)
 	let currentTaxableGuess = 0;
 	let spendDelta = 1
 	let spendGoal = inputs.spendGoal;
 	let cumulativeTaxes = 0;
 	let nominalTaxRate = 0.20; // Just a guess.
+	let marginalTaxRate = 0.33; // Just a guess.
+	let capitalGainsRate = 0.15; // A guess.
 	
+	
+	
+	/**************************************
+	 * PROCESS:
+		Determine tax status 
+		Determine SS & pension income.
+	    Determine targetIncome based on strategy:
+			For fixed, use larger of amortization rate or spendGoal
+				WithdrawalStrategy = [IRA:100, Cash:0, Brok:0]
+			For baseline, use SpendGoal 
+				WithdrawalStrategy = [IRA, Brok, Cash, Roth] by balance percent.
+			For delay, use SpendGoal
+				WithdrawalStrategy = [Brok: 100, IRA: 0, Cash: 0
+			For bracket, use larger of bracket limit or spendGoal
+				WithdrawalStrategy = [IRA:*, Brok:*, Cash:0]
+				
+		Calculate neededIncome by taxburden [targetIncome / (1 - nominalTaxRate)]
+		
+		addIncome = neededIncome - SS - pension.
+		round1 = calculateWithdrawals() using WithdrawalStrategy to get addIncome
+		
+		if shortfall, round2 = calculateWithdrawals() using [Cash: 100, ROTH: 0]
+		totalWithdrawals = sum(round1, round2)
+		
+		firstTax = calculateTaxes() 
+		netIncome = 
+		if netIncome > 
+		
+	 *
+	 *
+	 *************************************/
 
     for (let y = 0; y < maxYears; y++) {
 		spendGoal = spendGoal * spendDelta * (1+inputs.inflation);
@@ -594,6 +682,13 @@ function simulate(inputs) {
 		cpiRate = (1 + inputs.cpi) * cpiRate
 		inflation = (1 + inputs.inflation) * inflation
 		spendDelta = inputs.spendChange;
+		
+		let wdRoth = 0;
+        let wdBrokerage = 0;
+		let wdCash = 0;
+		let basisWithdrawn = 0;
+		let wdIRA = 0;
+
 
         let age1 = startYear - birthyear1 + y;
         let age2 = startYear - birthyear2 + y;
@@ -604,41 +699,44 @@ function simulate(inputs) {
 		totals.yearstested += 1;
 
         let status = (alive1 && alive2) ? 'MFJ' : 'SGL';
-		
+		// IRMAA is already known since it is based on income from 2 years ago.
+        let irmaa = calcIRMAA(balance.magiHistory[balance.magiHistory.length-2], status, cpiRate);
 		
 		// Calculate the bracket limits based on: stated limit.
 		let tgtBracketLimit = findLimitByRate('FEDERAL',status,inputs.stratRate)
 		
 		// Find federal & state rates and limits by spending goal:
 		let goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', status, spendGoal , cpiRate)
-		let goalStateBracketLimit = findUpperLimitByAmount('STATE', status, spendGoal, cpiRate)
+		let goalStateBracketLimit = findUpperLimitByAmount(STATEname, status, spendGoal, cpiRate)
 		let goalLimit = Math.min(goalFedBracketLimit.limit, goalStateBracketLimit.limit)
 		let irmaaBracket = findUpperLimitByAmount('IRMAA', status, goalLimit, cpiRate)
 		let irmaLimit = Math.min(goalLimit, irmaaBracket.limit);
 		let totalIncome = 0;
 		let capitalGains = 0;		
-		
-		//!!! TODO: if strategy is "bracket" but spendGoal is > bracket we have a problem.
+	
+		//!!! TODO: if strategy is "bracket" but spendGoal is > bracket limit
+		//		    we likely have a problem unless non-taxable accounts can backfill.
 
         // 1. Inherit IRA
         if (!alive1 && balance.ira1 > 0) { balance.ira2 += balance.ira1; balance.ira1 = 0; }
         if (!alive2 && balance.ira2 > 0) { balance.ira1 += balance.ira2; balance.ira2 = 0; }
 
+
         // 2. Base Income
 		let ssReduction = (inputs.ssFailYear > 2000 && startYear + y >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
         let s1 = (alive1 && age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate * ssReduction : 0;
         let s2 = (alive2 && age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate * ssReduction : 0;
-        let pen = inputs.pensionAnnual;
+        let pension = inputs.pensionAnnual;
 		
 		// One is deceased (if both decease, it won't get here)
         if (!alive1 || !alive2) {
             // Survivor Logic: Max of SS + Survivorship % of Pension
             s1 = Math.max(s1, s2);
             s2 = 0;
-            if (!alive1) { pen = pen * (inputs.survivorPct/100) }
+            if (!alive1) { pension = pension * (inputs.survivorPct/100) }
         }
         let fixedInc = s1 + s2;
-		let taxableInc = pen;
+		let taxableInc = pension;
 		let taxableInterest = balance.cash * inputs.cashYield
 		let taxableDividends = balance.brokerage * inputs.dividendRate
 		
@@ -650,38 +748,51 @@ function simulate(inputs) {
 		// Immediately remove RMDs from the respective IRAs because they MUST be taken first.
 		balance.ira1 = Math.max(0, balance.ira1 - rmd1);
 		balance.ira2 = Math.max(0, balance.ira2 - rmd2);
+		let curIRA = Math.max(0, balance.ira1 + balance.ira2 - inputs.iraBaseGoal);
+
+
 		
         let totalRMD = rmd1 + rmd2;
 		taxableInc += totalRMD
 
         // 4. Determine Target Spending amount based on Strategy
         let targetSpend = Math.min(spendGoal, goalLimit);
-        let iraWD = 0;
+        let additionalSpendNeeded = Math.max(0, targetSpend - totalRMD - fixedInc - taxableInc + irmaa);
 
 		//!!! Find the income federal limit. TODO: use that limit, to refine down to the next lower IRMAA limit and next lower State Limit.
-		let fedRate = goalFedBracketLimit.rate
-		let stateRate = goalStateBracketLimit.rate
+		let marginalFedTaxRate = goalFedBracketLimit.rate
+		let marginalStateTaxRate = goalStateBracketLimit.rate
 		
+		//	calculateProgressive('FEDERAL', status, amount, inflation=1, ratecreep=1)
+
+		let nominalFedTaxRateAtLimit = 0.14;
+		let nominalStateTaxAtLimit = 0.07
+		let withdrawStrategy = {order: [], weight: [], taxrate: []};
+		let withdrawResult = {}
+		
+		let curBalances = {IRA: balance.ira1 + balance.ira2, Brokerage: balance.brokerage, BrokerageBasis: balance.basis, Roth: balance.roth, Cash: balance.cash};
+			
 
         if (inputs.strategy === 'fixed') {
             let remYears = Math.max(1, inputs.nYears - y);
-			//!!! Doesn't have a floor to map to.
-			let curIRA = balance.ira1 + balance.ira2 - inputs.iraBaseGoal;
-			let amortized = fixedWithdrawal - totalRMD;
-			
-			//!!!TODO totalRMD has has already been removed...
-            iraWD = Math.max(0, amortized);
+			let amortized = Math.max(0, fixedWithdrawal - totalRMD);
+
+			// Withdraw the fixed amount left after RMDs, or whatever is left in IRA after leaving room
+            wdIRA = Math.max(0,Math.min(curIRA, amortized));
         } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit') {
 			//!!! This code has flaws.  Withdraws too much.
 			let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
 			let limit = fedLimit.limit;
-			fedRate = fedLimit.rate;	
+			let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation)
+			nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit
+			marginalFedTaxRate = fedLimit.rate;	
 
 			//!!!TODO Find the state rate and limit that corresponds to the limit (fedLimit.fedLimit)
 			//!!!TODO Find the IRMAA limit that corresponds to the fedLimit.fedLimit
-			let stLimit = findUpperLimitByAmount('STATE', status, fedLimit.limit, cpiRate);
-			stateRate = stLimit.rate;
+			let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
+			marginalStateTaxRate = stLimit.rate;
 			stateLimit = stLimit.limit;
+			nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / limit
 			
 			// pick whatever is smaller (state or Federal limit for the amount desired)
 			limit = Math.min(stateLimit, limit)
@@ -691,87 +802,84 @@ function simulate(inputs) {
 			}
 			
             currentTaxableGuess = limit - fixedInc - taxableInc - totalRMD;
-            iraWD = Math.max(0, currentTaxableGuess);
+            wdIRA = Math.max(0, currentTaxableGuess);
         } else {
-	       // Must be "baseline" strategy.  Withdraw enough to pay taxes.
-		   iraWD = Math.max(0, targetSpend / (1-fedRate-stateRate) - totalRMD);
+			/*********************/
+			/* BASELINE Strategy */
+			/*********************/
+	        // Withdraw enough proportionately to get to spendGoal - including taxes.
+			withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash']
+			withdrawStrategy.taxrate = [ nominalTaxRate, capitalGainsRate + nominalStateTaxAtLimit, 0, 0]
+			let withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy)
+		   
+			wdIRA = withdrawals.IRA ?? 0;	
+			wdBrokerage = withdrawals.Brokerage ?? 0;
+			wdCash =withdrawals.Cash ?? 0;
+			wdRoth = withdrawals.Roth ?? 0;
+			inspectForErrors( wdIRA, wdBrokerage, wdCash, wdRoth)
 		}
         
         // Ensure we don't withdraw more than exists - we've already removed the totalRMD
-        iraWD = Math.min(iraWD, balance.ira1 + balance.ira2);
+        wdIRA = Math.min(wdIRA, balance.ira1 + balance.ira2);
 		
-		// if (Number.isNaN(iraWD)) {
-		//   throw new Error('iraWD is NaN');
+		// if (Number.isNaN(wdIRA)) {
+		//   throw new Error('wdIRA is NaN');
 		// }
 
         // 5. Tax Calc (Including IRMAA lag)
-        let tax = calculateTax(fixedInc, iraWD + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
-		
+		//!!! TODO: May be premature. We may need more $ to meet spend goal.  We may have exhausted the IRAs.
+		inspectForErrors( fixedInc, wdIRA, totalRMD, taxableInterest, capitalGains, taxableDividends, status, age1, age2, cpiRate)
+        let tax = calculateTax(fixedInc, wdIRA + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
+		inspectForErrors(tax)
 		//!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
 		let magiHistoryLength = balance.magiHistory.length
 		if (magiHistoryLength < 1) {
 			balance.magiHistory.push(tax.magi);
 			balance.magiHistory.push(tax.magi);
 		}
-        let irmaa = calcIRMAA(balance.magiHistory[balance.magiHistory.length-2], status, cpiRate);
+
         let totalTax = tax.total + irmaa;
 		cumulativeTaxes += totalTax;
 
         // 6. Cash Flow Gap
-        let netCash = (fixedInc + iraWD) - totalTax;
-        let gap = targetSpend - netCash;
+        let netSpendable = (fixedInc + wdIRA) - totalTax;
+        let gap = targetSpend - netSpendable;
         
-        let rothWD = 0;
-        let brokerageWD = 0;
-		let cashWD = 0;
-		let basisWithdrawn = 0;
+		inspectForErrors({netSpendable: netSpendable, gap: gap, wdIRA: wdIRA, 
+			totalTax: totalTax});
+
 
         if (gap > 0) {
             // Need more money - Order: Cash -> Brokerage -> Roth
-            cashWD = Math.min(gap, balance.cash);
-            balance.cash -= cashWD; gap -= cashWD;
+            wdCash = Math.min(gap, balance.cash);
+            balance.cash -= wdCash; gap -= wdCash;
             
-            if (gap > 0) {
-				let withdrawlogic = calculateBrokerageWithdrawalForNet(gap, balance.brokerage, balance.basis)
-                brokerageWD = withdrawlogic.brokerWD;
-				capitalGains = withdrawlogic.capitalGains;
-				basisWithdrawn = withdrawlogic.basisWithdrawn;
-				
-				// Calculate new balances after withdrawal
-                balance.brokerage -= brokerageWD; 
-                balance.basis -= basisWithdrawn; 
-				
-				if (balance.brokerage != withdrawlogic.newBrokerageBal || 
-					withdrawlogic.newBrokerageBasis != balance.basis)
-				{	
-					;
-				}
 
-				gap -= brokerageWD;
-            }
             if (gap > 0) {
-                rothWD = Math.min(gap, balance.roth);
-                balance.roth -= rothWD; gap -= rothWD;
+                wdRoth = Math.min(gap, balance.roth);
+                balance.roth -= wdRoth; gap -= wdRoth;
             }
             // If Gap still > 0, we take more IRA (Baseline behavior)
 			// NOTE: From earlier we already know the marginal state and federal brackets.
             if (gap > 0 && (balance.ira1 + balance.ira2) > 0) {
                 let extraIRA = Math.min(gap / (1-tax.fedRate+tax.stRate), balance.ira1 + balance.ira2);
-                iraWD += extraIRA;
+                wdIRA += extraIRA;
                 // Re-calculate tax for new IRA WD
-                tax = calculateTax(fixedInc, iraWD + totalRMD, capitalGains + taxableDividends, status, age1, age2, cpiRate);
+                tax = calculateTax(fixedInc, wdIRA + totalRMD, capitalGains + taxableDividends, status, age1, age2, cpiRate);
                 totalTax = tax.fed + tax.state + irmaa;
-                netCash = (fixedInc + iraWD) - totalTax;
-                gap = targetSpend - (netCash + rothWD + brokerageWD + cashWD);
+                netSpendable = (fixedInc + wdIRA) - totalTax;
+                gap = targetSpend - (netSpendable + wdRoth + wdBrokerage + wdCash);
             }
         } else if (gap < -100 && (inputs.strategy !== 'baseline')) {
             // Surplus logic (Conversions)
             let surplus = Math.abs(gap);
             balance.roth += surplus;
-			rothWD -= surplus
+			wdRoth -= surplus
         }
 		
-		totalIncome = Math.max(1, fixedInc + iraWD + pen + taxableDividends + taxableInterest + capitalGains);
+		totalIncome = Math.max(1, fixedInc + wdIRA + pension + taxableDividends + taxableInterest + capitalGains + wdRoth + wdCash + wdBrokerage);
+		inspectForErrors({totalIncome: totalIncome});
+		
 		nominalTaxRate = totalTax / totalIncome		
 
         // 7. Updates
@@ -779,8 +887,8 @@ function simulate(inputs) {
 		let netIncome = totalIncome - totalTax;
 		
 		//!!! Remove withdrawals proportionately. RMDs have already been withdrawn.
-        balance.ira1 = Math.max(0, balance.ira1 - (iraWD * (balance.ira1/(balance.ira1+balance.ira2||1))));
-        balance.ira2 = Math.max(0, balance.ira2 - (iraWD * (balance.ira2/(balance.ira1+balance.ira2||1))));
+        balance.ira1 = Math.max(0, balance.ira1 - (wdIRA * (balance.ira1/(balance.ira1+balance.ira2||1))));
+        balance.ira2 = Math.max(0, balance.ira2 - (wdIRA * (balance.ira2/(balance.ira1+balance.ira2||1))));
         balance.ira1 *= (1 + inputs.growth);
         balance.ira2 *= (1 + inputs.growth);
         balance.roth *= (1 + inputs.growth);
@@ -791,7 +899,7 @@ function simulate(inputs) {
         balance.magiHistory.push(tax.magi);
 
         totals.tax += totalTax;
-        totals.gross += (fixedInc + iraWD);
+        totals.gross += (fixedInc + wdIRA);
         totals.spend += (targetSpend - Math.max(0, gap));
 		
 		let totalWealth = (balance.ira1 + balance.ira2 + Math.max(0,balance.brokerage - balance.basis)) * (1-nominalTaxRate) + balance.roth + balance.cash + balance.basis
@@ -809,29 +917,29 @@ function simulate(inputs) {
             age2: alive2 ? age2 : '—',
 			// 'spendDelta%': spendDelta,
             SSincome: fixedInc,
-			pension: pen,
+			pension: pension,
             spendGoal: targetSpend,
             netIncome: netIncome,
 			'-RMD1-': rmd1,
 			'-RMD2-': rmd2,
             'RMDwd': -totalRMD,
-            'IRAΔ': -iraWD,
-            'BrokerageΔ': -brokerageWD,
+            'IRAΔ': -wdIRA,
+            'BrokerageΔ': -wdBrokerage,
 			'-CapGains': capitalGains,
-            'RothΔ': -rothWD,
+            'RothΔ': -wdRoth,
 			cashDiv: taxableDividends,
 			cashInt: taxableInterest,
-            'CashΔ': -cashWD,
-			// totalIncome: iraWD + rothWD + brokerageWD + cashWD + fixedInc + pen + taxableInterest + taxableDividends,
-			netCash: taxableDividends + taxableInterest - cashWD,
+            'CashΔ': -wdCash,
+			// totalIncome: wdIRA + wdRoth + wdBrokerage + wdCash + fixedInc + pension + taxableInterest + taxableDividends,
+			netSpendable: taxableDividends + taxableInterest - wdCash,
 			IRMAA: irmaa,
 			FedTax: tax.fed,
 			StateTax: tax.state,
             totalTax: totalTax,
             '-fedLimit': tax.fedLimit,
 			'-stateLimit': tax.stLimit,
-			'-fedRate%': tax.fedRate,
-			'-stateRate%': tax.stRate,
+			'-marginalFedTaxRate%': tax.marginalFedTaxRate,
+			'-marginalStateTaxRate%': tax.stRate,
 			'NominalTax%': nominalTaxRate,
 			'SumTaxes': cumulativeTaxes,
             IRA1Bal: balance.ira1,
@@ -848,197 +956,6 @@ function simulate(inputs) {
 
     return { log, totals, finalNW: log[log.length-1].totalWealth };
 }
-
-
-/**
- * Finds the optimal mix of IRA withdrawals and brokerage sales to meet a target 
- * after-tax spending goal while minimizing total income (to preserve assets).
- * 
- * APPROACH:
- * Uses a two-level optimization strategy:
- * 1. Outer loop: Tests different ratios of brokerage sales vs IRA withdrawals 
- *    (0% to 100% from brokerage in 2% increments)
- * 2. Inner loop: Binary search to find the minimum gross income needed for each 
- *    ratio that achieves the after-tax spending target
- * 
- * The function accounts for:
- * - Cost basis in brokerage (only gains are taxed, not principal)
- * - 85% taxation of Social Security income (assumed based on income levels)
- * - Different tax treatment of earned income (IRA withdrawals) vs capital gains
- * - Federal, state (CA), and IRMAA Medicare surcharges
- * - Preservation of cash and Roth assets (not tapped in current implementation)
- * 
- * PARAMETERS:
- * @param {number} targetAfterTaxSpending - The desired after-tax spending amount
- * @param {Object} taxParams - Parameters for calculateTaxes function including:
- *   - yearOffset: Year offset from current year
- *   - filingStatus: 'Single', 'MFJ', 'MFS', 'HOH'
- *   - ages: [age1, age2] for IRMAA calculations
- *   - ss1, ss2: Social Security income amounts
- *   - ordDivInterest, qualifiedDiv: Investment income
- *   - taxExemptInterest: Tax-exempt interest income
- *   - pensionIncome: Pension income
- *   - hsaContrib: HSA contribution amount
- *   - cpi: CPI adjustment factor
- *   Note: earnedIncome and capGains will be overridden by this function
- * @param {number} brokerageBalance - Current total brokerage account balance
- * @param {number} brokerageBasis - Current cost basis in brokerage account
- * 
- * RETURN VALUE:
- * Returns an object with the optimal withdrawal strategy, or null if no solution found:
- * {
- *   iraWithdrawal: number,           // Amount to withdraw from IRA
- *   brokerageSale: number,           // Amount to sell from brokerage (gross proceeds)
- *   brokerageBasisReduction: number, // Amount of basis consumed (for tracking)
- *   capGainsRealized: number,        // Taxable capital gains from brokerage sale
- *   fedAGI: number,                  // Federal Adjusted Gross Income
- *   fedTax: number,                  // Federal income tax
- *   caTax: number,                   // California state income tax
- *   irmaa: number,                   // IRMAA Medicare surcharges
- *   totalTax: number,                // Sum of all taxes and surcharges
- *   effectiveRate: string,           // Effective tax rate as percentage string
- *   afterTaxSpending: number,        // Actual after-tax amount available (>= target)
- *   cashNeeded: number,              // Cash to tap (currently always 0)
- *   rothNeeded: number               // Roth to tap (currently always 0)
- * }
- * 
- * EXAMPLE:
- * const result = findRequiredWithdrawals(
- *   150000,
- *   { yearOffset: 0, filingStatus: 'MFJ', ages: [65, 63], ss1: 30000, ss2: 20000,
- *     ordDivInterest: 5000, qualifiedDiv: 3000, taxExemptInterest: 0, 
- *     pensionIncome: 0, hsaContrib: 0, cpi: 0.03 },
- *   500000,  // $500k brokerage balance
- *   250000   // $250k cost basis (50% gains)
- * );
- * // result.iraWithdrawal might be 80000
- * // result.brokerageSale might be 60000
- * // result.capGainsRealized might be 30000 (50% of sale is gain)
- */
-function findRequiredWithdrawals(
-  targetAfterTaxSpending,
-  taxParams,
-  brokerageBalance,
-  brokerageBasis
-) {
-  
-  let iterations = 0;
-  // Extract all income sources from taxParams
-  const { ss1, ss2, ordDivInterest, qualifiedDiv, taxExemptInterest, pensionIncome } = taxParams;
-  const ssIncome = (ss1 || 0) + (ss2 || 0);
-  const otherIncome = (ordDivInterest || 0) + (qualifiedDiv || 0) + (taxExemptInterest || 0) + (pensionIncome || 0);
-  
-  // Check if other income already meets the need
-  const taxParamsOtherOnly = {
-    ...taxParams,
-    earnedIncome: 0,
-    capGains: 0
-  };
-  const taxResultOtherOnly = calculateTaxes(taxParamsOtherOnly);
-  iterations += 1;
-  const afterTaxFromOtherOnly = ssIncome + otherIncome - taxResultOtherOnly.totalTax;
-  
-  if (afterTaxFromOtherOnly >= targetAfterTaxSpending) {
-    // No additional withdrawals needed
-    return {
-      iraWithdrawal: 0,
-      brokerageSale: 0,
-      brokerageBasisReduction: 0,
-      capGainsRealized: 0,
-      fedAGI: taxResultOtherOnly.fedAGI,
-      fedTax: taxResultOtherOnly.fedTax,
-      caTax: taxResultOtherOnly.caTax,
-      irmaa: taxResultOtherOnly.irmaa,
-      totalTax: taxResultOtherOnly.totalTax,
-      effectiveRate: taxResultOtherOnly.effectiveRate,
-      afterTaxSpending: +afterTaxFromOtherOnly.toFixed(2),
-      cashNeeded: 0,
-      rothNeeded: 0
-    };
-  } // end if afterTaxFromOtherOnly >= targetAfterTaxSpending
-  
-  const gainRatio = 1 - (brokerageBasis / brokerageBalance);
-  
-  let bestSolution = null;
-  let minTotalIncome = Infinity;
-  
-  // Try different splits: 0% to 100% from brokerage (rest from IRA)
-  for (let brokeragePct = 0; brokeragePct <= 100; brokeragePct += 2) {
-    
-    let low = targetAfterTaxSpending - afterTaxFromOtherOnly;  // Adjust starting point
-    let high = (targetAfterTaxSpending - afterTaxFromOtherOnly) * 2;
-    
-    // Binary search on total gross income needed
-    while (high - low > 1) {
-      let totalGrossNeeded = (low + high) / 2;
-      
-      let fromBrokerage = totalGrossNeeded * (brokeragePct / 100);
-      let capGains = fromBrokerage * gainRatio;
-      let fromIRA = totalGrossNeeded * (1 - brokeragePct / 100);
-      
-      const currentTaxParams = {
-        ...taxParams,
-        earnedIncome: fromIRA,
-        capGains: capGains
-      };
-      
-      const taxResult = calculateTaxes(currentTaxParams);
-		iterations += 1;
-	  
-      
-      // Include all income sources
-      let afterTax = totalGrossNeeded + ssIncome + otherIncome - taxResult.totalTax;
-      
-      if (afterTax < targetAfterTaxSpending) {
-        low = totalGrossNeeded;
-      } else {
-        high = totalGrossNeeded;
-      } // end if afterTax < targetAfterTaxSpending
-    } // end while (binary search)
-    
-    let totalGrossNeeded = high;
-    let fromBrokerage = totalGrossNeeded * (brokeragePct / 100);
-    let fromIRA = totalGrossNeeded * (1 - brokeragePct / 100);
-    let capGains = fromBrokerage * gainRatio;
-    
-    const currentTaxParams = {
-      ...taxParams,
-      earnedIncome: fromIRA,
-      capGains: capGains
-    };
-    
-    const taxResult = calculateTaxes(currentTaxParams);
-    iterations += 1;
-
-    let afterTax = totalGrossNeeded + ssIncome + otherIncome - taxResult.totalTax;
-    
-    // Verify solution works and is better
-    if (afterTax >= targetAfterTaxSpending && totalGrossNeeded < minTotalIncome) {
-      minTotalIncome = totalGrossNeeded;
-      
-      let brokerageBasisUsed = fromBrokerage * (brokerageBasis / brokerageBalance);
-      
-      bestSolution = {
-	    iterations: iterations,
-        iraWithdrawal: Math.round(fromIRA),
-        brokerageSale: Math.round(fromBrokerage),
-        brokerageBasisReduction: Math.round(brokerageBasisUsed),
-        capGainsRealized: Math.round(capGains),
-        fedAGI: taxResult.fedAGI,
-        fedTax: taxResult.fedTax,
-        caTax: taxResult.caTax,
-        irmaa: taxResult.irmaa,
-        totalTax: taxResult.totalTax,
-        effectiveRate: taxResult.effectiveRate,
-        afterTaxSpending: Math.round(afterTax),
-        cashNeeded: 0,
-        rothNeeded: 0
-      };
-    } // end if (verify solution)
-  } // end for brokeragePct
-  
-  return bestSolution;
-} // end findRequiredWithdrawals
 
 /**
  * Calculates Federal, California State, and IRMAA taxes.
@@ -1102,10 +1019,10 @@ function calculateTaxes(params) {
     // CA Add-backs: HSA is taxable. Muni interest is taxable (assuming out-of-state for conservative estimate).
     // CA Subtractions: Social Security is 100% exempt.
     const caAGI = (fedAGI - taxableSS) + hsaContrib + taxExemptInterest;
-    const caStdDeduct = TAXData['STATE'][filingStatus].std * inflationFactor;
+    const caStdDeduct = TAXData[STATEname][filingStatus].std * inflationFactor;
     const caTaxableIncome = Math.max(0, caAGI - caStdDeduct);
     const caTax = calcProgressive(caTaxableIncome, getCABrackets(filingStatus, inflationFactor));
-	let testCAResult = calculateProgressive('STATE', filingStatus, caTaxableIncome, inflationFactor).cumulative
+	let testCAResult = calculateProgressive(STATEname, filingStatus, caTaxableIncome, inflationFactor).cumulative
 	
 
     // --- 4. IRMAA CALCULATION ---
@@ -1177,10 +1094,8 @@ function getCABrackets(status, idx) {
 // Do a progressive calculation on the bracket.
 function calculateProgressive(entity, status, amount, inflation=1, ratecreep=1) {
  
-    let brks = TAXData[entity]?.[status]?.brackets;
-    
+    let brks = getRateBracket(entity, status)
     if (!brks) {
-        console.error(`Invalid tax data: entity="${entity}", status="${status}"`);
         return { cumulative: 0, total: 0, marginal: 0, limit: 0, error: `Invalid entity (${entity}) or status (${status})` };
     }
     
@@ -1222,11 +1137,11 @@ function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=
 	
 	// Calculate (CA) State Tax
 	// State basis is calculated differently.
-	let stStd = TAXData["STATE"]?.[status]?.std;
+	let stStd = TAXData[STATEname]?.[status]?.std;
 	
 	//!!!TODO: This is wrong. It should be calculated with the state deduction(s).
 	let stAGI = taxable;
-	calc = calculateProgressive('STATE', status, stAGI, inflation);
+	calc = calculateProgressive(STATEname, status, stAGI, inflation);
 	let stTax = calc.cumulative;
 	let stLimit = calc.limit;
 	let stRate = calc.marginal;
@@ -1245,6 +1160,7 @@ function calcIRMAA(magi, status, inflation) {
 /** UI CONTROLS **/
 function getInputs() {
     return {
+		STATEname: val('STATEname'), 	
 		strategy: val('strategy'), 	
 		nYears: +val('nYears'), 
 		stratRate: +val('stratRate')/100.0,
@@ -1424,7 +1340,7 @@ function calculateInflationAdjustedWithdrawal(principal, growthRate, inflationRa
 	if (principal <= 0) return 0;
     
     // Special case: when real growth is zero
-    if (Math.abs(realRate) < 1e-10) {
+    if (Math.abs(realRate) < 0.0001) {
         return principal / years;
     }
     
@@ -1611,11 +1527,615 @@ function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
     document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket');
+	// document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 
 
 /* Save, Import and Export settings/Scenarios
 */
+///////////////////////////////////////////////
+// ============================================================================
+
+
+// ============================================================================
+// MESSAGE DISPLAY FUNCTIONS
+// ============================================================================
+
+/**
+ * Displays a colored message in the scenario message area
+ * @param {string} message - The text message to display
+ * @param {string} type - Message type: 'success' (green), 'error' (red), or 'warning' (yellow)
+ *                        Default is 'success'
+ * Auto-hides the message after 5 seconds
+ */
+function showMessage(message, type = 'success') {
+    const messageDiv = document.getElementById('scenarioMessage');
+    messageDiv.textContent = message;
+    messageDiv.className = `scenario-message ${type}`;
+    messageDiv.style.display = 'block';
+    
+    // Auto-hide after 15 seconds
+    setTimeout(() => {
+        messageDiv.style.display = 'none';
+    }, 15000);
+}
+
+/**
+ * Manually clears and hides the message display area
+ * No parameters
+ */
+function clearMessage() {
+    const messageDiv = document.getElementById('scenarioMessage');
+    messageDiv.style.display = 'none';
+}
+
+// ============================================================================
+// STORAGE ACCESS FUNCTIONS
+// ============================================================================
+
+/**
+ * Retrieves all scenarios from the new storage key
+ * No parameters
+ * @returns {Object} Object containing scenario data keyed by scenario name
+ *                   Returns empty object {} if no scenarios exist
+ */
+function getSavedScenarios() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : {};
+}
+
+/**
+ * Retrieves all scenarios from the old storage key (previous version)
+ * No parameters
+ * @returns {Object} Object containing old scenario data keyed by scenario name
+ *                   Returns empty object {} if no old scenarios exist
+ */
+function getOldScenarios() {
+    const oldSaved = localStorage.getItem(OLD_STORAGE_KEY);
+    return oldSaved ? JSON.parse(oldSaved) : {};
+}
+
+/**
+ * Retrieves and merges scenarios from both old and new storage locations
+ * Old scenarios are marked with isOldStorage flag and version 1
+ * No parameters
+ * @returns {Object} Merged object containing all scenarios from both storage keys
+ *                   Old scenarios have isOldStorage: true property added
+ */
+function getAllScenarios() {
+    const newScenarios = getSavedScenarios();
+    const oldScenarios = getOldScenarios();
+    
+    // Merge old scenarios, marking them as version 1
+    const allScenarios = { ...newScenarios };
+    
+    for (const [name, scenario] of Object.entries(oldScenarios)) {
+        // If scenario doesn't have a version property, it's from old version
+        if (!scenario.version) {
+            allScenarios[name] = {
+                version: 1,
+                data: scenario.data || scenario, // Handle different old formats
+                savedAt: scenario.savedAt || 'Unknown',
+                isOldStorage: true // Flag to identify old storage scenarios
+            };
+        }
+    }
+    
+    return allScenarios;
+}
+
+// ============================================================================
+// SCENARIO VALIDATION FUNCTIONS
+// ============================================================================
+
+/**
+ * Checks if a scenario is compatible with the current version
+ * @param {Object} scenario - Scenario object with version property
+ * @returns {boolean} True if scenario.version matches SCENARIO_VERSION, false otherwise
+ */
+function isCompatibleScenario(scenario) {
+    return scenario.version === SCENARIO_VERSION;
+}
+
+/**
+ * Escapes single and double quotes in a string for safe use in HTML attributes
+ * @param {string} str - String to escape
+ * @returns {string} String with ' replaced by \' and " replaced by \"
+ */
+function escapeQuotes(str) {
+    return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+// ============================================================================
+// INITIALIZATION FUNCTION
+// ============================================================================
+
+/**
+ * Checks for old scenarios on page load and displays warning if found
+ * Called automatically on DOMContentLoaded event
+ * Does not auto-delete - user must use Manage Scenarios to delete
+ * No parameters
+ */
+function migrateOldScenarios() {
+    const oldScenarios = localStorage.getItem(OLD_STORAGE_KEY);
+    
+    if (oldScenarios) {
+        try {
+            const parsed = JSON.parse(oldScenarios);
+            const scenarioCount = Object.keys(parsed).length;
+            
+            if (scenarioCount > 0) {
+                showMessage(
+                    `Found ${scenarioCount} old scenario(s) from previous version. These are incompatible. Use "Manage Scenarios" to review and delete them.`,
+                    'warning'
+                );
+            }
+        } catch (e) {
+            localStorage.removeItem(OLD_STORAGE_KEY);
+        }
+    }
+}
+
+// ============================================================================
+// MAIN USER ACTION FUNCTIONS
+// ============================================================================
+
+/**
+ * Saves current form inputs as a named scenario to new storage
+ * Uses scenario name from input field #scenarioName, or generates timestamp name if empty
+ * Calls getInputs() to retrieve current form values
+ * Displays success or error message
+ * No parameters
+ */
+function saveScenario() {
+    const inputs = getInputs();
+	const scenarioName = document.getElementById('scenarioName').value.trim() || 
+                    `${new Date().toISOString().slice(0, 19).replace('T', ' ')}`;
+    
+    try {
+        const scenarios = getSavedScenarios();
+        
+        scenarios[scenarioName] = {
+            version: SCENARIO_VERSION,
+            data: inputs,
+            savedAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+        
+        showMessage(`Scenario "${scenarioName}" saved successfully!`, 'success');
+        document.getElementById('scenarioName').value = '';
+    } catch (error) {
+        showMessage(`Failed to save scenario: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Prompts user to select and load a compatible scenario
+ * Filters out incompatible versions before displaying list
+ * Shows error if no compatible scenarios exist
+ * No parameters
+ */
+function loadScenario() {
+    try {
+        const scenarios = getSavedScenarios();
+        const scenarioNames = Object.keys(scenarios);
+        
+        if (scenarioNames.length === 0) {
+            showMessage('No saved scenarios found.', 'error');
+            return;
+        }
+        
+        const compatibleScenarios = scenarioNames.filter(name => 
+            scenarios[name].version === SCENARIO_VERSION
+        );
+        
+        if (compatibleScenarios.length === 0) {
+            showMessage('No compatible scenarios found. All saved scenarios are from an older version.', 'error');
+            return;
+        }
+        
+        let selection = prompt('Enter scenario name to load:\n\n' + compatibleScenarios.join('\n'));
+        
+        if (selection && scenarios[selection]) {
+            if (scenarios[selection].version !== SCENARIO_VERSION) {
+                showMessage('This scenario is from an incompatible version and cannot be loaded.', 'error');
+                return;
+            }
+            applyScenario(scenarios[selection].data);
+            showMessage(`Scenario "${selection}" loaded successfully!`, 'success');
+        } else if (selection) {
+            showMessage('Scenario not found.', 'error');
+        }
+    } catch (error) {
+        showMessage(`Failed to load scenario: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Applies scenario data to form input fields
+ * Handles percentage conversions for specific fields (multiplies by 100 for display)
+ * Triggers recalculate() function if it exists
+ * @param {Object} data - Scenario data object with keys matching form input IDs
+ */
+function applyScenario(data) {
+    for (const [key, value] of Object.entries(data)) {
+        const element = document.getElementById(key);
+        if (element) {
+            // Handle percentage values (multiply by 100 for display)
+            if (['stratRate', 'spendChange', 'inflation', 'cpi', 'growth', 
+                 'cashYield', 'dividendrate', 'ssFailPct'].includes(key)) {
+                element.value = (value * 100).toFixed(2);
+            } else {
+                element.value = value;
+            }
+        }
+    }
+    
+    // Trigger any recalculations your app needs
+    if (typeof recalculate === 'function') {
+        recalculate();
+    }
+}
+
+// ============================================================================
+// SCENARIO MANAGEMENT FUNCTIONS
+// ============================================================================
+
+/**
+ * Opens modal dialog showing all scenarios from both storage locations
+ * Displays table with Name, Saved Date, Version, Storage location, and Actions
+ * Shows compatibility status with color coding (green=compatible, red=incompatible)
+ * Shows bulk action buttons if incompatible or old scenarios exist
+ * No parameters
+ */
+function manageScenarios() {
+    const scenarios = getAllScenarios();
+    const modal = document.getElementById('scenarioModal');
+    const content = document.getElementById('scenarioListContent');
+    
+    if (Object.keys(scenarios).length === 0) {
+        content.innerHTML = '<p>No saved scenarios.</p>';
+    } else {
+        let html = '<table style="width: 100%; border-collapse: collapse;">';
+        html += '<tr><th style="text-align: left; padding: 8px; border-bottom: 2px solid #ddd;">Name</th>';
+        html += '<th style="text-align: left; padding: 8px; border-bottom: 2px solid #ddd;">Saved</th>';
+        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Version</th>';
+        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Storage</th>';
+        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Actions</th></tr>';
+        
+        for (const [name, scenario] of Object.entries(scenarios)) {
+            const savedDate = scenario.savedAt !== 'Unknown' 
+                ? new Date(scenario.savedAt).toLocaleString() 
+                : 'Unknown';
+            const version = scenario.version || 1;
+            const isCurrent = version === SCENARIO_VERSION;
+            const isOldStorage = scenario.isOldStorage || false;
+            
+            const versionBadge = isCurrent 
+                ? `<span style="color: green; font-weight: bold;">v${version} ✓</span>` 
+                : `<span style="color: red;">v${version} ✗</span>`;
+            
+            const storageBadge = isOldStorage
+                ? `<span style="color: orange; font-size: 0.9em;">OLD</span>`
+                : `<span style="color: blue; font-size: 0.9em;">NEW</span>`;
+            
+            const rowStyle = isCurrent ? '' : 'background-color: #ffeeee;';
+            
+            html += `<tr style="${rowStyle}">
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${name}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${savedDate}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${versionBadge}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${storageBadge}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
+                    <button onclick="loadScenarioByName('${escapeQuotes(name)}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
+                    <button onclick="deleteScenario('${escapeQuotes(name)}')">Delete</button>
+                    <button onclick="exportScenario('${escapeQuotes(name)}')">Export</button>
+                </td>
+            </tr>`;
+        }
+        html += '</table>';
+        
+        const incompatibleCount = Object.values(scenarios).filter(s => !isCompatibleScenario(s)).length;
+        const oldStorageCount = Object.values(scenarios).filter(s => s.isOldStorage).length;
+        
+        if (incompatibleCount > 0 || oldStorageCount > 0) {
+            html += `<div style="margin-top: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">`;
+            
+            if (incompatibleCount > 0) {
+                html += `<strong>⚠️ ${incompatibleCount} incompatible scenario(s) found</strong><br>`;
+            }
+            if (oldStorageCount > 0) {
+                html += `<strong>📦 ${oldStorageCount} scenario(s) in old storage format</strong><br>`;
+            }
+            
+            html += `<button onclick="deleteIncompatibleScenarios()" style="margin-top: 5px;">Delete All Incompatible Scenarios</button>`;
+            
+            if (oldStorageCount > 0) {
+                html += ` <button onclick="deleteOldStorageKey()" style="margin-top: 5px;">Clear Old Storage</button>`;
+            }
+            
+            html += `</div>`;
+        }
+        
+        content.innerHTML = html;
+    }
+    
+    modal.style.display = 'block';
+}
+
+/**
+ * Loads a specific scenario by name from either storage location
+ * Validates version compatibility before loading
+ * Closes modal and shows success/error message
+ * @param {string} name - Name of the scenario to load
+ */
+function loadScenarioByName(name) {
+    try {
+        const scenarios = getAllScenarios();
+        if (scenarios[name]) {
+            if (!isCompatibleScenario(scenarios[name])) {
+                showMessage(`Scenario "${name}" is from an incompatible version (v${scenarios[name].version || 1}) and cannot be loaded. Current version: v${SCENARIO_VERSION}`, 'error');
+                return;
+            }
+            applyScenario(scenarios[name].data);
+            closeScenarioModal();
+            showMessage(`Scenario "${name}" loaded successfully!`, 'success');
+        }
+    } catch (error) {
+        showMessage(`Failed to load scenario: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Deletes a specific scenario from appropriate storage location
+ * Determines whether scenario is in old or new storage and deletes from correct location
+ * Prompts for confirmation before deletion
+ * Updates the management view and shows message
+ * @param {string} name - Name of the scenario to delete
+ */
+function deleteScenario(name) {
+    if (confirm(`Are you sure you want to delete "${name}"?`)) {
+        try {
+            const allScenarios = getAllScenarios();
+            const scenario = allScenarios[name];
+            
+            if (scenario.isOldStorage) {
+                // Delete from old storage
+                const oldScenarios = getOldScenarios();
+                delete oldScenarios[name];
+                if (Object.keys(oldScenarios).length > 0) {
+                    localStorage.setItem(OLD_STORAGE_KEY, JSON.stringify(oldScenarios));
+                } else {
+                    localStorage.removeItem(OLD_STORAGE_KEY);
+                }
+            } else {
+                // Delete from new storage
+                const scenarios = getSavedScenarios();
+                delete scenarios[name];
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+            }
+            
+            manageScenarios();
+            showMessage(`Scenario "${name}" deleted successfully.`, 'success');
+        } catch (error) {
+            showMessage(`Failed to delete scenario: ${error.message}`, 'error');
+        }
+    }
+}
+
+/**
+ * Closes the scenario management modal dialog
+ * No parameters
+ */
+function closeScenarioModal() {
+    document.getElementById('scenarioModal').style.display = 'none';
+}
+
+// ============================================================================
+// BULK OPERATIONS
+// ============================================================================
+
+/**
+ * Deletes all scenarios that don't match SCENARIO_VERSION
+ * Works across both old and new storage locations
+ * Prompts for confirmation showing count and names of scenarios to delete
+ * Removes old storage key if all old scenarios are deleted
+ * Shows success/error message
+ * No parameters
+ */
+function deleteIncompatibleScenarios() {
+    const scenarios = getAllScenarios();
+    const incompatibleNames = Object.keys(scenarios).filter(name => 
+        !isCompatibleScenario(scenarios[name])
+    );
+    
+    if (incompatibleNames.length === 0) {
+        showMessage('No incompatible scenarios found.', 'warning');
+        return;
+    }
+    
+    if (confirm(`Delete ${incompatibleNames.length} incompatible scenario(s)?\n\n${incompatibleNames.join('\n')}`)) {
+        try {
+            const newScenarios = getSavedScenarios();
+            const oldScenarios = getOldScenarios();
+            
+            // Delete from both storage locations
+            incompatibleNames.forEach(name => {
+                delete newScenarios[name];
+                delete oldScenarios[name];
+            });
+            
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(newScenarios));
+            
+            // Only save old scenarios if there are any left
+            if (Object.keys(oldScenarios).length > 0) {
+                localStorage.setItem(OLD_STORAGE_KEY, JSON.stringify(oldScenarios));
+            } else {
+                localStorage.removeItem(OLD_STORAGE_KEY);
+            }
+            
+            manageScenarios();
+            showMessage(`${incompatibleNames.length} incompatible scenario(s) deleted.`, 'success');
+        } catch (error) {
+            showMessage(`Failed to delete scenarios: ${error.message}`, 'error');
+        }
+    }
+}
+
+/**
+ * Completely removes OLD_STORAGE_KEY and all its scenarios
+ * Prompts for confirmation showing count of scenarios to delete
+ * Shows success/error message
+ * No parameters
+ */
+function deleteOldStorageKey() {
+    const oldScenarios = getOldScenarios();
+    const oldCount = Object.keys(oldScenarios).length;
+    
+    if (oldCount === 0) {
+        showMessage('No old storage scenarios found.', 'warning');
+        return;
+    }
+    
+    if (confirm(`This will permanently delete the old storage key and all ${oldCount} scenario(s) in it.\n\nAre you sure?`)) {
+        try {
+            localStorage.removeItem(OLD_STORAGE_KEY);
+            manageScenarios();
+            showMessage(`Old storage key removed (${oldCount} scenarios deleted).`, 'success');
+        } catch (error) {
+            showMessage(`Failed to remove old storage: ${error.message}`, 'error');
+        }
+    }
+}
+
+// ============================================================================
+// IMPORT/EXPORT FUNCTIONS
+// ============================================================================
+
+/**
+ * Exports a single scenario to JSON file
+ * Works with scenarios from either storage location
+ * Downloads file with scenario name as filename
+ * Shows success or error message
+ * @param {string} name - Name of the scenario to export
+ */
+function exportScenario(name) {
+    try {
+        const scenarios = getAllScenarios();
+        const scenario = scenarios[name];
+        
+        const dataStr = JSON.stringify(scenario, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${name}.json`;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+        showMessage(`Scenario "${name}" exported successfully.`, 'success');
+    } catch (error) {
+        showMessage(`Failed to export scenario: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Opens file picker to import scenario from JSON file
+ * Warns about version incompatibility if versions don't match
+ * Prompts for scenario name (defaults to filename without extension)
+ * Adds imported scenario to new storage location
+ * Shows success, warning, or error message
+ * No parameters
+ */
+function importScenario() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+            try {
+                const scenario = JSON.parse(event.target.result);
+                
+                if (scenario.version && scenario.version !== SCENARIO_VERSION) {
+                    if (!confirm(`Warning: This scenario is from version ${scenario.version}, current version is ${SCENARIO_VERSION}.\n\nIt may not load correctly. Continue anyway?`)) {
+                        showMessage('Import cancelled.', 'warning');
+                        return;
+                    }
+                }
+                
+                const name = prompt('Enter name for imported scenario:', file.name.replace('.json', ''));
+                
+                if (name) {
+                    const scenarios = getSavedScenarios();
+                    scenarios[name] = scenario;
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+                    showMessage(`Scenario "${name}" imported successfully!`, 'success');
+                } else {
+                    showMessage('Import cancelled.', 'warning');
+                }
+            } catch (error) {
+                showMessage(`Error importing scenario: ${error.message}`, 'error');
+            }
+        };
+        
+        reader.onerror = () => {
+            showMessage('Failed to read file.', 'error');
+        };
+        
+        reader.readAsText(file);
+    };
+    
+    input.click();
+}
+
+/**
+ * Exports all scenarios from new storage to single JSON file
+ * Downloads with date-stamped filename (format: all-scenarios-YYYY-MM-DD.json)
+ * Shows warning if no scenarios exist, otherwise shows success or error message
+ * No parameters
+ */
+function exportAllScenarios() {
+    try {
+        const scenarios = getSavedScenarios();
+        
+        if (Object.keys(scenarios).length === 0) {
+            showMessage('No scenarios to export.', 'warning');
+            return;
+        }
+        
+        const dataStr = JSON.stringify(scenarios, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `all-scenarios-${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+        showMessage(`All scenarios exported successfully.`, 'success');
+    } catch (error) {
+        showMessage(`Failed to export scenarios: ${error.message}`, 'error');
+    }
+}
+
+// ============================================================================
+// INITIALIZATION - Call on page load
+// ============================================================================
+
+window.addEventListener('DOMContentLoaded', function() {
+    migrateOldScenarios();
+});
+
+
 
 // Auto-run tests when page loads (comment out if you don't want auto-run)
 // window.addEventListener('DOMContentLoaded', runTests);

@@ -1,0 +1,248 @@
+const TAXData = {
+	TEST: {
+		// Data used for testing only.
+		YEAR: 2026,
+		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1},  {l: 2000, r: 0.2}, {l: 40000, r: 0.8} ]	},
+		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1},  {l: 2000/2, r: 0.2}, {l: 40000/2, r: 0.8} ]}
+	},
+    CA: {
+		STATE: 'California',
+		YEAR: 2025,
+        MFJ: {
+            std: 10804,
+            brackets: [
+                { l: 20824, r: 0.01 }, { l: 49368, r: 0.02 }, { l: 77918, r: 0.04 },
+                { l: 108162, r: 0.06 }, { l: 136700, r: 0.08 }, { l: 698274, r: 0.093 },
+                { l: 837922, r: 0.103 }, { l: 1000000, r: 0.123 }, { l: 1e9, r: 0.133 }
+            ]
+        },
+        SGL: {
+            std: 5402,
+            brackets: [
+                { l: 10412, r: 0.01 }, { l: 24684, r: 0.02 }, { l: 38959, r: 0.04 },
+                { l: 54081, r: 0.06 }, { l: 68350, r: 0.08 }, { l: 349137, r: 0.093 },
+                { l: 418961, r: 0.103 }, { l: 698271, r: 0.123 }, { l: 1e9, r: 0.133 }
+            ]
+        }
+    }, // CALIFORNIA
+	
+	// For states with NO state tax. Not implemented yet... but it's close.
+    NONE: {
+		STATE: 'None',
+		YEAR: 2026,
+        MFJ: {
+            std: 0,
+            brackets: [ { l: 1e9, r: 0 } ]
+        },
+        SGL: {
+            std: 0,
+            brackets: [ { l: 1e9, r: 0 } ]
+        }
+    },
+	
+
+	FEDERAL: {
+		YEAR: 2026,  // Official IRS Revenue Procedure 2025-32
+		REFERENCE: 'https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill',
+		REF_2: 'https://taxfoundation.org/data/all/federal/2026-tax-brackets/',
+		MFJ: {
+			std: 32200, 
+			age: 65,
+			stdbump: 1650,
+			brackets: [ 
+				{ l: 24800, r: 0.10 }, { l: 100800, r: 0.12 }, { l: 211400, r: 0.22 },
+				{ l: 403550, r: 0.24 }, { l: 512450, r: 0.32 }, { l: 768700, r: 0.35 },
+				{ l: 1e9, r: 0.37 }	]
+			},
+		SGL: {
+			std: 16100,
+			age: 65,
+			stdbump: 2050,
+			brackets: [
+				{ l: 12400, r: 0.10 }, { l: 50400, r: 0.12 }, { l: 105700, r: 0.22 },
+				{ l: 201775, r: 0.24 }, { l: 256225, r: 0.32 }, { l: 640600, r: 0.35 },
+				{ l: 1e9, r: 0.37 }	]
+			}
+		},
+		
+	FED_CAP_GAINS: {
+		YEAR: 2026,
+		REFERENCE: 'none - Claude.ai created it.',
+		NOTE: 'This bracket combines capital gains and NIIT - strictly speaking its not correct', 
+		MFJ: {
+			brackets: [
+				{ l: 98900, r: 0.00 },      // 0% cap gains
+				{ l: 250000, r: 0.15 },     // 15% cap gains, no NIIT
+				{ l: 613700, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
+				{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
+			]
+		},
+		SGL: {
+			brackets: [
+				{ l: 49450, r: 0.00 },      // 0% cap gains
+				{ l: 200000, r: 0.15 },     // 15% cap gains, no NIIT
+				{ l: 306850, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
+				{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
+			]
+		}
+	},
+	
+	SOCIALSECURITY: {
+		Year: 2025,
+		MFJ: { brackets: [{ l:32000-1, r: 0.0}, { l:32000, r: 0.5}, {l: 44000, r: 0.85}] },
+		MFJ: { brackets: [{ l:32000-1, r: 0.0}, { l:32000, r: 0.5}, {l: 44000, r: 0.85}] }
+		},
+
+	IRMAA: {
+		YEAR: 2026,
+		LOOKBACK: 2024,  // Based on 2024 tax return
+		standardPartB: 202.90,
+		partBDeductible: 283,
+		
+		MFJ: {
+			brackets: [
+				{ l: 218000 - 1, r: 0}, { l: 218000, r: (2 * 202.90) },
+				{ l: 274000, r: 2 * (284.10 + 14.50) },	{ l: 348000, r: 2 * (405.90 + 37.60) },
+				{ l: 410000, r: 2 * (527.70 + 60.60) },	{ l: 750000, r: 2 * (649.50 + 83.70) },
+				{ l: 1e9, r: 2 * (689.90 + 91.00) }
+			]
+		},
+		
+		SGL: {
+			brackets: [
+				{ l: 109000 - 1, r: 0}, { l: 109000, r: 202.90 +0 },
+				{ l: 137000, r: 284.10 +14.50 }, { l: 174000, r: 405.90 + 37.60 },
+				{ l: 205000, r: 527.70 + 60.60 }, { l: 500000, r: 649.50 + 83.70 },
+				{ l: 1e9, r: 689.90 + 91.00 }
+			]
+		},
+		
+		MFS: {
+			brackets: [
+				{ l: 109000 - 1, r: 0}, { l: 109000, r: 202.90 + 0 },
+				{ l: 403000, r: 649.50 + 83.70 }, { l: 1e9, r: 689.90 + 91.00 }
+			]
+		}
+	}, // IRMAA	
+	
+	NY: {
+		STATE: 'New York',
+		YEAR: 2025,
+		MFJ: {
+			std: 16050,
+			brackets: [
+				{ l: 17150, r: 0.04 }, { l: 23600, r: 0.045 }, { l: 27900, r: 0.0525 },
+				{ l: 161550, r: 0.055 }, { l: 323200, r: 0.06 }, { l: 2155350, r: 0.0685 },
+				{ l: 5000000, r: 0.0965 }, { l: 25000000, r: 0.103 }, { l: 1e9, r: 0.109 }
+			]
+		},
+		SGL: {
+			std: 8000,
+			brackets: [
+				{ l: 8500, r: 0.04 }, { l: 11700, r: 0.045 }, { l: 13900, r: 0.0525 },
+				{ l: 80650, r: 0.055 }, { l: 215400, r: 0.06 }, { l: 1077550, r: 0.0685 },
+				{ l: 5000000, r: 0.0965 }, { l: 25000000, r: 0.103 }, { l: 1e9, r: 0.109 }
+			]
+		}
+	},  // NEWYORK
+
+	NC: {
+		STATE: 'North Carolina',
+		YEAR: 2025,
+		MFJ: {
+			std: 25500,
+			brackets: [
+				{ l: 1e9, r: 0.0475 }  // Flat tax rate
+			]
+		},
+		SGL: {
+			std: 12750,
+			brackets: [
+				{ l: 1e9, r: 0.0475 }  // Flat tax rate
+			]
+		}
+	}, // NORTHCAROLINA
+
+	MI: {
+		STATE: 'Michigan',
+		YEAR: 2025,
+		MFJ: {
+			std: 5600,
+			brackets: [
+				{ l: 1e9, r: 0.0405 }  // Flat tax rate
+			]
+		},
+		SGL: {
+			std: 5600,
+			brackets: [
+				{ l: 1e9, r: 0.0405 }  // Flat tax rate
+			]
+		}
+	}, // MICHIGAN
+
+	PA: {
+		STATE: 'Pennsylvania',
+		YEAR: 2025,
+		MFJ: {
+			std: 0,  // Pennsylvania has no standard deduction for state tax
+			brackets: [
+				{ l: 1e9, r: 0.0307 }  // Flat tax rate
+			]
+		},
+		SGL: {
+			std: 0,  // Pennsylvania has no standard deduction for state tax
+			brackets: [
+				{ l: 1e9, r: 0.0307 }  // Flat tax rate
+			]
+		}
+	}, // PENNSYLVANIA	
+	OR: {
+		STATE: 'Oregon',
+		YEAR: 2025,
+		MFJ: {
+			std: 5200,
+			brackets: [
+				{ l: 7300, r: 0.0475 }, { l: 18400, r: 0.0675 }, { l: 250000, r: 0.0875 },
+				{ l: 1e9, r: 0.099 }
+			]
+		},
+		SGL: {
+			std: 2605,
+			brackets: [
+				{ l: 3650, r: 0.0475 }, { l: 9200, r: 0.0675 }, { l: 125000, r: 0.0875 },
+				{ l: 1e9, r: 0.099 }
+			]
+		}
+	}, // OREGON
+	DC: {
+		STATE: 'District of Columbia',
+		YEAR: 2025,
+		MFJ: {
+			std: 29200,
+			brackets: [
+				{ l: 10000, r: 0.04 }, { l: 40000, r: 0.06 }, { l: 60000, r: 0.065 },
+				{ l: 250000, r: 0.085 }, { l: 500000, r: 0.0925 }, { l: 1000000, r: 0.0975 },
+				{ l: 1e9, r: 0.1075 }
+			]
+		},
+		SGL: {
+			std: 14600,
+			brackets: [
+				{ l: 10000, r: 0.04 }, { l: 40000, r: 0.06 }, { l: 60000, r: 0.065 },
+				{ l: 250000, r: 0.085 }, { l: 500000, r: 0.0925 }, { l: 1000000, r: 0.0975 },
+				{ l: 1e9, r: 0.1075 }
+			]
+		} 
+	} // WASHINGTONDC
+	
+}; // TAXdata
+
+// Uniform Lifetime Table (Simplified)
+const RMD_TABLE = {
+    72: 27.4, 73: 26.5, 74: 25.5, 75: 24.6, 76: 23.7, 77: 22.9, 78: 22.0, 79: 21.1,
+    80: 20.2, 81: 19.4, 82: 18.5, 83: 17.7, 84: 16.8, 85: 16.0, 86: 15.2, 87: 14.4,
+    88: 13.7, 89: 12.9, 90: 12.2, 91: 11.5, 92: 10.8, 93: 10.1, 94: 9.5, 95: 8.9,
+    96: 8.4, 97: 7.8, 98: 7.3, 99: 6.8, 100: 6.4, 101: 6.0, 102: 5.6, 103: 5.2,
+	104: 4.9, 105: 4.6, 106: 4.3, 107: 4.1, 108: 3.9, 109: 3.7, 110: 3.5, 111: 3.4,
+	112: 3.3, 113: 3.1, 114: 3.0, 115: 2.9, 116: 2.8, 117: 2.7, 118: 2.5, 119: 2.3, 120: 2.0
+};

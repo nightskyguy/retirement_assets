@@ -1,8 +1,8 @@
 ## Who is this For?  What Can It Do? 
 
-You can download the files and run the tool offline in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tool from Github Pages here:
+You can [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool offline in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tool from Github Pages here:
 
-	**[nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html)
+	** [nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html) **
 
 **There is no SUPPORT for this tool** and no guarantee of accuracy, or appropriateness of use. There is also no charge. **USE AT YOUR OWN RISK**
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer 7a</title>
+    <title>Retirement Optimizer 7b</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<!-- <link rel="stylesheet" href="retirementopt_styles.css"> -->
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">	
@@ -17,10 +17,10 @@
 <div class="container">
     <div class="sidebar">
 	    <div class="row"><div  id="spending">
-            <div><label>After-Tax Spend Goal&nbsp;</label>
-            <input type="number" id="spendGoal" value="180000"></div>
-            <div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. 98% means you spend 2% less each year. 100 means no change.">Spend Delta &nbsp;&nbsp;&nbsp;</label>
-            <input type="number" id="spendChange" value="99.0" step="0.1" min="-25" placeholder="0.0">%<BR>(100 means no change)</div>
+            <div><label>After-Tax Spend &nbsp;</label>
+            <input type="number" id="spendGoal" value="150000"></div>
+            <div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. 98% means you spend 2% less each year. 0 means no change.">Spend Delta %&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</label>
+            <input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0"></div>
 			</div>
 		</div>	
         <div class="input-group">
@@ -47,11 +47,11 @@
         </div>
 	
         <div class="row">
-			<label title="Draw down IRA to this amount or less.">IRA Reduction Goal</label>
+			<label title="Draw down IRA to this amount or less.">IRA Goal</label>
             <input type="number" id="iraBaseGoal" value="350000" width="50%"><BR>
 			<label>
 			  <input type="checkbox" id="maxConversion" name="maxConversion" checked>
-			  Maximize Conversion
+			  Max Conversion
 			</label>
 			
 		</div>	
@@ -67,23 +67,23 @@
             <div><label>Spouse Expectancy</label><input type="number" id="die2" value="98"></div>
         </div>
 
-        <h3>2. Assets</h3>
+        <h3>2. Assets (Current)</h3>
         <div class="row">
-            <div><label>Your IRA</label>  <input type="number" id="ira1" value="2000000"></div>
+            <div><label>Your IRA</label>  <input type="number" id="ira1" value="1000000"></div>
             <div><label>Spouse IRA</label><input type="number" id="ira2"  value="400000"></div>
         </div>
         <div class="row">
-            <div><label>Brokerage</label><input type="number" id="brokerage" value="400000"></div>
-            <div><label>Brokerage Basis</label><input type="number" id="basis" value="200000"></div>
+            <div><label>Brokerage</label><input type="number" id="brokerage" value="100000"></div>
+            <div><label>Brokerage Basis</label><input type="number" id="basis" value="100000"></div>
         </div>
         <div class="row">
-            <div><label>Roth IRA</label><input type="number" id="roth" value="200000"></div>
-            <div><label>Cash Balance</label><input type="number" id="cash" value="100000"></div>
+            <div><label>Roth IRA</label><input type="number" id="roth" value="50000"></div>
+            <div><label>Cash Balance</label><input type="number" id="cash" value="50000"></div>
         </div>
 
-        <h3>3. Income</h3>
+        <h3>3. Income (annual)</h3>
         <div class="row">
-            <div><label>Your Social Security Amt</label><input type="number" id="ss1" value="48000"></div>
+            <div><label>Social Security Amt</label><input type="number" id="ss1" value="48000"></div>
             <div><label>Start Age</label><input type="number" id="ss1Age" value="70"></div>
         </div>
         <div class="row">
@@ -92,18 +92,18 @@
         </div>
         <div class="row">
             <div><label>Your Pension</label><input type="number" id="pensionAnnual" value="15000"></div>
-            <div><label>Survivorship</label><input type="number" id="survivorPct" value="75">%</div>
+            <div><label>Survivorship %</label><input type="number" id="survivorPct" value="75"></div>
         </div>
 
 
         <h3>4. Assumptions</h3>
         <div class="row">
-            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)</label><input type="number" id="inflation" value="0" step="0.01" min="0" placeholder="0.00">%</div>
-            <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)</label><input type="number" id="cpi" value="0" step="0.01" min="0" placeholder="0.00">%</div>
+            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%</label><input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00"></div>
+            <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%</label><input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></div>
         </div>
         <div class="row">
-            <div><label title="Your asset mix will dictate what growth rate to expect. In a brokerage, your basis doesn't grow at the rate the account does.">Growth (6?)</label><input type="number" id="growth" value="6.0">%</div>
-            <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)?</label><input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00">%</div>
+            <div><label title="Your asset mix will dictate what growth rate to expect. In a brokerage, your basis doesn't grow at the rate the account does.">Growth (6)%</label><input type="number" id="growth" value="6.0"></div>
+            <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?</label><input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></div>
         </div>
         <div class="row">
 			<div><label title="This is the rate that your asset mix emits dividends.">Dividend Rate (0.5)?</label><BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00">%</div>
@@ -126,7 +126,7 @@
 		</div>
         <div class="row">
 			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail</label> <input type="number" id="ssFailYear" value="2033"></div>
-            <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SSecurity Net Payout</label><input type="number" id="ssFailPct" value="77.3">%</div>
+            <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%</label><input type="number" id="ssFailPct" value="77.3"></div>
         </div>
 
     </div>
@@ -137,7 +137,8 @@
 				<div class="log-entry">
 				</div>
 				<ul>
-				<li><b>7a</b> Now has various state rates. Fixed most calculations. See <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A> for details. </li>	
+				<li><b>7b</b> More state rates. Fixed most calculations. Minor UI changes. Changed the defaults to something "more common" - . See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>. </li>					
+				<li>7a Now has various state rates. Fixed most calculations. See <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A> for details. </li>	
 				
 				<li>6v Implemented Save/Load/Export/Delete Scenarios.</li>	
 				<li>6u Implemented SS Fail. More UI fixes. Moved all strategy items to the top.</li>	
@@ -193,7 +194,7 @@
 		<div id="tab-insight" class="card hidden">
 			🛑 Some pithy insights will appear here. Right now it's not implemented.
 			<h4>Where is the Code</h4>
-			This might be useful to know: you can run this locally (download the 3 pieces from github) 
+			This might be useful to know: you can run this locally (download the *.html and *.js and *.css files from github) 
 			<A HREF="https://github.com/nightskyguy/retirement_assets">https://github.com/nightskyguy/retirement_assets</a>.
 			<p>And you can also take a look at the source, make comments, or even open a pull request to propose changes. Just follow the link above.
 
@@ -303,11 +304,11 @@ function inspectForErrors(inputs) {
 		if (value === undefined) {
 			console.error(`❌ ${name} is undefined`);
 			debugger;
-		}
+		} else 
 		if (isNaN(value)) {
 			console.error(`❌ ${name} is NaN`);
 			debugger;
-		}
+		} else 
 		if (!isFinite(value) && value !== 0) {
 			console.error(`❌ ${name} is Infinity`);
 			debugger;
@@ -411,7 +412,7 @@ function calculateBrokerageWithdrawal(withdrawal, brokerageBalance, brokerageBas
     return {
         withdrawn: actualWithdrawal,           // Total amount withdrawn
         capitalGains: capitalGains,            // Amount subject to capital gains tax
-        basisChange: -basisChange              // Change in basis (negative = reduction)
+        basisChange: basisChange               // Change in basis (positive = reduction)
     };
 }
 
@@ -523,7 +524,7 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
             
             // Track basis change
             if (!result.BrokerageBasis) result.BrokerageBasis = 0;
-            result.BrokerageBasis += brokerageInfo.basisChange; // Note: this is negative
+            result.BrokerageBasis += brokerageInfo.basisChange; 
             
         } else {
             // For other accounts, simple calculation
@@ -612,7 +613,7 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
                 
                 for (let iter = 0; iter < 3; iter++) {
                     const remainingBalance = balances.Brokerage - alreadyWithdrawn;
-                    const remainingBasis = balances.BrokerageBasis + (result.BrokerageBasis ?? 0); // Note: result.BrokerageBasis is negative
+                    const remainingBasis = balances.BrokerageBasis - (result.BrokerageBasis ?? 0);
                     
                     const testInfo = calculateBrokerageWithdrawal(estimate, remainingBalance, remainingBasis);
                     const testTax = testInfo.capitalGains * taxRate;
@@ -738,6 +739,7 @@ function simulate(inputs) {
 	let nominalTaxRate = 0.20; // Just a guess.
 	let marginalTaxRate = 0.33; // Just a guess.
 	let capitalGainsRate = 0.15; // A guess.
+	let tax;
 	
 	
 	
@@ -754,20 +756,7 @@ function simulate(inputs) {
 				WithdrawalStrategy = [Brok: 100, IRA: 0, Cash: 0
 			For bracket, use larger of bracket limit or spendGoal
 				WithdrawalStrategy = [IRA:*, Brok:*, Cash:0]
-				
-		Calculate neededIncome by taxburden [targetIncome / (1 - nominalTaxRate)]
-		
-		addIncome = neededIncome - SS - pension.
-		round1 = calculateWithdrawals() using WithdrawalStrategy to get addIncome
-		
-		if shortfall, round2 = calculateWithdrawals() using [Cash: 100, ROTH: 0]
-		totalWithdrawals = sum(round1, round2)
-		
-		firstTax = calculateTaxes() 
-		netIncome = 
-		if netIncome > 
-		
-	 *
+					
 	 *
 	 *************************************/
 
@@ -782,9 +771,6 @@ function simulate(inputs) {
 		let withdrawals_round2 = withdrawals;
 		let netWithdrawals = withdrawals;
 		
-		let wdRoth = 0;
-        let wdBrokerage = 0;
-		let wdCash = 0;
 		let basisWithdrawn = 0;
 		let wdIRA = 0;
 		let depRoth = 0;
@@ -813,7 +799,7 @@ function simulate(inputs) {
 		let goalLimit = Math.min(goalFedBracketLimit.limit, goalStateBracketLimit.limit)
 		let irmaaBracket = findUpperLimitByAmount('IRMAA', status, goalLimit, cpiRate)
 		let irmaLimit = Math.min(goalLimit, irmaaBracket.limit);
-		let totalIncome = 0;
+		let totalIncome, netIncome = 0;
 		let capitalGains = 0;		
 	
 		//!!! TODO: if strategy is "bracket" but spendGoal is > bracket limit
@@ -876,8 +862,8 @@ function simulate(inputs) {
 			
 
         if (inputs.strategy === 'fixed') {
-			// In this strategy, we confine withdrawals to the IRA for the first round. We don't care
-			// about the tax implications.
+			// In this strategy, we confine withdrawals to the IRA for the first round. 
+			// We don't care about the tax implications.
 			
             let remYears = Math.max(1, inputs.nYears - y);
 			let amortized = Math.max(0, fixedWithdrawal - totalRMD);
@@ -923,18 +909,24 @@ function simulate(inputs) {
 		
 		
 		applyWithdrawals( curBalances, withdrawals)
-		inspectForErrors( {wdIRA: wdIRA, wdBrokerage: wdBrokerage, wdCash: wdCash, wdRoth: wdRoth})        
+		inspectForErrors( curBalances, withdrawals)
+        
 		netWithdrawals = accumulateWithdrawals( [netWithdrawals, withdrawals])
+		capitalGains = netWithdrawals.BrokerageBasis  ?? 0
 
         // 5. Tax Calc (Including IRMAA lag)
 		//!!! TODO: May be premature. We may need more $ to meet spend goal.  We may have exhausted the IRAs.
-		inspectForErrors( fixedInc, wdIRA, totalRMD, taxableInterest, capitalGains, taxableDividends, status, age1, age2, cpiRate)
+		
+		inspectForErrors({fixedInc: fixedInc, wdIRA: wdIRA, totalRMD: totalRMD, taxableInterest: taxableInterest, capitalGains: capitalGains, taxableDividends: taxableDividends, age1: age1, age2: age2, cpiRate: cpiRate})
 			
 
-		// function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=1) 
-        let tax = calculateTax(fixedInc, wdIRA + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
-		inspectForErrors(tax)
+		// function calculateTax(fixed, netWithdrawals.IRA`, gains, status, a1, a2, inflation=1, ratecreep=1) 
+        tax = calculateTax(fixedInc, netWithdrawals.IRA + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
+		inspectForErrors(tax)  // See if any numbers look fishy.
 		//!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
+		marginalFedTaxRate = tax.fedRate;
+		marginalStateTaxRate= tax.stateRate;
+		
 		let magiHistoryLength = balance.magiHistory.length
 		if (magiHistoryLength < 1) {
 			balance.magiHistory.push(tax.magi);
@@ -963,30 +955,30 @@ function simulate(inputs) {
 			
 			netWithdrawals = accumulateWithdrawals( [netWithdrawals, withdrawals])
 			applyWithdrawals(curBalances, withdrawals);
-			
-        } else if (gap < -100 && (inputs.strategy !== 'baseline')) {
-            // Surplus logic (Conversions)
-            let surplus = Math.abs(gap);
-            balance.Roth += surplus;
-			wdRoth -= surplus
         }
 		
+		// Recheck tax calculations due to possible additional withdrawals - and we now
+		// have a more accurate income picture.
+		tax = calculateTax(fixedInc, netWithdrawals.IRA + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
+		inspectForErrors(tax);
 		
 		// sumAccounts(netWithdrawals) + totalRMD + fixedInc - totalTax
 
-		totalIncome = Math.max(1, fixedInc + netWithdrawals.IRA + pension + taxableDividends + taxableInterest + capitalGains + netWithdrawals.Roth + netWithdrawals.Cash + netWithdrawals.Brokerage);
+		totalIncome = Math.max(1, fixedInc + netWithdrawals.IRA + pension + taxableDividends + taxableInterest + netWithdrawals.Roth + netWithdrawals.Cash + netWithdrawals.Brokerage + totalRMD);
+		
 		inspectForErrors({totalIncome: totalIncome});
 		
-		nominalTaxRate = totalTax / totalIncome		
+		nominalTaxRate = totalTax / tax.magi;		
 
         // 7. Updates
 		
-		let netIncome = totalIncome - totalTax;
+		netIncome = totalIncome - totalTax;
+		let surplus = Math.max(0, netIncome - spendGoal)
 		
 		//!!! Remove withdrawals proportionately. RMDs have already been withdrawn.
 		const ira1_ratio = (balance.IRA1/(balance.IRA1+balance.IRA2||1))
-        netWithdrawals.IRA1 = Math.max(0, wdIRA * ira1_ratio);
-        netWithdrawals.IRA2 = Math.max(0, wdIRA * (1 - ira1_ratio));
+        netWithdrawals.IRA1 = Math.max(0, netWithdrawals.IRA * ira1_ratio);
+        netWithdrawals.IRA2 = Math.max(0, netWithdrawals.IRA * (1 - ira1_ratio));
 		
 		// Withdraw from the balances.
 		applyWithdrawals(balance, netWithdrawals)
@@ -1004,10 +996,11 @@ function simulate(inputs) {
         balance.Cash +=  taxableDividends;
         balance.magiHistory.push(tax.magi);
         totals.tax += totalTax;
-        totals.gross += (fixedInc + wdIRA);
+        totals.gross += (totalIncome);
         totals.spend += (targetSpend - Math.max(0, gap));
+		balance.Roth += surplus;
 		
-		let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0,balance.Brokerage - balance.BrokerageBasis)) * (1-nominalTaxRate) + balance.Roth + balance.Cash + balance.BrokerageBasis
+		let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage -   balance.BrokerageBasis)) * (1-nominalTaxRate) + balance.Roth + balance.Cash + balance.BrokerageBasis
 
 		if (netIncome < targetSpend || totalWealth < (targetSpend * 2)) {
 			totals.success = false;
@@ -1020,29 +1013,34 @@ function simulate(inputs) {
             year: startYear + y,
             age1: alive1 ? age1 : '—',
             age2: alive2 ? age2 : '—',
+			status: status,
             SSincome: fixedInc,
 			pension: pension,
             spendGoal: targetSpend,
+			magi: tax.magi,
 			totalIncome: totalIncome,
             netIncome: netIncome,	
-			'-RMD1-': rmd1,
-			'-RMD2-': rmd2,
+            surplus: surplus,	
+			'RMD1-': rmd1,
+			'RMD2-': rmd2,
             'RMDwd': totalRMD,
-            'IRAwd': netWithdrawals.IRA,
-            'Brokeragewd': netWithdrawals.Brokerage,
-			'-CapGains': capitalGains,
-            'Rothwd': netWithdrawals.Roth,
+			'IRA1-': netWithdrawals.IRA1,
+			'IRA2-': netWithdrawals.IRA2,
+            // 'IRAwd': netWithdrawals.IRA,
+            'Brokerage-': netWithdrawals.Brokerage,
+			'CapGains': capitalGains,
+            'RothWD': netWithdrawals.Roth,
+            'CashWD': netWithdrawals.Cash,
 			'cashD+I': taxableDividends + taxableInterest,
-            'CashΔ': -netWithdrawals.Cash,
 			IRMAA: irmaa,
 			FedTax: tax.fed,
 			StateTax: tax.state,
             totalTax: totalTax,
             'fedLimit': tax.fedLimit,
 			'stateLimit': tax.stLimit,
-			'marginalFedTaxRate%': marginalFedTaxRate,
-			'marginalStateTaxRate%': tax.stRate,
-			'NominalTax%': nominalTaxRate,
+			'FedRate%': tax.fedRate,
+			'StateRate%': tax.stRate,
+			'NominalRate%': nominalTaxRate,
 			'SumTaxes': cumulativeTaxes,
             IRA1: balance.IRA1,
 			IRA2: balance.IRA2,
@@ -1050,12 +1048,12 @@ function simulate(inputs) {
 			Cash: balance.Cash,
 			Roth: balance.Roth,
             Brokerage: balance.Brokerage,
-            BrokerageBasis: balance.BrokerageBasis,
+            Basis: balance.BrokerageBasis,
             totalWealth: totalWealth,
 			cashG: gains.Cash,
 			brokerageG: gains.Brokerage,
 			rothG: gains.Roth,
-			rothConv: gains.Roth
+			rothConv: surplus
         });
 
     } // end large for for year by year.
@@ -1265,6 +1263,13 @@ function calcIRMAA(magi, status, inflation) {
 
 /** UI CONTROLS **/
 function getInputs() {
+	// TODO: If we override these values, we should update the UI 
+	let spendChange = +val('spendChange')
+	if (spendChange < -25 || spendChange > 25) spendChange = 0
+	let brokerage = +val('brokerage');
+	let brokeragebasis = +val('basis');
+	if (brokerage <= 0.01) basis = 0;
+	if (basis > brokerage) basis = brokerage;
     return {
 		STATEname: val('STATEname'), 	
 		strategy: val('strategy'), 	
@@ -1277,8 +1282,8 @@ function getInputs() {
         IRA1: +val('ira1'), 
 		IRA2: +val('ira2'), 
 		Roth: +val('roth'),
-        Brokerage: +val('brokerage'), 
-		BrokerageBasis: +val('basis'), 
+        Brokerage: brokerage, 
+		BrokerageBasis: brokeragebasis, 
 		Cash: +val('cash'),
         ss1: +val('ss1'), 
 		ss1Age: +val('ss1Age'), 
@@ -1287,7 +1292,7 @@ function getInputs() {
         pensionAnnual: +val('pensionAnnual'), 
 		survivorPct: +val('survivorPct'), 
 		spendGoal: +val('spendGoal'),
-		spendChange: +val('spendChange')/100.0, 
+		spendChange: 1 + (spendChange/100.0), 
 		iraBaseGoal: +val('iraBaseGoal'),
         inflation: +val('inflation')/100.0, 
 		cpi: +val('cpi')/100.0, 
@@ -1354,10 +1359,10 @@ function updateTable(log) {
 	
 	const tooltips = {
 		'RMD-': 'Total of all RMDs (positive indicate withdrawals)',
-		'BrokerageΔ': 'Withdrawals are negative',
+		'Brokerage': 'Withdrawals are negative',
 		'IRMAA': 'First two years are presumed the same as the 3rd year on.',
 		'SpendGoal': 'With inflation, this amount increases.',
-		'RothΔ': 'Positive amounts are deposits, negative are withdrawals',
+		'Roth': 'Positive amounts are deposits, negative are withdrawals',
 		'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA are all included.',
 		'NominalTax%': 'TotalTax/TotalGrossIncome'
 	};
@@ -1392,7 +1397,7 @@ function updateTable(log) {
 	  
 	  // Pink takes priority over yellow
 	  if (shouldHighlightPink) {
-		tr.style.backgroundColor = '#ffb6c1';  // Light pink
+		tr.style.backgroundColor = '#ffb6c180';  // Light pink
 	  } else if (shouldHighlightYellow) {
 		tr.style.backgroundColor = '#ffff99';  // Light yellow
 	  }

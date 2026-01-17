@@ -8,6 +8,23 @@ You can [download the files](https://github.com/nightskyguy/retirement_assets) a
 
 A California resident built this with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, Javascript, and Groovy. See **Key Features** below for a non-exhaustive list of what the tool can do - and be sure to look at *What the Tool IGNOREs* so you understand the limitations.
 
+#### Features in the Works (and Known Bugs):
+
++ <STRONG>BUG</B> Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "Withdraw to meet spend") and often overshoots.
++ Implement the "*Max conversion*" logic - use cash/brokerage assets to increase Roth conversions. Currently it "converts" the excess withdrawals after taxes and spend goal.  But if there is available cash to pay taxes on the conversion, more can be moved into Roth. Of course excess withdrawals can also be spent or deposited into cash.
++ <STRONG>BUG</B> The current tax engine has shortcomings. Use a more comprehensive calculation. (It's in the code, but needs updating to be made usable/correct). Currently needs *Capital Gains* and *NIIT* handling and improvements in handling SS taxability.
++ <STRONG>BUG</B> When Roth funds are tapped to meet spending goals, it still may overwithdraw. For example, it may withdraw 15,000 and have a 15,000 surplus which implies the Roth withdrawal was unnecessary.
++ <STRONG>BUG</B> We suspect the "Fill Bracket" goal has a flaw in the current implementation. Please be cautious/ignore for now!
++ <STRONG>BUG</B> The Dividend rate is currently only applied to the Brokerage account. It should be applied to the Roth account, too!
++ Add a "taxcreep" to see what harm a creeping tax rate might do.  I notice some states (e.g. Georgia) are reducing their tax rates, while others are adding more brackets and increasing rates.
++ Save/Import/Export of settings <B>DONE</B>. BUT The Load/Save/Delete/Manage Scenarios UI is rather ugly and undocumented. It works, however, so it's low priority to fix and document it.
++ Autoload any saved "Default" scenario (so you can pick up where you left off).
++ Better organize the Annual Details tables.
++ Allow exporting of the Annual Details table(s).
++ The tool should warn when a "Fill Federal Bracket" is picked that is impossible to meet due to After-Tax Spend goal. For example, setting After-Tax Spend to 180,000 makes it impossible to stay in the 12% (or even the 22%) bracket unless there are lots of cash, brokerage or Roth assets already.
++ Allow selection of the quarter in which withdrawals will occur. I don't think it makes a signficant difference, but changing the model a bit will make it possible to know how much difference it might make. For example if you're trying to draw down an IRA, taking the withdrawals early in the year means you will accrue less growth in that account. Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last quarter may help.
+
+
 #### Why This Tool?
 Because he is in retirement, and has an unhealthy IRA balance to manage - it became obvious that no tool he could find offered the flexibility and ease of use he desired.  He and his wife are of different ages (so have different IRAs, RMD timings, Social Security amounts, etc.)  Some really powerful tools didn't offer California tax calculations (California is a high tax state), didn't provide for life expectancy, and more.
 
@@ -27,51 +44,35 @@ In this tool, we lump IRMAA together with California state and Federal taxes (in
 1. A complete model until death of a single person or married couple with RMDs calculated, separation of 5 different accounts (IRA1, IRA2, Brokerage, Cash, ROTH)
 2. Tweakable rates, withdrawal strategies, and charts and tables to match them - but NOT TOO many variables.
 3. A structure that can allow replacement of the California tax tables with (any) other states. 33 of the US states tax IRA and 401K withdrawals the same way - albeit at different tax rates.  Also, those same 33 states treat all capital gains as taxable income - and that can matter quite a lot. In fact, 8 different state tax rates are currently available. WARNING: only California calculations are done using the correct model. Other states may be off. Best to double check.
-4. Modeling can show the true cost of the widow penalty (when one spouse predeceases another)
+4. Modeling can show the true cost of the widow penalty (when one spouse predeceases another) and IRMAA penalty.
 5. The ability to model different spending rates in retirement (e.g. the spending SMILE) or a flat spending rate.
 6. A simple way to see the MOST you might expect to spend through retirement, what happens if your life expectancy is changed
 7. It automatically rolls any IRA balance from the decease spouse to the living spouse (because RMDs may apply differently!)
 8. Forecast the affect of the impending 2033 Social Security Fund depletion (with a 33% reduction in payouts)
 9. "Wealth" as shown in this tool is adjusted for the average taxation measured.  Many tools would show a 500,000 Roth and a 500,000 IRA as being 1,000,000 net worth.  But that's not the case. You can only take money out of an IRA/401K at a zero percent total rate at a very low amount. RMDs may make that impossible at some point.
-10. Choose tax rates from a number of states (currently California, District of Columbia, Michigan, New York, North Carolina, Oregon, Pennsylvania, Virginia, Illinois, Connecticut, Maryland, Georgia and NONE (for those states with no state tax).  Note there are some calculation variations that are not accounted for.
-
-#### Features in the Works:
-
-1. Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "Withdraw to meet spend") and overshoots others.
-2. Implement the "maximize conversion" logic - use cash/brokerage assets to increase Roth conversions.
-3. There are two tax engines, the current one is rough and doesn't properly handle capital gains.
-4. Use a more comprehensive calculation. (It's in the code, but needs updating to be made usable).
-5. Add a "taxcreep" to see what harm a creeping tax rate might do.
-6. More robust federal tax handling (currently needs *Capital Gains* and *NIIT* handling and improvements in handling SS taxability)
-7. "Maximize" Roth option. It would use available Cash and brokerage accounts to "backfill" the taxes needed for a conversion. Currently it "converts" the excess withdrawals after taxes and spend goal.  This option would throw cash at covering the tax on IRA withdrawals to increase conversion.
-8. Save/Export/Delete/Import inputs to try different scenarios.  (These are currently in the development version).
-9. Autoload any saved "Default" scenario (so you can pick up where you left off).
-10. Better organize the Annual Details tables.
-11. Allow exporting of the Annual Details table(s).
-12. Allow selection of the quarter in which withdrawals will occur. I don't think it makes a signficant difference, but changing the model a bit will make it possible to know how much difference it might make. For example if you're trying to draw down an IRA, taking the withdrawals early in the year means you will accrue less growth in that account. Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last quarter may help.
+10. Choose tax rates from a number of states (currently California, District of Columbia, Michigan, New York, North Carolina, Oregon, Pennsylvania, Virginia, Illinois, Connecticut, Maryland, Georgia and NONE (for those states with no state tax).  Note there are some calculation variations among states that are not performed.
+11. Save/Load/Import/Export settings. 
 
 
 #### What the Tool IGNORES
 
 + The various short term benefits to seniors under the OBB (e.g. extra deductions and phaseouts).  For the author, those small helps will be gone before he manages to deplete his IRA sufficiently.
-+ It does not track separate ROTH accounts - because ROTH accounts have no tax consequences, so they are much like cash.  
-+ Forecasting variable growth rates, or growth rates that differ between different assets.  (It's silly to forecast 8% growth in an IRA and 4% growth in a ROTH - or v.v.)
-+ Trying to Monte-Carlo or apply historical models.
++ It does not track separate ROTH accounts - because ROTH accounts have no tax consequences, so they are much like cash, but in fact, Roth's can't be co-owned.  
++ Forecasting variable growth rates, or growth rates that differ between different assets.  (It's silly to forecast 8% growth in an IRA and 4% growth in a ROTH - or v.v.) because that may hide the value of one over the other, however it MAY make sense for Roth assets to be more aggressive than IRA assets.
++ Monte-Carlo or historical models to determine plan robustness.  That may happen in the future.
 + This is not a tool to attempt to model different asset class ratios, or different asset location arrangements.
 + Tax filing statuses other than MFJ (married filing jointly) and SGL (Single). There is no Head of Household, Married filing separately, etc.
-+ There is no provision for itemized tax returns.  This tool assumes you rely on standard deductions.
-+ No provision for using QCDs to minimize Required Minimum Distributions.  This might get added. You can take QCDs starting at age 70.5 for up to 111k per person.
-+ The tool doesn't try to maintain a brokerage account balance or a cash balance. It will deplete those to zero.
-+ The tool also funnels dividends (from the Brokerage) and interest on cash into the cash account (i.e. it does not model dividend reinvestment) in part because modeling the basis of a brokerage account becomes more 
-complicated - and in part, because the author believes that using those cash equivalents generally works better to SPEND or apply to Roth Conversion.
++ There is no provision for itemized tax returns.  This tool assumes you rely on standard deductions (or exemptions, if that's what your state uses).  It also assumes that Single means one person, Married Filing Jointly is two. If you have a dependent adult, or children, it will not calculate the proper possible exemptions or deductions for these situations.
++ There is currently No provision for using QCDs to minimize Required Minimum Distributions.  This might get added. You can take QCDs starting at age 70.5 for up to 111k per person.
++ The tool doesn't try to maintain a brokerage account balance or a cash balance. It will deplete those to zero if required.
++ The tool also funnels dividends (from the Brokerage) and interest on cash into the cash account (i.e. it does not model dividend reinvestment) in part because modeling the basis of a brokerage account becomes more complicated - and in part, because the author believes that using those cash equivalents generally works better to SPEND or apply to Roth Conversion.
 
 #### Limitations and Restrictions
 
 A. The tool models things a year-at-a-time. This is not strictly accurate, because, for example, **when** you make withdrawals or conversions may affect the net. For example, 
-if you wait until the end of the year to make your withdrawals has a different result than making a withdrawal at the beginning of the year.  The order of calculations is:  RMD withdrawals, calculation of spending/conversion withdrawals (and removal of those funds from the needed accounts) THEN taxes, interest and dividends on the remainder are calculated. Surplus funds after minimum spending levels are 
-deposited into a Roth.  
+if you wait until the end of the year to make your withdrawals has a different result than making a withdrawal at the beginning of the year.  The order of calculations is:  RMD withdrawals, calculation of spending/conversion withdrawals (and removal of those funds from the needed accounts) THEN taxes, interest and dividends on the remainder are calculated. Surplus funds after minimum spending levels are deposited into a Roth.  In real life, you must do Roth conversions as a separate operation, but this tool can help forecast what that conversion would be.
 B. As noted, it tracks ONE total Roth balance, even if you're married.
-C. IRA withdrawals to reduce IRA balances are done proportionately. Some improvement may result by reducing a large balance first.  You can model this by moving the total balance to one person.
+C. IRA withdrawals are done *proportionately*. Some improvement may result by reducing a large balance first.  You can model this by moving the total balance to one person.
 D. **There is no SUPPORT for this tool**. If you ask nicely, or offer a pull request to actually implement a feature, of course we can talk. It is a best effort/time available endeavor.
 
 
@@ -84,3 +85,5 @@ The sources I found:
 
 + Another [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nulys5i/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button) contribution by <i>Working-Schedule5000
 </i> is what made me realize that writing a tool in JavaScript results in the most readability and tweakability of the code. Spreadsheets can become hard to follow.  To use download and save, then run in your browser: https://drive.google.com/file/d/1ZJNCg-HNXHZmzWv9zW1anaFpLNTOTf10/view
+
++ [Visual Federal Tax Tool](https://engaging-data.com/tax-brackets/) - this tool shows how your federal taxes are calculated.  As of 2026-01-17, it doesn't handle taxability of Social Security income, and as best I can tell, doesn't handle the OBB provisions for seniors.

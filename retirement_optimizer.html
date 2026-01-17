@@ -109,14 +109,18 @@
 			<div><label title="This is the rate that your asset mix emits dividends.">Dividend Rate (0.5)?</label><BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00">%</div>
 			<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation</label><BR>
             <select id="STATEname"">
+                <option   value="NONE">-No State Tax-</option>
                 <option   value="CA" selected>California</option>
-                <option   value="DC">Washington,DC</option>
+                <option   value="CT">Connecticut</option>
+                <option   value="IL">Illinois</option>
+                <option   value="MD">Maryland</option>
                 <option   value="MI">Michigan</option>
-                <option   value="NONE">No State Tax</option>
                 <option   value="NY">New York</option>
                 <option   value="NC">North Carolina</option>
                 <option   value="OR">Oregon</option>
                 <option   value="PA">Pennsylvania</option>
+                <option   value="VA">Virginia</option>
+				<option   value="DC">Washington,DC</option>
             </select>
 			</div>			
 		</div>
@@ -391,6 +395,26 @@ function findUpperLimitByAmount( entity, status, amount, inflation=1) {
 
 ///
 
+function calculateBrokerageWithdrawal(withdrawal, brokerageBalance, brokerageBasis) {
+    // Can't withdraw more than available balance
+    const actualWithdrawal = Math.min(withdrawal, brokerageBalance);
+    
+    // Calculate proportion of account being withdrawn
+    const proportion = brokerageBalance > 0 ? actualWithdrawal / brokerageBalance : 0;
+    
+    // Calculate basis reduction (proportional to withdrawal)
+    const basisChange = brokerageBasis * proportion;
+    
+    // Amount subject to capital gains = withdrawal minus the basis portion
+    const capitalGains = actualWithdrawal - basisChange;
+    
+    return {
+        withdrawn: actualWithdrawal,           // Total amount withdrawn
+        capitalGains: capitalGains,            // Amount subject to capital gains tax
+        basisChange: -basisChange              // Change in basis (negative = reduction)
+    };
+}
+
 /**
  * Calculates withdrawal amounts from multiple accounts based on strategy, accounting for taxes
  * @param {Object} balances - Account balances
@@ -406,6 +430,7 @@ function findUpperLimitByAmount( entity, status, amount, inflation=1) {
  * @param {Array<number>} withdrawStrategy.taxrate - Tax rates for each account (0.0 to 1.0)
  * @returns {Object} Withdrawal amounts (gross), taxes paid, net amounts, and remaining shortfall
  */
+
 function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
     // Initialize result structure
     const result = {
@@ -414,29 +439,27 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
         shortfall: 0
     };
     
-
-	// Check edge cases.
-	let errors = []
-
-	gapAmount == null || (gapAmount <= 0) && errors.push("gapAmount is null or <= 0");
-	(withdrawStrategy == null || Object.keys(withdrawStrategy).length === 0 ) && errors.push("withdrawStrategy is nullor empty");
-	(balances == null || Object.keys(balances).length === 0) && errors.push("balances is null or empty");
-	(withdrawStrategy?.order == null || Object.keys(withdrawStrategy.order).length === 0) && errors.push("withdrawal.order is null or empty");
-	
-	if (errors.length > 0) {
-		// All good.
-		result.errors = errors;
-		return result
-	}
+    // Check edge cases
+    let errors = [];
     
-  
+    gapAmount == null || (gapAmount <= 0) && errors.push("gapAmount is null or <= 0");
+    (withdrawStrategy == null || Object.keys(withdrawStrategy).length === 0) && errors.push("withdrawStrategy is null or empty");
+    (balances == null || Object.keys(balances).length === 0) && errors.push("balances is null or empty");
+    (withdrawStrategy?.order == null || Object.keys(withdrawStrategy.order).length === 0) && errors.push("withdrawal.order is null or empty");
+    
+    if (errors.length > 0) {
+        result.errors = errors;
+        return result;
+    }
+    
     const order = withdrawStrategy.order;
     const taxrates = withdrawStrategy.taxrate;
     const originalGapAmount = gapAmount;
-	
-	
-	const {BrokerageBasis, ...rest} = balances;
-	let totalFunds = Object.values(rest).reduce((sum, v) => sum + v, 0)	
+    
+    const {BrokerageBasis, ...rest} = balances;
+    let totalFunds = Object.values(rest).reduce((sum, v) => sum + v, 0);
+    
+    let normalizedWeight;
 	
 	// Normalize the weights (if they exist - or create weights from balances if not.
 	if (withdrawStrategy.weight?.length > 0) {
@@ -446,171 +469,242 @@ function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
 	  const orderBalances = withdrawStrategy.order.map(acct => balances[acct]);
 	  const sum = orderBalances.reduce((a, b) => a + b, 0);
 	  normalizedWeight = orderBalances.map(bal => bal / sum);
-	}	// withdrawStrategy.weight exists or not.
-		
+	}	// withdrawStrategy.weight exists or not.	
 	
-    let netRemaining = gapAmount; // This is the NET amount we still need
     
-    // Phase 1: Process weighted accounts (weight > 0)
-    // Calculate NET targets based on original gap amount
+    let netRemaining = gapAmount;
+    
+    // Phase 1: Process weighted accounts
     const netTargets = {};
-	
     
     for (let i = 0; i < order.length; i++) {
         const account = order[i];
         const weight = normalizedWeight[i];
-        
-        if (weight > 0) {
-			// This assumes the weight is a percentage e.g. 50 for 50% but that's not desireable.
-            netTargets[account] = (originalGapAmount * weight) ;
-        } else {
-            netTargets[account] = 0;
-        } // if weight > 0
-    } // for each account in order
+        netTargets[account] = weight > 0 ? (originalGapAmount * weight) : 0;
+    }
     
-    // Withdraw from weighted accounts up to their targets
+    // Helper function to calculate effective tax rate for an account
+    function getEffectiveTaxRate(account, grossWithdrawal) {
+        if (account !== 'Brokerage') {
+            // For non-brokerage accounts, use the full tax rate
+            return taxrates[order.indexOf(account)] ?? 0;
+        }
+        
+        // For brokerage, only tax the capital gains portion
+        const brokerageInfo = calculateBrokerageWithdrawal(
+            grossWithdrawal,
+            balances.Brokerage,
+            balances.BrokerageBasis
+        );
+        
+        // Effective tax rate = (capital gains / total withdrawal) * tax rate
+        const taxRate = taxrates[order.indexOf(account)] ?? 0;
+        return grossWithdrawal > 0 ? (brokerageInfo.capitalGains / grossWithdrawal) * taxRate : 0;
+    }
+    
+    // Helper function to perform a withdrawal from an account
+    function performWithdrawal(account, grossWithdrawal, accountIndex) {
+        if (grossWithdrawal <= 0.01) return { netWithdrawal: 0, tax: 0 };
+        
+        const taxRate = taxrates[accountIndex] ?? 0;
+        let netWithdrawal, tax;
+        
+        if (account === 'Brokerage') {
+            // Use the brokerage-specific calculation
+            const brokerageInfo = calculateBrokerageWithdrawal(
+                grossWithdrawal,
+                balances.Brokerage,
+                balances.BrokerageBasis
+            );
+            
+            // Tax only applies to capital gains
+            tax = brokerageInfo.capitalGains * taxRate;
+            netWithdrawal = grossWithdrawal - tax;
+            
+            // Track basis change
+            if (!result.BrokerageBasis) result.BrokerageBasis = 0;
+            result.BrokerageBasis += brokerageInfo.basisChange; // Note: this is negative
+            
+        } else {
+            // For other accounts, simple calculation
+            tax = grossWithdrawal * taxRate;
+            netWithdrawal = grossWithdrawal - tax;
+        }
+        
+        // Update result
+        if (!result[account]) result[account] = 0;
+        if (!result[account + 'Tax']) result[account + 'Tax'] = 0;
+        
+        result[account] += grossWithdrawal;
+        result[account + 'Tax'] += tax;
+        
+        return { netWithdrawal, tax };
+    }
+    
+    // Phase 1: Withdraw from weighted accounts up to their targets
     for (let i = 0; i < order.length; i++) {
         if (netRemaining <= 0.01) break;
         
         const account = order[i];
-        const taxRate = taxrates[i];
-        
-        if (netTargets[account] <= 0) continue; // Skip zero-weight accounts for now
-        
-        const available = balances[account] || 0;
         const netTarget = netTargets[account];
         
-        // Calculate gross withdrawal needed to achieve net target
-        const grossTarget = netTarget / (1 - taxRate);
+        if (netTarget <= 0) continue; // Skip zero-weight accounts
         
-        // Can't withdraw more than available or more than needed (in gross terms)
-        const grossNeeded = netRemaining / (1 - taxRate);
-        const grossWithdrawal = Math.min(grossTarget, available, grossNeeded);
+        const available = balances[account] ?? 0;
+        if (available <= 0.01) continue;
         
-        if (grossWithdrawal > 0.01) {
-            const netWithdrawal = grossWithdrawal * (1 - taxRate);
-            const tax = grossWithdrawal * taxRate;
-            
-            result[account] = grossWithdrawal;
-            result[account + 'Tax'] = tax;
-            netRemaining -= netWithdrawal;
-            
-            // Handle brokerage basis
-            if (account === 'Brokerage' && balances.BrokerageBasis > 0 && balances.Brokerage > 0) {
-                const basisRatio = balances.BrokerageBasis / balances.Brokerage;
-                result.BrokerageBasis = grossWithdrawal * basisRatio;
-            } // if Brokerage
-        } // if grossWithdrawal > 0.01
-    } // for each account in order
-	
-	
-    //!!! I suspect this does NOTHING.
-	//	NOTE: This probably only makes sense if the accounts haven't been depleted already.
-    // Phase 2: If gap not satisfied, iterate with increased weights on weighted accounts
-    let maxIterations = 10;
-    let iteration = 0;
-    
-    while (netRemaining > 0.01 && iteration < maxIterations) {
-        iteration++;
+        // We need to solve for grossWithdrawal iteratively for brokerage
+        // For simplicity, we'll use an approximation approach
+        let grossWithdrawal;
         
-        let progressMade = false;
-        
-        // Increase targets for weighted accounts
-        for (let i = 0; i < order.length; i++) {
-            if (netRemaining <= 0.01) break;
+        if (account === 'Brokerage') {
+            // Iterative approach to find the right gross withdrawal
+            // Start with an estimate
+            const taxRate = taxrates[i] ?? 0;
+            let estimate = netTarget / (1 - taxRate); // Initial estimate
             
-            const account = order[i];
-            const taxRate = taxrates[i];
+            // Refine estimate (up to 3 iterations should be enough)
+            for (let iter = 0; iter < 3; iter++) {
+                const testInfo = calculateBrokerageWithdrawal(estimate, balances.Brokerage, balances.BrokerageBasis);
+                const testTax = testInfo.capitalGains * taxRate;
+                const testNet = estimate - testTax;
+                
+                if (Math.abs(testNet - netTarget) < 0.01) break;
+                
+                // Adjust estimate
+                const correction = netTarget - testNet;
+                estimate += correction / (1 - taxRate * (testInfo.capitalGains / estimate));
+            }
             
-            if (netTargets[account] === 0) continue; // Still skip zero-weight accounts
-            
-            const available = (balances[account] || 0) - result[account];
-            
-            if (available <= 0.01) continue;
-            
-            // Increase target by 10% of original gap
-            const additionalNetTarget = originalGapAmount * 0.10;
-            const additionalGrossTarget = additionalNetTarget / (1 - taxRate);
-            
+            grossWithdrawal = Math.min(estimate, available, netTarget / (1 - taxRate) * 2); // Safety cap
+        } else {
+            const taxRate = taxrates[i] ?? 0;
+            const grossTarget = netTarget / (1 - taxRate);
             const grossNeeded = netRemaining / (1 - taxRate);
-            const grossWithdrawal = Math.min(additionalGrossTarget, available, grossNeeded);
-            
-            if (grossWithdrawal > 0.01) {
-                const netWithdrawal = grossWithdrawal * (1 - taxRate);
-                const tax = grossWithdrawal * taxRate;
-                
-                result[account] += grossWithdrawal;
-                result[account + 'Tax'] += tax;
-                netRemaining -= netWithdrawal;
-                progressMade = true;
-                
-                // Update brokerage basis
-                if (account === 'Brokerage' && balances.BrokerageBasis > 0 && balances.Brokerage > 0) {
-                    const basisRatio = balances.BrokerageBasis / balances.Brokerage;
-                    result.BrokerageBasis = result[account] * basisRatio;
-                } // if Brokerage
-            } // if grossWithdrawal > 0.01
-        } // for each account in order
+            grossWithdrawal = Math.min(grossTarget, available, grossNeeded);
+        }
         
-        if (!progressMade) break; // All weighted accounts depleted
-    } // while netRemaining > 0.01
+        grossWithdrawal = Math.min(grossWithdrawal, available);
+		inspectForErrors({available: available, grossWithdrawal: grossWithdrawal})
+        
+        const { netWithdrawal, tax } = performWithdrawal(account, grossWithdrawal, i);
+        netRemaining -= netWithdrawal;
+    }
     
-    // Phase 3: Fall back to zero-weight accounts if gap still not satisfied
+    // Phase 2: If gap not satisfied, take from remaining balances in order
     if (netRemaining > 0.01) {
         for (let i = 0; i < order.length; i++) {
             if (netRemaining <= 0.01) break;
             
-            const account = order[i] ?? 'NONE';
-            const taxRate = taxrates[i] ?? 0;
-			if (!Object.hasOwn(result, account)) {
-				result[account] = 0;
-			}
-            const available = (balances[account] || 0) - result[account];
+            const account = order[i];
+            const alreadyWithdrawn = result[account] ?? 0;
+            const available = (balances[account] ?? 0) - alreadyWithdrawn;
             
             if (available <= 0.01) continue;
             
-            const grossNeeded = netRemaining / (1 - taxRate);
-            const grossWithdrawal = Math.min(available, grossNeeded);
+            // Calculate how much gross we need to get the net we need
+            let grossWithdrawal;
             
-            if (grossWithdrawal > 0.01) {
-                const netWithdrawal = grossWithdrawal * (1 - taxRate);
-                const tax = grossWithdrawal * taxRate;
+            if (account === 'Brokerage') {
+                // Iterative approach for brokerage
+                const taxRate = taxrates[i];
+                let estimate = netRemaining / (1 - taxRate);
                 
-                result[account] += grossWithdrawal;
-                result[account + 'Tax'] = tax + (result[account + 'Tax'] ?? 0);
-                netRemaining -= netWithdrawal;
-				
-				// Calculate new basis
-                if (account === 'Brokerage' && balances.BrokerageBasis > 0 && balances.Brokerage > 0) {
-                    const basisRatio = balances.BrokerageBasis / balances.Brokerage;
-                    result.BrokerageBasis = result[account] * basisRatio;
-                } // if Brokerage
-            } // if grossWithdrawal > 0.01
-        } // for each account in order
-    } // if netRemaining > 0.01
+                for (let iter = 0; iter < 3; iter++) {
+                    const remainingBalance = balances.Brokerage - alreadyWithdrawn;
+                    const remainingBasis = balances.BrokerageBasis + (result.BrokerageBasis ?? 0); // Note: result.BrokerageBasis is negative
+                    
+                    const testInfo = calculateBrokerageWithdrawal(estimate, remainingBalance, remainingBasis);
+                    const testTax = testInfo.capitalGains * taxRate;
+                    const testNet = estimate - testTax;
+                    
+                    if (Math.abs(testNet - netRemaining) < 0.01) break;
+                    
+                    const correction = netRemaining - testNet;
+                    estimate += correction / (1 - taxRate * (testInfo.capitalGains / estimate));
+                }
+                
+                grossWithdrawal = Math.min(estimate, available);
+            } else {
+                const taxRate = taxrates[i];
+                const grossNeeded = netRemaining / (1 - taxRate);
+                grossWithdrawal = Math.min(available, grossNeeded);
+            }
+            
+            const { netWithdrawal, tax } = performWithdrawal(account, grossWithdrawal, i);
+            netRemaining -= netWithdrawal;
+        }
+    }
     
     // Calculate totals
-	
-	// Sum the non-tax, non Basis entries (totalWithdrawals)
-	let totalWithdrawals = 0;
-	totalWithdrawals = 	Object.entries(result).filter(([k]) => !k.endsWith('Tax') && !k.endsWith('Basis')).reduce((totalWithdrawals, [, v]) => totalWithdrawals + v, 0)
-
-	// Now sum the taxes
-    result.totalTax = Object.entries(result).filter(([k]) => k.endsWith('Tax')).reduce((sum, [, v]) => sum + v, 0)
-
-	// Compute the net amount		
+    let totalWithdrawals = Object.entries(result)
+        .filter(([k]) => !k.endsWith('Tax') && !k.endsWith('Basis') && !k.includes('total') && k !== 'shortfall' && k !== 'netAmount' && k !== 'errors')
+        .reduce((sum, [, v]) => sum + v, 0);
+    
+    result.totalTax = Object.entries(result)
+        .filter(([k]) => k.endsWith('Tax'))
+        .reduce((sum, [, v]) => sum + v, 0);
+    
     result.netAmount = totalWithdrawals - result.totalTax;
-	
-	// Calculate any shortfall
-	result.shortfall = gapAmount - result.netAmount
-
-    // Round all results to 3 decimals (mutate result)
-	Object.keys(result).forEach(k => result[k] = +result[k].toFixed(3))
-	
+    result.shortfall = Math.max(0, gapAmount - result.netAmount);
+    
+    // Round all results to 3 decimals
+    Object.keys(result).forEach(k => {
+        if (typeof result[k] === 'number') {
+            result[k] = +result[k].toFixed(3);
+        }
+    });
     
     return result;
-} // function calculateWithdrawals
+}
 
+
+// Apply withdrawals  to the balances MUTATES balances!
+function applyWithdrawals(balances, withdrawals) {
+    for (const key in withdrawals) {
+        if (key in balances) {
+            balances[key] = Math.max(0, balances[key] - withdrawals[key]);
+        }
+    }
+    return balances;  // Optional - for chaining/convenience
+}
+
+function accumulateWithdrawals(withdrawalsArray) {
+    const totals = {};
+    
+    for (const withdrawals of withdrawalsArray) {
+        for (const key in withdrawals) {
+            if (key in totals) {
+                totals[key] += withdrawals[key];
+            } else {
+                totals[key] = withdrawals[key];
+            }
+        }
+    }
+    
+    return totals;
+}
+
+
+function applyGrowth(balances, growthRates) {
+	const gains = {}
+	let gain = 0;
+    for (const key in balances) {
+        if (key in growthRates) {
+            // Apply growth: balance * (1 + rate)
+			gain = balances[key] * growthRates[key]
+			gains[key] = gain;
+            balances[key] = Math.max(0, balances[key] + gain);
+        }
+        // If no matching rate, balance remains unchanged
+    }
+    return gains;  // Return the amounts gained/lost
+}
+
+
+function sumAccounts(obj, keys = ['IRA', 'IRA1', 'IRA2', 'Roth', 'Brokerage', 'Cash']) {
+    return keys.reduce((sum, key) => sum + (obj[key] ?? 0), 0);
+}
 
 /////////////////////////////
 
@@ -619,9 +713,8 @@ let simulationCount = 0;
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
     let balance = {
-        ira1: inputs.ira1, ira2: inputs.ira2, roth: inputs.roth,
-        brokerage: inputs.brokerage, basis: inputs.basis, cash: inputs.cash,
-		basis: inputs.basis,
+        IRA1: inputs.IRA1, IRA2: inputs.IRA2, Roth: inputs.Roth,
+        Brokerage: inputs.Brokerage, BrokerageBasis: inputs.BrokerageBasis, Cash: inputs.Cash,
         magiHistory: []
     };
     simulationCount += 1;
@@ -637,7 +730,7 @@ function simulate(inputs) {
 
 	let cpiRate = 1
 	let inflation = 1
-	let fixedWithdrawal = calculateAmortizedWithdrawal(balance.ira1 + balance.ira2, inputs.iraBaseGoal, inputs.nYears,inputs.growth)
+	let fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, inputs.iraBaseGoal, inputs.nYears,inputs.growth)
 	let currentTaxableGuess = 0;
 	let spendDelta = 1
 	let spendGoal = inputs.spendGoal;
@@ -685,11 +778,18 @@ function simulate(inputs) {
 		inflation = (1 + inputs.inflation) * inflation
 		spendDelta = inputs.spendChange;
 		
+		let withdrawals = { IRA: 0, IRA1: 0, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0};
+		let withdrawals_round2 = withdrawals;
+		let netWithdrawals = withdrawals;
+		
 		let wdRoth = 0;
         let wdBrokerage = 0;
 		let wdCash = 0;
 		let basisWithdrawn = 0;
 		let wdIRA = 0;
+		let depRoth = 0;
+		let depBrokerage = 0;
+		let depCash = 0;
 
 
         let age1 = startYear - birthyear1 + y;
@@ -720,8 +820,8 @@ function simulate(inputs) {
 		//		    we likely have a problem unless non-taxable accounts can backfill.
 
         // 1. Inherit IRA
-        if (!alive1 && balance.ira1 > 0) { balance.ira2 += balance.ira1; balance.ira1 = 0; }
-        if (!alive2 && balance.ira2 > 0) { balance.ira1 += balance.ira2; balance.ira2 = 0; }
+        if (!alive1 && balance.IRA1 > 0) { balance.IRA2 += balance.IRA1; balance.IRA1 = 0; }
+        if (!alive2 && balance.IRA2 > 0) { balance.IRA1 += balance.IRA2; balance.IRA2 = 0; }
 
 
         // 2. Base Income
@@ -737,20 +837,21 @@ function simulate(inputs) {
             s2 = 0;
             if (!alive1) { pension = pension * (inputs.survivorPct/100) }
         }
-        let fixedInc = s1 + s2;
-		let taxableInc = pension;
-		let taxableInterest = balance.cash * inputs.cashYield
-		let taxableDividends = balance.brokerage * inputs.dividendRate
+        let fixedInc = s1 + s2;					// Social Security
+		let taxableInc = pension;				// Pensions, W2, RMDs, wdIRA, wdBrokerage
+		let taxableInterest = balance.Cash * inputs.cashYield
+		let taxableDividends = balance.Brokerage * inputs.dividendRate
 		
 
         // 3. RMDs
-        let rmd1 = alive1 ? balance.ira1 * getRMDPercentage(age1, birthyear1) || 0 : 0;
-        let rmd2 = alive2 ? balance.ira2 * getRMDPercentage(age2, birthyear2) || 0 : 0;
+        let rmd1 = alive1 ? balance.IRA1 * getRMDPercentage(age1, birthyear1) || 0 : 0;
+        let rmd2 = alive2 ? balance.IRA2 * getRMDPercentage(age2, birthyear2) || 0 : 0;
 		
 		// Immediately remove RMDs from the respective IRAs because they MUST be taken first.
-		balance.ira1 = Math.max(0, balance.ira1 - rmd1);
-		balance.ira2 = Math.max(0, balance.ira2 - rmd2);
-		let curIRA = Math.max(0, balance.ira1 + balance.ira2 - inputs.iraBaseGoal);
+		// TODO: Allow RMDs to go to QCDs one day!
+		balance.IRA1 = Math.max(0, balance.IRA1 - rmd1);
+		balance.IRA2 = Math.max(0, balance.IRA2 - rmd2);
+		let curIRA = Math.max(0, balance.IRA1 + balance.IRA2 - inputs.iraBaseGoal);
 
 
 		
@@ -759,7 +860,7 @@ function simulate(inputs) {
 
         // 4. Determine Target Spending amount based on Strategy
         let targetSpend = Math.min(spendGoal, goalLimit);
-        let additionalSpendNeeded = Math.max(0, targetSpend - totalRMD - fixedInc - taxableInc + irmaa);
+        let additionalSpendNeeded = Math.max(0, targetSpend - fixedInc - taxableInc + irmaa);
 
 		//!!! Find the income federal limit. TODO: use that limit, to refine down to the next lower IRMAA limit and next lower State Limit.
 		let marginalFedTaxRate = goalFedBracketLimit.rate
@@ -770,17 +871,20 @@ function simulate(inputs) {
 		let nominalFedTaxRateAtLimit = 0.14;
 		let nominalStateTaxAtLimit = 0.07
 		let withdrawStrategy = {order: [], weight: [], taxrate: []};
-		let withdrawResult = {}
 		
-		let curBalances = {IRA: balance.ira1 + balance.ira2, Brokerage: balance.brokerage, BrokerageBasis: balance.basis, Roth: balance.roth, Cash: balance.cash};
+		let curBalances = {IRA: balance.IRA1 + balance.IRA2, Brokerage: balance.Brokerage, BrokerageBasis: balance.BrokerageBasis, Roth: balance.Roth, Cash: balance.Cash, IRA1: balance.IRA1, IRA2: balance.IRA2};
 			
 
         if (inputs.strategy === 'fixed') {
+			// In this strategy, we confine withdrawals to the IRA for the first round. We don't care
+			// about the tax implications.
+			
             let remYears = Math.max(1, inputs.nYears - y);
 			let amortized = Math.max(0, fixedWithdrawal - totalRMD);
 
-			// Withdraw the fixed amount left after RMDs, or whatever is left in IRA after leaving room
-            wdIRA = Math.max(0,Math.min(curIRA, amortized));
+			// Withdraw the fixed amount left after RMDs, or whatever is left in IRAs after leaving room
+			withdrawals = { IRA: Math.max(0,Math.min(curIRA, amortized)) }
+			
         } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit') {
 			//!!! This code has flaws.  Withdraws too much.
 			let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
@@ -804,7 +908,8 @@ function simulate(inputs) {
 			}
 			
             currentTaxableGuess = limit - fixedInc - taxableInc - totalRMD;
-            wdIRA = Math.max(0, currentTaxableGuess);
+			wdIRA = Math.min(Math.max(0, currentTaxableGuess), balance.IRA1 + balance.IRA2);
+			
         } else {
 			/*********************/
 			/* BASELINE Strategy */
@@ -812,25 +917,21 @@ function simulate(inputs) {
 	        // Withdraw enough proportionately to get to spendGoal - including taxes.
 			withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash']
 			withdrawStrategy.taxrate = [ nominalTaxRate, capitalGainsRate + nominalStateTaxAtLimit, 0, 0]
-			let withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy)
-		   
-			wdIRA = withdrawals.IRA ?? 0;	
-			wdBrokerage = withdrawals.Brokerage ?? 0;
-			wdCash =withdrawals.Cash ?? 0;
-			wdRoth = withdrawals.Roth ?? 0;
-			inspectForErrors( wdIRA, wdBrokerage, wdCash, wdRoth)
+			withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy)
+	
 		}
-        
-        // Ensure we don't withdraw more than exists - we've already removed the totalRMD
-        wdIRA = Math.min(wdIRA, balance.ira1 + balance.ira2);
 		
-		// if (Number.isNaN(wdIRA)) {
-		//   throw new Error('wdIRA is NaN');
-		// }
+		
+		applyWithdrawals( curBalances, withdrawals)
+		inspectForErrors( {wdIRA: wdIRA, wdBrokerage: wdBrokerage, wdCash: wdCash, wdRoth: wdRoth})        
+		netWithdrawals = accumulateWithdrawals( [netWithdrawals, withdrawals])
 
         // 5. Tax Calc (Including IRMAA lag)
 		//!!! TODO: May be premature. We may need more $ to meet spend goal.  We may have exhausted the IRAs.
 		inspectForErrors( fixedInc, wdIRA, totalRMD, taxableInterest, capitalGains, taxableDividends, status, age1, age2, cpiRate)
+			
+
+		// function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=1) 
         let tax = calculateTax(fixedInc, wdIRA + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
 		inspectForErrors(tax)
 		//!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
@@ -844,42 +945,36 @@ function simulate(inputs) {
 		cumulativeTaxes += totalTax;
 
         // 6. Cash Flow Gap
-        let netSpendable = (fixedInc + wdIRA) - totalTax;
+		let netSpendable = sumAccounts(netWithdrawals) + totalRMD + fixedInc - totalTax
         let gap = targetSpend - netSpendable;
         
 		inspectForErrors({netSpendable: netSpendable, gap: gap, wdIRA: wdIRA, 
 			totalTax: totalTax});
 
-
-        if (gap > 0) {
-            // Need more money - Order: Cash -> Brokerage -> Roth
-            wdCash = Math.min(gap, balance.cash);
-            balance.cash -= wdCash; gap -= wdCash;
-            
-
-            if (gap > 0) {
-                wdRoth = Math.min(gap, balance.roth);
-                balance.roth -= wdRoth; gap -= wdRoth;
-            }
-            // If Gap still > 0, we take more IRA (Baseline behavior)
-			// NOTE: From earlier we already know the marginal state and federal brackets.
-            if (gap > 0 && (balance.ira1 + balance.ira2) > 0) {
-                let extraIRA = Math.min(gap / (1-tax.fedRate+tax.stRate), balance.ira1 + balance.ira2);
-                wdIRA += extraIRA;
-                // Re-calculate tax for new IRA WD
-                tax = calculateTax(fixedInc, wdIRA + totalRMD, capitalGains + taxableDividends, status, age1, age2, cpiRate);
-                totalTax = tax.fed + tax.state + irmaa;
-                netSpendable = (fixedInc + wdIRA) - totalTax;
-                gap = targetSpend - (netSpendable + wdRoth + wdBrokerage + wdCash);
-            }
+		
+        if (gap > 0.10) {
+			// We need to do more withdrawals.
+			withdrawStrategy.order = ['Brokerage', 'Cash', 'IRA', 'Roth'];
+			withdrawStrategy.weights = [40, 60, 0, 0];
+			withdrawStrategy.taxrate = [capitalGainsRate + nominalStateTaxAtLimit, 0, nominalTaxRate, 0];
+			withdrawals = calculateWithdrawals(curBalances, gap, withdrawStrategy);
+			// Capture any shortfall
+			shortfall = withdrawals.shortfall;
+			
+			netWithdrawals = accumulateWithdrawals( [netWithdrawals, withdrawals])
+			applyWithdrawals(curBalances, withdrawals);
+			
         } else if (gap < -100 && (inputs.strategy !== 'baseline')) {
             // Surplus logic (Conversions)
             let surplus = Math.abs(gap);
-            balance.roth += surplus;
+            balance.Roth += surplus;
 			wdRoth -= surplus
         }
 		
-		totalIncome = Math.max(1, fixedInc + wdIRA + pension + taxableDividends + taxableInterest + capitalGains + wdRoth + wdCash + wdBrokerage);
+		
+		// sumAccounts(netWithdrawals) + totalRMD + fixedInc - totalTax
+
+		totalIncome = Math.max(1, fixedInc + netWithdrawals.IRA + pension + taxableDividends + taxableInterest + capitalGains + netWithdrawals.Roth + netWithdrawals.Cash + netWithdrawals.Brokerage);
 		inspectForErrors({totalIncome: totalIncome});
 		
 		nominalTaxRate = totalTax / totalIncome		
@@ -889,24 +984,32 @@ function simulate(inputs) {
 		let netIncome = totalIncome - totalTax;
 		
 		//!!! Remove withdrawals proportionately. RMDs have already been withdrawn.
-        balance.ira1 = Math.max(0, balance.ira1 - (wdIRA * (balance.ira1/(balance.ira1+balance.ira2||1))));
-        balance.ira2 = Math.max(0, balance.ira2 - (wdIRA * (balance.ira2/(balance.ira1+balance.ira2||1))));
-        balance.ira1 *= (1 + inputs.growth);
-        balance.ira2 *= (1 + inputs.growth);
-        balance.roth *= (1 + inputs.growth);
-        balance.brokerage *= (1 + inputs.growth);
+		const ira1_ratio = (balance.IRA1/(balance.IRA1+balance.IRA2||1))
+        netWithdrawals.IRA1 = Math.max(0, wdIRA * ira1_ratio);
+        netWithdrawals.IRA2 = Math.max(0, wdIRA * (1 - ira1_ratio));
 		
-		// Accrue dividends to cash
-        balance.cash = balance.cash * (1 + inputs.cashYield) + taxableDividends;
-        balance.magiHistory.push(tax.magi);
+		// Withdraw from the balances.
+		applyWithdrawals(balance, netWithdrawals)
+		
 
+		let growthRates = {IRA: inputs.growth, IRA1: inputs.growth, IRA2: inputs.growth, 
+						   Brokerage: inputs.growth, Cash: inputs.cashYield, Roth: inputs.growth}
+		
+		// Grow Balances
+		let gains = applyGrowth( balance, growthRates)
+		
+ 	
+		// Accrue dividends to cash
+		gains.Cash += taxableDividends
+        balance.Cash +=  taxableDividends;
+        balance.magiHistory.push(tax.magi);
         totals.tax += totalTax;
         totals.gross += (fixedInc + wdIRA);
         totals.spend += (targetSpend - Math.max(0, gap));
 		
-		let totalWealth = (balance.ira1 + balance.ira2 + Math.max(0,balance.brokerage - balance.basis)) * (1-nominalTaxRate) + balance.roth + balance.cash + balance.basis
+		let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0,balance.Brokerage - balance.BrokerageBasis)) * (1-nominalTaxRate) + balance.Roth + balance.Cash + balance.BrokerageBasis
 
-		if (netIncome < targetSpend || totalWealth < 10000) {
+		if (netIncome < targetSpend || totalWealth < (targetSpend * 2)) {
 			totals.success = false;
 			totals.failedInYear.push(startYear + y)
 		} else {
@@ -917,41 +1020,42 @@ function simulate(inputs) {
             year: startYear + y,
             age1: alive1 ? age1 : '—',
             age2: alive2 ? age2 : '—',
-			// 'spendDelta%': spendDelta,
             SSincome: fixedInc,
 			pension: pension,
             spendGoal: targetSpend,
-            netIncome: netIncome,
+			totalIncome: totalIncome,
+            netIncome: netIncome,	
 			'-RMD1-': rmd1,
 			'-RMD2-': rmd2,
-            'RMDwd': -totalRMD,
-            'IRAΔ': -wdIRA,
-            'BrokerageΔ': -wdBrokerage,
+            'RMDwd': totalRMD,
+            'IRAwd': netWithdrawals.IRA,
+            'Brokeragewd': netWithdrawals.Brokerage,
 			'-CapGains': capitalGains,
-            'RothΔ': -wdRoth,
-			cashDiv: taxableDividends,
-			cashInt: taxableInterest,
-            'CashΔ': -wdCash,
-			// totalIncome: wdIRA + wdRoth + wdBrokerage + wdCash + fixedInc + pension + taxableInterest + taxableDividends,
-			netSpendable: taxableDividends + taxableInterest - wdCash,
+            'Rothwd': netWithdrawals.Roth,
+			'cashD+I': taxableDividends + taxableInterest,
+            'CashΔ': -netWithdrawals.Cash,
 			IRMAA: irmaa,
 			FedTax: tax.fed,
 			StateTax: tax.state,
             totalTax: totalTax,
-            '-fedLimit': tax.fedLimit,
-			'-stateLimit': tax.stLimit,
-			'-marginalFedTaxRate%': tax.marginalFedTaxRate,
-			'-marginalStateTaxRate%': tax.stRate,
+            'fedLimit': tax.fedLimit,
+			'stateLimit': tax.stLimit,
+			'marginalFedTaxRate%': marginalFedTaxRate,
+			'marginalStateTaxRate%': tax.stRate,
 			'NominalTax%': nominalTaxRate,
 			'SumTaxes': cumulativeTaxes,
-            IRA1Bal: balance.ira1,
-			IRA2Bal: balance.ira2,
-			TotalIRA: balance.ira1 + balance.ira2,
-			CashBal: balance.cash,
-			RothBal: balance.roth,
-            brokerageBal: balance.brokerage,
-            basisBal: balance.basis,
-            totalWealth: totalWealth
+            IRA1: balance.IRA1,
+			IRA2: balance.IRA2,
+			TotalIRA: balance.IRA1 + balance.IRA2,
+			Cash: balance.Cash,
+			Roth: balance.Roth,
+            Brokerage: balance.Brokerage,
+            BrokerageBasis: balance.BrokerageBasis,
+            totalWealth: totalWealth,
+			cashG: gains.Cash,
+			brokerageG: gains.Brokerage,
+			rothG: gains.Roth,
+			rothConv: gains.Roth
         });
 
     } // end large for for year by year.
@@ -1170,12 +1274,12 @@ function getInputs() {
 		die1: +val('die1'), 
 		birthyear2: +val('birthyear2'), 
 		die2: +val('die2'),
-        ira1: +val('ira1'), 
-		ira2: +val('ira2'), 
-		roth: +val('roth'),
-        brokerage: +val('brokerage'), 
-		basis: +val('basis'), 
-		cash: +val('cash'),
+        IRA1: +val('ira1'), 
+		IRA2: +val('ira2'), 
+		Roth: +val('roth'),
+        Brokerage: +val('brokerage'), 
+		BrokerageBasis: +val('basis'), 
+		Cash: +val('cash'),
         ss1: +val('ss1'), 
 		ss1Age: +val('ss1Age'), 
 		ss2: +val('ss2'), 
@@ -1379,9 +1483,9 @@ function updateCharts(log) {
             labels: log.map(r => r.year),
             datasets: [
                 { label: 'IRAs', data: log.map(r => r.TotalIRA), borderColor: '#e67e22', fill: false },
-                { label: 'Roth', data: log.map(r => r.RothBal), borderColor: '#000000', fill: false },
-                { label: 'Brokerage', data: log.map(r => r.brokerageBal), borderColor: '#2980b9', fill: false },
-                { label: 'Cash', data: log.map(r => r.CashBal), borderColor: '#27ae60', fill: false },
+                { label: 'Roth', data: log.map(r => r.Roth), borderColor: '#000000', fill: false },
+                { label: 'Brokerage', data: log.map(r => r.Brokerage), borderColor: '#2980b9', fill: false },
+                { label: 'Cash', data: log.map(r => r.Cash), borderColor: '#27ae60', fill: false },
                 { label: 'TotalWealth', data: log.map(r => r.totalWealth), borderColor: '#888888', fill: false }
             ]
         },

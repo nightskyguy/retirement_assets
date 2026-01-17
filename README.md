@@ -33,7 +33,7 @@ In this tool, we lump IRMAA together with California state and Federal taxes (in
 7. It automatically rolls any IRA balance from the decease spouse to the living spouse (because RMDs may apply differently!)
 8. Forecast the affect of the impending 2033 Social Security Fund depletion (with a 33% reduction in payouts)
 9. "Wealth" as shown in this tool is adjusted for the average taxation measured.  Many tools would show a 500,000 Roth and a 500,000 IRA as being 1,000,000 net worth.  But that's not the case. You can only take money out of an IRA/401K at a zero percent total rate at a very low amount. RMDs may make that impossible at some point.
-10. Choose tax rates from a number of states (currently California, District of Columbia, Michigan, New York, North Carolina, Oregon, Pennsylvania, and NONE (for those states with no state tax).
+10. Choose tax rates from a number of states (currently California, District of Columbia, Michigan, New York, North Carolina, Oregon, Pennsylvania, Virginia, Illinois, Connecticut, Maryland, Georgia and NONE (for those states with no state tax).  Note there are some calculation variations that are not accounted for.
 
 #### Features in the Works:
 
@@ -48,6 +48,7 @@ In this tool, we lump IRMAA together with California state and Federal taxes (in
 9. Autoload any saved "Default" scenario (so you can pick up where you left off).
 10. Better organize the Annual Details tables.
 11. Allow exporting of the Annual Details table(s).
+12. Allow selection of the quarter in which withdrawals will occur. I don't think it makes a signficant difference, but changing the model a bit will make it possible to know how much difference it might make. For example if you're trying to draw down an IRA, taking the withdrawals early in the year means you will accrue less growth in that account. Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last quarter may help.
 
 
 #### What the Tool IGNORES

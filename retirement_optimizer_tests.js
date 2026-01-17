@@ -69,6 +69,151 @@ function runTests() {
 	
 	
 	// NEW FUNCTIONS
+	
+    // Test 1: Single account with positive growth
+	let startSituation = { Cash: 100 };
+    assertEqual(
+        applyGrowth(startSituation, { IRA: 0.04, Brokerage: -0.01, Cash: 0.035 } ),
+        { Cash: 3.5 },
+        'applyGrowth: Single account with 3.5% growth'
+    );
+	assertEqual( startSituation, { Cash: 103.5 },
+		'applyGrowth: Single account with 3.5% growth (realized)'
+    );	
+    
+    // Test 2: Multiple accounts with mixed growth
+	startSituation = { Cash: 100, Brokerage: 100 };
+    assertEqual(
+        applyGrowth( startSituation, { IRA: 0.04, Brokerage: -0.01, Cash: 0.035 } ),
+        { Cash: 3.5, Brokerage: -1 },
+        'applyGrowth: Multiple accounts with positive and negative growth'
+    );
+    
+    // Test 3: All accounts with positive growth
+    assertEqual(
+        applyGrowth(
+            { IRA: 1000000, Roth: 500000, Brokerage: 200000, Cash: 50000 },
+            { IRA: 0.07, Roth: 0.07, Brokerage: 0.05, Cash: 0.04 }
+        ),
+        {   "IRA": 70000,
+  "Roth": 35000,
+  "Brokerage": 10000,
+  "Cash": 2000 },
+        'applyGrowth: All accounts with positive growth rates'
+    );
+    
+    // Test 4: Negative growth (market downturn)
+	startSituation = { IRA: 1000000, Cash: 50000 };
+    assertEqual(
+        applyGrowth( startSituation, { IRA: -0.20, Cash: 0.02 } ),
+        { "IRA": -200000, "Cash": 1000 },
+        'applyGrowth: Negative growth rate (20% loss)'
+    );	
+	assertEqual( startSituation, {"IRA": 800000, "Cash": 51000}, 
+		'applyGrowth: Negative growth rate (20% loss) realized');
+	
+	
+    // Test 1: Basic withdrawal from IRA
+    assertEqual(
+        applyWithdrawals(
+            { Brokerage: 0, BrokerageBasis: 0, Cash: 0, IRA: 2000000, Roth: 0 },
+            { IRA: 116250, IRATax: 23250, netAmount: 93000, shortfall: 0, totalTax: 23250 }
+        ),
+        { Brokerage: 0, BrokerageBasis: 0, Cash: 0, IRA: 1883750, Roth: 0 },
+        'applyWithdrawals: Basic IRA withdrawal'
+    );
+    
+    // Test 2: Multiple account withdrawals
+    assertEqual(
+        applyWithdrawals(
+            { Brokerage: 50000, Cash: 10000, IRA: 500000, Roth: 100000 },
+            { Brokerage: 5000, IRA: 50000, Roth: 10000 }
+        ),
+        { Brokerage: 45000, Cash: 10000, IRA: 450000, Roth: 90000 },
+        'applyWithdrawals: Multiple account withdrawals'
+    );
+    
+    // Test 3: Withdrawal exceeds balance (should floor at 0)
+    assertEqual(
+        applyWithdrawals(
+            { IRA: 10000, Roth: 5000 },
+            { IRA: 15000, Roth: 6000 }
+        ),
+        { IRA: 0, Roth: 0 },
+        'applyWithdrawals: Withdrawal exceeds balance - floor at zero'
+    );
+    
+    // Test 4: Withdrawal keys don't match balance keys (should be ignored)
+    assertEqual(
+        applyWithdrawals(
+            { IRA: 100000, Roth: 50000 },
+            { Brokerage: 10000, Cash: 5000, totalTax: 1000 }
+        ),
+        { IRA: 100000, Roth: 50000 },
+        'applyWithdrawals: Non-matching withdrawal keys ignored'
+    );
+    
+    // Test 5: Empty withdrawals object
+    assertEqual(
+        applyWithdrawals(
+            { IRA: 100000, Roth: 50000 },
+            {}
+        ),
+        { IRA: 100000, Roth: 50000 },
+        'applyWithdrawals: Empty withdrawals object - no change'
+    );
+    
+    // Test 6: Zero withdrawals
+    assertEqual(
+        applyWithdrawals(
+            { IRA: 100000, Roth: 50000 },
+            { IRA: 0, Roth: 0 }
+        ),
+        { IRA: 100000, Roth: 50000 },
+        'applyWithdrawals: Zero withdrawals - no change'
+    );
+    
+    // Test 7: Mix of matching and non-matching keys
+    assertEqual(
+        applyWithdrawals(
+            { Brokerage: 100000, IRA: 200000, Roth: 50000 },
+            { IRA: 25000, Cash: 10000, netAmount: 15000, Roth: 5000 }
+        ),
+        { Brokerage: 100000, IRA: 175000, Roth: 45000 },
+        'applyWithdrawals: Mix of matching and non-matching keys'
+    );
+    
+    // Test 8: Exact withdrawal (balance becomes zero)
+    assertEqual(
+        applyWithdrawals(
+            { IRA: 50000, Roth: 25000 },
+            { IRA: 50000, Roth: 25000 }
+        ),
+        { IRA: 0, Roth: 0 },
+        'applyWithdrawals: Exact withdrawal - balance to zero'
+    );
+    
+    // Test 9: All accounts with various withdrawal scenarios
+    assertEqual(
+        applyWithdrawals(
+            { Brokerage: 100000, BrokerageBasis: 60000, Cash: 50000, IRA: 500000, Roth: 200000 },
+            { Brokerage: 10000, BrokerageBasis: 6000, Cash: 100000, IRA: 50000, taxAmount: 15000 }
+        ),
+        { Brokerage: 90000, BrokerageBasis: 54000, Cash: 0, IRA: 450000, Roth: 200000 },
+        'applyWithdrawals: Complex scenario with all account types'
+    );
+    
+    // Test 10: Negative withdrawal (shouldn't happen, but test behavior)
+    assertEqual(
+        applyWithdrawals(
+            { IRA: 100000 },
+            { IRA: -10000 }
+        ),
+        { IRA: 110000 },
+        'applyWithdrawals: Negative withdrawal adds to balance (edge case)'
+    );
+
+	
 
 // Boundary conditions
 assertEqual(
@@ -86,7 +231,7 @@ assertEqual(
     "withdrawal.order is null or empty"
   ]
     },
-    'Test: Pass wrong/null/empty values.'
+    'calculateWithdrawals: Pass wrong/null/empty values.'
 );
 
 
@@ -98,16 +243,16 @@ assertEqual(
         { order: ['Brokerage', 'IRA'], weight: [1000, 2000], taxrate: [0.10, 0.20] }
     ),
     {
-  "totalTax": 203.704,
+  "totalTax": 189.459,
   "netAmount": 1000,
   "shortfall": 0,
-  "Brokerage": 370.37,
-  "BrokerageTax": 37.037,
-  "BrokerageBasis": 133.333,
+  "BrokerageBasis": -128.205,
+  "Brokerage": 356.125,
+  "BrokerageTax": 22.792,
   "IRA": 833.333,
   "IRATax": 166.667
     },
-    'Test: Use balances as weight.'
+    'calculateWithdrawals: Use balances as weight.'
 );
 
 //  Test with with NO weights.
@@ -118,20 +263,20 @@ assertEqual(
         { order: ['Brokerage', 'IRA'], taxrate: [0.10, 0.20] }
     ),
     {
-  "totalTax": 203.704,
+  "totalTax": 189.459,
   "netAmount": 1000,
   "shortfall": 0,
-  "Brokerage": 370.37,
-  "BrokerageTax": 37.037,
-  "BrokerageBasis": 133.333,
+  "BrokerageBasis": -128.205,
+  "Brokerage": 356.125,
+  "BrokerageTax": 22.792,
   "IRA": 833.333,
   "IRATax": 166.667
     },
-    'Test: Weights are missing no shortfall.'
+    'calculateWithdrawals: Weights are missing no shortfall.'
 );
 
 
-//  Test with with NO weights, and a shortfall - should not touch Roth or Cash.
+//  Test with with NO weights, and a shortfall - should not touch Roth or Cash. Note Rates is a short array.
 assertEqual(
     calculateWithdrawals(
         { IRA: 2000, Brokerage: 1000, BrokerageBasis: 360, Cash: 5000, Roth: 5000 },
@@ -139,20 +284,20 @@ assertEqual(
         { order: ['Brokerage', 'IRA'], taxrate: [0.10, 0.20] }
     ),
     {
-  "totalTax": 500,
-  "netAmount": 2500,
-  "shortfall": 2500,
+  "totalTax": 464,
+  "netAmount": 2536,
+  "shortfall": 2464,
+  "BrokerageBasis": -360,
   "Brokerage": 1000,
-  "BrokerageTax": 100,
-  "BrokerageBasis": 360,
+  "BrokerageTax": 64,
   "IRA": 2000,
   "IRATax": 400
     },
-    'Test: Weights are missing, with shortfall, no change to Roth or Cash.'
+    'calculateWithdrawals: Weights are missing, with shortfall, no change to Roth or Cash.'
 );
 
 
-//  Test with with NO weights, and a shortfall - should not touch Roth.
+//  Test with with NO weights, and a shortfall - should not touch Roth. NOTE taxrate is missing last rate.
 assertEqual(
     calculateWithdrawals(
         { IRA: 2000, Brokerage: 1000, BrokerageBasis: 360, Cash: 5000, Roth: 5000 },
@@ -160,18 +305,18 @@ assertEqual(
         { order: ['Brokerage', 'IRA', 'Cash'], taxrate: [0.10, 0.20] }
     ),
     {
-  "totalTax": 500,
+  "totalTax": 355.235,
   "netAmount": 5000,
   "shortfall": 0,
-  "Brokerage": 1000,
-  "BrokerageTax": 100,
-  "BrokerageBasis": 360,
-  "IRA": 2000,
-  "IRATax": 400,
-  "Cash": 2500,
+  "BrokerageBasis": -240.385,
+  "Brokerage": 667.735,
+  "BrokerageTax": 42.735,
+  "IRA": 1562.5,
+  "IRATax": 312.5,
+  "Cash": 3125,
   "CashTax": 0
     },
-    'Test: Weights are missing, with shortfall filled by IRA, no change to Roth.'
+    'calculateWithdrawals: Weights are missing, taxrate is short. Shortfall filled by IRA, no change to Roth.'
 );
 
 
@@ -184,16 +329,16 @@ assertEqual(
         { order: ['Brokerage', 'IRA', 'Cash', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0.15, 0.25, 0, 0] }
     ),
     {
-  "totalTax": 254.902,
+  "totalTax": 198.582,
   "netAmount": 1000,
   "shortfall": 0,
-  "Brokerage": 588.235,
-  "BrokerageTax": 88.235,
-  "BrokerageBasis": 352.941,
+  "BrokerageBasis": -319.149,
+  "Brokerage": 531.915,
+  "BrokerageTax": 31.915,
   "IRA": 666.667,
   "IRATax": 166.667
     },
-    'Test: 50/50 split with tax rates 0.15 and 0.25'
+    'calculateWithdrawals: 50/50 split with tax rates 0.15 and 0.25'
 );
 
 // Test: Scenario A - Normal operation with no taxes
@@ -209,11 +354,11 @@ assertEqual(
   "shortfall": 0,
   "Cash": 500,
   "CashTax": 0,
+  "BrokerageBasis": -300,
   "Brokerage": 500,
-  "BrokerageTax": 0,
-  "BrokerageBasis": 300
+  "BrokerageTax": 0
     },
-    'Test: Normal 50/50 split with no taxes'
+    'calculateWithdrawals: Normal 50/50 split with no taxes'
 );
 
 // Test: High tax rate causing insufficient gross funds and a shorfall.
@@ -224,12 +369,12 @@ assertEqual(
         { order: ['Brokerage', 'IRA', 'Cash', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0.50, 0.5, 0, 0] }
     ),
     {
-  "totalTax": 1000,
-  "netAmount": 3000,
-  "shortfall": 1000,
+  "totalTax": 900,
+  "netAmount": 3100,
+  "shortfall": 900,
+  "BrokerageBasis": -200,
   "Brokerage": 1000,
-  "BrokerageTax": 500,
-  "BrokerageBasis": 200,
+  "BrokerageTax": 400,
   "IRA": 1000,
   "IRATax": 500,
   "Cash": 1000,
@@ -237,7 +382,7 @@ assertEqual(
   "Roth": 1000,
   "RothTax": 0
     },
-    'Test calculateWithdrawals: High tax rates causing shortfall'
+    'calculateWithdrawals: High tax rates causing shortfall'
 );
 
 // Test: Account depletion with fallback and taxes
@@ -248,18 +393,18 @@ assertEqual(
         { order: ['Cash', 'Brokerage', 'IRA', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0, 0.10, 0.25, 0] }
     ),
     {
-  "totalTax": 800,
+  "totalTax": 773.333,
   "netAmount": 4000,
   "shortfall": 0,
   "Cash": 1000,
   "CashTax": 0,
+  "BrokerageBasis": -200,
   "Brokerage": 1000,
-  "BrokerageTax": 100,
-  "BrokerageBasis": 200,
-  "IRA": 2800,
-  "IRATax": 700
+  "BrokerageTax": 80,
+  "IRA": 2773.333,
+  "IRATax": 693.333
     },
-    'Test: Weighted accounts depleted, fallback to IRA with 25% tax'
+    'calculateWithdrawals: Weighted accounts depleted, fallback to IRA with 25% tax'
 );
 
 // Test: All Roth (tax-free)
@@ -276,7 +421,7 @@ assertEqual(
   "Roth": 5000,
   "RothTax": 0
     },
-    'Test: 100% from Roth (tax-free)'
+    'calculateWithdrawals: 100% from Roth (tax-free)'
 );
 
 assertEqual(
@@ -286,18 +431,18 @@ assertEqual(
         { order: ['Cash', 'Brokerage', 'IRA', 'Roth'], weight: [50, 50, 0, 0], taxrate: [0, 0.20, 0.30, 0] }
     ),
     {
-  "totalTax": 1714.286,
+  "totalTax": 1200,
   "netAmount": 8000,
   "shortfall": 0,
   "Cash": 3000,
   "CashTax": 0,
+  "BrokerageBasis": -1800,
   "Brokerage": 3000,
-  "BrokerageTax": 600,
-  "BrokerageBasis": 1800,
-  "IRA": 3714.286,
-  "IRATax": 1114.286  
+  "BrokerageTax": 240,
+  "IRA": 3200,
+  "IRATax": 960 
     },
-    'Test: Mixed tax rates with depletion and fallback to IRA'
+    'calculateWithdrawals: Mixed tax rates with depletion and fallback to IRA'
 );
 
 // Test: Zero gap amount
@@ -315,7 +460,7 @@ assertEqual(
     "gapAmount is null or <= 0"
   ]
     },
-    'Test: Zero gap amount'
+    'calculateWithdrawals: Zero gap amount'
 );
 
 // Test: All accounts empty with taxes
@@ -328,13 +473,9 @@ assertEqual(
     {
   "totalTax": 0,
   "netAmount": 0,
-  "shortfall": 5000,
-  "Cash": 0,
-  "Brokerage": 0,
-  "IRA": 0,
-  "Roth": 0
+  "shortfall": 5000
     },
-    'Test: All accounts empty'
+    'calculateWithdrawals: All accounts empty'
 );
 
 // Test: Different order with taxes
@@ -345,18 +486,18 @@ assertEqual(
         { order: ['Roth', 'IRA', 'Brokerage', 'Cash'], weight: [40, 40, 20, 0], taxrate: [0, 0.25, 0.15, 0] }
     ),
     {
-  "totalTax": 2023.529,
+  "totalTax": 1753.191,
   "netAmount": 12000,
   "shortfall": 0,
   "Roth": 4800,
   "RothTax": 0,
   "IRA": 6400,
   "IRATax": 1600,
-  "Brokerage": 2823.529,
-  "BrokerageTax": 423.529,
-  "BrokerageBasis": 1694.118
+  "BrokerageBasis": -1531.915,
+  "Brokerage": 2553.191,
+  "BrokerageTax": 153.191
     },
-    'Test: Different order - Roth and IRA prioritized with taxes'
+    'calculateWithdrawals: Different order - Roth and IRA prioritized with taxes'
 );
 
 	// These use TEST data and should NOT need to be changed.
@@ -385,12 +526,12 @@ assertEqual(
   "die1": 88,
   "birthyear2": 1952,
   "die2": 98,
-  "ira1": 2000000,
-  "ira2": 400000,
-  "roth": 200000,
-  "brokerage": 400000,
-  "basis": 200000,
-  "cash": 100000,
+  "IRA1": 2000000,
+  "IRA2": 400000,
+  "Roth": 200000,
+  "Brokerage": 400000,
+  "BrokerageBasis": 200000,
+  "Cash": 100000,
   "ss1": 48000,
   "ss1Age": 70,
   "ss2": 24000,

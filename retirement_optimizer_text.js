@@ -9,7 +9,7 @@ howToUse: `
 		<li><strong>Strategy:</strong> 
 			Find this unlabeled item at the top left of the display.
 			Set the <i>After-Tax Sending Goal</i> to the amount of after-tax income you need per year. And set the <i>Spend Delta</i> percentage. A Spend Delta of 100 means no change, while a 98.5 would reduce spending by 1.5% each year. To have spending grow, use a number greater than 100%
-			<ul><li>In <em>Withdraw to meet spend goal</em> it proportionately withdraws enough from all available sources to reach <i>After-tax Spending Goal</i>. Its a good baseline to compare other strategies to.</li>
+			<ul><li>In <em>Withdraw to meet spend goal</em> it proportionately withdraws enough from all available sources to reach <i>After-tax Spending Goal</i>. Its a good baseline to compare with other strategies.</li>
 			<li>Compare with <em>Reduce IRA in N Years</em> to amortize your IRAs in a fixed number of years (they won't be emptied, they will be drawn down to <i>IRA Reduction Goal</i>.</li>
 			<li><i>Fill Federal Tax Bracket</i> withdraws enough to max out the chosen federal tax bracket.</li>
 			<li><i>Lesser of IRMAA or ...</i> is not yet implemented, but here it's like <i>Fill Federal Tax Bracket</i>, but reduces the amount withdrawn to stay under the (next) IRMAA tier.</li></ul>

@@ -1,50 +1,29 @@
 const TAXData = {
-	TEST: {
-		// Data used for testing only.
-		YEAR: 2026,
-		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1},  {l: 2000, r: 0.2}, {l: 40000, r: 0.8} ]	},
-		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1},  {l: 2000/2, r: 0.2}, {l: 40000/2, r: 0.8} ]}
-	},
-    CA: {
-		STATE: 'California',
-		YEAR: 2025,
-        MFJ: {
-            std: 10804,
-            brackets: [
-                { l: 20824, r: 0.01 }, { l: 49368, r: 0.02 }, { l: 77918, r: 0.04 },
-                { l: 108162, r: 0.06 }, { l: 136700, r: 0.08 }, { l: 698274, r: 0.093 },
-                { l: 837922, r: 0.103 }, { l: 1000000, r: 0.123 }, { l: 1e9, r: 0.133 }
-            ]
-        },
-        SGL: {
-            std: 5402,
-            brackets: [
-                { l: 10412, r: 0.01 }, { l: 24684, r: 0.02 }, { l: 38959, r: 0.04 },
-                { l: 54081, r: 0.06 }, { l: 68350, r: 0.08 }, { l: 349137, r: 0.093 },
-                { l: 418961, r: 0.103 }, { l: 698271, r: 0.123 }, { l: 1e9, r: 0.133 }
-            ]
-        }
-    }, // CALIFORNIA
-	
-	// For states with NO state tax. Not implemented yet... but it's close.
-    NONE: {
-		STATE: 'None',
-		YEAR: 2026,
-        MFJ: {
-            std: 0,
-            brackets: [ { l: 1e9, r: 0 } ]
-        },
-        SGL: {
-            std: 0,
-            brackets: [ { l: 1e9, r: 0 } ]
-        }
-    },
-	
-
 	FEDERAL: {
 		YEAR: 2026,  // Official IRS Revenue Procedure 2025-32
 		REFERENCE: 'https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill',
 		REF_2: 'https://taxfoundation.org/data/all/federal/2026-tax-brackets/',
+		CAPITAL_GAINS: {
+			YEAR: 2026,
+			REFERENCE: 'none - Claude.ai created it.',
+			NOTE: 'This bracket combines capital gains and NIIT - strictly speaking its not correct', 
+			MFJ: {
+				brackets: [
+					{ l: 98900, r: 0.00 },      // 0% cap gains
+					{ l: 250000, r: 0.15 },     // 15% cap gains, no NIIT
+					{ l: 613700, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
+					{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
+				]
+			},
+			SGL: {
+				brackets: [
+					{ l: 49450, r: 0.00 },      // 0% cap gains
+					{ l: 200000, r: 0.15 },     // 15% cap gains, no NIIT
+					{ l: 306850, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
+					{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
+				]
+			}			
+		},
 		MFJ: {
 			std: 32200, 
 			age: 65,
@@ -64,29 +43,6 @@ const TAXData = {
 				{ l: 1e9, r: 0.37 }	]
 			}
 		},
-		
-	FED_CAP_GAINS: {
-		YEAR: 2026,
-		REFERENCE: 'none - Claude.ai created it.',
-		NOTE: 'This bracket combines capital gains and NIIT - strictly speaking its not correct', 
-		MFJ: {
-			brackets: [
-				{ l: 98900, r: 0.00 },      // 0% cap gains
-				{ l: 250000, r: 0.15 },     // 15% cap gains, no NIIT
-				{ l: 613700, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
-				{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
-			]
-		},
-		SGL: {
-			brackets: [
-				{ l: 49450, r: 0.00 },      // 0% cap gains
-				{ l: 200000, r: 0.15 },     // 15% cap gains, no NIIT
-				{ l: 306850, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
-				{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
-			]
-		}
-	},
-	
 	SOCIALSECURITY: {
 		Year: 2025,
 		MFJ: { brackets: [{ l:32000-1, r: 0.0}, { l:32000, r: 0.5}, {l: 44000, r: 0.85}] },
@@ -99,7 +55,8 @@ const TAXData = {
 		standardPartB: 202.90,
 		partBDeductible: 283,
 		
-		MFJ: {
+		// NOTE these are MONTHLY values, it is NOT progressive, and these are the actual tax, not rates.
+				MFJ: {
 			brackets: [
 				{ l: 218000 - 1, r: 0}, { l: 218000, r: (2 * 202.90) },
 				{ l: 274000, r: 2 * (284.10 + 14.50) },	{ l: 348000, r: 2 * (405.90 + 37.60) },
@@ -124,6 +81,184 @@ const TAXData = {
 			]
 		}
 	}, // IRMAA	
+
+
+	// For states with NO state tax. Not implemented yet... but it's close.
+    NONE: {
+		STATE: 'None',
+		YEAR: 2026,
+		FLAT_RATE: 0.0,
+        MFJ: {
+            std: 0,
+            brackets: [ { l: 1e9, r: 0 } ]
+        },
+        SGL: {
+            std: 0,
+            brackets: [ { l: 1e9, r: 0 } ]
+        }
+    },
+
+    CA: {
+		STATE: 'California',
+		YEAR: 2025,
+        MFJ: {
+            std: 10804,
+            brackets: [
+                { l: 20824, r: 0.01 }, { l: 49368, r: 0.02 }, { l: 77918, r: 0.04 },
+                { l: 108162, r: 0.06 }, { l: 136700, r: 0.08 }, { l: 698274, r: 0.093 },
+                { l: 837922, r: 0.103 }, { l: 1000000, r: 0.123 }, { l: 1e9, r: 0.133 }
+            ]
+        },
+        SGL: {
+            std: 5402,
+            brackets: [
+                { l: 10412, r: 0.01 }, { l: 24684, r: 0.02 }, { l: 38959, r: 0.04 },
+                { l: 54081, r: 0.06 }, { l: 68350, r: 0.08 }, { l: 349137, r: 0.093 },
+                { l: 418961, r: 0.103 }, { l: 698271, r: 0.123 }, { l: 1e9, r: 0.133 }
+            ]
+        }
+    }, // CALIFORNIA
+	
+
+	// CONNECTICUT - 2025/2026
+	CT: {
+		STATE: 'Connecticut',
+		YEAR: 2025,  // No changes announced for 2026
+		MFJ: {
+			std: 24000,  // CT uses personal exemptions instead, not standard deduction
+			exemption: 24000,  // Phase out at higher incomes
+			brackets: [
+				{ l: 20000, r: 0.02 },
+				{ l: 100000, r: 0.045 },
+				{ l: 200000, r: 0.055 },
+				{ l: 400000, r: 0.06 },
+				{ l: 500000, r: 0.065 },
+				{ l: 1000000, r: 0.069 },
+				{ l: 1e9, r: 0.0699 }
+			]
+		},
+		SGL: {
+			std: 15000,
+			exemption: 15000,  // Phase out at higher incomes
+			brackets: [
+				{ l: 10000, r: 0.02 },
+				{ l: 50000, r: 0.045 },
+				{ l: 100000, r: 0.055 },
+				{ l: 200000, r: 0.06 },
+				{ l: 250000, r: 0.065 },
+				{ l: 500000, r: 0.069 },
+				{ l: 1e9, r: 0.0699 }
+			]
+		}
+	}, // CONNECTICUT
+
+	// GEORGIA - 2025/2026
+	GA: {
+		STATE: 'Georgia',
+		YEAR: 2025,
+		FLAT_RATE: {2026: 0.0519, 2027: 0.0509, 2028: 0.499 }, // Will decrease to 5.09% on Jan 1, 2027
+		MFJ: {
+			std: 24000,  // Increased from $18,500
+			exemption_dependent: 4000,  // $4,000 per dependent
+			brackets: [
+				{ l: 1e9, r: 0.0519 }  // Single flat rate
+			]
+		},
+		SGL: {
+			std: 12000,  // Increased from $7,100
+			exemption_dependent: 4000,
+			brackets: [
+				{ l: 1e9, r: 0.0519 }
+			]
+		},
+		// Note: Rate will decrease 0.10% annually: 
+		// 2027: 5.09%, 2028: 4.99% (then stays at 4.99%)
+	}, // GEORGIA	
+
+	// ILLINOIS - 
+	IL: {
+		STATE: 'Illinois',
+		YEAR: 2025,  // Flat tax, no change for 2026
+		FLAT_RATE: 0.0495,  // 4.95% flat rate for all filers
+		MFJ: {
+			std: 5700,  // Illinois doesn't use standard deduction
+			exemption: 5700,  // $2,850 per person (2 × $2,850)
+			brackets: [
+				{ l: 1e9, r: 0.0495 }  // Single flat rate
+			]
+		},
+		SGL: {
+			std: 2850,
+			exemption: 2850,  // $2,850 per person
+			brackets: [
+				{ l: 1e9, r: 0.0495 }
+			]
+		},
+		// Note: Exemptions phase out above $250K single / $500K MFJ federal AGI
+	}, // ILLINOIS
+
+	// MARYLAND - 2025/2026
+	MD: {
+		STATE: 'Maryland',
+		YEAR: 2025,  // New brackets effective July 1, 2025
+		CAPITAL_GAINS: {
+			MFJ: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: 1e9, r: 0.02 }] },
+			SGL: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: 1e9, r: 0.02 }] }
+		},
+		MFJ: {
+			std: 6700,  // New for 2025, was income-based before
+			brackets: [
+				{ l: 1000, r: 0.02 },
+				{ l: 2000, r: 0.03 },
+				{ l: 3000, r: 0.04 },
+				{ l: 100000, r: 0.0475 },
+				{ l: 125000, r: 0.05 },
+				{ l: 150000, r: 0.0525 },
+				{ l: 250000, r: 0.055 },
+				{ l: 600000, r: 0.0575 },
+				{ l: 600001, r: 0.0625 },  // New bracket for 2025
+				{ l: 1200000, r: 0.065 },  // New top bracket for 2025
+				{ l: 1e9, r: 0.065 }
+			]
+		},
+		SGL: {
+			std: 3350,  // New for 2025, was income-based before
+			brackets: [
+				{ l: 1000, r: 0.02 },
+				{ l: 2000, r: 0.03 },
+				{ l: 3000, r: 0.04 },
+				{ l: 100000, r: 0.0475 },
+				{ l: 125000, r: 0.05 },
+				{ l: 150000, r: 0.0525 },
+				{ l: 250000, r: 0.055 },
+				{ l: 500000, r: 0.0575 },
+				{ l: 500001, r: 0.0625 },  // New bracket for 2025
+				{ l: 1000000, r: 0.065 },  // New top bracket for 2025
+				{ l: 1e9, r: 0.065 }
+			]
+		},
+		// Note: Maryland also has local county taxes (2.25%-3.3%) added on top
+		// Capital gains surtax of 2% for federal AGI > $350K (all statuses)
+	}, // MARYLAND
+
+	MI: {
+		STATE: 'Michigan',
+		YEAR: 2025,
+		FLAT_RATE: 0.0405,  // 4.05% flat rate for all filers
+		MFJ: {
+			std: 5600,
+			brackets: [
+				{ l: 1e9, r: 0.0405 }  // Flat tax rate
+			]
+		},
+		SGL: {
+			std: 5600,
+			brackets: [
+				{ l: 1e9, r: 0.0405 }  // Flat tax rate
+			]
+		}
+	}, // MICHIGAN
+
 	
 	NY: {
 		STATE: 'New York',
@@ -149,6 +284,7 @@ const TAXData = {
 	NC: {
 		STATE: 'North Carolina',
 		YEAR: 2025,
+		FLAT_RATE: 0.0475,  // 4.75% flat rate for all filers		
 		MFJ: {
 			std: 25500,
 			brackets: [
@@ -163,39 +299,6 @@ const TAXData = {
 		}
 	}, // NORTHCAROLINA
 
-	MI: {
-		STATE: 'Michigan',
-		YEAR: 2025,
-		MFJ: {
-			std: 5600,
-			brackets: [
-				{ l: 1e9, r: 0.0405 }  // Flat tax rate
-			]
-		},
-		SGL: {
-			std: 5600,
-			brackets: [
-				{ l: 1e9, r: 0.0405 }  // Flat tax rate
-			]
-		}
-	}, // MICHIGAN
-
-	PA: {
-		STATE: 'Pennsylvania',
-		YEAR: 2025,
-		MFJ: {
-			std: 0,  // Pennsylvania has no standard deduction for state tax
-			brackets: [
-				{ l: 1e9, r: 0.0307 }  // Flat tax rate
-			]
-		},
-		SGL: {
-			std: 0,  // Pennsylvania has no standard deduction for state tax
-			brackets: [
-				{ l: 1e9, r: 0.0307 }  // Flat tax rate
-			]
-		}
-	}, // PENNSYLVANIA	
 	OR: {
 		STATE: 'Oregon',
 		YEAR: 2025,
@@ -214,6 +317,50 @@ const TAXData = {
 			]
 		}
 	}, // OREGON
+
+	PA: {
+		STATE: 'Pennsylvania',
+		YEAR: 2025,
+		FLAT_RATE: 0.0300,  // 3.07% flat rate for all filers
+		MFJ: {
+			std: 0,  // Pennsylvania has no standard deduction for state tax
+			brackets: [
+				{ l: 1e9, r: 0.0307 }  // Flat tax rate
+			]
+		},
+		SGL: {
+			std: 0,  // Pennsylvania has no standard deduction for state tax
+			brackets: [
+				{ l: 1e9, r: 0.0307 }  // Flat tax rate
+			]
+		}
+	}, // PENNSYLVANIA	
+
+	// VIRGINIA - 2025/2026
+	VA: {
+		STATE: 'Virginia',
+		YEAR: 2025,  // 2026 data not significantly different
+		MFJ: {
+			std: 17500,  // Increased from 17000 in 2024
+			brackets: [
+				{ l: 3000, r: 0.02 },
+				{ l: 5000, r: 0.03 },
+				{ l: 17000, r: 0.05 },
+				{ l: 1e9, r: 0.0575 }
+			]
+		},
+		SGL: {
+			std: 8750,  // Increased from 8500 in 2024
+			brackets: [
+				{ l: 3000, r: 0.02 },
+				{ l: 5000, r: 0.03 },
+				{ l: 17000, r: 0.05 },
+				{ l: 1e9, r: 0.0575 }
+			]
+		}
+	}, // VIRGINIA
+
+
 	DC: {
 		STATE: 'District of Columbia',
 		YEAR: 2025,
@@ -233,7 +380,15 @@ const TAXData = {
 				{ l: 1e9, r: 0.1075 }
 			]
 		} 
-	} // WASHINGTONDC
+	}, // WASHINGTONDC
+
+	TEST: {
+		// Data used for testing only.
+		YEAR: 2026,
+		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1},  {l: 2000, r: 0.2}, {l: 40000, r: 0.8} ]	},
+		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1},  {l: 2000/2, r: 0.2}, {l: 40000/2, r: 0.8} ]}
+	},
+	XYZZY: { }
 	
 }; // TAXdata
 

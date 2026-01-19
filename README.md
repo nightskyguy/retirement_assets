@@ -6,33 +6,37 @@ You can [download the files](https://github.com/nightskyguy/retirement_assets) a
 
 **There is no SUPPORT for this tool** and no guarantee of accuracy, or appropriateness of use. There is also no charge. **USE AT YOUR OWN RISK**
 
-A California resident built this with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, Javascript, and Groovy. See **Key Features** below for a non-exhaustive list of what the tool can do - and be sure to look at *What the Tool IGNOREs* so you understand the limitations.
+A California resident built this with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, Javascript, and Groovy. See **Key Features** below for a non-exhaustive list of what the tool can do - and be sure to look at *What the Tool IGNOREs* (and *Known Bugs*, below) so you understand the limitations.
 
 #### Features in the Works (and Known Bugs):
 
-+ <STRONG>BUG</B> Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "Withdraw to meet spend") and often overshoots.
-+ Implement the "*Max conversion*" logic - use cash/brokerage assets to increase Roth conversions. Currently it "converts" the excess withdrawals after taxes and spend goal.  But if there is available cash to pay taxes on the conversion, more can be moved into Roth. Of course excess withdrawals can also be spent or deposited into cash.
-+ <STRONG>BUG</B> The current tax engine has shortcomings. Use a more comprehensive calculation. (It's in the code, but needs updating to be made usable/correct). Currently needs *Capital Gains* and *NIIT* handling and improvements in handling SS taxability.
-+ <STRONG>BUG</B> When Roth funds are tapped to meet spending goals, it still may overwithdraw. For example, it may withdraw 15,000 and have a 15,000 surplus which implies the Roth withdrawal was unnecessary.
-+ <STRONG>BUG</B> We suspect the "Fill Bracket" goal has a flaw in the current implementation. Please be cautious/ignore for now!
-+ <STRONG>BUG</B> The Dividend rate is currently only applied to the Brokerage account. It should be applied to the Roth account, too!
++ **BUG** Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "Withdraw to meet spend") and often overshoots.
++ Implement the *Max Conversion* logic - use cash/brokerage assets to increase Roth conversions. Currently it "converts" the excess withdrawals after taxes and spend goal.  But if there is available cash to pay taxes on the conversion, more can be moved into Roth. Of course excess withdrawals can also be spent or deposited into cash.
++ **BUG** The current tax engine has shortcomings. Need a more comprehensive calculation. (It's in the code, but needs updating to be made usable/correct). Currently needs *Capital Gains* and *NIIT* taxation and improvements in handling SS taxability.
++ **BUG** When Roth funds are tapped to meet spending goals, it still may overwithdraw. For example, it may withdraw 15,000 and then have a 15,000 surplus which implies the Roth withdrawal was unnecessary.
++ **BUG** We suspect the "Fill Bracket" goal has a flaw in the implementation. Please be cautious/ignore for now!
++ **BUG** The Dividend rate is applied to the Brokerage account. It should be applied to the Roth account, too! Remember Brokerage dividends are accummulated in the 
 + Add a "taxcreep" to see what harm a creeping tax rate might do.  I notice some states (e.g. Georgia) are reducing their tax rates, while others are adding more brackets and increasing rates.
-+ Save/Import/Export of settings <B>DONE</B>. BUT The Load/Save/Delete/Manage Scenarios UI is rather ugly and undocumented. It works, however, so it's low priority to fix and document it.
++ Save/Import/Export of settings **DONE**. The Load/Save/Delete/Manage Scenarios UI is undocumented. 
 + Autoload any saved "Default" scenario (so you can pick up where you left off).
-+ Better organize the Annual Details tables.
++ Better organize the Annual Details tables. There are just two many columns to easily navigate.
 + Allow exporting of the Annual Details table(s).
 + The tool should warn when a "Fill Federal Bracket" is picked that is impossible to meet due to After-Tax Spend goal. For example, setting After-Tax Spend to 180,000 makes it impossible to stay in the 12% (or even the 22%) bracket unless there are lots of cash, brokerage or Roth assets already.
 + Allow selection of the quarter in which withdrawals will occur. I don't think it makes a signficant difference, but changing the model a bit will make it possible to know how much difference it might make. For example if you're trying to draw down an IRA, taking the withdrawals early in the year means you will accrue less growth in that account. Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last quarter may help.
 
 
 #### Why This Tool?
-Because he is in retirement, and has an unhealthy IRA balance to manage - it became obvious that no tool he could find offered the flexibility and ease of use he desired.  He and his wife are of different ages (so have different IRAs, RMD timings, Social Security amounts, etc.)  Some really powerful tools didn't offer California tax calculations (California is a high tax state), didn't provide for life expectancy, and more.
+Because the author is in retirement and has an unhealthy IRA balance to manage - it became obvious that no tool he could find offered the flexibility and *ease of use* he desired.  He and his wife are of different ages (so have different IRAs, RMD timings, Social Security amounts, etc.)  Some really powerful tools didn't offer California tax calculations (California is a high tax state), or didn't provide for life expectancy, and more.  Some of the questions the author sought to answer by modeling are these:
 
-The purpose of this tool is to model the remaining years of life with respect to spendable cash and taxation - and to determine how to optimize spendable cash. This tool may be useful to those who are *in* or *very near* retirement. It is not designed to analyze portfolios, in fact you must provide a best guess on the growth rate you expect for your particular portfolio(s).
-Signficantly more analysis is needed to do pre-retirement optimization, or optimization of asset mixes - this is not a tool for that. 
+- Which strategy does the best job of reducing total taxation?
+- What withdrawal strategy produces the most annual spendable amount? What is that amount?
+- What assets will be left at the end of life, and in which accounts?
+
+Therefore, the purpose of this tool is to model the remaining years of life with respect to spendable cash and taxation - and to determine how to optimize spendable cash. This tool may be useful to those who are *in* or *very near* retirement. It is not designed to analyze portfolios, in fact you must provide a best guess on the growth rate you expect for your particular portfolio(s).
+Signficantly more analysis is needed to do pre-retirement optimization, or optimization of asset mixes - this is not a tool for that. Some general principles apply, however: in general if you have a large IRA, it is usually best to put more bonds and conservative assets in the IRA, and put more aggressive assets in the ROTH so that they can grow tax free.
 		
-Many focus on <i>Roth Conversions</i> and that is not wrong thinking, but such a view misses the big picture of WHY to do conversions. Also from the time one stops getting regular W2 income until the time one starts receiving pensions or social security is known as the "valley of opportunity".  
-During this otherwise low income period, strategic withdrawals and movement is possible. Ultimately you are in a better place if you have <i>degrees of freedom</i> in your assets - more on this in a moment. 
+Many focus on ***Roth Conversions*** and that is not wrong thinking, but such a view misses the big picture of WHY to do conversions. Also from the time one stops getting regular W2 income until the time one starts receiving pensions or social security is known as the "valley of opportunity".  
+During this otherwise low income period, strategic withdrawals and movement is possible. Ultimately you are in a better place if you have *degrees of freedom* in your assets - more on this in a moment. 
 It also does not make sense to pay more tax than necessary. I do not see taxation as evil, but it does not feel "right" to pay up to 14,000/year in IRMAA fees for no net benefit 
 in Medicare - but that is one of the many pitfalls of having too much forced income.
 		
@@ -47,11 +51,12 @@ In this tool, we lump IRMAA together with California state and Federal taxes (in
 4. Modeling can show the true cost of the widow penalty (when one spouse predeceases another) and IRMAA penalty.
 5. The ability to model different spending rates in retirement (e.g. the spending SMILE) or a flat spending rate.
 6. A simple way to see the MOST you might expect to spend through retirement, what happens if your life expectancy is changed
-7. It automatically rolls any IRA balance from the decease spouse to the living spouse (because RMDs may apply differently!)
+7. It automatically rolls any IRA balance from the deceased spouse to the living spouse (because RMDs may apply differently!)
 8. Forecast the affect of the impending 2033 Social Security Fund depletion (with a 33% reduction in payouts)
-9. "Wealth" as shown in this tool is adjusted for the average taxation measured.  Many tools would show a 500,000 Roth and a 500,000 IRA as being 1,000,000 net worth.  But that's not the case. You can only take money out of an IRA/401K at a zero percent total rate at a very low amount. RMDs may make that impossible at some point.
+9. "Wealth" as shown in this tool is adjusted for the average taxation measured.  Many tools would show a 500,000 Roth and a 500,000 IRA as being 1,000,000 net worth.  But that's not very accurate. You can only take money out of an IRA/401K at a zero percent total rate at a very low amount. RMDs may make that impossible at some point.
 10. Choose tax rates from a number of states (currently California, District of Columbia, Michigan, New York, North Carolina, Oregon, Pennsylvania, Virginia, Illinois, Connecticut, Maryland, Georgia and NONE (for those states with no state tax).  Note there are some calculation variations among states that are not performed.
-11. Save/Load/Import/Export settings. 
+11. Save/Load/Import/Export settings so you can quickly start where you left off.
+12. View the detailed transactions (*Annual Details*) or a simplified chart (*Chart*).
 
 
 #### What the Tool IGNORES
@@ -83,7 +88,47 @@ The sources I found:
 
 + [GoogleSheet](https://docs.google.com/spreadsheets/d/1orZQ9g1KvGVrCShibutjyreaeqbmRFVAZ9aSY_57-DQ/edit?gid=1250894970#gid=1250894970) by Charles Eglington found on [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nu9lawc/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1), but missing some - to me - important things. In particular it doesn't properly calculate standard deductions (age related), or handle several situations related to the death of one spouse. It needs a "Life Expectancy" for each person, and should properly calculate deductions, filing status, etc.  In addition, I'd like it to "self optimize" by varying the amounts of IRA/401K withdrawals (and the number of years for withdrawals).  Ideally it would properly, or more properly calculate California Tax, and have a way to forecast based on inflation.
 
-+ Another [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nulys5i/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button) contribution by <i>Working-Schedule5000
-</i> is what made me realize that writing a tool in JavaScript results in the most readability and tweakability of the code. Spreadsheets can become hard to follow.  To use download and save, then run in your browser: https://drive.google.com/file/d/1ZJNCg-HNXHZmzWv9zW1anaFpLNTOTf10/view
++ Another [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nulys5i/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button) contribution by _Working-Schedule5000
+_ is what made me realize that writing a tool in JavaScript results in the most readability and tweakability of the code. Spreadsheets can become hard to follow.  To use download and save, then run in your browser: https://drive.google.com/file/d/1ZJNCg-HNXHZmzWv9zW1anaFpLNTOTf10/view
 
 + [Visual Federal Tax Tool](https://engaging-data.com/tax-brackets/) - this tool shows how your federal taxes are calculated.  As of 2026-01-17, it doesn't handle taxability of Social Security income, and as best I can tell, doesn't handle the OBB provisions for seniors.
+
+
+### Ramblings and Observations
+
+#### Some of the Things I Learned About Taxation
+
+While the Social Security payments are adjusted annually by the CPI (Consumer Price Index), the rate at which Social Security is taxed is based on thresholds have NEVER been adjusted for inflation since they were established (1983 for 50%, and 1993 for 85%). This is no doubt why congress has churned and churned on trying to make Social Security non taxable.
+
+My original model assumed that the IRMAA tax brackets and amounts are adjusted by CPI, but that's not true. The brackets are adjusted per CPI, but the amounts are tied to medicare. The CPI has averaged about 2.8% annually over the last 20 years, but Medicare has averaged 5.6% annual increase.  IRMAA, as mentioned is a TAX CLIFF, not a graduated bracket. That means if you make $1 more than the maximum you move up an IRMAA tier. The result is not only the need to pay the tax, say an extra 4k per year, but you may have to withdraw more from an IRA to pay the tax.  At a 20% nominal tax rate, that extra $1 costs at least $5K AND may result in pushing you up into higher marginal brackets.
+
+#### About State Taxation
+
+33 of 50 states tax capital gains the same as regular income. Unfortunately many tools and many discussions neglect this aspect, which is another reason I wrote this tool. 9 states have no taxation or do not tax capital gains (as of 2025), and 9 states have preferential treatment of capital gains. [[Source]](https://www.theentrustgroup.com/blog/state-capital-gains-tax)
+
+If you live in, or plan to move in a different state and you want to use this tool, you can! It now includes several states - and more can be added. If you're impatient, you can get creative and ask AI to add your state to the *TAXdata* embedded in retirement_optimizer_taxdata.js file.
+
+#### ROTH Conversion Gotchas
+
+The bad scenarios for ROTH conversions are these:
+
+1. You withdraw/convert now at a higher tax rate than you will face in your future.
+2. You withdraw + convert in an amount that pushes your taxation up (this is a specific case of 1)
+3. You convert before you're 59.5 and do not have funds to pay the taxes AND/or that conversion pushes you into a higher taxation situation.
+
+There are more than a dozen ways that not doing a conversion (to ROTH or brokerage) can result in less spendable money and reduce spendable asset value. These scenarios mostly affect those with proportionately large IRA/401K balances. Even modest IRA/401K balances can significantly improve their asset balance and spendable cash through thoughtful withdrawals.
+
+Here are some of the harms of having or accruing a large IRA/401K:
+
+1. Growth in or size of the IRA/401K balance reaches a point where you end up in a higher tax bracket before or after RMDs start.
+2. RMDs cause you to have little to no room for managing your desired spend (i.e. avoiding higher taxes and/or IRMAA and/or NIIT).
+3. If the bulk of your assets remain in an IRA/401K, any large extra expenditure will result in a corresponding hit to your taxation (think remodeling, buying a fancy car, or a vacation home).
+4. Tax rates could go up significantly in the future (I argue they will go up!).
+5. To spend more, you have to withdraw more and pay more tax.
+6. Social security bottoms out in 2033 (as it is on track to do), and you have to withdraw more to cover the loss of Social Security funds... increasing your taxation.
+7. Your spouse passes away. Now you're in a single tax bracket paying 30% more taxes for the same income (unless you remarry).
+8. Your IRA (not 401K) crosses about 1.5m - in that case you could be forced to surrender some of it in a lawsuit. (401Ks have stronger protection). ROTHs are similarly exposed, but because ROTH is not taxed, a smaller balance has greater value to you.
+9. You and your spouse pass away. Your heirs will be forced to liquidate the IRA/401K balance within 10 years at THEIR tax rate. (ROTHs must be liquidated, too, but there is no tax).
+10. If you or your spouse pass away, usually the most effective way to manage this is for the survivor to "take over" the deceased's IRA/401K balance. The now larger balance will be subject to the survivors RMD requirements. This might be better if the surviving spouse is younger, but could go the other way.
+11. As your IRA/401K grows, your RMDs will also grow. At some point this causes 85% of your social security to become taxable, AND causes IRMAA taxes, AND possibly NIIT.
+12. IRA/401K withdrawals are taxable income in MOST states. ROTH withdrawals are not taxable in any state.

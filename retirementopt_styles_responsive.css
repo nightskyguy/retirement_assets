@@ -508,6 +508,40 @@ th[title] {
     }
 }
 
+/* Modal-specific button styles */
+.modal-btn {
+    padding: 6px 10px !important;
+    font-size: 0.85rem !important;
+    min-height: auto !important;
+    width: auto !important;
+    margin: 2px !important;
+    display: inline-block !important;
+}
+
+/* Ensure modal tables are responsive */
+#scenarioModal table {
+    font-size: 0.85rem;
+}
+
+#scenarioModal td {
+    white-space: nowrap;
+    padding: 6px 4px !important;
+}
+
+
+#scenarioModal button,
+#scenarioListContent button {
+    width: auto !important;
+    min-width: 60px !important;
+    max-width: 100px !important;
+    padding: 6px 10px !important;
+    font-size: 0.85rem !important;
+    min-height: auto !important;
+    margin: 2px !important;
+    display: inline-block !important;
+}
+
+
 /* ========================================
    DESKTOP - Large screens (> 1024px)
    ======================================== */

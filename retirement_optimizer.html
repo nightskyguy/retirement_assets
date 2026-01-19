@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer 7b</title>
+    <title>Retirement Optimizer 7c</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<!-- <link rel="stylesheet" href="retirementopt_styles.css"> -->
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">	
@@ -25,9 +25,9 @@
 		</div>	
         <div class="input-group">
             <select id="strategy" onchange="toggleStrategyUI()">
-                <option value="baseline">Withdraw to meet spend</option>
-                <option value="fixed">Reduce IRA in &#120393; Years</option>
-                <option value="bracket">Fill Federal Tax Bracket</option>
+                <option value="baseline">💵Withdraw to meet spend</option>
+                <option value="fixed">💸Reduce IRA in &#120393; Years</option>
+                <option value="bracket">🪣Fill Federal Tax Bracket</option>
                 <option value="minlimit">🛑Lesser of IRMAA or TaxBracket</option>
             </select>
         </div>
@@ -69,16 +69,16 @@
 
         <h3>2. Assets (Current)</h3>
         <div class="row">
-            <div><label>Your IRA</label>  <input type="number" id="ira1" value="1000000"></div>
-            <div><label>Spouse IRA</label><input type="number" id="ira2"  value="400000"></div>
+            <div><label>Your IRA</label>  <input type="number" id="IRA1" value="1000000"></div>
+            <div><label>Spouse IRA</label><input type="number" id="IRA2"  value="400000"></div>
         </div>
         <div class="row">
-            <div><label>Brokerage</label><input type="number" id="brokerage" value="100000"></div>
-            <div><label>Brokerage Basis</label><input type="number" id="basis" value="100000"></div>
+            <div><label>Brokerage</label><input type="number" id="Brokerage" value="100000"></div>
+            <div><label>Brokerage Basis</label><input type="number" id="BrokerageBasis" value="100000"></div>
         </div>
         <div class="row">
-            <div><label>Roth IRA</label><input type="number" id="roth" value="50000"></div>
-            <div><label>Cash Balance</label><input type="number" id="cash" value="50000"></div>
+            <div><label>Roth IRA</label><input type="number" id="Roth" value="50000"></div>
+            <div><label>Cash Balance</label><input type="number" id="Cash" value="50000"></div>
         </div>
 
         <h3>3. Income (annual)</h3>
@@ -102,11 +102,11 @@
             <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%</label><input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></div>
         </div>
         <div class="row">
-            <div><label title="Your asset mix will dictate what growth rate to expect. In a brokerage, your basis doesn't grow at the rate the account does.">Growth (6)%</label><input type="number" id="growth" value="6.0"></div>
+            <div><label title="Your asset mix will dictate what growth rate to expect. In a brokerage, your basis doesn't grow at the rate the account does. Note that the dividend rate is additive. 4% growth and 2% dividends = 6% total.">Growth (6)%</label><input type="number" id="growth" value="6.0"></div>
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?</label><input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></div>
         </div>
         <div class="row">
-			<div><label title="This is the rate that your asset mix emits dividends.">Dividend Rate (0.5)?</label><BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00">%</div>
+			<div><label title="This is the rate that your asset mix emits dividends. Brokerage dividends accrue to the Cash account. Others to their own account.">Dividend Rate %</label><BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00"></div>
 			<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation</label><BR>
             <select id="STATEname"">
                 <option   value="NONE">-No State Tax-</option>
@@ -129,47 +129,9 @@
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%</label><input type="number" id="ssFailPct" value="77.3"></div>
         </div>
 
-    </div>
+    </div> <!-- sidebar -->
 
     <div class="main">
-			<div class="header-drawers">
-			<details class="top-drawer"><summary>Change Log</summary><div><br>
-				<div class="log-entry">
-				</div>
-				<ul>
-				<li><b>7b</b> More state rates. Fixed most calculations. Minor UI changes. Changed the defaults to something "more common" - . See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>. </li>					
-				<li>7a Now has various state rates. Fixed most calculations. See <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A> for details. </li>	
-				
-				<li>6v Implemented Save/Load/Export/Delete Scenarios.</li>	
-				<li>6u Implemented SS Fail. More UI fixes. Moved all strategy items to the top.</li>	
-				<li>6t Solved a math issue causing NaN to occur. Cleaned up the visuals.</li>				
-				<li>6s Some more fancy highlighting of the tables. Fixed broken strategy changer. Tests moved into separate file, too.</li>				
-				<li>6r Moved the heavy text (top drawers) into a separate file.</li>
-				<li>6q Beautifications and hover notes. More self tests with an indicator on screen if they fail. Started the Social Security "meltdown" implementation. Added (empty) Insights tab.
-				</li><li>6p Corrected instructions for Single filer usage. Fixed error in brokerage tracking. Added brokerage dividend rate. Dividends automatically accrue to Cash.
-				</li><li>6n Calculation fixes. WARNING: detailed calculations not done - but current calcs are accurate.
-				</li><li>6m More self tests, some rework.
-				</li><li>6k Reworked tax brackets for sanity ease of update. Added more instructions. 
-				</li><li>6j Move style sheet out for readability.
-				</li><li>6i Remove the Recalculate and Optimize buttons. Use the similarly named tabs as the buttons. 
-				</li><li>5hp Integrated Federal SS "Tax Torpedo" logic, California HSA add-backs, and IRMAA cliff surcharges. This logic is present, but not yet being used.  The older logic is "close".
-				</li><li>5h Added change log and instructions
-				</li><li>4g Do rate limit lookups based on inflation. Add suggested values.
-				</li><li>4f Use cpi% to adjust taxation (brackets)
-				</li><li>4e Use calculated birthyear for correct RMDs
-				</li>
-				</ul>
-				</div>
-			</details>
-
-			<details class="top-drawer">
-				<summary>How to Use</summary><div class="drawer-content" id="drawer-howto"></div>
-			</details>
-			<details class="top-drawer"><summary>Planned <strong id="testsFailed">🟢</strong></summary><div class="drawer-content" id="drawer-planned"></div>
-			</details>
-			<details class="top-drawer"><summary>Background</summary><div class=drawer-content" id="drawer-background"></div>
-			</details>
-		</div>	
         <div class="top-bar">
             <div id="summary-stats" style="display:flex; gap:30px;">
 				<div id="stat-success">  </div>
@@ -180,29 +142,30 @@
                 <div><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
                 <div><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
             </div>
-            </div>
+        </div>
 
         <div class="tabs">
-            <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details</button>
-            <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Chart</button>
-            <button id="btn-opt" class="tab-btn" onclick="{showTab('tab-insight')}">Insights</button>
-            <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer</button>
-		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export</button>
-
+            <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
+            <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Chart 📊</button>
+            <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer 🎯</button>
+		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
+		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}">Documentation <strong id="testsFailed">🟢</strong></button>
 
         </div>
 		<div id="tab-insight" class="card hidden">
-			🛑 Some pithy insights will appear here. Right now it's not implemented.
+			🛑 Some pithy insights will appear here. Right now it's not implemented. It will 
+			include observations like: which strategy seems most effective, what the net withdrawal rate will be for the given <i>After-Tax Spend</i> 
 			<h4>Where is the Code</h4>
 			This might be useful to know: you can run this locally (download the *.html and *.js and *.css files from github) 
 			<A HREF="https://github.com/nightskyguy/retirement_assets">https://github.com/nightskyguy/retirement_assets</a>.
 			<p>And you can also take a look at the source, make comments, or even open a pull request to propose changes. Just follow the link above.
 
-			You can also directly <strong>run</strong> the code from github: <A HREF="https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html">nightskyguy.github.io/retirement_assets/retirement_optimizer.html</a>
+			You can directly <strong>run</strong> the code from github: <A HREF="https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html">nightskyguy.github.io/retirement_assets/retirement_optimizer.html</a>
 			
 			<p>If you're wondering whether you're being tracked, the answer is no. There is no logic 
 			(currently) to do any kind of tracking or telemetry. You can read the code if you're skeptical.
-			And by the way, you SHOULD be skeptical.
+			And by the way, you SHOULD be skeptical.  Sooner or later I am going to want to know 
+			how many users are using it and from (approximately) where. Mostly for self edification, but also to know if, for example, lots of Idaho users are loading it... it would be clue to add state taxes for Idaho.
 
 			<table id="insights-table">
 				<thead>
@@ -216,8 +179,8 @@
 			<div class="scenario-controls">
 				<div class="scenario-row">
 					<input type="text" id="scenarioName" placeholder="Scenario name (optional)" style="flex: 1; margin-right: 10px;">
-					<button onclick="saveScenario()">Save Scenario</button>
-					<button onclick="manageScenarios()">Manage Scenarios (Load, Delete, Export)</button>
+					<button onclick="saveScenario()">Save</button>
+					<button onclick="manageScenarios()">Load, Delete, Export</button>
 					<button onclick="importScenario()">Import</button>
 				</div>
 				<div id="scenarioMessage" class="scenario-message"></div>
@@ -235,6 +198,65 @@
 				</div>
 			</div>	
 		</div>
+
+		<div id="tab-docs" class="card hidden">
+			<div class="header-drawers">
+			<div id="insights">
+			🛑 Some pithy insights will appear here. Right now it's not implemented. It will 
+			include observations like: which strategy seems most effective, what the net withdrawal rate will be for the given <i>After-Tax Spend</i> 
+			<h4>Where is the Code</h4>
+			This might be useful to know: you can run this locally (download the *.html and *.js and *.css files from github) 
+			<A HREF="https://github.com/nightskyguy/retirement_assets">https://github.com/nightskyguy/retirement_assets</a>.
+			<p>And you can also take a look at the source, make comments, or even open a pull request to propose changes. Just follow the link above.
+
+			You can directly <strong>run</strong> the code from github: <A HREF="https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html">nightskyguy.github.io/retirement_assets/retirement_optimizer.html</a>
+			
+			<p>If you're wondering whether you're being tracked, the answer is no. There is no logic 
+			(currently) to do any kind of tracking or telemetry. You can read the code if you're skeptical.
+			And by the way, you SHOULD be skeptical.  Sooner or later I am going to want to know 
+			how many users are using it and from (approximately) where. Mostly for self edification, but also to know if, for example, lots of Idaho users are loading it... it would be clue to add state taxes for Idaho.
+			</div>			
+				<details class="top-drawer"><summary>Change Log</summary>			
+				<div class="drawer-content" id="drawer-changelog"> 
+				<!--- CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG --->
+				<ul>
+				<li><b>7c</b> Prior update(s) broke the save/load functionality due to case changes.  Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years. The rate is encoded in the TAXdata table - not user adjustable. Began UI change to move the top tabs into a new location: Documentation.</li>
+				<li>7b More state rates. Fixed most calculations. Minor UI changes. Changed the defaults to something "more common" - . See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>. </li>					
+				<li>7a Now has various state rates. Fixed most calculations. See <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A> for details. </li>	
+				
+				<li>6v Implemented Save/Load/Export/Delete Scenarios.</li>	
+				<li>6u Implemented SS Fail. More UI fixes. Moved all strategy items to the top.</li>	
+				<li>6t Solved a math issue causing NaN to occur. Cleaned up the visuals.</li>				
+				<li>6s Some more fancy highlighting of the tables. Fixed broken strategy changer. Tests moved into separate file, too.</li>				
+				<li>6r Moved the heavy text (top drawers) into a separate file.</li>
+				<li>6q Beautifications and hover notes. More self tests with an indicator on screen if they fail. Started the Social Security "meltdown" implementation. Added (empty) Insights tab.</li>
+				<li>6p Corrected instructions for Single filer usage. Fixed error in brokerage tracking. Added brokerage dividend rate. Dividends automatically accrue to Cash.</li>
+				<li>6n Calculation fixes. WARNING: detailed calculations not done - but current calcs are accurate.</li>
+				<li>6m More self tests, some rework.</li>
+				<li>6k Reworked tax brackets for sanity ease of update. Added more instructions. </li>
+				<li>6j Move style sheet out for readability.</li>
+				<li>6i Remove the Recalculate and Optimize buttons. Use the similarly named tabs as the buttons. </li>
+				<li>5hp Integrated Federal SS "Tax Torpedo" logic, California HSA add-backs, and IRMAA cliff surcharges. This logic is present, but not yet being used.  The older logic is "close".
+				<li>5h Added change log and instructions</li>
+				<li>4g Do rate limit lookups based on inflation. Add suggested values.</li>
+				<li>4f Use cpi% to adjust taxation (brackets)</li>
+				<li>4e Use calculated birthyear for correct RMDs</li>
+				</ul>
+				</div> <!-- changelog -->
+				</details>	
+
+				<details class="top-drawer">
+					<summary>How to Use</summary>
+					<div class="drawer-content" id="drawer-howto"></div>
+				</details>
+				<details class="top-drawer"><summary>Planned</summary>
+					<div class="drawer-content" id="drawer-planned"></div>
+				</details>
+				<details class="top-drawer"><summary>Background</summary>
+					<div class=drawer-content" id="drawer-background"></div>
+				</details>
+			</div> <!-- header-drawers -->
+		</div> <!-- id=tab-docs -->
 
 		<div id="tab-tbl" class="card table-wrap">
 			<table id="main-table">
@@ -255,15 +277,7 @@
         <div id="tab-opt" class="card hidden table-wrap">
             <table id="opt-table">
                 <thead>
-                    <tr>
-                        <th>Strategy</th>
-                        <th>Total Lifetime Tax</th>
-                        <th>Final Wealth</th>
-                        <th>Effective Tax Rate</th>
-                        <th>Years Funded</th>
-						<th>Success/Fail</th>
-						<th>Years Tested</th>
-                    </tr>
+
                 </thead>
                 <tbody></tbody>
             </table>
@@ -283,7 +297,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // ============================================================================
 
 // Version constant - increment this when data structure changes
-const SCENARIO_VERSION = 3;
+const SCENARIO_VERSION = 4;
 
 // New storage key for current version scenarios
 const STORAGE_KEY = 'SLCRetireOptimizeScenario';
@@ -308,11 +322,7 @@ function inspectForErrors(inputs) {
 		if (isNaN(value)) {
 			console.error(`❌ ${name} is NaN`);
 			debugger;
-		} else 
-		if (!isFinite(value) && value !== 0) {
-			console.error(`❌ ${name} is Infinity`);
-			debugger;
-		}
+		} 
 	}
 }
 
@@ -381,17 +391,19 @@ function findLimitByRate( entity, status, tgtrate, inflation=1) {
 function findUpperLimitByAmount( entity, status, amount, inflation=1) {
     let limit = 0;
 	let rate = 0;
+	let nominalRate = 0.0;
     let brks = getRateBracket(entity, status)
 	
     for (let b of brks) {
         if (b.l * inflation <= amount ) {
 			rate = b.r;
+			nominalRate = b.nr ?? 0;
         } else {
 			limit = b.l * inflation - 1;
 			break;
 		}
     }
-	return { limit, rate: rate }
+	return { limit, rate: rate, nominalRate: nominalRate }
 }
 
 ///
@@ -729,8 +741,9 @@ function simulate(inputs) {
     let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear1 + inputs.die2) - startYear + 1;
     let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [] };
 
-	let cpiRate = 1
-	let inflation = 1
+	let cpiRate = 1		// The rate that SS and Tax brackets increase.
+	let inflation = 1	// The rate at which overall inflation increases.
+	let medicareRate = 1	// The rate of increase in IRMAA tax and Medicare.
 	let fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, inputs.iraBaseGoal, inputs.nYears,inputs.growth)
 	let currentTaxableGuess = 0;
 	let spendDelta = 1
@@ -765,7 +778,8 @@ function simulate(inputs) {
 		
 		cpiRate = (1 + inputs.cpi) * cpiRate
 		inflation = (1 + inputs.inflation) * inflation
-		spendDelta = inputs.spendChange;
+		spendDelta = 1 + inputs.spendChange;
+		medicareRate *= ( 1 + TAXData.IRMAA.ANNUAL_INCREASE )
 		
 		let withdrawals = { IRA: 0, IRA1: 0, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0};
 		let withdrawals_round2 = withdrawals;
@@ -788,7 +802,7 @@ function simulate(inputs) {
 
         let status = (alive1 && alive2) ? 'MFJ' : 'SGL';
 		// IRMAA is already known since it is based on income from 2 years ago.
-        let irmaa = calcIRMAA(balance.magiHistory[balance.magiHistory.length-2], status, cpiRate);
+        let irmaa = calcIRMAA(balance.magiHistory[balance.magiHistory.length-2], status, cpiRate, medicareRate);
 		
 		// Calculate the bracket limits based on: stated limit.
 		let tgtBracketLimit = findLimitByRate('FEDERAL',status,inputs.stratRate)
@@ -830,8 +844,12 @@ function simulate(inputs) {
 		
 
         // 3. RMDs
-        let rmd1 = alive1 ? balance.IRA1 * getRMDPercentage(age1, birthyear1) || 0 : 0;
-        let rmd2 = alive2 ? balance.IRA2 * getRMDPercentage(age2, birthyear2) || 0 : 0;
+		let rmd1Pct = getRMDPercentage(age1, birthyear1);
+		let rmd2Pct = getRMDPercentage(age2, birthyear2);
+        let rmd1 = alive1 ? balance.IRA1 * rmd1Pct || 0 : 0;
+        let rmd2 = alive2 ? balance.IRA2 * rmd2Pct || 0 : 0;
+		rmd1Pct = Math.max(rmd1Pct, rmd2Pct, 0);
+		rmd1Pct = Math.max(rmd1Pct, rmd2Pct, 0);
 		
 		// Immediately remove RMDs from the respective IRAs because they MUST be taken first.
 		// TODO: Allow RMDs to go to QCDs one day!
@@ -962,6 +980,10 @@ function simulate(inputs) {
 		tax = calculateTax(fixedInc, netWithdrawals.IRA + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
 		inspectForErrors(tax);
 		
+		totalTax = tax.total + irmaa;
+		cumulativeTaxes += totalTax;
+
+		
 		// sumAccounts(netWithdrawals) + totalRMD + fixedInc - totalTax
 
 		totalIncome = Math.max(1, fixedInc + netWithdrawals.IRA + pension + taxableDividends + taxableInterest + netWithdrawals.Roth + netWithdrawals.Cash + netWithdrawals.Brokerage + totalRMD);
@@ -1021,9 +1043,10 @@ function simulate(inputs) {
 			totalIncome: totalIncome,
             netIncome: netIncome,	
             surplus: surplus,	
+			'RMD%': rmd1Pct,
 			'RMD1-': rmd1,
 			'RMD2-': rmd2,
-            'RMDwd': totalRMD,
+            '-RMDwd': totalRMD,
 			'IRA1-': netWithdrawals.IRA1,
 			'IRA2-': netWithdrawals.IRA2,
             // 'IRAwd': netWithdrawals.IRA,
@@ -1050,6 +1073,7 @@ function simulate(inputs) {
             Brokerage: balance.Brokerage,
             Basis: balance.BrokerageBasis,
             totalWealth: totalWealth,
+			Spendable: totals.spend,
 			cashG: gains.Cash,
 			brokerageG: gains.Brokerage,
 			rothG: gains.Roth,
@@ -1075,16 +1099,17 @@ function simulate(inputs) {
  * @param {number} params.capGains - Net Long Term Capital Gains.
  * @param {number} params.taxExemptInterest - Muni bond interest (non-taxable but used for SS/IRMAA/CA).
  * @param {number} params.hsaContrib - Total HSA contributions (deductible Fed, taxable CA).
- * @param {number} params.cpi - Annual cpi/Inflation rate (e.g., 0.025 for 2.5%).
+ * @param {number} params.cpi - current cpi/Inflation rate (e.g., 1.025 for 2.5%).
+ * @param {number} params.medicareRate - medicare cost/IRMAA Inflation rate (e.g., 1.056 for 5.6%).
  */
 function calculateTaxes(params) {
     const { 
         yearOffset, filingStatus, ages, earnedIncome, ss1, ss2, 
         ordDivInterest, qualifiedDiv, capGains, taxExemptInterest, 
-        hsaContrib, cpi 
+        hsaContrib, cpi, medicareRate
     } = params;
 
-    const inflationFactor = Math.pow(1 + cpi, yearOffset);
+    const inflationFactor = cpi;
     const totalSS = ss1 + ss2;
 
     // --- 1. FEDERAL SOCIAL SECURITY TAXABILITY ---
@@ -1094,11 +1119,15 @@ function calculateTaxes(params) {
     let taxableSS = 0;
 	//!!! TODO This logic can be replace with calculateProgressive using the provisionalIncome?!
 	taxableSS = calculateProgressive('SOCIALSECURITY', filingStatus, provisionalIncome, inflationFactor).cumulative
-    const ssThreshold1 = (filingStatus === 'MFJ' ? 32000 : 25000) * inflationFactor;
-    const ssThreshold2 = (filingStatus === 'MFJ' ? 44000 : 34000) * inflationFactor;
+	
+	
+	//!!! TODO: This can probably be done with calculateProgressive()
+    const ssThreshold1 = TAXdata['SOCIALSECURITY'][filingStatus].brackets[1];
+    const ssThreshold2 = TAXdata['SOCIALSECURITY'][filingStatus].brackets[2];
 
-    if (provisionalIncome > ssThreshold2) {
-        taxableSS = Math.min(0.85 * totalSS, (0.85 * (provisionalIncome - ssThreshold2)) + Math.min(6000 * inflationFactor, 0.5 * (ssThreshold2 - ssThreshold1)));
+
+    if (provisionalIncome > ssThreshold2.l) {
+        taxableSS = Math.min(0.85 * totalSS, (0.85 * (provisionalIncome - ssThreshold2.l)) + Math.min(6000 * inflationFactor, 0.5 * (ssThreshold2 - ssThreshold1)));
     } else if (provisionalIncome > ssThreshold1) {
         taxableSS = Math.min(0.5 * totalSS, 0.5 * (provisionalIncome - ssThreshold1));
     }
@@ -1132,7 +1161,7 @@ function calculateTaxes(params) {
     // --- 4. IRMAA CALCULATION ---
     // MAGI for IRMAA = Fed AGI + Tax-Exempt Interest
     const irmaaMAGI = fedAGI + taxExemptInterest;
-    const irmaaAnnualSurcharge = calcIRMAA(irmaaMAGI, filingStatus, inflationFactor) * 12;
+    const irmaaAnnualSurcharge = calcIRMAA(irmaaMAGI, filingStatus, cpiRate, medicareRate);
 
     return {
         fedAGI: Math.round(fedAGI),
@@ -1206,6 +1235,7 @@ function calculateProgressive(entity, status, amount, inflation=1, ratecreep=1) 
     let prevLimit = 0;
     let cumulative = 0;
     let marginalRate = 0;
+	let nominalRate = 0;
     
     for (let b of brks) {
         let currentLimit = b.l * inflation;
@@ -1213,16 +1243,18 @@ function calculateProgressive(entity, status, amount, inflation=1, ratecreep=1) 
         if (amount <= currentLimit) {
             cumulative += (amount - prevLimit) * b.r * ratecreep;
             marginalRate = b.r * ratecreep;
+			nominalRate = b.nr ?? 0;
             prevLimit = currentLimit;
             break;
         } else {
             cumulative += (currentLimit - prevLimit) * b.r * ratecreep;
             marginalRate = b.r * ratecreep;
+			nominalRate = b.nr ?? 0;
             prevLimit = currentLimit;
         }
     }
     
-    return { cumulative, total: cumulative, marginal: marginalRate, limit: prevLimit }
+    return { cumulative, total: cumulative, marginal: marginalRate, limit: prevLimit, nominalRate: nominalRate }
 }
 
 function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=1) {
@@ -1256,9 +1288,10 @@ function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=
 			fedLimit: fedLimit, stLimit: stLimit, fedRate: fedRate, stRate: stRate};
 }
 
-function calcIRMAA(magi, status, inflation) {
-	let irmaalimit = findUpperLimitByAmount( 'IRMAA', status, magi, inflation)
-	return irmaalimit.rate * inflation * 12
+function calcIRMAA(magi, status, cpiRate, medicareRate = (1 + TAXData.IRMAA.ANNUAL_INCREASE)) {
+	
+	let irmaalimit = findUpperLimitByAmount( 'IRMAA', status, magi, cpiRate)
+	return irmaalimit.rate * medicareRate * 12
 }
 
 /** UI CONTROLS **/
@@ -1266,10 +1299,10 @@ function getInputs() {
 	// TODO: If we override these values, we should update the UI 
 	let spendChange = +val('spendChange')
 	if (spendChange < -25 || spendChange > 25) spendChange = 0
-	let brokerage = +val('brokerage');
-	let brokeragebasis = +val('basis');
-	if (brokerage <= 0.01) basis = 0;
-	if (basis > brokerage) basis = brokerage;
+	let Brokerage = +val('Brokerage');
+	let BrokerageBasis = +val('BrokerageBasis');
+	if (Brokerage <= 0.01) basis = 0;
+	if (BrokerageBasis > Brokerage) BrokerageBasis = Brokerage;
     return {
 		STATEname: val('STATEname'), 	
 		strategy: val('strategy'), 	
@@ -1279,12 +1312,12 @@ function getInputs() {
 		die1: +val('die1'), 
 		birthyear2: +val('birthyear2'), 
 		die2: +val('die2'),
-        IRA1: +val('ira1'), 
-		IRA2: +val('ira2'), 
-		Roth: +val('roth'),
-        Brokerage: brokerage, 
-		BrokerageBasis: brokeragebasis, 
-		Cash: +val('cash'),
+        IRA1: +val('IRA1'), 
+		IRA2: +val('IRA2'), 
+		Roth: +val('Roth'),
+        Brokerage: Brokerage, 
+		BrokerageBasis: BrokerageBasis, 
+		Cash: +val('Cash'),
         ss1: +val('ss1'), 
 		ss1Age: +val('ss1Age'), 
 		ss2: +val('ss2'), 
@@ -1292,7 +1325,7 @@ function getInputs() {
         pensionAnnual: +val('pensionAnnual'), 
 		survivorPct: +val('survivorPct'), 
 		spendGoal: +val('spendGoal'),
-		spendChange: 1 + (spendChange/100.0), 
+		spendChange: (spendChange/100.0), 
 		iraBaseGoal: +val('iraBaseGoal'),
         inflation: +val('inflation')/100.0, 
 		cpi: +val('cpi')/100.0, 
@@ -1305,37 +1338,123 @@ function getInputs() {
     };
 }
 
+/*
+ *
+ *
+ */
 function runSimulation() {
     let res = simulate(getInputs());
     updateTable(res.log);
     updateStats(res.totals, res.finalNW);
     updateCharts(res.log);
 }
+// //////////////////////////////////////////////////////////////////
 
 function runOptimizer() {
     let base = getInputs();
     let results = [];
+    
     for (let n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
         base.strategy = 'fixed';
         base.nYears = n;
         results.push({ 
-		strategy: "Fixed", parameter: n, unit: "years", ...simulate(base) });
+            strategy: "Fixed", 
+            parameter: n, 
+            unit: "years", 
+            ...simulate(base) 
+        });
     }
-    let html = results.map(r => `
-        <tr>
-            <td>${r.strategy} ${r.parameter} ${r.unit}</td>
-            <td>$${Math.round(r.totals.tax).toLocaleString()}</td>
-            <td>$${Math.round(r.finalNW).toLocaleString()}</td>
-            <td>${(r.totals.tax/r.totals.gross*100).toFixed(1)}%</td>
-			<td>${r.totals.yearsfunded}</td>
-			<td>${r.totals.success ? '🟢' : '🚨'}</td>
-			<td>${r.totals.yearstested}</td>
-        </tr>
-    `).join('');
-    document.querySelector('#opt-table tbody').innerHTML = html;
+    
+    // Find best result
+    const successfulResults = results.filter(r => r.totals.success);
+    
+    let bestIndex = -1;
+    if (successfulResults.length > 0) {
+        const minTax = Math.min(...successfulResults.map(r => r.totals.tax));
+        const lowestTaxResults = successfulResults.filter(r => r.totals.tax === minTax);
+        
+        if (lowestTaxResults.length === 1) {
+            bestIndex = results.indexOf(lowestTaxResults[0]);
+        } else {
+            const maxWealth = Math.max(...lowestTaxResults.map(r => r.finalNW));
+            const bestResult = lowestTaxResults.find(r => r.finalNW === maxWealth);
+            bestIndex = results.indexOf(bestResult);
+        }
+    }
+    
+    // Define columns
+    const columns = [
+        { 
+            label: "Success/Fail", 
+            getValue: r => r.totals.success ? '🟢' : '🚨' 
+        },
+        { 
+            label: "Strategy", 
+            getValue: r => `${r.strategy} ${r.parameter} ${r.unit}` 
+        },
+        { 
+            label: "Total Lifetime Tax", 
+            getValue: r => `$${Math.round(r.totals.tax).toLocaleString()}` 
+        },
+        { 
+            label: "Final Wealth", 
+            getValue: r => `$${Math.round(r.finalNW).toLocaleString()}` 
+        },
+        { 
+            label: "Effective Tax Rate", 
+            getValue: r => `${(r.totals.tax/r.totals.gross*100).toFixed(1)}%` 
+        },
+        { 
+            label: "Years Funded", 
+            getValue: r => r.totals.yearsfunded 
+        },
+        { 
+            label: "Years Tested", 
+            getValue: r => r.totals.yearstested 
+        }
+    ];
+    
+    // Build header row
+    const headerHtml = '<tr>' + columns.map(col => `<th>${col.label}</th>`).join('') + '</tr>';
+    
+    // Build data rows
+    const rowsHtml = results.map((r, idx) => {
+        const isBest = idx === bestIndex;
+        const rowStyle = isBest ? ' style="background-color: #90EE90; font-weight: bold; cursor: pointer;"' : ' style="cursor: pointer;"';
+        
+        const cells = columns.map(col => `<td>${col.getValue(r)}</td>`).join('');
+        
+        return `<tr${rowStyle} onclick="loadOptimizerResult(${idx})" title="Click to load this strategy">${cells}</tr>`;
+    }).join('');
+    
+    // Store results globally so loadOptimizerResult can access them
+    window.optimizerResults = results;
+    
+    // Update table
+    document.querySelector('#opt-table thead').innerHTML = headerHtml;
+    document.querySelector('#opt-table tbody').innerHTML = rowsHtml;
     showTab('tab-opt');
 }
 
+// Load a result from the optimizer back into the input fields
+function loadOptimizerResult(index) {
+    const result = window.optimizerResults[index];
+    
+    // Set the strategy dropdown
+    document.getElementById('strategy').value = 'fixed';
+    
+    // Set the nYears parameter
+    document.getElementById('nYears').value = result.parameter;
+    
+    // Show the correct UI section
+    toggleStrategyUI();
+    
+    // Run the simulation to update the display
+	runSimulation(); 
+	showTab('tab-tbl')
+}
+
+// //////////////////////////////////////////////////////////////////
 
 function updateTable(log) {
 	const oldTable = document.getElementById('main-table');
@@ -1358,13 +1477,27 @@ function updateTable(log) {
 	const headerRow = thead.insertRow();
 	
 	const tooltips = {
-		'RMD-': 'Total of all RMDs (positive indicate withdrawals)',
-		'Brokerage': 'Withdrawals are negative',
+		'year': 'A pink row means insufficient funds. A yellow row is for a single survivor',
+		'RMDwd': 'Total of all RMDs (positive indicate withdrawals)',
+		'RMD%': 'The highest percentage RMD required for IRA1 or IRA2.',
+		'Brokerage': 'Year end Brokerage balance',
+		'Brokerage-': 'Withdrawals from Brokerage account (sales)',
+		'Basis': 'The amount in brokerage which can be withdrawn tax free.',
+		'IRA1-': 'Withrdrawals from IRA1',
+		'IRA2-': 'Withrdrawals from IRA2',
+		'CapGains': 'Amount of gains from selling brokerage assets.',
 		'IRMAA': 'First two years are presumed the same as the 3rd year on.',
-		'SpendGoal': 'With inflation, this amount increases.',
-		'Roth': 'Positive amounts are deposits, negative are withdrawals',
-		'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA are all included.',
-		'NominalTax%': 'TotalTax/TotalGrossIncome'
+		'spendGoal': 'This amount increases by inflation less Spend Delta%.',
+		'Roth': 'Balance at Year End',
+		'RothG': 'Growth in the Roth (added to Roth account)',
+		'RothG': 'Growth in the Roth (added to Roth account)',
+		'RothConv': 'Amount moved from IRA to Roth (converted)',
+		'CashWD': 'Tax free withdrawals from Cash',
+		'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
+		'magi': 'Modified Adjusted Gross Income - determines future IRMAA',
+		'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA - in total.',
+		'SumTaxes': 'Running total of Federal,IRMAA,NIIT,CapGains & IRMAA.',
+		'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA'
 	};
 
 	keys.forEach(key => {
@@ -1875,8 +2008,8 @@ function applyScenario(data) {
         if (element) {
             // Handle percentage values (multiply by 100 for display)
             if (['stratRate', 'spendChange', 'inflation', 'cpi', 'growth', 
-                 'cashYield', 'dividendrate', 'ssFailPct'].includes(key)) {
-                element.value = (value * 100).toFixed(2);
+                 'cashYield', 'dividendRate', 'ssFailPct'].includes(key)) {
+                element.value = (value * 100).toFixed(3);
             } else {
                 element.value = value;
             }
@@ -1884,8 +2017,8 @@ function applyScenario(data) {
     }
     
     // Trigger any recalculations your app needs
-    if (typeof recalculate === 'function') {
-        recalculate();
+    if (typeof runSimulation === 'function') {
+        runSimulation();
     }
 }
 
@@ -1912,7 +2045,6 @@ function manageScenarios() {
         html += '<tr><th style="text-align: left; padding: 8px; border-bottom: 2px solid #ddd;">Name</th>';
         html += '<th style="text-align: left; padding: 8px; border-bottom: 2px solid #ddd;">Saved</th>';
         html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Version</th>';
-        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Storage</th>';
         html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Actions</th></tr>';
         
         for (const [name, scenario] of Object.entries(scenarios)) {
@@ -1934,14 +2066,13 @@ function manageScenarios() {
             const rowStyle = isCurrent ? '' : 'background-color: #ffeeee;';
             
             html += `<tr style="${rowStyle}">
-                <td style="padding: 8px; border-bottom: 1px solid #eee;">${name}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee;">${savedDate}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${versionBadge}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${storageBadge}</td>
+                <td style="padding: 4px; border-bottom: 1px solid #eee;">${name}</td>
+                <td style="padding: 4px; border-bottom: 1px solid #eee;">${savedDate}</td>
+                <td style="padding: 4px; border-bottom: 1px solid #eee; text-align: center;">${versionBadge}</td>
                 <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
-                    <button onclick="loadScenarioByName('${escapeQuotes(name)}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
-                    <button onclick="deleteScenario('${escapeQuotes(name)}')">Delete</button>
-                    <button onclick="exportScenario('${escapeQuotes(name)}')">Export</button>
+					<button class="modal-btn" onclick="loadScenarioByName('${escapeQuotes(name)}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
+					<button class="modal-btn" onclick="deleteScenario('${escapeQuotes(name)}')">Delete</button>
+					<button class="modal-btn" onclick="exportScenario('${escapeQuotes(name)}')">Export</button>
                 </td>
             </tr>`;
         }

@@ -513,7 +513,7 @@ assertEqual(
     assertEqual(findLimitByRate('TEST', 'SGL', 0.05, 1), {limit: 0, rate: 0}, 
                 'findLimitByRate: TEST SGL 5% finds no limit or rate (0)');	
 
-    assertEqual(findUpperLimitByAmount('TEST', 'SGL', 998, 1), {limit: 999, rate: 0.1}, 
+    assertEqual(findUpperLimitByAmount('TEST', 'SGL', 998, 1), {"limit": 999,"rate": 0.1, "nominalRate": 0.1}, 
                 'findUpperLimitByAmount: TEST SGL 998 finds limit: 999, rate: 0.1');
 				
 	assertEqual(getInputs(), 
@@ -539,7 +539,7 @@ assertEqual(
   "pensionAnnual": 15000,
   "survivorPct": 75,
   "spendGoal": 150000,
-  "spendChange": 0.99,
+  "spendChange": -0.01,
   "iraBaseGoal": 350000,
   "inflation": 0.03,
   "cpi": 0.028,
@@ -589,21 +589,24 @@ assertEqual(
 	assertEqual(calcIRMAA(100, 'SGL', 1), 0,
 				'😭calcIRMAA  0 for SGL at 100 income');
 
-	assertEqual(calcIRMAA(109001, 'SGL', 1), 12 * 202.9,
+	assertEqual(calcIRMAA(109001, 'SGL', 1, 1), 12 * 202.9,
 				'😭calcIRMAA  202.9 for 109001 SGL income');
 
-	assertEqual(calcIRMAA(273999, 'MFJ', 1), (12 * 2 * 202.90),
-				'😭calcIRMAA  (2 * 202.90) for 273999 MFJ income');    
+	assertEqual(calcIRMAA(273999, 'MFJ', 1, 1.5), 1.5 * 2 * (12 * 202.90),
+				'😭calcIRMAA no CPI, 1.5 medicareRate @ 273999 MFJ income');    
 
-	assertEqual(calcIRMAA(274000, 'MFJ', 1), 12 * 2 * (284.10 + 14.50),
+	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1), 12 * 2 * (284.10 + 14.50),
 				'😭calcIRMAA  2 * (284.10 + 14.50) for 274000 MFJ income');
 
+	assertEqual(calcIRMAA(218000, 'MFJ', 2, 1), 0,
+				'😭calcIRMAA  2 * (284.10 + 14.50) for 218000 MFJ income at 2');
+
 	assertEqual(calculateProgressive('TEST','MFJ',72000), 
-		{cumulative: 30700, total: 30700, marginal: 0.8, limit: 40000}, 
+		{"cumulative": 30700, "total": 30700, "marginal": 0.8, "limit": 40000, "nominalRate": 0.4}, 
 		'calculateProgressive(TEST, MFJ, 72000) ok')	
 
 	assertEqual(calculateProgressive('TEST','SGL',72000), 
-		{cumulative: 15350, total: 15350, marginal: 0.8, limit: 20000}, 
+		{"cumulative": 15350,"total": 15350,"marginal": 0.8,"limit": 20000,"nominalRate": 0.45}, 
 		'calculateProgressive(TEST,SGL,72000) ok')
 		
 	assertEqual(calculateProgressive('NONEXISTENT','SGL',72000), 

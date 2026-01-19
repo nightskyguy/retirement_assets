@@ -12,7 +12,7 @@ const TAXData = {
 					{ l: 98900, r: 0.00 },      // 0% cap gains
 					{ l: 250000, r: 0.15 },     // 15% cap gains, no NIIT
 					{ l: 613700, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
-					{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
+					{ l: Infinity, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
 				]
 			},
 			SGL: {
@@ -20,7 +20,7 @@ const TAXData = {
 					{ l: 49450, r: 0.00 },      // 0% cap gains
 					{ l: 200000, r: 0.15 },     // 15% cap gains, no NIIT
 					{ l: 306850, r: 0.188 },    // 15% + 3.8% NIIT = 18.8%
-					{ l: 1e9, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
+					{ l: Infinity, r: 0.238 }        // 20% + 3.8% NIIT = 23.8%
 				]
 			}			
 		},
@@ -29,55 +29,62 @@ const TAXData = {
 			age: 65,
 			stdbump: 1650,
 			brackets: [ 
-				{ l: 24800, r: 0.10 }, { l: 100800, r: 0.12 }, { l: 211400, r: 0.22 },
-				{ l: 403550, r: 0.24 }, { l: 512450, r: 0.32 }, { l: 768700, r: 0.35 },
-				{ l: 1e9, r: 0.37 }	]
-			},
+				{ l: 24800, r: 0.10, nr: 0.1000 },
+				{ l: 100800, r: 0.12, nr: 0.1151 },
+				{ l: 211400, r: 0.22, nr: 0.1700 },
+				{ l: 403550, r: 0.24, nr: 0.2033 },
+				{ l: 512450, r: 0.32, nr: 0.2281 },
+				{ l: 768700, r: 0.35, nr: 0.2687 },
+				{ l: Infinity, r: 0.37, nr: 0.37 }
+			]
+		},
 		SGL: {
 			std: 16100,
 			age: 65,
 			stdbump: 2050,
 			brackets: [
-				{ l: 12400, r: 0.10 }, { l: 50400, r: 0.12 }, { l: 105700, r: 0.22 },
-				{ l: 201775, r: 0.24 }, { l: 256225, r: 0.32 }, { l: 640600, r: 0.35 },
-				{ l: 1e9, r: 0.37 }	]
-			}
-		},
+				{ l: 12400, r: 0.10, nr: 0.1000 },
+				{ l: 50400, r: 0.12, nr: 0.1151 },
+				{ l: 105700, r: 0.22, nr: 0.1700 },
+				{ l: 201775, r: 0.24, nr: 0.2033 },
+				{ l: 256225, r: 0.32, nr: 0.2281 },
+				{ l: 640600, r: 0.35, nr: 0.3012 },
+				{ l: Infinity, r: 0.37, nr: 0.37 }
+			]
+		}
+	},
+		
 	SOCIALSECURITY: {
-		Year: 2025,
-		MFJ: { brackets: [{ l:32000-1, r: 0.0}, { l:32000, r: 0.5}, {l: 44000, r: 0.85}] },
-		MFJ: { brackets: [{ l:32000-1, r: 0.0}, { l:32000, r: 0.5}, {l: 44000, r: 0.85}] }
-		},
+		Year: 2026,
+		SGL: { brackets: [{ l: 25000-1, r: 0.0}, { l: 25000, r: 0.5}, { l: 34000, r: 0.85}] },
+		MFJ: { brackets: [{ l: 32000-1, r: 0.0}, { l: 32000, r: 0.5}, { l: 44000, r: 0.85}] }
+	},
 
 	IRMAA: {
 		YEAR: 2026,
-		LOOKBACK: 2024,  // Based on 2024 tax return
+		LOOKBACK: -2,  // Based on 2024 tax return
+		ANNUAL_INCREASE: 0.056,	// based on analysis of 
 		standardPartB: 202.90,
 		partBDeductible: 283,
 		
 		// NOTE these are MONTHLY values, it is NOT progressive, and these are the actual tax, not rates.
+		// Also note that brackets increase at the rate of CPI, while Medicare and IRMAA rates
+		// increase at the ANNUAL_INCREASE rate above.
 				MFJ: {
 			brackets: [
-				{ l: 218000 - 1, r: 0}, { l: 218000, r: (2 * 202.90) },
-				{ l: 274000, r: 2 * (284.10 + 14.50) },	{ l: 348000, r: 2 * (405.90 + 37.60) },
-				{ l: 410000, r: 2 * (527.70 + 60.60) },	{ l: 750000, r: 2 * (649.50 + 83.70) },
-				{ l: 1e9, r: 2 * (689.90 + 91.00) }
+				{ l: 218000 - 1, r: 0, tier: "-none-"}, { l: 218000, r: (2 * 202.90), tier: "Tier 1" },
+				{ l: 274000, r: 2 * (284.10 + 14.50), tier: "Tier 2" },	{ l: 348000, r: 2 * (405.90 + 37.60), tier: "Tier 3" },
+				{ l: 410000, r: 2 * (527.70 + 60.60), tier: "Tier 4" },	{ l: 750000, r: 2 * (649.50 + 83.70), tier: "Tier 5" },
+				{ l: Infinity, r: 2 * (689.90 + 91.00), tier: "Tier 6 (TOP)" }
 			]
 		},
 		
 		SGL: {
 			brackets: [
-				{ l: 109000 - 1, r: 0}, { l: 109000, r: 202.90 +0 },
-				{ l: 137000, r: 284.10 +14.50 }, { l: 174000, r: 405.90 + 37.60 },
-				{ l: 205000, r: 527.70 + 60.60 }, { l: 500000, r: 649.50 + 83.70 },
-				{ l: 1e9, r: 689.90 + 91.00 }
-			]
-		},
-		
-		MFS: {
-			brackets: [
-				{ l: 109000 - 1, r: 0}, { l: 109000, r: 202.90 + 0 },
-				{ l: 403000, r: 649.50 + 83.70 }, { l: 1e9, r: 689.90 + 91.00 }
+				{ l: 109000 - 1, r: 0, tier: "-none-"}, { l: 109000, r: 202.90 +0, tier: "Tier 1" },
+				{ l: 137000, r: 284.10 +14.50, tier: "Tier 2" }, { l: 174000, r: 405.90 + 37.60, tier: "Tier 3" },
+				{ l: 205000, r: 527.70 + 60.60, tier: "Tier 4" }, { l: 500000, r: 649.50 + 83.70 , tier: "Tier 5"},
+				{ l: Infinity, r: 689.90 + 91.00, tier: "Tier 6 (TOP)" }
 			]
 		}
 	}, // IRMAA	
@@ -90,13 +97,13 @@ const TAXData = {
 		FLAT_RATE: 0.0,
         MFJ: {
             std: 0,
-            brackets: [ { l: 1e9, r: 0 } ]
+            brackets: [ { l: Infinity, r: 0 } ]
         },
         SGL: {
             std: 0,
-            brackets: [ { l: 1e9, r: 0 } ]
+            brackets: [ { l: Infinity, r: 0 } ]
         }
-    },
+    },	// FEDERAL brackets
 
     CA: {
 		STATE: 'California',
@@ -106,7 +113,7 @@ const TAXData = {
             brackets: [
                 { l: 20824, r: 0.01 }, { l: 49368, r: 0.02 }, { l: 77918, r: 0.04 },
                 { l: 108162, r: 0.06 }, { l: 136700, r: 0.08 }, { l: 698274, r: 0.093 },
-                { l: 837922, r: 0.103 }, { l: 1000000, r: 0.123 }, { l: 1e9, r: 0.133 }
+                { l: 837922, r: 0.103 }, { l: 1000000, r: 0.123 }, { l: Infinity, r: 0.133 }
             ]
         },
         SGL: {
@@ -114,7 +121,7 @@ const TAXData = {
             brackets: [
                 { l: 10412, r: 0.01 }, { l: 24684, r: 0.02 }, { l: 38959, r: 0.04 },
                 { l: 54081, r: 0.06 }, { l: 68350, r: 0.08 }, { l: 349137, r: 0.093 },
-                { l: 418961, r: 0.103 }, { l: 698271, r: 0.123 }, { l: 1e9, r: 0.133 }
+                { l: 418961, r: 0.103 }, { l: 698271, r: 0.123 }, { l: Infinity, r: 0.133 }
             ]
         }
     }, // CALIFORNIA
@@ -134,7 +141,7 @@ const TAXData = {
 				{ l: 400000, r: 0.06 },
 				{ l: 500000, r: 0.065 },
 				{ l: 1000000, r: 0.069 },
-				{ l: 1e9, r: 0.0699 }
+				{ l: Infinity, r: 0.0699 }
 			]
 		},
 		SGL: {
@@ -147,7 +154,7 @@ const TAXData = {
 				{ l: 200000, r: 0.06 },
 				{ l: 250000, r: 0.065 },
 				{ l: 500000, r: 0.069 },
-				{ l: 1e9, r: 0.0699 }
+				{ l: Infinity, r: 0.0699 }
 			]
 		}
 	}, // CONNECTICUT
@@ -161,14 +168,14 @@ const TAXData = {
 			std: 24000,  // Increased from $18,500
 			exemption_dependent: 4000,  // $4,000 per dependent
 			brackets: [
-				{ l: 1e9, r: 0.0519 }  // Single flat rate
+				{ l: Infinity, r: 0.0519 }  // Single flat rate
 			]
 		},
 		SGL: {
 			std: 12000,  // Increased from $7,100
 			exemption_dependent: 4000,
 			brackets: [
-				{ l: 1e9, r: 0.0519 }
+				{ l: Infinity, r: 0.0519 }
 			]
 		},
 		// Note: Rate will decrease 0.10% annually: 
@@ -184,14 +191,14 @@ const TAXData = {
 			std: 5700,  // Illinois doesn't use standard deduction
 			exemption: 5700,  // $2,850 per person (2 × $2,850)
 			brackets: [
-				{ l: 1e9, r: 0.0495 }  // Single flat rate
+				{ l: Infinity, r: 0.0495 }  // Single flat rate
 			]
 		},
 		SGL: {
 			std: 2850,
 			exemption: 2850,  // $2,850 per person
 			brackets: [
-				{ l: 1e9, r: 0.0495 }
+				{ l: Infinity, r: 0.0495 }
 			]
 		},
 		// Note: Exemptions phase out above $250K single / $500K MFJ federal AGI
@@ -202,8 +209,8 @@ const TAXData = {
 		STATE: 'Maryland',
 		YEAR: 2025,  // New brackets effective July 1, 2025
 		CAPITAL_GAINS: {
-			MFJ: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: 1e9, r: 0.02 }] },
-			SGL: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: 1e9, r: 0.02 }] }
+			MFJ: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: Infinity, r: 0.02 }] },
+			SGL: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: Infinity, r: 0.02 }] }
 		},
 		MFJ: {
 			std: 6700,  // New for 2025, was income-based before
@@ -218,7 +225,7 @@ const TAXData = {
 				{ l: 600000, r: 0.0575 },
 				{ l: 600001, r: 0.0625 },  // New bracket for 2025
 				{ l: 1200000, r: 0.065 },  // New top bracket for 2025
-				{ l: 1e9, r: 0.065 }
+				{ l: Infinity, r: 0.065 }
 			]
 		},
 		SGL: {
@@ -234,7 +241,7 @@ const TAXData = {
 				{ l: 500000, r: 0.0575 },
 				{ l: 500001, r: 0.0625 },  // New bracket for 2025
 				{ l: 1000000, r: 0.065 },  // New top bracket for 2025
-				{ l: 1e9, r: 0.065 }
+				{ l: Infinity, r: 0.065 }
 			]
 		},
 		// Note: Maryland also has local county taxes (2.25%-3.3%) added on top
@@ -248,13 +255,13 @@ const TAXData = {
 		MFJ: {
 			std: 5600,
 			brackets: [
-				{ l: 1e9, r: 0.0405 }  // Flat tax rate
+				{ l: Infinity, r: 0.0405 }  // Flat tax rate
 			]
 		},
 		SGL: {
 			std: 5600,
 			brackets: [
-				{ l: 1e9, r: 0.0405 }  // Flat tax rate
+				{ l: Infinity, r: 0.0405 }  // Flat tax rate
 			]
 		}
 	}, // MICHIGAN
@@ -268,7 +275,7 @@ const TAXData = {
 			brackets: [
 				{ l: 17150, r: 0.04 }, { l: 23600, r: 0.045 }, { l: 27900, r: 0.0525 },
 				{ l: 161550, r: 0.055 }, { l: 323200, r: 0.06 }, { l: 2155350, r: 0.0685 },
-				{ l: 5000000, r: 0.0965 }, { l: 25000000, r: 0.103 }, { l: 1e9, r: 0.109 }
+				{ l: 5000000, r: 0.0965 }, { l: 25000000, r: 0.103 }, { l: Infinity, r: 0.109 }
 			]
 		},
 		SGL: {
@@ -276,7 +283,7 @@ const TAXData = {
 			brackets: [
 				{ l: 8500, r: 0.04 }, { l: 11700, r: 0.045 }, { l: 13900, r: 0.0525 },
 				{ l: 80650, r: 0.055 }, { l: 215400, r: 0.06 }, { l: 1077550, r: 0.0685 },
-				{ l: 5000000, r: 0.0965 }, { l: 25000000, r: 0.103 }, { l: 1e9, r: 0.109 }
+				{ l: 5000000, r: 0.0965 }, { l: 25000000, r: 0.103 }, { l: Infinity, r: 0.109 }
 			]
 		}
 	},  // NEWYORK
@@ -288,13 +295,13 @@ const TAXData = {
 		MFJ: {
 			std: 25500,
 			brackets: [
-				{ l: 1e9, r: 0.0475 }  // Flat tax rate
+				{ l: Infinity, r: 0.0475 }  // Flat tax rate
 			]
 		},
 		SGL: {
 			std: 12750,
 			brackets: [
-				{ l: 1e9, r: 0.0475 }  // Flat tax rate
+				{ l: Infinity, r: 0.0475 }  // Flat tax rate
 			]
 		}
 	}, // NORTHCAROLINA
@@ -306,14 +313,14 @@ const TAXData = {
 			std: 5200,
 			brackets: [
 				{ l: 7300, r: 0.0475 }, { l: 18400, r: 0.0675 }, { l: 250000, r: 0.0875 },
-				{ l: 1e9, r: 0.099 }
+				{ l: Infinity, r: 0.099 }
 			]
 		},
 		SGL: {
 			std: 2605,
 			brackets: [
 				{ l: 3650, r: 0.0475 }, { l: 9200, r: 0.0675 }, { l: 125000, r: 0.0875 },
-				{ l: 1e9, r: 0.099 }
+				{ l: Infinity, r: 0.099 }
 			]
 		}
 	}, // OREGON
@@ -325,13 +332,13 @@ const TAXData = {
 		MFJ: {
 			std: 0,  // Pennsylvania has no standard deduction for state tax
 			brackets: [
-				{ l: 1e9, r: 0.0307 }  // Flat tax rate
+				{ l: Infinity, r: 0.0307 }  // Flat tax rate
 			]
 		},
 		SGL: {
 			std: 0,  // Pennsylvania has no standard deduction for state tax
 			brackets: [
-				{ l: 1e9, r: 0.0307 }  // Flat tax rate
+				{ l: Infinity, r: 0.0307 }  // Flat tax rate
 			]
 		}
 	}, // PENNSYLVANIA	
@@ -346,7 +353,7 @@ const TAXData = {
 				{ l: 3000, r: 0.02 },
 				{ l: 5000, r: 0.03 },
 				{ l: 17000, r: 0.05 },
-				{ l: 1e9, r: 0.0575 }
+				{ l: Infinity, r: 0.0575 }
 			]
 		},
 		SGL: {
@@ -355,7 +362,7 @@ const TAXData = {
 				{ l: 3000, r: 0.02 },
 				{ l: 5000, r: 0.03 },
 				{ l: 17000, r: 0.05 },
-				{ l: 1e9, r: 0.0575 }
+				{ l: Infinity, r: 0.0575 }
 			]
 		}
 	}, // VIRGINIA
@@ -369,7 +376,7 @@ const TAXData = {
 			brackets: [
 				{ l: 10000, r: 0.04 }, { l: 40000, r: 0.06 }, { l: 60000, r: 0.065 },
 				{ l: 250000, r: 0.085 }, { l: 500000, r: 0.0925 }, { l: 1000000, r: 0.0975 },
-				{ l: 1e9, r: 0.1075 }
+				{ l: Infinity, r: 0.1075 }
 			]
 		},
 		SGL: {
@@ -377,7 +384,7 @@ const TAXData = {
 			brackets: [
 				{ l: 10000, r: 0.04 }, { l: 40000, r: 0.06 }, { l: 60000, r: 0.065 },
 				{ l: 250000, r: 0.085 }, { l: 500000, r: 0.0925 }, { l: 1000000, r: 0.0975 },
-				{ l: 1e9, r: 0.1075 }
+				{ l: Infinity, r: 0.1075 }
 			]
 		} 
 	}, // WASHINGTONDC
@@ -385,8 +392,8 @@ const TAXData = {
 	TEST: {
 		// Data used for testing only.
 		YEAR: 2026,
-		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1},  {l: 2000, r: 0.2}, {l: 40000, r: 0.8} ]	},
-		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1},  {l: 2000/2, r: 0.2}, {l: 40000/2, r: 0.8} ]}
+		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1, nr: 0.1},  {l: 2000, r: 0.2, nr: 0.15}, {l: 40000, r: 0.8, nr: 0.4} ]	},
+		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1, nr: 0.1},  {l: 2000/2, r: 0.2, nr: 0.15}, {l: 40000/2, r: 0.8, nr: 0.45} ]}
 	},
 	XYZZY: { }
 	

@@ -954,7 +954,7 @@ function testCase8_ExactlyAt50PercentThreshold() {
 // ============================================================================
 function runAllTaxTests() {
     console.log('╔════════════════════════════════════════════════════╗');
-    console.log('║     RUNNING CALCULATETAXES() TEST SUITE            ║');
+    console.log('║     RUNNING calculateTaxes() TEST SUITE            ║');
     console.log('╚════════════════════════════════════════════════════╝');
     
     testCase1_OnlySSBelowThreshold();

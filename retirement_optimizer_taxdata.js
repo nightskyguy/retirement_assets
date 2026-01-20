@@ -109,6 +109,7 @@ const TAXData = {
     CA: {
 		STATE: 'California',
 		YEAR: 2025,
+		Default: true,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
         MFJ: {
             std: 10804,

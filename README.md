@@ -12,17 +12,17 @@ A California resident built this with [Google gemini](https://gemini.google.com)
 
 + **BUG** Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "Withdraw to meet spend") and often overshoots.
 + Implement the *Max Conversion* logic - use cash/brokerage assets to increase Roth conversions. Currently it "converts" the excess withdrawals after taxes and spend goal.  But if there is available cash to pay taxes on the conversion, more can be moved into Roth. Of course excess withdrawals can also be spent or deposited into cash.
-+ **BUG** The current tax engine has shortcomings. Need a more comprehensive calculation. (It's in the code, but needs updating to be made usable/correct). Currently needs *Capital Gains* and *NIIT* taxation and improvements in handling SS taxability.
-+ **BUG** When Roth funds are tapped to meet spending goals, it still may overwithdraw. For example, it may withdraw 15,000 and then have a 15,000 surplus which implies the Roth withdrawal was unnecessary.
+The current tax engine has been fixed to a more comprehensive one that shortcomings. Need a more comprehensive calculation. It now handles  *Capital Gains* and *NIIT* taxation and improvements in handling SS taxability.
++ **BUG** When Roth funds are tapped to meet spending goals, it  may overwithdraw. For example, it may withdraw 15,000 and then have a 15,000 surplus which implies the Roth withdrawal was unnecessary.
 + **BUG** We suspect the "Fill Bracket" goal has a flaw in the implementation. Please be cautious/ignore for now!
-+ **BUG** The Dividend rate is applied to the Brokerage account. It should be applied to the Roth account, too! Remember Brokerage dividends are accummulated in the 
++ **BUG** The Dividend rate is applied to the Brokerage account. It should be applied to the Roth account, too! Remember Brokerage dividends (and interest on cash) are accummulated in the cash account.
 + Add a "taxcreep" to see what harm a creeping tax rate might do.  I notice some states (e.g. Georgia) are reducing their tax rates, while others are adding more brackets and increasing rates.
-+ Save/Import/Export of settings **DONE**. The Load/Save/Delete/Manage Scenarios UI is undocumented. 
++ Load/Save/Delete/Manage Scenarios UI is undocumented. it seems usable enough, however.
 + Autoload any saved "Default" scenario (so you can pick up where you left off).
-+ Better organize the Annual Details tables. There are just two many columns to easily navigate.
++ Better organize the Annual Details tables. There are too many columns to easily navigate.
 + Allow exporting of the Annual Details table(s).
 + The tool should warn when a "Fill Federal Bracket" is picked that is impossible to meet due to After-Tax Spend goal. For example, setting After-Tax Spend to 180,000 makes it impossible to stay in the 12% (or even the 22%) bracket unless there are lots of cash, brokerage or Roth assets already.
-+ Allow selection of the quarter in which withdrawals will occur. I don't think it makes a signficant difference, but changing the model a bit will make it possible to know how much difference it might make. For example if you're trying to draw down an IRA, taking the withdrawals early in the year means you will accrue less growth in that account. Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last quarter may help.
++ Allow selection of the quarter in which withdrawals will occur. It may not make a signficant difference, but changing the model a bit will make it possible to know how much difference could result. For example if you're trying to draw down an IRA, taking the withdrawals early in the year means you will accrue less growth in that account. Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last quarter may help.
 
 
 #### Why This Tool?

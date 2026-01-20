@@ -95,6 +95,7 @@ const TAXData = {
 		STATE: 'None',
 		YEAR: 2026,
 		FLAT_RATE: 0.0,
+		SSTaxation: 0.00,  // no tax on Social Security benefits
         MFJ: {
             std: 0,
             brackets: [ { l: Infinity, r: 0 } ]
@@ -108,6 +109,7 @@ const TAXData = {
     CA: {
 		STATE: 'California',
 		YEAR: 2025,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
         MFJ: {
             std: 10804,
             brackets: [
@@ -131,6 +133,7 @@ const TAXData = {
 	CT: {
 		STATE: 'Connecticut',
 		YEAR: 2025,  // No changes announced for 2026
+		SSTaxation: 0.25,  // Taxes SS benefits above 75k or 100k (MFJ) at 25%	
 		MFJ: {
 			std: 24000,  // CT uses personal exemptions instead, not standard deduction
 			exemption: 24000,  // Phase out at higher incomes
@@ -163,6 +166,7 @@ const TAXData = {
 	GA: {
 		STATE: 'Georgia',
 		YEAR: 2025,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: {2026: 0.0519, 2027: 0.0509, 2028: 0.499 }, // Will decrease to 5.09% on Jan 1, 2027
 		MFJ: {
 			std: 24000,  // Increased from $18,500
@@ -186,6 +190,7 @@ const TAXData = {
 	IL: {
 		STATE: 'Illinois',
 		YEAR: 2025,  // Flat tax, no change for 2026
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.0495,  // 4.95% flat rate for all filers
 		MFJ: {
 			std: 5700,  // Illinois doesn't use standard deduction
@@ -208,6 +213,7 @@ const TAXData = {
 	MD: {
 		STATE: 'Maryland',
 		YEAR: 2025,  // New brackets effective July 1, 2025
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		CAPITAL_GAINS: {
 			MFJ: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: Infinity, r: 0.02 }] },
 			SGL: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: Infinity, r: 0.02 }] }
@@ -251,6 +257,7 @@ const TAXData = {
 	MI: {
 		STATE: 'Michigan',
 		YEAR: 2025,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.0405,  // 4.05% flat rate for all filers
 		MFJ: {
 			std: 5600,
@@ -270,6 +277,7 @@ const TAXData = {
 	NY: {
 		STATE: 'New York',
 		YEAR: 2025,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 16050,
 			brackets: [
@@ -291,6 +299,7 @@ const TAXData = {
 	NC: {
 		STATE: 'North Carolina',
 		YEAR: 2025,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.0475,  // 4.75% flat rate for all filers		
 		MFJ: {
 			std: 25500,
@@ -309,6 +318,7 @@ const TAXData = {
 	OR: {
 		STATE: 'Oregon',
 		YEAR: 2025,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 5200,
 			brackets: [
@@ -347,6 +357,7 @@ const TAXData = {
 	VA: {
 		STATE: 'Virginia',
 		YEAR: 2025,  // 2026 data not significantly different
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 17500,  // Increased from 17000 in 2024
 			brackets: [
@@ -371,6 +382,7 @@ const TAXData = {
 	DC: {
 		STATE: 'District of Columbia',
 		YEAR: 2025,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 29200,
 			brackets: [
@@ -392,6 +404,7 @@ const TAXData = {
 	TEST: {
 		// Data used for testing only.
 		YEAR: 2026,
+		SSTaxation: 0.50,  // Taxes SS at 50%
 		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1, nr: 0.1},  {l: 2000, r: 0.2, nr: 0.15}, {l: 40000, r: 0.8, nr: 0.4} ]	},
 		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1, nr: 0.1},  {l: 2000/2, r: 0.2, nr: 0.15}, {l: 40000/2, r: 0.8, nr: 0.45} ]}
 	},

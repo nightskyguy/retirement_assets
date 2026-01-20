@@ -574,16 +574,14 @@ assertEqual(
 
 	// RMD Percentages.  First should be 0, second should match.
     // RMD percentage lookup
-    if (typeof getRMDPercentage !== 'undefined') {
-        let rmd73 = getRMDPercentage(73, 1952);
-        assertEqual(rmd73 > 0.037 && rmd73 < 0.038, true,
+    let rmd73 = getRMDPercentage(1952+72, 1952);
+    assertEqual(rmd73 > 0.037 && rmd73 < 0.038, true,
                     'RMD: Age 73 should be ~3.77% (divisor 26.5)');
-    }
 
-	assertEqual(getRMDPercentage(74, 1960), 0,
+	assertEqual(getRMDPercentage(1960+73, 1960), 0,
 			'getRMDPercentage for age 74, birth year 1960 correct (0)');	
 
-	assertEqual(getRMDPercentage(74, 1950), 0.0392156862745098,
+	assertEqual(getRMDPercentage(1950+75, 1950), 0.042,
 			'getRMDPercentage for age 76, birth year 1950 correct (4.2%)');
 
 	assertEqual(calcIRMAA(100, 'SGL', 1), 0,
@@ -640,17 +638,343 @@ assertEqual(
 	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(-1000, -0.03, 0.00, 30),0), 0,
 		'calculateInflationAdjustedWithdrawal(-1000, 0.07, 0.03, 30) (principal < 0)')		
 
-/*
-    assertEqual(findRequiredWithdrawals(150000, { yearOffset: 0, filingStatus: 'MFJ', ages: [65, 63], ss1: 30000, ss2: 20000,
-					ordDivInterest: 5000, qualifiedDiv: 3000, taxExemptInterest: 0, 
-					pensionIncome: 0, hsaContrib: 0, cpi: 0.03 },
-					500000,  // $500k brokerage balance
-					250000   // $250k cost basis (50% gains)
-				),   
-			{},
-			'findRequiredWithdrawals(complicated arguments)!')
-*/	
-	
+// ============================================================================
+// Add TESTTAXATION state to TAXData for testing purposes
+// ============================================================================
+TAXData.TESTTAXATION = {
+    STATE: 'Test State',
+    YEAR: 2026,
+    SSTaxation: 0.00,  // Does not tax Social Security
+    MFJ: {
+        std: 10000,  // Simple round number for testing
+        brackets: [
+            { l: 50000, r: 0.05 },
+            { l: 100000, r: 0.10 },
+            { l: Infinity, r: 0.15 }
+        ]
+    },
+    SGL: {
+        std: 5000,  // Simple round number for testing
+        brackets: [
+            { l: 25000, r: 0.05 },
+            { l: 50000, r: 0.10 },
+            { l: Infinity, r: 0.15 }
+        ]
+    }
+};
+
+// ============================================================================
+// TEST CASE 1: Simple - Only SS income, below taxability threshold
+// ============================================================================
+function testCase1_OnlySSBelowThreshold() {
+    console.log('\n=== Test Case 1: Only SS Income, Below Threshold ===');
+    
+    const result = calculateTaxes({
+        filingStatus: 'SGL',
+        ages: [67],
+        earnedIncome: 0,
+        ss1: 20000,
+        ss2: 0,
+        ordDivInterest: 0,
+        qualifiedDiv: 0,
+        capGains: 0,
+        taxExemptInterest: 0,
+        hsaContrib: 0,
+        inflation: 1.0,
+        state: 'TESTTAXATION'
+    });
+    
+    // Provisional income = 0 + 0.5 * 20000 = 10,000 (below $25,000 threshold)
+    assertEqual(result.provisionalIncome, 10000, 'Provisional Income');
+    assertEqual(result.taxableSS, 0, 'Taxable SS (should be 0)');
+    assertEqual(result.AGI, 0, 'AGI (no taxable income)');
+    assertEqual(result.federalTax, 0, 'Federal Tax');
+    assertEqual(result.stateTax, 0, 'State Tax');
+    assertEqual(result.totalTax, 0, 'Total Tax');
+} // testCase1_OnlySSBelowThreshold()
+
+// ============================================================================
+// TEST CASE 2: SS with 50% taxability (between thresholds)
+// ============================================================================
+function testCase2_SS50PercentTaxable() {
+    console.log('\n=== Test Case 2: SS 50% Taxable (MFJ) ===');
+    
+    const result = calculateTaxes({
+        filingStatus: 'MFJ',
+        ages: [64, 62],  // Under 65, no age bump
+        earnedIncome: 20000,
+        ss1: 15000,
+        ss2: 15000,
+        ordDivInterest: 0,
+        qualifiedDiv: 0,
+        capGains: 0,
+        taxExemptInterest: 0,
+        hsaContrib: 0,
+        inflation: 1.0,
+        state: 'TESTTAXATION'
+    });
+    
+    // Provisional income = 20000 + 0.5 * 30000 = 35,000
+    // Between $32,000 and $44,000 thresholds
+    // Excess over $32,000 = 3,000
+    // Taxable SS = min(0.5 * 30000, 0.5 * 3000) = min(15000, 1500) = 1,500
+    assertEqual(result.provisionalIncome, 35000, 'Provisional Income');
+    assertEqual(result.taxableSS, 1500, 'Taxable SS (50% tier)');
+    assertEqual(result.AGI, 21500, 'AGI');
+    assertEqual(result.federalTaxableIncome, 0, 'Federal Taxable Income (below std deduction)');
+    assertEqual(result.federalTax, 0, 'Federal Tax');
+} // testCase2_SS50PercentTaxable()
+
+// ============================================================================
+// TEST CASE 3: SS with 85% taxability (above second threshold)
+// ============================================================================
+function testCase3_SS85PercentTaxable() {
+    console.log('\n=== Test Case 3: SS 85% Taxable (MFJ) ===');
+    
+    const result = calculateTaxes({
+        filingStatus: 'MFJ',
+        ages: [70, 68],  // Both over 65, get age bumps
+        earnedIncome: 50000,
+        ss1: 20000,
+        ss2: 20000,
+        ordDivInterest: 0,
+        qualifiedDiv: 0,
+        capGains: 0,
+        taxExemptInterest: 0,
+        hsaContrib: 0,
+        inflation: 1.0,
+        state: 'TESTTAXATION'
+    });
+    
+    // Provisional income = 50000 + 0.5 * 40000 = 70,000 (above $44,000)
+    assertEqual(result.provisionalIncome, 70000, 'Provisional Income');
+    
+    // Tier 1: 0.5 * (44000 - 32000) = 6,000
+    // Tier 2: 0.85 * (70000 - 44000) = 22,100
+    // Total: 28,100 (max would be 0.85 * 40000 = 34,000)
+    assertEqual(result.taxableSS, 28100, 'Taxable SS (85% tier)');
+    assertEqual(result.AGI, 78100, 'AGI');
+    assertEqual(result.federalStdDeduction, 35500, 'Federal Std Deduction with age bumps');
+    assertEqual(result.federalTaxableIncome, 42600, 'Federal Taxable Income');
+    
+    // Federal tax on 42,600:
+    // First $24,800 @ 10% = 2,480
+    // Remaining $17,800 @ 12% = 2,136
+    // Total = 4,616
+    assertEqual(result.federalTax, 4616, 'Federal Tax');
+} // testCase3_SS85PercentTaxable()
+
+// ============================================================================
+// TEST CASE 4: Large Capital Gains (testing preferential rates)
+// ============================================================================
+function testCase4_LargeCapitalGains() {
+    console.log('\n=== Test Case 4: Large Capital Gains ===');
+    
+    const result = calculateTaxes({
+        filingStatus: 'MFJ',
+        ages: [55, 53],
+        earnedIncome: 60000,
+        ss1: 0,
+        ss2: 0,
+        ordDivInterest: 5000,
+        qualifiedDiv: 10000,
+        capGains: 200000,  // Large cap gains
+        taxExemptInterest: 0,
+        hsaContrib: 0,
+        inflation: 1.0,
+        state: 'TESTTAXATION'
+    });
+    
+    // AGI = 60000 + 5000 + 10000 + 200000 = 275,000
+    assertEqual(result.AGI, 275000, 'AGI');
+    assertEqual(result.federalTaxableIncome, 242800, 'Federal Taxable Income');
+    assertEqual(result.ordinaryIncomeInAGI, 65000, 'Ordinary Income in AGI');
+    assertEqual(result.preferentialIncomeInAGI, 210000, 'Preferential Income in AGI');
+    assertEqual(result.taxableOrdinaryIncome, 32800, 'Taxable Ordinary Income');
+    assertEqual(result.taxablePreferentialIncome, 210000, 'Taxable Preferential Income');
+    
+    // Federal ordinary tax on 32,800:
+    // First $24,800 @ 10% = 2,480
+    // Remaining $8,000 @ 12% = 960
+    // Total ordinary = 3,440
+    assertEqual(result.federalOrdinaryTax, 3440, 'Federal Ordinary Tax');
+    
+    // Capital gains tax (position starts at 32,800):
+    // From 32,800 to 98,900 = 66,100 @ 0% = 0
+    // From 98,900 to 242,800 = 143,900 @ 15% = 21,585
+    assertEqual(result.capitalGainsTax, 21585, 'Capital Gains Tax');
+    assertEqual(result.federalTax, 25025, 'Total Federal Tax');
+} // testCase4_LargeCapitalGains()
+
+// ============================================================================
+// TEST CASE 5: Complex - Multiple income types with HSA
+// ============================================================================
+function testCase5_ComplexMultipleIncomes() {
+    console.log('\n=== Test Case 5: Complex Multiple Income Types ===');
+    
+    const result = calculateTaxes({
+        filingStatus: 'MFJ',
+        ages: [67, 65],  // Both get age bump
+        earnedIncome: 80000,
+        ss1: 25000,
+        ss2: 18000,
+        ordDivInterest: 8000,
+        qualifiedDiv: 12000,
+        capGains: 15000,
+        taxExemptInterest: 5000,  // Tax-exempt interest
+        hsaContrib: 10000,
+        inflation: 1.0,
+        state: 'TESTTAXATION'
+    });
+    
+    // Provisional income = (80000 - 10000) + 8000 + 12000 + 15000 + 5000 + 0.5 * 43000
+    // = 70000 + 8000 + 12000 + 15000 + 5000 + 21500 = 131,500
+    assertEqual(result.provisionalIncome, 131500, 'Provisional Income');
+    
+    // Well above $44,000 threshold
+    // Tier 1: 0.5 * (44000 - 32000) = 6,000
+    // Tier 2: 0.85 * (131500 - 44000) = 74,375
+    // Total: 80,375, but max is 0.85 * 43000 = 36,550
+    assertEqual(result.taxableSS, 36550, 'Taxable SS (capped at 85%)');
+    
+    // Federal AGI = (80000 - 10000) + 36550 + 8000 + 12000 + 15000 = 141,550
+    assertEqual(result.AGI, 141550, 'Federal AGI');
+    
+    // IRMAA MAGI = AGI + tax-exempt interest = 141550 + 5000 = 146,550
+    assertEqual(result.irmaaMagi, 146550, 'IRMAA MAGI');
+    
+    // Federal std deduction = 32200 + 1650 + 1650 = 35,500
+    assertEqual(result.federalStdDeduction, 35500, 'Federal Std Deduction');
+    
+    // State AGI (TEST state allows HSA deduction, no SS tax)
+    // = (80000 - 10000) + 0 + 8000 + 12000 + 15000 = 105,000
+    assertEqual(result.stateAGI, 105000, 'State AGI (TEST state)');
+} // testCase5_ComplexMultipleIncomes()
+
+// ============================================================================
+// TEST CASE 6: High income testing NIIT inclusion in capital gains
+// ============================================================================
+function testCase6_HighIncomeNIIT() {
+    console.log('\n=== Test Case 6: High Income with NIIT ===');
+    
+    const result = calculateTaxes({
+        filingStatus: 'MFJ',
+        ages: [45, 43],
+        earnedIncome: 300000,
+        ss1: 0,
+        ss2: 0,
+        ordDivInterest: 20000,
+        qualifiedDiv: 50000,
+        capGains: 400000,  // Large cap gains triggering NIIT
+        taxExemptInterest: 0,
+        hsaContrib: 0,
+        inflation: 1.0,
+        state: 'TESTTAXATION'
+    });
+    
+    // AGI = 300000 + 20000 + 50000 + 400000 = 770,000
+    assertEqual(result.AGI, 770000, 'AGI');
+    assertEqual(result.federalTaxableIncome, 737800, 'Federal Taxable Income');
+    assertEqual(result.taxableOrdinaryIncome, 287800, 'Taxable Ordinary Income');
+    assertEqual(result.taxablePreferentialIncome, 450000, 'Taxable Preferential Income');
+    
+    // Capital gains start at position 287,800 (well past 0% and 15% brackets)
+    // Position 287,800 to 613,700 = 325,900 @ 18.8% = 61,269.20
+    // Position 613,700 to 737,800 = 124,100 @ 23.8% = 29,535.80
+    // Total cap gains tax = 90,805
+    assertEqual(result.capitalGainsTax, 90805, 'Capital Gains Tax (with NIIT)');
+} // testCase6_HighIncomeNIIT()
+
+// ============================================================================
+// TEST CASE 7: Single filer with inflation adjustment
+// ============================================================================
+function testCase7_SingleWithInflation() {
+    console.log('\n=== Test Case 7: Single Filer with Inflation ===');
+    
+    const result = calculateTaxes({
+        filingStatus: 'SGL',
+        ages: [68],  // Gets age bump
+        earnedIncome: 50000,
+        ss1: 30000,
+        ss2: 0,
+        ordDivInterest: 2000,
+        qualifiedDiv: 0,
+        capGains: 0,
+        taxExemptInterest: 0,
+        hsaContrib: 0,
+        inflation: 1.10,  // 10% inflation
+        state: 'TESTTAXATION'
+    });
+    
+    // Provisional income = 50000 + 2000 + 0.5 * 30000 = 67,000
+    assertEqual(result.provisionalIncome, 67000, 'Provisional Income');
+    
+    // SS thresholds with inflation: $25,000 * 1.1 = 27,500; $34,000 * 1.1 = 37,400
+    // Provisional 67,000 > 37,400 (inflated second threshold)
+    // Tier 1: 0.5 * (37400 - 27500) = 4,950
+    // Tier 2: 0.85 * (67000 - 37400) = 25,160
+    // Total: 30,110, max is 0.85 * 30000 = 25,500
+    assertEqual(result.taxableSS, 25500, 'Taxable SS (85% max)');
+    
+    // Federal std deduction = (16100 + 2050) * 1.1 = 19,965
+    assertEqual(result.federalStdDeduction, 19965, 'Federal Std Deduction (inflated)');
+} // testCase7_SingleWithInflation()
+
+// ============================================================================
+// TEST CASE 8: Edge case - exactly at 50% threshold
+// ============================================================================
+function testCase8_ExactlyAt50PercentThreshold() {
+    console.log('\n=== Test Case 8: Exactly at 50% Threshold ===');
+    
+    const result = calculateTaxes({
+        filingStatus: 'SGL',
+        ages: [66],
+        earnedIncome: 10000,
+        ss1: 30000,
+        ss2: 0,
+        ordDivInterest: 0,
+        qualifiedDiv: 0,
+        capGains: 0,
+        taxExemptInterest: 0,
+        hsaContrib: 0,
+        inflation: 1.0,
+        state: 'TESTTAXATION'
+    });
+    
+    // Provisional income = 10000 + 0.5 * 30000 = 25,000 (exactly at first threshold)
+    assertEqual(result.provisionalIncome, 25000, 'Provisional Income (exactly at threshold)');
+    
+    // At exactly $25,000, we're at the boundary
+    // Should trigger 50% taxability for income above this
+    assertEqual(result.taxableSS, 0, 'Taxable SS (at threshold boundary)');
+} // testCase8_ExactlyAt50PercentThreshold()
+
+// ============================================================================
+// Run all tests
+// ============================================================================
+function runAllTaxTests() {
+    console.log('╔════════════════════════════════════════════════════╗');
+    console.log('║     RUNNING CALCULATETAXES() TEST SUITE            ║');
+    console.log('╚════════════════════════════════════════════════════╝');
+    
+    testCase1_OnlySSBelowThreshold();
+    testCase2_SS50PercentTaxable();
+    testCase3_SS85PercentTaxable();
+    testCase4_LargeCapitalGains();
+    testCase5_ComplexMultipleIncomes();
+    testCase6_HighIncomeNIIT();
+    testCase7_SingleWithInflation();
+    testCase8_ExactlyAt50PercentThreshold();
+    
+    console.log('\n╔════════════════════════════════════════════════════╗');
+    console.log('║     TEST SUITE COMPLETE                            ║');
+    console.log('╚════════════════════════════════════════════════════╝');
+    console.log(`\nResults: ${passed} passed, ${failed} failed`);
+} // runAllTaxTests()
+
+// Run the test suite
+runAllTaxTests();
+
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`);
 	console.log(`   chart.js version ${Chart.version}`);

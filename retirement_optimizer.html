@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer 7c</title>
+    <title>Retirement Optimizer 7d</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<!-- <link rel="stylesheet" href="retirementopt_styles.css"> -->
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">	
@@ -220,7 +220,8 @@
 				<div class="drawer-content" id="drawer-changelog"> 
 				<!--- CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG --->
 				<ul>
-				<li><b>7c</b> Prior update(s) broke the save/load functionality due to case changes.  Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years. The rate is encoded in the TAXdata table - not user adjustable. Began UI change to move the top tabs into a new location: Documentation.</li>
+				<li><b>7d</b> Updated taxation calculations to use a more thorough calculator.
+				<li>7c Prior update(s) broke the save/load functionality due to case changes.  Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years. The rate is encoded in the TAXdata table - not user adjustable. Began UI change to move the top tabs into a new location: Documentation.</li>
 				<li>7b More state rates. Fixed most calculations. Minor UI changes. Changed the defaults to something "more common" - . See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>. </li>					
 				<li>7a Now has various state rates. Fixed most calculations. See <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A> for details. </li>	
 				
@@ -326,8 +327,9 @@ function inspectForErrors(inputs) {
 	}
 }
 
-function getRMDPercentage(age, birthYear) {
-const startAge = (birthYear >= 1960) ? 75 : 73;
+function getRMDPercentage(currentYear, birthYear) {
+	const startAge = (birthYear >= 1960) ? 75 : 73;
+	const age = currentYear - birthYear + 1;
     if (age < startAge) return 0;
     if (age > 120) return 1/RMD_TABLE[120];
     return 1/(RMD_TABLE[age]);
@@ -366,9 +368,20 @@ function calculateAmortizedWithdrawal(currentIRA, targetIRA, years, growthRate) 
 }
 
 
-// Find the top amount in the provided brackets. If the bracket isn't found, it finds 
-// the limit in the next lower bracket.  This doesn't check to be sure any values are reasonable.
-
+/**
+ * Find the income limit for a specified marginal tax rate within tax brackets.
+ * Returns the highest bracket limit where the rate is less than or equal to the target rate.
+ * Uses TAXdata structure to retrieve bracket information.
+ * 
+ * @param {string} entity - Tax entity identifier (e.g., 'federal', 'CA', 'IRMAA', 'SS')
+ * @param {string} status - Filing status (e.g., 'single', 'joint', 'mfs', 'hoh')
+ * @param {number} tgtrate - Target marginal tax rate to find limit for
+ * @param {number} [inflation=1] - Inflation multiplier for bracket limits (default: 1)
+ * @returns {Object} Bracket limit results
+ * @returns {number} return.limit - Income limit at or below the target rate (0 if no match)
+ * @returns {number} return.rate - Actual rate of the bracket found
+ * @note Does not validate input parameters for reasonableness
+ */
 function findLimitByRate( entity, status, tgtrate, inflation=1) {
     let brks = getRateBracket(entity, status)
 
@@ -408,6 +421,21 @@ function findUpperLimitByAmount( entity, status, amount, inflation=1) {
 
 ///
 
+/**
+ * Calculate taxable capital gains from a brokerage account withdrawal.
+ * Determines the proportional basis reduction and resulting capital gains
+ * based on the withdrawal amount relative to total account balance.
+ * 
+ * @param {number} withdrawal - Requested withdrawal amount
+ * @param {number} brokerageBalance - Current total brokerage account balance
+ * @param {number} brokerageBasis - Current cost basis in the brokerage account
+ * @returns {Object} Withdrawal calculation results
+ * @returns {number} return.withdrawn - Actual amount withdrawn (limited by balance)
+ * @returns {number} return.capitalGains - Amount subject to capital gains tax
+ * @returns {number} return.basisChange - Reduction in cost basis (always positive)
+ * @note Withdrawal is capped at available balance
+ * @note Uses proportional basis reduction method
+ */
 function calculateBrokerageWithdrawal(withdrawal, brokerageBalance, brokerageBasis) {
     // Can't withdraw more than available balance
     const actualWithdrawal = Math.min(withdrawal, brokerageBalance);
@@ -443,7 +471,6 @@ function calculateBrokerageWithdrawal(withdrawal, brokerageBalance, brokerageBas
  * @param {Array<number>} withdrawStrategy.taxrate - Tax rates for each account (0.0 to 1.0)
  * @returns {Object} Withdrawal amounts (gross), taxes paid, net amounts, and remaining shortfall
  */
-
 function calculateWithdrawals(balances, gapAmount, withdrawStrategy) {
     // Initialize result structure
     const result = {
@@ -734,11 +761,11 @@ function simulate(inputs) {
 	STATEname = inputs.STATEname;
     let log = [];
 	//!!!TODO Remove hardcoded start year!
-    let startYear = 2026;
+    let currentYear = inputs.startYear ?? 2026;
 	let birthyear1 = inputs.birthyear1;
 	let birthyear2 = inputs.birthyear2;
 
-    let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear1 + inputs.die2) - startYear + 1;
+    let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear1 + inputs.die2) - currentYear + 1;
     let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [] };
 
 	let cpiRate = 1		// The rate that SS and Tax brackets increase.
@@ -752,7 +779,7 @@ function simulate(inputs) {
 	let nominalTaxRate = 0.20; // Just a guess.
 	let marginalTaxRate = 0.33; // Just a guess.
 	let capitalGainsRate = 0.15; // A guess.
-	let tax;
+	let tax = {};
 	
 	
 	
@@ -776,8 +803,8 @@ function simulate(inputs) {
     for (let y = 0; y < maxYears; y++) {
 		spendGoal = spendGoal * spendDelta * (1+inputs.inflation);
 		
-		cpiRate = (1 + inputs.cpi) * cpiRate
-		inflation = (1 + inputs.inflation) * inflation
+		cpiRate = (1 + inputs.cpi) * cpiRate;
+		inflation = (1 + inputs.inflation) * inflation;
 		spendDelta = 1 + inputs.spendChange;
 		medicareRate *= ( 1 + TAXData.IRMAA.ANNUAL_INCREASE )
 		
@@ -792,8 +819,8 @@ function simulate(inputs) {
 		let depCash = 0;
 
 
-        let age1 = startYear - birthyear1 + y;
-        let age2 = startYear - birthyear2 + y;
+        let age1 = currentYear - birthyear1 + 1;
+        let age2 = currentYear - birthyear2 + 1;
         let alive1 = age1 <= inputs.die1;
         let alive2 = age2 <= inputs.die2;
         if (!alive1 && !alive2) break;
@@ -825,7 +852,7 @@ function simulate(inputs) {
 
 
         // 2. Base Income
-		let ssReduction = (inputs.ssFailYear > 2000 && startYear + y >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
+		let ssReduction = (inputs.ssFailYear > 2000 && currentYear >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
         let s1 = (alive1 && age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate * ssReduction : 0;
         let s2 = (alive2 && age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate * ssReduction : 0;
         let pension = inputs.pensionAnnual;
@@ -844,8 +871,8 @@ function simulate(inputs) {
 		
 
         // 3. RMDs
-		let rmd1Pct = getRMDPercentage(age1, birthyear1);
-		let rmd2Pct = getRMDPercentage(age2, birthyear2);
+		let rmd1Pct = getRMDPercentage(currentYear, birthyear1);
+		let rmd2Pct = getRMDPercentage(currentYear, birthyear2);
         let rmd1 = alive1 ? balance.IRA1 * rmd1Pct || 0 : 0;
         let rmd2 = alive2 ? balance.IRA2 * rmd2Pct || 0 : 0;
 		rmd1Pct = Math.max(rmd1Pct, rmd2Pct, 0);
@@ -937,9 +964,30 @@ function simulate(inputs) {
 		
 		inspectForErrors({fixedInc: fixedInc, wdIRA: wdIRA, totalRMD: totalRMD, taxableInterest: taxableInterest, capitalGains: capitalGains, taxableDividends: taxableDividends, age1: age1, age2: age2, cpiRate: cpiRate})
 			
+			
+		let tax2 = calculateTaxes({filingStatus: status, ages: [age1, age2], 
+				ss1: s1, ss2: s2,
+				earnedIncome: totalRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+				qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
+				taxExemptInterest: 0, state: STATEname })
+		inspectForErrors(tax2)  // See if any numbers look fishy.
+
+		// Map new returns to old returns:
+		tax.fed = tax2.federalOrdinaryTax + tax2.capitalGainsTax + tax2.federalTax + tax2.niitTax;
+		tax.state = tax2.stateTax;
+		tax.total = tax2.totalTax;
+		tax.magi = tax2.irmaaMagi;
+		tax.stagi = tax2.stateAGI;
+		tax.stRate = tax2.stateMarginalRate;
+		tax.fedRate = tax2.federalMarginalRate;
+		tax.fedLimit = tax2.fedLimit;
+		tax.stLimit = tax2.stLimit;
+	
 
 		// function calculateTax(fixed, netWithdrawals.IRA`, gains, status, a1, a2, inflation=1, ratecreep=1) 
-        tax = calculateTax(fixedInc, netWithdrawals.IRA + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
+        // tax = calculateTax(fixedInc, netWithdrawals.IRA + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
+
+		
 		inspectForErrors(tax)  // See if any numbers look fishy.
 		//!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
 		marginalFedTaxRate = tax.fedRate;
@@ -977,8 +1025,29 @@ function simulate(inputs) {
 		
 		// Recheck tax calculations due to possible additional withdrawals - and we now
 		// have a more accurate income picture.
-		tax = calculateTax(fixedInc, netWithdrawals.IRA + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
-		inspectForErrors(tax);
+		capitalGains = netWithdrawals.BrokerageBasis  ?? 0
+
+		
+		tax2 = calculateTaxes({filingStatus: status, ages: [age1, age2], 
+				ss1: s1, ss2: s2,
+				earnedIncome: totalRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+				qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
+				taxExemptInterest: 0, state: STATEname })
+		inspectForErrors(tax2)  // See if any numbers look fishy.
+
+		// Map new returns to old returns:
+		tax.fed = tax2.federalOrdinaryTax + tax2.capitalGainsTax + tax2.federalTax + tax2.niitTax;
+		tax.state = tax2.stateTax;
+		tax.total = tax2.totalTax;
+		tax.magi = tax2.irmaaMagi;
+		tax.stagi = tax2.stateAGI;
+		tax.stRate = tax2.stateMarginalRate;
+		tax.fedRate = tax2.federalMarginalRate;		
+		tax.fedLimit = tax2.fedLimit;
+		tax.stLimit = tax2.stLimit;
+		
+		// tax = calculateTax(fixedInc, netWithdrawals.IRA + totalRMD + taxableInterest, capitalGains + taxableDividends, status, age1, age2, cpiRate);
+		// inspectForErrors(tax);
 		
 		totalTax = tax.total + irmaa;
 		cumulativeTaxes += totalTax;
@@ -1026,13 +1095,15 @@ function simulate(inputs) {
 
 		if (netIncome < targetSpend || totalWealth < (targetSpend * 2)) {
 			totals.success = false;
-			totals.failedInYear.push(startYear + y)
+			totals.failedInYear.push(currentYear)
 		} else {
 			totals.yearsfunded += 1
 		}
+		currentYear += 1;
+
 
         log.push({
-            year: startYear + y,
+            year: currentYear,
             age1: alive1 ? age1 : '—',
             age2: alive2 ? age2 : '—',
 			status: status,
@@ -1086,145 +1157,23 @@ function simulate(inputs) {
 }
 
 /**
- * Calculates Federal, California State, and IRMAA taxes.
- * * @param {Object} params - Input parameters
- * @param {number} params.yearOffset - Number of years from base (2026) to adjust for cpi/Inflation.
- * @param {string} params.filingStatus - 'MFJ' (Married Filing Jointly) or 'Single'.
- * @param {Array}  params.ages - Array of ages [age1, age2] or [age1] if single.
- * @param {number} params.earnedIncome - Total of W2, IRA/401k withdrawals, and RMDs.
- * @param {number} params.ss1 - Social Security for Person 1.
- * @param {number} params.ss2 - Social Security for Person 2 (0 if Single).
- * @param {number} params.ordDivInterest - Interest and Ordinary Dividends.
- * @param {number} params.qualifiedDiv - Qualified Dividends (taxed at lower rates Federally).
- * @param {number} params.capGains - Net Long Term Capital Gains.
- * @param {number} params.taxExemptInterest - Muni bond interest (non-taxable but used for SS/IRMAA/CA).
- * @param {number} params.hsaContrib - Total HSA contributions (deductible Fed, taxable CA).
- * @param {number} params.cpi - current cpi/Inflation rate (e.g., 1.025 for 2.5%).
- * @param {number} params.medicareRate - medicare cost/IRMAA Inflation rate (e.g., 1.056 for 5.6%).
+ * Calculate progressive tax on a given amount using tax brackets from TAXdata structure.
+ * Iterates through brackets, applying rates to income ranges, with optional inflation
+ * and rate creep adjustments for future year projections.
+ * 
+ * @param {string} entity - Tax entity identifier (e.g., 'federal', 'CA', 'IRMAA', 'SS')
+ * @param {string} status - Filing status (e.g., 'single', 'joint', 'mfs', 'hoh')
+ * @param {number} amount - Taxable amount to calculate tax on
+ * @param {number} [inflation=1] - Inflation multiplier for bracket limits (default: 1)
+ * @param {number} [ratecreep=1] - Rate adjustment multiplier (default: 1)
+ * @returns {Object} Tax calculation results
+ * @returns {number} return.cumulative - Total tax owed
+ * @returns {number} return.total - Total tax owed (same as cumulative)
+ * @returns {number} return.marginal - Marginal tax rate at this income level
+ * @returns {number} return.limit - Upper limit of the bracket reached
+ * @returns {number} return.nominalRate - Nominal rate if specified in bracket data
+ * @returns {string} [return.error] - Error message if entity/status invalid
  */
-function calculateTaxes(params) {
-    const { 
-        yearOffset, filingStatus, ages, earnedIncome, ss1, ss2, 
-        ordDivInterest, qualifiedDiv, capGains, taxExemptInterest, 
-        hsaContrib, cpi, medicareRate
-    } = params;
-
-    const inflationFactor = cpi;
-    const totalSS = ss1 + ss2;
-
-    // --- 1. FEDERAL SOCIAL SECURITY TAXABILITY ---
-    // Formula: Provisional Income = AGI (excluding SS) + TaxExemptInterest + 50% of SS
-    const provisionalIncome = earnedIncome + ordDivInterest + qualifiedDiv + capGains + taxExemptInterest - hsaContrib + (totalSS * 0.5);
-    
-    let taxableSS = 0;
-	//!!! TODO This logic can be replace with calculateProgressive using the provisionalIncome?!
-	taxableSS = calculateProgressive('SOCIALSECURITY', filingStatus, provisionalIncome, inflationFactor).cumulative
-	
-	
-	//!!! TODO: This can probably be done with calculateProgressive()
-    const ssThreshold1 = TAXdata['SOCIALSECURITY'][filingStatus].brackets[1];
-    const ssThreshold2 = TAXdata['SOCIALSECURITY'][filingStatus].brackets[2];
-
-
-    if (provisionalIncome > ssThreshold2.l) {
-        taxableSS = Math.min(0.85 * totalSS, (0.85 * (provisionalIncome - ssThreshold2.l)) + Math.min(6000 * inflationFactor, 0.5 * (ssThreshold2 - ssThreshold1)));
-    } else if (provisionalIncome > ssThreshold1) {
-        taxableSS = Math.min(0.5 * totalSS, 0.5 * (provisionalIncome - ssThreshold1));
-    }
-
-    // --- 2. FEDERAL TAX CALCULATION ---
-    const fedAGI = earnedIncome + ordDivInterest + qualifiedDiv + capGains + taxableSS - hsaContrib;
-    
-    // Standard Deduction with Age 65+ bump
-    let fedStdDeduct = TAXData['FEDERAL'][filingStatus].std * inflationFactor;
-    ages.forEach(age => { if (age >= TAXData['FEDERAL'][filingStatus].age) fedStdDeduct += (TAXData['FEDERAL'][filingStatus].stdbump * inflationFactor); });
-
-    const fedTaxableIncome = Math.max(0, fedAGI - fedStdDeduct);
-    const prefIncome = qualifiedDiv + capGains; // Income taxed at 0/15/20%
-    const ordinaryTaxable = Math.max(0, fedTaxableIncome - prefIncome);
-
-    const fedOrdinaryTax = calcProgressive(ordinaryTaxable, getFedBrackets(filingStatus, inflationFactor));
-	let testFedTax = calculateProgressive('FEDERAL', filingStatus, ordinaryTaxable, inflationFactor).cumulative
-    const fedPrefTax = calcPrefTax(ordinaryTaxable, prefIncome, filingStatus, inflationFactor);
-    const totalFedTax = fedOrdinaryTax + fedPrefTax;
-
-    // --- 3. (CALIFORNIA) STATE TAX CALCULATION ---
-    // CA Add-backs: HSA is taxable. Muni interest is taxable (assuming out-of-state for conservative estimate).
-    // CA Subtractions: Social Security is 100% exempt.
-    const caAGI = (fedAGI - taxableSS) + hsaContrib + taxExemptInterest;
-    const caStdDeduct = TAXData[STATEname][filingStatus].std * inflationFactor;
-    const caTaxableIncome = Math.max(0, caAGI - caStdDeduct);
-    const caTax = calcProgressive(caTaxableIncome, getCABrackets(filingStatus, inflationFactor));
-	let testCAResult = calculateProgressive(STATEname, filingStatus, caTaxableIncome, inflationFactor).cumulative
-	
-
-    // --- 4. IRMAA CALCULATION ---
-    // MAGI for IRMAA = Fed AGI + Tax-Exempt Interest
-    const irmaaMAGI = fedAGI + taxExemptInterest;
-    const irmaaAnnualSurcharge = calcIRMAA(irmaaMAGI, filingStatus, cpiRate, medicareRate);
-
-    return {
-        fedAGI: Math.round(fedAGI),
-        fedTax: Math.round(totalFedTax),
-        caTax: Math.round(caTax),
-        irmaa: Math.round(irmaaAnnualSurcharge),
-        totalTax: Math.round(totalFedTax + caTax + irmaaAnnualSurcharge),
-        effectiveRate: ((totalFedTax + caTax + irmaaAnnualSurcharge) / (fedAGI + totalSS + taxExemptInterest) * 100).toFixed(2) + '%'
-    };
-}
-
-// --- HELPER FUNCTIONS ---
-
-function calcProgressive(taxable, brackets) {
-    let tax = 0;
-    let previousLimit = 0;
-    for (const b of brackets) {
-        if (taxable > previousLimit) {
-            const amountInBracket = Math.min(taxable, b.limit) - previousLimit;
-            tax += amountInBracket * b.rate;
-            previousLimit = b.limit;
-        }
-    }
-    return tax;
-}
-
-function calcPrefTax(ordTaxable, prefIncome, status, idx) {
-    // Simplified Fed Capital Gains Brackets (0%, 15%, 20%)
-    const thresholds = (status === 'MFJ' ? [94050, 583750] : [47025, 518900]).map(v => v * idx);
-    let tax = 0;
-    let remainingPref = prefIncome;
-    let currentLevel = ordTaxable;
-
-    // 0% tier
-    const zeroCap = Math.max(0, thresholds[0] - currentLevel);
-    remainingPref -= Math.min(remainingPref, zeroCap);
-    currentLevel += Math.min(prefIncome, zeroCap);
-
-    // 15% tier
-    if (remainingPref > 0) {
-        const fifteenCap = Math.max(0, thresholds[1] - currentLevel);
-        const amountAtFifteen = Math.min(remainingPref, fifteenCap);
-        tax += amountAtFifteen * 0.15;
-        remainingPref -= amountAtFifteen;
-    }
-    // 20% tier
-    if (remainingPref > 0) tax += remainingPref * 0.20;
-    return tax;
-}
-
-
-function getFedBrackets(status, idx) {
-    return status === 'MFJ' 
-        ? [{limit: 23850*idx, rate: 0.1}, {limit: 96950*idx, rate: 0.12}, {limit: 206700*idx, rate: 0.22}, {limit: 394600*idx, rate: 0.24}, {limit: 1e9, rate: 0.32}]
-        : [{limit: 11925*idx, rate: 0.1}, {limit: 48475*idx, rate: 0.12}, {limit: 103350*idx, rate: 0.22}, {limit: 197300*idx, rate: 0.24}, {limit: 1e9, rate: 0.32}];
-}
-
-function getCABrackets(status, idx) {
-    const base = [{limit: 10412, rate: 0.01}, {limit: 24684, rate: 0.02}, {limit: 38959, rate: 0.04}, {limit: 54081, rate: 0.06}, {limit: 68348, rate: 0.08}, {limit: 349137, rate: 0.093}, {limit: 418961, rate: 0.103}, {limit: 698271, rate: 0.113}, {limit: 1e9, rate: 0.123}];
-    return base.map(b => ({ limit: b.limit * (status === 'MFJ' ? 2 : 1) * idx, rate: b.rate }));
-}
-
-// Do a progressive calculation on the bracket.
 function calculateProgressive(entity, status, amount, inflation=1, ratecreep=1) {
  
     let brks = getRateBracket(entity, status)
@@ -1287,6 +1236,275 @@ function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=
     return { total: totalTax, fed: fedTax, state: stTax, magi: agi, stagi: stAGI, 
 			fedLimit: fedLimit, stLimit: stLimit, fedRate: fedRate, stRate: stRate};
 }
+
+
+///////////////////////////
+/**
+ * Calculates Federal, State, Capital Gains (and NIIT) taxes. Include correct handling of Social Security Taxability. 
+ * Inputs are as described below.
+ * Outputs should include: 
+ *   totalTax, federalTax, stateTax, capitalGainsTax, niitTax, AGI, and 
+ *   the MAGI suitable for determining the IRMAA taxes in subsequent years.
+ * 
+ * @param {Object} params - Input parameters
+ * @param {string} params.filingStatus - 'MFJ' (Married Filing Jointly) or 'SGL' (Single).
+ * @param {Array}  params.ages - Array of ages [age1, age2] or [age1] if single.
+ * @param {number} params.earnedIncome - Total of W2, IRA/401k withdrawals, pensions and RMDs.
+ * @param {number} params.ss1 - Social Security for Person 1.
+ * @param {number} params.ss2 - Social Security for Person 2 (0 if Single).
+ * @param {number} params.ordDivInterest - Interest and Ordinary Dividends.
+ * @param {number} params.qualifiedDiv - Qualified Dividends (taxed at lower rates Federally).
+ * @param {number} params.capGains - Net Long Term Capital Gains.
+ * @param {number} params.taxExemptInterest - Muni bond interest (non-taxable but used for SS/IRMAA/CA).
+ * @param {number} params.hsaContrib - Total HSA contributions (deductible Fed, taxable CA).
+ * @param {number} params.inflation - Inflation multiplier for tax brackets (e.g., 1.025 for 2.5% cumulative).
+ * @param {string} params.state - State abbreviation (e.g., 'CA', 'NONE').
+ * @returns {Object} Comprehensive tax calculation results
+ */
+function calculateTaxes(params = {}) {
+	// Destructure all parameters.
+    const {
+        filingStatus = 'MFJ',
+        ages = [],
+        earnedIncome = 0,
+        ss1 = 0,
+        ss2 = 0,
+        ordDivInterest = 0,
+        qualifiedDiv = 0,
+        capGains = 0,
+        taxExemptInterest = 0,
+        hsaContrib = 0,
+        inflation = 1.0,
+        state = 'CA'
+    } = params;
+    
+    // Normalize filing status to match TAXData keys
+    const status = filingStatus ?? "MFJ";
+    const totalSS = ss1 + ss2;
+    
+    // ========================================================================
+    // STEP 1: Calculate Federal Standard Deduction (including age adjustments)
+    // ========================================================================
+    const federalStdBase = TAXData.FEDERAL[status].std;
+    const federalAgeThreshold = TAXData.FEDERAL[status].age;
+    const federalAgeBump = TAXData.FEDERAL[status].stdbump;
+    
+    let federalStdDeduction = federalStdBase * inflation;
+    
+    // Add age-based additional standard deduction
+    if (ages[0] >= federalAgeThreshold) {
+        federalStdDeduction += federalAgeBump * inflation;
+    } // ages[0] check
+    
+    if (status === 'MFJ' && ages.length > 1 && ages[1] >= federalAgeThreshold) {
+        federalStdDeduction += federalAgeBump * inflation;
+    } // ages[1] check for MFJ
+    
+	// ========================================================================
+	// STEP 2: Calculate Social Security Taxability (Federal)
+	// ========================================================================
+	// Get SS taxability brackets using helper function
+	const ssBrackets = getRateBracket('SOCIALSECURITY', status);
+	if (!ssBrackets) {
+		return { error: `Unable to retrieve Social Security brackets for status: ${status}` };
+	} // SS brackets validation
+
+	// Provisional Income = AGI (before SS) + Tax-Exempt Interest + [rate%] of SS
+	// The rate for provisional income is the second bracket rate (index 1)
+	const provisionalIncomeRate = ssBrackets[1].r ?? 0;
+	const provisionalIncome = (earnedIncome - hsaContrib + ordDivInterest + 
+							  qualifiedDiv + capGains + taxExemptInterest + 
+							  provisionalIncomeRate * totalSS);
+
+	let taxableSS = 0;
+
+	// Determine taxable portion based on provisional income
+	if (provisionalIncome <= ssBrackets[0].l * inflation) {
+		// Below first threshold - no SS is taxable
+		taxableSS = 0;
+	} else if (provisionalIncome <= ssBrackets[2].l * inflation) {
+		// Between first and second threshold - taxable at tier 1 rate
+		const threshold1 = ssBrackets[1].l * inflation;
+		const tier1Rate = ssBrackets[1].r;
+		const excessOver1 = provisionalIncome - threshold1;
+		taxableSS = Math.min(tier1Rate * totalSS, tier1Rate * excessOver1);
+	} else {
+		// Above second threshold - taxable at tier 2 rate (with tier 1 portion)
+		const threshold1 = ssBrackets[1].l * inflation;
+		const threshold2 = ssBrackets[2].l * inflation;
+		const tier1Rate = ssBrackets[1].r;
+		const tier2Rate = ssBrackets[2].r;
+		const excessOver2 = provisionalIncome - threshold2;
+		
+		// Calculate tier 1 amount (difference between thresholds at tier 1 rate)
+		const tier1Amount = tier1Rate * (threshold2 - threshold1);
+		
+		// Calculate tier 2 amount (excess over threshold 2 at tier 2 rate)
+		const tier2Amount = tier2Rate * excessOver2;
+		
+		// Total taxable SS is limited to tier 2 rate * total SS
+		taxableSS = Math.min(tier2Rate * totalSS, tier1Amount + tier2Amount);
+	} // SS taxability calculation
+    
+    // ========================================================================
+    // STEP 3: Calculate Federal AGI and Taxable Income
+    // ========================================================================
+    const federalAGI = (earnedIncome - hsaContrib) + taxableSS + ordDivInterest + 
+                       qualifiedDiv + capGains;
+    
+    const federalTaxableIncome = Math.max(0, federalAGI - federalStdDeduction);
+    
+    // ========================================================================
+    // STEP 4: Separate Ordinary and Preferentially-Taxed Income
+    // ========================================================================
+    // Ordinary income components (taxed at regular rates)
+    const ordinaryIncomeInAGI = (earnedIncome - hsaContrib) + taxableSS + ordDivInterest;
+    
+    // Preferentially-taxed income (qualified dividends + long-term cap gains)
+    const preferentialIncomeInAGI = qualifiedDiv + capGains;
+    
+    // Determine how much of taxable income is ordinary vs. preferential
+    // Standard deduction comes off ordinary income first
+    const taxableOrdinaryIncome = Math.max(0, Math.min(federalTaxableIncome, 
+                                            ordinaryIncomeInAGI - federalStdDeduction));
+    const taxablePreferentialIncome = Math.max(0, federalTaxableIncome - taxableOrdinaryIncome);
+    
+    // ========================================================================
+    // STEP 5: Calculate Federal Ordinary Income Tax
+    // ========================================================================
+    const federalOrdinaryResult = calculateProgressive('FEDERAL', status, 
+                                                       taxableOrdinaryIncome, inflation);
+    const federalOrdinaryTax = federalOrdinaryResult.total;
+    const federalMarginalRate = federalOrdinaryResult.marginal;
+    
+    // ========================================================================
+    // STEP 6: Calculate Federal Capital Gains Tax (including NIIT)
+    // ========================================================================
+    // Capital gains brackets are based on total taxable income position
+    // We start applying cap gains rates where ordinary income ended
+    const capGainsBrackets = TAXData.FEDERAL.CAPITAL_GAINS[status].brackets;
+    let federalCapGainsTax = 0;
+    let remainingPreferential = taxablePreferentialIncome;
+    let currentPosition = taxableOrdinaryIncome; // Start where ordinary income left off
+    
+    // Apply capital gains rates based on position in total taxable income
+    for (let i = 0; i < capGainsBrackets.length; i++) {
+        const bracket = capGainsBrackets[i];
+        const bracketLimit = bracket.l * inflation;
+        const rate = bracket.r;
+        
+        // Skip brackets we've already passed
+        if (currentPosition >= bracketLimit) {
+            continue;
+        } // bracket already passed
+        
+        // Calculate how much preferential income fits in this bracket
+        const roomInBracket = bracketLimit - currentPosition;
+        const amountInBracket = Math.min(remainingPreferential, roomInBracket);
+        
+        // Apply the rate to this portion
+        federalCapGainsTax += amountInBracket * rate;
+        remainingPreferential -= amountInBracket;
+        currentPosition += amountInBracket;
+        
+        // Exit if we've taxed all preferential income
+        if (remainingPreferential <= 0) {
+            break;
+        } // all preferential income taxed
+    } // capital gains bracket loop
+    
+    // Total federal tax
+    const federalTax = federalOrdinaryTax + federalCapGainsTax;
+    
+    // ========================================================================
+    // STEP 7: Calculate State AGI and Taxable Income
+    // ========================================================================
+    // State differences from Federal AGI:
+    // - California: HSA contributions are NOT deductible (add back)
+    // - California: Social Security is NOT taxable (use different SS amount)
+    // - California: No preferential rates for cap gains (all ordinary income)
+    
+    const stateData = TAXData[state];
+    const stateSSTaxRate = stateData.SSTaxation || 0;
+    
+    // Calculate state-specific taxable SS
+    const stateTaxableSS = totalSS * stateSSTaxRate;
+    
+    // State AGI calculation (CA adds back HSA)
+    let stateAGI;
+    if (state === 'CA') {
+        // California: HSA not deductible, use state SS taxation rate
+        stateAGI = earnedIncome + stateTaxableSS + ordDivInterest + 
+                   qualifiedDiv + capGains;
+    } else {
+        // Other states: may follow federal treatment more closely
+        stateAGI = earnedIncome - hsaContrib + stateTaxableSS + ordDivInterest + 
+                   qualifiedDiv + capGains;
+    } // state AGI calculation
+    
+    // State standard deduction
+    const stateStdDeduction = stateData[status].std * inflation;
+    
+    // State taxable income
+    const stateTaxableIncome = Math.max(0, stateAGI - stateStdDeduction);
+    
+    // ========================================================================
+    // STEP 8: Calculate State Tax
+    // ========================================================================
+    const stateResult = calculateProgressive(state, status, stateTaxableIncome, inflation);
+    const stateTax = stateResult.total;
+    const stateMarginalRate = stateResult.marginal;
+    
+    // ========================================================================
+    // STEP 9: Calculate IRMAA MAGI (for future year IRMAA determination)
+    // ========================================================================
+    // IRMAA MAGI = Federal AGI + Tax-Exempt Interest
+    const irmaaMagi = federalAGI + taxExemptInterest;
+    
+    // ========================================================================
+    // STEP 10: Calculate Total Tax and Return Results
+    // ========================================================================
+    const totalTax = federalTax + stateTax;
+    
+    return {
+        // Primary outputs requested
+        totalTax: totalTax,
+        federalTax: federalTax,
+        stateTax: stateTax,
+        capitalGainsTax: federalCapGainsTax,  // Includes NIIT
+        niitTax: 0,  // Included in capitalGainsTax (combined brackets)
+        AGI: federalAGI,
+        irmaaMagi: irmaaMagi,
+        
+        // Additional detailed breakdown
+        federalOrdinaryTax: federalOrdinaryTax,
+        federalMarginalRate: federalMarginalRate,
+        stateMarginalRate: stateMarginalRate,
+		fedLimit: federalOrdinaryResult.limit,
+		stLimit: stateResult.limit,
+        
+        // Income components
+        taxableSS: taxableSS,
+        provisionalIncome: provisionalIncome,
+        federalTaxableIncome: federalTaxableIncome,
+        stateTaxableIncome: stateTaxableIncome,
+        stateAGI: stateAGI,
+        
+        // Standard deductions applied
+        federalStdDeduction: federalStdDeduction,
+        stateStdDeduction: stateStdDeduction,
+        
+        // Income breakdown for verification
+        ordinaryIncomeInAGI: ordinaryIncomeInAGI,
+        preferentialIncomeInAGI: preferentialIncomeInAGI,
+        taxableOrdinaryIncome: taxableOrdinaryIncome,
+        taxablePreferentialIncome: taxablePreferentialIncome
+    }; // return object
+} // calculateTaxes()
+
+
+
+///////////////////////////
 
 function calcIRMAA(magi, status, cpiRate, medicareRate = (1 + TAXData.IRMAA.ANNUAL_INCREASE)) {
 	

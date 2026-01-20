@@ -12,7 +12,7 @@ A California resident built this with [Google gemini](https://gemini.google.com)
 
 + **BUG** Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "Withdraw to meet spend") and often overshoots.
 + Implement the *Max Conversion* logic - use cash/brokerage assets to increase Roth conversions. Currently it "converts" the excess withdrawals after taxes and spend goal.  But if there is available cash to pay taxes on the conversion, more can be moved into Roth. Of course excess withdrawals can also be spent or deposited into cash.
-The current tax engine has been fixed to a more comprehensive one that shortcomings. Need a more comprehensive calculation. It now handles  *Capital Gains* and *NIIT* taxation and improvements in handling SS taxability.
+The current tax engine has been fixed to a more comprehensive one. It now handles  *Capital Gains* and *NIIT* taxation and adds improvements in handling SS taxability.
 + **BUG** When Roth funds are tapped to meet spending goals, it  may overwithdraw. For example, it may withdraw 15,000 and then have a 15,000 surplus which implies the Roth withdrawal was unnecessary.
 + **BUG** We suspect the "Fill Bracket" goal has a flaw in the implementation. Please be cautious/ignore for now!
 + **BUG** The Dividend rate is applied to the Brokerage account. It should be applied to the Roth account, too! Remember Brokerage dividends (and interest on cash) are accummulated in the cash account.

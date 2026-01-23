@@ -10,7 +10,7 @@ A California resident built this with [Google gemini](https://gemini.google.com)
 
 #### Features in the Works (and Known Bugs):
 
-+ **BUG** Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "⚖️Withdraw Proportionally") and often overshoots.  Note the improved tax calculations - item 3 below - have lessened this problem a bit, but it still occurs.
++ **BUG** Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "🔄Withdraw Proportionally") and often overshoots.  Note the improved tax calculations - item 3 below - have lessened this problem a bit, but it still occurs.
 + **DONE** Implement the *Max Conversion* logic - use cash/brokerage assets to increase Roth conversions. Currently it "converts" the excess withdrawals after taxes and spend goal.  But if there is available cash to pay taxes on the conversion, more can be moved into Roth. Of course excess withdrawals can also be spent or deposited into cash. However there is not an option to withdraw brokerage funds to increase Roth conversions.
 + **FIXED** The tax calculations are more comprehensive.
 + **FIXED** When Roth funds are tapped to meet spending goals, it may overwithdraw. For example, it may withdraw 15,000 and then have a 15,000 surplus which implies the Roth withdrawal was unnecessary.

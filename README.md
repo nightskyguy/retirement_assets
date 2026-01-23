@@ -10,23 +10,24 @@ A California resident built this with [Google gemini](https://gemini.google.com)
 
 #### Features in the Works (and Known Bugs):
 
-+ **BUG** Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "Withdraw to meet spend") and often overshoots.
-+ Implement the *Max Conversion* logic - use cash/brokerage assets to increase Roth conversions. Currently it "converts" the excess withdrawals after taxes and spend goal.  But if there is available cash to pay taxes on the conversion, more can be moved into Roth. Of course excess withdrawals can also be spent or deposited into cash.
-+ **BUG** The current tax engine has shortcomings. Need a more comprehensive calculation. (It's in the code, but needs updating to be made usable/correct). Currently needs *Capital Gains* and *NIIT* taxation and improvements in handling SS taxability.
-+ **BUG** When Roth funds are tapped to meet spending goals, it still may overwithdraw. For example, it may withdraw 15,000 and then have a 15,000 surplus which implies the Roth withdrawal was unnecessary.
++ **BUG** Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "⚖️Withdraw Proportionally") and often overshoots.  Note the improved tax calculations - item 3 below - have lessened this problem a bit, but it still occurs.
++ **DONE** Implement the *Max Conversion* logic - use cash/brokerage assets to increase Roth conversions. Currently it "converts" the excess withdrawals after taxes and spend goal.  But if there is available cash to pay taxes on the conversion, more can be moved into Roth. Of course excess withdrawals can also be spent or deposited into cash. However there is not an option to withdraw brokerage funds to increase Roth conversions.
++ **FIXED** The tax calculations are more comprehensive.
++ **FIXED** When Roth funds are tapped to meet spending goals, it may overwithdraw. For example, it may withdraw 15,000 and then have a 15,000 surplus which implies the Roth withdrawal was unnecessary.
 + **BUG** We suspect the "Fill Bracket" goal has a flaw in the implementation. Please be cautious/ignore for now!
-+ **BUG** The Dividend rate is applied to the Brokerage account. It should be applied to the Roth account, too! Remember Brokerage dividends are accummulated in the 
++ **BUG** The Dividend rate is applied to the Brokerage account. It should be applied to the Roth account, too! Brokerage dividends are accummulated in the Cash account.
 + Add a "taxcreep" to see what harm a creeping tax rate might do.  I notice some states (e.g. Georgia) are reducing their tax rates, while others are adding more brackets and increasing rates.
 + Save/Import/Export of settings **DONE**. The Load/Save/Delete/Manage Scenarios UI is undocumented. 
-+ Autoload any saved "Default" scenario (so you can pick up where you left off).
-+ Better organize the Annual Details tables. There are just two many columns to easily navigate.
++ **Completed** Autoload any saved "default" scenario (so you can pick up where you left off).  A message pops up telling you this happened.
++ Better organize the Annual Details tables. There are just too many columns to easily navigate.
 + Allow exporting of the Annual Details table(s).
 + The tool should warn when a "Fill Federal Bracket" is picked that is impossible to meet due to After-Tax Spend goal. For example, setting After-Tax Spend to 180,000 makes it impossible to stay in the 12% (or even the 22%) bracket unless there are lots of cash, brokerage or Roth assets already.
-+ Allow selection of the quarter in which withdrawals will occur. I don't think it makes a signficant difference, but changing the model a bit will make it possible to know how much difference it might make. For example if you're trying to draw down an IRA, taking the withdrawals early in the year means you will accrue less growth in that account. Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last quarter may help.
++ Allow selection of the quarter in which withdrawals will occur. I don't know if it makes a signficant difference, but changing the model a bit will make it possible to know how much difference it might make. For example if you're trying to draw down an IRA, taking the withdrawals early in the year means you will accrue less growth in the IRA account (and more in the Roth or Brokerage if that's where the funds go). Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last quarter may help.
++ There is no option to accumulate "surplus" amounts anywhere except Roth. Or to try to refill Brokerage or Cash accounts. Surplus in this context means if your spend goal is exceeded, the amount above your planned spend is counted as surplus and is automatically marked as a Roth conversion.  Since Roth is the "super account" for most purposes, it's not clear if an option to do anything else makes sense.
 
 
 #### Why This Tool?
-Because the author is in retirement and has an unhealthy IRA balance to manage - it became obvious that no tool he could find offered the flexibility and *ease of use* he desired.  He and his wife are of different ages (so have different IRAs, RMD timings, Social Security amounts, etc.)  Some really powerful tools didn't offer California tax calculations (California is a high tax state), or didn't provide for life expectancy, and more.  Some of the questions the author sought to answer by modeling are these:
+Because the author is in retirement and has an unhealthy IRA balance to manage - it became obvious that no tool he could find offered the flexibility and *ease of use* he desired.  He and his wife are of different ages (so have different IRAs, RMD timings, Social Security amounts, etc.)  Some really powerful tools did not offer California tax calculations (California is a high tax state), or did not provide for life expectancy, and more.  Some of the questions the author sought to answer by modeling are these:
 
 - Which strategy does the best job of reducing total taxation?
 - What withdrawal strategy produces the most annual spendable amount? What is that amount?
@@ -45,18 +46,25 @@ In this tool, we lump IRMAA together with California state and Federal taxes (in
 
 #### Key Features:
 
-1. A complete model until death of a single person or married couple with RMDs calculated, separation of 5 different accounts (IRA1, IRA2, Brokerage, Cash, ROTH)
-2. Tweakable rates, withdrawal strategies, and charts and tables to match them - but NOT TOO many variables.
-3. A structure that can allow replacement of the California tax tables with (any) other states. 33 of the US states tax IRA and 401K withdrawals the same way - albeit at different tax rates.  Also, those same 33 states treat all capital gains as taxable income - and that can matter quite a lot. In fact, 8 different state tax rates are currently available. WARNING: only California calculations are done using the correct model. Other states may be off. Best to double check.
-4. Modeling can show the true cost of the widow penalty (when one spouse predeceases another) and IRMAA penalty.
-5. The ability to model different spending rates in retirement (e.g. the spending SMILE) or a flat spending rate.
-6. A simple way to see the MOST you might expect to spend through retirement, what happens if your life expectancy is changed
-7. It automatically rolls any IRA balance from the deceased spouse to the living spouse (because RMDs may apply differently!)
-8. Forecast the affect of the impending 2033 Social Security Fund depletion (with a 33% reduction in payouts)
+
++ Sophisticated Federal Tax and State tax calculations.  Includes *Capital Gains*, *NIIT*, a variety of states, and accurate social security taxation calculations.
++ A complete model until death of a single person or married couple with RMDs calculated, separation of 5 different accounts (IRA1, IRA2, Brokerage, Cash, ROTH)
++ Tweakable rates, withdrawal strategies, and charts and tables to match them - but NOT TOO many variables.
++ Withdrawal Strategies include: **🔄Withdraw Proportionally** this strategy does nothing to avoid RMDs or IRMAA but it does withdrawals based on asset balances.  A "**💸Reduce IRA in *N* Years**"  attempts to amortize the IRA down to "IRA Goal" in the number of years specified (Note "**Optimizer 🎯**" checks years 1 to 30 automatically and highlights the best result in a table - click any line in the table to choose that scenario). A "**🪣Fill Federal Tax Bracket**" where you pick the Federal Bracket you want to fill, and it draws up to the top of that bracket (or a higher one if your Spend Goal is too high) with the intent of doing Roth conversion with any surplus. A "**🛑Lesser of IRMAA or TaxBracket**" which is not currently implemented.
++ There is also a "Max Conversion" option. What it does is use any surplus cash to increase Roth conversions from the largest IRA balance.
++ A structure that allows more than just the California tax tables (which are the default) 33 of the US states tax IRA and 401K withdrawals the same way - albeit at different tax rates.  Also, those same 33 states treat all capital gains as taxable income - and that can matter quite a lot. In fact, 8 different state tax rates are currently available. WARNING: only California calculations are done using the correct model. Other states may be off. Best to double check.
++ Modeling can show the true cost of the widow penalty (when one spouse predeceases another) and the IRMAA penalty.
++ The ability to model different spending rates (goals) in retirement (e.g. the spending SMILE) or a flat spending rate.
++ A simple way to see the MOST you might expect to spend through retirement, what happens if your life expectancy is changed
++ It automatically rolls any IRA balance from the deceased spouse to the living spouse (because RMDs may apply differently!)
++ Includes the affect of the impending **2033 Social Security Fund** depletion (with a 23% reduction in payouts).
 9. "Wealth" as shown in this tool is adjusted for the average taxation measured.  Many tools would show a 500,000 Roth and a 500,000 IRA as being 1,000,000 net worth.  But that's not very accurate. You can only take money out of an IRA/401K at a zero percent total rate at a very low amount. RMDs may make that impossible at some point.
-10. Choose tax rates from a number of states (currently California, District of Columbia, Michigan, New York, North Carolina, Oregon, Pennsylvania, Virginia, Illinois, Connecticut, Maryland, Georgia and NONE (for those states with no state tax).  Note there are some calculation variations among states that are not performed.
-11. Save/Load/Import/Export settings so you can quickly start where you left off.
-12. View the detailed transactions (*Annual Details*) or a simplified chart (*Chart*).
+10. Choose tax rates from a number of states (currently California, District of Columbia, Michigan, New York, North Carolina, Oregon, Pennsylvania, 
+Virginia, Illinois, Connecticut, Maryland, Georgia and NONE (for those states with no state tax).  Note there are some calculation variations among 
+states that are not performed.
+11. Save/Load/Import/Export settings (**Import/Export 📂**) so you can quickly start where you left off. If you save your settings as the name "default" those settings will automatically be reloaded when you restart. NOTE settings are saved in your browser. However you can Export them and Import scenarios in another browser if you wish.
+12. View the detailed transactions (**Annual Details ⊞**) or a simplified graph (**Chart 📊**).
+
 
 
 #### What the Tool IGNORES
@@ -93,16 +101,52 @@ _ is what made me realize that writing a tool in JavaScript results in the most 
 
 + [Visual Federal Tax Tool](https://engaging-data.com/tax-brackets/) - this tool shows how your federal taxes are calculated.  As of 2026-01-17, it doesn't handle taxability of Social Security income, and as best I can tell, doesn't handle the OBB provisions for seniors.
 
++ [What IRA Balances Result in IRMAA due to RMDS](https://nightskyguy.github.io/retirement_assets/irmaa_and_rmds.html) I wrote this tool, too, using AI. Given your fixed income, it will calculate what size IRA balance will cause RMDs that hit IRMAA tiers at various ages.  The tool uses current rates and does not attempt to adjust for inflation.  For example a married couple with a $16,607,550 balance at age **73** together with $130,000 income (pensions/social security/etc) will hit the highest IRMAA Tier 5 due to $626,700 forced RMD. Yeah, that is clearly not most of us. But at age **80** a $2,882,540 IRA balance together with that same income will hit **Tier 2** $5.2K annual charge) because that balance at that age forces a $142,000 RMD.  A balance of $1,286,740 for a single 80 year old lands in **Tier 4** with a $5,7k annual charge.  At 75 that same single person would be in Tier 4 with a 1.5M IRA balance. 
 
-### Ramblings and Observations
 
-#### Some of the Things I Learned About Taxation
+## Ramblings and Observations
 
-While the Social Security payments are adjusted annually by the CPI (Consumer Price Index), the rate at which Social Security is taxed is based on thresholds have NEVER been adjusted for inflation since they were established (1983 for 50%, and 1993 for 85%). This is no doubt why congress has churned and churned on trying to make Social Security non taxable.
+### Some of the Things I Learned About Taxation
 
-My original model assumed that the IRMAA tax brackets and amounts are adjusted by CPI, but that's not true. The brackets are adjusted per CPI, but the amounts are tied to medicare. The CPI has averaged about 2.8% annually over the last 20 years, but Medicare has averaged 5.6% annual increase.  IRMAA, as mentioned is a TAX CLIFF, not a graduated bracket. That means if you make $1 more than the maximum you move up an IRMAA tier. The result is not only the need to pay the tax, say an extra 4k per year, but you may have to withdraw more from an IRA to pay the tax.  At a 20% nominal tax rate, that extra $1 costs at least $5K AND may result in pushing you up into higher marginal brackets.
+**Moldy Brackets** While the Social Security payments are adjusted annually by the CPI (Consumer Price Index), the rate at which Social Security is taxed is based on thresholds have NEVER been adjusted for inflation since they were established (1983 for 50%, and 1993 for 85%). This is no doubt why congress has churned and churned on trying to make Social Security non taxable.
 
-#### About State Taxation
+**IRMAA Escalation** My original model assumed that the IRMAA tax brackets and amounts are adjusted by CPI, but that's not true. The brackets are adjusted per CPI, but the amounts are tied to medicare. The CPI has averaged about 2.8% annually over the last 20 years, but Medicare has averaged 5.6% annual increase.  IRMAA, as mentioned is a TAX CLIFF, not a graduated bracket. That means if you make $1 more than the maximum you move up an IRMAA tier. The result is not only the need to pay the tax, say an extra 4k per year, but you may have to withdraw more from an IRA to pay the tax.  At a 20% nominal tax rate, that extra $1 costs at least $5K AND may result in pushing you up into higher marginal brackets.
+
+Those *Moldy Brackets* have added to another problem: there is a ["Tax Torpedo"](https://www.fidelity.com/learning-center/personal-finance/social-security-tax-torpedo-and-hidden-taxes) - along with several other tax "pitfalls" - that hits *middle income* retirees particularly hard. The so-called **Tax Torpedo** turns a portion of your income in the federal 10%, 12% and 22% brackets into an effective tax rate of 18.5%, 22.2% and **40.7%** respectively. To add more injury, several states (8 remaining) tax Social Security and that can make these rates even worse.  Here are the net effects:
+
+#### State Tax Rates on Social Security Income by Federal Bracket Level (2026)
+
+| State | Tax Structure | Rate at 10% Fed Level (~$10-20K) | Rate at 12% Fed Level (~$30-70K) | Rate at 22% Fed Level (~$75-150K) |
+|-------|---------------|----------------------------------|----------------------------------|----------------------------------|
+| **Colorado** | Flat | 4.4% | 4.4% | 4.4% |
+| **Connecticut** | Progressive (7 brackets) | 2.0% - 4.5% | 5.0% - 5.5% | 5.5% - 6.0% |
+| **Minnesota** | Progressive (4 brackets) | 5.35% | 6.80% | 7.85% - 9.85% |
+| **Montana** | Two brackets | 4.7% | 4.7% - 5.65% | 5.65% |
+| **New Mexico** | Progressive (5 brackets) | 1.7% - 3.2% | 4.7% - 4.9% | 4.9% - 5.9% |
+| **Rhode Island** | Three brackets | 3.75% - 4.75% | 4.75% - 5.99% | 5.99% |
+| **Utah** | Flat | 4.55% | 4.55% | 4.55% |
+| **Vermont** | Progressive (4 brackets) | 3.35% - 6.60% | 6.60% - 7.60% | 7.60% - 8.75% |
+
+#### Combined Tax Torpedo Examples (during 85% SS phase-out):
+
+**At 12% Federal Bracket:**
+- Federal effective: 22.2%
+- + Minnesota (6.80%): **29.0% combined**
+- + Vermont (6.60%-7.60%): **28.8-29.8% combined**
+- + Rhode Island (5.99%): **28.2% combined**
+- + Montana (4.7%-5.65%): **26.9-27.9% combined**
+- + Colorado/Utah (~4.5%): **~26.7% combined**
+
+**At 22% Federal Bracket:**
+- Federal effective: 40.7%
+- + Minnesota (7.85-9.85%): **48.6-50.6% combined**
+- + Vermont (7.60-8.75%): **48.3-49.5% combined**
+- + Rhode Island (5.99%): **46.7% combined**
+- + New Mexico (5.9%): **46.6% combined**
+- + Montana (5.65%): **46.4% combined**
+- + Colorado/Utah (~4.5%): **~45.2% combined**
+
+#### No "Long Term Capital Gains" in most states
 
 33 of 50 states tax capital gains the same as regular income. Unfortunately many tools and many discussions neglect this aspect, which is another reason I wrote this tool. 9 states have no taxation or do not tax capital gains (as of 2025), and 9 states have preferential treatment of capital gains. [[Source]](https://www.theentrustgroup.com/blog/state-capital-gains-tax)
 

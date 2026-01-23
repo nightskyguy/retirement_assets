@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IRA Balances and IRMAA</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .calculator {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-bottom: 25px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #34495e;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #results {
+            margin-top: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: white;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        th {
+            background-color: #34495e;
+            color: white;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        .currency {
+            text-align: right;
+        }
+        .note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 0.9em;
+            border-radius: 4px;
+        }
+        .info-box {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            border-radius: 4px;
+        }
+		
+		.tooltip-container {
+			position: relative;
+			display: inline-block;
+		}
+
+		.tooltip-icon {
+			display: inline-block;
+			width: 18px;
+			height: 18px;
+			background-color: #3498db;
+			color: white;
+			border-radius: 50%;
+			text-align: center;
+			line-height: 18px;
+			font-size: 12px;
+			font-weight: bold;
+			cursor: help;
+			margin-left: 5px;
+		}
+
+		.tooltip-text {
+			visibility: hidden;
+			width: 300px;
+			background-color: #555;
+			color: #fff;
+			text-align: left;
+			border-radius: 6px;
+			padding: 10px;
+			position: absolute;
+			z-index: 1;
+			bottom: 125%;
+			left: 50%;
+			margin-left: -150px;
+			opacity: 0;
+			transition: opacity 0.3s;
+			font-size: 13px;
+			line-height: 1.4;
+		}
+
+		.tooltip-text::after {
+			content: "";
+			position: absolute;
+			top: 100%;
+			left: 50%;
+			margin-left: -5px;
+			border-width: 5px;
+			border-style: solid;
+			border-color: #555 transparent transparent transparent;
+		}
+
+		.tooltip-container:hover .tooltip-text {
+			visibility: visible;
+			opacity: 1;
+		}		
+    </style>
+</head>
+<body>
+    <div class="calculator">
+        <h1>IRA Balance Calculator to Avoid IRMAA</h1>
+        <p class="subtitle">Calculate maximum IRA balance to avoid IRMAA surcharges at all 5 tiers</p>
+        
+        <div class="input-group">
+            <label for="maritalStatus">Marital Status:</label>
+            <select id="maritalStatus">
+                <option value="MFJ">Married Filing Jointly</option>
+                <option value="SGL">Single</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+                <label for="socialSecurity">
+        Annual Social Security Income:
+        <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">
+                Enter your annual Social Security benefit. 
+                <br><br>
+                <strong>Typical ranges:</strong><br>
+                • Average individual: $24,000/year<br>
+                • Average couple: $37,000/year<br>
+                • Maximum (maxed out 35 years): $61,000 individual or $122,000 couple
+            </span>
+        </span>
+    </label>
+            <input type="number" id="socialSecurity" value="48000" min="0" step="1000">
+        </div>
+
+        <div class="input-group">
+            <label for="ages">Age(s) to Calculate (comma-separated, e.g., 75,80,85):</label>
+            <input type="text" id="ages" value="75,80,85,90,95" placeholder="e.g., 75,80,85,90,95">
+        </div>
+
+        <div class="input-group">
+		
+            <label for="otherIncome">Other Taxable Income (pensions, interest, etc.):
+				<span class="tooltip-container">
+				  <span class="tooltip-icon">?</span>
+						<span class="tooltip-text">
+							Include all sources of additional income (not including an RMD) 
+							<br><br>
+							• Dividend and Interest income/year<br>
+							• Pensions, Annuities, or W2 (earned) income<br>
+							• IRA withdrawals in <b>excess</b> of the RMD
+						</span>
+				</span>						
+			</label>
+            <input type="number" id="otherIncome" value="0" min="0" step="1000" title="All additional sources of income (dividends, capital gains, interest, w2,and IRA withdrawals in *excess* of RMDs">
+        </div>
+
+        <button onclick="calculate()">Calculate Maximum IRA Balance</button>
+
+        <div class="note" id="assumptionsNote" style="display: none;">
+            <strong>Note:</strong> 
+            Calculations show the maximum IRA balance that would keep MAGI at or below each IRMAA tier threshold. In practice, you'd want to stay away from the limit by a few thousand dollars to avoid the IRMAA Tax Cliff.
+            Assumptions:
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>No tax-exempt interest or other MAGI adjustments</li>
+                <li>RMD is the only withdrawal from the IRA</li>
+                <li>Taxable Social Security calculated based on provisional income rules</li>
+            </ul>
+            <strong>IRMAA Surcharges:</strong> <span id="surchargeNote"></span> Part B + Part D combined.
+        </div>
+
+        <div id="results"></div>
+        <div class="info-box">
+            <strong>IRMAA Thresholds as of 2025 brackets:</strong><br>
+            <strong>Tier 1:</strong> MFJ $212,000 | Single $106,000 → Surcharge: $1,042.80/year (per person)<br>
+            <strong>Tier 2:</strong> MFJ $266,000 | Single $133,000 → Surcharge: $2,619.60/year (per person)<br>
+            <strong>Tier 3:</strong> MFJ $320,000 | Single $160,000 → Surcharge: $4,196.40/year (per person)<br>
+            <strong>Tier 4:</strong> MFJ $374,000 | Single $187,000 → Surcharge: $5,773.20/year (per person)<br>
+            <strong>Tier 5:</strong> MFJ $750,000 | Single $500,000 → Surcharge: $6,349.20/year (per person)
+			
+			<STRONG>IMPORTANT NOTE</STRONG> These are values as of 2025. However the consumer price index increases at a rate of about 2.8% per year annually for the last 20 years, while the IRMAA tax increases at a rate of about 5.6% per year (it's tied to Medicare costs). This means that in the future the brackets will be adjusted, however the TAX will also be adjusted by about twice as much.  Example: <i>Tier 1 at 106k and 1K</i> annual additional tax will become <b>109K with an 11K tax</b>.
+        </div>		
+    </div>
+
+    <script>
+        // RMD Uniform Lifetime Table
+        const RMD_TABLE = {
+            72: 27.4, 73: 26.5, 74: 25.5, 75: 24.6, 76: 23.7, 77: 22.9, 78: 22.0, 79: 21.1,
+            80: 20.2, 81: 19.4, 82: 18.5, 83: 17.7, 84: 16.8, 85: 16.0, 86: 15.2, 87: 14.4,
+            88: 13.7, 89: 12.9, 90: 12.2, 91: 11.5, 92: 10.8, 93: 10.1, 94: 9.5, 95: 8.9,
+            96: 8.4, 97: 7.8, 98: 7.3, 99: 6.8, 100: 6.4, 101: 6.0, 102: 5.6, 103: 5.2,
+            104: 4.9, 105: 4.6, 106: 4.3, 107: 4.1, 108: 3.9, 109: 3.7, 110: 3.5,
+            111: 3.4, 112: 3.3, 113: 3.1, 114: 3.0, 115: 2.9, 116: 2.8, 117: 2.7,
+            118: 2.5, 119: 2.3, 120: 2.0
+        };
+
+        // IRMAA thresholds (2025)
+        const IRMAA_THRESHOLDS = {
+            MFJ: {
+                tier1: 212000,
+                tier2: 266000,
+                tier3: 320000,
+                tier4: 374000,
+                tier5: 750000
+            },
+            SGL: {
+                tier1: 106000,
+                tier2: 133000,
+                tier3: 160000,
+                tier4: 187000,
+                tier5: 500000
+            }
+        };
+
+        // IRMAA annual surcharges (2025) - per person
+        // Part B + Part D combined
+        const IRMAA_SURCHARGES = {
+            tier1: 1042.80,  // ($74.00 + $12.90) × 12
+            tier2: 2619.60,  // ($185.00 + $33.30) × 12
+            tier3: 4196.40,  // ($295.90 + $53.80) × 12
+            tier4: 5773.20,  // ($406.90 + $74.80) × 12
+            tier5: 6349.20   // ($450.00 + $79.10) × 12
+        };
+
+        function calculateTaxableSS(socialSecurity, otherIncome) {
+            // Calculate taxable portion of Social Security
+            // For IRMAA-level incomes, this will typically be 85%
+            const provisionalIncome = otherIncome + (0.5 * socialSecurity);
+            const filingStatus = document.getElementById('maritalStatus').value;
+            
+            const tier1 = filingStatus === 'MFJ' ? 32000 : 25000;
+            const tier2 = filingStatus === 'MFJ' ? 44000 : 34000;
+            
+            let taxableSS = 0;
+            
+            if (provisionalIncome <= tier1) {
+                taxableSS = 0;
+            } else if (provisionalIncome <= tier2) {
+                taxableSS = Math.min(0.5 * socialSecurity, 0.5 * (provisionalIncome - tier1));
+            } else {
+                const tier2Amount = 0.5 * (tier2 - tier1);
+                const tier3Amount = 0.85 * (provisionalIncome - tier2);
+                taxableSS = Math.min(0.85 * socialSecurity, tier2Amount + tier3Amount);
+            }
+            
+            return taxableSS;
+        }
+
+        function solveForMaxRMD(socialSecurity, otherIncome, irmaaTreshold) {
+            // Iterative solver since taxable SS depends on RMD amount
+            // Start with an estimate
+            let rmdEstimate = irmaaTreshold - otherIncome - (0.85 * socialSecurity);
+            
+            // Iterate to find exact solution
+            for (let i = 0; i < 10; i++) {
+                const taxableSS = calculateTaxableSS(socialSecurity, otherIncome + rmdEstimate);
+                const magi = otherIncome + rmdEstimate + taxableSS;
+                const difference = irmaaTreshold - magi;
+                
+                if (Math.abs(difference) < 1) break;
+                
+                rmdEstimate += difference;
+            }
+            
+            return Math.max(0, rmdEstimate);
+        }
+
+        function calculate() {
+            const maritalStatus = document.getElementById('maritalStatus').value;
+            const socialSecurity = parseFloat(document.getElementById('socialSecurity').value) || 0;
+            const otherIncome = parseFloat(document.getElementById('otherIncome').value) || 0;
+            const agesInput = document.getElementById('ages').value;
+            
+            // Parse ages
+            const ages = agesInput.split(',').map(a => parseInt(a.trim())).filter(a => !isNaN(a) && a >= 72);
+            
+            if (ages.length === 0) {
+                document.getElementById('results').innerHTML = '<p style="color: red;">Please enter valid ages (72 or older).</p>';
+                document.getElementById('assumptionsNote').style.display = 'none';
+                return;
+            }
+
+            // Update the static note box
+            const noteDiv = document.getElementById('assumptionsNote');
+            const surchargeSpan = document.getElementById('surchargeNote');
+            
+            // Update assumptions in note
+            const assumptionsList = noteDiv.querySelector('ul');
+            assumptionsList.innerHTML = `
+                <li>Social Security: $${socialSecurity.toLocaleString()}/year</li>
+                <li>Other taxable income: $${otherIncome.toLocaleString()}/year</li>
+                <li>No tax-exempt interest or other MAGI adjustments</li>
+                <li>RMD is the only withdrawal from the IRA</li>
+                <li>Taxable Social Security calculated based on provisional income rules</li>
+            `;
+            
+            // Update surcharge note
+            if (maritalStatus === 'MFJ') {
+                surchargeSpan.textContent = 'Annual amounts shown are for both spouses (doubled) assuming both are on Medicare.';
+            } else {
+                surchargeSpan.textContent = 'Annual amounts shown are per person.';
+            }
+            
+            noteDiv.style.display = 'block';
+
+            const irmaaThresholds = IRMAA_THRESHOLDS[maritalStatus];
+            
+            // Build results table
+            let html = '<h2>Results</h2>';
+            
+            ages.sort((a, b) => a - b);
+            
+            ages.forEach(age => {
+                const divisor = RMD_TABLE[age];
+                if (!divisor) {
+                    html += `<p style="color: red;">Age ${age} is out of range for RMD table.</p>`;
+                    return;
+                }
+                
+                html += `<h3>Age ${age} (RMD Divisor: ${divisor.toFixed(1)})</h3>`;
+                html += '<table>';
+                html += '<tr><th>IRMAA Tier</th><th>Maximum IRA Balance</th><th>RMD Amount</th><th>Estimated MAGI</th><th>Annual IRMAA Surcharge</th></tr>';
+                
+                // Calculate for each tier
+                ['tier1', 'tier2', 'tier3', 'tier4', 'tier5'].forEach((tier, index) => {
+                    const threshold = irmaaThresholds[tier];
+                    const maxRMD = solveForMaxRMD(socialSecurity, otherIncome, threshold);
+                    const maxIRABalance = maxRMD * divisor;
+                    const rmdAmount = maxIRABalance / divisor;
+                    const taxableSS = calculateTaxableSS(socialSecurity, otherIncome + rmdAmount);
+                    const estimatedMAGI = otherIncome + rmdAmount + taxableSS;
+                    // Double the surcharge for married couples (both spouses pay)
+                    const irmaaCharge = IRMAA_SURCHARGES[tier] * (maritalStatus === 'MFJ' ? 2 : 1);
+                    
+                    html += '<tr>';
+                    html += `<td>Tier ${index + 1}</td>`;
+                    html += `<td class="currency">$${maxIRABalance.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>`;
+                    html += `<td class="currency">$${rmdAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>`;
+                    html += `<td class="currency">$${estimatedMAGI.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>`;
+                    html += `<td class="currency">$${irmaaCharge.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
+                    html += '</tr>';
+                });
+                
+                html += '</table>';
+            });
+            
+            document.getElementById('results').innerHTML = html;
+        }
+
+        // Calculate on page load with default values
+        window.onload = calculate;
+    </script>
+</body>
+</html>

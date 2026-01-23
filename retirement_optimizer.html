@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer 7d</title>
+    <title>Retirement Optimizer 7e</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<!-- <link rel="stylesheet" href="retirementopt_styles.css"> -->
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">	
@@ -15,41 +15,45 @@
 <body>
 
 <div class="container">
-    <div class="sidebar">
-	    <div class="row">
-		  <div  id="spending">
-            <div><label>After-Tax Spend &nbsp;</label>
-            <input type="number" id="spendGoal" value="150000"></div>
-            <div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. 98% means you spend 2% less each year. 0 means no change.">Spend Delta %&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</label>
-            <input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0"></div>
-		  </div>
-	  </div>	<!-- id="spending" -->
-
-        <div class="input-group">
-            <select id="strategy" onchange="toggleStrategyUI()">
-                <option value="baseline">💵Withdraw to meet spend</option>
-                <option value="fixed">💸Reduce IRA in &#120393; Years</option>
-                <option value="bracket">🪣Fill Federal Tax Bracket</option>
-                <option value="minlimit">🛑Lesser of IRMAA or TaxBracket</option>
-            </select>
-        </div>
-        <div class="input-group">
+	<div class="sidebar">
+		<div id="strategy-container">
+		    <div class="row"><div  id="spending">
+				<div><label>After-Tax Spend &nbsp;</label>
+				<input type="number" id="spendGoal" value="150000"></div>
+				<div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. -2% means you spend 2% less each year. 0 means no change.">Spend Delta %&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</label>
+				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0"></div>
+				</div><!-- spending -->
+			</div>	<!-- class=row -->
+		
+		
+			<div class="input-group">
+				<select id="strategy" onchange="toggleStrategyUI()">
+					<option value="baseline">🔄Withdraw Proportionally</option>  <!--⚖️-->
+					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
+					<option value="bracket">🪣Fill Federal Tax Bracket</option>
+					<option value="minlimit">🛑Lesser of IRMAA or TaxBracket</option>
+				</select>
+			</div>
+			
 			<div id="ui-fixed" class="input-group hidden">
 				<label>Target Years (&#120393;)</label>
 				<input type="number" id="nYears" value="10">
 			</div>
+			
 			<div id="ui-bracket" class="input-group hidden">
 				<select id="stratRate">
 					<option value="24" selected>24%(403/201)k</option>
 				</select>
 			</div>
-        </div>
+		</div>  <!-- strategy-container -->
+        <div class="row">	
+		</div>
 	
         <div class="row">
 			<label title="Draw down IRA to this amount or less.">IRA Goal</label>
-            <input type="number" id="iraBaseGoal" value="350000" width="50%"><BR>
-			<label>
-			  <input type="checkbox" id="maxConversion" name="maxConversion" checked>
+            <input type="number" id="iraBaseGoal" value="750000" width="50%"><BR>
+			<label title='If checked, it will use available cash to maximize Roth conversions'>
+			  <input type="checkbox" id="maxConversion" name="maxConversion">
 			  Max Conversion
 			</label>
 			
@@ -130,6 +134,7 @@
                 <div><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong></div>
                 <div><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
                 <div><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
+				<div id="popUpMessage" class="scenario-message"></div>
             </div>
         </div>
 
@@ -141,29 +146,7 @@
 		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}">Documentation <strong id="testsFailed">🟢</strong></button>
 
         </div>
-		<div id="tab-insight" class="card hidden">
-			🛑 Some pithy insights will appear here. Right now it's not implemented. It will 
-			include observations like: which strategy seems most effective, what the net withdrawal rate will be for the given <i>After-Tax Spend</i> 
-			<h4>Where is the Code</h4>
-			This might be useful to know: you can run this locally (download the *.html and *.js and *.css files from github) 
-			<A HREF="https://github.com/nightskyguy/retirement_assets">https://github.com/nightskyguy/retirement_assets</a>.
-			<p>And you can also take a look at the source, make comments, or even open a pull request to propose changes. Just follow the link above.
 
-			You can directly <strong>run</strong> the code from github: <A HREF="https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html">nightskyguy.github.io/retirement_assets/retirement_optimizer.html</a>
-			
-			<p>If you're wondering whether you're being tracked, the answer is no. There is no logic 
-			(currently) to do any kind of tracking or telemetry. You can read the code if you're skeptical.
-			And by the way, you SHOULD be skeptical.  Sooner or later I am going to want to know 
-			how many users are using it and from (approximately) where. Mostly for self edification, but also to know if, for example, lots of Idaho users are loading it... it would be clue to add state taxes for Idaho.
-
-			<table id="insights-table">
-				<thead>
-					<tr id="groupRow"></tr>
-					<tr id="headerRow"></tr>
-				</thead>
-				<tbody id="tableBody"></tbody>
-			</table>
-		</div>
 		<div id="tab-fileio" class="card hidden">
 			<div class="scenario-controls">
 				<div class="scenario-row">
@@ -172,7 +155,6 @@
 					<button onclick="manageScenarios()">Load, Delete, Export</button>
 					<button onclick="importScenario()">Import</button>
 				</div>
-				<div id="scenarioMessage" class="scenario-message"></div>
 				<div id="scenarioList" style="display: none; margin-top: 10px;">
 					<!-- Scenario list will be populated here -->
 				</div>
@@ -190,26 +172,48 @@
 
 		<div id="tab-docs" class="card hidden">
 			<div class="header-drawers">
+				<details class="top-drawer">
+					<summary>How to Use</summary>
+					<div class="drawer-content" id="drawer-howto"></div>
+				</details>
+			</div> <!-- header-drawers -->
 			<div id="insights">
-			🛑 Some pithy insights will appear here. Right now it's not implemented. It will 
+			🛑 Some pithy insights will appear here. Right now they are not implemented. Insights shall   
 			include observations like: which strategy seems most effective, what the net withdrawal rate will be for the given <i>After-Tax Spend</i> 
 			<h4>Where is the Code</h4>
 			This might be useful to know: you can run this locally (download the *.html and *.js and *.css files from github) 
-			<A HREF="https://github.com/nightskyguy/retirement_assets">https://github.com/nightskyguy/retirement_assets</a>.
+			<A HREF="https://github.com/nightskyguy/retirement_assets">https://github.com/nightskyguy/retirement_assets</A>.
 			<p>And you can also take a look at the source, make comments, or even open a pull request to propose changes. Just follow the link above.
 
 			You can directly <strong>run</strong> the code from github: <A HREF="https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html">nightskyguy.github.io/retirement_assets/retirement_optimizer.html</a>
+			
+			<H4>Other Tools</H4>		
+			There is a standalone tool to determine what IRA balances (with RMDs) cause IRMAA taxation:  
+			<A HREF="https://nightskyguy.github.io/retirement_assets/irmaa_and_rmds.html">nightskyguy.github.io/retirement_assets/irmaa_and_rmds.html</A>
+			
 			
 			<p>If you're wondering whether you're being tracked, the answer is no. There is no logic 
 			(currently) to do any kind of tracking or telemetry. You can read the code if you're skeptical.
 			And by the way, you SHOULD be skeptical.  Sooner or later I am going to want to know 
 			how many users are using it and from (approximately) where. Mostly for self edification, but also to know if, for example, lots of Idaho users are loading it... it would be clue to add state taxes for Idaho.
-			</div>			
-				<details class="top-drawer"><summary>Change Log</summary>			
+			</div>	
+
+			<div id="tab-insight" class="card hidden">
+				<table id="insights-table">
+					<thead>
+						<tr id="groupRow"></tr>
+						<tr id="headerRow"></tr>
+					</thead>
+					<tbody id="tableBody"></tbody>
+				</table>
+			</div>
+				<!--details class="top-drawer"><summary>Change Log</summary>			
 				<div class="drawer-content" id="drawer-changelog"> 
 				<!--- CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG --->
+				<H3>Change Log</H3>
 				<ul>
-				<li><b>7d</b> Updated taxation calculations to use a more thorough calculator.
+				<li><b>7e</b> Fixed more bugs, added much more information (See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>). And added a new standalone tool. 
+				<li>7d Updated taxation calculations to use a more thorough calculator.
 				<li>7c Prior update(s) broke the save/load functionality due to case changes.  Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years. The rate is encoded in the TAXdata table - not user adjustable. Began UI change to move the top tabs into a new location: Documentation.</li>
 				<li>7b More state rates. Fixed most calculations. Minor UI changes. Changed the defaults to something "more common" - . See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>. </li>					
 				<li>7a Now has various state rates. Fixed most calculations. See <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A> for details. </li>	
@@ -232,20 +236,8 @@
 				<li>4f Use cpi% to adjust taxation (brackets)</li>
 				<li>4e Use calculated birthyear for correct RMDs</li>
 				</ul>
-				</div> <!-- changelog -->
-				</details>	
-
-				<details class="top-drawer">
-					<summary>How to Use</summary>
-					<div class="drawer-content" id="drawer-howto"></div>
-				</details>
-				<details class="top-drawer"><summary>Planned</summary>
-					<div class="drawer-content" id="drawer-planned"></div>
-				</details>
-				<details class="top-drawer"><summary>Background</summary>
-					<div class=drawer-content" id="drawer-background"></div>
-				</details>
-			</div> <!-- header-drawers -->
+				<!-- </div> <!-- changelog --
+				</details>	-->
 		</div> <!-- id=tab-docs -->
 
 		<div id="tab-tbl" class="card table-wrap">
@@ -279,8 +271,8 @@
 document.addEventListener('DOMContentLoaded', function() {
     // document.getElementById('drawer-changelog').innerHTML = drawerContent.changelog;
     document.getElementById('drawer-howto').innerHTML = drawerContent.howToUse;
-    document.getElementById('drawer-planned').innerHTML = drawerContent.planned;
-    document.getElementById('drawer-background').innerHTML = drawerContent.background;
+    // document.getElementById('drawer-planned').innerHTML = drawerContent.planned;
+    // document.getElementById('drawer-background').innerHTML = drawerContent.background;
 });
 
 // CONFIGURATION CONSTANTS
@@ -303,17 +295,27 @@ const OLD_STORAGE_KEY = 'retirementScenarios';
 // The default state to use for STATE calculations.
 let STATEname = 'CA'
 
-function inspectForErrors(inputs) {
-	for (const [name, value] of Object.entries(inputs)) {
-		if (value === undefined) {
-			console.error(`❌ ${name} is undefined`);
-			debugger;
-		} else 
-		if (isNaN(value)) {
-			console.error(`❌ ${name} is NaN`);
-			debugger;
-		} 
-	}
+// For DEBUGGING. Sprinkled throughout to catch NaN and undefined values hiding in the data.
+function inspectForErrors(namedObjects) {
+	let errorsFound = false;
+    for (const [objName, inputs] of Object.entries(namedObjects)) {
+        for (const [name, value] of Object.entries(inputs)) {
+            // Skip objects, arrays, functions, and booleans
+            // if (typeof value === 'object' || typeof value === 'function' || 
+            //     typeof value === 'boolean') {
+            //     continue;
+            // }
+            
+            if (value === undefined) {
+                console.error(`❌ ${objName}.${name} is undefined`);
+            } else if (isNaN(value)) {
+                // This catches both NaN numbers AND strings that evaluate to NaN
+                console.error(`❌ ${objName}.${name} is NaN (value: ${value}, type: ${typeof value})`);
+				errorsFound = true;
+            }
+        }
+    }
+	if (errorsFound) debugger;
 }
 
 function getRMDPercentage(currentYear, birthYear) {
@@ -708,21 +710,36 @@ function accumulateWithdrawals(withdrawalsArray) {
             } else {
                 totals[key] = withdrawals[key];
             }
-        }
-    }
-    
+        } // for key in withdrawals
+    } // for withdrawals
     return totals;
+} // accumulateWithdrawals
+
+// combines gains objects into one.
+function combineGains(gains1, gains2) {
+    const combined = {};
+    const allKeys = new Set([...Object.keys(gains1), ...Object.keys(gains2)]);
+    
+    allKeys.forEach(key => {
+        combined[key] = (gains1[key] ?? 0) + (gains2[key] ?? 0);
+    });
+    
+    return combined;
 }
 
 
-function applyGrowth(balances, growthRates) {
-	const gains = {}
-	let gain = 0;
+
+/// Now allows specification of the number of months. Defaults to 12.
+function applyGrowth(balances, growthRates, months = 12) {
+    const gains = {}
+    let gain = 0;
+    const periodRate = months / 12;  // Fraction of year
+    
     for (const key in balances) {
         if (key in growthRates) {
-            // Apply growth: balance * (1 + rate)
-			gain = balances[key] * growthRates[key]
-			gains[key] = gain;
+            // Apply proportional growth: balance * (rate * months/12)
+            gain = balances[key] * growthRates[key] * periodRate;
+            gains[key] = gain;
             balances[key] = Math.max(0, balances[key] + gain);
         }
         // If no matching rate, balance remains unchanged
@@ -1054,32 +1071,75 @@ function simulate(inputs) {
         netWithdrawals.IRA2 = Math.max(0, netWithdrawals.IRA * (1 - ira1_ratio));
 		
 		// Withdraw from the balances.
+		
+		
 		// We are going to put the surplus into the Roth, so if we have a surplus AND 
 		// a Roth WD, we can reduce the Roth WD by the amount of the surplus.
-		
 		if (surplus > 0 && netWithdrawals.Roth > 0) {
-			surplus = Math.max(0,Math.min(surplus, netWithdrawals.Roth - surplus))
-			netWithdrawals.Roth -= Math.min(netWithdrawals.Roth, surplus)
+			let surplusToRoth = Math.min(surplus, netWithdrawals.Roth);
+			netWithdrawals.Roth -= surplusToRoth;
+			surplus -= surplusToRoth;
 		}
 		
+		// Decrement the proposed withdrawals from the balance(s).
 		applyWithdrawals(balance, netWithdrawals)
-		
+
+		let availableCash = balance.Cash + surplus;
+		let totalConverted = 0;
+
+		if (inputs.maxConversion && availableCash > 1000) {
+			// Determine order: largest IRA first
+			let iras = [
+				{ name: 'IRA1', withdrawal: netWithdrawals.IRA1 },
+				{ name: 'IRA2', withdrawal: netWithdrawals.IRA2 }
+			].sort((a, b) => b.withdrawal - a.withdrawal);
+			
+			let conversions = { IRA1: 0, IRA2: 0 };
+			
+			for (let ira of iras) {
+				if (ira.withdrawal > 0 && availableCash > 0) {
+					// Calculate max we can convert given available cash for taxes
+					let maxConvertible = availableCash / nominalTaxRate;
+					let actualConversion = Math.min(ira.withdrawal, maxConvertible);
+					let taxOnConversion = actualConversion * nominalTaxRate;
+					
+					conversions[ira.name] = actualConversion;
+					availableCash -= taxOnConversion;
+					totalConverted += actualConversion;
+				} // if ira.withdrawal > 0 && availableCash > 0
+			} // for let ira of iras
+			
+			// Apply the conversions
+			let totalTaxPaid = totalConverted * nominalTaxRate;
+			
+			// Apportion tax payment between Cash and surplus
+			let taxFromCash = Math.min(balance.Cash, totalTaxPaid);
+			let taxFromSurplus = totalTaxPaid - taxFromCash;
+			
+			balance.Cash -= taxFromCash;
+			surplus -= taxFromSurplus;
+			withdrawals.Cash += totalTaxPaid;
+		} // if maxConversion && availableCash > 1000
+	
 
 		let growthRates = {IRA: inputs.growth, IRA1: inputs.growth, IRA2: inputs.growth, 
 						   Brokerage: inputs.growth, Cash: inputs.cashYield, Roth: inputs.growth}
 		
 		// Grow Balances
-		let gains = applyGrowth( balance, growthRates)
+		// TODO: Allow applying growth before and after withdrawals. 
+		//       To simulate how things differ if withdrawals are done early or later in the year.
 		
- 	
-		// Accrue dividends to cash
+		let gains = applyGrowth( balance, growthRates)
+		inspectForErrors(growthRates, balance, gains )  // See if any numbers look fishy.
+
+ 		// Accrue dividends to cash
 		gains.Cash += taxableDividends
         balance.Cash +=  taxableDividends;
         balance.magiHistory.push(tax.magi);
         totals.tax += totalTax;
         totals.gross += (totalIncome);
         totals.spend += (targetSpend - Math.max(0, gap));
-		balance.Roth += surplus;
+		balance.Roth += surplus + totalConverted;
 		
 		let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage -   balance.BrokerageBasis)) * (1-nominalTaxRate) + balance.Roth + balance.Cash + balance.BrokerageBasis
 
@@ -1090,6 +1150,9 @@ function simulate(inputs) {
 			totals.yearsfunded += 1
 		}
 		currentYear += 1;
+		
+		inspectForErrors({totalWealth: totalWealth} )  // See if any numbers look fishy.
+
 
 
         log.push({
@@ -1138,7 +1201,8 @@ function simulate(inputs) {
 			cashG: gains.Cash,
 			brokerageG: gains.Brokerage,
 			rothG: gains.Roth,
-			rothConv: surplus
+			rothConv: surplus + totalConverted,
+			rothBonusConv: surplus
         });
 
     } // end large for for year by year.
@@ -1196,37 +1260,6 @@ function calculateProgressive(entity, status, amount, inflation=1, ratecreep=1) 
     return { cumulative, total: cumulative, marginal: marginalRate, limit: prevLimit, nominalRate: nominalRate }
 }
 
-function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=1) {
-    let std = TAXData["FEDERAL"]?.[status]?.std;
-    if (a1 >= TAXData["FEDERAL"]?.[status]?.age) std += TAXData["FEDERAL"][status].stdbump * inflation;
-    if (a2 >= TAXData["FEDERAL"]?.[status]?.age && status === 'MFJ') std += TAXData["FEDERAL"][status].stdbump * inflation;
-
-    let agi = fixed + ira + gains;
-    let taxable = Math.max(0, agi - std);
-	
-	let calc = calculateProgressive('FEDERAL', status, taxable, inflation);
-	let fedTax = calc.cumulative;
-	let fedRate = calc.marginal;
-	let fedLimit = calc.limit;
-	
-	
-	// Calculate (CA) State Tax
-	// State basis is calculated differently.
-	let stStd = TAXData[STATEname]?.[status]?.std;
-	
-	//!!!TODO: This is wrong. It should be calculated with the state deduction(s).
-	let stAGI = taxable;
-	calc = calculateProgressive(STATEname, status, stAGI, inflation);
-	let stTax = calc.cumulative;
-	let stLimit = calc.limit;
-	let stRate = calc.marginal;
-	
-	let totalTax = fedTax + stTax
-	
-    return { total: totalTax, fed: fedTax, state: stTax, magi: agi, stagi: stAGI, 
-			fedLimit: fedLimit, stLimit: stLimit, fedRate: fedRate, stRate: stRate};
-}
-
 
 ///////////////////////////
 /**
@@ -1247,7 +1280,7 @@ function calculateTax(fixed, ira, gains, status, a1, a2, inflation=1, ratecreep=
  * @param {number} params.capGains - Net Long Term Capital Gains.
  * @param {number} params.taxExemptInterest - Muni bond interest (non-taxable but used for SS/IRMAA/CA).
  * @param {number} params.hsaContrib - Total HSA contributions (deductible Fed, taxable CA).
- * @param {number} params.inflation - Inflation multiplier for tax brackets (e.g., 1.025 for 2.5% cumulative).
+ * @param {number} params.inflation - Inflation (CPI) multiplier for tax brackets (e.g., 1.025 for 2.5% cumulative).
  * @param {string} params.state - State abbreviation (e.g., 'CA', 'NONE').
  * @returns {Object} Comprehensive tax calculation results
  */
@@ -1458,18 +1491,29 @@ function calculateTaxes(params = {}) {
     
     return {
         // Primary outputs requested
+		
+		// Map new returns to old returns:
+		//tax.fed = tax2.federalOrdinaryTax + tax2.capitalGainsTax + tax2.federalTax + tax2.niitTax
+		
+        total: totalTax,
         totalTax: totalTax,
         federalTax: federalTax,
         stateTax: stateTax,
+		state: stateTax,
         capitalGainsTax: federalCapGainsTax,  // Includes NIIT
         niitTax: 0,  // Included in capitalGainsTax (combined brackets)
         AGI: federalAGI,
         irmaaMagi: irmaaMagi,
+        magi: irmaaMagi,
         
         // Additional detailed breakdown
         federalOrdinaryTax: federalOrdinaryTax,
         federalMarginalRate: federalMarginalRate,
+		fedRate: federalMarginalRate,
+		
         stateMarginalRate: stateMarginalRate,
+		stRate: stateMarginalRate,
+		
 		fedLimit: federalOrdinaryResult.limit,
 		stLimit: stateResult.limit,
         
@@ -1479,6 +1523,7 @@ function calculateTaxes(params = {}) {
         federalTaxableIncome: federalTaxableIncome,
         stateTaxableIncome: stateTaxableIncome,
         stateAGI: stateAGI,
+        stagi: stateAGI,
         
         // Standard deductions applied
         federalStdDeduction: federalStdDeduction,
@@ -1542,6 +1587,7 @@ function getInputs() {
 		dividendRate: +val('dividendRate')/100.0,
 		ssFailYear: +val('ssFailYear'), 
 		ssFailPct: +val('ssFailPct')/100.0,
+		maxConversion: valChecked('maxConversion'),
 		startInYear: +val('startInYear')
     };
 }
@@ -1663,6 +1709,71 @@ function loadOptimizerResult(index) {
 }
 
 // //////////////////////////////////////////////////////////////////
+
+// Column category mappings - each column can be in multiple categories
+const columnCategories = {
+    // Summary - high-level overview
+    'year': ['Summary'],
+    'age1': ['Summary'],
+    'age2': ['Summary'],
+    'status': ['Summary'],
+    'spendGoal': ['Summary'],
+    'netIncome': ['Summary'],
+    'totalWealth': ['Summary', 'Account Balances'],
+    'totalTax': ['Summary', 'Taxation Specifics'],
+    'NominalRate%': ['Summary', 'Taxation Specifics'],
+    'surplus': ['Summary'],
+    
+    // Income Sources (could be its own category if you want)
+    'SSincome': ['Summary'],
+    'pension': ['Summary'],
+    'totalIncome': ['Summary', 'Taxation Specifics'],
+    'cashD+I': ['Cash Changes', 'Taxation Specifics'],
+    
+    // Account Balances - end-of-year balances
+    'IRA1': ['Account Balances', 'IRA Changes'],
+    'IRA2': ['Account Balances', 'IRA Changes'],
+    'TotalIRA': ['Account Balances', 'IRA Changes'],
+    'Cash': ['Account Balances', 'Cash Changes'],
+    'Roth': ['Account Balances', 'Roth Changes'],
+    'Brokerage': ['Account Balances', 'Brokerage Changes'],
+    'Basis': ['Account Balances', 'Brokerage Changes'],
+    'Spendable': ['Account Balances'],
+    
+    // Taxation Specifics
+    'magi': ['Taxation Specifics'],
+    'IRMAA': ['Taxation Specifics'],
+    'FedTax': ['Taxation Specifics'],
+    'StateTax': ['Taxation Specifics'],
+    'CapGains': ['Taxation Specifics', 'Brokerage Changes'],
+    'SumTaxes': ['Taxation Specifics'],
+    'FedRate%': ['Taxation Specifics'],
+    'StateRate%': ['Taxation Specifics'],
+    'fedLimit': ['Taxation Specifics'],
+    'stateLimit': ['Taxation Specifics'],
+    
+    // IRA Changes - withdrawals, RMDs, and conversions
+    'IRA1-': ['IRA Changes'],
+    'IRA2-': ['IRA Changes'],
+    'RMD%': ['IRA Changes'],
+    'RMD1-': ['IRA Changes'],
+    'RMD2-': ['IRA Changes'],
+    '-RMDwd': ['IRA Changes'],
+    'rothConv': ['IRA Changes', 'Roth Changes'],  // Conversion comes from IRA
+    
+    // Roth Changes - balance, withdrawals, growth, conversions
+    'RothWD': ['Roth Changes'],
+    'rothG': ['Roth Changes'],
+    
+    // Brokerage Changes - balance, withdrawals, gains, growth
+    'Brokerage-': ['Brokerage Changes'],
+    'brokerageG': ['Brokerage Changes'],
+    
+    // Cash Changes - balance, withdrawals, growth
+    'CashWD': ['Cash Changes'],
+    'cashG': ['Cash Changes']
+};
+
 
 function updateTable(log) {
 	const oldTable = document.getElementById('main-table');
@@ -1959,6 +2070,8 @@ taxChart = new Chart(ctxT, {
 }
 
 function val(id) { return document.getElementById(id)?.value; }
+function valChecked(id) { return document.getElementById(id)?.checked; }
+
 
 function showTab(id) {
     // 1. Hide all tab content cards
@@ -1978,7 +2091,7 @@ function showTab(id) {
 function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
-    document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket');
+    document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket' && m !== 'minlimit');
 	// document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 
@@ -2001,7 +2114,7 @@ function toggleStrategyUI() {
  * Auto-hides the message after 5 seconds
  */
 function showMessage(message, type = 'success') {
-    const messageDiv = document.getElementById('scenarioMessage');
+    const messageDiv = document.getElementById('popUpMessage');
     messageDiv.textContent = message;
     messageDiv.className = `scenario-message ${type}`;
     messageDiv.style.display = 'block';
@@ -2017,7 +2130,7 @@ function showMessage(message, type = 'success') {
  * No parameters
  */
 function clearMessage() {
-    const messageDiv = document.getElementById('scenarioMessage');
+    const messageDiv = document.getElementById('popUpMessage');
     messageDiv.style.display = 'none';
 }
 
@@ -2219,7 +2332,11 @@ function applyScenario(data) {
                  'cashYield', 'dividendRate', 'ssFailPct'].includes(key)) {
                 element.value = (value * 100).toFixed(3);
             } else {
-                element.value = value;
+				if (['maxConversion'].includes(key)) {
+					document.getElementById('maxConversion').checked = value
+				} else { 
+					element.value = value;
+				}
             }
         }
     }
@@ -2610,25 +2727,26 @@ function generateStratRateOptions() {
         // Mark 24% as selected (or choose a different default)
         const selected = (rate === 24) ? ' selected' : '';
         
-        html += `<option value="${rate}"${selected}>${rate}%(${mfjLimit}/${sglLimit})k</option>\n`;
+        html += `<option value="${rate}"${selected}>${rate}%&nbsp;&nbsp;(${mfjLimit}/${sglLimit})k</option>\n`;
     }
     
     return html;
 }
 
 
-// Generate selection lists from TAXData
-document.getElementById('stratRate').innerHTML = generateStratRateOptions();
-document.getElementById('STATEname').innerHTML = generateStateOptions();
+
 
 
 // ============================================================================
 // INITIALIZATION - Call on page load
 // ============================================================================
 
-// window.addEventListener('DOMContentLoaded', function() {
+window.addEventListener('DOMContentLoaded', function() {
 //    migrateOldScenarios();
-// });
+// Generate selection lists from TAXData
+	document.getElementById('stratRate').innerHTML = generateStratRateOptions();
+	document.getElementById('STATEname').innerHTML = generateStateOptions();	
+});
 
 
 

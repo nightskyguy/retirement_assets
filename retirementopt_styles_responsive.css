@@ -106,7 +106,13 @@ h3 {
     color: var(--primary); 
 }
 
-#strategy, #ui-fixed, #ui-bracket, #spending {
+/* This has higher specificity (ID = 1,0,0) - WINS regardless of order */
+#strategy {
+    max-width: 100% !important;
+    width: 100%;
+}
+
+#strategy-container {
     width: 100% !important;   
     max-width: 100% !important;
     border: 2px solid #ff9800;
@@ -115,6 +121,29 @@ h3 {
     border-radius: 6px;
     font-weight: 600;
     box-sizing: border-box;
+}
+
+/* Remove borders from individual elements inside the container */
+#strategy-container .input-group {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin-bottom: 8px;
+}
+
+#strategy-container .input-group:last-child {
+    margin-bottom: 0;
+}
+
+#strategy {
+    font-weight: 600;
+}
+
+/* These inputs should be full width in the Sidebar */
+#strategy, #stratRate, #nYears {
+    max-width: 100% !important;
+    width: 100%;
+    font-weight: 600;
 }
 
 .important-label {

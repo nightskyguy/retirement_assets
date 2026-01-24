@@ -21,6 +21,54 @@ body {
     min-height: 100vh;
 }
 
+/* Column filter controls styling - single row layout */
+.column-controls {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f5f5f5;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 15px;
+}
+
+.column-controls label {
+    cursor: pointer;
+    font-weight: normal;
+    white-space: nowrap;
+}
+
+.column-controls input[type="checkbox"] {
+    margin-right: 5px;
+    cursor: pointer;
+}
+
+.column-controls label.all-columns {
+    font-weight: bold;
+    padding-right: 15px;
+    margin-right: 15px;
+    border-right: 2px solid #999;
+}
+
+/* CRITICAL: This hides columns marked as hidden */
+table th.hidden-column,
+table td.hidden-column {
+    display: none;
+}
+
+/* Optional: Style empty columns differently when visible */
+table th.empty-column {
+    background-color: #f0f0f0;
+    font-style: italic;
+    color: #666;
+}
+
+table td.empty-column {
+    background-color: #fafafa;
+}
+
 /* Sidebar becomes full-width header on mobile */
 .sidebar { 
     position: relative;
@@ -443,6 +491,30 @@ th[title] {
 .scenario-item button {
     margin-left: 0;
     width: 100%;
+}
+
+.has-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.has-tooltip:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 1000;
+}
+
+table th.empty-column {
+    background-color: #f0f0f0;
+    font-style: italic;
 }
 
 /* ========================================

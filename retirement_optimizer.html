@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer 7f</title>
+    <title>Retirement Optimizer 7g</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<!-- <link rel="stylesheet" href="retirementopt_styles.css"> -->
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">	
@@ -128,12 +128,11 @@
         <div class="top-bar">
             <div id="summary-stats" style="display:flex; gap:30px;">
 				<div id="stat-success">  </div>
-				<div><small>Years of Life</small><br><strong id="stat-years">0</strong></div>
-				<div><small>Funded Years</small><br><strong id="stat-yearsfunded">0</strong></div>
-                <div><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong></div>
-                <div><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong></div>
-                <div><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
-                <div><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
+				<div title="How many years of life are fully funded."><small>Funded/Years of Life</small><br><strong id="stat-years">0</strong></div>
+                <div title="Total taxes paid/total spendable wealth"><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong></div>
+                <div title="Sum of all taxes paid."><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong></div>
+                <div title="How much spendable income was produced."><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
+                <div title="Remaining wealth at the end of life."><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
 				<div id="popUpMessage" class="scenario-message"></div>
             </div>
         </div>
@@ -212,7 +211,9 @@
 				<!--- CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG --->
 				<H3>Change Log</H3>
 				<ul>
-				<li><b>7f</b> Fixed HTML cautions. Fixed error in calculating what to do with surplus. It was putting some surplus into Roth even though no IRA withdrawals had occurred. CapitalGains calculation was wrong, and the tax burden for Brokerage withdrawals was also incorrect. <B>BUG</B> However it's still significantly over-withdrawing.
+				<li><b>7g</b> Found one source of overwithdrawal: the tax rate on capital gains should be proportional to the basis.
+				
+				<li>7f Fixed HTML cautions. Fixed error in calculating what to do with surplus. It was putting some surplus into Roth even though no IRA withdrawals had occurred. CapitalGains calculation was wrong, and the tax burden for Brokerage withdrawals was also incorrect. <B>BUG</B> However it's still significantly over-withdrawing.
 				<li>7e Fixed more bugs, added much more information (See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>). And added a new standalone tool. 
 				<li>7d Updated taxation calculations to use a more thorough calculator.
 				<li>7c Prior update(s) broke the save/load functionality due to case changes.  Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years. The rate is encoded in the TAXdata table - not user adjustable. Began UI change to move the top tabs into a new location: Documentation.</li>
@@ -242,6 +243,35 @@
 		</div> <!-- id=tab-docs -->
 
 		<div id="tab-tbl" class="card table-wrap">
+			<div class="column-controls">
+				<label class="all-columns">
+					<input type="checkbox" id="show-all" onchange="updateColumnVisibility()"> Show All
+				</label>
+				<label class="all-columns">
+					<input type="checkbox" id="show-empty-columns" onchange="updateColumnVisibility()"> Show Zero
+				</label>
+				<label>
+					<input type="checkbox" id="cat-summary" checked onchange="updateColumnVisibility()"> Summary
+				</label>
+				<label>
+					<input type="checkbox" id="cat-balances" onchange="updateColumnVisibility()"> Balances
+				</label>
+				<label>
+					<input type="checkbox" id="cat-taxation" onchange="updateColumnVisibility()"> Taxation
+				</label>
+				<label>
+					<input type="checkbox" id="cat-ira" onchange="updateColumnVisibility()"> IRA Δ
+				</label>
+				<label>
+					<input type="checkbox" id="cat-roth" onchange="updateColumnVisibility()"> Roth Δ
+				</label>
+				<label>
+					<input type="checkbox" id="cat-brokerage" onchange="updateColumnVisibility()"> Brokerage Δ
+				</label>
+				<label>
+					<input type="checkbox" id="cat-cash" onchange="updateColumnVisibility()"> Cash Δ
+				</label>
+			</div><!-- class="column-controls" -->
 			<table id="main-table">
 				<thead>
 					<tr id="groupRow"></tr>
@@ -450,7 +480,7 @@ function calculateBrokerageWithdrawal(withdrawal, brokerageBalance, brokerageBas
 
 /**
  * Calculates withdrawal amounts from multiple accounts based on strategy, accounting for taxes
- * @param {Object} balances - Account balances
+ * @param {Object} balances - Balances
  * @param {number} balances.IRA - IRA balance
  * @param {number} balances.Brokerage - Brokerage account balance
  * @param {number} balances.BrokerageBasis - Brokerage cost basis
@@ -459,7 +489,7 @@ function calculateBrokerageWithdrawal(withdrawal, brokerageBalance, brokerageBas
  * @param {number} gapAmount - Total NET amount needed (after taxes)
  * @param {Object} withdrawStrategy - Withdrawal strategy definition
  * @param {Array<string>} withdrawStrategy.order - Order of ALL accounts (including zero-weight)
- * @param {Array<number>} withdrawStrategy.weight - Relative weights for each account in order if null, weights are based on account balances.
+ * @param {Array<number>} withdrawStrategy.weight - Relative weights for each account in order if null, weights are based on Balances.
  * @param {Array<number>} withdrawStrategy.taxrate - Tax rates for each account (0.0 to 1.0)
  * @returns {Object} Withdrawal amounts (gross), taxes paid, net amounts, and remaining shortfall
  */
@@ -816,16 +846,8 @@ function simulate(inputs) {
 		medicareRate *= ( 1 + TAXData.IRMAA.ANNUAL_INCREASE )
 		
 		let withdrawals = { IRA: 0, IRA1: 0, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0};
-		let withdrawals_round2 = withdrawals;
 		let netWithdrawals = withdrawals;
 		
-		let basisWithdrawn = 0;
-		let wdIRA = 0;
-		let depRoth = 0;
-		let depBrokerage = 0;
-		let depCash = 0;
-
-
         let age1 = currentYear - birthyear1 + 1;
         let age2 = currentYear - birthyear2 + 1;
         let alive1 = age1 <= inputs.die1;
@@ -847,7 +869,8 @@ function simulate(inputs) {
 		let goalLimit = Math.min(goalFedBracketLimit.limit, goalStateBracketLimit.limit)
 		let irmaaBracket = findUpperLimitByAmount('IRMAA', status, goalLimit, cpiRate)
 		let irmaLimit = Math.min(goalLimit, irmaaBracket.limit);
-		let totalIncome, netIncome = 0;
+		let totalIncome =0;
+		let netIncome = 0;
 		let capitalGains = 0;		
 	
 		//!!! TODO: if strategy is "bracket" but spendGoal is > bracket limit
@@ -872,7 +895,7 @@ function simulate(inputs) {
             if (!alive1) { pension = pension * (inputs.survivorPct/100) }
         }
         let fixedInc = s1 + s2;					// Social Security
-		let taxableInc = pension;				// Pensions, W2, RMDs, wdIRA, wdBrokerage
+		let taxableInc = pension;				// Pensions, W2, RMDs, IRA withdrawals, wdBrokerage
 		
 		// These will be APPROXIMATE worst case - no Withdrawals have been made.
 		let taxableInterest = balance.Cash * inputs.cashYield
@@ -952,7 +975,6 @@ function simulate(inputs) {
 			}
 			
             currentTaxableGuess = limit - fixedInc - taxableInc - totalRMD;
-			wdIRA = Math.min(Math.max(0, currentTaxableGuess), balance.IRA1 + balance.IRA2);
 			
         } else {
 			/*********************/
@@ -975,7 +997,7 @@ function simulate(inputs) {
         // 5. Tax Calc (Including IRMAA lag)
 		//!!! TODO: May be premature. We may need more $ to meet spend goal.  We may have exhausted the IRAs.
 		
-		inspectForErrors({fixedInc: fixedInc, wdIRA: wdIRA, totalRMD: totalRMD, taxableInterest: taxableInterest, capitalGains: capitalGains, taxableDividends: taxableDividends, age1: age1, age2: age2, cpiRate: cpiRate})
+		inspectForErrors({fixedInc: fixedInc, totalRMD: totalRMD, taxableInterest: taxableInterest, capitalGains: capitalGains, taxableDividends: taxableDividends, age1: age1, age2: age2, cpiRate: cpiRate})
 			
 			
 		let tax = calculateTaxes({filingStatus: status, ages: [age1, age2], 
@@ -986,7 +1008,7 @@ function simulate(inputs) {
 		inspectForErrors(tax)  // See if any numbers look fishy.
 
 		marginalFedTaxRate = tax.fedRate;
-		marginalStateTaxRate= tax.stateRate;
+		marginalStateTaxRate= tax.stRate;
 
 		//!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
 		
@@ -999,20 +1021,17 @@ function simulate(inputs) {
         let totalTax = tax.totalTax + irmaa;
 
         // 6. Cash Flow Gap
-		let netSpendable = sumAccounts(netWithdrawals) + totalRMD + fixedInc - totalTax
+		let netSpendable = netWithdrawals.netAmount + fixedInc + taxableInc - totalTax
         let gap = targetSpend - netSpendable;
         
-		inspectForErrors({netSpendable: netSpendable, gap: gap, wdIRA: wdIRA, 
-			totalTax: totalTax});
+		inspectForErrors({netSpendable: netSpendable, gap: gap, totalTax: totalTax});
 
         if (gap > 1.00) {
 			// We need to do more withdrawals.
 			withdrawStrategy.order = ['Brokerage', 'Cash', 'IRA', 'Roth'];
 			withdrawStrategy.weights = [40, 60, 0, 0];
-			withdrawStrategy.taxrate = [capitalGainsRate + nominalStateTaxAtLimit, 0, nominalTaxRate, 0];
+			withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0, nominalTaxRate, 0];
 			withdrawals = calculateWithdrawals(curBalances, gap, withdrawStrategy);
-			// Capture any shortfall
-			shortfall = withdrawals.shortfall;
 			
 			netWithdrawals = accumulateWithdrawals( [netWithdrawals, withdrawals])
 			applyWithdrawals(curBalances, withdrawals);
@@ -1113,7 +1132,7 @@ function simulate(inputs) {
 		balance.Cash += surplus.Cash
 		surplus.Total = 0;
 	
-
+		//!!!TODO: Need to tax the growth of Cash and Brokerage!
 		let growthRates = {IRA: inputs.growth, IRA1: inputs.growth, IRA2: inputs.growth, 
 						   Brokerage: inputs.growth, Cash: inputs.cashYield, Roth: inputs.growth}
 		
@@ -1535,11 +1554,17 @@ function calcIRMAA(magi, status, cpiRate, medicareRate = (1 + TAXData.IRMAA.ANNU
 function getInputs() {
 	// TODO: If we override these values, we should update the UI 
 	let spendChange = +val('spendChange')
-	if (spendChange < -25 || spendChange > 25) spendChange = 0
+	if (spendChange < -25 || spendChange > 25) {
+		showMessage('Spend Delta: '+ spendChange +'% is unreasonable. Using 0% instead.', 'warning')
+		spendChange = 0
+		}
 	let Brokerage = +val('Brokerage');
 	let BrokerageBasis = +val('BrokerageBasis');
 	if (Brokerage <= 0.01) basis = 0;
-	if (BrokerageBasis > Brokerage) BrokerageBasis = Brokerage;
+	if (BrokerageBasis > Brokerage) {
+		showMessage('BrokerageBasis (' + BrokerageBasis + ') was greater than the Brokerage balance. BrokerageBasis in input is being ignored. Using ' + Brokerage + ' instead.', 'warning');
+		BrokerageBasis = Brokerage;
+		}
     return {
 		STATEname: val('STATEname'), 	
 		strategy: val('strategy'), 	
@@ -1631,24 +1656,20 @@ function runOptimizer() {
             getValue: r => `${r.strategy} ${r.parameter} ${r.unit}` 
         },
         { 
-            label: "Total Lifetime Tax", 
-            getValue: r => `$${Math.round(r.totals.tax).toLocaleString()}` 
+            label: "Lifetime Tax", 
+            getValue: r => `${Math.round(r.totals.tax).toLocaleString()}` 
         },
         { 
             label: "Final Wealth", 
-            getValue: r => `$${Math.round(r.finalNW).toLocaleString()}` 
+            getValue: r => `${Math.round(r.finalNW).toLocaleString()}` 
         },
         { 
             label: "Effective Tax Rate", 
             getValue: r => `${(r.totals.tax/r.totals.gross*100).toFixed(1)}%` 
         },
         { 
-            label: "Years Funded", 
-            getValue: r => r.totals.yearsfunded 
-        },
-        { 
-            label: "Years Tested", 
-            getValue: r => r.totals.yearstested 
+            label: "Years Funded/Total", 
+            getValue: r => r.totals.yearsfunded + '/' + r.totals.yearstested
         }
     ];
     
@@ -1703,62 +1724,555 @@ const columnCategories = {
     'status': ['Summary'],
     'spendGoal': ['Summary'],
     'netIncome': ['Summary'],
-    'totalWealth': ['Summary', 'Account Balances'],
-    'totalTax': ['Summary', 'Taxation Specifics'],
-    'NominalRate%': ['Summary', 'Taxation Specifics'],
+    'totalWealth': ['Summary', 'Balances'],
+    'totalTax': ['Summary', 'Taxation'],
+    'NominalRate%': ['Summary', 'Taxation'],
     'surplus': ['Summary'],
     
     // Income Sources (could be its own category if you want)
     'SSincome': ['Summary'],
     'pension': ['Summary'],
-    'totalIncome': ['Summary', 'Taxation Specifics'],
-    'cashD+I': ['Cash Changes', 'Taxation Specifics'],
+    'totalIncome': ['Summary', 'Taxation'],
+    'cashD+I': ['Cash Δ', 'Taxation'],
     
-    // Account Balances - end-of-year balances
-    'IRA1': ['Account Balances', 'IRA Changes'],
-    'IRA2': ['Account Balances', 'IRA Changes'],
-    'TotalIRA': ['Account Balances', 'IRA Changes'],
-    'Cash': ['Account Balances', 'Cash Changes'],
-    'Roth': ['Account Balances', 'Roth Changes'],
-    'Brokerage': ['Account Balances', 'Brokerage Changes'],
-    'Basis': ['Account Balances', 'Brokerage Changes'],
-    'Spendable': ['Account Balances'],
+    // Balances - end-of-year balances
+    'IRA1': ['Balances', 'IRA Δ'],
+    'IRA2': ['Balances', 'IRA Δ'],
+    'TotalIRA': ['Balances', 'IRA Δ'],
+    'Cash': ['Balances', 'Cash Δ'],
+    'Roth': ['Balances', 'Roth Δ'],
+    'Brokerage': ['Balances', 'Brokerage Δ'],
+    'Basis': ['Balances', 'Brokerage Δ'],
+    'Spendable': ['Balances'],
     
-    // Taxation Specifics
-    'magi': ['Taxation Specifics'],
-    'IRMAA': ['Taxation Specifics'],
-    'FedTax': ['Taxation Specifics'],
-    'StateTax': ['Taxation Specifics'],
-    'CapGains': ['Taxation Specifics', 'Brokerage Changes'],
-    'SumTaxes': ['Taxation Specifics'],
-    'FedRate%': ['Taxation Specifics'],
-    'StateRate%': ['Taxation Specifics'],
-    'fedLimit': ['Taxation Specifics'],
-    'stateLimit': ['Taxation Specifics'],
+    // Taxation
+    'magi': ['Taxation'],
+    'IRMAA': ['Taxation'],
+    'FedTax': ['Taxation'],
+    'StateTax': ['Taxation'],
+    'CapGains': ['Taxation', 'Brokerage Δ'],
+    'SumTaxes': ['Taxation'],
+    'FedRate%': ['Taxation'],
+    'StateRate%': ['Taxation'],
+    'fedLimit': ['Taxation'],
+    'stateLimit': ['Taxation'],
     
     // IRA Changes - withdrawals, RMDs, and conversions
-    'IRA1-': ['IRA Changes'],
-    'IRA2-': ['IRA Changes'],
-    'RMD%': ['IRA Changes'],
-    'RMD1-': ['IRA Changes'],
-    'RMD2-': ['IRA Changes'],
-    '-RMDwd': ['IRA Changes'],
-    'rothConv': ['IRA Changes', 'Roth Changes'],  // Conversion comes from IRA
+    'IRA1-': ['IRA Δ'],
+    'IRA2-': ['IRA Δ'],
+    'RMD%': ['IRA Δ'],
+    'RMD1-': ['IRA Δ'],
+    'RMD2-': ['IRA Δ'],
+    '-RMDwd': ['IRA Δ'],
+    'rothConv': ['IRA Δ', 'Roth Δ'],  // Conversion comes from IRA
     
     // Roth Changes - balance, withdrawals, growth, conversions
-    'RothWD': ['Roth Changes'],
-    'rothG': ['Roth Changes'],
+    'RothWD': ['Roth Δ'],
+    'rothG': ['Roth Δ'],
     
     // Brokerage Changes - balance, withdrawals, gains, growth
-    'Brokerage-': ['Brokerage Changes'],
-    'brokerageG': ['Brokerage Changes'],
+    'Brokerage-': ['Brokerage Δ'],
+    'brokerageG': ['Brokerage Δ'],
     
     // Cash Changes - balance, withdrawals, growth
-    'CashWD': ['Cash Changes'],
-    'cashG': ['Cash Changes']
+    'CashWD': ['Cash Δ'],
+    'cashG': ['Cash Δ']
 };
 
+// Get active categories based on checkbox state
+function getActiveCategories() {
+    const categories = [];
+    if (document.getElementById('cat-summary')?.checked) categories.push('Summary');
+    if (document.getElementById('cat-balances')?.checked) categories.push('Balances');
+    if (document.getElementById('cat-taxation')?.checked) categories.push('Taxation');
+    if (document.getElementById('cat-ira')?.checked) categories.push('IRA Δ');
+    if (document.getElementById('cat-roth')?.checked) categories.push('Roth Δ');
+    if (document.getElementById('cat-brokerage')?.checked) categories.push('Brokerage Δ');
+    if (document.getElementById('cat-cash')?.checked) categories.push('Cash Δ');
+    return categories;
+}
 
+// Check if a column should be visible based on category filters
+function isColumnVisible(columnKey) {
+    const showAll = document.getElementById('show-all')?.checked ?? false;
+    
+    if (showAll) {
+        // Show all columns that are listed in at least one category
+        return columnCategories.hasOwnProperty(columnKey);
+    }
+    
+    const activeCategories = getActiveCategories();
+    
+    // Column is not categorized - hide it
+    if (!columnCategories.hasOwnProperty(columnKey)) {
+        return false;
+    }
+    
+    // Check if column is in any active category
+    const columnCats = columnCategories[columnKey];
+    return columnCats.some(cat => activeCategories.includes(cat));
+}
+
+// Analyze which columns have content (non-zero, non-empty values)
+function analyzeColumnContent(log) {
+    if (!log || log.length === 0) return {};
+    
+    const keys = Object.keys(log[0]).filter(key => !key.startsWith('-'));
+    const columnStatus = {};
+    
+    keys.forEach(key => {
+        let hasNonZeroValue = false;
+        
+        for (const row of log) {
+            const value = row[key];
+            
+            // Check if value exists and is non-zero
+            if (value != null && value !== '' && value !== '—') {
+                if (!isNaN(value) && parseFloat(value) !== 0) {
+                    hasNonZeroValue = true;
+                    break;
+                } else if (isNaN(value) && value !== '—') {
+                    // Non-numeric non-empty value
+                    hasNonZeroValue = true;
+                    break;
+                }
+            }
+        }
+        
+        columnStatus[key] = hasNonZeroValue;
+    });
+    
+    return columnStatus;
+}
+
+// Global variable to store column content analysis
+let columnContentStatus = {};
+
+// Update column visibility without rebuilding the entire table
+function updateColumnVisibility() {
+    const table = document.getElementById('main-table');
+    if (!table) return;
+    
+    const headerRow = table.querySelector('thead tr');
+    const bodyRows = table.querySelectorAll('tbody tr');
+    
+    if (!headerRow) return;
+    
+    const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
+    
+    // Get column keys from header
+    const headers = Array.from(headerRow.querySelectorAll('th'));
+    
+    headers.forEach((th, index) => {
+        const columnKey = th.textContent;
+        const visibleByCategory = isColumnVisible(columnKey);
+        const isEmpty = th.classList.contains('empty-column');
+        
+        // Column is visible if it passes category filter AND (has content OR show-empty is checked)
+        const visible = visibleByCategory && (showEmpty || !isEmpty);
+        
+        // Update header
+        if (visible) {
+            th.classList.remove('hidden-column');
+        } else {
+            th.classList.add('hidden-column');
+        }
+        
+        // Update all body cells in this column
+        bodyRows.forEach(row => {
+            const cell = row.cells[index];
+            if (cell) {
+                if (visible) {
+                    cell.classList.remove('hidden-column');
+                } else {
+                    cell.classList.add('hidden-column');
+                }
+            }
+        });
+    });
+}
+
+function updateTable(log) {
+    const oldTable = document.getElementById('main-table');
+
+    if (!log || log.length === 0) {
+        if (oldTable) {
+          oldTable.remove();
+        }
+        return null;
+    }
+
+    // Analyze which columns have content
+    columnContentStatus = analyzeColumnContent(log);
+
+    const table = document.createElement('table');
+    table.border = '1';
+    table.id = 'main-table';
+  
+    const keys = Object.keys(log[0]);
+
+    // Create header
+    const thead = table.createTHead();
+    const headerRow = thead.insertRow();
+    
+    const tooltips = {
+        'year': 'A pink row means insufficient funds. A yellow row is for a single survivor',
+        'RMDwd': 'Total of all RMDs (positive indicate withdrawals)',
+        'RMD%': 'The highest percentage RMD required for IRA1 or IRA2.',
+        'Brokerage': 'Year end Brokerage balance',
+        'Brokerage-': 'Withdrawals from Brokerage account (sales)',
+        'Basis': 'The amount in brokerage which can be withdrawn tax free.',
+        'IRA1-': 'Withdrawals from IRA1',
+        'IRA2-': 'Withdrawals from IRA2',
+        'CapGains': 'Amount of gains from selling brokerage assets.',
+        'IRMAA': 'First two years are presumed the same as the 3rd year on.',
+        'spendGoal': 'This amount increases by inflation less Spend Delta%.',
+        'Roth': 'Balance at Year End',
+        'RothG': 'Growth in the Roth (added to Roth account)',
+        'RothConv': 'Amount moved from IRA to Roth (converted)',
+        'CashWD': 'Tax free withdrawals from Cash',
+        'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
+        'magi': 'Modified Adjusted Gross Income - determines future IRMAA',
+        'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA - in total.',
+        'SumTaxes': 'Running total of Federal,IRMAA,NIIT,CapGains & IRMAA.',
+        'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA'
+    };
+
+    keys.forEach(key => {
+        if (!key.startsWith('-')) {
+            const th = document.createElement('th');
+            const displayKey = key.endsWith('!') ? key.slice(0, -1) : key;
+            th.textContent = displayKey;
+            
+            if (tooltips[key]) {
+                th.title = tooltips[key];
+            }
+            
+            // Apply visibility based on category filter AND empty column filter
+            const visibleByCategory = isColumnVisible(displayKey);
+            const hasContent = columnContentStatus[key];
+            const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
+            
+            if (!visibleByCategory || (!hasContent && !showEmpty)) {
+                th.classList.add('hidden-column');
+            }
+            
+            // Mark empty columns for styling
+            if (!hasContent) {
+                th.classList.add('empty-column');
+            }
+            
+            headerRow.appendChild(th);
+        }
+    });
+  
+    // Create body
+    const tbody = table.createTBody();
+    log.forEach(row => {
+      const tr = tbody.insertRow();
+      
+      // Check conditions for highlighting
+      const spendGoal = row['SpendGoal'] ?? row['spendGoal'];
+      const netIncome = row['NetIncome'] ?? row['netIncome'];
+      const totalWealth = row['TotalWealth'] ?? row['totalWealth'];
+      const age1 = row['Age1'] ?? row['age1'];
+      const age2 = row['Age2'] ?? row['age2'];
+      
+      const shouldHighlightPink = (spendGoal > netIncome) || (totalWealth < spendGoal);
+      const shouldHighlightYellow = (age1 === '—' || age2 === '—');
+      
+      // Pink takes priority over yellow
+      if (shouldHighlightPink) {
+        tr.style.backgroundColor = '#ffb6c180';  // Light pink
+      } else if (shouldHighlightYellow) {
+        tr.style.backgroundColor = '#ffff99';  // Light yellow
+      }
+      
+      keys.forEach(key => {
+        if (!key.startsWith('-')) {
+          const td = tr.insertCell();
+          const value = row[key];
+          
+          // Check if key indicates percentage
+          const isPercent = key.toLowerCase().includes('%');
+          const isYear = key.toLowerCase().includes('yr') || key.toLowerCase().includes('year');
+          
+          if (value != null && !isNaN(value)) {
+            if (isPercent) {
+              // Format as percentage (convert from decimal)
+              td.textContent = (value * 100).toFixed(2);
+            } else {
+              // Format as whole number
+              if (isYear) {
+                td.textContent = value;
+              } else {
+                td.textContent = Math.round(value).toLocaleString();
+              }
+            }
+          } else {
+            td.textContent = value ?? '';
+          }
+          
+          // Apply visibility based on category filter AND empty column filter
+          const displayKey = key.endsWith('!') ? key.slice(0, -1) : key;
+          const visibleByCategory = isColumnVisible(displayKey);
+          const hasContent = columnContentStatus[key];
+          const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
+          
+          if (!visibleByCategory || (!hasContent && !showEmpty)) {
+            td.classList.add('hidden-column');
+          }
+          
+          // Mark empty columns for styling
+          if (!hasContent) {
+            td.classList.add('empty-column');
+          }
+          
+          tr.appendChild(td);
+        }
+      });
+    });
+  
+    if (oldTable) {
+        oldTable.replaceWith(table);
+    }
+  
+    return table;
+}
+
+
+
+/*****************************
+
+// Add this function to detect empty or all-zero columns
+function analyzeColumnContent(log) {
+    if (!log || log.length === 0) return {};
+    
+    const keys = Object.keys(log[0]).filter(key => !key.startsWith('-'));
+    const columnStatus = {};
+    
+    keys.forEach(key => {
+        let hasNonZeroValue = false;
+        
+        for (const row of log) {
+            const value = row[key];
+            
+            // Check if value exists and is non-zero
+            if (value != null && value !== '' && value !== '—') {
+                if (!isNaN(value) && parseFloat(value) !== 0) {
+                    hasNonZeroValue = true;
+                    break;
+                } else if (isNaN(value) && value !== '—') {
+                    // Non-numeric non-empty value
+                    hasNonZeroValue = true;
+                    break;
+                }
+            }
+        }
+        
+        columnStatus[key] = hasNonZeroValue;
+    });
+    
+    return columnStatus;
+}
+
+// Global variable to store column content analysis
+let columnContentStatus = {};
+
+function updateTable(log) {
+    const oldTable = document.getElementById('main-table');
+
+    if (!log || log.length === 0) {
+        if (oldTable) {
+          oldTable.remove();
+        }
+        return null;
+    }
+
+    // Analyze which columns have content
+    columnContentStatus = analyzeColumnContent(log);
+
+    const table = document.createElement('table');
+    table.border = '1';
+    table.id = 'main-table';
+  
+    const keys = Object.keys(log[0]);
+
+    // Create header
+    const thead = table.createTHead();
+    const headerRow = thead.insertRow();
+    
+    const tooltips = {
+        'year': 'A pink row means insufficient funds. A yellow row is for a single survivor',
+        'RMDwd': 'Total of all RMDs (positive indicate withdrawals)',
+        'RMD%': 'The highest percentage RMD required for IRA1 or IRA2.',
+        'Brokerage': 'Year end Brokerage balance',
+        'Brokerage-': 'Withdrawals from Brokerage account (sales)',
+        'Basis': 'The amount in brokerage which can be withdrawn tax free.',
+        'IRA1-': 'Withdrawals from IRA1',
+        'IRA2-': 'Withdrawals from IRA2',
+        'CapGains': 'Amount of gains from selling brokerage assets.',
+        'IRMAA': 'First two years are presumed the same as the 3rd year on.',
+        'spendGoal': 'This amount increases by inflation less Spend Delta%.',
+        'Roth': 'Balance at Year End',
+        'RothG': 'Growth in the Roth (added to Roth account)',
+        'RothConv': 'Amount moved from IRA to Roth (converted)',
+        'CashWD': 'Tax free withdrawals from Cash',
+        'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
+        'magi': 'Modified Adjusted Gross Income - determines future IRMAA',
+        'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA - in total.',
+        'SumTaxes': 'Running total of Federal,IRMAA,NIIT,CapGains & IRMAA.',
+        'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA'
+    };
+
+    keys.forEach(key => {
+        if (!key.startsWith('-')) {
+            const th = document.createElement('th');
+            const displayKey = key.endsWith('!') ? key.slice(0, -1) : key;
+            th.textContent = displayKey;
+            
+            if (tooltips[key]) {
+                th.title = tooltips[key];
+            }
+            
+            // Apply visibility based on category filter AND empty column filter
+            const visibleByCategory = typeof isColumnVisible === 'function' ? isColumnVisible(displayKey) : true;
+            const hasContent = columnContentStatus[key];
+            const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
+            
+            if (!visibleByCategory || (!hasContent && !showEmpty)) {
+                th.classList.add('hidden-column');
+            }
+            
+            // Mark empty columns for styling
+            if (!hasContent) {
+                th.classList.add('empty-column');
+            }
+            
+            headerRow.appendChild(th);
+        }
+    });
+  
+    // Create body
+    const tbody = table.createTBody();
+    log.forEach(row => {
+      const tr = tbody.insertRow();
+      
+      // Check conditions for highlighting
+      const spendGoal = row['SpendGoal'] ?? row['spendGoal'];
+      const netIncome = row['NetIncome'] ?? row['netIncome'];
+      const totalWealth = row['TotalWealth'] ?? row['totalWealth'];
+      const age1 = row['Age1'] ?? row['age1'];
+      const age2 = row['Age2'] ?? row['age2'];
+      
+      const shouldHighlightPink = (spendGoal > netIncome) || (totalWealth < spendGoal);
+      const shouldHighlightYellow = (age1 === '—' || age2 === '—');
+      
+      // Pink takes priority over yellow
+      if (shouldHighlightPink) {
+        tr.style.backgroundColor = '#ffb6c180';  // Light pink
+      } else if (shouldHighlightYellow) {
+        tr.style.backgroundColor = '#ffff99';  // Light yellow
+      }
+      
+      keys.forEach(key => {
+        if (!key.startsWith('-')) {
+          const td = tr.insertCell();
+          const value = row[key];
+          
+          // Check if key indicates percentage
+          const isPercent = key.toLowerCase().includes('%');
+          const isYear = key.toLowerCase().includes('yr') || key.toLowerCase().includes('year');
+          
+          if (value != null && !isNaN(value)) {
+            if (isPercent) {
+              // Format as percentage (convert from decimal)
+              td.textContent = (value * 100).toFixed(2);
+            } else {
+              // Format as whole number
+              if (isYear) {
+                td.textContent = value;
+              } else {
+                td.textContent = Math.round(value).toLocaleString();
+              }
+            }
+          } else {
+            td.textContent = value ?? '';
+          }
+          
+          // Apply visibility based on category filter AND empty column filter
+          const displayKey = key.endsWith('!') ? key.slice(0, -1) : key;
+          const visibleByCategory = typeof isColumnVisible === 'function' ? isColumnVisible(displayKey) : true;
+          const hasContent = columnContentStatus[key];
+          const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
+          
+          if (!visibleByCategory || (!hasContent && !showEmpty)) {
+            td.classList.add('hidden-column');
+          }
+          
+          // Mark empty columns for styling
+          if (!hasContent) {
+            td.classList.add('empty-column');
+          }
+          
+          tr.appendChild(td);
+        }
+      });
+    });
+  
+    if (oldTable) {
+        oldTable.replaceWith(table);
+    }
+  
+    return table;
+}
+
+// Update the visibility function to handle both category and empty column filters
+function updateColumnVisibility() {
+    const table = document.getElementById('main-table');
+    if (!table) return;
+    
+    const headerRow = table.querySelector('thead tr');
+    const bodyRows = table.querySelectorAll('tbody tr');
+    
+    if (!headerRow) return;
+    
+    const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
+    
+    // Get column keys from header
+    const headers = Array.from(headerRow.querySelectorAll('th'));
+    
+    headers.forEach((th, index) => {
+        const columnKey = th.textContent;
+        const visibleByCategory = isColumnVisible(columnKey);
+        const isEmpty = th.classList.contains('empty-column');
+        
+        // Column is visible if it passes category filter AND (has content OR show-empty is checked)
+        const visible = visibleByCategory && (showEmpty || !isEmpty);
+        
+        // Update header
+        if (visible) {
+            th.classList.remove('hidden-column');
+        } else {
+            th.classList.add('hidden-column');
+        }
+        
+        // Update all body cells in this column
+        bodyRows.forEach(row => {
+            const cell = row.cells[index];
+            if (cell) {
+                if (visible) {
+                    cell.classList.remove('hidden-column');
+                } else {
+                    cell.classList.add('hidden-column');
+                }
+            }
+        });
+    });
+}
+
+
+/* OLD FUNCTION
 function updateTable(log) {
 	const oldTable = document.getElementById('main-table');
 
@@ -1874,6 +2388,7 @@ function updateTable(log) {
   
   return table;
 }
+END OLD FUNCTION */
 
 /*calculateInflationAdjustedWithdrawal:
 * given the parameters, determines the first year withdrawal (subsequent years are 
@@ -1904,8 +2419,8 @@ function updateStats(totals, finalNW, minNetWorth = 100000) {
     document.getElementById('stat-spend').innerText = '$' + Math.round(totals.spend).toLocaleString();
     document.getElementById('stat-tax').innerText = '$' + Math.round(totals.tax).toLocaleString();
     document.getElementById('stat-nw').innerText = '$' + Math.round(finalNW).toLocaleString();
-    document.getElementById('stat-years').innerText = totals.yearstested;
-    document.getElementById('stat-yearsfunded').innerText = totals.yearsfunded;
+    document.getElementById('stat-years').innerText = totals.yearsfunded + '/' + totals.yearstested;
+    // document.getElementById('stat-yearsfunded').innerText = totals.yearsfunded;
 	let indicator = '🛑 FAILED ';
 	if (totals.yearsfunded >= totals.yearstested && finalNW > minNetWorth) {
 		indicator = '🟢 SUCCESS ';
@@ -2195,35 +2710,6 @@ function escapeQuotes(str) {
     return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
 
-// ============================================================================
-// INITIALIZATION FUNCTION
-// ============================================================================
-
-/**
- * Checks for old scenarios on page load and displays warning if found
- * Called automatically on DOMContentLoaded event
- * Does not auto-delete - user must use Manage Scenarios to delete
- * No parameters
- */
-function migrateOldScenarios() {
-    const oldScenarios = localStorage.getItem(OLD_STORAGE_KEY);
-    
-    if (oldScenarios) {
-        try {
-            const parsed = JSON.parse(oldScenarios);
-            const scenarioCount = Object.keys(parsed).length;
-            
-            if (scenarioCount > 0) {
-                showMessage(
-                    `Found ${scenarioCount} old scenario(s) from previous version. These are incompatible. Use "Manage Scenarios" to review and delete them.`,
-                    'warning'
-                );
-            }
-        } catch (e) {
-            localStorage.removeItem(OLD_STORAGE_KEY);
-        }
-    }
-}
 
 // ============================================================================
 // MAIN USER ACTION FUNCTIONS
@@ -2400,12 +2886,8 @@ function manageScenarios() {
                 html += `<strong>📦 ${oldStorageCount} scenario(s) in old storage format</strong><br>`;
             }
             
-            html += `<button onclick="deleteIncompatibleScenarios()" style="margin-top: 5px;">Delete All Incompatible Scenarios</button>`;
-            
-            if (oldStorageCount > 0) {
-                html += ` <button onclick="deleteOldStorageKey()" style="margin-top: 5px;">Clear Old Storage</button>`;
-            }
-            
+            html += `<button onclick="deleteIncompatibleScenarios()" style="margin-top: 5px;">Delete All Incompatible Scenarios</button>`;          
+           
             html += `</div>`;
         }
         
@@ -2534,32 +3016,6 @@ function deleteIncompatibleScenarios() {
     }
 }
 
-/**
- * Completely removes OLD_STORAGE_KEY and all its scenarios
- * Prompts for confirmation showing count of scenarios to delete
- * Shows success/error message
- * No parameters
- */
-function deleteOldStorageKey() {
-    const oldScenarios = getOldScenarios();
-    const oldCount = Object.keys(oldScenarios).length;
-    
-    if (oldCount === 0) {
-        showMessage('No old storage scenarios found.', 'warning');
-        return;
-    }
-    
-    if (confirm(`This will permanently delete the old storage key and all ${oldCount} scenario(s) in it.\n\nAre you sure?`)) {
-        try {
-            localStorage.removeItem(OLD_STORAGE_KEY);
-            manageScenarios();
-            showMessage(`Old storage key removed (${oldCount} scenarios deleted).`, 'success');
-        } catch (error) {
-            showMessage(`Failed to remove old storage: ${error.message}`, 'error');
-        }
-    }
-}
-
 // ============================================================================
 // IMPORT/EXPORT FUNCTIONS
 // ============================================================================
@@ -2678,6 +3134,8 @@ function exportAllScenarios() {
     }
 }
 
+
+// Scan the TAXData for state tax tables and add them to the choice list.
 function generateStateOptions() {
     let html = '<option value="NONE">-No State Tax-</option>\n';
     
@@ -2694,7 +3152,7 @@ function generateStateOptions() {
     return html;
 }
 
-
+// 
 function generateStratRateOptions() {
     const federal = TAXData.FEDERAL;
     const mfjBrackets = federal.MFJ.brackets;
@@ -2726,8 +3184,7 @@ function generateStratRateOptions() {
 // ============================================================================
 
 window.addEventListener('DOMContentLoaded', function() {
-//    migrateOldScenarios();
-// Generate selection lists from TAXData
+	// Generate selection lists from TAXData
 	document.getElementById('stratRate').innerHTML = generateStratRateOptions();
 	document.getElementById('STATEname').innerHTML = generateStateOptions();	
 });

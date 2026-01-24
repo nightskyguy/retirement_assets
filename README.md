@@ -10,21 +10,24 @@ A California resident built this with [Google gemini](https://gemini.google.com)
 
 #### Features in the Works (and Known Bugs):
 
-+ **BUG** Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "🔄Withdraw Proportionally") and often overshoots.  Note the improved tax calculations - item 3 below - have lessened this problem a bit, but it still occurs.
-+ **DONE** Implement the *Max Conversion* logic - use cash/brokerage assets to increase Roth conversions. Currently it "converts" the excess withdrawals after taxes and spend goal.  But if there is available cash to pay taxes on the conversion, more can be moved into Roth. Of course excess withdrawals can also be spent or deposited into cash. However there is not an option to withdraw brokerage funds to increase Roth conversions.
-+ **FIXED** The tax calculations are more comprehensive.
-+ **FIXED** When Roth funds are tapped to meet spending goals, it may overwithdraw. For example, it may withdraw 15,000 and then have a 15,000 surplus which implies the Roth withdrawal was unnecessary.
 + **BUG** We suspect the "Fill Bracket" goal has a flaw in the implementation. Please be cautious/ignore for now!
 + **BUG** The Dividend rate is applied to the Brokerage account. It should be applied to the Roth account, too! Brokerage dividends are accummulated in the Cash account.
++ **BUG** It's not clear if interest and dividends are being properly accounted for.
 + Add a "taxcreep" to see what harm a creeping tax rate might do.  I notice some states (e.g. Georgia) are reducing their tax rates, while others are adding more brackets and increasing rates.
-+ Save/Import/Export of settings **DONE**. The Load/Save/Delete/Manage Scenarios UI is undocumented. 
-+ **Completed** Autoload any saved "default" scenario (so you can pick up where you left off).  A message pops up telling you this happened.
 + Better organize the Annual Details tables. There are just too many columns to easily navigate.
 + Allow exporting of the Annual Details table(s).
 + The tool should warn when a "Fill Federal Bracket" is picked that is impossible to meet due to After-Tax Spend goal. For example, setting After-Tax Spend to 180,000 makes it impossible to stay in the 12% (or even the 22%) bracket unless there are lots of cash, brokerage or Roth assets already.
 + Allow selection of the quarter in which withdrawals will occur. I don't know if it makes a signficant difference, but changing the model a bit will make it possible to know how much difference it might make. For example if you're trying to draw down an IRA, taking the withdrawals early in the year means you will accrue less growth in the IRA account (and more in the Roth or Brokerage if that's where the funds go). Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last quarter may help.
 + There is no option to accumulate "surplus" amounts anywhere except Roth. Or to try to refill Brokerage or Cash accounts. Surplus in this context means if your spend goal is exceeded, the amount above your planned spend is counted as surplus and is automatically marked as a Roth conversion.  Since Roth is the "super account" for most purposes, it's not clear if an option to do anything else makes sense.
 
+##### Recent Fixes / Improvements
++ Only the surplus from IRA withdrawals can be moved into Roth. **FIXED** 
++ Fix the withdrawal logic. Currently it undershoots withdrawals in some scenarios (particularly "🔄Withdraw Proportionally") and often overshoots.  Note the improved tax calculations - item 3 below - have lessened this problem a bit, but it still occurs. **FIXED** 
++ **DONE** Implement the *Max Conversion* logic - use cash/brokerage assets to increase Roth conversions. Currently it "converts" the excess withdrawals after taxes and spend goal.  But if there is available cash to pay taxes on the conversion, more can be moved into Roth. Of course excess withdrawals can also be spent or deposited into cash. However there is not an option to withdraw brokerage funds to increase Roth conversions.
++ The tax calculations are more comprehensive. **FIXED** 
++ When Roth funds are tapped to meet spending goals, it may overwithdraw. For example, it may withdraw 15,000 and then have a 15,000 surplus which implies the Roth withdrawal was unnecessary. **FIXED** 
++ Save/Import/Export of settings **DONE**. The Load/Save/Delete/Manage Scenarios UI is undocumented. 
++ **Completed** Autoload any saved "default" scenario (so you can pick up where you left off).  A message pops up telling you this happened.
 
 #### Why This Tool?
 Because the author is in retirement and has an unhealthy IRA balance to manage - it became obvious that no tool he could find offered the flexibility and *ease of use* he desired.  He and his wife are of different ages (so have different IRAs, RMD timings, Social Security amounts, etc.)  Some really powerful tools did not offer California tax calculations (California is a high tax state), or did not provide for life expectancy, and more.  Some of the questions the author sought to answer by modeling are these:

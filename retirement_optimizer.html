@@ -62,18 +62,18 @@
 		
         <h3>1. Profile & Ages</h3>
         <div class="row">
-            <div><label>Your Birth Year<input type="number" id="birthyear1" value="1960"></label></div>
+            <div><label><B>Your</B> Birth Year<input type="number" id="birthyear1" value="1960"></label></div>
             <div><label>Life Expectancy<input type="number" id="die1" value="88"></label></div>
         </div>
         <div class="row">
-            <div><label>Spouse Birth Year</B><input type="number" id="birthyear2" value="1952"></label></div>
-            <div><label>Spouse Expectancy<input type="number" id="die2" value="98"></label></div>
+            <div><label><B><I>Spouse</I></B> Birth Year</B><input type="number" id="birthyear2" value="1952"></label></div>
+            <div><label><B><I>Spouse</I></B> Expectancy<input type="number" id="die2" value="98"></label></div>
         </div>
 
         <h3>2. Assets (Current)</h3>
         <div class="row">
-            <div><label>Your IRA  <input type="number" id="IRA1" value="1000000"></label></div>
-            <div><label>Spouse IRA<input type="number" id="IRA2"  value="400000"></label></div>
+            <div><label><B>Your</B> IRA  <input type="number" id="IRA1" value="1000000"></label></div>
+            <div><label><B><I>Spouse</I></B> IRA<input type="number" id="IRA2"  value="400000"></label></div>
         </div>
         <div class="row">
             <div><label>Brokerage<input type="number" id="Brokerage" value="100000"></label></div>
@@ -90,11 +90,11 @@
             <div><label>Start Age<input type="number" id="ss1Age" value="70"></label></div>
         </div>
         <div class="row">
-            <div><label>Spouse SS Amt<input type="number" id="ss2" value="24000"></label></div>
-            <div><label>Spouse Start Age<input type="number" id="ss2Age" value="70"></div></label><BR>
+            <div><label><B><I>Spouse</I></B> SS Amt<input type="number" id="ss2" value="24000"></label></div>
+            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></div></label><BR>
         </div>
         <div class="row">
-            <div><label>Your Pension<input type="number" id="pensionAnnual" value="15000"></label></div>
+            <div><label><B>Your</B> Pension<input type="number" id="pensionAnnual" value="15000"></label></div>
             <div><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
         </div>
 
@@ -182,6 +182,8 @@
 			<h4>Where is the Code</h4>
 			This might be useful to know: you can run this locally (download the *.html and *.js and *.css files from github) 
 			<A HREF="https://github.com/nightskyguy/retirement_assets">https://github.com/nightskyguy/retirement_assets</A>.
+			
+			The charts require the ability to load this file remotely: <A HREF=""https://cdn.jsdelivr.net/npm/chart.js">"cdn.jsdelivr.net/npm/chart.js"</A>.
 			<p>And you can also take a look at the source, make comments, or even open a pull request to propose changes. Just follow the link above.
 
 			You can directly <strong>run</strong> the code from github: <A HREF="https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html">nightskyguy.github.io/retirement_assets/retirement_optimizer.html</a>
@@ -210,9 +212,9 @@
 				<div class="drawer-content" id="drawer-changelog"> 
 				<!--- CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG --->
 				<H3>Change Log</H3>
+				For the most details, please <STRONG>consult the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A></STRONG>.
 				<ul>
-				<li><b>7g</b> Found one source of overwithdrawal: the tax rate on capital gains should be proportional to the basis.
-				
+				<li><b>7g</b> Found one source of overwithdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it overwithdrew to make up for the excluded pension.  Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed.				
 				<li>7f Fixed HTML cautions. Fixed error in calculating what to do with surplus. It was putting some surplus into Roth even though no IRA withdrawals had occurred. CapitalGains calculation was wrong, and the tax burden for Brokerage withdrawals was also incorrect. <B>BUG</B> However it's still significantly over-withdrawing.
 				<li>7e Fixed more bugs, added much more information (See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>). And added a new standalone tool. 
 				<li>7d Updated taxation calculations to use a more thorough calculator.
@@ -252,6 +254,9 @@
 				</label>
 				<label>
 					<input type="checkbox" id="cat-summary" checked onchange="updateColumnVisibility()"> Summary
+				</label>
+				<label>
+					<input type="checkbox" id="cat-income" onchange="updateColumnVisibility()"> Income
 				</label>
 				<label>
 					<input type="checkbox" id="cat-balances" onchange="updateColumnVisibility()"> Balances
@@ -799,11 +804,17 @@ function simulate(inputs) {
     let log = [];
 	//!!!TODO Remove hardcoded start year!
     let currentYear = inputs.startYear ?? 2026;
-	let birthyear1 = inputs.birthyear1;
-	let birthyear2 = inputs.birthyear2;
+	
+	let birthyear2 = Math.floor(inputs.birthyear1);
+	let birthmonth2 = Math.max(1, Math.min(12, Math.round((inputs.birthyear1 - birthyear2) * 100) || 12));	
+	let birthyear1 = birthyear2;
+	let birthmonth1 = birthmonth2;
+	
+	birthyear2 = Math.floor(inputs.birthyear2);
+	birthmonth2 = Math.max(1, Math.min(12, Math.round((inputs.birthyear2 - birthyear2) * 100) || 12));
 
     let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear1 + inputs.die2) - currentYear + 1;
-    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [] };
+    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [] , shortfall: 0};
 
 	let cpiRate = 1		// The rate that SS and Tax brackets increase.
 	let inflation = 1	// The rate at which overall inflation increases.
@@ -839,12 +850,7 @@ function simulate(inputs) {
 
     for (let y = 0; y < maxYears; y++) {
 		spendGoal = spendGoal * spendDelta * (1+inputs.inflation);
-		
-		cpiRate = (1 + inputs.cpi) * cpiRate;
-		inflation = (1 + inputs.inflation) * inflation;
-		spendDelta = 1 + inputs.spendChange;
-		medicareRate *= ( 1 + TAXData.IRMAA.ANNUAL_INCREASE )
-		
+			
 		let withdrawals = { IRA: 0, IRA1: 0, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0};
 		let netWithdrawals = withdrawals;
 		
@@ -915,15 +921,16 @@ function simulate(inputs) {
 		balance.IRA1 = Math.max(0, balance.IRA1 - rmd1);
 		balance.IRA2 = Math.max(0, balance.IRA2 - rmd2);
 		let curIRA = Math.max(0, balance.IRA1 + balance.IRA2 - inputs.iraBaseGoal);
-
-
+	
+		
 		
         let totalRMD = rmd1 + rmd2;
 		taxableInc += totalRMD
+		let possibleIncome = taxableInc + taxableDividends + taxableInterest + fixedInc;
 
         // 4. Determine Target Spending amount based on Strategy
         let targetSpend = Math.min(spendGoal, goalLimit);
-        let additionalSpendNeeded = Math.max(0, targetSpend - fixedInc - taxableInc + irmaa);
+        let additionalSpendNeeded = Math.max(0, targetSpend + irmaa - possibleIncome);
 
 		//!!! Find the income federal limit. TODO: use that limit, to refine down to the next lower IRMAA limit and next lower State Limit.
 		let marginalFedTaxRate = goalFedBracketLimit.rate
@@ -1009,19 +1016,23 @@ function simulate(inputs) {
 
 		marginalFedTaxRate = tax.fedRate;
 		marginalStateTaxRate= tax.stRate;
+		capitalGainsRate = tax.capitalGainsRate;
 
 		//!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
 		
 		let magiHistoryLength = balance.magiHistory.length
 		if (magiHistoryLength < 1) {
-			balance.magiHistory.push(tax.magi);
-			balance.magiHistory.push(tax.magi);
+			balance.magiHistory.push(tax.MAGI);
+			balance.magiHistory.push(tax.MAGI);
 		}
 
         let totalTax = tax.totalTax + irmaa;
 
         // 6. Cash Flow Gap
-		let netSpendable = netWithdrawals.netAmount + fixedInc + taxableInc - totalTax
+		// taxableInc includes pension, RMDs
+		possibleIncome = taxableInc + taxableDividends + taxableInterest + fixedInc + netWithdrawals.netAmount;
+		
+		let netSpendable = possibleIncome - totalTax
         let gap = targetSpend - netSpendable;
         
 		inspectForErrors({netSpendable: netSpendable, gap: gap, totalTax: totalTax});
@@ -1060,12 +1071,13 @@ function simulate(inputs) {
 		
 		inspectForErrors({totalIncome: totalIncome});
 		
-		nominalTaxRate = (tax.magi > 1.00) ? totalTax / tax.magi : 0.0;		
+		nominalTaxRate = (tax.MAGI > 1.00) ? totalTax / tax.MAGI : 0.0;		
 
         // 7. Updates
 		
 		netIncome = totalIncome - totalTax;
-		let surplus = {Total: Math.max(0, netIncome - spendGoal), Roth:0, Cash: 0, Brokerage: 0}
+		let surplus = {Total: Math.max(0, netIncome - spendGoal), Roth:0, Cash: 0, Brokerage: 0,
+						Shortfall: Math.min(0, netIncome - spendGoal)};
 		
 		//!!! Remove withdrawals proportionately. RMDs have already been withdrawn.
 		const ira1_ratio = (balance.IRA1/(balance.IRA1+balance.IRA2||1))
@@ -1146,15 +1158,16 @@ function simulate(inputs) {
  		// Accrue dividends to cash
 		gains.Cash += taxableDividends
         balance.Cash +=  taxableDividends;
-        balance.magiHistory.push(tax.magi);
+        balance.magiHistory.push(tax.MAGI);
         totals.tax += totalTax;
-        totals.gross += (totalIncome);
-        totals.spend += (targetSpend - Math.max(0, gap));
+        totals.gross += totalIncome;
+        totals.spend += (targetSpend + surplus.Shortfall);
 		balance.Roth += surplus.Total + totalConverted;
+		totals.shortfall += surplus.Shortfall;
 		
 		let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage -   balance.BrokerageBasis)) * (1-nominalTaxRate) + balance.Roth + balance.Cash + balance.BrokerageBasis
 
-		if (netIncome < targetSpend || totalWealth < (targetSpend * 2)) {
+		if ((netIncome+100.0) < targetSpend || totalWealth < (targetSpend * 1.5)) {
 			totals.success = false;
 			totals.failedInYear.push(currentYear)
 		} else {
@@ -1171,17 +1184,18 @@ function simulate(inputs) {
             SSincome: fixedInc,
 			pension: pension,
             spendGoal: targetSpend,
-			magi: tax.magi,
+			MAGI: tax.MAGI,
 			totalIncome: totalIncome,
             netIncome: netIncome,	
             surplus: surplus.Total,	
+            shortfall: surplus.Shortfall,	
 			'RMD%': rmd1Pct,
 			'RMD1-': rmd1,
 			'RMD2-': rmd2,
-            '-RMDwd': totalRMD,
+            'RMDwd': totalRMD,
 			'IRA1-': netWithdrawals.IRA1,
 			'IRA2-': netWithdrawals.IRA2,
-            // 'IRAwd': netWithdrawals.IRA,
+            'IRAwd': netWithdrawals.IRA,
             'Brokerage-': netWithdrawals.Brokerage,
 			'CapGains': capitalGains,
             'RothWD': netWithdrawals.Roth,
@@ -1213,6 +1227,12 @@ function simulate(inputs) {
 			rothBonusConv: surplus.Roth
         });
 		currentYear += 1;
+		
+		// Adjust inflation rates for subsequent rounds.
+		cpiRate *= (1 + inputs.cpi);
+		inflation *= (1 + inputs.inflation);
+		spendDelta = 1 + inputs.spendChange;
+		medicareRate *= ( 1 + TAXData.IRMAA.ANNUAL_INCREASE )		
     } // end for (let y = 0; y < maxYears; y++)
 
     return { log, totals, finalNW: log[log.length-1].totalWealth };
@@ -1417,6 +1437,7 @@ function calculateTaxes(params = {}) {
     let federalCapGainsTax = 0;
     let remainingPreferential = taxablePreferentialIncome;
     let currentPosition = taxableOrdinaryIncome; // Start where ordinary income left off
+	let capitalGainsRate = 0;
     
     // Apply capital gains rates based on position in total taxable income
     for (let i = 0; i < capGainsBrackets.length; i++) {
@@ -1428,7 +1449,8 @@ function calculateTaxes(params = {}) {
         if (currentPosition >= bracketLimit) {
             continue;
         } // bracket already passed
-        
+        capitalGainsRate = rate;
+		
         // Calculate how much preferential income fits in this bracket
         const roomInBracket = bracketLimit - currentPosition;
         const amountInBracket = Math.min(remainingPreferential, roomInBracket);
@@ -1503,11 +1525,12 @@ function calculateTaxes(params = {}) {
         federalTax: federalTax,
         stateTax: stateTax,
 		state: stateTax,
+        capitalGainsRate: capitalGainsRate,
         capitalGainsTax: federalCapGainsTax,  // Includes NIIT
         niitTax: 0,  // Included in capitalGainsTax (combined brackets)
         AGI: federalAGI,
         irmaaMagi: irmaaMagi,
-        magi: irmaaMagi,
+        MAGI: irmaaMagi,
         
         // Additional detailed breakdown
         federalOrdinaryTax: federalOrdinaryTax,
@@ -1714,26 +1737,26 @@ function loadOptimizerResult(index) {
 }
 
 // //////////////////////////////////////////////////////////////////
-
 // Column category mappings - each column can be in multiple categories
 const columnCategories = {
     // Summary - high-level overview
-    'year': ['Summary'],
+    'year': ['Summary', 'Taxation', 'Balances', 'Income'],
     'age1': ['Summary'],
     'age2': ['Summary'],
     'status': ['Summary'],
-    'spendGoal': ['Summary'],
-    'netIncome': ['Summary'],
+    'spendGoal': ['Summary', 'Income'],
+    'netIncome': ['Summary', 'Income'],
     'totalWealth': ['Summary', 'Balances'],
-    'totalTax': ['Summary', 'Taxation'],
+    'totalTax': ['Summary', 'Taxation', 'Income'],
     'NominalRate%': ['Summary', 'Taxation'],
-    'surplus': ['Summary'],
+    'surplus': ['Summary', 'Income'],
+    'shortfall': ['Summary', 'Income'],
     
     // Income Sources (could be its own category if you want)
-    'SSincome': ['Summary'],
-    'pension': ['Summary'],
-    'totalIncome': ['Summary', 'Taxation'],
-    'cashD+I': ['Cash Δ', 'Taxation'],
+    'SSincome': ['Summary', 'Income'],
+    'pension': ['Summary', 'Income'],
+    'totalIncome': ['Summary', 'Taxation', 'Income'],
+    'cashD+I': ['Cash Δ', 'Taxation', 'Income'],
     
     // Balances - end-of-year balances
     'IRA1': ['Balances', 'IRA Δ'],
@@ -1746,11 +1769,11 @@ const columnCategories = {
     'Spendable': ['Balances'],
     
     // Taxation
-    'magi': ['Taxation'],
+    'MAGI': ['Taxation'],
     'IRMAA': ['Taxation'],
     'FedTax': ['Taxation'],
     'StateTax': ['Taxation'],
-    'CapGains': ['Taxation', 'Brokerage Δ'],
+    'CapGains': ['Taxation', 'Brokerage Δ', 'Income'],
     'SumTaxes': ['Taxation'],
     'FedRate%': ['Taxation'],
     'StateRate%': ['Taxation'],
@@ -1760,22 +1783,23 @@ const columnCategories = {
     // IRA Changes - withdrawals, RMDs, and conversions
     'IRA1-': ['IRA Δ'],
     'IRA2-': ['IRA Δ'],
+	'IRAwd': ['IRA Δ', 'Income'],
     'RMD%': ['IRA Δ'],
     'RMD1-': ['IRA Δ'],
     'RMD2-': ['IRA Δ'],
-    '-RMDwd': ['IRA Δ'],
+    'RMDwd': ['IRA Δ', 'Income'],
     'rothConv': ['IRA Δ', 'Roth Δ'],  // Conversion comes from IRA
     
     // Roth Changes - balance, withdrawals, growth, conversions
-    'RothWD': ['Roth Δ'],
+    'RothWD': ['Roth Δ', 'Income'],
     'rothG': ['Roth Δ'],
     
     // Brokerage Changes - balance, withdrawals, gains, growth
-    'Brokerage-': ['Brokerage Δ'],
+    'Brokerage-': ['Brokerage Δ', 'Income'],
     'brokerageG': ['Brokerage Δ'],
     
     // Cash Changes - balance, withdrawals, growth
-    'CashWD': ['Cash Δ'],
+    'CashWD': ['Cash Δ', 'Income'],
     'cashG': ['Cash Δ']
 };
 
@@ -1784,6 +1808,7 @@ function getActiveCategories() {
     const categories = [];
     if (document.getElementById('cat-summary')?.checked) categories.push('Summary');
     if (document.getElementById('cat-balances')?.checked) categories.push('Balances');
+    if (document.getElementById('cat-income')?.checked) categories.push('Income');
     if (document.getElementById('cat-taxation')?.checked) categories.push('Taxation');
     if (document.getElementById('cat-ira')?.checked) categories.push('IRA Δ');
     if (document.getElementById('cat-roth')?.checked) categories.push('Roth Δ');
@@ -1917,14 +1942,14 @@ function updateTable(log) {
     
     const tooltips = {
         'year': 'A pink row means insufficient funds. A yellow row is for a single survivor',
-        'RMDwd': 'Total of all RMDs (positive indicate withdrawals)',
+        'RMDwd': 'Total of all Required Minimum Distributions (RMDs)',
         'RMD%': 'The highest percentage RMD required for IRA1 or IRA2.',
         'Brokerage': 'Year end Brokerage balance',
-        'Brokerage-': 'Withdrawals from Brokerage account (sales)',
+        'Brokerage-': 'Withdrawals from Brokerage account (asset sales/cash withdrawal)',
         'Basis': 'The amount in brokerage which can be withdrawn tax free.',
         'IRA1-': 'Withdrawals from IRA1',
         'IRA2-': 'Withdrawals from IRA2',
-        'CapGains': 'Amount of gains from selling brokerage assets.',
+        'CapGains': 'Amount of gains from withdrawing brokerage assets.',
         'IRMAA': 'First two years are presumed the same as the 3rd year on.',
         'spendGoal': 'This amount increases by inflation less Spend Delta%.',
         'Roth': 'Balance at Year End',
@@ -1932,9 +1957,10 @@ function updateTable(log) {
         'RothConv': 'Amount moved from IRA to Roth (converted)',
         'CashWD': 'Tax free withdrawals from Cash',
         'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
-        'magi': 'Modified Adjusted Gross Income - determines future IRMAA',
+        'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',
         'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA - in total.',
         'SumTaxes': 'Running total of Federal,IRMAA,NIIT,CapGains & IRMAA.',
+        'totalIncome': 'Funds from all sources, taxable and tax-free.',
         'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA'
     };
 
@@ -1968,6 +1994,7 @@ function updateTable(log) {
   
     // Create body
     const tbody = table.createTBody();
+	let maritalStatus = 'MFJ';
     log.forEach(row => {
       const tr = tbody.insertRow();
       
@@ -1978,13 +2005,15 @@ function updateTable(log) {
       const age1 = row['Age1'] ?? row['age1'];
       const age2 = row['Age2'] ?? row['age2'];
       
-      const shouldHighlightPink = (spendGoal > netIncome) || (totalWealth < spendGoal);
-      const shouldHighlightYellow = (age1 === '—' || age2 === '—');
+	  // Allow a miss by 100 dollars.
+      const incomeShortfall = (spendGoal > netIncome + 100.0) || (totalWealth < spendGoal * 1.5);
+      const deathOccurred = maritalStatus != row['status'];
+	  maritalStatus = row['status'];
       
       // Pink takes priority over yellow
-      if (shouldHighlightPink) {
+      if (incomeShortfall) {
         tr.style.backgroundColor = '#ffb6c180';  // Light pink
-      } else if (shouldHighlightYellow) {
+      } else if (deathOccurred) {
         tr.style.backgroundColor = '#ffff99';  // Light yellow
       }
       
@@ -2040,355 +2069,6 @@ function updateTable(log) {
     return table;
 }
 
-
-
-/*****************************
-
-// Add this function to detect empty or all-zero columns
-function analyzeColumnContent(log) {
-    if (!log || log.length === 0) return {};
-    
-    const keys = Object.keys(log[0]).filter(key => !key.startsWith('-'));
-    const columnStatus = {};
-    
-    keys.forEach(key => {
-        let hasNonZeroValue = false;
-        
-        for (const row of log) {
-            const value = row[key];
-            
-            // Check if value exists and is non-zero
-            if (value != null && value !== '' && value !== '—') {
-                if (!isNaN(value) && parseFloat(value) !== 0) {
-                    hasNonZeroValue = true;
-                    break;
-                } else if (isNaN(value) && value !== '—') {
-                    // Non-numeric non-empty value
-                    hasNonZeroValue = true;
-                    break;
-                }
-            }
-        }
-        
-        columnStatus[key] = hasNonZeroValue;
-    });
-    
-    return columnStatus;
-}
-
-// Global variable to store column content analysis
-let columnContentStatus = {};
-
-function updateTable(log) {
-    const oldTable = document.getElementById('main-table');
-
-    if (!log || log.length === 0) {
-        if (oldTable) {
-          oldTable.remove();
-        }
-        return null;
-    }
-
-    // Analyze which columns have content
-    columnContentStatus = analyzeColumnContent(log);
-
-    const table = document.createElement('table');
-    table.border = '1';
-    table.id = 'main-table';
-  
-    const keys = Object.keys(log[0]);
-
-    // Create header
-    const thead = table.createTHead();
-    const headerRow = thead.insertRow();
-    
-    const tooltips = {
-        'year': 'A pink row means insufficient funds. A yellow row is for a single survivor',
-        'RMDwd': 'Total of all RMDs (positive indicate withdrawals)',
-        'RMD%': 'The highest percentage RMD required for IRA1 or IRA2.',
-        'Brokerage': 'Year end Brokerage balance',
-        'Brokerage-': 'Withdrawals from Brokerage account (sales)',
-        'Basis': 'The amount in brokerage which can be withdrawn tax free.',
-        'IRA1-': 'Withdrawals from IRA1',
-        'IRA2-': 'Withdrawals from IRA2',
-        'CapGains': 'Amount of gains from selling brokerage assets.',
-        'IRMAA': 'First two years are presumed the same as the 3rd year on.',
-        'spendGoal': 'This amount increases by inflation less Spend Delta%.',
-        'Roth': 'Balance at Year End',
-        'RothG': 'Growth in the Roth (added to Roth account)',
-        'RothConv': 'Amount moved from IRA to Roth (converted)',
-        'CashWD': 'Tax free withdrawals from Cash',
-        'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
-        'magi': 'Modified Adjusted Gross Income - determines future IRMAA',
-        'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA - in total.',
-        'SumTaxes': 'Running total of Federal,IRMAA,NIIT,CapGains & IRMAA.',
-        'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA'
-    };
-
-    keys.forEach(key => {
-        if (!key.startsWith('-')) {
-            const th = document.createElement('th');
-            const displayKey = key.endsWith('!') ? key.slice(0, -1) : key;
-            th.textContent = displayKey;
-            
-            if (tooltips[key]) {
-                th.title = tooltips[key];
-            }
-            
-            // Apply visibility based on category filter AND empty column filter
-            const visibleByCategory = typeof isColumnVisible === 'function' ? isColumnVisible(displayKey) : true;
-            const hasContent = columnContentStatus[key];
-            const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
-            
-            if (!visibleByCategory || (!hasContent && !showEmpty)) {
-                th.classList.add('hidden-column');
-            }
-            
-            // Mark empty columns for styling
-            if (!hasContent) {
-                th.classList.add('empty-column');
-            }
-            
-            headerRow.appendChild(th);
-        }
-    });
-  
-    // Create body
-    const tbody = table.createTBody();
-    log.forEach(row => {
-      const tr = tbody.insertRow();
-      
-      // Check conditions for highlighting
-      const spendGoal = row['SpendGoal'] ?? row['spendGoal'];
-      const netIncome = row['NetIncome'] ?? row['netIncome'];
-      const totalWealth = row['TotalWealth'] ?? row['totalWealth'];
-      const age1 = row['Age1'] ?? row['age1'];
-      const age2 = row['Age2'] ?? row['age2'];
-      
-      const shouldHighlightPink = (spendGoal > netIncome) || (totalWealth < spendGoal);
-      const shouldHighlightYellow = (age1 === '—' || age2 === '—');
-      
-      // Pink takes priority over yellow
-      if (shouldHighlightPink) {
-        tr.style.backgroundColor = '#ffb6c180';  // Light pink
-      } else if (shouldHighlightYellow) {
-        tr.style.backgroundColor = '#ffff99';  // Light yellow
-      }
-      
-      keys.forEach(key => {
-        if (!key.startsWith('-')) {
-          const td = tr.insertCell();
-          const value = row[key];
-          
-          // Check if key indicates percentage
-          const isPercent = key.toLowerCase().includes('%');
-          const isYear = key.toLowerCase().includes('yr') || key.toLowerCase().includes('year');
-          
-          if (value != null && !isNaN(value)) {
-            if (isPercent) {
-              // Format as percentage (convert from decimal)
-              td.textContent = (value * 100).toFixed(2);
-            } else {
-              // Format as whole number
-              if (isYear) {
-                td.textContent = value;
-              } else {
-                td.textContent = Math.round(value).toLocaleString();
-              }
-            }
-          } else {
-            td.textContent = value ?? '';
-          }
-          
-          // Apply visibility based on category filter AND empty column filter
-          const displayKey = key.endsWith('!') ? key.slice(0, -1) : key;
-          const visibleByCategory = typeof isColumnVisible === 'function' ? isColumnVisible(displayKey) : true;
-          const hasContent = columnContentStatus[key];
-          const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
-          
-          if (!visibleByCategory || (!hasContent && !showEmpty)) {
-            td.classList.add('hidden-column');
-          }
-          
-          // Mark empty columns for styling
-          if (!hasContent) {
-            td.classList.add('empty-column');
-          }
-          
-          tr.appendChild(td);
-        }
-      });
-    });
-  
-    if (oldTable) {
-        oldTable.replaceWith(table);
-    }
-  
-    return table;
-}
-
-// Update the visibility function to handle both category and empty column filters
-function updateColumnVisibility() {
-    const table = document.getElementById('main-table');
-    if (!table) return;
-    
-    const headerRow = table.querySelector('thead tr');
-    const bodyRows = table.querySelectorAll('tbody tr');
-    
-    if (!headerRow) return;
-    
-    const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
-    
-    // Get column keys from header
-    const headers = Array.from(headerRow.querySelectorAll('th'));
-    
-    headers.forEach((th, index) => {
-        const columnKey = th.textContent;
-        const visibleByCategory = isColumnVisible(columnKey);
-        const isEmpty = th.classList.contains('empty-column');
-        
-        // Column is visible if it passes category filter AND (has content OR show-empty is checked)
-        const visible = visibleByCategory && (showEmpty || !isEmpty);
-        
-        // Update header
-        if (visible) {
-            th.classList.remove('hidden-column');
-        } else {
-            th.classList.add('hidden-column');
-        }
-        
-        // Update all body cells in this column
-        bodyRows.forEach(row => {
-            const cell = row.cells[index];
-            if (cell) {
-                if (visible) {
-                    cell.classList.remove('hidden-column');
-                } else {
-                    cell.classList.add('hidden-column');
-                }
-            }
-        });
-    });
-}
-
-
-/* OLD FUNCTION
-function updateTable(log) {
-	const oldTable = document.getElementById('main-table');
-
-	if (!log || log.length === 0) {
-		if (oldTable) {
-		  oldTable.remove();
-		}
-		return null;
-	}
-
-	const table = document.createElement('table');
-	table.border = '1';
-	table.id = 'main-table';
-  
-	const keys = Object.keys(log[0]);
-
-	// Create header
-	const thead = table.createTHead();
-	const headerRow = thead.insertRow();
-	
-	const tooltips = {
-		'year': 'A pink row means insufficient funds. A yellow row is for a single survivor',
-		'RMDwd': 'Total of all RMDs (positive indicate withdrawals)',
-		'RMD%': 'The highest percentage RMD required for IRA1 or IRA2.',
-		'Brokerage': 'Year end Brokerage balance',
-		'Brokerage-': 'Withdrawals from Brokerage account (sales)',
-		'Basis': 'The amount in brokerage which can be withdrawn tax free.',
-		'IRA1-': 'Withrdrawals from IRA1',
-		'IRA2-': 'Withrdrawals from IRA2',
-		'CapGains': 'Amount of gains from selling brokerage assets.',
-		'IRMAA': 'First two years are presumed the same as the 3rd year on.',
-		'spendGoal': 'This amount increases by inflation less Spend Delta%.',
-		'Roth': 'Balance at Year End',
-		'RothG': 'Growth in the Roth (added to Roth account)',
-		'RothG': 'Growth in the Roth (added to Roth account)',
-		'RothConv': 'Amount moved from IRA to Roth (converted)',
-		'CashWD': 'Tax free withdrawals from Cash',
-		'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
-		'magi': 'Modified Adjusted Gross Income - determines future IRMAA',
-		'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA - in total.',
-		'SumTaxes': 'Running total of Federal,IRMAA,NIIT,CapGains & IRMAA.',
-		'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA'
-	};
-
-	keys.forEach(key => {
-		if (!key.startsWith('-')) {
-			const th = document.createElement('th');
-			th.textContent = key.endsWith('!') ? key.slice(0, -1) : key;
-			
-			if (tooltips[key]) {
-				th.title = tooltips[key];
-			}
-			
-			headerRow.appendChild(th);
-		}
-	});
-  
-	// Create body
-	const tbody = table.createTBody();
-	log.forEach(row => {
-	  const tr = tbody.insertRow();
-	  
-	  // Check conditions for highlighting
-	  const spendGoal = row['SpendGoal'] ?? row['spendGoal'];
-	  const netIncome = row['NetIncome'] ?? row['netIncome'];
-	  const totalWealth = row['TotalWealth'] ?? row['totalWealth'];
-	  const age1 = row['Age1'] ?? row['age1'];
-	  const age2 = row['Age2'] ?? row['age2'];
-	  
-	  const shouldHighlightPink = (spendGoal > netIncome) || (totalWealth < spendGoal);
-	  const shouldHighlightYellow = (age1 === '—' || age2 === '—');
-	  
-	  // Pink takes priority over yellow
-	  if (shouldHighlightPink) {
-		tr.style.backgroundColor = '#ffb6c180';  // Light pink
-	  } else if (shouldHighlightYellow) {
-		tr.style.backgroundColor = '#ffff99';  // Light yellow
-	  }
-	  
-	  keys.forEach(key => {
-		if (!key.startsWith('-')) {
-		  const td = tr.insertCell();
-		  const value = row[key];
-		  
-		  // Check if key indicates percentage
-		  const isPercent = key.toLowerCase().includes('%');
-		  const isYear = key.toLowerCase().includes('yr') || key.toLowerCase().includes('year');
-		  
-		  if (value != null && !isNaN(value)) {
-			if (isPercent) {
-			  // Format as percentage (convert from decimal)
-			  td.textContent = (value * 100).toFixed(2);
-			} else {
-			  // Format as whole number
-			  if (isYear) {
-				td.textContent = value;
-			  } else {
-				td.textContent = Math.round(value).toLocaleString();
-			  }
-			}
-		  } else {
-			td.textContent = value ?? '';
-		  }
-		  
-		  tr.appendChild(td);
-		}
-	  });
-	});
-  
-  if (oldTable) {
-    oldTable.replaceWith(table);
-  }
-  
-  return table;
-}
-END OLD FUNCTION */
 
 /*calculateInflationAdjustedWithdrawal:
 * given the parameters, determines the first year withdrawal (subsequent years are 

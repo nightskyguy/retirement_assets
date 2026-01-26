@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Retirement Optimizer 7g</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-	<!-- <link rel="stylesheet" href="retirementopt_styles.css"> -->
-	<link rel="stylesheet" href="retirementopt_styles_responsive.css">	
+	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
 	<base target="_blank">	
 	<script src="retirement_optimizer_tests.js"></script>	
 	<script src="retirement_optimizer_text.js"></script>	
@@ -27,12 +26,12 @@
 		
 		
 			<div class="input-group">
-				<select id="strategy" onchange="toggleStrategyUI()">
+				<label><select id="strategy" onchange="toggleStrategyUI()">
 					<option value="baseline">🔄Withdraw Proportionally</option>  <!--⚖️-->
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
 					<option value="bracket">🪣Fill Federal Tax Bracket</option>
 					<option value="minlimit">🛑Lesser of IRMAA or TaxBracket</option>
-				</select>
+				</select></label>
 			</div>
 			
 			<div id="ui-fixed" class="input-group hidden">
@@ -41,9 +40,9 @@
 			</div>
 			
 			<div id="ui-bracket" class="input-group hidden">
-				<select id="stratRate">
+				<label><select id="stratRate">
 					<option value="24" selected>24%(403/201)k</option>
-				</select>
+				</select></label>
 			</div>
 		</div>  <!-- strategy-container -->
         <div class="row">	
@@ -66,7 +65,7 @@
             <div><label>Life Expectancy<input type="number" id="die1" value="88"></label></div>
         </div>
         <div class="row">
-            <div><label><B><I>Spouse</I></B> Birth Year</B><input type="number" id="birthyear2" value="1952"></label></div>
+            <div><label><B><I>Spouse</I></B> Birth Year<input type="number" id="birthyear2" value="1952"></label></div>
             <div><label><B><I>Spouse</I></B> Expectancy<input type="number" id="die2" value="98"></label></div>
         </div>
 
@@ -91,7 +90,7 @@
         </div>
         <div class="row">
             <div><label><B><I>Spouse</I></B> SS Amt<input type="number" id="ss2" value="24000"></label></div>
-            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></div></label><BR>
+            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></label></div><BR>
         </div>
         <div class="row">
             <div><label><B>Your</B> Pension<input type="number" id="pensionAnnual" value="15000"></label></div>
@@ -111,7 +110,7 @@
         <div class="row">
 			<div><label title="This is the rate that your asset mix emits dividends. Brokerage dividends accrue to the Cash account. Others to their own account.">Dividend Rate %<BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00"></label></div>
 			<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation<BR>
-            <select id="STATEname"">
+            <select id="STATEname">
                 <option   value="NONE">-No State Tax-</option>
                 <option   value="CA" selected>California</option>
             </select></label>
@@ -180,13 +179,13 @@
 			🛑 Some pithy insights will appear here. Right now they are not implemented. Insights shall   
 			include observations like: which strategy seems most effective, what the net withdrawal rate will be for the given <i>After-Tax Spend</i> 
 			<h4>Where is the Code</h4>
-			This might be useful to know: you can run this locally (download the *.html and *.js and *.css files from github) 
+			This might be useful to know: you can run this locally (download the *.html and *.js and *.css files from GitHub)
 			<A HREF="https://github.com/nightskyguy/retirement_assets">https://github.com/nightskyguy/retirement_assets</A>.
 			
-			The charts require the ability to load this file remotely: <A HREF=""https://cdn.jsdelivr.net/npm/chart.js">"cdn.jsdelivr.net/npm/chart.js"</A>.
+			The charts require the ability to load this file remotely: <A HREF="https://cdn.jsdelivr.net/npm/chart.js">cdn.jsdelivr.net/npm/chart.js</A>.
 			<p>And you can also take a look at the source, make comments, or even open a pull request to propose changes. Just follow the link above.
 
-			You can directly <strong>run</strong> the code from github: <A HREF="https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html">nightskyguy.github.io/retirement_assets/retirement_optimizer.html</a>
+			You can directly <strong>run</strong> the code from GitHub: <A HREF="https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html">nightskyguy.github.io/retirement_assets/retirement_optimizer.html</a>
 			
 			<H4>Other Tools</H4>		
 			There is a standalone tool to determine what IRA balances (with RMDs) cause IRMAA taxation:  
@@ -196,28 +195,31 @@
 			<p>If you're wondering whether you're being tracked, the answer is no. There is no logic 
 			(currently) to do any kind of tracking or telemetry. You can read the code if you're skeptical.
 			And by the way, you SHOULD be skeptical.  Sooner or later I am going to want to know 
-			how many users are using it and from (approximately) where. Mostly for self edification, but also to know if, for example, lots of Idaho users are loading it... it would be clue to add state taxes for Idaho.
+			how many users are using it and from (approximately) where. Mostly for self edification, but also to know if, for example, lots of Idaho users are loading it... it would be a clue to add state taxes for Idaho.
 			</div>	
 
 			<div id="tab-insight" class="card hidden">
 				<table id="insights-table">
 					<thead>
-						<tr id="groupRow"></tr>
-						<tr id="headerRow"></tr>
+						<tr id="ins_groupRow"></tr>
+						<tr id="ins_headerRow"></tr>
 					</thead>
-					<tbody id="tableBody"></tbody>
+					<tbody id="ins_tableBody"></tbody>
 				</table>
 			</div>
 				<!--details class="top-drawer"><summary>Change Log</summary>			
 				<div class="drawer-content" id="drawer-changelog"> 
-				<!--- CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG --->
+				!-- CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG -->
 				<H3>Change Log</H3>
 				For the most details, please <STRONG>consult the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A></STRONG>.
 				<ul>
-				<li><b>7g</b> Found one source of overwithdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it overwithdrew to make up for the excluded pension.  Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed.				
-				<li>7f Fixed HTML cautions. Fixed error in calculating what to do with surplus. It was putting some surplus into Roth even though no IRA withdrawals had occurred. CapitalGains calculation was wrong, and the tax burden for Brokerage withdrawals was also incorrect. <B>BUG</B> However it's still significantly over-withdrawing.
-				<li>7e Fixed more bugs, added much more information (See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>). And added a new standalone tool. 
-				<li>7d Updated taxation calculations to use a more thorough calculator.
+				<li><b>7g</b> Found one source of over-withdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it over-withdrew to make up for the excluded pension.  Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed.
+					<B>BUG</B>Unfortunately, there are still scenarios where under-withdrawal occurs (though not over-withdrawals anymore!).
+					The mass of columns have been tamed somewhat with live selectable options, including suppressing columns that have only zeros, grouping by association.
+				</li>
+				<li>7f Fixed HTML cautions. Fixed error in calculating what to do with surplus. It was putting some surplus into Roth even though no IRA withdrawals had occurred. CapitalGains calculation was wrong, and the tax burden for Brokerage withdrawals was also incorrect. However it is still significantly over-withdrawing.</li>
+					<li>7e Fixed more bugs, added much more information (See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>). And added a new standalone tool. </li>
+				<li>7d Updated taxation calculations to use a more thorough calculator.</li>
 				<li>7c Prior update(s) broke the save/load functionality due to case changes.  Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years. The rate is encoded in the TAXdata table - not user adjustable. Began UI change to move the top tabs into a new location: Documentation.</li>
 				<li>7b More state rates. Fixed most calculations. Minor UI changes. Changed the defaults to something "more common" - . See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>. </li>					
 				<li>7a Now has various state rates. Fixed most calculations. See <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A> for details. </li>	
@@ -240,7 +242,7 @@
 				<li>4f Use cpi% to adjust taxation (brackets)</li>
 				<li>4e Use calculated birthyear for correct RMDs</li>
 				</ul>
-				<!-- </div> <!-- changelog --
+				<!-- </div> !-- changelog --
 				</details>	-->
 		</div> <!-- id=tab-docs -->
 
@@ -1960,6 +1962,7 @@ function updateTable(log) {
         'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',
         'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA - in total.',
         'SumTaxes': 'Running total of Federal,IRMAA,NIIT,CapGains & IRMAA.',
+        'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Likely due to errors in the calculation or unexpected bracket changes.',
         'totalIncome': 'Funds from all sources, taxable and tax-free.',
         'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA'
     };

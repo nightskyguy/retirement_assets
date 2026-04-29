@@ -94,7 +94,7 @@ D. **There is no SUPPORT for this tool**. If you ask nicely, or offer a pull req
 
 
 #### What about Other tools
-One of the lovely things about engineers, is they like to build things. I've found at least two other free resources that both inspired me and made realize that there is more than one way to solve problems.  
+One of the lovely things about engineers, is they like to build things. I've found many other free resources that both inspired me and made realize that there is more than one way to solve problems.  
 
 The sources I found:
 
@@ -107,6 +107,13 @@ _ is what made me realize that writing a tool in JavaScript results in the most 
 
 + [What IRA Balances Result in IRMAA due to RMDS](https://nightskyguy.github.io/retirement_assets/irmaa_and_rmds.html) I wrote this tool, too, using AI. Given entered fixed income, it calculates what size IRA balance will cause RMDs that hit IRMAA tiers at various ages.  The tool uses current rates and does not attempt to adjust for inflation.  For example a married couple with a $16,607,550 balance at age **73** together with $130,000 income (pensions/social security/etc) will hit the highest IRMAA Tier 5 due to $626,700 forced RMD. Yeah, that is clearly not most of us. But at age **80** a $2,882,540 IRA balance together with that same income will hit **Tier 2** $5.2K annual charge) because that balance at that age forces a $142,000 RMD.  A balance of $1,286,740 for a single 80 year old lands in **Tier 4** with a $5,7k annual charge.  At 75 that same single person would be in Tier 4 with a 1.5M IRA balance. 
 
+Operational Tools (All Free, though one is only free to try)
+
++ [NestWise](https://www.nestwise.me/) - lots and lots of features. No login required. Includes things like budgeting, extensive Monte Carlo analysis, and even one of my favorite features which allows you to automatically iterate over different withdrawal rates (using different strategies) to find one that best suits you.  I've examined the source code for this tool and collaborated with the developer. No backdoors, or exploitable flaws were found.
++ [RetirementIQ](https://retirementiq.app/) Free for 7 days, $50/year. I've not dabbled much with this, partly because I prefer open source that I can inspect for possible flaws, backdoors, etc.  Directly invoke it here: [retirementiq.app](https://retirementiq.app/app/)
+
++ [Retirement Figures](http://retirementfigures.com/) seems pretty robust and is currently free.  I have no  access to the source to look for problems.
+
 
 ## Ramblings and Observations
 
@@ -116,7 +123,7 @@ _ is what made me realize that writing a tool in JavaScript results in the most 
 
 **IRMAA Escalation** My original model assumed that the IRMAA tax brackets and amounts are adjusted by CPI, but that's not true. The brackets are adjusted per CPI, but the amounts are tied to medicare. The CPI has averaged about 2.8% annually over the last 20 years, but Medicare has averaged 5.6% annual increase.  IRMAA, as mentioned is a TAX CLIFF, not a graduated bracket. That means if you make $1 more than the maximum you move up an IRMAA tier. The result is not only the need to pay the tax, say an extra 4k per year, but you may have to withdraw more from an IRA to pay the tax.  At a 20% nominal tax rate, that extra $1 costs at least $5K AND may result in pushing you up into higher marginal brackets.
 
-Those *Moldy Brackets* have added to another problem: there is a ["Tax Torpedo"](https://www.fidelity.com/learning-center/personal-finance/social-security-tax-torpedo-and-hidden-taxes) - along with several other tax "pitfalls" - that hits *middle income* retirees particularly hard. The so-called **Tax Torpedo** turns a portion of your income in the federal 10%, 12% and 22% brackets into an effective tax rate of 18.5%, 22.2% and **40.7%** respectively. To add more injury, several states (8 remaining) tax Social Security and that can make these rates even worse.  Here are the net effects:
+Those *Moldy Brackets* have added to another problem: there is a ["Tax Torpedo"](https://www.fidelity.com/learning-center/personal-finance/social-security-tax-torpedo-and-hidden-taxes) - along with several other tax "pitfalls" - that hits *middle income* retirees particularly hard. The so-called **Tax Torpedo** turns a portion of your income in the federal 10%, 12% and 22% brackets into an effective tax rate of 18.5%, 22.2% and **40.7%** respectively. To add more injury, eight states tax Social Security and that can make these rates even worse.  Here are the net effects:
 
 #### State Tax Rates on Social Security Income by Federal Bracket Level (2026)
 
@@ -163,20 +170,25 @@ The bad scenarios for ROTH conversions are these:
 1. You withdraw/convert now at a higher tax rate than you will face in your future.
 2. You withdraw + convert in an amount that pushes your taxation up (this is a specific case of 1)
 3. You convert before you're 59.5 and do not have funds to pay the taxes AND/or that conversion pushes you into a higher taxation situation.
+4. You have modest IRA balances, and expect that to be the case once you start drawing them in retirement. Modest here means something less than 1 million with 12 or fewer years before you plan to start drawing down assets. If you have 1M now, 10 years of gains like those in the 2016 to 2025 period could TRIPLE that 1M to 3M.
+5. Your remainder estate is going to charity (not people).  Charities pay zero tax regardless of the income source.
+6. You plan to take advantage of QCDs (Qualified Chraritable Deductions) after 70.5 years of age. QCDs satisfy RMD requirements, and do not count against your MAGI so do not incur IRMAA penalties.
+7. You already have a healthy mix of assets (e.g. 60% IRA/401K, 30% Roth, 10% or higher Cash/CDs/Bonds in taxable).
+8. You have to pay convesion taxes solely from the IRA withdrawals. Sometimes this works, usually it's a detriment.
 
 There are more than a dozen ways that not doing a conversion (to ROTH or brokerage) can result in less spendable money and reduce spendable asset value. These scenarios mostly affect those with proportionately large IRA/401K balances. Even modest IRA/401K balances can significantly improve their asset balance and spendable cash through thoughtful withdrawals.
 
 Here are some of the harms of having or accruing a large IRA/401K:
 
 1. Growth in or size of the IRA/401K balance reaches a point where you end up in a higher tax bracket before or after RMDs start.
-2. RMDs cause you to have little to no room for managing your desired spend (i.e. avoiding higher taxes and/or IRMAA and/or NIIT).
-3. If the bulk of your assets remain in an IRA/401K, any large extra expenditure will result in a corresponding hit to your taxation (think remodeling, buying a fancy car, or a vacation home).
+2. RMDs cause you to have little to no room for managing your desired spend (i.e. avoiding higher taxes and/or IRMAA and/or NIIT) - and you don't plan to invoke QCDs.
+3. If the bulk of your assets remain in an IRA/401K, any large extra expenditure may cause a corresponding hit to your taxation (think remodeling, buying a fancy car, repairing a roof, or buying a vacation home).
 4. Tax rates could go up significantly in the future (I argue they will go up!).
-5. To spend more, you have to withdraw more and pay more tax.
-6. Social security bottoms out in 2033 (as it is on track to do), and you have to withdraw more to cover the loss of Social Security funds... increasing your taxation.
-7. Your spouse passes away. Now you're in a single tax bracket paying 30% more taxes for the same income (unless you remarry).
-8. Your IRA (not 401K) crosses about 1.5m - in that case you could be forced to surrender some of it in a lawsuit. (401Ks have stronger protection). ROTHs are similarly exposed, but because ROTH is not taxed, a smaller balance has greater value to you.
-9. You and your spouse pass away. Your heirs will be forced to liquidate the IRA/401K balance within 10 years at THEIR tax rate. (ROTHs must be liquidated, too, but there is no tax).
-10. If you or your spouse pass away, usually the most effective way to manage this is for the survivor to "take over" the deceased's IRA/401K balance. The now larger balance will be subject to the survivors RMD requirements. This might be better if the surviving spouse is younger, but could go the other way.
-11. As your IRA/401K grows, your RMDs will also grow. At some point this causes 85% of your social security to become taxable, AND causes IRMAA taxes, AND possibly NIIT.
-12. IRA/401K withdrawals are taxable income in MOST states. ROTH withdrawals are not taxable in any state.
+5. Social security bottoms out in 2033 (as it is on track to do), and you have to withdraw more to cover the loss of Social Security funds... increasing your taxation.
+6. Your spouse passes away. Now you're in a single tax bracket paying 30% more taxes for the same income (unless you remarry).
+7. Your IRA (not 401K) crosses about 1.5m - in that case you could be forced to surrender some of it in a lawsuit. (401Ks have stronger protection). ROTHs are similarly exposed, but because ROTH is not taxed, a smaller balance has greater value to you.
+8. You and your spouse pass away. Your heirs will be forced to liquidate the IRA/401K balance within 10 years at THEIR tax rate. (ROTHs must be liquidated, too, but there is no tax).
+9. If you or your spouse pass away, usually the most effective way to manage this is for the survivor to "take over" the deceased's IRA/401K balance. The now larger balance will be subject to the survivors RMD requirements. This might be better if the surviving spouse is younger, but could go the other way.
+10. As your IRA/401K grows, your RMDs will also grow. At some point this causes 85% of your social security to become taxable, AND causes IRMAA taxes, AND possibly NIIT.
+11. IRA/401K withdrawals are taxable income in MOST states. ROTH withdrawals are not taxable in any state.
+12. You die wealthy, not having spent what you could have, and your heirs pay the highest taxes of their lives to draw down the remaining balance in 10 years.  Though they may still be able to use QCDs if they are 70.5 at the time.

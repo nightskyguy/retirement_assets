@@ -727,11 +727,21 @@ assertEqual(
 		'getInputs()')
 		
 
-// Example: $1M IRA, want to get down to $200K over 10 years, 6% growth
-	assertEqual(calculateAmortizedWithdrawal(1000000, 200000, 10, 0.06), 108694.367,
-		'calculateAmortizedWithdrawal(1000000, 200000, 10, 0.06) = 108694.367');
+	// Example: $1M IRA, want to get down to $200K over 10 years, 6% growth
+	assertEqual(calculateAmortizedWithdrawal(1000000, 200000, 10, 0.06), 120694.367,
+		'calculateAmortizedWithdrawal(1000000, 200000, 10, 0.06) = 120694.367');
 
-// calculateBrokerageWithdrawalForNet REMOVED.
+	// Example: $1M IRA, want to get down to $200K in 1 year, 6% growth
+	assertEqual(calculateAmortizedWithdrawal(1000000, 200000, 1, 0.06), 860000,
+		'calculateAmortizedWithdrawal(1000000, 200000, 1, 0.06) = 860000');
+
+	// Example: $10k IRA, want to get down to $2K in 3 year, -5% growth
+	assertEqual(calculateAmortizedWithdrawal(10000, 2000, 3, -0.05), 2304.557,
+		'calculateAmortizedWithdrawal(10000, 2000, 3, -0.05) = 2304.557');		
+
+	assertEqual(calculateAmortizedWithdrawal(950, 1000, 5, 0.1), 86.81,
+		'calculateAmortizedWithdrawal(950, 1000, 5, 0.1) = 86.81');			
+
 				
 	// 😭😭😭 NOTE NOTE NOTE: All of the following tests are sensitive to the real TAXData. 😭😭😭
 
@@ -847,8 +857,7 @@ assertEqual(
 			filingStatus: 'SGL',
 			ages: [67],
 			earnedIncome: 0,
-			ss1: 20000,
-			ss2: 0,
+			totalSS: 20000,
 			ordDivInterest: 0,
 			qualifiedDiv: 0,
 			capGains: 0,
@@ -877,8 +886,7 @@ assertEqual(
 			filingStatus: 'MFJ',
 			ages: [64, 62],  // Under 65, no age bump
 			earnedIncome: 20000,
-			ss1: 15000,
-			ss2: 15000,
+			totalSS: 15000 + 15000,
 			ordDivInterest: 0,
 			qualifiedDiv: 0,
 			capGains: 0,
@@ -909,8 +917,7 @@ assertEqual(
 			filingStatus: 'MFJ',
 			ages: [70, 68],  // Both over 65, get age bumps
 			earnedIncome: 50000,
-			ss1: 20000,
-			ss2: 20000,
+			totalSS: 20000 + 20000,
 			ordDivInterest: 0,
 			qualifiedDiv: 0,
 			capGains: 0,
@@ -948,8 +955,7 @@ assertEqual(
 			filingStatus: 'MFJ',
 			ages: [55, 53],
 			earnedIncome: 60000,
-			ss1: 0,
-			ss2: 0,
+			totalSS: 0,
 			ordDivInterest: 5000,
 			qualifiedDiv: 10000,
 			capGains: 200000,  // Large cap gains
@@ -990,8 +996,7 @@ assertEqual(
 			filingStatus: 'MFJ',
 			ages: [67, 65],  // Both get age bump
 			earnedIncome: 80000,
-			ss1: 25000,
-			ss2: 18000,
+			totalSS: 25000 + 18000,
 			ordDivInterest: 8000,
 			qualifiedDiv: 12000,
 			capGains: 15000,
@@ -1035,8 +1040,7 @@ assertEqual(
 			filingStatus: 'MFJ',
 			ages: [45, 43],
 			earnedIncome: 300000,
-			ss1: 0,
-			ss2: 0,
+			totalSS: 0,
 			ordDivInterest: 20000,
 			qualifiedDiv: 50000,
 			capGains: 400000,  // Large cap gains triggering NIIT
@@ -1069,8 +1073,7 @@ assertEqual(
 			filingStatus: 'SGL',
 			ages: [68],  // Gets age bump
 			earnedIncome: 50000,
-			ss1: 30000,
-			ss2: 0,
+			totalSS: 30000,
 			ordDivInterest: 2000,
 			qualifiedDiv: 0,
 			capGains: 0,
@@ -1104,8 +1107,7 @@ assertEqual(
 			filingStatus: 'SGL',
 			ages: [66],
 			earnedIncome: 10000,
-			ss1: 30000,
-			ss2: 0,
+			totalSS: 30000,
 			ordDivInterest: 0,
 			qualifiedDiv: 0,
 			capGains: 0,

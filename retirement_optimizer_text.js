@@ -10,7 +10,7 @@ howToUse: `
 			Find this unlabeled item at the top left of the display.
 			Set the <i>After-Tax Send</i> to the amount of after-tax income you need per year. And set the <i>Spend Delta</i> percentage. A Spend Delta of 0 means no change, while -1.5 would reduce spending by 1.5% each year. To have spending grow, use a number greater than 0, like 2%.  Default is -1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile"> historical data</A>.
 			<ul><li>In <em>Withdraw Proportionally</em> it proportionately withdraws enough from all available sources to reach <i>After-tax Spending Goal</i>. Its a good baseline to compare with other strategies.</li>
-			<li>Compare with <em>Reduce IRA in N Years</em> to amortize your IRAs in a fixed number of years (they won't be emptied, they will be drawn down to <i>IRA  Goal</i>.</li>
+			<li>Compare with <em>Reduce IRA in N Years</em> to amortize your IRAs in a fixed number of years (they will not be emptied, they will be drawn down to <i>IRA  Goal</i>.</li>
 			<li><i>Fill Federal Tax Bracket</i> withdraws enough to max out the chosen federal tax bracket. NOTE: If your spend goal is in a bracket higher than you select, it will try to meet the spend goal instead of locking to the bracket.</li>
 			<li><i>Lesser of IRMAA or TaxBracket</i> is not yet implemented, but here it's like <i>Fill Federal Tax Bracket</i>, but reduces the amount withdrawn to stay under the the lesser of the (next) IRMAA tier, the next state or next federal bracket - which ever is lower. It applies an inflation adjusted "safety threshold" of 2,000. There are three gotcha's here: a. the <i>After-Tax Spend</i> goal is in play so it may blow right past the next tier if you have insufficient non-taxable income, b. the current year IRMAA tax is based on income from two years ago - so this setting attempts to avoid FUTURE tax - not tax in this year, c. the current year filing status is what is used to avoid hitting a higher tier. Here is why that matters: If you or your spouse pass away, the careful work avoiding a higher tier two years ago will still <i>hurt </i> in the current year. For example if the MAGI is one dollar below the first tier while married, two years from now when filing status is Single, that MAGI falls into the 4th IRMAA tier - the only upside here, is that there is now half as much of the IRMAA tax since it is per-person. One solution is to remarry. :-) </li></ul>
 		<li><strong>After Changes...</strong> selecting the Annual Details, Chart or Optimizer will cause a recalculation and show the page. On the <i>Annual Details</i> table, rows are highlighted in yellow if status changes to single. A pink/red backgrounds means there are not enough funds to meet two years of SpendGoal.
@@ -24,18 +24,10 @@ howToUse: `
 	<li>The RMD tables are the standard one, not the one that might apply if there is a 10 year or more difference in spouse ages</li>
 	<li>It only uses the MFJ and Single tax brackets. (No head of household, or Married filing separately)</li>
 	<li>Because ROTH assets are not taxable, it merges all ROTH funds into one account. In real life, conversions/withdraws and earnings would occur in separate accounts.</li>
-	<li>There is no Federal Alternative Minimum Tax (AMT) calculation. This normally does not apply to retirees unless they have huge bond interest, or are exercising ISO stock.  In the case of California the 1% additional tax for high earners is built into the embedded tax table.</li>
+	<li>There is no Federal Alternative Minimum Tax (AMT) calculation. This normally does not apply to retirees unless they have huge bond interest, or are exercising ISO stock. In the case of California the 1% additional tax for high earners is built into the embedded tax table.</li>
 	</ol>
+	Please read further details in the <A href="https://nightskyguy.github.io/retirement_assets/">README.md</A>.
 </div>
-	`,
-/////////////////////////////////////////////////////////////////////////////////	
-planned: `
-	<div class="drawer-content" id="drawer-planned"><B>Planned Enhancements &amp; Bug Fixes</B>
-	Please read details in the  <A href="https://nightskyguy.github.io/retirement_assets/">README.md</A> - it contains 
-	a list of planned enhancements and known problems.  In case you're wondering, I moved it there 
-	because I was failing to duplicate between these documents and decided to save myself some 
-	pain.
-	</div>  
-	`	  
+	`
 } // drawerContent
 

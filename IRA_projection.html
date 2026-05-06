@@ -327,7 +327,7 @@
 
 <header>
   <h1>IRA_PROJECTION.js</h1>
-  <p>age 65 · SECURE 2.0 · IRS Uniform Lifetime Table · inflation-adjusted withdrawals after RMD</p>
+  <p>SECURE 2.0 · IRS Uniform Lifetime Table · RMDs begin at age 75 · inflation-adjusted withdrawals after RMD</p>
 </header>
 
 <div class="shell">
@@ -335,6 +335,11 @@
   <!-- Controls -->
   <div class="panel">
     <div class="panel-title">Parameters</div>
+
+    <div class="ctrl">
+      <div class="ctrl-header"><label>Current age</label><span class="val" id="vAge">65</span></div>
+      <input type="range" id="age" min="40" max="74" step="1" value="65">
+    </div>
 
     <div class="ctrl">
       <div class="ctrl-header"><label>Starting balance</label><span class="val" id="vStart">$2,000,000</span></div>
@@ -431,7 +436,7 @@
     </div>
 
     <div class="footnote">
-      RMD = prior year-end balance ÷ IRS Uniform Lifetime Table factor (SECURE 2.0, age 73+).
+      RMD = prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, per SECURE 2.0 for those born after 1958).
       Actual withdrawal = max(inflation-adjusted withdrawal, RMD).
       <span id="modeNote">Future $ mode: nominal dollars. Today's $ mode: all values deflated by cumulative inflation.</span>
       Amber rows = RMD exceeds desired withdrawal. This tool is for illustrative purposes only.
@@ -448,9 +453,11 @@ const ULT = {
   96:8.4,  97:7.8,  98:7.3,  99:6.8,  100:6.4
 };
 
+const RMD_START_AGE = 75;
+
 function rmdFactor(age) {
-  if (age < 73) return null;
-  return ULT[Math.min(Math.max(Math.round(age), 73), 100)] || 6.4;
+  if (age < RMD_START_AGE) return null;
+  return ULT[Math.min(Math.max(Math.round(age), RMD_START_AGE), 100)] || 6.4;
 }
 
 function fmt(v) {
@@ -460,11 +467,11 @@ function fmt(v) {
   return (v < 0 ? '-$' : '$') + Math.round(abs).toLocaleString();
 }
 
-function project(start, rate, baseWd, inflRate, years) {
+function project(start, rate, baseWd, inflRate, years, startAge) {
   let bal = start;
   const rows = [];
   for (let y = 1; y <= years; y++) {
-    const age      = 65 + y;
+    const age      = startAge + y;
     const inflMult = Math.pow(1 + inflRate / 100, y);
     const adjWd    = baseWd * inflMult;           // inflation-grown withdrawal
     const factor   = rmdFactor(age);
@@ -523,7 +530,7 @@ const chart = new Chart(ctx, {
         titleFont: { family: "'DM Mono',monospace", size: 11 },
         bodyFont:  { family: "'DM Mono',monospace", size: 11 },
         callbacks: {
-          title: items => `Year ${items[0].dataIndex + 1}  ·  Age ${65 + items[0].dataIndex + 1}`,
+          title: items => items[0].label,
           label: c    => ` ${c.dataset.label}: ${fmt(c.parsed.y)}`
         }
       }
@@ -552,46 +559,24 @@ const chart = new Chart(ctx, {
 });
 
 /* ── Table ── */
-function buildTable(rows, useReal) {
+function buildTable(rows) {
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
-
-  // Update header labels
-  document.getElementById('thBal').textContent  = useReal ? 'Real bal'   : 'Nominal bal';
-  document.getElementById('thBase').textContent = useReal ? 'Base wd (today $)' : 'Base wd (today $)';
-  document.getElementById('thAdj').textContent  = useReal ? 'Adj wd (real)' : 'Adj wd (nominal)';
 
   rows.forEach(r => {
     const tr = document.createElement('tr');
     if (r.depleted)       tr.className = 'depleted';
     else if (r.rmdActive) tr.className = 'rmd-active';
-
-    const d = useReal ? {
-      bal:     r.realBal,
-      realBal: r.realBal,
-      rmd:     r.realRmd,
-      adjWd:   r.realAdjWd,
-      actualWd:r.realActualWd,
-      growth:  r.realGrowth
-    } : {
-      bal:     r.bal,
-      realBal: r.realBal,
-      rmd:     r.rmd,
-      adjWd:   r.adjWd,
-      actualWd:r.actualWd,
-      growth:  r.growth
-    };
-
     tr.innerHTML = `
       <td>${r.y}</td>
       <td>${r.age}</td>
-      <td>${fmt(d.bal)}</td>
+      <td>${fmt(r.bal)}</td>
       <td>${fmt(r.realBal)}</td>
-      <td>${d.rmd > 0 ? fmt(d.rmd) : '—'}</td>
+      <td>${r.rmd > 0 ? fmt(r.rmd) : '—'}</td>
       <td>${fmt(r.baseWd)}</td>
-      <td>${fmt(d.adjWd)}</td>
-      <td>${fmt(d.actualWd)}</td>
-      <td>${fmt(d.growth)}</td>
+      <td>${fmt(r.adjWd)}</td>
+      <td>${fmt(r.actualWd)}</td>
+      <td>${fmt(r.growth)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -599,6 +584,7 @@ function buildTable(rows, useReal) {
 
 /* ── Main update ── */
 function update() {
+  const startAge = +document.getElementById('age').value;
   const start   = +document.getElementById('start').value;
   const rate    = +document.getElementById('rate').value;
   const wd      = +document.getElementById('wd').value;
@@ -606,6 +592,7 @@ function update() {
   const years   = +document.getElementById('yrs').value;
   const useReal = document.getElementById('realToggle').checked;
 
+  document.getElementById('vAge').textContent   = startAge;
   document.getElementById('vStart').textContent = fmt(start);
   document.getElementById('vRate').textContent  = rate.toFixed(1) + '%';
   document.getElementById('vW').textContent     = fmt(wd);
@@ -616,8 +603,8 @@ function update() {
   document.getElementById('optFuture').classList.toggle('active', !useReal);
   document.getElementById('optReal').classList.toggle('active',    useReal);
 
-  const rows   = project(start, rate, wd, infl, years);
-  const labels = rows.map(r => 'Yr ' + r.y);
+  const rows   = project(start, rate, wd, infl, years, startAge);
+  const labels = rows.map(r => 'Age ' + r.age);
 
   // In future-$ mode:  nominal balance, growing infl-adj wd, growing base wd (nominal)
   // In today's-$ mode: real balance, flat base wd line (= always baseWd), real rmd, real actual wd
@@ -661,7 +648,7 @@ function update() {
   document.getElementById('mReal').className   = 'num ' + (last.realBal > start ? 'pos' : 'neg');
 
   document.getElementById('mRmd').textContent  = last.rmd > 0
-    ? fmt(useReal ? last.realRmd : last.rmd) : 'pre-73';
+    ? fmt(useReal ? last.realRmd : last.rmd) : `pre-${RMD_START_AGE}`;
 
   document.getElementById('mDep').textContent  = deplIdx >= 0 ? 'Year ' + (deplIdx + 1) : 'Never';
   document.getElementById('mDep').className    = 'num ' + (deplIdx >= 0 ? 'neg' : 'pos');
@@ -670,10 +657,10 @@ function update() {
     ? "Today's $ mode: all values deflated by cumulative inflation — constant purchasing power."
     : 'Future $ mode: all values in nominal (not inflation-adjusted) dollars.';
 
-  buildTable(rows, useReal);
+  buildTable(rows);
 }
 
-['start','rate','wd','infl','yrs'].forEach(id =>
+['age','start','rate','wd','infl','yrs'].forEach(id =>
   document.getElementById(id).addEventListener('input', update)
 );
 document.getElementById('realToggle').addEventListener('change', update);

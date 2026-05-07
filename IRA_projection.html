@@ -7,320 +7,97 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
-    --bg:       #0f1117;
-    --surface:  #181c27;
-    --surface2: #1f2435;
-    --border:   #2a3048;
-    --teal:     #19c99d;
-    --blue:     #4f9cf9;
-    --amber:    #f5a623;
-    --red:      #f25c5c;
-    --purple:   #a78bfa;
-    --text:     #e8eaf2;
-    --muted:    #7b83a0;
-    --mono:     'DM Mono', monospace;
-    --sans:     'DM Sans', sans-serif;
+    --bg:      #0f1117; --surface: #181c27; --surface2: #1f2435; --border: #2a3048;
+    --teal:    #19c99d; --blue: #4f9cf9;   --amber: #f5a623;    --red: #f25c5c;
+    --purple:  #a78bfa; --green2: #86efac; --orange: #fb923c;   --pink: #f472b6;
+    --text:    #e8eaf2; --muted: #7b83a0;
+    --mono: 'DM Mono', monospace; --sans: 'DM Sans', sans-serif;
   }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:14px; min-height:100vh; padding:2rem 1.5rem 4rem; }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 14px;
-    min-height: 100vh;
-    padding: 2rem 1.5rem 4rem;
+  header { max-width:980px; margin:0 auto 2rem; border-bottom:1px solid var(--border); padding-bottom:1.25rem; display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
+  header h1 { font-family:var(--mono); font-size:1.1rem; font-weight:500; letter-spacing:.04em; color:var(--teal); }
+  header p  { font-size:12px; color:var(--muted); font-family:var(--mono); }
+
+  .shell { max-width:980px; margin:0 auto; display:grid; grid-template-columns:270px 1fr; gap:1.5rem; align-items:start; }
+
+  .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem; }
+  .panel-title { font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--muted); text-transform:uppercase; margin-bottom:1.25rem; }
+
+  .ctrl { margin-bottom:1.2rem; }
+  .ctrl-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+  .ctrl-header label { font-size:12px; color:var(--muted); font-family:var(--mono); }
+  .ctrl-header .val  { font-family:var(--mono); font-size:13px; font-weight:500; color:var(--text); }
+
+  input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:3px; background:var(--border); border-radius:2px; outline:none; cursor:pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:var(--teal); cursor:pointer; transition:transform .1s; }
+  input[type=range]::-webkit-slider-thumb:hover { transform:scale(1.3); }
+  input[type=range]::-moz-range-thumb { width:14px; height:14px; border:none; border-radius:50%; background:var(--teal); cursor:pointer; }
+
+  .divider { border:none; border-top:1px solid var(--border); margin:1.25rem 0; }
+
+  /* Toggle */
+  .toggle-row  { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:1rem; }
+  .toggle-label{ font-family:var(--mono); font-size:12px; color:var(--muted); }
+  .toggle-wrap { display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:11px; }
+  .toggle-opt  { color:var(--muted); transition:color .15s; white-space:nowrap; cursor:pointer; }
+  .toggle-opt.active { color:var(--teal); font-weight:500; }
+  .switch { position:relative; width:36px; height:20px; flex-shrink:0; }
+  .switch input { opacity:0; width:0; height:0; }
+  .slider-track { position:absolute; inset:0; background:var(--border); border-radius:20px; cursor:pointer; transition:background .2s; }
+  .slider-track::before { content:''; position:absolute; width:14px; height:14px; left:3px; top:3px; background:var(--muted); border-radius:50%; transition:transform .2s, background .2s; }
+  .switch input:checked + .slider-track { background:rgba(25,201,157,.25); }
+  .switch input:checked + .slider-track::before { transform:translateX(16px); background:var(--teal); }
+
+  /* Tax threshold editor */
+  .thresh-grid { display:grid; grid-template-columns:1fr auto auto; gap:5px 8px; align-items:center; margin-top:.75rem; }
+  .thresh-grid .gh { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; padding-bottom:4px; border-bottom:1px solid var(--border); }
+  .thresh-grid input[type=text],
+  .thresh-grid input[type=number] {
+    background:var(--surface2); border:1px solid var(--border); border-radius:4px;
+    color:var(--text); font-family:var(--mono); font-size:11px; padding:4px 6px; width:100%;
+    outline:none; transition:border-color .15s;
   }
+  .thresh-grid input:focus { border-color:var(--teal); }
+  .thresh-grid input[type=number] { width:80px; text-align:right; }
+  .thresh-toggle { display:flex; align-items:center; justify-content:center; }
+  .thresh-toggle input[type=checkbox] { accent-color:var(--teal); width:14px; height:14px; cursor:pointer; }
+  .thresh-row-color { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
 
-  header {
-    max-width: 940px;
-    margin: 0 auto 2rem;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 1.25rem;
-    display: flex;
-    align-items: baseline;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
+  .add-btn { margin-top:.6rem; width:100%; background:transparent; border:1px dashed var(--border); border-radius:5px; color:var(--muted); font-family:var(--mono); font-size:11px; padding:5px; cursor:pointer; transition:border-color .15s, color .15s; }
+  .add-btn:hover { border-color:var(--teal); color:var(--teal); }
+  .del-btn { background:transparent; border:none; color:var(--muted); font-size:14px; cursor:pointer; line-height:1; padding:0 2px; transition:color .15s; }
+  .del-btn:hover { color:var(--red); }
 
-  header h1 {
-    font-family: var(--mono);
-    font-size: 1.1rem;
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    color: var(--teal);
-  }
+  /* Right column */
+  .right { display:flex; flex-direction:column; gap:1rem; }
+  .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; }
+  .metric { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.85rem 1rem; }
+  .metric .lbl { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .metric .num { font-family:var(--mono); font-size:17px; font-weight:500; }
+  .pos{color:var(--teal)}.neg{color:var(--red)}.warn{color:var(--amber)}.info{color:var(--blue)}
 
-  header p {
-    font-size: 12px;
-    color: var(--muted);
-    font-family: var(--mono);
-  }
+  .chart-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem 1.25rem 1rem; }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; margin-bottom:12px; }
+  .legend span { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); font-family:var(--mono); }
+  .leg-sq   { width:12px; height:3px; border-radius:2px; flex-shrink:0; }
+  .leg-dash { width:16px; height:0; border-top:2px dashed; flex-shrink:0; }
+  .leg-dot  { width:16px; height:0; border-top:2px dotted; flex-shrink:0; }
 
-  .shell {
-    max-width: 940px;
-    margin: 0 auto;
-    display: grid;
-    grid-template-columns: 265px 1fr;
-    gap: 1.5rem;
-    align-items: start;
-  }
+  .note-table { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; overflow-x:auto; }
+  .note-table table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; }
+  .note-table th { color:var(--muted); font-weight:400; text-align:right; padding:4px 8px; letter-spacing:.05em; border-bottom:1px solid var(--border); white-space:nowrap; }
+  .note-table th:first-child { text-align:left; }
+  .note-table td { text-align:right; padding:4px 8px; border-bottom:1px solid rgba(42,48,72,.5); color:var(--text); white-space:nowrap; }
+  .note-table td:first-child { text-align:left; color:var(--muted); }
+  .note-table tr.rmd-active td { color:var(--amber); }
+  .note-table tr.depleted td   { color:var(--red); }
 
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.25rem;
-  }
+  .footnote { margin-top:1rem; font-size:11px; color:var(--muted); font-family:var(--mono); line-height:1.7; }
 
-  .panel-title {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    color: var(--muted);
-    text-transform: uppercase;
-    margin-bottom: 1.25rem;
-  }
-
-  .ctrl { margin-bottom: 1.2rem; }
-
-  .ctrl-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    margin-bottom: 6px;
-  }
-
-  .ctrl-header label {
-    font-size: 12px;
-    color: var(--muted);
-    font-family: var(--mono);
-  }
-
-  .ctrl-header .val {
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text);
-  }
-
-  input[type=range] {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 3px;
-    background: var(--border);
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-  }
-
-  input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    background: var(--teal);
-    cursor: pointer;
-    transition: transform 0.1s;
-  }
-
-  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
-  input[type=range]::-moz-range-thumb {
-    width: 14px; height: 14px; border: none;
-    border-radius: 50%; background: var(--teal); cursor: pointer;
-  }
-
-  .divider {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 1.25rem 0;
-  }
-
-  /* ── Toggle switch ── */
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .toggle-label {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .toggle-wrap {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-family: var(--mono);
-    font-size: 11px;
-  }
-
-  .toggle-opt {
-    color: var(--muted);
-    transition: color 0.15s;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-
-  .toggle-opt.active { color: var(--teal); font-weight: 500; }
-
-  .switch {
-    position: relative;
-    width: 36px;
-    height: 20px;
-    flex-shrink: 0;
-  }
-
-  .switch input { opacity: 0; width: 0; height: 0; }
-
-  .slider-track {
-    position: absolute;
-    inset: 0;
-    background: var(--border);
-    border-radius: 20px;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .slider-track::before {
-    content: '';
-    position: absolute;
-    width: 14px; height: 14px;
-    left: 3px; top: 3px;
-    background: var(--muted);
-    border-radius: 50%;
-    transition: transform 0.2s, background 0.2s;
-  }
-
-  .switch input:checked + .slider-track { background: rgba(25,201,157,0.25); }
-  .switch input:checked + .slider-track::before {
-    transform: translateX(16px);
-    background: var(--teal);
-  }
-
-  /* ── Right column ── */
-  .right { display: flex; flex-direction: column; gap: 1rem; }
-
-  .metrics {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.75rem;
-  }
-
-  .metric {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.85rem 1rem;
-  }
-
-  .metric .lbl {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--muted);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    margin-bottom: 5px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .metric .num {
-    font-family: var(--mono);
-    font-size: 17px;
-    font-weight: 500;
-  }
-
-  .pos  { color: var(--teal); }
-  .neg  { color: var(--red); }
-  .warn { color: var(--amber); }
-  .info { color: var(--blue); }
-
-  .chart-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.25rem 1.25rem 1rem;
-  }
-
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    margin-bottom: 12px;
-  }
-
-  .legend span {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--muted);
-    font-family: var(--mono);
-  }
-
-  .leg-sq   { width: 12px; height: 3px; border-radius: 2px; flex-shrink: 0; }
-  .leg-dash { width: 16px; height: 0; border-top: 2px dashed; flex-shrink: 0; }
-  .leg-dot  { width: 16px; height: 0; border-top: 2px dotted; flex-shrink: 0; }
-
-  .note-table {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem 1.25rem;
-    overflow-x: auto;
-  }
-
-  .note-table table {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: var(--mono);
-    font-size: 11px;
-  }
-
-  .note-table th {
-    color: var(--muted);
-    font-weight: 400;
-    text-align: right;
-    padding: 4px 8px;
-    letter-spacing: 0.05em;
-    border-bottom: 1px solid var(--border);
-    white-space: nowrap;
-  }
-
-  .note-table th:first-child { text-align: left; }
-
-  .note-table td {
-    text-align: right;
-    padding: 4px 8px;
-    border-bottom: 1px solid rgba(42,48,72,0.5);
-    color: var(--text);
-    white-space: nowrap;
-  }
-
-  .note-table td:first-child { text-align: left; color: var(--muted); }
-  .note-table tr.rmd-active td { color: var(--amber); }
-  .note-table tr.depleted td   { color: var(--red); }
-
-  .footnote {
-    margin-top: 1rem;
-    font-size: 11px;
-    color: var(--muted);
-    font-family: var(--mono);
-    line-height: 1.7;
-  }
-
-  @media (max-width: 700px) {
-    .shell   { grid-template-columns: 1fr; }
-    .metrics { grid-template-columns: repeat(2, 1fr); }
-  }
+  @media(max-width:720px){ .shell{grid-template-columns:1fr} .metrics{grid-template-columns:repeat(2,1fr)} }
 </style>
 </head>
 <body>
@@ -332,7 +109,7 @@
 
 <div class="shell">
 
-  <!-- Controls -->
+  <!-- ── Left panel ── -->
   <div class="panel">
     <div class="panel-title">Parameters</div>
 
@@ -340,12 +117,10 @@
       <div class="ctrl-header"><label>Current age</label><span class="val" id="vAge">65</span></div>
       <input type="range" id="age" min="40" max="74" step="1" value="65">
     </div>
-
     <div class="ctrl">
       <div class="ctrl-header"><label>Starting balance</label><span class="val" id="vStart">$2,000,000</span></div>
       <input type="range" id="start" min="500000" max="5000000" step="100000" value="2000000">
     </div>
-
     <div class="ctrl">
       <div class="ctrl-header"><label>Annual growth</label><span class="val" id="vRate">8.0%</span></div>
       <input type="range" id="rate" min="1" max="15" step="0.5" value="8">
@@ -357,14 +132,10 @@
       <div class="ctrl-header"><label>Base withdrawal (today $)</label><span class="val" id="vW">$100,000</span></div>
       <input type="range" id="wd" min="0" max="300000" step="5000" value="100000">
     </div>
-
     <div class="ctrl">
       <div class="ctrl-header"><label>Inflation rate</label><span class="val" id="vInfl">2.5%</span></div>
       <input type="range" id="infl" min="0" max="8" step="0.5" value="2.5">
     </div>
-
-    <hr class="divider">
-
     <div class="ctrl">
       <div class="ctrl-header"><label>Years to project</label><span class="val" id="vYrs">30 yrs</span></div>
       <input type="range" id="yrs" min="5" max="35" step="1" value="30">
@@ -372,29 +143,50 @@
 
     <hr class="divider">
 
-    <!-- Dollar mode toggle -->
+    <!-- Display $ toggle -->
     <div class="toggle-row">
       <span class="toggle-label">Display in</span>
       <div class="toggle-wrap">
-        <span class="toggle-opt active" id="optFuture" onclick="document.getElementById('realToggle').checked=false;update()">Future $</span>
-        <label class="switch">
-          <input type="checkbox" id="realToggle">
-          <span class="slider-track"></span>
-        </label>
-        <span class="toggle-opt" id="optReal" onclick="document.getElementById('realToggle').checked=true;update()">Today's $</span>
+        <span class="toggle-opt active" id="optFuture" onclick="setToggle('realToggle',false)">Future $</span>
+        <label class="switch"><input type="checkbox" id="realToggle"><span class="slider-track"></span></label>
+        <span class="toggle-opt" id="optReal" onclick="setToggle('realToggle',true)">Today's $</span>
       </div>
     </div>
+
+    <!-- Married/Single toggle -->
+    <div class="toggle-row">
+      <span class="toggle-label">Filing status</span>
+      <div class="toggle-wrap">
+        <span class="toggle-opt active" id="optMFJ" onclick="setToggle('singleToggle',false)">MFJ</span>
+        <label class="switch"><input type="checkbox" id="singleToggle"><span class="slider-track"></span></label>
+        <span class="toggle-opt" id="optSingle" onclick="setToggle('singleToggle',true)">Single</span>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Tax threshold editor -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <span class="panel-title" style="margin:0">Tax thresholds (today's $)</span>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">show</span>
+    </div>
+    <div class="thresh-grid" id="threshGrid">
+      <span class="gh" style="grid-column:1">Label</span>
+      <span class="gh" style="grid-column:2;text-align:right">Amount</span>
+      <span class="gh" style="grid-column:3;text-align:center">✓</span>
+    </div>
+    <button class="add-btn" onclick="addThreshold()">+ add threshold</button>
 
     <div style="margin-top:1.5rem;font-size:11px;color:var(--muted);font-family:var(--mono);line-height:1.7">
       Withdrawal logic:<br>
       1. Grow balance by rate<br>
-      2. Compute RMD if age ≥ 73<br>
+      2. Compute RMD if age ≥ 75<br>
       3. Infl-adj wd = base × (1+i)^y<br>
       4. Actual = max(infl-adj wd, RMD)
     </div>
   </div>
 
-  <!-- Right column -->
+  <!-- ── Right column ── -->
   <div class="right">
 
     <div class="metrics">
@@ -405,30 +197,26 @@
     </div>
 
     <div class="chart-wrap">
-      <div class="legend">
-        <span><span class="leg-sq"  style="background:#19c99d"></span><span id="lgBal">Nominal balance</span></span>
+      <div class="legend" id="legend">
+        <span><span class="leg-sq" style="background:#19c99d"></span><span id="lgBal">Nominal balance</span></span>
         <span id="lgRealWrap"><span class="leg-sq" style="background:#4f9cf9"></span>Real balance</span>
-        <span><span class="leg-sq"  style="background:#f5a623"></span>RMD required</span>
+        <span><span class="leg-sq" style="background:#f5a623"></span>RMD required</span>
         <span><span class="leg-dot" style="border-color:#a78bfa"></span><span id="lgBase">Base withdrawal</span></span>
-        <span><span class="leg-dash"style="border-color:#f25c5c"></span>Actual withdrawal</span>
+        <span><span class="leg-dash" style="border-color:#f25c5c"></span>Actual withdrawal</span>
+        <!-- threshold legend items injected by JS -->
       </div>
-      <div style="position:relative;width:100%;height:310px">
-        <canvas id="ch" role="img" aria-label="IRA projection chart showing balance, RMD, base withdrawal, and actual withdrawals over time">IRA projection over time</canvas>
+      <div style="position:relative;width:100%;height:340px">
+        <canvas id="ch" role="img" aria-label="IRA projection chart">IRA projection over time</canvas>
       </div>
     </div>
 
     <div class="note-table">
       <table>
-        <thead id="thead">
+        <thead>
           <tr>
             <th>Yr</th><th>Age</th>
-            <th id="thBal">Balance</th>
-            <th>Real bal</th>
-            <th>RMD</th>
-            <th id="thBase">Base wd</th>
-            <th id="thAdj">Infl-adj wd</th>
-            <th>Actual wd</th>
-            <th>Growth</th>
+            <th>Nominal bal</th><th>Real bal</th>
+            <th>RMD</th><th>Base wd</th><th>Infl-adj wd</th><th>Actual wd</th><th>Growth</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -436,64 +224,159 @@
     </div>
 
     <div class="footnote">
-      RMD = prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, per SECURE 2.0 for those born after 1958).
+      RMD = prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, SECURE 2.0, born after 1958).
       Actual withdrawal = max(inflation-adjusted withdrawal, RMD).
-      <span id="modeNote">Future $ mode: nominal dollars. Today's $ mode: all values deflated by cumulative inflation.</span>
-      Amber rows = RMD exceeds desired withdrawal. This tool is for illustrative purposes only.
+      Tax thresholds = standard deduction + bracket floor, grown with inflation each year.
+      <span id="modeNote"></span>
+      Amber rows = RMD overrides desired withdrawal. For illustrative purposes only.
     </div>
 
   </div>
 </div>
 
 <script>
+/* ═══════════════════════════════════════════════
+   IRS DATA
+═══════════════════════════════════════════════ */
 const ULT = {
-  72:27.4, 73:26.5, 74:25.5, 75:24.6, 76:23.7, 77:22.9, 78:22.0, 79:21.1,
-  80:20.2, 81:19.4, 82:18.5, 83:17.7, 84:16.8, 85:16.0, 86:15.2, 87:14.4,
-  88:13.7, 89:12.9, 90:12.2, 91:11.5, 92:10.8, 93:10.1, 94:9.5,  95:8.9,
-  96:8.4,  97:7.8,  98:7.3,  99:6.8,  100:6.4
+  72:27.4,73:26.5,74:25.5,75:24.6,76:23.7,77:22.9,78:22.0,79:21.1,
+  80:20.2,81:19.4,82:18.5,83:17.7,84:16.8,85:16.0,86:15.2,87:14.4,
+  88:13.7,89:12.9,90:12.2,91:11.5,92:10.8,93:10.1,94:9.5,95:8.9,
+  96:8.4,97:7.8,98:7.3,99:6.8,100:6.4
+};
+const RMD_START_AGE = 75;
+function rmdFactor(age){
+  if(age<RMD_START_AGE)return null;
+  return ULT[Math.min(Math.max(Math.round(age),RMD_START_AGE),100)]||6.4;
+}
+
+/* 2026 brackets: stdDed + bracket floor = threshold plotted
+   MFJ:    std deduction 30,000 (2026 est). Brackets: 10% 0-23800, 12% 23800-96700, 22% 96700-206700, 32% 206700-394600
+   Single: std deduction 15,000 (2026 est). Brackets: 10% 0-11925, 12% 11925-48475, 22% 48475-103350, 32% 103350-197300
+   Threshold = stdDed + bracketFloor  (income at which you enter that bracket after deduction)
+*/
+const DEFAULTS = {
+  mfj: [
+    { label:'12% bracket', amount: 30000 + 23800,  color:'#86efac', visible:true },
+    { label:'22% bracket', amount: 30000 + 96700,  color:'#fb923c', visible:true },
+    { label:'32% bracket', amount: 30000 + 206700, color:'#f472b6', visible:true },
+  ],
+  single: [
+    { label:'12% bracket', amount: 15000 + 11925,  color:'#86efac', visible:true },
+    { label:'22% bracket', amount: 15000 + 48475,  color:'#fb923c', visible:true },
+    { label:'32% bracket', amount: 15000 + 103350, color:'#f472b6', visible:true },
+  ]
 };
 
-const RMD_START_AGE = 75;
+/* Live threshold state — editable by user */
+let thresholds = DEFAULTS.mfj.map(t => ({...t}));
 
-function rmdFactor(age) {
-  if (age < RMD_START_AGE) return null;
-  return ULT[Math.min(Math.max(Math.round(age), RMD_START_AGE), 100)] || 6.4;
+/* Palette for new user-added thresholds */
+const EXTRA_COLORS = ['#67e8f9','#fde68a','#d8b4fe','#6ee7b7','#fca5a5','#93c5fd'];
+let colorIdx = 0;
+
+/* ═══════════════════════════════════════════════
+   UTILS
+═══════════════════════════════════════════════ */
+function fmt(v){
+  if(v===null||v===undefined||isNaN(v))return'—';
+  const abs=Math.abs(v);
+  if(abs>=1e6)return(v<0?'-':'')+'$'+(abs/1e6).toFixed(2)+'M';
+  return(v<0?'-$':'$')+Math.round(abs).toLocaleString();
 }
 
-function fmt(v) {
-  if (v === null || v === undefined || isNaN(v)) return '—';
-  const abs = Math.abs(v);
-  if (abs >= 1e6) return (v < 0 ? '-' : '') + '$' + (abs / 1e6).toFixed(2) + 'M';
-  return (v < 0 ? '-$' : '$') + Math.round(abs).toLocaleString();
+function setToggle(id, val){
+  document.getElementById(id).checked = val;
+  update();
 }
 
-function project(start, rate, baseWd, inflRate, years, startAge) {
+/* ═══════════════════════════════════════════════
+   THRESHOLD EDITOR UI
+═══════════════════════════════════════════════ */
+function renderThreshEditor(){
+  const grid = document.getElementById('threshGrid');
+  // Clear rows (keep header = first 3 children)
+  while(grid.children.length > 3) grid.removeChild(grid.lastChild);
+
+  thresholds.forEach((t, i) => {
+    // Color swatch + label input
+    const labelWrap = document.createElement('div');
+    labelWrap.style.cssText = 'display:flex;align-items:center;gap:6px';
+    const swatch = document.createElement('span');
+    swatch.className = 'thresh-row-color';
+    swatch.style.background = t.color;
+    const labelIn = document.createElement('input');
+    labelIn.type = 'text';
+    labelIn.value = t.label;
+    labelIn.addEventListener('input', e => { thresholds[i].label = e.target.value; update(); });
+    labelWrap.appendChild(swatch);
+    labelWrap.appendChild(labelIn);
+
+    // Amount input
+    const amtIn = document.createElement('input');
+    amtIn.type = 'number';
+    amtIn.value = t.amount;
+    amtIn.min = 0; amtIn.step = 1000;
+    amtIn.addEventListener('input', e => { thresholds[i].amount = +e.target.value||0; update(); });
+
+    // Visible toggle + delete
+    const ctrlWrap = document.createElement('div');
+    ctrlWrap.style.cssText = 'display:flex;align-items:center;gap:6px;justify-content:center';
+    const chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.checked = t.visible;
+    chk.addEventListener('change', e => { thresholds[i].visible = e.target.checked; update(); });
+    const del = document.createElement('button');
+    del.className = 'del-btn';
+    del.textContent = '×';
+    del.title = 'Remove';
+    del.addEventListener('click', () => { thresholds.splice(i,1); renderThreshEditor(); update(); });
+    ctrlWrap.appendChild(chk);
+    ctrlWrap.appendChild(del);
+
+    grid.appendChild(labelWrap);
+    grid.appendChild(amtIn);
+    grid.appendChild(ctrlWrap);
+  });
+}
+
+function addThreshold(){
+  const col = EXTRA_COLORS[colorIdx++ % EXTRA_COLORS.length];
+  thresholds.push({ label:'Custom', amount:200000, color:col, visible:true });
+  renderThreshEditor();
+  update();
+}
+
+/* ═══════════════════════════════════════════════
+   PROJECTION
+═══════════════════════════════════════════════ */
+function project(start, rate, baseWd, inflRate, years, startAge){
   let bal = start;
   const rows = [];
-  for (let y = 1; y <= years; y++) {
+  for(let y=1; y<=years; y++){
     const age      = startAge + y;
-    const inflMult = Math.pow(1 + inflRate / 100, y);
-    const adjWd    = baseWd * inflMult;           // inflation-grown withdrawal
+    const inflMult = Math.pow(1 + inflRate/100, y);
+    const adjWd    = baseWd * inflMult;
     const factor   = rmdFactor(age);
-    const rmd      = factor ? bal / factor : 0;
+    const rmd      = factor ? bal/factor : 0;
     const actualWd = Math.max(adjWd, rmd);
-    const growth   = bal * (rate / 100);
+    const growth   = bal * (rate/100);
     const newBal   = bal + growth - actualWd;
     const depleted = newBal <= 0;
     bal = Math.max(0, newBal);
     rows.push({
       y, age, inflMult,
       bal,
-      realBal:      bal      / inflMult,
+      realBal:      bal/inflMult,
       rmd,
-      realRmd:      rmd      / inflMult,
+      realRmd:      rmd/inflMult,
       adjWd,
-      realAdjWd:    adjWd    / inflMult,   // ≈ baseWd
+      realAdjWd:    adjWd/inflMult,
       actualWd,
-      realActualWd: actualWd / inflMult,
+      realActualWd: actualWd/inflMult,
       growth,
-      realGrowth:   growth   / inflMult,
-      baseWd,                               // constant — today's dollars
+      realGrowth:   growth/inflMult,
+      baseWd,
       depleted,
       rmdActive: rmd > adjWd
     });
@@ -501,170 +384,222 @@ function project(start, rate, baseWd, inflRate, years, startAge) {
   return rows;
 }
 
-/* ── Chart ── */
+/* ═══════════════════════════════════════════════
+   CHART
+═══════════════════════════════════════════════ */
 const ctx = document.getElementById('ch').getContext('2d');
+const FIXED_DATASETS = 5; // balance, real, rmd, base, actual
+
 const chart = new Chart(ctx, {
   type: 'line',
   data: {
     labels: [],
     datasets: [
-      /* 0 */ { label: 'Balance',         data: [], borderColor: '#19c99d', backgroundColor: 'rgba(25,201,157,0.07)', fill: true,  tension: 0.3, pointRadius: 0, borderWidth: 2,   yAxisID: 'yBal' },
-      /* 1 */ { label: 'Real balance',    data: [], borderColor: '#4f9cf9', backgroundColor: 'transparent',          fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2,   yAxisID: 'yBal' },
-      /* 2 */ { label: 'RMD',             data: [], borderColor: '#f5a623', backgroundColor: 'transparent',          fill: false, tension: 0.2, pointRadius: 0, borderWidth: 1.5, yAxisID: 'yWd'  },
-      /* 3 */ { label: 'Base withdrawal', data: [], borderColor: '#a78bfa', backgroundColor: 'transparent',          fill: false, tension: 0,   pointRadius: 0, borderWidth: 1.5, borderDash: [2,3], yAxisID: 'yWd' },
-      /* 4 */ { label: 'Actual WD',       data: [], borderColor: '#f25c5c', backgroundColor: 'transparent',          fill: false, tension: 0.2, pointRadius: 0, borderWidth: 1.5, borderDash: [5,4], yAxisID: 'yWd' }
+      /* 0 */ { label:'Balance',         data:[], borderColor:'#19c99d', backgroundColor:'rgba(25,201,157,0.07)', fill:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+      /* 1 */ { label:'Real balance',    data:[], borderColor:'#4f9cf9', backgroundColor:'transparent',          fill:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+      /* 2 */ { label:'RMD',             data:[], borderColor:'#f5a623', backgroundColor:'transparent',          fill:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd'  },
+      /* 3 */ { label:'Base withdrawal', data:[], borderColor:'#a78bfa', backgroundColor:'transparent',          fill:false, tension:0,   pointRadius:0, borderWidth:1.5, borderDash:[2,3], yAxisID:'yWd' },
+      /* 4 */ { label:'Actual WD',       data:[], borderColor:'#f25c5c', backgroundColor:'transparent',          fill:false, tension:0.2, pointRadius:0, borderWidth:1.5, borderDash:[5,4], yAxisID:'yWd' }
     ]
   },
   options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#1f2435',
-        borderColor: '#2a3048',
-        borderWidth: 1,
-        titleColor: '#7b83a0',
-        bodyColor: '#e8eaf2',
-        titleFont: { family: "'DM Mono',monospace", size: 11 },
-        bodyFont:  { family: "'DM Mono',monospace", size: 11 },
-        callbacks: {
+    responsive:true, maintainAspectRatio:false,
+    interaction:{ mode:'index', intersect:false },
+    plugins:{
+      legend:{ display:false },
+      tooltip:{
+        backgroundColor:'#1f2435', borderColor:'#2a3048', borderWidth:1,
+        titleColor:'#7b83a0', bodyColor:'#e8eaf2',
+        titleFont:{ family:"'DM Mono',monospace", size:11 },
+        bodyFont: { family:"'DM Mono',monospace", size:11 },
+        callbacks:{
           title: items => items[0].label,
-          label: c    => ` ${c.dataset.label}: ${fmt(c.parsed.y)}`
+          label: c => ` ${c.dataset.label}: ${fmt(c.parsed.y)}`
         }
       }
     },
-    scales: {
-      x: {
-        grid: { color: 'rgba(42,48,72,0.6)' },
-        ticks: { color: '#7b83a0', font: { family: "'DM Mono',monospace", size: 10 }, maxTicksLimit: 10 }
-      },
-      yBal: {
-        position: 'left',
-        grid: { color: 'rgba(42,48,72,0.6)' },
-        ticks: { color: '#7b83a0', font: { family: "'DM Mono',monospace", size: 10 },
-          callback: v => v >= 1e6 ? '$' + (v/1e6).toFixed(1) + 'M' : '$' + (v/1000).toFixed(0) + 'K' },
-        title: { display: true, text: 'Balance', color: '#7b83a0', font: { size: 10, family: "'DM Mono',monospace" } }
-      },
-      yWd: {
-        position: 'right',
-        grid: { display: false },
-        ticks: { color: '#7b83a0', font: { family: "'DM Mono',monospace", size: 10 },
-          callback: v => '$' + (v/1000).toFixed(0) + 'K' },
-        title: { display: true, text: 'Annual $', color: '#7b83a0', font: { size: 10, family: "'DM Mono',monospace" } }
-      }
+    scales:{
+      x:{ grid:{color:'rgba(42,48,72,0.6)'}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, maxTicksLimit:12} },
+      yBal:{ position:'left',  grid:{color:'rgba(42,48,72,0.6)'}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, callback:v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':'$'+(v/1000).toFixed(0)+'K'}, title:{display:true,text:'Balance',color:'#7b83a0',font:{size:10,family:"'DM Mono',monospace"}} },
+      yWd: { position:'right', grid:{display:false}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, callback:v=>'$'+(v/1000).toFixed(0)+'K'}, title:{display:true,text:'Annual $',color:'#7b83a0',font:{size:10,family:"'DM Mono',monospace"}} }
     }
   }
 });
 
-/* ── Table ── */
-function buildTable(rows) {
+/* ═══════════════════════════════════════════════
+   TABLE
+═══════════════════════════════════════════════ */
+function buildTable(rows){
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
-
   rows.forEach(r => {
     const tr = document.createElement('tr');
-    if (r.depleted)       tr.className = 'depleted';
-    else if (r.rmdActive) tr.className = 'rmd-active';
+    if(r.depleted)        tr.className = 'depleted';
+    else if(r.rmdActive)  tr.className = 'rmd-active';
     tr.innerHTML = `
-      <td>${r.y}</td>
-      <td>${r.age}</td>
-      <td>${fmt(r.bal)}</td>
-      <td>${fmt(r.realBal)}</td>
-      <td>${r.rmd > 0 ? fmt(r.rmd) : '—'}</td>
-      <td>${fmt(r.baseWd)}</td>
-      <td>${fmt(r.adjWd)}</td>
-      <td>${fmt(r.actualWd)}</td>
-      <td>${fmt(r.growth)}</td>
+      <td>${r.y}</td><td>${r.age}</td>
+      <td>${fmt(r.bal)}</td><td>${fmt(r.realBal)}</td>
+      <td>${r.rmd>0?fmt(r.rmd):'—'}</td>
+      <td>${fmt(r.baseWd)}</td><td>${fmt(r.adjWd)}</td>
+      <td>${fmt(r.actualWd)}</td><td>${fmt(r.growth)}</td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-/* ── Main update ── */
-function update() {
-  const startAge = +document.getElementById('age').value;
-  const start   = +document.getElementById('start').value;
-  const rate    = +document.getElementById('rate').value;
-  const wd      = +document.getElementById('wd').value;
-  const infl    = +document.getElementById('infl').value;
-  const years   = +document.getElementById('yrs').value;
-  const useReal = document.getElementById('realToggle').checked;
+/* ═══════════════════════════════════════════════
+   LEGEND (dynamic threshold entries)
+═══════════════════════════════════════════════ */
+function rebuildLegend(){
+  // Remove old threshold legend items (everything after the 5 fixed spans)
+  const legend = document.getElementById('legend');
+  const fixed = legend.querySelectorAll('span[data-fixed]').length || 5;
+  const all = Array.from(legend.children);
+  all.forEach((el,i) => { if(i>=5) el.remove(); });
 
+  thresholds.forEach(t => {
+    if(!t.visible) return;
+    const span = document.createElement('span');
+    const line = document.createElement('span');
+    line.style.cssText = `display:inline-block;width:16px;height:0;border-top:2px dashed ${t.color};flex-shrink:0`;
+    span.appendChild(line);
+    span.appendChild(document.createTextNode(' ' + t.label));
+    legend.appendChild(span);
+  });
+}
+
+/* ═══════════════════════════════════════════════
+   MAIN UPDATE
+═══════════════════════════════════════════════ */
+function update(){
+  const startAge = +document.getElementById('age').value;
+  const start    = +document.getElementById('start').value;
+  const rate     = +document.getElementById('rate').value;
+  const wd       = +document.getElementById('wd').value;
+  const infl     = +document.getElementById('infl').value;
+  const years    = +document.getElementById('yrs').value;
+  const useReal  = document.getElementById('realToggle').checked;
+  const isSingle = document.getElementById('singleToggle').checked;
+
+  // Display values
   document.getElementById('vAge').textContent   = startAge;
   document.getElementById('vStart').textContent = fmt(start);
-  document.getElementById('vRate').textContent  = rate.toFixed(1) + '%';
+  document.getElementById('vRate').textContent  = rate.toFixed(1)+'%';
   document.getElementById('vW').textContent     = fmt(wd);
-  document.getElementById('vInfl').textContent  = infl.toFixed(1) + '%';
-  document.getElementById('vYrs').textContent   = years + ' yrs';
+  document.getElementById('vInfl').textContent  = infl.toFixed(1)+'%';
+  document.getElementById('vYrs').textContent   = years+' yrs';
 
-  // Toggle label highlight
+  // Toggle highlights
   document.getElementById('optFuture').classList.toggle('active', !useReal);
   document.getElementById('optReal').classList.toggle('active',    useReal);
+  document.getElementById('optMFJ').classList.toggle('active',    !isSingle);
+  document.getElementById('optSingle').classList.toggle('active',  isSingle);
 
   const rows   = project(start, rate, wd, infl, years, startAge);
-  const labels = rows.map(r => 'Age ' + r.age);
+  const labels = rows.map(r => 'Age '+r.age);
 
-  // In future-$ mode:  nominal balance, growing infl-adj wd, growing base wd (nominal)
-  // In today's-$ mode: real balance, flat base wd line (= always baseWd), real rmd, real actual wd
-  const balData    = rows.map(r => Math.round(useReal ? r.realBal      : r.bal));
-  const realData   = rows.map(r => Math.round(r.realBal));
-  const rmdData    = rows.map(r => Math.round(useReal ? r.realRmd      : r.rmd));
-  // Base wd line: in today's $ it's a flat line at baseWd; in future $ it grows with inflation
-  const baseData   = rows.map(r => Math.round(useReal ? r.baseWd       : r.adjWd));
-  const actData    = rows.map(r => Math.round(useReal ? r.realActualWd : r.actualWd));
+  // Core chart data
+  const balData  = rows.map(r => Math.round(useReal ? r.realBal      : r.bal));
+  const realData = rows.map(r => Math.round(r.realBal));
+  const rmdData  = rows.map(r => Math.round(useReal ? r.realRmd      : r.rmd));
+  const baseData = rows.map(r => Math.round(useReal ? r.baseWd       : r.adjWd));
+  const actData  = rows.map(r => Math.round(useReal ? r.realActualWd : r.actualWd));
 
   chart.data.labels           = labels;
   chart.data.datasets[0].data = balData;
   chart.data.datasets[1].data = realData;
-  chart.data.datasets[1].hidden = useReal;  // redundant when already in real mode
+  chart.data.datasets[1].hidden = useReal;
   chart.data.datasets[2].data = rmdData;
   chart.data.datasets[3].data = baseData;
   chart.data.datasets[4].data = actData;
 
-  // Axis titles
-  const balTitle = useReal ? "Balance (today's $)" : 'Balance (nominal $)';
-  const wdTitle  = useReal ? "Annual $ (today's $)" : 'Annual $ (nominal)';
-  chart.options.scales.yBal.title.text = balTitle;
-  chart.options.scales.yWd.title.text  = wdTitle;
+  // Rebuild threshold datasets (indices 5+)
+  // Remove all beyond the 5 fixed
+  while(chart.data.datasets.length > FIXED_DATASETS)
+    chart.data.datasets.pop();
+
+  thresholds.forEach(t => {
+    if(!t.visible) return;
+    // Each year: threshold grown by inflation from today's base
+    // In future-$ mode: nominal threshold = t.amount * inflMult
+    // In today's-$ mode: always t.amount (flat line)
+    const data = rows.map(r => {
+      const nominal = t.amount * r.inflMult;
+      return Math.round(useReal ? t.amount : nominal);
+    });
+    chart.data.datasets.push({
+      label: t.label,
+      data,
+      borderColor: t.color,
+      backgroundColor: 'transparent',
+      fill: false,
+      tension: 0,
+      pointRadius: 0,
+      borderWidth: 1.5,
+      borderDash: [6, 3],
+      yAxisID: 'yWd'
+    });
+  });
+
+  // Axis labels
+  chart.options.scales.yBal.title.text = useReal ? "Balance (today's $)" : 'Balance (nominal $)';
+  chart.options.scales.yWd.title.text  = useReal ? "Annual $ (today's $)" : 'Annual $ (nominal)';
   chart.update('none');
 
-  // Legend labels
+  rebuildLegend();
+
+  // Legend text
   document.getElementById('lgBal').textContent  = useReal ? "Balance (today's $)" : 'Nominal balance';
-  document.getElementById('lgBase').textContent = useReal ? "Base wd (flat today's $)" : 'Base wd (infl-grown)';
+  document.getElementById('lgBase').textContent = useReal ? "Base wd (today's $, flat)" : 'Base wd (infl-grown)';
   document.getElementById('lgRealWrap').style.display = useReal ? 'none' : '';
 
   // Metric cards
-  const last    = rows[rows.length - 1];
+  const last    = rows[rows.length-1];
   const deplIdx = rows.findIndex(r => r.depleted);
+  const primary = useReal ? last.realBal : last.bal;
 
-  const dispPrimary = useReal ? last.realBal : last.bal;
-  document.getElementById('mNom').textContent  = fmt(dispPrimary);
-  document.getElementById('mNom').className    = 'num ' + (dispPrimary > start ? 'pos' : 'neg');
-  document.getElementById('nomLbl').textContent= useReal ? "Real bal (today's $)" : 'Nominal bal (final)';
-
-  document.getElementById('mReal').textContent = fmt(last.realBal);
-  document.getElementById('mReal').className   = 'num ' + (last.realBal > start ? 'pos' : 'neg');
-
-  document.getElementById('mRmd').textContent  = last.rmd > 0
-    ? fmt(useReal ? last.realRmd : last.rmd) : `pre-${RMD_START_AGE}`;
-
-  document.getElementById('mDep').textContent  = deplIdx >= 0 ? 'Year ' + (deplIdx + 1) : 'Never';
-  document.getElementById('mDep').className    = 'num ' + (deplIdx >= 0 ? 'neg' : 'pos');
-
+  document.getElementById('mNom').textContent   = fmt(primary);
+  document.getElementById('mNom').className     = 'num '+(primary>start?'pos':'neg');
+  document.getElementById('nomLbl').textContent = useReal ? "Real bal (today's $)" : 'Nominal bal (final)';
+  document.getElementById('mReal').textContent  = fmt(last.realBal);
+  document.getElementById('mReal').className    = 'num '+(last.realBal>start?'pos':'neg');
+  document.getElementById('mRmd').textContent   = last.rmd>0 ? fmt(useReal?last.realRmd:last.rmd) : `pre-${RMD_START_AGE}`;
+  document.getElementById('mDep').textContent   = deplIdx>=0 ? 'Year '+(deplIdx+1) : 'Never';
+  document.getElementById('mDep').className     = 'num '+(deplIdx>=0?'neg':'pos');
   document.getElementById('modeNote').textContent = useReal
-    ? "Today's $ mode: all values deflated by cumulative inflation — constant purchasing power."
-    : 'Future $ mode: all values in nominal (not inflation-adjusted) dollars.';
+    ? "Today's $ mode: all values in constant purchasing power."
+    : 'Future $ mode: all values in nominal dollars.';
 
   buildTable(rows);
 }
 
+/* ═══════════════════════════════════════════════
+   FILING STATUS SWITCH — resets thresholds to defaults
+═══════════════════════════════════════════════ */
+document.getElementById('singleToggle').addEventListener('change', e => {
+  const isSingle = e.target.checked;
+  const src = isSingle ? DEFAULTS.single : DEFAULTS.mfj;
+  // Preserve user-added extras (beyond index 2), just update the first 3
+  src.forEach((d,i) => {
+    if(thresholds[i]){
+      thresholds[i].label   = d.label;
+      thresholds[i].amount  = d.amount;
+      thresholds[i].color   = d.color;
+    }
+  });
+  renderThreshEditor();
+  update();
+});
+
+/* ═══════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════ */
 ['age','start','rate','wd','infl','yrs'].forEach(id =>
   document.getElementById(id).addEventListener('input', update)
 );
 document.getElementById('realToggle').addEventListener('change', update);
 
+renderThreshEditor();
 update();
 </script>
 </body>

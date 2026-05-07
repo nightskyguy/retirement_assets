@@ -10,6 +10,9 @@ A California resident built this with [Google gemini](https://gemini.google.com)
 
 #### Features in the Works (and Known Bugs):
 
+> [!WARNING]
+> I've stopped updating this for the time being.  In part because I am evaluating other tools, in part because I realized that the approach needs some rethinking. And in part because some of the bugs are daunting.
+
 + **BUG** We suspect the "Fill Bracket" goal has a flaw in the implementation. Please be cautious/ignore for now!
 + **BUG** There appears to be an error in the logic that is now under-withdrawing to meet spend goals.  For my several test scenarios, under withdrawals to meet spend may come to 3k per year. 
 + **BUG** The Dividend rate is applied to the Brokerage account. It should be applied to the Roth account, too! Brokerage dividends are accumulated in the Cash account.
@@ -96,7 +99,12 @@ D. **There is no SUPPORT for this tool**. If you ask nicely, or offer a pull req
 #### What about Other tools
 One of the lovely things about engineers, is they like to build things. I've found many other free resources that both inspired me and made realize that there is more than one way to solve problems.  
 
-The sources I found:
+The sources I found or built.
+
++ [IRA Projection](https://nightskyguy.github.io/retirement_assets/IRA_projection.html) by Me.
+In following various Reddit and YouTube discussions, I notice a lot of handwaving about IRA/401K balances. What this tool does is it allows you to set your current age, current IRA value, growth and inflation, filing status, and withdrawal rate.  It then calculates the IRA balance and RMDs (once they kick in).  If your current age is > 66 it assumes you have RMDs starting at 73, otherwise it assumes at 75.  You can view the plot in Current or Future dollars.  It's particularly useful for noticing if/when RMDs (by themselves) would exceed certain thresholds (like the Federal 22% bracket). Note that the thresholds provided by default assume the standard deduction has been applied. All brackets are adjusted by the inflation figure given.  You can also add or override the brackets, e.g. to determine which IRMAA tier(s) may be crossed, or to add State tax brackets.  There is no provision for including "additional" income like Social Security, pension, dividends, capital gains, or interest.  And there is no provision for adding lumpy withdrawals, or applying a "curve" to withdrawals. Also, it assumes withdrawals start immediately.  These are possible future additions, but again, the goal is just to get an idea what an IRA might look like in 5 or 10 or 15 years at different appreciation and withdrawal rates.
+
+Where I think it will shine is to quickly determine: how your spending power erodes with inflation, and whether you are going to face RMD jeopardy (and the scale of that jeopardy).
 
 + [GoogleSheet](https://docs.google.com/spreadsheets/d/1orZQ9g1KvGVrCShibutjyreaeqbmRFVAZ9aSY_57-DQ/edit?gid=1250894970#gid=1250894970) by Charles Eglington found on [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nu9lawc/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1). It's got lots of options. I want some things that aren't in it like a "Life Expectancy" for each person, properly calculate deductions, deduce filing status, etc.  In addition, I'd like it to "self optimize" by varying the amounts of IRA/401K withdrawals (and the number of years for withdrawals).  Ideally it would properly, or more properly calculate California Tax, and have a way to forecast based on inflation. But it's still a helpful tool.
 

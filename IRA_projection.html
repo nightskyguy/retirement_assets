@@ -7,39 +7,31 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
   :root {
-    --bg:      #0f1117; --surface: #181c27; --surface2: #1f2435; --border: #2a3048;
-    --teal:    #19c99d; --blue: #4f9cf9;   --amber: #f5a623;    --red: #f25c5c;
-    --purple:  #a78bfa; --green2: #86efac; --orange: #fb923c;   --pink: #f472b6;
-    --text:    #e8eaf2; --muted: #7b83a0;
-    --mono: 'DM Mono', monospace; --sans: 'DM Sans', sans-serif;
+    --bg:#0f1117; --surface:#181c27; --surface2:#1f2435; --border:#2a3048;
+    --teal:#19c99d; --blue:#4f9cf9; --amber:#f5a623; --red:#f25c5c;
+    --purple:#a78bfa; --text:#e8eaf2; --muted:#7b83a0;
+    --mono:'DM Mono',monospace; --sans:'DM Sans',sans-serif;
   }
   body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:14px; min-height:100vh; padding:2rem 1.5rem 4rem; }
-
-  header { max-width:980px; margin:0 auto 2rem; border-bottom:1px solid var(--border); padding-bottom:1.25rem; display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
+  header { max-width:1000px; margin:0 auto 2rem; border-bottom:1px solid var(--border); padding-bottom:1.25rem; display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
   header h1 { font-family:var(--mono); font-size:1.1rem; font-weight:500; letter-spacing:.04em; color:var(--teal); }
   header p  { font-size:12px; color:var(--muted); font-family:var(--mono); }
-
-  .shell { max-width:980px; margin:0 auto; display:grid; grid-template-columns:270px 1fr; gap:1.5rem; align-items:start; }
-
+  .shell { max-width:1000px; margin:0 auto; display:grid; grid-template-columns:275px 1fr; gap:1.5rem; align-items:start; }
   .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem; }
   .panel-title { font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--muted); text-transform:uppercase; margin-bottom:1.25rem; }
-
-  .ctrl { margin-bottom:1.2rem; }
-  .ctrl-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+  .ctrl { margin-bottom:1.1rem; }
+  .ctrl-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; }
   .ctrl-header label { font-size:12px; color:var(--muted); font-family:var(--mono); }
   .ctrl-header .val  { font-family:var(--mono); font-size:13px; font-weight:500; color:var(--text); }
-
   input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:3px; background:var(--border); border-radius:2px; outline:none; cursor:pointer; }
   input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:var(--teal); cursor:pointer; transition:transform .1s; }
   input[type=range]::-webkit-slider-thumb:hover { transform:scale(1.3); }
   input[type=range]::-moz-range-thumb { width:14px; height:14px; border:none; border-radius:50%; background:var(--teal); cursor:pointer; }
-
-  .divider { border:none; border-top:1px solid var(--border); margin:1.25rem 0; }
-
+  .divider { border:none; border-top:1px solid var(--border); margin:1.1rem 0; }
   /* Toggle */
-  .toggle-row  { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:1rem; }
+  .toggle-row  { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:.9rem; }
   .toggle-label{ font-family:var(--mono); font-size:12px; color:var(--muted); }
   .toggle-wrap { display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:11px; }
   .toggle-opt  { color:var(--muted); transition:color .15s; white-space:nowrap; cursor:pointer; }
@@ -50,42 +42,31 @@
   .slider-track::before { content:''; position:absolute; width:14px; height:14px; left:3px; top:3px; background:var(--muted); border-radius:50%; transition:transform .2s, background .2s; }
   .switch input:checked + .slider-track { background:rgba(25,201,157,.25); }
   .switch input:checked + .slider-track::before { transform:translateX(16px); background:var(--teal); }
-
-  /* Tax threshold editor */
-  .thresh-grid { display:grid; grid-template-columns:1fr auto auto; gap:5px 8px; align-items:center; margin-top:.75rem; }
-  .thresh-grid .gh { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; padding-bottom:4px; border-bottom:1px solid var(--border); }
+  /* Threshold editor */
+  .thresh-grid { display:grid; grid-template-columns:1fr 82px auto; gap:4px 7px; align-items:center; margin-top:.6rem; }
+  .thresh-grid .gh { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; padding-bottom:3px; border-bottom:1px solid var(--border); }
   .thresh-grid input[type=text],
-  .thresh-grid input[type=number] {
-    background:var(--surface2); border:1px solid var(--border); border-radius:4px;
-    color:var(--text); font-family:var(--mono); font-size:11px; padding:4px 6px; width:100%;
-    outline:none; transition:border-color .15s;
-  }
+  .thresh-grid input[type=number] { background:var(--surface2); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:11px; padding:3px 5px; width:100%; outline:none; transition:border-color .15s; }
   .thresh-grid input:focus { border-color:var(--teal); }
-  .thresh-grid input[type=number] { width:80px; text-align:right; }
-  .thresh-toggle { display:flex; align-items:center; justify-content:center; }
-  .thresh-toggle input[type=checkbox] { accent-color:var(--teal); width:14px; height:14px; cursor:pointer; }
+  .thresh-grid input[type=number] { text-align:right; }
   .thresh-row-color { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
-
-  .add-btn { margin-top:.6rem; width:100%; background:transparent; border:1px dashed var(--border); border-radius:5px; color:var(--muted); font-family:var(--mono); font-size:11px; padding:5px; cursor:pointer; transition:border-color .15s, color .15s; }
+  .add-btn { margin-top:.5rem; width:100%; background:transparent; border:1px dashed var(--border); border-radius:5px; color:var(--muted); font-family:var(--mono); font-size:11px; padding:4px; cursor:pointer; transition:border-color .15s, color .15s; }
   .add-btn:hover { border-color:var(--teal); color:var(--teal); }
   .del-btn { background:transparent; border:none; color:var(--muted); font-size:14px; cursor:pointer; line-height:1; padding:0 2px; transition:color .15s; }
   .del-btn:hover { color:var(--red); }
-
-  /* Right column */
+  /* Right */
   .right { display:flex; flex-direction:column; gap:1rem; }
   .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; }
   .metric { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.85rem 1rem; }
   .metric .lbl { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .metric .num { font-family:var(--mono); font-size:17px; font-weight:500; }
   .pos{color:var(--teal)}.neg{color:var(--red)}.warn{color:var(--amber)}.info{color:var(--blue)}
-
   .chart-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem 1.25rem 1rem; }
-  .legend { display:flex; flex-wrap:wrap; gap:14px; margin-bottom:12px; }
+  .legend { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; }
   .legend span { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); font-family:var(--mono); }
   .leg-sq   { width:12px; height:3px; border-radius:2px; flex-shrink:0; }
   .leg-dash { width:16px; height:0; border-top:2px dashed; flex-shrink:0; }
   .leg-dot  { width:16px; height:0; border-top:2px dotted; flex-shrink:0; }
-
   .note-table { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; overflow-x:auto; }
   .note-table table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; }
   .note-table th { color:var(--muted); font-weight:400; text-align:right; padding:4px 8px; letter-spacing:.05em; border-bottom:1px solid var(--border); white-space:nowrap; }
@@ -94,28 +75,28 @@
   .note-table td:first-child { text-align:left; color:var(--muted); }
   .note-table tr.rmd-active td { color:var(--amber); }
   .note-table tr.depleted td   { color:var(--red); }
-
   .footnote { margin-top:1rem; font-size:11px; color:var(--muted); font-family:var(--mono); line-height:1.7; }
-
-  @media(max-width:720px){ .shell{grid-template-columns:1fr} .metrics{grid-template-columns:repeat(2,1fr)} }
+  @media(max-width:740px){ .shell{grid-template-columns:1fr} .metrics{grid-template-columns:repeat(2,1fr)} }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>IRA_PROJECTION.js</h1>
-  <p>SECURE 2.0 · IRS Uniform Lifetime Table · RMDs begin at age 75 · inflation-adjusted withdrawals after RMD</p>
+  <h1>IRA Projection v.5</h1>
+  <p>SECURE 2.0 · IRS Uniform Lifetime Table · RMDs begin at age 75 · 2026 Tax / IRMAA Code</p>
 </header>
 
 <div class="shell">
-
   <!-- ── Left panel ── -->
   <div class="panel">
-    <div class="panel-title">Parameters</div>
-
+    <div class="panel-title"></div>
     <div class="ctrl">
-      <div class="ctrl-header"><label>Current age</label><span class="val" id="vAge">65</span></div>
-      <input type="range" id="age" min="40" max="74" step="1" value="65">
+      <div class="ctrl-header"><label>Current age</label><span class="val" id="vAge">61</span></div>
+      <input type="range" id="age" min="40" max="74" step="1" value="61">
+    </div>
+    <div class="ctrl">
+      <div class="ctrl-header"><label>Withdrawal start age</label><span class="val" id="vWdAge">65</span></div>
+      <input type="range" id="wdAge" min="40" max="80" step="1" value="65">
     </div>
     <div class="ctrl">
       <div class="ctrl-header"><label>Starting balance</label><span class="val" id="vStart">$2,000,000</span></div>
@@ -129,8 +110,8 @@
     <hr class="divider">
 
     <div class="ctrl">
-      <div class="ctrl-header"><label>Base withdrawal (today $)</label><span class="val" id="vW">$100,000</span></div>
-      <input type="range" id="wd" min="0" max="300000" step="5000" value="100000">
+      <div class="ctrl-header"><label>Base withdrawal (today $)</label><span class="val" id="vW">$75,000</span></div>
+      <input type="range" id="wd" min="0" max="300000" step="5000" value="75000">
     </div>
     <div class="ctrl">
       <div class="ctrl-header"><label>Inflation rate</label><span class="val" id="vInfl">2.5%</span></div>
@@ -138,12 +119,11 @@
     </div>
     <div class="ctrl">
       <div class="ctrl-header"><label>Years to project</label><span class="val" id="vYrs">30 yrs</span></div>
-      <input type="range" id="yrs" min="5" max="35" step="1" value="30">
+      <input type="range" id="yrs" min="5" max="40" step="1" value="30">
     </div>
 
     <hr class="divider">
 
-    <!-- Display $ toggle -->
     <div class="toggle-row">
       <span class="toggle-label">Display in</span>
       <div class="toggle-wrap">
@@ -152,61 +132,58 @@
         <span class="toggle-opt" id="optReal" onclick="setToggle('realToggle',true)">Today's $</span>
       </div>
     </div>
-
-    <!-- Married/Single toggle -->
     <div class="toggle-row">
       <span class="toggle-label">Filing status</span>
       <div class="toggle-wrap">
-        <span class="toggle-opt active" id="optMFJ" onclick="setToggle('singleToggle',false)">MFJ</span>
+        <span class="toggle-opt active" id="optMFJ"    onclick="setFilingStatus(false)">MFJ</span>
         <label class="switch"><input type="checkbox" id="singleToggle"><span class="slider-track"></span></label>
-        <span class="toggle-opt" id="optSingle" onclick="setToggle('singleToggle',true)">Single</span>
+        <span class="toggle-opt"        id="optSingle" onclick="setFilingStatus(true)">Single</span>
       </div>
     </div>
 
     <hr class="divider">
 
-    <!-- Tax threshold editor -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
-      <span class="panel-title" style="margin:0">Tax thresholds (today's $)</span>
-      <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">show</span>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
+      <span class="panel-title" style="margin:0">Tax &amp; IRMAA thresholds</span>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">amt · show</span>
+    </div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:.5rem">
+      Today's $: std deduction included. Grown with inflation on chart.
     </div>
     <div class="thresh-grid" id="threshGrid">
-      <span class="gh" style="grid-column:1">Label</span>
-      <span class="gh" style="grid-column:2;text-align:right">Amount</span>
-      <span class="gh" style="grid-column:3;text-align:center">✓</span>
+      <span class="gh">Label</span><span class="gh" style="text-align:right">Amount</span><span class="gh" style="text-align:center">✓</span>
     </div>
     <button class="add-btn" onclick="addThreshold()">+ add threshold</button>
 
-    <div style="margin-top:1.5rem;font-size:11px;color:var(--muted);font-family:var(--mono);line-height:1.7">
+    <div style="margin-top:1.25rem;font-size:11px;color:var(--muted);font-family:var(--mono);line-height:1.7">
       Withdrawal logic:<br>
       1. Grow balance by rate<br>
-      2. Compute RMD if age ≥ 75<br>
-      3. Infl-adj wd = base × (1+i)^y<br>
-      4. Actual = max(infl-adj wd, RMD)
+      2. RMD if age ≥ 75<br>
+      3. Adj wd = base×(1+i)^y<br>
+      4. Actual = max(adj wd, RMD)<br>
+      5. No withdrawal before start age
     </div>
   </div>
 
   <!-- ── Right column ── -->
   <div class="right">
-
     <div class="metrics">
-      <div class="metric"><div class="lbl" id="nomLbl">Nominal bal (final)</div><div class="num" id="mNom">—</div></div>
-      <div class="metric"><div class="lbl">Real bal (final)</div><div class="num" id="mReal">—</div></div>
-      <div class="metric"><div class="lbl">RMD (final yr)</div><div class="num warn" id="mRmd">—</div></div>
-      <div class="metric"><div class="lbl">Depleted at</div><div class="num" id="mDep">Never</div></div>
+      <div class="metric"><div class="lbl">Nominal bal (final)</div><div class="num pos" id="mNom">—</div></div>
+      <div class="metric"><div class="lbl">Real bal (final)</div><div class="num pos" id="mReal">—</div></div>
+      <div class="metric"><div class="lbl" id="rmdLbl">Peak RMD</div><div class="num warn" id="mRmd">—</div></div>
+      <div class="metric"><div class="lbl">Underfunded at</div><div class="num" id="mDep">Never</div></div>
     </div>
 
     <div class="chart-wrap">
       <div class="legend" id="legend">
-        <span><span class="leg-sq" style="background:#19c99d"></span><span id="lgBal">Nominal balance</span></span>
+        <span><span class="leg-sq" style="background:#19c99d"></span>Nominal balance</span>
         <span id="lgRealWrap"><span class="leg-sq" style="background:#4f9cf9"></span>Real balance</span>
-        <span><span class="leg-sq" style="background:#f5a623"></span>RMD required</span>
-        <span><span class="leg-dot" style="border-color:#a78bfa"></span><span id="lgBase">Base withdrawal</span></span>
-        <span><span class="leg-dash" style="border-color:#f25c5c"></span>Actual withdrawal</span>
-        <!-- threshold legend items injected by JS -->
+        <span><span class="leg-sq" style="background:#f5a623"></span>RMD</span>
+        <span><span class="leg-dot" style="border-color:#a78bfa"></span><span id="lgBase">Base wd</span></span>
+        <span><span class="leg-dash" style="border-color:#f25c5c"></span>Actual wd</span>
       </div>
-      <div style="position:relative;width:100%;height:340px">
-        <canvas id="ch" role="img" aria-label="IRA projection chart">IRA projection over time</canvas>
+      <div style="position:relative;width:100%;height:350px">
+        <canvas id="ch" role="img" aria-label="IRA projection chart">IRA projection</canvas>
       </div>
     </div>
 
@@ -214,9 +191,9 @@
       <table>
         <thead>
           <tr>
-            <th>Yr</th><th>Age</th>
+            <th>Year</th><th>Age</th>
             <th>Nominal bal</th><th>Real bal</th>
-            <th>RMD</th><th>Base wd</th><th>Infl-adj wd</th><th>Actual wd</th><th>Growth</th>
+            <th>RMD</th><th>Base wd</th><th>Actual wd</th><th>Growth</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -225,19 +202,18 @@
 
     <div class="footnote">
       RMD = prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, SECURE 2.0, born after 1958).
-      Actual withdrawal = max(inflation-adjusted withdrawal, RMD).
-      Tax thresholds = standard deduction + bracket floor, grown with inflation each year.
-      <span id="modeNote"></span>
-      Amber rows = RMD overrides desired withdrawal. For illustrative purposes only.
+      Actual wd = max(inflation-adj withdrawal, RMD); zero before withdrawal start age.
+      Thresholds = std deduction + bracket floor (2026 est.), grown with inflation.
+      "Underfunded" = first year balance &lt; that year's inflation-adjusted base withdrawal.
+      <span id="modeNote"></span> For illustrative purposes only.
     </div>
-
   </div>
 </div>
 
 <script>
-/* ═══════════════════════════════════════════════
-   IRS DATA
-═══════════════════════════════════════════════ */
+const CURRENT_YEAR = 2026;
+
+/* ── IRS Uniform Lifetime Table ── */
 const ULT = {
   72:27.4,73:26.5,74:25.5,75:24.6,76:23.7,77:22.9,78:22.0,79:21.1,
   80:20.2,81:19.4,82:18.5,83:17.7,84:16.8,85:16.0,86:15.2,87:14.4,
@@ -246,38 +222,48 @@ const ULT = {
 };
 const RMD_START_AGE = 75;
 function rmdFactor(age){
-  if(age<RMD_START_AGE)return null;
-  return ULT[Math.min(Math.max(Math.round(age),RMD_START_AGE),100)]||6.4;
+  if(age < RMD_START_AGE) return null;
+  return ULT[Math.min(Math.max(Math.round(age), RMD_START_AGE), 100)] || 6.4;
 }
 
-/* 2026 brackets: stdDed + bracket floor = threshold plotted
-   MFJ:    std deduction 30,000 (2026 est). Brackets: 10% 0-23800, 12% 23800-96700, 22% 96700-206700, 32% 206700-394600
-   Single: std deduction 15,000 (2026 est). Brackets: 10% 0-11925, 12% 11925-48475, 22% 48475-103350, 32% 103350-197300
-   Threshold = stdDed + bracketFloor  (income at which you enter that bracket after deduction)
+/* ── 2026 Tax thresholds (today's $) ──
+   Amount plotted = std deduction + bracket floor
+   MFJ std deduction: $30,000   Single std deduction: $15,000
+   2026 bracket floors (taxable income):
+     10%→0, 12%→23,850, 22%→96,950, 24%→206,700, 32%→394,600
+   IRMAA 2026 MAGI thresholds (no bracket floor — raw MAGI):
+     Tier 1: MFJ $212,000 / Single $106,000
+     Tier 2: MFJ $266,000 / Single $133,000
+   We add std deduction to IRMAA too, per user agreement.
 */
 const DEFAULTS = {
   mfj: [
-    { label:'12% bracket', amount: 30000 + 23800,  color:'#86efac', visible:true },
-    { label:'22% bracket', amount: 30000 + 96700,  color:'#fb923c', visible:true },
-    { label:'32% bracket', amount: 30000 + 206700, color:'#f472b6', visible:true },
+    { label:'10% bracket', amount:30000+0,       color:'#67e8f9', visible:false },
+    { label:'12% bracket', amount:30000+23850,    color:'#86efac', visible:true  },
+    { label:'22% bracket', amount:30000+96950,    color:'#fb923c', visible:true  },
+    { label:'24% bracket', amount:30000+206700,   color:'#fde68a', visible:false },
+    { label:'IRMAA Tier 1',amount:30000+212000,   color:'#c4b5fd', visible:true },
+    { label:'IRMAA Tier 2',amount:30000+266000,   color:'#f9a8d4', visible:false },
+    { label:'32% bracket', amount:30000+394600,   color:'#f472b6', visible:false  },
   ],
   single: [
-    { label:'12% bracket', amount: 15000 + 11925,  color:'#86efac', visible:true },
-    { label:'22% bracket', amount: 15000 + 48475,  color:'#fb923c', visible:true },
-    { label:'32% bracket', amount: 15000 + 103350, color:'#f472b6', visible:true },
+    { label:'10% bracket', amount:15000+0,        color:'#67e8f9', visible:false },
+    { label:'12% bracket', amount:15000+11925,     color:'#86efac', visible:true  },
+    { label:'22% bracket', amount:15000+48475,     color:'#fb923c', visible:true  },
+    { label:'24% bracket', amount:15000+103350,    color:'#fde68a', visible:false },
+    { label:'IRMAA Tier 1',amount:15000+106000,    color:'#c4b5fd', visible:true },
+    { label:'IRMAA Tier 2',amount:15000+133000,    color:'#f9a8d4', visible:false },
+    { label:'32% bracket', amount:15000+197300,    color:'#f472b6', visible:false  },
   ]
 };
 
-/* Live threshold state — editable by user */
+// Live threshold state — deep copy so edits don't mutate DEFAULTS
 let thresholds = DEFAULTS.mfj.map(t => ({...t}));
 
-/* Palette for new user-added thresholds */
-const EXTRA_COLORS = ['#67e8f9','#fde68a','#d8b4fe','#6ee7b7','#fca5a5','#93c5fd'];
+const EXTRA_COLORS = ['#93c5fd','#6ee7b7','#fca5a5','#d8b4fe','#fdba74','#a5f3fc'];
 let colorIdx = 0;
 
-/* ═══════════════════════════════════════════════
-   UTILS
-═══════════════════════════════════════════════ */
+/* ── Helpers ── */
 function fmt(v){
   if(v===null||v===undefined||isNaN(v))return'—';
   const abs=Math.abs(v);
@@ -285,124 +271,121 @@ function fmt(v){
   return(v<0?'-$':'$')+Math.round(abs).toLocaleString();
 }
 
-function setToggle(id, val){
-  document.getElementById(id).checked = val;
-  update();
-}
+function setToggle(id, val){ document.getElementById(id).checked=val; update(); }
 
-/* ═══════════════════════════════════════════════
-   THRESHOLD EDITOR UI
-═══════════════════════════════════════════════ */
-function renderThreshEditor(){
-  const grid = document.getElementById('threshGrid');
-  // Clear rows (keep header = first 3 children)
-  while(grid.children.length > 3) grid.removeChild(grid.lastChild);
-
-  thresholds.forEach((t, i) => {
-    // Color swatch + label input
-    const labelWrap = document.createElement('div');
-    labelWrap.style.cssText = 'display:flex;align-items:center;gap:6px';
-    const swatch = document.createElement('span');
-    swatch.className = 'thresh-row-color';
-    swatch.style.background = t.color;
-    const labelIn = document.createElement('input');
-    labelIn.type = 'text';
-    labelIn.value = t.label;
-    labelIn.addEventListener('input', e => { thresholds[i].label = e.target.value; update(); });
-    labelWrap.appendChild(swatch);
-    labelWrap.appendChild(labelIn);
-
-    // Amount input
-    const amtIn = document.createElement('input');
-    amtIn.type = 'number';
-    amtIn.value = t.amount;
-    amtIn.min = 0; amtIn.step = 1000;
-    amtIn.addEventListener('input', e => { thresholds[i].amount = +e.target.value||0; update(); });
-
-    // Visible toggle + delete
-    const ctrlWrap = document.createElement('div');
-    ctrlWrap.style.cssText = 'display:flex;align-items:center;gap:6px;justify-content:center';
-    const chk = document.createElement('input');
-    chk.type = 'checkbox';
-    chk.checked = t.visible;
-    chk.addEventListener('change', e => { thresholds[i].visible = e.target.checked; update(); });
-    const del = document.createElement('button');
-    del.className = 'del-btn';
-    del.textContent = '×';
-    del.title = 'Remove';
-    del.addEventListener('click', () => { thresholds.splice(i,1); renderThreshEditor(); update(); });
-    ctrlWrap.appendChild(chk);
-    ctrlWrap.appendChild(del);
-
-    grid.appendChild(labelWrap);
-    grid.appendChild(amtIn);
-    grid.appendChild(ctrlWrap);
+function setFilingStatus(isSingle){
+  document.getElementById('singleToggle').checked = isSingle;
+  const src = isSingle ? DEFAULTS.single : DEFAULTS.mfj;
+  // Reset all default rows; preserve user extras beyond the defaults length
+  src.forEach((d,i)=>{
+    if(i < thresholds.length){
+      thresholds[i].label   = d.label;
+      thresholds[i].amount  = d.amount;
+      thresholds[i].color   = d.color;
+      thresholds[i].visible = d.visible;
+    }
   });
-}
-
-function addThreshold(){
-  const col = EXTRA_COLORS[colorIdx++ % EXTRA_COLORS.length];
-  thresholds.push({ label:'Custom', amount:200000, color:col, visible:true });
+  // If user had fewer rows than defaults (shouldn't happen), add them
+  if(thresholds.length < src.length){
+    for(let i=thresholds.length; i<src.length; i++) thresholds.push({...src[i]});
+  }
   renderThreshEditor();
   update();
 }
 
-/* ═══════════════════════════════════════════════
-   PROJECTION
-═══════════════════════════════════════════════ */
-function project(start, rate, baseWd, inflRate, years, startAge){
+/* ── Threshold editor ── */
+function renderThreshEditor(){
+  const grid = document.getElementById('threshGrid');
+  while(grid.children.length > 3) grid.removeChild(grid.lastChild);
+
+  thresholds.forEach((t,i) => {
+    const labelWrap = document.createElement('div');
+    labelWrap.style.cssText = 'display:flex;align-items:center;gap:5px';
+    const swatch = document.createElement('span');
+    swatch.className = 'thresh-row-color';
+    swatch.style.background = t.color;
+    const labelIn = document.createElement('input');
+    labelIn.type='text'; labelIn.value=t.label;
+    labelIn.addEventListener('input', e=>{ thresholds[i].label=e.target.value; update(); });
+    labelWrap.append(swatch, labelIn);
+
+    const amtIn = document.createElement('input');
+    amtIn.type='number'; amtIn.value=t.amount; amtIn.min=0; amtIn.step=1000;
+    amtIn.addEventListener('input', e=>{ thresholds[i].amount=+e.target.value||0; update(); });
+
+    const ctrlWrap = document.createElement('div');
+    ctrlWrap.style.cssText='display:flex;align-items:center;gap:5px;justify-content:center';
+    const chk = document.createElement('input');
+    chk.type='checkbox'; chk.checked=t.visible;
+    chk.addEventListener('change', e=>{ thresholds[i].visible=e.target.checked; update(); });
+    const del = document.createElement('button');
+    del.className='del-btn'; del.textContent='×'; del.title='Remove';
+    del.addEventListener('click', ()=>{ thresholds.splice(i,1); renderThreshEditor(); update(); });
+    ctrlWrap.append(chk, del);
+
+    grid.append(labelWrap, amtIn, ctrlWrap);
+  });
+}
+
+function addThreshold(){
+  thresholds.push({ label:'Custom', amount:150000, color:EXTRA_COLORS[colorIdx++%EXTRA_COLORS.length], visible:true });
+  renderThreshEditor(); update();
+}
+
+/* ── Projection engine ── */
+function project(start, rate, baseWd, inflRate, years, startAge, wdStartAge){
   let bal = start;
   const rows = [];
   for(let y=1; y<=years; y++){
-    const age      = startAge + y;
-    const inflMult = Math.pow(1 + inflRate/100, y);
-    const adjWd    = baseWd * inflMult;
-    const factor   = rmdFactor(age);
-    const rmd      = factor ? bal/factor : 0;
-    const actualWd = Math.max(adjWd, rmd);
-    const growth   = bal * (rate/100);
-    const newBal   = bal + growth - actualWd;
-    const depleted = newBal <= 0;
+    const age       = startAge + y;
+    const calYear   = CURRENT_YEAR + y;
+    const inflMult  = Math.pow(1 + inflRate/100, y);
+    const withdrawing = age > wdStartAge;  // strict: first withdrawal year is wdStartAge+1
+    const adjWd     = withdrawing ? baseWd * inflMult : 0;
+    const factor    = rmdFactor(age);
+    const rmd       = factor ? bal/factor : 0;
+    const actualWd  = withdrawing ? Math.max(adjWd, rmd) : 0;
+    const growth    = bal * (rate/100);
+    const newBal    = bal + growth - actualWd;
+    const depleted  = newBal <= 0;
     bal = Math.max(0, newBal);
+    // "underfunded" = balance < what this year's adj withdrawal would be (even if not yet withdrawing,
+    //  we compare against what withdrawal would be so the metric is forward-looking)
+    const targetWd  = baseWd * inflMult;
     rows.push({
-      y, age, inflMult,
+      y, age, calYear, inflMult,
       bal,
       realBal:      bal/inflMult,
       rmd,
       realRmd:      rmd/inflMult,
-      adjWd,
-      realAdjWd:    adjWd/inflMult,
+      adjWd,        // actual adj wd this year (0 before wdStartAge)
       actualWd,
       realActualWd: actualWd/inflMult,
       growth,
       realGrowth:   growth/inflMult,
-      baseWd,
+      baseWd,       // constant today's $
+      targetWd,     // inflation-adj target (used for underfunded check)
       depleted,
-      rmdActive: rmd > adjWd
+      rmdActive: rmd>0 && rmd > adjWd,
+      withdrawing
     });
   }
   return rows;
 }
 
-/* ═══════════════════════════════════════════════
-   CHART
-═══════════════════════════════════════════════ */
-const ctx = document.getElementById('ch').getContext('2d');
-const FIXED_DATASETS = 5; // balance, real, rmd, base, actual
-
-const chart = new Chart(ctx, {
-  type: 'line',
-  data: {
-    labels: [],
-    datasets: [
-      /* 0 */ { label:'Balance',         data:[], borderColor:'#19c99d', backgroundColor:'rgba(25,201,157,0.07)', fill:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
-      /* 1 */ { label:'Real balance',    data:[], borderColor:'#4f9cf9', backgroundColor:'transparent',          fill:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
-      /* 2 */ { label:'RMD',             data:[], borderColor:'#f5a623', backgroundColor:'transparent',          fill:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd'  },
-      /* 3 */ { label:'Base withdrawal', data:[], borderColor:'#a78bfa', backgroundColor:'transparent',          fill:false, tension:0,   pointRadius:0, borderWidth:1.5, borderDash:[2,3], yAxisID:'yWd' },
-      /* 4 */ { label:'Actual WD',       data:[], borderColor:'#f25c5c', backgroundColor:'transparent',          fill:false, tension:0.2, pointRadius:0, borderWidth:1.5, borderDash:[5,4], yAxisID:'yWd' }
-    ]
-  },
-  options: {
+/* ── Chart setup ── */
+const FIXED_DS = 5;
+const chartCtx = document.getElementById('ch').getContext('2d');
+const chart = new Chart(chartCtx, {
+  type:'line',
+  data:{ labels:[], datasets:[
+    /* 0 */ { label:'Nominal balance', data:[], borderColor:'#19c99d', backgroundColor:'rgba(25,201,157,0.07)', fill:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 1 */ { label:'Real balance',   data:[], borderColor:'#4f9cf9', backgroundColor:'transparent',          fill:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 2 */ { label:'RMD',            data:[], borderColor:'#f5a623', backgroundColor:'transparent',          fill:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd'  },
+    /* 3 */ { label:'Base wd',        data:[], borderColor:'#a78bfa', backgroundColor:'transparent',          fill:false, tension:0,   pointRadius:0, borderWidth:1.5, borderDash:[2,3], yAxisID:'yWd' },
+    /* 4 */ { label:'Actual wd',      data:[], borderColor:'#f25c5c', backgroundColor:'transparent',          fill:false, tension:0.2, pointRadius:0, borderWidth:1.5, borderDash:[5,4], yAxisID:'yWd' }
+  ]},
+  options:{
     responsive:true, maintainAspectRatio:false,
     interaction:{ mode:'index', intersect:false },
     plugins:{
@@ -414,7 +397,7 @@ const chart = new Chart(ctx, {
         bodyFont: { family:"'DM Mono',monospace", size:11 },
         callbacks:{
           title: items => items[0].label,
-          label: c => ` ${c.dataset.label}: ${fmt(c.parsed.y)}`
+          label: c => c.parsed.y===0 && c.datasetIndex>=FIXED_DS ? null : ` ${c.dataset.label}: ${fmt(c.parsed.y)}`
         }
       }
     },
@@ -426,178 +409,170 @@ const chart = new Chart(ctx, {
   }
 });
 
-/* ═══════════════════════════════════════════════
-   TABLE
-═══════════════════════════════════════════════ */
+/* ── Table ── */
 function buildTable(rows){
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
   rows.forEach(r => {
     const tr = document.createElement('tr');
-    if(r.depleted)        tr.className = 'depleted';
-    else if(r.rmdActive)  tr.className = 'rmd-active';
+    if(r.depleted)        tr.className='depleted';
+    else if(r.rmdActive)  tr.className='rmd-active';
     tr.innerHTML = `
-      <td>${r.y}</td><td>${r.age}</td>
+      <td>${r.calYear}</td><td>${r.age}</td>
       <td>${fmt(r.bal)}</td><td>${fmt(r.realBal)}</td>
       <td>${r.rmd>0?fmt(r.rmd):'—'}</td>
-      <td>${fmt(r.baseWd)}</td><td>${fmt(r.adjWd)}</td>
-      <td>${fmt(r.actualWd)}</td><td>${fmt(r.growth)}</td>
+      <td>${fmt(r.baseWd)}</td>
+      <td>${r.withdrawing?fmt(r.actualWd):'—'}</td>
+      <td>${fmt(r.growth)}</td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-/* ═══════════════════════════════════════════════
-   LEGEND (dynamic threshold entries)
-═══════════════════════════════════════════════ */
+/* ── Legend rebuild ── */
 function rebuildLegend(){
-  // Remove old threshold legend items (everything after the 5 fixed spans)
   const legend = document.getElementById('legend');
-  const fixed = legend.querySelectorAll('span[data-fixed]').length || 5;
-  const all = Array.from(legend.children);
-  all.forEach((el,i) => { if(i>=5) el.remove(); });
-
-  thresholds.forEach(t => {
+  // Remove dynamic threshold items (beyond the 5 fixed children)
+  Array.from(legend.children).slice(5).forEach(el=>el.remove());
+  thresholds.forEach(t=>{
     if(!t.visible) return;
     const span = document.createElement('span');
     const line = document.createElement('span');
-    line.style.cssText = `display:inline-block;width:16px;height:0;border-top:2px dashed ${t.color};flex-shrink:0`;
-    span.appendChild(line);
-    span.appendChild(document.createTextNode(' ' + t.label));
+    line.style.cssText=`display:inline-block;width:16px;height:0;border-top:2px dashed ${t.color};flex-shrink:0`;
+    span.append(line, document.createTextNode(' '+t.label));
     legend.appendChild(span);
   });
 }
 
-/* ═══════════════════════════════════════════════
-   MAIN UPDATE
-═══════════════════════════════════════════════ */
+/* ── Main update ── */
 function update(){
-  const startAge = +document.getElementById('age').value;
-  const start    = +document.getElementById('start').value;
-  const rate     = +document.getElementById('rate').value;
-  const wd       = +document.getElementById('wd').value;
-  const infl     = +document.getElementById('infl').value;
-  const years    = +document.getElementById('yrs').value;
-  const useReal  = document.getElementById('realToggle').checked;
-  const isSingle = document.getElementById('singleToggle').checked;
+  const startAge  = +document.getElementById('age').value;
+  const wdStartAge= +document.getElementById('wdAge').value;
+  const start     = +document.getElementById('start').value;
+  const rate      = +document.getElementById('rate').value;
+  const baseWd    = +document.getElementById('wd').value;
+  const infl      = +document.getElementById('infl').value;
+  const years     = +document.getElementById('yrs').value;
+  const useReal   = document.getElementById('realToggle').checked;
+  const isSingle  = document.getElementById('singleToggle').checked;
 
-  // Display values
+  // Labels
   document.getElementById('vAge').textContent   = startAge;
+  document.getElementById('vWdAge').textContent = wdStartAge;
   document.getElementById('vStart').textContent = fmt(start);
   document.getElementById('vRate').textContent  = rate.toFixed(1)+'%';
-  document.getElementById('vW').textContent     = fmt(wd);
+  document.getElementById('vW').textContent     = fmt(baseWd);
   document.getElementById('vInfl').textContent  = infl.toFixed(1)+'%';
   document.getElementById('vYrs').textContent   = years+' yrs';
 
   // Toggle highlights
-  document.getElementById('optFuture').classList.toggle('active', !useReal);
-  document.getElementById('optReal').classList.toggle('active',    useReal);
-  document.getElementById('optMFJ').classList.toggle('active',    !isSingle);
-  document.getElementById('optSingle').classList.toggle('active',  isSingle);
+  document.getElementById('optFuture').classList.toggle('active',!useReal);
+  document.getElementById('optReal').classList.toggle('active', useReal);
+  document.getElementById('optMFJ').classList.toggle('active',  !isSingle);
+  document.getElementById('optSingle').classList.toggle('active', isSingle);
 
-  const rows   = project(start, rate, wd, infl, years, startAge);
-  const labels = rows.map(r => 'Age '+r.age);
+  const rows   = project(start, rate, baseWd, infl, years, startAge, wdStartAge);
+  const labels = rows.map(r => `Age ${r.age}`);
 
-  // Core chart data
-  const balData  = rows.map(r => Math.round(useReal ? r.realBal      : r.bal));
-  const realData = rows.map(r => Math.round(r.realBal));
-  const rmdData  = rows.map(r => Math.round(useReal ? r.realRmd      : r.rmd));
-  const baseData = rows.map(r => Math.round(useReal ? r.baseWd       : r.adjWd));
-  const actData  = rows.map(r => Math.round(useReal ? r.realActualWd : r.actualWd));
-
+  // Balance datasets — always nominal / always real, never toggled
   chart.data.labels           = labels;
-  chart.data.datasets[0].data = balData;
-  chart.data.datasets[1].data = realData;
-  chart.data.datasets[1].hidden = useReal;
-  chart.data.datasets[2].data = rmdData;
-  chart.data.datasets[3].data = baseData;
-  chart.data.datasets[4].data = actData;
+  chart.data.datasets[0].data = rows.map(r => Math.round(r.bal));
+  chart.data.datasets[1].data = rows.map(r => Math.round(r.realBal));
+  chart.data.datasets[1].hidden = useReal; // hide redundant real line when in today's $ mode
 
-  // Rebuild threshold datasets (indices 5+)
-  // Remove all beyond the 5 fixed
-  while(chart.data.datasets.length > FIXED_DATASETS)
-    chart.data.datasets.pop();
+  // Right-axis datasets (toggle-sensitive)
+  chart.data.datasets[2].data = rows.map(r => Math.round(useReal ? r.realRmd      : r.rmd));
+  chart.data.datasets[3].data = rows.map(r => Math.round(useReal ? baseWd         : baseWd * r.inflMult));
+  chart.data.datasets[4].data = rows.map(r => Math.round(useReal ? r.realActualWd : r.actualWd));
 
-  thresholds.forEach(t => {
+  // Threshold datasets (dynamic, indices 5+)
+  while(chart.data.datasets.length > FIXED_DS) chart.data.datasets.pop();
+  thresholds.forEach(t=>{
     if(!t.visible) return;
-    // Each year: threshold grown by inflation from today's base
-    // In future-$ mode: nominal threshold = t.amount * inflMult
-    // In today's-$ mode: always t.amount (flat line)
-    const data = rows.map(r => {
-      const nominal = t.amount * r.inflMult;
-      return Math.round(useReal ? t.amount : nominal);
-    });
     chart.data.datasets.push({
       label: t.label,
-      data,
-      borderColor: t.color,
-      backgroundColor: 'transparent',
-      fill: false,
-      tension: 0,
-      pointRadius: 0,
-      borderWidth: 1.5,
-      borderDash: [6, 3],
-      yAxisID: 'yWd'
+      data:  rows.map(r => Math.round(useReal ? t.amount : t.amount * r.inflMult)),
+      borderColor: t.color, backgroundColor:'transparent',
+      fill:false, tension:0, pointRadius:0, borderWidth:1.5, borderDash:[6,3],
+      yAxisID:'yWd'
     });
   });
 
-  // Axis labels
-  chart.options.scales.yBal.title.text = useReal ? "Balance (today's $)" : 'Balance (nominal $)';
+  chart.options.scales.yBal.title.text = 'Balance';
   chart.options.scales.yWd.title.text  = useReal ? "Annual $ (today's $)" : 'Annual $ (nominal)';
   chart.update('none');
 
   rebuildLegend();
 
   // Legend text
-  document.getElementById('lgBal').textContent  = useReal ? "Balance (today's $)" : 'Nominal balance';
   document.getElementById('lgBase').textContent = useReal ? "Base wd (today's $, flat)" : 'Base wd (infl-grown)';
   document.getElementById('lgRealWrap').style.display = useReal ? 'none' : '';
 
-  // Metric cards
-  const last    = rows[rows.length-1];
-  const deplIdx = rows.findIndex(r => r.depleted);
-  const primary = useReal ? last.realBal : last.bal;
+  // ── Metric cards ──
+  const last = rows[rows.length-1];
 
-  document.getElementById('mNom').textContent   = fmt(primary);
-  document.getElementById('mNom').className     = 'num '+(primary>start?'pos':'neg');
-  document.getElementById('nomLbl').textContent = useReal ? "Real bal (today's $)" : 'Nominal bal (final)';
-  document.getElementById('mReal').textContent  = fmt(last.realBal);
-  document.getElementById('mReal').className    = 'num '+(last.realBal>start?'pos':'neg');
-  document.getElementById('mRmd').textContent   = last.rmd>0 ? fmt(useReal?last.realRmd:last.rmd) : `pre-${RMD_START_AGE}`;
-  document.getElementById('mDep').textContent   = deplIdx>=0 ? 'Year '+(deplIdx+1) : 'Never';
-  document.getElementById('mDep').className     = 'num '+(deplIdx>=0?'neg':'pos');
+  // Nominal bal — always nominal, never toggled
+  document.getElementById('mNom').textContent = fmt(last.bal);
+  document.getElementById('mNom').className   = 'num '+(last.bal>start?'pos':'neg');
+
+  // Real bal — always real, never toggled
+  document.getElementById('mReal').textContent = fmt(last.realBal);
+  document.getElementById('mReal').className   = 'num '+(last.realBal>start?'pos':'neg');
+
+  // Peak RMD (toggle-sensitive)
+  const peakRmd = rows.reduce((mx,r)=>{
+    const v = useReal ? r.realRmd : r.rmd;
+    return v>mx ? v : mx;
+  }, 0);
+  document.getElementById('mRmd').textContent = peakRmd>0 ? fmt(peakRmd) : 'None';
+  document.getElementById('rmdLbl').textContent = useReal ? "Peak RMD (today's $)" : 'Peak RMD (nominal)';
+
+  // Underfunded: first year balance < that year's inflation-adj base withdrawal target
+  const underfundIdx = rows.findIndex(r => r.bal < r.targetWd);
+  document.getElementById('mDep').textContent = underfundIdx>=0
+    ? `${rows[underfundIdx].calYear} (age ${rows[underfundIdx].age})`
+    : 'Never';
+  document.getElementById('mDep').className   = 'num '+(underfundIdx>=0?'neg':'pos');
+
   document.getElementById('modeNote').textContent = useReal
-    ? "Today's $ mode: all values in constant purchasing power."
-    : 'Future $ mode: all values in nominal dollars.';
+    ? "Today's $ mode: right-axis values in constant purchasing power; balances always nominal/real."
+    : 'Future $ mode: right-axis values in nominal dollars; balances always nominal/real.';
 
   buildTable(rows);
 }
 
-/* ═══════════════════════════════════════════════
-   FILING STATUS SWITCH — resets thresholds to defaults
-═══════════════════════════════════════════════ */
-document.getElementById('singleToggle').addEventListener('change', e => {
-  const isSingle = e.target.checked;
-  const src = isSingle ? DEFAULTS.single : DEFAULTS.mfj;
-  // Preserve user-added extras (beyond index 2), just update the first 3
-  src.forEach((d,i) => {
-    if(thresholds[i]){
-      thresholds[i].label   = d.label;
-      thresholds[i].amount  = d.amount;
-      thresholds[i].color   = d.color;
-    }
-  });
-  renderThreshEditor();
+/* ── Age slider: enforce wdStartAge >= startAge ── */
+document.getElementById('age').addEventListener('input', () => {
+  const startAge  = +document.getElementById('age').value;
+  const wdEl      = document.getElementById('wdAge');
+  const minWdAge  = Math.max(startAge, 60);
+  wdEl.min        = startAge;          // can't start withdrawals before current age
+  if(+wdEl.value < minWdAge){
+    wdEl.value = minWdAge;
+  }
   update();
 });
+document.getElementById('wdAge').addEventListener('input', update);
 
-/* ═══════════════════════════════════════════════
-   INIT
-═══════════════════════════════════════════════ */
-['age','start','rate','wd','infl','yrs'].forEach(id =>
+['start','rate','wd','infl','yrs'].forEach(id =>
   document.getElementById(id).addEventListener('input', update)
 );
 document.getElementById('realToggle').addEventListener('change', update);
+
+document.getElementById('singleToggle').addEventListener('change', e => {
+  setFilingStatus(e.target.checked);
+});
+
+
+/* ── Init ── */
+// Set wdAge min correctly on load
+(function(){
+  const startAge = +document.getElementById('age').value;
+  const wdEl     = document.getElementById('wdAge');
+  wdEl.min       = startAge;
+  const defaultWd = Math.max(startAge, 60);
+  wdEl.value     = defaultWd;
+})();
 
 renderThreshEditor();
 update();

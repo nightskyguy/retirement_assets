@@ -1,0 +1,140 @@
+IRA PROJECTION TOOL — REPRODUCTION SPEC
+========================================
+Single self-contained HTML file. No build step. Requires internet for
+Chart.js 4.4.1 (cdnjs) and Google Fonts (DM Sans / DM Mono). Dark theme.
+
+
+LAYOUT
+------
+Two-column grid (275px left panel | flex right column), max-width 1000px.
+Left panel: all sliders, toggles, and threshold editor.
+Right column: 4 metric cards, chart, data table, footnote.
+
+
+LEFT PANEL — SLIDERS (all range inputs, value shown inline right)
+-----------------------------------------------------------------
+1. Current age          min 40  max 74  step 1   default 65
+2. Withdrawal start age min=currentAge  max 80  step 1   default max(currentAge, 60)
+   - When age slider moves, wdAge.min = startAge; if wdAge < max(startAge,60), clamp it up.
+3. Starting balance     min 500K  max 5M  step 100K  default 2M
+4. Annual growth        min 1%  max 15%  step 0.5%  default 8%
+5. Base withdrawal      min 0  max 300K  step 5K  default 100K  (in today's dollars)
+6. Inflation rate       min 0%  max 8%   step 0.5%  default 2.5%
+7. Years to project     min 5   max 40   step 1    default 30
+
+
+LEFT PANEL — TOGGLES
+--------------------
+Toggle 1: "Display in"  Future $ (default) | Today's $
+  - Affects: right-axis chart lines (RMD, base wd, actual wd, thresholds), Peak RMD card,
+    right-axis label, legend label for base wd line.
+  - Does NOT affect: Nominal bal card (always nominal), Real bal card (always real).
+
+Toggle 2: "Filing status"  MFJ (default) | Single
+  - Resets the first 7 threshold rows to the appropriate MFJ or Single defaults.
+  - Preserves any user-added custom rows beyond index 6.
+  - Both the text labels (onclick) AND the checkbox (change event) must call setFilingStatus().
+
+
+LEFT PANEL — TAX & IRMAA THRESHOLD EDITOR
+------------------------------------------
+Editable grid (label | amount | show checkbox + delete button).
+Amounts are in today's dollars; grown by inflation on the chart each year.
+Amount plotted = standard deduction + bracket floor (same logic for IRMAA).
+
+2026 defaults — MFJ (std deduction $30,000):
+  10% bracket   $30,000 + $0        = $30,000    hidden by default
+  12% bracket   $30,000 + $23,850   = $53,850    VISIBLE
+  22% bracket   $30,000 + $96,950   = $126,950   VISIBLE
+  24% bracket   $30,000 + $206,700  = $236,700   hidden
+  32% bracket   $30,000 + $394,600  = $424,600   VISIBLE
+  IRMAA Tier 1  $30,000 + $212,000  = $242,000   hidden
+  IRMAA Tier 2  $30,000 + $266,000  = $296,000   hidden
+
+2026 defaults — Single (std deduction $15,000):
+  10% bracket   $15,000 + $0        = $15,000    hidden
+  12% bracket   $15,000 + $11,925   = $26,925    VISIBLE
+  22% bracket   $15,000 + $48,475   = $63,475    VISIBLE
+  24% bracket   $15,000 + $103,350  = $118,350   hidden
+  32% bracket   $15,000 + $197,300  = $212,300   VISIBLE
+  IRMAA Tier 1  $15,000 + $106,000  = $121,000   hidden
+  IRMAA Tier 2  $15,000 + $133,000  = $148,000   hidden
+
+"+ add threshold" button appends a custom row with a rotating palette color.
+Each threshold row: editable label text, editable dollar amount, show/hide checkbox, delete (×) button.
+
+
+PROJECTION ENGINE  project(start, rate, baseWd, inflRate, years, startAge, wdStartAge)
+---------------------------------------------------------------------------------------
+Per year y (age = startAge + y):
+  inflMult  = (1 + inflRate)^y
+  withdrawing = (age > wdStartAge)   [strict: first withdrawal is year AFTER wdStartAge]
+  adjWd     = withdrawing ? baseWd * inflMult : 0
+  rmd       = (age >= 75) ? balance / ULT[age] : 0
+  actualWd  = withdrawing ? max(adjWd, rmd) : 0
+  growth    = balance * rate
+  balance   = balance + growth - actualWd  (floor 0)
+  realBal   = balance / inflMult
+  targetWd  = baseWd * inflMult  (used for underfunded check even before wdStartAge)
+
+RMD table: IRS Uniform Lifetime Table (SECURE 2.0). Starts at age 75. Ages 75-100 listed.
+RMD_START_AGE = 75  (born after 1958; those born 1951-1958 would use 73 — not modeled here).
+
+Row output fields: y, age, calYear (=2026+y), inflMult, bal, realBal, rmd, realRmd,
+  adjWd, actualWd, realActualWd, growth, realGrowth, baseWd, targetWd, depleted, rmdActive, withdrawing.
+
+
+CHART  (Chart.js 4.4.1, type:'line')
+-------------------------------------
+X-axis labels: "Age 66", "Age 67", … (startAge + y)
+Two Y-axes: yBal (left, balance scale), yWd (right, annual dollar scale).
+All lines: pointRadius 0 (no dots).
+
+Fixed datasets (indices 0-4):
+  0  Nominal balance   solid teal #19c99d  fill area  yBal  — always nominal, never toggled
+  1  Real balance      solid blue #4f9cf9  no fill    yBal  — always real; hidden when Today's $ mode
+  2  RMD               solid amber #f5a623            yWd   — toggle-sensitive
+  3  Base withdrawal   dotted purple #a78bfa [2,3]    yWd   — flat in Today's $, inflating in Future $
+  4  Actual withdrawal dashed red #f25c5c   [5,4]     yWd   — toggle-sensitive
+
+Dynamic datasets (indices 5+, rebuilt each update):
+  One dataset per visible threshold. Dashed line [6,3], each threshold's color, yWd axis.
+  Data: today's $ amount * inflMult per year (Future $), or flat today's $ amount (Today's $).
+
+
+METRIC CARDS (4, always visible)
+---------------------------------
+1. Nominal bal (final)   — last row r.bal. Always nominal. Never changes with toggle.
+2. Real bal (final)      — last row r.realBal. Always real. Never changes with toggle.
+3. Peak RMD              — max(r.rmd or r.realRmd across all rows). Toggle-sensitive.
+                           Label says "Peak RMD (nominal)" or "Peak RMD (today's $)".
+                           Shows "None" if no RMDs occur in projection window.
+4. Underfunded at        — first year where r.bal < r.targetWd (balance < infl-adj base withdrawal).
+                           Shows calendar year + age, e.g. "2041 (age 80)". Shows "Never" if not hit.
+                           NOT "balance hits zero" — it's "can no longer fund your withdrawal target".
+
+
+DATA TABLE
+----------
+Columns: Year (calendar, 2027…), Age, Nominal bal, Real bal, RMD, Base wd, Actual wd, Growth.
+Row colors: amber = RMD overrides desired withdrawal; red = balance depleted (went to zero).
+"Actual wd" shows "—" for years before withdrawal start age.
+No "Infl-adj wd" column (redundant with Actual wd in most years).
+Table does NOT change with the Future$/Today's $ toggle (always shows nominal values).
+
+
+KNOWN GOTCHA / BUG HISTORY
+---------------------------
+The filing status checkbox AND its text-label onclick handlers must both call setFilingStatus().
+Attaching only a 'change' event OR only onclick will leave one interaction path broken.
+Correct pattern:
+  document.getElementById('singleToggle').addEventListener('change', e => setFilingStatus(e.target.checked));
+  <span onclick="setFilingStatus(false)">MFJ</span>
+  <span onclick="setFilingStatus(true)">Single</span>
+
+
+DEPENDENCIES
+------------
+Chart.js 4.4.1  https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js
+Google Fonts    DM Mono (300,400,500) + DM Sans (300,400,500)
+No other libraries. No build tooling. Open directly in browser.

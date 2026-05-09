@@ -570,8 +570,7 @@ document.getElementById('singleToggle').addEventListener('change', e => {
   const startAge = +document.getElementById('age').value;
   const wdEl     = document.getElementById('wdAge');
   wdEl.min       = startAge;
-  const defaultWd = Math.max(startAge, 60);
-  wdEl.value     = defaultWd;
+  if(+wdEl.value < startAge) wdEl.value = startAge;
 })();
 
 renderThreshEditor();

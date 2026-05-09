@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NPV — Growing Annuity Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f3ee;
+    --surface: #ffffff;
+    --surface2: #edeae3;
+    --border: #d8d4cb;
+    --text: #1a1916;
+    --muted: #7a7670;
+    --accent: #2a5caa;
+    --accent-light: #dce8f7;
+    --bar-default: #c8d8ef;
+    --bar-active: #2a5caa;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+  }
+
+  header h1 {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  header p {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  .formula-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.875rem 1.25rem;
+    margin-bottom: 2rem;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .formula-box strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .controls {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .control-row {
+    display: grid;
+    grid-template-columns: 200px 1fr 72px;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1.25rem;
+  }
+
+  .control-row:last-child { margin-bottom: 0; }
+
+  .control-row label {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--surface);
+  }
+
+  .readout {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: right;
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 1.25rem 0;
+  }
+
+  .combined-rate {
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: -0.5rem;
+    margin-bottom: 0.25rem;
+  }
+  .combined-rate strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .results {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+  }
+
+  .metric.primary {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+
+  .metric .lbl {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: var(--mono);
+  }
+
+  .metric.primary .lbl { color: var(--accent); }
+
+  .metric .val {
+    font-family: var(--mono);
+    font-size: 1.35rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .metric.primary .val { color: var(--accent); }
+
+  .chart-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+
+  .chart-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-bottom: 1rem;
+  }
+
+  .chart-wrap {
+    position: relative;
+    width: 100%;
+    height: 220px;
+  }
+
+  footer {
+    margin-top: 2rem;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    font-family: var(--mono);
+  }
+
+  .help-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 0.75rem;
+    padding: 6px 14px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .help-btn:hover { opacity: 0.85; }
+
+  /* Modal overlay */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(26, 25, 22, 0.5);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    max-width: 620px;
+    width: 100%;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 2rem;
+    position: relative;
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 3px 10px;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .modal-close:hover { color: var(--text); }
+
+  .modal h2 {
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  .modal .modal-lead {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+  }
+
+  .modal h3 {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    margin: 1.25rem 0 0.75rem;
+  }
+
+  .modal dl {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 6px 16px;
+    font-size: 13px;
+  }
+
+  .modal dt {
+    font-family: var(--mono);
+    font-weight: 500;
+    color: var(--text);
+    padding-top: 2px;
+  }
+
+  .modal dd {
+    color: var(--muted);
+    line-height: 1.55;
+  }
+
+  .modal .example-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.875rem 1.1rem;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.65;
+    margin-top: 0.75rem;
+  }
+
+  .modal .example-box strong {
+    font-family: var(--mono);
+    font-weight: 500;
+  }
+
+  @media (max-width: 540px) {
+    .modal dl { grid-template-columns: 1fr; }
+    .modal dt { margin-top: 0.5rem; }
+    .modal dd { margin-left: 0; }
+  }
+
+  @media (max-width: 540px) {
+    .control-row { grid-template-columns: 1fr 60px; }
+    .control-row label { grid-column: 1 / -1; margin-bottom: -8px; }
+    .results { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Current Cost of Future Increasing Payments</h1>
+    <p>What is the current cost of N years of payments that grow faster than inflation?</p>
+    <button class="help-btn" onclick="document.getElementById('help-modal').classList.add('open')">
+      &#9432; How to Use This Tool
+    </button>
+  </header>
+
+  <!-- Usage modal -->
+  <div class="modal-overlay" id="help-modal" onclick="if(event.target===this)this.classList.remove('open')">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button class="modal-close" onclick="document.getElementById('help-modal').classList.remove('open')">✕ Close</button>
+
+      <h2 id="modal-title">How to Use This Tool</h2>
+      <p class="modal-lead">
+        This calculator answers: <em>how much money must be set aside today</em> — and left to grow — to fund
+        a series of payments that increase every year? The primary use case is <strong>Medicare IRMAA
+        surcharges</strong>, but it works for any growing recurring obligation.
+      </p>
+
+      <h3>Primary Use Case — IRMAA Penalties</h3>
+      <dl>
+        <dt>What is IRMAA?</dt>
+        <dd>IRMAA (Income-Related Monthly Adjustment Amount) is a Medicare surcharge added to Part B and Part D premiums when your income exceeds certain thresholds. It is assessed based on your MAGI from two years prior.</dd>
+
+        <dt>Why can't you just avoid it?</dt>
+        <dd>IRMAA avoidance requires keeping RMDs plus other fixed income below a tier boundary. If your RMDs alone push you into a tier, avoidance may not be possible — so you need to plan to <em>fund</em> the penalty instead.</dd>
+
+        <dt>The tax problem</dt>
+        <dd>IRMAA is paid with after-tax dollars, but retirement income (IRA/401k withdrawals) is taxed as ordinary income. If your penalty is $2,000 and your tax rate is 20%, you need to withdraw <strong>$2,500</strong> to net $2,000 after taxes. Enter your IRMAA penalty as the First Payment; the Tax Rate slider handles this gross-up automatically.</dd>
+      </dl>
+
+      <h3>Inputs</h3>
+      <dl>
+        <dt>First Payment</dt>
+        <dd>The after-tax obligation in year 1 — for IRMAA, this is the annual surcharge you owe Medicare (Part B + Part D combined). Each subsequent year's payment grows by Inflation + Extra Growth.</dd>
+
+        <dt>Number of Years</dt>
+        <dd>How many years you expect to be subject to this payment. The default of 15 reflects a common IRMAA planning window: RMDs begin at age 75 under current law, and a longevity assumption of 90 gives a 15-year horizon.</dd>
+
+        <dt>Inflation Rate</dt>
+        <dd>Baseline CPI rate. IRMAA thresholds are indexed to CPI, but premiums often rise faster — use the Extra Growth field to capture that.</dd>
+
+        <dt>Extra Growth Above Inflation</dt>
+        <dd>How much faster the payment grows beyond CPI. Medicare Part B premiums have historically grown 2–4% above general inflation. Set to 0 if you want a conservative floor estimate.</dd>
+
+        <dt>Portfolio Return Rate</dt>
+        <dd>The annual return you expect to earn on the funds set aside for this obligation. This is how quickly the reserve can grow to keep pace with future payments. A higher return means you need to set aside less today.</dd>
+
+        <dt>Federal Tax Rate (marginal)</dt>
+        <dd>The <em>marginal</em> rate for your federal tax bracket — the rate applied to the last dollars of income (e.g. 24%), not your lower effective average rate. Use the marginal rate because IRMAA payments are funded from the top slice of withdrawals, which sit at the margin. The first IRMAA tier typically falls in the 24% bracket.</dd>
+
+        <dt>State Tax Rate</dt>
+        <dd>Your state income tax rate on retirement withdrawals. Set to 0 for no-income-tax states (TX, FL, WA, NV, SD, WY, AK, NH, TN). California's top rate is 13.3%. The tool combines federal + state: <strong>Pre-tax draw = Payment ÷ (1 − federal − state)</strong>.</dd>
+      </dl>
+
+      <h3>Results</h3>
+      <dl>
+        <dt>Funds to Allocate Now</dt>
+        <dd>The reserve needed today — growing at your Portfolio Return Rate — to cover every future grossed-up payment. There is no lump-sum buyout for IRMAA; these funds must stay invested and growing alongside the obligation.</dd>
+
+        <dt>Year 1 Pre-tax Draw</dt>
+        <dd>What must actually come out of your account in year 1: the IRMAA penalty divided by (1 − combined tax rate). This makes the tax cost visible.</dd>
+
+        <dt>Final Year Pre-tax Draw</dt>
+        <dd>The gross withdrawal needed in the <em>last</em> year of the projection. Compare this to Year 1 to see how large the obligation grows in nominal dollars. Because IRMAA rises faster than inflation, the real (inflation-adjusted) burden also grows — these payments displace an increasing share of disposable income every year.</dd>
+
+        <dt>Total Real Cost (today's $)</dt>
+        <dd>Every future pre-tax draw converted back to today's purchasing power using inflation as the deflator, then summed. Because IRMAA grows <em>faster</em> than inflation (Extra Growth > 0), this total exceeds N × Year 1 draw — the "small potatoes" compound into a meaningfully larger real burden over time.</dd>
+      </dl>
+
+      <h3>Bar Chart</h3>
+      <dl>
+        <dt></dt>
+        <dd>Shows how the required reserve changes as Portfolio Return Rate varies from 2% to 12%. The dark blue bar is your current selection. A lower expected return means a larger reserve is needed today — stress-test this assumption.</dd>
+      </dl>
+
+      <h3>Example A — IRMAA Penalty Only (what you'd save by avoiding a tier)</h3>
+      <div class="example-box">
+        Your RMDs + fixed income keep you in Tier 1 IRMAA with a cost of <strong>$2,297/year for a couple</strong>
+        (the 2025 surcharge above base Medicare: $81.20 + $14.50 per person per month × 12 × 2).
+        Base Medicare is unavoidable — this is purely the <em>penalty</em> for exceeding the income threshold.<br><br>
+        Settings: First Payment = $2,300, Years = 15, Inflation = 3%, Extra Growth = 2%, Portfolio = 7%,
+        Federal = 24%, State = 0%.<br><br>
+        → Year 1 Pre-tax Draw ≈ <strong>$3,026</strong> &nbsp;·&nbsp;
+           Final Year (nominal) ≈ <strong>$5,900</strong><br>
+        → Total Real Cost shows the penalty costs more in real dollars every year — those "small potatoes"
+        keep growing.
+      </div>
+
+      <h3>Example B — Total Medicare as a Growing Obligation</h3>
+      <div class="example-box">
+        Even with no IRMAA, Medicare costs roughly <strong>$4,870/year per couple</strong> (2025 base
+        Part B + Part D). This is as unavoidable as death and taxes — and it grows faster than inflation.<br><br>
+        Set First Payment = $4,870 to see the full base Medicare burden. Then consider the tiers:<br>
+        &nbsp;· <strong>Tier 1 IRMAA</strong> adds ~$2,297 → total ≈ $7,167/yr (~47% above base)<br>
+        &nbsp;· <strong>Tier 2 IRMAA</strong> roughly doubles the base surcharge → total ≈ $9,700/yr<br><br>
+        Run each scenario to see how the "small potatoes" of today compound into a substantial real burden
+        over a 15-year retirement horizon.
+      </div>
+    </div>
+  </div>
+
+
+  <div class="controls">
+    <div class="control-row">
+      <label>First payment</label>
+      <input type="range" id="pmt" min="100" max="10000" step="50" value="2300">
+      <span class="readout" id="pmt-out">$2,300</span>
+    </div>
+    <div class="control-row">
+      <label>Number of Years</label>
+      <input type="range" id="yrs" min="5" max="40" step="1" value="15">
+      <span class="readout" id="yrs-out">15</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="control-row">
+      <label title="The CPI/COLA inflation rate">Inflation Rate</label>
+      <input type="range" id="inf" min="0" max="8" step="0.25" value="3">
+      <span class="readout" id="inf-out">3.0%</span>
+    </div>
+    <div class="control-row">
+      <label title="How much faster the payment grows above inflation">Extra growth above inflation</label>
+      <input type="range" id="extra" min="0" max="6" step="0.25" value="2">
+      <span class="readout" id="extra-out">2.0%</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="control-row">
+      <label title="Expected after-tax annual return on the funds set aside to cover these payments">Portfolio Return Rate</label>
+      <input type="range" id="disc" min="1" max="12" step="0.5" value="7">
+      <span class="readout" id="disc-out">7.0%</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="control-row">
+      <label title="The marginal federal bracket rate — the rate on your last dollars of income (e.g. 24%), not your lower effective average rate. Use the marginal rate because IRMAA payments are funded from the top slice of withdrawals.">Federal Tax Rate <span style="font-size:11px;color:var(--accent)">(marginal)</span></label>
+      <input type="range" id="ftax" min="0" max="40" step="1" value="24">
+      <span class="readout" id="ftax-out">24%</span>
+    </div>
+    <div class="control-row">
+      <label title="State income tax rate. Set to 0 for states with no income tax (TX, FL, WA, NV, etc.). California's top rate is 13.3%.">State Tax Rate</label>
+      <input type="range" id="stax" min="0" max="13.3" step="0.1" value="0">
+      <span class="readout" id="stax-out">0.0%</span>
+    </div>
+    <div class="combined-rate">Combined rate: <strong id="combined-rate-out">24.0%</strong> &nbsp;·&nbsp; gross-up factor: <strong id="grossup-out">1.316×</strong></div>
+  </div>
+
+  <div class="results">
+    <div class="metric primary">
+      <div class="lbl">Funds to Allocate Now</div>
+      <div class="val" id="npv" title="Invested at your portfolio return rate, this amount covers all future grossed-up payments.">—</div>
+    </div>
+    <div class="metric">
+      <div class="lbl">Year 1 Pre-tax Draw</div>
+      <div class="val" id="pretax" title="Gross account withdrawal needed in year 1. = Payment ÷ (1 − combined tax rate)">—</div>
+    </div>
+    <div class="metric">
+      <div class="lbl">Final Year Pre-tax Draw</div>
+      <div class="val" id="final-pmt" title="Gross withdrawal needed in the last year — shows how much the obligation has grown in nominal dollars.">—</div>
+    </div>
+    <div class="metric">
+      <div class="lbl">Total Real Cost (today's $)</div>
+      <div class="val" id="real-pv" title="Sum of all pre-tax draws, each discounted back to today's dollars by inflation. Grows larger than N × Year 1 because IRMAA rises faster than inflation.">—</div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-title">NPV across different growth rates — highlighted = current selection</div>
+    <div class="chart-wrap">
+      <canvas id="chart" role="img" aria-label="Bar chart of NPV at discount rates 2% through 12%"></canvas>
+    </div>
+  </div>
+
+  <div class="formula-box">
+    <p>Growing annuity present value — PMT is the grossed-up first payment</p><br>
+    <strong>PV = PMT × [1 − ((1+g)/(1+r))ⁿ] / (r − g)</strong><br><br>
+    where &nbsp;g = inflation + extra growth,&nbsp; r = portfolio return rate,&nbsp; PMT = payment ÷ (1 − tax rate)
+  </div>
+
+  <footer>growing annuity calculator &nbsp;·&nbsp; discount rate = after-tax investment return</footer>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  function calcNPV(pmt, g, r, n) {
+    if (Math.abs(r - g) < 1e-9) return pmt * n / (1 + r);
+    return pmt * (1 - Math.pow((1 + g) / (1 + r), n)) / (r - g);
+  }
+
+  function fmt(v) { return '$' + Math.round(v).toLocaleString(); }
+  function pct(v) { return (v * 100).toFixed(1) + '%'; }
+
+  let chartInst = null;
+  const RATES = [2,3,4,5,6,7,8,9,10,11,12];
+
+  function update() {
+    const pmt   = +document.getElementById('pmt').value;
+    const inf   = +document.getElementById('inf').value / 100;
+    const extra = +document.getElementById('extra').value / 100;
+    const disc  = +document.getElementById('disc').value / 100;
+    const n     = +document.getElementById('yrs').value;
+    const ftax  = +document.getElementById('ftax').value / 100;
+    const stax  = +document.getElementById('stax').value / 100;
+    const combined = ftax + stax;
+
+    document.getElementById('pmt-out').textContent   = '$' + pmt.toLocaleString();
+    document.getElementById('inf-out').textContent   = pct(inf);
+    document.getElementById('extra-out').textContent = pct(extra);
+    document.getElementById('disc-out').textContent  = pct(disc);
+    document.getElementById('yrs-out').textContent   = n;
+    document.getElementById('ftax-out').textContent  = Math.round(ftax * 100) + '%';
+    document.getElementById('stax-out').textContent  = (stax * 100).toFixed(1) + '%';
+    document.getElementById('combined-rate-out').textContent = (combined * 100).toFixed(1) + '%';
+    const grossupFactor = combined < 1 ? 1 / (1 - combined) : 1;
+    document.getElementById('grossup-out').textContent = grossupFactor.toFixed(3) + '×';
+
+    const g = inf + extra;
+
+    const effectivePmt = combined < 1 ? pmt / (1 - combined) : pmt;
+
+    document.getElementById('pretax').textContent   = fmt(effectivePmt);
+    document.getElementById('final-pmt').textContent = fmt(effectivePmt * Math.pow(1 + g, n - 1));
+
+    const npv = calcNPV(effectivePmt, g, disc, n);
+    document.getElementById('npv').textContent = fmt(npv);
+
+    // Sum each year's draw discounted back to today by inflation only
+    let realTotal = 0;
+    for (let i = 0; i < n; i++) {
+      realTotal += effectivePmt * Math.pow(1 + g, i) / Math.pow(1 + inf, i);
+    }
+    document.getElementById('real-pv').textContent = fmt(realTotal);
+
+    const highlight = Math.round(disc * 100);
+    const vals   = RATES.map(r => Math.round(calcNPV(effectivePmt, g, r / 100, n)));
+    const colors = RATES.map(r => r === highlight ? '#2a5caa' : '#c8d8ef');
+
+    if (chartInst) {
+      chartInst.data.datasets[0].data = vals;
+      chartInst.data.datasets[0].backgroundColor = colors;
+      chartInst.update('none');
+    } else {
+      chartInst = new Chart(document.getElementById('chart'), {
+        type: 'bar',
+        data: {
+          labels: RATES.map(r => r + '%'),
+          datasets: [{ label: 'NPV', data: vals, backgroundColor: colors, borderWidth: 0, borderRadius: 3 }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => fmt(ctx.raw) } }
+          },
+          scales: {
+            x: { ticks: { autoSkip: false, maxRotation: 0, font: { family: "'DM Mono', monospace", size: 12 } }, grid: { display: false } },
+            y: { ticks: { callback: v => '$' + Math.round(v / 1000) + 'k', font: { family: "'DM Mono', monospace", size: 11 } }, grid: { color: '#edeae3' } }
+          }
+        }
+      });
+    }
+  }
+
+  ['pmt','inf','extra','disc','yrs','ftax','stax'].forEach(id =>
+    document.getElementById(id).addEventListener('input', update)
+  );
+  update();
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') document.getElementById('help-modal').classList.remove('open');
+  });
+</script>
+</body>
+</html>

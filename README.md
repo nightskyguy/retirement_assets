@@ -123,6 +123,14 @@ Operational Tools (All Free, though one is only free to try)
 + [Retirement Figures](http://retirementfigures.com/) seems pretty robust and is currently free.  I have no  access to the source to look for problems.
 
 
+## Standalone Calculator Tools
+
+**[FutureCost.html](FutureCost.html) — Present Value of Growing Payments**
+Answers the question: how much money must be set aside today — and left to grow — to fund a stream of payments that increase faster than inflation? The primary use case is Medicare IRMAA surcharges: because IRMAA penalties are paid from pre-tax IRA/401k withdrawals, the tool tracks federal and state marginal tax rates separately and grosses up every payment to reflect the actual account draw required. Sliders control the annual penalty, planning horizon, CPI inflation, extra growth above inflation (Medicare premiums have historically risen 2–4% above CPI), portfolio return rate, and income (MAGI). Four result metrics — funds to allocate now, year-1 pre-tax draw, final-year pre-tax draw, and total real cost in today's dollars — plus a year-by-year chart of the payment as a percentage of income make the central point viscerally clear: those "small potatoes" grow in real purchasing-power terms every single year.
+
+**[AfterTaxRealGrowth.html](AfterTaxRealGrowth.html) — After-Tax Real Growth Rate**
+Visualizes how inflation and taxation combine to erode nominal investment returns. Set an inflation rate and your portfolio's nominal return, and the tool plots the real after-tax return across six federal tax brackets (0%, 12%, 22%, 24%, 32%, 37%), with the 24% bracket highlighted as the typical IRMAA Tier 1 landing zone. A dashed break-even line at 0% real return makes immediately visible that a 2.50% nominal return at 2.50% inflation and 25% tax is not a wash — it is a net loss of purchasing power (~0.61%/year). Each bracket card shows your real return at the current portfolio return alongside the minimum nominal return needed to merely preserve purchasing power at that bracket and inflation rate. Useful for stress-testing conservative accounts (CDs, money markets, bond funds) where the real return is easily negative without realizing it.
+
 ## Ramblings and Observations
 
 ### Some of the Things I Learned About Taxation

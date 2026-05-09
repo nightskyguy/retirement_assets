@@ -421,6 +421,11 @@
       <input type="range" id="port" min="0" max="15" step="0.25" value="5">
       <span class="readout" id="port-out">5.00%</span>
     </div>
+    <div class="control-row">
+      <label title="State income tax rate added to each federal bracket. Set to 0 for no-income-tax states. California's top rate is 13.3%.">State Tax Rate (marginal)</label>
+      <input type="range" id="stax" min="0" max="13.3" step="0.1" value="0">
+      <span class="readout" id="stax-out">0.00%</span>
+    </div>
   </div>
 
   <div class="bracket-grid">
@@ -514,9 +519,9 @@
       ctx.setLineDash([4, 3]);
       ctx.stroke();
       ctx.font = "10px 'DM Mono', monospace";
-      ctx.fillStyle = '#888';
-      ctx.textAlign = 'center';
-      ctx.fillText('your return', x, chartArea.bottom + 14);
+      ctx.fillStyle = '#666';
+      ctx.textAlign = 'left';
+      ctx.fillText('← your return', x + 4, chartArea.top + 12);
       ctx.restore();
     }
   };
@@ -527,26 +532,31 @@
   function update() {
     const pi   = +document.getElementById('inf').value / 100;
     const port = +document.getElementById('port').value;
+    const stax = +document.getElementById('stax').value / 100;
     currentPort = port;
 
     document.getElementById('inf-out').textContent  = (pi * 100).toFixed(2) + '%';
     document.getElementById('port-out').textContent = port.toFixed(2) + '%';
+    document.getElementById('stax-out').textContent = (stax * 100).toFixed(2) + '%';
 
-    // Update bracket cards
+    // Update bracket cards — combined rate = federal + state
     BRACKETS.forEach(b => {
-      const real = realRet(port, b.t, pi) * 100;
-      const be   = breakeven(b.t, pi);
+      const combined = b.t + stax;
+      const real = realRet(port, combined, pi) * 100;
+      const be   = breakeven(combined, pi);
       const valEl = document.getElementById('bv-' + b.id);
       valEl.textContent = (real >= 0 ? '+' : '') + real.toFixed(2) + '%';
       valEl.className = 'bc-val ' + (real >= 0 ? 'gain' : 'loss');
-      document.getElementById('bs-' + b.id).textContent =
-        'break-even: ' + be.toFixed(2) + '% nominal';
+      const combinedLabel = stax > 0
+        ? 'combined: ' + (combined * 100).toFixed(2) + '% · break-even: ' + be.toFixed(2) + '%'
+        : 'break-even: ' + be.toFixed(2) + '% nominal';
+      document.getElementById('bs-' + b.id).textContent = combinedLabel;
     });
 
-    // Build line datasets
+    // Build line datasets using combined rate
     const datasets = BRACKETS.map(b => ({
       label: b.label + ' tax',
-      data: NOMINAL.map(g => +(realRet(g, b.t, pi) * 100).toFixed(3)),
+      data: NOMINAL.map(g => +(realRet(g, b.t + stax, pi) * 100).toFixed(3)),
       borderColor: b.color,
       borderWidth: b.width,
       pointRadius: 0,
@@ -634,7 +644,7 @@
     }
   }
 
-  ['inf', 'port'].forEach(id =>
+  ['inf', 'port', 'stax'].forEach(id =>
     document.getElementById(id).addEventListener('input', update)
   );
   update();

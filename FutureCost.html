@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NPV — Growing Annuity Calculator</title>
+<title>NPV — Growing Payment Calculator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -161,6 +161,15 @@
     color: var(--text);
     font-weight: 500;
   }
+
+  .metric .sub-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 5px;
+  }
+
+  .chart-section + .chart-section { margin-top: 1rem; }
 
   .results {
     display: grid;
@@ -421,10 +430,13 @@
         <dd>The annual return you expect to earn on the funds set aside for this obligation. This is how quickly the reserve can grow to keep pace with future payments. A higher return means you need to set aside less today.</dd>
 
         <dt>Federal Tax Rate (marginal)</dt>
-        <dd>The <em>marginal</em> rate for your federal tax bracket — the rate applied to the last dollars of income (e.g. 24%), not your lower effective average rate. Use the marginal rate because IRMAA payments are funded from the top slice of withdrawals, which sit at the margin. The first IRMAA tier typically falls in the 24% bracket.</dd>
+        <dd>The <em>marginal</em> rate for your federal tax bracket — the rate applied to the last dollars of regular income (e.g. 24%), not your lower effective average rate. Use the marginal rate because IRMAA payments are funded from the top slice of withdrawals, which sit at the margin. The first IRMAA tier typically falls in the 24% bracket.</dd>
 
-        <dt>State Tax Rate</dt>
-        <dd>Your state income tax rate on retirement withdrawals. Set to 0 for no-income-tax states (TX, FL, WA, NV, SD, WY, AK, NH, TN). California's top rate is 13.3%. The tool combines federal + state: <strong>Pre-tax draw = Payment ÷ (1 − federal − state)</strong>.</dd>
+        <dt>State Tax Rate (marginal)</dt>
+        <dd>Your state income tax rate on regular income. Set to 0 for no-income-tax states (TX, FL, WA, NV, SD, WY, AK, NH, TN). California's top rate is 13.3%. The tool combines federal + state: <strong>Pre-tax draw = Payment ÷ (1 − federal − state)</strong>.</dd>
+
+        <dt>Annual Income (MAGI)</dt>
+        <dd>Your current Modified Adjusted Gross Income, used only to compute the "% of income" figures shown in the Year 1 and Final Year metrics. The tool assumes this grows with CPI each year so the comparison stays apples-to-apples. The IRMAA Tier 1 threshold for MFJ 2026 is $218,001 — defaulting just above that is a natural starting point.</dd>
       </dl>
 
       <h3>Results</h3>
@@ -433,19 +445,22 @@
         <dd>The reserve needed today — growing at your Portfolio Return Rate — to cover every future grossed-up payment. There is no lump-sum buyout for IRMAA; these funds must stay invested and growing alongside the obligation.</dd>
 
         <dt>Year 1 Pre-tax Draw</dt>
-        <dd>What must actually come out of your account in year 1: the IRMAA penalty divided by (1 − combined tax rate). This makes the tax cost visible.</dd>
+        <dd>What must actually come out of your account in year 1: the IRMAA penalty divided by (1 − combined tax rate). The smaller line below shows this as a percentage of your current income — a useful baseline.</dd>
 
         <dt>Final Year Pre-tax Draw</dt>
-        <dd>The gross withdrawal needed in the <em>last</em> year of the projection. Compare this to Year 1 to see how large the obligation grows in nominal dollars. Because IRMAA rises faster than inflation, the real (inflation-adjusted) burden also grows — these payments displace an increasing share of disposable income every year.</dd>
+        <dd>The gross withdrawal needed in the <em>last</em> year of the projection. The percentage shown below it is calculated against that year's inflation-grown income. Because the payment grows faster than income (Extra Growth > 0), this percentage is higher than Year 1 — those payments displace an ever-larger share of disposable income every year.</dd>
 
         <dt>Total Real Cost (today's $)</dt>
-        <dd>Every future pre-tax draw converted back to today's purchasing power using inflation as the deflator, then summed. Because IRMAA grows <em>faster</em> than inflation (Extra Growth > 0), this total exceeds N × Year 1 draw — the "small potatoes" compound into a meaningfully larger real burden over time.</dd>
+        <dd>Every future pre-tax draw deflated by CPI and summed. Because IRMAA grows <em>faster</em> than inflation, this total exceeds N × Year 1 draw — the "small potatoes" compound into a meaningfully larger real burden over time.</dd>
       </dl>
 
-      <h3>Bar Chart</h3>
+      <h3>Charts</h3>
       <dl>
-        <dt></dt>
-        <dd>Shows how the required reserve changes as Portfolio Return Rate varies from 2% to 12%. The dark blue bar is your current selection. A lower expected return means a larger reserve is needed today — stress-test this assumption.</dd>
+        <dt>NPV sensitivity</dt>
+        <dd>Shows how the required reserve changes as Portfolio Return Rate varies from 2% to 12%. The dark blue bar is your current selection — stress-test the return assumption here.</dd>
+
+        <dt>% of income by year</dt>
+        <dd>Each bar is that year's grossed-up payment as a percentage of that year's CPI-grown income. Because the payment grows at CPI + Extra Growth while income grows at CPI only, the bars rise at the Extra Growth rate each year. A flat Extra Growth of 0% produces a flat line; the default 2% produces a visibly rising staircase — the "growing potatoes" made geometric.</dd>
       </dl>
 
       <h3>Example A — IRMAA Penalty Only (what you'd save by avoiding a tier)</h3>
@@ -497,8 +512,9 @@
     <div class="control-row">
       <label title="How much faster the payment grows above inflation">Extra growth above inflation</label>
       <input type="range" id="extra" min="0" max="6" step="0.25" value="2">
-      <span class="readout" id="extra-out">2.0%</span>
+      <span class="readout" id="extra-out">2.00%</span>
     </div>
+    <div class="combined-rate">Payment growth (g): <strong id="g-rate-out">5.00%</strong> &nbsp;·&nbsp; <span id="inf-g-out">3.00%</span> CPI + <span id="extra-g-out">2.00%</span> extra</div>
 
     <div class="divider"></div>
 
@@ -520,7 +536,15 @@
       <input type="range" id="stax" min="0" max="13.3" step="0.1" value="0">
       <span class="readout" id="stax-out">0.0%</span>
     </div>
-    <div class="combined-rate">Combined rate: <strong id="combined-rate-out">24.0%</strong> &nbsp;·&nbsp; gross-up factor: <strong id="grossup-out">1.316×</strong></div>
+    <div class="combined-rate">Combined rate: <strong id="combined-rate-out">24.00%</strong> &nbsp;·&nbsp; gross-up factor: <strong id="grossup-out">1.316×</strong></div>
+
+    <div class="divider"></div>
+
+    <div class="control-row">
+      <label title="Your current annual MAGI. Used only for the % of income display. Grows with CPI each year. IRMAA Tier 1 (MFJ 2026) begins at $218,001.">Annual Income (MAGI)</label>
+      <input type="range" id="income" min="150000" max="600000" step="5000" value="220000">
+      <span class="readout" id="income-out">$220k</span>
+    </div>
   </div>
 
   <div class="results">
@@ -531,10 +555,12 @@
     <div class="metric">
       <div class="lbl">Year 1 Pre-tax Draw</div>
       <div class="val" id="pretax" title="Gross account withdrawal needed in year 1. = Payment ÷ (1 − combined tax rate)">—</div>
+      <div class="sub-val" id="pretax-pct">—% of income</div>
     </div>
     <div class="metric">
       <div class="lbl">Final Year Pre-tax Draw</div>
       <div class="val" id="final-pmt" title="Gross withdrawal needed in the last year — shows how much the obligation has grown in nominal dollars.">—</div>
+      <div class="sub-val" id="final-pct">—% of income</div>
     </div>
     <div class="metric">
       <div class="lbl">Total Real Cost (today's $)</div>
@@ -543,9 +569,16 @@
   </div>
 
   <div class="chart-section">
-    <div class="chart-title">NPV across different growth rates — highlighted = current selection</div>
+    <div class="chart-title">NPV across different portfolio return rates — highlighted = current selection</div>
     <div class="chart-wrap">
       <canvas id="chart" role="img" aria-label="Bar chart of NPV at discount rates 2% through 12%"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-title">Pre-tax draw as % of annual income — year by year (income grows with CPI)</div>
+    <div class="chart-wrap">
+      <canvas id="chart2" role="img" aria-label="Bar chart of payment as percentage of income by year"></canvas>
     </div>
   </div>
 
@@ -566,54 +599,67 @@
     return pmt * (1 - Math.pow((1 + g) / (1 + r), n)) / (r - g);
   }
 
-  function fmt(v) { return '$' + Math.round(v).toLocaleString(); }
-  function pct(v) { return (v * 100).toFixed(1) + '%'; }
+  function fmt(v)  { return '$' + Math.round(v).toLocaleString(); }
+  function fmtK(v) { return '$' + Math.round(v / 1000) + 'k'; }
+  function pct(v)  { return (v * 100).toFixed(2) + '%'; }
 
-  let chartInst = null;
+  let chartInst = null, chartInst2 = null;
   const RATES = [2,3,4,5,6,7,8,9,10,11,12];
 
   function update() {
-    const pmt   = +document.getElementById('pmt').value;
-    const inf   = +document.getElementById('inf').value / 100;
-    const extra = +document.getElementById('extra').value / 100;
-    const disc  = +document.getElementById('disc').value / 100;
-    const n     = +document.getElementById('yrs').value;
-    const ftax  = +document.getElementById('ftax').value / 100;
-    const stax  = +document.getElementById('stax').value / 100;
+    const pmt    = +document.getElementById('pmt').value;
+    const inf    = +document.getElementById('inf').value / 100;
+    const extra  = +document.getElementById('extra').value / 100;
+    const disc   = +document.getElementById('disc').value / 100;
+    const n      = +document.getElementById('yrs').value;
+    const ftax   = +document.getElementById('ftax').value / 100;
+    const stax   = +document.getElementById('stax').value / 100;
+    const income = +document.getElementById('income').value;
     const combined = ftax + stax;
-
-    document.getElementById('pmt-out').textContent   = '$' + pmt.toLocaleString();
-    document.getElementById('inf-out').textContent   = pct(inf);
-    document.getElementById('extra-out').textContent = pct(extra);
-    document.getElementById('disc-out').textContent  = pct(disc);
-    document.getElementById('yrs-out').textContent   = n;
-    document.getElementById('ftax-out').textContent  = Math.round(ftax * 100) + '%';
-    document.getElementById('stax-out').textContent  = (stax * 100).toFixed(1) + '%';
-    document.getElementById('combined-rate-out').textContent = (combined * 100).toFixed(1) + '%';
-    const grossupFactor = combined < 1 ? 1 / (1 - combined) : 1;
-    document.getElementById('grossup-out').textContent = grossupFactor.toFixed(3) + '×';
-
     const g = inf + extra;
 
+    // Readouts
+    document.getElementById('pmt-out').textContent            = '$' + pmt.toLocaleString();
+    document.getElementById('inf-out').textContent            = pct(inf);
+    document.getElementById('extra-out').textContent          = pct(extra);
+    document.getElementById('disc-out').textContent           = pct(disc);
+    document.getElementById('yrs-out').textContent            = n;
+    document.getElementById('ftax-out').textContent           = pct(ftax);
+    document.getElementById('stax-out').textContent           = pct(stax);
+    document.getElementById('income-out').textContent         = fmtK(income);
+    document.getElementById('combined-rate-out').textContent  = pct(combined);
+    document.getElementById('g-rate-out').textContent         = pct(g);
+    document.getElementById('inf-g-out').textContent          = pct(inf);
+    document.getElementById('extra-g-out').textContent        = pct(extra);
+    const grossupFactor = combined < 1 ? 1 / (1 - combined) : 1;
+    document.getElementById('grossup-out').textContent        = grossupFactor.toFixed(3) + '×';
+
+    // Effective (grossed-up) payment
     const effectivePmt = combined < 1 ? pmt / (1 - combined) : pmt;
 
-    document.getElementById('pretax').textContent   = fmt(effectivePmt);
-    document.getElementById('final-pmt').textContent = fmt(effectivePmt * Math.pow(1 + g, n - 1));
+    // Year 1
+    document.getElementById('pretax').textContent     = fmt(effectivePmt);
+    document.getElementById('pretax-pct').textContent = (effectivePmt / income * 100).toFixed(2) + '% of income';
 
-    const npv = calcNPV(effectivePmt, g, disc, n);
-    document.getElementById('npv').textContent = fmt(npv);
+    // Final year (nominal payment and income both grown)
+    const finalPmt    = effectivePmt * Math.pow(1 + g, n - 1);
+    const finalIncome = income * Math.pow(1 + inf, n - 1);
+    document.getElementById('final-pmt').textContent  = fmt(finalPmt);
+    document.getElementById('final-pct').textContent  = (finalPmt / finalIncome * 100).toFixed(2) + '% of income';
 
-    // Sum each year's draw discounted back to today by inflation only
+    // NPV
+    document.getElementById('npv').textContent = fmt(calcNPV(effectivePmt, g, disc, n));
+
+    // Total real cost: each year's draw deflated by inflation
     let realTotal = 0;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < n; i++)
       realTotal += effectivePmt * Math.pow(1 + g, i) / Math.pow(1 + inf, i);
-    }
     document.getElementById('real-pv').textContent = fmt(realTotal);
 
+    // Chart 1: NPV sensitivity across return rates
     const highlight = Math.round(disc * 100);
     const vals   = RATES.map(r => Math.round(calcNPV(effectivePmt, g, r / 100, n)));
     const colors = RATES.map(r => r === highlight ? '#2a5caa' : '#c8d8ef');
-
     if (chartInst) {
       chartInst.data.datasets[0].data = vals;
       chartInst.data.datasets[0].backgroundColor = colors;
@@ -621,17 +667,10 @@
     } else {
       chartInst = new Chart(document.getElementById('chart'), {
         type: 'bar',
-        data: {
-          labels: RATES.map(r => r + '%'),
-          datasets: [{ label: 'NPV', data: vals, backgroundColor: colors, borderWidth: 0, borderRadius: 3 }]
-        },
+        data: { labels: RATES.map(r => r + '%'), datasets: [{ label: 'NPV', data: vals, backgroundColor: colors, borderWidth: 0, borderRadius: 3 }] },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: { callbacks: { label: ctx => fmt(ctx.raw) } }
-          },
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => fmt(ctx.raw) } } },
           scales: {
             x: { ticks: { autoSkip: false, maxRotation: 0, font: { family: "'DM Mono', monospace", size: 12 } }, grid: { display: false } },
             y: { ticks: { callback: v => '$' + Math.round(v / 1000) + 'k', font: { family: "'DM Mono', monospace", size: 11 } }, grid: { color: '#edeae3' } }
@@ -639,9 +678,33 @@
         }
       });
     }
+
+    // Chart 2: payment as % of income, year by year
+    const yearLabels = Array.from({length: n}, (_, i) => 'Yr ' + (i + 1));
+    const pctVals = Array.from({length: n}, (_, i) =>
+      +((effectivePmt * Math.pow(1 + g, i)) / (income * Math.pow(1 + inf, i)) * 100).toFixed(3)
+    );
+    if (chartInst2) {
+      chartInst2.data.labels = yearLabels;
+      chartInst2.data.datasets[0].data = pctVals;
+      chartInst2.update('none');
+    } else {
+      chartInst2 = new Chart(document.getElementById('chart2'), {
+        type: 'bar',
+        data: { labels: yearLabels, datasets: [{ label: '% of income', data: pctVals, backgroundColor: '#c8d8ef', borderWidth: 0, borderRadius: 2 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.raw.toFixed(2) + '% of income' } } },
+          scales: {
+            x: { ticks: { autoSkip: true, maxTicksLimit: 16, maxRotation: 0, font: { family: "'DM Mono', monospace", size: 10 } }, grid: { display: false } },
+            y: { ticks: { callback: v => v.toFixed(1) + '%', font: { family: "'DM Mono', monospace", size: 11 } }, grid: { color: '#edeae3' } }
+          }
+        }
+      });
+    }
   }
 
-  ['pmt','inf','extra','disc','yrs','ftax','stax'].forEach(id =>
+  ['pmt','inf','extra','disc','yrs','ftax','stax','income'].forEach(id =>
     document.getElementById(id).addEventListener('input', update)
   );
   update();

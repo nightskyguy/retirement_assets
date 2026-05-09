@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>After-Tax Real Growth Rate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f3ee;
+    --surface: #ffffff;
+    --surface2: #edeae3;
+    --border: #d8d4cb;
+    --text: #1a1916;
+    --muted: #7a7670;
+    --accent: #2a5caa;
+    --accent-light: #dce8f7;
+    --gain: #2d7a4f;
+    --loss: #b03030;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 2rem 1rem 4rem;
+  }
+
+  .container { max-width: 720px; margin: 0 auto; }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+  }
+
+  header h1 {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  header p { font-size: 13px; color: var(--muted); font-weight: 300; }
+
+  .controls {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .control-row {
+    display: grid;
+    grid-template-columns: 220px 1fr 72px;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1.25rem;
+  }
+
+  .control-row:last-child { margin-bottom: 0; }
+
+  .control-row label { font-size: 13px; color: var(--muted); font-weight: 400; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--surface);
+  }
+
+  .readout {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: right;
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+  }
+
+  /* Bracket cards */
+  .bracket-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+
+  .bc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.875rem 1rem;
+  }
+
+  .bc.irmaa { border-color: var(--accent); background: var(--accent-light); }
+
+  .bc-lbl {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .bc.irmaa .bc-lbl { color: var(--accent); }
+
+  .bc-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  .bc-val {
+    font-family: var(--mono);
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .bc-val.gain { color: var(--gain); }
+  .bc-val.loss { color: var(--loss); }
+
+  .bc-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .bc.irmaa .bc-sub { color: var(--accent); opacity: 0.85; }
+
+  /* Chart */
+  .chart-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .chart-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-bottom: 1rem;
+  }
+
+  .chart-wrap { position: relative; width: 100%; height: 300px; }
+
+  .chart-note {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 0.75rem;
+  }
+
+  .formula-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.875rem 1.25rem;
+    margin-bottom: 2rem;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .formula-box strong { color: var(--text); font-weight: 500; }
+
+  footer {
+    margin-top: 2rem;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    font-family: var(--mono);
+  }
+
+  /* Help button */
+  .help-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 0.75rem;
+    padding: 6px 14px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .help-btn:hover { opacity: 0.85; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(26, 25, 22, 0.5);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    max-width: 580px;
+    width: 100%;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 2rem;
+    position: relative;
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 1rem; right: 1rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 3px 10px;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .modal-close:hover { color: var(--text); }
+
+  .modal h2 {
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  .modal .modal-lead {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+  }
+
+  .modal h3 {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+    margin: 1.25rem 0 0.75rem;
+  }
+
+  .modal dl {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 6px 16px;
+    font-size: 13px;
+  }
+
+  .modal dt { font-family: var(--mono); font-weight: 500; color: var(--text); padding-top: 2px; }
+  .modal dd { color: var(--muted); line-height: 1.55; }
+
+  .modal .example-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.875rem 1.1rem;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.65;
+    margin-top: 0.75rem;
+  }
+
+  .modal .example-box strong { font-family: var(--mono); font-weight: 500; }
+
+  @media (max-width: 540px) {
+    .control-row { grid-template-columns: 1fr 60px; }
+    .control-row label { grid-column: 1 / -1; margin-bottom: -8px; }
+    .bracket-grid { grid-template-columns: 1fr 1fr; }
+    .modal dl { grid-template-columns: 1fr; }
+    .modal dt { margin-top: 0.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>After-Tax Real Growth Rate</h1>
+    <p>What is your actual purchasing-power gain after inflation and taxes?</p>
+    <button class="help-btn" onclick="document.getElementById('help-modal').classList.add('open')">
+      &#9432; How to Read This Chart
+    </button>
+  </header>
+
+  <div class="modal-overlay" id="help-modal" onclick="if(event.target===this)this.classList.remove('open')">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button class="modal-close" onclick="document.getElementById('help-modal').classList.remove('open')">✕ Close</button>
+
+      <h2 id="modal-title">How to Read This Chart</h2>
+      <p class="modal-lead">
+        A nominal return of 5% sounds healthy — but after inflation and taxes it may be far less impressive,
+        or even negative. This tool shows the <strong>real after-tax return</strong> (actual change in
+        purchasing power) for six common tax brackets across a range of nominal growth rates.
+      </p>
+
+      <h3>The Key Insight</h3>
+      <div class="example-box">
+        Suppose you earn <strong>2.50% nominal</strong> and inflation is <strong>2.50%</strong>.
+        Intuitively it seems like a wash — but if you pay <strong>25% tax</strong> on the gain, your
+        after-tax return is only 1.875%. Inflation still takes 2.50%, so you lose
+        <strong>~0.61% of purchasing power per year</strong>.<br><br>
+        To merely <em>break even</em> at 25% tax and 2.50% inflation you need:<br>
+        g = 2.50% ÷ (1 − 0.25) = <strong>3.33% nominal</strong>.
+        Every increase in tax rate raises this bar further.
+      </div>
+
+      <h3>Inputs</h3>
+      <dl>
+        <dt>Inflation Rate</dt>
+        <dd>Annual CPI rate. This raises the bar that nominal returns must clear just to preserve purchasing power. Even at modest inflation, taxes can tip a mediocre return into a real loss.</dd>
+
+        <dt>Portfolio Return</dt>
+        <dd>Your nominal (pre-tax) annual return. Sets the vertical reference line on the chart and drives the real-return figures shown in each bracket card. Try the actual return on your conservative accounts — CDs, money markets, bond funds.</dd>
+      </dl>
+
+      <h3>Bracket Cards</h3>
+      <dl>
+        <dt>Real Return</dt>
+        <dd>Your actual purchasing-power change at the current portfolio return, in that bracket. <span style="color:var(--gain);font-weight:500">Green</span> = gaining; <span style="color:var(--loss);font-weight:500">red</span> = losing. The 24% bracket is highlighted — this is typically where the first IRMAA tier falls for a married couple.</dd>
+
+        <dt>Break-even</dt>
+        <dd>The minimum nominal return needed at that tax rate and inflation level to neither gain nor lose purchasing power. Lines on the chart cross 0% real return exactly at this nominal rate.</dd>
+      </dl>
+
+      <h3>Chart</h3>
+      <dl>
+        <dt></dt>
+        <dd>Each colored line is one tax bracket's real after-tax return across all nominal growth rates. The dashed gray line at 0% is break-even. The vertical dashed line marks your current portfolio return. Lines below 0% represent a loss of purchasing power — the shaded area to the left of the vertical line and below 0% is where your money loses value in real terms.</dd>
+      </dl>
+
+      <h3>Formula</h3>
+      <dl>
+        <dt>Real after-tax return</dt>
+        <dd>(1 + g × (1 − t)) ÷ (1 + π) − 1<br>
+        g = nominal growth rate &nbsp;·&nbsp; t = tax rate &nbsp;·&nbsp; π = inflation</dd>
+
+        <dt>Break-even nominal</dt>
+        <dd>π ÷ (1 − t) &nbsp;— the minimum g for zero real return</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="control-row">
+      <label title="Annual CPI / cost-of-living inflation rate">Inflation Rate</label>
+      <input type="range" id="inf" min="0" max="8" step="0.25" value="2.5">
+      <span class="readout" id="inf-out">2.50%</span>
+    </div>
+    <div class="control-row">
+      <label title="Your portfolio's nominal (pre-tax) annual return — sets the reference line on the chart">Portfolio Return (nominal)</label>
+      <input type="range" id="port" min="0" max="15" step="0.25" value="5">
+      <span class="readout" id="port-out">5.00%</span>
+    </div>
+    <div class="control-row">
+      <label title="State income tax rate added to each federal bracket. Set to 0 for no-income-tax states. California's top rate is 13.3%.">State Tax Rate (marginal)</label>
+      <input type="range" id="stax" min="0" max="13.3" step="0.1" value="0">
+      <span class="readout" id="stax-out">0.00%</span>
+    </div>
+  </div>
+
+  <div class="bracket-grid">
+    <div class="bc" id="bc-0">
+      <div class="bc-lbl"><span class="bc-dot" style="background:#4caf80"></span>0% bracket</div>
+      <div class="bc-val" id="bv-0">—</div>
+      <div class="bc-sub" id="bs-0">break-even: —</div>
+    </div>
+    <div class="bc" id="bc-12">
+      <div class="bc-lbl"><span class="bc-dot" style="background:#5b9bd5"></span>12% bracket</div>
+      <div class="bc-val" id="bv-12">—</div>
+      <div class="bc-sub" id="bs-12">break-even: —</div>
+    </div>
+    <div class="bc" id="bc-22">
+      <div class="bc-lbl"><span class="bc-dot" style="background:#2a5caa"></span>22% bracket</div>
+      <div class="bc-val" id="bv-22">—</div>
+      <div class="bc-sub" id="bs-22">break-even: —</div>
+    </div>
+    <div class="bc irmaa" id="bc-24">
+      <div class="bc-lbl"><span class="bc-dot" style="background:#1e3f7a"></span>24% — IRMAA Tier 1</div>
+      <div class="bc-val" id="bv-24">—</div>
+      <div class="bc-sub" id="bs-24">break-even: —</div>
+    </div>
+    <div class="bc" id="bc-32">
+      <div class="bc-lbl"><span class="bc-dot" style="background:#c06830"></span>32% bracket</div>
+      <div class="bc-val" id="bv-32">—</div>
+      <div class="bc-sub" id="bs-32">break-even: —</div>
+    </div>
+    <div class="bc" id="bc-37">
+      <div class="bc-lbl"><span class="bc-dot" style="background:#b03030"></span>37% bracket</div>
+      <div class="bc-val" id="bv-37">—</div>
+      <div class="bc-sub" id="bs-37">break-even: —</div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-title">Real after-tax return vs. nominal growth rate — by tax bracket</div>
+    <div class="chart-wrap">
+      <canvas id="chart" role="img" aria-label="Line chart of real after-tax return by tax bracket"></canvas>
+    </div>
+    <div class="chart-note">Above 0% = gaining purchasing power &nbsp;·&nbsp; Below 0% = losing purchasing power</div>
+  </div>
+
+  <div class="formula-box">
+    <strong>Real after-tax return = (1 + g × (1 − t)) / (1 + π) − 1</strong><br><br>
+    g = nominal growth rate &nbsp;·&nbsp; t = total marginal tax rate &nbsp;·&nbsp; π = inflation rate<br><br>
+    <strong>Break-even nominal rate = π / (1 − t)</strong> &nbsp;— the minimum return to preserve purchasing power
+  </div>
+
+  <footer>after-tax real growth calculator &nbsp;·&nbsp; real return = purchasing-power change after inflation and taxes</footer>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  const BRACKETS = [
+    { t: 0,    id: '0',  label: '0%',            color: '#4caf80', width: 1.5 },
+    { t: 0.12, id: '12', label: '12%',            color: '#5b9bd5', width: 1.5 },
+    { t: 0.22, id: '22', label: '22%',            color: '#2a5caa', width: 1.5 },
+    { t: 0.24, id: '24', label: '24% (IRMAA T1)', color: '#1e3f7a', width: 2.5 },
+    { t: 0.32, id: '32', label: '32%',            color: '#c06830', width: 1.5 },
+    { t: 0.37, id: '37', label: '37%',            color: '#b03030', width: 1.5 },
+  ];
+
+  // X-axis: 0% to 15% in 0.25% steps = 61 points
+  const NOMINAL = Array.from({length: 61}, (_, i) => i * 0.25);
+
+  function realRet(g, t, pi) {
+    return (1 + (g / 100) * (1 - t)) / (1 + pi) - 1;
+  }
+
+  function breakeven(t, pi) {
+    return t < 1 ? (pi / (1 - t)) * 100 : Infinity;
+  }
+
+  // Custom plugin: draws vertical reference line at the portfolio return
+  let currentPort = 5;
+  const verticalLinePlugin = {
+    id: 'verticalLine',
+    afterDraw(chart) {
+      const { ctx, chartArea, scales } = chart;
+      const portIdx = Math.round(currentPort / 0.25);
+      if (portIdx < 0 || portIdx >= NOMINAL.length) return;
+      const x = scales.x.getPixelForValue(portIdx);
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x, chartArea.top);
+      ctx.lineTo(x, chartArea.bottom);
+      ctx.strokeStyle = '#888';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.font = "10px 'DM Mono', monospace";
+      ctx.fillStyle = '#666';
+      ctx.textAlign = 'left';
+      ctx.fillText('← your return', x + 4, chartArea.top + 12);
+      ctx.restore();
+    }
+  };
+  Chart.register(verticalLinePlugin);
+
+  let chartInst = null;
+
+  function update() {
+    const pi   = +document.getElementById('inf').value / 100;
+    const port = +document.getElementById('port').value;
+    const stax = +document.getElementById('stax').value / 100;
+    currentPort = port;
+
+    document.getElementById('inf-out').textContent  = (pi * 100).toFixed(2) + '%';
+    document.getElementById('port-out').textContent = port.toFixed(2) + '%';
+    document.getElementById('stax-out').textContent = (stax * 100).toFixed(2) + '%';
+
+    // Update bracket cards — combined rate = federal + state
+    BRACKETS.forEach(b => {
+      const combined = b.t + stax;
+      const real = realRet(port, combined, pi) * 100;
+      const be   = breakeven(combined, pi);
+      const valEl = document.getElementById('bv-' + b.id);
+      valEl.textContent = (real >= 0 ? '+' : '') + real.toFixed(2) + '%';
+      valEl.className = 'bc-val ' + (real >= 0 ? 'gain' : 'loss');
+      const combinedLabel = stax > 0
+        ? 'combined: ' + (combined * 100).toFixed(2) + '% · break-even: ' + be.toFixed(2) + '%'
+        : 'break-even: ' + be.toFixed(2) + '% nominal';
+      document.getElementById('bs-' + b.id).textContent = combinedLabel;
+    });
+
+    // Build line datasets using combined rate
+    const datasets = BRACKETS.map(b => ({
+      label: b.label + ' tax',
+      data: NOMINAL.map(g => +(realRet(g, b.t + stax, pi) * 100).toFixed(3)),
+      borderColor: b.color,
+      borderWidth: b.width,
+      pointRadius: 0,
+      fill: false,
+      tension: 0.1,
+    }));
+
+    // Break-even reference line at y = 0
+    datasets.push({
+      label: 'Break-even',
+      data: NOMINAL.map(() => 0),
+      borderColor: '#aaaaaa',
+      borderWidth: 1,
+      borderDash: [5, 4],
+      pointRadius: 0,
+      fill: false,
+      tension: 0,
+    });
+
+    if (chartInst) {
+      chartInst.data.datasets = datasets;
+      chartInst.update('none');
+    } else {
+      chartInst = new Chart(document.getElementById('chart'), {
+        type: 'line',
+        data: {
+          labels: NOMINAL.map((_, i) => i),
+          datasets,
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                font: { family: "'DM Mono', monospace", size: 10 },
+                boxWidth: 16,
+                padding: 10,
+              },
+            },
+            tooltip: {
+              callbacks: {
+                title: ctx => 'Nominal: ' + NOMINAL[ctx[0].dataIndex].toFixed(2) + '%',
+                label: ctx => ' ' + ctx.dataset.label + ': ' +
+                  (ctx.raw >= 0 ? '+' : '') + ctx.raw.toFixed(2) + '%',
+              }
+            }
+          },
+          scales: {
+            x: {
+              ticks: {
+                autoSkip: false,
+                maxRotation: 0,
+                font: { family: "'DM Mono', monospace", size: 10 },
+                // Show label only at whole-number nominal returns (every 4th point)
+                callback: (val, idx) => idx % 4 === 0 ? NOMINAL[idx] + '%' : '',
+              },
+              grid: { display: false },
+              title: {
+                display: true,
+                text: 'Nominal Annual Return',
+                font: { family: "'DM Mono', monospace", size: 11 },
+                color: '#7a7670',
+              },
+            },
+            y: {
+              ticks: {
+                callback: v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%',
+                font: { family: "'DM Mono', monospace", size: 11 },
+              },
+              grid: { color: '#edeae3' },
+              title: {
+                display: true,
+                text: 'Real After-Tax Return',
+                font: { family: "'DM Mono', monospace", size: 11 },
+                color: '#7a7670',
+              },
+            }
+          }
+        }
+      });
+    }
+  }
+
+  ['inf', 'port', 'stax'].forEach(id =>
+    document.getElementById(id).addEventListener('input', update)
+  );
+  update();
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') document.getElementById('help-modal').classList.remove('open');
+  });
+</script>
+</body>
+</html>

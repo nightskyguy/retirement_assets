@@ -1,0 +1,9 @@
+# Example CODEOWNERS file
+# Default owners for everything in the repo
+* @nightskyguy
+
+# Specific owners for JavaScript files (last match takes precedence)
+# *.js @js-owner
+
+# Owners for the /docs directory
+# /docs/ @docs-team   

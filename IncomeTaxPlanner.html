@@ -57,12 +57,37 @@
   .charts-col { display:flex; flex-direction:column; gap:1.1rem; }
   .assum { font-family:var(--mono); font-size:10px; color:var(--muted); line-height:1.8; }
   .assum strong { color:var(--text); } .assum .warn { color:var(--amber); } .assum div { margin-bottom:.2rem; }
+  .hdr-btn { background:var(--surf2); border:1px solid var(--border); border-radius:5px; color:var(--muted); font-family:var(--mono); font-size:11px; padding:5px 13px; cursor:pointer; transition:border-color .15s,color .15s; white-space:nowrap; }
+  .hdr-btn:hover { border-color:var(--teal); color:var(--teal); }
+  .hdr-btn.share { border-color:rgba(25,201,157,.35); color:var(--teal); }
+  .hdr-btn.share:hover { background:rgba(25,201,157,.08); }
+  .share-feedback { font-family:var(--mono); font-size:10px; color:var(--teal); opacity:0; transition:opacity .3s; }
+  .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:900; overflow-y:auto; }
+  .modal-box { max-width:700px; margin:2.5rem auto; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:2rem 2.2rem 2rem; }
+  .modal-hdr { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1.2rem; border-bottom:1px solid var(--border); padding-bottom:.8rem; }
+  .modal-hdr h2 { font-family:var(--mono); font-size:.95rem; font-weight:500; color:var(--teal); }
+  .modal-close { background:none; border:none; color:var(--muted); cursor:pointer; font-size:1.1rem; line-height:1; padding:0 2px; }
+  .modal-close:hover { color:var(--text); }
+  .modal-section { margin-bottom:1.2rem; }
+  .modal-section h3 { font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; margin-bottom:.5rem; }
+  .modal-section p, .modal-section li { font-family:var(--sans); font-size:13px; color:var(--text); line-height:1.75; }
+  .modal-section ul { padding-left:1.2rem; margin-top:.3rem; }
+  .modal-section li { margin-bottom:.25rem; }
+  .modal-kv { display:grid; grid-template-columns:auto 1fr; gap:.2rem .9rem; }
+  .modal-kv dt { font-family:var(--mono); font-size:12px; color:var(--teal); white-space:nowrap; }
+  .modal-kv dd { font-family:var(--sans); font-size:12px; color:var(--text); line-height:1.65; }
+  .modal-warn { font-family:var(--mono); font-size:11px; color:var(--amber); line-height:1.6; margin-top:.35rem; }
 </style>
 </head>
 <body>
 <header>
   <h1>Income Tax Planner</h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · 2026–2035 with inflation</p>
+  <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+    <span class="share-feedback" id="share-ok">Copied!</span>
+    <button class="hdr-btn share" onclick="shareConfig()">&#8258; Share</button>
+    <button class="hdr-btn" onclick="openModal()">How to Use</button>
+  </div>
 </header>
 
 <div class="shell">
@@ -885,8 +910,172 @@ function initTooltipSync() {
 updYear(); updInf(); updMed(); updProp(); updCgBasis();
 document.getElementById('ss-val').textContent = '$0';
 document.getElementById('cg-sale-val').textContent = '$0';
+loadFromURL();   // apply URL params before first render
 run();
 initTooltipSync();
+
+// ─── HOW TO USE MODAL ────────────────────────────────────────────────────────
+function openModal()  { document.getElementById('modal-bg').style.display='block'; }
+function closeModal() { document.getElementById('modal-bg').style.display='none';  }
+document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
+
+// ─── SHARE / URL ENCODING ────────────────────────────────────────────────────
+function buildShareURL() {
+  const base = window.location.href.split('?')[0].split('#')[0];
+  const p = new URLSearchParams({
+    st: cfg.status,
+    s:  cfg.state,
+    a1: cfg.ages[0],
+    a2: cfg.ages[1],
+    ss: cfg.ssIncome,
+    pt: cfg.propTax,
+    cs: cfg.cgSale,
+    cb: cfg.cgBasisPct,
+    yr: cfg.year,
+    'in': cfg.inflation,
+    me: cfg.medicareExtra,
+    ob: cfg.obbaOn  ? 1 : 0,
+    sh: cfg.saltHigh ? 1 : 0
+  });
+  return `${base}?${p.toString()}`;
+}
+
+async function shareConfig() {
+  const url = buildShareURL();
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch {
+    // file:// clipboard may be denied — fall back to prompt
+    prompt('Copy this URL to share your current settings:', url);
+    return;
+  }
+  const el = document.getElementById('share-ok');
+  el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 2000);
+}
+
+// ─── LOAD CONFIG FROM URL PARAMS ─────────────────────────────────────────────
+function loadFromURL() {
+  const p = new URLSearchParams(window.location.search);
+  if (!p.size) return;
+
+  // Filing status — update UI without triggering run()
+  if (p.has('st') && ['MFJ','SGL'].includes(p.get('st'))) {
+    const s = p.get('st');
+    cfg.status = s;
+    document.getElementById('btn-MFJ').classList.toggle('active', s==='MFJ');
+    document.getElementById('btn-SGL').classList.toggle('active', s==='SGL');
+    const mfj = s==='MFJ';
+    document.getElementById('age-grid').classList.toggle('single', !mfj);
+    document.getElementById('age2').style.display = mfj ? '' : 'none';
+    document.getElementById('age-label').textContent = mfj ? 'Taxpayer Ages' : 'Taxpayer Age';
+  }
+  if (p.has('s'))  document.getElementById('sel-state').value = p.get('s');
+  if (p.has('a1')) document.getElementById('age1').value = +p.get('a1');
+  if (p.has('a2')) document.getElementById('age2').value = +p.get('a2');
+
+  if (p.has('ss')) {
+    const v = +p.get('ss');
+    document.getElementById('num-ss').value = v;
+    document.getElementById('sl-ss').value  = Math.min(v, 80000);
+    document.getElementById('ss-val').textContent = '$'+v.toLocaleString();
+  }
+  if (p.has('pt')) {
+    const v = +p.get('pt');
+    document.getElementById('num-prop').value = v;
+    document.getElementById('prop-val').textContent = '$'+v.toLocaleString();
+  }
+  if (p.has('cs')) {
+    const v = +p.get('cs');
+    document.getElementById('num-cg-sale').value = v;
+    document.getElementById('sl-cg-sale').value  = Math.min(v, 500000);
+    document.getElementById('cg-sale-val').textContent = '$'+v.toLocaleString();
+  }
+  if (p.has('cb')) document.getElementById('sl-cg-basis').value = +p.get('cb');
+  if (p.has('yr')) {
+    document.getElementById('sl-year').value = +p.get('yr');
+    document.getElementById('year-display').textContent = p.get('yr');
+  }
+  if (p.has('in')) {
+    document.getElementById('sl-inf').value = p.get('in');
+    document.getElementById('inf-val').textContent = p.get('in')+'%';
+  }
+  if (p.has('me')) {
+    document.getElementById('sl-med').value = p.get('me');
+    document.getElementById('med-val').textContent = '+'+p.get('me')+'%';
+  }
+  if (p.has('ob')) {
+    const on = p.get('ob')==='1';
+    document.getElementById('sw-obbba').checked = on;
+    cfg.obbaOn = on;
+    document.getElementById('salt-40k').disabled = !on;
+    document.getElementById('salt-10k').disabled = !on;
+  }
+  if (p.has('sh')) {
+    const high = p.get('sh')==='1';
+    cfg.saltHigh = high;
+    document.getElementById('salt-40k').classList.toggle('active', high);
+    document.getElementById('salt-10k').classList.toggle('active', !high);
+  }
+  updCgBasis();
+}
 </script>
+
+<!-- ── HOW TO USE MODAL ── -->
+<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <h2>Income Tax Planner — How to Use</h2>
+      <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+    </div>
+
+    <div class="modal-section">
+      <h3>What questions does this answer?</h3>
+      <dl class="modal-kv">
+        <dt>A · Marginal sensitivity</dt>
+        <dd>How does my total tax burden change if my income is $10k higher or lower? The chart shows the full sweep so you can see cliffs, humps, and flat regions at a glance.</dd>
+        <dt>B · Sweet spots &amp; danger zones</dt>
+        <dd>Where are the SS torpedo, IRMAA tier crossings, and NIIT threshold? The vertical reference lines and marginal rate curve (purple dashed) make them immediately visible.</dd>
+        <dt>C · True all-in effective rate</dt>
+        <dd>Federal + state + IRMAA combined, not just the marginal bracket. The white line on the Tax Rates chart is the number that actually matters for planning.</dd>
+        <dt>D · Withholding guidance</dt>
+        <dd>Hover your expected income on either chart. The tooltip shows each component's dollar amount and its share of total income — use this to set federal and state withholding.</dd>
+      </dl>
+    </div>
+
+    <div class="modal-section">
+      <h3>How the income sweep works</h3>
+      <p>The x-axis sweeps <strong>ordinary income</strong> from $0 to $1.1M in $10k steps. Ordinary income covers wages, IRA/401k withdrawals, pensions, and RMDs — anything taxed at regular rates. <strong>Social Security</strong> and <strong>capital gains</strong> are entered as fixed amounts that apply at every point across the sweep, letting you see how they interact with the income ramp.</p>
+    </div>
+
+    <div class="modal-section">
+      <h3>The charts</h3>
+      <ul>
+        <li><strong>Tax Rates</strong> — federal effective (blue), state effective (orange), total effective (white), and federal marginal on ordinary income + CG (purple dashed). Hover to see exact values.</li>
+        <li><strong>Total Tax Dollars</strong> — stacked bars for Federal Ordinary, Federal CG, IRMAA, State Ordinary, and State CG. The teal line (right axis) is your MAGI — the figure used to determine next year's IRMAA tier.</li>
+        <li><strong>Cross-chart linking</strong> — hovering either chart activates the tooltip on the other at the same income level.</li>
+        <li><strong>IRMAA tier lines</strong> — click any IRMAA entry in the legend to toggle its vertical reference line on both charts simultaneously.</li>
+      </ul>
+    </div>
+
+    <div class="modal-section">
+      <h3>Caveats &amp; known simplifications</h3>
+      <ul>
+        <li><strong>IRMAA lookback:</strong> Medicare IRMAA uses your MAGI from <em>two years prior</em>. This tool applies it to <em>current-year</em> MAGI — convenient for planning but optimistic by about two years if you've recently had a high-income year.</li>
+        <li><strong>OBBBA provisions</strong> (senior deduction, elevated SALT cap) are modeled from best-available bill text as of mid-2025. Phase-out thresholds ($150k/$75k AGI) and the $40k SALT cap are estimates — verify with IRS guidance when published. No automatic sunset is modeled.</li>
+        <li><strong>Nebraska brackets</strong> are approximate based on the LB754 phase-down schedule; confirm with NE DOR for your specific year.</li>
+        <li><strong>SS provisional income thresholds</strong> ($32k/$44k MFJ, $25k/$34k Single) are intentionally <em>not</em> inflation-adjusted — that is current law, and the reason the SS torpedo worsens over time.</li>
+        <li><strong>NIIT threshold</strong> ($250k MFJ / $200k Single) is also not inflation-indexed — another orphan in the tax code, unchanged since 2013.</li>
+        <li><strong>Excluded:</strong> AMT, self-employment tax, CA SDI, qualified dividends (modeled as CG), muni bond interest, CA personal exemption credits.</li>
+      </ul>
+    </div>
+
+    <div class="modal-section">
+      <h3>Share button</h3>
+      <p>The <strong>Share</strong> button encodes all current settings into the URL and copies it to your clipboard. Paste it into any browser — or save it as a bookmark — to restore the exact same configuration. Works from a local file (<code>file://</code>) as well as a web server.</p>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

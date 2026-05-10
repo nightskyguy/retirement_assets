@@ -62,6 +62,14 @@
   .hdr-btn.share { border-color:rgba(25,201,157,.35); color:var(--teal); }
   .hdr-btn.share:hover { background:rgba(25,201,157,.08); }
   .share-feedback { font-family:var(--mono); font-size:10px; color:var(--teal); opacity:0; transition:opacity .3s; }
+  .share-panel { display:none; position:fixed; top:56px; right:1.5rem; z-index:800; background:var(--surface); border:1px solid var(--teal); border-radius:8px; padding:.85rem 1rem; width:min(480px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.5); }
+  .share-panel label { font-family:var(--mono); font-size:10px; color:var(--muted); display:block; margin-bottom:.4rem; }
+  .share-row { display:flex; gap:6px; }
+  .share-row input { flex:1; background:var(--surf2); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:11px; padding:5px 8px; outline:none; }
+  .share-row input:focus { border-color:var(--teal); }
+  .share-copy { background:rgba(25,201,157,.15); border:1px solid rgba(25,201,157,.4); border-radius:4px; color:var(--teal); font-family:var(--mono); font-size:11px; padding:5px 12px; cursor:pointer; white-space:nowrap; }
+  .share-copy:hover { background:rgba(25,201,157,.25); }
+  .share-status { font-family:var(--mono); font-size:10px; color:var(--teal); margin-top:.35rem; min-height:14px; }
   .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:900; overflow-y:auto; }
   .modal-box { max-width:700px; margin:2.5rem auto; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:2rem 2.2rem 2rem; }
   .modal-hdr { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1.2rem; border-bottom:1px solid var(--border); padding-bottom:.8rem; }
@@ -83,10 +91,18 @@
 <header>
   <h1>Income Tax Planner</h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · 2026–2035 with inflation</p>
-  <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-    <span class="share-feedback" id="share-ok">Copied!</span>
-    <button class="hdr-btn share" onclick="shareConfig()">&#8258; Share</button>
+  <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
+    <button class="hdr-btn share" onclick="toggleSharePanel()">&#8258; Share</button>
     <button class="hdr-btn" onclick="openModal()">How to Use</button>
+    <!-- Share panel anchored below header buttons -->
+    <div class="share-panel" id="share-panel">
+      <label>Copy this URL to restore your current settings in any browser:</label>
+      <div class="share-row">
+        <input type="text" id="share-url-input" readonly onclick="this.select()">
+        <button class="share-copy" onclick="copyShareURL()">Copy</button>
+      </div>
+      <div class="share-status" id="share-status"></div>
+    </div>
   </div>
 </header>
 
@@ -940,19 +956,46 @@ function buildShareURL() {
   return `${base}?${p.toString()}`;
 }
 
-async function shareConfig() {
-  const url = buildShareURL();
-  try {
-    await navigator.clipboard.writeText(url);
-  } catch {
-    // file:// clipboard may be denied — fall back to prompt
-    prompt('Copy this URL to share your current settings:', url);
-    return;
-  }
-  const el = document.getElementById('share-ok');
-  el.style.opacity = '1';
-  setTimeout(() => { el.style.opacity = '0'; }, 2000);
+function toggleSharePanel() {
+  const panel = document.getElementById('share-panel');
+  const input = document.getElementById('share-url-input');
+  const isOpen = panel.style.display === 'block';
+  if (isOpen) { panel.style.display = 'none'; return; }
+  input.value = buildShareURL();
+  document.getElementById('share-status').textContent = '';
+  panel.style.display = 'block';
+  // Select text after layout
+  requestAnimationFrame(() => { input.select(); });
 }
+
+async function copyShareURL() {
+  const input = document.getElementById('share-url-input');
+  const status = document.getElementById('share-status');
+  input.select();
+  // Try modern clipboard API first
+  try {
+    await navigator.clipboard.writeText(input.value);
+    status.textContent = '✓ Copied to clipboard';
+    return;
+  } catch { /* fall through */ }
+  // execCommand fallback (works in file:// and older browsers)
+  try {
+    document.execCommand('copy');
+    status.textContent = '✓ Copied to clipboard';
+  } catch {
+    status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C';
+  }
+}
+
+// Close share panel when clicking outside it
+document.addEventListener('click', e => {
+  const panel = document.getElementById('share-panel');
+  if (panel.style.display === 'block' &&
+      !panel.contains(e.target) &&
+      !e.target.closest('.hdr-btn.share')) {
+    panel.style.display = 'none';
+  }
+});
 
 // ─── LOAD CONFIG FROM URL PARAMS ─────────────────────────────────────────────
 function loadFromURL() {

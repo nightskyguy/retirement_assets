@@ -35,6 +35,15 @@
   .help-close { position:absolute; top:.9rem; right:1rem; background:transparent; border:none; color:var(--muted); font-size:22px; cursor:pointer; line-height:1; }
   .help-close:hover { color:var(--text); }
 
+  /* ── Toast ── */
+  #toast { position:fixed; bottom:2rem; left:50%; transform:translateX(-50%) translateY(16px); background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--teal); font-family:var(--mono); font-size:12px; padding:8px 22px; opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; z-index:400; white-space:nowrap; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ── Share panel ── */
+  #shareUrl { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:var(--mono); font-size:11px; padding:6px 8px; outline:none; word-break:break-all; margin-bottom:.75rem; }
+  #shareUrl:focus { border-color:var(--teal); }
+  .share-actions { display:flex; justify-content:flex-end; gap:.5rem; }
+
   /* ── Layout ── */
   .shell { max-width:1000px; margin:0 auto; display:grid; grid-template-columns:275px 1fr; gap:1.5rem; align-items:start; }
   .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem; }
@@ -106,8 +115,9 @@
 <body>
 
 <header>
-  <h1>IRA Projection v.6</h1>
+  <h1>IRA Projection v.7</h1>
   <p>SECURE 2.0 · IRS Uniform Lifetime Table · RMDs begin at age 75 · 2026 Tax / IRMAA Code</p>
+  <button class="help-btn" onclick="shareBookmark()">&#128279; Share</button>
   <button class="help-btn" onclick="toggleHelp()">? How to Use</button>
 </header>
 
@@ -184,6 +194,25 @@
   </div>
 </div>
 
+<div id="toast"></div>
+
+<!-- ── Share overlay ── -->
+<div class="help-overlay" id="shareOverlay" onclick="if(event.target===this)closeShare()">
+  <div class="help-box" style="max-width:500px">
+    <button class="help-close" onclick="closeShare()">×</button>
+    <h2>Share / Bookmark</h2>
+    <p style="margin-bottom:.75rem">Copy this link to restore your current settings:</p>
+    <input id="shareUrl" type="text" readonly>
+    <p id="shareNote" style="display:none;margin-top:.5rem;font-size:10px;color:var(--muted);font-family:var(--mono);line-height:1.6">
+      Append to the filename when opening directly:<br>
+      <code>IRA_projection.html<b>?v=7&amp;age=…</b></code>
+    </p>
+    <div class="share-actions">
+      <button class="help-btn" style="margin-left:0" onclick="copyShareUrl()">Copy</button>
+    </div>
+  </div>
+</div>
+
 <div class="shell">
   <!-- ── Left panel ── -->
   <div class="panel">
@@ -208,8 +237,8 @@
     <hr class="divider">
 
     <div class="ctrl">
-      <div class="ctrl-header"><label>Base withdrawal (today $)</label><span class="val" id="vW">$75,000</span></div>
-      <input type="range" id="wd" min="0" max="300000" step="5000" value="75000">
+      <div class="ctrl-header"><label>Withdrawal (today $)</label><span class="val" id="vW">$75,000</span></div>
+      <input type="range" id="wd" min="0" max="1000000" step="5000" value="75000">
     </div>
     <div class="ctrl">
       <div class="ctrl-header"><label>Inflation rate</label><span class="val" id="vInfl">2.5%</span></div>
@@ -305,8 +334,8 @@
         <thead>
           <tr>
             <th>Year</th><th>Age</th>
-            <th>Nominal bal</th><th>Real bal</th>
-            <th>RMD</th><th>Total income</th><th>Actual wd</th><th>Net growth</th>
+            <th>Balance</th><th>Real bal</th>
+            <th>RMD</th><th>Total income</th><th>Bracket</th><th>Withdrawal</th><th>Net growth</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -341,30 +370,43 @@ function rmdFactor(age){
 }
 
 /* ── 2026 Tax thresholds (today's $) ──
-   amount = std deduction + bracket floor
+   amount = std deduction + bracket floor (all amounts in today's dollars, grown with inflation)
    MFJ std deduction $30,000 · Single $15,000
-   IRMAA 2026 MAGI: MFJ $212k/$266k · Single $106k/$133k (std deduction added per user preference)
+   Federal brackets: 2025 values used as 2026 estimates (10/12/22/24/32/35/37%)
+   IRMAA 5-tier Medicare surcharge cliffs (MAGI-based; std deduction added for consistency):
+     MFJ: $212k/$266k/$334k/$400k/$750k · Single: $106k/$133k/$167k/$200k/$500k
    type:'bracket' → fill chain between sorted bracket lines (all brackets always in datasets)
-   type:'irmaa'   → cliff line only, no fill
+   type:'irmaa'   → cliff line only, no fill (IRMAA is a cliff, not marginal)
+   Ordered by ascending amount within each filing status.
 */
 const DEFAULTS = {
   mfj: [
-    { label:'10% bracket', amount:30000+0,       color:'#fef08a', visible:false, type:'bracket' },
-    { label:'12% bracket', amount:30000+23850,    color:'#fbbf24', visible:true,  type:'bracket' },
-    { label:'22% bracket', amount:30000+96950,    color:'#f97316', visible:true,  type:'bracket' },
-    { label:'24% bracket', amount:30000+206700,   color:'#ea580c', visible:false, type:'bracket' },
-    { label:'IRMAA Tier 1',amount:30000+212000,   color:'#f87171', visible:true,  type:'irmaa'   },
-    { label:'IRMAA Tier 2',amount:30000+266000,   color:'#dc2626', visible:false, type:'irmaa'   },
-    { label:'32% bracket', amount:30000+394600,   color:'#c2410c', visible:false, type:'bracket' },
+    { id:'f10', label:'10% bracket', amount:30000+0,       color:'#fef08a', visible:false, type:'bracket' },
+    { id:'f12', label:'12% bracket', amount:30000+23850,    color:'#fbbf24', visible:true,  type:'bracket' },
+    { id:'f22', label:'22% bracket', amount:30000+96950,    color:'#f97316', visible:true,  type:'bracket' },
+    { id:'f24', label:'24% bracket', amount:30000+206700,   color:'#ea580c', visible:false, type:'bracket' },
+    { id:'i1',  label:'IRMAA Tier 1',amount:30000+212000,   color:'#f87171', visible:true,  type:'irmaa'   },
+    { id:'i2',  label:'IRMAA Tier 2',amount:30000+266000,   color:'#dc2626', visible:false, type:'irmaa'   },
+    { id:'i3',  label:'IRMAA Tier 3',amount:30000+334000,   color:'#b91c1c', visible:false, type:'irmaa'   },
+    { id:'f32', label:'32% bracket', amount:30000+394600,   color:'#c2410c', visible:false, type:'bracket' },
+    { id:'i4',  label:'IRMAA Tier 4',amount:30000+400000,   color:'#991b1b', visible:false, type:'irmaa'   },
+    { id:'f35', label:'35% bracket', amount:30000+501050,   color:'#9a3412', visible:false, type:'bracket' },
+    { id:'f37', label:'37% bracket', amount:30000+751600,   color:'#7c2d12', visible:false, type:'bracket' },
+    { id:'i5',  label:'IRMAA Tier 5',amount:30000+750000,   color:'#7f1d1d', visible:false, type:'irmaa'   },
   ],
   single: [
-    { label:'10% bracket', amount:15000+0,        color:'#fef08a', visible:false, type:'bracket' },
-    { label:'12% bracket', amount:15000+11925,    color:'#fbbf24', visible:true,  type:'bracket' },
-    { label:'22% bracket', amount:15000+48475,    color:'#f97316', visible:true,  type:'bracket' },
-    { label:'24% bracket', amount:15000+103350,   color:'#ea580c', visible:false, type:'bracket' },
-    { label:'IRMAA Tier 1',amount:15000+106000,   color:'#f87171', visible:true,  type:'irmaa'   },
-    { label:'IRMAA Tier 2',amount:15000+133000,   color:'#dc2626', visible:false, type:'irmaa'   },
-    { label:'32% bracket', amount:15000+197300,   color:'#c2410c', visible:false, type:'bracket' },
+    { id:'f10', label:'10% bracket', amount:15000+0,        color:'#fef08a', visible:false, type:'bracket' },
+    { id:'f12', label:'12% bracket', amount:15000+11925,    color:'#fbbf24', visible:true,  type:'bracket' },
+    { id:'f22', label:'22% bracket', amount:15000+48475,    color:'#f97316', visible:true,  type:'bracket' },
+    { id:'f24', label:'24% bracket', amount:15000+103350,   color:'#ea580c', visible:false, type:'bracket' },
+    { id:'i1',  label:'IRMAA Tier 1',amount:15000+106000,   color:'#f87171', visible:true,  type:'irmaa'   },
+    { id:'i2',  label:'IRMAA Tier 2',amount:15000+133000,   color:'#dc2626', visible:false, type:'irmaa'   },
+    { id:'i3',  label:'IRMAA Tier 3',amount:15000+167000,   color:'#b91c1c', visible:false, type:'irmaa'   },
+    { id:'f32', label:'32% bracket', amount:15000+197300,   color:'#c2410c', visible:false, type:'bracket' },
+    { id:'i4',  label:'IRMAA Tier 4',amount:15000+200000,   color:'#991b1b', visible:false, type:'irmaa'   },
+    { id:'f35', label:'35% bracket', amount:15000+250525,   color:'#9a3412', visible:false, type:'bracket' },
+    { id:'f37', label:'37% bracket', amount:15000+375800,   color:'#7c2d12', visible:false, type:'bracket' },
+    { id:'i5',  label:'IRMAA Tier 5',amount:15000+500000,   color:'#7f1d1d', visible:false, type:'irmaa'   },
   ]
 };
 
@@ -417,6 +459,7 @@ function setFilingStatus(isSingle){
   const src = isSingle ? DEFAULTS.single : DEFAULTS.mfj;
   src.forEach((d,i)=>{
     if(i < thresholds.length){
+      thresholds[i].id      = d.id;
       thresholds[i].label   = d.label;
       thresholds[i].amount  = d.amount;
       thresholds[i].color   = d.color;
@@ -560,11 +603,9 @@ const chart = new Chart(chartCtx, {
             let bracket = null;
             const irmaaHit = [];
             for(const t of sorted){
-              const tv = useReal
-                ? t.amount - lastInflAdjIncome - lastFixedIncome / r.inflMult
-                : (t.amount - lastInflAdjIncome) * r.inflMult - lastFixedIncome;
-              if(tv <= 0) continue;
-              if(totalIncome >= tv){
+              // Compare total income directly to the (inflated) bracket threshold
+              const threshold = useReal ? t.amount : t.amount * r.inflMult;
+              if(totalIncome >= threshold){
                 if(t.type === 'bracket') bracket = t.label;
                 else if(t.type === 'irmaa') irmaaHit.push(t.label);
               }
@@ -585,6 +626,24 @@ const chart = new Chart(chartCtx, {
   }
 });
 
+/* ── Bracket annotation for table rows (always nominal) ── */
+function bracketForRow(r){
+  const totalIncome = r.actualWd + lastInflAdjIncome * r.inflMult + lastFixedIncome;
+  if(totalIncome <= 0) return '—';
+  const sorted = [...thresholds].sort((a,b) => a.amount - b.amount);
+  let bracketLabel = null, highestIrmaa = null;
+  for(const t of sorted){
+    if(totalIncome >= t.amount * r.inflMult){
+      if(t.type === 'bracket') bracketLabel = t.label;
+      else if(t.type === 'irmaa') highestIrmaa = t.label;
+    }
+  }
+  const parts = [];
+  if(bracketLabel)   parts.push(bracketLabel.replace(' bracket',''));
+  if(highestIrmaa)   parts.push(highestIrmaa.replace('IRMAA Tier ','T'));
+  return parts.length ? parts.join(' ') : '—';
+}
+
 /* ── Table ── */
 function buildTable(rows){
   const tbody = document.getElementById('tbody');
@@ -600,6 +659,7 @@ function buildTable(rows){
       <td>${fmt(r.bal)}</td><td>${fmt(r.realBal)}</td>
       <td>${r.rmd>0?fmt(r.rmd):'—'}</td>
       <td>${fmt(totalIncome)}</td>
+      <td style="color:var(--muted)">${bracketForRow(r)}</td>
       <td>${r.withdrawing?fmt(r.actualWd):'—'}</td>
       <td${ngNeg?' style="color:var(--red)"':''}>${fmt(r.netGrowth)}</td>
     `;
@@ -808,6 +868,136 @@ function update(){
   buildTable(rows);
 }
 
+/* ── URL bookmark / share ── */
+function buildBookmarkUrl(){
+  const p = new URLSearchParams();
+  p.set('v',     '7');
+  p.set('age',   document.getElementById('age').value);
+  p.set('wdage', document.getElementById('wdAge').value);
+  p.set('bal',   document.getElementById('start').value);
+  p.set('rate',  document.getElementById('rate').value);
+  p.set('wd',    document.getElementById('wd').value);
+  p.set('infl',  document.getElementById('infl').value);
+  p.set('yrs',   document.getElementById('yrs').value);
+  p.set('iadj',  document.getElementById('inflAdj').value);
+  p.set('fixed', document.getElementById('fixedInc').value);
+  if(document.getElementById('realToggle').checked)   p.set('real',   '1');
+  if(document.getElementById('singleToggle').checked) p.set('single', '1');
+
+  // tv = comma-separated stable IDs of visible thresholds
+  const visIds = thresholds.filter(t => t.id && t.visible).map(t => t.id).join(',');
+  if(visIds) p.set('tv', visIds);
+
+  // ds = 5-char bitmask for fixed dataset visibility (index 0–4)
+  p.set('ds', [0,1,2,3,4].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
+
+  return '?' + p.toString();
+}
+
+function applyUrlParams(){
+  const p = new URLSearchParams(location.search);
+
+  // Enforce wdAge >= age regardless of URL params
+  const enforceWdAge = () => {
+    const wdEl = document.getElementById('wdAge');
+    const minAge = +document.getElementById('age').value;
+    wdEl.min = minAge;
+    if(+wdEl.value < minAge) wdEl.value = minAge;
+  };
+
+  if(!p.has('v')){ enforceWdAge(); return; }
+
+  const setSlider = (id, key) => {
+    if(p.has(key)) document.getElementById(id).value = p.get(key);
+  };
+  setSlider('age',      'age');
+  setSlider('wdAge',    'wdage');
+  setSlider('start',    'bal');
+  setSlider('rate',     'rate');
+  setSlider('wd',       'wd');
+  setSlider('infl',     'infl');
+  setSlider('yrs',      'yrs');
+  setSlider('inflAdj',  'iadj');
+  setSlider('fixedInc', 'fixed');
+
+  document.getElementById('realToggle').checked   = p.get('real')   === '1';
+  document.getElementById('singleToggle').checked = p.get('single') === '1';
+
+  enforceWdAge();
+
+  // Re-init thresholds for the correct filing status
+  const isSingle = p.get('single') === '1';
+  thresholds = (isSingle ? DEFAULTS.single : DEFAULTS.mfj).map(t => ({...t}));
+
+  // Override visibility from tv param (stable IDs — unknown IDs ignored)
+  if(p.has('tv')){
+    const visSet = new Set(p.get('tv').split(',').filter(Boolean));
+    thresholds.forEach(t => { if(t.id) t.visible = visSet.has(t.id); });
+  }
+
+  // Apply fixed dataset visibility from ds bitmask
+  if(p.has('ds')){
+    const ds = p.get('ds');
+    const lgIds = ['lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap'];
+    for(let i = 0; i < Math.min(5, ds.length); i++){
+      const hidden = ds[i] === '0';
+      chart.data.datasets[i].hidden = hidden;
+      const el = document.getElementById(lgIds[i]);
+      if(el){
+        el.style.opacity = hidden ? '0.35' : '1';
+        el.title         = hidden ? 'Hidden — click to show' : 'Click to hide';
+      }
+    }
+  }
+}
+
+async function shareBookmark(){
+  const qs = buildBookmarkUrl();
+
+  const noteEl = document.getElementById('shareNote');
+
+  // data: and blob: URLs (preview panels) have no stable base path —
+  // show just the query string with an explanatory note.
+  if(location.protocol === 'data:' || location.protocol === 'blob:'){
+    document.getElementById('shareUrl').value = qs;
+    noteEl.style.display = 'block';
+    document.getElementById('shareOverlay').classList.add('open');
+    return;
+  }
+  noteEl.style.display = 'none';
+
+  // For http/https/file: strip any existing query string and append ours.
+  const url = location.href.split('?')[0] + qs;
+
+  if(navigator.clipboard && window.isSecureContext){
+    try{
+      await navigator.clipboard.writeText(url);
+      showToast('Link copied to clipboard');
+      return;
+    } catch(e){ /* fall through to panel */ }
+  }
+  document.getElementById('shareUrl').value = url;
+  document.getElementById('shareOverlay').classList.add('open');
+}
+
+function showToast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function closeShare(){ document.getElementById('shareOverlay').classList.remove('open'); }
+
+function copyShareUrl(){
+  const el = document.getElementById('shareUrl');
+  el.select();
+  try{ document.execCommand('copy'); } catch(e){}
+  showToast('Link copied to clipboard');
+  closeShare();
+}
+
 /* ── Event listeners ── */
 document.getElementById('age').addEventListener('input', () => {
   const startAge = +document.getElementById('age').value;
@@ -828,13 +1018,7 @@ document.getElementById('singleToggle').addEventListener('change', e => {
 });
 
 /* ── Init ── */
-(function(){
-  const startAge = +document.getElementById('age').value;
-  const wdEl     = document.getElementById('wdAge');
-  wdEl.min       = startAge;
-  if(+wdEl.value < startAge) wdEl.value = startAge;
-})();
-
+applyUrlParams();
 renderThreshEditor();
 update();
 </script>

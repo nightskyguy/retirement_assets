@@ -96,7 +96,7 @@
     <button class="hdr-btn" onclick="openModal()">How to Use</button>
     <!-- Share panel anchored below header buttons -->
     <div class="share-panel" id="share-panel">
-      <label>Copy this URL to restore your current settings in any browser:</label>
+      <label id="share-label">Copy this URL to restore your current settings in any browser:</label>
       <div class="share-row">
         <input type="text" id="share-url-input" readonly onclick="this.select()">
         <button class="share-copy" onclick="copyShareURL()">Copy</button>
@@ -936,9 +936,8 @@ function closeModal() { document.getElementById('modal-bg').style.display='none'
 document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
 
 // ─── SHARE / URL ENCODING ────────────────────────────────────────────────────
-function buildShareURL() {
-  const base = window.location.href.split('?')[0].split('#')[0];
-  const p = new URLSearchParams({
+function buildShareParams() {
+  return new URLSearchParams({
     st: cfg.status,
     s:  cfg.state,
     a1: cfg.ages[0],
@@ -952,19 +951,31 @@ function buildShareURL() {
     me: cfg.medicareExtra,
     ob: cfg.obbaOn  ? 1 : 0,
     sh: cfg.saltHigh ? 1 : 0
-  });
-  return `${base}?${p.toString()}`;
+  }).toString();
+}
+
+function buildShareURL() {
+  const params = buildShareParams();
+  const href = window.location.href;
+  // data: and blob: URLs encode the whole file — no usable base
+  if (href.startsWith('data:') || href.startsWith('blob:')) return '?' + params;
+  const base = href.split('?')[0].split('#')[0];
+  return `${base}?${params}`;
 }
 
 function toggleSharePanel() {
-  const panel = document.getElementById('share-panel');
-  const input = document.getElementById('share-url-input');
+  const panel  = document.getElementById('share-panel');
+  const input  = document.getElementById('share-url-input');
+  const lbl    = document.getElementById('share-label');
   const isOpen = panel.style.display === 'block';
   if (isOpen) { panel.style.display = 'none'; return; }
-  input.value = buildShareURL();
+  const url = buildShareURL();
+  input.value = url;
+  lbl.textContent = url.startsWith('?')
+    ? 'Append these params to the filename URL (file:// or https://) when opening from disk or web:'
+    : 'Copy this URL to restore your settings in any browser:';
   document.getElementById('share-status').textContent = '';
   panel.style.display = 'block';
-  // Select text after layout
   requestAnimationFrame(() => { input.select(); });
 }
 

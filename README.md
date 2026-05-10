@@ -1,17 +1,48 @@
-## Who is this For?  What Can It Do? 
+## Who Are These Tools For?  What Can They Do? 
 
-You can [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool offline in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tool from Github Pages here:
+You can [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) offline in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tools from Github Pages here:
 
-** [nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html) **
+** [Retirement Optimizer @ nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html) **
+** [IRA Projection @ nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/IRA_projection.html) **
+** [IRMAA and Medicare Future costs @ nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/FutureCost.html) **
+** [After Tax REAL Growth @nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/AfterTaxRealGrowth.html) **
 
-**There is no SUPPORT for this tool** and no guarantee of accuracy, or appropriateness of use. There is also no charge. **USE AT YOUR OWN RISK**
+**There is no SUPPORT for these tools** and no guarantee of accuracy, or appropriateness of use. There is also no charge. **USE AT YOUR OWN RISK**
 
-A California resident built this with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, Javascript, and Groovy. See **Key Features** below for a non-exhaustive list of what the tool can do - and be sure to look at *What the Tool IGNOREs* (and *Known Bugs*, below) so you understand the limitations.
+A California resident built these with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, Javascript, and Groovy. See **Standaline Tools** and **Key Features** below for a non-exhaustive list of what the tools can do - and be sure to look at *What the Tool IGNOREs* (and *Known Bugs*, below) so you understand the limitations of the *Retirement Optimizer*.
 
-#### Features in the Works (and Known Bugs):
+Here are less ambitious, standalone tools. Each should have a "How to Use" set if instructions.
+
+## Standalone Calculator Tools
+
+These tools are still being developed, while the main tool is currently taking a backseat. Each one 
+runs standalone in your browser. Internet connection is needed to lead fonts and the tool for graphing charts.  There is no "tracking" or reporting or sneaky stuff going on. You are welcome to see for yourself by inspecting the source code.
+
+**[IRA Projection](IRA_projection.html) — How your pre-tax (IRA/401k) may (mis)behave**
+In following various Reddit and YouTube discussions I notice a lot of handwaving about IRA/401K balances. What this tool does is it allows you to set your current age, current IRA value, growth and inflation, filing status, and withdrawal rate.  It then calculates the IRA balance and RMDs (once they kick in).  If your current age is > 66 it assumes you have RMDs starting at 73, otherwise it assumes at 75.  You can view the plot in Current or Future dollars.  It's particularly useful for noticing if/when RMDs (by themselves) would exceed certain thresholds (like the Federal 22% bracket). Note that the thresholds provided by default assume the standard deduction has been applied. All brackets are adjusted by the inflation figure given.  You can also add or override the brackets, e.g. to determine which IRMAA tier(s) may be crossed, or to add State tax brackets.  There is no provision for including "additional" income like Social Security, pension, dividends, capital gains, or interest.  And there is no provision for adding lumpy withdrawals, or applying a "curve" to withdrawals. Also, it assumes withdrawals start immediately.  These are possible future additions, but again, the goal is just to get an idea what an IRA might look like in 5 or 10 or 15 years at different appreciation and withdrawal rates.
+
+Where I think it will shine is to quickly determine: how your spending power erodes with inflation, and whether you are going to face RMD jeopardy (and the scale of that jeopardy).  You can also get a clue 
+
+There is not (yet) any provision for state taxation. Because there are many inputs, I'm planning to allow you to capture your current settings with a URL which you can paste into your (or another) browser to pickup where you left off...  Or to pass in a Reddit column showing someone why they really need to think about the traps of growth, underwithdrawal and RMD induced taxation.  My main tool, [Retirement Optimizer](retirement_optimizer.html) is geared to doing more SPECIFIC tax calculations. But as you can see below, it has bugs.
+
+
+**[FutureCost.html](FutureCost.html) — Present Value of Growing Payments**
+Answers the question: how much money must be set aside today — and left to grow — to fund a stream of payments that increase faster than inflation? The primary use case is Medicare IRMAA surcharges: because IRMAA penalties are paid from pre-tax IRA/401k withdrawals, the tool tracks federal and state marginal tax rates separately and grosses up every payment to reflect the actual account draw required. Sliders control the annual penalty, planning horizon, CPI inflation, extra growth above inflation (Medicare premiums have historically risen 2–4% above CPI), portfolio return rate, and income (MAGI). Four result metrics — funds to allocate now, year-1 pre-tax draw, final-year pre-tax draw, and total real cost in today's dollars — plus a year-by-year chart of the payment as a percentage of income make the central point viscerally clear: those "small potatoes" grow in real purchasing-power terms every single year.
+
+**[AfterTaxRealGrowth.html](AfterTaxRealGrowth.html) — After-Tax Real Growth Rate**
+Did you know that your 2.5% interest bearing savings account LOSES money even if inflation is LESS than 2.5%?  I suspected that, but this tool will show you the real answer - and surprise, it matters what your tax bracket is!
+
+Visualize how inflation and taxation combine to erode nominal investment returns. Set an inflation rate and your portfolio's nominal return, and the tool plots the real after-tax return across six federal tax brackets (0%, 12%, 22%, 24%, 32%, 37%), with the 24% bracket highlighted as the typical IRMAA Tier 1 landing zone. A dashed break-even line at 0% real return makes immediately visible that a 2.50% nominal return at 2.50% inflation and 25% tax is not a wash — it is a net loss of purchasing power (~0.61%/year). Each bracket card shows your real return at the current portfolio return alongside the minimum nominal return needed to merely preserve purchasing power at that bracket and inflation rate. Useful for stress-testing conservative accounts (CDs, money markets, bond funds) where the real return is easily negative without realizing it.
+
+
+## The Retirement Optimizer
+
+This was the "original" tool. It is a bit (over) ambitious. 
 
 > [!WARNING]
 > I've stopped updating this for the time being.  In part because I am evaluating other tools, in part because I realized that the approach needs some rethinking. And in part because some of the bugs are daunting.
+
+#### Features in the Works (and Known Bugs):
 
 + **BUG** We suspect the "Fill Bracket" goal has a flaw in the implementation. Please be cautious/ignore for now!
 + **BUG** There appears to be an error in the logic that is now under-withdrawing to meet spend goals.  For my several test scenarios, under withdrawals to meet spend may come to 3k per year. 
@@ -99,12 +130,8 @@ D. **There is no SUPPORT for this tool**. If you ask nicely, or offer a pull req
 #### What about Other tools
 One of the lovely things about engineers, is they like to build things. I've found many other free resources that both inspired me and made realize that there is more than one way to solve problems.  
 
-The sources I found or built.
+The sources I found around the interweb.
 
-+ [IRA Projection](https://nightskyguy.github.io/retirement_assets/IRA_projection.html) by Me.
-In following various Reddit and YouTube discussions, I notice a lot of handwaving about IRA/401K balances. What this tool does is it allows you to set your current age, current IRA value, growth and inflation, filing status, and withdrawal rate.  It then calculates the IRA balance and RMDs (once they kick in).  If your current age is > 66 it assumes you have RMDs starting at 73, otherwise it assumes at 75.  You can view the plot in Current or Future dollars.  It's particularly useful for noticing if/when RMDs (by themselves) would exceed certain thresholds (like the Federal 22% bracket). Note that the thresholds provided by default assume the standard deduction has been applied. All brackets are adjusted by the inflation figure given.  You can also add or override the brackets, e.g. to determine which IRMAA tier(s) may be crossed, or to add State tax brackets.  There is no provision for including "additional" income like Social Security, pension, dividends, capital gains, or interest.  And there is no provision for adding lumpy withdrawals, or applying a "curve" to withdrawals. Also, it assumes withdrawals start immediately.  These are possible future additions, but again, the goal is just to get an idea what an IRA might look like in 5 or 10 or 15 years at different appreciation and withdrawal rates.
-
-Where I think it will shine is to quickly determine: how your spending power erodes with inflation, and whether you are going to face RMD jeopardy (and the scale of that jeopardy).
 
 + [GoogleSheet](https://docs.google.com/spreadsheets/d/1orZQ9g1KvGVrCShibutjyreaeqbmRFVAZ9aSY_57-DQ/edit?gid=1250894970#gid=1250894970) by Charles Eglington found on [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nu9lawc/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1). It's got lots of options. I want some things that aren't in it like a "Life Expectancy" for each person, properly calculate deductions, deduce filing status, etc.  In addition, I'd like it to "self optimize" by varying the amounts of IRA/401K withdrawals (and the number of years for withdrawals).  Ideally it would properly, or more properly calculate California Tax, and have a way to forecast based on inflation. But it's still a helpful tool.
 
@@ -122,14 +149,6 @@ Operational Tools (All Free, though one is only free to try)
 
 + [Retirement Figures](http://retirementfigures.com/) seems pretty robust and is currently free.  I have no  access to the source to look for problems.
 
-
-## Standalone Calculator Tools
-
-**[FutureCost.html](FutureCost.html) — Present Value of Growing Payments**
-Answers the question: how much money must be set aside today — and left to grow — to fund a stream of payments that increase faster than inflation? The primary use case is Medicare IRMAA surcharges: because IRMAA penalties are paid from pre-tax IRA/401k withdrawals, the tool tracks federal and state marginal tax rates separately and grosses up every payment to reflect the actual account draw required. Sliders control the annual penalty, planning horizon, CPI inflation, extra growth above inflation (Medicare premiums have historically risen 2–4% above CPI), portfolio return rate, and income (MAGI). Four result metrics — funds to allocate now, year-1 pre-tax draw, final-year pre-tax draw, and total real cost in today's dollars — plus a year-by-year chart of the payment as a percentage of income make the central point viscerally clear: those "small potatoes" grow in real purchasing-power terms every single year.
-
-**[AfterTaxRealGrowth.html](AfterTaxRealGrowth.html) — After-Tax Real Growth Rate**
-Visualizes how inflation and taxation combine to erode nominal investment returns. Set an inflation rate and your portfolio's nominal return, and the tool plots the real after-tax return across six federal tax brackets (0%, 12%, 22%, 24%, 32%, 37%), with the 24% bracket highlighted as the typical IRMAA Tier 1 landing zone. A dashed break-even line at 0% real return makes immediately visible that a 2.50% nominal return at 2.50% inflation and 25% tax is not a wash — it is a net loss of purchasing power (~0.61%/year). Each bracket card shows your real return at the current portfolio return alongside the minimum nominal return needed to merely preserve purchasing power at that bracket and inflation rate. Useful for stress-testing conservative accounts (CDs, money markets, bond funds) where the real return is easily negative without realizing it.
 
 ## Ramblings and Observations
 

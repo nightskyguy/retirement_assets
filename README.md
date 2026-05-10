@@ -1,12 +1,12 @@
 ## Who Are These Tools For?  What Can They Do? 
 
-You can [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) offline in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tools from Github Pages here:
+You can [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) offline in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tools from Github Pages (_nightskyguy.github.io_) here:
 
-**[Retirement Optimizer @ nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html)**
-**[IRA Projection @ nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/IRA_projection.html)**
-**[IRMAA and Medicare Future costs @ nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/FutureCost.html)**
-**[After Tax REAL Growth @nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/AfterTaxRealGrowth.html)**
-**[Income Tax Planner @nightskyguy.github.io](https://nightskyguy.github.io/retirement_assets/IncomeTaxPlanner.html)**
++ **[IRA Projection](https://nightskyguy.github.io/retirement_assets/IRA_projection.html)**  What will my IRA do?
++ **[IRMAA and Medicare Future costs](https://nightskyguy.github.io/retirement_assets/FutureCost.html)** Will IRMAA kill me?
++ **[After Tax REAL Growth](https://nightskyguy.github.io/retirement_assets/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
++ **[Income Tax Planner](https://nightskyguy.github.io/retirement_assets/IncomeTaxPlanner.html)** What does taxation look like at different income levels (includes many states)
++ **[Retirement Optimizer](https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html)**  A full tool, but with bugs.
 
 **There is no SUPPORT for these tools** and no guarantee of accuracy, or appropriateness of use. There is also no charge. **USE AT YOUR OWN RISK**
 

@@ -1,6 +1,6 @@
 ## Who Are These Tools For?  What Can They Do? 
 
-You can [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) offline in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tools from Github Pages (_nightskyguy.github.io_) here:
+You can [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tools from Github Pages (_nightskyguy.github.io_) here:
 
 + **[IRA Projection](https://nightskyguy.github.io/retirement_assets/IRA_projection.html)**  What will my IRA do?
 + **[IRMAA and Medicare Future costs](https://nightskyguy.github.io/retirement_assets/FutureCost.html)** Will IRMAA kill me?
@@ -10,21 +10,21 @@ You can [download the files](https://github.com/nightskyguy/retirement_assets) a
 
 **There is no SUPPORT for these tools** and no guarantee of accuracy, or appropriateness of use. There is also no charge. **USE AT YOUR OWN RISK**
 
-A California resident built these with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, Javascript, and Groovy. See **Standaline Tools** and **Key Features** below for a non-exhaustive list of what the tools can do - and be sure to look at *What the Tool IGNOREs* (and *Known Bugs*, below) so you understand the limitations of the *Retirement Optimizer*.
+A California resident built these with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, and Javascript. See **Standalone Tools** and **Key Features** below for a summary of what the tools can do - and be sure to look at *What the Tool IGNOREs* (and *Known Bugs*, below) so you understand the limitations of the *Retirement Optimizer*.
 
-Here are less ambitious, standalone tools. Each should have a "How to Use" set if instructions.
+Here are less ambitious, standalone tools. Each should have a "How to Use" set if instructions, many have a way to generate a URL (called share) to capture your settings so you can either run again without reentering, or share with friends (or Redditors) for advice.
 
 ## Standalone Calculator Tools
 
 These tools are still being developed, while the main tool is currently taking a backseat. Each one 
 runs standalone in your browser. Internet connection is needed to lead fonts and the tool for graphing charts.  There is no "tracking" or reporting or sneaky stuff going on. You are welcome to see for yourself by inspecting the source code.
 
-**[IRA Projection](IRA_projection.html) — How your pre-tax (IRA/401k) may (mis)behave**
-In following various Reddit and YouTube discussions I notice a lot of handwaving about IRA/401K balances. What this tool does is it allows you to set your current age, current IRA value, growth and inflation, filing status, and withdrawal rate.  It then calculates the IRA balance and RMDs (once they kick in).  If your current age is > 66 it assumes you have RMDs starting at 73, otherwise it assumes at 75.  You can view the plot in Current or Future dollars.  It's particularly useful for noticing if/when RMDs (by themselves) would exceed certain thresholds (like the Federal 22% bracket). Note that the thresholds provided by default assume the standard deduction has been applied. All brackets are adjusted by the inflation figure given.  You can also add or override the brackets, e.g. to determine which IRMAA tier(s) may be crossed, or to add State tax brackets.  There is no provision for including "additional" income like Social Security, pension, dividends, capital gains, or interest.  And there is no provision for adding lumpy withdrawals, or applying a "curve" to withdrawals. Also, it assumes withdrawals start immediately.  These are possible future additions, but again, the goal is just to get an idea what an IRA might look like in 5 or 10 or 15 years at different appreciation and withdrawal rates.
+**[IRA Projection](IRA_projection.html) — How your pre-tax IRA/401k may (mis)behave**
+In following various Reddit and YouTube discussions I notice a lot of handwaving about IRA/401K balances. What this tool does is allow you to set your current age, current IRA value, growth and inflation, filing status, and withdrawal rate.  It then calculates the IRA balance and RMDs (once they kick in).  If your current age is > 66 it assumes you have RMDs starting at 73, otherwise it assumes at 75.  You can view the plot in Current or Future dollars.  It's particularly useful for noticing if/when RMDs (by themselves) would exceed certain thresholds (like the Federal 22% bracket). Note that the thresholds provided by default assume the standard deduction has been applied. All brackets are adjusted by the inflation figure given.  You can also add or override the brackets, e.g. to determine which IRMAA tier(s) may be crossed, or to add State tax brackets.  There is no provision for including "additional" income like Social Security, pension, dividends, capital gains, or interest.  And there is no provision for adding lumpy withdrawals, or applying a "curve" to withdrawals. These are possible future additions, but again, the goal is just to get an idea what an IRA might look like in 5 or 10 or 15 years at different appreciation and withdrawal rates.
 
 Where I think it will shine is to quickly determine: how your spending power erodes with inflation, and whether you are going to face RMD jeopardy (and the scale of that jeopardy).  You can also get a clue 
 
-There is not (yet) any provision for state taxation. Because there are many inputs, I'm planning to allow you to capture your current settings with a URL which you can paste into your (or another) browser to pickup where you left off...  Or to pass in a Reddit column showing someone why they really need to think about the traps of growth, underwithdrawal and RMD induced taxation.  My main tool, [Retirement Optimizer](retirement_optimizer.html) is geared to doing more SPECIFIC tax calculations. But as you can see below, it has bugs.
+There is not (yet) any provision for state taxation. Because there are many inputs, You can capture your current settings with a URL which you can paste into your (or another) browser to pickup where you left off...  Or to pass in a Reddit column showing someone why they really need to think about the traps of growth, underwithdrawal and RMD induced taxation.  My main tool, [Retirement Optimizer](retirement_optimizer.html) is geared to doing more SPECIFIC tax calculations. But as you can see below, it has bugs.
 
 
 **[FutureCost.html](FutureCost.html) — Present Value of Growing Payments**

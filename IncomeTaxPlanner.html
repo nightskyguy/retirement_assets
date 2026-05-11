@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Income Tax Planner · 2026+</title>
+<title>Income Tax Planner · 2026+ · v2</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -17,6 +17,7 @@
   body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:14px; min-height:100vh; padding:1.5rem 1.5rem 4rem; }
   header { max-width:1300px; margin:0 auto 1.25rem; border-bottom:1px solid var(--border); padding-bottom:.9rem; display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
   header h1 { font-family:var(--mono); font-size:1.05rem; font-weight:500; letter-spacing:.05em; color:var(--teal); }
+  header h1 .ver { font-size:.7rem; color:var(--muted); margin-left:.5rem; letter-spacing:.08em; vertical-align:middle; }
   header p  { font-size:11px; color:var(--muted); font-family:var(--mono); }
   .shell { max-width:1300px; margin:0 auto; display:grid; grid-template-columns:272px 1fr; gap:1.25rem; align-items:start; }
   .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.1rem; }
@@ -85,11 +86,37 @@
   .modal-kv dt { font-family:var(--mono); font-size:12px; color:var(--teal); white-space:nowrap; }
   .modal-kv dd { font-family:var(--sans); font-size:12px; color:var(--text); line-height:1.65; }
   .modal-warn { font-family:var(--mono); font-size:11px; color:var(--amber); line-height:1.6; margin-top:.35rem; }
+  /* ── v2: combined chart + info panel ── */
+  .chart-top-row { display:flex; align-items:center; margin-bottom:.75rem; gap:.65rem; flex-wrap:nowrap; }
+  .view-toggle { width:auto; flex-shrink:0; margin-left:auto; }
+  .view-toggle button { padding:5px 18px; }
+  .info-panel { background:var(--surf2); border:1px solid var(--border); border-radius:6px; padding:.7rem .95rem; margin-top:.85rem; min-height:5rem; }
+  .info-default { font-family:var(--mono); font-size:11px; color:var(--muted); text-align:center; padding:1rem 0; }
+  .info-header { display:flex; gap:1.1rem; font-family:var(--mono); font-size:11px; margin-bottom:.55rem; padding-bottom:.45rem; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .info-header .ih-lbl { color:var(--muted); }
+  .info-header .ih-val { color:var(--text); font-weight:500; }
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:.4rem 1.5rem; }
+  .info-col-title { font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:.35rem; padding-bottom:.25rem; border-bottom:1px solid var(--border); }
+  .info-row { display:flex; justify-content:space-between; font-family:var(--mono); font-size:11px; margin-bottom:2px; gap:.5rem; }
+  .info-row .ir-lbl { color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .info-row .ir-val { color:var(--text); white-space:nowrap; }
+  .info-row .ir-pct { color:var(--muted); margin-left:.35rem; white-space:nowrap; }
+  .info-divider { border-top:1px solid var(--border); margin:.3rem 0; }
+  .info-total .ir-val { color:var(--teal); font-weight:500; }
+  .info-total .ir-pct { color:var(--teal); }
+  /* ── year bar (above chart) ── */
+  .year-bar { display:flex; align-items:center; gap:.75rem; margin-bottom:.8rem; padding:.5rem .6rem; background:var(--surf2); border:1px solid var(--border); border-radius:6px; }
+  .yb-label { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
+  .yb-ends  { font-family:var(--mono); font-size:9px; color:var(--muted); white-space:nowrap; }
+  .yb-val   { font-family:var(--mono); font-size:1.15rem; font-weight:500; color:var(--teal); min-width:2.6rem; text-align:right; letter-spacing:.05em; }
+  .yb-slider { flex:1; }
+  /* ── taxable gain display ── */
+  .gain-display { font-family:var(--mono); font-size:12px; font-weight:500; color:var(--amber); margin-top:4px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner</h1>
+  <h1>Income Tax Planner<span class="ver">v2</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · 2026–2035 with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <button class="hdr-btn share" onclick="toggleSharePanel()">&#8258; Share</button>
@@ -177,19 +204,13 @@
 
     <div class="ctrl">
       <div class="ctrl-hdr"><label>Cost Basis (% of proceeds)</label><span class="val" id="cg-basis-val">60%</span></div>
-      <input type="range" id="sl-cg-basis" min="0" max="99" step="1" value="60"
+      <input type="range" id="sl-cg-basis" min="0" max="100" step="1" value="60"
              oninput="updCgBasis(); run()">
-      <div class="range-ends"><span>0% (all gain)</span><span>99% basis</span></div>
-      <div class="note" id="cg-note">Taxable gain: $0</div>
+      <div class="range-ends"><span>0% (all gain)</span><span>100% basis</span></div>
+      <div class="gain-display" id="cg-note">Taxable gain: $0</div>
     </div>
 
     <hr class="divider">
-
-    <div class="ctrl">
-      <div class="year-big" id="year-display">2026</div>
-      <input type="range" id="sl-year" min="2026" max="2035" step="1" value="2026" oninput="updYear(); run()">
-      <div class="range-ends"><span>2026</span><span>2035</span></div>
-    </div>
 
     <div class="ctrl">
       <div class="ctrl-hdr"><label>Annual Bracket Inflation</label><span class="val" id="inf-val">2.5%</span></div>
@@ -230,15 +251,22 @@
 
   <!-- ── RIGHT COLUMN ── -->
   <div class="charts-col">
-    <!-- Chart 1: Tax Rates -->
+    <!-- Combined Chart -->
     <div class="panel">
-      <div class="panel-title" id="rates-title">Tax Rates</div>
-      <canvas id="chart-rates" height="185"></canvas>
-    </div>
-    <!-- Chart 2: Total Tax Dollars -->
-    <div class="panel">
-      <div class="panel-title" id="dollars-title">Total Tax — Dollars</div>
-      <canvas id="chart-dollars" height="205"></canvas>
+      <span id="chart-title" style="display:none"></span>
+      <div class="chart-top-row">
+        <span class="yb-val" id="year-display">2026</span>
+        <input type="range" id="sl-year" min="2026" max="2035" step="1" value="2026" class="yb-slider" oninput="updYear(); run()">
+        <span class="yb-label">Tax Year</span>
+        <div class="pill-row opt view-toggle">
+          <button id="btn-rates" class="active" onclick="setViewMode('rates')">Tax Rates</button>
+          <button id="btn-dollars" onclick="setViewMode('dollars')">Tax Dollars</button>
+        </div>
+      </div>
+      <canvas id="chart-main" height="240"></canvas>
+      <div class="info-panel" id="info-panel">
+        <div class="info-default">Click a column to pin · hover for quick summary</div>
+      </div>
     </div>
     <!-- Assumptions -->
     <div class="panel">
@@ -451,15 +479,23 @@ function calcAt(ordInc) {
            ssTax, magi, fedAGI, useItz, nSen, senDed, cgGain, fedOrdTaxable };
 }
 
-// Stored sweep results for tooltip access
+// Stored sweep results for info panel access
 let sweepData = [];
+let pinnedIdx = null;  // pinned column index (null = none)
+
+const TT_BASE = {
+  backgroundColor:'#1f2435', borderColor:'#2a3048', borderWidth:1,
+  titleColor:'#e8eaf2', bodyColor:'#7b83a0',
+  titleFont:{family:'DM Mono, monospace',size:11},
+  bodyFont: {family:'DM Mono, monospace',size:11},
+  footerColor:'#a78bfa', footerFont:{family:'DM Mono, monospace',size:10}
+};
 
 function sweep() {
   const pts = [];
   for (let i=0; i<N; i++) pts.push(calcAt(i*INCOME_STEP));
 
-  // Numerical marginal rate: federal ordinary + IRMAA (captures SS torpedo + IRMAA spikes)
-  // Marginal rate from federal income tax only — IRMAA is a step cliff, not marginal
+  // Numerical marginal rate: federal ordinary + CG
   const marg = pts.map((p,i) => {
     if (i===0) return 0;
     return ((p.fedTax + p.fedCGTax) - (pts[i-1].fedTax + pts[i-1].fedCGTax)) / INCOME_STEP;
@@ -492,23 +528,33 @@ const XSCALE = {
           maxRotation:0, autoSkip:false, callback(_,i){ return LABELS[i]||null; }},
   grid:{ color:'#2a3048' }
 };
-const TT_BASE = {
-  backgroundColor:'#1f2435', borderColor:'#2a3048', borderWidth:1,
-  titleColor:'#e8eaf2', bodyColor:'#7b83a0',
-  titleFont:{family:'DM Mono, monospace',size:11},
-  bodyFont: {family:'DM Mono, monospace',size:11},
-  footerColor:'#e8eaf2', footerFont:{family:'DM Mono, monospace',size:11,weight:'bold'}
-};
 
-// vLine plugin — draws NIIT line always, IRMAA tier lines based on dataset hidden state
+// vLine plugin — pin line (solid green), NIIT, IRMAA tier lines
 const vLinePlugin = {
   id:'vLines',
   afterDatasetsDraw(chart, _args, opts) {
+    const {ctx, scales:{x, yR, yD}} = chart;
+    const yScale = yR?.display ? yR : yD;
+    if (!yScale) return;
+
+    // Pinned column: semi-transparent fill + solid teal line
+    if (pinnedIdx !== null && pinnedIdx >= 0 && pinnedIdx < N) {
+      const xPx = x.getPixelForValue(pinnedIdx);
+      const bw  = x.getPixelForValue(1) - x.getPixelForValue(0);
+      ctx.save();
+      ctx.fillStyle = 'rgba(25,201,157,0.10)';
+      ctx.fillRect(xPx - bw/2, yScale.top, bw, yScale.bottom - yScale.top);
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(25,201,157,0.85)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(xPx, yScale.top); ctx.lineTo(xPx, yScale.bottom); ctx.stroke();
+      ctx.restore();
+    }
+
+    // Reference lines (NIIT, IRMAA tiers)
     if (!opts?.lines?.length) return;
-    const {ctx, scales:{x,y}} = chart;
     for (const ln of opts.lines) {
       if (ln.index < 0 || ln.index >= N) continue;
-      // For IRMAA tier lines, check visibility via fake dataset
       if (ln.tierIdx !== undefined) {
         const fds = chart.data.datasets.find(d => d._isFake && d._tierIdx === ln.tierIdx);
         if (fds?.hidden) continue;
@@ -518,13 +564,13 @@ const vLinePlugin = {
       ctx.setLineDash(ln.dash ?? [5,3]);
       ctx.strokeStyle = ln.color;
       ctx.lineWidth   = 1.2;
-      ctx.beginPath(); ctx.moveTo(xPx, y.top); ctx.lineTo(xPx, y.bottom); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(xPx, yScale.top); ctx.lineTo(xPx, yScale.bottom); ctx.stroke();
       if (ln.label) {
         ctx.setLineDash([]);
         ctx.fillStyle = ln.color;
         ctx.font = '9px DM Mono, monospace';
         ctx.textAlign = 'left';
-        ctx.fillText(ln.label, xPx+3, y.top+10);
+        ctx.fillText(ln.label, xPx+3, yScale.top+10);
       }
       ctx.restore();
     }
@@ -532,27 +578,54 @@ const vLinePlugin = {
 };
 Chart.register(vLinePlugin);
 
-// Shared legend onClick: syncs IRMAA tier visibility across both charts
-function makeLegendClick(otherChartGetter) {
+// ─── VIEW STATE ──────────────────────────────────────────────────────────────
+let chartMain = null;
+let viewMode  = 'rates'; // 'rates' | 'dollars'
+
+function setViewMode(mode) {
+  viewMode = mode;
+  document.getElementById('btn-rates').classList.toggle('active', mode === 'rates');
+  document.getElementById('btn-dollars').classList.toggle('active', mode === 'dollars');
+  if (!chartMain) return;
+  chartMain.data.datasets.forEach(ds => {
+    if (ds._rateDs)   ds.hidden = mode !== 'rates';
+    if (ds._dollarDs) ds.hidden = mode !== 'dollars';
+    if (ds._magiDs)   ds.hidden = mode !== 'dollars';
+    // _isFake (IRMAA legend) visibility is user-toggled only — don't reset on mode switch
+  });
+  chartMain.options.scales.yR.display = mode === 'rates';
+  chartMain.options.scales.yD.display = mode === 'dollars';
+  chartMain.options.scales.y2.display = mode === 'dollars';
+  updateChartTitle();
+  chartMain.update('none');
+}
+
+function updateChartTitle() {
+  const label = viewMode === 'rates' ? 'Tax Rates' : 'Total Tax — Dollars';
+  document.getElementById('chart-title').textContent = `${label} — ${cfg.year}`;
+}
+
+function destroyCharts() {
+  if (chartMain) { chartMain.destroy(); chartMain = null; }
+}
+
+// Legend onClick: syncs IRMAA tier visibility
+function makeLegendClick() {
   return function(e, item, legend) {
-    const { chart } = legend;
-    const ds = chart.data.datasets[item.datasetIndex];
+    const ds = legend.chart.data.datasets[item.datasetIndex];
     if (ds?._isFake) {
       const ti = ds._tierIdx;
-      for (const c of [chartD, chartR].filter(Boolean)) {
-        const fd = c.data.datasets.find(d => d._isFake && d._tierIdx === ti);
-        if (fd) fd.hidden = !fd.hidden;
-        c.update('none');
-      }
+      const fd = chartMain.data.datasets.find(d => d._isFake && d._tierIdx === ti);
+      if (fd) fd.hidden = !fd.hidden;
+      chartMain.update('none');
       return;
     }
     Chart.defaults.plugins.legend.onClick.call(this, e, item, legend);
   };
 }
 
-function niitIdx()  { return Math.round(NIIT[cfg.status] / INCOME_STEP); }
+function niitIdx() { return Math.round(NIIT[cfg.status] / INCOME_STEP); }
 
-// Build IRMAA tier line positions from sweep data
 function tierLines(data) {
   const brks = TAXData.IRMAA?.[cfg.status]?.brackets ?? [];
   const inf  = Math.pow(1+cfg.inflation/100, cfg.year-BASE_YEAR);
@@ -565,197 +638,279 @@ function tierLines(data) {
   }).filter(t => t.index >= 0);
 }
 
-// Fake IRMAA tier datasets (appear in legend only, no actual chart data)
 function fakeIRMAA() {
   return TIER_CFG.map((tc, i) => ({
     type:'line', label:tc.label, data:[],
     borderColor:tc.color, borderDash:tc.dash, borderWidth:1.5,
-    pointRadius:0, _isFake:true, _tierIdx:i
+    pointRadius:0, yAxisID:'yR', _isFake:true, _tierIdx:i,
+    hidden: false  // start visible so tier lines show in both modes; user can toggle
   }));
 }
 
-// ─── CHART INSTANCES ─────────────────────────────────────────────────────────
-let chartR=null, chartD=null;
-
-function destroyCharts() {
-  if (chartR) { chartR.destroy(); chartR=null; }
-  if (chartD) { chartD.destroy(); chartD=null; }
-}
-
-// Chart 1: Tax Rates
-function renderRates(data) {
+// ─── COMBINED CHART ───────────────────────────────────────────────────────────
+// Dataset slot indices: 0-3 rate lines, 4-8 dollar bars, 9 MAGI line, 10-14 fake IRMAA
+function renderChart(data) {
   const pct = v => parseFloat((v*100).toFixed(2));
+
+  // Rate datasets
   const fedEff = data.map(d => pct(d.fedEff));
   const stEff  = data.map(d => pct(d.stEff));
   const totEff = data.map(d => pct(d.totEff));
-  const fedMrg = data.map(d => pct(Math.max(0,d.fedMarg)));
-  const yMax   = Math.ceil(Math.max(...fedMrg,...totEff,40)/5)*5 + 5;
+  const fedMrg = data.map(d => pct(Math.max(0, d.fedMarg)));
+  const yRMax  = Math.ceil(Math.max(...fedMrg, ...totEff, 40) / 5) * 5 + 5;
+
+  // Dollar datasets
+  const fedOrd = data.map(d => Math.round(d.fedTax));
+  const fedCG  = data.map(d => Math.round(d.fedCGTax));
+  const irmaaD = data.map(d => Math.round(d.irmaa));
+  const stOrd  = data.map(d => Math.round(d.stTaxOrd));
+  const stCG   = data.map(d => Math.round(d.stTaxCG));
+  const magiD  = data.map(d => Math.round(d.magi));
+
+  const maxMagi = Math.max(...magiD);
+  const y2Max   = Math.ceil(maxMagi * 1.1 / 100_000) * 100_000 || 2_000_000;
+  const maxTax  = Math.max(...data.map(d => d.totalTax));
+  const yDMax   = Math.ceil(maxTax * 1.15 / 50_000) * 50_000 || 500_000;
+
   const niit   = { index:niitIdx(), color:'#f5a623', dash:[4,3], label:'NIIT' };
   const tLines = tierLines(data);
   const vlines = [niit, ...tLines];
 
-  if (chartR) {
-    chartR.data.datasets[0].data = fedEff;
-    chartR.data.datasets[1].data = stEff;
-    chartR.data.datasets[2].data = totEff;
-    chartR.data.datasets[3].data = fedMrg;
-    chartR.options.scales.y.max  = yMax;
-    chartR.options.plugins.vLines.lines = vlines;
-    chartR.update('none');
+  updateChartTitle();
+
+  if (chartMain) {
+    const ds = chartMain.data.datasets;
+    ds[0].data = fedEff;
+    ds[1].data = stEff;
+    ds[2].data = totEff;
+    ds[3].data = fedMrg;
+    ds[4].data = fedOrd;
+    ds[5].data = fedCG;
+    ds[6].data = irmaaD;
+    ds[7].data = stOrd;
+    ds[8].data = stCG;
+    ds[9].data = magiD;
+    chartMain.options.scales.yR.max = yRMax;
+    chartMain.options.scales.yD.max = yDMax;
+    chartMain.options.scales.y2.max = y2Max;
+    chartMain.options.plugins.vLines.lines = vlines;
+    chartMain.update('none');
     return;
   }
 
-  chartR = new Chart(document.getElementById('chart-rates'), {
-    type:'line',
-    data:{
-      labels:LABELS,
-      datasets:[
-        {label:'Federal Effective', data:fedEff, borderColor:'#4f9cf9', backgroundColor:'transparent', borderWidth:2,   pointRadius:0, tension:0},
-        {label:'State Effective',   data:stEff,  borderColor:'#fb923c', backgroundColor:'transparent', borderWidth:2,   pointRadius:0, tension:0},
-        {label:'Total Effective',   data:totEff, borderColor:'#e8eaf2', backgroundColor:'transparent', borderWidth:2.5, pointRadius:0, tension:0},
-        {label:'Fed Marginal (Ord+CG)', data:fedMrg, borderColor:'#a78bfa', backgroundColor:'transparent', borderWidth:1.8, pointRadius:0, tension:0, borderDash:[6,3]},
+  const inR = viewMode !== 'rates';
+  const inD = viewMode !== 'dollars';
+
+  chartMain = new Chart(document.getElementById('chart-main'), {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [
+        // ─ RATE LINES ─
+        { _rateDs:true, type:'line', label:'Federal Effective',
+          data:fedEff, borderColor:'#4f9cf9', backgroundColor:'transparent',
+          borderWidth:2, pointRadius:0, tension:0, yAxisID:'yR', hidden:inR },
+        { _rateDs:true, type:'line', label:'State Effective',
+          data:stEff, borderColor:'#fb923c', backgroundColor:'transparent',
+          borderWidth:2, pointRadius:0, tension:0, yAxisID:'yR', hidden:inR },
+        { _rateDs:true, type:'line', label:'Total Effective',
+          data:totEff, borderColor:'#e8eaf2', backgroundColor:'transparent',
+          borderWidth:2.5, pointRadius:0, tension:0, yAxisID:'yR', hidden:inR },
+        { _rateDs:true, type:'line', label:'Fed Marginal (Ord+CG)',
+          data:fedMrg, borderColor:'#a78bfa', backgroundColor:'transparent',
+          borderWidth:1.8, pointRadius:0, tension:0, borderDash:[6,3], yAxisID:'yR', hidden:inR },
+        // ─ DOLLAR BARS ─
+        { _dollarDs:true, type:'bar', label:'Federal Ordinary Tax',
+          data:fedOrd, backgroundColor:'rgba(79,156,249,0.75)', borderWidth:0,
+          stack:'tx', yAxisID:'yD', hidden:inD },
+        { _dollarDs:true, type:'bar', label:'Federal CG Tax',
+          data:fedCG, backgroundColor:'rgba(147,197,253,0.80)', borderWidth:0,
+          stack:'tx', yAxisID:'yD', hidden:inD },
+        { _dollarDs:true, type:'bar', label:'IRMAA',
+          data:irmaaD, backgroundColor:'rgba(245,166,35,0.85)', borderWidth:0,
+          stack:'tx', yAxisID:'yD', hidden:inD },
+        { _dollarDs:true, type:'bar', label:'State Ordinary Tax',
+          data:stOrd, backgroundColor:'rgba(251,146,60,0.75)', borderWidth:0,
+          stack:'tx', yAxisID:'yD', hidden:inD },
+        { _dollarDs:true, type:'bar', label:'State CG Tax',
+          data:stCG, backgroundColor:'rgba(253,186,116,0.80)', borderWidth:0,
+          stack:'tx', yAxisID:'yD', hidden:inD },
+        // ─ MAGI LINE ─
+        { _magiDs:true, type:'line', label:'MAGI',
+          data:magiD, borderColor:'rgba(25,201,157,0.8)', backgroundColor:'transparent',
+          borderWidth:1.5, pointRadius:0, tension:0, yAxisID:'y2',
+          hidden:inD, order:-1 },
+        // ─ FAKE IRMAA (legend only) ─
         ...fakeIRMAA()
       ]
     },
-    options:{
-      animation:false, responsive:true, maintainAspectRatio:true,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{ labels:{color:'#7b83a0',font:{family:'DM Mono, monospace',size:10},boxWidth:12},
-                 onClick: makeLegendClick() },
-        tooltip:{
+    options: {
+      animation: false, responsive: true, maintainAspectRatio: true,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        tooltip: {
           ...TT_BASE,
+          enabled: true,
+          mode: 'index',
+          intersect: false,
           filter: item => !item.dataset._isFake,
-          itemSort: (a, b) => (b.raw ?? 0) - (a.raw ?? 0),
-          callbacks:{
-            title: it => `Ordinary income: $${(it[0].dataIndex*INCOME_STEP).toLocaleString()}`,
-            label: it => ` ${it.dataset.label}: ${it.raw.toFixed(1)}%`
+          callbacks: {
+            title(items) {
+              if (!items.length) return [];
+              const idx = items[0].dataIndex;
+              const d = sweepData[idx];
+              if (!d) return [];
+              const totalInc = d.ordInc + cfg.ssIncome + d.cgGain;
+              const pin = pinnedIdx === idx ? '  ★ pinned' : '';
+              return [`$${(d.ordInc/1000).toFixed(0)}k ordinary  ·  $${Math.round(totalInc/1000)}k total${pin}`];
+            },
+            beforeBody(items) {
+              if (!items.length) return [];
+              const d = sweepData[items[0].dataIndex];
+              if (!d) return [];
+              return [
+                ` Eff ${(d.totEff*100).toFixed(1)}%   Fed ${(d.fedEff*100).toFixed(1)}%   St ${(d.stEff*100).toFixed(1)}%`,
+                ` Marg ${(d.fedMarg*100).toFixed(1)}%   Tax $${Math.round(d.totalTax).toLocaleString()}`
+              ];
+            },
+            label: () => undefined,
+            footer(items) {
+              if (!items.length) return [];
+              const idx = items[0].dataIndex;
+              return [pinnedIdx === idx ? 'click to unpin' : 'click to pin this level'];
+            }
           }
         },
-        vLines:{ lines:vlines }
+        legend: {
+          labels: {
+            color:'#7b83a0', font:{family:'DM Mono, monospace', size:10}, boxWidth:12,
+            filter(item, chartData) {
+              const ds = chartData.datasets[item.datasetIndex];
+              if (!ds) return false;
+              if (ds._rateDs)   return viewMode === 'rates';
+              if (ds._dollarDs || ds._magiDs) return viewMode === 'dollars';
+              if (ds._isFake)   return viewMode === 'dollars';
+              return true;
+            }
+          },
+          onClick: makeLegendClick()
+        },
+        vLines: { lines: vlines }
       },
-      scales:{
-        x:{...XSCALE},
-        y:{ min:0, max:yMax,
-            ticks:{color:'#7b83a0',font:{family:'DM Mono, monospace',size:10},callback:v=>v+'%'},
-            grid:{color:'rgba(42,48,72,0.6)'} }
-      }
+      scales: {
+        x: { ...XSCALE, stacked: true },
+        xTop: {
+          type: 'category',
+          position: 'top',
+          ticks: {
+            color:'#4a5470', font:{family:'DM Mono, monospace', size:9},
+            maxRotation:0, autoSkip:false,
+            callback(val, i) {
+              const ord = i * INCOME_STEP;
+              if (ord % 100_000 !== 0) return null;
+              const total = ord + cfg.ssIncome + cfg.cgSale * (1 - cfg.cgBasisPct / 100);
+              return `$${Math.round(total / 1000)}k`;
+            }
+          },
+          title: { display:true, text:'Total Income (Ord + SS + CG)',
+                   color:'#4a5470', font:{family:'DM Mono, monospace', size:9} },
+          grid: { drawOnChartArea:false, drawTicks:true, color:'#2a3048' }
+        },
+        yR: {
+          type:'linear', position:'left',
+          display: viewMode === 'rates',
+          min:0, max:yRMax,
+          ticks:{ color:'#7b83a0', font:{family:'DM Mono, monospace', size:10}, callback: v => v+'%' },
+          grid:{ color:'rgba(42,48,72,0.6)' }
+        },
+        yD: {
+          type:'linear', position:'left',
+          display: viewMode === 'dollars',
+          stacked: true,
+          min:0, max:yDMax,
+          ticks:{ color:'#7b83a0', font:{family:'DM Mono, monospace', size:10},
+                  callback: v => v>=1e6?`$${(v/1e6).toFixed(1)}M`:v>=1000?`$${v/1000}k`:`$${v}` },
+          grid:{ color:'rgba(42,48,72,0.6)' }
+        },
+        y2: {
+          type:'linear', position:'right',
+          display: viewMode === 'dollars',
+          min:0, max:y2Max,
+          ticks:{ color:'rgba(25,201,157,0.6)', font:{family:'DM Mono, monospace', size:9},
+                  callback: v => v>=1e6?`$${(v/1e6).toFixed(1)}M`:v>=1000?`$${v/1000}k`:`$${v}` },
+          grid:{ drawOnChartArea:false },
+          title:{ display:true, text:'MAGI', color:'rgba(25,201,157,0.5)',
+                  font:{family:'DM Mono, monospace', size:9} }
+        }
+      },
+      barPercentage:1.0, categoryPercentage:1.0
     }
   });
 }
 
-// Chart 2: Total Tax Dollars
-function renderDollars(data) {
-  const fedOrd  = data.map(d => Math.round(d.fedTax));
-  const fedCG   = data.map(d => Math.round(d.fedCGTax));
-  const irmaaD  = data.map(d => Math.round(d.irmaa));
-  const stOrd   = data.map(d => Math.round(d.stTaxOrd));
-  const stCG    = data.map(d => Math.round(d.stTaxCG));
-  const magiD   = data.map(d => Math.round(d.magi));
+// ─── INFO PANEL ──────────────────────────────────────────────────────────────
+function updateInfoPanel(idx) {
+  const d = sweepData[idx];
+  if (!d) return;
+  const $v = v => '$' + Math.round(v).toLocaleString();
+  const pp = (v, denom) => denom > 1 ? (v / denom * 100).toFixed(1) + '%' : '—';
+  const totalInc = Math.max(d.ordInc + cfg.ssIncome + d.cgGain, 1);
+  // Effective rate on the CG gain itself (not % of total income)
+  const cgEffRate = d.cgGain > 0 ? ` (${(d.fedCGTax / d.cgGain * 100).toFixed(1)}% on gain)` : '';
 
-  const maxMagi = Math.max(...magiD);
-  const y2Max   = Math.ceil(maxMagi*1.1/100_000)*100_000 || 2_000_000;
+  document.getElementById('info-panel').innerHTML = `
+    <div class="info-header">
+      <span><span class="ih-lbl">Total income: </span><span class="ih-val">${$v(totalInc)}</span></span>
+      <span><span class="ih-lbl">Ordinary: </span><span class="ih-val">${$v(d.ordInc)}</span></span>
+      <span><span class="ih-lbl">SS: </span><span class="ih-val">${$v(cfg.ssIncome)}</span><span class="ih-lbl"> (${$v(d.ssTax)} taxable)</span></span>
+      <span><span class="ih-lbl">CG gain: </span><span class="ih-val">${$v(d.cgGain)}</span></span>
+      <span><span class="ih-lbl">MAGI: </span><span class="ih-val">${$v(d.magi)}</span></span>
+    </div>
+    <div class="info-grid">
+      <div>
+        <div class="info-col-title">Tax Rates</div>
+        <div class="info-row"><span class="ir-lbl">Total Effective</span><span class="ir-val">${(d.totEff*100).toFixed(1)}%</span></div>
+        <div class="info-row"><span class="ir-lbl">Federal Effective</span><span class="ir-val">${(d.fedEff*100).toFixed(1)}%</span></div>
+        <div class="info-row"><span class="ir-lbl">State Effective</span><span class="ir-val">${(d.stEff*100).toFixed(1)}%</span></div>
+        <div class="info-row"><span class="ir-lbl">Fed Marginal (Ord+CG)</span><span class="ir-val">${(d.fedMarg*100).toFixed(1)}%</span></div>
+        <div class="info-divider"></div>
+        <div class="info-row"><span class="ir-lbl">Deduction type</span><span class="ir-val">${d.useItz ? 'Itemized (SALT)' : 'Standard'}</span></div>
+        ${d.senDed > 0 ? `<div class="info-row"><span class="ir-lbl">Senior ded. (OBBBA)</span><span class="ir-val">${$v(d.senDed)}</span></div>` : ''}
+      </div>
+      <div>
+        <div class="info-col-title">Tax Dollars&ensp;<span style="font-size:9px;color:var(--muted)">(% of total income)</span></div>
+        <div class="info-row"><span class="ir-lbl">Federal Ordinary</span><span><span class="ir-val">${$v(d.fedTax)}</span><span class="ir-pct">${pp(d.fedTax,totalInc)}</span></span></div>
+        <div class="info-row"><span class="ir-lbl">Federal CG Tax</span><span><span class="ir-val">${$v(d.fedCGTax)}</span><span class="ir-pct">${pp(d.fedCGTax,totalInc)}<span style="color:var(--teal);margin-left:.3rem">${cgEffRate}</span></span></span></div>
+        <div class="info-row"><span class="ir-lbl">IRMAA</span><span><span class="ir-val">${$v(d.irmaa)}</span><span class="ir-pct">${pp(d.irmaa,totalInc)}</span></span></div>
+        <div class="info-row"><span class="ir-lbl">State Ordinary</span><span><span class="ir-val">${$v(d.stTaxOrd)}</span><span class="ir-pct">${pp(d.stTaxOrd,totalInc)}</span></span></div>
+        <div class="info-row"><span class="ir-lbl">State CG</span><span><span class="ir-val">${$v(d.stTaxCG)}</span><span class="ir-pct">${pp(d.stTaxCG,totalInc)}</span></span></div>
+        <div class="info-divider"></div>
+        <div class="info-row info-total"><span class="ir-lbl">Total Tax</span><span><span class="ir-val">${$v(d.totalTax)}</span><span class="ir-pct">${pp(d.totalTax,totalInc)}</span></span></div>
+      </div>
+    </div>`;
+}
 
-  const niit   = { index:niitIdx(), color:'#f5a623', dash:[4,3], label:'NIIT' };
-  const tLines = tierLines(data);
-  const vlines = [niit, ...tLines];
+function clearInfoPanel() {
+  document.getElementById('info-panel').innerHTML =
+    '<div class="info-default">Click a column to pin · hover for quick summary in tooltip</div>';
+}
 
-  if (chartD) {
-    chartD.data.datasets[0].data = fedOrd;
-    chartD.data.datasets[1].data = fedCG;
-    chartD.data.datasets[2].data = irmaaD;
-    chartD.data.datasets[3].data = stOrd;
-    chartD.data.datasets[4].data = stCG;
-    chartD.data.datasets[5].data = magiD;
-    chartD.options.scales.y2.max = y2Max;
-    chartD.options.plugins.vLines.lines = vlines;
-    chartD.update('none');
-    return;
-  }
-
-  chartD = new Chart(document.getElementById('chart-dollars'), {
-    type:'bar',
-    data:{
-      labels:LABELS,
-      datasets:[
-        {label:'Federal Ordinary Tax',  data:fedOrd,  backgroundColor:'rgba(79,156,249,0.75)',  borderWidth:0, stack:'tx'},
-        {label:'Federal CG Tax',        data:fedCG,   backgroundColor:'rgba(147,197,253,0.80)', borderWidth:0, stack:'tx'},
-        {label:'IRMAA',                 data:irmaaD,  backgroundColor:'rgba(245,166,35,0.85)',  borderWidth:0, stack:'tx'},
-        {label:'State Ordinary Tax',    data:stOrd,   backgroundColor:'rgba(251,146,60,0.75)',  borderWidth:0, stack:'tx'},
-        {label:'State CG Tax',          data:stCG,    backgroundColor:'rgba(253,186,116,0.80)', borderWidth:0, stack:'tx'},
-        // MAGI line on secondary axis
-        {type:'line', label:'MAGI', data:magiD,
-         borderColor:'rgba(25,201,157,0.8)', backgroundColor:'transparent',
-         borderWidth:1.5, pointRadius:0, tension:0, yAxisID:'y2', _hideTooltip:true, order:-1},
-        ...fakeIRMAA()
-      ]
-    },
-    options:{
-      animation:false, responsive:true, maintainAspectRatio:true,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{ labels:{color:'#7b83a0',font:{family:'DM Mono, monospace',size:10},boxWidth:12},
-                 onClick: makeLegendClick() },
-        tooltip:{
-          ...TT_BASE,
-          filter: item => !item.dataset._isFake && !item.dataset._hideTooltip && item.raw !== 0,
-          itemSort: (a, b) => (b.raw ?? 0) - (a.raw ?? 0),
-          callbacks:{
-            title(items) {
-              if (!items.length) return [];
-              const idx = items[0].dataIndex;
-              const d   = sweepData[idx];
-              if (!d) return [];
-              const totalInc = d.ordInc + cfg.ssIncome + d.cgGain;
-              return [
-                `Ordinary income:  $${d.ordInc.toLocaleString()}`,
-                `Capital gains:    $${d.cgGain.toLocaleString()} (sale $${cfg.cgSale.toLocaleString()}, basis ${cfg.cgBasisPct}%)`,
-                `Social Security:  $${cfg.ssIncome.toLocaleString()} ($${Math.round(d.ssTax).toLocaleString()} taxable)`,
-                `─────────────────────────────────`,
-                `Total income:     $${totalInc.toLocaleString()}`,
-                `MAGI (IRMAA):     $${Math.round(d.magi).toLocaleString()}`
-              ];
-            },
-            label(item) {
-              if (item.dataset._isFake || item.dataset._hideTooltip) return null;
-              const idx = item.dataIndex;
-              const d   = sweepData[idx];
-              if (!d) return null;
-              const totalInc = Math.max(1, d.ordInc + cfg.ssIncome + d.cgGain);
-              const val = item.raw ?? 0;
-              if (val === 0) return null;
-              const pct = (val/totalInc*100).toFixed(1);
-              return ` ${item.dataset.label}: $${Math.round(val).toLocaleString()} (${pct}%)`;
-            },
-            footer(items) {
-              if (!items.length) return [];
-              const idx = items[0].dataIndex;
-              const d   = sweepData[idx];
-              if (!d) return [];
-              const totalInc = Math.max(1, d.ordInc + cfg.ssIncome + d.cgGain);
-              const pct = (d.totalTax/totalInc*100).toFixed(1);
-              return [`─────────────────────────────────`,
-                      ` Total tax: $${Math.round(d.totalTax).toLocaleString()} (${pct}% of total income)`];
-            }
-          }
-        },
-        vLines:{ lines:vlines }
-      },
-      scales:{
-        x:{ ...XSCALE, stacked:true },
-        y:{ stacked:true,
-            ticks:{color:'#7b83a0',font:{family:'DM Mono, monospace',size:10},
-                   callback:v=>v>=1e6?`$${(v/1e6).toFixed(1)}M`:v>=1000?`$${v/1000}k`:`$${v}`},
-            grid:{color:'rgba(42,48,72,0.6)'} },
-        y2:{ type:'linear', position:'right', min:0, max:y2Max,
-             ticks:{color:'rgba(25,201,157,0.6)',font:{family:'DM Mono, monospace',size:9},
-                    callback:v=>v>=1e6?`$${(v/1e6).toFixed(1)}M`:v>=1000?`$${v/1000}k`:`$${v}`},
-             grid:{drawOnChartArea:false},
-             title:{display:true, text:'MAGI', color:'rgba(25,201,157,0.5)',
-                    font:{family:'DM Mono, monospace',size:9}} }
-      },
-      barPercentage:1.0, categoryPercentage:1.0
+function initInfoPanel() {
+  const canvas = document.getElementById('chart-main');
+  canvas.style.cursor = 'crosshair';
+  canvas.addEventListener('click', e => {
+    if (!chartMain) return;
+    const pts = chartMain.getElementsAtEventForMode(e, 'index', {intersect:false}, false);
+    if (!pts.length) return;
+    const idx = pts[0].index;
+    if (pinnedIdx === idx) {
+      pinnedIdx = null;
+      clearInfoPanel();
+    } else {
+      pinnedIdx = idx;
+      updateInfoPanel(idx);
     }
+    chartMain.update('none');
   });
 }
 
@@ -803,6 +958,7 @@ function renderAssumptions() {
     <div><strong>IRMAA:</strong> Step function applied to MAGI at each income level (2-year lookback "cheated" to current year). IRMAA costs grow at inflation + Medicare extra rate; expressed in 2026-base dollars. <span class="warn">IRMAA bracket values from TAXData — verify against CMS for exact 2026 amounts.</span></div>
     <div><strong>OBBBA senior ded.:</strong> $${OBBBA_PER_SENIOR.toLocaleString()}/person ≥ 65. Phase-out at ${(OBBBA_PHASEOUT_RATE*100).toFixed(0)}¢/$1 above $${OBBBA_PHASEOUT_AGI[cfg.status].toLocaleString()} AGI. <span class="warn">Phase-out parameters are estimates.</span></div>
     <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing.</div>
+    <div><strong>Top x-axis:</strong> Total income = ordinary income + Social Security + CG gain at each sweep point (fixed SS and CG amounts).</div>
     <div><strong>Excluded:</strong> AMT, SE tax, CA SDI, muni interest, qualif. dividends, CA personal exemption credits. Effective rate denominator = ordinary + SS + CG gain.</div>
   `;
 }
@@ -875,51 +1031,11 @@ function readCfg() {
 function run() {
   readCfg();
   const data = sweep();
-  renderRates(data);
-  renderDollars(data);
+  renderChart(data);
+  if (pinnedIdx !== null) updateInfoPanel(pinnedIdx);
   renderSummary(data);
   renderAssumptions();
-  // Update CG gain note
   updCgBasis();
-}
-
-// ─── CROSS-CHART TOOLTIP SYNC ────────────────────────────────────────────────
-function initTooltipSync() {
-  const cR = document.getElementById('chart-rates');
-  const cD = document.getElementById('chart-dollars');
-  let lock = false;
-
-  function syncTo(dstChart, idx) {
-    if (!dstChart) return;
-    const els = dstChart.data.datasets
-      .map((ds, di) => ({ds, di}))
-      .filter(({ds}) => !ds._isFake && !ds._hideTooltip)
-      .map(({di}) => ({datasetIndex: di, index: idx}));
-    const xPx = dstChart.scales?.x?.getPixelForValue(idx) ?? 0;
-    const yPx = dstChart.chartArea?.top ?? 0;
-    dstChart.tooltip.setActiveElements(els, {x: xPx, y: yPx});
-    dstChart.update('none');
-  }
-
-  function clearSync(dstChart) {
-    if (!dstChart) return;
-    dstChart.tooltip.setActiveElements([], {});
-    dstChart.update('none');
-  }
-
-  function onMove(e, src, dst) {
-    if (!src || !dst || lock) return;
-    const pts = src.getElementsAtEventForMode(e, 'index', {intersect: false}, false);
-    lock = true;
-    if (pts.length) syncTo(dst, pts[0].index);
-    else clearSync(dst);
-    lock = false;
-  }
-
-  cR.addEventListener('mousemove', e => onMove(e, chartR, chartD));
-  cR.addEventListener('mouseleave', () => clearSync(chartD));
-  cD.addEventListener('mousemove', e => onMove(e, chartD, chartR));
-  cD.addEventListener('mouseleave', () => clearSync(chartR));
 }
 
 // Init
@@ -928,7 +1044,8 @@ document.getElementById('ss-val').textContent = '$0';
 document.getElementById('cg-sale-val').textContent = '$0';
 loadFromURL();   // apply URL params before first render
 run();
-initTooltipSync();
+if (pinnedIdx !== null) updateInfoPanel(pinnedIdx);
+initInfoPanel();
 
 // ─── HOW TO USE MODAL ────────────────────────────────────────────────────────
 function openModal()  { document.getElementById('modal-bg').style.display='block'; }
@@ -937,7 +1054,7 @@ document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); 
 
 // ─── SHARE / URL ENCODING ────────────────────────────────────────────────────
 function buildShareParams() {
-  return new URLSearchParams({
+  const p = {
     st: cfg.status,
     s:  cfg.state,
     a1: cfg.ages[0],
@@ -951,7 +1068,9 @@ function buildShareParams() {
     me: cfg.medicareExtra,
     ob: cfg.obbaOn  ? 1 : 0,
     sh: cfg.saltHigh ? 1 : 0
-  }).toString();
+  };
+  if (pinnedIdx !== null) p.pi = pinnedIdx;
+  return new URLSearchParams(p).toString();
 }
 
 function buildShareURL() {
@@ -983,13 +1102,11 @@ async function copyShareURL() {
   const input = document.getElementById('share-url-input');
   const status = document.getElementById('share-status');
   input.select();
-  // Try modern clipboard API first
   try {
     await navigator.clipboard.writeText(input.value);
     status.textContent = '✓ Copied to clipboard';
     return;
   } catch { /* fall through */ }
-  // execCommand fallback (works in file:// and older browsers)
   try {
     document.execCommand('copy');
     status.textContent = '✓ Copied to clipboard';
@@ -1013,7 +1130,6 @@ function loadFromURL() {
   const p = new URLSearchParams(window.location.search);
   if (!p.size) return;
 
-  // Filing status — update UI without triggering run()
   if (p.has('st') && ['MFJ','SGL'].includes(p.get('st'))) {
     const s = p.get('st');
     cfg.status = s;
@@ -1071,6 +1187,10 @@ function loadFromURL() {
     document.getElementById('salt-40k').classList.toggle('active', high);
     document.getElementById('salt-10k').classList.toggle('active', !high);
   }
+  if (p.has('pi')) {
+    const idx = +p.get('pi');
+    if (idx >= 0 && idx < N) pinnedIdx = idx;
+  }
   updCgBasis();
 }
 </script>
@@ -1079,7 +1199,7 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner — How to Use</h2>
+      <h2>Income Tax Planner v2 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
@@ -1091,24 +1211,25 @@ function loadFromURL() {
         <dt>B · Sweet spots &amp; danger zones</dt>
         <dd>Where are the SS torpedo, IRMAA tier crossings, and NIIT threshold? The vertical reference lines and marginal rate curve (purple dashed) make them immediately visible.</dd>
         <dt>C · True all-in effective rate</dt>
-        <dd>Federal + state + IRMAA combined, not just the marginal bracket. The white line on the Tax Rates chart is the number that actually matters for planning.</dd>
+        <dd>Federal + state + IRMAA combined, not just the marginal bracket. The white line on the Tax Rates view is the number that actually matters for planning.</dd>
         <dt>D · Withholding guidance</dt>
-        <dd>Hover your expected income on either chart. The tooltip shows each component's dollar amount and its share of total income — use this to set federal and state withholding.</dd>
+        <dd>Hover your expected income on the chart. The info panel below shows every component — rates and dollars — simultaneously at that income level.</dd>
       </dl>
     </div>
 
     <div class="modal-section">
       <h3>How the income sweep works</h3>
-      <p>The x-axis sweeps <strong>ordinary income</strong> from $0 to $1.1M in $10k steps. Ordinary income covers wages, IRA/401k withdrawals, pensions, and RMDs — anything taxed at regular rates. <strong>Social Security</strong> and <strong>capital gains</strong> are entered as fixed amounts that apply at every point across the sweep, letting you see how they interact with the income ramp.</p>
+      <p>The x-axis sweeps <strong>ordinary income</strong> from $0 to $1.1M in $10k steps. Ordinary income covers wages, IRA/401k withdrawals, pensions, and RMDs — anything taxed at regular rates. <strong>Social Security</strong> and <strong>capital gains</strong> are entered as fixed amounts that apply at every point across the sweep, letting you see how they interact with the income ramp. The top x-axis shows the <strong>total income</strong> (ordinary + SS + CG gain) at each corresponding point.</p>
     </div>
 
     <div class="modal-section">
-      <h3>The charts</h3>
+      <h3>The chart</h3>
       <ul>
-        <li><strong>Tax Rates</strong> — federal effective (blue), state effective (orange), total effective (white), and federal marginal on ordinary income + CG (purple dashed). Hover to see exact values.</li>
-        <li><strong>Total Tax Dollars</strong> — stacked bars for Federal Ordinary, Federal CG, IRMAA, State Ordinary, and State CG. The teal line (right axis) is your MAGI — the figure used to determine next year's IRMAA tier.</li>
-        <li><strong>Cross-chart linking</strong> — hovering either chart activates the tooltip on the other at the same income level.</li>
-        <li><strong>IRMAA tier lines</strong> — click any IRMAA entry in the legend to toggle its vertical reference line on both charts simultaneously.</li>
+        <li><strong>Tax Rates view</strong> — federal effective (blue), state effective (orange), total effective (white), and federal marginal on ordinary income + CG (purple dashed).</li>
+        <li><strong>Tax Dollars view</strong> — stacked bars for Federal Ordinary, Federal CG, IRMAA, State Ordinary, and State CG. The teal line (right axis) is your MAGI — the figure used to determine next year's IRMAA tier.</li>
+        <li><strong>Info panel</strong> — hovering the chart shows all rates and dollar amounts for that income level simultaneously, regardless of which view is active.</li>
+        <li><strong>IRMAA tier lines</strong> — click any IRMAA entry in the legend (Tax Dollars view) to toggle its vertical reference line.</li>
+        <li><strong>Top axis</strong> — shows total income (ordinary + SS + CG) at each $100k ordinary income mark. When SS and CG are zero it matches the bottom axis.</li>
       </ul>
     </div>
 

@@ -112,6 +112,12 @@
   .yb-slider { flex:1; }
   /* ── taxable gain display ── */
   .gain-display { font-family:var(--mono); font-size:12px; font-weight:500; color:var(--amber); margin-top:4px; }
+  /* ── zoom controls ── */
+  .zoom-controls { display:flex; gap:4px; margin-left:.5rem; flex-shrink:0; }
+  .zoom-btn { background:var(--surf2); border:1px solid var(--border); border-radius:5px; color:var(--muted); font-family:var(--mono); font-size:11px; padding:5px 10px; cursor:pointer; transition:border-color .15s,color .15s; white-space:nowrap; }
+  .zoom-btn:hover { border-color:var(--teal); color:var(--teal); }
+  .zoom-btn.active { background:rgba(25,201,157,.15); border-color:rgba(25,201,157,.4); color:var(--teal); }
+  .zoom-btn.zoomed { border-color:rgba(245,166,35,.5); color:var(--amber); }
 </style>
 </head>
 <body>
@@ -262,6 +268,10 @@
           <button id="btn-rates" class="active" onclick="setViewMode('rates')">Tax Rates</button>
           <button id="btn-dollars" onclick="setViewMode('dollars')">Tax Dollars</button>
         </div>
+        <div class="zoom-controls">
+          <button id="btn-autozoom" class="zoom-btn active" onclick="toggleAutoZoom()">AutoZoom</button>
+          <button id="btn-full" class="zoom-btn" onclick="resetZoom()">Full</button>
+        </div>
       </div>
       <canvas id="chart-main" height="240"></canvas>
       <div class="info-panel" id="info-panel">
@@ -385,10 +395,9 @@ function lookupIRMAA(magi, status, inf, medGrowth) {
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
-const INCOME_MAX  = 1_100_000;
-const INCOME_STEP =    10_000;
-const BASE_YEAR   = 2026;
-const N           = INCOME_MAX / INCOME_STEP + 1; // 111
+const FULL_MAX  = 1_100_000;
+const FULL_STEP =    10_000;
+const BASE_YEAR = 2026;
 
 const OBBBA_PER_SENIOR    = 4_000;
 const OBBBA_PHASEOUT_AGI  = { MFJ:150_000, SGL:75_000 };
@@ -479,9 +488,77 @@ function calcAt(ordInc) {
            ssTax, magi, fedAGI, useItz, nSen, senDed, cgGain, fedOrdTaxable };
 }
 
+// ─── ZOOM STATE ──────────────────────────────────────────────────────────────
+let zoomMin      = 0;
+let zoomMax      = FULL_MAX;
+let zoomStep     = FULL_STEP;
+let autoZoomOn   = true;
+let pinnedIncome = null;  // actual $ income value of pinned column (null = none)
+
+function getN()       { return Math.round((zoomMax - zoomMin) / zoomStep) + 1; }
+function isFullZoom() { return zoomMin === 0 && zoomMax === FULL_MAX && zoomStep === FULL_STEP; }
+
+function pickStep(range) {
+  const raw = range / 110;
+  const nice = [200, 500, 1_000, 2_000, 5_000, 10_000, 25_000, 50_000];
+  return nice.find(s => s >= raw) ?? 50_000;
+}
+
+// Label interval for x-axis ticks — more marks when zoomed in
+function pickLabelStep() {
+  const range = zoomMax - zoomMin;
+  if (range <=  120_000) return  10_000;
+  if (range <=  300_000) return  25_000;
+  if (range <=  600_000) return  50_000;
+  return 100_000;
+}
+
+function getPinnedIdx() {
+  if (pinnedIncome === null) return null;
+  const idx = Math.round((pinnedIncome - zoomMin) / zoomStep);
+  return (idx >= 0 && idx < sweepData.length) ? idx : null;
+}
+
+function buildLabels() {
+  const n = getN();
+  return Array.from({length: n}, (_, i) => {
+    const v = zoomMin + i * zoomStep;
+    if (v === 0) return '$0';
+    if (v % 100_000 === 0) return `$${v / 1000}k`;
+    return '';
+  });
+}
+
+function zoomToIncome(income) {
+  const half = Math.max(income * 0.30, 25_000);
+  zoomMin  = Math.max(0, Math.round((income - half) / 1000) * 1000);
+  zoomMax  = Math.round((income + half) / 1000) * 1000;
+  zoomStep = pickStep(zoomMax - zoomMin);
+}
+
+function resetZoom() {
+  if (pinnedIncome !== null) {
+    // Snap pin to nearest full-zoom step so the highlight still shows
+    pinnedIncome = Math.max(0, Math.min(FULL_MAX,
+      Math.round(pinnedIncome / FULL_STEP) * FULL_STEP));
+  }
+  zoomMin = 0; zoomMax = FULL_MAX; zoomStep = FULL_STEP;
+  updateZoomUI();
+  run();
+}
+
+function toggleAutoZoom() {
+  autoZoomOn = !autoZoomOn;
+  updateZoomUI();
+}
+
+function updateZoomUI() {
+  document.getElementById('btn-autozoom').classList.toggle('active', autoZoomOn);
+  document.getElementById('btn-full').classList.toggle('zoomed', !isFullZoom());
+}
+
 // Stored sweep results for info panel access
 let sweepData = [];
-let pinnedIdx = null;  // pinned column index (null = none)
 
 const TT_BASE = {
   backgroundColor:'#1f2435', borderColor:'#2a3048', borderWidth:1,
@@ -492,13 +569,14 @@ const TT_BASE = {
 };
 
 function sweep() {
+  const n = getN();
   const pts = [];
-  for (let i=0; i<N; i++) pts.push(calcAt(i*INCOME_STEP));
+  for (let i=0; i<n; i++) pts.push(calcAt(zoomMin + i*zoomStep));
 
   // Numerical marginal rate: federal ordinary + CG
   const marg = pts.map((p,i) => {
     if (i===0) return 0;
-    return ((p.fedTax + p.fedCGTax) - (pts[i-1].fedTax + pts[i-1].fedCGTax)) / INCOME_STEP;
+    return ((p.fedTax + p.fedCGTax) - (pts[i-1].fedTax + pts[i-1].fedCGTax)) / zoomStep;
   });
 
   sweepData = pts.map((p,i) => {
@@ -516,16 +594,15 @@ function sweep() {
 }
 
 // ─── CHART INFRASTRUCTURE ────────────────────────────────────────────────────
-const LABELS = Array.from({length:N}, (_,i) => {
-  const v = i*INCOME_STEP;
-  if (v===0) return '$0';
-  if (v%100_000===0) return `$${v/1000}k`;
-  return '';
-});
-
 const XSCALE = {
   ticks:{ color:'#7b83a0', font:{family:'DM Mono, monospace',size:9},
-          maxRotation:0, autoSkip:false, callback(_,i){ return LABELS[i]||null; }},
+          maxRotation:0, autoSkip:false,
+          callback(_, i) {
+            const v = zoomMin + i * zoomStep;
+            const ls = pickLabelStep();
+            if (v === 0 || v % ls === 0) return v === 0 ? '$0' : `$${v / 1000}k`;
+            return null;
+          }},
   grid:{ color:'#2a3048' }
 };
 
@@ -538,7 +615,8 @@ const vLinePlugin = {
     if (!yScale) return;
 
     // Pinned column: semi-transparent fill + solid teal line
-    if (pinnedIdx !== null && pinnedIdx >= 0 && pinnedIdx < N) {
+    const pinnedIdx = getPinnedIdx();
+    if (pinnedIdx !== null) {
       const xPx = x.getPixelForValue(pinnedIdx);
       const bw  = x.getPixelForValue(1) - x.getPixelForValue(0);
       ctx.save();
@@ -554,7 +632,7 @@ const vLinePlugin = {
     // Reference lines (NIIT, IRMAA tiers)
     if (!opts?.lines?.length) return;
     for (const ln of opts.lines) {
-      if (ln.index < 0 || ln.index >= N) continue;
+      if (ln.index < 0 || ln.index >= sweepData.length) continue;
       if (ln.tierIdx !== undefined) {
         const fds = chart.data.datasets.find(d => d._isFake && d._tierIdx === ln.tierIdx);
         if (fds?.hidden) continue;
@@ -624,7 +702,7 @@ function makeLegendClick() {
   };
 }
 
-function niitIdx() { return Math.round(NIIT[cfg.status] / INCOME_STEP); }
+function niitIdx() { return Math.round((NIIT[cfg.status] - zoomMin) / zoomStep); }
 
 function tierLines(data) {
   const brks = TAXData.IRMAA?.[cfg.status]?.brackets ?? [];
@@ -679,6 +757,7 @@ function renderChart(data) {
   updateChartTitle();
 
   if (chartMain) {
+    chartMain.data.labels = buildLabels();
     const ds = chartMain.data.datasets;
     ds[0].data = fedEff;
     ds[1].data = stEff;
@@ -704,7 +783,7 @@ function renderChart(data) {
   chartMain = new Chart(document.getElementById('chart-main'), {
     type: 'bar',
     data: {
-      labels: LABELS,
+      labels: buildLabels(),
       datasets: [
         // ─ RATE LINES ─
         { _rateDs:true, type:'line', label:'Federal Effective',
@@ -761,7 +840,7 @@ function renderChart(data) {
               const d = sweepData[idx];
               if (!d) return [];
               const totalInc = d.ordInc + cfg.ssIncome + d.cgGain;
-              const pin = pinnedIdx === idx ? '  ★ pinned' : '';
+              const pin = getPinnedIdx() === idx ? '  ★ pinned' : '';
               return [`$${(d.ordInc/1000).toFixed(0)}k ordinary  ·  $${Math.round(totalInc/1000)}k total${pin}`];
             },
             beforeBody(items) {
@@ -777,7 +856,11 @@ function renderChart(data) {
             footer(items) {
               if (!items.length) return [];
               const idx = items[0].dataIndex;
-              return [pinnedIdx === idx ? 'click to unpin' : 'click to pin this level'];
+              const pIdx = getPinnedIdx();
+              if (pIdx === idx) {
+                return [autoZoomOn && !isFullZoom() ? 'click to re-center zoom' : 'click to unpin'];
+              }
+              return [autoZoomOn ? 'click to pin & zoom' : 'click to pin this level'];
             }
           }
         },
@@ -806,8 +889,9 @@ function renderChart(data) {
             color:'#4a5470', font:{family:'DM Mono, monospace', size:9},
             maxRotation:0, autoSkip:false,
             callback(val, i) {
-              const ord = i * INCOME_STEP;
-              if (ord % 100_000 !== 0) return null;
+              const ord = zoomMin + i * zoomStep;
+              const ls = pickLabelStep();
+              if (ord !== 0 && ord % ls !== 0) return null;
               const total = ord + cfg.ssIncome + cfg.cgSale * (1 - cfg.cgBasisPct / 100);
               return `$${Math.round(total / 1000)}k`;
             }
@@ -903,14 +987,34 @@ function initInfoPanel() {
     const pts = chartMain.getElementsAtEventForMode(e, 'index', {intersect:false}, false);
     if (!pts.length) return;
     const idx = pts[0].index;
-    if (pinnedIdx === idx) {
-      pinnedIdx = null;
-      clearInfoPanel();
-    } else {
-      pinnedIdx = idx;
-      updateInfoPanel(idx);
+    const d = sweepData[idx];
+    if (!d) return;
+    const income = d.ordInc;
+
+    if (pinnedIncome === income) {
+      // clicking the pinned column again
+      if (autoZoomOn && !isFullZoom()) {
+        // re-center zoom around same income
+        zoomToIncome(income);
+        updateZoomUI();
+        run();
+      } else {
+        pinnedIncome = null;
+        clearInfoPanel();
+        chartMain.update('none');
+      }
+      return;
     }
-    chartMain.update('none');
+
+    pinnedIncome = income;
+    if (autoZoomOn) {
+      zoomToIncome(income);
+      updateZoomUI();
+      run();
+    } else {
+      updateInfoPanel(getPinnedIdx());
+      chartMain.update('none');
+    }
   });
 }
 
@@ -926,7 +1030,7 @@ function renderSummary(data) {
   data.forEach(d => { if (d.fedMarg>peakMarg){ peakMarg=d.fedMarg; peakInc=d.ordInc; }});
 
   const saltCap = cfg.obbaOn?(cfg.saltHigh?40_000:10_000):10_000;
-  const sample  = data[20]; // $200k
+  const sample  = data.find(d => d.ordInc >= 200_000) ?? data[Math.floor(data.length / 2)];
 
   const rows = [
     `<div><strong>Year:</strong> ${cfg.year} · factor ×${inf.toFixed(3)}</div>`,
@@ -1032,7 +1136,8 @@ function run() {
   readCfg();
   const data = sweep();
   renderChart(data);
-  if (pinnedIdx !== null) updateInfoPanel(pinnedIdx);
+  const pi = getPinnedIdx();
+  if (pi !== null) updateInfoPanel(pi);
   renderSummary(data);
   renderAssumptions();
   updCgBasis();
@@ -1043,8 +1148,10 @@ updYear(); updInf(); updMed(); updProp(); updCgBasis();
 document.getElementById('ss-val').textContent = '$0';
 document.getElementById('cg-sale-val').textContent = '$0';
 loadFromURL();   // apply URL params before first render
+updateZoomUI();
 run();
-if (pinnedIdx !== null) updateInfoPanel(pinnedIdx);
+const _initPi = getPinnedIdx();
+if (_initPi !== null) updateInfoPanel(_initPi);
 initInfoPanel();
 
 // ─── HOW TO USE MODAL ────────────────────────────────────────────────────────
@@ -1069,7 +1176,9 @@ function buildShareParams() {
     ob: cfg.obbaOn  ? 1 : 0,
     sh: cfg.saltHigh ? 1 : 0
   };
-  if (pinnedIdx !== null) p.pi = pinnedIdx;
+  if (pinnedIncome !== null) p.pi = pinnedIncome;
+  if (!isFullZoom()) { p.zl = zoomMin; p.zh = zoomMax; p.zs = zoomStep; }
+  if (!autoZoomOn) p.az = 0;
   return new URLSearchParams(p).toString();
 }
 
@@ -1188,9 +1297,15 @@ function loadFromURL() {
     document.getElementById('salt-10k').classList.toggle('active', !high);
   }
   if (p.has('pi')) {
-    const idx = +p.get('pi');
-    if (idx >= 0 && idx < N) pinnedIdx = idx;
+    const income = +p.get('pi');
+    if (income >= 0) pinnedIncome = income;
   }
+  if (p.has('zl') && p.has('zh')) {
+    zoomMin  = +p.get('zl');
+    zoomMax  = +p.get('zh');
+    zoomStep = p.has('zs') ? +p.get('zs') : pickStep(zoomMax - zoomMin);
+  }
+  if (p.has('az')) autoZoomOn = p.get('az') !== '0';
   updCgBasis();
 }
 </script>

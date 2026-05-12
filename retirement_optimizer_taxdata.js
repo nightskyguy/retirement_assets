@@ -3,6 +3,11 @@ const TAXData = {
 		YEAR: 2026,  // Official IRS Revenue Procedure 2025-32
 		REFERENCE: 'https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill',
 		REF_2: 'https://taxfoundation.org/data/all/federal/2026-tax-brackets/',
+		// Net Investment Income Tax (3.8% surtax). MAGI thresholds — not indexed to inflation.
+		NIIT: {
+			MFJ: 250000,
+			SGL: 200000,
+		},
 		CAPITAL_GAINS: {
 			YEAR: 2026,
 			REFERENCE: 'none - Claude.ai created it.',

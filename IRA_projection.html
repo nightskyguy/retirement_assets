@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IRA Projection Tool</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="retirement_optimizer_taxdata.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -174,8 +175,8 @@
       <li><b>IRA withdrawal</b> — min(available balance, max(inflation-adj target, RMD)); zero before Withdrawal 1 start age.</li>
       <li><b>Total income</b> — IRA withdrawal + SS 1 (if active) + SS 2 (if active) + fixed income.</li>
       <li><b>SS amounts</b> — entered in today's dollars; inflation-adjusted from their start year before contributing each year.</li>
-      <li><b>Thresholds</b> — std deduction + bracket floor (2026 est.), grown with inflation each year. For example, the MFJ 10% threshold of $30,000 equals the standard deduction — only income above that amount is taxed at 10%. Bracket fills extend to the next bracket line — click any legend item to toggle.</li>
-      <li><b>NIIT</b> — not inflation-indexed; plotted as a flat nominal line in Future $ mode.</li>
+      <li><b>Thresholds</b> — bracket floors and IRMAA tiers sourced from <code>retirement_optimizer_taxdata.js</code> (2026 federal tables). The standard deduction is added automatically and age-adjusted at 65 (one stdbump applied for MFJ — assumes one spouse at 65; actual may be higher if both spouses are 65+). For example, MFJ income enters the 10% bracket at the $32,200 standard deduction — only income above that is taxable. Bracket fills extend to the next bracket line — click any legend item to toggle.</li>
+      <li><b>NIIT</b> — not inflation-indexed; stored as a negative floor and plotted as a flat nominal line in Future $ mode.</li>
       <li><b>"Funded until"</b> — last year the IRA balance fully covers the active inflation-adjusted withdrawal target; the final projected year if never depleted.</li>
       <li><b>Amber table rows</b> — RMD exceeds your target withdrawal. <b>Red rows</b> — IRA depleted.</li>
     </ul>
@@ -185,7 +186,7 @@
       <li><b>Colored bands</b> — federal income tax brackets. Each filled band represents one bracket's income range.</li>
       <li><b>Purple lines</b> — Medicare IRMAA surcharge tiers. These are <b>cliffs</b>: one dollar over the line triggers the full annual surcharge.</li>
       <li><b>NIIT line</b> — Net Investment Income Tax threshold ($250k MFJ / $200k Single + std deduction). A 3.8% surtax on net investment income above this level. Unlike other thresholds, NIIT is <b>not indexed to inflation</b> and plots as a flat line in Future $ mode.</li>
-      <li>Threshold amounts include the standard deduction (MFJ $30,000 / Single $15,000) added to the bracket floor. For example, a threshold of $30,000 for MFJ means only income above the standard deduction is taxed at 10% — the first $30,000 is fully sheltered. Thresholds are grown with inflation each year (except NIIT).</li>
+      <li>Threshold amounts are bracket floors from the 2026 tax tables with the standard deduction added automatically. The std deduction is age-adjusted at 65 (MFJ base $32,200 + $1,650 per spouse at 65; Single base $16,100 + $2,050 at 65). For example, MFJ income is first taxed at 10% above the $32,200 standard deduction — the first $32,200 is fully sheltered. Thresholds are grown with inflation each year (except NIIT, which is flat in nominal terms).</li>
       <li>Click any legend item to show or hide it.</li>
     </ul>
 
@@ -342,8 +343,8 @@
         </div>
         <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:.5rem">
           Today's $. Sorted low→high on blur. Grown with inflation.<br>
-          Amounts include the standard deduction (MFJ $30k / Single $15k).<br>
-          Negative amount = not inflation-indexed (flat nominal line).<br>
+          Floor above std deduction; std added automatically, age-adjusted at 65.<br>
+          Negative floor = not inflation-indexed (flat nominal line, e.g. NIIT).<br>
           Orange = bracket · Purple = IRMAA/NIIT cliff · Blue = state (custom)
         </div>
         <div class="thresh-grid" id="threshGrid">
@@ -414,48 +415,53 @@ function rmdFactor(age){
   return ULT[Math.min(Math.max(Math.round(age), RMD_START_AGE), 100)] || 6.4;
 }
 
-/* ── 2026 federal tax data (update here each year) ──
-   Bracket floors are taxable-income thresholds (above the std deduction).
-   IRMAA / NIIT floors are MAGI thresholds (above the std deduction).
-   NIIT is not indexed to inflation — stored as negative to flag that.
+/* ── Threshold defaults — built from TAXData (retirement_optimizer_taxdata.js) ──
+   t.amount = raw floor only; std deduction is added at render time (age-adjusted).
+   Bracket floor[i] = ceiling of bracket[i-1] (first bracket floor = 0).
+   IRMAA floor = MAGI threshold from TAXData.IRMAA.
+   Negative t.amount flags "not inflation-indexed" (NIIT).
    type:'bracket' → fill chain | type:'irmaa' → cliff, no fill
 */
-const TAX = {
-  mfj: {
-    stdDed:   30000,
-    brackets: { b10:0, b12:23850, b22:96950, b24:206700, b32:394600, b35:501050, b37:751600 },
-    irmaa:    { t1:212000, t2:266000, t3:334000, t4:400000, t5:750000 },
-    niit:     250000,
-  },
-  single: {
-    stdDed:   15000,
-    brackets: { b10:0, b12:11925, b22:48475, b24:103350, b32:197300, b35:250525, b37:375800 },
-    irmaa:    { t1:106000, t2:133000, t3:167000, t4:200000, t5:500000 },
-    niit:     200000,
-  }
-};
+const BRACKET_COLORS   = ['#fef08a','#fbbf24','#f97316','#ea580c','#c2410c','#9a3412','#7c2d12'];
+const BRACKET_VISIBLE  = [false, true, true, false, false, false, false];
+const IRMAA_COLORS     = ['#d8b4fe','#c084fc','#a855f7','#7c3aed','#5b21b6'];
+const IRMAA_VISIBLE    = [true, false, false, false, false];
 
-function buildDefaults(s){
-  const d = TAX[s];
-  const sd = d.stdDed;
-  return [
-    { id:'f10',  label:'10% bracket', amount: sd+d.brackets.b10, color:'#fef08a', visible:false, type:'bracket' },
-    { id:'f12',  label:'12% bracket', amount: sd+d.brackets.b12, color:'#fbbf24', visible:true,  type:'bracket' },
-    { id:'f22',  label:'22% bracket', amount: sd+d.brackets.b22, color:'#f97316', visible:true,  type:'bracket' },
-    { id:'f24',  label:'24% bracket', amount: sd+d.brackets.b24, color:'#ea580c', visible:false, type:'bracket' },
-    { id:'i1',   label:'IRMAA Tier 1',amount: sd+d.irmaa.t1,     color:'#d8b4fe', visible:true,  type:'irmaa'   },
-    { id:'i2',   label:'IRMAA Tier 2',amount: sd+d.irmaa.t2,     color:'#c084fc', visible:false, type:'irmaa'   },
-    { id:'i3',   label:'IRMAA Tier 3',amount: sd+d.irmaa.t3,     color:'#a855f7', visible:false, type:'irmaa'   },
-    { id:'f32',  label:'32% bracket', amount: sd+d.brackets.b32, color:'#c2410c', visible:false, type:'bracket' },
-    { id:'i4',   label:'IRMAA Tier 4',amount: sd+d.irmaa.t4,     color:'#7c3aed', visible:false, type:'irmaa'   },
-    { id:'niit', label:'NIIT',         amount: -(sd+d.niit),      color:'#818cf8', visible:true,  type:'irmaa'   },
-    { id:'f35',  label:'35% bracket', amount: sd+d.brackets.b35, color:'#9a3412', visible:false, type:'bracket' },
-    { id:'f37',  label:'37% bracket', amount: sd+d.brackets.b37, color:'#7c2d12', visible:false, type:'bracket' },
-    { id:'i5',   label:'IRMAA Tier 5',amount: sd+d.irmaa.t5,     color:'#5b21b6', visible:false, type:'irmaa'   },
-  ];
+function buildDefaults(status) {  // status: 'MFJ' or 'SGL'
+  const fd  = TAXData.FEDERAL[status];
+  const bk  = fd.brackets;
+  const irm = TAXData.IRMAA[status].brackets
+    .filter(b => b.tier && b.tier !== '-none-' && b.l !== Infinity);
+
+  const brackets = bk.map((b, i) => ({
+    id:      'f' + Math.round(b.r * 100),
+    label:   Math.round(b.r * 100) + '% bracket',
+    amount:  i === 0 ? 0 : bk[i - 1].l,          // floor = previous bracket's ceiling
+    color:   BRACKET_COLORS[i]  || '#7c2d12',
+    visible: BRACKET_VISIBLE[i] ?? false,
+    type:    'bracket'
+  }));
+
+  const irmaaTiers = irm.map((b, i) => ({
+    id:      'i' + (i + 1),
+    label:   'IRMAA ' + b.tier,
+    amount:  b.l,
+    color:   IRMAA_COLORS[i]  || '#5b21b6',
+    visible: IRMAA_VISIBLE[i] ?? false,
+    type:    'irmaa'
+  }));
+
+  const niit = {
+    id: 'niit', label: 'NIIT',
+    amount:  -(TAXData.FEDERAL.NIIT[status]),   // negative → not inflation-indexed
+    color:   '#818cf8', visible: true, type: 'irmaa'
+  };
+
+  return [...brackets, ...irmaaTiers, niit]
+    .sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
 }
 
-const DEFAULTS = { mfj: buildDefaults('mfj'), single: buildDefaults('single') };
+const DEFAULTS = { mfj: buildDefaults('MFJ'), single: buildDefaults('SGL') };
 
 let thresholds = DEFAULTS.mfj.map(t => ({...t}));
 const EXTRA_COLORS = ['#93c5fd','#6ee7b7','#fca5a5','#d8b4fe','#fdba74','#a5f3fc'];
@@ -472,13 +478,25 @@ function fmt(v){
   return(v<0?'-$':'$')+Math.round(abs).toLocaleString();
 }
 
+/* Age-adjusted standard deduction from TAXData.
+   For MFJ, one stdbump is applied when the user's age >= the threshold age
+   (conservative: counts one known spouse; actual MFJ may be higher if both
+   spouses are 65+, but spouse age is not tracked here). */
+function effectiveStd(age, status){
+  const td = TAXData.FEDERAL[status];
+  return td.std + (age >= td.age ? td.stdbump : 0);
+}
+
 /* Returns the effective threshold value for a given row.
+   t.amount is the raw floor above the std deduction (std added here, age-adjusted).
    Negative t.amount signals "not inflation-indexed" (e.g. NIIT):
      Future $ → flat nominal line   (just the base amount)
      Today's $ → declining real line (base / inflMult)
    Positive t.amount → normal inflation-indexed behavior. */
 function threshAmt(t, r, useReal){
-  const base    = Math.abs(t.amount);
+  const isSingle = document.getElementById('singleToggle').checked;
+  const std  = effectiveStd(r.age, isSingle ? 'SGL' : 'MFJ');
+  const base = std + Math.abs(t.amount);
   const indexed = t.amount >= 0;
   if(useReal) return indexed ? base : base / r.inflMult;
   return indexed ? base * r.inflMult : base;
@@ -542,7 +560,7 @@ function renderThreshEditor(){
     labelWrap.append(swatch, labelIn);
 
     const amtIn = document.createElement('input');
-    amtIn.type='number'; amtIn.value=t.amount; amtIn.min=0; amtIn.step=1000;
+    amtIn.type='number'; amtIn.value=t.amount; amtIn.step=1000;
     amtIn.addEventListener('input', e=>{ thresholds[i].amount=+e.target.value||0; update(); });
     amtIn.addEventListener('blur', ()=>{
       thresholds.sort((a,b)=>Math.abs(a.amount)-Math.abs(b.amount));

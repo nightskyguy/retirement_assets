@@ -5,6 +5,62 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IRA Projection Tool</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<!-- Inline fallback: Federal + IRMAA sections needed by this tool.
+     Keep in sync with retirement_optimizer_taxdata.js.
+     The external script below overrides this when the file is accessible. -->
+<script>
+var TAXData = {
+  FEDERAL: {
+    YEAR: 2026,
+    NIIT: { MFJ: 250000, SGL: 200000 },
+    MFJ: {
+      std: 32200, age: 65, stdbump: 1650,
+      brackets: [
+        { l: 24800,    r: 0.10, nr: 0.1000 },
+        { l: 100800,   r: 0.12, nr: 0.1151 },
+        { l: 211400,   r: 0.22, nr: 0.1700 },
+        { l: 403550,   r: 0.24, nr: 0.2033 },
+        { l: 512450,   r: 0.32, nr: 0.2281 },
+        { l: 768700,   r: 0.35, nr: 0.2687 },
+        { l: Infinity, r: 0.37, nr: 0.37   }
+      ]
+    },
+    SGL: {
+      std: 16100, age: 65, stdbump: 2050,
+      brackets: [
+        { l: 12400,    r: 0.10, nr: 0.1000 },
+        { l: 50400,    r: 0.12, nr: 0.1151 },
+        { l: 105700,   r: 0.22, nr: 0.1700 },
+        { l: 201775,   r: 0.24, nr: 0.2033 },
+        { l: 256225,   r: 0.32, nr: 0.2281 },
+        { l: 640600,   r: 0.35, nr: 0.3012 },
+        { l: Infinity, r: 0.37, nr: 0.37   }
+      ]
+    }
+  },
+  IRMAA: {
+    YEAR: 2026,
+    MFJ: { brackets: [
+      { l: 217999,   r: 0,                  tier: '-none-'       },
+      { l: 218000,   r: 2*202.90,           tier: 'Tier 1'       },
+      { l: 274000,   r: 2*(284.10+14.50),   tier: 'Tier 2'       },
+      { l: 348000,   r: 2*(405.90+37.60),   tier: 'Tier 3'       },
+      { l: 410000,   r: 2*(527.70+60.60),   tier: 'Tier 4'       },
+      { l: 750000,   r: 2*(649.50+83.70),   tier: 'Tier 5'       },
+      { l: Infinity, r: 2*(689.90+91.00),   tier: 'Tier 6 (TOP)' }
+    ]},
+    SGL: { brackets: [
+      { l: 108999,   r: 0,                  tier: '-none-'       },
+      { l: 109000,   r: 202.90,             tier: 'Tier 1'       },
+      { l: 137000,   r: 284.10+14.50,       tier: 'Tier 2'       },
+      { l: 174000,   r: 405.90+37.60,       tier: 'Tier 3'       },
+      { l: 205000,   r: 527.70+60.60,       tier: 'Tier 4'       },
+      { l: 500000,   r: 649.50+83.70,       tier: 'Tier 5'       },
+      { l: Infinity, r: 689.90+91.00,       tier: 'Tier 6 (TOP)' }
+    ]}
+  }
+};
+</script>
 <script src="retirement_optimizer_taxdata.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');

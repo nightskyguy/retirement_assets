@@ -61,9 +61,9 @@
 
   /* ── Collapsible panel sections ── */
   details.section { border-top:1px solid var(--border); margin:0; }
-  details.section > summary { list-style:none; font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; cursor:pointer; padding:.6rem 0 .5rem; display:flex; align-items:center; gap:.45rem; user-select:none; }
+  details.section > summary { list-style:none; font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:.08em; color:var(--amber); text-transform:uppercase; cursor:pointer; padding:.65rem 0 .55rem; display:flex; align-items:center; gap:.5rem; user-select:none; }
   details.section > summary::-webkit-details-marker { display:none; }
-  details.section > summary::before { content:'▶'; font-size:7px; flex-shrink:0; transition:transform .15s; }
+  details.section > summary::before { content:'▶'; font-size:9px; flex-shrink:0; transition:transform .15s; }
   details.section[open] > summary::before { transform:rotate(90deg); }
   .section-body { padding-bottom:.6rem; }
 
@@ -168,6 +168,17 @@
       <li>SECURE 2.0: RMDs start at 75 for those born after 1958.</li>
     </ul>
 
+    <h3 class="amber">Calculations</h3>
+    <ul>
+      <li><b>RMD</b> — prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, SECURE 2.0, born after 1958).</li>
+      <li><b>IRA withdrawal</b> — min(available balance, max(inflation-adj target, RMD)); zero before Withdrawal 1 start age.</li>
+      <li><b>Total income</b> — IRA withdrawal + SS 1 (if active) + SS 2 (if active) + fixed income.</li>
+      <li><b>SS amounts</b> — entered in today's dollars; inflation-adjusted from their start year before contributing each year.</li>
+      <li><b>Thresholds</b> — std deduction + bracket floor (2026 est.), grown with inflation each year. Bracket fills extend to the next bracket line — click any legend item to toggle.</li>
+      <li><b>"Underfunded"</b> — first year the IRA balance falls below that year's active inflation-adjusted withdrawal target.</li>
+      <li><b>Amber table rows</b> — RMD exceeds your target withdrawal. <b>Red rows</b> — IRA depleted.</li>
+    </ul>
+
     <h3 class="amber">Tax, IRMAA &amp; NIIT Threshold Lines</h3>
     <ul>
       <li><b>Colored bands</b> — federal income tax brackets. Each filled band represents one bracket's income range.</li>
@@ -230,8 +241,27 @@
   <div class="panel">
     <div class="panel-title"></div>
     <div class="ctrl">
-      <div class="ctrl-header"><label>Current age</label><span class="val" id="vAge">61</span></div>
+      <div class="ctrl-header"><label>Your Age</label><span class="val" id="vAge">61</span></div>
       <input type="range" id="age" min="40" max="74" step="1" value="61">
+    </div>
+
+    <div style="margin-top:.65rem">
+      <div class="toggle-row">
+        <span class="toggle-label">Display in</span>
+        <div class="toggle-wrap">
+          <span class="toggle-opt active" id="optFuture" onclick="setToggle('realToggle',false)">Future $</span>
+          <label class="switch"><input type="checkbox" id="realToggle"><span class="slider-track"></span></label>
+          <span class="toggle-opt" id="optReal" onclick="setToggle('realToggle',true)">Today's $</span>
+        </div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Filing status</span>
+        <div class="toggle-wrap">
+          <span class="toggle-opt active" id="optMFJ" onclick="setFilingStatus(false)">MFJ</span>
+          <label class="switch"><input type="checkbox" id="singleToggle"><span class="slider-track"></span></label>
+          <span class="toggle-opt" id="optSingle" onclick="setFilingStatus(true)">Single</span>
+        </div>
+      </div>
     </div>
 
     <details class="section" id="secBalance">
@@ -270,22 +300,6 @@
         <div class="ctrl">
           <div class="ctrl-header"><label>Withdrawal 2 (today $)</label><span class="val" id="vW2">$60,000</span></div>
           <input type="range" id="wd2" min="0" max="1000000" step="5000" value="60000">
-        </div>
-        <div class="toggle-row" style="margin-top:.5rem">
-          <span class="toggle-label">Display in</span>
-          <div class="toggle-wrap">
-            <span class="toggle-opt active" id="optFuture" onclick="setToggle('realToggle',false)">Future $</span>
-            <label class="switch"><input type="checkbox" id="realToggle"><span class="slider-track"></span></label>
-            <span class="toggle-opt" id="optReal" onclick="setToggle('realToggle',true)">Today's $</span>
-          </div>
-        </div>
-        <div class="toggle-row">
-          <span class="toggle-label">Filing status</span>
-          <div class="toggle-wrap">
-            <span class="toggle-opt active" id="optMFJ" onclick="setFilingStatus(false)">MFJ</span>
-            <label class="switch"><input type="checkbox" id="singleToggle"><span class="slider-track"></span></label>
-            <span class="toggle-opt" id="optSingle" onclick="setFilingStatus(true)">Single</span>
-          </div>
         </div>
       </div>
     </details>
@@ -336,14 +350,6 @@
       </div>
     </details>
 
-    <div style="margin-top:.75rem;font-size:11px;color:var(--muted);font-family:var(--mono);line-height:1.7">
-      Withdrawal logic:<br>
-      1. Grow balance by rate<br>
-      2. RMD if age ≥ 75<br>
-      3. Target = active Wd × (1+i)^y<br>
-      4. IRA wd = min(bal, max(target, RMD))<br>
-      5. No wd before Wd1 start age
-    </div>
   </div>
 
   <!-- ── Right column ── -->
@@ -384,14 +390,7 @@
     </div>
 
     <div class="footnote">
-      RMD = prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, SECURE 2.0, born after 1958).
-      IRA withdrawal = min(available balance, max(inflation-adj target, RMD)); zero before Withdrawal 1 start age.
-      Total income = IRA withdrawal + SS 1 (if active) + SS 2 (if active) + fixed income.
-      SS amounts in today's dollars; inflation-adjusted from their start years before contributing.
-      Thresholds = std deduction + bracket floor (2026 est.), grown with inflation each year.
-      Bracket fills always extend to the next bracket — click legend to toggle individual lines.
-      "Underfunded" = first year IRA balance &lt; that year's active inflation-adjusted withdrawal target.
-      <span id="modeNote"></span> For illustrative purposes only.
+      <span id="modeNote"></span> For illustrative purposes only. See <b>How to Use → Calculations</b> for full methodology.
     </div>
   </div>
 </div>

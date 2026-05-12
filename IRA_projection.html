@@ -174,8 +174,9 @@
       <li><b>IRA withdrawal</b> — min(available balance, max(inflation-adj target, RMD)); zero before Withdrawal 1 start age.</li>
       <li><b>Total income</b> — IRA withdrawal + SS 1 (if active) + SS 2 (if active) + fixed income.</li>
       <li><b>SS amounts</b> — entered in today's dollars; inflation-adjusted from their start year before contributing each year.</li>
-      <li><b>Thresholds</b> — std deduction + bracket floor (2026 est.), grown with inflation each year. Bracket fills extend to the next bracket line — click any legend item to toggle.</li>
-      <li><b>"Underfunded"</b> — first year the IRA balance falls below that year's active inflation-adjusted withdrawal target.</li>
+      <li><b>Thresholds</b> — std deduction + bracket floor (2026 est.), grown with inflation each year. For example, the MFJ 10% threshold of $30,000 equals the standard deduction — only income above that amount is taxed at 10%. Bracket fills extend to the next bracket line — click any legend item to toggle.</li>
+      <li><b>NIIT</b> — not inflation-indexed; plotted as a flat nominal line in Future $ mode.</li>
+      <li><b>"Funded until"</b> — last year the IRA balance fully covers the active inflation-adjusted withdrawal target; the final projected year if never depleted.</li>
       <li><b>Amber table rows</b> — RMD exceeds your target withdrawal. <b>Red rows</b> — IRA depleted.</li>
     </ul>
 
@@ -183,8 +184,8 @@
     <ul>
       <li><b>Colored bands</b> — federal income tax brackets. Each filled band represents one bracket's income range.</li>
       <li><b>Purple lines</b> — Medicare IRMAA surcharge tiers. These are <b>cliffs</b>: one dollar over the line triggers the full annual surcharge.</li>
-      <li><b>NIIT line</b> — Net Investment Income Tax threshold ($250k MFJ / $200k Single + std deduction). A 3.8% surtax on net investment income above this level.</li>
-      <li>Thresholds are 2026 estimates (std deduction + bracket floor), grown with inflation, and offset down by SS and fixed income.</li>
+      <li><b>NIIT line</b> — Net Investment Income Tax threshold ($250k MFJ / $200k Single + std deduction). A 3.8% surtax on net investment income above this level. Unlike other thresholds, NIIT is <b>not indexed to inflation</b> and plots as a flat line in Future $ mode.</li>
+      <li>Threshold amounts include the standard deduction (MFJ $30,000 / Single $15,000) added to the bracket floor. For example, a threshold of $30,000 for MFJ means only income above the standard deduction is taxed at 10% — the first $30,000 is fully sheltered. Thresholds are grown with inflation each year (except NIIT).</li>
       <li>Click any legend item to show or hide it.</li>
     </ul>
 
@@ -192,7 +193,7 @@
     <ul>
       <li><b>Nominal / Real bal</b> — IRA balance at end of projection in future and today's dollars.</li>
       <li><b>Peak RMD</b> — largest required minimum distribution over the projection period.</li>
-      <li><b>Underfunded at</b> — first year the IRA balance falls below the active withdrawal target.</li>
+      <li><b>Funded until</b> — last year the IRA fully covers the active withdrawal target; the final projected year if never depleted.</li>
       <li><b>Total IRA Drawn</b> — cumulative sum of all IRA withdrawals over the projection window (nominal).</li>
       <li><b>Total Income</b> — cumulative sum of all income sources (IRA + SS 1 + SS 2 + fixed) over the window (nominal).</li>
     </ul>
@@ -341,6 +342,8 @@
         </div>
         <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:.5rem">
           Today's $. Sorted low→high on blur. Grown with inflation.<br>
+          Amounts include the standard deduction (MFJ $30k / Single $15k).<br>
+          Negative amount = not inflation-indexed (flat nominal line).<br>
           Orange = bracket · Purple = IRMAA/NIIT cliff · Blue = state (custom)
         </div>
         <div class="thresh-grid" id="threshGrid">
@@ -358,7 +361,7 @@
       <div class="metric"><div class="lbl">Nominal bal (final)</div><div class="num pos" id="mNom">—</div></div>
       <div class="metric"><div class="lbl">Real bal (final)</div><div class="num pos" id="mReal">—</div></div>
       <div class="metric"><div class="lbl" id="rmdLbl">Peak RMD</div><div class="num warn" id="mRmd">—</div></div>
-      <div class="metric"><div class="lbl">Underfunded at</div><div class="num" id="mDep">Never</div></div>
+      <div class="metric"><div class="lbl">Funded Until</div><div class="num" id="mDep">Never</div></div>
       <div class="metric"><div class="lbl">Total IRA Drawn</div><div class="num info" id="mTotalIra">—</div></div>
       <div class="metric"><div class="lbl">Total Income</div><div class="num info" id="mTotalInc">—</div></div>
     </div>
@@ -431,7 +434,7 @@ const DEFAULTS = {
     { id:'i3',   label:'IRMAA Tier 3',amount:30000+334000,  color:'#a855f7', visible:false, type:'irmaa'   },
     { id:'f32',  label:'32% bracket', amount:30000+394600,  color:'#c2410c', visible:false, type:'bracket' },
     { id:'i4',   label:'IRMAA Tier 4',amount:30000+400000,  color:'#7c3aed', visible:false, type:'irmaa'   },
-    { id:'niit', label:'NIIT',         amount:30000+250000,  color:'#818cf8', visible:true,  type:'irmaa'   },
+    { id:'niit', label:'NIIT',         amount:-(30000+250000), color:'#818cf8', visible:true,  type:'irmaa'   },
     { id:'f35',  label:'35% bracket', amount:30000+501050,  color:'#9a3412', visible:false, type:'bracket' },
     { id:'f37',  label:'37% bracket', amount:30000+751600,  color:'#7c2d12', visible:false, type:'bracket' },
     { id:'i5',   label:'IRMAA Tier 5',amount:30000+750000,  color:'#5b21b6', visible:false, type:'irmaa'   },
@@ -446,7 +449,7 @@ const DEFAULTS = {
     { id:'i3',   label:'IRMAA Tier 3',amount:15000+167000,  color:'#a855f7', visible:false, type:'irmaa'   },
     { id:'f32',  label:'32% bracket', amount:15000+197300,  color:'#c2410c', visible:false, type:'bracket' },
     { id:'i4',   label:'IRMAA Tier 4',amount:15000+200000,  color:'#7c3aed', visible:false, type:'irmaa'   },
-    { id:'niit', label:'NIIT',         amount:15000+200000,  color:'#818cf8', visible:true,  type:'irmaa'   },
+    { id:'niit', label:'NIIT',         amount:-(15000+200000), color:'#818cf8', visible:true,  type:'irmaa'   },
     { id:'f35',  label:'35% bracket', amount:15000+250525,  color:'#9a3412', visible:false, type:'bracket' },
     { id:'f37',  label:'37% bracket', amount:15000+375800,  color:'#7c2d12', visible:false, type:'bracket' },
     { id:'i5',   label:'IRMAA Tier 5',amount:15000+500000,  color:'#5b21b6', visible:false, type:'irmaa'   },
@@ -466,6 +469,18 @@ function fmt(v){
   const abs=Math.abs(v);
   if(abs>=1e6)return(v<0?'-':'')+'$'+(abs/1e6).toFixed(2)+'M';
   return(v<0?'-$':'$')+Math.round(abs).toLocaleString();
+}
+
+/* Returns the effective threshold value for a given row.
+   Negative t.amount signals "not inflation-indexed" (e.g. NIIT):
+     Future $ → flat nominal line   (just the base amount)
+     Today's $ → declining real line (base / inflMult)
+   Positive t.amount → normal inflation-indexed behavior. */
+function threshAmt(t, r, useReal){
+  const base    = Math.abs(t.amount);
+  const indexed = t.amount >= 0;
+  if(useReal) return indexed ? base : base / r.inflMult;
+  return indexed ? base * r.inflMult : base;
 }
 
 function hexToRgba(hex, a){
@@ -529,7 +544,7 @@ function renderThreshEditor(){
     amtIn.type='number'; amtIn.value=t.amount; amtIn.min=0; amtIn.step=1000;
     amtIn.addEventListener('input', e=>{ thresholds[i].amount=+e.target.value||0; update(); });
     amtIn.addEventListener('blur', ()=>{
-      thresholds.sort((a,b)=>a.amount-b.amount);
+      thresholds.sort((a,b)=>Math.abs(a.amount)-Math.abs(b.amount));
       renderThreshEditor();
       update();
     });
@@ -550,7 +565,7 @@ function renderThreshEditor(){
 
 function addThreshold(){
   thresholds.push({ label:'Custom', amount:150000, color:EXTRA_COLORS[colorIdx++%EXTRA_COLORS.length], visible:true, type:'bracket' });
-  thresholds.sort((a,b)=>a.amount-b.amount);
+  thresholds.sort((a,b)=>Math.abs(a.amount)-Math.abs(b.amount));
   renderThreshEditor(); update();
 }
 
@@ -649,11 +664,11 @@ const chart = new Chart(chartCtx, {
             const useReal = document.getElementById('realToggle').checked;
             const totalIncome = useReal ? r.realTotalIncome : r.totalIncome;
             if(totalIncome <= 0) return [];
-            const sorted = [...thresholds].sort((a,b) => a.amount - b.amount);
+            const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
             let bracket = null;
             const irmaaHit = [];
             for(const t of sorted){
-              const threshold = useReal ? t.amount : t.amount * r.inflMult;
+              const threshold = threshAmt(t, r, useReal);
               if(totalIncome >= threshold){
                 if(t.type === 'bracket') bracket = t.label;
                 else if(t.type === 'irmaa') irmaaHit.push(t.label);
@@ -678,10 +693,10 @@ const chart = new Chart(chartCtx, {
 /* ── Bracket annotation for table rows (always nominal) ── */
 function bracketForRow(r){
   if(r.totalIncome <= 0) return '—';
-  const sorted = [...thresholds].sort((a,b) => a.amount - b.amount);
+  const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
   let bracketLabel = null, highestIrmaa = null;
   for(const t of sorted){
-    if(r.totalIncome >= t.amount * r.inflMult){
+    if(r.totalIncome >= threshAmt(t, r, false)){
       if(t.type === 'bracket') bracketLabel = t.label;
       else if(t.type === 'irmaa') highestIrmaa = t.label;
     }
@@ -719,7 +734,7 @@ function rebuildLegend(){
   const legend = document.getElementById('legend');
   Array.from(legend.children).slice(5).forEach(el => el.remove());
 
-  const sorted = [...thresholds].sort((a,b) => a.amount - b.amount);
+  const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
   sorted.forEach(t => {
     const span = document.createElement('span');
     span.className = 'leg-toggle';
@@ -802,11 +817,11 @@ function update(){
 
   const sortedBrackets = [...thresholds]
     .filter(t => t.type === 'bracket')
-    .sort((a, b) => a.amount - b.amount);
+    .sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
 
   const sortedIrmaa = [...thresholds]
     .filter(t => t.type === 'irmaa')
-    .sort((a, b) => a.amount - b.amount);
+    .sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
 
   const bracketBaseIdx = FIXED_DS;
 
@@ -817,7 +832,7 @@ function update(){
     const fillAlpha  = (i % 2 === 0) ? 0.14 : 0.36;
 
     const data = rows.map(r => {
-      const v = useReal ? t.amount : t.amount * r.inflMult;
+      const v = threshAmt(t, r, useReal);
       return v > 0 ? Math.round(v) : null;
     });
 
@@ -838,7 +853,7 @@ function update(){
   sortedIrmaa.forEach((t) => {
     if(!t.visible) return;
     const data = rows.map(r => {
-      const v = useReal ? t.amount : t.amount * r.inflMult;
+      const v = threshAmt(t, r, useReal);
       return v > 0 ? Math.round(v) : null;
     });
     chart.data.datasets.push({
@@ -864,7 +879,7 @@ function update(){
   });
   thresholds.filter(t => t.visible).forEach(t => {
     const lastR = rows[rows.length - 1];
-    const peak = useReal ? t.amount : t.amount * lastR.inflMult;
+    const peak = threshAmt(t, lastR, useReal);
     if(peak > yWdMax) yWdMax = peak;
   });
   chart.options.scales.yWd.min = 0;
@@ -891,10 +906,23 @@ function update(){
   document.getElementById('rmdLbl').textContent = useReal ? "Peak RMD (today's $)" : 'Peak RMD (nominal)';
 
   const underfundIdx = rows.findIndex(r => r.withdrawing && r.bal < r.targetWd);
-  document.getElementById('mDep').textContent = underfundIdx>=0
-    ? `${rows[underfundIdx].calYear} (age ${rows[underfundIdx].age})`
-    : 'Never';
-  document.getElementById('mDep').className = 'num '+(underfundIdx>=0?'neg':'pos');
+  {
+    let depText, depClass;
+    if(underfundIdx < 0){
+      const lastR = rows[rows.length - 1];
+      depText  = `${lastR.calYear} (age ${lastR.age})`;
+      depClass = 'num pos';
+    } else if(underfundIdx === 0){
+      depText  = 'Immediately';
+      depClass = 'num neg';
+    } else {
+      const r = rows[underfundIdx - 1];
+      depText  = `${r.calYear} (age ${r.age})`;
+      depClass = 'num neg';
+    }
+    document.getElementById('mDep').textContent = depText;
+    document.getElementById('mDep').className   = depClass;
+  }
 
   const totalIraDrawn = rows.reduce((s,r) => s + r.actualWd, 0);
   const totalAllIncome = rows.reduce((s,r) => s + r.totalIncome, 0);

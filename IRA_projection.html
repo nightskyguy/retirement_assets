@@ -53,11 +53,19 @@
   .ctrl-header label { font-size:12px; color:var(--muted); font-family:var(--mono); }
   .ctrl-header .val  { font-family:var(--mono); font-size:13px; font-weight:500; color:var(--text); }
   .ctrl-note { font-family:var(--mono); font-size:9px; color:var(--muted); margin-top:3px; line-height:1.5; }
-  input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:3px; background:var(--border); border-radius:2px; outline:none; cursor:pointer; }
+  input[type=range] { -webkit-appearance:none; appearance:none; display:block; width:calc(100% - 16px); margin:0 8px; height:3px; background:var(--border); border-radius:2px; outline:none; cursor:pointer; touch-action:pan-y; }
   input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:var(--teal); cursor:pointer; transition:transform .1s; }
   input[type=range]::-webkit-slider-thumb:hover { transform:scale(1.3); }
   input[type=range]::-moz-range-thumb { width:14px; height:14px; border:none; border-radius:50%; background:var(--teal); cursor:pointer; }
   .divider { border:none; border-top:1px solid var(--border); margin:1.1rem 0; }
+
+  /* ── Collapsible panel sections ── */
+  details.section { border-top:1px solid var(--border); margin:0; }
+  details.section > summary { list-style:none; font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:.08em; color:var(--amber); text-transform:uppercase; cursor:pointer; padding:.65rem 0 .55rem; display:flex; align-items:center; gap:.5rem; user-select:none; }
+  details.section > summary::-webkit-details-marker { display:none; }
+  details.section > summary::before { content:'▶'; font-size:9px; flex-shrink:0; transition:transform .15s; }
+  details.section[open] > summary::before { transform:rotate(90deg); }
+  .section-body { padding-bottom:.6rem; }
 
   /* ── Toggle ── */
   .toggle-row   { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:.9rem; }
@@ -150,7 +158,7 @@
       <li><b>SS 1 / SS 2</b> — each spouse's Social Security (or other inflation-linked) income in today's dollars, with a separate start age. Ages are relative to <em>your</em> current age — e.g., if you are 50 and your spouse is already collecting, set SS 1 start age to 50. Both streams are inflation-adjusted before contributing and are fully additive.</li>
       <li><b>Fixed add'l income</b> — income fixed in nominal terms: pension, interest, dividends, cap gains.</li>
     </ul>
-    <p style="margin-top:.35rem">SS and fixed income fields <b>shift threshold lines down</b>, showing only the IRA-withdrawal headroom remaining within each bracket after accounting for other income.</p>
+    <p style="margin-top:.35rem">The <b>Total Income</b> line includes all sources (IRA + SS + fixed). Threshold lines show raw inflated amounts so you can see directly which bracket your total income falls in.</p>
 
     <h3 class="amber">Withdrawal Logic</h3>
     <ul>
@@ -158,6 +166,17 @@
       <li>No IRA withdrawal before Period 1 start age.</li>
       <li>Once the IRA is exhausted, IRA withdrawals stop — Total Income continues from SS and fixed sources only.</li>
       <li>SECURE 2.0: RMDs start at 75 for those born after 1958.</li>
+    </ul>
+
+    <h3 class="amber">Calculations</h3>
+    <ul>
+      <li><b>RMD</b> — prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, SECURE 2.0, born after 1958).</li>
+      <li><b>IRA withdrawal</b> — min(available balance, max(inflation-adj target, RMD)); zero before Withdrawal 1 start age.</li>
+      <li><b>Total income</b> — IRA withdrawal + SS 1 (if active) + SS 2 (if active) + fixed income.</li>
+      <li><b>SS amounts</b> — entered in today's dollars; inflation-adjusted from their start year before contributing each year.</li>
+      <li><b>Thresholds</b> — std deduction + bracket floor (2026 est.), grown with inflation each year. Bracket fills extend to the next bracket line — click any legend item to toggle.</li>
+      <li><b>"Underfunded"</b> — first year the IRA balance falls below that year's active inflation-adjusted withdrawal target.</li>
+      <li><b>Amber table rows</b> — RMD exceeds your target withdrawal. <b>Red rows</b> — IRA depleted.</li>
     </ul>
 
     <h3 class="amber">Tax, IRMAA &amp; NIIT Threshold Lines</h3>
@@ -222,124 +241,115 @@
   <div class="panel">
     <div class="panel-title"></div>
     <div class="ctrl">
-      <div class="ctrl-header"><label>Current age</label><span class="val" id="vAge">61</span></div>
+      <div class="ctrl-header"><label>Your Age</label><span class="val" id="vAge">61</span></div>
       <input type="range" id="age" min="40" max="74" step="1" value="61">
     </div>
 
-    <hr class="divider">
-
-    <!-- Withdrawal Period 1 -->
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Withdrawal 1 start age</label><span class="val" id="vWdAge">65</span></div>
-      <input type="range" id="wdAge" min="40" max="80" step="1" value="65">
-    </div>
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Withdrawal 1 (today $)</label><span class="val" id="vW">$75,000</span></div>
-      <input type="range" id="wd" min="0" max="1000000" step="5000" value="75000">
-    </div>
-
-    <!-- Withdrawal Period 2 -->
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Withdrawal 2 start age</label><span class="val" id="vWd2Age">75</span></div>
-      <input type="range" id="wd2Age" min="40" max="85" step="1" value="75">
-    </div>
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Withdrawal 2 (today $)</label><span class="val" id="vW2">$60,000</span></div>
-      <input type="range" id="wd2" min="0" max="1000000" step="5000" value="60000">
-    </div>
-
-    <hr class="divider">
-
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Starting balance</label><span class="val" id="vStart">$2,000,000</span></div>
-      <input type="range" id="start" min="500000" max="5000000" step="100000" value="2000000">
-    </div>
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Annual growth</label><span class="val" id="vRate">8.0%</span></div>
-      <input type="range" id="rate" min="1" max="15" step="0.5" value="8">
-    </div>
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Inflation rate</label><span class="val" id="vInfl">2.5%</span></div>
-      <input type="range" id="infl" min="0" max="8" step="0.5" value="2.5">
-    </div>
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Years to project</label><span class="val" id="vYrs">30 yrs</span></div>
-      <input type="range" id="yrs" min="5" max="40" step="1" value="30">
-    </div>
-
-    <hr class="divider">
-
-    <div class="toggle-row">
-      <span class="toggle-label">Display in</span>
-      <div class="toggle-wrap">
-        <span class="toggle-opt active" id="optFuture" onclick="setToggle('realToggle',false)">Future $</span>
-        <label class="switch"><input type="checkbox" id="realToggle"><span class="slider-track"></span></label>
-        <span class="toggle-opt" id="optReal" onclick="setToggle('realToggle',true)">Today's $</span>
+    <div style="margin-top:.65rem">
+      <div class="toggle-row">
+        <span class="toggle-label">Display in</span>
+        <div class="toggle-wrap">
+          <span class="toggle-opt active" id="optFuture" onclick="setToggle('realToggle',false)">Future $</span>
+          <label class="switch"><input type="checkbox" id="realToggle"><span class="slider-track"></span></label>
+          <span class="toggle-opt" id="optReal" onclick="setToggle('realToggle',true)">Today's $</span>
+        </div>
       </div>
-    </div>
-    <div class="toggle-row">
-      <span class="toggle-label">Filing status</span>
-      <div class="toggle-wrap">
-        <span class="toggle-opt active" id="optMFJ"    onclick="setFilingStatus(false)">MFJ</span>
-        <label class="switch"><input type="checkbox" id="singleToggle"><span class="slider-track"></span></label>
-        <span class="toggle-opt"        id="optSingle" onclick="setFilingStatus(true)">Single</span>
+      <div class="toggle-row">
+        <span class="toggle-label">Filing status</span>
+        <div class="toggle-wrap">
+          <span class="toggle-opt active" id="optMFJ" onclick="setFilingStatus(false)">MFJ</span>
+          <label class="switch"><input type="checkbox" id="singleToggle"><span class="slider-track"></span></label>
+          <span class="toggle-opt" id="optSingle" onclick="setFilingStatus(true)">Single</span>
+        </div>
       </div>
     </div>
 
-    <hr class="divider">
+    <details class="section" id="secBalance">
+      <summary>Balance &amp; Rates</summary>
+      <div class="section-body">
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Starting balance</label><span class="val" id="vStart">$2,000,000</span></div>
+          <input type="range" id="start" min="500000" max="5000000" step="100000" value="2000000">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Annual growth</label><span class="val" id="vRate">8.0%</span></div>
+          <input type="range" id="rate" min="1" max="15" step="0.5" value="8">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Inflation rate</label><span class="val" id="vInfl">2.5%</span></div>
+          <input type="range" id="infl" min="0" max="8" step="0.5" value="2.5">
+        </div>
+      </div>
+    </details>
 
-    <!-- SS 1 -->
-    <div class="ctrl">
-      <div class="ctrl-header"><label>SS 1 start age</label><span class="val" id="vSS1Age">62</span></div>
-      <input type="range" id="ss1Age" min="50" max="70" step="1" value="62">
-    </div>
-    <div class="ctrl">
-      <div class="ctrl-header"><label>SS 1 (today $)</label><span class="val" id="vSS1">$0</span></div>
-      <input type="range" id="ss1" min="0" max="100000" step="500" value="0">
-      <div class="ctrl-note">SS × 85%, TIPS, or other infl-linked income. Grows with inflation from start year. Age is relative to you.</div>
-    </div>
+    <details class="section" id="secWithdrawals">
+      <summary>IRA Withdrawals</summary>
+      <div class="section-body">
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Withdrawal 1 start age</label><span class="val" id="vWdAge">65</span></div>
+          <input type="range" id="wdAge" min="40" max="80" step="1" value="65">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Withdrawal 1 (today $)</label><span class="val" id="vW">$75,000</span></div>
+          <input type="range" id="wd" min="0" max="1000000" step="5000" value="75000">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Withdrawal 2 start age</label><span class="val" id="vWd2Age">75</span></div>
+          <input type="range" id="wd2Age" min="40" max="85" step="1" value="75">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Withdrawal 2 (today $)</label><span class="val" id="vW2">$60,000</span></div>
+          <input type="range" id="wd2" min="0" max="1000000" step="5000" value="60000">
+        </div>
+      </div>
+    </details>
 
-    <!-- SS 2 -->
-    <div class="ctrl">
-      <div class="ctrl-header"><label>SS 2 start age</label><span class="val" id="vSS2Age">70</span></div>
-      <input type="range" id="ss2Age" min="50" max="70" step="1" value="70">
-    </div>
-    <div class="ctrl">
-      <div class="ctrl-header"><label>SS 2 (today $)</label><span class="val" id="vSS2">$0</span></div>
-      <input type="range" id="ss2" min="0" max="100000" step="500" value="0">
-      <div class="ctrl-note">Second spouse's SS or other infl-linked income. Fully additive with SS 1. Age relative to you.</div>
-    </div>
+    <details class="section" id="secIncome">
+      <summary>Income</summary>
+      <div class="section-body">
+        <div class="ctrl">
+          <div class="ctrl-header"><label>SS 1 start age</label><span class="val" id="vSS1Age">62</span></div>
+          <input type="range" id="ss1Age" min="50" max="70" step="1" value="62">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>SS 1 (today $)</label><span class="val" id="vSS1">$0</span></div>
+          <input type="range" id="ss1" min="0" max="100000" step="500" value="0">
+          <div class="ctrl-note">SS × 85%, TIPS, or other infl-linked income. Grows with inflation from start year. Age relative to you.</div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>SS 2 start age</label><span class="val" id="vSS2Age">70</span></div>
+          <input type="range" id="ss2Age" min="50" max="70" step="1" value="70">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>SS 2 (today $)</label><span class="val" id="vSS2">$0</span></div>
+          <input type="range" id="ss2" min="0" max="100000" step="500" value="0">
+          <div class="ctrl-note">Second spouse's SS or other infl-linked income. Fully additive with SS 1. Age relative to you.</div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Fixed add'l income</label><span class="val" id="vFixedInc">$0</span></div>
+          <input type="range" id="fixedInc" min="0" max="150000" step="1000" value="0">
+          <div class="ctrl-note">Pension, interest, dividends, cap gains — fixed in nominal terms</div>
+        </div>
+      </div>
+    </details>
 
-    <!-- Fixed income -->
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Fixed add'l income</label><span class="val" id="vFixedInc">$0</span></div>
-      <input type="range" id="fixedInc" min="0" max="150000" step="1000" value="0">
-      <div class="ctrl-note">Pension, interest, dividends, cap gains — fixed in nominal terms</div>
-    </div>
+    <details class="section" id="secThresholds">
+      <summary>Tax &amp; IRMAA Thresholds</summary>
+      <div class="section-body">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">amt · show</span>
+        </div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:.5rem">
+          Today's $. Sorted low→high on blur. Grown with inflation.<br>
+          Orange = bracket · Purple = IRMAA/NIIT cliff · Blue = state (custom)
+        </div>
+        <div class="thresh-grid" id="threshGrid">
+          <span class="gh">Label</span><span class="gh" style="text-align:right">Amount</span><span class="gh" style="text-align:center">✓</span>
+        </div>
+        <button class="add-btn" onclick="addThreshold()">+ add threshold</button>
+      </div>
+    </details>
 
-    <hr class="divider">
-
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
-      <span class="panel-title" style="margin:0">Tax &amp; IRMAA thresholds</span>
-      <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">amt · show</span>
-    </div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:.5rem">
-      Today's $. Sorted low→high on blur. Grown with inflation.<br>
-      Orange = bracket · Purple = IRMAA/NIIT cliff · Blue = state (custom)
-    </div>
-    <div class="thresh-grid" id="threshGrid">
-      <span class="gh">Label</span><span class="gh" style="text-align:right">Amount</span><span class="gh" style="text-align:center">✓</span>
-    </div>
-    <button class="add-btn" onclick="addThreshold()">+ add threshold</button>
-
-    <div style="margin-top:1.25rem;font-size:11px;color:var(--muted);font-family:var(--mono);line-height:1.7">
-      Withdrawal logic:<br>
-      1. Grow balance by rate<br>
-      2. RMD if age ≥ 75<br>
-      3. Target = active Wd × (1+i)^y<br>
-      4. IRA wd = min(bal, max(target, RMD))<br>
-      5. No wd before Wd1 start age
-    </div>
   </div>
 
   <!-- ── Right column ── -->
@@ -380,14 +390,7 @@
     </div>
 
     <div class="footnote">
-      RMD = prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, SECURE 2.0, born after 1958).
-      IRA withdrawal = min(available balance, max(inflation-adj target, RMD)); zero before Withdrawal 1 start age.
-      Total income = IRA withdrawal + SS 1 (if active) + SS 2 (if active) + fixed income.
-      SS amounts in today's dollars; inflation-adjusted from their start years before contributing.
-      Thresholds = std deduction + bracket floor (2026 est.), grown with inflation, offset by income inputs.
-      Bracket fills always extend to the next bracket — click legend to toggle individual lines.
-      "Underfunded" = first year IRA balance &lt; that year's active inflation-adjusted withdrawal target.
-      <span id="modeNote"></span> For illustrative purposes only.
+      <span id="modeNote"></span> For illustrative purposes only. See <b>How to Use → Calculations</b> for full methodology.
     </div>
   </div>
 </div>
@@ -554,12 +557,12 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
   let bal = start;
   const rows = [];
   for(let y=1; y<=years; y++){
-    const age      = startAge + y;
-    const calYear  = CURRENT_YEAR + y;
-    const inflMult = Math.pow(1 + inflRate/100, y);
+    const age      = startAge + (y - 1);
+    const calYear  = CURRENT_YEAR + (y - 1);
+    const inflMult = Math.pow(1 + inflRate/100, y - 1);
 
     // Active withdrawal period: Period 2 takes over at wd2StartAge
-    const withdrawing = age > wd1StartAge;
+    const withdrawing = age >= wd1StartAge;
     const activeWd    = age >= wd2StartAge ? wd2 : wd1;
     const targetWd    = withdrawing ? activeWd * inflMult : 0;
 
@@ -738,7 +741,7 @@ function update(){
   const wd1         = +document.getElementById('wd').value;
   const wd2         = +document.getElementById('wd2').value;
   const infl        = +document.getElementById('infl').value;
-  const years       = +document.getElementById('yrs').value;
+  const years       = 106 - startAge;
   const useReal     = document.getElementById('realToggle').checked;
   const isSingle    = document.getElementById('singleToggle').checked;
   const ss1         = +document.getElementById('ss1').value;
@@ -756,7 +759,6 @@ function update(){
   document.getElementById('vW').textContent       = fmt(wd1);
   document.getElementById('vW2').textContent      = fmt(wd2);
   document.getElementById('vInfl').textContent    = infl.toFixed(1)+'%';
-  document.getElementById('vYrs').textContent     = years+' yrs';
   document.getElementById('vSS1Age').textContent  = ss1Age;
   document.getElementById('vSS1').textContent     = fmt(ss1);
   document.getElementById('vSS2Age').textContent  = ss2Age;
@@ -812,11 +814,7 @@ function update(){
     const fillAlpha  = (i % 2 === 0) ? 0.14 : 0.36;
 
     const data = rows.map(r => {
-      const ss1c = r.age >= ss1Age ? ss1 * r.inflMult : 0;
-      const ss2c = r.age >= ss2Age ? ss2 * r.inflMult : 0;
-      const v = useReal
-        ? t.amount - ss1 - ss2 - fixedIncome / r.inflMult
-        : t.amount * r.inflMult - ss1c - ss2c - fixedIncome;
+      const v = useReal ? t.amount : t.amount * r.inflMult;
       return v > 0 ? Math.round(v) : null;
     });
 
@@ -837,11 +835,7 @@ function update(){
   sortedIrmaa.forEach((t) => {
     if(!t.visible) return;
     const data = rows.map(r => {
-      const ss1c = r.age >= ss1Age ? ss1 * r.inflMult : 0;
-      const ss2c = r.age >= ss2Age ? ss2 * r.inflMult : 0;
-      const v = useReal
-        ? t.amount - ss1 - ss2 - fixedIncome / r.inflMult
-        : t.amount * r.inflMult - ss1c - ss2c - fixedIncome;
+      const v = useReal ? t.amount : t.amount * r.inflMult;
       return v > 0 ? Math.round(v) : null;
     });
     chart.data.datasets.push({
@@ -867,11 +861,7 @@ function update(){
   });
   thresholds.filter(t => t.visible).forEach(t => {
     const lastR = rows[rows.length - 1];
-    const ss1c = lastR.age >= ss1Age ? ss1 * lastR.inflMult : 0;
-    const ss2c = lastR.age >= ss2Age ? ss2 * lastR.inflMult : 0;
-    const peak = useReal
-      ? t.amount - ss1 - ss2 - fixedIncome / lastR.inflMult
-      : t.amount * lastR.inflMult - ss1c - ss2c - fixedIncome;
+    const peak = useReal ? t.amount : t.amount * lastR.inflMult;
     if(peak > yWdMax) yWdMax = peak;
   });
   chart.options.scales.yWd.min = 0;
@@ -933,7 +923,6 @@ function buildBookmarkUrl(){
   p.set('wd',     document.getElementById('wd').value);
   p.set('wd2',    document.getElementById('wd2').value);
   p.set('infl',   document.getElementById('infl').value);
-  p.set('yrs',    document.getElementById('yrs').value);
   p.set('ss1',    document.getElementById('ss1').value);
   p.set('ss1age', document.getElementById('ss1Age').value);
   p.set('ss2',    document.getElementById('ss2').value);
@@ -980,7 +969,6 @@ function applyUrlParams(){
   setSlider('wd',       'wd');
   setSlider('wd2',      'wd2');
   setSlider('infl',     'infl');
-  setSlider('yrs',      'yrs');
   setSlider('ss1',      'ss1');
   setSlider('ss1Age',   'ss1age');
   setSlider('ss2',      'ss2');
@@ -1080,7 +1068,7 @@ document.getElementById('wdAge').addEventListener('input', () => {
   update();
 });
 
-['wd2Age','start','rate','wd','wd2','infl','yrs','ss1','ss1Age','ss2','ss2Age','fixedInc'].forEach(id =>
+['wd2Age','start','rate','wd','wd2','infl','ss1','ss1Age','ss2','ss2Age','fixedInc'].forEach(id =>
   document.getElementById(id).addEventListener('input', update)
 );
 document.getElementById('realToggle').addEventListener('change', update);
@@ -1092,6 +1080,13 @@ document.getElementById('singleToggle').addEventListener('change', e => {
 applyUrlParams();
 renderThreshEditor();
 update();
+
+// Open all sections except Thresholds on desktop; collapse all on mobile
+if(window.innerWidth > 740){
+  ['secBalance','secWithdrawals','secIncome'].forEach(id => {
+    document.getElementById(id).open = true;
+  });
+}
 </script>
 </body>
 </html>

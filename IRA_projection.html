@@ -94,6 +94,10 @@
   .del-btn { background:transparent; border:none; color:var(--muted); font-size:14px; cursor:pointer; line-height:1; padding:0 2px; transition:color .15s; }
   .del-btn:hover { color:var(--red); }
 
+  /* ── Balance text input ── */
+  .bal-input { display:block; width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:13px; font-weight:500; padding:5px 9px; outline:none; transition:border-color .15s; }
+  .bal-input:focus { border-color:var(--teal); }
+
   /* ── Right ── */
   .right { display:flex; flex-direction:column; gap:1rem; }
   .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:.75rem; }
@@ -270,8 +274,9 @@
       <summary>Balance &amp; Rates</summary>
       <div class="section-body">
         <div class="ctrl">
-          <div class="ctrl-header"><label>Starting balance</label><span class="val" id="vStart">$2,000,000</span></div>
-          <input type="range" id="start" min="500000" max="5000000" step="100000" value="2000000">
+          <div class="ctrl-header"><label>Starting balance</label></div>
+          <input type="text" id="start" class="bal-input" value="$2,000,000" autocomplete="off" spellcheck="false">
+          <div class="ctrl-note">$1k – $20M · Type a number with or without $ and commas · Enter to confirm</div>
         </div>
         <div class="ctrl">
           <div class="ctrl-header"><label>Annual growth</label><span class="val" id="vRate">8.0%</span></div>
@@ -505,6 +510,15 @@ function threshAmt(t, r, useReal){
 function hexToRgba(hex, a){
   const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
   return `rgba(${r},${g},${b},${a})`;
+}
+
+function parseStart(){
+  let raw = document.getElementById('start').value.trim().replace(/[$,\s]/g,'');
+  let mult = 1;
+  if(/[mM]$/.test(raw))      { mult = 1e6; raw = raw.slice(0,-1); }
+  else if(/[kK]$/.test(raw)) { mult = 1e3; raw = raw.slice(0,-1); }
+  const v = parseFloat(raw) * mult;
+  return Math.min(20000000, Math.max(1000, isNaN(v) ? 2000000 : v));
 }
 
 function setToggle(id, val){ document.getElementById(id).checked=val; update(); }
@@ -777,7 +791,7 @@ function update(){
   const startAge    = +document.getElementById('age').value;
   const wdStartAge  = +document.getElementById('wdAge').value;
   const wd2StartAge = +document.getElementById('wd2Age').value;
-  const start       = +document.getElementById('start').value;
+  const start       = parseStart();
   const rate        = +document.getElementById('rate').value;
   const wd1         = +document.getElementById('wd').value;
   const wd2         = +document.getElementById('wd2').value;
@@ -795,7 +809,6 @@ function update(){
   document.getElementById('vAge').textContent     = startAge;
   document.getElementById('vWdAge').textContent   = wdStartAge;
   document.getElementById('vWd2Age').textContent  = wd2StartAge;
-  document.getElementById('vStart').textContent   = fmt(start);
   document.getElementById('vRate').textContent    = rate.toFixed(1)+'%';
   document.getElementById('vW').textContent       = fmt(wd1);
   document.getElementById('vW2').textContent      = fmt(wd2);
@@ -972,7 +985,7 @@ function buildBookmarkUrl(){
   p.set('age',    document.getElementById('age').value);
   p.set('wdage',  document.getElementById('wdAge').value);
   p.set('wd2age', document.getElementById('wd2Age').value);
-  p.set('bal',    document.getElementById('start').value);
+  p.set('bal',    parseStart());
   p.set('rate',   document.getElementById('rate').value);
   p.set('wd',     document.getElementById('wd').value);
   p.set('wd2',    document.getElementById('wd2').value);
@@ -1018,7 +1031,7 @@ function applyUrlParams(){
   setSlider('age',      'age');
   setSlider('wdAge',    'wdage');
   setSlider('wd2Age',   'wd2age');
-  setSlider('start',    'bal');
+  if(p.has('bal')){ document.getElementById('start').value = fmt(+p.get('bal') || 2000000); }
   setSlider('rate',     'rate');
   setSlider('wd',       'wd');
   setSlider('wd2',      'wd2');
@@ -1122,9 +1135,22 @@ document.getElementById('wdAge').addEventListener('input', () => {
   update();
 });
 
-['wd2Age','start','rate','wd','wd2','infl','ss1','ss1Age','ss2','ss2Age','fixedInc'].forEach(id =>
+['wd2Age','rate','wd','wd2','infl','ss1','ss1Age','ss2','ss2Age','fixedInc'].forEach(id =>
   document.getElementById(id).addEventListener('input', update)
 );
+
+/* ── Starting balance text input ── */
+const startEl = document.getElementById('start');
+startEl.addEventListener('input', () => {
+  if(parseStart() >= 1000) update();
+});
+startEl.addEventListener('blur', () => {
+  startEl.value = fmt(parseStart());
+  update();
+});
+startEl.addEventListener('keydown', e => {
+  if(e.key === 'Enter') startEl.blur();
+});
 document.getElementById('realToggle').addEventListener('change', update);
 document.getElementById('singleToggle').addEventListener('change', e => {
   setFilingStatus(e.target.checked);

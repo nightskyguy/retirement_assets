@@ -15,7 +15,7 @@
     --mono:'DM Mono',monospace; --sans:'DM Sans',sans-serif;
   }
   body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:14px; min-height:100vh; padding:2rem 1.5rem 4rem; }
-  header { max-width:1000px; margin:0 auto 2rem; border-bottom:1px solid var(--border); padding-bottom:1.25rem; display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
+  header { max-width:1100px; margin:0 auto 2rem; border-bottom:1px solid var(--border); padding-bottom:1.25rem; display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
   header h1 { font-family:var(--mono); font-size:1.1rem; font-weight:500; letter-spacing:.04em; color:var(--teal); }
   header p  { font-size:12px; color:var(--muted); font-family:var(--mono); flex:1; }
   .help-btn { margin-left:auto; background:transparent; border:1px solid var(--border); border-radius:5px; color:var(--muted); font-family:var(--mono); font-size:11px; padding:4px 12px; cursor:pointer; transition:border-color .15s, color .15s; white-space:nowrap; align-self:center; }
@@ -45,7 +45,7 @@
   .share-actions { display:flex; justify-content:flex-end; gap:.5rem; }
 
   /* ── Layout ── */
-  .shell { max-width:1000px; margin:0 auto; display:grid; grid-template-columns:275px 1fr; gap:1.5rem; align-items:start; }
+  .shell { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:290px 1fr; gap:1.5rem; align-items:start; }
   .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem; }
   .panel-title { font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--muted); text-transform:uppercase; margin-bottom:1.25rem; }
   .ctrl { margin-bottom:1.1rem; }
@@ -87,7 +87,7 @@
 
   /* ── Right ── */
   .right { display:flex; flex-direction:column; gap:1rem; }
-  .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; }
+  .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:.75rem; }
   .metric { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:.85rem 1rem; }
   .metric .lbl { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .metric .num { font-family:var(--mono); font-size:17px; font-weight:500; }
@@ -115,7 +115,7 @@
 <body>
 
 <header>
-  <h1>IRA Projection v.7</h1>
+  <h1>IRA Projection v.8</h1>
   <p>SECURE 2.0 · IRS Uniform Lifetime Table · RMDs begin at age 75 · 2026 Tax / IRMAA Code</p>
   <button class="help-btn" onclick="shareBookmark()">&#128279; Share</button>
   <button class="help-btn" onclick="toggleHelp()">? How to Use</button>
@@ -133,62 +133,66 @@
 
     <h3 class="teal">What can I explore?</h3>
     <ul>
-      <li><b>Withdrawal rate vs. balance longevity</b> — Dial your base withdrawal and observe whether the balance survives through your projection window, and at what point RMDs take over.</li>
-      <li><b>Growth rate sensitivity</b> — Try higher and lower growth rates to see how dramatically a large IRA can overshoot (or undershoot) expectations.</li>
-      <li><b>Roth conversion headroom</b> — Set additional income to reflect SS and other sources. Then raise your withdrawal above your lifestyle needs. The gap between the withdrawal line and the next bracket ceiling is roughly how much you could convert to Roth each year — and the balance chart shows whether that pace is sustainable.</li>
-      <li><b>MFJ vs. Single ("Widow's Tax")</b> — Toggle the filing-status switch. The bracket thresholds roughly halve when filing single, often pushing the same income into a dramatically higher bracket and triggering IRMAA tiers that were previously clear.</li>
-      <li><b>Inflation's toll</b> — Switch to Today's $ mode to see the gap between the nominal IRA balance and its real purchasing power. The blue real-balance line is the one that actually matters for spending.</li>
+      <li><b>Two withdrawal periods</b> — Model a higher-spend early retirement followed by reduced withdrawals later (or vice versa). The "Withdrawal target" line steps between rates at their configured start ages.</li>
+      <li><b>Two Social Security incomes</b> — Enter each spouse's SS amount (in today's dollars) and the age at which it begins, expressed relative to your current age. Both grow with inflation from their start years and are fully additive.</li>
+      <li><b>Roth conversion headroom</b> — With SS and other income set, raise your withdrawal above lifestyle needs. The gap between the Total Income line and the next bracket ceiling shows how much you could convert annually.</li>
+      <li><b>MFJ vs. Single ("Widow's Tax")</b> — Toggle the filing-status switch. Bracket thresholds roughly halve when filing single, often triggering IRMAA tiers that were previously clear.</li>
+      <li><b>Inflation's toll</b> — Switch to Today's $ mode to see the gap between the nominal IRA balance and its real purchasing power.</li>
     </ul>
 
     <h3 class="amber">Left Panel — Inputs</h3>
     <ul>
-      <li><b>Current age / Withdrawal start age</b> — projection begins at current age; voluntary withdrawals start at the indicated age (must be ≥ current age).</li>
+      <li><b>Current age</b> — projection begins at this age.</li>
+      <li><b>Withdrawal 1 start age / amount</b> — Period 1 withdrawals begin at this age; amount in today's dollars, grown with inflation each year.</li>
+      <li><b>Withdrawal 2 start age / amount</b> — Period 2 takes over at this age (must be ≥ Period 1 start, ≤ 85). If both start ages are equal, Period 2 applies.</li>
       <li><b>Starting balance / Annual growth</b> — today's pre-tax IRA balance and expected nominal annual return.</li>
-      <li><b>Base withdrawal</b> — annual spend in today's dollars; grown with inflation each projection year.</li>
-      <li><b>Display in Future $ / Today's $</b> — toggles whether right-axis lines (withdrawals, thresholds) are shown in nominal or inflation-deflated terms. Balance lines always show both.</li>
-      <li><b>Infl-adj add'l income</b> — income that grows with inflation: Social Security (use 85% of gross benefit), TIPS, etc.</li>
-      <li><b>Fixed add'l income</b> — income fixed in nominal terms: pension, interest, dividends, capital gains.</li>
+      <li><b>Inflation rate / Years to project</b> — assumed annual inflation and projection window.</li>
+      <li><b>SS 1 / SS 2</b> — each spouse's Social Security (or other inflation-linked) income in today's dollars, with a separate start age. Ages are relative to <em>your</em> current age — e.g., if you are 50 and your spouse is already collecting, set SS 1 start age to 50. Both streams are inflation-adjusted before contributing and are fully additive.</li>
+      <li><b>Fixed add'l income</b> — income fixed in nominal terms: pension, interest, dividends, cap gains.</li>
     </ul>
-    <p style="margin-top:.35rem">Both income fields <b>shift threshold lines down</b>, showing only the IRA-withdrawal headroom remaining within each bracket after accounting for other income.</p>
+    <p style="margin-top:.35rem">SS and fixed income fields <b>shift threshold lines down</b>, showing only the IRA-withdrawal headroom remaining within each bracket after accounting for other income.</p>
 
     <h3 class="amber">Withdrawal Logic</h3>
     <ul>
-      <li>Each year: balance grows → RMD calculated (age ≥ 75, IRS Uniform Lifetime Table) → actual withdrawal = max(inflation-adj base, RMD).</li>
-      <li>No withdrawal before the withdrawal start age, even if RMD age has been reached.</li>
+      <li>Each year: balance grows → RMD calculated (age ≥ 75) → target = active withdrawal period amount × inflation factor → IRA withdrawal = min(available balance, max(target, RMD)).</li>
+      <li>No IRA withdrawal before Period 1 start age.</li>
+      <li>Once the IRA is exhausted, IRA withdrawals stop — Total Income continues from SS and fixed sources only.</li>
       <li>SECURE 2.0: RMDs start at 75 for those born after 1958.</li>
     </ul>
 
-    <h3 class="amber">Tax &amp; IRMAA Threshold Lines</h3>
+    <h3 class="amber">Tax, IRMAA &amp; NIIT Threshold Lines</h3>
     <ul>
-      <li><b>Colored bands</b> — federal income tax brackets. Each filled band represents one bracket's income range. Bracket <em>lines</em> can be toggled off in the legend; bands always extend to the next bracket regardless.</li>
-      <li><b>Red lines</b> — Medicare IRMAA surcharge tiers. These are <b>cliffs</b>: one dollar over the line triggers the full annual surcharge. No fill — the penalty is not marginal.</li>
-      <li>Thresholds are 2026 estimates (std deduction + bracket floor), grown with inflation. Offset down by any additional income you enter.</li>
-      <li>Click any legend item to show or hide it. All threshold rows also sort low → high automatically.</li>
+      <li><b>Colored bands</b> — federal income tax brackets. Each filled band represents one bracket's income range.</li>
+      <li><b>Purple lines</b> — Medicare IRMAA surcharge tiers. These are <b>cliffs</b>: one dollar over the line triggers the full annual surcharge.</li>
+      <li><b>NIIT line</b> — Net Investment Income Tax threshold ($250k MFJ / $200k Single + std deduction). A 3.8% surtax on net investment income above this level.</li>
+      <li>Thresholds are 2026 estimates (std deduction + bracket floor), grown with inflation, and offset down by SS and fixed income.</li>
+      <li>Click any legend item to show or hide it.</li>
     </ul>
 
     <h3 class="amber">Metric Cards</h3>
     <ul>
       <li><b>Nominal / Real bal</b> — IRA balance at end of projection in future and today's dollars.</li>
       <li><b>Peak RMD</b> — largest required minimum distribution over the projection period.</li>
-      <li><b>Underfunded at</b> — first year the IRA balance falls below that year's inflation-adjusted withdrawal target.</li>
+      <li><b>Underfunded at</b> — first year the IRA balance falls below the active withdrawal target.</li>
+      <li><b>Total IRA Drawn</b> — cumulative sum of all IRA withdrawals over the projection window (nominal).</li>
+      <li><b>Total Income</b> — cumulative sum of all income sources (IRA + SS 1 + SS 2 + fixed) over the window (nominal).</li>
     </ul>
 
-    <h3 class="amber">Limitations — How this differs from reality</h3>
+    <h3 class="amber">Limitations</h3>
     <ul>
-      <li><b>Growth is constant here; markets are not.</b> A single annual rate is a useful fiction. Actual returns fluctuate with market conditions, your investment mix, and sequence-of-returns risk.</li>
-      <li><b>Tax law changes.</b> Brackets, standard deductions, and IRMAA thresholds are all subject to legislation. Future Medicare costs and IRMAA surcharges are likely to grow, further eroding net spendable income over time.</li>
-      <li><b>Net spendable income is not calculated.</b> The tool shows gross income and bracket placement, not after-tax cash in hand.</li>
-      <li><b>No state taxes.</b> Most states tax IRA withdrawals; some exempt Social Security. State brackets can meaningfully compound federal rates.</li>
-      <li><b>No external assets.</b> Brokerage accounts, savings, real estate, and other investments are not modeled. Spending from outside the IRA changes the picture substantially.</li>
-      <li><b>Fixed withdrawal is unrealistic.</b> Actual spending changes with health, lifestyle, and life events. This model assumes you hold to the same inflation-adjusted base.</li>
-      <li><b>Longevity is unknown.</b> Neither your lifespan nor your spouse's is factored in. Plan accordingly.</li>
-      <li><b>Income timing matters.</b> There is no way to model starting Social Security at different ages for two spouses, or income that phases in or out over time.</li>
+      <li><b>Growth is constant here; markets are not.</b> A single annual rate is a useful fiction.</li>
+      <li><b>Tax law changes.</b> Brackets, standard deductions, and IRMAA thresholds are all subject to legislation.</li>
+      <li><b>Net spendable income is not calculated.</b> The tool shows gross income and bracket placement, not after-tax cash.</li>
+      <li><b>No state taxes.</b> Most states tax IRA withdrawals; some exempt Social Security.</li>
+      <li><b>No external assets.</b> Brokerage accounts, savings, and real estate are not modeled.</li>
+      <li><b>Longevity is unknown.</b> Neither your lifespan nor your spouse's is factored in.</li>
     </ul>
 
     <h3 class="teal">Tips</h3>
     <ul>
-      <li>Amber rows in the table = RMD exceeds your target withdrawal. Red rows = depleted balance.</li>
+      <li>Amber rows in the table = RMD exceeds your target withdrawal. Red rows = IRA depleted.</li>
       <li>For IRMAA planning: qualified charitable distributions (QCDs) do not count toward MAGI.</li>
+      <li>SS amounts are in today's dollars — no need to pre-inflate. The tool adjusts them before they begin.</li>
       <li>Try Today's $ mode to see whether your real purchasing power holds steady over time.</li>
     </ul>
   </div>
@@ -205,7 +209,7 @@
     <input id="shareUrl" type="text" readonly>
     <p id="shareNote" style="display:none;margin-top:.5rem;font-size:10px;color:var(--muted);font-family:var(--mono);line-height:1.6">
       Append to the filename when opening directly:<br>
-      <code>IRA_projection.html<b>?v=7&amp;age=…</b></code>
+      <code>IRA_projection.html<b>?v=8&amp;age=…</b></code>
     </p>
     <div class="share-actions">
       <button class="help-btn" style="margin-left:0" onclick="copyShareUrl()">Copy</button>
@@ -221,10 +225,31 @@
       <div class="ctrl-header"><label>Current age</label><span class="val" id="vAge">61</span></div>
       <input type="range" id="age" min="40" max="74" step="1" value="61">
     </div>
+
+    <hr class="divider">
+
+    <!-- Withdrawal Period 1 -->
     <div class="ctrl">
-      <div class="ctrl-header"><label>Withdrawal start age</label><span class="val" id="vWdAge">65</span></div>
+      <div class="ctrl-header"><label>Withdrawal 1 start age</label><span class="val" id="vWdAge">65</span></div>
       <input type="range" id="wdAge" min="40" max="80" step="1" value="65">
     </div>
+    <div class="ctrl">
+      <div class="ctrl-header"><label>Withdrawal 1 (today $)</label><span class="val" id="vW">$75,000</span></div>
+      <input type="range" id="wd" min="0" max="1000000" step="5000" value="75000">
+    </div>
+
+    <!-- Withdrawal Period 2 -->
+    <div class="ctrl">
+      <div class="ctrl-header"><label>Withdrawal 2 start age</label><span class="val" id="vWd2Age">75</span></div>
+      <input type="range" id="wd2Age" min="40" max="85" step="1" value="75">
+    </div>
+    <div class="ctrl">
+      <div class="ctrl-header"><label>Withdrawal 2 (today $)</label><span class="val" id="vW2">$60,000</span></div>
+      <input type="range" id="wd2" min="0" max="1000000" step="5000" value="60000">
+    </div>
+
+    <hr class="divider">
+
     <div class="ctrl">
       <div class="ctrl-header"><label>Starting balance</label><span class="val" id="vStart">$2,000,000</span></div>
       <input type="range" id="start" min="500000" max="5000000" step="100000" value="2000000">
@@ -232,13 +257,6 @@
     <div class="ctrl">
       <div class="ctrl-header"><label>Annual growth</label><span class="val" id="vRate">8.0%</span></div>
       <input type="range" id="rate" min="1" max="15" step="0.5" value="8">
-    </div>
-
-    <hr class="divider">
-
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Withdrawal (today $)</label><span class="val" id="vW">$75,000</span></div>
-      <input type="range" id="wd" min="0" max="1000000" step="5000" value="75000">
     </div>
     <div class="ctrl">
       <div class="ctrl-header"><label>Inflation rate</label><span class="val" id="vInfl">2.5%</span></div>
@@ -270,11 +288,29 @@
 
     <hr class="divider">
 
+    <!-- SS 1 -->
     <div class="ctrl">
-      <div class="ctrl-header"><label>Infl-adj add'l income</label><span class="val" id="vInflAdj">$0</span></div>
-      <input type="range" id="inflAdj" min="0" max="150000" step="1000" value="0">
-      <div class="ctrl-note">SS × 85%, TIPS — grows with inflation each year</div>
+      <div class="ctrl-header"><label>SS 1 start age</label><span class="val" id="vSS1Age">62</span></div>
+      <input type="range" id="ss1Age" min="50" max="70" step="1" value="62">
     </div>
+    <div class="ctrl">
+      <div class="ctrl-header"><label>SS 1 (today $)</label><span class="val" id="vSS1">$0</span></div>
+      <input type="range" id="ss1" min="0" max="100000" step="500" value="0">
+      <div class="ctrl-note">SS × 85%, TIPS, or other infl-linked income. Grows with inflation from start year. Age is relative to you.</div>
+    </div>
+
+    <!-- SS 2 -->
+    <div class="ctrl">
+      <div class="ctrl-header"><label>SS 2 start age</label><span class="val" id="vSS2Age">70</span></div>
+      <input type="range" id="ss2Age" min="50" max="70" step="1" value="70">
+    </div>
+    <div class="ctrl">
+      <div class="ctrl-header"><label>SS 2 (today $)</label><span class="val" id="vSS2">$0</span></div>
+      <input type="range" id="ss2" min="0" max="100000" step="500" value="0">
+      <div class="ctrl-note">Second spouse's SS or other infl-linked income. Fully additive with SS 1. Age relative to you.</div>
+    </div>
+
+    <!-- Fixed income -->
     <div class="ctrl">
       <div class="ctrl-header"><label>Fixed add'l income</label><span class="val" id="vFixedInc">$0</span></div>
       <input type="range" id="fixedInc" min="0" max="150000" step="1000" value="0">
@@ -289,7 +325,7 @@
     </div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:.5rem">
       Today's $. Sorted low→high on blur. Grown with inflation.<br>
-      Orange = bracket · Red = IRMAA cliff · Blue = state (custom)
+      Orange = bracket · Purple = IRMAA/NIIT cliff · Blue = state (custom)
     </div>
     <div class="thresh-grid" id="threshGrid">
       <span class="gh">Label</span><span class="gh" style="text-align:right">Amount</span><span class="gh" style="text-align:center">✓</span>
@@ -300,9 +336,9 @@
       Withdrawal logic:<br>
       1. Grow balance by rate<br>
       2. RMD if age ≥ 75<br>
-      3. Adj wd = base×(1+i)^y<br>
-      4. Actual = max(adj wd, RMD)<br>
-      5. No withdrawal before start age
+      3. Target = active Wd × (1+i)^y<br>
+      4. IRA wd = min(bal, max(target, RMD))<br>
+      5. No wd before Wd1 start age
     </div>
   </div>
 
@@ -313,16 +349,17 @@
       <div class="metric"><div class="lbl">Real bal (final)</div><div class="num pos" id="mReal">—</div></div>
       <div class="metric"><div class="lbl" id="rmdLbl">Peak RMD</div><div class="num warn" id="mRmd">—</div></div>
       <div class="metric"><div class="lbl">Underfunded at</div><div class="num" id="mDep">Never</div></div>
+      <div class="metric"><div class="lbl">Total IRA Drawn</div><div class="num info" id="mTotalIra">—</div></div>
+      <div class="metric"><div class="lbl">Total Income</div><div class="num info" id="mTotalInc">—</div></div>
     </div>
 
     <div class="chart-wrap">
       <div class="legend" id="legend">
-        <!-- Fixed items 0–4; thresholds appended dynamically -->
         <span id="lgNomWrap"    class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(0,'lgNomWrap')"><span class="leg-sq" style="background:#19c99d"></span>Nominal balance</span>
         <span id="lgRealWrap"   class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(1,'lgRealWrap')"><span class="leg-sq" style="background:#4f9cf9"></span>Real balance</span>
         <span id="lgRmdWrap"    class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(2,'lgRmdWrap')"><span class="leg-dash" style="border-color:rgba(245,166,35,0.85)"></span>RMD</span>
-        <span id="lgBaseWdWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(3,'lgBaseWdWrap')"><span class="leg-dot"  style="border-color:#a78bfa"></span><span id="lgBase">Base wd</span></span>
-        <span id="lgActualWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(4,'lgActualWrap')"><span class="leg-sq" style="background:#f25c5c"></span>Actual wd</span>
+        <span id="lgBaseWdWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(3,'lgBaseWdWrap')"><span class="leg-dot"  style="border-color:#a78bfa"></span><span id="lgBase">Withdrawal target</span></span>
+        <span id="lgActualWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(4,'lgActualWrap')"><span class="leg-sq" style="background:#e8eaf2"></span>Total Income</span>
       </div>
       <div style="position:relative;width:100%;height:350px">
         <canvas id="ch" role="img" aria-label="IRA projection chart">IRA projection</canvas>
@@ -335,7 +372,7 @@
           <tr>
             <th>Year</th><th>Age</th>
             <th>Balance</th><th>Real bal</th>
-            <th>RMD</th><th>Total income</th><th>Bracket</th><th>Withdrawal</th><th>Net growth</th>
+            <th>RMD</th><th>Total income</th><th>Bracket</th><th>IRA Withdrawal</th><th>Net growth</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -344,10 +381,12 @@
 
     <div class="footnote">
       RMD = prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, SECURE 2.0, born after 1958).
-      Actual wd = max(inflation-adj withdrawal, RMD); zero before withdrawal start age.
-      Thresholds = std deduction + bracket floor (2026 est.), grown with inflation, offset by additional income inputs.
+      IRA withdrawal = min(available balance, max(inflation-adj target, RMD)); zero before Withdrawal 1 start age.
+      Total income = IRA withdrawal + SS 1 (if active) + SS 2 (if active) + fixed income.
+      SS amounts in today's dollars; inflation-adjusted from their start years before contributing.
+      Thresholds = std deduction + bracket floor (2026 est.), grown with inflation, offset by income inputs.
       Bracket fills always extend to the next bracket — click legend to toggle individual lines.
-      "Underfunded" = first year balance &lt; that year's inflation-adjusted base withdrawal.
+      "Underfunded" = first year IRA balance &lt; that year's active inflation-adjusted withdrawal target.
       <span id="modeNote"></span> For illustrative purposes only.
     </div>
   </div>
@@ -370,43 +409,44 @@ function rmdFactor(age){
 }
 
 /* ── 2026 Tax thresholds (today's $) ──
-   amount = std deduction + bracket floor (all amounts in today's dollars, grown with inflation)
+   amount = std deduction + bracket floor
    MFJ std deduction $30,000 · Single $15,000
-   Federal brackets: 2025 values used as 2026 estimates (10/12/22/24/32/35/37%)
-   IRMAA 5-tier Medicare surcharge cliffs (MAGI-based; std deduction added for consistency):
-     MFJ: $212k/$266k/$334k/$400k/$750k · Single: $106k/$133k/$167k/$200k/$500k
-   type:'bracket' → fill chain between sorted bracket lines (all brackets always in datasets)
-   type:'irmaa'   → cliff line only, no fill (IRMAA is a cliff, not marginal)
-   Ordered by ascending amount within each filing status.
+   IRMAA tiers (MAGI + std ded):
+     MFJ:    $212k / $266k / $334k / $400k / $750k
+     Single: $106k / $133k / $167k / $200k / $500k
+   NIIT: $250k MFJ, $200k Single (+ std ded)
+   type:'bracket' → fill chain | type:'irmaa' → cliff, no fill
 */
 const DEFAULTS = {
   mfj: [
-    { id:'f10', label:'10% bracket', amount:30000+0,       color:'#fef08a', visible:false, type:'bracket' },
-    { id:'f12', label:'12% bracket', amount:30000+23850,    color:'#fbbf24', visible:true,  type:'bracket' },
-    { id:'f22', label:'22% bracket', amount:30000+96950,    color:'#f97316', visible:true,  type:'bracket' },
-    { id:'f24', label:'24% bracket', amount:30000+206700,   color:'#ea580c', visible:false, type:'bracket' },
-    { id:'i1',  label:'IRMAA Tier 1',amount:30000+212000,   color:'#f87171', visible:true,  type:'irmaa'   },
-    { id:'i2',  label:'IRMAA Tier 2',amount:30000+266000,   color:'#dc2626', visible:false, type:'irmaa'   },
-    { id:'i3',  label:'IRMAA Tier 3',amount:30000+334000,   color:'#b91c1c', visible:false, type:'irmaa'   },
-    { id:'f32', label:'32% bracket', amount:30000+394600,   color:'#c2410c', visible:false, type:'bracket' },
-    { id:'i4',  label:'IRMAA Tier 4',amount:30000+400000,   color:'#991b1b', visible:false, type:'irmaa'   },
-    { id:'f35', label:'35% bracket', amount:30000+501050,   color:'#9a3412', visible:false, type:'bracket' },
-    { id:'f37', label:'37% bracket', amount:30000+751600,   color:'#7c2d12', visible:false, type:'bracket' },
-    { id:'i5',  label:'IRMAA Tier 5',amount:30000+750000,   color:'#7f1d1d', visible:false, type:'irmaa'   },
+    { id:'f10',  label:'10% bracket', amount:30000+0,       color:'#fef08a', visible:false, type:'bracket' },
+    { id:'f12',  label:'12% bracket', amount:30000+23850,   color:'#fbbf24', visible:true,  type:'bracket' },
+    { id:'f22',  label:'22% bracket', amount:30000+96950,   color:'#f97316', visible:true,  type:'bracket' },
+    { id:'f24',  label:'24% bracket', amount:30000+206700,  color:'#ea580c', visible:false, type:'bracket' },
+    { id:'i1',   label:'IRMAA Tier 1',amount:30000+212000,  color:'#d8b4fe', visible:true,  type:'irmaa'   },
+    { id:'i2',   label:'IRMAA Tier 2',amount:30000+266000,  color:'#c084fc', visible:false, type:'irmaa'   },
+    { id:'i3',   label:'IRMAA Tier 3',amount:30000+334000,  color:'#a855f7', visible:false, type:'irmaa'   },
+    { id:'f32',  label:'32% bracket', amount:30000+394600,  color:'#c2410c', visible:false, type:'bracket' },
+    { id:'i4',   label:'IRMAA Tier 4',amount:30000+400000,  color:'#7c3aed', visible:false, type:'irmaa'   },
+    { id:'niit', label:'NIIT',         amount:30000+250000,  color:'#818cf8', visible:true,  type:'irmaa'   },
+    { id:'f35',  label:'35% bracket', amount:30000+501050,  color:'#9a3412', visible:false, type:'bracket' },
+    { id:'f37',  label:'37% bracket', amount:30000+751600,  color:'#7c2d12', visible:false, type:'bracket' },
+    { id:'i5',   label:'IRMAA Tier 5',amount:30000+750000,  color:'#5b21b6', visible:false, type:'irmaa'   },
   ],
   single: [
-    { id:'f10', label:'10% bracket', amount:15000+0,        color:'#fef08a', visible:false, type:'bracket' },
-    { id:'f12', label:'12% bracket', amount:15000+11925,    color:'#fbbf24', visible:true,  type:'bracket' },
-    { id:'f22', label:'22% bracket', amount:15000+48475,    color:'#f97316', visible:true,  type:'bracket' },
-    { id:'f24', label:'24% bracket', amount:15000+103350,   color:'#ea580c', visible:false, type:'bracket' },
-    { id:'i1',  label:'IRMAA Tier 1',amount:15000+106000,   color:'#f87171', visible:true,  type:'irmaa'   },
-    { id:'i2',  label:'IRMAA Tier 2',amount:15000+133000,   color:'#dc2626', visible:false, type:'irmaa'   },
-    { id:'i3',  label:'IRMAA Tier 3',amount:15000+167000,   color:'#b91c1c', visible:false, type:'irmaa'   },
-    { id:'f32', label:'32% bracket', amount:15000+197300,   color:'#c2410c', visible:false, type:'bracket' },
-    { id:'i4',  label:'IRMAA Tier 4',amount:15000+200000,   color:'#991b1b', visible:false, type:'irmaa'   },
-    { id:'f35', label:'35% bracket', amount:15000+250525,   color:'#9a3412', visible:false, type:'bracket' },
-    { id:'f37', label:'37% bracket', amount:15000+375800,   color:'#7c2d12', visible:false, type:'bracket' },
-    { id:'i5',  label:'IRMAA Tier 5',amount:15000+500000,   color:'#7f1d1d', visible:false, type:'irmaa'   },
+    { id:'f10',  label:'10% bracket', amount:15000+0,       color:'#fef08a', visible:false, type:'bracket' },
+    { id:'f12',  label:'12% bracket', amount:15000+11925,   color:'#fbbf24', visible:true,  type:'bracket' },
+    { id:'f22',  label:'22% bracket', amount:15000+48475,   color:'#f97316', visible:true,  type:'bracket' },
+    { id:'f24',  label:'24% bracket', amount:15000+103350,  color:'#ea580c', visible:false, type:'bracket' },
+    { id:'i1',   label:'IRMAA Tier 1',amount:15000+106000,  color:'#d8b4fe', visible:true,  type:'irmaa'   },
+    { id:'i2',   label:'IRMAA Tier 2',amount:15000+133000,  color:'#c084fc', visible:false, type:'irmaa'   },
+    { id:'i3',   label:'IRMAA Tier 3',amount:15000+167000,  color:'#a855f7', visible:false, type:'irmaa'   },
+    { id:'f32',  label:'32% bracket', amount:15000+197300,  color:'#c2410c', visible:false, type:'bracket' },
+    { id:'i4',   label:'IRMAA Tier 4',amount:15000+200000,  color:'#7c3aed', visible:false, type:'irmaa'   },
+    { id:'niit', label:'NIIT',         amount:15000+200000,  color:'#818cf8', visible:true,  type:'irmaa'   },
+    { id:'f35',  label:'35% bracket', amount:15000+250525,  color:'#9a3412', visible:false, type:'bracket' },
+    { id:'f37',  label:'37% bracket', amount:15000+375800,  color:'#7c2d12', visible:false, type:'bracket' },
+    { id:'i5',   label:'IRMAA Tier 5',amount:15000+500000,  color:'#5b21b6', visible:false, type:'irmaa'   },
   ]
 };
 
@@ -414,8 +454,8 @@ let thresholds = DEFAULTS.mfj.map(t => ({...t}));
 const EXTRA_COLORS = ['#93c5fd','#6ee7b7','#fca5a5','#d8b4fe','#fdba74','#a5f3fc'];
 let colorIdx = 0;
 
-// Module-level state referenced by tooltip callbacks
-let lastRows = [], lastInflAdjIncome = 0, lastFixedIncome = 0;
+// Module-level state referenced by tooltip and table callbacks
+let lastRows = [], lastSS1 = 0, lastSS1Age = 62, lastSS2 = 0, lastSS2Age = 70, lastFixedIncome = 0;
 
 /* ── Helpers ── */
 function fmt(v){
@@ -433,7 +473,7 @@ function hexToRgba(hex, a){
 function setToggle(id, val){ document.getElementById(id).checked=val; update(); }
 function toggleHelp(){ document.getElementById('helpOverlay').classList.toggle('open'); }
 
-/* ── Fixed dataset toggle (by dataset index + legend element id) ── */
+/* ── Fixed dataset toggle ── */
 function toggleFixedDs(dsIdx, elemId){
   const ds = chart.data.datasets[dsIdx];
   ds.hidden = !ds.hidden;
@@ -443,33 +483,22 @@ function toggleFixedDs(dsIdx, elemId){
   chart.update('none');
 }
 
-/* ── Threshold line toggle (via legend click) ── */
+/* ── Threshold line toggle ── */
 function toggleThreshLine(threshObj){
   threshObj.visible = !threshObj.visible;
-  // Rebuild datasets and legend; preserve fixed dataset hidden states
   const hiddenStates = chart.data.datasets.slice(0, FIXED_DS).map(d => d.hidden);
   update();
   hiddenStates.forEach((h, i) => { chart.data.datasets[i].hidden = h; });
   chart.update('none');
-  renderThreshEditor(); // sync checkboxes
+  renderThreshEditor();
 }
 
 function setFilingStatus(isSingle){
   document.getElementById('singleToggle').checked = isSingle;
   const src = isSingle ? DEFAULTS.single : DEFAULTS.mfj;
-  src.forEach((d,i)=>{
-    if(i < thresholds.length){
-      thresholds[i].id      = d.id;
-      thresholds[i].label   = d.label;
-      thresholds[i].amount  = d.amount;
-      thresholds[i].color   = d.color;
-      thresholds[i].visible = d.visible;
-      thresholds[i].type    = d.type;
-    }
-  });
-  if(thresholds.length < src.length){
-    for(let i=thresholds.length; i<src.length; i++) thresholds.push({...src[i]});
-  }
+  // Replace built-in thresholds; preserve any user-added custom thresholds beyond the defaults
+  const customs = thresholds.filter(t => !t.id);
+  thresholds = src.map(t => ({...t})).concat(customs);
   renderThreshEditor();
   update();
 }
@@ -520,38 +549,55 @@ function addThreshold(){
 }
 
 /* ── Projection engine ── */
-function project(start, rate, baseWd, inflRate, years, startAge, wdStartAge){
+function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, years, startAge,
+                  ss1, ss1StartAge, ss2, ss2StartAge, fixedIncome){
   let bal = start;
   const rows = [];
   for(let y=1; y<=years; y++){
-    const age       = startAge + y;
-    const calYear   = CURRENT_YEAR + y;
-    const inflMult  = Math.pow(1 + inflRate/100, y);
-    const withdrawing = age > wdStartAge;
-    const adjWd     = withdrawing ? baseWd * inflMult : 0;
-    const factor    = rmdFactor(age);
-    const rmd       = factor ? bal/factor : 0;
-    const actualWd  = withdrawing ? Math.max(adjWd, rmd) : 0;
-    const growth    = bal * (rate/100);
-    const newBal    = bal + growth - actualWd;
-    const depleted  = newBal <= 0;
-    bal = Math.max(0, newBal);
-    const targetWd  = baseWd * inflMult;
+    const age      = startAge + y;
+    const calYear  = CURRENT_YEAR + y;
+    const inflMult = Math.pow(1 + inflRate/100, y);
+
+    // Active withdrawal period: Period 2 takes over at wd2StartAge
+    const withdrawing = age > wd1StartAge;
+    const activeWd    = age >= wd2StartAge ? wd2 : wd1;
+    const targetWd    = withdrawing ? activeWd * inflMult : 0;
+
+    const factor = rmdFactor(age);
+    const rmd    = factor ? bal / factor : 0;
+
+    // IRA withdrawal capped at available balance (depletion fix)
+    const balAfterGrowth = bal * (1 + rate/100);
+    const desiredWd      = withdrawing ? Math.max(targetWd, rmd) : 0;
+    const actualWd       = Math.min(desiredWd, Math.max(0, balAfterGrowth));
+
+    const growth  = bal * (rate/100);
+    const newBal  = Math.max(0, balAfterGrowth - actualWd);
+    const depleted = newBal <= 0 && desiredWd > 0;
+    bal = newBal;
+
+    // SS: inflation-adjusted from year 0, active from respective start ages
+    const ss1Contrib = age >= ss1StartAge ? ss1 * inflMult : 0;
+    const ss2Contrib = age >= ss2StartAge ? ss2 * inflMult : 0;
+    const totalIncome = actualWd + ss1Contrib + ss2Contrib + fixedIncome;
+
     rows.push({
       y, age, calYear, inflMult,
       bal,
-      realBal:      bal/inflMult,
+      realBal:        bal / inflMult,
       rmd,
-      realRmd:      rmd/inflMult,
-      adjWd,
-      actualWd,
-      realActualWd: actualWd/inflMult,
-      growth,
-      netGrowth:    growth - actualWd,
-      baseWd,
+      realRmd:        rmd / inflMult,
       targetWd,
+      activeWd,
+      actualWd,
+      realActualWd:   actualWd / inflMult,
+      growth,
+      netGrowth:      growth - actualWd,
+      ss1Contrib, ss2Contrib,
+      totalIncome,
+      realTotalIncome: totalIncome / inflMult,
       depleted,
-      rmdActive: rmd>0 && rmd > adjWd,
+      rmdActive: rmd > 0 && rmd > targetWd,
       withdrawing
     });
   }
@@ -564,11 +610,11 @@ const chartCtx = document.getElementById('ch').getContext('2d');
 const chart = new Chart(chartCtx, {
   type:'line',
   data:{ labels:[], datasets:[
-    /* 0 Nominal bal  */ { label:'Nominal balance', data:[], borderColor:'#19c99d', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
-    /* 1 Real bal     */ { label:'Real balance',    data:[], borderColor:'#4f9cf9', backgroundColor:'transparent', fill:false, hidden:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
-    /* 2 RMD          */ { label:'RMD',             data:[], borderColor:'rgba(245,166,35,0.85)', backgroundColor:'transparent', fill:false, spanGaps:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
-    /* 3 Base wd      */ { label:'Base wd',         data:[], borderColor:'#a78bfa', backgroundColor:'transparent', fill:false, tension:0,   pointRadius:0, borderWidth:1.5, borderDash:[2,3], yAxisID:'yWd' },
-    /* 4 Actual wd    */ { label:'Actual wd',       data:[], borderColor:'#f25c5c', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2,   yAxisID:'yWd' }
+    /* 0 Nominal bal    */ { label:'Nominal balance',   data:[], borderColor:'#19c99d', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 1 Real bal       */ { label:'Real balance',      data:[], borderColor:'#4f9cf9', backgroundColor:'transparent', fill:false, hidden:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 2 RMD            */ { label:'RMD',               data:[], borderColor:'rgba(245,166,35,0.85)', backgroundColor:'transparent', fill:false, spanGaps:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
+    /* 3 Wd target      */ { label:'Withdrawal target', data:[], borderColor:'#a78bfa', backgroundColor:'transparent', fill:false, tension:0, pointRadius:0, borderWidth:1.5, borderDash:[2,3], yAxisID:'yWd' },
+    /* 4 Total income   */ { label:'Total Income',      data:[], borderColor:'#e8eaf2', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2, yAxisID:'yWd' }
   ]},
   options:{
     responsive:true, maintainAspectRatio:false,
@@ -595,15 +641,12 @@ const chart = new Chart(chartCtx, {
             const r = lastRows[items[0].dataIndex];
             if(!r) return [];
             const useReal = document.getElementById('realToggle').checked;
-            const totalIncome = useReal
-              ? r.realActualWd + lastInflAdjIncome + lastFixedIncome / r.inflMult
-              : r.actualWd + lastInflAdjIncome * r.inflMult + lastFixedIncome;
+            const totalIncome = useReal ? r.realTotalIncome : r.totalIncome;
             if(totalIncome <= 0) return [];
             const sorted = [...thresholds].sort((a,b) => a.amount - b.amount);
             let bracket = null;
             const irmaaHit = [];
             for(const t of sorted){
-              // Compare total income directly to the (inflated) bracket threshold
               const threshold = useReal ? t.amount : t.amount * r.inflMult;
               if(totalIncome >= threshold){
                 if(t.type === 'bracket') bracket = t.label;
@@ -621,26 +664,25 @@ const chart = new Chart(chartCtx, {
     scales:{
       x:{ grid:{color:'rgba(42,48,72,0.6)'}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, maxTicksLimit:12} },
       yBal:{ position:'left',  grid:{color:'rgba(42,48,72,0.6)'}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, callback:v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':'$'+(v/1000).toFixed(0)+'K'}, title:{display:true,text:'Balance',color:'#7b83a0',font:{size:10,family:"'DM Mono',monospace"}} },
-      yWd: { position:'right', grid:{display:false}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, callback:v=>'$'+(v/1000).toFixed(0)+'K'}, title:{display:true,text:'Annual $',color:'#7b83a0',font:{size:10,family:"'DM Mono',monospace"}} }
+      yWd: { position:'right', grid:{display:false}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, callback:v=>'$'+(v/1000).toFixed(0)+'K'}, title:{display:true,text:'Gross Income',color:'#7b83a0',font:{size:10,family:"'DM Mono',monospace"}} }
     }
   }
 });
 
 /* ── Bracket annotation for table rows (always nominal) ── */
 function bracketForRow(r){
-  const totalIncome = r.actualWd + lastInflAdjIncome * r.inflMult + lastFixedIncome;
-  if(totalIncome <= 0) return '—';
+  if(r.totalIncome <= 0) return '—';
   const sorted = [...thresholds].sort((a,b) => a.amount - b.amount);
   let bracketLabel = null, highestIrmaa = null;
   for(const t of sorted){
-    if(totalIncome >= t.amount * r.inflMult){
+    if(r.totalIncome >= t.amount * r.inflMult){
       if(t.type === 'bracket') bracketLabel = t.label;
       else if(t.type === 'irmaa') highestIrmaa = t.label;
     }
   }
   const parts = [];
-  if(bracketLabel)   parts.push(bracketLabel.replace(' bracket',''));
-  if(highestIrmaa)   parts.push(highestIrmaa.replace('IRMAA Tier ','T'));
+  if(bracketLabel)  parts.push(bracketLabel.replace(' bracket',''));
+  if(highestIrmaa)  parts.push(highestIrmaa.replace('IRMAA Tier ','T'));
   return parts.length ? parts.join(' ') : '—';
 }
 
@@ -652,13 +694,12 @@ function buildTable(rows){
     const tr = document.createElement('tr');
     if(r.depleted)        tr.className='depleted';
     else if(r.rmdActive)  tr.className='rmd-active';
-    const totalIncome = r.actualWd + lastInflAdjIncome * r.inflMult + lastFixedIncome;
     const ngNeg = !r.depleted && r.netGrowth < 0;
     tr.innerHTML = `
       <td>${r.calYear}</td><td>${r.age}</td>
       <td>${fmt(r.bal)}</td><td>${fmt(r.realBal)}</td>
       <td>${r.rmd>0?fmt(r.rmd):'—'}</td>
-      <td>${fmt(totalIncome)}</td>
+      <td>${fmt(r.totalIncome)}</td>
       <td style="color:var(--muted)">${bracketForRow(r)}</td>
       <td>${r.withdrawing?fmt(r.actualWd):'—'}</td>
       <td${ngNeg?' style="color:var(--red)"':''}>${fmt(r.netGrowth)}</td>
@@ -670,10 +711,8 @@ function buildTable(rows){
 /* ── Legend rebuild ── */
 function rebuildLegend(){
   const legend = document.getElementById('legend');
-  // Remove all dynamic threshold legend items (beyond the 5 fixed ones)
   Array.from(legend.children).slice(5).forEach(el => el.remove());
 
-  // All thresholds sorted — visible ones opaque, invisible ones dimmed
   const sorted = [...thresholds].sort((a,b) => a.amount - b.amount);
   sorted.forEach(t => {
     const span = document.createElement('span');
@@ -691,27 +730,37 @@ function rebuildLegend(){
 
 /* ── Main update ── */
 function update(){
-  const startAge      = +document.getElementById('age').value;
-  const wdStartAge    = +document.getElementById('wdAge').value;
-  const start         = +document.getElementById('start').value;
-  const rate          = +document.getElementById('rate').value;
-  const baseWd        = +document.getElementById('wd').value;
-  const infl          = +document.getElementById('infl').value;
-  const years         = +document.getElementById('yrs').value;
-  const useReal       = document.getElementById('realToggle').checked;
-  const isSingle      = document.getElementById('singleToggle').checked;
-  const inflAdjIncome = +document.getElementById('inflAdj').value;
-  const fixedIncome   = +document.getElementById('fixedInc').value;
+  const startAge    = +document.getElementById('age').value;
+  const wdStartAge  = +document.getElementById('wdAge').value;
+  const wd2StartAge = +document.getElementById('wd2Age').value;
+  const start       = +document.getElementById('start').value;
+  const rate        = +document.getElementById('rate').value;
+  const wd1         = +document.getElementById('wd').value;
+  const wd2         = +document.getElementById('wd2').value;
+  const infl        = +document.getElementById('infl').value;
+  const years       = +document.getElementById('yrs').value;
+  const useReal     = document.getElementById('realToggle').checked;
+  const isSingle    = document.getElementById('singleToggle').checked;
+  const ss1         = +document.getElementById('ss1').value;
+  const ss1Age      = +document.getElementById('ss1Age').value;
+  const ss2         = +document.getElementById('ss2').value;
+  const ss2Age      = +document.getElementById('ss2Age').value;
+  const fixedIncome = +document.getElementById('fixedInc').value;
 
   // Labels
   document.getElementById('vAge').textContent     = startAge;
   document.getElementById('vWdAge').textContent   = wdStartAge;
+  document.getElementById('vWd2Age').textContent  = wd2StartAge;
   document.getElementById('vStart').textContent   = fmt(start);
   document.getElementById('vRate').textContent    = rate.toFixed(1)+'%';
-  document.getElementById('vW').textContent       = fmt(baseWd);
+  document.getElementById('vW').textContent       = fmt(wd1);
+  document.getElementById('vW2').textContent      = fmt(wd2);
   document.getElementById('vInfl').textContent    = infl.toFixed(1)+'%';
   document.getElementById('vYrs').textContent     = years+' yrs';
-  document.getElementById('vInflAdj').textContent = fmt(inflAdjIncome);
+  document.getElementById('vSS1Age').textContent  = ss1Age;
+  document.getElementById('vSS1').textContent     = fmt(ss1);
+  document.getElementById('vSS2Age').textContent  = ss2Age;
+  document.getElementById('vSS2').textContent     = fmt(ss2);
   document.getElementById('vFixedInc').textContent= fmt(fixedIncome);
 
   // Toggle highlights
@@ -720,34 +769,30 @@ function update(){
   document.getElementById('optMFJ').classList.toggle('active',  !isSingle);
   document.getElementById('optSingle').classList.toggle('active', isSingle);
 
-  const rows   = project(start, rate, baseWd, infl, years, startAge, wdStartAge);
+  const rows   = project(start, rate, wd1, wd2, wdStartAge, wd2StartAge, infl, years, startAge,
+                          ss1, ss1Age, ss2, ss2Age, fixedIncome);
   const labels = rows.map(r => `Age ${r.age}`);
 
-  // Fixed datasets (preserve .hidden state — set by legend toggles)
   chart.data.labels           = labels;
   chart.data.datasets[0].data = rows.map(r => Math.round(r.bal));
   chart.data.datasets[1].data = rows.map(r => Math.round(r.realBal));
-  // Real balance always user-controlled; not auto-toggled by mode
 
-  // RMD: null before RMD age so line only appears when relevant
   chart.data.datasets[2].data = rows.map(r =>
     r.rmd > 0 ? Math.round(useReal ? r.realRmd : r.rmd) : null
   );
-  chart.data.datasets[3].data = rows.map(r =>
-    Math.round(useReal ? baseWd : baseWd * r.inflMult)
-  );
+
+  // Withdrawal target: step between period 1 and period 2
+  chart.data.datasets[3].data = rows.map(r => {
+    if(!r.withdrawing) return null;
+    return Math.round(useReal ? r.activeWd : r.activeWd * r.inflMult);
+  });
+
+  // Total Income line (IRA + SS1 + SS2 + fixed)
   chart.data.datasets[4].data = rows.map(r =>
-    Math.round(useReal ? r.realActualWd : r.actualWd)
+    Math.round(useReal ? r.realTotalIncome : r.totalIncome)
   );
 
-  /* ── Threshold datasets ──────────────────────────────────────────────
-     Strategy: ALL thresholds always present in chart.data.datasets so
-     the fill chain between brackets is never broken.
-     - Bracket thresholds: sorted low→high; each fills to the next bracket.
-       Invisible ones get transparent borders but still anchor fills.
-     - IRMAA thresholds: sorted low→high, appended after brackets.
-       Always visible as lines (if t.visible); no fill.
-  ─────────────────────────────────────────────────────────────────────*/
+  /* ── Threshold datasets ── */
   while(chart.data.datasets.length > FIXED_DS) chart.data.datasets.pop();
 
   const sortedBrackets = [...thresholds]
@@ -758,21 +803,20 @@ function update(){
     .filter(t => t.type === 'irmaa')
     .sort((a, b) => a.amount - b.amount);
 
-  // Bracket dataset indices: FIXED_DS .. FIXED_DS + sortedBrackets.length - 1
   const bracketBaseIdx = FIXED_DS;
 
   sortedBrackets.forEach((t, i) => {
     const dsIdx      = bracketBaseIdx + i;
     const hasNext    = i < sortedBrackets.length - 1;
     const fillTarget = hasNext ? dsIdx + 1 : false;
-
-    // Alternating alpha for clearly distinct bands: 0.14 / 0.36
-    const fillAlpha = (i % 2 === 0) ? 0.14 : 0.36;
+    const fillAlpha  = (i % 2 === 0) ? 0.14 : 0.36;
 
     const data = rows.map(r => {
+      const ss1c = r.age >= ss1Age ? ss1 * r.inflMult : 0;
+      const ss2c = r.age >= ss2Age ? ss2 * r.inflMult : 0;
       const v = useReal
-        ? t.amount - inflAdjIncome - fixedIncome / r.inflMult
-        : (t.amount - inflAdjIncome) * r.inflMult - fixedIncome;
+        ? t.amount - ss1 - ss2 - fixedIncome / r.inflMult
+        : t.amount * r.inflMult - ss1c - ss2c - fixedIncome;
       return v > 0 ? Math.round(v) : null;
     });
 
@@ -790,13 +834,14 @@ function update(){
     });
   });
 
-  // IRMAA datasets: always appended after brackets
   sortedIrmaa.forEach((t) => {
     if(!t.visible) return;
     const data = rows.map(r => {
+      const ss1c = r.age >= ss1Age ? ss1 * r.inflMult : 0;
+      const ss2c = r.age >= ss2Age ? ss2 * r.inflMult : 0;
       const v = useReal
-        ? t.amount - inflAdjIncome - fixedIncome / r.inflMult
-        : (t.amount - inflAdjIncome) * r.inflMult - fixedIncome;
+        ? t.amount - ss1 - ss2 - fixedIncome / r.inflMult
+        : t.amount * r.inflMult - ss1c - ss2c - fixedIncome;
       return v > 0 ? Math.round(v) : null;
     });
     chart.data.datasets.push({
@@ -810,23 +855,23 @@ function update(){
     });
   });
 
-  chart.options.scales.yBal.title.text = 'Balance';
-  chart.options.scales.yWd.title.text  = useReal ? "Annual $ (today's $)" : 'Annual $ (nominal)';
+  chart.options.scales.yWd.title.text = useReal ? "Gross Income (today's $)" : 'Gross Income';
 
-  // Compute yWd max from visible thresholds + withdrawal lines so invisible
-  // bracket datasets (transparent lines) don't inflate the scale.
+  // yWd max from visible data only
   let yWdMax = 1000;
   rows.forEach(r => {
     [useReal ? r.realRmd : r.rmd,
-     useReal ? baseWd    : baseWd * r.inflMult,
-     useReal ? r.realActualWd : r.actualWd
-    ].forEach(v => { if(v > yWdMax) yWdMax = v; });
+     useReal ? r.activeWd : r.activeWd * r.inflMult,
+     useReal ? r.realTotalIncome : r.totalIncome
+    ].forEach(v => { if(v && v > yWdMax) yWdMax = v; });
   });
   thresholds.filter(t => t.visible).forEach(t => {
     const lastR = rows[rows.length - 1];
+    const ss1c = lastR.age >= ss1Age ? ss1 * lastR.inflMult : 0;
+    const ss2c = lastR.age >= ss2Age ? ss2 * lastR.inflMult : 0;
     const peak = useReal
-      ? t.amount - inflAdjIncome - fixedIncome / lastR.inflMult
-      : (t.amount - inflAdjIncome) * lastR.inflMult - fixedIncome;
+      ? t.amount - ss1 - ss2 - fixedIncome / lastR.inflMult
+      : t.amount * lastR.inflMult - ss1c - ss2c - fixedIncome;
     if(peak > yWdMax) yWdMax = peak;
   });
   chart.options.scales.yWd.min = 0;
@@ -834,7 +879,7 @@ function update(){
   chart.update('none');
 
   rebuildLegend();
-  document.getElementById('lgBase').textContent = useReal ? "Base wd (today's $, flat)" : 'Base wd (infl-grown)';
+  document.getElementById('lgBase').textContent = useReal ? "Withdrawal target (today's $)" : 'Withdrawal target';
 
   // ── Metric cards ──
   const last = rows[rows.length-1];
@@ -852,43 +897,54 @@ function update(){
   document.getElementById('mRmd').textContent = peakRmd>0 ? fmt(peakRmd) : 'None';
   document.getElementById('rmdLbl').textContent = useReal ? "Peak RMD (today's $)" : 'Peak RMD (nominal)';
 
-  const underfundIdx = rows.findIndex(r => r.bal < r.targetWd);
+  const underfundIdx = rows.findIndex(r => r.withdrawing && r.bal < r.targetWd);
   document.getElementById('mDep').textContent = underfundIdx>=0
     ? `${rows[underfundIdx].calYear} (age ${rows[underfundIdx].age})`
     : 'Never';
-  document.getElementById('mDep').className   = 'num '+(underfundIdx>=0?'neg':'pos');
+  document.getElementById('mDep').className = 'num '+(underfundIdx>=0?'neg':'pos');
+
+  const totalIraDrawn = rows.reduce((s,r) => s + r.actualWd, 0);
+  const totalAllIncome = rows.reduce((s,r) => s + r.totalIncome, 0);
+  document.getElementById('mTotalIra').textContent = fmt(totalIraDrawn);
+  document.getElementById('mTotalInc').textContent = fmt(totalAllIncome);
 
   document.getElementById('modeNote').textContent = useReal
     ? "Today's $ mode: right-axis values in constant purchasing power; balances always nominal/real."
     : 'Future $ mode: right-axis values in nominal dollars; balances always nominal/real.';
 
-  lastRows = rows;
-  lastInflAdjIncome = inflAdjIncome;
-  lastFixedIncome   = fixedIncome;
+  lastRows        = rows;
+  lastSS1         = ss1;
+  lastSS1Age      = ss1Age;
+  lastSS2         = ss2;
+  lastSS2Age      = ss2Age;
+  lastFixedIncome = fixedIncome;
   buildTable(rows);
 }
 
 /* ── URL bookmark / share ── */
 function buildBookmarkUrl(){
   const p = new URLSearchParams();
-  p.set('v',     '7');
-  p.set('age',   document.getElementById('age').value);
-  p.set('wdage', document.getElementById('wdAge').value);
-  p.set('bal',   document.getElementById('start').value);
-  p.set('rate',  document.getElementById('rate').value);
-  p.set('wd',    document.getElementById('wd').value);
-  p.set('infl',  document.getElementById('infl').value);
-  p.set('yrs',   document.getElementById('yrs').value);
-  p.set('iadj',  document.getElementById('inflAdj').value);
-  p.set('fixed', document.getElementById('fixedInc').value);
+  p.set('v',      '8');
+  p.set('age',    document.getElementById('age').value);
+  p.set('wdage',  document.getElementById('wdAge').value);
+  p.set('wd2age', document.getElementById('wd2Age').value);
+  p.set('bal',    document.getElementById('start').value);
+  p.set('rate',   document.getElementById('rate').value);
+  p.set('wd',     document.getElementById('wd').value);
+  p.set('wd2',    document.getElementById('wd2').value);
+  p.set('infl',   document.getElementById('infl').value);
+  p.set('yrs',    document.getElementById('yrs').value);
+  p.set('ss1',    document.getElementById('ss1').value);
+  p.set('ss1age', document.getElementById('ss1Age').value);
+  p.set('ss2',    document.getElementById('ss2').value);
+  p.set('ss2age', document.getElementById('ss2Age').value);
+  p.set('fixed',  document.getElementById('fixedInc').value);
   if(document.getElementById('realToggle').checked)   p.set('real',   '1');
   if(document.getElementById('singleToggle').checked) p.set('single', '1');
 
-  // tv = comma-separated stable IDs of visible thresholds
   const visIds = thresholds.filter(t => t.id && t.visible).map(t => t.id).join(',');
   if(visIds) p.set('tv', visIds);
 
-  // ds = 5-char bitmask for fixed dataset visibility (index 0–4)
   p.set('ds', [0,1,2,3,4].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
 
   return '?' + p.toString();
@@ -897,12 +953,18 @@ function buildBookmarkUrl(){
 function applyUrlParams(){
   const p = new URLSearchParams(location.search);
 
-  // Enforce wdAge >= age regardless of URL params
+  const enforceWd2Age = () => {
+    const wd2El  = document.getElementById('wd2Age');
+    const minAge = +document.getElementById('wdAge').value;
+    wd2El.min    = minAge;
+    if(+wd2El.value < minAge) wd2El.value = minAge;
+  };
   const enforceWdAge = () => {
-    const wdEl = document.getElementById('wdAge');
+    const wdEl   = document.getElementById('wdAge');
     const minAge = +document.getElementById('age').value;
-    wdEl.min = minAge;
+    wdEl.min     = minAge;
     if(+wdEl.value < minAge) wdEl.value = minAge;
+    enforceWd2Age();
   };
 
   if(!p.has('v')){ enforceWdAge(); return; }
@@ -912,12 +974,17 @@ function applyUrlParams(){
   };
   setSlider('age',      'age');
   setSlider('wdAge',    'wdage');
+  setSlider('wd2Age',   'wd2age');
   setSlider('start',    'bal');
   setSlider('rate',     'rate');
   setSlider('wd',       'wd');
+  setSlider('wd2',      'wd2');
   setSlider('infl',     'infl');
   setSlider('yrs',      'yrs');
-  setSlider('inflAdj',  'iadj');
+  setSlider('ss1',      'ss1');
+  setSlider('ss1Age',   'ss1age');
+  setSlider('ss2',      'ss2');
+  setSlider('ss2Age',   'ss2age');
   setSlider('fixedInc', 'fixed');
 
   document.getElementById('realToggle').checked   = p.get('real')   === '1';
@@ -925,17 +992,14 @@ function applyUrlParams(){
 
   enforceWdAge();
 
-  // Re-init thresholds for the correct filing status
   const isSingle = p.get('single') === '1';
   thresholds = (isSingle ? DEFAULTS.single : DEFAULTS.mfj).map(t => ({...t}));
 
-  // Override visibility from tv param (stable IDs — unknown IDs ignored)
   if(p.has('tv')){
     const visSet = new Set(p.get('tv').split(',').filter(Boolean));
     thresholds.forEach(t => { if(t.id) t.visible = visSet.has(t.id); });
   }
 
-  // Apply fixed dataset visibility from ds bitmask
   if(p.has('ds')){
     const ds = p.get('ds');
     const lgIds = ['lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap'];
@@ -953,11 +1017,8 @@ function applyUrlParams(){
 
 async function shareBookmark(){
   const qs = buildBookmarkUrl();
-
   const noteEl = document.getElementById('shareNote');
 
-  // data: and blob: URLs (preview panels) have no stable base path —
-  // show just the query string with an explanatory note.
   if(location.protocol === 'data:' || location.protocol === 'blob:'){
     document.getElementById('shareUrl').value = qs;
     noteEl.style.display = 'block';
@@ -966,15 +1027,13 @@ async function shareBookmark(){
   }
   noteEl.style.display = 'none';
 
-  // For http/https/file: strip any existing query string and append ours.
   const url = location.href.split('?')[0] + qs;
-
   if(navigator.clipboard && window.isSecureContext){
     try{
       await navigator.clipboard.writeText(url);
       showToast('Link copied to clipboard');
       return;
-    } catch(e){ /* fall through to panel */ }
+    } catch(e){}
   }
   document.getElementById('shareUrl').value = url;
   document.getElementById('shareOverlay').classList.add('open');
@@ -1002,14 +1061,26 @@ function copyShareUrl(){
 document.getElementById('age').addEventListener('input', () => {
   const startAge = +document.getElementById('age').value;
   const wdEl     = document.getElementById('wdAge');
-  const minWdAge = Math.max(startAge, 60);
   wdEl.min       = startAge;
-  if(+wdEl.value < minWdAge) wdEl.value = minWdAge;
+  if(+wdEl.value < startAge) wdEl.value = startAge;
+  const wd2El = document.getElementById('wd2Age');
+  wd2El.min   = +wdEl.value;
+  if(+wd2El.value < +wdEl.value) wd2El.value = wdEl.value;
+  document.getElementById('vWdAge').textContent  = wdEl.value;
+  document.getElementById('vWd2Age').textContent = wd2El.value;
   update();
 });
-document.getElementById('wdAge').addEventListener('input', update);
 
-['start','rate','wd','infl','yrs','inflAdj','fixedInc'].forEach(id =>
+document.getElementById('wdAge').addEventListener('input', () => {
+  const wd1Age = +document.getElementById('wdAge').value;
+  const wd2El  = document.getElementById('wd2Age');
+  wd2El.min    = wd1Age;
+  if(+wd2El.value < wd1Age) wd2El.value = wd1Age;
+  document.getElementById('vWd2Age').textContent = wd2El.value;
+  update();
+});
+
+['wd2Age','start','rate','wd','wd2','infl','yrs','ss1','ss1Age','ss2','ss2Age','fixedInc'].forEach(id =>
   document.getElementById(id).addEventListener('input', update)
 );
 document.getElementById('realToggle').addEventListener('change', update);

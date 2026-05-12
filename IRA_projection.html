@@ -694,16 +694,20 @@ const chart = new Chart(chartCtx, {
 function bracketForRow(r){
   if(r.totalIncome <= 0) return '—';
   const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
-  let bracketLabel = null, highestIrmaa = null;
+  let bracketLabel = null, highestIrmaa = null, highestUnindexed = null;
   for(const t of sorted){
     if(r.totalIncome >= threshAmt(t, r, false)){
       if(t.type === 'bracket') bracketLabel = t.label;
-      else if(t.type === 'irmaa') highestIrmaa = t.label;
+      else if(t.type === 'irmaa'){
+        if(t.amount >= 0) highestIrmaa      = t.label;
+        else              highestUnindexed  = t.label;
+      }
     }
   }
   const parts = [];
-  if(bracketLabel)  parts.push(bracketLabel.replace(' bracket',''));
-  if(highestIrmaa)  parts.push(highestIrmaa.replace('IRMAA Tier ','T'));
+  if(bracketLabel)      parts.push(bracketLabel.replace(' bracket',''));
+  if(highestIrmaa)      parts.push(highestIrmaa.replace('IRMAA Tier ','T'));
+  if(highestUnindexed)  parts.push(highestUnindexed);
   return parts.length ? parts.join(' ') : '—';
 }
 

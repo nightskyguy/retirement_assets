@@ -483,6 +483,9 @@ function toggleFixedDs(dsIdx, elemId){
   const el = document.getElementById(elemId);
   el.style.opacity = ds.hidden ? '0.35' : '1';
   el.title = ds.hidden ? 'Hidden — click to show' : 'Click to hide';
+  // Hide yBal axis when both balance datasets (0=nominal, 1=real) are hidden
+  const balHidden = chart.data.datasets[0].hidden && chart.data.datasets[1].hidden;
+  chart.options.scales.yBal.display = !balHidden;
   chart.update('none');
 }
 

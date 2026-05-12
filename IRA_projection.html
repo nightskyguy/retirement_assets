@@ -414,47 +414,48 @@ function rmdFactor(age){
   return ULT[Math.min(Math.max(Math.round(age), RMD_START_AGE), 100)] || 6.4;
 }
 
-/* ── 2026 Tax thresholds (today's $) ──
-   amount = std deduction + bracket floor
-   MFJ std deduction $30,000 · Single $15,000
-   IRMAA tiers (MAGI + std ded):
-     MFJ:    $212k / $266k / $334k / $400k / $750k
-     Single: $106k / $133k / $167k / $200k / $500k
-   NIIT: $250k MFJ, $200k Single (+ std ded)
+/* ── 2026 federal tax data (update here each year) ──
+   Bracket floors are taxable-income thresholds (above the std deduction).
+   IRMAA / NIIT floors are MAGI thresholds (above the std deduction).
+   NIIT is not indexed to inflation — stored as negative to flag that.
    type:'bracket' → fill chain | type:'irmaa' → cliff, no fill
 */
-const DEFAULTS = {
-  mfj: [
-    { id:'f10',  label:'10% bracket', amount:30000+0,       color:'#fef08a', visible:false, type:'bracket' },
-    { id:'f12',  label:'12% bracket', amount:30000+23850,   color:'#fbbf24', visible:true,  type:'bracket' },
-    { id:'f22',  label:'22% bracket', amount:30000+96950,   color:'#f97316', visible:true,  type:'bracket' },
-    { id:'f24',  label:'24% bracket', amount:30000+206700,  color:'#ea580c', visible:false, type:'bracket' },
-    { id:'i1',   label:'IRMAA Tier 1',amount:30000+212000,  color:'#d8b4fe', visible:true,  type:'irmaa'   },
-    { id:'i2',   label:'IRMAA Tier 2',amount:30000+266000,  color:'#c084fc', visible:false, type:'irmaa'   },
-    { id:'i3',   label:'IRMAA Tier 3',amount:30000+334000,  color:'#a855f7', visible:false, type:'irmaa'   },
-    { id:'f32',  label:'32% bracket', amount:30000+394600,  color:'#c2410c', visible:false, type:'bracket' },
-    { id:'i4',   label:'IRMAA Tier 4',amount:30000+400000,  color:'#7c3aed', visible:false, type:'irmaa'   },
-    { id:'niit', label:'NIIT',         amount:-(30000+250000), color:'#818cf8', visible:true,  type:'irmaa'   },
-    { id:'f35',  label:'35% bracket', amount:30000+501050,  color:'#9a3412', visible:false, type:'bracket' },
-    { id:'f37',  label:'37% bracket', amount:30000+751600,  color:'#7c2d12', visible:false, type:'bracket' },
-    { id:'i5',   label:'IRMAA Tier 5',amount:30000+750000,  color:'#5b21b6', visible:false, type:'irmaa'   },
-  ],
-  single: [
-    { id:'f10',  label:'10% bracket', amount:15000+0,       color:'#fef08a', visible:false, type:'bracket' },
-    { id:'f12',  label:'12% bracket', amount:15000+11925,   color:'#fbbf24', visible:true,  type:'bracket' },
-    { id:'f22',  label:'22% bracket', amount:15000+48475,   color:'#f97316', visible:true,  type:'bracket' },
-    { id:'f24',  label:'24% bracket', amount:15000+103350,  color:'#ea580c', visible:false, type:'bracket' },
-    { id:'i1',   label:'IRMAA Tier 1',amount:15000+106000,  color:'#d8b4fe', visible:true,  type:'irmaa'   },
-    { id:'i2',   label:'IRMAA Tier 2',amount:15000+133000,  color:'#c084fc', visible:false, type:'irmaa'   },
-    { id:'i3',   label:'IRMAA Tier 3',amount:15000+167000,  color:'#a855f7', visible:false, type:'irmaa'   },
-    { id:'f32',  label:'32% bracket', amount:15000+197300,  color:'#c2410c', visible:false, type:'bracket' },
-    { id:'i4',   label:'IRMAA Tier 4',amount:15000+200000,  color:'#7c3aed', visible:false, type:'irmaa'   },
-    { id:'niit', label:'NIIT',         amount:-(15000+200000), color:'#818cf8', visible:true,  type:'irmaa'   },
-    { id:'f35',  label:'35% bracket', amount:15000+250525,  color:'#9a3412', visible:false, type:'bracket' },
-    { id:'f37',  label:'37% bracket', amount:15000+375800,  color:'#7c2d12', visible:false, type:'bracket' },
-    { id:'i5',   label:'IRMAA Tier 5',amount:15000+500000,  color:'#5b21b6', visible:false, type:'irmaa'   },
-  ]
+const TAX = {
+  mfj: {
+    stdDed:   30000,
+    brackets: { b10:0, b12:23850, b22:96950, b24:206700, b32:394600, b35:501050, b37:751600 },
+    irmaa:    { t1:212000, t2:266000, t3:334000, t4:400000, t5:750000 },
+    niit:     250000,
+  },
+  single: {
+    stdDed:   15000,
+    brackets: { b10:0, b12:11925, b22:48475, b24:103350, b32:197300, b35:250525, b37:375800 },
+    irmaa:    { t1:106000, t2:133000, t3:167000, t4:200000, t5:500000 },
+    niit:     200000,
+  }
 };
+
+function buildDefaults(s){
+  const d = TAX[s];
+  const sd = d.stdDed;
+  return [
+    { id:'f10',  label:'10% bracket', amount: sd+d.brackets.b10, color:'#fef08a', visible:false, type:'bracket' },
+    { id:'f12',  label:'12% bracket', amount: sd+d.brackets.b12, color:'#fbbf24', visible:true,  type:'bracket' },
+    { id:'f22',  label:'22% bracket', amount: sd+d.brackets.b22, color:'#f97316', visible:true,  type:'bracket' },
+    { id:'f24',  label:'24% bracket', amount: sd+d.brackets.b24, color:'#ea580c', visible:false, type:'bracket' },
+    { id:'i1',   label:'IRMAA Tier 1',amount: sd+d.irmaa.t1,     color:'#d8b4fe', visible:true,  type:'irmaa'   },
+    { id:'i2',   label:'IRMAA Tier 2',amount: sd+d.irmaa.t2,     color:'#c084fc', visible:false, type:'irmaa'   },
+    { id:'i3',   label:'IRMAA Tier 3',amount: sd+d.irmaa.t3,     color:'#a855f7', visible:false, type:'irmaa'   },
+    { id:'f32',  label:'32% bracket', amount: sd+d.brackets.b32, color:'#c2410c', visible:false, type:'bracket' },
+    { id:'i4',   label:'IRMAA Tier 4',amount: sd+d.irmaa.t4,     color:'#7c3aed', visible:false, type:'irmaa'   },
+    { id:'niit', label:'NIIT',         amount: -(sd+d.niit),      color:'#818cf8', visible:true,  type:'irmaa'   },
+    { id:'f35',  label:'35% bracket', amount: sd+d.brackets.b35, color:'#9a3412', visible:false, type:'bracket' },
+    { id:'f37',  label:'37% bracket', amount: sd+d.brackets.b37, color:'#7c2d12', visible:false, type:'bracket' },
+    { id:'i5',   label:'IRMAA Tier 5',amount: sd+d.irmaa.t5,     color:'#5b21b6', visible:false, type:'irmaa'   },
+  ];
+}
+
+const DEFAULTS = { mfj: buildDefaults('mfj'), single: buildDefaults('single') };
 
 let thresholds = DEFAULTS.mfj.map(t => ({...t}));
 const EXTRA_COLORS = ['#93c5fd','#6ee7b7','#fca5a5','#d8b4fe','#fdba74','#a5f3fc'];

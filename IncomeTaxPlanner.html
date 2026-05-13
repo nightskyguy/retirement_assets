@@ -306,10 +306,9 @@ const FULL_MAX  = 1_100_000;
 const FULL_STEP =    10_000;
 const BASE_YEAR = 2026;
 
-// Display-only: OBBBA phase-out parameters (match values in calculateTaxes.js)
-const OBBBA_PER_SENIOR    = 4_000;
-const OBBBA_PHASEOUT_AGI  = { MFJ:150_000, SGL:75_000 };
-const OBBBA_PHASEOUT_RATE = 0.06;
+// OBBBA display helpers — read from TAXData so display stays in sync with calculations
+const obbaSalt = TAXData.OBBBA.SALT;
+const obbaSen  = TAXData.OBBBA.SENIOR_DED;
 
 // Display-only: SS torpedo thresholds (not indexed to inflation per current law)
 const SS_T = { MFJ:{t1:32_000,t2:44_000}, SGL:{t1:25_000,t2:34_000} };
@@ -343,6 +342,9 @@ function calcAt(ordInc) {
   const medGrowth = Math.pow(1 + medicareExtra / 100, year - BASE_YEAR);
   const cgGain    = cgSale > 0 ? cgSale * (1 - cgBasisPct / 100) : 0;
 
+  // Suppress saltHigh after OBBBA SALT provisions sunset
+  const effectiveSaltHigh = saltHigh && year <= obbaSalt.sunsetYear;
+
   const r = calculateTaxes({
     filingStatus:    status,
     ages:            ages,
@@ -352,7 +354,7 @@ function calcAt(ordInc) {
     inflation:       inf,
     state:           state,
     obbaOn:          obbaOn,
-    saltHigh:        saltHigh,
+    saltHigh:        effectiveSaltHigh,
     propTax:         propTax,
     irmaaAnnualCost: 0   // computed below from MAGI
   });
@@ -372,6 +374,8 @@ function calcAt(ordInc) {
     fedAGI:    r.AGI,
     useItz:    r.useItemized,
     senDed:    r.seniorDeduction,
+    fedDed:    r.federalStdDeduction,
+    stDed:     r.stateStdDeduction,
     cgGain
   };
 }
@@ -846,7 +850,8 @@ function updateInfoPanel(idx) {
         <div class="info-row"><span class="ir-lbl">State Effective</span><span class="ir-val">${(d.stEff*100).toFixed(1)}%</span></div>
         <div class="info-row"><span class="ir-lbl">Fed Marginal (Ord+CG)</span><span class="ir-val">${(d.fedMarg*100).toFixed(1)}%</span></div>
         <div class="info-divider"></div>
-        <div class="info-row"><span class="ir-lbl">Deduction type</span><span class="ir-val">${d.useItz ? 'Itemized (SALT)' : 'Standard'}</span></div>
+        <div class="info-row"><span class="ir-lbl">Federal deduction</span><span class="ir-val"><span style="font-size:10px;color:var(--muted)">${d.useItz ? 'itemized' : 'standard'}</span>&ensp;${$v(d.fedDed)}</span></div>
+        <div class="info-row"><span class="ir-lbl">State deduction</span><span class="ir-val">${$v(d.stDed)}</span></div>
         ${d.senDed > 0 ? `<div class="info-row"><span class="ir-lbl">Senior ded. (OBBBA)</span><span class="ir-val">${$v(d.senDed)}</span></div>` : ''}
       </div>
       <div>
@@ -917,7 +922,8 @@ function renderSummary(data) {
   let peakMarg=0, peakInc=0;
   data.forEach(d => { if (d.fedMarg>peakMarg){ peakMarg=d.fedMarg; peakInc=d.ordInc; }});
 
-  const saltCap = cfg.obbaOn?(cfg.saltHigh?40_000:10_000):10_000;
+  const effectiveSaltHigh = cfg.saltHigh && cfg.year <= obbaSalt.sunsetYear;
+  const saltCap = cfg.obbaOn ? (effectiveSaltHigh ? obbaSalt.capHigh : obbaSalt.capLow) : obbaSalt.capLow;
   const sample  = data.find(d => d.ordInc >= 200_000) ?? data[Math.floor(data.length / 2)];
 
   const rows = [
@@ -926,7 +932,7 @@ function renderSummary(data) {
     `<div><strong>Federal std. ded.:</strong> $${Math.round(stdF).toLocaleString()} (${nSen} bump${nSen!==1?'s':''})</div>`,
   ];
   if (cfg.obbaOn && nSen>0)
-    rows.push(`<div><strong>OBBBA senior ded.:</strong> up to $${(OBBBA_PER_SENIOR*nSen).toLocaleString()}, phases out above $${OBBBA_PHASEOUT_AGI[cfg.status].toLocaleString()}</div>`);
+    rows.push(`<div><strong>OBBBA senior ded.:</strong> up to $${(obbaSen.perSenior*nSen).toLocaleString()}, phases out above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()}</div>`);
   if (cfg.cgSale > 0)
     rows.push(`<div><strong>Capital gains:</strong> $${cgGain.toLocaleString()} taxable gain on $${cfg.cgSale.toLocaleString()} sale (${(100-cfg.cgBasisPct).toFixed(0)}% gain rate)</div>`);
   if (sample)
@@ -948,8 +954,8 @@ function renderAssumptions() {
     <div><strong>Social Security:</strong> Provisional income = ordinary income + CG + ½ SS (real treatment). Thresholds $32k/$44k MFJ; $25k/$34k SGL — NOT inflation-adjusted per current law.</div>
     <div><strong>Capital gains:</strong> Federal uses combined CG+NIIT brackets (stacked on top of ordinary taxable income). State taxes CG at ordinary income rates (marginal increase). CG adds to MAGI and SS provisional income.</div>
     <div><strong>IRMAA:</strong> Step function applied to MAGI at each income level (2-year lookback "cheated" to current year). IRMAA costs grow at inflation + Medicare extra rate; expressed in 2026-base dollars. <span class="warn">IRMAA bracket values from TAXData — verify against CMS for exact 2026 amounts.</span></div>
-    <div><strong>OBBBA senior ded.:</strong> $${OBBBA_PER_SENIOR.toLocaleString()}/person ≥ 65. Phase-out at ${(OBBBA_PHASEOUT_RATE*100).toFixed(0)}¢/$1 above $${OBBBA_PHASEOUT_AGI[cfg.status].toLocaleString()} AGI. <span class="warn">Phase-out parameters are estimates.</span></div>
-    <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing.</div>
+    <div><strong>OBBBA senior ded.:</strong> $${obbaSen.perSenior.toLocaleString()}/person ≥ 65. Phase-out at ${(obbaSen.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} AGI. <span class="warn">Phase-out parameters are estimates.</span></div>
+    <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing. OBBBA $${obbaSalt.capHigh.toLocaleString()} cap phases out $1-for-$1 above $${obbaSalt.phaseoutThreshold.toLocaleString()} MAGI, flooring at $${obbaSalt.capLow.toLocaleString()} (fully phased out at $${(obbaSalt.phaseoutThreshold + obbaSalt.capHigh - obbaSalt.capLow).toLocaleString()} MAGI); sunsets after ${obbaSalt.sunsetYear}. <span class="warn">Phase-out threshold and sunset year are estimates — verify with IRS guidance.</span></div>
     <div><strong>Top x-axis:</strong> Total income = ordinary income + Social Security + CG gain at each sweep point (fixed SS and CG amounts).</div>
     <div><strong>Excluded:</strong> AMT, SE tax, CA SDI, muni interest, qualif. dividends, CA personal exemption credits. Effective rate denominator = ordinary + SS + CG gain.</div>
   `;
@@ -1241,7 +1247,7 @@ function loadFromURL() {
       <h3>Caveats &amp; known simplifications</h3>
       <ul>
         <li><strong>IRMAA lookback:</strong> Medicare IRMAA uses your MAGI from <em>two years prior</em>. This tool applies it to <em>current-year</em> MAGI — convenient for planning but optimistic by about two years if you've recently had a high-income year.</li>
-        <li><strong>OBBBA provisions</strong> (senior deduction, elevated SALT cap) are modeled from best-available bill text as of mid-2025. Phase-out thresholds ($150k/$75k AGI) and the $40k SALT cap are estimates — verify with IRS guidance when published. No automatic sunset is modeled.</li>
+        <li><strong>OBBBA provisions</strong> (senior deduction, elevated SALT cap) are modeled from best-available bill text as of mid-2025. All parameters (phase-out thresholds, caps, sunset year) are sourced from <code>TAXData.OBBBA</code> — update that block when IRS guidance is published. The $40k SALT cap automatically reverts to $10k for years after ${obbaSalt.sunsetYear}.</li>
         <li><strong>Nebraska brackets</strong> are approximate based on the LB754 phase-down schedule; confirm with NE DOR for your specific year.</li>
         <li><strong>SS provisional income thresholds</strong> ($32k/$44k MFJ, $25k/$34k Single) are intentionally <em>not</em> inflation-adjusted — that is current law, and the reason the SS torpedo worsens over time.</li>
         <li><strong>NIIT threshold</strong> ($250k MFJ / $200k Single) is also not inflation-indexed — another orphan in the tax code, unchanged since 2013.</li>

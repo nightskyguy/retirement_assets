@@ -439,6 +439,23 @@ var TAXData = {
 	
 }; // TAXdata
 
+// OBBBA provisions — update this block when law changes or provisions sunset.
+// calculateTaxes.js and IncomeTaxPlanner.html read from here; no values are hardcoded there.
+TAXData.OBBBA = {
+    SALT: {
+        capHigh:           40000,   // elevated OBBBA cap
+        capLow:            10000,   // TCJA floor / fallback when OBBBA is off or sunset
+        phaseoutThreshold: 500000,  // MAGI above which capHigh phases out (MFJ & SGL per OBBBA)
+        phaseoutRate:      1.0,     // $1-for-$1 reduction above threshold
+        sunsetYear:        2029     // capHigh expires after this tax year; revert to capLow
+    },
+    SENIOR_DED: {
+        perSenior:    4000,                          // deduction per person aged ≥ 65
+        phaseoutAGI:  { MFJ: 150000, SGL: 75000 },  // AGI above which deduction phases out
+        phaseoutRate: 0.06                           // $0.06 reduction per $1 above threshold
+    }
+};
+
 // Uniform Lifetime Table (Simplified)
 const RMD_TABLE = {
     72: 27.4, 73: 26.5, 74: 25.5, 75: 24.6, 76: 23.7, 77: 22.9, 78: 22.0, 79: 21.1,

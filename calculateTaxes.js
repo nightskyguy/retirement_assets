@@ -60,17 +60,14 @@ function calculateTaxes(params = {}) {
 
     let federalStdDeduction = (federalStdBase + federalAgeBump * nSeniors) * inflation;
 
-    // OBBBA senior deduction: $4,000 per senior, phases out at 6% above AGI threshold
-    // Computed after AGI is known (Step 3); placeholder set here, applied in Step 1b below.
-    const OBBBA_PER_SENIOR = 4000;
-    const OBBBA_PHASEOUT_AGI = { MFJ: 150000, SGL: 75000 };
-    const OBBBA_PHASEOUT_RATE = 0.06;
+    // OBBBA parameters — sourced from TAXData.OBBBA (no values hardcoded here).
+    const obbaSalt = TAXData.OBBBA.SALT;
+    const obbaSen  = TAXData.OBBBA.SENIOR_DED;
 
-    // SALT itemizing: compare standard deduction vs capped state+local taxes
-    // State tax is not known until Step 8; we use a forward-reference approach —
-    // the caller may pass stateTaxPaid, or we skip itemizing (conservative default).
-    // For now, SALT comparison is deferred to Step 1b after state tax is computed.
-    const saltCap = obbaOn ? (saltHigh ? 40000 : 10000) : 10000;
+    // SALT itemizing: compare standard deduction vs capped state+local taxes.
+    // State tax is not known until Step 4; SALT comparison is deferred to Step 5.
+    // OBBBA capHigh phases out $1-for-$1 above phaseoutThreshold (Step 5).
+    const saltBaseCap = obbaOn ? (saltHigh ? obbaSalt.capHigh : obbaSalt.capLow) : obbaSalt.capLow;
 
 	// ========================================================================
 	// STEP 2: Calculate Social Security Taxability (Federal)
@@ -156,7 +153,12 @@ function calculateTaxes(params = {}) {
     // ========================================================================
     // STEP 5: Finalize Federal Deduction (SALT itemizing + OBBBA senior deduction)
     // ========================================================================
-    // SALT itemizing: choose whichever is larger — standard deduction or capped SALT
+    // SALT itemizing: choose whichever is larger — standard deduction or capped SALT.
+    // Apply OBBBA $40k phase-out: cap reduces $1-for-$1 above $500k MAGI, floor $10k.
+    const saltMagi = federalAGI + taxExemptInterest;
+    const saltCap = (obbaOn && saltHigh)
+        ? Math.max(obbaSalt.capLow, saltBaseCap - Math.max(0, saltMagi - obbaSalt.phaseoutThreshold))
+        : saltBaseCap;
     const saltItemized = Math.min(stateTax + propTax, saltCap);
     const useItemized = saltItemized > federalStdDeduction;
     let federalDeduction = useItemized ? saltItemized : federalStdDeduction;
@@ -164,9 +166,9 @@ function calculateTaxes(params = {}) {
     // OBBBA senior deduction: $4,000/senior, phases out at 6% above threshold
     let seniorDeduction = 0;
     if (obbaOn && nSeniors > 0) {
-        const rawSenDed = OBBBA_PER_SENIOR * nSeniors;
-        const phaseoutExcess = Math.max(0, federalAGI - OBBBA_PHASEOUT_AGI[status]);
-        seniorDeduction = Math.max(0, rawSenDed - phaseoutExcess * OBBBA_PHASEOUT_RATE);
+        const rawSenDed = obbaSen.perSenior * nSeniors;
+        const phaseoutExcess = Math.max(0, federalAGI - obbaSen.phaseoutAGI[status]);
+        seniorDeduction = Math.max(0, rawSenDed - phaseoutExcess * obbaSen.phaseoutRate);
     } // OBBBA senior deduction
     federalDeduction += seniorDeduction;
 

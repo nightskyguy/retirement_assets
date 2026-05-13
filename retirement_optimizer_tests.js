@@ -1265,9 +1265,69 @@ assertEqual(
 	} // testCase14_SALTCapNotWorth()
 
 	// ============================================================================
-	// TEST CASE 15: CT state taxes SS at 25%
+	// TEST CASE 15: SALT cap mid-phase-out (MAGI $520k → cap reduced to $20k)
 	// ============================================================================
-	function testCase15_CTStateSSTaxation() {
+	function testCase15_SALTPhaseoutMid() {
+		console.log('\n=== Test Case 15: SALT Cap Mid Phase-Out ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [55, 53],
+			earnedIncome: 520000,
+			totalSS: 0,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'TESTTAXATION',
+			obbaOn: true,
+			saltHigh: true
+		});
+
+		// saltMagi = 520000; excess = 520000-500000 = 20000
+		// saltCap = max(10000, 40000 - 20000) = 20000
+		// stateTax on 510000 (520000-10000 std) =
+		//   50000*0.05 + 50000*0.10 + 410000*0.15 = 2500+5000+61500 = 69000
+		// saltItemized = min(69000, 20000) = 20000 > federalStd=32200? No: 20000 < 32200
+		// → useItemized=false (phased-out cap fell below standard deduction)
+		assertEqual(result.useItemized, false, 'Phased-out SALT cap falls below std deduction');
+		assertEqual(result.federalStdDeduction, 32200, 'Uses standard deduction after phase-out');
+	} // testCase15_SALTPhaseoutMid()
+
+	// ============================================================================
+	// TEST CASE 16: SALT cap fully phased out (MAGI $550k → cap floors at $10k)
+	// ============================================================================
+	function testCase16_SALTPhaseoutFull() {
+		console.log('\n=== Test Case 16: SALT Cap Fully Phased Out ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [55, 53],
+			earnedIncome: 550000,
+			totalSS: 0,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'TESTTAXATION',
+			obbaOn: true,
+			saltHigh: true
+		});
+
+		// saltMagi = 550000; excess = 50000; cap = max(10000, 40000-50000) = 10000 (floor)
+		// Behaves identically to saltHigh=false at this income level
+		assertEqual(result.useItemized, false, 'Fully phased-out SALT cap floors at $10k');
+		assertEqual(result.federalStdDeduction, 32200, 'Uses standard deduction (SALT floor = std ded)');
+	} // testCase16_SALTPhaseoutFull()
+
+	// ============================================================================
+	// TEST CASE 17: CT state taxes SS at 25%
+	// ============================================================================
+	function testCase17_CTStateSSTaxation() {
 		console.log('\n=== Test Case 15: Connecticut SS Taxation (25%) ===');
 
 		const result = calculateTaxes({
@@ -1289,13 +1349,13 @@ assertEqual(
 		// CT MFJ std = 24000 → stateTaxableIncome = 60000-24000 = 36000
 		assertEqual(result.stateAGI, 60000, 'CT stateAGI includes 25% of SS');
 		assertEqual(result.stateTaxableIncome, 36000, 'CT state taxable income');
-	} // testCase15_CTStateSSTaxation()
+	} // testCase17_CTStateSSTaxation()
 
 	// ============================================================================
-	// TEST CASE 16: stateOrdinaryTax / stateCapGainsTax split
+	// TEST CASE 18: stateOrdinaryTax / stateCapGainsTax split
 	// ============================================================================
-	function testCase16_StateTaxSplit() {
-		console.log('\n=== Test Case 16: State Ordinary vs Cap Gains Tax Split ===');
+	function testCase18_StateTaxSplit() {
+		console.log('\n=== Test Case 18: State Ordinary vs Cap Gains Tax Split ===');
 
 		const result = calculateTaxes({
 			filingStatus: 'MFJ',
@@ -1319,7 +1379,7 @@ assertEqual(
 		assertEqual(result.stateTax, 13500, 'Total state tax');
 		assertEqual(result.stateOrdinaryTax, 6500, 'State ordinary tax');
 		assertEqual(result.stateCapGainsTax, 7000, 'State cap gains tax');
-	} // testCase16_StateTaxSplit()
+	} // testCase18_StateTaxSplit()
 
 	// ============================================================================
 	// Run all tests
@@ -1343,8 +1403,10 @@ assertEqual(
 		testCase12_OBBASeniorDeductionZero();
 		testCase13_SALTItemizingWins();
 		testCase14_SALTCapNotWorth();
-		testCase15_CTStateSSTaxation();
-		testCase16_StateTaxSplit();
+		testCase15_SALTPhaseoutMid();
+		testCase16_SALTPhaseoutFull();
+		testCase17_CTStateSSTaxation();
+		testCase18_StateTaxSplit();
 
 		console.log('\n╔════════════════════════════════════════════════════╗');
 		console.log('║     TEST SUITE COMPLETE                            ║');

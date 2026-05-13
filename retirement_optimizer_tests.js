@@ -689,42 +689,8 @@ assertEqual(
     assertEqual(findUpperLimitByAmount('TEST', 'SGL', 998, 1), {"limit": 999,"rate": 0.1, "nominalRate": 0.1}, 
                 'findUpperLimitByAmount: TEST SGL 998 finds limit: 999, rate: 0.1');
 				
-	assertEqual(getInputs(), 
-{
-  "STATEname": "CA",
-  "strategy": "baseline",
-  "nYears": 10,
-  "stratRate": 0.24,
-  "birthyear1": 1960,
-  "die1": 88,
-  "birthyear2": 1952,
-  "die2": 98,
-  "IRA1": 1000000,
-  "IRA2": 400000,
-  "Roth": 50000,
-  "Brokerage": 100000,
-  "BrokerageBasis": 100000,
-  "Cash": 50000,
-  "ss1": 48000,
-  "ss1Age": 70,
-  "ss2": 24000,
-  "ss2Age": 70,
-  "pensionAnnual": 15000,
-  "survivorPct": 75,
-  "spendGoal": 150000,
-  "spendChange": -0.01,
-  "iraBaseGoal": 750000,
-  "inflation": 0.03,
-  "cpi": 0.028,
-  "growth": 0.06,
-  "cashYield": 0.03,
-  "dividendRate": 0.005,
-  "ssFailYear": 2033,
-  "ssFailPct": 0.773,
-  "maxConversion": false,
-  "startInYear": null
-},
-		'getInputs()')
+	// TODO: move getInputs() test back to retirement_optimizer.html (requires its DOM elements)
+	// assertEqual(getInputs(), { ... }, 'getInputs()')
 		
 
 	// Example: $1M IRA, want to get down to $200K over 10 years, 6% growth
@@ -1086,12 +1052,12 @@ assertEqual(
 		// Provisional income = 50000 + 2000 + 0.5 * 30000 = 67,000
 		assertEqual(result.provisionalIncome, 67000, 'Provisional Income');
 		
-		// SS thresholds with inflation: $25,000 * 1.1 = 27,500; $34,000 * 1.1 = 37,400
-		// Provisional 67,000 > 37,400 (inflated second threshold)
-		// Tier 1: 0.5 * (37400 - 27500) = 4,950
-		// Tier 2: 0.85 * (67000 - 37400) = 25,160
-		// Total: 30,110, max is 0.85 * 30000 = 25,500
-		assertEqual(result.taxableSS, 25500, 'Taxable SS (85% max)');
+		// SS thresholds are statutory (NOT inflation-indexed): t1=$25,000, t2=$34,000
+		// Provisional 67,000 > 34,000 (second threshold)
+		// Tier 1: 0.5 * (34000 - 25000) = 4,500
+		// Tier 2: 0.85 * (67000 - 34000) = 28,050
+		// Total: 32,550, max is 0.85 * 30000 = 25,500
+		assertEqual(result.taxableSS, 25500, 'Taxable SS (85% max, thresholds not inflated)');
 		
 		// Federal std deduction = (16100 + 2050) * 1.1 = 19,965
 		assertEqual(result.federalStdDeduction, 19965, 'Federal Std Deduction (inflated)');
@@ -1126,6 +1092,296 @@ assertEqual(
 	} // testCase8_ExactlyAt50PercentThreshold()
 
 	// ============================================================================
+	// TEST CASE 9: SS thresholds are NOT CPI-indexed (validates fix vs old bug)
+	// ============================================================================
+	function testCase9_SSThresholdsNotInflated() {
+		console.log('\n=== Test Case 9: SS Thresholds Not Inflation-Indexed ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'SGL',
+			ages: [66],
+			earnedIncome: 8000,
+			totalSS: 40000,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.5,  // 50% inflation — old code would inflate thresholds
+			state: 'TESTTAXATION'
+		});
+
+		// Provisional income = 8000 + 0.5 * 40000 = 28,000
+		// SS thresholds are NOT inflated: t1=25,000, t2=34,000
+		// 28,000 is in tier-1 band (25k–34k):
+		//   excessOver1 = 28000 - 25000 = 3,000
+		//   taxableSS = min(0.5 * 40000, 0.5 * 3000) = min(20000, 1500) = 1,500
+		// (Old buggy code: inflated t1=37,500 → provisional 28,000 < 37,500 → taxableSS=0)
+		assertEqual(result.provisionalIncome, 28000, 'Provisional Income');
+		assertEqual(result.taxableSS, 1500, 'Taxable SS (SS thresholds not CPI-indexed)');
+	} // testCase9_SSThresholdsNotInflated()
+
+	// ============================================================================
+	// TEST CASE 10: OBBBA senior deduction — full (below phase-out)
+	// ============================================================================
+	function testCase10_OBBASeniorDeductionFull() {
+		console.log('\n=== Test Case 10: OBBBA Senior Deduction Full (below phase-out) ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [70, 68],  // Both seniors
+			earnedIncome: 50000,
+			totalSS: 20000,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'TESTTAXATION',
+			obbaOn: true
+		});
+
+		// Provisional income = 50000 + 0.5*20000 = 60000 > 44000
+		// Tier1=6000, Tier2=0.85*(60000-44000)=13600 → total=19600, max=0.85*20000=17000
+		// taxableSS=17000, AGI=50000+17000=67000
+		// OBBBA: 2 seniors, rawSenDed=8000, phaseoutExcess=max(0,67000-150000)=0
+		assertEqual(result.AGI, 67000, 'AGI');
+		assertEqual(result.seniorDeduction, 8000, 'Senior Deduction (full, below phase-out)');
+		assertEqual(result.useItemized, false, 'Not itemizing (SALT < std deduction)');
+	} // testCase10_OBBASeniorDeductionFull()
+
+	// ============================================================================
+	// TEST CASE 11: OBBBA senior deduction — partial phase-out
+	// ============================================================================
+	function testCase11_OBBASeniorDeductionPartial() {
+		console.log('\n=== Test Case 11: OBBBA Senior Deduction Partial Phase-Out ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [70, 68],
+			earnedIncome: 200000,
+			totalSS: 0,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'TESTTAXATION',
+			obbaOn: true
+		});
+
+		// AGI = 200000; phaseoutExcess = 200000-150000 = 50000
+		// seniorDeduction = max(0, 8000 - 50000*0.06) = max(0, 8000-3000) = 5000
+		assertEqual(result.AGI, 200000, 'AGI');
+		assertEqual(result.seniorDeduction, 5000, 'Senior Deduction (partial phase-out)');
+	} // testCase11_OBBASeniorDeductionPartial()
+
+	// ============================================================================
+	// TEST CASE 12: OBBBA senior deduction — fully phased out
+	// ============================================================================
+	function testCase12_OBBASeniorDeductionZero() {
+		console.log('\n=== Test Case 12: OBBBA Senior Deduction Fully Phased Out ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [70, 68],
+			earnedIncome: 350000,
+			totalSS: 0,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'TESTTAXATION',
+			obbaOn: true
+		});
+
+		// AGI = 350000; phaseoutExcess = 200000; reduction = 200000*0.06=12000 > 8000
+		// seniorDeduction = max(0, 8000-12000) = 0
+		assertEqual(result.AGI, 350000, 'AGI');
+		assertEqual(result.seniorDeduction, 0, 'Senior Deduction (fully phased out)');
+	} // testCase12_OBBASeniorDeductionZero()
+
+	// ============================================================================
+	// TEST CASE 13: SALT itemizing wins with OBBBA $40k cap
+	// ============================================================================
+	function testCase13_SALTItemizingWins() {
+		console.log('\n=== Test Case 13: SALT Itemizing Wins (OBBBA $40k cap) ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [55, 53],
+			earnedIncome: 500000,
+			totalSS: 0,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'TESTTAXATION',
+			obbaOn: true,
+			saltHigh: true
+		});
+
+		// stateAGI=500000, std=10000, taxableState=490000
+		// stateTax = 50000*0.05 + 50000*0.10 + 390000*0.15 = 2500+5000+58500 = 66000
+		// SALT: min(66000+0, 40000)=40000; federalStd=32200 (no age bumps)
+		// 40000 > 32200 → useItemized=true, federalDeduction=40000
+		// federalAGI=500000; federalTaxableIncome=500000-40000=460000
+		assertEqual(result.useItemized, true, 'SALT itemizing wins');
+		assertEqual(result.federalStdDeduction, 40000, 'Federal deduction = SALT $40k cap');
+		assertEqual(result.federalTaxableIncome, 460000, 'Federal taxable income with SALT deduction');
+	} // testCase13_SALTItemizingWins()
+
+	// ============================================================================
+	// TEST CASE 14: SALT $10k cap never beats standard deduction
+	// ============================================================================
+	function testCase14_SALTCapNotWorth() {
+		console.log('\n=== Test Case 14: SALT $10k Cap Does Not Beat Std Deduction ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [55, 53],
+			earnedIncome: 500000,
+			totalSS: 0,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'TESTTAXATION'
+			// obbaOn defaults false → saltCap=$10k
+		});
+
+		// stateTax=66000; SALT=min(66000,10000)=10000 < federalStd=32200
+		// → useItemized=false; federalDeduction=32200
+		assertEqual(result.useItemized, false, 'SALT $10k cap does not beat std deduction');
+		assertEqual(result.federalStdDeduction, 32200, 'Uses standard deduction');
+	} // testCase14_SALTCapNotWorth()
+
+	// ============================================================================
+	// TEST CASE 15: SALT cap mid-phase-out (MAGI $520k → cap reduced to $20k)
+	// ============================================================================
+	function testCase15_SALTPhaseoutMid() {
+		console.log('\n=== Test Case 15: SALT Cap Mid Phase-Out ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [55, 53],
+			earnedIncome: 520000,
+			totalSS: 0,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'TESTTAXATION',
+			obbaOn: true,
+			saltHigh: true
+		});
+
+		// saltMagi = 520000; excess = 520000-500000 = 20000
+		// saltCap = max(10000, 40000 - 20000) = 20000
+		// stateTax on 510000 (520000-10000 std) =
+		//   50000*0.05 + 50000*0.10 + 410000*0.15 = 2500+5000+61500 = 69000
+		// saltItemized = min(69000, 20000) = 20000 > federalStd=32200? No: 20000 < 32200
+		// → useItemized=false (phased-out cap fell below standard deduction)
+		assertEqual(result.useItemized, false, 'Phased-out SALT cap falls below std deduction');
+		assertEqual(result.federalStdDeduction, 32200, 'Uses standard deduction after phase-out');
+	} // testCase15_SALTPhaseoutMid()
+
+	// ============================================================================
+	// TEST CASE 16: SALT cap fully phased out (MAGI $550k → cap floors at $10k)
+	// ============================================================================
+	function testCase16_SALTPhaseoutFull() {
+		console.log('\n=== Test Case 16: SALT Cap Fully Phased Out ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [55, 53],
+			earnedIncome: 550000,
+			totalSS: 0,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'TESTTAXATION',
+			obbaOn: true,
+			saltHigh: true
+		});
+
+		// saltMagi = 550000; excess = 50000; cap = max(10000, 40000-50000) = 10000 (floor)
+		// Behaves identically to saltHigh=false at this income level
+		assertEqual(result.useItemized, false, 'Fully phased-out SALT cap floors at $10k');
+		assertEqual(result.federalStdDeduction, 32200, 'Uses standard deduction (SALT floor = std ded)');
+	} // testCase16_SALTPhaseoutFull()
+
+	// ============================================================================
+	// TEST CASE 17: CT state taxes SS at 25%
+	// ============================================================================
+	function testCase17_CTStateSSTaxation() {
+		console.log('\n=== Test Case 15: Connecticut SS Taxation (25%) ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [67, 65],
+			earnedIncome: 50000,
+			totalSS: 40000,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 0,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'CT'
+		});
+
+		// CT SSTaxation=0.25 → stateTaxableSS = 40000*0.25 = 10000
+		// stateAGI = 50000 + 10000 + 0 + 0 + 0 = 60000
+		// CT MFJ std = 24000 → stateTaxableIncome = 60000-24000 = 36000
+		assertEqual(result.stateAGI, 60000, 'CT stateAGI includes 25% of SS');
+		assertEqual(result.stateTaxableIncome, 36000, 'CT state taxable income');
+	} // testCase17_CTStateSSTaxation()
+
+	// ============================================================================
+	// TEST CASE 18: stateOrdinaryTax / stateCapGainsTax split
+	// ============================================================================
+	function testCase18_StateTaxSplit() {
+		console.log('\n=== Test Case 18: State Ordinary vs Cap Gains Tax Split ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ',
+			ages: [55, 53],
+			earnedIncome: 100000,
+			totalSS: 0,
+			ordDivInterest: 0,
+			qualifiedDiv: 0,
+			capGains: 50000,
+			taxExemptInterest: 0,
+			hsaContrib: 0,
+			inflation: 1.0,
+			state: 'TESTTAXATION'
+		});
+
+		// stateAGI = 100000+50000 = 150000; std=10000; taxable=140000
+		// stateTax = 50000*0.05 + 50000*0.10 + 40000*0.15 = 2500+5000+6000 = 13500
+		// stateAGIOrdOnly = 150000-50000=100000; taxableOrdOnly=90000
+		// stateOrdinaryTax = 50000*0.05 + 40000*0.10 = 2500+4000 = 6500
+		// stateCapGainsTax = 13500-6500 = 7000
+		assertEqual(result.stateTax, 13500, 'Total state tax');
+		assertEqual(result.stateOrdinaryTax, 6500, 'State ordinary tax');
+		assertEqual(result.stateCapGainsTax, 7000, 'State cap gains tax');
+	} // testCase18_StateTaxSplit()
+
+	// ============================================================================
 	// Run all tests
 	// ============================================================================
 	function runAllTaxTests() {
@@ -1141,7 +1397,17 @@ assertEqual(
 		testCase6_HighIncomeNIIT();
 		testCase7_SingleWithInflation();
 		testCase8_ExactlyAt50PercentThreshold();
-		
+		testCase9_SSThresholdsNotInflated();
+		testCase10_OBBASeniorDeductionFull();
+		testCase11_OBBASeniorDeductionPartial();
+		testCase12_OBBASeniorDeductionZero();
+		testCase13_SALTItemizingWins();
+		testCase14_SALTCapNotWorth();
+		testCase15_SALTPhaseoutMid();
+		testCase16_SALTPhaseoutFull();
+		testCase17_CTStateSSTaxation();
+		testCase18_StateTaxSplit();
+
 		console.log('\n╔════════════════════════════════════════════════════╗');
 		console.log('║     TEST SUITE COMPLETE                            ║');
 		console.log('╚════════════════════════════════════════════════════╝');

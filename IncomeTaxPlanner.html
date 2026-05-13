@@ -119,12 +119,18 @@
   .zoom-btn.active { background:rgba(25,201,157,.15); border-color:rgba(25,201,157,.4); color:var(--teal); }
   .zoom-btn.zoomed { border-color:rgba(245,166,35,.5); color:var(--amber); }
 </style>
+<!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
+<script src="retirement_optimizer_taxdata.js"></script>
+<script src="retirement_optimizer_core.js"></script>
+<script src="calculateTaxes.js"></script>
+<script src="retirement_optimizer_tests.js"></script>
 </head>
 <body>
 <header>
   <h1>Income Tax Planner<span class="ver">v2</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · 2026–2035 with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
+    <strong id="testsFailed" title="Unit tests status">🟢</strong>
     <button class="hdr-btn share" onclick="toggleSharePanel()">&#8258; Share</button>
     <button class="hdr-btn" onclick="openModal()">How to Use</button>
     <!-- Share panel anchored below header buttons -->
@@ -289,121 +295,23 @@
 <script>
 'use strict';
 
-// ─── TAX DATA ────────────────────────────────────────────────────────────────
-const TAXData = {
-  FEDERAL: {
-    YEAR: 2026, // IRS Rev. Proc. 2025-32
-    MFJ: { std:32200, age:65, stdbump:1650, brackets:[
-      {l:24800,r:.10},{l:100800,r:.12},{l:211400,r:.22},
-      {l:403550,r:.24},{l:512450,r:.32},{l:768700,r:.35},{l:Infinity,r:.37}
-    ]},
-    SGL: { std:16100, age:65, stdbump:2050, brackets:[
-      {l:12400,r:.10},{l:50400,r:.12},{l:105700,r:.22},
-      {l:201775,r:.24},{l:256225,r:.32},{l:640600,r:.35},{l:Infinity,r:.37}
-    ]},
-    // Combined CG + NIIT brackets (position = taxable ordinary + CG stacked)
-    CAPITAL_GAINS: {
-      MFJ: { brackets:[{l:98900,r:0},{l:250000,r:.15},{l:613700,r:.188},{l:Infinity,r:.238}] },
-      SGL: { brackets:[{l:49450,r:0},{l:200000,r:.15},{l:306850,r:.188},{l:Infinity,r:.238}] }
-    }
-  },
-  IRMAA: {
-    YEAR: 2026,
-    ANNUAL_INCREASE: 0.056,
-    MFJ: { brackets:[
-      {l:217999,r:0,          tier:'None'},
-      {l:218000,r:2*202.90,   tier:'Tier 1'},
-      {l:274000,r:2*(284.10+14.50), tier:'Tier 2'},
-      {l:348000,r:2*(405.90+37.60), tier:'Tier 3'},
-      {l:410000,r:2*(527.70+60.60), tier:'Tier 4'},
-      {l:750000,r:2*(649.50+83.70), tier:'Tier 5'},
-      {l:Infinity,r:2*(689.90+91.00),tier:'Tier 6'}
-    ]},
-    SGL: { brackets:[
-      {l:108999,r:0,          tier:'None'},
-      {l:109000,r:202.90,     tier:'Tier 1'},
-      {l:137000,r:284.10+14.50, tier:'Tier 2'},
-      {l:174000,r:405.90+37.60, tier:'Tier 3'},
-      {l:205000,r:527.70+60.60, tier:'Tier 4'},
-      {l:500000,r:649.50+83.70, tier:'Tier 5'},
-      {l:Infinity,r:689.90+91.00,tier:'Tier 6'}
-    ]}
-  },
-  no: {
-    MFJ:{ std:0, brackets:[{l:Infinity,r:0}] },
-    SGL:{ std:0, brackets:[{l:Infinity,r:0}] }
-  },
-  CA:{ MFJ:{ std:10804, brackets:[{l:20824,r:.01},{l:49368,r:.02},{l:77918,r:.04},{l:108162,r:.06},{l:136700,r:.08},{l:698274,r:.093},{l:837922,r:.103},{l:1000000,r:.123},{l:Infinity,r:.133}]},
-       SGL:{ std:5402,  brackets:[{l:10412,r:.01},{l:24684,r:.02},{l:38959,r:.04},{l:54081,r:.06},{l:68350,r:.08},{l:349137,r:.093},{l:418961,r:.103},{l:698271,r:.123},{l:Infinity,r:.133}]}},
-  CT:{ MFJ:{ std:24000, brackets:[{l:20000,r:.02},{l:100000,r:.045},{l:200000,r:.055},{l:400000,r:.06},{l:500000,r:.065},{l:1000000,r:.069},{l:Infinity,r:.0699}]},
-       SGL:{ std:15000, brackets:[{l:10000,r:.02},{l:50000,r:.045},{l:100000,r:.055},{l:200000,r:.06},{l:250000,r:.065},{l:500000,r:.069},{l:Infinity,r:.0699}]}},
-  DC:{ MFJ:{ std:29200, brackets:[{l:10000,r:.04},{l:40000,r:.06},{l:60000,r:.065},{l:250000,r:.085},{l:500000,r:.0925},{l:1000000,r:.0975},{l:Infinity,r:.1075}]},
-       SGL:{ std:14600, brackets:[{l:10000,r:.04},{l:40000,r:.06},{l:60000,r:.065},{l:250000,r:.085},{l:500000,r:.0925},{l:1000000,r:.0975},{l:Infinity,r:.1075}]}},
-  GA:{ MFJ:{ std:24000, brackets:[{l:Infinity,r:.0519}] }, SGL:{ std:12000, brackets:[{l:Infinity,r:.0519}] }},
-  IL:{ MFJ:{ std:5700,  brackets:[{l:Infinity,r:.0495}] }, SGL:{ std:2850,  brackets:[{l:Infinity,r:.0495}] }},
-  MD:{ MFJ:{ std:6700,  brackets:[{l:1000,r:.02},{l:2000,r:.03},{l:3000,r:.04},{l:100000,r:.0475},{l:125000,r:.05},{l:150000,r:.0525},{l:250000,r:.055},{l:600000,r:.0575},{l:600001,r:.0625},{l:1200000,r:.065},{l:Infinity,r:.065}]},
-       SGL:{ std:3350,  brackets:[{l:1000,r:.02},{l:2000,r:.03},{l:3000,r:.04},{l:100000,r:.0475},{l:125000,r:.05},{l:150000,r:.0525},{l:250000,r:.055},{l:500000,r:.0575},{l:500001,r:.0625},{l:1000000,r:.065},{l:Infinity,r:.065}]}},
-  MI:{ MFJ:{ std:5600,  brackets:[{l:Infinity,r:.0405}] }, SGL:{ std:5600, brackets:[{l:Infinity,r:.0405}] }},
-  NY:{ MFJ:{ std:16050, brackets:[{l:17150,r:.04},{l:23600,r:.045},{l:27900,r:.0525},{l:161550,r:.055},{l:323200,r:.06},{l:2155350,r:.0685},{l:5000000,r:.0965},{l:25000000,r:.103},{l:Infinity,r:.109}]},
-       SGL:{ std:8000,  brackets:[{l:8500,r:.04},{l:11700,r:.045},{l:13900,r:.0525},{l:80650,r:.055},{l:215400,r:.06},{l:1077550,r:.0685},{l:5000000,r:.0965},{l:25000000,r:.103},{l:Infinity,r:.109}]}},
-  NC:{ MFJ:{ std:25500, brackets:[{l:Infinity,r:.0475}] }, SGL:{ std:12750, brackets:[{l:Infinity,r:.0475}] }},
-  OR:{ MFJ:{ std:5200,  brackets:[{l:7300,r:.0475},{l:18400,r:.0675},{l:250000,r:.0875},{l:Infinity,r:.099}]},
-       SGL:{ std:2605,  brackets:[{l:3650,r:.0475},{l:9200,r:.0675},{l:125000,r:.0875},{l:Infinity,r:.099}]}},
-  PA:{ MFJ:{ std:0,     brackets:[{l:Infinity,r:.0307}] }, SGL:{ std:0, brackets:[{l:Infinity,r:.0307}] }},
-  VA:{ MFJ:{ std:17500, brackets:[{l:3000,r:.02},{l:5000,r:.03},{l:17000,r:.05},{l:Infinity,r:.0575}]},
-       SGL:{ std:8750,  brackets:[{l:3000,r:.02},{l:5000,r:.03},{l:17000,r:.05},{l:Infinity,r:.0575}]}},
-  // Nebraska: LB754 phase-down; 2026 rates approximate; SS exempt per LB873 (eff. 2024)
-  NE:{ MFJ:{ std:13700, brackets:[{l:6860,r:.0246},{l:Infinity,r:.052}]},
-       SGL:{ std:6860,  brackets:[{l:3430,r:.0246},{l:Infinity,r:.052}]}}
-};
-
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
-function calcProg(entity, status, amount, inf) {
-  const brks = TAXData?.[entity]?.[status]?.brackets;
-  if (!brks || amount <= 0) return { total:0, marginal:0 };
-  let prev=0, tax=0, marginal=0;
-  for (const b of brks) {
-    const lim = b.l * inf;
-    if (amount <= lim) { tax += (amount-prev)*b.r; marginal=b.r; break; }
-    tax += (lim-prev)*b.r; marginal=b.r; prev=lim;
-  }
-  return { total:tax, marginal };
-}
-
-function calcFedCGTax(taxableOrd, cgGain, status, inf) {
-  const brks = TAXData.FEDERAL.CAPITAL_GAINS?.[status]?.brackets;
-  if (!brks || cgGain <= 0) return 0;
-  let rem=cgGain, pos=taxableOrd, tax=0;
-  for (const b of brks) {
-    const lim = b.l * inf;
-    if (pos >= lim) continue;
-    const room = lim - pos;
-    const inB  = Math.min(rem, room);
-    tax += inB * b.r;
-    rem -= inB; pos += inB;
-    if (rem <= 0) break;
-  }
-  return tax;
-}
-
-function lookupIRMAA(magi, status, inf, medGrowth) {
-  const brks = TAXData.IRMAA?.[status]?.brackets;
-  if (!brks) return 0;
-  let monthly = 0;
-  for (const b of brks) { if (magi > b.l * inf) monthly = b.r; }
-  return monthly * 12 * medGrowth; // annual, in real (2026-base) dollars
-}
+// ─── TAX DATA, HELPERS, AND CORE ENGINE ──────────────────────────────────────
+// Loaded from external scripts:
+//   retirement_optimizer_taxdata.js  → TAXData
+//   retirement_optimizer_core.js     → calculateProgressive, getRateBracket, findUpperLimitByAmount
+//   calculateTaxes.js                → calculateTaxes(), calcIRMAA()
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const FULL_MAX  = 1_100_000;
 const FULL_STEP =    10_000;
 const BASE_YEAR = 2026;
 
-const OBBBA_PER_SENIOR    = 4_000;
-const OBBBA_PHASEOUT_AGI  = { MFJ:150_000, SGL:75_000 };
-const OBBBA_PHASEOUT_RATE = 0.06;
+// OBBBA display helpers — read from TAXData so display stays in sync with calculations
+const obbaSalt = TAXData.OBBBA.SALT;
+const obbaSen  = TAXData.OBBBA.SENIOR_DED;
+
+// Display-only: SS torpedo thresholds (not indexed to inflation per current law)
 const SS_T = { MFJ:{t1:32_000,t2:44_000}, SGL:{t1:25_000,t2:34_000} };
-const NIIT  = { MFJ:250_000, SGL:200_000 };
 
 // IRMAA tier visual config (5 paying tiers; Tier 6/top omitted from lines)
 const TIER_CFG = [
@@ -423,69 +331,53 @@ const cfg = {
   obbaOn:true, saltHigh:true
 };
 
-// ─── TAX CALCULATION ─────────────────────────────────────────────────────────
-function taxableSS(prov, totalSS, status) {
-  if (totalSS <= 0) return 0;
-  const {t1,t2} = SS_T[status];
-  if (prov <= t1) return 0;
-  if (prov <= t2) return Math.min(.5*totalSS, .5*(prov-t1));
-  return Math.min(.85*totalSS, .5*(t2-t1) + .85*(prov-t2));
-}
-
+// ─── CALC ADAPTER ────────────────────────────────────────────────────────────
+// Thin wrapper that maps cfg → calculateTaxes() params and reshapes the result
+// to match the shape expected by sweep(), renderChart(), and renderSummary().
 function calcAt(ordInc) {
-  const {status,state,ages,ssIncome,propTax,obbaOn,saltHigh,
-         year,inflation,cgSale,cgBasisPct,medicareExtra} = cfg;
-  const inf      = Math.pow(1+inflation/100, year-BASE_YEAR);
-  const medGrowth= Math.pow(1+medicareExtra/100, year-BASE_YEAR);
+  const {status, state, ages, ssIncome, propTax, obbaOn, saltHigh,
+         year, inflation, cgSale, cgBasisPct, medicareExtra} = cfg;
 
-  const cgGain = cgSale > 0 ? cgSale * (1 - cgBasisPct/100) : 0;
+  const inf       = Math.pow(1 + inflation / 100, year - BASE_YEAR);
+  const medGrowth = Math.pow(1 + medicareExtra / 100, year - BASE_YEAR);
+  const cgGain    = cgSale > 0 ? cgSale * (1 - cgBasisPct / 100) : 0;
 
-  // SS taxability (provisional income includes CG)
-  const provisional = ordInc + .5*ssIncome + cgGain;
-  const ssTax       = taxableSS(provisional, ssIncome, status);
-  const fedAGI      = ordInc + ssTax + cgGain;   // MAGI ≈ fedAGI (no muni interest)
-  const magi        = fedAGI;
+  // Suppress saltHigh after OBBBA SALT provisions sunset
+  const effectiveSaltHigh = saltHigh && year <= obbaSalt.sunsetYear;
 
-  // State taxes — CG treated as ordinary income for all states
-  let stTaxOrd=0, stTaxCG=0;
-  if (state !== 'no') {
-    const stStd     = TAXData[state][status].std * inf;
-    const stOrd     = Math.max(0, ordInc - stStd);
-    const stWithCG  = Math.max(0, ordInc + cgGain - stStd);
-    stTaxOrd = calcProg(state, status, stOrd,    inf).total;
-    stTaxCG  = calcProg(state, status, stWithCG, inf).total - stTaxOrd;
-  }
+  const r = calculateTaxes({
+    filingStatus:    status,
+    ages:            ages,
+    earnedIncome:    ordInc,
+    totalSS:         ssIncome,
+    capGains:        cgGain,
+    inflation:       inf,
+    state:           state,
+    obbaOn:          obbaOn,
+    saltHigh:        effectiveSaltHigh,
+    propTax:         propTax,
+    irmaaAnnualCost: 0   // computed below from MAGI
+  });
 
-  // Federal deduction: standard (+ age bumps) vs SALT-only itemized
-  const fm      = TAXData.FEDERAL[status];
-  const stdBase = fm.std * inf;
-  const ageBump = fm.stdbump * inf;
-  const nSen    = (ages[0]>=65?1:0) + (status==='MFJ' && ages.length>1 && ages[1]>=65?1:0);
-  const stdDed  = stdBase + ageBump*nSen;
+  // IRMAA: step-function on MAGI, costs grow at inflation + medicareExtra
+  const irmaa = calcIRMAA(r.MAGI, status, inf, medGrowth);
 
-  const saltCap  = obbaOn ? (saltHigh ? 40_000 : 10_000) : 10_000;
-  const totalSt  = stTaxOrd + stTaxCG;
-  const saltItz  = Math.min(totalSt + propTax, saltCap);
-  const useItz   = saltItz > stdDed;
-  const fedDed   = useItz ? saltItz : stdDed;
-
-  // OBBBA senior deduction
-  let senDed = 0;
-  if (obbaOn && nSen > 0) {
-    const raw    = OBBBA_PER_SENIOR * nSen;
-    const excess = Math.max(0, fedAGI - OBBBA_PHASEOUT_AGI[status]);
-    senDed = Math.max(0, raw - excess*OBBBA_PHASEOUT_RATE);
-  }
-
-  // Federal ordinary taxable income (CG excluded — taxed at preferential rates)
-  const ordInAGI    = ordInc + ssTax;
-  const fedOrdTaxable = Math.max(0, ordInAGI - fedDed - senDed);
-  const fedTax        = calcProg('FEDERAL', status, fedOrdTaxable, inf).total;
-  const fedCGTax      = calcFedCGTax(fedOrdTaxable, cgGain, status, inf);
-  const irmaa         = lookupIRMAA(magi, status, inf, medGrowth);
-
-  return { ordInc, fedTax, fedCGTax, irmaa, stTaxOrd, stTaxCG,
-           ssTax, magi, fedAGI, useItz, nSen, senDed, cgGain, fedOrdTaxable };
+  return {
+    ordInc,
+    fedTax:    r.federalOrdinaryTax,
+    fedCGTax:  r.capitalGainsTax,
+    irmaa,
+    stTaxOrd:  r.stateOrdinaryTax,
+    stTaxCG:   r.stateCapGainsTax,
+    ssTax:     r.taxableSS,
+    magi:      r.MAGI,
+    fedAGI:    r.AGI,
+    useItz:    r.useItemized,
+    senDed:    r.seniorDeduction,
+    fedDed:    r.federalStdDeduction,
+    stDed:     r.stateStdDeduction,
+    cgGain
+  };
 }
 
 // ─── ZOOM STATE ──────────────────────────────────────────────────────────────
@@ -702,7 +594,7 @@ function makeLegendClick() {
   };
 }
 
-function niitIdx() { return Math.round((NIIT[cfg.status] - zoomMin) / zoomStep); }
+function niitIdx() { return Math.round((TAXData.FEDERAL.NIIT[cfg.status] - zoomMin) / zoomStep); }
 
 function tierLines(data) {
   const brks = TAXData.IRMAA?.[cfg.status]?.brackets ?? [];
@@ -958,7 +850,8 @@ function updateInfoPanel(idx) {
         <div class="info-row"><span class="ir-lbl">State Effective</span><span class="ir-val">${(d.stEff*100).toFixed(1)}%</span></div>
         <div class="info-row"><span class="ir-lbl">Fed Marginal (Ord+CG)</span><span class="ir-val">${(d.fedMarg*100).toFixed(1)}%</span></div>
         <div class="info-divider"></div>
-        <div class="info-row"><span class="ir-lbl">Deduction type</span><span class="ir-val">${d.useItz ? 'Itemized (SALT)' : 'Standard'}</span></div>
+        <div class="info-row"><span class="ir-lbl">Federal deduction</span><span class="ir-val"><span style="font-size:10px;color:var(--muted)">${d.useItz ? 'itemized' : 'standard'}</span>&ensp;${$v(d.fedDed)}</span></div>
+        <div class="info-row"><span class="ir-lbl">State deduction</span><span class="ir-val">${$v(d.stDed)}</span></div>
         ${d.senDed > 0 ? `<div class="info-row"><span class="ir-lbl">Senior ded. (OBBBA)</span><span class="ir-val">${$v(d.senDed)}</span></div>` : ''}
       </div>
       <div>
@@ -1029,7 +922,8 @@ function renderSummary(data) {
   let peakMarg=0, peakInc=0;
   data.forEach(d => { if (d.fedMarg>peakMarg){ peakMarg=d.fedMarg; peakInc=d.ordInc; }});
 
-  const saltCap = cfg.obbaOn?(cfg.saltHigh?40_000:10_000):10_000;
+  const effectiveSaltHigh = cfg.saltHigh && cfg.year <= obbaSalt.sunsetYear;
+  const saltCap = cfg.obbaOn ? (effectiveSaltHigh ? obbaSalt.capHigh : obbaSalt.capLow) : obbaSalt.capLow;
   const sample  = data.find(d => d.ordInc >= 200_000) ?? data[Math.floor(data.length / 2)];
 
   const rows = [
@@ -1038,7 +932,7 @@ function renderSummary(data) {
     `<div><strong>Federal std. ded.:</strong> $${Math.round(stdF).toLocaleString()} (${nSen} bump${nSen!==1?'s':''})</div>`,
   ];
   if (cfg.obbaOn && nSen>0)
-    rows.push(`<div><strong>OBBBA senior ded.:</strong> up to $${(OBBBA_PER_SENIOR*nSen).toLocaleString()}, phases out above $${OBBBA_PHASEOUT_AGI[cfg.status].toLocaleString()}</div>`);
+    rows.push(`<div><strong>OBBBA senior ded.:</strong> up to $${(obbaSen.perSenior*nSen).toLocaleString()}, phases out above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()}</div>`);
   if (cfg.cgSale > 0)
     rows.push(`<div><strong>Capital gains:</strong> $${cgGain.toLocaleString()} taxable gain on $${cfg.cgSale.toLocaleString()} sale (${(100-cfg.cgBasisPct).toFixed(0)}% gain rate)</div>`);
   if (sample)
@@ -1060,8 +954,8 @@ function renderAssumptions() {
     <div><strong>Social Security:</strong> Provisional income = ordinary income + CG + ½ SS (real treatment). Thresholds $32k/$44k MFJ; $25k/$34k SGL — NOT inflation-adjusted per current law.</div>
     <div><strong>Capital gains:</strong> Federal uses combined CG+NIIT brackets (stacked on top of ordinary taxable income). State taxes CG at ordinary income rates (marginal increase). CG adds to MAGI and SS provisional income.</div>
     <div><strong>IRMAA:</strong> Step function applied to MAGI at each income level (2-year lookback "cheated" to current year). IRMAA costs grow at inflation + Medicare extra rate; expressed in 2026-base dollars. <span class="warn">IRMAA bracket values from TAXData — verify against CMS for exact 2026 amounts.</span></div>
-    <div><strong>OBBBA senior ded.:</strong> $${OBBBA_PER_SENIOR.toLocaleString()}/person ≥ 65. Phase-out at ${(OBBBA_PHASEOUT_RATE*100).toFixed(0)}¢/$1 above $${OBBBA_PHASEOUT_AGI[cfg.status].toLocaleString()} AGI. <span class="warn">Phase-out parameters are estimates.</span></div>
-    <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing.</div>
+    <div><strong>OBBBA senior ded.:</strong> $${obbaSen.perSenior.toLocaleString()}/person ≥ 65. Phase-out at ${(obbaSen.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} AGI. <span class="warn">Phase-out parameters are estimates.</span></div>
+    <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing. OBBBA $${obbaSalt.capHigh.toLocaleString()} cap phases out $1-for-$1 above $${obbaSalt.phaseoutThreshold.toLocaleString()} MAGI, flooring at $${obbaSalt.capLow.toLocaleString()} (fully phased out at $${(obbaSalt.phaseoutThreshold + obbaSalt.capHigh - obbaSalt.capLow).toLocaleString()} MAGI); sunsets after ${obbaSalt.sunsetYear}. <span class="warn">Phase-out threshold and sunset year are estimates — verify with IRS guidance.</span></div>
     <div><strong>Top x-axis:</strong> Total income = ordinary income + Social Security + CG gain at each sweep point (fixed SS and CG amounts).</div>
     <div><strong>Excluded:</strong> AMT, SE tax, CA SDI, muni interest, qualif. dividends, CA personal exemption credits. Effective rate denominator = ordinary + SS + CG gain.</div>
   `;
@@ -1153,6 +1047,7 @@ run();
 const _initPi = getPinnedIdx();
 if (_initPi !== null) updateInfoPanel(_initPi);
 initInfoPanel();
+runTests();
 
 // ─── HOW TO USE MODAL ────────────────────────────────────────────────────────
 function openModal()  { document.getElementById('modal-bg').style.display='block'; }
@@ -1352,7 +1247,7 @@ function loadFromURL() {
       <h3>Caveats &amp; known simplifications</h3>
       <ul>
         <li><strong>IRMAA lookback:</strong> Medicare IRMAA uses your MAGI from <em>two years prior</em>. This tool applies it to <em>current-year</em> MAGI — convenient for planning but optimistic by about two years if you've recently had a high-income year.</li>
-        <li><strong>OBBBA provisions</strong> (senior deduction, elevated SALT cap) are modeled from best-available bill text as of mid-2025. Phase-out thresholds ($150k/$75k AGI) and the $40k SALT cap are estimates — verify with IRS guidance when published. No automatic sunset is modeled.</li>
+        <li><strong>OBBBA provisions</strong> (senior deduction, elevated SALT cap) are modeled from best-available bill text as of mid-2025. All parameters (phase-out thresholds, caps, sunset year) are sourced from <code>TAXData.OBBBA</code> — update that block when IRS guidance is published. The $40k SALT cap automatically reverts to $10k for years after ${obbaSalt.sunsetYear}.</li>
         <li><strong>Nebraska brackets</strong> are approximate based on the LB754 phase-down schedule; confirm with NE DOR for your specific year.</li>
         <li><strong>SS provisional income thresholds</strong> ($32k/$44k MFJ, $25k/$34k Single) are intentionally <em>not</em> inflation-adjusted — that is current law, and the reason the SS torpedo worsens over time.</li>
         <li><strong>NIIT threshold</strong> ($250k MFJ / $200k Single) is also not inflation-indexed — another orphan in the tax code, unchanged since 2013.</li>

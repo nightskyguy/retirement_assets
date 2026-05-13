@@ -19,6 +19,9 @@
  * @param {number} params.inflation - Inflation (CPI) multiplier for tax brackets (e.g., 1.025 for 2.5% cumulative).
  * @param {string} params.state - State abbreviation (e.g., 'CA', 'NONE').
  * @param {number} params.irmaaAnnualCost - Annual IRMAA premium cost (calculated externally from 2-year lookback MAGI)
+ * @param {boolean} params.obbaOn - Enable OBBBA provisions (senior deduction + elevated SALT cap). Default false.
+ * @param {boolean} params.saltHigh - Use $40k SALT cap (OBBBA); false = $10k (TCJA). Only relevant when obbaOn=true. Default false.
+ * @param {number}  params.propTax - Annual property + local taxes paid (used for SALT itemizing comparison). Default 0.
  * @returns {Object} Comprehensive tax calculation results
  */
 function calculateTaxes(params = {}) {
@@ -35,29 +38,36 @@ function calculateTaxes(params = {}) {
         taxExemptInterest = 0,
         hsaContrib = 0,
         inflation = 1.0,
-        state = 'CA'
+        state = 'CA',
+        obbaOn = false,
+        saltHigh = false,
+        propTax = 0
     } = params;
 
     // Normalize filing status to match TAXData keys
     const status = filingStatus ?? "MFJ";
 
     // ========================================================================
-    // STEP 1: Calculate Federal Standard Deduction (including age adjustments)
+    // STEP 1: Calculate Federal Deduction (standard + age bumps, vs SALT itemized)
     // ========================================================================
     const federalStdBase = TAXData.FEDERAL[status].std;
     const federalAgeThreshold = TAXData.FEDERAL[status].age;
     const federalAgeBump = TAXData.FEDERAL[status].stdbump;
 
-    let federalStdDeduction = federalStdBase * inflation;
+    // Count seniors (age ≥ 65) for age bump and OBBBA senior deduction
+    const nSeniors = (ages[0] >= federalAgeThreshold ? 1 : 0) +
+                     (status === 'MFJ' && ages.length > 1 && ages[1] >= federalAgeThreshold ? 1 : 0);
 
-    // Add age-based additional standard deduction
-    if (ages[0] >= federalAgeThreshold) {
-        federalStdDeduction += federalAgeBump * inflation;
-    } // ages[0] check
+    let federalStdDeduction = (federalStdBase + federalAgeBump * nSeniors) * inflation;
 
-    if (status === 'MFJ' && ages.length > 1 && ages[1] >= federalAgeThreshold) {
-        federalStdDeduction += federalAgeBump * inflation;
-    } // ages[1] check for MFJ
+    // OBBBA parameters — sourced from TAXData.OBBBA (no values hardcoded here).
+    const obbaSalt = TAXData.OBBBA.SALT;
+    const obbaSen  = TAXData.OBBBA.SENIOR_DED;
+
+    // SALT itemizing: compare standard deduction vs capped state+local taxes.
+    // State tax is not known until Step 4; SALT comparison is deferred to Step 5.
+    // OBBBA capHigh phases out $1-for-$1 above phaseoutThreshold (Step 5).
+    const saltBaseCap = obbaOn ? (saltHigh ? obbaSalt.capHigh : obbaSalt.capLow) : obbaSalt.capLow;
 
 	// ========================================================================
 	// STEP 2: Calculate Social Security Taxability (Federal)
@@ -78,19 +88,20 @@ function calculateTaxes(params = {}) {
 	let taxableSS = 0;
 
 	// Determine taxable portion based on provisional income
-	if (provisionalIncome <= ssBrackets[0].l * inflation) {
+	// SS thresholds are NOT indexed to inflation (statutory since 1984)
+	if (provisionalIncome <= ssBrackets[0].l) {
 		// Below first threshold - no SS is taxable
 		taxableSS = 0;
-	} else if (provisionalIncome <= ssBrackets[2].l * inflation) {
+	} else if (provisionalIncome <= ssBrackets[2].l) {
 		// Between first and second threshold - taxable at tier 1 rate
-		const threshold1 = ssBrackets[1].l * inflation;
+		const threshold1 = ssBrackets[1].l;
 		const tier1Rate = ssBrackets[1].r;
 		const excessOver1 = provisionalIncome - threshold1;
 		taxableSS = Math.min(tier1Rate * totalSS, tier1Rate * excessOver1);
 	} else {
 		// Above second threshold - taxable at tier 2 rate (with tier 1 portion)
-		const threshold1 = ssBrackets[1].l * inflation;
-		const threshold2 = ssBrackets[2].l * inflation;
+		const threshold1 = ssBrackets[1].l;
+		const threshold2 = ssBrackets[2].l;
 		const tier1Rate = ssBrackets[1].r;
 		const tier2Rate = ssBrackets[2].r;
 		const excessOver2 = provisionalIncome - threshold2;
@@ -106,30 +117,75 @@ function calculateTaxes(params = {}) {
 	} // SS taxability calculation
 
     // ========================================================================
-    // STEP 3: Calculate Federal AGI and Taxable Income
+    // STEP 3: Calculate Federal AGI (pre-deduction)
     // ========================================================================
     const federalAGI = (earnedIncome - hsaContrib) + taxableSS + ordDivInterest +
                        qualifiedDiv + capGains;
 
-    const federalTaxableIncome = Math.max(0, federalAGI - federalStdDeduction);
+    // ========================================================================
+    // STEP 4: Calculate State AGI and State Tax
+    // (Must precede federal deduction finalization for SALT itemizing)
+    // ========================================================================
+    const stateData = TAXData[state];
+    const stateSSTaxRate = stateData.SSTaxation || 0;
+    const stateTaxableSS = totalSS * stateSSTaxRate;
+
+    // CA does not allow HSA deduction at state level
+    let stateAGI;
+    if (state === 'CA') {
+        stateAGI = earnedIncome + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains;
+    } else {
+        stateAGI = earnedIncome - hsaContrib + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains;
+    } // state AGI calculation
+
+    const stateStdDeduction = stateData[status].std * inflation;
+    const stateTaxableIncome = Math.max(0, stateAGI - stateStdDeduction);
+    const stateResult = calculateProgressive(state, status, stateTaxableIncome, inflation);
+    const stateTax = stateResult.total;
+    const stateMarginalRate = stateResult.marginal;
+
+    // Compute state ordinary tax (without CG) to enable stacked breakdown in callers
+    const stateAGIOrdOnly = stateAGI - capGains;
+    const stateTaxableOrdOnly = Math.max(0, stateAGIOrdOnly - stateStdDeduction);
+    const stateOrdinaryTax = calculateProgressive(state, status, stateTaxableOrdOnly, inflation).total;
+    const stateCapGainsTax = stateTax - stateOrdinaryTax;
 
     // ========================================================================
-    // STEP 4: Separate Ordinary and Preferentially-Taxed Income
+    // STEP 5: Finalize Federal Deduction (SALT itemizing + OBBBA senior deduction)
     // ========================================================================
-    // Ordinary income components (taxed at regular rates)
+    // SALT itemizing: choose whichever is larger — standard deduction or capped SALT.
+    // Apply OBBBA $40k phase-out: cap reduces $1-for-$1 above $500k MAGI, floor $10k.
+    const saltMagi = federalAGI + taxExemptInterest;
+    const saltCap = (obbaOn && saltHigh)
+        ? Math.max(obbaSalt.capLow, saltBaseCap - Math.max(0, saltMagi - obbaSalt.phaseoutThreshold))
+        : saltBaseCap;
+    const saltItemized = Math.min(stateTax + propTax, saltCap);
+    const useItemized = saltItemized > federalStdDeduction;
+    let federalDeduction = useItemized ? saltItemized : federalStdDeduction;
+
+    // OBBBA senior deduction: $4,000/senior, phases out at 6% above threshold
+    let seniorDeduction = 0;
+    if (obbaOn && nSeniors > 0) {
+        const rawSenDed = obbaSen.perSenior * nSeniors;
+        const phaseoutExcess = Math.max(0, federalAGI - obbaSen.phaseoutAGI[status]);
+        seniorDeduction = Math.max(0, rawSenDed - phaseoutExcess * obbaSen.phaseoutRate);
+    } // OBBBA senior deduction
+    federalDeduction += seniorDeduction;
+
+    // ========================================================================
+    // STEP 6: Separate Ordinary and Preferentially-Taxed Income
+    // ========================================================================
+    const federalTaxableIncome = Math.max(0, federalAGI - federalDeduction);
+
     const ordinaryIncomeInAGI = (earnedIncome - hsaContrib) + taxableSS + ordDivInterest;
-
-    // Preferentially-taxed income (qualified dividends + long-term cap gains)
     const preferentialIncomeInAGI = qualifiedDiv + capGains;
 
-    // Determine how much of taxable income is ordinary vs. preferential
-    // Standard deduction comes off ordinary income first
     const taxableOrdinaryIncome = Math.max(0, Math.min(federalTaxableIncome,
-                                            ordinaryIncomeInAGI - federalStdDeduction));
+                                            ordinaryIncomeInAGI - federalDeduction));
     const taxablePreferentialIncome = Math.max(0, federalTaxableIncome - taxableOrdinaryIncome);
 
     // ========================================================================
-    // STEP 5: Calculate Federal Ordinary Income Tax
+    // STEP 7: Calculate Federal Ordinary Income Tax
     // ========================================================================
     const federalOrdinaryResult = calculateProgressive('FEDERAL', status,
                                                        taxableOrdinaryIncome, inflation);
@@ -137,146 +193,82 @@ function calculateTaxes(params = {}) {
     const federalMarginalRate = federalOrdinaryResult.marginal;
 
     // ========================================================================
-    // STEP 6: Calculate Federal Capital Gains Tax (including NIIT)
+    // STEP 8: Calculate Federal Capital Gains Tax (including NIIT)
     // ========================================================================
-    // Capital gains brackets are based on total taxable income position
-    // We start applying cap gains rates where ordinary income ended
     const capGainsBrackets = TAXData.FEDERAL.CAPITAL_GAINS[status].brackets;
     let federalCapGainsTax = 0;
     let remainingPreferential = taxablePreferentialIncome;
-    let currentPosition = taxableOrdinaryIncome; // Start where ordinary income left off
+    let currentPosition = taxableOrdinaryIncome;
 	let capitalGainsRate = 0;
 
-    // Apply capital gains rates based on position in total taxable income
     for (let i = 0; i < capGainsBrackets.length; i++) {
         const bracket = capGainsBrackets[i];
         const bracketLimit = bracket.l * inflation;
         const rate = bracket.r;
-
-        // Skip brackets we've already passed
-        if (currentPosition >= bracketLimit) {
-            continue;
-        } // bracket already passed
+        if (currentPosition >= bracketLimit) continue;
         capitalGainsRate = rate;
-
-        // Calculate how much preferential income fits in this bracket
         const roomInBracket = bracketLimit - currentPosition;
         const amountInBracket = Math.min(remainingPreferential, roomInBracket);
-
-        // Apply the rate to this portion
         federalCapGainsTax += amountInBracket * rate;
         remainingPreferential -= amountInBracket;
         currentPosition += amountInBracket;
-
-        // Exit if we've taxed all preferential income
-        if (remainingPreferential <= 0) {
-            break;
-        } // all preferential income taxed
+        if (remainingPreferential <= 0) break;
     } // capital gains bracket loop
 
-    // Total federal tax
     const federalTax = federalOrdinaryTax + federalCapGainsTax;
 
     // ========================================================================
-    // STEP 7: Calculate State AGI and Taxable Income
+    // STEP 9: IRMAA MAGI and totals
     // ========================================================================
-    // State differences from Federal AGI:
-    // - California: HSA contributions are NOT deductible (add back)
-    // - California: Social Security is NOT taxable (use different SS amount)
-    // - California: No preferential rates for cap gains (all ordinary income)
-
-    const stateData = TAXData[state];
-    const stateSSTaxRate = stateData.SSTaxation || 0;
-
-    // Calculate state-specific taxable SS
-    const stateTaxableSS = totalSS * stateSSTaxRate;
-
-    // State AGI calculation (CA adds back HSA)
-    let stateAGI;
-    if (state === 'CA') {
-        // California: HSA not deductible, use state SS taxation rate
-        stateAGI = earnedIncome + stateTaxableSS + ordDivInterest +
-                   qualifiedDiv + capGains;
-    } else {
-        // Other states: may follow federal treatment more closely
-        stateAGI = earnedIncome - hsaContrib + stateTaxableSS + ordDivInterest +
-                   qualifiedDiv + capGains;
-    } // state AGI calculation
-
-    // State standard deduction
-    const stateStdDeduction = stateData[status].std * inflation;
-
-    // State taxable income
-    const stateTaxableIncome = Math.max(0, stateAGI - stateStdDeduction);
-
-    // ========================================================================
-    // STEP 8: Calculate State Tax
-    // ========================================================================
-    const stateResult = calculateProgressive(state, status, stateTaxableIncome, inflation);
-    const stateTax = stateResult.total;
-    const stateMarginalRate = stateResult.marginal;
-
-    // ========================================================================
-    // STEP 9: Calculate IRMAA MAGI (for future year IRMAA determination)
-    // ========================================================================
-    // IRMAA MAGI = Federal AGI + Tax-Exempt Interest
     const irmaaMagi = federalAGI + taxExemptInterest;
-
-    // ========================================================================
-    // STEP 10: Calculate Total Tax and Return Results
-    // ========================================================================
     const totalTax = federalTax + stateTax;
     const federalNominalRate = federalOrdinaryResult.nominalRate || 0;
     const stateNominalRate = stateResult.nominalRate || 0;
     const irmaaRate = federalAGI > 0 ? irmaaAnnualCost / federalAGI : 0;
-
     const nominalRate = federalNominalRate + stateNominalRate + irmaaRate;
 
     return {
-        // Primary outputs requested
-        nominalRate: nominalRate,
-        federalNominalRate: federalNominalRate,
-        stateNominalRate: stateNominalRate,
-        irmaaRate: irmaaRate,
-        irmaaAnnualCost: irmaaAnnualCost,
-        totalTax: totalTax,
-        federalTax: federalTax,
-        stateTax: stateTax,
+        nominalRate,
+        federalNominalRate,
+        stateNominalRate,
+        irmaaRate,
+        irmaaAnnualCost,
+        totalTax,
+        federalTax,
+        stateTax,
 		state: stateTax,
-        capitalGainsRate: capitalGainsRate,
-        capitalGainsTax: federalCapGainsTax,  // Includes NIIT
-        niitTax: 0,  // Included in capitalGainsTax (combined brackets)
+        stateOrdinaryTax,
+        stateCapGainsTax,
+        capitalGainsRate,
+        capitalGainsTax: federalCapGainsTax,
+        niitTax: 0,
         AGI: federalAGI,
-        irmaaMagi: irmaaMagi,
+        irmaaMagi,
         MAGI: irmaaMagi,
 
-        // Additional detailed breakdown
-        federalOrdinaryTax: federalOrdinaryTax,
-        federalMarginalRate: federalMarginalRate,
+        federalOrdinaryTax,
+        federalMarginalRate,
 		fedRate: federalMarginalRate,
-
-        stateMarginalRate: stateMarginalRate,
+        stateMarginalRate,
 		stRate: stateMarginalRate,
-
 		fedLimit: federalOrdinaryResult.limit,
 		stLimit: stateResult.limit,
 
-        // Income components
-        taxableSS: taxableSS,
-        provisionalIncome: provisionalIncome,
-        federalTaxableIncome: federalTaxableIncome,
-        stateTaxableIncome: stateTaxableIncome,
-        stateAGI: stateAGI,
+        taxableSS,
+        provisionalIncome,
+        federalTaxableIncome,
+        stateTaxableIncome,
+        stateAGI,
         stagi: stateAGI,
 
-        // Standard deductions applied
-        federalStdDeduction: federalStdDeduction,
-        stateStdDeduction: stateStdDeduction,
+        federalStdDeduction: federalDeduction,
+        stateStdDeduction,
+        useItemized,
+        seniorDeduction,
 
-        // Income breakdown for verification
-        ordinaryIncomeInAGI: ordinaryIncomeInAGI,
-        preferentialIncomeInAGI: preferentialIncomeInAGI,
-        taxableOrdinaryIncome: taxableOrdinaryIncome,
-        taxablePreferentialIncome: taxablePreferentialIncome
+        ordinaryIncomeInAGI,
+        preferentialIncomeInAGI,
+        taxableOrdinaryIncome,
+        taxablePreferentialIncome
     }; // return object
 } // calculateTaxes()

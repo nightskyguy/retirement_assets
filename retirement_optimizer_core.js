@@ -2298,10 +2298,10 @@ function generateStratRateOptions() {
 // INITIALIZATION - Call on page load
 // ============================================================================
 
-window.addEventListener('DOMContentLoaded', function () {
-    // Generate selection lists from TAXData
-    document.getElementById('stratRate').innerHTML = generateStratRateOptions();
-    document.getElementById('STATEname').innerHTML = generateStateOptions();
-});
+// TODO: move this listener into retirement_optimizer.html (elements don't exist in other consumers)
+// window.addEventListener('DOMContentLoaded', function () {
+//     document.getElementById('stratRate').innerHTML = generateStratRateOptions();
+//     document.getElementById('STATEname').innerHTML = generateStateOptions();
+// });
 
 

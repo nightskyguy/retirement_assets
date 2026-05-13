@@ -122,7 +122,6 @@
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="retirement_optimizer_taxdata.js"></script>
 <script src="retirement_optimizer_core.js"></script>
-<script src="calculateTaxes.js"></script>
 <script src="retirement_optimizer_tests.js"></script>
 </head>
 <body>
@@ -299,7 +298,7 @@
 // Loaded from external scripts:
 //   retirement_optimizer_taxdata.js  → TAXData
 //   retirement_optimizer_core.js     → calculateProgressive, getRateBracket, findUpperLimitByAmount
-//   calculateTaxes.js                → calculateTaxes(), calcIRMAA()
+//   retirement_optimizer_taxdata.js  → calculateTaxes(), calcIRMAA() (consolidated here)
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const FULL_MAX  = 1_100_000;

@@ -123,12 +123,14 @@
 <script src="retirement_optimizer_taxdata.js"></script>
 <script src="retirement_optimizer_core.js"></script>
 <script src="calculateTaxes.js"></script>
+<script src="retirement_optimizer_tests.js"></script>
 </head>
 <body>
 <header>
   <h1>Income Tax Planner<span class="ver">v2</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · 2026–2035 with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
+    <strong id="testsFailed" title="Unit tests status">🟢</strong>
     <button class="hdr-btn share" onclick="toggleSharePanel()">&#8258; Share</button>
     <button class="hdr-btn" onclick="openModal()">How to Use</button>
     <!-- Share panel anchored below header buttons -->
@@ -1039,6 +1041,7 @@ run();
 const _initPi = getPinnedIdx();
 if (_initPi !== null) updateInfoPanel(_initPi);
 initInfoPanel();
+runTests();
 
 // ─── HOW TO USE MODAL ────────────────────────────────────────────────────────
 function openModal()  { document.getElementById('modal-bg').style.display='block'; }

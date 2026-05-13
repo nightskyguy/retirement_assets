@@ -407,6 +407,27 @@ var TAXData = {
 		} 
 	}, // WASHINGTONDC
 
+	// NEBRASKA - LB754 phase-down; SS exempt per LB873 (eff. 2024)
+	NE: {
+		STATE: 'Nebraska',
+		YEAR: 2026,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits (LB873, eff. 2024)
+		MFJ: {
+			std: 13700,
+			brackets: [
+				{ l: 6860, r: 0.0246 },
+				{ l: Infinity, r: 0.052 }
+			]
+		},
+		SGL: {
+			std: 6860,
+			brackets: [
+				{ l: 3430, r: 0.0246 },
+				{ l: Infinity, r: 0.052 }
+			]
+		}
+	}, // NEBRASKA
+
 	TEST: {
 		// Data used for testing only.
 		YEAR: 2026,

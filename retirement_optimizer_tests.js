@@ -949,7 +949,9 @@ assertEqual(
 		// From 32,800 to 98,900 = 66,100 @ 0% = 0
 		// From 98,900 to 242,800 = 143,900 @ 15% = 21,585
 		assertEqual(result.capitalGainsTax, 21585, 'Capital Gains Tax');
-		assertEqual(result.federalTax, 25025, 'Total Federal Tax');
+		// NIIT: MAGI 275k - threshold 250k = 25k; NII 215k; 3.8% × 25k = 950
+		assertEqual(result.niitTax, 950, 'NIIT');
+		assertEqual(result.federalTax, 25975, 'Total Federal Tax');
 	} // testCase4_LargeCapitalGains()
 
 	// ============================================================================
@@ -1023,10 +1025,10 @@ assertEqual(
 		assertEqual(result.taxablePreferentialIncome, 450000, 'Taxable Preferential Income');
 		
 		// Capital gains start at position 287,800 (well past 0% and 15% brackets)
-		// Position 287,800 to 613,700 = 325,900 @ 18.8% = 61,269.20
-		// Position 613,700 to 737,800 = 124,100 @ 23.8% = 29,535.80
-		// Total cap gains tax = 90,805
-		assertEqual(result.capitalGainsTax, 90805, 'Capital Gains Tax (with NIIT)');
+		// All 450,000 falls in 20% bracket: 450,000 @ 20% = 90,000
+		assertEqual(result.capitalGainsTax, 90000, 'Capital Gains Tax');
+		// NIIT: MAGI 770k - threshold 250k = 520k; NII = 470k; 3.8% × min(470k, 520k) = 17,860
+		assertEqual(result.niitTax, 17860, 'NIIT Tax');
 	} // testCase6_HighIncomeNIIT()
 
 	// ============================================================================

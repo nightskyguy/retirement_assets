@@ -705,7 +705,7 @@ function simulate(inputs) {
         let tax = calculateTaxes({
             filingStatus: status, ages: [age1, age2],
             totalSS: s1 + s2, irmaaAnnualCost: irmaa,
-            earnedIncome: totalRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+            earnedIncome: pension + totalRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
             qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
             taxExemptInterest: 0, state: STATEname
         })
@@ -728,7 +728,7 @@ function simulate(inputs) {
         // 6. Cash Flow Gap
         // taxableInc includes pension, RMDs
         possibleIncome = taxableInc + taxableDividends + taxableInterest + fixedInc + netWithdrawals.IRA +
-            capitalGains;
+            capitalGains + (netWithdrawals.BrokerageBasis ?? 0);
 
         let netSpendable = possibleIncome - totalTax
         let gap = targetSpend - netSpendable;
@@ -738,7 +738,7 @@ function simulate(inputs) {
         if (gap > 1.00) {
             // We need to do more withdrawals.
             withdrawStrategy.order = ['Brokerage', 'Cash', 'IRA', 'Roth'];
-            withdrawStrategy.weights = [40, 60, 0, 0];
+            withdrawStrategy.weight = [40, 60, 0, 0];
             withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0, nominalTaxRate, 0];
             withdrawals = calculateWithdrawals(curBalances, gap, withdrawStrategy);
 
@@ -754,7 +754,7 @@ function simulate(inputs) {
         tax = calculateTaxes({
             filingStatus: status, ages: [age1, age2],
             totalSS: s1 + s2, irmaaAnnualCost: irmaa,
-            earnedIncome: totalRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+            earnedIncome: pension + totalRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
             qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
             taxExemptInterest: 0, state: STATEname
         })

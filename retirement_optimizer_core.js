@@ -503,7 +503,7 @@ function simulate(inputs) {
     birthmonth2 = Math.max(1, Math.min(12, Math.round((inputs.birthyear2 - birthyear2) * 100) || 12));
 
     let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear1 + inputs.die2) - currentYear + 1;
-    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0 };
+    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0, taxCurrentDollars: 0, spendCurrentDollars: 0 };
 
     let cpiRate = 1		// The rate that SS and Tax brackets increase.
     let inflation = 1	// The rate at which overall inflation increases.
@@ -866,12 +866,14 @@ function simulate(inputs) {
         totals.tax += totalTax;
         totals.gross += totalIncome;
         totals.spend += (targetSpend + surplus.Shortfall);
+        totals.taxCurrentDollars += totalTax / inflation;
+        totals.spendCurrentDollars += (targetSpend + surplus.Shortfall) / inflation;
         balance.Roth += surplus.Total + totalConverted;
         totals.shortfall += surplus.Shortfall;
 
         let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage - balance.BrokerageBasis)) * (1 - nominalTaxRate) + balance.Roth + balance.Cash + balance.BrokerageBasis
 
-        if ((netIncome + 100.0) < targetSpend || totalWealth < (targetSpend * 1.5)) {
+        if (netIncome < targetSpend * 0.99 || totalWealth < (targetSpend * 1.5)) {
             totals.success = false;
             totals.failedInYear.push(currentYear)
         } else {
@@ -928,7 +930,8 @@ function simulate(inputs) {
             brokerageG: gains.Brokerage,
             rothG: gains.Roth,
             rothConv: totalConverted,
-            rothBonusConv: surplus.Roth
+            rothBonusConv: surplus.Roth,
+            inflationFactor: inflation
         });
         currentYear += 1;
 
@@ -1051,9 +1054,22 @@ function getInputs() {
  */
 function runSimulation() {
     let res = simulate(getInputs());
+    lastSimulationLog = res.log;
+    lastTotals = res.totals;
+    lastFinalNW = res.finalNW;
+    const lastEntry = res.log[res.log.length - 1];
+    lastFinalNWCurrentDollars = lastEntry.totalWealth / (lastEntry.inflationFactor || 1);
     updateTable(res.log);
-    updateStats(res.totals, res.finalNW);
+    updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
+}
+
+function updateCurrentDollarsView() {
+    if (lastSimulationLog) {
+        updateTable(lastSimulationLog);
+        updateCharts(lastSimulationLog);
+        updateStats(lastTotals, lastFinalNW, lastFinalNWCurrentDollars);
+    }
 }
 // //////////////////////////////////////////////////////////////////
 
@@ -1427,8 +1443,8 @@ function updateTable(log) {
         const age1 = row['Age1'] ?? row['age1'];
         const age2 = row['Age2'] ?? row['age2'];
 
-        // Allow a miss by 100 dollars.
-        const incomeShortfall = (spendGoal > netIncome + 100.0) || (totalWealth < spendGoal * 1.5);
+        // Allow up to 1% shortfall before flagging as underfunded.
+        const incomeShortfall = (netIncome < spendGoal * 0.99) || (totalWealth < spendGoal * 1.5);
         const deathOccurred = maritalStatus != row['status'];
 
         // Pink takes priority over yellow
@@ -1440,7 +1456,7 @@ function updateTable(log) {
         const deathHighlightCols = ['year', 'age1', 'age2', 'status', 'SSincome'];
 
         keys.forEach(key => {
-            if (!key.startsWith('-')) {
+            if (!key.startsWith('-') && key !== 'inflationFactor') {
                 const td = tr.insertCell();
                 const value = row[key];
 
@@ -1461,7 +1477,9 @@ function updateTable(log) {
                         if (isYear) {
                             td.textContent = value;
                         } else {
-                            td.textContent = Math.round(value).toLocaleString();
+                            const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
+                            const displayValue = inCurrentDollars ? value / (row.inflationFactor || 1) : value;
+                            td.textContent = Math.round(displayValue).toLocaleString();
                         }
                     }
                 } else {
@@ -1520,11 +1538,15 @@ function calculateInflationAdjustedWithdrawal(principal, growthRate, inflationRa
 }
 
 
-function updateStats(totals, finalNW, minNetWorth = 100000) {
+function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWorth = 100000) {
+    const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
+    const dispTax   = inCurrentDollars ? totals.taxCurrentDollars   : totals.tax;
+    const dispSpend = inCurrentDollars ? totals.spendCurrentDollars : totals.spend;
+    const dispNW    = inCurrentDollars ? finalNWCurrentDollars      : finalNW;
     document.getElementById('stat-rate').innerText = (totals.tax / totals.gross * 100).toFixed(1) + '%';
-    document.getElementById('stat-spend').innerText = '$' + Math.round(totals.spend).toLocaleString();
-    document.getElementById('stat-tax').innerText = '$' + Math.round(totals.tax).toLocaleString();
-    document.getElementById('stat-nw').innerText = '$' + Math.round(finalNW).toLocaleString();
+    document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
+    document.getElementById('stat-tax').innerText = '$' + Math.round(dispTax).toLocaleString();
+    document.getElementById('stat-nw').innerText = '$' + Math.round(dispNW).toLocaleString();
     document.getElementById('stat-years').innerText = totals.yearsfunded + '/' + totals.yearstested;
     // document.getElementById('stat-yearsfunded').innerText = totals.yearsfunded;
     let indicator = '🛑 FAILED ';
@@ -1535,8 +1557,13 @@ function updateStats(totals, finalNW, minNetWorth = 100000) {
 
 }
 
+let lastSimulationLog = null;
+let lastTotals = null, lastFinalNW = null, lastFinalNWCurrentDollars = null;
 let assetChart, taxChart;
 function updateCharts(log) {
+    const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
+    const adj = r => inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1;
+
     const ctxA = document.getElementById('chartAssets').getContext('2d');
     if (assetChart) assetChart.destroy();
     assetChart = new Chart(ctxA, {
@@ -1544,11 +1571,11 @@ function updateCharts(log) {
         data: {
             labels: log.map(r => r.year),
             datasets: [
-                { label: 'IRAs', data: log.map(r => r.TotalIRA), borderColor: '#e67e22', fill: false },
-                { label: 'Roth', data: log.map(r => r.Roth), borderColor: '#000000', fill: false },
-                { label: 'Brokerage', data: log.map(r => r.Brokerage), borderColor: '#2980b9', fill: false },
-                { label: 'Cash', data: log.map(r => r.Cash), borderColor: '#27ae60', fill: false },
-                { label: 'TotalWealth', data: log.map(r => r.totalWealth), borderColor: '#888888', fill: false }
+                { label: 'IRAs', data: log.map(r => r.TotalIRA * adj(r)), borderColor: '#e67e22', fill: false },
+                { label: 'Roth', data: log.map(r => r.Roth * adj(r)), borderColor: '#000000', fill: false },
+                { label: 'Brokerage', data: log.map(r => r.Brokerage * adj(r)), borderColor: '#2980b9', fill: false },
+                { label: 'Cash', data: log.map(r => r.Cash * adj(r)), borderColor: '#27ae60', fill: false },
+                { label: 'TotalWealth', data: log.map(r => r.totalWealth * adj(r)), borderColor: '#888888', fill: false }
             ]
         },
         options: {
@@ -1586,7 +1613,7 @@ function updateCharts(log) {
             datasets: [
                 {
                     label: 'Fed Tax',
-                    data: log.map(r => r.FedTax),
+                    data: log.map(r => r.FedTax * adj(r)),
                     type: 'bar',  // Type on dataset
                     backgroundColor: '#e74c3c80',
                     stack: 'taxes',
@@ -1594,7 +1621,7 @@ function updateCharts(log) {
                 },
                 {
                     label: 'State Tax',
-                    data: log.map(r => r.StateTax),
+                    data: log.map(r => r.StateTax * adj(r)),
                     type: 'bar',  // Type on dataset
                     backgroundColor: '#4BC0C0B3',
                     stack: 'taxes',
@@ -1602,7 +1629,7 @@ function updateCharts(log) {
                 },
                 {
                     label: 'IRMAA',
-                    data: log.map(r => r.IRMAA),
+                    data: log.map(r => r.IRMAA * adj(r)),
                     type: 'bar',  // Type on dataset
                     backgroundColor: '#000000D0',
                     stack: 'taxes',
@@ -1624,7 +1651,7 @@ function updateCharts(log) {
                 */
                 {
                     label: 'Spendable Income',
-                    data: log.map(r => r.netIncome),
+                    data: log.map(r => r.netIncome * adj(r)),
                     type: 'line',  // Type on dataset
                     borderColor: '#27ae60',
                     fill: false,

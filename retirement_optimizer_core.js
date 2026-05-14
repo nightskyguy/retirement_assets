@@ -787,14 +787,23 @@ function simulate(inputs) {
         netWithdrawals.IRA2 = Math.max(0, netWithdrawals.IRA * (1 - ira1_ratio));
 
 
-        // If we took money from Roth, but have a surplus, replace the excess withdrawal - it was unnecessary
-        surplus.Roth = Math.min(surplus.Total, netWithdrawals.Roth);
-        netWithdrawals.Roth -= surplus.Roth;
-        surplus.Total -= surplus.Roth;
+        // If we took money from Roth unnecessarily, refund it back.
+        let rothRefund = Math.min(surplus.Total, netWithdrawals.Roth);
+        netWithdrawals.Roth -= rothRefund;
+        surplus.Total -= rothRefund;
 
-        // We've "refunded" the Roth. If we still have a surplus, only the amount that came from IRAs can go to Roth
-        surplus.Roth = Math.min(surplus.Total, netWithdrawals.IRA)
-        surplus.Total -= surplus.Roth;
+        // With MaxConversion: route the IRA-sourced surplus to Roth instead of Cash.
+        // This does NOT change how much was withdrawn — it only redirects where the
+        // after-tax excess lands. Taxes were already paid on the full IRA withdrawal.
+        // TODO: The tax used here (nominalTaxRate) was computed on the spending income,
+        //       not on the incremental surplus being converted. The marginal rate on the
+        //       surplus could be slightly higher if it pushes into a higher bracket.
+        //       Correcting this would require a third tax-recalculation pass.
+        surplus.Roth = 0;
+        if (inputs.maxConversion) {
+            surplus.Roth = Math.min(surplus.Total, netWithdrawals.IRA);
+            surplus.Total -= surplus.Roth;
+        }
 
         // If there is still a surplus, replace any excess Cash withdrawal.
         surplus.Cash = Math.min(surplus.Total, netWithdrawals.Cash);
@@ -804,42 +813,7 @@ function simulate(inputs) {
         // Decrement the proposed withdrawals from the balance(s).
         applyWithdrawals(balance, netWithdrawals)
 
-        let availableCash = balance.Cash + surplus.Total;
-        let totalConverted = 0;
-
-        if (inputs.maxConversion && availableCash > 1000) {
-            // Determine order: largest IRA first
-            let iras = [
-                { name: 'IRA1', withdrawal: netWithdrawals.IRA1 },
-                { name: 'IRA2', withdrawal: netWithdrawals.IRA2 }
-            ].sort((a, b) => b.withdrawal - a.withdrawal);
-
-            let conversions = { IRA1: 0, IRA2: 0 };
-
-            for (let ira of iras) {
-                if (ira.withdrawal > 0 && availableCash > 0) {
-                    // Calculate max we can convert given available cash for taxes
-                    let maxConvertible = availableCash / nominalTaxRate;
-                    let actualConversion = Math.min(ira.withdrawal, maxConvertible);
-                    let taxOnConversion = actualConversion * nominalTaxRate;
-
-                    conversions[ira.name] = actualConversion;
-                    availableCash -= taxOnConversion;
-                    totalConverted += actualConversion;
-                } // if ira.withdrawal > 0 && availableCash > 0
-            } // for let ira of iras
-
-            // Apply the conversions
-            let totalTaxPaid = totalConverted * nominalTaxRate;
-
-            // Apportion tax payment between Cash and surplus
-            let taxFromCash = Math.min(balance.Cash, totalTaxPaid);
-            let taxFromSurplus = totalTaxPaid - taxFromCash;
-
-            balance.Cash -= taxFromCash;
-            surplus.Total -= taxFromSurplus;
-            withdrawals.Cash += totalTaxPaid;
-        } // if maxConversion && availableCash > 1000
+        const totalConverted = surplus.Roth;
 
         // If there is STILL a surplus, put it in Cash.
         surplus.Cash = surplus.Total;
@@ -868,7 +842,7 @@ function simulate(inputs) {
         totals.spend += (targetSpend + surplus.Shortfall);
         totals.taxCurrentDollars += totalTax / inflation;
         totals.spendCurrentDollars += (targetSpend + surplus.Shortfall) / inflation;
-        balance.Roth += surplus.Total + totalConverted;
+        balance.Roth += totalConverted;  // surplus.Roth === totalConverted; surplus.Total is 0 here
         totals.shortfall += surplus.Shortfall;
 
         let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage - balance.BrokerageBasis)) * (1 - nominalTaxRate) + balance.Roth + balance.Cash + balance.BrokerageBasis
@@ -930,7 +904,6 @@ function simulate(inputs) {
             brokerageG: gains.Brokerage,
             rothG: gains.Roth,
             rothConv: totalConverted,
-            rothBonusConv: surplus.Roth,
             inflationFactor: inflation
         });
         currentYear += 1;

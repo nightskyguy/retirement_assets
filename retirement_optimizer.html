@@ -31,7 +31,7 @@
 					<option value="baseline">🔄Withdraw Proportionally</option>  <!--⚖️-->
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
 					<option value="bracket">🪣Fill Federal Tax Bracket</option>
-					<option value="minlimit">🛑Lesser of IRMAA or TaxBracket</option>
+					<option value="minlimit" disabled style="color:#bbb;">🛑Lesser of IRMAA or TaxBracket (not implemented)</option>
 				</select></label>
 			</div>
 			
@@ -134,6 +134,9 @@
                 <div title="How much spendable income was produced."><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
                 <div title="Remaining wealth at the end of life."><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
 				<div id="popUpMessage" class="scenario-message"></div>
+				<div title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
+					<label><input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()"> Current $</label>
+				</div>
             </div>
         </div>
 
@@ -320,6 +323,11 @@
         <div id="tab-chart" class="card hidden">
             <canvas id="chartAssets" style="max-height:350px;"></canvas>
             <hr>
+            <div style="margin: 4px 8px;">
+                <label title="Show Roth conversion amounts as a bar. When checked, also adds conversions to the Spendable Income line.">
+                    <input type="checkbox" id="include-roth-spendable" onchange="if(lastSimulationLog) updateCharts(lastSimulationLog)"> Include Roth Conversions in Spendable
+                </label>
+            </div>
             <canvas id="chartTaxSpend" style="max-height:350px;"></canvas>
         </div>
 
@@ -345,6 +353,7 @@ document.addEventListener('DOMContentLoaded', function() {
 window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('stratRate').innerHTML = generateStratRateOptions();
     document.getElementById('STATEname').innerHTML = generateStateOptions();
+    setupChartSync();
 });
 
 // Auto-run tests when page loads (comment out if you don't want auto-run)

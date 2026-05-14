@@ -503,7 +503,7 @@ function simulate(inputs) {
     birthmonth2 = Math.max(1, Math.min(12, Math.round((inputs.birthyear2 - birthyear2) * 100) || 12));
 
     let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear1 + inputs.die2) - currentYear + 1;
-    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0 };
+    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0, taxCurrentDollars: 0, spendCurrentDollars: 0 };
 
     let cpiRate = 1		// The rate that SS and Tax brackets increase.
     let inflation = 1	// The rate at which overall inflation increases.
@@ -787,14 +787,23 @@ function simulate(inputs) {
         netWithdrawals.IRA2 = Math.max(0, netWithdrawals.IRA * (1 - ira1_ratio));
 
 
-        // If we took money from Roth, but have a surplus, replace the excess withdrawal - it was unnecessary
-        surplus.Roth = Math.min(surplus.Total, netWithdrawals.Roth);
-        netWithdrawals.Roth -= surplus.Roth;
-        surplus.Total -= surplus.Roth;
+        // If we took money from Roth unnecessarily, refund it back.
+        let rothRefund = Math.min(surplus.Total, netWithdrawals.Roth);
+        netWithdrawals.Roth -= rothRefund;
+        surplus.Total -= rothRefund;
 
-        // We've "refunded" the Roth. If we still have a surplus, only the amount that came from IRAs can go to Roth
-        surplus.Roth = Math.min(surplus.Total, netWithdrawals.IRA)
-        surplus.Total -= surplus.Roth;
+        // With MaxConversion: route the IRA-sourced surplus to Roth instead of Cash.
+        // This does NOT change how much was withdrawn — it only redirects where the
+        // after-tax excess lands. Taxes were already paid on the full IRA withdrawal.
+        // TODO: The tax used here (nominalTaxRate) was computed on the spending income,
+        //       not on the incremental surplus being converted. The marginal rate on the
+        //       surplus could be slightly higher if it pushes into a higher bracket.
+        //       Correcting this would require a third tax-recalculation pass.
+        surplus.Roth = 0;
+        if (inputs.maxConversion) {
+            surplus.Roth = Math.min(surplus.Total, netWithdrawals.IRA);
+            surplus.Total -= surplus.Roth;
+        }
 
         // If there is still a surplus, replace any excess Cash withdrawal.
         surplus.Cash = Math.min(surplus.Total, netWithdrawals.Cash);
@@ -804,42 +813,7 @@ function simulate(inputs) {
         // Decrement the proposed withdrawals from the balance(s).
         applyWithdrawals(balance, netWithdrawals)
 
-        let availableCash = balance.Cash + surplus.Total;
-        let totalConverted = 0;
-
-        if (inputs.maxConversion && availableCash > 1000) {
-            // Determine order: largest IRA first
-            let iras = [
-                { name: 'IRA1', withdrawal: netWithdrawals.IRA1 },
-                { name: 'IRA2', withdrawal: netWithdrawals.IRA2 }
-            ].sort((a, b) => b.withdrawal - a.withdrawal);
-
-            let conversions = { IRA1: 0, IRA2: 0 };
-
-            for (let ira of iras) {
-                if (ira.withdrawal > 0 && availableCash > 0) {
-                    // Calculate max we can convert given available cash for taxes
-                    let maxConvertible = availableCash / nominalTaxRate;
-                    let actualConversion = Math.min(ira.withdrawal, maxConvertible);
-                    let taxOnConversion = actualConversion * nominalTaxRate;
-
-                    conversions[ira.name] = actualConversion;
-                    availableCash -= taxOnConversion;
-                    totalConverted += actualConversion;
-                } // if ira.withdrawal > 0 && availableCash > 0
-            } // for let ira of iras
-
-            // Apply the conversions
-            let totalTaxPaid = totalConverted * nominalTaxRate;
-
-            // Apportion tax payment between Cash and surplus
-            let taxFromCash = Math.min(balance.Cash, totalTaxPaid);
-            let taxFromSurplus = totalTaxPaid - taxFromCash;
-
-            balance.Cash -= taxFromCash;
-            surplus.Total -= taxFromSurplus;
-            withdrawals.Cash += totalTaxPaid;
-        } // if maxConversion && availableCash > 1000
+        const totalConverted = surplus.Roth;
 
         // If there is STILL a surplus, put it in Cash.
         surplus.Cash = surplus.Total;
@@ -866,12 +840,14 @@ function simulate(inputs) {
         totals.tax += totalTax;
         totals.gross += totalIncome;
         totals.spend += (targetSpend + surplus.Shortfall);
-        balance.Roth += surplus.Total + totalConverted;
+        totals.taxCurrentDollars += totalTax / inflation;
+        totals.spendCurrentDollars += (targetSpend + surplus.Shortfall) / inflation;
+        balance.Roth += totalConverted;  // surplus.Roth === totalConverted; surplus.Total is 0 here
         totals.shortfall += surplus.Shortfall;
 
         let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage - balance.BrokerageBasis)) * (1 - nominalTaxRate) + balance.Roth + balance.Cash + balance.BrokerageBasis
 
-        if ((netIncome + 100.0) < targetSpend || totalWealth < (targetSpend * 1.5)) {
+        if (netIncome < targetSpend * 0.99 || totalWealth < (targetSpend * 1.5)) {
             totals.success = false;
             totals.failedInYear.push(currentYear)
         } else {
@@ -928,7 +904,7 @@ function simulate(inputs) {
             brokerageG: gains.Brokerage,
             rothG: gains.Roth,
             rothConv: totalConverted,
-            rothBonusConv: surplus.Roth
+            inflationFactor: inflation
         });
         currentYear += 1;
 
@@ -1051,110 +1027,213 @@ function getInputs() {
  */
 function runSimulation() {
     let res = simulate(getInputs());
+    lastSimulationLog = res.log;
+    lastTotals = res.totals;
+    lastFinalNW = res.finalNW;
+    const lastEntry = res.log[res.log.length - 1];
+    lastFinalNWCurrentDollars = lastEntry.totalWealth / (lastEntry.inflationFactor || 1);
     updateTable(res.log);
-    updateStats(res.totals, res.finalNW);
+    updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
+}
+
+function updateCurrentDollarsView() {
+    if (lastSimulationLog) {
+        updateTable(lastSimulationLog);
+        updateCharts(lastSimulationLog);
+        updateStats(lastTotals, lastFinalNW, lastFinalNWCurrentDollars);
+    }
+    if (window.optimizerResults) renderOptimizerTable(window.optimizerResults);
 }
 // //////////////////////////////////////////////////////////////////
 
 function runOptimizer() {
-    let base = getInputs();
-    let results = [];
+    const base = getInputs();
+    const results = [];
 
-    for (let n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
-        base.strategy = 'fixed';
-        base.nYears = n;
+    // Get all bracket rates from TAXData (skip the last Infinity bracket)
+    const bracketRates = TAXData.FEDERAL.MFJ.brackets
+        .slice(0, -1)
+        .map(b => b.r);
+
+    function addResult(strategyLabel, paramLabel, paramSortVal, overrides) {
+        const inputs = Object.assign({}, base, overrides);
+        const res = simulate(inputs);
+        const lastEntry = res.log[res.log.length - 1];
         results.push({
-            strategy: "Fixed",
-            parameter: n,
-            unit: "years",
-            ...simulate(base)
+            _id: results.length,
+            _strategyLabel: strategyLabel,
+            _paramLabel: paramLabel,
+            _paramSortVal: paramSortVal,
+            _maxConversion: overrides.maxConversion,
+            _strategy: overrides.strategy,
+            _nYears: overrides.nYears ?? null,
+            _stratRate: overrides.stratRate ?? null,
+            totals: res.totals,
+            finalNW: res.finalNW,
+            finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
         });
     }
 
-    // Find best result
-    const successfulResults = results.filter(r => r.totals.success);
+    for (const maxConv of [false, true]) {
+        // Proportional baseline
+        addResult('Proportional', '—', -1, { strategy: 'baseline', maxConversion: maxConv });
 
-    let bestIndex = -1;
-    if (successfulResults.length > 0) {
-        const minTax = Math.min(...successfulResults.map(r => r.totals.tax));
-        const lowestTaxResults = successfulResults.filter(r => r.totals.tax === minTax);
+        // Fixed N years
+        for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
+            addResult('Fixed', `${n} yrs`, n, { strategy: 'fixed', nYears: n, maxConversion: maxConv });
+        }
 
-        if (lowestTaxResults.length === 1) {
-            bestIndex = results.indexOf(lowestTaxResults[0]);
-        } else {
-            const maxWealth = Math.max(...lowestTaxResults.map(r => r.finalNW));
-            const bestResult = lowestTaxResults.find(r => r.finalNW === maxWealth);
-            bestIndex = results.indexOf(bestResult);
+        // Fill bracket — one row per bracket level
+        for (const rate of bracketRates) {
+            const pct = Math.round(rate * 100);
+            addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
         }
     }
 
-    // Define columns
-    const columns = [
-        {
-            label: "Success/Fail",
-            getValue: r => r.totals.success ? '🟢' : '🚨'
-        },
-        {
-            label: "Strategy",
-            getValue: r => `${r.strategy} ${r.parameter} ${r.unit}`
-        },
-        {
-            label: "Lifetime Tax",
-            getValue: r => `${Math.round(r.totals.tax).toLocaleString()}`
-        },
-        {
-            label: "Final Wealth",
-            getValue: r => `${Math.round(r.finalNW).toLocaleString()}`
-        },
-        {
-            label: "Effective Tax Rate",
-            getValue: r => `${(r.totals.tax / r.totals.gross * 100).toFixed(1)}%`
-        },
-        {
-            label: "Years Funded/Total",
-            getValue: r => r.totals.yearsfunded + '/' + r.totals.yearstested
-        }
-    ];
+    // Update top-bar stats using the proportional/no-maxConv baseline (first result)
+    const baseline = results[0];
+    if (baseline) {
+        updateStats(baseline.totals, baseline.finalNW, baseline.finalNWCurrentDollars);
+    }
 
-    // Build header row
-    const headerHtml = '<tr>' + columns.map(col => `<th>${col.label}</th>`).join('') + '</tr>';
-
-    // Build data rows
-    const rowsHtml = results.map((r, idx) => {
-        const isBest = idx === bestIndex;
-        const rowStyle = isBest ? ' style="background-color: #90EE90; font-weight: bold; cursor: pointer;"' : ' style="cursor: pointer;"';
-
-        const cells = columns.map(col => `<td>${col.getValue(r)}</td>`).join('');
-
-        return `<tr${rowStyle} onclick="loadOptimizerResult(${idx})" title="Click to load this strategy">${cells}</tr>`;
-    }).join('');
-
-    // Store results globally so loadOptimizerResult can access them
     window.optimizerResults = results;
-
-    // Update table
-    document.querySelector('#opt-table thead').innerHTML = headerHtml;
-    document.querySelector('#opt-table tbody').innerHTML = rowsHtml;
+    window.optimizerSortState = window.optimizerSortState ?? { colKey: null, direction: 'asc' };
+    renderOptimizerTable(results);
     showTab('tab-opt');
 }
 
-// Load a result from the optimizer back into the input fields
-function loadOptimizerResult(index) {
-    const result = window.optimizerResults[index];
+// Column definitions (shared between render and sort)
+function getOptimizerColumns() {
+    const inC = () => document.getElementById('show-current-dollars')?.checked;
+    return [
+        {
+            key: 'status', label: '✓',
+            getValue: r => r.totals.success ? '🟢' : '🚨',
+            getSortValue: r => r.totals.success ? 1 : 0
+        },
+        {
+            key: 'strategy', label: 'Strategy',
+            getValue: r => r._strategyLabel,
+            getSortValue: r => r._strategyLabel
+        },
+        {
+            key: 'param', label: 'Param',
+            getValue: r => r._paramLabel,
+            getSortValue: r => r._paramSortVal
+        },
+        {
+            key: 'maxConv', label: 'Max Conv',
+            getValue: r => r._maxConversion ? '✓' : '',
+            getSortValue: r => r._maxConversion ? 1 : 0
+        },
+        {
+            key: 'tax', label: 'Lifetime Tax',
+            getValue: r => Math.round(inC() ? r.totals.taxCurrentDollars : r.totals.tax).toLocaleString(),
+            getSortValue: r => inC() ? r.totals.taxCurrentDollars : r.totals.tax
+        },
+        {
+            key: 'spend', label: 'Total Spendable',
+            getValue: r => Math.round(inC() ? r.totals.spendCurrentDollars : r.totals.spend).toLocaleString(),
+            getSortValue: r => inC() ? r.totals.spendCurrentDollars : r.totals.spend
+        },
+        {
+            key: 'nw', label: 'Final Wealth',
+            getValue: r => Math.round(inC() ? r.finalNWCurrentDollars : r.finalNW).toLocaleString(),
+            getSortValue: r => inC() ? r.finalNWCurrentDollars : r.finalNW
+        },
+        {
+            key: 'rate', label: 'Tax Rate',
+            getValue: r => `${(r.totals.tax / r.totals.gross * 100).toFixed(1)}%`,
+            getSortValue: r => r.totals.tax / r.totals.gross
+        },
+        {
+            key: 'years', label: 'Yrs Funded',
+            getValue: r => `${r.totals.yearsfunded}/${r.totals.yearstested}`,
+            getSortValue: r => r.totals.yearsfunded
+        }
+    ];
+}
 
-    // Set the strategy dropdown
-    document.getElementById('strategy').value = 'fixed';
+function renderOptimizerTable(results) {
+    if (!results || results.length === 0) return;
+    const columns = getOptimizerColumns();
+    const sortState = window.optimizerSortState ?? { colKey: null, direction: 'asc' };
 
-    // Set the nYears parameter
-    document.getElementById('nYears').value = result.parameter;
+    // Sort a copy; preserve original _id for click handlers
+    let display = results.slice();
+    if (sortState.colKey) {
+        const col = columns.find(c => c.key === sortState.colKey);
+        if (col) {
+            display.sort((a, b) => {
+                const av = col.getSortValue(a), bv = col.getSortValue(b);
+                const cmp = (typeof av === 'string') ? av.localeCompare(bv) : (av - bv);
+                return sortState.direction === 'asc' ? cmp : -cmp;
+            });
+        }
+    }
 
-    // Show the correct UI section
+    // Identify the single best row (min tax among successes; tie-break on max wealth)
+    const successes = results.filter(r => r.totals.success);
+    let bestId = null;
+    if (successes.length > 0) {
+        const minTax = Math.min(...successes.map(r => r.totals.tax));
+        const tied = successes.filter(r => r.totals.tax === minTax);
+        const best = tied.length === 1 ? tied[0]
+            : tied.reduce((a, b) => a.finalNW >= b.finalNW ? a : b);
+        bestId = best._id;
+    }
+
+    // Header with sort arrows
+    const headerHtml = '<tr>' + columns.map(col => {
+        const active = sortState.colKey === col.key;
+        const arrow = active ? (sortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
+        return `<th style="cursor:pointer;user-select:none;" onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</th>`;
+    }).join('') + '</tr>';
+
+    // Rows
+    const rowsHtml = display.map(r => {
+        const isBest = r._id === bestId;
+        const style = isBest
+            ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
+            : 'cursor:pointer;';
+        const cells = columns.map(col => `<td>${col.getValue(r)}</td>`).join('');
+        return `<tr style="${style}" onclick="loadOptimizerResult(${r._id})" title="Click to load this strategy">${cells}</tr>`;
+    }).join('');
+
+    document.querySelector('#opt-table thead').innerHTML = headerHtml;
+    document.querySelector('#opt-table tbody').innerHTML = rowsHtml;
+}
+
+function sortOptimizerBy(colKey) {
+    const s = window.optimizerSortState ?? { colKey: null, direction: 'asc' };
+    if (s.colKey === colKey) {
+        s.direction = s.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        s.colKey = colKey;
+        s.direction = 'asc';
+    }
+    window.optimizerSortState = s;
+    if (window.optimizerResults) renderOptimizerTable(window.optimizerResults);
+}
+
+// Restore inputs from an optimizer row and re-run simulation
+function loadOptimizerResult(id) {
+    const result = (window.optimizerResults ?? []).find(r => r._id === id);
+    if (!result) return;
+
+    document.getElementById('strategy').value = result._strategy;
+
+    if (result._strategy === 'fixed' && result._nYears != null) {
+        document.getElementById('nYears').value = result._nYears;
+    } else if (result._strategy === 'bracket' && result._stratRate != null) {
+        document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
+    }
+
+    document.getElementById('maxConversion').checked = result._maxConversion;
     toggleStrategyUI();
-
-    // Run the simulation to update the display
     runSimulation();
-    showTab('tab-tbl')
+    showTab('tab-tbl');
 }
 
 // //////////////////////////////////////////////////////////////////
@@ -1427,8 +1506,8 @@ function updateTable(log) {
         const age1 = row['Age1'] ?? row['age1'];
         const age2 = row['Age2'] ?? row['age2'];
 
-        // Allow a miss by 100 dollars.
-        const incomeShortfall = (spendGoal > netIncome + 100.0) || (totalWealth < spendGoal * 1.5);
+        // Allow up to 1% shortfall before flagging as underfunded.
+        const incomeShortfall = (netIncome < spendGoal * 0.99) || (totalWealth < spendGoal * 1.5);
         const deathOccurred = maritalStatus != row['status'];
 
         // Pink takes priority over yellow
@@ -1440,7 +1519,7 @@ function updateTable(log) {
         const deathHighlightCols = ['year', 'age1', 'age2', 'status', 'SSincome'];
 
         keys.forEach(key => {
-            if (!key.startsWith('-')) {
+            if (!key.startsWith('-') && key !== 'inflationFactor') {
                 const td = tr.insertCell();
                 const value = row[key];
 
@@ -1461,7 +1540,9 @@ function updateTable(log) {
                         if (isYear) {
                             td.textContent = value;
                         } else {
-                            td.textContent = Math.round(value).toLocaleString();
+                            const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
+                            const displayValue = inCurrentDollars ? value / (row.inflationFactor || 1) : value;
+                            td.textContent = Math.round(displayValue).toLocaleString();
                         }
                     }
                 } else {
@@ -1520,11 +1601,15 @@ function calculateInflationAdjustedWithdrawal(principal, growthRate, inflationRa
 }
 
 
-function updateStats(totals, finalNW, minNetWorth = 100000) {
+function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWorth = 100000) {
+    const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
+    const dispTax   = inCurrentDollars ? totals.taxCurrentDollars   : totals.tax;
+    const dispSpend = inCurrentDollars ? totals.spendCurrentDollars : totals.spend;
+    const dispNW    = inCurrentDollars ? finalNWCurrentDollars      : finalNW;
     document.getElementById('stat-rate').innerText = (totals.tax / totals.gross * 100).toFixed(1) + '%';
-    document.getElementById('stat-spend').innerText = '$' + Math.round(totals.spend).toLocaleString();
-    document.getElementById('stat-tax').innerText = '$' + Math.round(totals.tax).toLocaleString();
-    document.getElementById('stat-nw').innerText = '$' + Math.round(finalNW).toLocaleString();
+    document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
+    document.getElementById('stat-tax').innerText = '$' + Math.round(dispTax).toLocaleString();
+    document.getElementById('stat-nw').innerText = '$' + Math.round(dispNW).toLocaleString();
     document.getElementById('stat-years').innerText = totals.yearsfunded + '/' + totals.yearstested;
     // document.getElementById('stat-yearsfunded').innerText = totals.yearsfunded;
     let indicator = '🛑 FAILED ';
@@ -1535,143 +1620,142 @@ function updateStats(totals, finalNW, minNetWorth = 100000) {
 
 }
 
+let lastSimulationLog = null;
+let lastTotals = null, lastFinalNW = null, lastFinalNWCurrentDollars = null;
 let assetChart, taxChart;
+
+// Crosshair plugin — vertical dashed line at the active x position
+const crosshairPlugin = {
+    id: 'crosshair',
+    afterDraw(chart) {
+        if (chart.tooltip?._active?.length) {
+            const x = chart.tooltip._active[0].element.x;
+            const { top, bottom } = chart.chartArea;
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(x, top);
+            ctx.lineTo(x, bottom);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+            ctx.setLineDash([4, 4]);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+};
+
+function syncChart(source, target, event) {
+    const pts = source.getElementsAtEventForMode(event, 'index', { intersect: false }, false);
+    if (pts.length === 0) return;
+    const idx = pts[0].index;
+    const active = target.data.datasets.map((_, i) => ({ datasetIndex: i, index: idx }));
+    target.setActiveElements(active);
+    target.tooltip.setActiveElements(active, { x: 0, y: 0 });
+    target.update('none');
+}
+
+function clearChartHighlight(chart) {
+    chart.setActiveElements([]);
+    chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+    chart.update('none');
+}
+
+function setupChartSync() {
+    if (typeof Chart !== 'undefined') Chart.register(crosshairPlugin);
+    const aCanvas = document.getElementById('chartAssets');
+    const tCanvas = document.getElementById('chartTaxSpend');
+    if (!aCanvas || !tCanvas) return;
+    aCanvas.addEventListener('mousemove', e => { if (assetChart && taxChart) syncChart(assetChart, taxChart, e); });
+    aCanvas.addEventListener('mouseleave', () => { if (taxChart) clearChartHighlight(taxChart); });
+    tCanvas.addEventListener('mousemove', e => { if (taxChart && assetChart) syncChart(taxChart, assetChart, e); });
+    tCanvas.addEventListener('mouseleave', () => { if (assetChart) clearChartHighlight(assetChart); });
+}
 function updateCharts(log) {
+    const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
+    const adj = r => inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1;
+    const inclRoth = document.getElementById('include-roth-spendable')?.checked;
+
+    const sharedTooltip = {
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            tooltip: {
+                itemSort: (a, b) => b.parsed.y - a.parsed.y,
+                callbacks: {
+                    label: ctx => ctx.dataset.label + ': ' + Math.round(ctx.parsed.y).toLocaleString()
+                }
+            }
+        }
+    };
+
     const ctxA = document.getElementById('chartAssets').getContext('2d');
-    if (assetChart) assetChart.destroy();
+    (Chart.getChart(ctxA.canvas) ?? assetChart)?.destroy();
     assetChart = new Chart(ctxA, {
         type: 'line',
         data: {
             labels: log.map(r => r.year),
             datasets: [
-                { label: 'IRAs', data: log.map(r => r.TotalIRA), borderColor: '#e67e22', fill: false },
-                { label: 'Roth', data: log.map(r => r.Roth), borderColor: '#000000', fill: false },
-                { label: 'Brokerage', data: log.map(r => r.Brokerage), borderColor: '#2980b9', fill: false },
-                { label: 'Cash', data: log.map(r => r.Cash), borderColor: '#27ae60', fill: false },
-                { label: 'TotalWealth', data: log.map(r => r.totalWealth), borderColor: '#888888', fill: false }
+                { label: 'IRAs',        data: log.map(r => r.TotalIRA    * adj(r)), borderColor: '#e67e22', fill: false },
+                { label: 'Roth',        data: log.map(r => r.Roth        * adj(r)), borderColor: '#000000', fill: false },
+                { label: 'Brokerage',   data: log.map(r => r.Brokerage   * adj(r)), borderColor: '#2980b9', fill: false },
+                { label: 'Cash',        data: log.map(r => r.Cash        * adj(r)), borderColor: '#27ae60', fill: false },
+                { label: 'TotalWealth', data: log.map(r => r.totalWealth * adj(r)), borderColor: '#888888', fill: false }
             ]
         },
-        options: {
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function (context) {
-                            return context.dataset.label + ': ' +
-                                Math.round(context.parsed.y).toLocaleString();
-                        }
-                    }
-                }
-                /*				,
-                              legend: {
-                                labels: {
-                                  usePointStyle: true,
-                                  pointStyle: 'circle',
-                                    fill: false,
-                                  boxWidth: 10,
-                                  boxHeight: 10,
-                
-                                  padding: 16
-                                    }
-                                } // legend
-                */
-            } // plugins
-        } // options
+        options: { ...sharedTooltip }
     });
 
     const ctxT = document.getElementById('chartTaxSpend').getContext('2d');
-    if (taxChart) taxChart.destroy();
+    (Chart.getChart(ctxT.canvas) ?? taxChart)?.destroy();
     taxChart = new Chart(ctxT, {
-        data: {  // Removed type from here
+        data: {
             labels: log.map(r => r.year),
             datasets: [
                 {
                     label: 'Fed Tax',
-                    data: log.map(r => r.FedTax),
-                    type: 'bar',  // Type on dataset
-                    backgroundColor: '#e74c3c80',
-                    stack: 'taxes',
-                    order: 2
+                    data: log.map(r => r.FedTax * adj(r)),
+                    type: 'bar', backgroundColor: '#e74c3c80', stack: 'taxes', order: 2
                 },
                 {
                     label: 'State Tax',
-                    data: log.map(r => r.StateTax),
-                    type: 'bar',  // Type on dataset
-                    backgroundColor: '#4BC0C0B3',
-                    stack: 'taxes',
-                    order: 2
+                    data: log.map(r => r.StateTax * adj(r)),
+                    type: 'bar', backgroundColor: '#4BC0C0B3', stack: 'taxes', order: 2
                 },
                 {
                     label: 'IRMAA',
-                    data: log.map(r => r.IRMAA),
-                    type: 'bar',  // Type on dataset
-                    backgroundColor: '#000000D0',
-                    stack: 'taxes',
-                    order: 2
+                    data: log.map(r => r.IRMAA * adj(r)),
+                    type: 'bar', backgroundColor: '#000000D0', stack: 'taxes', order: 2
                 },
-
-                /*			
-                            { 
-                                label: 'Fixed Income', 
-                                data: log.map(r => r.pension + r.SSincome),
-                                type: 'line',  // Type on dataset
-                                borderColor: '#272727', 
-                                fill: false, 
-                                stack: false,
-                                borderWidth: 3,
-                                order: 1
-                                // NO stack property
-                            },
-                */
+                {
+                    label: 'Roth Conv',
+                    data: log.map(r => r.rothConv * adj(r)),
+                    type: 'bar', backgroundColor: '#8e44ad80', stack: 'conversions', order: 2
+                },
                 {
                     label: 'Spendable Income',
-                    data: log.map(r => r.netIncome),
-                    type: 'line',  // Type on dataset
-                    borderColor: '#27ae60',
-                    fill: false,
-                    stack: false,
-                    borderWidth: 3,
-                    order: 1
-                    // NO stack property
+                    data: log.map(r => (r.netIncome + (inclRoth ? r.rothConv : 0)) * adj(r)),
+                    type: 'line', borderColor: '#27ae60', fill: false,
+                    borderWidth: 3, order: 1
                 }
             ]
         },
         options: {
+            ...sharedTooltip,
             scales: {
-                x: {
-                    stacked: true
-                },
+                x: { stacked: true },
                 y: {
                     stacked: true,
-                    ticks: {
-                        callback: function (value) {
-                            return Math.round(value).toLocaleString();
-                        }
-                    }
+                    ticks: { callback: v => Math.round(v).toLocaleString() }
                 }
             },
             plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function (context) {
-                            return context.dataset.label + ': ' +
-                                Math.round(context.parsed.y).toLocaleString();
-                        }
-                    }
-                },
+                ...sharedTooltip.plugins,
                 legend: {
-                    labels: {
-                        usePointStyle: true,
-                        pointStyle: 'circle',
-
-                        boxWidth: 10,
-                        boxHeight: 10,
-
-                        padding: 16
-                    }
-                } // legend
-            } // plugins
-        } // options
-    });	// chart
+                    labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }
+                }
+            }
+        }
+    });
 }
 
 function val(id) { return document.getElementById(id)?.value; }

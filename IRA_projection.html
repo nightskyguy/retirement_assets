@@ -345,6 +345,26 @@ var TAXData = {
       </div>
     </details>
 
+    <details class="section" id="secAccumulation">
+      <summary>Accumulation</summary>
+      <div class="section-body">
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Annual contribution (today $)</label><span class="val" id="vContrib">$0</span></div>
+          <input type="range" id="contrib" min="0" max="70000" step="1000" value="0">
+        </div>
+        <div class="ctrl" id="ctrlContribEndAge" style="opacity:0.4;pointer-events:none">
+          <div class="ctrl-header"><label>Stop contributing at age</label><span class="val" id="vContribEndAge">62</span></div>
+          <input type="range" id="contribEndAge" min="40" max="106" step="1" value="62">
+        </div>
+        <div class="ctrl" id="ctrlContribInflate" style="opacity:0.4;pointer-events:none">
+          <div class="ctrl-header">
+            <label>Grow contributions with inflation</label>
+            <label class="switch"><input type="checkbox" id="contribInflate"><span class="slider-track"></span></label>
+          </div>
+        </div>
+      </div>
+    </details>
+
     <details class="section" id="secWithdrawals">
       <summary>IRA Withdrawals</summary>
       <div class="section-body">
@@ -356,7 +376,7 @@ var TAXData = {
           <div class="ctrl-header"><label>Withdrawal 1 (today $)</label><span class="val" id="vW">$75,000</span></div>
           <input type="range" id="wd" min="0" max="1000000" step="5000" value="75000">
         </div>
-        <div class="ctrl">
+        <div class="ctrl" id="ctrlWd2Age">
           <div class="ctrl-header"><label>Withdrawal 2 start age</label><span class="val" id="vWd2Age">75</span></div>
           <input type="range" id="wd2Age" min="40" max="85" step="1" value="75">
         </div>
@@ -435,6 +455,7 @@ var TAXData = {
         <span id="lgRmdWrap"    class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(2,'lgRmdWrap')"><span class="leg-dash" style="border-color:rgba(245,166,35,0.85)"></span>RMD</span>
         <span id="lgBaseWdWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(3,'lgBaseWdWrap')"><span class="leg-dot"  style="border-color:#a78bfa"></span><span id="lgBase">Withdrawal target</span></span>
         <span id="lgActualWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(4,'lgActualWrap')"><span class="leg-sq" style="background:#e8eaf2"></span>Total Income</span>
+        <span id="lgContribWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(5,'lgContribWrap')"><span class="leg-dash" style="border-color:#5aab6b"></span>Annual Contribution</span>
       </div>
       <div style="position:relative;width:100%;height:350px">
         <canvas id="ch" role="img" aria-label="IRA projection chart">IRA projection</canvas>
@@ -447,7 +468,7 @@ var TAXData = {
           <tr>
             <th>Year</th><th>Age</th>
             <th>Balance</th><th>Real bal</th>
-            <th>RMD</th><th>Total income</th><th>Bracket</th><th>IRA Withdrawal</th><th>Net growth</th>
+            <th>RMD</th><th>Total income</th><th>Bracket</th><th>IRA Withdrawal</th><th title="Growth earned on prior balance, less withdrawals, plus contributions">Net growth</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -660,7 +681,7 @@ function addThreshold(){
 
 /* ── Projection engine ── */
 function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, years, startAge,
-                  ss1, ss1StartAge, ss2, ss2StartAge, fixedIncome){
+                  ss1, ss1StartAge, ss2, ss2StartAge, fixedIncome, contrib, contribEndAge, contribInflate){
   let bal = start;
   const rows = [];
   for(let y=1; y<=years; y++){
@@ -668,21 +689,24 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
     const calYear  = CURRENT_YEAR + (y - 1);
     const inflMult = Math.pow(1 + inflRate/100, y - 1);
 
-    // Active withdrawal period: Period 2 takes over at wd2StartAge
+    // Active withdrawal period: Period 2 takes over at wd2StartAge (ignored if amount is 0)
     const withdrawing = age >= wd1StartAge;
-    const activeWd    = age >= wd2StartAge ? wd2 : wd1;
+    const activeWd    = (age >= wd2StartAge && wd2 > 0) ? wd2 : wd1;
     const targetWd    = withdrawing ? activeWd * inflMult : 0;
 
     const factor = rmdFactor(age);
     const rmd    = factor ? bal / factor : 0;
 
     // IRA withdrawal capped at available balance (depletion fix)
-    const balAfterGrowth = bal * (1 + rate/100);
-    const desiredWd      = withdrawing ? Math.max(targetWd, rmd) : 0;
-    const actualWd       = Math.min(desiredWd, Math.max(0, balAfterGrowth));
+    const balAfterGrowth  = bal * (1 + rate/100);
+    const contribAmt      = contribInflate ? (contrib || 0) * inflMult : (contrib || 0);
+    const annualContrib   = (contribAmt > 0 && age <= contribEndAge) ? contribAmt : 0;
+    const balAfterContrib = balAfterGrowth + annualContrib;
+    const desiredWd       = withdrawing ? Math.max(targetWd, rmd) : 0;
+    const actualWd        = Math.min(desiredWd, Math.max(0, balAfterContrib));
 
     const growth  = bal * (rate/100);
-    const newBal  = Math.max(0, balAfterGrowth - actualWd);
+    const newBal  = Math.max(0, balAfterContrib - actualWd);
     const depleted = newBal <= 0 && desiredWd > 0;
     bal = newBal;
 
@@ -702,7 +726,8 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
       actualWd,
       realActualWd:   actualWd / inflMult,
       growth,
-      netGrowth:      growth - actualWd,
+      annualContrib,
+      netGrowth:      growth - actualWd + annualContrib,
       ss1Contrib, ss2Contrib,
       totalIncome,
       realTotalIncome: totalIncome / inflMult,
@@ -715,16 +740,17 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
 }
 
 /* ── Chart setup ── */
-const FIXED_DS = 5;
+const FIXED_DS = 6;
 const chartCtx = document.getElementById('ch').getContext('2d');
 const chart = new Chart(chartCtx, {
   type:'line',
   data:{ labels:[], datasets:[
-    /* 0 Nominal bal    */ { label:'Nominal balance',   data:[], borderColor:'#19c99d', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
-    /* 1 Real bal       */ { label:'Real balance',      data:[], borderColor:'#4f9cf9', backgroundColor:'transparent', fill:false, hidden:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
-    /* 2 RMD            */ { label:'RMD',               data:[], borderColor:'rgba(245,166,35,0.85)', backgroundColor:'transparent', fill:false, spanGaps:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
-    /* 3 Wd target      */ { label:'Withdrawal target', data:[], borderColor:'#a78bfa', backgroundColor:'transparent', fill:false, tension:0, pointRadius:0, borderWidth:1.5, borderDash:[2,3], yAxisID:'yWd' },
-    /* 4 Total income   */ { label:'Total Income',      data:[], borderColor:'#e8eaf2', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2, yAxisID:'yWd' }
+    /* 0 Nominal bal    */ { label:'Nominal balance',      data:[], borderColor:'#19c99d', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 1 Real bal       */ { label:'Real balance',         data:[], borderColor:'#4f9cf9', backgroundColor:'transparent', fill:false, hidden:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 2 RMD            */ { label:'RMD',                  data:[], borderColor:'rgba(245,166,35,0.85)', backgroundColor:'transparent', fill:false, spanGaps:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
+    /* 3 Wd target      */ { label:'Withdrawal target',    data:[], borderColor:'#a78bfa', backgroundColor:'transparent', fill:false, tension:0, pointRadius:0, borderWidth:1.5, borderDash:[2,3], yAxisID:'yWd' },
+    /* 4 Total income   */ { label:'Total Income',         data:[], borderColor:'#e8eaf2', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2, yAxisID:'yWd' },
+    /* 5 Contribution   */ { label:'Annual Contribution',  data:[], borderColor:'#5aab6b', backgroundColor:'transparent', fill:false, hidden:false, tension:0, pointRadius:0, borderWidth:1.5, borderDash:[4,3], yAxisID:'yWd' }
   ]},
   options:{
     responsive:true, maintainAspectRatio:false,
@@ -825,7 +851,7 @@ function buildTable(rows){
 /* ── Legend rebuild ── */
 function rebuildLegend(){
   const legend = document.getElementById('legend');
-  Array.from(legend.children).slice(5).forEach(el => el.remove());
+  Array.from(legend.children).slice(6).forEach(el => el.remove());
 
   const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
   sorted.forEach(t => {
@@ -859,7 +885,10 @@ function update(){
   const ss1Age      = +document.getElementById('ss1Age').value;
   const ss2         = +document.getElementById('ss2').value;
   const ss2Age      = +document.getElementById('ss2Age').value;
-  const fixedIncome = +document.getElementById('fixedInc').value;
+  const fixedIncome    = +document.getElementById('fixedInc').value;
+  const contrib        = +document.getElementById('contrib').value;
+  const contribEndAge  = +document.getElementById('contribEndAge').value;
+  const contribInflate = document.getElementById('contribInflate').checked;
 
   // Labels
   document.getElementById('vAge').textContent     = startAge;
@@ -873,7 +902,9 @@ function update(){
   document.getElementById('vSS1').textContent     = fmt(ss1);
   document.getElementById('vSS2Age').textContent  = ss2Age;
   document.getElementById('vSS2').textContent     = fmt(ss2);
-  document.getElementById('vFixedInc').textContent= fmt(fixedIncome);
+  document.getElementById('vFixedInc').textContent    = fmt(fixedIncome);
+  document.getElementById('vContrib').textContent      = fmt(contrib);
+  document.getElementById('vContribEndAge').textContent= contribEndAge;
 
   // Toggle highlights
   document.getElementById('optFuture').classList.toggle('active',!useReal);
@@ -882,7 +913,7 @@ function update(){
   document.getElementById('optSingle').classList.toggle('active', isSingle);
 
   const rows   = project(start, rate, wd1, wd2, wdStartAge, wd2StartAge, infl, years, startAge,
-                          ss1, ss1Age, ss2, ss2Age, fixedIncome);
+                          ss1, ss1Age, ss2, ss2Age, fixedIncome, contrib, contribEndAge, contribInflate);
   const labels = rows.map(r => `Age ${r.age}`);
 
   chart.data.labels           = labels;
@@ -902,6 +933,11 @@ function update(){
   // Total Income line (IRA + SS1 + SS2 + fixed)
   chart.data.datasets[4].data = rows.map(r =>
     Math.round(useReal ? r.realTotalIncome : r.totalIncome)
+  );
+
+  // Annual Contribution line
+  chart.data.datasets[5].data = rows.map(r =>
+    r.annualContrib > 0 ? Math.round(useReal ? r.annualContrib / r.inflMult : r.annualContrib) : null
   );
 
   /* ── Threshold datasets ── */
@@ -966,7 +1002,8 @@ function update(){
   rows.forEach(r => {
     [useReal ? r.realRmd : r.rmd,
      useReal ? r.activeWd : r.activeWd * r.inflMult,
-     useReal ? r.realTotalIncome : r.totalIncome
+     useReal ? r.realTotalIncome : r.totalIncome,
+     useReal ? r.annualContrib / r.inflMult : r.annualContrib
     ].forEach(v => { if(v && v > yWdMax) yWdMax = v; });
   });
   thresholds.filter(t => t.visible).forEach(t => {
@@ -1057,7 +1094,11 @@ function buildBookmarkUrl(){
   const visIds = thresholds.filter(t => t.id && t.visible).map(t => t.id).join(',');
   if(visIds) p.set('tv', visIds);
 
-  p.set('ds', [0,1,2,3,4].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
+  p.set('contrib',     document.getElementById('contrib').value);
+  p.set('contribEnd',  document.getElementById('contribEndAge').value);
+  if(document.getElementById('contribInflate').checked) p.set('contribInflate', '1');
+
+  p.set('ds', [0,1,2,3,4,5].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
 
   return '?' + p.toString();
 }
@@ -1096,7 +1137,10 @@ function applyUrlParams(){
   setSlider('ss1Age',   'ss1age');
   setSlider('ss2',      'ss2');
   setSlider('ss2Age',   'ss2age');
-  setSlider('fixedInc', 'fixed');
+  setSlider('fixedInc',     'fixed');
+  setSlider('contrib',      'contrib');
+  setSlider('contribEndAge','contribEnd');
+  document.getElementById('contribInflate').checked = p.get('contribInflate') === '1';
 
   document.getElementById('realToggle').checked   = p.get('real')   === '1';
   document.getElementById('singleToggle').checked = p.get('single') === '1';
@@ -1113,8 +1157,8 @@ function applyUrlParams(){
 
   if(p.has('ds')){
     const ds = p.get('ds');
-    const lgIds = ['lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap'];
-    for(let i = 0; i < Math.min(5, ds.length); i++){
+    const lgIds = ['lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap','lgContribWrap'];
+    for(let i = 0; i < Math.min(6, ds.length); i++){
       const hidden = ds[i] === '0';
       chart.data.datasets[i].hidden = hidden;
       const el = document.getElementById(lgIds[i]);
@@ -1168,6 +1212,23 @@ function copyShareUrl(){
   closeShare();
 }
 
+/* ── UI sync helpers ── */
+function syncWd2UI(){
+  const disabled = +document.getElementById('wd2').value === 0;
+  const el = document.getElementById('ctrlWd2Age');
+  el.style.opacity       = disabled ? '0.4' : '1';
+  el.style.pointerEvents = disabled ? 'none' : '';
+}
+
+function syncContribUI(){
+  const disabled = +document.getElementById('contrib').value === 0;
+  ['ctrlContribEndAge','ctrlContribInflate'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.opacity       = disabled ? '0.4' : '1';
+    el.style.pointerEvents = disabled ? 'none' : '';
+  });
+}
+
 /* ── Event listeners ── */
 document.getElementById('age').addEventListener('input', () => {
   const startAge = +document.getElementById('age').value;
@@ -1179,6 +1240,9 @@ document.getElementById('age').addEventListener('input', () => {
   if(+wd2El.value < +wdEl.value) wd2El.value = wdEl.value;
   document.getElementById('vWdAge').textContent  = wdEl.value;
   document.getElementById('vWd2Age').textContent = wd2El.value;
+  const ceEl = document.getElementById('contribEndAge');
+  ceEl.min = startAge;
+  if(+ceEl.value < startAge) ceEl.value = startAge;
   update();
 });
 
@@ -1191,7 +1255,10 @@ document.getElementById('wdAge').addEventListener('input', () => {
   update();
 });
 
-['wd2Age','rate','wd','wd2','infl','ss1','ss1Age','ss2','ss2Age','fixedInc'].forEach(id =>
+document.getElementById('wd2').addEventListener('input', () => { syncWd2UI(); update(); });
+document.getElementById('contrib').addEventListener('input', () => { syncContribUI(); update(); });
+
+['wd2Age','rate','wd','infl','ss1','ss1Age','ss2','ss2Age','fixedInc','contribEndAge','contribInflate'].forEach(id =>
   document.getElementById(id).addEventListener('input', update)
 );
 
@@ -1214,12 +1281,21 @@ document.getElementById('singleToggle').addEventListener('change', e => {
 
 /* ── Init ── */
 applyUrlParams();
+syncWd2UI();
+syncContribUI();
+// Set contribEndAge min to match starting age
+{
+  const ceEl = document.getElementById('contribEndAge');
+  const startAge = +document.getElementById('age').value;
+  ceEl.min = startAge;
+  if(+ceEl.value < startAge) ceEl.value = startAge;
+}
 renderThreshEditor();
 update();
 
 // Open all sections except Thresholds on desktop; collapse all on mobile
 if(window.innerWidth > 740){
-  ['secBalance','secWithdrawals','secIncome'].forEach(id => {
+  ['secBalance','secAccumulation','secWithdrawals','secIncome'].forEach(id => {
     document.getElementById(id).open = true;
   });
 }

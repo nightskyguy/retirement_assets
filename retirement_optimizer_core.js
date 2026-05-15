@@ -739,7 +739,7 @@ function simulate(inputs) {
             // We need to do more withdrawals.
             withdrawStrategy.order = ['Brokerage', 'Cash', 'IRA', 'Roth'];
             withdrawStrategy.weight = [40, 60, 0, 0];
-            withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0, nominalTaxRate, 0];
+            withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + marginalStateTaxRate), 0, marginalFedTaxRate + marginalStateTaxRate, 0];
             withdrawals = calculateWithdrawals(curBalances, gap, withdrawStrategy);
 
             netWithdrawals = accumulateWithdrawals([netWithdrawals, withdrawals])

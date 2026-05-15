@@ -124,6 +124,25 @@ var TAXData = {
   details.section[open] > summary::before { transform:rotate(90deg); }
   .section-body { padding-bottom:.6rem; }
 
+  /* Account-type sub-section (IRA, Brokerage, Cash inside Accounts) */
+  details.section-sub { border-top:1px solid rgba(42,48,72,0.6); margin:0; }
+  details.section-sub > summary { list-style:none; font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.08em; color:var(--teal); text-transform:uppercase; cursor:pointer; padding:.5rem 0 .4rem .75rem; display:flex; align-items:center; gap:.5rem; user-select:none; }
+  details.section-sub > summary::-webkit-details-marker { display:none; }
+  details.section-sub > summary::before { content:'▶'; font-size:8px; flex-shrink:0; transition:transform .15s; }
+  details.section-sub[open] > summary::before { transform:rotate(90deg); }
+  details.section-sub .section-body { padding-left:.5rem; }
+
+  /* Inner sub-group within an account (Balance & Growth, Accumulation, Withdrawals inside IRA) */
+  details.section-inner { border-top:1px solid rgba(42,48,72,0.4); margin:0; }
+  details.section-inner > summary { list-style:none; font-family:var(--mono); font-size:9.5px; font-weight:400; letter-spacing:.07em; color:var(--muted); text-transform:uppercase; cursor:pointer; padding:.38rem 0 .3rem 1.25rem; display:flex; align-items:center; gap:.4rem; user-select:none; }
+  details.section-inner > summary::-webkit-details-marker { display:none; }
+  details.section-inner > summary::before { content:'▶'; font-size:7px; flex-shrink:0; transition:transform .15s; }
+  details.section-inner[open] > summary::before { transform:rotate(90deg); }
+  details.section-inner .section-body { padding-left:1.25rem; }
+
+  /* Table group header */
+  .note-table th.th-group { text-align:center; color:var(--teal); font-weight:500; letter-spacing:.08em; border-bottom:1px solid var(--border); }
+
   /* ── Toggle ── */
   .toggle-row   { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:.9rem; }
   .toggle-label { font-family:var(--mono); font-size:12px; color:var(--muted); }
@@ -169,6 +188,9 @@ var TAXData = {
   .leg-dot  { width:16px; height:0; border-top:2px dotted; flex-shrink:0; }
   .leg-toggle { cursor:pointer; transition:opacity .15s; user-select:none; }
   .leg-toggle:hover { opacity:0.75 !important; }
+  .tog { background:var(--surface2); border:1px solid var(--border); border-radius:4px; color:var(--muted); font-family:var(--mono); font-size:10px; padding:2px 7px; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
+  .tog.active { background:var(--teal); border-color:var(--teal); color:#0f1117; font-weight:500; }
+  .tog:hover:not(.active) { border-color:var(--muted); color:var(--text); }
   .note-table { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; overflow-x:auto; }
   .note-table table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; }
   .note-table th { color:var(--muted); font-weight:400; text-align:right; padding:4px 8px; letter-spacing:.05em; border-bottom:1px solid var(--border); white-space:nowrap; }
@@ -177,6 +199,7 @@ var TAXData = {
   .note-table td:first-child { text-align:left; color:var(--muted); }
   .note-table tr.rmd-active td { color:var(--amber); }
   .note-table tr.depleted td   { color:var(--red); }
+  .note-table tr.shortfall td  { background:rgba(245,166,35,0.07); }
   .footnote { margin-top:1rem; font-size:11px; color:var(--muted); font-family:var(--mono); line-height:1.7; }
   @media(max-width:740px){ .shell{grid-template-columns:1fr} .metrics{grid-template-columns:repeat(2,1fr)} }
 </style>
@@ -216,7 +239,7 @@ var TAXData = {
       <li><b>Withdrawal 2 start age / amount</b> — Period 2 takes over at this age (must be ≥ Period 1 start, ≤ 85). If both start ages are equal, Period 2 applies.</li>
       <li><b>Starting balance / Annual growth</b> — today's pre-tax IRA balance and expected nominal annual return.</li>
       <li><b>Inflation rate / Years to project</b> — assumed annual inflation and projection window.</li>
-      <li><b>SS 1 / SS 2</b> — each spouse's Social Security (or other inflation-linked) income in today's dollars, with a separate start age. Ages are relative to <em>your</em> current age — e.g., if you are 50 and your spouse is already collecting, set SS 1 start age to 50. Both streams are inflation-adjusted before contributing and are fully additive.</li>
+      <li><b>My SS / Spouse SS</b> — each person's Social Security (or other inflation-linked) income in today's dollars, with a separate start age. Ages are relative to <em>your</em> current age — e.g., if you are 50 and your spouse is already collecting, set Spouse SS start age to 50. Both streams are inflation-adjusted and fully additive.</li>
       <li><b>Fixed add'l income</b> — income fixed in nominal terms: pension, interest, dividends, cap gains.</li>
     </ul>
     <p style="margin-top:.35rem">The <b>Total Income</b> line includes all sources (IRA + SS + fixed). Threshold lines show raw inflated amounts so you can see directly which bracket your total income falls in.</p>
@@ -233,7 +256,7 @@ var TAXData = {
     <ul>
       <li><b>RMD</b> — prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, SECURE 2.0, born after 1958).</li>
       <li><b>IRA withdrawal</b> — min(available balance, max(inflation-adj target, RMD)); zero before Withdrawal 1 start age.</li>
-      <li><b>Total income</b> — IRA withdrawal + SS 1 (if active) + SS 2 (if active) + fixed income.</li>
+      <li><b>Total income</b> — IRA withdrawal + My SS (if active) + Spouse SS (if active) + fixed income.</li>
       <li><b>SS amounts</b> — entered in today's dollars; inflation-adjusted from their start year before contributing each year.</li>
       <li><b>Thresholds</b> — bracket floors and IRMAA tiers sourced from <code>retirement_optimizer_taxdata.js</code> (2026 federal tables). The standard deduction is added automatically and age-adjusted at 65 (one stdbump applied for MFJ — assumes one spouse at 65; actual may be higher if both spouses are 65+). For example, MFJ income enters the 10% bracket at the $32,200 standard deduction — only income above that is taxable. Bracket fills extend to the next bracket line — click any legend item to toggle.</li>
       <li><b>NIIT</b> — not inflation-indexed; stored as a negative floor and plotted as a flat nominal line in Future $ mode.</li>
@@ -256,7 +279,7 @@ var TAXData = {
       <li><b>Peak RMD</b> — largest required minimum distribution over the projection period.</li>
       <li><b>Funded until</b> — last year the IRA fully covers the active withdrawal target; the final projected year if never depleted.</li>
       <li><b>Total IRA Drawn</b> — cumulative sum of all IRA withdrawals over the projection window (nominal).</li>
-      <li><b>Total Income</b> — cumulative sum of all income sources (IRA + SS 1 + SS 2 + fixed) over the window (nominal).</li>
+      <li><b>Total Income</b> — cumulative sum of all income sources (IRA + My SS + Spouse SS + fixed) over the window (nominal).</li>
     </ul>
 
     <h3 class="amber">Limitations</h3>
@@ -302,10 +325,6 @@ var TAXData = {
   <!-- ── Left panel ── -->
   <div class="panel">
     <div class="panel-title"></div>
-    <div class="ctrl">
-      <div class="ctrl-header"><label>Your Age</label><span class="val" id="vAge">61</span></div>
-      <input type="range" id="age" min="40" max="74" step="1" value="61">
-    </div>
 
     <div style="margin-top:.65rem">
       <div class="toggle-row">
@@ -326,17 +345,13 @@ var TAXData = {
       </div>
     </div>
 
-    <details class="section" id="secBalance">
-      <summary>Balance &amp; Rates</summary>
+    <details class="section" id="secAssumptions">
+      <summary>Assumptions</summary>
       <div class="section-body">
         <div class="ctrl">
-          <div class="ctrl-header"><label>Starting balance</label></div>
-          <input type="text" id="start" class="bal-input" value="$2,000,000" autocomplete="off" spellcheck="false">
-          <div class="ctrl-note">$1k – $20M · Type a number with or without $ and commas · Enter to confirm</div>
-        </div>
-        <div class="ctrl">
-          <div class="ctrl-header"><label>Annual growth</label><span class="val" id="vRate">8.0%</span></div>
+          <div class="ctrl-header"><label>Annual growth rate</label><span class="val" id="vRate">8.0%</span></div>
           <input type="range" id="rate" min="1" max="15" step="0.5" value="8">
+          <div class="ctrl-note">Pre-tax return applied to IRA, Spouse IRA, and Roth.</div>
         </div>
         <div class="ctrl">
           <div class="ctrl-header"><label>Inflation rate</label><span class="val" id="vInfl">2.5%</span></div>
@@ -345,25 +360,212 @@ var TAXData = {
       </div>
     </details>
 
-    <details class="section" id="secWithdrawals">
-      <summary>IRA Withdrawals</summary>
-      <div class="section-body">
-        <div class="ctrl">
-          <div class="ctrl-header"><label>Withdrawal 1 start age</label><span class="val" id="vWdAge">65</span></div>
-          <input type="range" id="wdAge" min="40" max="80" step="1" value="65">
-        </div>
-        <div class="ctrl">
-          <div class="ctrl-header"><label>Withdrawal 1 (today $)</label><span class="val" id="vW">$75,000</span></div>
-          <input type="range" id="wd" min="0" max="1000000" step="5000" value="75000">
-        </div>
-        <div class="ctrl">
-          <div class="ctrl-header"><label>Withdrawal 2 start age</label><span class="val" id="vWd2Age">75</span></div>
-          <input type="range" id="wd2Age" min="40" max="85" step="1" value="75">
-        </div>
-        <div class="ctrl">
-          <div class="ctrl-header"><label>Withdrawal 2 (today $)</label><span class="val" id="vW2">$60,000</span></div>
-          <input type="range" id="wd2" min="0" max="1000000" step="5000" value="60000">
-        </div>
+    <details class="section" id="secAccounts">
+      <summary>Accounts</summary>
+      <div class="section-body" style="padding:0">
+
+        <!-- ── IRA account ── -->
+        <details class="section-sub" id="secIRA">
+          <summary>My IRA</summary>
+          <div class="section-body" style="padding-left:0;padding-bottom:0">
+
+            <details class="section-inner" id="secBalance">
+              <summary>Balance &amp; Growth</summary>
+              <div class="section-body">
+                <!-- Birth year + month (replaces age slider) -->
+                <div class="ctrl">
+                  <div class="ctrl-header"><label>Your birth year</label><span class="val" id="vAge">Age 65</span></div>
+                  <input type="number" id="birthYear" value="1961" min="1930" max="2005"
+                         style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
+                </div>
+                <div class="ctrl">
+                  <div class="ctrl-header"><label>Birth month</label></div>
+                  <select id="birthMonth" style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
+                    <option value="1">January</option><option value="2">February</option>
+                    <option value="3">March</option><option value="4">April</option>
+                    <option value="5" selected>May</option><option value="6">June</option>
+                    <option value="7">July</option><option value="8">August</option>
+                    <option value="9">September</option><option value="10">October</option>
+                    <option value="11">November</option><option value="12">December</option>
+                  </select>
+                </div>
+                <div class="ctrl">
+                  <div class="ctrl-header"><label>Starting IRA balance</label></div>
+                  <input type="text" id="start" class="bal-input" value="$2,000,000" autocomplete="off" spellcheck="false">
+                  <div class="ctrl-note">Type amount with optional suffix: 2M, 500k, 1.5M · Enter to confirm</div>
+                </div>
+              </div>
+            </details>
+
+            <details class="section-inner" id="secAccumulation">
+              <summary>Accumulation</summary>
+              <div class="section-body">
+                <div class="ctrl">
+                  <div class="ctrl-header"><label>Annual contribution (today $)</label><span class="val" id="vContrib">$0</span></div>
+                  <input type="range" id="contrib" min="0" max="70000" step="1000" value="0">
+                </div>
+                <div class="ctrl" id="ctrlContribEndAge" style="opacity:0.4;pointer-events:none">
+                  <div class="ctrl-header"><label>Stop contributing at age</label><span class="val" id="vContribEndAge">62</span></div>
+                  <input type="range" id="contribEndAge" min="40" max="106" step="1" value="62">
+                </div>
+                <div class="ctrl" id="ctrlContribInflate" style="opacity:0.4;pointer-events:none">
+                  <div class="ctrl-header">
+                    <label>Grow contributions with inflation</label>
+                    <label class="switch"><input type="checkbox" id="contribInflate"><span class="slider-track"></span></label>
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <details class="section-inner" id="secWithdrawals">
+              <summary>Withdrawals</summary>
+              <div class="section-body">
+                <div class="ctrl">
+                  <div class="ctrl-header"><label>Withdrawal 1 start age</label><span class="val" id="vWdAge">65</span></div>
+                  <input type="range" id="wdAge" min="40" max="80" step="1" value="65">
+                </div>
+                <div class="ctrl">
+                  <div class="ctrl-header"><label>Withdrawal 1 (today $)</label><span class="val" id="vW">$75,000</span></div>
+                  <input type="range" id="wd" min="0" max="1000000" step="5000" value="75000">
+                </div>
+                <div class="ctrl" id="ctrlWd2Age">
+                  <div class="ctrl-header"><label>Withdrawal 2 start age</label><span class="val" id="vWd2Age">75</span></div>
+                  <input type="range" id="wd2Age" min="40" max="85" step="1" value="75">
+                </div>
+                <div class="ctrl">
+                  <div class="ctrl-header"><label>Withdrawal 2 (today $)</label><span class="val" id="vW2">$60,000</span></div>
+                  <input type="range" id="wd2" min="0" max="1000000" step="5000" value="60000">
+                </div>
+              </div>
+            </details>
+
+          </div>
+        </details>
+
+        <!-- ── Spouse IRA ── -->
+        <details class="section-sub" id="secSpouseIRA">
+          <summary>Spouse IRA</summary>
+          <div class="section-body">
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Spouse birth year</label><span class="val" id="vSpouseAge">Age —</span></div>
+              <input type="number" id="spouseBirthYear" value="1963" min="1930" max="2005"
+                     style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Spouse birth month</label></div>
+              <select id="spouseBirthMonth" style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
+                <option value="1">January</option><option value="2">February</option>
+                <option value="3">March</option><option value="4">April</option>
+                <option value="5" selected>May</option><option value="6">June</option>
+                <option value="7">July</option><option value="8">August</option>
+                <option value="9">September</option><option value="10">October</option>
+                <option value="11">November</option><option value="12">December</option>
+              </select>
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Starting balance</label></div>
+              <input type="text" id="spouseIRAStart" value="$0" class="bal-input">
+              <div class="ctrl-note">e.g. 500k, 1.2M · Enter to confirm</div>
+            </div>
+            <div class="ctrl-note" style="padding:.5rem 0 .25rem">
+              Grows at shared growth rate. RMDs calculated per SECURE 2.0 from spouse's birth year. Planned withdrawals can be added later.
+            </div>
+          </div>
+        </details>
+
+        <!-- ── Roth ── -->
+        <details class="section-sub" id="secRoth">
+          <summary>Roth</summary>
+          <div class="section-body">
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Starting balance</label></div>
+              <input type="text" id="rothStart" value="$0" class="bal-input">
+              <div class="ctrl-note">e.g. 200k, 1M · Enter to confirm</div>
+            </div>
+            <div class="ctrl-note" style="padding:.5rem 0 .25rem">
+              Grows at shared growth rate. No RMDs. Tax-free — excluded from taxable income totals.
+            </div>
+          </div>
+        </details>
+
+        <!-- ── Brokerage account ── -->
+        <details class="section-sub" id="secBrokerage">
+          <summary>Brokerage</summary>
+          <div class="section-body">
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Starting balance</label></div>
+              <input type="text" id="brokStart" value="$0" class="bal-input">
+              <div class="ctrl-note">e.g. 500k, 1.2M · Enter to confirm</div>
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Cost basis (% of balance)</label><span class="val" id="vBrokBasis">60% · $0</span></div>
+              <input type="range" id="brokBasis" min="0" max="100" step="1" value="60">
+              <div class="ctrl-note">What you originally paid as a fraction of current value. 100% = no embedded gain.</div>
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Annual appreciation</label><span class="val" id="vBrokApp">5.0%</span></div>
+              <input type="range" id="brokApp" min="0" max="15" step="0.1" value="5">
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Dividend yield</label><span class="val" id="vBrokDiv">2.0%</span></div>
+              <input type="range" id="brokDiv" min="0" max="10" step="0.1" value="2">
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Dividends</label></div>
+              <div style="display:flex;gap:10px;margin-top:6px">
+                <span class="toggle-opt active" id="optDivCash" onclick="setBrokDivMode(false)">→ Cash</span>
+                <span class="toggle-opt" id="optDivDrip" onclick="setBrokDivMode(true)">Reinvest (DRIP)</span>
+              </div>
+              <div class="ctrl-note">Always taxable income regardless of destination.</div>
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Capital gains sales</label></div>
+              <div style="display:flex;gap:10px;margin-top:6px">
+                <span class="toggle-opt active" id="optCgNone" onclick="setCgMode('none')">None</span>
+                <span class="toggle-opt" id="optCgPer" onclick="setCgMode('periodic')">Periodic</span>
+              </div>
+            </div>
+            <div id="cgPeriodicControls" style="opacity:0.4;pointer-events:none">
+              <div class="ctrl">
+                <div class="ctrl-header"><label>Sale amount (today's $)</label><span class="val" id="vCgAmt">$0</span></div>
+                <input type="range" id="cgAmt" min="0" max="500000" step="5000" value="0">
+              </div>
+              <div class="ctrl">
+                <div class="ctrl-header"><label>Sale amount mode</label></div>
+                <div style="display:flex;gap:10px;margin-top:6px">
+                  <span class="toggle-opt active" id="optCgFixed" onclick="setCgInflate(false)">Fixed $</span>
+                  <span class="toggle-opt" id="optCgInfl" onclick="setCgInflate(true)">+ Inflation</span>
+                </div>
+              </div>
+              <div class="ctrl">
+                <div class="ctrl-header"><label>Every N years</label><span class="val" id="vCgFreq">1</span></div>
+                <input type="range" id="cgFreq" min="1" max="10" step="1" value="1">
+              </div>
+              <div class="ctrl">
+                <div class="ctrl-header"><label>Start at age</label><span class="val" id="vCgStartAge">65</span></div>
+                <input type="range" id="cgStartAge" min="40" max="90" step="1" value="65">
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- ── Cash account ── -->
+        <details class="section-sub" id="secCash">
+          <summary>Cash</summary>
+          <div class="section-body">
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Starting balance</label></div>
+              <input type="text" id="cashStart" value="$0" class="bal-input">
+              <div class="ctrl-note">e.g. 50k, 200k · Enter to confirm</div>
+            </div>
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Annual interest rate</label><span class="val" id="vCashRate">4.0%</span></div>
+              <input type="range" id="cashRate" min="0" max="10" step="0.1" value="4">
+              <div class="ctrl-note">Receives dividends (when not DRIPing) and brokerage sale proceeds. Interest accrues annually.</div>
+            </div>
+          </div>
+        </details>
+
       </div>
     </details>
 
@@ -371,27 +573,51 @@ var TAXData = {
       <summary>Income</summary>
       <div class="section-body">
         <div class="ctrl">
-          <div class="ctrl-header"><label>SS 1 start age</label><span class="val" id="vSS1Age">62</span></div>
+          <div class="ctrl-header"><label>My SS start age</label><span class="val" id="vSS1Age">62</span></div>
           <input type="range" id="ss1Age" min="50" max="70" step="1" value="62">
         </div>
         <div class="ctrl">
-          <div class="ctrl-header"><label>SS 1 (today $)</label><span class="val" id="vSS1">$0</span></div>
+          <div class="ctrl-header"><label>My SS (today $)</label><span class="val" id="vSS1">$0</span></div>
           <input type="range" id="ss1" min="0" max="100000" step="500" value="0">
           <div class="ctrl-note">SS × 85%, TIPS, or other infl-linked income. Grows with inflation from start year. Age relative to you.</div>
         </div>
         <div class="ctrl">
-          <div class="ctrl-header"><label>SS 2 start age</label><span class="val" id="vSS2Age">70</span></div>
+          <div class="ctrl-header"><label>Spouse SS start age</label><span class="val" id="vSS2Age">70</span></div>
           <input type="range" id="ss2Age" min="50" max="70" step="1" value="70">
         </div>
         <div class="ctrl">
-          <div class="ctrl-header"><label>SS 2 (today $)</label><span class="val" id="vSS2">$0</span></div>
+          <div class="ctrl-header"><label>Spouse SS (today $)</label><span class="val" id="vSS2">$0</span></div>
           <input type="range" id="ss2" min="0" max="100000" step="500" value="0">
-          <div class="ctrl-note">Second spouse's SS or other infl-linked income. Fully additive with SS 1. Age relative to you.</div>
+          <div class="ctrl-note">Spouse's Social Security or other inflation-linked income. Age relative to you.</div>
         </div>
         <div class="ctrl">
           <div class="ctrl-header"><label>Fixed add'l income</label><span class="val" id="vFixedInc">$0</span></div>
           <input type="range" id="fixedInc" min="0" max="150000" step="1000" value="0">
           <div class="ctrl-note">Pension, interest, dividends, cap gains — fixed in nominal terms</div>
+        </div>
+      </div>
+    </details>
+
+    <details class="section" id="secLifestyle">
+      <summary>Lifestyle Target</summary>
+      <div class="section-body">
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Annual target (today's $)</label><span class="val" id="vLtAmt">$0</span></div>
+          <input type="range" id="ltAmt" min="0" max="500000" step="5000" value="0">
+        </div>
+        <div class="ctrl" id="ltModeRow">
+          <div class="ctrl-header"><label>Mode</label></div>
+          <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--text)">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="flat" checked> Constant $</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="infl"> + Inflation</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="smile"> Spending smile</label>
+            <label style="display:flex;align-items:center;gap:6px;opacity:0.4;pointer-events:none"><input type="radio" name="ltMode" value="bestfit" disabled> Best fit <span style="color:var(--muted)">(coming soon)</span></label>
+          </div>
+        </div>
+        <div class="ctrl" id="ltDeclineRow">
+          <div class="ctrl-header"><label>Annual real decline</label><span class="val" id="vLtDecline">1.5%</span></div>
+          <input type="range" id="ltDecline" min="0.1" max="5" step="0.1" value="1.5">
+          <div class="ctrl-note">% per year spending decreases in real terms (spending smile mode only)</div>
         </div>
       </div>
     </details>
@@ -433,8 +659,14 @@ var TAXData = {
         <span id="lgNomWrap"    class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(0,'lgNomWrap')"><span class="leg-sq" style="background:#19c99d"></span>Nominal balance</span>
         <span id="lgRealWrap"   class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(1,'lgRealWrap')"><span class="leg-sq" style="background:#4f9cf9"></span>Real balance</span>
         <span id="lgRmdWrap"    class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(2,'lgRmdWrap')"><span class="leg-dash" style="border-color:rgba(245,166,35,0.85)"></span>RMD</span>
-        <span id="lgBaseWdWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(3,'lgBaseWdWrap')"><span class="leg-dot"  style="border-color:#a78bfa"></span><span id="lgBase">Withdrawal target</span></span>
+        <span id="lgBaseWdWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(3,'lgBaseWdWrap')"><span class="leg-sq"  style="background:#a78bfa"></span><span id="lgBase">Withdrawal target</span></span>
         <span id="lgActualWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(4,'lgActualWrap')"><span class="leg-sq" style="background:#e8eaf2"></span>Total Income</span>
+        <span id="lgContribWrap"    class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(5,'lgContribWrap')"><span class="leg-sq" style="background:#5aab6b"></span>IRA Contribution</span>
+        <span id="lgLifestyleWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(6,'lgLifestyleWrap')"><span class="leg-dash" style="border-color:#f5a623"></span><span id="lgLifestyle">Lifestyle target</span></span>
+        <span id="lgBrokWrap"     class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(7,'lgBrokWrap')"><span class="leg-sq" style="background:#2dd4bf"></span>Brokerage</span>
+        <span id="lgCashWrap"     class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(8,'lgCashWrap')"><span class="leg-sq" style="background:#4ade80"></span>Cash</span>
+        <span id="lgSpouseIRAWrap" class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(9,'lgSpouseIRAWrap')"><span class="leg-sq" style="background:#818cf8"></span>Spouse IRA</span>
+        <span id="lgRothWrap"     class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(10,'lgRothWrap')"><span class="leg-sq" style="background:#f472b6"></span>Roth</span>
       </div>
       <div style="position:relative;width:100%;height:350px">
         <canvas id="ch" role="img" aria-label="IRA projection chart">IRA projection</canvas>
@@ -445,9 +677,20 @@ var TAXData = {
       <table>
         <thead>
           <tr>
-            <th>Year</th><th>Age</th>
-            <th>Balance</th><th>Real bal</th>
-            <th>RMD</th><th>Total income</th><th>Bracket</th><th>IRA Withdrawal</th><th>Net growth</th>
+            <th rowspan="2">Year</th><th rowspan="2">Age</th>
+            <th colspan="4" class="th-group" id="thIraGroup"><span id="thIraLabel">My IRA</span>
+              <span style="margin-left:6px;display:inline-flex;gap:3px;font-weight:400;text-transform:none;letter-spacing:0">
+                <button id="optIra_mine"     class="tog active" onclick="setIraView('mine')"    >Me</button>
+                <button id="optIra_spouse"   class="tog"        onclick="setIraView('spouse')"  >Spouse</button>
+                <button id="optIra_combined" class="tog"        onclick="setIraView('combined')">Both</button>
+              </span>
+            </th>
+            <th rowspan="2">Roth Bal</th>
+            <th rowspan="2">Total Income</th><th rowspan="2">Bracket</th>
+            <th rowspan="2">Brokerage</th><th rowspan="2">Cash</th><th rowspan="2" title="Dividends + interest + realized capital gains">Div+Int</th>
+          </tr>
+          <tr>
+            <th>IRA Bal</th><th>RMD</th><th>IRA Wd</th><th title="Growth earned on prior balance, less withdrawals, plus contributions">IRA Net</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -461,7 +704,22 @@ var TAXData = {
 </div>
 
 <script>
-const CURRENT_YEAR = 2026;
+const CURRENT_YEAR  = 2026;
+const CURRENT_MONTH = 5;   // May
+
+/* ── Age from birth year + month ── */
+function computeAge(birthYear, birthMonth){
+  let age = CURRENT_YEAR - (+birthYear || CURRENT_YEAR - 65);
+  if(CURRENT_MONTH < +(birthMonth || 1)) age -= 1;
+  return Math.min(Math.max(age, 18), 120);
+}
+
+/* ── SECURE 2.0: RMD start age by birth year ── */
+function rmdStartAge(birthYear){
+  if(birthYear >= 1960) return 75;  // full phase-in
+  if(birthYear >= 1951) return 73;  // transitional
+  return 72;                        // pre-SECURE 2.0
+}
 
 /* ── IRS Uniform Lifetime Table ── */
 const ULT = {
@@ -470,10 +728,10 @@ const ULT = {
   88:13.7,89:12.9,90:12.2,91:11.5,92:10.8,93:10.1,94:9.5,95:8.9,
   96:8.4,97:7.8,98:7.3,99:6.8,100:6.4
 };
-const RMD_START_AGE = 75;
-function rmdFactor(age){
-  if(age < RMD_START_AGE) return null;
-  return ULT[Math.min(Math.max(Math.round(age), RMD_START_AGE), 100)] || 6.4;
+/* rmdAge = person-specific start age from rmdStartAge(birthYear) */
+function rmdFactor(age, rmdAge){
+  if(age < rmdAge) return null;
+  return ULT[Math.min(Math.max(Math.round(age), rmdAge), 100)] || 6.4;
 }
 
 /* ── Threshold defaults — built from TAXData (retirement_optimizer_taxdata.js) ──
@@ -530,6 +788,18 @@ let colorIdx = 0;
 
 // Module-level state referenced by tooltip and table callbacks
 let lastRows = [], lastSS1 = 0, lastSS1Age = 62, lastSS2 = 0, lastSS2Age = 70, lastFixedIncome = 0;
+let lastBrokStart = 0, lastCashStart = 0;
+let lastUseReal = false;
+
+// IRA view toggle
+let iraView = 'mine';          // 'mine' | 'spouse' | 'combined'
+let lastSpouseIRAStart = 0;
+let lastRothStart      = 0;
+
+// Brokerage / cash UI state
+let brokDrip  = false;   // dividend destination: false = Cash, true = DRIP
+let cgMode    = 'none';  // 'none' | 'periodic'
+let cgInflate = false;   // sale amount mode: false = fixed $, true = +inflation
 
 /* ── Helpers ── */
 function fmt(v){
@@ -576,6 +846,17 @@ function parseStart(){
   const v = parseFloat(raw) * mult;
   return Math.min(20000000, Math.max(1000, isNaN(v) ? 2000000 : v));
 }
+
+function parseBalInput(id){
+  let raw = (document.getElementById(id)?.value || '0').trim().replace(/[$,\s]/g,'');
+  let mult = 1;
+  if(/[mM]$/.test(raw))      { mult = 1e6; raw = raw.slice(0,-1); }
+  else if(/[kK]$/.test(raw)) { mult = 1e3; raw = raw.slice(0,-1); }
+  const v = parseFloat(raw) * mult;
+  return Math.min(20_000_000, Math.max(0, isNaN(v) ? 0 : v));
+}
+function parseBrokStart(){ return parseBalInput('brokStart'); }
+function parseCashStart(){ return parseBalInput('cashStart'); }
 
 function setToggle(id, val){ document.getElementById(id).checked=val; update(); }
 function toggleHelp(){ document.getElementById('helpOverlay').classList.toggle('open'); }
@@ -660,52 +941,130 @@ function addThreshold(){
 
 /* ── Projection engine ── */
 function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, years, startAge,
-                  ss1, ss1StartAge, ss2, ss2StartAge, fixedIncome){
-  let bal = start;
+                  ss1, ss1StartAge, ss2, ss2StartAge, fixedIncome, contrib, contribEndAge, contribInflate,
+                  ltAmt, ltMode, ltDecline,
+                  brokStart, brokBasisPct, brokApp, brokDivPct, brokDrip,
+                  cgMode, cgAmt, cgFreq, cgStartAge, cgInflate,
+                  cashStart, cashRatePct,
+                  myRmdStart, spouseStartAge, spouseRmdStart, spouseIRAStart, rothStart){
+  let bal       = start;
+  let brokBal   = brokStart;
+  let brokBasis = brokStart * (brokBasisPct / 100);
+  let cashBal   = cashStart;
+  let spouseIRABal = spouseIRAStart;
+  let rothBal      = rothStart;
   const rows = [];
   for(let y=1; y<=years; y++){
     const age      = startAge + (y - 1);
     const calYear  = CURRENT_YEAR + (y - 1);
     const inflMult = Math.pow(1 + inflRate/100, y - 1);
 
-    // Active withdrawal period: Period 2 takes over at wd2StartAge
+    // Active withdrawal period: Period 2 takes over at wd2StartAge (ignored if amount is 0)
     const withdrawing = age >= wd1StartAge;
-    const activeWd    = age >= wd2StartAge ? wd2 : wd1;
+    const activeWd    = (age >= wd2StartAge && wd2 > 0) ? wd2 : wd1;
     const targetWd    = withdrawing ? activeWd * inflMult : 0;
 
-    const factor = rmdFactor(age);
+    const factor = rmdFactor(age, myRmdStart);
     const rmd    = factor ? bal / factor : 0;
 
     // IRA withdrawal capped at available balance (depletion fix)
-    const balAfterGrowth = bal * (1 + rate/100);
-    const desiredWd      = withdrawing ? Math.max(targetWd, rmd) : 0;
-    const actualWd       = Math.min(desiredWd, Math.max(0, balAfterGrowth));
+    const balAfterGrowth  = bal * (1 + rate/100);
+    const contribAmt      = contribInflate ? (contrib || 0) * inflMult : (contrib || 0);
+    const annualContrib   = (contribAmt > 0 && age <= contribEndAge) ? contribAmt : 0;
+    const balAfterContrib = balAfterGrowth + annualContrib;
+    const desiredWd       = withdrawing ? Math.max(targetWd, rmd) : 0;
+    const actualWd        = Math.min(desiredWd, Math.max(0, balAfterContrib));
 
     const growth  = bal * (rate/100);
-    const newBal  = Math.max(0, balAfterGrowth - actualWd);
+    const newBal  = Math.max(0, balAfterContrib - actualWd);
     const depleted = newBal <= 0 && desiredWd > 0;
     bal = newBal;
 
     // SS: inflation-adjusted from year 0, active from respective start ages
     const ss1Contrib = age >= ss1StartAge ? ss1 * inflMult : 0;
     const ss2Contrib = age >= ss2StartAge ? ss2 * inflMult : 0;
-    const totalIncome = actualWd + ss1Contrib + ss2Contrib + fixedIncome;
+
+    // ── Brokerage ──
+    const brokStartBal = brokBal;                          // start-of-year value for dividend calc
+    brokBal *= (1 + brokApp / 100);                        // 1. appreciation
+
+    const dividends = brokStartBal * (brokDivPct / 100);  // 2. dividends
+    if(brokDrip){
+      brokBal   += dividends;                              //    DRIP: reinvest → balance
+      brokBasis += dividends;                              //         new shares → increase basis
+    } else {
+      cashBal += dividends;                                //    sweep to Cash
+    }
+
+    let capitalGain  = 0;                                  // 3. capital gains sale
+    let saleProceeds = 0;
+    if(cgMode === 'periodic' && cgAmt > 0 && age >= cgStartAge
+       && (age - cgStartAge) % cgFreq === 0 && brokBal > 0){
+      const saleTarget = cgInflate ? cgAmt * inflMult : cgAmt;
+      const sale       = Math.min(saleTarget, brokBal);
+      const gainFrac   = brokBal > 0 ? Math.max(0, (brokBal - brokBasis) / brokBal) : 0;
+      capitalGain      = sale * gainFrac;
+      saleProceeds     = sale;
+      brokBasis       -= sale * (brokBasis / brokBal);    // reduce basis proportionally
+      brokBal         -= sale;
+      cashBal         += sale;                             // full proceeds → Cash
+    }
+    brokBal   = Math.max(0, brokBal);
+    brokBasis = Math.max(0, Math.min(brokBasis, brokBal));
+
+    // ── Cash ──
+    const cashInterest = cashBal * (cashRatePct / 100);
+    cashBal += cashInterest;
+
+    // ── Spouse IRA ──
+    const spouseCurrentAge = spouseStartAge + (y - 1);
+    const spouseGrowthAmt  = spouseIRABal * (rate / 100);
+    spouseIRABal          += spouseGrowthAmt;
+    const spouseFactor     = rmdFactor(spouseCurrentAge, spouseRmdStart);
+    const spouseRmd        = spouseFactor ? spouseIRABal / spouseFactor : 0;
+    spouseIRABal           = Math.max(0, spouseIRABal - spouseRmd);
+    const spouseNetGrowth  = spouseGrowthAmt - spouseRmd;
+
+    // ── Roth (no RMD, no taxable withdrawal) ──
+    rothBal *= (1 + rate / 100);
+
+    // ── Combined income ──
+    const divPlusInt  = dividends + cashInterest + capitalGain;
+    const totalIncome = actualWd + spouseRmd + ss1Contrib + ss2Contrib + fixedIncome + divPlusInt;
+
+    // ── Lifestyle target ──
+    const yearsRetired = Math.max(0, age - wd1StartAge);
+    let lifestyleTarget = 0;
+    if(ltAmt > 0){
+      if(ltMode === 'flat')  lifestyleTarget = ltAmt;
+      if(ltMode === 'infl')  lifestyleTarget = ltAmt * inflMult;
+      if(ltMode === 'smile') lifestyleTarget = ltAmt * Math.pow(1 - (ltDecline||1.5)/100, yearsRetired) * inflMult;
+    }
 
     rows.push({
       y, age, calYear, inflMult,
       bal,
-      realBal:        bal / inflMult,
+      realBal:         bal / inflMult,
       rmd,
-      realRmd:        rmd / inflMult,
+      realRmd:         rmd / inflMult,
       targetWd,
       activeWd,
       actualWd,
-      realActualWd:   actualWd / inflMult,
+      realActualWd:    actualWd / inflMult,
       growth,
-      netGrowth:      growth - actualWd,
+      annualContrib,
+      netGrowth:       growth - actualWd + annualContrib,
       ss1Contrib, ss2Contrib,
+      brokBal, brokBasis,
+      dividends, capitalGain, saleProceeds,
+      cashBal, cashInterest,
+      spouseIRABal, spouseRmd, spouseNetGrowth, spouseCurrentAge,
+      rothBal,
+      divPlusInt,
       totalIncome,
       realTotalIncome: totalIncome / inflMult,
+      lifestyleTarget,
+      lifestyleTargetReal: lifestyleTarget / inflMult,
       depleted,
       rmdActive: rmd > 0 && rmd > targetWd,
       withdrawing
@@ -715,16 +1074,22 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
 }
 
 /* ── Chart setup ── */
-const FIXED_DS = 5;
+const FIXED_DS = 11;
 const chartCtx = document.getElementById('ch').getContext('2d');
 const chart = new Chart(chartCtx, {
   type:'line',
   data:{ labels:[], datasets:[
-    /* 0 Nominal bal    */ { label:'Nominal balance',   data:[], borderColor:'#19c99d', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
-    /* 1 Real bal       */ { label:'Real balance',      data:[], borderColor:'#4f9cf9', backgroundColor:'transparent', fill:false, hidden:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
-    /* 2 RMD            */ { label:'RMD',               data:[], borderColor:'rgba(245,166,35,0.85)', backgroundColor:'transparent', fill:false, spanGaps:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
-    /* 3 Wd target      */ { label:'Withdrawal target', data:[], borderColor:'#a78bfa', backgroundColor:'transparent', fill:false, tension:0, pointRadius:0, borderWidth:1.5, borderDash:[2,3], yAxisID:'yWd' },
-    /* 4 Total income   */ { label:'Total Income',      data:[], borderColor:'#e8eaf2', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2, yAxisID:'yWd' }
+    /* 0 Nominal bal    */ { label:'Nominal balance',      data:[], borderColor:'#19c99d', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 1 Real bal       */ { label:'Real balance',         data:[], borderColor:'#4f9cf9', backgroundColor:'transparent', fill:false, hidden:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 2 RMD            */ { label:'RMD',                  data:[], borderColor:'rgba(245,166,35,0.85)', backgroundColor:'transparent', fill:false, spanGaps:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
+    /* 3 Wd target      */ { label:'Withdrawal target',    data:[], borderColor:'#a78bfa', backgroundColor:'transparent', fill:false, tension:0, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
+    /* 4 Total income   */ { label:'Total Income',         data:[], borderColor:'#e8eaf2', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2, yAxisID:'yWd' },
+    /* 5 Contribution   */ { label:'IRA Contribution',     data:[], borderColor:'#5aab6b', backgroundColor:'transparent', fill:false, hidden:true,  tension:0, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
+    /* 6 Lifestyle tgt  */ { label:'Lifestyle target',     data:[], borderColor:'#f5a623', backgroundColor:'transparent', fill:false, hidden:false, tension:0, pointRadius:0, borderWidth:2,   borderDash:[8,4], yAxisID:'yWd' },
+    /* 7 Brokerage bal  */ { label:'Brokerage',            data:[], borderColor:'#2dd4bf', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 8 Cash bal       */ { label:'Cash',                 data:[], borderColor:'#4ade80', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 9 Spouse IRA bal */ { label:'Spouse IRA',           data:[], borderColor:'#818cf8', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /*10 Roth bal       */ { label:'Roth',                 data:[], borderColor:'#f472b6', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' }
   ]},
   options:{
     responsive:true, maintainAspectRatio:false,
@@ -746,6 +1111,10 @@ const chart = new Chart(chartCtx, {
         callbacks:{
           title: items => items[0]?.label || '',
           label: c => ` ${c.dataset.label}: ${fmt(c.parsed.y)}`,
+          labelColor: (context) => {
+            const c = context.dataset.borderColor;
+            return { borderColor:c, backgroundColor:c, borderWidth:2, borderRadius:2 };
+          },
           afterBody: (items) => {
             if(!items.length || !lastRows.length) return [];
             const r = lastRows[items[0].dataIndex];
@@ -808,15 +1177,41 @@ function buildTable(rows){
     const tr = document.createElement('tr');
     if(r.depleted)        tr.className='depleted';
     else if(r.rmdActive)  tr.className='rmd-active';
-    const ngNeg = !r.depleted && r.netGrowth < 0;
+    else if(r.lifestyleTarget > 0 && r.totalIncome < r.lifestyleTarget) tr.className='shortfall';
+    // IRA view-aware columns
+    let iraBal, iraRmd, iraWd, iraNet;
+    if(iraView === 'spouse'){
+      iraBal  = lastUseReal ? r.spouseIRABal / r.inflMult : r.spouseIRABal;
+      iraRmd  = r.spouseRmd;
+      iraWd   = r.spouseRmd > 0 ? r.spouseRmd : 0;
+      iraNet  = r.spouseNetGrowth;
+    } else if(iraView === 'combined'){
+      iraBal  = lastUseReal ? (r.bal + r.spouseIRABal) / r.inflMult : (r.bal + r.spouseIRABal);
+      iraRmd  = r.rmd + r.spouseRmd;
+      iraWd   = (r.withdrawing ? r.actualWd : 0) + r.spouseRmd;
+      iraNet  = r.netGrowth + r.spouseNetGrowth;
+    } else {  // 'mine'
+      iraBal  = lastUseReal ? r.realBal : r.bal;
+      iraRmd  = r.rmd;
+      iraWd   = r.withdrawing ? r.actualWd : 0;
+      iraNet  = r.netGrowth;
+    }
+    const iraNetNeg = !r.depleted && iraNet < 0;
+    const brokVal = lastUseReal ? r.brokBal / r.inflMult : r.brokBal;
+    const cashVal = lastUseReal ? r.cashBal / r.inflMult : r.cashBal;
+    const rothVal = lastUseReal ? r.rothBal / r.inflMult : r.rothBal;
     tr.innerHTML = `
       <td>${r.calYear}</td><td>${r.age}</td>
-      <td>${fmt(r.bal)}</td><td>${fmt(r.realBal)}</td>
-      <td>${r.rmd>0?fmt(r.rmd):'—'}</td>
+      <td>${fmt(iraBal)}</td>
+      <td>${iraRmd > 0 ? fmt(iraRmd) : '—'}</td>
+      <td>${iraWd   > 0 ? fmt(iraWd)  : '—'}</td>
+      <td${iraNetNeg?' style="color:var(--red)"':''}>${fmt(iraNet)}</td>
+      <td>${lastRothStart > 0 ? fmt(Math.round(rothVal)) : '—'}</td>
       <td>${fmt(r.totalIncome)}</td>
       <td style="color:var(--muted)">${bracketForRow(r)}</td>
-      <td>${r.withdrawing?fmt(r.actualWd):'—'}</td>
-      <td${ngNeg?' style="color:var(--red)"':''}>${fmt(r.netGrowth)}</td>
+      <td>${lastBrokStart > 0 ? fmt(Math.round(brokVal)) : '—'}</td>
+      <td>${lastCashStart > 0 || lastBrokStart > 0 ? fmt(Math.round(cashVal)) : '—'}</td>
+      <td>${r.divPlusInt > 0 ? fmt(Math.round(r.divPlusInt)) : '—'}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -825,7 +1220,7 @@ function buildTable(rows){
 /* ── Legend rebuild ── */
 function rebuildLegend(){
   const legend = document.getElementById('legend');
-  Array.from(legend.children).slice(5).forEach(el => el.remove());
+  Array.from(legend.children).slice(FIXED_DS).forEach(el => el.remove());
 
   const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
   sorted.forEach(t => {
@@ -844,7 +1239,19 @@ function rebuildLegend(){
 
 /* ── Main update ── */
 function update(){
-  const startAge    = +document.getElementById('age').value;
+  const birthYear   = +document.getElementById('birthYear').value  || (CURRENT_YEAR - 65);
+  const birthMonth  = +document.getElementById('birthMonth').value || 1;
+  const startAge    = computeAge(birthYear, birthMonth);
+  const myRmdStartAge = rmdStartAge(birthYear);
+
+  const spouseBirthYear  = +document.getElementById('spouseBirthYear').value  || (CURRENT_YEAR - 63);
+  const spouseBirthMonth = +document.getElementById('spouseBirthMonth').value || 1;
+  const spouseStartAge   = computeAge(spouseBirthYear, spouseBirthMonth);
+  const spouseRmdStartAge = rmdStartAge(spouseBirthYear);
+
+  const spouseIRAStartVal = parseBalInput('spouseIRAStart');
+  const rothStartVal      = parseBalInput('rothStart');
+
   const wdStartAge  = +document.getElementById('wdAge').value;
   const wd2StartAge = +document.getElementById('wd2Age').value;
   const start       = parseStart();
@@ -859,10 +1266,26 @@ function update(){
   const ss1Age      = +document.getElementById('ss1Age').value;
   const ss2         = +document.getElementById('ss2').value;
   const ss2Age      = +document.getElementById('ss2Age').value;
-  const fixedIncome = +document.getElementById('fixedInc').value;
+  const fixedIncome    = +document.getElementById('fixedInc').value;
+  const contrib        = +document.getElementById('contrib').value;
+  const contribEndAge  = +document.getElementById('contribEndAge').value;
+  const contribInflate = document.getElementById('contribInflate').checked;
+  const ltAmt          = +document.getElementById('ltAmt').value;
+  const ltMode         = document.querySelector('input[name="ltMode"]:checked')?.value || 'flat';
+  const ltDecline      = +document.getElementById('ltDecline').value;
+  const brokStartVal   = parseBrokStart();
+  const brokBasisPct   = +document.getElementById('brokBasis').value;
+  const brokAppVal     = +document.getElementById('brokApp').value;
+  const brokDivVal     = +document.getElementById('brokDiv').value;
+  const cgAmtVal       = +document.getElementById('cgAmt').value;
+  const cgFreqVal      = +document.getElementById('cgFreq').value;
+  const cgStartAgeVal  = +document.getElementById('cgStartAge').value;
+  const cashStartVal   = parseCashStart();
+  const cashRateVal    = +document.getElementById('cashRate').value;
 
   // Labels
-  document.getElementById('vAge').textContent     = startAge;
+  document.getElementById('vAge').textContent       = `Age ${startAge} · RMD starts ${myRmdStartAge}`;
+  document.getElementById('vSpouseAge').textContent = `Age ${spouseStartAge} · RMD starts ${spouseRmdStartAge}`;
   document.getElementById('vWdAge').textContent   = wdStartAge;
   document.getElementById('vWd2Age').textContent  = wd2StartAge;
   document.getElementById('vRate').textContent    = rate.toFixed(1)+'%';
@@ -873,7 +1296,18 @@ function update(){
   document.getElementById('vSS1').textContent     = fmt(ss1);
   document.getElementById('vSS2Age').textContent  = ss2Age;
   document.getElementById('vSS2').textContent     = fmt(ss2);
-  document.getElementById('vFixedInc').textContent= fmt(fixedIncome);
+  document.getElementById('vFixedInc').textContent    = fmt(fixedIncome);
+  document.getElementById('vContrib').textContent      = fmt(contrib);
+  document.getElementById('vContribEndAge').textContent= contribEndAge;
+  document.getElementById('vLtAmt').textContent        = fmt(ltAmt);
+  document.getElementById('vLtDecline').textContent    = ltDecline.toFixed(1) + '%';
+  document.getElementById('vBrokBasis').textContent    = brokBasisPct + '% · ' + fmt(Math.round(brokStartVal * brokBasisPct / 100));
+  document.getElementById('vBrokApp').textContent      = brokAppVal.toFixed(1) + '%';
+  document.getElementById('vBrokDiv').textContent      = brokDivVal.toFixed(1) + '%';
+  document.getElementById('vCgAmt').textContent        = fmt(cgAmtVal);
+  document.getElementById('vCgFreq').textContent       = cgFreqVal;
+  document.getElementById('vCgStartAge').textContent   = cgStartAgeVal;
+  document.getElementById('vCashRate').textContent     = cashRateVal.toFixed(1) + '%';
 
   // Toggle highlights
   document.getElementById('optFuture').classList.toggle('active',!useReal);
@@ -881,8 +1315,19 @@ function update(){
   document.getElementById('optMFJ').classList.toggle('active',  !isSingle);
   document.getElementById('optSingle').classList.toggle('active', isSingle);
 
+  lastBrokStart      = brokStartVal;
+  lastCashStart      = cashStartVal;
+  lastSpouseIRAStart = spouseIRAStartVal;
+  lastRothStart      = rothStartVal;
+
   const rows   = project(start, rate, wd1, wd2, wdStartAge, wd2StartAge, infl, years, startAge,
-                          ss1, ss1Age, ss2, ss2Age, fixedIncome);
+                          ss1, ss1Age, ss2, ss2Age, fixedIncome, contrib, contribEndAge, contribInflate,
+                          ltAmt, ltMode, ltDecline,
+                          brokStartVal, brokBasisPct, brokAppVal, brokDivVal, brokDrip,
+                          cgMode, cgAmtVal, cgFreqVal, cgStartAgeVal, cgInflate,
+                          cashStartVal, cashRateVal,
+                          myRmdStartAge, spouseStartAge, spouseRmdStartAge,
+                          spouseIRAStartVal, rothStartVal);
   const labels = rows.map(r => `Age ${r.age}`);
 
   chart.data.labels           = labels;
@@ -902,6 +1347,36 @@ function update(){
   // Total Income line (IRA + SS1 + SS2 + fixed)
   chart.data.datasets[4].data = rows.map(r =>
     Math.round(useReal ? r.realTotalIncome : r.totalIncome)
+  );
+
+  // Annual Contribution line
+  chart.data.datasets[5].data = rows.map(r =>
+    r.annualContrib > 0 ? Math.round(useReal ? r.annualContrib / r.inflMult : r.annualContrib) : null
+  );
+
+  // Lifestyle target line
+  chart.data.datasets[6].data = rows.map(r =>
+    r.lifestyleTarget > 0 ? Math.round(useReal ? r.lifestyleTargetReal : r.lifestyleTarget) : null
+  );
+
+  // Brokerage balance line
+  chart.data.datasets[7].data = rows.map(r =>
+    r.brokBal > 0 ? Math.round(useReal ? r.brokBal / r.inflMult : r.brokBal) : null
+  );
+
+  // Cash balance line
+  chart.data.datasets[8].data = rows.map(r =>
+    r.cashBal > 0 ? Math.round(useReal ? r.cashBal / r.inflMult : r.cashBal) : null
+  );
+
+  // Spouse IRA balance line
+  chart.data.datasets[9].data = rows.map(r =>
+    r.spouseIRABal > 0 ? Math.round(useReal ? r.spouseIRABal / r.inflMult : r.spouseIRABal) : null
+  );
+
+  // Roth balance line
+  chart.data.datasets[10].data = rows.map(r =>
+    r.rothBal > 0 ? Math.round(useReal ? r.rothBal / r.inflMult : r.rothBal) : null
   );
 
   /* ── Threshold datasets ── */
@@ -954,7 +1429,7 @@ function update(){
       borderColor:     t.color,
       backgroundColor: 'transparent',
       fill:            false,
-      tension:0, pointRadius:0, borderWidth:1.5, borderDash:[6,3],
+      tension:0, pointRadius:0, borderWidth:1.5, borderDash:[2,3],
       yAxisID:         'yWd'
     });
   });
@@ -966,7 +1441,9 @@ function update(){
   rows.forEach(r => {
     [useReal ? r.realRmd : r.rmd,
      useReal ? r.activeWd : r.activeWd * r.inflMult,
-     useReal ? r.realTotalIncome : r.totalIncome
+     useReal ? r.realTotalIncome : r.totalIncome,
+     useReal ? r.annualContrib / r.inflMult : r.annualContrib,
+     useReal ? r.lifestyleTargetReal : r.lifestyleTarget
     ].forEach(v => { if(v && v > yWdMax) yWdMax = v; });
   });
   thresholds.filter(t => t.visible).forEach(t => {
@@ -1031,14 +1508,14 @@ function update(){
   lastSS2         = ss2;
   lastSS2Age      = ss2Age;
   lastFixedIncome = fixedIncome;
+  lastUseReal     = useReal;
   buildTable(rows);
 }
 
 /* ── URL bookmark / share ── */
 function buildBookmarkUrl(){
   const p = new URLSearchParams();
-  p.set('v',      '8');
-  p.set('age',    document.getElementById('age').value);
+  p.set('v',      '9');
   p.set('wdage',  document.getElementById('wdAge').value);
   p.set('wd2age', document.getElementById('wd2Age').value);
   p.set('bal',    parseStart());
@@ -1057,7 +1534,36 @@ function buildBookmarkUrl(){
   const visIds = thresholds.filter(t => t.id && t.visible).map(t => t.id).join(',');
   if(visIds) p.set('tv', visIds);
 
-  p.set('ds', [0,1,2,3,4].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
+  p.set('contrib',     document.getElementById('contrib').value);
+  p.set('contribEnd',  document.getElementById('contribEndAge').value);
+  if(document.getElementById('contribInflate').checked) p.set('contribInflate', '1');
+
+  p.set('ltamt',   document.getElementById('ltAmt').value);
+  p.set('ltmode',  document.querySelector('input[name="ltMode"]:checked')?.value || 'flat');
+  p.set('ltdecl',  document.getElementById('ltDecline').value);
+
+  p.set('brok',        parseBrokStart());
+  p.set('brokBasis',   document.getElementById('brokBasis').value);
+  p.set('brokApp',     document.getElementById('brokApp').value);
+  p.set('brokDiv',     document.getElementById('brokDiv').value);
+  if(brokDrip)   p.set('brokDrip',  '1');
+  p.set('cgMode',      cgMode);
+  p.set('cgAmt',       document.getElementById('cgAmt').value);
+  if(cgInflate)  p.set('cgInflate', '1');
+  p.set('cgFreq',      document.getElementById('cgFreq').value);
+  p.set('cgStartAge',  document.getElementById('cgStartAge').value);
+  p.set('cash',        parseCashStart());
+  p.set('cashRate',    document.getElementById('cashRate').value);
+
+  p.set('birthYear',       document.getElementById('birthYear').value);
+  p.set('birthMonth',      document.getElementById('birthMonth').value);
+  p.set('spouseBirthYear', document.getElementById('spouseBirthYear').value);
+  p.set('spouseBirthMonth',document.getElementById('spouseBirthMonth').value);
+  p.set('spouseIRA',       parseBalInput('spouseIRAStart'));
+  p.set('roth',            parseBalInput('rothStart'));
+  if(iraView !== 'mine') p.set('iraView', iraView);
+
+  p.set('ds', [0,1,2,3,4,5,6,7,8,9,10].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
 
   return '?' + p.toString();
 }
@@ -1073,8 +1579,11 @@ function applyUrlParams(){
   };
   const enforceWdAge = () => {
     const wdEl   = document.getElementById('wdAge');
-    const minAge = +document.getElementById('age').value;
-    wdEl.min     = minAge;
+    const minAge = computeAge(
+      +document.getElementById('birthYear').value  || (CURRENT_YEAR - 65),
+      +document.getElementById('birthMonth').value || 1
+    );
+    wdEl.min = minAge;
     if(+wdEl.value < minAge) wdEl.value = minAge;
     enforceWd2Age();
   };
@@ -1084,7 +1593,11 @@ function applyUrlParams(){
   const setSlider = (id, key) => {
     if(p.has(key)) document.getElementById(id).value = p.get(key);
   };
-  setSlider('age',      'age');
+  // Birth year + month (restore before enforceWdAge)
+  setSlider('birthYear',        'birthYear');
+  setSlider('birthMonth',       'birthMonth');
+  setSlider('spouseBirthYear',  'spouseBirthYear');
+  setSlider('spouseBirthMonth', 'spouseBirthMonth');
   setSlider('wdAge',    'wdage');
   setSlider('wd2Age',   'wd2age');
   if(p.has('bal')){ document.getElementById('start').value = fmt(+p.get('bal') || 2000000); }
@@ -1096,7 +1609,35 @@ function applyUrlParams(){
   setSlider('ss1Age',   'ss1age');
   setSlider('ss2',      'ss2');
   setSlider('ss2Age',   'ss2age');
-  setSlider('fixedInc', 'fixed');
+  setSlider('fixedInc',     'fixed');
+  setSlider('contrib',      'contrib');
+  setSlider('contribEndAge','contribEnd');
+  document.getElementById('contribInflate').checked = p.get('contribInflate') === '1';
+
+  setSlider('ltAmt',   'ltamt');
+  setSlider('ltDecline','ltdecl');
+  if(p.has('ltmode')){
+    const r = document.querySelector(`input[name="ltMode"][value="${p.get('ltmode')}"]`);
+    if(r) r.checked = true;
+  }
+  updateLtControls();
+
+  if(p.has('brok'))  document.getElementById('brokStart').value = fmt(+p.get('brok') || 0);
+  setSlider('brokBasis',  'brokBasis');
+  setSlider('brokApp',    'brokApp');
+  setSlider('brokDiv',    'brokDiv');
+  if(p.get('brokDrip') === '1')  setBrokDivMode(true);
+  if(p.has('cgMode'))  setCgMode(p.get('cgMode'));
+  setSlider('cgAmt',      'cgAmt');
+  if(p.get('cgInflate') === '1') setCgInflate(true);
+  setSlider('cgFreq',     'cgFreq');
+  setSlider('cgStartAge', 'cgStartAge');
+  if(p.has('cash'))  document.getElementById('cashStart').value = fmt(+p.get('cash') || 0);
+  setSlider('cashRate',   'cashRate');
+
+  if(p.has('spouseIRA')) document.getElementById('spouseIRAStart').value = fmt(+p.get('spouseIRA') || 0);
+  if(p.has('roth'))      document.getElementById('rothStart').value      = fmt(+p.get('roth')      || 0);
+  if(p.has('iraView'))   setIraView(p.get('iraView'));
 
   document.getElementById('realToggle').checked   = p.get('real')   === '1';
   document.getElementById('singleToggle').checked = p.get('single') === '1';
@@ -1113,8 +1654,8 @@ function applyUrlParams(){
 
   if(p.has('ds')){
     const ds = p.get('ds');
-    const lgIds = ['lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap'];
-    for(let i = 0; i < Math.min(5, ds.length); i++){
+    const lgIds = ['lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap','lgContribWrap','lgLifestyleWrap','lgBrokWrap','lgCashWrap','lgSpouseIRAWrap','lgRothWrap'];
+    for(let i = 0; i < Math.min(11, ds.length); i++){
       const hidden = ds[i] === '0';
       chart.data.datasets[i].hidden = hidden;
       const el = document.getElementById(lgIds[i]);
@@ -1168,19 +1709,89 @@ function copyShareUrl(){
   closeShare();
 }
 
+/* ── UI sync helpers ── */
+function updateLtControls(){
+  const amt    = +document.getElementById('ltAmt').value;
+  const mode   = document.querySelector('input[name="ltMode"]:checked')?.value || 'flat';
+  const noAmt  = amt === 0;
+  const noSmile = mode !== 'smile';
+  ['ltModeRow'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.opacity       = noAmt ? '0.4' : '1';
+    el.style.pointerEvents = noAmt ? 'none' : '';
+  });
+  const declineEl = document.getElementById('ltDeclineRow');
+  declineEl.style.opacity       = (noAmt || noSmile) ? '0.4' : '1';
+  declineEl.style.pointerEvents = (noAmt || noSmile) ? 'none' : '';
+}
+
+function setIraView(v){
+  iraView = v;
+  ['mine','spouse','combined'].forEach(x =>
+    document.getElementById('optIra_'+x).classList.toggle('active', x === v)
+  );
+  const labels = { mine:'My IRA', spouse:'Spouse IRA', combined:'Combined IRA' };
+  document.getElementById('thIraLabel').textContent = labels[v];
+  buildTable(lastRows);
+}
+
+function setBrokDivMode(drip){
+  brokDrip = drip;
+  document.getElementById('optDivCash').classList.toggle('active', !drip);
+  document.getElementById('optDivDrip').classList.toggle('active',  drip);
+  update();
+}
+
+function setCgMode(mode){
+  cgMode = mode;
+  document.getElementById('optCgNone').classList.toggle('active', mode === 'none');
+  document.getElementById('optCgPer' ).classList.toggle('active', mode === 'periodic');
+  const el = document.getElementById('cgPeriodicControls');
+  el.style.opacity       = mode === 'none' ? '0.4' : '1';
+  el.style.pointerEvents = mode === 'none' ? 'none' : '';
+  update();
+}
+
+function setCgInflate(inflate){
+  cgInflate = inflate;
+  document.getElementById('optCgFixed').classList.toggle('active', !inflate);
+  document.getElementById('optCgInfl' ).classList.toggle('active',  inflate);
+  update();
+}
+
+function syncWd2UI(){
+  const disabled = +document.getElementById('wd2').value === 0;
+  const el = document.getElementById('ctrlWd2Age');
+  el.style.opacity       = disabled ? '0.4' : '1';
+  el.style.pointerEvents = disabled ? 'none' : '';
+}
+
+function syncContribUI(){
+  const disabled = +document.getElementById('contrib').value === 0;
+  ['ctrlContribEndAge','ctrlContribInflate'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.opacity       = disabled ? '0.4' : '1';
+    el.style.pointerEvents = disabled ? 'none' : '';
+  });
+}
+
 /* ── Event listeners ── */
-document.getElementById('age').addEventListener('input', () => {
-  const startAge = +document.getElementById('age').value;
-  const wdEl     = document.getElementById('wdAge');
-  wdEl.min       = startAge;
+// Birth year changes enforce wdAge and contribEndAge minimums
+function enforceBirthAgeConstraints(){
+  const startAge = computeAge(
+    +document.getElementById('birthYear').value  || (CURRENT_YEAR - 65),
+    +document.getElementById('birthMonth').value || 1
+  );
+  const wdEl = document.getElementById('wdAge');
+  wdEl.min   = startAge;
   if(+wdEl.value < startAge) wdEl.value = startAge;
   const wd2El = document.getElementById('wd2Age');
   wd2El.min   = +wdEl.value;
   if(+wd2El.value < +wdEl.value) wd2El.value = wdEl.value;
-  document.getElementById('vWdAge').textContent  = wdEl.value;
-  document.getElementById('vWd2Age').textContent = wd2El.value;
-  update();
-});
+  const ceEl = document.getElementById('contribEndAge');
+  ceEl.min = startAge;
+  if(+ceEl.value < startAge) ceEl.value = startAge;
+}
 
 document.getElementById('wdAge').addEventListener('input', () => {
   const wd1Age = +document.getElementById('wdAge').value;
@@ -1191,9 +1802,33 @@ document.getElementById('wdAge').addEventListener('input', () => {
   update();
 });
 
-['wd2Age','rate','wd','wd2','infl','ss1','ss1Age','ss2','ss2Age','fixedInc'].forEach(id =>
-  document.getElementById(id).addEventListener('input', update)
+document.getElementById('wd2').addEventListener('input', () => { syncWd2UI(); update(); });
+document.getElementById('contrib').addEventListener('input', () => { syncContribUI(); update(); });
+document.getElementById('ltAmt').addEventListener('input', () => { updateLtControls(); update(); });
+document.querySelectorAll('input[name="ltMode"]').forEach(r =>
+  r.addEventListener('change', () => { updateLtControls(); update(); })
 );
+document.getElementById('ltDecline').addEventListener('input', update);
+
+['wd2Age','rate','wd','infl','ss1','ss1Age','ss2','ss2Age','fixedInc','contribEndAge','contribInflate',
+ 'brokBasis','brokApp','brokDiv','cgAmt','cgFreq','cgStartAge','cashRate'
+].forEach(id => document.getElementById(id).addEventListener('input', update));
+
+/* ── Birth year + month inputs (self and spouse) ── */
+['birthMonth','spouseBirthMonth'].forEach(id =>
+  document.getElementById(id).addEventListener('change', () => { enforceBirthAgeConstraints(); update(); })
+);
+['birthYear','spouseBirthYear'].forEach(id =>
+  document.getElementById(id).addEventListener('input', () => { enforceBirthAgeConstraints(); update(); })
+);
+
+/* ── Brokerage, Cash, Spouse IRA, Roth text balance inputs ── */
+['brokStart','cashStart','spouseIRAStart','rothStart'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', update);
+  el.addEventListener('blur',  () => { el.value = fmt(parseBalInput(id)); update(); });
+  el.addEventListener('keydown', e => { if(e.key === 'Enter') el.blur(); });
+});
 
 /* ── Starting balance text input ── */
 const startEl = document.getElementById('start');
@@ -1214,12 +1849,29 @@ document.getElementById('singleToggle').addEventListener('change', e => {
 
 /* ── Init ── */
 applyUrlParams();
+syncWd2UI();
+syncContribUI();
+updateLtControls();
+setCgMode('none');
+setBrokDivMode(false);
+setCgInflate(false);
+setIraView('mine');
+// Set contribEndAge min to match starting age
+{
+  const ceEl    = document.getElementById('contribEndAge');
+  const startAge = computeAge(
+    +document.getElementById('birthYear').value  || (CURRENT_YEAR - 65),
+    +document.getElementById('birthMonth').value || 1
+  );
+  ceEl.min = startAge;
+  if(+ceEl.value < startAge) ceEl.value = startAge;
+}
 renderThreshEditor();
 update();
 
-// Open all sections except Thresholds on desktop; collapse all on mobile
+// Open Assumptions + IRA subtree on desktop; collapse all on mobile
 if(window.innerWidth > 740){
-  ['secBalance','secWithdrawals','secIncome'].forEach(id => {
+  ['secAssumptions','secAccounts','secIRA','secBalance','secAccumulation','secWithdrawals'].forEach(id => {
     document.getElementById(id).open = true;
   });
 }

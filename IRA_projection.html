@@ -239,7 +239,7 @@ var TAXData = {
       <li><b>Withdrawal 2 start age / amount</b> — Period 2 takes over at this age (must be ≥ Period 1 start, ≤ 85). If both start ages are equal, Period 2 applies.</li>
       <li><b>Starting balance / Annual growth</b> — today's pre-tax IRA balance and expected nominal annual return.</li>
       <li><b>Inflation rate / Years to project</b> — assumed annual inflation and projection window.</li>
-      <li><b>SS 1 / SS 2</b> — each spouse's Social Security (or other inflation-linked) income in today's dollars, with a separate start age. Ages are relative to <em>your</em> current age — e.g., if you are 50 and your spouse is already collecting, set SS 1 start age to 50. Both streams are inflation-adjusted before contributing and are fully additive.</li>
+      <li><b>My SS / Spouse SS</b> — each person's Social Security (or other inflation-linked) income in today's dollars, with a separate start age. Ages are relative to <em>your</em> current age — e.g., if you are 50 and your spouse is already collecting, set Spouse SS start age to 50. Both streams are inflation-adjusted and fully additive.</li>
       <li><b>Fixed add'l income</b> — income fixed in nominal terms: pension, interest, dividends, cap gains.</li>
     </ul>
     <p style="margin-top:.35rem">The <b>Total Income</b> line includes all sources (IRA + SS + fixed). Threshold lines show raw inflated amounts so you can see directly which bracket your total income falls in.</p>
@@ -256,7 +256,7 @@ var TAXData = {
     <ul>
       <li><b>RMD</b> — prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, SECURE 2.0, born after 1958).</li>
       <li><b>IRA withdrawal</b> — min(available balance, max(inflation-adj target, RMD)); zero before Withdrawal 1 start age.</li>
-      <li><b>Total income</b> — IRA withdrawal + SS 1 (if active) + SS 2 (if active) + fixed income.</li>
+      <li><b>Total income</b> — IRA withdrawal + My SS (if active) + Spouse SS (if active) + fixed income.</li>
       <li><b>SS amounts</b> — entered in today's dollars; inflation-adjusted from their start year before contributing each year.</li>
       <li><b>Thresholds</b> — bracket floors and IRMAA tiers sourced from <code>retirement_optimizer_taxdata.js</code> (2026 federal tables). The standard deduction is added automatically and age-adjusted at 65 (one stdbump applied for MFJ — assumes one spouse at 65; actual may be higher if both spouses are 65+). For example, MFJ income enters the 10% bracket at the $32,200 standard deduction — only income above that is taxable. Bracket fills extend to the next bracket line — click any legend item to toggle.</li>
       <li><b>NIIT</b> — not inflation-indexed; stored as a negative floor and plotted as a flat nominal line in Future $ mode.</li>
@@ -279,7 +279,7 @@ var TAXData = {
       <li><b>Peak RMD</b> — largest required minimum distribution over the projection period.</li>
       <li><b>Funded until</b> — last year the IRA fully covers the active withdrawal target; the final projected year if never depleted.</li>
       <li><b>Total IRA Drawn</b> — cumulative sum of all IRA withdrawals over the projection window (nominal).</li>
-      <li><b>Total Income</b> — cumulative sum of all income sources (IRA + SS 1 + SS 2 + fixed) over the window (nominal).</li>
+      <li><b>Total Income</b> — cumulative sum of all income sources (IRA + My SS + Spouse SS + fixed) over the window (nominal).</li>
     </ul>
 
     <h3 class="amber">Limitations</h3>
@@ -573,22 +573,22 @@ var TAXData = {
       <summary>Income</summary>
       <div class="section-body">
         <div class="ctrl">
-          <div class="ctrl-header"><label>SS 1 start age</label><span class="val" id="vSS1Age">62</span></div>
+          <div class="ctrl-header"><label>My SS start age</label><span class="val" id="vSS1Age">62</span></div>
           <input type="range" id="ss1Age" min="50" max="70" step="1" value="62">
         </div>
         <div class="ctrl">
-          <div class="ctrl-header"><label>SS 1 (today $)</label><span class="val" id="vSS1">$0</span></div>
+          <div class="ctrl-header"><label>My SS (today $)</label><span class="val" id="vSS1">$0</span></div>
           <input type="range" id="ss1" min="0" max="100000" step="500" value="0">
           <div class="ctrl-note">SS × 85%, TIPS, or other infl-linked income. Grows with inflation from start year. Age relative to you.</div>
         </div>
         <div class="ctrl">
-          <div class="ctrl-header"><label>SS 2 start age</label><span class="val" id="vSS2Age">70</span></div>
+          <div class="ctrl-header"><label>Spouse SS start age</label><span class="val" id="vSS2Age">70</span></div>
           <input type="range" id="ss2Age" min="50" max="70" step="1" value="70">
         </div>
         <div class="ctrl">
-          <div class="ctrl-header"><label>SS 2 (today $)</label><span class="val" id="vSS2">$0</span></div>
+          <div class="ctrl-header"><label>Spouse SS (today $)</label><span class="val" id="vSS2">$0</span></div>
           <input type="range" id="ss2" min="0" max="100000" step="500" value="0">
-          <div class="ctrl-note">Second spouse's SS or other infl-linked income. Fully additive with SS 1. Age relative to you.</div>
+          <div class="ctrl-note">Spouse's Social Security or other inflation-linked income. Age relative to you.</div>
         </div>
         <div class="ctrl">
           <div class="ctrl-header"><label>Fixed add'l income</label><span class="val" id="vFixedInc">$0</span></div>

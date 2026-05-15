@@ -177,6 +177,7 @@ var TAXData = {
   .note-table td:first-child { text-align:left; color:var(--muted); }
   .note-table tr.rmd-active td { color:var(--amber); }
   .note-table tr.depleted td   { color:var(--red); }
+  .note-table tr.shortfall td  { background:rgba(245,166,35,0.07); }
   .footnote { margin-top:1rem; font-size:11px; color:var(--muted); font-family:var(--mono); line-height:1.7; }
   @media(max-width:740px){ .shell{grid-template-columns:1fr} .metrics{grid-template-columns:repeat(2,1fr)} }
 </style>
@@ -416,6 +417,30 @@ var TAXData = {
       </div>
     </details>
 
+    <details class="section" id="secLifestyle">
+      <summary>Lifestyle Target</summary>
+      <div class="section-body">
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Annual target (today's $)</label><span class="val" id="vLtAmt">$0</span></div>
+          <input type="range" id="ltAmt" min="0" max="500000" step="5000" value="0">
+        </div>
+        <div class="ctrl" id="ltModeRow">
+          <div class="ctrl-header"><label>Mode</label></div>
+          <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--text)">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="flat" checked> Constant $</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="infl"> + Inflation</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="smile"> Spending smile</label>
+            <label style="display:flex;align-items:center;gap:6px;opacity:0.4;pointer-events:none"><input type="radio" name="ltMode" value="bestfit" disabled> Best fit <span style="color:var(--muted)">(coming soon)</span></label>
+          </div>
+        </div>
+        <div class="ctrl" id="ltDeclineRow">
+          <div class="ctrl-header"><label>Annual real decline</label><span class="val" id="vLtDecline">1.5%</span></div>
+          <input type="range" id="ltDecline" min="0.1" max="5" step="0.1" value="1.5">
+          <div class="ctrl-note">% per year spending decreases in real terms (spending smile mode only)</div>
+        </div>
+      </div>
+    </details>
+
     <details class="section" id="secThresholds">
       <summary>Tax &amp; IRMAA Thresholds</summary>
       <div class="section-body">
@@ -455,7 +480,8 @@ var TAXData = {
         <span id="lgRmdWrap"    class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(2,'lgRmdWrap')"><span class="leg-dash" style="border-color:rgba(245,166,35,0.85)"></span>RMD</span>
         <span id="lgBaseWdWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(3,'lgBaseWdWrap')"><span class="leg-dot"  style="border-color:#a78bfa"></span><span id="lgBase">Withdrawal target</span></span>
         <span id="lgActualWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(4,'lgActualWrap')"><span class="leg-sq" style="background:#e8eaf2"></span>Total Income</span>
-        <span id="lgContribWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(5,'lgContribWrap')"><span class="leg-dash" style="border-color:#5aab6b"></span>Annual Contribution</span>
+        <span id="lgContribWrap"    class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(5,'lgContribWrap')"><span class="leg-dash" style="border-color:#5aab6b"></span>Annual Contribution</span>
+        <span id="lgLifestyleWrap" class="leg-toggle" title="Click to hide" onclick="toggleFixedDs(6,'lgLifestyleWrap')"><span class="leg-dash" style="border-color:#f5a623"></span><span id="lgLifestyle">Lifestyle target</span></span>
       </div>
       <div style="position:relative;width:100%;height:350px">
         <canvas id="ch" role="img" aria-label="IRA projection chart">IRA projection</canvas>
@@ -681,7 +707,8 @@ function addThreshold(){
 
 /* ── Projection engine ── */
 function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, years, startAge,
-                  ss1, ss1StartAge, ss2, ss2StartAge, fixedIncome, contrib, contribEndAge, contribInflate){
+                  ss1, ss1StartAge, ss2, ss2StartAge, fixedIncome, contrib, contribEndAge, contribInflate,
+                  ltAmt, ltMode, ltDecline){
   let bal = start;
   const rows = [];
   for(let y=1; y<=years; y++){
@@ -715,22 +742,33 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
     const ss2Contrib = age >= ss2StartAge ? ss2 * inflMult : 0;
     const totalIncome = actualWd + ss1Contrib + ss2Contrib + fixedIncome;
 
+    // Lifestyle target
+    const yearsRetired = Math.max(0, age - wd1StartAge);
+    let lifestyleTarget = 0;
+    if(ltAmt > 0){
+      if(ltMode === 'flat')  lifestyleTarget = ltAmt;
+      if(ltMode === 'infl')  lifestyleTarget = ltAmt * inflMult;
+      if(ltMode === 'smile') lifestyleTarget = ltAmt * Math.pow(1 - (ltDecline||1.5)/100, yearsRetired) * inflMult;
+    }
+
     rows.push({
       y, age, calYear, inflMult,
       bal,
-      realBal:        bal / inflMult,
+      realBal:         bal / inflMult,
       rmd,
-      realRmd:        rmd / inflMult,
+      realRmd:         rmd / inflMult,
       targetWd,
       activeWd,
       actualWd,
-      realActualWd:   actualWd / inflMult,
+      realActualWd:    actualWd / inflMult,
       growth,
       annualContrib,
-      netGrowth:      growth - actualWd + annualContrib,
+      netGrowth:       growth - actualWd + annualContrib,
       ss1Contrib, ss2Contrib,
       totalIncome,
       realTotalIncome: totalIncome / inflMult,
+      lifestyleTarget,
+      lifestyleTargetReal: lifestyleTarget / inflMult,
       depleted,
       rmdActive: rmd > 0 && rmd > targetWd,
       withdrawing
@@ -740,7 +778,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
 }
 
 /* ── Chart setup ── */
-const FIXED_DS = 6;
+const FIXED_DS = 7;
 const chartCtx = document.getElementById('ch').getContext('2d');
 const chart = new Chart(chartCtx, {
   type:'line',
@@ -750,7 +788,8 @@ const chart = new Chart(chartCtx, {
     /* 2 RMD            */ { label:'RMD',                  data:[], borderColor:'rgba(245,166,35,0.85)', backgroundColor:'transparent', fill:false, spanGaps:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
     /* 3 Wd target      */ { label:'Withdrawal target',    data:[], borderColor:'#a78bfa', backgroundColor:'transparent', fill:false, tension:0, pointRadius:0, borderWidth:1.5, borderDash:[2,3], yAxisID:'yWd' },
     /* 4 Total income   */ { label:'Total Income',         data:[], borderColor:'#e8eaf2', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2, yAxisID:'yWd' },
-    /* 5 Contribution   */ { label:'Annual Contribution',  data:[], borderColor:'#5aab6b', backgroundColor:'transparent', fill:false, hidden:false, tension:0, pointRadius:0, borderWidth:1.5, borderDash:[4,3], yAxisID:'yWd' }
+    /* 5 Contribution   */ { label:'Annual Contribution',  data:[], borderColor:'#5aab6b', backgroundColor:'transparent', fill:false, hidden:false, tension:0, pointRadius:0, borderWidth:1.5, borderDash:[4,3], yAxisID:'yWd' },
+    /* 6 Lifestyle tgt  */ { label:'Lifestyle target',     data:[], borderColor:'#f5a623', backgroundColor:'transparent', fill:false, hidden:false, tension:0, pointRadius:0, borderWidth:2,   borderDash:[8,4], yAxisID:'yWd' }
   ]},
   options:{
     responsive:true, maintainAspectRatio:false,
@@ -834,6 +873,7 @@ function buildTable(rows){
     const tr = document.createElement('tr');
     if(r.depleted)        tr.className='depleted';
     else if(r.rmdActive)  tr.className='rmd-active';
+    else if(r.lifestyleTarget > 0 && r.totalIncome < r.lifestyleTarget) tr.className='shortfall';
     const ngNeg = !r.depleted && r.netGrowth < 0;
     tr.innerHTML = `
       <td>${r.calYear}</td><td>${r.age}</td>
@@ -851,7 +891,7 @@ function buildTable(rows){
 /* ── Legend rebuild ── */
 function rebuildLegend(){
   const legend = document.getElementById('legend');
-  Array.from(legend.children).slice(6).forEach(el => el.remove());
+  Array.from(legend.children).slice(FIXED_DS).forEach(el => el.remove());
 
   const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
   sorted.forEach(t => {
@@ -889,6 +929,9 @@ function update(){
   const contrib        = +document.getElementById('contrib').value;
   const contribEndAge  = +document.getElementById('contribEndAge').value;
   const contribInflate = document.getElementById('contribInflate').checked;
+  const ltAmt          = +document.getElementById('ltAmt').value;
+  const ltMode         = document.querySelector('input[name="ltMode"]:checked')?.value || 'flat';
+  const ltDecline      = +document.getElementById('ltDecline').value;
 
   // Labels
   document.getElementById('vAge').textContent     = startAge;
@@ -905,6 +948,8 @@ function update(){
   document.getElementById('vFixedInc').textContent    = fmt(fixedIncome);
   document.getElementById('vContrib').textContent      = fmt(contrib);
   document.getElementById('vContribEndAge').textContent= contribEndAge;
+  document.getElementById('vLtAmt').textContent        = fmt(ltAmt);
+  document.getElementById('vLtDecline').textContent    = ltDecline.toFixed(1) + '%';
 
   // Toggle highlights
   document.getElementById('optFuture').classList.toggle('active',!useReal);
@@ -913,7 +958,8 @@ function update(){
   document.getElementById('optSingle').classList.toggle('active', isSingle);
 
   const rows   = project(start, rate, wd1, wd2, wdStartAge, wd2StartAge, infl, years, startAge,
-                          ss1, ss1Age, ss2, ss2Age, fixedIncome, contrib, contribEndAge, contribInflate);
+                          ss1, ss1Age, ss2, ss2Age, fixedIncome, contrib, contribEndAge, contribInflate,
+                          ltAmt, ltMode, ltDecline);
   const labels = rows.map(r => `Age ${r.age}`);
 
   chart.data.labels           = labels;
@@ -938,6 +984,11 @@ function update(){
   // Annual Contribution line
   chart.data.datasets[5].data = rows.map(r =>
     r.annualContrib > 0 ? Math.round(useReal ? r.annualContrib / r.inflMult : r.annualContrib) : null
+  );
+
+  // Lifestyle target line
+  chart.data.datasets[6].data = rows.map(r =>
+    r.lifestyleTarget > 0 ? Math.round(useReal ? r.lifestyleTargetReal : r.lifestyleTarget) : null
   );
 
   /* ── Threshold datasets ── */
@@ -1003,7 +1054,8 @@ function update(){
     [useReal ? r.realRmd : r.rmd,
      useReal ? r.activeWd : r.activeWd * r.inflMult,
      useReal ? r.realTotalIncome : r.totalIncome,
-     useReal ? r.annualContrib / r.inflMult : r.annualContrib
+     useReal ? r.annualContrib / r.inflMult : r.annualContrib,
+     useReal ? r.lifestyleTargetReal : r.lifestyleTarget
     ].forEach(v => { if(v && v > yWdMax) yWdMax = v; });
   });
   thresholds.filter(t => t.visible).forEach(t => {
@@ -1098,7 +1150,11 @@ function buildBookmarkUrl(){
   p.set('contribEnd',  document.getElementById('contribEndAge').value);
   if(document.getElementById('contribInflate').checked) p.set('contribInflate', '1');
 
-  p.set('ds', [0,1,2,3,4,5].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
+  p.set('ltamt',   document.getElementById('ltAmt').value);
+  p.set('ltmode',  document.querySelector('input[name="ltMode"]:checked')?.value || 'flat');
+  p.set('ltdecl',  document.getElementById('ltDecline').value);
+
+  p.set('ds', [0,1,2,3,4,5,6].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
 
   return '?' + p.toString();
 }
@@ -1142,6 +1198,14 @@ function applyUrlParams(){
   setSlider('contribEndAge','contribEnd');
   document.getElementById('contribInflate').checked = p.get('contribInflate') === '1';
 
+  setSlider('ltAmt',   'ltamt');
+  setSlider('ltDecline','ltdecl');
+  if(p.has('ltmode')){
+    const r = document.querySelector(`input[name="ltMode"][value="${p.get('ltmode')}"]`);
+    if(r) r.checked = true;
+  }
+  updateLtControls();
+
   document.getElementById('realToggle').checked   = p.get('real')   === '1';
   document.getElementById('singleToggle').checked = p.get('single') === '1';
 
@@ -1157,8 +1221,8 @@ function applyUrlParams(){
 
   if(p.has('ds')){
     const ds = p.get('ds');
-    const lgIds = ['lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap','lgContribWrap'];
-    for(let i = 0; i < Math.min(6, ds.length); i++){
+    const lgIds = ['lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap','lgContribWrap','lgLifestyleWrap'];
+    for(let i = 0; i < Math.min(7, ds.length); i++){
       const hidden = ds[i] === '0';
       chart.data.datasets[i].hidden = hidden;
       const el = document.getElementById(lgIds[i]);
@@ -1213,6 +1277,21 @@ function copyShareUrl(){
 }
 
 /* ── UI sync helpers ── */
+function updateLtControls(){
+  const amt    = +document.getElementById('ltAmt').value;
+  const mode   = document.querySelector('input[name="ltMode"]:checked')?.value || 'flat';
+  const noAmt  = amt === 0;
+  const noSmile = mode !== 'smile';
+  ['ltModeRow'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.opacity       = noAmt ? '0.4' : '1';
+    el.style.pointerEvents = noAmt ? 'none' : '';
+  });
+  const declineEl = document.getElementById('ltDeclineRow');
+  declineEl.style.opacity       = (noAmt || noSmile) ? '0.4' : '1';
+  declineEl.style.pointerEvents = (noAmt || noSmile) ? 'none' : '';
+}
+
 function syncWd2UI(){
   const disabled = +document.getElementById('wd2').value === 0;
   const el = document.getElementById('ctrlWd2Age');
@@ -1257,6 +1336,11 @@ document.getElementById('wdAge').addEventListener('input', () => {
 
 document.getElementById('wd2').addEventListener('input', () => { syncWd2UI(); update(); });
 document.getElementById('contrib').addEventListener('input', () => { syncContribUI(); update(); });
+document.getElementById('ltAmt').addEventListener('input', () => { updateLtControls(); update(); });
+document.querySelectorAll('input[name="ltMode"]').forEach(r =>
+  r.addEventListener('change', () => { updateLtControls(); update(); })
+);
+document.getElementById('ltDecline').addEventListener('input', update);
 
 ['wd2Age','rate','wd','infl','ss1','ss1Age','ss2','ss2Age','fixedInc','contribEndAge','contribInflate'].forEach(id =>
   document.getElementById(id).addEventListener('input', update)
@@ -1283,6 +1367,7 @@ document.getElementById('singleToggle').addEventListener('change', e => {
 applyUrlParams();
 syncWd2UI();
 syncContribUI();
+updateLtControls();
 // Set contribEndAge min to match starting age
 {
   const ceEl = document.getElementById('contribEndAge');
@@ -1295,7 +1380,7 @@ update();
 
 // Open all sections except Thresholds on desktop; collapse all on mobile
 if(window.innerWidth > 740){
-  ['secBalance','secAccumulation','secWithdrawals','secIncome'].forEach(id => {
+  ['secBalance','secAccumulation','secWithdrawals','secIncome','secLifestyle'].forEach(id => {
     document.getElementById(id).open = true;
   });
 }

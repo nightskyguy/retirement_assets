@@ -441,6 +441,80 @@ var TAXData = {
       </div>
     </details>
 
+    <details class="section" id="secBrokerage">
+      <summary>Brokerage Account</summary>
+      <div class="section-body">
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Starting balance</label></div>
+          <input type="text" id="brokStart" value="$0" class="bal-input">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Cost basis (% of balance)</label><span class="val" id="vBrokBasis">60% · $0</span></div>
+          <input type="range" id="brokBasis" min="0" max="100" step="1" value="60">
+          <div class="ctrl-note">What you originally paid as a fraction of current value. 100% = no embedded gain.</div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Annual appreciation</label><span class="val" id="vBrokApp">5.0%</span></div>
+          <input type="range" id="brokApp" min="0" max="15" step="0.1" value="5">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Dividend yield</label><span class="val" id="vBrokDiv">2.0%</span></div>
+          <input type="range" id="brokDiv" min="0" max="10" step="0.1" value="2">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Dividends</label></div>
+          <div style="display:flex;gap:10px;margin-top:6px">
+            <span class="toggle-opt active" id="optDivCash" onclick="setBrokDivMode(false)">→ Cash</span>
+            <span class="toggle-opt" id="optDivDrip" onclick="setBrokDivMode(true)">Reinvest (DRIP)</span>
+          </div>
+          <div class="ctrl-note">Always taxable income regardless of destination.</div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Capital gains sales</label></div>
+          <div style="display:flex;gap:10px;margin-top:6px">
+            <span class="toggle-opt active" id="optCgNone" onclick="setCgMode('none')">None</span>
+            <span class="toggle-opt" id="optCgPer" onclick="setCgMode('periodic')">Periodic</span>
+          </div>
+        </div>
+        <div id="cgPeriodicControls" style="opacity:0.4;pointer-events:none">
+          <div class="ctrl">
+            <div class="ctrl-header"><label>Sale amount (today's $)</label><span class="val" id="vCgAmt">$0</span></div>
+            <input type="range" id="cgAmt" min="0" max="500000" step="5000" value="0">
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-header"><label>Sale amount mode</label></div>
+            <div style="display:flex;gap:10px;margin-top:6px">
+              <span class="toggle-opt active" id="optCgFixed" onclick="setCgInflate(false)">Fixed $</span>
+              <span class="toggle-opt" id="optCgInfl" onclick="setCgInflate(true)">+ Inflation</span>
+            </div>
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-header"><label>Every N years</label><span class="val" id="vCgFreq">1</span></div>
+            <input type="range" id="cgFreq" min="1" max="10" step="1" value="1">
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-header"><label>Start at age</label><span class="val" id="vCgStartAge">65</span></div>
+            <input type="range" id="cgStartAge" min="40" max="90" step="1" value="65">
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="section" id="secCash">
+      <summary>Cash Account</summary>
+      <div class="section-body">
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Starting balance</label></div>
+          <input type="text" id="cashStart" value="$0" class="bal-input">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Annual interest rate</label><span class="val" id="vCashRate">4.0%</span></div>
+          <input type="range" id="cashRate" min="0" max="10" step="0.1" value="4">
+          <div class="ctrl-note">Receives dividends (when not DRIPing) and brokerage sale proceeds. Interest accrues annually.</div>
+        </div>
+      </div>
+    </details>
+
     <details class="section" id="secThresholds">
       <summary>Tax &amp; IRMAA Thresholds</summary>
       <div class="section-body">
@@ -495,6 +569,7 @@ var TAXData = {
             <th>Year</th><th>Age</th>
             <th>Balance</th><th>Real bal</th>
             <th>RMD</th><th>Total income</th><th>Bracket</th><th>IRA Withdrawal</th><th title="Growth earned on prior balance, less withdrawals, plus contributions">Net growth</th>
+            <th>Brokerage</th><th>Cash</th><th title="Dividends + interest + realized capital gains">Div+Int</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -577,6 +652,12 @@ let colorIdx = 0;
 
 // Module-level state referenced by tooltip and table callbacks
 let lastRows = [], lastSS1 = 0, lastSS1Age = 62, lastSS2 = 0, lastSS2Age = 70, lastFixedIncome = 0;
+let lastBrokStart = 0, lastCashStart = 0;
+
+// Brokerage / cash UI state
+let brokDrip  = false;   // dividend destination: false = Cash, true = DRIP
+let cgMode    = 'none';  // 'none' | 'periodic'
+let cgInflate = false;   // sale amount mode: false = fixed $, true = +inflation
 
 /* ── Helpers ── */
 function fmt(v){
@@ -622,6 +703,17 @@ function parseStart(){
   else if(/[kK]$/.test(raw)) { mult = 1e3; raw = raw.slice(0,-1); }
   const v = parseFloat(raw) * mult;
   return Math.min(20000000, Math.max(1000, isNaN(v) ? 2000000 : v));
+}
+
+function parseBrokStart(){
+  const raw = (document.getElementById('brokStart')?.value || '0').replace(/[$,]/g,'');
+  const v   = parseFloat(raw);
+  return Math.min(20_000_000, Math.max(0, isNaN(v) ? 0 : v));
+}
+function parseCashStart(){
+  const raw = (document.getElementById('cashStart')?.value || '0').replace(/[$,]/g,'');
+  const v   = parseFloat(raw);
+  return Math.min(20_000_000, Math.max(0, isNaN(v) ? 0 : v));
 }
 
 function setToggle(id, val){ document.getElementById(id).checked=val; update(); }
@@ -708,8 +800,14 @@ function addThreshold(){
 /* ── Projection engine ── */
 function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, years, startAge,
                   ss1, ss1StartAge, ss2, ss2StartAge, fixedIncome, contrib, contribEndAge, contribInflate,
-                  ltAmt, ltMode, ltDecline){
-  let bal = start;
+                  ltAmt, ltMode, ltDecline,
+                  brokStart, brokBasisPct, brokApp, brokDivPct, brokDrip,
+                  cgMode, cgAmt, cgFreq, cgStartAge, cgInflate,
+                  cashStart, cashRatePct){
+  let bal      = start;
+  let brokBal  = brokStart;
+  let brokBasis = brokStart * (brokBasisPct / 100);
+  let cashBal  = cashStart;
   const rows = [];
   for(let y=1; y<=years; y++){
     const age      = startAge + (y - 1);
@@ -740,9 +838,44 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
     // SS: inflation-adjusted from year 0, active from respective start ages
     const ss1Contrib = age >= ss1StartAge ? ss1 * inflMult : 0;
     const ss2Contrib = age >= ss2StartAge ? ss2 * inflMult : 0;
-    const totalIncome = actualWd + ss1Contrib + ss2Contrib + fixedIncome;
 
-    // Lifestyle target
+    // ── Brokerage ──
+    const brokStartBal = brokBal;                          // start-of-year value for dividend calc
+    brokBal *= (1 + brokApp / 100);                        // 1. appreciation
+
+    const dividends = brokStartBal * (brokDivPct / 100);  // 2. dividends
+    if(brokDrip){
+      brokBal   += dividends;                              //    DRIP: reinvest → balance
+      brokBasis += dividends;                              //         new shares → increase basis
+    } else {
+      cashBal += dividends;                                //    sweep to Cash
+    }
+
+    let capitalGain  = 0;                                  // 3. capital gains sale
+    let saleProceeds = 0;
+    if(cgMode === 'periodic' && cgAmt > 0 && age >= cgStartAge
+       && (age - cgStartAge) % cgFreq === 0 && brokBal > 0){
+      const saleTarget = cgInflate ? cgAmt * inflMult : cgAmt;
+      const sale       = Math.min(saleTarget, brokBal);
+      const gainFrac   = brokBal > 0 ? Math.max(0, (brokBal - brokBasis) / brokBal) : 0;
+      capitalGain      = sale * gainFrac;
+      saleProceeds     = sale;
+      brokBasis       -= sale * (brokBasis / brokBal);    // reduce basis proportionally
+      brokBal         -= sale;
+      cashBal         += sale;                             // full proceeds → Cash
+    }
+    brokBal   = Math.max(0, brokBal);
+    brokBasis = Math.max(0, Math.min(brokBasis, brokBal));
+
+    // ── Cash ──
+    const cashInterest = cashBal * (cashRatePct / 100);
+    cashBal += cashInterest;
+
+    // ── Combined income ──
+    const divPlusInt  = dividends + cashInterest + capitalGain;
+    const totalIncome = actualWd + ss1Contrib + ss2Contrib + fixedIncome + divPlusInt;
+
+    // ── Lifestyle target ──
     const yearsRetired = Math.max(0, age - wd1StartAge);
     let lifestyleTarget = 0;
     if(ltAmt > 0){
@@ -765,6 +898,10 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
       annualContrib,
       netGrowth:       growth - actualWd + annualContrib,
       ss1Contrib, ss2Contrib,
+      brokBal, brokBasis,
+      dividends, capitalGain, saleProceeds,
+      cashBal, cashInterest,
+      divPlusInt,
       totalIncome,
       realTotalIncome: totalIncome / inflMult,
       lifestyleTarget,
@@ -883,6 +1020,9 @@ function buildTable(rows){
       <td style="color:var(--muted)">${bracketForRow(r)}</td>
       <td>${r.withdrawing?fmt(r.actualWd):'—'}</td>
       <td${ngNeg?' style="color:var(--red)"':''}>${fmt(r.netGrowth)}</td>
+      <td>${lastBrokStart > 0 ? fmt(Math.round(r.brokBal)) : '—'}</td>
+      <td>${lastCashStart > 0 || lastBrokStart > 0 ? fmt(Math.round(r.cashBal)) : '—'}</td>
+      <td>${r.divPlusInt > 0 ? fmt(Math.round(r.divPlusInt)) : '—'}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -932,6 +1072,15 @@ function update(){
   const ltAmt          = +document.getElementById('ltAmt').value;
   const ltMode         = document.querySelector('input[name="ltMode"]:checked')?.value || 'flat';
   const ltDecline      = +document.getElementById('ltDecline').value;
+  const brokStartVal   = parseBrokStart();
+  const brokBasisPct   = +document.getElementById('brokBasis').value;
+  const brokAppVal     = +document.getElementById('brokApp').value;
+  const brokDivVal     = +document.getElementById('brokDiv').value;
+  const cgAmtVal       = +document.getElementById('cgAmt').value;
+  const cgFreqVal      = +document.getElementById('cgFreq').value;
+  const cgStartAgeVal  = +document.getElementById('cgStartAge').value;
+  const cashStartVal   = parseCashStart();
+  const cashRateVal    = +document.getElementById('cashRate').value;
 
   // Labels
   document.getElementById('vAge').textContent     = startAge;
@@ -950,6 +1099,13 @@ function update(){
   document.getElementById('vContribEndAge').textContent= contribEndAge;
   document.getElementById('vLtAmt').textContent        = fmt(ltAmt);
   document.getElementById('vLtDecline').textContent    = ltDecline.toFixed(1) + '%';
+  document.getElementById('vBrokBasis').textContent    = brokBasisPct + '% · ' + fmt(Math.round(brokStartVal * brokBasisPct / 100));
+  document.getElementById('vBrokApp').textContent      = brokAppVal.toFixed(1) + '%';
+  document.getElementById('vBrokDiv').textContent      = brokDivVal.toFixed(1) + '%';
+  document.getElementById('vCgAmt').textContent        = fmt(cgAmtVal);
+  document.getElementById('vCgFreq').textContent       = cgFreqVal;
+  document.getElementById('vCgStartAge').textContent   = cgStartAgeVal;
+  document.getElementById('vCashRate').textContent     = cashRateVal.toFixed(1) + '%';
 
   // Toggle highlights
   document.getElementById('optFuture').classList.toggle('active',!useReal);
@@ -957,9 +1113,15 @@ function update(){
   document.getElementById('optMFJ').classList.toggle('active',  !isSingle);
   document.getElementById('optSingle').classList.toggle('active', isSingle);
 
+  lastBrokStart = brokStartVal;
+  lastCashStart = cashStartVal;
+
   const rows   = project(start, rate, wd1, wd2, wdStartAge, wd2StartAge, infl, years, startAge,
                           ss1, ss1Age, ss2, ss2Age, fixedIncome, contrib, contribEndAge, contribInflate,
-                          ltAmt, ltMode, ltDecline);
+                          ltAmt, ltMode, ltDecline,
+                          brokStartVal, brokBasisPct, brokAppVal, brokDivVal, brokDrip,
+                          cgMode, cgAmtVal, cgFreqVal, cgStartAgeVal, cgInflate,
+                          cashStartVal, cashRateVal);
   const labels = rows.map(r => `Age ${r.age}`);
 
   chart.data.labels           = labels;
@@ -1154,6 +1316,19 @@ function buildBookmarkUrl(){
   p.set('ltmode',  document.querySelector('input[name="ltMode"]:checked')?.value || 'flat');
   p.set('ltdecl',  document.getElementById('ltDecline').value);
 
+  p.set('brok',        parseBrokStart());
+  p.set('brokBasis',   document.getElementById('brokBasis').value);
+  p.set('brokApp',     document.getElementById('brokApp').value);
+  p.set('brokDiv',     document.getElementById('brokDiv').value);
+  if(brokDrip)   p.set('brokDrip',  '1');
+  p.set('cgMode',      cgMode);
+  p.set('cgAmt',       document.getElementById('cgAmt').value);
+  if(cgInflate)  p.set('cgInflate', '1');
+  p.set('cgFreq',      document.getElementById('cgFreq').value);
+  p.set('cgStartAge',  document.getElementById('cgStartAge').value);
+  p.set('cash',        parseCashStart());
+  p.set('cashRate',    document.getElementById('cashRate').value);
+
   p.set('ds', [0,1,2,3,4,5,6].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
 
   return '?' + p.toString();
@@ -1205,6 +1380,19 @@ function applyUrlParams(){
     if(r) r.checked = true;
   }
   updateLtControls();
+
+  if(p.has('brok'))  document.getElementById('brokStart').value = fmt(+p.get('brok') || 0);
+  setSlider('brokBasis',  'brokBasis');
+  setSlider('brokApp',    'brokApp');
+  setSlider('brokDiv',    'brokDiv');
+  if(p.get('brokDrip') === '1')  setBrokDivMode(true);
+  if(p.has('cgMode'))  setCgMode(p.get('cgMode'));
+  setSlider('cgAmt',      'cgAmt');
+  if(p.get('cgInflate') === '1') setCgInflate(true);
+  setSlider('cgFreq',     'cgFreq');
+  setSlider('cgStartAge', 'cgStartAge');
+  if(p.has('cash'))  document.getElementById('cashStart').value = fmt(+p.get('cash') || 0);
+  setSlider('cashRate',   'cashRate');
 
   document.getElementById('realToggle').checked   = p.get('real')   === '1';
   document.getElementById('singleToggle').checked = p.get('single') === '1';
@@ -1292,6 +1480,30 @@ function updateLtControls(){
   declineEl.style.pointerEvents = (noAmt || noSmile) ? 'none' : '';
 }
 
+function setBrokDivMode(drip){
+  brokDrip = drip;
+  document.getElementById('optDivCash').classList.toggle('active', !drip);
+  document.getElementById('optDivDrip').classList.toggle('active',  drip);
+  update();
+}
+
+function setCgMode(mode){
+  cgMode = mode;
+  document.getElementById('optCgNone').classList.toggle('active', mode === 'none');
+  document.getElementById('optCgPer' ).classList.toggle('active', mode === 'periodic');
+  const el = document.getElementById('cgPeriodicControls');
+  el.style.opacity       = mode === 'none' ? '0.4' : '1';
+  el.style.pointerEvents = mode === 'none' ? 'none' : '';
+  update();
+}
+
+function setCgInflate(inflate){
+  cgInflate = inflate;
+  document.getElementById('optCgFixed').classList.toggle('active', !inflate);
+  document.getElementById('optCgInfl' ).classList.toggle('active',  inflate);
+  update();
+}
+
 function syncWd2UI(){
   const disabled = +document.getElementById('wd2').value === 0;
   const el = document.getElementById('ctrlWd2Age');
@@ -1342,9 +1554,17 @@ document.querySelectorAll('input[name="ltMode"]').forEach(r =>
 );
 document.getElementById('ltDecline').addEventListener('input', update);
 
-['wd2Age','rate','wd','infl','ss1','ss1Age','ss2','ss2Age','fixedInc','contribEndAge','contribInflate'].forEach(id =>
-  document.getElementById(id).addEventListener('input', update)
-);
+['wd2Age','rate','wd','infl','ss1','ss1Age','ss2','ss2Age','fixedInc','contribEndAge','contribInflate',
+ 'brokBasis','brokApp','brokDiv','cgAmt','cgFreq','cgStartAge','cashRate'
+].forEach(id => document.getElementById(id).addEventListener('input', update));
+
+/* ── Brokerage & Cash text balance inputs ── */
+['brokStart','cashStart'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', update);
+  el.addEventListener('blur',  () => { el.value = fmt(id === 'brokStart' ? parseBrokStart() : parseCashStart()); update(); });
+  el.addEventListener('keydown', e => { if(e.key === 'Enter') el.blur(); });
+});
 
 /* ── Starting balance text input ── */
 const startEl = document.getElementById('start');
@@ -1368,6 +1588,9 @@ applyUrlParams();
 syncWd2UI();
 syncContribUI();
 updateLtControls();
+setCgMode('none');
+setBrokDivMode(false);
+setCgInflate(false);
 // Set contribEndAge min to match starting age
 {
   const ceEl = document.getElementById('contribEndAge');
@@ -1380,7 +1603,7 @@ update();
 
 // Open all sections except Thresholds on desktop; collapse all on mobile
 if(window.innerWidth > 740){
-  ['secBalance','secAccumulation','secWithdrawals','secIncome','secLifestyle'].forEach(id => {
+  ['secBalance','secAccumulation','secWithdrawals','secIncome','secLifestyle','secBrokerage','secCash'].forEach(id => {
     document.getElementById(id).open = true;
   });
 }

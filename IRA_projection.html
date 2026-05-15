@@ -188,6 +188,9 @@ var TAXData = {
   .leg-dot  { width:16px; height:0; border-top:2px dotted; flex-shrink:0; }
   .leg-toggle { cursor:pointer; transition:opacity .15s; user-select:none; }
   .leg-toggle:hover { opacity:0.75 !important; }
+  .tog { background:var(--surface2); border:1px solid var(--border); border-radius:4px; color:var(--muted); font-family:var(--mono); font-size:10px; padding:2px 7px; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
+  .tog.active { background:var(--teal); border-color:var(--teal); color:#0f1117; font-weight:500; }
+  .tog:hover:not(.active) { border-color:var(--muted); color:var(--text); }
   .note-table { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; overflow-x:auto; }
   .note-table table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; }
   .note-table th { color:var(--muted); font-weight:400; text-align:right; padding:4px 8px; letter-spacing:.05em; border-bottom:1px solid var(--border); white-space:nowrap; }

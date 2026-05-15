@@ -675,7 +675,7 @@ var TAXData = {
         <thead>
           <tr>
             <th rowspan="2">Year</th><th rowspan="2">Age</th>
-            <th colspan="4" class="th-group" id="thIraGroup">My IRA
+            <th colspan="4" class="th-group" id="thIraGroup"><span id="thIraLabel">My IRA</span>
               <span style="margin-left:6px;display:inline-flex;gap:3px;font-weight:400;text-transform:none;letter-spacing:0">
                 <button id="optIra_mine"     class="tog active" onclick="setIraView('mine')"    >Me</button>
                 <button id="optIra_spouse"   class="tog"        onclick="setIraView('spouse')"  >Spouse</button>
@@ -1728,7 +1728,7 @@ function setIraView(v){
     document.getElementById('optIra_'+x).classList.toggle('active', x === v)
   );
   const labels = { mine:'My IRA', spouse:'Spouse IRA', combined:'Combined IRA' };
-  document.getElementById('thIraGroup').textContent = labels[v];
+  document.getElementById('thIraLabel').textContent = labels[v];
   buildTable(lastRows);
 }
 

@@ -1725,6 +1725,27 @@ function update(){
     });
   });
 
+  const sortedState = [...thresholds]
+    .filter(t => t.type === 'state')
+    .sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
+
+  sortedState.forEach((t) => {
+    if(!t.visible) return;
+    const data = rows.map(r => {
+      const v = threshAmt(t, r, useReal);
+      return v > 0 ? Math.round(v) : null;
+    });
+    chart.data.datasets.push({
+      label:           t.label,
+      data,
+      borderColor:     t.color,
+      backgroundColor: 'transparent',
+      fill:            false,
+      tension:0, pointRadius:0, borderWidth:1.5, borderDash:[4,2],
+      yAxisID:         'yWd'
+    });
+  });
+
   chart.options.scales.yWd.title.text = useReal ? "Gross Income (today's $)" : 'Gross Income';
 
   // yWd max from visible data only

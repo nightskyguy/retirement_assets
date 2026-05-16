@@ -103,6 +103,9 @@
             <div><label><B>Your</B> Pension<input type="number" id="pensionAnnual" value="15000"></label></div>
             <div><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
         </div>
+        <div class="row">
+            <div><label title="Most pensions have no inflation adjustment. Enable only if your pension includes a cost-of-living adjustment (COLA)."><input type="checkbox" id="pensionCola"> Pension has COLA (inflation-adjusted)</label></div>
+        </div>
 
 
         <h3>4. Assumptions</h3>
@@ -134,10 +137,10 @@
             <div id="summary-stats" style="display:flex; gap:30px;">
 				<div id="stat-success">  </div>
 				<div title="How many years of life are fully funded."><small>Funded/Years of Life</small><br><strong id="stat-years">0</strong></div>
-                <div title="Total taxes paid/total spendable wealth"><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong></div>
-                <div title="Sum of all taxes paid."><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong></div>
-                <div title="How much spendable income was produced."><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
-                <div title="Remaining wealth at the end of life."><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
+                <div title="Total taxes paid/total spendable wealth"><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Sum of all taxes paid."><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="How much spendable income was produced."><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Remaining wealth at the end of life."><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
 				<div id="popUpMessage" class="scenario-message"></div>
 				<div title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
 					<label><input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()"> Current $</label>
@@ -327,8 +330,10 @@
 		</div>
 
         <div id="tab-chart" class="card hidden">
+            <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Balances</h4>
             <canvas id="chartAssets" style="max-height:403px;"></canvas>
             <hr>
+            <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Income and Expenses</h4>
             <canvas id="chartIncomeSources" style="max-height:403px;"></canvas>
             <hr>
             <div style="margin: 4px 8px;">
@@ -336,11 +341,14 @@
                     <input type="checkbox" id="include-roth-spendable" onchange="if(lastSimulationLog) updateCharts(lastSimulationLog)"> Include Roth Conversions in Spendable
                 </label>
                 &nbsp;&nbsp;
-                <label title="Show or hide the Tax/Spend breakdown chart.">
-                    <input type="checkbox" id="show-taxspend" checked onchange="document.getElementById('chartTaxSpend').style.display=this.checked?'':'none'"> Show Tax/Spend Chart
+                <label title="Show or hide the Taxation breakdown chart.">
+                    <input type="checkbox" id="show-taxspend" onchange="document.getElementById('taxation-section').style.display=this.checked?'':'none'"> Show Taxation Chart
                 </label>
             </div>
-            <canvas id="chartTaxSpend" style="max-height:350px;"></canvas>
+            <div id="taxation-section" style="display:none;">
+                <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Taxation</h4>
+                <canvas id="chartTaxSpend" style="max-height:350px;"></canvas>
+            </div>
         </div>
 
         <div id="tab-opt" class="card hidden table-wrap">
@@ -367,6 +375,7 @@ window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('STATEname').innerHTML = generateStateOptions();
     setupChartSync();
     toggleStrategyUI();
+    setupAutoRecalc();
 });
 
 // Auto-run tests when page loads (comment out if you don't want auto-run)

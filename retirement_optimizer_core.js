@@ -582,14 +582,14 @@ function simulate(inputs) {
         let ssReduction = (inputs.ssFailYear > 2000 && currentYear >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
         let s1 = (alive1 && age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate * ssReduction : 0;
         let s2 = (alive2 && age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate * ssReduction : 0;
-        let pension = inputs.pensionAnnual;
+        let pension = inputs.pensionAnnual * (inputs.pensionCola ? inflation : 1);
 
         // One is deceased (if both decease, it won't get here)
         if (!alive1 || !alive2) {
             // Survivor Logic: Max of SS + Survivorship % of Pension
             s1 = Math.max(s1, s2);
             s2 = 0;
-            if (!alive1) { pension = pension * (inputs.survivorPct / 100) }
+            if (!alive1) { pension = pension * (inputs.survivorPct / 100); }
         }
         let fixedInc = s1 + s2;					// Social Security
         let taxableInc = pension;				// Pensions, W2, RMDs, IRA withdrawals, wdBrokerage
@@ -1029,6 +1029,7 @@ function getInputs() {
         ss2Age: +val('ss2Age'),
         pensionAnnual: +val('pensionAnnual'),
         survivorPct: +val('survivorPct'),
+        pensionCola: !!valChecked('pensionCola'),
         spendGoal: +val('spendGoal'),
         spendChange: (spendChange / 100.0),
         iraBaseGoal: +val('iraBaseGoal'),
@@ -1643,26 +1644,60 @@ function calculateInflationAdjustedWithdrawal(principal, growthRate, inflationRa
 
 
 function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWorth = 100000) {
-    const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
-    const dispTax   = inCurrentDollars ? totals.taxCurrentDollars   : totals.tax;
-    const dispSpend = inCurrentDollars ? totals.spendCurrentDollars : totals.spend;
-    const dispNW    = inCurrentDollars ? finalNWCurrentDollars      : finalNW;
-    document.getElementById('stat-rate').innerText = (totals.tax / totals.gross * 100).toFixed(1) + '%';
-    document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
-    document.getElementById('stat-tax').innerText = '$' + Math.round(dispTax).toLocaleString();
-    document.getElementById('stat-nw').innerText = '$' + Math.round(dispNW).toLocaleString();
-    document.getElementById('stat-years').innerText = totals.yearsfunded + '/' + totals.yearstested;
-    // document.getElementById('stat-yearsfunded').innerText = totals.yearsfunded;
-    let indicator = '🛑 FAILED ';
-    if (totals.yearsfunded >= totals.yearstested && finalNW > minNetWorth) {
-        indicator = '🟢 SUCCESS ';
-    }
-    document.getElementById('stat-success').innerText = indicator;
+    const inCD = document.getElementById('show-current-dollars')?.checked;
+    const dispTax   = inCD ? totals.taxCurrentDollars   : totals.tax;
+    const dispSpend = inCD ? totals.spendCurrentDollars : totals.spend;
+    const dispNW    = inCD ? finalNWCurrentDollars      : finalNW;
+    const dispRate  = totals.tax / totals.gross;
 
+    document.getElementById('stat-rate').innerText  = (dispRate * 100).toFixed(1) + '%';
+    document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
+    document.getElementById('stat-tax').innerText   = '$' + Math.round(dispTax).toLocaleString();
+    document.getElementById('stat-nw').innerText    = '$' + Math.round(dispNW).toLocaleString();
+    document.getElementById('stat-years').innerText = totals.yearsfunded + '/' + totals.yearstested;
+    document.getElementById('stat-success').innerText =
+        (totals.yearsfunded >= totals.yearstested && finalNW > minNetWorth) ? '🟢 SUCCESS ' : '🛑 FAILED ';
+
+    // Delta vs previous run
+    if (_prevStatsTotals) {
+        const pTax   = inCD ? _prevStatsTotals.taxCurrentDollars   : _prevStatsTotals.tax;
+        const pSpend = inCD ? _prevStatsTotals.spendCurrentDollars : _prevStatsTotals.spend;
+        const pNW    = inCD ? _prevStatsFinalNWCD                  : _prevStatsFinalNW;
+        const pRate  = _prevStatsTotals.tax / _prevStatsTotals.gross;
+
+        function fmtDelta(cur, prev, preferHigh) {
+            const d = Math.round(cur - prev);
+            if (d === 0) return '';
+            const good = preferHigh ? d > 0 : d < 0;
+            const clr = good ? '#1a7a1a' : '#c0392b';
+            return `<span style="color:${clr}">${d > 0 ? '+' : ''}${d.toLocaleString()}</span>`;
+        }
+        function fmtDeltaPct(cur, prev, preferHigh) {
+            const d = cur - prev;
+            if (Math.abs(d) < 0.00005) return '';
+            const good = preferHigh ? d > 0 : d < 0;
+            const clr = good ? '#1a7a1a' : '#c0392b';
+            return `<span style="color:${clr}">${d > 0 ? '+' : ''}${(d * 100).toFixed(2)}%</span>`;
+        }
+
+        const rD = document.getElementById('stat-rate-delta');
+        const tD = document.getElementById('stat-tax-delta');
+        const sD = document.getElementById('stat-spend-delta');
+        const nD = document.getElementById('stat-nw-delta');
+        if (rD) rD.innerHTML = fmtDeltaPct(dispRate, pRate, false);
+        if (tD) tD.innerHTML = fmtDelta(dispTax, pTax, false);
+        if (sD) sD.innerHTML = fmtDelta(dispSpend, pSpend, true);
+        if (nD) nD.innerHTML = fmtDelta(dispNW, pNW, true);
+    }
+
+    _prevStatsTotals    = { ...totals };
+    _prevStatsFinalNW   = finalNW;
+    _prevStatsFinalNWCD = finalNWCurrentDollars;
 }
 
 let lastSimulationLog = null;
 let lastTotals = null, lastFinalNW = null, lastFinalNWCurrentDollars = null;
+let _prevStatsTotals = null, _prevStatsFinalNW = null, _prevStatsFinalNWCD = null;
 let assetChart, taxChart, incomeChart;
 
 // Crosshair plugin — vertical dashed line at the active x position
@@ -1782,17 +1817,17 @@ function updateCharts(log) {
                 {
                     label: 'Fed Tax',
                     data: log.map(r => r.FedTax * adj(r)),
-                    type: 'bar', backgroundColor: '#e74c3c80', stack: 'taxes', order: 2
+                    type: 'bar', backgroundColor: '#e74c3cC0', stack: 'taxes', order: 2
                 },
                 {
                     label: 'State Tax',
                     data: log.map(r => r.StateTax * adj(r)),
-                    type: 'bar', backgroundColor: '#c0392bB0', stack: 'taxes', order: 2
+                    type: 'bar', backgroundColor: '#f1948a90', stack: 'taxes', order: 2
                 },
                 {
                     label: 'IRMAA',
                     data: log.map(r => r.IRMAA * adj(r)),
-                    type: 'bar', backgroundColor: '#7b241cC0', stack: 'taxes', order: 2
+                    type: 'bar', backgroundColor: '#922b21E0', stack: 'taxes', order: 2
                 },
                 {
                     label: 'Roth Conv',
@@ -1861,10 +1896,12 @@ function updateCharts(log) {
                 mkInc('Cap Gains',        '#1abc9cB0', r => r.CapGains),
                 mkInc('Dividends',        '#f39c12B0', r => r.cashDividends),
                 mkInc('Interest',         '#f1c40fB0', r => r.cashInterest),
+                // Visual separator between income and expense legend items
+                { label: '│', type: 'bar', data: log.map(() => 0), backgroundColor: 'transparent', borderWidth: 0, stack: 'income', order: 2 },
                 // Tax causes stack on top (unscaled absolute amounts)
                 mkTax('Fed Tax',   '#e74c3cC0', r => r.FedTax),
-                mkTax('State Tax', '#c0392bC0', r => r.StateTax),
-                mkTax('IRMAA',     '#922b21C0', r => r.IRMAA),
+                mkTax('State Tax', '#f1948a90', r => r.StateTax),
+                mkTax('IRMAA',     '#922b21E0', r => r.IRMAA),
                 // Spendable Income line sits exactly at the income/tax seam
                 {
                     label: 'Spendable Income',
@@ -1883,7 +1920,13 @@ function updateCharts(log) {
             },
             plugins: {
                 ...sharedTooltip.plugins,
-                legend: { labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 } }
+                legend: {
+                    onClick: (e, item, legend) => {
+                        if (item.text === '│') return;
+                        Chart.defaults.plugins.legend.onClick(e, item, legend);
+                    },
+                    labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }
+                }
             }
         }
     });
@@ -1905,6 +1948,29 @@ function showTab(id) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     const activeBtn = document.querySelector(`.tab-btn[onclick*="${id}"]`);
     if (activeBtn) activeBtn.classList.add('active');
+}
+
+
+function setupAutoRecalc() {
+    let timer = null;
+    function scheduleRecalc() {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            const tab = document.querySelector('.tab-btn.active')?.getAttribute('onclick') || '';
+            if (tab.includes('tab-opt')) {
+                runOptimizer();
+            } else {
+                runSimulation();
+            }
+        }, 400);
+    }
+    document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
+        if (el.type === 'checkbox' || el.tagName === 'SELECT') {
+            el.addEventListener('change', scheduleRecalc);
+        } else {
+            el.addEventListener('input', scheduleRecalc);
+        }
+    });
 }
 
 

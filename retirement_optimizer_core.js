@@ -1723,6 +1723,16 @@ function updateCharts(log) {
             tooltip: {
                 itemSort: (a, b) => b.parsed.y - a.parsed.y,
                 callbacks: {
+                    title: items => {
+                        const r = log[items[0]?.dataIndex];
+                        if (!r) return items[0]?.label ?? '';
+                        const a1 = (r.age1 == null || r.age1 === '—') ? '--' : r.age1;
+                        const a2 = (r.age2 == null || r.age2 === '—') ? '--' : r.age2;
+                        const taxPct = r.totalIncome > 0
+                            ? (r.totalTax / r.totalIncome * 100).toFixed(1) + '%'
+                            : '--';
+                        return `${r.year}  |  You: ${a1}  Spouse: ${a2}  |  Tax: ${taxPct}`;
+                    },
                     label: ctx => ctx.dataset.label + ': ' + Math.round(ctx.parsed.y).toLocaleString()
                 }
             }

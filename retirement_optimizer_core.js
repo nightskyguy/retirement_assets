@@ -1810,31 +1810,52 @@ function updateCharts(log) {
         }
     });
 
-    // Income Sources chart
+    // Income Sources chart — Option C+
+    // Income source bars are scaled so they collectively sum to netIncome (spendable).
+    // Tax bars (Fed, State, IRMAA) stack on top, reaching totalIncome.
+    // Bar height = totalIncome; Spendable Income line sits at the income/tax seam.
     const ctxI = document.getElementById('chartIncomeSources').getContext('2d');
     (Chart.getChart(ctxI.canvas) ?? incomeChart)?.destroy();
-    const mkBar = (label, color, dataFn, stack = 'income') => ({
-        label, data: log.map(dataFn),
-        type: 'bar', backgroundColor: color, stack, order: 2
+
+    // Scale each source so visible bars collectively sum to netIncome.
+    // Using visibleSum as denominator absorbs unlisted components (e.g. brokerage basis return).
+    const visibleSum = r => r.SSincome + r.pension + r.RMDwd + r.IRAwd + r.RothWD + r.CapGains + r.cashDividends + r.cashInterest;
+    const mkInc = (label, color, rawFn) => ({
+        label, type: 'bar', backgroundColor: color, stack: 'income', order: 2,
+        data: log.map(r => {
+            const vsum = visibleSum(r);
+            const scale = vsum > 0 ? r.netIncome / vsum : 1;
+            return rawFn(r) * scale * adj(r);
+        })
     });
+    const mkTax = (label, color, rawFn) => ({
+        label, type: 'bar', backgroundColor: color, stack: 'income', order: 2,
+        data: log.map(r => rawFn(r) * adj(r))
+    });
+
     incomeChart = new Chart(ctxI, {
         data: {
             labels: log.map(r => r.year),
             datasets: [
-                mkBar('Social Security',  '#2ecc7180', r => r.SSincome          * adj(r)),
-                mkBar('Pension',          '#27ae6080', r => r.pension            * adj(r)),
-                mkBar('IRA RMD',          '#e67e2280', r => r.RMDwd              * adj(r)),
-                mkBar('IRA Withdrawal',   '#d35400B0', r => r.IRAwd              * adj(r)),
-                mkBar('Roth Withdrawal',  '#8e44ad80', r => r.RothWD             * adj(r)),
-                mkBar('Cap Gains',        '#2980b980', r => r.CapGains           * adj(r)),
-                mkBar('Dividends',        '#16a08580', r => r.cashDividends      * adj(r)),
-                mkBar('Interest',         '#1abc9c80', r => r.cashInterest       * adj(r)),
-                mkBar('Total Taxation',   '#e74c3cC0', r => r.totalTax           * adj(r), 'taxes'),
+                // Income sources — each scaled proportionally so they sum to netIncome
+                mkInc('Social Security',  '#3498dbB0', r => r.SSincome),
+                mkInc('Pension',          '#9b59b6B0', r => r.pension),
+                mkInc('IRA RMD',          '#e67e22B0', r => r.RMDwd),
+                mkInc('IRA Withdrawal',   '#d35400B0', r => r.IRAwd),
+                mkInc('Roth Withdrawal',  '#95a5a6B0', r => r.RothWD),
+                mkInc('Cap Gains',        '#1abc9cB0', r => r.CapGains),
+                mkInc('Dividends',        '#f39c12B0', r => r.cashDividends),
+                mkInc('Interest',         '#f1c40fB0', r => r.cashInterest),
+                // Tax causes stack on top (unscaled absolute amounts)
+                mkTax('Fed Tax',   '#e74c3cC0', r => r.FedTax),
+                mkTax('State Tax', '#c0392bC0', r => r.StateTax),
+                mkTax('IRMAA',     '#922b21C0', r => r.IRMAA),
+                // Spendable Income line sits exactly at the income/tax seam
                 {
-                    label: 'Total Income',
-                    data: log.map(r => r.totalIncome * adj(r)),
-                    type: 'line', borderColor: '#222222', borderWidth: 2,
-                    backgroundColor: '#222222', pointBackgroundColor: '#222222',
+                    label: 'Spendable Income',
+                    data: log.map(r => r.netIncome * adj(r)),
+                    type: 'line', borderColor: '#27ae60', borderWidth: 2.5,
+                    backgroundColor: '#27ae60', pointBackgroundColor: '#27ae60',
                     fill: false, order: 1
                 }
             ]

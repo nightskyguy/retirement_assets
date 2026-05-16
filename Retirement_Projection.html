@@ -370,6 +370,29 @@ var TAXData = {
           <div class="ctrl-header"><label>State income tax</label></div>
           <select id="stateSelect" class="state-select" style="margin-top:6px" onchange="applyStateThresholds(); update()"></select>
         </div>
+        <details class="section-sub" id="secLifestyle">
+          <summary>Desired Spendable Income</summary>
+          <div class="section-body" style="padding-left:0;padding-bottom:0">
+            <div class="ctrl">
+              <div class="ctrl-header"><label>Annual target (today's $)</label><span class="val" id="vLtAmt">$0</span></div>
+              <input type="range" id="ltAmt" min="0" max="500000" step="5000" value="0">
+            </div>
+            <div class="ctrl" id="ltModeRow">
+              <div class="ctrl-header"><label>Mode</label></div>
+              <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--text)">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="flat" checked> Constant $</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="infl"> + Inflation</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="smile"> Spending smile</label>
+                <label style="display:flex;align-items:center;gap:6px;opacity:0.4;pointer-events:none"><input type="radio" name="ltMode" value="bestfit" disabled> Best fit <span style="color:var(--muted)">(coming soon)</span></label>
+              </div>
+            </div>
+            <div class="ctrl" id="ltDeclineRow">
+              <div class="ctrl-header"><label>Annual real decline</label><span class="val" id="vLtDecline">1.5%</span></div>
+              <input type="range" id="ltDecline" min="0.1" max="5" step="0.1" value="1.5">
+              <div class="ctrl-note">% per year spending decreases in real terms (spending smile mode only)</div>
+            </div>
+          </div>
+        </details>
       </div>
     </details>
 
@@ -611,30 +634,6 @@ var TAXData = {
       </div>
     </details>
 
-    <details class="section" id="secLifestyle">
-      <summary>Lifestyle Target</summary>
-      <div class="section-body">
-        <div class="ctrl">
-          <div class="ctrl-header"><label>Annual target (today's $)</label><span class="val" id="vLtAmt">$0</span></div>
-          <input type="range" id="ltAmt" min="0" max="500000" step="5000" value="0">
-        </div>
-        <div class="ctrl" id="ltModeRow">
-          <div class="ctrl-header"><label>Mode</label></div>
-          <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--text)">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="flat" checked> Constant $</label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="infl"> + Inflation</label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="smile"> Spending smile</label>
-            <label style="display:flex;align-items:center;gap:6px;opacity:0.4;pointer-events:none"><input type="radio" name="ltMode" value="bestfit" disabled> Best fit <span style="color:var(--muted)">(coming soon)</span></label>
-          </div>
-        </div>
-        <div class="ctrl" id="ltDeclineRow">
-          <div class="ctrl-header"><label>Annual real decline</label><span class="val" id="vLtDecline">1.5%</span></div>
-          <input type="range" id="ltDecline" min="0.1" max="5" step="0.1" value="1.5">
-          <div class="ctrl-note">% per year spending decreases in real terms (spending smile mode only)</div>
-        </div>
-      </div>
-    </details>
-
     <details class="section" id="secThresholds">
       <summary>Tax &amp; IRMAA Thresholds</summary>
       <div class="section-body">
@@ -683,7 +682,7 @@ var TAXData = {
             <span id="lgBaseWdWrap"    class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(3,'lgBaseWdWrap')"><span class="leg-sq" style="background:#a78bfa"></span><span id="lgBase">Withdrawal target</span></span>
             <span id="lgActualWrap"    class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(4,'lgActualWrap')"><span class="leg-sq" style="background:#e8eaf2"></span>Total Income</span>
             <span id="lgContribWrap"   class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(5,'lgContribWrap')"><span class="leg-sq" style="background:#5aab6b"></span>IRA Contribution</span>
-            <span id="lgLifestyleWrap"  class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(6,'lgLifestyleWrap')"><span class="leg-dash" style="border-color:#f5a623"></span><span id="lgLifestyle">Lifestyle target</span></span>
+            <span id="lgLifestyleWrap"  class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(6,'lgLifestyleWrap')"><span class="leg-dash" style="border-color:#f5a623"></span><span id="lgLifestyle">Desired Income</span></span>
             <span id="lgTaxableWrap"   class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(11,'lgTaxableWrap')"><span class="leg-dash" style="border-color:#fb923c"></span>Taxable Income</span>
             <span id="lgFedTaxWrap"    class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(12,'lgFedTaxWrap')"><span class="leg-sq" style="background:#f87171"></span>Federal Tax</span>
             <span id="lgStateTaxWrap"  class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(13,'lgStateTaxWrap')"><span class="leg-sq" style="background:#34d399"></span>State Tax</span>
@@ -726,9 +725,9 @@ var TAXData = {
             <th rowspan="2">Year</th><th rowspan="2">Age</th>
             <th colspan="4" class="th-group" id="thIraGroup"><span id="thIraLabel">My IRA</span>
               <span style="margin-left:6px;display:inline-flex;gap:3px;font-weight:400;text-transform:none;letter-spacing:0">
-                <button id="optIra_mine"     class="tog active" onclick="setIraView('mine')"    >Me</button>
+                <button id="optIra_mine"     class="tog"        onclick="setIraView('mine')"    >Me</button>
                 <button id="optIra_spouse"   class="tog"        onclick="setIraView('spouse')"  >Spouse</button>
-                <button id="optIra_combined" class="tog"        onclick="setIraView('combined')">Both</button>
+                <button id="optIra_combined" class="tog active" onclick="setIraView('combined')">Both</button>
               </span>
             </th>
             <th rowspan="2">Total Income</th><th rowspan="2">Bracket</th>
@@ -886,7 +885,7 @@ let lastBrokStart = 0, lastCashStart = 0;
 let lastUseReal = false;
 
 // IRA view toggle
-let iraView = 'mine';          // 'mine' | 'spouse' | 'combined'
+let iraView = 'combined';      // 'mine' | 'spouse' | 'combined'
 let lastSpouseIRAStart = 0;
 let lastRothStart      = 0;
 
@@ -1275,7 +1274,7 @@ const chart = new Chart(chartCtx, {
     /* 3 Wd target      */ { label:'Withdrawal target',    data:[], borderColor:'#a78bfa', backgroundColor:'transparent', fill:false, tension:0, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
     /* 4 Total income   */ { label:'Total Income',         data:[], borderColor:'#e8eaf2', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2, yAxisID:'yWd' },
     /* 5 Contribution   */ { label:'IRA Contribution',     data:[], borderColor:'#5aab6b', backgroundColor:'transparent', fill:false, hidden:true,  tension:0, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
-    /* 6 Lifestyle tgt  */ { label:'Lifestyle target',     data:[], borderColor:'#f5a623', backgroundColor:'transparent', fill:false, hidden:false, tension:0, pointRadius:0, borderWidth:2,   borderDash:[8,4], yAxisID:'yWd' },
+    /* 6 Lifestyle tgt  */ { label:'Desired Income',     data:[], borderColor:'#f5a623', backgroundColor:'transparent', fill:false, hidden:false, tension:0, pointRadius:0, borderWidth:2,   borderDash:[8,4], yAxisID:'yWd' },
     /* 7 Brokerage bal  */ { label:'Brokerage',            data:[], borderColor:'#2dd4bf', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
     /* 8 Cash bal       */ { label:'Cash',                 data:[], borderColor:'#4ade80', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
     /* 9 Spouse IRA bal */ { label:'Spouse IRA',           data:[], borderColor:'#818cf8', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
@@ -1319,18 +1318,20 @@ const chart = new Chart(chartCtx, {
             const stateTaxInc = useReal ? (r.stateTaxableIncome || 0) / r.inflMult : (r.stateTaxableIncome || 0);
             if(totalIncome <= 0) return [];
             const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
-            let bracket = null;
+            let bracket = null, stateBracket = null;
             const irmaaHit = [];
             for(const t of sorted){
               const threshold = threshAmt(t, r, useReal);
               const compare   = t.type === 'bracket' ? taxableInc : (t.type === 'state' ? stateTaxInc : totalIncome);
               if(compare >= threshold){
                 if(t.type === 'bracket') bracket = t.label;
+                else if(t.type === 'state') stateBracket = t.label;
                 else if(t.type === 'irmaa') irmaaHit.push(t.label);
               }
             }
             const lines = ['', ` Total income: ${fmt(totalIncome)}`, ` Taxable income: ${fmt(taxableInc)}`];
             if(bracket) lines.push(` In: ${bracket}`);
+            if(stateBracket) lines.push(` State: ${stateBracket}`);
             irmaaHit.forEach(name => lines.push(` ⚠ ${name}`));
             return lines;
           }
@@ -1879,7 +1880,7 @@ function buildBookmarkUrl(){
   p.set('spouseBirthMonth',document.getElementById('spouseBirthMonth').value);
   p.set('spouseIRA',       parseBalInput('spouseIRAStart'));
   p.set('roth',            parseBalInput('rothStart'));
-  if(iraView !== 'mine') p.set('iraView', iraView);
+  if(iraView !== 'combined') p.set('iraView', iraView);
   const stateVal = document.getElementById('stateSelect')?.value;
   if(stateVal) p.set('state', stateVal);
 
@@ -2213,7 +2214,7 @@ updateLtControls();
 setCgMode('none');
 setBrokDivMode(false);
 setCgInflate(false);
-setIraView('mine');
+setIraView('combined');
 // Set contribEndAge min to match starting age
 {
   const ceEl    = document.getElementById('contribEndAge');

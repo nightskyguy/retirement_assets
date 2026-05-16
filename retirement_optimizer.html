@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer 7g</title>
+    <title>Retirement Optimizer 8</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
 	<base target="_blank">	
@@ -31,6 +31,7 @@
 					<option value="baseline">🔄Withdraw Proportionally</option>  <!--⚖️-->
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
 					<option value="bracket">🪣Fill Federal Tax Bracket</option>
+					<option value="propwd">📈Proportional Withdraw %</option>
 					<option value="minlimit" disabled style="color:#bbb;">🛑Lesser of IRMAA or TaxBracket (not implemented)</option>
 				</select></label>
 			</div>
@@ -39,12 +40,17 @@
 				<label>Target Years (&#120393;)
 				<input type="number" id="nYears" value="10"></label>
 			</div>
-			
+
 			<div id="ui-bracket" class="input-group hidden">
 				<label><select id="stratRate">
                     <!-- This will be populated by generateStratRateOptions() -->
 					<option value="24" selected>24% : 40300 MFJ / 201000 SGL</option>
 				</select></label>
+			</div>
+
+			<div id="ui-propwd" class="input-group hidden">
+				<label title="Withdraw this % above After-Tax Spend from IRAs each year (0%=exact spend, 100%=2× spend, 200%=3× spend). Excess flows to Roth or Cash.">Withdraw Boost %
+				<input type="number" id="propWithdraw" value="20" min="0" max="200" step="5"></label>
 			</div>
 		</div>  <!-- strategy-container -->
         <div class="row">	
@@ -245,6 +251,7 @@
 				<H3>Change Log</H3>
 				For the most details, please <STRONG>consult the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A></STRONG>.
 				<ul>
+				<li><b>8</b> Added "Proportional Withdraw %" strategy with configurable IRA withdrawal boost (0–200% above spend goal); optimizer tests it at 0/5/10/20/50% × Max Conversion on/off; Roth Conv bar now stacks on top of taxes in the lower chart; optimizer table highlights best row per column (lowest tax, lowest tax rate, highest spend, highest wealth).</li>
 				<li><b>7g</b> Found one source of over-withdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it over-withdrew to make up for the excluded pension.  Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed.
 					<B>BUG</B>Unfortunately, there are still scenarios where under-withdrawal occurs (though not over-withdrawals anymore!).
 					The mass of columns have been tamed somewhat with live selectable options, including suppressing columns that have only zeros, grouping by association.

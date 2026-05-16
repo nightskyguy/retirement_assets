@@ -678,6 +678,16 @@ function simulate(inputs) {
             withdrawStrategy.taxrate = [nominalTaxRate, capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit)]
             withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy)
 
+        } else if (inputs.strategy === 'propwd') {
+            // Proportional Withdraw %: same account order as baseline, but targets
+            // (1 + propWithdraw) × spendGoal as the gross withdrawal floor.
+            // Only spendGoal is actually spent; the surplus flows to Roth/Cash via step 7.
+            const boostTarget = spendGoal * (1 + (inputs.propWithdraw ?? 0.20));
+            const boostedNeed = Math.max(0, boostTarget + irmaa - possibleIncome);
+            withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash'];
+            withdrawStrategy.taxrate = [nominalTaxRate, capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0, 0];
+            withdrawals = calculateWithdrawals(curBalances, boostedNeed, withdrawStrategy);
+
         } else {
             /*********************/
             /* BASELINE Strategy */
@@ -1017,6 +1027,7 @@ function getInputs() {
         ssFailYear: +val('ssFailYear'),
         ssFailPct: +val('ssFailPct') / 100.0,
         maxConversion: valChecked('maxConversion'),
+        propWithdraw: +val('propWithdraw') / 100.0,
         startInYear: +val('startInYear')
     };
 }
@@ -1078,6 +1089,11 @@ function runOptimizer() {
     for (const maxConv of [false, true]) {
         // Proportional baseline
         addResult('Proportional', '—', -1, { strategy: 'baseline', maxConversion: maxConv });
+
+        // Proportional Withdraw % — 0%, 5%, 10%, 20%, 50%
+        for (const pct of [0, 5, 10, 20, 50]) {
+            addResult('Prop Withdraw', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
+        }
 
         // Fixed N years
         for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
@@ -1173,15 +1189,21 @@ function renderOptimizerTable(results) {
         }
     }
 
-    // Identify the single best row (min tax among successes; tie-break on max wealth)
+    // Identify per-metric winners among successful rows
     const successes = results.filter(r => r.totals.success);
-    let bestId = null;
+    const bestIds = new Set();
+    const colWinners = {}; // key -> winning _id
     if (successes.length > 0) {
-        const minTax = Math.min(...successes.map(r => r.totals.tax));
-        const tied = successes.filter(r => r.totals.tax === minTax);
-        const best = tied.length === 1 ? tied[0]
-            : tied.reduce((a, b) => a.finalNW >= b.finalNW ? a : b);
-        bestId = best._id;
+        const pick = (arr, fn, isMax) => arr.reduce((a, b) => isMax ? (fn(b) > fn(a) ? b : a) : (fn(b) < fn(a) ? b : a));
+        const w1 = pick(successes, r => r.totals.tax, false);
+        const w2 = pick(successes, r => r.totals.tax / r.totals.gross, false);
+        const w3 = pick(successes, r => r.totals.spend, true);
+        const w4 = pick(successes, r => r.finalNW, true);
+        [w1, w2, w3, w4].forEach(w => bestIds.add(w._id));
+        colWinners.tax   = w1._id;
+        colWinners.rate  = w2._id;
+        colWinners.spend = w3._id;
+        colWinners.nw    = w4._id;
     }
 
     // Header with sort arrows
@@ -1191,14 +1213,20 @@ function renderOptimizerTable(results) {
         return `<th style="cursor:pointer;user-select:none;" onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</th>`;
     }).join('') + '</tr>';
 
-    // Rows
+    // Rows — per-cell green for metric winners, full-row green if winner in any metric
     const rowsHtml = display.map(r => {
-        const isBest = r._id === bestId;
-        const style = isBest
-            ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
-            : 'cursor:pointer;';
-        const cells = columns.map(col => `<td>${col.getValue(r)}</td>`).join('');
-        return `<tr style="${style}" onclick="loadOptimizerResult(${r._id})" title="Click to load this strategy">${cells}</tr>`;
+        const isWinner = bestIds.has(r._id);
+        const rowStyle = isWinner ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;' : 'cursor:pointer;';
+        const cells = columns.map(col => {
+            // Highlight the specific winning cell with a slightly deeper green
+            const cellWin = (col.key === 'tax' && r._id === colWinners.tax)
+                         || (col.key === 'rate' && r._id === colWinners.rate)
+                         || (col.key === 'spend' && r._id === colWinners.spend)
+                         || (col.key === 'nw'   && r._id === colWinners.nw);
+            const cellStyle = cellWin ? ' style="background-color:#4CAF5080;"' : '';
+            return `<td${cellStyle}>${col.getValue(r)}</td>`;
+        }).join('');
+        return `<tr style="${rowStyle}" onclick="loadOptimizerResult(${r._id})" title="Click to load this strategy">${cells}</tr>`;
     }).join('');
 
     document.querySelector('#opt-table thead').innerHTML = headerHtml;
@@ -1729,7 +1757,7 @@ function updateCharts(log) {
                 {
                     label: 'Roth Conv',
                     data: log.map(r => r.rothConv * adj(r)),
-                    type: 'bar', backgroundColor: '#8e44ad80', stack: 'conversions', order: 2
+                    type: 'bar', backgroundColor: '#8e44ad80', stack: 'taxes', order: 2
                 },
                 {
                     label: 'Spendable Income',
@@ -1781,6 +1809,7 @@ function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
     document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket' && m !== 'minlimit');
+    document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 

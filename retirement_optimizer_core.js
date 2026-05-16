@@ -1084,6 +1084,7 @@ function runOptimizer() {
             _strategy: overrides.strategy,
             _nYears: overrides.nYears ?? null,
             _stratRate: overrides.stratRate ?? null,
+            _propWithdraw: overrides.propWithdraw ?? null,
             totals: res.totals,
             finalNW: res.finalNW,
             finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
@@ -1115,7 +1116,7 @@ function runOptimizer() {
     }
 
     window.optimizerResults = results;
-    window.optimizerSortState = window.optimizerSortState ?? { colKey: null, direction: 'asc' };
+    window.optimizerSortState = { colKey: 'spend', direction: 'desc' };
     renderOptimizerTable(results);
     showTab('tab-opt');
 }
@@ -1257,6 +1258,8 @@ function loadOptimizerResult(id) {
         document.getElementById('nYears').value = result._nYears;
     } else if (result._strategy === 'bracket' && result._stratRate != null) {
         document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
+    } else if (result._strategy === 'propwd' && result._propWithdraw != null) {
+        document.getElementById('propWithdraw').value = Math.round(result._propWithdraw * 100);
     }
 
     document.getElementById('maxConversion').checked = result._maxConversion;

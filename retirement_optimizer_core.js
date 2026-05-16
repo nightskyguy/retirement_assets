@@ -1654,9 +1654,14 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
     document.getElementById('stat-tax').innerText   = '$' + Math.round(dispTax).toLocaleString();
     document.getElementById('stat-nw').innerText    = '$' + Math.round(dispNW).toLocaleString();
-    document.getElementById('stat-years').innerText = totals.yearsfunded + '/' + totals.yearstested;
-    document.getElementById('stat-success').innerText =
-        (totals.yearsfunded >= totals.yearstested && finalNW > minNetWorth) ? '🟢 SUCCESS ' : '🛑 FAILED ';
+    const yearsEl = document.getElementById('stat-years');
+    if (yearsEl) {
+        yearsEl.innerText = totals.yearsfunded + '/' + totals.yearstested;
+        const fullyFunded = totals.yearsfunded >= totals.yearstested && finalNW > minNetWorth;
+        yearsEl.style.color = fullyFunded ? '' : '#c0392b';
+    }
+    const changeEl = document.getElementById('stat-success');
+    if (changeEl) changeEl.innerText = _lastChangedInputLabel ? '↺ ' + _lastChangedInputLabel : '';
 
     // Delta vs previous run
     if (_prevStatsTotals) {
@@ -1680,10 +1685,12 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
             return `<span style="color:${clr}">${d > 0 ? '+' : ''}${(d * 100).toFixed(2)}%</span>`;
         }
 
+        const yD = document.getElementById('stat-years-delta');
         const rD = document.getElementById('stat-rate-delta');
         const tD = document.getElementById('stat-tax-delta');
         const sD = document.getElementById('stat-spend-delta');
         const nD = document.getElementById('stat-nw-delta');
+        if (yD) yD.innerHTML = fmtDelta(totals.yearsfunded, _prevStatsTotals.yearsfunded, true);
         if (rD) rD.innerHTML = fmtDeltaPct(dispRate, pRate, false);
         if (tD) tD.innerHTML = fmtDelta(dispTax, pTax, false);
         if (sD) sD.innerHTML = fmtDelta(dispSpend, pSpend, true);
@@ -1698,6 +1705,7 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
 let lastSimulationLog = null;
 let lastTotals = null, lastFinalNW = null, lastFinalNWCurrentDollars = null;
 let _prevStatsTotals = null, _prevStatsFinalNW = null, _prevStatsFinalNWCD = null;
+let _lastChangedInputLabel = null;
 let assetChart, taxChart, incomeChart;
 
 // Crosshair plugin — vertical dashed line at the active x position
@@ -1952,8 +1960,23 @@ function showTab(id) {
 
 
 function setupAutoRecalc() {
+    const LABELS = {
+        spendGoal: 'Spend Goal', spendChange: 'Spend Δ%', strategy: 'Strategy',
+        nYears: 'N Years', stratRate: 'Bracket', propWithdraw: 'Boost%',
+        iraBaseGoal: 'IRA Goal', maxConversion: 'Max Conv',
+        birthyear1: 'Your Birth', die1: 'Your Life Exp',
+        birthyear2: 'Spouse Birth', die2: 'Spouse Life Exp',
+        IRA1: 'Your IRA', IRA2: 'Spouse IRA',
+        Brokerage: 'Brokerage', BrokerageBasis: 'Brok Basis',
+        Roth: 'Roth', Cash: 'Cash',
+        ss1: 'My SS', ss1Age: 'SS Age', ss2: 'Spouse SS', ss2Age: 'Spouse SS Age',
+        pensionAnnual: 'Pension', survivorPct: 'Survivor%', pensionCola: 'Pension COLA',
+        inflation: 'Inflation', cpi: 'CPI/COLA', growth: 'Growth', cashYield: 'Cash Yield',
+        dividendRate: 'Dividends', STATEname: 'State Tax', ssFailYear: 'SS Fail Yr', ssFailPct: 'SS Payout%'
+    };
     let timer = null;
-    function scheduleRecalc() {
+    function scheduleRecalc(el) {
+        _lastChangedInputLabel = LABELS[el.id] || el.id;
         clearTimeout(timer);
         timer = setTimeout(() => {
             const tab = document.querySelector('.tab-btn.active')?.getAttribute('onclick') || '';
@@ -1966,9 +1989,9 @@ function setupAutoRecalc() {
     }
     document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
         if (el.type === 'checkbox' || el.tagName === 'SELECT') {
-            el.addEventListener('change', scheduleRecalc);
+            el.addEventListener('change', () => scheduleRecalc(el));
         } else {
-            el.addEventListener('input', scheduleRecalc);
+            el.addEventListener('input', () => scheduleRecalc(el));
         }
     });
 }

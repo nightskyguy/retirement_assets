@@ -1333,8 +1333,8 @@ const chart = new Chart(chartCtx, {
     },
     scales:{
       x:{ grid:{color:'rgba(42,48,72,0.6)'}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, maxTicksLimit:12} },
-      yBal:{ position:'left',  grid:{color:'rgba(42,48,72,0.6)'}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, callback:v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':'$'+(v/1000).toFixed(0)+'K'}, title:{display:true,text:'Balance',color:'#7b83a0',font:{size:10,family:"'DM Mono',monospace"}} },
-      yWd: { position:'right', grid:{display:false}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, callback:v=>'$'+(v/1000).toFixed(0)+'K'}, title:{display:true,text:'Gross Income',color:'#7b83a0',font:{size:10,family:"'DM Mono',monospace"}} }
+      yBal:{ position:'left',  grid:{color:'rgba(42,48,72,0.6)'}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, callback:v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':'$'+(v/1000).toFixed(0)+'K'}, title:{display:true,text:['Balances','Future $'],color:'#7b83a0',font:{size:10,family:"'DM Mono',monospace"}} },
+      yWd: { position:'right', grid:{display:false}, ticks:{color:'#7b83a0', font:{family:"'DM Mono',monospace",size:10}, callback:v=>'$'+(v/1000).toFixed(0)+'K'}, title:{display:true,text:'Future $',color:'#7b83a0',font:{size:10,family:"'DM Mono',monospace"}} }
     }
   }
 });
@@ -1740,7 +1740,8 @@ function update(){
     });
   });
 
-  chart.options.scales.yWd.title.text = useReal ? "Gross Income (today's $)" : 'Gross Income';
+  chart.options.scales.yWd.title.text  = useReal ? "Today's $" : "Future $";
+  chart.options.scales.yBal.title.text = useReal ? ['Balances', "Today's $"] : ['Balances', 'Future $'];
 
   // yWd max from visible data only
   let yWdMax = 1000;

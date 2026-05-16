@@ -280,6 +280,7 @@ var TAXData = {
       <li><b>NIIT line</b> — Net Investment Income Tax threshold ($250k MFJ / $200k Single + std deduction). A 3.8% surtax on net investment income above this level. Unlike other thresholds, NIIT is <b>not indexed to inflation</b> and plots as a flat line in Future $ mode.</li>
       <li>Threshold amounts are bracket floors from the 2026 tax tables with the standard deduction added automatically. The std deduction is age-adjusted at 65 (MFJ base $32,200 + $1,650 per spouse at 65; Single base $16,100 + $2,050 at 65). For example, MFJ income is first taxed at 10% above the $32,200 standard deduction — the first $32,200 is fully sheltered. Thresholds are grown with inflation each year (except NIIT, which is flat in nominal terms).</li>
       <li>Click any legend item to show or hide it.</li>
+      <li><b>Threshold editor</b> — amounts are in today's $ and grown with inflation each year. Federal brackets are compared against Fed Taxable Income; state brackets against State Taxable Income; IRMAA tiers against MAGI (≈ Total Income). A negative amount marks a non-indexed threshold that stays flat in nominal terms (e.g. NIIT). Colors: orange = fed bracket, purple = IRMAA/NIIT, blue = state bracket. Entries sort low→high when you leave the amount field.</li>
     </ul>
 
     <h3 class="amber">Metric Cards</h3>
@@ -640,14 +641,6 @@ var TAXData = {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
           <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">amt · show</span>
         </div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:.5rem">
-          Today's $. Sorted low→high on blur. Grown with inflation.<br>
-          Federal brackets compared against Fed Taxable Income.<br>
-          State brackets compared against State Taxable Income.<br>
-          IRMAA thresholds compared against MAGI (≈ Total Income).<br>
-          Negative = not inflation-indexed (flat nominal, e.g. NIIT).<br>
-          Orange = fed bracket · Purple = IRMAA/NIIT · Blue = state bracket
-        </div>
         <div class="thresh-grid" id="threshGrid">
           <span class="gh">Label</span><span class="gh" style="text-align:right">Amount</span><span class="gh" style="text-align:center">✓</span>
         </div>
@@ -852,7 +845,7 @@ function buildStateThresholds(stateKey, status) {
     if(floor <= 0) return;
     result.push({
       id:      's' + result.length,
-      label:   stateName + ' ' + parseFloat((b.r * 100).toFixed(1)) + '% bracket',
+      label:   stateKey + ' ' + parseFloat((b.r * 100).toFixed(1)) + '% bracket',
       amount:  floor,
       color:   STATE_THRESH_COLORS[result.length % STATE_THRESH_COLORS.length],
       visible: result.length < 2,
@@ -1688,7 +1681,7 @@ function update(){
     const dsIdx      = bracketBaseIdx + i;
     const hasNext    = i < sortedBrackets.length - 1;
     const fillTarget = hasNext ? dsIdx + 1 : false;
-    const fillAlpha  = (i % 2 === 0) ? 0.14 : 0.36;
+    const fillAlpha  = (i % 2 === 0) ? 0.05 : 0.11;
 
     const data = rows.map(r => {
       const v = threshAmt(t, r, useReal);

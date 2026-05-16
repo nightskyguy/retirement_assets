@@ -329,14 +329,18 @@
         <div id="tab-chart" class="card hidden">
             <canvas id="chartAssets" style="max-height:350px;"></canvas>
             <hr>
+            <canvas id="chartIncomeSources" style="max-height:350px;"></canvas>
+            <hr>
             <div style="margin: 4px 8px;">
                 <label title="Show Roth conversion amounts as a bar. When checked, also adds conversions to the Spendable Income line.">
                     <input type="checkbox" id="include-roth-spendable" onchange="if(lastSimulationLog) updateCharts(lastSimulationLog)"> Include Roth Conversions in Spendable
                 </label>
+                &nbsp;&nbsp;
+                <label title="Show or hide the Tax/Spend breakdown chart.">
+                    <input type="checkbox" id="show-taxspend" checked onchange="document.getElementById('chartTaxSpend').style.display=this.checked?'':'none'"> Show Tax/Spend Chart
+                </label>
             </div>
             <canvas id="chartTaxSpend" style="max-height:350px;"></canvas>
-            <hr>
-            <canvas id="chartIncomeSources" style="max-height:350px;"></canvas>
         </div>
 
         <div id="tab-opt" class="card hidden table-wrap">

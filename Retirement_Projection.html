@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IRA Projection Tool</title>
+<title>Retirement Projection Tool</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- Inline fallback: Federal + IRMAA sections needed by this tool.
      Keep in sync with retirement_optimizer_taxdata.js.
@@ -366,7 +366,7 @@ var TAXData = {
         </div>
         <div class="ctrl">
           <div class="ctrl-header"><label>State income tax</label></div>
-          <select id="stateSelect" class="state-select" style="margin-top:6px" onchange="update()"></select>
+          <select id="stateSelect" class="state-select" style="margin-top:6px" onchange="applyStateThresholds(); update()"></select>
         </div>
       </div>
     </details>
@@ -641,10 +641,11 @@ var TAXData = {
         </div>
         <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:.5rem">
           Today's $. Sorted low→high on blur. Grown with inflation.<br>
-          Raw taxable income floor. Compared against Taxable Income line.<br>
+          Federal brackets compared against Fed Taxable Income.<br>
+          State brackets compared against State Taxable Income.<br>
           IRMAA thresholds compared against MAGI (≈ Total Income).<br>
           Negative = not inflation-indexed (flat nominal, e.g. NIIT).<br>
-          Orange = bracket · Purple = IRMAA/NIIT cliff · Blue = state (custom)
+          Orange = fed bracket · Purple = IRMAA/NIIT · Blue = state bracket
         </div>
         <div class="thresh-grid" id="threshGrid">
           <span class="gh">Label</span><span class="gh" style="text-align:right">Amount</span><span class="gh" style="text-align:center">✓</span>
@@ -828,6 +829,43 @@ function buildDefaults(status) {  // status: 'MFJ' or 'SGL'
 
 const DEFAULTS = { mfj: buildDefaults('MFJ'), single: buildDefaults('SGL') };
 
+const STATE_THRESH_COLORS = ['#60a5fa','#34d399','#a78bfa','#f9a8d4','#fcd34d','#6ee7b7','#c4b5fd','#86efac'];
+
+function buildStateThresholds(stateKey, status) {
+  if(!stateKey || stateKey === 'no' || !TAXData[stateKey]) return [];
+  const stateData = TAXData[stateKey];
+  const stateName = stateData.STATE || stateKey;
+  const brackets  = stateData[status]?.brackets || [];
+  const result = [];
+  brackets.forEach((b, i) => {
+    if(b.l === Infinity || b.r <= 0) return;
+    const floor = i === 0 ? 0 : brackets[i - 1].l;
+    if(floor <= 0) return;
+    result.push({
+      id:      's' + result.length,
+      label:   stateName + ' ' + parseFloat((b.r * 100).toFixed(1)) + '% bracket',
+      amount:  floor,
+      color:   STATE_THRESH_COLORS[result.length % STATE_THRESH_COLORS.length],
+      visible: result.length < 2,
+      type:    'state',
+    });
+  });
+  return result;
+}
+
+function applyStateThresholds() {
+  const stateKey = document.getElementById('stateSelect')?.value || 'CA';
+  const isSingle = document.getElementById('singleToggle')?.checked;
+  const status   = isSingle ? 'SGL' : 'MFJ';
+  thresholds = thresholds.filter(t => !t.id?.startsWith('s'));
+  const newThresh = buildStateThresholds(stateKey, status);
+  if(newThresh.length) {
+    thresholds = thresholds.concat(newThresh);
+    thresholds.sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
+  }
+  renderThreshEditor();
+}
+
 let thresholds = DEFAULTS.mfj.map(t => ({...t}));
 const EXTRA_COLORS = ['#93c5fd','#6ee7b7','#fca5a5','#d8b4fe','#fdba74','#a5f3fc'];
 let colorIdx = 0;
@@ -936,10 +974,10 @@ function toggleThreshLine(threshObj){
 function setFilingStatus(isSingle){
   document.getElementById('singleToggle').checked = isSingle;
   const src = isSingle ? DEFAULTS.single : DEFAULTS.mfj;
-  // Replace built-in thresholds; preserve any user-added custom thresholds beyond the defaults
+  // Replace built-in thresholds; preserve user-added custom thresholds (no id)
   const customs = thresholds.filter(t => !t.id);
   thresholds = src.map(t => ({...t})).concat(customs);
-  renderThreshEditor();
+  applyStateThresholds();  // re-adds state thresholds for new filing status, calls renderThreshEditor
   update();
 }
 
@@ -1170,7 +1208,8 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
     const stateTax    = taxResult ? taxResult.stateTax    : 0;
     const fedMarginal = taxResult ? (taxResult.federalMarginalRate || 0) : 0;
     const stMarginal  = taxResult ? (taxResult.stateMarginalRate   || 0) : 0;
-    const fedTaxableIncome = taxResult ? (taxResult.federalTaxableIncome || 0) : 0;
+    const fedTaxableIncome  = taxResult ? (taxResult.federalTaxableIncome || 0) : 0;
+    const stateTaxableIncome = taxResult ? (taxResult.stateTaxableIncome  || 0) : 0;
     const rowMagi     = taxResult ? (taxResult.MAGI || taxResult.AGI || 0) : 0;
     magiHistory.push({ y, magi: rowMagi });
 
@@ -1207,7 +1246,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
       rmdActive: rmd > 0 && rmd > targetWd,
       withdrawing,
       taxResult, totalTax, federalTax, stateTax, irmaaAmt: irmaaAnnualCost,
-      fedTaxableIncome, fedMarginal, stMarginal,
+      fedTaxableIncome, stateTaxableIncome, fedMarginal, stMarginal,
       rothConversion, conversionTax, cashUsedForTax,
     });
   }
@@ -1264,13 +1303,14 @@ const chart = new Chart(chartCtx, {
             const useReal = document.getElementById('realToggle').checked;
             const totalIncome = useReal ? r.realTotalIncome : r.totalIncome;
             const taxableInc  = useReal ? (r.fedTaxableIncome || 0) / r.inflMult : (r.fedTaxableIncome || 0);
+            const stateTaxInc = useReal ? (r.stateTaxableIncome || 0) / r.inflMult : (r.stateTaxableIncome || 0);
             if(totalIncome <= 0) return [];
             const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
             let bracket = null;
             const irmaaHit = [];
             for(const t of sorted){
               const threshold = threshAmt(t, r, useReal);
-              const compare   = t.type === 'bracket' ? taxableInc : totalIncome;
+              const compare   = t.type === 'bracket' ? taxableInc : (t.type === 'state' ? stateTaxInc : totalIncome);
               if(compare >= threshold){
                 if(t.type === 'bracket') bracket = t.label;
                 else if(t.type === 'irmaa') irmaaHit.push(t.label);
@@ -1300,7 +1340,7 @@ function bracketForRow(r){
   const taxable = r.fedTaxableIncome || 0;
   for(const t of sorted){
     const threshold = threshAmt(t, r, false);
-    const compare   = t.type === 'bracket' ? taxable : r.totalIncome;
+    const compare   = t.type === 'bracket' ? taxable : (t.type === 'state' ? (r.stateTaxableIncome || 0) : r.totalIncome);
     if(compare >= threshold){
       if(t.type === 'bracket') bracketLabel = t.label;
       else if(t.type === 'irmaa'){
@@ -2079,7 +2119,7 @@ setIraView('mine');
   ceEl.min = startAge;
   if(+ceEl.value < startAge) ceEl.value = startAge;
 }
-renderThreshEditor();
+applyStateThresholds();  // populates state brackets then calls renderThreshEditor
 update();
 
 // Open Assumptions + IRA subtree on desktop; collapse all on mobile

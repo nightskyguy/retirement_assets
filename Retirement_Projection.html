@@ -198,6 +198,8 @@ var TAXData = {
   .tog { background:var(--surface2); border:1px solid var(--border); border-radius:4px; color:var(--muted); font-family:var(--mono); font-size:10px; padding:2px 7px; cursor:pointer; transition:background .15s, color .15s, border-color .15s; }
   .tog.active { background:var(--teal); border-color:var(--teal); color:#0f1117; font-weight:500; }
   .tog:hover:not(.active) { border-color:var(--muted); color:var(--text); }
+  .chart-view-row { display:flex; gap:4px; margin-bottom:8px; }
+  .chart-view-row .tog { flex:1; text-align:center; font-size:11px; padding:4px 0; }
   .note-table { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; overflow-x:auto; }
   .note-table table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; }
   .note-table th { color:var(--muted); font-weight:400; text-align:right; padding:4px 8px; letter-spacing:.05em; border-bottom:1px solid var(--border); white-space:nowrap; }
@@ -668,6 +670,11 @@ var TAXData = {
     </div>
 
     <div class="chart-wrap">
+      <div class="chart-view-row">
+        <button id="cvBal" class="tog active" onclick="setChartView('balances')">Balances</button>
+        <button id="cvTax" class="tog"        onclick="setChartView('taxation')">Taxation</button>
+        <button id="cvInc" class="tog"        onclick="setChartView('income')">Income</button>
+      </div>
       <div class="legend" id="legend">
         <div class="leg-group">
           <span class="leg-group-hdr" onclick="toggleLegendGroup('grpIncome')">▼ Income &amp; Flows</span>
@@ -678,6 +685,9 @@ var TAXData = {
             <span id="lgContribWrap"   class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(5,'lgContribWrap')"><span class="leg-sq" style="background:#5aab6b"></span>IRA Contribution</span>
             <span id="lgLifestyleWrap"  class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(6,'lgLifestyleWrap')"><span class="leg-dash" style="border-color:#f5a623"></span><span id="lgLifestyle">Lifestyle target</span></span>
             <span id="lgTaxableWrap"   class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(11,'lgTaxableWrap')"><span class="leg-dash" style="border-color:#fb923c"></span>Taxable Income</span>
+            <span id="lgFedTaxWrap"    class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(12,'lgFedTaxWrap')"><span class="leg-sq" style="background:#f87171"></span>Federal Tax</span>
+            <span id="lgStateTaxWrap"  class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(13,'lgStateTaxWrap')"><span class="leg-sq" style="background:#34d399"></span>State Tax</span>
+            <span id="lgIrmaaTaxWrap"  class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(14,'lgIrmaaTaxWrap')"><span class="leg-sq" style="background:#c084fc"></span>IRMAA</span>
           </div>
         </div>
         <div class="leg-group">
@@ -1254,7 +1264,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
 }
 
 /* ── Chart setup ── */
-const FIXED_DS = 12;
+const FIXED_DS = 15;
 const chartCtx = document.getElementById('ch').getContext('2d');
 const chart = new Chart(chartCtx, {
   type:'line',
@@ -1270,7 +1280,10 @@ const chart = new Chart(chartCtx, {
     /* 8 Cash bal       */ { label:'Cash',                 data:[], borderColor:'#4ade80', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
     /* 9 Spouse IRA bal */ { label:'Spouse IRA',           data:[], borderColor:'#818cf8', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
     /*10 Roth bal       */ { label:'Roth',                 data:[], borderColor:'#f472b6', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
-    /*11 Taxable income */ { label:'Taxable Income',       data:[], borderColor:'#fb923c', backgroundColor:'transparent', fill:false, hidden:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd', borderDash:[4,3] }
+    /*11 Taxable income */ { label:'Taxable Income',       data:[], borderColor:'#fb923c', backgroundColor:'transparent', fill:false, hidden:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd', borderDash:[4,3] },
+    /*12 Federal Tax   */ { label:'Federal Tax',          data:[], borderColor:'#f87171', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
+    /*13 State Tax     */ { label:'State Tax',            data:[], borderColor:'#34d399', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
+    /*14 IRMAA         */ { label:'IRMAA',                data:[], borderColor:'#c084fc', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' }
   ]},
   options:{
     responsive:true, maintainAspectRatio:false,
@@ -1331,6 +1344,63 @@ const chart = new Chart(chartCtx, {
     }
   }
 });
+
+/* ── Chart view (Balances / Taxation / Income) ── */
+let chartView = 'balances';
+let _cvInit   = false;
+
+const CV = {
+  balances: { show:[1],             showBands:false },
+  taxation: { show:[4,11,12,13,14], showBands:true  },
+  income:   { show:[2,3,4,6],       showBands:false  }
+};
+
+const LEG_WRAP = [
+  'lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap',
+  'lgContribWrap','lgLifestyleWrap','lgBrokWrap','lgCashWrap',
+  'lgSpouseIRAWrap','lgRothWrap','lgTaxableWrap',
+  'lgFedTaxWrap','lgStateTaxWrap','lgIrmaaTaxWrap'
+];
+
+const CV_GROUPS = {
+  balances: ['grpBal'],
+  taxation: ['grpIncome','grpFedThr','grpIrmaa','grpStateThr'],
+  income:   ['grpIncome']
+};
+const ALL_GROUPS = ['grpBal','grpIncome','grpFedThr','grpIrmaa','grpStateThr'];
+
+function setChartView(mode) {
+  chartView = mode;
+  const cfg = CV[mode];
+
+  document.getElementById('cvBal').classList.toggle('active', mode === 'balances');
+  document.getElementById('cvTax').classList.toggle('active', mode === 'taxation');
+  document.getElementById('cvInc').classList.toggle('active', mode === 'income');
+
+  for (let i = 0; i < FIXED_DS; i++) {
+    const hidden = !cfg.show.includes(i);
+    chart.data.datasets[i].hidden = hidden;
+    const el = document.getElementById(LEG_WRAP[i]);
+    if (el) {
+      el.style.opacity = hidden ? '0.35' : '';
+      el.title         = hidden ? 'Hidden — click to show' : 'Click to hide';
+    }
+  }
+
+  for (let i = FIXED_DS; i < chart.data.datasets.length; i++) {
+    chart.data.datasets[i].hidden = !cfg.showBands;
+  }
+
+  chart.options.scales.yBal.display = (mode === 'balances');
+  chart.options.scales.yWd.display  = (mode !== 'balances');
+
+  ALL_GROUPS.forEach(g => {
+    const grp = document.getElementById(g)?.closest('.leg-group');
+    if (grp) grp.style.display = CV_GROUPS[mode].includes(g) ? '' : 'none';
+  });
+
+  chart.update('none');
+}
 
 /* ── Bracket annotation for table rows (always nominal) ── */
 function bracketForRow(r){
@@ -1595,6 +1665,11 @@ function update(){
     return v > 0 ? Math.round(useReal ? v / r.inflMult : v) : null;
   });
 
+  // Tax dollar lines
+  chart.data.datasets[12].data = rows.map(r => Math.round(useReal ? (r.federalTax || 0) / r.inflMult : (r.federalTax || 0)) || null);
+  chart.data.datasets[13].data = rows.map(r => Math.round(useReal ? (r.stateTax   || 0) / r.inflMult : (r.stateTax   || 0)) || null);
+  chart.data.datasets[14].data = rows.map(r => Math.round(useReal ? (r.irmaaAmt   || 0) / r.inflMult : (r.irmaaAmt   || 0)) || null);
+
   /* ── Threshold datasets ── */
   while(chart.data.datasets.length > FIXED_DS) chart.data.datasets.pop();
 
@@ -1669,6 +1744,11 @@ function update(){
   });
   chart.options.scales.yWd.min = 0;
   chart.options.scales.yWd.max = Math.ceil(yWdMax * 1.08 / 5000) * 5000;
+  // Re-enforce band visibility after bands are rebuilt each run
+  const _showBands = _cvInit ? CV[chartView].showBands : false;
+  for (let i = FIXED_DS; i < chart.data.datasets.length; i++) {
+    chart.data.datasets[i].hidden = !_showBands;
+  }
   chart.update('none');
 
   rebuildLegend();
@@ -1726,6 +1806,7 @@ function update(){
   lastFixedIncome = fixedIncome;
   lastUseReal     = useReal;
   buildTable(rows);
+  if (!_cvInit) { _cvInit = true; setChartView('balances'); }
 }
 
 /* ── URL bookmark / share ── */
@@ -1781,7 +1862,8 @@ function buildBookmarkUrl(){
   const stateVal = document.getElementById('stateSelect')?.value;
   if(stateVal) p.set('state', stateVal);
 
-  p.set('ds', [0,1,2,3,4,5,6,7,8,9,10,11].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
+  p.set('ds', [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(i => chart.data.datasets[i].hidden ? '0' : '1').join(''));
+  p.set('cv', chartView);
 
   return '?' + p.toString();
 }
@@ -1876,17 +1958,19 @@ function applyUrlParams(){
 
   if(p.has('ds')){
     const ds = p.get('ds');
-    const lgIds = ['lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap','lgContribWrap','lgLifestyleWrap','lgBrokWrap','lgCashWrap','lgSpouseIRAWrap','lgRothWrap','lgTaxableWrap'];
-    for(let i = 0; i < Math.min(12, ds.length); i++){
+    for(let i = 0; i < Math.min(FIXED_DS, ds.length); i++){
       const hidden = ds[i] === '0';
       chart.data.datasets[i].hidden = hidden;
-      const el = document.getElementById(lgIds[i]);
+      const el = document.getElementById(LEG_WRAP[i]);
       if(el){
         el.style.opacity = hidden ? '0.35' : '1';
         el.title         = hidden ? 'Hidden — click to show' : 'Click to hide';
       }
     }
   }
+
+  const cvParam = p.get('cv');
+  if(cvParam && CV[cvParam]) setChartView(cvParam);
 }
 
 async function shareBookmark(){

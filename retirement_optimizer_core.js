@@ -679,14 +679,18 @@ function simulate(inputs) {
             withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy)
 
         } else if (inputs.strategy === 'propwd') {
-            // Proportional Withdraw %: same account order as baseline, but targets
-            // (1 + propWithdraw) × spendGoal as the gross withdrawal floor.
-            // Only spendGoal is actually spent; the surplus flows to Roth/Cash via step 7.
-            const boostTarget = spendGoal * (1 + (inputs.propWithdraw ?? 0.20));
-            const boostedNeed = Math.max(0, boostTarget + irmaa - possibleIncome);
+            // Proportional +%: first withdraw proportionally for spending (same as baseline),
+            // then add an IRA-only boost of propWithdraw × spendGoal strictly from IRA.
+            // The after-tax surplus from the boost flows to Roth/Cash via step 7.
             withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash'];
             withdrawStrategy.taxrate = [nominalTaxRate, capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0, 0];
-            withdrawals = calculateWithdrawals(curBalances, boostedNeed, withdrawStrategy);
+            withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy);
+            const pct = inputs.propWithdraw ?? 0;
+            if (pct > 0) {
+                const remainingIRA = Math.max(0, curBalances.IRA - (withdrawals.IRA || 0));
+                const boost = Math.min(spendGoal * pct, remainingIRA);
+                withdrawals.IRA = (withdrawals.IRA || 0) + boost;
+            }
 
         } else {
             /*********************/
@@ -1087,10 +1091,7 @@ function runOptimizer() {
     }
 
     for (const maxConv of [false, true]) {
-        // Proportional baseline
-        addResult('Proportional', '—', -1, { strategy: 'baseline', maxConversion: maxConv });
-
-        // Proportional Withdraw % — 0%, 5%, 10%, 20%, 50%
+        // Proportional +% — 0% is the pure baseline; 5/10/20/50% add IRA-only boost
         for (const pct of [0, 5, 10, 20, 50]) {
             addResult('Prop Withdraw', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
         }
@@ -1107,7 +1108,7 @@ function runOptimizer() {
         }
     }
 
-    // Update top-bar stats using the proportional/no-maxConv baseline (first result)
+    // Update top-bar stats using the 0% propwd/no-maxConv row (first result, equivalent to baseline)
     const baseline = results[0];
     if (baseline) {
         updateStats(baseline.totals, baseline.finalNW, baseline.finalNWCurrentDollars);

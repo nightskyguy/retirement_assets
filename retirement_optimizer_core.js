@@ -1706,11 +1706,16 @@ function setupChartSync() {
     if (typeof Chart !== 'undefined') Chart.register(crosshairPlugin);
     const aCanvas = document.getElementById('chartAssets');
     const tCanvas = document.getElementById('chartTaxSpend');
-    if (!aCanvas || !tCanvas) return;
-    aCanvas.addEventListener('mousemove', e => { if (assetChart && taxChart) syncChart(assetChart, taxChart, e); });
-    aCanvas.addEventListener('mouseleave', () => { if (taxChart) clearChartHighlight(taxChart); });
-    tCanvas.addEventListener('mousemove', e => { if (taxChart && assetChart) syncChart(taxChart, assetChart, e); });
-    tCanvas.addEventListener('mouseleave', () => { if (assetChart) clearChartHighlight(assetChart); });
+    const iCanvas = document.getElementById('chartIncomeSources');
+    if (!aCanvas || !tCanvas || !iCanvas) return;
+    const syncOthers = (src, others, e) => others.forEach(c => { if (c) syncChart(src, c, e); });
+    const clearOthers = charts => charts.forEach(c => { if (c) clearChartHighlight(c); });
+    aCanvas.addEventListener('mousemove', e => syncOthers(assetChart,  [taxChart, incomeChart], e));
+    aCanvas.addEventListener('mouseleave', () => clearOthers([taxChart, incomeChart]));
+    tCanvas.addEventListener('mousemove', e => syncOthers(taxChart,   [assetChart, incomeChart], e));
+    tCanvas.addEventListener('mouseleave', () => clearOthers([assetChart, incomeChart]));
+    iCanvas.addEventListener('mousemove', e => syncOthers(incomeChart, [assetChart, taxChart], e));
+    iCanvas.addEventListener('mouseleave', () => clearOthers([assetChart, taxChart]));
 }
 function updateCharts(log) {
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
@@ -1782,12 +1787,12 @@ function updateCharts(log) {
                 {
                     label: 'State Tax',
                     data: log.map(r => r.StateTax * adj(r)),
-                    type: 'bar', backgroundColor: '#4BC0C0B3', stack: 'taxes', order: 2
+                    type: 'bar', backgroundColor: '#c0392bB0', stack: 'taxes', order: 2
                 },
                 {
                     label: 'IRMAA',
                     data: log.map(r => r.IRMAA * adj(r)),
-                    type: 'bar', backgroundColor: '#000000D0', stack: 'taxes', order: 2
+                    type: 'bar', backgroundColor: '#7b241cC0', stack: 'taxes', order: 2
                 },
                 {
                     label: 'Roth Conv',
@@ -1849,10 +1854,10 @@ function updateCharts(log) {
             datasets: [
                 // Income sources — each scaled proportionally so they sum to netIncome
                 mkInc('Social Security',  '#3498dbB0', r => r.SSincome),
-                mkInc('Pension',          '#9b59b6B0', r => r.pension),
+                mkInc('Pension',          '#7f8c8dB0', r => r.pension),
                 mkInc('IRA RMD',          '#e67e22B0', r => r.RMDwd),
                 mkInc('IRA Withdrawal',   '#d35400B0', r => r.IRAwd),
-                mkInc('Roth Withdrawal',  '#95a5a6B0', r => r.RothWD),
+                mkInc('Roth Withdrawal',  '#8e44adB0', r => r.RothWD),
                 mkInc('Cap Gains',        '#1abc9cB0', r => r.CapGains),
                 mkInc('Dividends',        '#f39c12B0', r => r.cashDividends),
                 mkInc('Interest',         '#f1c40fB0', r => r.cashInterest),

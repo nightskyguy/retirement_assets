@@ -147,7 +147,7 @@
 
         <div class="tabs">
             <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
-            <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Chart 📊</button>
+            <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer 🎯</button>
 		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
 		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}">Documentation <strong id="testsFailed">🟢</strong></button>
@@ -335,6 +335,8 @@
                 </label>
             </div>
             <canvas id="chartTaxSpend" style="max-height:350px;"></canvas>
+            <hr>
+            <canvas id="chartIncomeSources" style="max-height:350px;"></canvas>
         </div>
 
         <div id="tab-opt" class="card hidden table-wrap">

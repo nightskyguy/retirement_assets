@@ -750,14 +750,21 @@ function simulate(inputs) {
         inspectForErrors({ netSpendable: netSpendable, gap: gap, totalTax: totalTax });
 
         if (gap > 1.00) {
-            // We need to do more withdrawals.
-            withdrawStrategy.order = ['Brokerage', 'Cash', 'IRA', 'Roth'];
-            withdrawStrategy.weight = [40, 60, 0, 0];
-            withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0, nominalTaxRate, 0];
+            // We need to do more withdrawals. First try Brokerage + Cash.
+            withdrawStrategy.order = ['Brokerage', 'Cash'];
+            withdrawStrategy.weight = [40, 60];
+            withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0];
             withdrawals = calculateWithdrawals(curBalances, gap, withdrawStrategy);
-
-            netWithdrawals = accumulateWithdrawals([netWithdrawals, withdrawals])
+            netWithdrawals = accumulateWithdrawals([netWithdrawals, withdrawals]);
             applyWithdrawals(curBalances, withdrawals);
+
+            // If still short, fall back to Roth (tax-free).
+            if ((withdrawals.shortfall ?? 0) > 1 && curBalances.Roth > 0) {
+                const rothWd = { order: ['Roth'], taxrate: [0], weight: null };
+                const rothWithdrawals = calculateWithdrawals(curBalances, withdrawals.shortfall, rothWd);
+                netWithdrawals = accumulateWithdrawals([netWithdrawals, rothWithdrawals]);
+                applyWithdrawals(curBalances, rothWithdrawals);
+            }
         }
 
         // Recheck tax calculations due to possible additional withdrawals - and we now
@@ -895,6 +902,8 @@ function simulate(inputs) {
             'RothWD': netWithdrawals.Roth,
             'CashWD': netWithdrawals.Cash,
             'cashD+I': taxableDividends + taxableInterest,
+            'cashDividends': taxableDividends,
+            'cashInterest': taxableInterest,
             IRMAA: irmaa,
             FedTax: tax.federalTax,
             StateTax: tax.state,
@@ -1094,7 +1103,7 @@ function runOptimizer() {
     for (const maxConv of [false, true]) {
         // Proportional +% — 0% is the pure baseline; 5/10/20/50% add IRA-only boost
         for (const pct of [0, 5, 10, 20, 50]) {
-            addResult('Prop Withdraw', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
+            addResult('Proportional', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
         }
 
         // Fixed N years
@@ -1654,7 +1663,7 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
 
 let lastSimulationLog = null;
 let lastTotals = null, lastFinalNW = null, lastFinalNWCurrentDollars = null;
-let assetChart, taxChart;
+let assetChart, taxChart, incomeChart;
 
 // Crosshair plugin — vertical dashed line at the active x position
 const crosshairPlugin = {
@@ -1720,6 +1729,12 @@ function updateCharts(log) {
         }
     };
 
+    const mkLine = (label, color, dataFn) => ({
+        label, data: log.map(dataFn),
+        borderColor: color, backgroundColor: color,
+        pointBackgroundColor: color, fill: false
+    });
+
     const ctxA = document.getElementById('chartAssets').getContext('2d');
     (Chart.getChart(ctxA.canvas) ?? assetChart)?.destroy();
     assetChart = new Chart(ctxA, {
@@ -1727,14 +1742,20 @@ function updateCharts(log) {
         data: {
             labels: log.map(r => r.year),
             datasets: [
-                { label: 'IRAs',        data: log.map(r => r.TotalIRA    * adj(r)), borderColor: '#e67e22', fill: false },
-                { label: 'Roth',        data: log.map(r => r.Roth        * adj(r)), borderColor: '#000000', fill: false },
-                { label: 'Brokerage',   data: log.map(r => r.Brokerage   * adj(r)), borderColor: '#2980b9', fill: false },
-                { label: 'Cash',        data: log.map(r => r.Cash        * adj(r)), borderColor: '#27ae60', fill: false },
-                { label: 'TotalWealth', data: log.map(r => r.totalWealth * adj(r)), borderColor: '#888888', fill: false }
+                mkLine('IRAs',        '#e67e22', r => r.TotalIRA    * adj(r)),
+                mkLine('Roth',        '#8e44ad', r => r.Roth        * adj(r)),
+                mkLine('Brokerage',   '#2980b9', r => r.Brokerage   * adj(r)),
+                mkLine('Cash',        '#27ae60', r => r.Cash        * adj(r)),
+                mkLine('TotalWealth', '#555555', r => r.totalWealth * adj(r))
             ]
         },
-        options: { ...sharedTooltip }
+        options: {
+            ...sharedTooltip,
+            plugins: {
+                ...sharedTooltip.plugins,
+                legend: { labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 } }
+            }
+        }
     });
 
     const ctxT = document.getElementById('chartTaxSpend').getContext('2d');
@@ -1785,6 +1806,48 @@ function updateCharts(log) {
                 legend: {
                     labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }
                 }
+            }
+        }
+    });
+
+    // Income Sources chart
+    const ctxI = document.getElementById('chartIncomeSources').getContext('2d');
+    (Chart.getChart(ctxI.canvas) ?? incomeChart)?.destroy();
+    const mkBar = (label, color, dataFn, stack = 'income') => ({
+        label, data: log.map(dataFn),
+        type: 'bar', backgroundColor: color, stack, order: 2
+    });
+    incomeChart = new Chart(ctxI, {
+        data: {
+            labels: log.map(r => r.year),
+            datasets: [
+                mkBar('Social Security',  '#2ecc7180', r => r.SSincome          * adj(r)),
+                mkBar('Pension',          '#27ae6080', r => r.pension            * adj(r)),
+                mkBar('IRA RMD',          '#e67e2280', r => r.RMDwd              * adj(r)),
+                mkBar('IRA Withdrawal',   '#d35400B0', r => r.IRAwd              * adj(r)),
+                mkBar('Roth Withdrawal',  '#8e44ad80', r => r.RothWD             * adj(r)),
+                mkBar('Cap Gains',        '#2980b980', r => r.CapGains           * adj(r)),
+                mkBar('Dividends',        '#16a08580', r => r.cashDividends      * adj(r)),
+                mkBar('Interest',         '#1abc9c80', r => r.cashInterest       * adj(r)),
+                mkBar('Total Taxation',   '#e74c3cC0', r => r.totalTax           * adj(r), 'taxes'),
+                {
+                    label: 'Total Income',
+                    data: log.map(r => r.totalIncome * adj(r)),
+                    type: 'line', borderColor: '#222222', borderWidth: 2,
+                    backgroundColor: '#222222', pointBackgroundColor: '#222222',
+                    fill: false, order: 1
+                }
+            ]
+        },
+        options: {
+            ...sharedTooltip,
+            scales: {
+                x: { stacked: true },
+                y: { stacked: true, ticks: { callback: v => Math.round(v).toLocaleString() } }
+            },
+            plugins: {
+                ...sharedTooltip.plugins,
+                legend: { labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 } }
             }
         }
     });

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer 7g</title>
+    <title>Retirement Optimizer 8</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
 	<base target="_blank">	
@@ -28,7 +28,7 @@
 		
 			<div class="input-group">
 				<label><select id="strategy" onchange="toggleStrategyUI()">
-					<option value="baseline">🔄Withdraw Proportionally</option>  <!--⚖️-->
+					<option value="propwd">📊Withdraw Proportional +%</option>
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
 					<option value="bracket">🪣Fill Federal Tax Bracket</option>
 					<option value="minlimit" disabled style="color:#bbb;">🛑Lesser of IRMAA or TaxBracket (not implemented)</option>
@@ -39,12 +39,17 @@
 				<label>Target Years (&#120393;)
 				<input type="number" id="nYears" value="10"></label>
 			</div>
-			
+
 			<div id="ui-bracket" class="input-group hidden">
 				<label><select id="stratRate">
                     <!-- This will be populated by generateStratRateOptions() -->
 					<option value="24" selected>24% : 40300 MFJ / 201000 SGL</option>
 				</select></label>
+			</div>
+
+			<div id="ui-propwd" class="input-group hidden">
+				<label title="Withdraw this % above After-Tax Spend from IRAs each year (0%=exact spend, 100%=2× spend, 200%=3× spend). Excess flows to Roth or Cash.">Withdraw Boost %
+				<input type="number" id="propWithdraw" value="20" min="0" max="200" step="5"></label>
 			</div>
 		</div>  <!-- strategy-container -->
         <div class="row">	
@@ -98,6 +103,9 @@
             <div><label><B>Your</B> Pension<input type="number" id="pensionAnnual" value="15000"></label></div>
             <div><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
         </div>
+        <div class="row">
+            <div><label title="Most pensions have no inflation adjustment. Enable only if your pension includes a cost-of-living adjustment (COLA)."><input type="checkbox" id="pensionCola"> Pension has COLA (inflation-adjusted)</label></div>
+        </div>
 
 
         <h3>4. Assumptions</h3>
@@ -127,12 +135,12 @@
     <div class="main">
         <div class="top-bar">
             <div id="summary-stats" style="display:flex; gap:30px;">
-				<div id="stat-success">  </div>
-				<div title="How many years of life are fully funded."><small>Funded/Years of Life</small><br><strong id="stat-years">0</strong></div>
-                <div title="Total taxes paid/total spendable wealth"><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong></div>
-                <div title="Sum of all taxes paid."><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong></div>
-                <div title="How much spendable income was produced."><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong></div>
-                <div title="Remaining wealth at the end of life."><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong></div>
+				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;min-width:60px;"></div>
+				<div title="How many years of life are fully funded."><small>Funded/Years of Life</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Total taxes paid/total spendable wealth"><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Sum of all taxes paid."><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="How much spendable income was produced."><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Remaining wealth at the end of life."><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
 				<div id="popUpMessage" class="scenario-message"></div>
 				<div title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
 					<label><input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()"> Current $</label>
@@ -142,7 +150,7 @@
 
         <div class="tabs">
             <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
-            <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Chart 📊</button>
+            <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer 🎯</button>
 		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
 		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}">Documentation <strong id="testsFailed">🟢</strong></button>
@@ -185,7 +193,7 @@
                             <li><strong>Strategy:</strong> 
                                 Find this unlabeled item at the top left of the display.
                                 Set the <i>After-Tax Send</i> to the amount of after-tax income you need per year. And set the <i>Spend Delta</i> percentage. A Spend Delta of 0 means no change, while -1.5 would reduce spending by 1.5% each year. To have spending grow, use a number greater than 0, like 2%.  Default is -1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile"> historical data</A>.
-                                <ul><li>In <em>Withdraw Proportionally</em> it proportionately withdraws enough from all available sources to reach <i>After-tax Spending Goal</i>. Its a good baseline to compare with other strategies.</li>
+                                <ul><li>In <em>Withdraw Proportional +%</em> it proportionately withdraws enough from all sources to reach the <i>After-Tax Spend</i> goal, then adds an extra IRA-only boost of 0–200% of that spend goal. At 0% it is the pure proportional baseline; higher percentages accelerate IRA drawdown, with the after-tax surplus flowing to Roth (if Max Conversion is on) or Cash.</li>
                                 <li>Compare with <em>Reduce IRA in N Years</em> to amortize your IRAs in a fixed number of years (they will not be emptied, they will be drawn down to <i>IRA  Goal</i>.</li>
                                 <li><i>Fill Federal Tax Bracket</i> withdraws enough to max out the chosen federal tax bracket. NOTE: If your spend goal is in a bracket higher than you select, it will try to meet the spend goal instead of locking to the bracket.</li>
                                 <li><i>Lesser of IRMAA or TaxBracket</i> is not yet implemented, but here it's like <i>Fill Federal Tax Bracket</i>, but reduces the amount withdrawn to stay under the the lesser of the (next) IRMAA tier, the next state or next federal bracket - which ever is lower. It applies an inflation adjusted "safety threshold" of 2,000. There are three gotcha's here: a. the <i>After-Tax Spend</i> goal is in play so it may blow right past the next tier if you have insufficient non-taxable income, b. the current year IRMAA tax is based on income from two years ago - so this setting attempts to avoid FUTURE tax - not tax in this year, c. the current year filing status is what is used to avoid hitting a higher tier. Here is why that matters: If you or your spouse pass away, the careful work avoiding a higher tier two years ago will still <i>hurt </i> in the current year. For example if the MAGI is one dollar below the first tier while married, two years from now when filing status is Single, that MAGI falls into the 4th IRMAA tier - the only upside here, is that there is now half as much of the IRMAA tax since it is per-person. One solution is to remarry. :-) </li></ul>
@@ -245,6 +253,7 @@
 				<H3>Change Log</H3>
 				For the most details, please <STRONG>consult the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A></STRONG>.
 				<ul>
+				<li><b>8</b> Added "Proportional Withdraw %" strategy with configurable IRA withdrawal boost (0–200% above spend goal); optimizer tests it at 0/5/10/20/50% × Max Conversion on/off; Roth Conv bar now stacks on top of taxes in the lower chart; optimizer table highlights best row per column (lowest tax, lowest tax rate, highest spend, highest wealth).</li>
 				<li><b>7g</b> Found one source of over-withdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it over-withdrew to make up for the excluded pension.  Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed.
 					<B>BUG</B>Unfortunately, there are still scenarios where under-withdrawal occurs (though not over-withdrawals anymore!).
 					The mass of columns have been tamed somewhat with live selectable options, including suppressing columns that have only zeros, grouping by association.
@@ -321,14 +330,25 @@
 		</div>
 
         <div id="tab-chart" class="card hidden">
-            <canvas id="chartAssets" style="max-height:350px;"></canvas>
+            <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Balances</h4>
+            <canvas id="chartAssets" style="max-height:403px;"></canvas>
+            <hr>
+            <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Income and Expenses</h4>
+            <canvas id="chartIncomeSources" style="max-height:403px;"></canvas>
             <hr>
             <div style="margin: 4px 8px;">
                 <label title="Show Roth conversion amounts as a bar. When checked, also adds conversions to the Spendable Income line.">
                     <input type="checkbox" id="include-roth-spendable" onchange="if(lastSimulationLog) updateCharts(lastSimulationLog)"> Include Roth Conversions in Spendable
                 </label>
+                &nbsp;&nbsp;
+                <label title="Show or hide the Taxation breakdown chart.">
+                    <input type="checkbox" id="show-taxspend" onchange="document.getElementById('taxation-section').style.display=this.checked?'':'none'"> Show Taxation Chart
+                </label>
             </div>
-            <canvas id="chartTaxSpend" style="max-height:350px;"></canvas>
+            <div id="taxation-section" style="display:none;">
+                <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Taxation</h4>
+                <canvas id="chartTaxSpend" style="max-height:350px;"></canvas>
+            </div>
         </div>
 
         <div id="tab-opt" class="card hidden table-wrap">
@@ -354,6 +374,8 @@ window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('stratRate').innerHTML = generateStratRateOptions();
     document.getElementById('STATEname').innerHTML = generateStateOptions();
     setupChartSync();
+    toggleStrategyUI();
+    setupAutoRecalc();
 });
 
 // Auto-run tests when page loads (comment out if you don't want auto-run)

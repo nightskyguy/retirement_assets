@@ -582,14 +582,14 @@ function simulate(inputs) {
         let ssReduction = (inputs.ssFailYear > 2000 && currentYear >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
         let s1 = (alive1 && age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate * ssReduction : 0;
         let s2 = (alive2 && age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate * ssReduction : 0;
-        let pension = inputs.pensionAnnual;
+        let pension = inputs.pensionAnnual * (inputs.pensionCola ? inflation : 1);
 
         // One is deceased (if both decease, it won't get here)
         if (!alive1 || !alive2) {
             // Survivor Logic: Max of SS + Survivorship % of Pension
             s1 = Math.max(s1, s2);
             s2 = 0;
-            if (!alive1) { pension = pension * (inputs.survivorPct / 100) }
+            if (!alive1) { pension = pension * (inputs.survivorPct / 100); }
         }
         let fixedInc = s1 + s2;					// Social Security
         let taxableInc = pension;				// Pensions, W2, RMDs, IRA withdrawals, wdBrokerage
@@ -678,6 +678,20 @@ function simulate(inputs) {
             withdrawStrategy.taxrate = [nominalTaxRate, capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit)]
             withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy)
 
+        } else if (inputs.strategy === 'propwd') {
+            // Proportional +%: first withdraw proportionally for spending (same as baseline),
+            // then add an IRA-only boost of propWithdraw × spendGoal strictly from IRA.
+            // The after-tax surplus from the boost flows to Roth/Cash via step 7.
+            withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash'];
+            withdrawStrategy.taxrate = [nominalTaxRate, capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0, 0];
+            withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy);
+            const pct = inputs.propWithdraw ?? 0;
+            if (pct > 0) {
+                const remainingIRA = Math.max(0, curBalances.IRA - (withdrawals.IRA || 0));
+                const boost = Math.min(spendGoal * pct, remainingIRA);
+                withdrawals.IRA = (withdrawals.IRA || 0) + boost;
+            }
+
         } else {
             /*********************/
             /* BASELINE Strategy */
@@ -736,14 +750,21 @@ function simulate(inputs) {
         inspectForErrors({ netSpendable: netSpendable, gap: gap, totalTax: totalTax });
 
         if (gap > 1.00) {
-            // We need to do more withdrawals.
-            withdrawStrategy.order = ['Brokerage', 'Cash', 'IRA', 'Roth'];
-            withdrawStrategy.weight = [40, 60, 0, 0];
-            withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0, nominalTaxRate, 0];
+            // We need to do more withdrawals. First try Brokerage + Cash.
+            withdrawStrategy.order = ['Brokerage', 'Cash'];
+            withdrawStrategy.weight = [40, 60];
+            withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0];
             withdrawals = calculateWithdrawals(curBalances, gap, withdrawStrategy);
-
-            netWithdrawals = accumulateWithdrawals([netWithdrawals, withdrawals])
+            netWithdrawals = accumulateWithdrawals([netWithdrawals, withdrawals]);
             applyWithdrawals(curBalances, withdrawals);
+
+            // If still short, fall back to Roth (tax-free).
+            if ((withdrawals.shortfall ?? 0) > 1 && curBalances.Roth > 0) {
+                const rothWd = { order: ['Roth'], taxrate: [0], weight: null };
+                const rothWithdrawals = calculateWithdrawals(curBalances, withdrawals.shortfall, rothWd);
+                netWithdrawals = accumulateWithdrawals([netWithdrawals, rothWithdrawals]);
+                applyWithdrawals(curBalances, rothWithdrawals);
+            }
         }
 
         // Recheck tax calculations due to possible additional withdrawals - and we now
@@ -881,6 +902,8 @@ function simulate(inputs) {
             'RothWD': netWithdrawals.Roth,
             'CashWD': netWithdrawals.Cash,
             'cashD+I': taxableDividends + taxableInterest,
+            'cashDividends': taxableDividends,
+            'cashInterest': taxableInterest,
             IRMAA: irmaa,
             FedTax: tax.federalTax,
             StateTax: tax.state,
@@ -1006,6 +1029,7 @@ function getInputs() {
         ss2Age: +val('ss2Age'),
         pensionAnnual: +val('pensionAnnual'),
         survivorPct: +val('survivorPct'),
+        pensionCola: !!valChecked('pensionCola'),
         spendGoal: +val('spendGoal'),
         spendChange: (spendChange / 100.0),
         iraBaseGoal: +val('iraBaseGoal'),
@@ -1017,6 +1041,7 @@ function getInputs() {
         ssFailYear: +val('ssFailYear'),
         ssFailPct: +val('ssFailPct') / 100.0,
         maxConversion: valChecked('maxConversion'),
+        propWithdraw: +val('propWithdraw') / 100.0,
         startInYear: +val('startInYear')
     };
 }
@@ -1069,6 +1094,7 @@ function runOptimizer() {
             _strategy: overrides.strategy,
             _nYears: overrides.nYears ?? null,
             _stratRate: overrides.stratRate ?? null,
+            _propWithdraw: overrides.propWithdraw ?? null,
             totals: res.totals,
             finalNW: res.finalNW,
             finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
@@ -1076,8 +1102,10 @@ function runOptimizer() {
     }
 
     for (const maxConv of [false, true]) {
-        // Proportional baseline
-        addResult('Proportional', '—', -1, { strategy: 'baseline', maxConversion: maxConv });
+        // Proportional +% — 0% is the pure baseline; 5/10/20/50% add IRA-only boost
+        for (const pct of [0, 5, 10, 20, 50]) {
+            addResult('Proportional', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
+        }
 
         // Fixed N years
         for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
@@ -1091,14 +1119,14 @@ function runOptimizer() {
         }
     }
 
-    // Update top-bar stats using the proportional/no-maxConv baseline (first result)
+    // Update top-bar stats using the 0% propwd/no-maxConv row (first result, equivalent to baseline)
     const baseline = results[0];
     if (baseline) {
         updateStats(baseline.totals, baseline.finalNW, baseline.finalNWCurrentDollars);
     }
 
     window.optimizerResults = results;
-    window.optimizerSortState = window.optimizerSortState ?? { colKey: null, direction: 'asc' };
+    window.optimizerSortState = { colKey: 'spend', direction: 'desc' };
     renderOptimizerTable(results);
     showTab('tab-opt');
 }
@@ -1173,15 +1201,21 @@ function renderOptimizerTable(results) {
         }
     }
 
-    // Identify the single best row (min tax among successes; tie-break on max wealth)
+    // Identify per-metric winners among successful rows
     const successes = results.filter(r => r.totals.success);
-    let bestId = null;
+    const bestIds = new Set();
+    const colWinners = {}; // key -> winning _id
     if (successes.length > 0) {
-        const minTax = Math.min(...successes.map(r => r.totals.tax));
-        const tied = successes.filter(r => r.totals.tax === minTax);
-        const best = tied.length === 1 ? tied[0]
-            : tied.reduce((a, b) => a.finalNW >= b.finalNW ? a : b);
-        bestId = best._id;
+        const pick = (arr, fn, isMax) => arr.reduce((a, b) => isMax ? (fn(b) > fn(a) ? b : a) : (fn(b) < fn(a) ? b : a));
+        const w1 = pick(successes, r => r.totals.tax, false);
+        const w2 = pick(successes, r => r.totals.tax / r.totals.gross, false);
+        const w3 = pick(successes, r => r.totals.spend, true);
+        const w4 = pick(successes, r => r.finalNW, true);
+        [w1, w2, w3, w4].forEach(w => bestIds.add(w._id));
+        colWinners.tax   = w1._id;
+        colWinners.rate  = w2._id;
+        colWinners.spend = w3._id;
+        colWinners.nw    = w4._id;
     }
 
     // Header with sort arrows
@@ -1191,14 +1225,20 @@ function renderOptimizerTable(results) {
         return `<th style="cursor:pointer;user-select:none;" onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</th>`;
     }).join('') + '</tr>';
 
-    // Rows
+    // Rows — per-cell green for metric winners, full-row green if winner in any metric
     const rowsHtml = display.map(r => {
-        const isBest = r._id === bestId;
-        const style = isBest
-            ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
-            : 'cursor:pointer;';
-        const cells = columns.map(col => `<td>${col.getValue(r)}</td>`).join('');
-        return `<tr style="${style}" onclick="loadOptimizerResult(${r._id})" title="Click to load this strategy">${cells}</tr>`;
+        const isWinner = bestIds.has(r._id);
+        const rowStyle = isWinner ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;' : 'cursor:pointer;';
+        const cells = columns.map(col => {
+            // Highlight the specific winning cell with a slightly deeper green
+            const cellWin = (col.key === 'tax' && r._id === colWinners.tax)
+                         || (col.key === 'rate' && r._id === colWinners.rate)
+                         || (col.key === 'spend' && r._id === colWinners.spend)
+                         || (col.key === 'nw'   && r._id === colWinners.nw);
+            const cellStyle = cellWin ? ' style="background-color:#4CAF5080;"' : '';
+            return `<td${cellStyle}>${col.getValue(r)}</td>`;
+        }).join('');
+        return `<tr style="${rowStyle}" onclick="loadOptimizerResult(${r._id})" title="Click to load this strategy">${cells}</tr>`;
     }).join('');
 
     document.querySelector('#opt-table thead').innerHTML = headerHtml;
@@ -1228,6 +1268,8 @@ function loadOptimizerResult(id) {
         document.getElementById('nYears').value = result._nYears;
     } else if (result._strategy === 'bracket' && result._stratRate != null) {
         document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
+    } else if (result._strategy === 'propwd' && result._propWithdraw != null) {
+        document.getElementById('propWithdraw').value = Math.round(result._propWithdraw * 100);
     }
 
     document.getElementById('maxConversion').checked = result._maxConversion;
@@ -1602,27 +1644,69 @@ function calculateInflationAdjustedWithdrawal(principal, growthRate, inflationRa
 
 
 function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWorth = 100000) {
-    const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
-    const dispTax   = inCurrentDollars ? totals.taxCurrentDollars   : totals.tax;
-    const dispSpend = inCurrentDollars ? totals.spendCurrentDollars : totals.spend;
-    const dispNW    = inCurrentDollars ? finalNWCurrentDollars      : finalNW;
-    document.getElementById('stat-rate').innerText = (totals.tax / totals.gross * 100).toFixed(1) + '%';
-    document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
-    document.getElementById('stat-tax').innerText = '$' + Math.round(dispTax).toLocaleString();
-    document.getElementById('stat-nw').innerText = '$' + Math.round(dispNW).toLocaleString();
-    document.getElementById('stat-years').innerText = totals.yearsfunded + '/' + totals.yearstested;
-    // document.getElementById('stat-yearsfunded').innerText = totals.yearsfunded;
-    let indicator = '🛑 FAILED ';
-    if (totals.yearsfunded >= totals.yearstested && finalNW > minNetWorth) {
-        indicator = '🟢 SUCCESS ';
-    }
-    document.getElementById('stat-success').innerText = indicator;
+    const inCD = document.getElementById('show-current-dollars')?.checked;
+    const dispTax   = inCD ? totals.taxCurrentDollars   : totals.tax;
+    const dispSpend = inCD ? totals.spendCurrentDollars : totals.spend;
+    const dispNW    = inCD ? finalNWCurrentDollars      : finalNW;
+    const dispRate  = totals.tax / totals.gross;
 
+    document.getElementById('stat-rate').innerText  = (dispRate * 100).toFixed(1) + '%';
+    document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
+    document.getElementById('stat-tax').innerText   = '$' + Math.round(dispTax).toLocaleString();
+    document.getElementById('stat-nw').innerText    = '$' + Math.round(dispNW).toLocaleString();
+    const yearsEl = document.getElementById('stat-years');
+    if (yearsEl) {
+        yearsEl.innerText = totals.yearsfunded + '/' + totals.yearstested;
+        const fullyFunded = totals.yearsfunded >= totals.yearstested && finalNW > minNetWorth;
+        yearsEl.style.color = fullyFunded ? '' : '#c0392b';
+    }
+    const changeEl = document.getElementById('stat-success');
+    if (changeEl) changeEl.innerText = _lastChangedInputLabel ? '↺ ' + _lastChangedInputLabel : '';
+
+    // Delta vs previous run
+    if (_prevStatsTotals) {
+        const pTax   = inCD ? _prevStatsTotals.taxCurrentDollars   : _prevStatsTotals.tax;
+        const pSpend = inCD ? _prevStatsTotals.spendCurrentDollars : _prevStatsTotals.spend;
+        const pNW    = inCD ? _prevStatsFinalNWCD                  : _prevStatsFinalNW;
+        const pRate  = _prevStatsTotals.tax / _prevStatsTotals.gross;
+
+        function fmtDelta(cur, prev, preferHigh) {
+            const d = Math.round(cur - prev);
+            if (d === 0) return '';
+            const good = preferHigh ? d > 0 : d < 0;
+            const clr = good ? '#1a7a1a' : '#c0392b';
+            return `<span style="color:${clr}">${d > 0 ? '+' : ''}${d.toLocaleString()}</span>`;
+        }
+        function fmtDeltaPct(cur, prev, preferHigh) {
+            const d = cur - prev;
+            if (Math.abs(d) < 0.00005) return '';
+            const good = preferHigh ? d > 0 : d < 0;
+            const clr = good ? '#1a7a1a' : '#c0392b';
+            return `<span style="color:${clr}">${d > 0 ? '+' : ''}${(d * 100).toFixed(2)}%</span>`;
+        }
+
+        const yD = document.getElementById('stat-years-delta');
+        const rD = document.getElementById('stat-rate-delta');
+        const tD = document.getElementById('stat-tax-delta');
+        const sD = document.getElementById('stat-spend-delta');
+        const nD = document.getElementById('stat-nw-delta');
+        if (yD) yD.innerHTML = fmtDelta(totals.yearsfunded, _prevStatsTotals.yearsfunded, true);
+        if (rD) rD.innerHTML = fmtDeltaPct(dispRate, pRate, false);
+        if (tD) tD.innerHTML = fmtDelta(dispTax, pTax, false);
+        if (sD) sD.innerHTML = fmtDelta(dispSpend, pSpend, true);
+        if (nD) nD.innerHTML = fmtDelta(dispNW, pNW, true);
+    }
+
+    _prevStatsTotals    = { ...totals };
+    _prevStatsFinalNW   = finalNW;
+    _prevStatsFinalNWCD = finalNWCurrentDollars;
 }
 
 let lastSimulationLog = null;
 let lastTotals = null, lastFinalNW = null, lastFinalNWCurrentDollars = null;
-let assetChart, taxChart;
+let _prevStatsTotals = null, _prevStatsFinalNW = null, _prevStatsFinalNWCD = null;
+let _lastChangedInputLabel = null;
+let assetChart, taxChart, incomeChart;
 
 // Crosshair plugin — vertical dashed line at the active x position
 const crosshairPlugin = {
@@ -1665,11 +1749,16 @@ function setupChartSync() {
     if (typeof Chart !== 'undefined') Chart.register(crosshairPlugin);
     const aCanvas = document.getElementById('chartAssets');
     const tCanvas = document.getElementById('chartTaxSpend');
-    if (!aCanvas || !tCanvas) return;
-    aCanvas.addEventListener('mousemove', e => { if (assetChart && taxChart) syncChart(assetChart, taxChart, e); });
-    aCanvas.addEventListener('mouseleave', () => { if (taxChart) clearChartHighlight(taxChart); });
-    tCanvas.addEventListener('mousemove', e => { if (taxChart && assetChart) syncChart(taxChart, assetChart, e); });
-    tCanvas.addEventListener('mouseleave', () => { if (assetChart) clearChartHighlight(assetChart); });
+    const iCanvas = document.getElementById('chartIncomeSources');
+    if (!aCanvas || !tCanvas || !iCanvas) return;
+    const syncOthers = (src, others, e) => others.forEach(c => { if (c) syncChart(src, c, e); });
+    const clearOthers = charts => charts.forEach(c => { if (c) clearChartHighlight(c); });
+    aCanvas.addEventListener('mousemove', e => syncOthers(assetChart,  [taxChart, incomeChart], e));
+    aCanvas.addEventListener('mouseleave', () => clearOthers([taxChart, incomeChart]));
+    tCanvas.addEventListener('mousemove', e => syncOthers(taxChart,   [assetChart, incomeChart], e));
+    tCanvas.addEventListener('mouseleave', () => clearOthers([assetChart, incomeChart]));
+    iCanvas.addEventListener('mousemove', e => syncOthers(incomeChart, [assetChart, taxChart], e));
+    iCanvas.addEventListener('mouseleave', () => clearOthers([assetChart, taxChart]));
 }
 function updateCharts(log) {
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
@@ -1682,11 +1771,27 @@ function updateCharts(log) {
             tooltip: {
                 itemSort: (a, b) => b.parsed.y - a.parsed.y,
                 callbacks: {
+                    title: items => {
+                        const r = log[items[0]?.dataIndex];
+                        if (!r) return items[0]?.label ?? '';
+                        const a1 = (r.age1 == null || r.age1 === '—') ? '--' : r.age1;
+                        const a2 = (r.age2 == null || r.age2 === '—') ? '--' : r.age2;
+                        const taxPct = r.totalIncome > 0
+                            ? (r.totalTax / r.totalIncome * 100).toFixed(1) + '%'
+                            : '--';
+                        return `${r.year}  |  You: ${a1}  Spouse: ${a2}  |  Tax: ${taxPct}`;
+                    },
                     label: ctx => ctx.dataset.label + ': ' + Math.round(ctx.parsed.y).toLocaleString()
                 }
             }
         }
     };
+
+    const mkLine = (label, color, dataFn) => ({
+        label, data: log.map(dataFn),
+        borderColor: color, backgroundColor: color,
+        pointBackgroundColor: color, fill: false
+    });
 
     const ctxA = document.getElementById('chartAssets').getContext('2d');
     (Chart.getChart(ctxA.canvas) ?? assetChart)?.destroy();
@@ -1695,14 +1800,20 @@ function updateCharts(log) {
         data: {
             labels: log.map(r => r.year),
             datasets: [
-                { label: 'IRAs',        data: log.map(r => r.TotalIRA    * adj(r)), borderColor: '#e67e22', fill: false },
-                { label: 'Roth',        data: log.map(r => r.Roth        * adj(r)), borderColor: '#000000', fill: false },
-                { label: 'Brokerage',   data: log.map(r => r.Brokerage   * adj(r)), borderColor: '#2980b9', fill: false },
-                { label: 'Cash',        data: log.map(r => r.Cash        * adj(r)), borderColor: '#27ae60', fill: false },
-                { label: 'TotalWealth', data: log.map(r => r.totalWealth * adj(r)), borderColor: '#888888', fill: false }
+                mkLine('IRAs',        '#e67e22', r => r.TotalIRA    * adj(r)),
+                mkLine('Roth',        '#8e44ad', r => r.Roth        * adj(r)),
+                mkLine('Brokerage',   '#2980b9', r => r.Brokerage   * adj(r)),
+                mkLine('Cash',        '#27ae60', r => r.Cash        * adj(r)),
+                mkLine('TotalWealth', '#555555', r => r.totalWealth * adj(r))
             ]
         },
-        options: { ...sharedTooltip }
+        options: {
+            ...sharedTooltip,
+            plugins: {
+                ...sharedTooltip.plugins,
+                legend: { labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 } }
+            }
+        }
     });
 
     const ctxT = document.getElementById('chartTaxSpend').getContext('2d');
@@ -1714,22 +1825,22 @@ function updateCharts(log) {
                 {
                     label: 'Fed Tax',
                     data: log.map(r => r.FedTax * adj(r)),
-                    type: 'bar', backgroundColor: '#e74c3c80', stack: 'taxes', order: 2
+                    type: 'bar', backgroundColor: '#e74c3cC0', stack: 'taxes', order: 2
                 },
                 {
                     label: 'State Tax',
                     data: log.map(r => r.StateTax * adj(r)),
-                    type: 'bar', backgroundColor: '#4BC0C0B3', stack: 'taxes', order: 2
+                    type: 'bar', backgroundColor: '#f1948a90', stack: 'taxes', order: 2
                 },
                 {
                     label: 'IRMAA',
                     data: log.map(r => r.IRMAA * adj(r)),
-                    type: 'bar', backgroundColor: '#000000D0', stack: 'taxes', order: 2
+                    type: 'bar', backgroundColor: '#922b21E0', stack: 'taxes', order: 2
                 },
                 {
                     label: 'Roth Conv',
                     data: log.map(r => r.rothConv * adj(r)),
-                    type: 'bar', backgroundColor: '#8e44ad80', stack: 'conversions', order: 2
+                    type: 'bar', backgroundColor: '#8e44ad80', stack: 'taxes', order: 2
                 },
                 {
                     label: 'Spendable Income',
@@ -1756,6 +1867,77 @@ function updateCharts(log) {
             }
         }
     });
+
+    // Income Sources chart — Option C+
+    // Income source bars are scaled so they collectively sum to netIncome (spendable).
+    // Tax bars (Fed, State, IRMAA) stack on top, reaching totalIncome.
+    // Bar height = totalIncome; Spendable Income line sits at the income/tax seam.
+    const ctxI = document.getElementById('chartIncomeSources').getContext('2d');
+    (Chart.getChart(ctxI.canvas) ?? incomeChart)?.destroy();
+
+    // Scale each source so visible bars collectively sum to netIncome.
+    // Using visibleSum as denominator absorbs unlisted components (e.g. brokerage basis return).
+    const visibleSum = r => r.SSincome + r.pension + r.RMDwd + r.IRAwd + r.RothWD + r.CapGains + r.cashDividends + r.cashInterest;
+    const mkInc = (label, color, rawFn) => ({
+        label, type: 'bar', backgroundColor: color, stack: 'income', order: 2,
+        data: log.map(r => {
+            const vsum = visibleSum(r);
+            const scale = vsum > 0 ? r.netIncome / vsum : 1;
+            return rawFn(r) * scale * adj(r);
+        })
+    });
+    const mkTax = (label, color, rawFn) => ({
+        label, type: 'bar', backgroundColor: color, stack: 'income', order: 2,
+        data: log.map(r => rawFn(r) * adj(r))
+    });
+
+    incomeChart = new Chart(ctxI, {
+        data: {
+            labels: log.map(r => r.year),
+            datasets: [
+                // Income sources — each scaled proportionally so they sum to netIncome
+                mkInc('Social Security',  '#3498dbB0', r => r.SSincome),
+                mkInc('Pension',          '#7f8c8dB0', r => r.pension),
+                mkInc('IRA RMD',          '#e67e22B0', r => r.RMDwd),
+                mkInc('IRA Withdrawal',   '#d35400B0', r => r.IRAwd),
+                mkInc('Roth Withdrawal',  '#8e44adB0', r => r.RothWD),
+                mkInc('Cap Gains',        '#1abc9cB0', r => r.CapGains),
+                mkInc('Dividends',        '#f39c12B0', r => r.cashDividends),
+                mkInc('Interest',         '#f1c40fB0', r => r.cashInterest),
+                // Visual separator between income and expense legend items
+                { label: '│', type: 'bar', data: log.map(() => 0), backgroundColor: 'transparent', borderWidth: 0, stack: 'income', order: 2 },
+                // Tax causes stack on top (unscaled absolute amounts)
+                mkTax('Fed Tax',   '#e74c3cC0', r => r.FedTax),
+                mkTax('State Tax', '#f1948a90', r => r.StateTax),
+                mkTax('IRMAA',     '#922b21E0', r => r.IRMAA),
+                // Spendable Income line sits exactly at the income/tax seam
+                {
+                    label: 'Spendable Income',
+                    data: log.map(r => r.netIncome * adj(r)),
+                    type: 'line', borderColor: '#27ae60', borderWidth: 2.5,
+                    backgroundColor: '#27ae60', pointBackgroundColor: '#27ae60',
+                    fill: false, order: 1
+                }
+            ]
+        },
+        options: {
+            ...sharedTooltip,
+            scales: {
+                x: { stacked: true },
+                y: { stacked: true, ticks: { callback: v => Math.round(v).toLocaleString() } }
+            },
+            plugins: {
+                ...sharedTooltip.plugins,
+                legend: {
+                    onClick: (e, item, legend) => {
+                        if (item.text === '│') return;
+                        Chart.defaults.plugins.legend.onClick(e, item, legend);
+                    },
+                    labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }
+                }
+            }
+        }
+    });
 }
 
 function val(id) { return document.getElementById(id)?.value; }
@@ -1777,10 +1959,49 @@ function showTab(id) {
 }
 
 
+function setupAutoRecalc() {
+    const LABELS = {
+        spendGoal: 'Spend Goal', spendChange: 'Spend Δ%', strategy: 'Strategy',
+        nYears: 'N Years', stratRate: 'Bracket', propWithdraw: 'Boost%',
+        iraBaseGoal: 'IRA Goal', maxConversion: 'Max Conv',
+        birthyear1: 'Your Birth', die1: 'Your Life Exp',
+        birthyear2: 'Spouse Birth', die2: 'Spouse Life Exp',
+        IRA1: 'Your IRA', IRA2: 'Spouse IRA',
+        Brokerage: 'Brokerage', BrokerageBasis: 'Brok Basis',
+        Roth: 'Roth', Cash: 'Cash',
+        ss1: 'My SS', ss1Age: 'SS Age', ss2: 'Spouse SS', ss2Age: 'Spouse SS Age',
+        pensionAnnual: 'Pension', survivorPct: 'Survivor%', pensionCola: 'Pension COLA',
+        inflation: 'Inflation', cpi: 'CPI/COLA', growth: 'Growth', cashYield: 'Cash Yield',
+        dividendRate: 'Dividends', STATEname: 'State Tax', ssFailYear: 'SS Fail Yr', ssFailPct: 'SS Payout%'
+    };
+    let timer = null;
+    function scheduleRecalc(el) {
+        _lastChangedInputLabel = LABELS[el.id] || el.id;
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            const tab = document.querySelector('.tab-btn.active')?.getAttribute('onclick') || '';
+            if (tab.includes('tab-opt')) {
+                runOptimizer();
+            } else {
+                runSimulation();
+            }
+        }, 400);
+    }
+    document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
+        if (el.type === 'checkbox' || el.tagName === 'SELECT') {
+            el.addEventListener('change', () => scheduleRecalc(el));
+        } else {
+            el.addEventListener('input', () => scheduleRecalc(el));
+        }
+    });
+}
+
+
 function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
     document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket' && m !== 'minlimit');
+    document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 

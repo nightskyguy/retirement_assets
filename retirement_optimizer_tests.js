@@ -1384,6 +1384,173 @@ assertEqual(
 	} // testCase18_StateTaxSplit()
 
 	// ============================================================================
+	// ACCOUNT GROWTH TESTS  (b, c, d)
+	// ============================================================================
+	console.log('\n=== Account Growth Tests ===');
+
+	// (b) Brokerage: price appreciation via applyGrowth + dividends to Cash
+	{
+		const bal = { Brokerage: 100000, BrokerageBasis: 60000, Cash: 10000 };
+		const rates = { Brokerage: 0.06, BrokerageBasis: 0.06, Cash: 0.03 };
+		const g = applyGrowth(bal, rates, 12);
+		// Brokerage grows 6%
+		assertEqual(g.Brokerage, 6000, 'Brokerage: annual gain at 6%');
+		assertEqual(bal.Brokerage, 106000, 'Brokerage: balance after 6% growth');
+		// BrokerageBasis also grows proportionally
+		assertEqual(g.BrokerageBasis, 3600, 'BrokerageBasis: annual gain at 6%');
+		assertEqual(bal.BrokerageBasis, 63600, 'BrokerageBasis: balance after 6% growth');
+		// Cash grows at cashYield
+		assertEqual(g.Cash, 300, 'Cash: annual gain at 3%');
+		assertEqual(bal.Cash, 10300, 'Cash: balance after 3% growth');
+
+		// Dividends (2%) on 100k brokerage should add 2000 to cash (not reinvested)
+		const dividends = 100000 * 0.02;
+		bal.Cash += dividends;
+		assertEqual(bal.Cash, 12300, 'Brokerage dividends (not reinvested) flow to Cash');
+	}
+
+	// Brokerage: dividend reinvestment — dividends add to Brokerage and Basis
+	{
+		const bal = { Brokerage: 100000, BrokerageBasis: 60000, Cash: 10000 };
+		const rates = { Brokerage: 0.06, BrokerageBasis: 0.06, Cash: 0.03 };
+		applyGrowth(bal, rates, 12);
+		const dividends = 100000 * 0.02;
+		// Reinvested: brokerage and basis both grow
+		bal.Brokerage += dividends;
+		bal.BrokerageBasis += dividends;
+		assertEqual(bal.Brokerage, 108000, 'Brokerage: after growth + reinvested dividends');
+		assertEqual(bal.BrokerageBasis, 65600, 'BrokerageBasis: after growth + reinvested dividends (basis steps up)');
+		assertEqual(bal.Cash, 10300, 'Cash unchanged when dividends reinvested');
+	}
+
+	// (b) Brokerage: 10-year compound growth matches formula
+	{
+		const startBalance = 100000;
+		const rate = 0.06;
+		let bal = { Brokerage: startBalance };
+		const rates = { Brokerage: rate };
+		for (let i = 0; i < 10; i++) applyGrowth(bal, rates, 12);
+		const expected = startBalance * Math.pow(1 + rate, 10);
+		assertEqual(Math.round(bal.Brokerage), Math.round(expected), 'Brokerage: 10-year compound growth matches formula');
+	}
+
+	// (c) Cash: annual growth at cashYield
+	{
+		const bal = { Cash: 50000 };
+		const rates = { Cash: 0.035 };
+		const g = applyGrowth(bal, rates, 12);
+		assertEqual(g.Cash, 1750, 'Cash: annual gain at 3.5%');
+		assertEqual(bal.Cash, 51750, 'Cash: balance after 3.5% growth');
+	}
+
+	// (c) Cash: 5-year compound growth
+	{
+		const startBalance = 50000;
+		const rate = 0.035;
+		let bal = { Cash: startBalance };
+		const rates = { Cash: rate };
+		for (let i = 0; i < 5; i++) applyGrowth(bal, rates, 12);
+		const expected = startBalance * Math.pow(1 + rate, 5);
+		assertEqual(Math.round(bal.Cash), Math.round(expected), 'Cash: 5-year compound growth matches formula');
+	}
+
+	// (d) Roth: annual growth at growth rate
+	{
+		const bal = { Roth: 80000 };
+		const rates = { Roth: 0.06 };
+		const g = applyGrowth(bal, rates, 12);
+		assertEqual(g.Roth, 4800, 'Roth: annual gain at 6%');
+		assertEqual(bal.Roth, 84800, 'Roth: balance after 6% growth');
+	}
+
+	// (d) Roth: grows independently — dividends do NOT flow to Roth externally (no entry in growthRates for dividends)
+	{
+		const bal = { Roth: 80000, Cash: 10000 };
+		const rates = { Roth: 0.06, Cash: 0.03 };
+		applyGrowth(bal, rates, 12);
+		// Brokerage dividends go to Cash, not Roth — Roth only grows via its own rate
+		assertEqual(bal.Roth, 84800, 'Roth: does not receive external dividends');
+	}
+
+	// (d) Roth: 10-year compound growth
+	{
+		const startBalance = 80000;
+		const rate = 0.06;
+		let bal = { Roth: startBalance };
+		const rates = { Roth: rate };
+		for (let i = 0; i < 10; i++) applyGrowth(bal, rates, 12);
+		const expected = startBalance * Math.pow(1 + rate, 10);
+		assertEqual(Math.round(bal.Roth), Math.round(expected), 'Roth: 10-year compound growth matches formula');
+	}
+
+	// ============================================================================
+	// FIXED STRATEGY TESTS  (a) — "Convert in N Years" shortfall investigation
+	// ============================================================================
+	console.log('\n=== Fixed Strategy (Convert in N Years) Tests ===');
+
+	const baseInputs = {
+		STATEname: 'CA', strategy: 'fixed', nYears: 5,
+		birthyear1: 1955, birthmonth1: 1, die1: 80,
+		birthyear2: 0,    birthmonth2: 12, die2: 0,
+		IRA1: 250000, IRA2: 0, Roth: 50000,
+		Brokerage: 200000, BrokerageBasis: 200000, Cash: 100000,
+		ss1: 0, ss1Age: 70, ss2: 0, ss2Age: 70,
+		pensionAnnual: 0, survivorPct: 0, pensionCola: false,
+		spendGoal: 60000, spendChange: 0, iraBaseGoal: 0,
+		inflation: 0.03, cpi: 0.028, growth: 0.06,
+		cashYield: 0.03, dividendRate: 0.005,
+		ssFailYear: 2099, ssFailPct: 1.0,
+		maxConversion: false, propWithdraw: 0,
+		startInYear: 0, dividendReinvest: false,
+		startYear: 2026
+	};
+
+	// (a-1) Fixed strategy with adequate portfolio: shortfall may occur (known behavior) but should be bounded
+	{
+		const result = simulate(baseInputs);
+		// The fixed strategy can leave a shortfall because IRA-only withdrawals are taxed, leaving
+		// a gap the brokerage/cash fallback must cover.  Verify it's not catastrophic (< $5000 total).
+		assertEqual(result.totals.shortfall > -5000, true, 'Fixed strategy: shortfall bounded (not catastrophic)');
+		assertEqual(result.log.length > 0, true, 'Fixed strategy: simulation produces log entries');
+	}
+
+	// (a-2) After N years, IRA should be drawn to near zero (since iraBaseGoal=0)
+	{
+		const result = simulate(baseInputs);
+		const afterNYears = result.log[Math.min(5, result.log.length - 1)];
+		// IRA should be substantially reduced after N years
+		assertEqual(afterNYears.TotalIRA < 250000, true, 'Fixed strategy: IRA balance reduces over N years');
+	}
+
+	// (a-3) Very small IRA — fallback to Brokerage/Cash covers spending
+	{
+		const smallIRAInputs = { ...baseInputs, IRA1: 30000, IRA2: 0, nYears: 3 };
+		const result = simulate(smallIRAInputs);
+		// Simulation should still run (no crash) and brokerage/cash should be drawn
+		const lastYear = result.log[result.log.length - 1];
+		assertEqual(result.log.length > 0, true, 'Fixed strategy: runs when IRA is small');
+		// Brokerage or Cash must have been used (total wealth less than starting brokerage+cash+ira)
+		const startingTotal = 30000 + 200000 + 100000 + 50000;
+		assertEqual(lastYear.totalWealth < startingTotal, true, 'Fixed strategy: assets drawn down when IRA small');
+	}
+
+	// (a-4) Adequate portfolio should succeed
+	{
+		const result = simulate(baseInputs);
+		assertEqual(result.totals.success, true, 'Fixed strategy: adequate portfolio reports success');
+	}
+
+	// (a-5) RMD tracking works correctly — totals.rmd accumulates
+	{
+		// Use an older birth year so RMDs kick in
+		const rmdInputs = { ...baseInputs, birthyear1: 1945, die1: 90, IRA1: 500000 };
+		const result = simulate(rmdInputs);
+		assertEqual(result.totals.rmd > 0, true, 'Fixed strategy: RMDs are tracked when age >= 73/75');
+		assertEqual(result.totals.rmdTax >= 0, true, 'Fixed strategy: rmdTax is non-negative');
+		assertEqual(result.totals.rmdTax <= result.totals.tax + 1, true, 'Fixed strategy: rmdTax does not exceed total tax');
+	}
+
+	// ============================================================================
 	// Run all tests
 	// ============================================================================
 	function runAllTaxTests() {

@@ -494,16 +494,13 @@ function simulate(inputs) {
     //!!!TODO Remove hardcoded start year!
     let currentYear = inputs.startYear ?? 2026;
 
-    let birthyear2 = Math.floor(inputs.birthyear1);
-    let birthmonth2 = Math.max(1, Math.min(12, Math.round((inputs.birthyear1 - birthyear2) * 100) || 12));
-    let birthyear1 = birthyear2;
-    let birthmonth1 = birthmonth2;
+    let birthyear1 = Math.floor(inputs.birthyear1);
+    let birthmonth1 = inputs.birthmonth1 ?? 12;
+    let birthyear2 = Math.floor(inputs.birthyear2);
+    let birthmonth2 = inputs.birthmonth2 ?? 12;
 
-    birthyear2 = Math.floor(inputs.birthyear2);
-    birthmonth2 = Math.max(1, Math.min(12, Math.round((inputs.birthyear2 - birthyear2) * 100) || 12));
-
-    let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear1 + inputs.die2) - currentYear + 1;
-    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0, taxCurrentDollars: 0, spendCurrentDollars: 0 };
+    let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear2 + inputs.die2) - currentYear + 1;
+    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0, taxCurrentDollars: 0, spendCurrentDollars: 0, rmd: 0, rmdTax: 0, thirdPassCount: 0, thirdPassTime: 0, totalTime: 0 };
 
     let cpiRate = 1		// The rate that SS and Tax brackets increase.
     let inflation = 1	// The rate at which overall inflation increases.
@@ -538,6 +535,7 @@ function simulate(inputs) {
      *************************************/
 
     for (let y = 0; y < maxYears; y++) {
+        const loopStart = performance.now();
         spendGoal = spendGoal * spendDelta * (1 + inputs.inflation);
         fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, inputs.iraBaseGoal, inputs.nYears - y, inputs.growth)
 
@@ -783,6 +781,35 @@ function simulate(inputs) {
 
         // Now we have the "real tax"
         totalTax = tax.totalTax + irmaa;
+
+        // Third pass: if second-pass taxes created a residual shortfall, withdraw more and recalc once.
+        // This handles cases where the gap fill (brokerage cap gains) raised taxes above the initial estimate.
+        // Compute gross income inline (totalIncome is still 0 here; it's assigned below at line 813).
+        const incomeAfterGapFill = fixedInc + netWithdrawals.IRA + pension + taxableDividends +
+            taxableInterest + netWithdrawals.Roth + netWithdrawals.Cash + netWithdrawals.Brokerage + totalRMD;
+        const residualGap = targetSpend - (incomeAfterGapFill - totalTax);
+        if (residualGap > 1) {
+            const thirdPassStart = performance.now();
+            const thirdWd = calculateWithdrawals(curBalances, residualGap, {
+                order: ['Brokerage', 'Cash'],
+                weight: [40, 60],
+                taxrate: [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0]
+            });
+            netWithdrawals = accumulateWithdrawals([netWithdrawals, thirdWd]);
+            applyWithdrawals(curBalances, thirdWd);
+            capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
+            tax = calculateTaxes({
+                filingStatus: status, ages: [age1, age2],
+                totalSS: s1 + s2, irmaaAnnualCost: irmaa,
+                earnedIncome: pension + totalRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+                qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
+                taxExemptInterest: 0, state: STATEname
+            });
+            totalTax = tax.totalTax + irmaa;
+            totals.thirdPassCount += 1;
+            totals.thirdPassTime += performance.now() - thirdPassStart;
+        }
+
         cumulativeTaxes += totalTax;
 
 
@@ -854,15 +881,24 @@ function simulate(inputs) {
         let gains = applyGrowth(balance, growthRates)
         inspectForErrors(growthRates, balance, gains)  // See if any numbers look fishy.
 
-        // Accrue dividends to cash
-        gains.Cash += taxableDividends
-        balance.Cash += taxableDividends;
+        // Accrue dividends — reinvest into brokerage (basis steps up) or flow to cash
+        if (inputs.dividendReinvest) {
+            gains.Brokerage = (gains.Brokerage || 0) + taxableDividends;
+            balance.Brokerage += taxableDividends;
+            balance.BrokerageBasis += taxableDividends;
+        } else {
+            gains.Cash += taxableDividends;
+            balance.Cash += taxableDividends;
+        }
         balance.magiHistory.push(tax.MAGI);
         totals.tax += totalTax;
         totals.gross += totalIncome;
         totals.spend += (targetSpend + surplus.Shortfall);
         totals.taxCurrentDollars += totalTax / inflation;
         totals.spendCurrentDollars += (targetSpend + surplus.Shortfall) / inflation;
+        totals.rmd += totalRMD;
+        // Estimate tax attributable to RMDs proportionally (RMD / totalIncome × totalTax)
+        totals.rmdTax += totalIncome > 0 ? (totalRMD / totalIncome) * totalTax : 0;
         balance.Roth += totalConverted;  // surplus.Roth === totalConverted; surplus.Total is 0 here
         totals.shortfall += surplus.Shortfall;
 
@@ -927,8 +963,11 @@ function simulate(inputs) {
             brokerageG: gains.Brokerage,
             rothG: gains.Roth,
             rothConv: totalConverted,
-            inflationFactor: inflation
+            surplusCash: surplus.Cash,
+            inflationFactor: inflation,
+            loopMs: performance.now() - loopStart
         });
+        totals.totalTime += log[log.length - 1].loopMs;
         currentYear += 1;
 
         // Adjust inflation rates for subsequent rounds.
@@ -1014,8 +1053,10 @@ function getInputs() {
         nYears: +val('nYears'),
         stratRate: +val('stratRate') / 100.0,
         birthyear1: +val('birthyear1'),
+        birthmonth1: +val('birthmonth1') || 12,
         die1: +val('die1'),
         birthyear2: +val('birthyear2'),
+        birthmonth2: +val('birthmonth2') || 12,
         die2: +val('die2'),
         IRA1: +val('IRA1'),
         IRA2: +val('IRA2'),
@@ -1042,7 +1083,8 @@ function getInputs() {
         ssFailPct: +val('ssFailPct') / 100.0,
         maxConversion: valChecked('maxConversion'),
         propWithdraw: +val('propWithdraw') / 100.0,
-        startInYear: +val('startInYear')
+        startInYear: +val('startInYear'),
+        dividendReinvest: !!valChecked('dividendReinvest')
     };
 }
 
@@ -1075,6 +1117,7 @@ function updateCurrentDollarsView() {
 function runOptimizer() {
     const base = getInputs();
     const results = [];
+    const optimizerStart = performance.now();
 
     // Get all bracket rates from TAXData (skip the last Infinity bracket)
     const bracketRates = TAXData.FEDERAL.MFJ.brackets
@@ -1087,10 +1130,11 @@ function runOptimizer() {
         const lastEntry = res.log[res.log.length - 1];
         results.push({
             _id: results.length,
-            _strategyLabel: strategyLabel,
+            _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : ''),
             _paramLabel: paramLabel,
             _paramSortVal: paramSortVal,
             _maxConversion: overrides.maxConversion,
+            _spendGoal: inputs.spendGoal,
             _strategy: overrides.strategy,
             _nYears: overrides.nYears ?? null,
             _stratRate: overrides.stratRate ?? null,
@@ -1126,6 +1170,7 @@ function runOptimizer() {
     }
 
     window.optimizerResults = results;
+    window.optimizerPerfStats = { totalMs: performance.now() - optimizerStart, runsCount: results.length };
     window.optimizerSortState = { colKey: 'spend', direction: 'desc' };
     renderOptimizerTable(results);
     showTab('tab-opt');
@@ -1134,7 +1179,8 @@ function runOptimizer() {
 // Column definitions (shared between render and sort)
 function getOptimizerColumns() {
     const inC = () => document.getElementById('show-current-dollars')?.checked;
-    return [
+    const nerdknob = new URLSearchParams(location.search).has('nerdknob');
+    const cols = [
         {
             key: 'status', label: '✓',
             getValue: r => r.totals.success ? '🟢' : '🚨',
@@ -1151,9 +1197,9 @@ function getOptimizerColumns() {
             getSortValue: r => r._paramSortVal
         },
         {
-            key: 'maxConv', label: 'Max Conv',
-            getValue: r => r._maxConversion ? '✓' : '',
-            getSortValue: r => r._maxConversion ? 1 : 0
+            key: 'spendGoal', label: 'Spend Goal',
+            getValue: r => Math.round(r._spendGoal).toLocaleString(),
+            getSortValue: r => r._spendGoal
         },
         {
             key: 'tax', label: 'Lifetime Tax',
@@ -1179,26 +1225,49 @@ function getOptimizerColumns() {
             key: 'years', label: 'Yrs Funded',
             getValue: r => `${r.totals.yearsfunded}/${r.totals.yearstested}`,
             getSortValue: r => r.totals.yearsfunded
+        },
+        {
+            key: 'rmd', label: 'Total RMDs',
+            getValue: r => Math.round(r.totals.rmd).toLocaleString(),
+            getSortValue: r => r.totals.rmd
+        },
+        {
+            key: 'rmdtax', label: 'RMD Tax%',
+            getValue: r => r.totals.tax > 0 ? `${(r.totals.rmdTax / r.totals.tax * 100).toFixed(0)}%` : '—',
+            getSortValue: r => r.totals.rmdTax / (r.totals.tax || 1)
         }
     ];
+    if (nerdknob) {
+        cols.push({
+            key: 'simms', label: '⏱ms',
+            getValue: r => r.totals.totalTime != null ? r.totals.totalTime.toFixed(1) : '—',
+            getSortValue: r => r.totals.totalTime ?? 0
+        });
+    }
+    return cols;
 }
 
 function renderOptimizerTable(results) {
     if (!results || results.length === 0) return;
     const columns = getOptimizerColumns();
-    const sortState = window.optimizerSortState ?? { colKey: null, direction: 'asc' };
+    // Default: sort by Spendable descending; Final Wealth descending as tiebreaker
+    const sortState = window.optimizerSortState ?? { colKey: 'spend', direction: 'desc' };
 
     // Sort a copy; preserve original _id for click handlers
     let display = results.slice();
-    if (sortState.colKey) {
-        const col = columns.find(c => c.key === sortState.colKey);
-        if (col) {
-            display.sort((a, b) => {
-                const av = col.getSortValue(a), bv = col.getSortValue(b);
-                const cmp = (typeof av === 'string') ? av.localeCompare(bv) : (av - bv);
-                return sortState.direction === 'asc' ? cmp : -cmp;
-            });
-        }
+    const nwCol = columns.find(c => c.key === 'nw');
+    const col   = columns.find(c => c.key === sortState.colKey);
+    if (col) {
+        display.sort((a, b) => {
+            const av = col.getSortValue(a), bv = col.getSortValue(b);
+            const cmp = (typeof av === 'string') ? av.localeCompare(bv) : (av - bv);
+            const primary = sortState.direction === 'asc' ? cmp : -cmp;
+            // Tiebreaker: when sorting by Spendable and values are equal, sort by Final Wealth desc
+            if (primary === 0 && sortState.colKey === 'spend' && nwCol) {
+                return nwCol.getSortValue(b) - nwCol.getSortValue(a);
+            }
+            return primary;
+        });
     }
 
     // Identify per-metric winners among successful rows
@@ -1211,11 +1280,13 @@ function renderOptimizerTable(results) {
         const w2 = pick(successes, r => r.totals.tax / r.totals.gross, false);
         const w3 = pick(successes, r => r.totals.spend, true);
         const w4 = pick(successes, r => r.finalNW, true);
-        [w1, w2, w3, w4].forEach(w => bestIds.add(w._id));
-        colWinners.tax   = w1._id;
-        colWinners.rate  = w2._id;
-        colWinners.spend = w3._id;
-        colWinners.nw    = w4._id;
+        const w5 = pick(successes, r => r.totals.rmdTax / (r.totals.tax || 1), false);
+        [w1, w2, w3, w4, w5].forEach(w => bestIds.add(w._id));
+        colWinners.tax    = w1._id;
+        colWinners.rate   = w2._id;
+        colWinners.spend  = w3._id;
+        colWinners.nw     = w4._id;
+        colWinners.rmdtax = w5._id;
     }
 
     // Header with sort arrows
@@ -1231,10 +1302,11 @@ function renderOptimizerTable(results) {
         const rowStyle = isWinner ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;' : 'cursor:pointer;';
         const cells = columns.map(col => {
             // Highlight the specific winning cell with a slightly deeper green
-            const cellWin = (col.key === 'tax' && r._id === colWinners.tax)
-                         || (col.key === 'rate' && r._id === colWinners.rate)
-                         || (col.key === 'spend' && r._id === colWinners.spend)
-                         || (col.key === 'nw'   && r._id === colWinners.nw);
+            const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
+                         || (col.key === 'rate'   && r._id === colWinners.rate)
+                         || (col.key === 'spend'  && r._id === colWinners.spend)
+                         || (col.key === 'nw'     && r._id === colWinners.nw)
+                         || (col.key === 'rmdtax' && r._id === colWinners.rmdtax);
             const cellStyle = cellWin ? ' style="background-color:#4CAF5080;"' : '';
             return `<td${cellStyle}>${col.getValue(r)}</td>`;
         }).join('');
@@ -1243,6 +1315,33 @@ function renderOptimizerTable(results) {
 
     document.querySelector('#opt-table thead').innerHTML = headerHtml;
     document.querySelector('#opt-table tbody').innerHTML = rowsHtml;
+
+    // Note when all spendable values are the same (fully-funded: every strategy hits the spend goal)
+    const noteEl = document.getElementById('opt-note');
+    if (noteEl) {
+        const spendVals = results.map(r => r.totals.spend);
+        const allSame = spendVals.every(v => v === spendVals[0]);
+        if (allSame && results.length > 1) {
+            noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable — this means every strategy fully funds your spending goal. Differentiate by Lifetime Tax, Final Wealth, or Yrs Funded.';
+            noteEl.style.display = 'block';
+        } else {
+            noteEl.style.display = 'none';
+        }
+    }
+
+    // Nerdknob: show optimizer performance stats when URL contains ?nerdknob
+    const perfEl = document.getElementById('opt-perf');
+    if (perfEl) {
+        const nerdknob = new URLSearchParams(location.search).has('nerdknob');
+        const perf = window.optimizerPerfStats;
+        if (nerdknob && perf) {
+            const msPerRun = (perf.totalMs / perf.runsCount).toFixed(1);
+            perfEl.textContent = `⏱ ${perf.totalMs.toFixed(0)}ms total · ${msPerRun}ms/run · ${perf.runsCount} runs`;
+            perfEl.style.display = 'block';
+        } else {
+            perfEl.style.display = 'none';
+        }
+    }
 }
 
 function sortOptimizerBy(colKey) {
@@ -1342,7 +1441,11 @@ const columnCategories = {
 
     // Cash Changes - balance, withdrawals, growth
     'CashWD': ['Cash Δ', 'Income'],
-    'cashG': ['Cash Δ']
+    'cashG': ['Cash Δ'],
+    'surplusCash': ['Cash Δ', 'Income'],
+
+    // Debug / performance — only visible under Show All (no checkbox maps to 'Debug')
+    'loopMs': ['Debug']
 };
 
 // Get active categories based on checkbox state
@@ -1654,6 +1757,12 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     document.getElementById('stat-spend').innerText = '$' + Math.round(dispSpend).toLocaleString();
     document.getElementById('stat-tax').innerText   = '$' + Math.round(dispTax).toLocaleString();
     document.getElementById('stat-nw').innerText    = '$' + Math.round(dispNW).toLocaleString();
+    const rmdEl = document.getElementById('stat-rmd');
+    const rmdPctEl = document.getElementById('stat-rmd-pct');
+    if (rmdEl) rmdEl.innerText = '$' + Math.round(totals.rmd ?? 0).toLocaleString();
+    if (rmdPctEl) rmdPctEl.innerText = totals.tax > 0
+        ? `${((totals.rmdTax ?? 0) / totals.tax * 100).toFixed(0)}% of taxes`
+        : '';
     const yearsEl = document.getElementById('stat-years');
     if (yearsEl) {
         yearsEl.innerText = totals.yearsfunded + '/' + totals.yearstested;
@@ -1706,7 +1815,7 @@ let lastSimulationLog = null;
 let lastTotals = null, lastFinalNW = null, lastFinalNWCurrentDollars = null;
 let _prevStatsTotals = null, _prevStatsFinalNW = null, _prevStatsFinalNWCD = null;
 let _lastChangedInputLabel = null;
-let assetChart, taxChart, incomeChart;
+let assetChart, incomeChart;
 
 // Crosshair plugin — vertical dashed line at the active x position
 const crosshairPlugin = {
@@ -1748,22 +1857,18 @@ function clearChartHighlight(chart) {
 function setupChartSync() {
     if (typeof Chart !== 'undefined') Chart.register(crosshairPlugin);
     const aCanvas = document.getElementById('chartAssets');
-    const tCanvas = document.getElementById('chartTaxSpend');
     const iCanvas = document.getElementById('chartIncomeSources');
-    if (!aCanvas || !tCanvas || !iCanvas) return;
+    if (!aCanvas || !iCanvas) return;
     const syncOthers = (src, others, e) => others.forEach(c => { if (c) syncChart(src, c, e); });
     const clearOthers = charts => charts.forEach(c => { if (c) clearChartHighlight(c); });
-    aCanvas.addEventListener('mousemove', e => syncOthers(assetChart,  [taxChart, incomeChart], e));
-    aCanvas.addEventListener('mouseleave', () => clearOthers([taxChart, incomeChart]));
-    tCanvas.addEventListener('mousemove', e => syncOthers(taxChart,   [assetChart, incomeChart], e));
-    tCanvas.addEventListener('mouseleave', () => clearOthers([assetChart, incomeChart]));
-    iCanvas.addEventListener('mousemove', e => syncOthers(incomeChart, [assetChart, taxChart], e));
-    iCanvas.addEventListener('mouseleave', () => clearOthers([assetChart, taxChart]));
+    aCanvas.addEventListener('mousemove', e => syncOthers(assetChart,  [incomeChart], e));
+    aCanvas.addEventListener('mouseleave', () => clearOthers([incomeChart]));
+    iCanvas.addEventListener('mousemove', e => syncOthers(incomeChart, [assetChart], e));
+    iCanvas.addEventListener('mouseleave', () => clearOthers([assetChart]));
 }
 function updateCharts(log) {
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
     const adj = r => inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1;
-    const inclRoth = document.getElementById('include-roth-spendable')?.checked;
 
     const sharedTooltip = {
         interaction: { mode: 'index', intersect: false },
@@ -1816,58 +1921,6 @@ function updateCharts(log) {
         }
     });
 
-    const ctxT = document.getElementById('chartTaxSpend').getContext('2d');
-    (Chart.getChart(ctxT.canvas) ?? taxChart)?.destroy();
-    taxChart = new Chart(ctxT, {
-        data: {
-            labels: log.map(r => r.year),
-            datasets: [
-                {
-                    label: 'Fed Tax',
-                    data: log.map(r => r.FedTax * adj(r)),
-                    type: 'bar', backgroundColor: '#e74c3cC0', stack: 'taxes', order: 2
-                },
-                {
-                    label: 'State Tax',
-                    data: log.map(r => r.StateTax * adj(r)),
-                    type: 'bar', backgroundColor: '#f1948a90', stack: 'taxes', order: 2
-                },
-                {
-                    label: 'IRMAA',
-                    data: log.map(r => r.IRMAA * adj(r)),
-                    type: 'bar', backgroundColor: '#922b21E0', stack: 'taxes', order: 2
-                },
-                {
-                    label: 'Roth Conv',
-                    data: log.map(r => r.rothConv * adj(r)),
-                    type: 'bar', backgroundColor: '#8e44ad80', stack: 'taxes', order: 2
-                },
-                {
-                    label: 'Spendable Income',
-                    data: log.map(r => (r.netIncome + (inclRoth ? r.rothConv : 0)) * adj(r)),
-                    type: 'line', borderColor: '#27ae60', fill: false,
-                    borderWidth: 3, order: 1
-                }
-            ]
-        },
-        options: {
-            ...sharedTooltip,
-            scales: {
-                x: { stacked: true },
-                y: {
-                    stacked: true,
-                    ticks: { callback: v => Math.round(v).toLocaleString() }
-                }
-            },
-            plugins: {
-                ...sharedTooltip.plugins,
-                legend: {
-                    labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }
-                }
-            }
-        }
-    });
-
     // Income Sources chart — Option C+
     // Income source bars are scaled so they collectively sum to netIncome (spendable).
     // Tax bars (Fed, State, IRMAA) stack on top, reaching totalIncome.
@@ -1877,7 +1930,8 @@ function updateCharts(log) {
 
     // Scale each source so visible bars collectively sum to netIncome.
     // Using visibleSum as denominator absorbs unlisted components (e.g. brokerage basis return).
-    const visibleSum = r => r.SSincome + r.pension + r.RMDwd + r.IRAwd + r.RothWD + r.CapGains + r.cashDividends + r.cashInterest;
+    // IRAwd is reduced by rothConv so the conversion doesn't inflate spendable income bars.
+    const visibleSum = r => r.SSincome + r.pension + r.RMDwd + Math.max(0, r.IRAwd - r.rothConv) + r.RothWD + r.CapGains + r.cashDividends + r.cashInterest;
     const mkInc = (label, color, rawFn) => ({
         label, type: 'bar', backgroundColor: color, stack: 'income', order: 2,
         data: log.map(r => {
@@ -1899,17 +1953,19 @@ function updateCharts(log) {
                 mkInc('Social Security',  '#3498dbB0', r => r.SSincome),
                 mkInc('Pension',          '#7f8c8dB0', r => r.pension),
                 mkInc('IRA RMD',          '#e67e22B0', r => r.RMDwd),
-                mkInc('IRA Withdrawal',   '#d35400B0', r => r.IRAwd),
+                mkInc('Interest',         '#f1c40fB0', r => r.cashInterest),
+                mkInc('IRA Withdrawal',   '#d35400B0', r => Math.max(0, r.IRAwd - r.rothConv)),
                 mkInc('Roth Withdrawal',  '#8e44adB0', r => r.RothWD),
                 mkInc('Cap Gains',        '#1abc9cB0', r => r.CapGains),
                 mkInc('Dividends',        '#f39c12B0', r => r.cashDividends),
-                mkInc('Interest',         '#f1c40fB0', r => r.cashInterest),
                 // Visual separator between income and expense legend items
                 { label: '│', type: 'bar', data: log.map(() => 0), backgroundColor: 'transparent', borderWidth: 0, stack: 'income', order: 2 },
-                // Tax causes stack on top (unscaled absolute amounts)
-                mkTax('Fed Tax',   '#e74c3cC0', r => r.FedTax),
-                mkTax('State Tax', '#f1948a90', r => r.StateTax),
-                mkTax('IRMAA',     '#922b21E0', r => r.IRMAA),
+                // Expenses stack on top (unscaled absolute amounts)
+                mkTax('Fed Tax',        '#e74c3cC0', r => r.FedTax),
+                mkTax('State Tax',      '#f1948a90', r => r.StateTax),
+                mkTax('IRMAA',          '#922b21E0', r => r.IRMAA),
+                mkTax('Roth Conv',      '#8e44ad80', r => r.rothConv),
+                mkTax('Cash Deposit',   '#27ae6070', r => r.surplusCash),
                 // Spendable Income line sits exactly at the income/tax seam
                 {
                     label: 'Spendable Income',
@@ -1928,6 +1984,10 @@ function updateCharts(log) {
             },
             plugins: {
                 ...sharedTooltip.plugins,
+                tooltip: {
+                    ...sharedTooltip.plugins.tooltip,
+                    filter: item => item.dataset.label !== '│'
+                },
                 legend: {
                     onClick: (e, item, legend) => {
                         if (item.text === '│') return;
@@ -1972,7 +2032,8 @@ function setupAutoRecalc() {
         ss1: 'My SS', ss1Age: 'SS Age', ss2: 'Spouse SS', ss2Age: 'Spouse SS Age',
         pensionAnnual: 'Pension', survivorPct: 'Survivor%', pensionCola: 'Pension COLA',
         inflation: 'Inflation', cpi: 'CPI/COLA', growth: 'Growth', cashYield: 'Cash Yield',
-        dividendRate: 'Dividends', STATEname: 'State Tax', ssFailYear: 'SS Fail Yr', ssFailPct: 'SS Payout%'
+        dividendRate: 'Dividends', STATEname: 'State Tax', ssFailYear: 'SS Fail Yr', ssFailPct: 'SS Payout%',
+        birthmonth1: 'Your Birth Mo', birthmonth2: 'Spouse Birth Mo', dividendReinvest: 'Div Reinvest'
     };
     let timer = null;
     function scheduleRecalc(el) {
@@ -1991,7 +2052,7 @@ function setupAutoRecalc() {
         if (el.type === 'checkbox' || el.tagName === 'SELECT') {
             el.addEventListener('change', () => scheduleRecalc(el));
         } else {
-            el.addEventListener('input', () => scheduleRecalc(el));
+            el.addEventListener('blur', () => scheduleRecalc(el));
         }
     });
 }
@@ -2003,6 +2064,54 @@ function toggleStrategyUI() {
     document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket' && m !== 'minlimit');
     document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
+}
+
+
+// ============================================================================
+// URL SHARE / LOAD
+// ============================================================================
+
+function buildShareURL() {
+    const params = new URLSearchParams();
+    document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
+        if (!el.id) return;
+        if (el.type === 'checkbox') {
+            params.set(el.id, el.checked ? 'true' : 'false');
+        } else {
+            params.set(el.id, el.value);
+        }
+    });
+    const base = location.href.split('?')[0].split('#')[0];
+    return base + '?' + params.toString();
+}
+
+function copyShareURL() {
+    const url = buildShareURL();
+    navigator.clipboard.writeText(url).then(() => {
+        const confirm = document.getElementById('share-confirm');
+        if (confirm) {
+            confirm.style.display = 'inline';
+            setTimeout(() => { confirm.style.display = 'none'; }, 2500);
+        }
+    }).catch(() => {
+        // Fallback for file:// protocol where clipboard may be restricted
+        prompt('Copy this URL to bookmark or share your settings:', url);
+    });
+}
+
+function loadFromURL() {
+    const params = new URLSearchParams(location.search);
+    if (!params.size) return;
+    params.forEach((value, key) => {
+        const el = document.getElementById(key);
+        if (!el) return;
+        if (el.type === 'checkbox') {
+            el.checked = value === 'true';
+        } else {
+            el.value = value;
+        }
+    });
+    toggleStrategyUI();
 }
 
 

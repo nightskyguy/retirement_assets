@@ -19,7 +19,7 @@
 		<div id="strategy-container">
 		    <div class="row"><div  id="spending">
 				<div><label>After-Tax Spend &nbsp;
-				<input type="number" id="spendGoal" value="150000"></label></div>
+				<input type="number" id="spendGoal" value="140000"></label></div>
 				<div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. -2% means you spend 2% less each year. 0 means no change.">Spend Delta %&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0"></label></div>
 				</div><!-- spending -->
@@ -68,11 +68,13 @@
 		
         <h3>1. Profile & Ages</h3>
         <div class="row">
-            <div><label><B>Your</B> Birth Year<input type="number" id="birthyear1" value="1960"></label></div>
+            <div><label><B>Your</B> Birth Year<input type="number" id="birthyear1" value="1960"></label>
+            &nbsp;<label>Month<select id="birthmonth1"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label></div>
             <div><label>Life Expectancy<input type="number" id="die1" value="88"></label></div>
         </div>
         <div class="row">
-            <div><label><B><I>Spouse</I></B> Birth Year<input type="number" id="birthyear2" value="1952"></label></div>
+            <div><label><B><I>Spouse</I></B> Birth Year<input type="number" id="birthyear2" value="1952"></label>
+            &nbsp;<label>Month<select id="birthmonth2"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label></div>
             <div><label><B><I>Spouse</I></B> Expectancy<input type="number" id="die2" value="98"></label></div>
         </div>
 
@@ -84,6 +86,9 @@
         <div class="row">
             <div><label>Brokerage<input type="number" id="Brokerage" value="100000"></label></div>
             <div><label>Brokerage Basis<input type="number" id="BrokerageBasis" value="100000"></label></div>
+        </div>
+        <div class="row">
+            <div><label title="When checked, dividends stay in the brokerage (balance and basis both increase). When unchecked, dividends flow to the Cash account."><input type="checkbox" id="dividendReinvest"> Reinvest Brokerage Dividends</label></div>
         </div>
         <div class="row">
             <div><label>Roth IRA<input type="number" id="Roth" value="50000"></label></div>
@@ -139,11 +144,16 @@
 				<div title="How many years of life are fully funded."><small>Funded/Years of Life</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total taxes paid/total spendable wealth"><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Sum of all taxes paid."><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Total Required Minimum Distributions taken. Percentage is the share of lifetime taxes attributable to RMDs."><small>TOTAL RMDs</small><br><strong id="stat-rmd">$0</strong><div id="stat-rmd-pct" style="font-size:0.75em;min-height:1em;color:#888;"></div></div>
                 <div title="How much spendable income was produced."><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Remaining wealth at the end of life."><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
 				<div id="popUpMessage" class="scenario-message"></div>
 				<div title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
 					<label><input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()"> Current $</label>
+				</div>
+				<div title="Generate a URL with all current settings for bookmarking or sharing">
+					<button onclick="copyShareURL()" style="font-size:0.8em;padding:4px 8px;">🔗 Share</button>
+					<span id="share-confirm" style="font-size:0.75em;color:#1a7a1a;display:none;margin-left:4px;">Copied!</span>
 				</div>
             </div>
         </div>
@@ -335,29 +345,17 @@
             <hr>
             <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Income and Expenses</h4>
             <canvas id="chartIncomeSources" style="max-height:403px;"></canvas>
-            <hr>
-            <div style="margin: 4px 8px;">
-                <label title="Show Roth conversion amounts as a bar. When checked, also adds conversions to the Spendable Income line.">
-                    <input type="checkbox" id="include-roth-spendable" onchange="if(lastSimulationLog) updateCharts(lastSimulationLog)"> Include Roth Conversions in Spendable
-                </label>
-                &nbsp;&nbsp;
-                <label title="Show or hide the Taxation breakdown chart.">
-                    <input type="checkbox" id="show-taxspend" onchange="document.getElementById('taxation-section').style.display=this.checked?'':'none'"> Show Taxation Chart
-                </label>
-            </div>
-            <div id="taxation-section" style="display:none;">
-                <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Taxation</h4>
-                <canvas id="chartTaxSpend" style="max-height:350px;"></canvas>
-            </div>
         </div>
 
         <div id="tab-opt" class="card hidden table-wrap">
+            <div id="opt-perf" style="margin-bottom:6px;font-size:1em;color:#555;font-family:monospace;display:none;"></div>
             <table id="opt-table">
                 <thead>
 
                 </thead>
                 <tbody></tbody>
             </table>
+            <div id="opt-note" style="margin-top:8px;font-size:0.8em;color:#666;display:none;"></div>
         </div>
     </div>
 </div>
@@ -374,6 +372,7 @@ window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('stratRate').innerHTML = generateStratRateOptions();
     document.getElementById('STATEname').innerHTML = generateStateOptions();
     setupChartSync();
+    loadFromURL?.();   // Preset inputs from URL params if present (must run after dropdowns are built)
     toggleStrategyUI();
     setupAutoRecalc();
 });

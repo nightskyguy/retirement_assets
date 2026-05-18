@@ -1124,16 +1124,11 @@ function updateCurrentDollarsView() {
 // the highest spend goal where at least one strategy succeeds.
 // Returns { result, optimizedSpend, strategyLabel, paramLabel, paramSortVal, overrides } or null.
 function optimizeSpendDown(baseInputs, strategyOverridesList) {
-    function passes(res) {
-        const last = res.log[res.log.length - 1];
-        return last.totalWealth >= last.spendGoal * SUCCESS_WEALTH_YEARS;
-    }
-
     function bestPassingStrategy(spendGoal) {
         let best = null;
         for (const entry of strategyOverridesList) {
             const res = simulate(Object.assign({}, baseInputs, entry.overrides, { spendGoal }));
-            if (passes(res)) {
+            if (res.totals.success) {
                 if (!best || res.totals.spend > best.result.totals.spend) {
                     best = { result: res, ...entry };
                 }
@@ -1142,30 +1137,16 @@ function optimizeSpendDown(baseInputs, strategyOverridesList) {
         return best;
     }
 
-    // Confirm baseline truly fails for all strategies
-    if (bestPassingStrategy(baseInputs.spendGoal)) return null;
+    // Phase 1: verify MIN_SPEND is viable — it's the floor for the binary search.
+    const MIN_SPEND = Math.max(500, baseInputs.spendGoal * 0.02);
+    const floorEntry = bestPassingStrategy(MIN_SPEND);
+    if (!floorEntry) return null;
 
-    // Exponential search downward to find a passing lower bound.
-    // The relationship is NOT guaranteed monotonic at very low spend levels
-    // (e.g. iraBaseGoal constraints), so we probe at 50%, 25%, 12.5%... of
-    // baseline until we find a level that passes, then binary search upward.
+    // Phase 2: binary search from MIN_SPEND (passes) up to baseline (fails) — same logic as
+    // optimizeSpend(). Converges to the highest spend where totals.success is true.
+    let lo = MIN_SPEND;
     let hi = baseInputs.spendGoal;
-    let lo = hi * 0.50;
-    let loEntry = null;
-    const MIN_SPEND = Math.max(500, baseInputs.spendGoal * 0.02); // hard floor: $500 or 2%
-
-    while (lo >= MIN_SPEND) {
-        loEntry = bestPassingStrategy(lo);
-        if (loEntry) break;
-        hi = lo;       // this level also fails — narrow the ceiling
-        lo = lo * 0.5;
-    }
-
-    // No passing level found anywhere down to the minimum
-    if (!loEntry) return null;
-
-    // Binary search between lo (passes) and hi (fails) for the highest sustainable spend
-    let bestEntry = loEntry;
+    let bestEntry = floorEntry;
     while ((hi - lo) / baseInputs.spendGoal > SPEND_SEARCH_TOLERANCE) {
         const mid = (lo + hi) / 2;
         const entry = bestPassingStrategy(mid);

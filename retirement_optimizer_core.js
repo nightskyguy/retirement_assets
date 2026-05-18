@@ -10,6 +10,12 @@ const STORAGE_KEY = 'SLCRetireOptimizeScenario';
 // Old storage key from previous version
 const OLD_STORAGE_KEY = 'retirementScenarios';
 
+// Spend optimizer constants
+const SUCCESS_WEALTH_YEARS   = 2.0;   // Ending wealth must be >= this multiple of final-year spend
+const SPEND_SEARCH_CEILING   = 0.50;  // Binary search upper bound: 50% above baseline spend
+const SPEND_SEARCH_TOLERANCE = 0.005; // Stop binary search when bounds are within 0.5%
+const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase spending" banner
+
 
 
 /** TAX CONSTANTS **/
@@ -1114,6 +1120,46 @@ function updateCurrentDollarsView() {
 }
 // //////////////////////////////////////////////////////////////////
 
+// Returns the highest-spend simulation result that still meets the SUCCESS_WEALTH_YEARS
+// criterion, or null if the baseline itself fails.
+// baseInputs: full inputs object at baseline spendGoal
+// overrides:  strategy overrides (same object passed to addResult for this row)
+function optimizeSpend(baseInputs, overrides) {
+    function passes(res) {
+        const last = res.log[res.log.length - 1];
+        return last.totalWealth >= last.spendGoal * SUCCESS_WEALTH_YEARS;
+    }
+
+    const baseSpend = baseInputs.spendGoal;
+
+    // Step 1: baseline must pass
+    const baseRes = simulate(Object.assign({}, baseInputs, overrides));
+    if (!passes(baseRes)) return null;
+
+    // Step 2: try ceiling (50% above baseline)
+    const ceilSpend = baseSpend * (1 + SPEND_SEARCH_CEILING);
+    const ceilInputs = Object.assign({}, baseInputs, overrides, { spendGoal: ceilSpend });
+    const ceilRes = simulate(ceilInputs);
+    if (passes(ceilRes)) {
+        return { result: ceilRes, optimizedSpend: ceilSpend, hitCeiling: true };
+    }
+
+    // Step 3: binary search between baseline and ceiling
+    let lo = baseSpend, hi = ceilSpend;
+    let bestResult = baseRes;
+    while ((hi - lo) / baseSpend > SPEND_SEARCH_TOLERANCE) {
+        const mid = (lo + hi) / 2;
+        const res = simulate(Object.assign({}, baseInputs, overrides, { spendGoal: mid }));
+        if (passes(res)) {
+            lo = mid;
+            bestResult = res;
+        } else {
+            hi = mid;
+        }
+    }
+    return { result: bestResult, optimizedSpend: lo, hitCeiling: false };
+}
+
 function runOptimizer() {
     const base = getInputs();
     const results = [];
@@ -1124,11 +1170,14 @@ function runOptimizer() {
         .slice(0, -1)
         .map(b => b.r);
 
+    // strategyOverrides stored separately so the spend optimizer can reuse them
+    const strategyOverridesList = [];
+
     function addResult(strategyLabel, paramLabel, paramSortVal, overrides) {
         const inputs = Object.assign({}, base, overrides);
         const res = simulate(inputs);
         const lastEntry = res.log[res.log.length - 1];
-        results.push({
+        const row = {
             _id: results.length,
             _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : ''),
             _paramLabel: paramLabel,
@@ -1139,10 +1188,13 @@ function runOptimizer() {
             _nYears: overrides.nYears ?? null,
             _stratRate: overrides.stratRate ?? null,
             _propWithdraw: overrides.propWithdraw ?? null,
+            _isSpendOptimized: false,
             totals: res.totals,
             finalNW: res.finalNW,
             finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
-        });
+        };
+        results.push(row);
+        strategyOverridesList.push({ strategyLabel, paramLabel, paramSortVal, overrides });
     }
 
     for (const maxConv of [false, true]) {
@@ -1163,6 +1215,36 @@ function runOptimizer() {
         }
     }
 
+    // Spend optimizer second pass — only runs when user enabled the toggle
+    if (document.getElementById('optimizeSpend')?.checked) {
+        const baselineCount = results.length;
+        for (let i = 0; i < baselineCount; i++) {
+            const baseRow = results[i];
+            if (!baseRow.totals.success) continue;
+            const { strategyLabel, paramLabel, paramSortVal, overrides } = strategyOverridesList[i];
+            const opt = optimizeSpend(base, overrides);
+            if (!opt) continue;
+            const lastEntry = opt.result.log[opt.result.log.length - 1];
+            results.push({
+                _id: results.length,
+                _strategyLabel: (strategyLabel + (overrides.maxConversion ? ' ✓' : '')) + (opt.hitCeiling ? ' ✦+' : ' ✦'),
+                _paramLabel: paramLabel,
+                _paramSortVal: paramSortVal,
+                _maxConversion: overrides.maxConversion,
+                _spendGoal: opt.optimizedSpend,
+                _strategy: overrides.strategy,
+                _nYears: overrides.nYears ?? null,
+                _stratRate: overrides.stratRate ?? null,
+                _propWithdraw: overrides.propWithdraw ?? null,
+                _isSpendOptimized: true,
+                _hitCeiling: opt.hitCeiling,
+                totals: opt.result.totals,
+                finalNW: opt.result.finalNW,
+                finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+            });
+        }
+    }
+
     // Update top-bar stats using the 0% propwd/no-maxConv row (first result, equivalent to baseline)
     const baseline = results[0];
     if (baseline) {
@@ -1173,7 +1255,25 @@ function runOptimizer() {
     window.optimizerPerfStats = { totalMs: performance.now() - optimizerStart, runsCount: results.length };
     window.optimizerSortState = { colKey: 'spend', direction: 'desc' };
     renderOptimizerTable(results);
+    renderSpendOptimizerBanner(results, base.spendGoal);
     showTab('tab-opt');
+}
+
+function renderSpendOptimizerBanner(results, baseSpendGoal) {
+    const el = document.getElementById('opt-spend-banner');
+    if (!el) return;
+    const optimized = results
+        .filter(r => r._isSpendOptimized && r.totals.success)
+        .sort((a, b) => b._spendGoal - a._spendGoal);
+    const best = optimized[0];
+    if (best && (best._spendGoal / baseSpendGoal - 1) >= SPEND_SEARCH_MIN_DELTA) {
+        const amt = Math.round(best._spendGoal).toLocaleString();
+        const label = best._strategyLabel;
+        el.textContent = `💡 It appears you can increase your spending to $${amt}/yr and still have two full years of funding remaining. (Strategy: ${label})`;
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
 }
 
 // Column definitions (shared between render and sort)
@@ -1296,10 +1396,14 @@ function renderOptimizerTable(results) {
         return `<th style="cursor:pointer;user-select:none;" onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</th>`;
     }).join('') + '</tr>';
 
-    // Rows — per-cell green for metric winners, full-row green if winner in any metric
+    // Rows — per-cell green for metric winners, full-row green if winner, blue tint if spend-optimized
     const rowsHtml = display.map(r => {
         const isWinner = bestIds.has(r._id);
-        const rowStyle = isWinner ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;' : 'cursor:pointer;';
+        const rowStyle = isWinner
+            ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
+            : r._isSpendOptimized
+                ? 'background-color:#dbeafe;font-style:italic;cursor:pointer;'
+                : 'cursor:pointer;';
         const cells = columns.map(col => {
             // Highlight the specific winning cell with a slightly deeper green
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
@@ -1961,9 +2065,9 @@ function updateCharts(log) {
                 // Visual separator between income and expense legend items
                 { label: '│', type: 'bar', data: log.map(() => 0), backgroundColor: 'transparent', borderWidth: 0, stack: 'income', order: 2 },
                 // Expenses stack on top (unscaled absolute amounts)
-                mkTax('Fed Tax',        '#e74c3cC0', r => r.FedTax),
-                mkTax('State Tax',      '#f1948a90', r => r.StateTax),
-                mkTax('IRMAA',          '#922b21E0', r => r.IRMAA),
+                mkTax('Fed Tax',        '#A30000C0', r => r.FedTax),
+                mkTax('State Tax',      '#FF2E2EC0', r => r.StateTax),
+                mkTax('IRMAA',          '#FFB8B8C0', r => r.IRMAA),
                 mkTax('Roth Conv',      '#8e44ad80', r => r.rothConv),
                 mkTax('Cash Deposit',   '#27ae6070', r => r.surplusCash),
                 // Spendable Income line sits exactly at the income/tax seam

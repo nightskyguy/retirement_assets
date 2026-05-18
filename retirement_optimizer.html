@@ -162,6 +162,9 @@
             <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
             <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer 🎯</button>
+            <label style="display:inline-flex;align-items:center;gap:4px;margin-left:8px;font-size:0.85em;cursor:pointer;" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
+                <input type="checkbox" id="optimizeSpend"> Optimize Spend
+            </label>
 		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
 		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}">Documentation <strong id="testsFailed">🟢</strong></button>
 
@@ -348,6 +351,7 @@
         </div>
 
         <div id="tab-opt" class="card hidden table-wrap">
+            <div id="opt-spend-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
             <div id="opt-perf" style="margin-bottom:6px;font-size:1em;color:#555;font-family:monospace;display:none;"></div>
             <table id="opt-table">
                 <thead>

@@ -1263,6 +1263,7 @@ function runOptimizer() {
     }
 
     // Spend optimizer second pass — only runs when user enabled the toggle
+    window.optimizerNoSolutionFloor = null;
     if (document.getElementById('optimizeSpend')?.checked) {
         const anySuccess = results.some(r => r.totals.success);
 
@@ -1318,6 +1319,9 @@ function runOptimizer() {
                     finalNW: opt.result.finalNW,
                     finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
                 });
+            } else {
+                // Reverse search also failed — record the floor that was tried for the banner
+                window.optimizerNoSolutionFloor = base.spendGoal * 0.10;
             }
         }
     }
@@ -1339,6 +1343,17 @@ function runOptimizer() {
 function renderSpendOptimizerBanner(results, baseSpendGoal) {
     const el = document.getElementById('opt-spend-banner');
     if (!el) return;
+
+    // No-solution case: reverse search ran but even the floor (10% of baseline) failed
+    if (window.optimizerNoSolutionFloor != null) {
+        const floor = Math.round(window.optimizerNoSolutionFloor).toLocaleString();
+        el.style.background = '#f8d7da';
+        el.style.borderColor = '#f5c6cb';
+        el.style.color = '#721c24';
+        el.textContent = `⛔ No strategy could sustain your spending goal, and none could be found even at $${floor}/yr (the lowest level tried). Consider reducing your spend goal or increasing your portfolio.`;
+        el.style.display = 'block';
+        return;
+    }
 
     const reverseRow = results.find(r => r._isReverseOptimized);
     if (reverseRow) {

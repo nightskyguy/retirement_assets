@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DJ1KD88H79"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-DJ1KD88H79');
+</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IRA Balances and IRMAA</title>
@@ -159,7 +166,10 @@
     <div class="calculator">
         <h1>IRA Balance Calculator to Avoid IRMAA</h1>
         <p class="subtitle">Calculate maximum IRA balance to avoid IRMAA surcharges at all 5 tiers</p>
-        
+        <div style="margin-bottom:1rem">
+          <button onclick="showOtherTools()" style="background:#2a5caa;color:#fff;border:none;border-radius:5px;padding:5px 14px;font-size:13px;cursor:pointer;">&#9783; Other Tools</button>
+        </div>
+
         <div class="input-group">
             <label for="maritalStatus">Marital Status:</label>
             <select id="maritalStatus">
@@ -403,5 +413,7 @@
         // Calculate on page load with default values
         window.onload = calculate;
     </script>
+<script src="other_tools.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"YOUR_CF_TOKEN"}'></script>
 </body>
 </html>

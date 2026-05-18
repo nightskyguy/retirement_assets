@@ -26,7 +26,7 @@ howToUse: `
 	<li>Because ROTH assets are not taxable, it merges all ROTH funds into one account. In real life, conversions/withdraws and earnings would occur in separate accounts.</li>
 	<li>There is no Federal Alternative Minimum Tax (AMT) calculation. This normally does not apply to retirees unless they have huge bond interest, or are exercising ISO stock. In the case of California the 1% additional tax for high earners is built into the embedded tax table.</li>
 	</ol>
-	Please read further details in the <A href="https://nightskyguy.github.io/retirement_assets/">README.md</A>.
+	Please read further details in the <A href="https://tools.netcitizen.us/">README.md</A>.
 </div>
 	`
 } // drawerContent

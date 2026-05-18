@@ -6,16 +6,16 @@ I use the term "IRA" for any account that is "Pre Tax". And "Roth" for any tax f
 
 Trivia for fun: "IRA" stands for "Individual Retirement *AGREEMENT*", not account. Yeah, weird. And it's not ROTH but Roth. It's named after Senator William *Roth* who introduced it.  Oh, and the "(k)" in 401(k) does NOT refer to Eugene Keogh, it's a reference to the Internal Revenue Code. 
 
-You can inspect or [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tools from Github Pages (_nightskyguy.github.io_).  You need internet access for the fonts and charts to work properly because those are downloaded from public sources.
+You can inspect or [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tools from Cloudflare (_tools.netcitizen.us_).  You need internet access for the fonts and charts to work properly because those are downloaded from public sources.
 
 You can DIRECTLY invoke these tools:
 
-+ **[Retirement Projection](https://nightskyguy.github.io/retirement_assets/Retirement_Projection.html)**  What will my retirement assets do?
-+ Deprecated **[IRA Projection](https://nightskyguy.github.io/retirement_assets/IRA_projection.html)**  What will my **IRA** do?
-+ **[IRMAA and Medicare Future costs](https://nightskyguy.github.io/retirement_assets/FutureCost.html)** Will IRMAA kill me?
-+ **[After Tax REAL Growth](https://nightskyguy.github.io/retirement_assets/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
-+ **[Income Tax Planner](https://nightskyguy.github.io/retirement_assets/IncomeTaxPlanner.html)** What does taxation look like at different ordinary income levels (includes many states)
-+ **[Retirement Optimizer](https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html)**  A full tool, with optimizers!  This is the OG tool that I started, and have been tinkering with.
++ **[Retirement Projection](https://tools.netcitizen.us/Retirement_Projection.html)**  What will my retirement assets do?
++ Deprecated **[IRA Projection](https://tools.netcitizen.us/IRA_projection.html)**  What will my **IRA** do?
++ **[IRMAA and Medicare Future costs](https://tools.netcitizen.us/FutureCost.html)** Will IRMAA kill me?
++ **[After Tax REAL Growth](https://tools.netcitizen.us/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
++ **[Income Tax Planner](https://tools.netcitizen.us/IncomeTaxPlanner.html)** What does taxation look like at different ordinary income levels (includes many states)
++ **[Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html)**  A full tool, with optimizers!  This is the OG tool that I started, and have been tinkering with.
 
 **There is no SUPPORT for these tools** and no guarantee of accuracy, or appropriateness of use. No warranty of suitability for any purpose. There is also *no charge*. **USE AT YOUR OWN RISK**
 
@@ -25,8 +25,7 @@ Here are less ambitious, standalone tools. Each should have a "How to Use" set i
 
 ## Standalone Calculator Tools
 
-These tools are still being developed, while the main tool is currently taking a backseat. Each one 
-runs standalone in your browser. Internet connection is needed to lead fonts and the tool for graphing charts.  There is no "tracking" or reporting or sneaky stuff going on. You are welcome to see for yourself by inspecting the source code.
+These tools are still being developed, while the main tool is currently taking a backseat. Each one runs standalone in your browser. Internet connection is needed to load fonts and the tool for graphing charts. Basic, anonymous page-load analytics are collected (Google Analytics and Cloudflare Web Analytics) solely to understand how often the tools are used and from what general region — no personally identifiable information is collected, stored, or transmitted. General region information helps prioritize which state tax rules to add in future releases. You are welcome to see for yourself by inspecting the source code.
 
 
 **[Retirement Projection](Retirement_Projection.html) — How might *most* of your retirement assets fare during your lifetime.**
@@ -179,7 +178,7 @@ _ is what made me realize that writing a tool in JavaScript results in the most 
 
 + [Visual Federal Tax Tool](https://engaging-data.com/tax-brackets/) - this tool shows how your federal taxes are calculated.  As of 2026-01-17, it doesn't handle taxability of Social Security income, and as best I can tell, doesn't handle the OBB (One Big Beautiful Bill) provisions for seniors.
 
-+ [What IRA Balances Result in IRMAA due to RMDS](https://nightskyguy.github.io/retirement_assets/irmaa_and_rmds.html) I wrote this tool, too, using AI. Given entered fixed income, it calculates what size IRA balance will cause RMDs that hit IRMAA tiers at various ages.  The tool uses current rates and does not attempt to adjust for inflation.  For example a married couple with a $16,607,550 balance at age **73** together with $130,000 income (pensions/social security/etc) will hit the highest IRMAA Tier 5 due to $626,700 forced RMD. Yeah, that is clearly not most of us. But at age **80** a $2,882,540 IRA balance together with that same income will hit **Tier 2** $5.2K annual charge) because that balance at that age forces a $142,000 RMD.  A balance of $1,286,740 for a single 80 year old lands in **Tier 4** with a $5,7k annual charge.  At 75 that same single person would be in Tier 4 with a 1.5M IRA balance. 
++ [What IRA Balances Result in IRMAA due to RMDS](https://tools.netcitizen.us/irmaa_and_rmds.html) I wrote this tool, too, using AI. Given entered fixed income, it calculates what size IRA balance will cause RMDs that hit IRMAA tiers at various ages.  The tool uses current rates and does not attempt to adjust for inflation.  For example a married couple with a $16,607,550 balance at age **73** together with $130,000 income (pensions/social security/etc) will hit the highest IRMAA Tier 5 due to $626,700 forced RMD. Yeah, that is clearly not most of us. But at age **80** a $2,882,540 IRA balance together with that same income will hit **Tier 2** $5.2K annual charge) because that balance at that age forces a $142,000 RMD.  A balance of $1,286,740 for a single 80 year old lands in **Tier 4** with a $5,7k annual charge.  At 75 that same single person would be in Tier 4 with a 1.5M IRA balance. 
 
 Operational Tools (All Free, though one is only free to try)
 
@@ -239,7 +238,7 @@ If you live in, or plan to move in a different state and you want to use this to
 
 #### Roth Conversion Gotchas
 
-The bad scenarios for Roth conversions are these - and most can be modeled with the [IRA Projection Tool](https://nightskyguy.github.io/retirement_assets/IRA_projection.html)
+The bad scenarios for Roth conversions are these - and most can be modeled with the [IRA Projection Tool](https://tools.netcitizen.us/IRA_projection.html)
 
 1. You withdraw/convert now at a (significantly) higher tax rate than you will face in your future. Converting into the 24% bracket might save you even if you expect to be in the 22% bracket, but converting into the 32% bracket will likely not help - at least this is the conventional wisdom.
 2. You withdraw + convert in an amount that pushes your taxation up (this is a specific case of 1)

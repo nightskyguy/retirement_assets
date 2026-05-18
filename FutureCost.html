@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DJ1KD88H79"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-DJ1KD88H79');
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NPV — Growing Payment Calculator</title>
@@ -386,6 +393,7 @@
     <button class="help-btn" onclick="document.getElementById('help-modal').classList.add('open')">
       &#9432; How to Use This Tool
     </button>
+    <button class="help-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
   </header>
 
   <!-- Usage modal -->
@@ -714,5 +722,7 @@
     if (e.key === 'Escape') document.getElementById('help-modal').classList.remove('open');
   });
 </script>
+<script src="other_tools.js"></script>
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

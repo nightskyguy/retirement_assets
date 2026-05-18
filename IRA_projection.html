@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DJ1KD88H79"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-DJ1KD88H79');
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IRA Projection Tool</title>
@@ -218,6 +225,7 @@ var TAXData = {
   <p>SECURE 2.0 · IRS Uniform Lifetime Table · RMDs begin at age 75 · 2026 Tax / IRMAA Code</p>
   <button class="help-btn" onclick="shareBookmark()">&#128279; Share</button>
   <button class="help-btn" onclick="toggleHelp()">? How to Use</button>
+  <button class="help-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
 </header>
 
 <!-- ── Help modal ── -->
@@ -2089,5 +2097,7 @@ if(window.innerWidth > 740){
   });
 }
 </script>
+<script src="other_tools.js"></script>
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

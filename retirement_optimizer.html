@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DJ1KD88H79"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-DJ1KD88H79');
+</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Retirement Optimizer 8</title>
@@ -223,9 +230,13 @@
                         <li>Because ROTH assets are not taxable, it merges all ROTH funds into one account. In real life, conversions/withdraws and earnings would occur in separate accounts.</li>
                         <li>There is no Federal Alternative Minimum Tax (AMT) calculation. This normally does not apply to retirees unless they have huge bond interest, or are exercising ISO stock. In the case of California the 1% additional tax for high earners is built into the embedded tax table.</li>
                         </ol>
-                        Please read further details in the <A href="https://nightskyguy.github.io/retirement_assets/">README.md</A>.
+                        Please read further details in the <A href="https://tools.netcitizen.us/">README.md</A>.
                     </div>                        
                     </div>
+				</details>
+				<details class="top-drawer">
+					<summary>Other Tools</summary>
+					<div class="drawer-content" id="ot-drawer-content"></div>
 				</details>
 			</div> <!-- header-drawers -->
 			<div id="insights">
@@ -238,17 +249,14 @@
 			The charts require the ability to load this file remotely: <A HREF="https://cdn.jsdelivr.net/npm/chart.js">cdn.jsdelivr.net/npm/chart.js</A>.
 			<p>And you can also take a look at the source, make comments, or even open a pull request to propose changes. Just follow the link above.
 
-			You can directly <strong>run</strong> the code from GitHub: <A HREF="https://nightskyguy.github.io/retirement_assets/retirement_optimizer.html">nightskyguy.github.io/retirement_assets/retirement_optimizer.html</a>
+			You can directly <strong>run</strong> the code from GitHub: <A HREF="https://tools.netcitizen.us/retirement_optimizer.html">tools.netcitizen.us/retirement_optimizer.html</a>
 			
 			<H4>Other Tools</H4>		
 			There is a standalone tool to determine what IRA balances (with RMDs) cause IRMAA taxation:  
-			<A HREF="https://nightskyguy.github.io/retirement_assets/irmaa_and_rmds.html">nightskyguy.github.io/retirement_assets/irmaa_and_rmds.html</A>
+			<A HREF="https://tools.netcitizen.us/irmaa_and_rmds.html">tools.netcitizen.us/irmaa_and_rmds.html</A>
 			
 			
-			<p>If you're wondering whether you're being tracked, the answer is no. There is no logic 
-			(currently) to do any kind of tracking or telemetry. You can read the code if you're skeptical.
-			And by the way, you SHOULD be skeptical.  Sooner or later I am going to want to know 
-			how many users are using it and from (approximately) where. Mostly for self edification, but also to know if, for example, lots of Idaho users are loading it... it would be a clue to add state taxes for Idaho.
+			<p>Page loads are tracked anonymously using Google Analytics and Cloudflare Web Analytics — just enough to know that someone visited, and roughly where in the world they came from. No personally identifiable information is collected, kept, or transmitted. No account data you enter is ever sent anywhere; it stays entirely in your browser. You are welcome to read the source code if you'd like to verify that.</p>
 			</div>	
 
 			<div id="tab-insight" class="card hidden">
@@ -264,7 +272,7 @@
 				<div class="drawer-content" id="drawer-changelog"> 
 				!-- CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG -->
 				<H3>Change Log</H3>
-				For the most details, please <STRONG>consult the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A></STRONG>.
+				For the most details, please <STRONG>consult the <A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.
 				<ul>
 				<li><b>8</b> Added "Proportional Withdraw %" strategy with configurable IRA withdrawal boost (0–200% above spend goal); optimizer tests it at 0/5/10/20/50% × Max Conversion on/off; Roth Conv bar now stacks on top of taxes in the lower chart; optimizer table highlights best row per column (lowest tax, lowest tax rate, highest spend, highest wealth).</li>
 				<li><b>7g</b> Found one source of over-withdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it over-withdrew to make up for the excluded pension.  Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed.
@@ -272,11 +280,11 @@
 					The mass of columns have been tamed somewhat with live selectable options, including suppressing columns that have only zeros, grouping by association.
 				</li>
 				<li>7f Fixed HTML cautions. Fixed error in calculating what to do with surplus. It was putting some surplus into Roth even though no IRA withdrawals had occurred. CapitalGains calculation was wrong, and the tax burden for Brokerage withdrawals was also incorrect. However it is still significantly over-withdrawing.</li>
-					<li>7e Fixed more bugs, added much more information (See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>). And added a new standalone tool. </li>
+					<li>7e Fixed more bugs, added much more information (See the <A HREF="https://tools.netcitizen.us/">README.md</A>). And added a new standalone tool. </li>
 				<li>7d Updated taxation calculations to use a more thorough calculator.</li>
 				<li>7c Prior update(s) broke the save/load functionality due to case changes.  Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years. The rate is encoded in the TAXdata table - not user adjustable. Began UI change to move the top tabs into a new location: Documentation.</li>
-				<li>7b More state rates. Fixed most calculations. Minor UI changes. Changed the defaults to something "more common" - . See the <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A>. </li>					
-				<li>7a Now has various state rates. Fixed most calculations. See <A HREF="https://nightskyguy.github.io/retirement_assets/">README.md</A> for details. </li>	
+				<li>7b More state rates. Fixed most calculations. Minor UI changes. Changed the defaults to something "more common" - . See the <A HREF="https://tools.netcitizen.us/">README.md</A>. </li>					
+				<li>7a Now has various state rates. Fixed most calculations. See <A HREF="https://tools.netcitizen.us/">README.md</A> for details. </li>	
 				
 				<li>6v Implemented Save/Load/Export/Delete Scenarios.</li>	
 				<li>6u Implemented SS Fail. More UI fixes. Moved all strategy items to the top.</li>	
@@ -390,5 +398,7 @@ loadScenarioByName?.('default');
 
 runSimulation?.();
 </script>
+<script src="other_tools.js"></script>
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

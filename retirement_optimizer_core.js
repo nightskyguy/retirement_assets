@@ -1145,14 +1145,27 @@ function optimizeSpendDown(baseInputs, strategyOverridesList) {
     // Confirm baseline truly fails for all strategies
     if (bestPassingStrategy(baseInputs.spendGoal)) return null;
 
-    // Binary search downward: floor is 10% of baseline, ceiling is baseline
-    let lo = baseInputs.spendGoal * 0.10;
+    // Exponential search downward to find a passing lower bound.
+    // The relationship is NOT guaranteed monotonic at very low spend levels
+    // (e.g. iraBaseGoal constraints), so we probe at 50%, 25%, 12.5%... of
+    // baseline until we find a level that passes, then binary search upward.
     let hi = baseInputs.spendGoal;
-    let bestEntry = null;
+    let lo = hi * 0.50;
+    let loEntry = null;
+    const MIN_SPEND = Math.max(500, baseInputs.spendGoal * 0.02); // hard floor: $500 or 2%
 
-    // Quick check: if even the floor fails, nothing will work
-    if (!bestPassingStrategy(lo)) return null;
+    while (lo >= MIN_SPEND) {
+        loEntry = bestPassingStrategy(lo);
+        if (loEntry) break;
+        hi = lo;       // this level also fails — narrow the ceiling
+        lo = lo * 0.5;
+    }
 
+    // No passing level found anywhere down to the minimum
+    if (!loEntry) return null;
+
+    // Binary search between lo (passes) and hi (fails) for the highest sustainable spend
+    let bestEntry = loEntry;
     while ((hi - lo) / baseInputs.spendGoal > SPEND_SEARCH_TOLERANCE) {
         const mid = (lo + hi) / 2;
         const entry = bestPassingStrategy(mid);
@@ -1163,7 +1176,6 @@ function optimizeSpendDown(baseInputs, strategyOverridesList) {
             hi = mid;
         }
     }
-    if (!bestEntry) return null;
     return { optimizedSpend: lo, ...bestEntry };
 }
 
@@ -1320,8 +1332,8 @@ function runOptimizer() {
                     finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
                 });
             } else {
-                // Reverse search also failed — record the floor that was tried for the banner
-                window.optimizerNoSolutionFloor = base.spendGoal * 0.10;
+                // Reverse search also failed — report the lowest spend level that was tried
+                window.optimizerNoSolutionFloor = Math.max(500, base.spendGoal * 0.02);
             }
         }
     }

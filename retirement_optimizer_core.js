@@ -1356,7 +1356,7 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
         el.style.background = '#f8d7da';
         el.style.borderColor = '#f5c6cb';
         el.style.color = '#721c24';
-        el.textContent = `⚠️ No strategy can fund your current spend goal. The highest sustainable spending found is $${amt}/yr with two full years of wealth remaining. (Strategy: ${label})`;
+        el.textContent = `⚠️ No strategy can fund your current spend goal. The highest sustainable spending found is $${amt}/yr, with all years funded and ${SUCCESS_WEALTH_YEARS} years of wealth remaining. (Strategy: ${label})`;
         el.style.display = 'block';
         return;
     }
@@ -1371,7 +1371,7 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
         el.style.background = '#fff3cd';
         el.style.borderColor = '#ffc107';
         el.style.color = '#856404';
-        el.textContent = `💡 It appears you can increase your spending to $${amt}/yr and still have two full years of funding remaining. (Strategy: ${label})`;
+        el.textContent = `💡 It appears you can increase your spending to $${amt}/yr with all years funded and ${SUCCESS_WEALTH_YEARS} years of wealth remaining. (Strategy: ${label})`;
         el.style.display = 'block';
     } else {
         el.style.display = 'none';

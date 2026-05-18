@@ -1615,15 +1615,27 @@ assertEqual(
 		assertEqual(opt !== null, true, 'optimizeSpendDown: finds result when lower spend is viable');
 		assertEqual(opt.optimizedSpend < strainedInputs.spendGoal, true,
 			'optimizeSpendDown: result spend is below the failing baseline');
-		const last = opt.result.log[opt.result.log.length - 1];
-		assertEqual(last.totalWealth >= last.spendGoal * SUCCESS_WEALTH_YEARS, true,
-			'optimizeSpendDown: result satisfies 2-year ending wealth criterion');
+		assertEqual(opt.result.totals.success, true,
+			'optimizeSpendDown: result passes totals.success (not just end-wealth)');
 	}
 
-	// (opt-4) Reverse optimizer: returns null when even the 10%-floor spend is unsustainable
+	// (opt-4) Reverse optimizer: returns null when even MIN_SPEND is unsustainable
 	{
 		const opt = optimizeSpendDown(impossibleInputs, miniStrategyList);
-		assertEqual(opt, null, 'optimizeSpendDown: returns null when even floor spend fails');
+		assertEqual(opt, null, 'optimizeSpendDown: returns null when even MIN_SPEND fails');
+	}
+
+	// (opt-5) Reverse optimizer: converges near the true ceiling, not just any passing value.
+	// strainedInputs: IRA1=800k, spendGoal=300k. MIN_SPEND=6k. Sustainable ceiling is ~30-40k
+	// (≈4% of 800k). Verify the result is at least 4x MIN_SPEND (24k) — well above the floor
+	// but safely below the expected ceiling, so this catches regressions where the search
+	// short-circuits at MIN_SPEND.
+	{
+		const opt = optimizeSpendDown(strainedInputs, miniStrategyList);
+		const minSpend = Math.max(500, strainedInputs.spendGoal * 0.02);
+		assertEqual(opt !== null, true, 'optimizeSpendDown (opt-5): result exists');
+		assertEqual(opt.optimizedSpend > minSpend * 4, true,
+			'optimizeSpendDown: converged spend is well above MIN_SPEND (binary search is reaching the ceiling)');
 	}
 
 	// ============================================================================

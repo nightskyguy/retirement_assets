@@ -1203,6 +1203,7 @@ function optimizeSpend(baseInputs, overrides) {
 function runOptimizer() {
     const base = getInputs();
     const results = [];
+    simulationCount = 0;
     const optimizerStart = performance.now();
 
     // Get all bracket rates from TAXData (skip the last Infinity bracket)
@@ -1326,7 +1327,7 @@ function runOptimizer() {
     }
 
     window.optimizerResults = results;
-    window.optimizerPerfStats = { totalMs: performance.now() - optimizerStart, runsCount: results.length };
+    window.optimizerPerfStats = { totalMs: performance.now() - optimizerStart, runsCount: simulationCount };
     window.optimizerSortState = { colKey: 'spend', direction: 'desc' };
     renderOptimizerTable(results);
     renderSpendOptimizerBanner(results, base.spendGoal);

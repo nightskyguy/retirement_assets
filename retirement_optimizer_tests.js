@@ -1551,6 +1551,82 @@ assertEqual(
 	}
 
 	// ============================================================================
+	// SPEND OPTIMIZER TESTS
+	// ============================================================================
+	console.log('\n=== Spend Optimizer Tests ===');
+
+	// Shared strategy list used by reverse optimizer tests
+	const miniStrategyList = [
+		{ strategyLabel: 'Proportional', paramLabel: '0%',  paramSortVal: 0,
+		  overrides: { strategy: 'propwd',  propWithdraw: 0,    maxConversion: false } },
+		{ strategyLabel: 'Fill Bracket', paramLabel: '22%', paramSortVal: 0.22,
+		  overrides: { strategy: 'bracket', stratRate: 0.22,    maxConversion: false } },
+		{ strategyLabel: 'Fixed',        paramLabel: '5 yrs', paramSortVal: 5,
+		  overrides: { strategy: 'fixed',   nYears: 5,          maxConversion: false } },
+	];
+
+	// Wealthy scenario — large portfolio, conservative spend — forward optimizer should find higher spend
+	const wealthyInputs = {
+		...baseInputs,
+		IRA1: 1500000, IRA2: 0, Roth: 300000,
+		Brokerage: 500000, BrokerageBasis: 400000, Cash: 200000,
+		spendGoal: 50000,
+		birthyear1: 1960, die1: 90
+	};
+
+	// Strained scenario — decent portfolio, high spend — all strategies fail at baseline, but lower spend works
+	const strainedInputs = {
+		...baseInputs,
+		IRA1: 800000, IRA2: 0, Roth: 0,
+		Brokerage: 0, BrokerageBasis: 0, Cash: 0,
+		spendGoal: 300000,
+		birthyear1: 1960, die1: 90
+	};
+
+	// Impossible scenario — tiny portfolio, even 10% of spendGoal is unsustainable
+	const impossibleInputs = {
+		...baseInputs,
+		IRA1: 3000, IRA2: 0, Roth: 0,
+		Brokerage: 0, BrokerageBasis: 0, Cash: 0,
+		spendGoal: 150000,
+		birthyear1: 1960, die1: 90
+	};
+
+	// (opt-1) Forward optimizer: wealthy baseline passes and returns a higher optimized spend
+	{
+		const opt = optimizeSpend(wealthyInputs, { strategy: 'bracket', stratRate: 0.22, maxConversion: false });
+		assertEqual(opt !== null, true, 'optimizeSpend: returns result for comfortably-passing scenario');
+		assertEqual(opt.optimizedSpend > wealthyInputs.spendGoal, true,
+			'optimizeSpend: optimized spend exceeds baseline spend goal');
+		const last = opt.result.log[opt.result.log.length - 1];
+		assertEqual(last.totalWealth >= last.spendGoal * SUCCESS_WEALTH_YEARS, true,
+			'optimizeSpend: result satisfies 2-year ending wealth criterion');
+	}
+
+	// (opt-2) Forward optimizer: returns null when baseline itself fails
+	{
+		const opt = optimizeSpend(strainedInputs, { strategy: 'propwd', propWithdraw: 0, maxConversion: false });
+		assertEqual(opt, null, 'optimizeSpend: returns null when baseline fails the wealth criterion');
+	}
+
+	// (opt-3) Reverse optimizer: finds a sustainable lower spend when all strategies fail at baseline
+	{
+		const opt = optimizeSpendDown(strainedInputs, miniStrategyList);
+		assertEqual(opt !== null, true, 'optimizeSpendDown: finds result when lower spend is viable');
+		assertEqual(opt.optimizedSpend < strainedInputs.spendGoal, true,
+			'optimizeSpendDown: result spend is below the failing baseline');
+		const last = opt.result.log[opt.result.log.length - 1];
+		assertEqual(last.totalWealth >= last.spendGoal * SUCCESS_WEALTH_YEARS, true,
+			'optimizeSpendDown: result satisfies 2-year ending wealth criterion');
+	}
+
+	// (opt-4) Reverse optimizer: returns null when even the 10%-floor spend is unsustainable
+	{
+		const opt = optimizeSpendDown(impossibleInputs, miniStrategyList);
+		assertEqual(opt, null, 'optimizeSpendDown: returns null when even floor spend fails');
+	}
+
+	// ============================================================================
 	// Run all tests
 	// ============================================================================
 	function runAllTaxTests() {

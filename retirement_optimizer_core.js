@@ -1120,6 +1120,53 @@ function updateCurrentDollarsView() {
 }
 // //////////////////////////////////////////////////////////////////
 
+// When ALL strategies fail at baseline, searches downward across every strategy to find
+// the highest spend goal where at least one strategy succeeds.
+// Returns { result, optimizedSpend, strategyLabel, paramLabel, paramSortVal, overrides } or null.
+function optimizeSpendDown(baseInputs, strategyOverridesList) {
+    function passes(res) {
+        const last = res.log[res.log.length - 1];
+        return last.totalWealth >= last.spendGoal * SUCCESS_WEALTH_YEARS;
+    }
+
+    function bestPassingStrategy(spendGoal) {
+        let best = null;
+        for (const entry of strategyOverridesList) {
+            const res = simulate(Object.assign({}, baseInputs, entry.overrides, { spendGoal }));
+            if (passes(res)) {
+                if (!best || res.totals.spend > best.result.totals.spend) {
+                    best = { result: res, ...entry };
+                }
+            }
+        }
+        return best;
+    }
+
+    // Confirm baseline truly fails for all strategies
+    if (bestPassingStrategy(baseInputs.spendGoal)) return null;
+
+    // Binary search downward: floor is 10% of baseline, ceiling is baseline
+    let lo = baseInputs.spendGoal * 0.10;
+    let hi = baseInputs.spendGoal;
+    let bestEntry = null;
+
+    // Quick check: if even the floor fails, nothing will work
+    if (!bestPassingStrategy(lo)) return null;
+
+    while ((hi - lo) / baseInputs.spendGoal > SPEND_SEARCH_TOLERANCE) {
+        const mid = (lo + hi) / 2;
+        const entry = bestPassingStrategy(mid);
+        if (entry) {
+            lo = mid;
+            bestEntry = entry;
+        } else {
+            hi = mid;
+        }
+    }
+    if (!bestEntry) return null;
+    return { optimizedSpend: lo, ...bestEntry };
+}
+
 // Returns the highest-spend simulation result that still meets the SUCCESS_WEALTH_YEARS
 // criterion, or null if the baseline itself fails.
 // baseInputs: full inputs object at baseline spendGoal
@@ -1217,31 +1264,61 @@ function runOptimizer() {
 
     // Spend optimizer second pass — only runs when user enabled the toggle
     if (document.getElementById('optimizeSpend')?.checked) {
-        const baselineCount = results.length;
-        for (let i = 0; i < baselineCount; i++) {
-            const baseRow = results[i];
-            if (!baseRow.totals.success) continue;
-            const { strategyLabel, paramLabel, paramSortVal, overrides } = strategyOverridesList[i];
-            const opt = optimizeSpend(base, overrides);
-            if (!opt) continue;
-            const lastEntry = opt.result.log[opt.result.log.length - 1];
-            results.push({
-                _id: results.length,
-                _strategyLabel: (strategyLabel + (overrides.maxConversion ? ' ✓' : '')) + (opt.hitCeiling ? ' ✦+' : ' ✦'),
-                _paramLabel: paramLabel,
-                _paramSortVal: paramSortVal,
-                _maxConversion: overrides.maxConversion,
-                _spendGoal: opt.optimizedSpend,
-                _strategy: overrides.strategy,
-                _nYears: overrides.nYears ?? null,
-                _stratRate: overrides.stratRate ?? null,
-                _propWithdraw: overrides.propWithdraw ?? null,
-                _isSpendOptimized: true,
-                _hitCeiling: opt.hitCeiling,
-                totals: opt.result.totals,
-                finalNW: opt.result.finalNW,
-                finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
-            });
+        const anySuccess = results.some(r => r.totals.success);
+
+        if (anySuccess) {
+            // Forward mode: for each successful strategy, binary-search upward
+            const baselineCount = results.length;
+            for (let i = 0; i < baselineCount; i++) {
+                const baseRow = results[i];
+                if (!baseRow.totals.success) continue;
+                const { strategyLabel, paramLabel, paramSortVal, overrides } = strategyOverridesList[i];
+                const opt = optimizeSpend(base, overrides);
+                if (!opt) continue;
+                const lastEntry = opt.result.log[opt.result.log.length - 1];
+                results.push({
+                    _id: results.length,
+                    _strategyLabel: (strategyLabel + (overrides.maxConversion ? ' ✓' : '')) + (opt.hitCeiling ? ' ✦+' : ' ✦'),
+                    _paramLabel: paramLabel,
+                    _paramSortVal: paramSortVal,
+                    _maxConversion: overrides.maxConversion,
+                    _spendGoal: opt.optimizedSpend,
+                    _strategy: overrides.strategy,
+                    _nYears: overrides.nYears ?? null,
+                    _stratRate: overrides.stratRate ?? null,
+                    _propWithdraw: overrides.propWithdraw ?? null,
+                    _isSpendOptimized: true,
+                    _isReverseOptimized: false,
+                    _hitCeiling: opt.hitCeiling,
+                    totals: opt.result.totals,
+                    finalNW: opt.result.finalNW,
+                    finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+                });
+            }
+        } else {
+            // Reverse mode: all strategies failed — find the highest spend that works
+            const opt = optimizeSpendDown(base, strategyOverridesList);
+            if (opt) {
+                const lastEntry = opt.result.log[opt.result.log.length - 1];
+                results.push({
+                    _id: results.length,
+                    _strategyLabel: (opt.strategyLabel + (opt.overrides.maxConversion ? ' ✓' : '')) + ' ▼',
+                    _paramLabel: opt.paramLabel,
+                    _paramSortVal: opt.paramSortVal,
+                    _maxConversion: opt.overrides.maxConversion,
+                    _spendGoal: opt.optimizedSpend,
+                    _strategy: opt.overrides.strategy,
+                    _nYears: opt.overrides.nYears ?? null,
+                    _stratRate: opt.overrides.stratRate ?? null,
+                    _propWithdraw: opt.overrides.propWithdraw ?? null,
+                    _isSpendOptimized: true,
+                    _isReverseOptimized: true,
+                    _hitCeiling: false,
+                    totals: opt.result.totals,
+                    finalNW: opt.result.finalNW,
+                    finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+                });
+            }
         }
     }
 
@@ -1262,6 +1339,19 @@ function runOptimizer() {
 function renderSpendOptimizerBanner(results, baseSpendGoal) {
     const el = document.getElementById('opt-spend-banner');
     if (!el) return;
+
+    const reverseRow = results.find(r => r._isReverseOptimized);
+    if (reverseRow) {
+        const amt = Math.round(reverseRow._spendGoal).toLocaleString();
+        const label = reverseRow._strategyLabel;
+        el.style.background = '#f8d7da';
+        el.style.borderColor = '#f5c6cb';
+        el.style.color = '#721c24';
+        el.textContent = `⚠️ No strategy can fund your current spend goal. The highest sustainable spending found is $${amt}/yr with two full years of wealth remaining. (Strategy: ${label})`;
+        el.style.display = 'block';
+        return;
+    }
+
     const optimized = results
         .filter(r => r._isSpendOptimized && r.totals.success)
         .sort((a, b) => b._spendGoal - a._spendGoal);
@@ -1269,6 +1359,9 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
     if (best && (best._spendGoal / baseSpendGoal - 1) >= SPEND_SEARCH_MIN_DELTA) {
         const amt = Math.round(best._spendGoal).toLocaleString();
         const label = best._strategyLabel;
+        el.style.background = '#fff3cd';
+        el.style.borderColor = '#ffc107';
+        el.style.color = '#856404';
         el.textContent = `💡 It appears you can increase your spending to $${amt}/yr and still have two full years of funding remaining. (Strategy: ${label})`;
         el.style.display = 'block';
     } else {
@@ -1401,9 +1494,11 @@ function renderOptimizerTable(results) {
         const isWinner = bestIds.has(r._id);
         const rowStyle = isWinner
             ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
-            : r._isSpendOptimized
-                ? 'background-color:#dbeafe;font-style:italic;cursor:pointer;'
-                : 'cursor:pointer;';
+            : r._isReverseOptimized
+                ? 'background-color:#fde8d8;font-style:italic;cursor:pointer;'
+                : r._isSpendOptimized
+                    ? 'background-color:#dbeafe;font-style:italic;cursor:pointer;'
+                    : 'cursor:pointer;';
         const cells = columns.map(col => {
             // Highlight the specific winning cell with a slightly deeper green
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
@@ -1419,6 +1514,54 @@ function renderOptimizerTable(results) {
 
     document.querySelector('#opt-table thead').innerHTML = headerHtml;
     document.querySelector('#opt-table tbody').innerHTML = rowsHtml;
+
+    // Best summary table — unique winner rows labeled by what they won
+    const bestEl = document.getElementById('opt-best');
+    if (bestEl) {
+        if (successes.length > 0) {
+            const winnerDefs = [
+                { key: 'spend',  label: '🏆 Most Spendable',   id: colWinners.spend  },
+                { key: 'nw',     label: '💰 Most Wealth',       id: colWinners.nw     },
+                { key: 'tax',    label: '📉 Lowest Tax',        id: colWinners.tax    },
+                { key: 'rate',   label: '📊 Lowest Tax Rate',   id: colWinners.rate   },
+                { key: 'rmdtax', label: '📋 Lowest RMD Tax%',   id: colWinners.rmdtax },
+            ];
+            // Deduplicate: a row can win multiple metrics; show it once under its first/best label
+            const seen = new Set();
+            const uniqueWinners = winnerDefs.filter(w => {
+                if (seen.has(w.id)) return false;
+                seen.add(w.id);
+                return true;
+            });
+            const bestRows = uniqueWinners.map(w => {
+                const r = results.find(x => x._id === w.id);
+                if (!r) return '';
+                const cells = columns.map(col => {
+                    const cellWin = col.key === w.key;
+                    const cellStyle = cellWin ? ' style="background-color:#4CAF5080;"' : '';
+                    return `<td${cellStyle}>${col.getValue(r)}</td>`;
+                }).join('');
+                return `<tr style="background-color:#90EE90;font-weight:bold;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} — click to load">
+                    <td colspan="1" style="background:#4CAF50;color:#fff;font-size:0.78em;white-space:nowrap;padding:2px 6px;">${w.label}</td>
+                    ${columns.slice(1).map(col => {
+                        const cellWin = col.key === w.key;
+                        const cellStyle = cellWin ? ' style="background-color:#4CAF5080;"' : '';
+                        return `<td${cellStyle}>${col.getValue(r)}</td>`;
+                    }).join('')}
+                </tr>`;
+            }).join('');
+            const bestHeader = '<tr>' + columns.map((col, i) =>
+                `<th>${i === 0 ? 'Best' : col.label}</th>`
+            ).join('') + '</tr>';
+            bestEl.innerHTML = `<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+                <thead>${bestHeader}</thead>
+                <tbody>${bestRows}</tbody>
+            </table>`;
+            bestEl.style.display = 'block';
+        } else {
+            bestEl.style.display = 'none';
+        }
+    }
 
     // Note when all spendable values are the same (fully-funded: every strategy hits the spend goal)
     const noteEl = document.getElementById('opt-note');
@@ -1476,9 +1619,13 @@ function loadOptimizerResult(id) {
     }
 
     document.getElementById('maxConversion').checked = result._maxConversion;
+    // For spend-optimized rows, restore the optimized spend goal
+    if (result._spendGoal != null) {
+        document.getElementById('spendGoal').value = Math.round(result._spendGoal);
+    }
     toggleStrategyUI();
     runSimulation();
-    showTab('tab-tbl');
+    showTab('tab-chart');
 }
 
 // //////////////////////////////////////////////////////////////////

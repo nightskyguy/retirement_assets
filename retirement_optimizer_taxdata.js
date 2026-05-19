@@ -723,3 +723,14 @@ function calcIRMAA(magi, status, cpiRate, medicareRate = (1 + TAXData.IRMAA.ANNU
 	let irmaalimit = findUpperLimitByAmount( 'IRMAA', status, magi, cpiRate)
 	return irmaalimit.rate * medicareRate * 12
 }
+
+function getIRMAATier(magi, status, cpiRate) {
+	const brks = getRateBracket('IRMAA', status);
+	if (!brks) return '-';
+	let tier = brks[0].tier ?? '-';
+	for (const b of brks) {
+		if (b.l * cpiRate <= magi) tier = b.tier ?? '-';
+		else break;
+	}
+	return tier;
+}

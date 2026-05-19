@@ -1151,8 +1151,11 @@ function updateIRAGoalHint() {
         const targetAtAge = spendGoal / rmdPctAtTarget;
         // Discount back to today at growth rate
         const targetNow = targetAtAge / Math.pow(1 + growth, yearsUntil);
-        hint.textContent = `Suggested IRA Goal: $${Math.round(targetNow).toLocaleString()}`;
-        hint.title = `IRA balance today that would produce RMDs ≤ your spend goal at age ${targetAge} (IRS table: ${(rmdPctAtTarget * 100).toFixed(2)}% RMD rate, ${yearsUntil} yrs at ${(growth * 100).toFixed(1)}% growth)`;
+        const rounded = Math.round(targetNow);
+        hint.textContent = `Suggested IRA Goal: $${rounded.toLocaleString()}`;
+        hint.title = `IRA balance today that would produce RMDs ≤ your spend goal at age ${targetAge} (IRS table: ${(rmdPctAtTarget * 100).toFixed(2)}% RMD rate, ${yearsUntil} yrs at ${(growth * 100).toFixed(1)}% growth). Click to apply.`;
+        hint.style.cursor = 'pointer';
+        hint.onclick = () => { document.getElementById('iraBaseGoal').value = rounded; runSimulation(); };
     } catch(e) {
         hint.textContent = '';
     }

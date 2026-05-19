@@ -38,10 +38,11 @@
 					<option value="propwd">📊Withdraw Proportional +%</option>
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
 					<option value="bracket">🪣Fill Federal Tax Bracket</option>
-					<option value="minlimit">🛑Lesser of IRMAA or TaxBracket</option>
+					<option value="minlimit" disabled style="color:#bbb;">🛑Lesser of IRMAA or TaxBracket (broken)</option>
+					<option value="fixedpct">📉Fixed % IRA Withdrawal</option>
 				</select></label>
 			</div>
-			
+
 			<div id="ui-fixed" class="input-group hidden">
 				<label>Target Years (&#120393;)
 				<input type="number" id="nYears" value="10"></label>
@@ -58,13 +59,19 @@
 				<label title="Withdraw this % above After-Tax Spend from IRAs each year (0%=exact spend, 100%=2× spend, 200%=3× spend). Excess flows to Roth or Cash.">Withdraw Boost %
 				<input type="number" id="propWithdraw" value="20" min="0" max="200" step="5"></label>
 			</div>
+
+			<div id="ui-fixedpct" class="input-group hidden">
+				<label title="Withdraw this % of the total IRA balance each year. RMDs count toward this amount. Any spending shortfall draws from Cash → Brokerage → Roth.">IRA Withdraw %
+				<input type="number" id="iraWithdrawPct" value="5" min="0.5" max="20" step="0.5"></label>
+			</div>
 		</div>  <!-- strategy-container -->
-        <div class="row">	
+        <div class="row">
 		</div>
-	
+
         <div class="row">
 			<label title="Draw down total IRA(s) to this amount or less - to avoid IRMAA/tax bracket issues in RMDS.">IRA Goal
-            <input type="number" id="iraBaseGoal" value="750000" width="50%"></label><BR>
+            <input type="number" id="iraBaseGoal" value="750000" width="50%"></label>
+			<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div><BR>
 			<label title='If checked, it will use available cash to maximize Roth conversions'>
 			  <input type="checkbox" id="maxConversion" name="maxConversion">
 			  Max Conversion

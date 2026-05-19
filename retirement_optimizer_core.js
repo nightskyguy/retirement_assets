@@ -626,7 +626,7 @@ function simulate(inputs) {
         let possibleIncome = taxableInc + taxableDividends + taxableInterest + fixedInc;
 
         // 4. Determine Target Spending amount based on Strategy
-        const isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit';
+        const isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'fixedpct';
         let targetSpend = isBracketStrategy ? spendGoal : Math.min(spendGoal, goalLimit);
         let additionalSpendNeeded = Math.max(0, targetSpend + irmaa - possibleIncome);
 
@@ -682,6 +682,16 @@ function simulate(inputs) {
             // Cash → Brokerage → Roth in the gap-fill pass below (bracket-strategy path).
             const iRAbracketRoom = Math.max(0, limit - taxableInc - fixedInc - taxableInterest - taxableDividends);
             const IRAwd = Math.min(curIRA, iRAbracketRoom);
+            withdrawals = { IRA: IRAwd, netAmount: IRAwd };
+
+        } else if (inputs.strategy === 'fixedpct') {
+            // Withdraw a fixed % of the original IRA balance (before RMDs) each year.
+            // RMDs already taken count toward the target; any excess beyond RMDs is the
+            // additional draw. Spending shortfall fills from Cash → Brokerage → Roth below.
+            const pct = inputs.iraWithdrawPct ?? 0.05;
+            const originalIRA = balance.IRA1 + balance.IRA2 + totalRMD;
+            const targetTotal = originalIRA * pct;
+            const IRAwd = Math.max(0, Math.min(curIRA, targetTotal - totalRMD));
             withdrawals = { IRA: IRAwd, netAmount: IRAwd };
 
         } else if (inputs.strategy === 'propwd') {
@@ -1114,6 +1124,7 @@ function getInputs() {
         ssFailPct: +val('ssFailPct') / 100.0,
         maxConversion: valChecked('maxConversion'),
         propWithdraw: +val('propWithdraw') / 100.0,
+        iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
         startInYear: +val('startInYear'),
         dividendReinvest: !!valChecked('dividendReinvest')
     };
@@ -1123,6 +1134,30 @@ function getInputs() {
  *
  *
  */
+function updateIRAGoalHint() {
+    const hint = document.getElementById('ira-goal-hint');
+    if (!hint) return;
+    try {
+        const birthyear1 = +val('birthyear1');
+        const currentYear = new Date().getFullYear();
+        const age1 = currentYear - birthyear1 + 1;
+        const growth = +val('growth') / 100;
+        const spendGoal = +val('spendGoal');
+        const targetAge = 84;
+        const yearsUntil = targetAge - age1;
+        if (yearsUntil <= 0 || spendGoal <= 0 || !RMD_TABLE[targetAge]) { hint.textContent = ''; return; }
+        // Target IRA at age 84: balance where RMD equals spend goal
+        const rmdPctAtTarget = 1 / RMD_TABLE[targetAge];
+        const targetAtAge = spendGoal / rmdPctAtTarget;
+        // Discount back to today at growth rate
+        const targetNow = targetAtAge / Math.pow(1 + growth, yearsUntil);
+        hint.textContent = `Suggested IRA Goal: $${Math.round(targetNow).toLocaleString()}`;
+        hint.title = `IRA balance today that would produce RMDs ≤ your spend goal at age ${targetAge} (IRS table: ${(rmdPctAtTarget * 100).toFixed(2)}% RMD rate, ${yearsUntil} yrs at ${(growth * 100).toFixed(1)}% growth)`;
+    } catch(e) {
+        hint.textContent = '';
+    }
+}
+
 function runSimulation() {
     let res = simulate(getInputs());
     lastSimulationLog = res.log;
@@ -1133,6 +1168,7 @@ function runSimulation() {
     updateTable(res.log);
     updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
+    updateIRAGoalHint();
 }
 
 function updateCurrentDollarsView() {
@@ -1254,6 +1290,7 @@ function runOptimizer() {
             _nYears: overrides.nYears ?? null,
             _stratRate: overrides.stratRate ?? null,
             _propWithdraw: overrides.propWithdraw ?? null,
+            _iraWithdrawPct: overrides.iraWithdrawPct ?? null,
             _isSpendOptimized: false,
             totals: res.totals,
             finalNW: res.finalNW,
@@ -1278,6 +1315,11 @@ function runOptimizer() {
         for (const rate of bracketRates) {
             const pct = Math.round(rate * 100);
             addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
+        }
+
+        // Fixed % IRA withdrawal
+        for (const pct of [3, 4, 5, 6, 7, 8, 10]) {
+            addResult('Fixed % IRA', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
         }
     }
 
@@ -1650,6 +1692,8 @@ function loadOptimizerResult(id) {
         document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
     } else if (result._strategy === 'propwd' && result._propWithdraw != null) {
         document.getElementById('propWithdraw').value = Math.round(result._propWithdraw * 100);
+    } else if (result._strategy === 'fixedpct' && result._iraWithdrawPct != null) {
+        document.getElementById('iraWithdrawPct').value = Math.round(result._iraWithdrawPct * 100);
     }
 
     document.getElementById('maxConversion').checked = result._maxConversion;
@@ -2466,6 +2510,7 @@ function toggleStrategyUI() {
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
     document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket' && m !== 'minlimit');
     document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
+    document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 

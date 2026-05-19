@@ -573,6 +573,8 @@ function simulate(inputs) {
         let totalIncome = 0;
         let netIncome = 0;
         let capitalGains = 0;
+        let bracketTarget = 0;  // ceiling being targeted by bracket/minlimit strategies
+        let bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy)
 
         //!!! TODO: if strategy is "bracket" but spendGoal is > bracket limit
         //		    we likely have a problem unless non-taxable accounts can backfill.
@@ -624,7 +626,8 @@ function simulate(inputs) {
         let possibleIncome = taxableInc + taxableDividends + taxableInterest + fixedInc;
 
         // 4. Determine Target Spending amount based on Strategy
-        let targetSpend = Math.min(spendGoal, goalLimit);
+        const isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'fixedpct';
+        let targetSpend = isBracketStrategy ? spendGoal : Math.min(spendGoal, goalLimit);
         let additionalSpendNeeded = Math.max(0, targetSpend + irmaa - possibleIncome);
 
         //!!! Find the income federal limit. TODO: use that limit, to refine down to the next lower IRMAA limit and next lower State Limit.
@@ -656,31 +659,40 @@ function simulate(inputs) {
             withdrawals = { IRA: IRAwd, netAmount: IRAwd }
 
         } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit') {
-            //!!! This code has flaws.  Withdraws too much.
             let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
             let limit = fedLimit.limit;
-            let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation)
-            nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit
+            let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation);
+            nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit;
             marginalFedTaxRate = fedLimit.rate;
 
-            //!!!TODO Find the state rate and limit that corresponds to the limit (fedLimit.fedLimit)
-            //!!!TODO Find the IRMAA limit that corresponds to the fedLimit.fedLimit
             let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
             marginalStateTaxRate = stLimit.rate;
             stateLimit = stLimit.limit;
-            nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / limit
+            nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / limit;
 
-            // pick whatever is smaller (state or Federal limit for the amount desired)
-            limit = Math.min(stateLimit, limit)
+            limit = Math.min(stateLimit, limit);
 
             if (inputs.strategy === 'minlimit') {
-                limit = Math.min(limit, irmaLimit)
+                limit = Math.min(limit, irmaLimit);
             }
 
-            currentTaxableGuess = limit - fixedInc - taxableInc - totalRMD;
-            withdrawStrategy.order = ['IRA', 'Brokerage']
-            withdrawStrategy.taxrate = [nominalTaxRate, capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit)]
-            withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy)
+            bracketTarget = limit;
+
+            // Cap IRA draw at the bracket ceiling; any spending shortfall is filled from
+            // Cash → Brokerage → Roth in the gap-fill pass below (bracket-strategy path).
+            const iRAbracketRoom = Math.max(0, limit - taxableInc - fixedInc - taxableInterest - taxableDividends);
+            const IRAwd = Math.min(curIRA, iRAbracketRoom);
+            withdrawals = { IRA: IRAwd, netAmount: IRAwd };
+
+        } else if (inputs.strategy === 'fixedpct') {
+            // Withdraw a fixed % of the original IRA balance (before RMDs) each year.
+            // RMDs already taken count toward the target; any excess beyond RMDs is the
+            // additional draw. Spending shortfall fills from Cash → Brokerage → Roth below.
+            const pct = inputs.iraWithdrawPct ?? 0.05;
+            const originalIRA = balance.IRA1 + balance.IRA2 + totalRMD;
+            const targetTotal = originalIRA * pct;
+            const IRAwd = Math.max(0, Math.min(curIRA, targetTotal - totalRMD));
+            withdrawals = { IRA: IRAwd, netAmount: IRAwd };
 
         } else if (inputs.strategy === 'propwd') {
             // Proportional +%: first withdraw proportionally for spending (same as baseline),
@@ -754,20 +766,40 @@ function simulate(inputs) {
         inspectForErrors({ netSpendable: netSpendable, gap: gap, totalTax: totalTax });
 
         if (gap > 1.00) {
-            // We need to do more withdrawals. First try Brokerage + Cash.
-            withdrawStrategy.order = ['Brokerage', 'Cash'];
-            withdrawStrategy.weight = [40, 60];
-            withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0];
-            withdrawals = calculateWithdrawals(curBalances, gap, withdrawStrategy);
-            netWithdrawals = accumulateWithdrawals([netWithdrawals, withdrawals]);
-            applyWithdrawals(curBalances, withdrawals);
+            if (isBracketStrategy) {
+                // Bracket/IRMAA strategies: supplement spending from Cash first, then Brokerage, then Roth.
+                // This keeps supplemental draws out of taxable income as much as possible.
+                const cashWd = calculateWithdrawals(curBalances, gap, { order: ['Cash'], weight: [1], taxrate: [0] });
+                netWithdrawals = accumulateWithdrawals([netWithdrawals, cashWd]);
+                applyWithdrawals(curBalances, cashWd);
 
-            // If still short, fall back to Roth (tax-free).
-            if ((withdrawals.shortfall ?? 0) > 1 && curBalances.Roth > 0) {
-                const rothWd = { order: ['Roth'], taxrate: [0], weight: null };
-                const rothWithdrawals = calculateWithdrawals(curBalances, withdrawals.shortfall, rothWd);
-                netWithdrawals = accumulateWithdrawals([netWithdrawals, rothWithdrawals]);
-                applyWithdrawals(curBalances, rothWithdrawals);
+                if ((cashWd.shortfall ?? 0) > 1) {
+                    const brokerWd = calculateWithdrawals(curBalances, cashWd.shortfall,
+                        { order: ['Brokerage'], weight: [1], taxrate: [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit)] });
+                    netWithdrawals = accumulateWithdrawals([netWithdrawals, brokerWd]);
+                    applyWithdrawals(curBalances, brokerWd);
+
+                    if ((brokerWd.shortfall ?? 0) > 1 && curBalances.Roth > 0) {
+                        const rothWithdrawals = calculateWithdrawals(curBalances, brokerWd.shortfall, { order: ['Roth'], weight: [1], taxrate: [0] });
+                        netWithdrawals = accumulateWithdrawals([netWithdrawals, rothWithdrawals]);
+                        applyWithdrawals(curBalances, rothWithdrawals);
+                    }
+                }
+            } else {
+                // Default: Brokerage + Cash proportional, then Roth fallback.
+                withdrawStrategy.order = ['Brokerage', 'Cash'];
+                withdrawStrategy.weight = [40, 60];
+                withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0];
+                withdrawals = calculateWithdrawals(curBalances, gap, withdrawStrategy);
+                netWithdrawals = accumulateWithdrawals([netWithdrawals, withdrawals]);
+                applyWithdrawals(curBalances, withdrawals);
+
+                if ((withdrawals.shortfall ?? 0) > 1 && curBalances.Roth > 0) {
+                    const rothWd = { order: ['Roth'], taxrate: [0], weight: null };
+                    const rothWithdrawals = calculateWithdrawals(curBalances, withdrawals.shortfall, rothWd);
+                    netWithdrawals = accumulateWithdrawals([netWithdrawals, rothWithdrawals]);
+                    applyWithdrawals(curBalances, rothWithdrawals);
+                }
             }
         }
 
@@ -787,6 +819,7 @@ function simulate(inputs) {
 
         // Now we have the "real tax"
         totalTax = tax.totalTax + irmaa;
+        bracketOverage = bracketTarget > 0 ? Math.max(0, tax.MAGI - bracketTarget) : 0;
 
         // Third pass: if second-pass taxes created a residual shortfall, withdraw more and recalc once.
         // This handles cases where the gap fill (brokerage cap gains) raised taxes above the initial estimate.
@@ -796,11 +829,10 @@ function simulate(inputs) {
         const residualGap = targetSpend - (incomeAfterGapFill - totalTax);
         if (residualGap > 1) {
             const thirdPassStart = performance.now();
-            const thirdWd = calculateWithdrawals(curBalances, residualGap, {
-                order: ['Brokerage', 'Cash'],
-                weight: [40, 60],
-                taxrate: [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0]
-            });
+            const thirdWdStrategy = isBracketStrategy
+                ? { order: ['Cash'], weight: [1], taxrate: [0] }
+                : { order: ['Brokerage', 'Cash'], weight: [40, 60], taxrate: [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0] };
+            const thirdWd = calculateWithdrawals(curBalances, residualGap, thirdWdStrategy);
             netWithdrawals = accumulateWithdrawals([netWithdrawals, thirdWd]);
             applyWithdrawals(curBalances, thirdWd);
             capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
@@ -947,11 +979,14 @@ function simulate(inputs) {
             'cashDividends': taxableDividends,
             'cashInterest': taxableInterest,
             IRMAA: irmaa,
+            IRMAATier: getIRMAATier(balance.magiHistory[balance.magiHistory.length - 2], status, cpiRate),
             FedTax: tax.federalTax,
             StateTax: tax.state,
             totalTax: totalTax,
-            'fedLimit': tax.fedLimit,
-            'stateLimit': tax.stLimit,
+            'FedCap': tax.fedLimit,
+            'StateCap': tax.stLimit,
+            'BracketTarget': bracketTarget,
+            'BracketOverage': bracketOverage,
             'FedRate%': tax.fedRate,
             'StateRate%': tax.stRate,
             'NominalRate%': nominalTaxRate,
@@ -1089,6 +1124,7 @@ function getInputs() {
         ssFailPct: +val('ssFailPct') / 100.0,
         maxConversion: valChecked('maxConversion'),
         propWithdraw: +val('propWithdraw') / 100.0,
+        iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
         startInYear: +val('startInYear'),
         dividendReinvest: !!valChecked('dividendReinvest')
     };
@@ -1098,6 +1134,33 @@ function getInputs() {
  *
  *
  */
+function updateIRAGoalHint() {
+    const hint = document.getElementById('ira-goal-hint');
+    if (!hint) return;
+    try {
+        const birthyear1 = +val('birthyear1');
+        const currentYear = new Date().getFullYear();
+        const age1 = currentYear - birthyear1 + 1;
+        const growth = +val('growth') / 100;
+        const spendGoal = +val('spendGoal');
+        const targetAge = 84;
+        const yearsUntil = targetAge - age1;
+        if (yearsUntil <= 0 || spendGoal <= 0 || !RMD_TABLE[targetAge]) { hint.textContent = ''; return; }
+        // Target IRA at age 84: balance where RMD equals spend goal
+        const rmdPctAtTarget = 1 / RMD_TABLE[targetAge];
+        const targetAtAge = spendGoal / rmdPctAtTarget;
+        // Discount back to today at growth rate
+        const targetNow = targetAtAge / Math.pow(1 + growth, yearsUntil);
+        const rounded = Math.round(targetNow);
+        hint.textContent = `Suggested IRA Goal: $${rounded.toLocaleString()}`;
+        hint.title = `IRA balance today that would produce RMDs ≤ your spend goal at age ${targetAge} (IRS table: ${(rmdPctAtTarget * 100).toFixed(2)}% RMD rate, ${yearsUntil} yrs at ${(growth * 100).toFixed(1)}% growth). Click to apply.`;
+        hint.style.cursor = 'pointer';
+        hint.onclick = () => { document.getElementById('iraBaseGoal').value = rounded; runSimulation(); };
+    } catch(e) {
+        hint.textContent = '';
+    }
+}
+
 function runSimulation() {
     let res = simulate(getInputs());
     lastSimulationLog = res.log;
@@ -1108,6 +1171,7 @@ function runSimulation() {
     updateTable(res.log);
     updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
+    updateIRAGoalHint();
 }
 
 function updateCurrentDollarsView() {
@@ -1229,6 +1293,7 @@ function runOptimizer() {
             _nYears: overrides.nYears ?? null,
             _stratRate: overrides.stratRate ?? null,
             _propWithdraw: overrides.propWithdraw ?? null,
+            _iraWithdrawPct: overrides.iraWithdrawPct ?? null,
             _isSpendOptimized: false,
             totals: res.totals,
             finalNW: res.finalNW,
@@ -1253,6 +1318,11 @@ function runOptimizer() {
         for (const rate of bracketRates) {
             const pct = Math.round(rate * 100);
             addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
+        }
+
+        // Fixed % IRA withdrawal
+        for (const pct of [3, 4, 5, 6, 7, 8, 10]) {
+            addResult('Fixed % IRA', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
         }
     }
 
@@ -1625,6 +1695,8 @@ function loadOptimizerResult(id) {
         document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
     } else if (result._strategy === 'propwd' && result._propWithdraw != null) {
         document.getElementById('propWithdraw').value = Math.round(result._propWithdraw * 100);
+    } else if (result._strategy === 'fixedpct' && result._iraWithdrawPct != null) {
+        document.getElementById('iraWithdrawPct').value = Math.round(result._iraWithdrawPct * 100);
     }
 
     document.getElementById('maxConversion').checked = result._maxConversion;
@@ -1646,7 +1718,7 @@ const columnCategories = {
     'age2': ['Summary'],
     'status': ['Summary', 'Taxation'],
     'spendGoal': ['Summary', 'Income'],
-    'netIncome': ['Summary', 'Income', 'Taxation'],
+    'netIncome': ['Summary', 'Income'],
     'totalWealth': ['Summary', 'Balances'],
     'totalTax': ['Summary', 'Taxation', 'Income'],
     'NominalRate%': ['Summary', 'Taxation'],
@@ -1656,8 +1728,8 @@ const columnCategories = {
     // Income Sources (could be its own category if you want)
     'SSincome': ['Summary', 'Income'],
     'pension': ['Summary', 'Income'],
-    'totalIncome': ['Summary', 'Taxation', 'Income'],
-    'cashD+I': ['Cash Δ', 'Taxation', 'Income'],
+    'totalIncome': ['Summary', 'Income'],
+    'cashD+I': ['Cash Δ', 'Income'],
 
     // Balances - end-of-year balances
     'IRA1': ['Balances', 'IRA Δ'],
@@ -1672,14 +1744,17 @@ const columnCategories = {
     // Taxation
     'MAGI': ['Taxation'],
     'IRMAA': ['Taxation'],
+    'IRMAATier': ['Taxation'],
     'FedTax': ['Taxation'],
     'StateTax': ['Taxation'],
     'CapGains': ['Taxation', 'Brokerage Δ', 'Income'],
     'SumTaxes': ['Taxation'],
     'FedRate%': ['Taxation'],
     'StateRate%': ['Taxation'],
-    'fedLimit': ['Taxation'],
-    'stateLimit': ['Taxation'],
+    'FedCap': ['Taxation'],
+    'StateCap': ['Taxation'],
+    'BracketTarget': ['Taxation'],
+    'BracketOverage': ['Taxation'],
 
     // IRA Changes - withdrawals, RMDs, and conversions
     'IRA1-': ['IRA Δ'],
@@ -1706,6 +1781,27 @@ const columnCategories = {
 
     // Debug / performance — only visible under Show All (no checkbox maps to 'Debug')
     'loopMs': ['Debug']
+};
+
+// Maps each column key to a visual group label for the group header row
+const columnGroupDefs = {
+    'year': 'Who', 'age1': 'Who', 'age2': 'Who', 'status': 'Who',
+    'spendGoal': 'Income', 'netIncome': 'Income', 'surplus': 'Income', 'shortfall': 'Income',
+    'SSincome': 'Income', 'pension': 'Income', 'totalIncome': 'Income',
+    'IRAwd': 'IRA / Roth', 'IRA1-': 'IRA / Roth', 'IRA2-': 'IRA / Roth',
+    'RMDwd': 'IRA / Roth', 'RMD%': 'IRA / Roth', 'RMD1-': 'IRA / Roth', 'RMD2-': 'IRA / Roth',
+    'rothConv': 'IRA / Roth', 'RothWD': 'IRA / Roth', 'rothG': 'IRA / Roth',
+    'Brokerage-': 'Brokerage', 'brokerageG': 'Brokerage',
+    'CapGains': 'Tax',
+    'CashWD': 'Cash', 'cashG': 'Cash', 'cashD+I': 'Cash', 'surplusCash': 'Cash',
+    'MAGI': 'Tax', 'IRMAA': 'Tax', 'IRMAATier': 'Tax',
+    'FedTax': 'Tax', 'StateTax': 'Tax', 'totalTax': 'Tax',
+    'FedRate%': 'Tax', 'StateRate%': 'Tax', 'NominalRate%': 'Tax',
+    'FedCap': 'Tax', 'StateCap': 'Tax', 'SumTaxes': 'Tax',
+    'BracketTarget': 'Tax', 'BracketOverage': 'Tax',
+    'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
+    'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
+    'Basis': 'Balances', 'Spendable': 'Balances', 'totalWealth': 'Balances',
 };
 
 // Get active categories based on checkbox state
@@ -1783,7 +1879,9 @@ function updateColumnVisibility() {
     const table = document.getElementById('main-table');
     if (!table) return;
 
-    const headerRow = table.querySelector('thead tr');
+    // Use the last thead row (column names), not the first (group header)
+    const allHeaderRows = table.querySelectorAll('thead tr');
+    const headerRow = allHeaderRows[allHeaderRows.length - 1];
     const bodyRows = table.querySelectorAll('tbody tr');
 
     if (!headerRow) return;
@@ -1820,6 +1918,53 @@ function updateColumnVisibility() {
             }
         });
     });
+
+    rebuildGroupRow(table);
+}
+
+// Rebuild the group header row based on currently visible columns
+function rebuildGroupRow(table) {
+    const thead = table.tHead;
+    if (!thead || thead.rows.length < 2) return;
+    const groupRow = thead.rows[0];
+    const headerRow = thead.rows[1];
+    groupRow.innerHTML = '';
+
+    const groupColors = {
+        'Who':        '#e8eaf6',
+        'Income':     '#e8f5e9',
+        'IRA / Roth': '#fff3e0',
+        'Brokerage':  '#fce4ec',
+        'Cash':       '#f3e5f5',
+        'Tax':        '#e3f2fd',
+        'Balances':   '#e0f2f1',
+    };
+
+    let currentGroup = null;
+    let currentSpan = 0;
+    let currentCell = null;
+
+    Array.from(headerRow.cells).forEach(th => {
+        if (th.classList.contains('hidden-column')) return;
+        const key = th.textContent.trim();
+        const group = columnGroupDefs[key] ?? '';
+
+        if (group !== currentGroup) {
+            if (currentCell !== null) currentCell.colSpan = currentSpan;
+            currentGroup = group;
+            currentSpan = 1;
+            currentCell = document.createElement('th');
+            currentCell.textContent = group;
+            const bg = groupColors[group] ?? '#f5f5f5';
+            currentCell.style.cssText =
+                `background:${bg};text-align:center;font-size:0.78em;font-weight:bold;` +
+                `border-bottom:1px solid #bbb;padding:2px 4px;`;
+            groupRow.appendChild(currentCell);
+        } else {
+            currentSpan++;
+        }
+    });
+    if (currentCell !== null) currentCell.colSpan = currentSpan;
 }
 
 function updateTable(log) {
@@ -1841,8 +1986,9 @@ function updateTable(log) {
 
     const keys = Object.keys(log[0]);
 
-    // Create header
+    // Create header — row 0 is the group banner, row 1 is the column names
     const thead = table.createTHead();
+    thead.insertRow(); // group row placeholder — populated by rebuildGroupRow below
     const headerRow = thead.insertRow();
 
     const tooltips = {
@@ -1855,7 +2001,12 @@ function updateTable(log) {
         'IRA1-': 'Withdrawals from IRA1',
         'IRA2-': 'Withdrawals from IRA2',
         'CapGains': 'Amount of gains from withdrawing brokerage assets.',
-        'IRMAA': 'First two years are presumed the same as the 3rd year on.',
+        'IRMAA': 'Annual IRMAA surcharge based on MAGI from 2 years prior.',
+        'IRMAATier': 'IRMAA tier (e.g. Tier 1–6) derived from MAGI 2 years ago.',
+        'FedCap': 'Upper boundary of the current federal tax bracket.',
+        'StateCap': 'Upper boundary of the current state tax bracket.',
+        'BracketTarget': 'MAGI ceiling targeted by the bracket/IRMAA strategy this year (0 for other strategies).',
+        'BracketOverage': 'Amount MAGI exceeded the bracket target. Non-zero means spending needs pushed above the ceiling.',
         'spendGoal': 'This amount increases by inflation less Spend Delta%.',
         'Roth': 'Balance at Year End',
         'RothG': 'Growth in the Roth (added to Roth account)',
@@ -1931,6 +2082,9 @@ function updateTable(log) {
                 if (deathOccurred && deathHighlightCols.includes(key.toLowerCase())) {
                     td.style.backgroundColor = '#ffff99';  // Light yellow
                 }
+                if (key === 'BracketOverage' && (row['BracketOverage'] ?? 0) > 0) {
+                    td.style.backgroundColor = '#ff8c0099';  // Orange — MAGI exceeded bracket ceiling
+                }
 
                 // Check if key indicates percentage
                 const isPercent = key.toLowerCase().includes('%');
@@ -1973,6 +2127,8 @@ function updateTable(log) {
             }
         });
     });
+
+    rebuildGroupRow(table);
 
     if (oldTable) {
         oldTable.replaceWith(table);
@@ -2181,26 +2337,36 @@ function updateCharts(log) {
         }
     });
 
-    // Income Sources chart — Option C+
-    // Income source bars are scaled so they collectively sum to netIncome (spendable).
-    // Tax bars (Fed, State, IRMAA) stack on top, reaching totalIncome.
-    // Bar height = totalIncome; Spendable Income line sits at the income/tax seam.
+    // Income Sources chart
+    // All income sources are scaled by (netIncome / visibleSum) ≈ (1 - effectiveTaxRate).
+    // visibleSum = all income sources contributing to spending (including Cash WD and Basis Return).
+    // This keeps each source proportional to its nominal value — a fixed pension stays
+    // nearly fixed rather than inflating when Cash becomes the dominant income source.
+    // Tax bands sit on top, reaching totalIncome. Spendable Income line at netIncome.
     const ctxI = document.getElementById('chartIncomeSources').getContext('2d');
     (Chart.getChart(ctxI.canvas) ?? incomeChart)?.destroy();
 
-    // Scale each source so visible bars collectively sum to netIncome.
-    // Using visibleSum as denominator absorbs unlisted components (e.g. brokerage basis return).
-    // IRAwd is reduced by rothConv so the conversion doesn't inflate spendable income bars.
-    const visibleSum = r => r.SSincome + r.pension + r.RMDwd + Math.max(0, r.IRAwd - r.rothConv) + r.RothWD + r.CapGains + r.cashDividends + r.cashInterest;
+    // Brokerage basis return: the untaxed (return-of-basis) portion of brokerage withdrawals
+    const basisReturn = r => Math.max(0, (r['Brokerage-'] ?? 0) - (r.CapGains ?? 0));
+
+    // All income sources (including Cash WD and Basis Return). IRAwd excludes rothConv since
+    // that is shown separately as a cost above the Spendable line.
+    const visibleSum = r => r.SSincome + r.pension + r.RMDwd + Math.max(0, r.IRAwd - r.rothConv)
+        + r.RothWD + r.CapGains + r.cashDividends + r.cashInterest
+        + (r.CashWD ?? 0) + basisReturn(r);
+
+    // scale = (1 - effectiveTaxRate) on post-refund income. Using r.netIncome is wrong in surplus
+    // years because netIncome was computed with pre-refund cash withdrawals; the logged CashWD is
+    // post-refund. Deriving scale from (visibleSum - totalTax) / visibleSum stays correct in both.
     const mkInc = (label, color, rawFn) => ({
         label, type: 'bar', backgroundColor: color, stack: 'income', order: 2,
         data: log.map(r => {
             const vsum = visibleSum(r);
-            const scale = vsum > 0 ? r.netIncome / vsum : 1;
+            const scale = vsum > 0 ? (vsum - r.totalTax) / vsum : 1;
             return rawFn(r) * scale * adj(r);
         })
     });
-    const mkTax = (label, color, rawFn) => ({
+    const mkAbs = (label, color, rawFn) => ({
         label, type: 'bar', backgroundColor: color, stack: 'income', order: 2,
         data: log.map(r => rawFn(r) * adj(r))
     });
@@ -2209,27 +2375,27 @@ function updateCharts(log) {
         data: {
             labels: log.map(r => r.year),
             datasets: [
-                // Income sources — each scaled proportionally so they sum to netIncome
-                mkInc('Social Security',  '#3498dbB0', r => r.SSincome),
-                mkInc('Pension',          '#7f8c8dB0', r => r.pension),
-                mkInc('IRA RMD',          '#e67e22B0', r => r.RMDwd),
-                mkInc('Interest',         '#f1c40fB0', r => r.cashInterest),
-                mkInc('IRA Withdrawal',   '#d35400B0', r => Math.max(0, r.IRAwd - r.rothConv)),
-                mkInc('Roth Withdrawal',  '#8e44adB0', r => r.RothWD),
-                mkInc('Cap Gains',        '#1abc9cB0', r => r.CapGains),
-                mkInc('Dividends',        '#f39c12B0', r => r.cashDividends),
-                // Visual separator between income and expense legend items
+                // Income sources — all scaled by (1 - effectiveTaxRate) so they sum to (visibleSum - totalTax)
+                mkInc('SS',              '#3498dbB0', r => r.SSincome),
+                mkInc('Pension',         '#7f8c8dB0', r => r.pension),
+                mkInc('IRA RMD',         '#e67e22B0', r => r.RMDwd),
+                mkInc('Interest',        '#f1c40fB0', r => r.cashInterest),
+                mkInc('IRA WD',          '#d35400B0', r => Math.max(0, r.IRAwd - r.rothConv)),
+                mkInc('Roth WD',         '#8e44adB0', r => r.RothWD),
+                mkInc('Gains+Div',       '#1abc9cB0', r => r.CapGains + r.cashDividends),
+                mkInc('Cash WD',         '#27ae60B0', r => r.CashWD ?? 0),
+                mkInc('Brokerage',       '#2980b9B0', r => basisReturn(r)),
+                // Visual separator between spending and expense legend items
                 { label: '│', type: 'bar', data: log.map(() => 0), backgroundColor: 'transparent', borderWidth: 0, stack: 'income', order: 2 },
-                // Expenses stack on top (unscaled absolute amounts)
-                mkTax('Fed Tax',        '#A30000C0', r => r.FedTax),
-                mkTax('State Tax',      '#FF2E2EC0', r => r.StateTax),
-                mkTax('IRMAA',          '#FFB8B8C0', r => r.IRMAA),
-                mkTax('Roth Conv',      '#8e44ad80', r => r.rothConv),
-                mkTax('Cash Deposit',   '#27ae6070', r => r.surplusCash),
+                // Expenses stack on top of the Spendable Income line (unscaled absolute amounts)
+                mkAbs('Fed Tax',        '#A30000C0', r => r.FedTax),
+                mkAbs('State Tax',      '#FF2E2EC0', r => r.StateTax),
+                mkAbs('IRMAA',          '#FFB8B8C0', r => r.IRMAA),
+                mkAbs('Roth Conv',      '#8e44ad80', r => r.rothConv),
                 // Spendable Income line sits exactly at the income/tax seam
                 {
-                    label: 'Spendable Income',
-                    data: log.map(r => r.netIncome * adj(r)),
+                    label: 'Net Income',
+                    data: log.map(r => (visibleSum(r) - r.totalTax) * adj(r)),
                     type: 'line', borderColor: '#27ae60', borderWidth: 2.5,
                     backgroundColor: '#27ae60', pointBackgroundColor: '#27ae60',
                     fill: false, order: 1
@@ -2246,7 +2412,31 @@ function updateCharts(log) {
                 ...sharedTooltip.plugins,
                 tooltip: {
                     ...sharedTooltip.plugins.tooltip,
-                    filter: item => item.dataset.label !== '│'
+                    callbacks: {
+                        ...sharedTooltip.plugins.tooltip.callbacks,
+                        title: items => {
+                            const r = log[items[0]?.dataIndex];
+                            if (!r) return items[0]?.label ?? '';
+                            const a1 = (r.age1 == null || r.age1 === '—') ? '--' : r.age1;
+                            const a2 = (r.age2 == null || r.age2 === '—') ? '--' : r.age2;
+                            const taxPct = r.totalIncome > 0
+                                ? (r.totalTax / r.totalIncome * 100).toFixed(1) + '%'
+                                : '--';
+                            const a = adj(r);
+                            const totalFmt = Math.round(r.totalIncome * a).toLocaleString();
+                            const cwd = (r.CashWD ?? 0) * a;
+                            const br = basisReturn(r) * a;
+                            const parts = [];
+                            if (cwd > 0.5) parts.push(`Cash ${Math.round(cwd).toLocaleString()}`);
+                            if (br  > 0.5) parts.push(`Brokerage ${Math.round(br).toLocaleString()}`);
+                            const untaxedStr = parts.length > 0 ? `  |  Untaxed: ${parts.join(' + ')}` : '';
+                            return [
+                                `${r.year}  |  You: ${a1}  Spouse: ${a2}  |  Tax: ${taxPct}`,
+                                `Total Income: ${totalFmt}${untaxedStr}`
+                            ];
+                        }
+                    },
+                    filter: item => item.dataset.label !== '│' && Math.abs(Math.round(item.parsed.y)) > 0
                 },
                 legend: {
                     onClick: (e, item, legend) => {
@@ -2323,6 +2513,7 @@ function toggleStrategyUI() {
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
     document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket' && m !== 'minlimit');
     document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
+    document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 

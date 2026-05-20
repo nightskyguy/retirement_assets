@@ -1,12 +1,14 @@
+> [!WARNING & DISCLAIMER]
+> **There is no SUPPORT for these tools** and no guarantee of accuracy, or appropriateness of use. No warranty of suitability for any purpose. There is also *no charge*. **USE AT YOUR OWN RISK**
+
+
 ## Who Are These Tools For?  What Can They Do? 
 
-First, **NOTE this**
+First, **NOTE this** I use the term "**IRA**" for any account that is "Pre-Tax". And "**Roth**" for any tax free account.  **IRA** in this context could be any number of actual account types: IRA, Traditional IRA, Solo IRA, SEP-IRA, Simple IRA, 401(k), 403(b), 457(b), Keogh plans, and probably more.  **Roth** includes Roth IRA, IRA 401(k), HSA, TFRAs. HSAs are a bit of a different animal, actually.
 
-I use the term "IRA" for any account that is "Pre Tax". And "Roth" for any tax free account.  **IRA** in this context could be any number of actual account types: IRA, Traditional IRA, Solo IRA, SEP-IRA, Simple IRA, 401(k), 403(b), 457(b), Keogh plans, and probably more.  **Roth** includes Roth IRA, IRA 401(k), HSA, TFRAs. HSAs are a bit of a different animal, actually.
+Trivia for fun: "_IRA_" stands for "Individual Retirement *AGREEMENT*", not account. Yeah, weird. And it's not ROTH but Roth. It's named after Senator William *Roth* who introduced it.  Oh, and the "(k)" in 401(k) does NOT refer to Eugene Keogh, it's a reference to the Internal Revenue Code. 
 
-Trivia for fun: "IRA" stands for "Individual Retirement *AGREEMENT*", not account. Yeah, weird. And it's not ROTH but Roth. It's named after Senator William *Roth* who introduced it.  Oh, and the "(k)" in 401(k) does NOT refer to Eugene Keogh, it's a reference to the Internal Revenue Code. 
-
-You can inspect or [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) in about any browser (only Brave and Chrome have been tested).  Or you can directly run the tools from Cloudflare (_tools.netcitizen.us_).  You need internet access for the fonts and charts to work properly because those are downloaded from public sources.
+You can inspect or [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) in about any browser (Brave and Chrome have been tested).  Or you can directly run the tools from Cloudflare (_tools.netcitizen.us_).  You need internet access for the fonts and charts to work properly because those are downloaded from public sources.
 
 You can DIRECTLY invoke these tools:
 
@@ -16,8 +18,6 @@ You can DIRECTLY invoke these tools:
 + **[After Tax REAL Growth](https://tools.netcitizen.us/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
 + **[Income Tax Planner](https://tools.netcitizen.us/IncomeTaxPlanner.html)** What does taxation look like at different ordinary income levels (includes many states)
 + **[Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html)**  A full tool, with optimizers!  This is the OG tool that I started, and have been tinkering with.
-
-**There is no SUPPORT for these tools** and no guarantee of accuracy, or appropriateness of use. No warranty of suitability for any purpose. There is also *no charge*. **USE AT YOUR OWN RISK**
 
 A California resident built these with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, and Javascript. See **Standalone Tools** and **Key Features** below for a summary of what the tools can do - and be sure to look at *What the Tool IGNOREs* (and *Known Bugs*, below) so you understand the limitations of the *Retirement Optimizer*.
 
@@ -59,17 +59,17 @@ Did you know that your 2.5% interest bearing savings account LOSES money even if
 Visualize how inflation and taxation combine to erode nominal investment returns. Set an inflation rate and your portfolio's nominal return, and the tool plots the real after-tax return across six federal tax brackets (0%, 12%, 22%, 24%, 32%, 37%), with the 24% bracket highlighted as the typical IRMAA Tier 1 landing zone. A dashed break-even line at 0% real return makes immediately visible that a 2.50% nominal return at 2.50% inflation and 25% tax is not a wash — it is a net loss of purchasing power (~0.61%/year). Each bracket card shows your real return at the current portfolio return alongside the minimum nominal return needed to merely preserve purchasing power at that bracket and inflation rate. Useful for stress-testing conservative accounts (CDs, money markets, bond funds) where the real return is easily negative without realizing it.
 
 **[IncomeTaxPlanner.html](IncomeTaxPlanner.html) — Federal + State Tax Sweep with IRMAA & Capital Gains**
-Sweeps ordinary income from $0 to $1.1M in $10k steps and plots your true all-in effective tax rate — federal, state, and IRMAA combined — alongside a marginal rate curve that makes the Social Security torpedo, IRMAA tier crossings, and NIIT threshold immediately visible. Configure filing status, state (13 options), taxpayer ages, fixed Social Security income, capital gains proceeds and basis, a target year 2026–2035 with configurable CPI, and OBBBA provisions (senior deduction, elevated SALT cap). Two linked charts update instantly on any control change, and hovering either chart activates the corresponding tooltip on the other at the same income level.
+Sweeps ordinary income from $0 to $1.1M in $10k steps and plots your true all-in effective tax rate — federal, state, and IRMAA combined — with a marginal rate curve that makes the Social Security torpedo, IRMAA tier crossings, and NIIT threshold immediately visible. Configure filing status, state (13 options currently), taxpayer ages, fixed Social Security income, capital gains proceeds and basis, a target year 2026–2035 with configurable CPI, and OBBBA provisions (senior deduction, elevated SALT cap). Two linked charts update instantly on any control change, and hovering either chart activates the corresponding tooltip on the other at the same income level.
 
-Uses 2026 IRS Rev. Proc. 2025-32 federal brackets inflated forward by your chosen CPI rate; IRMAA premiums grow at that rate plus a configurable Medicare-specific increment. Designed to answer four questions: *How sensitive is my tax burden to a $10k income change? Where are my sweet spots and danger zones (SS torpedo, IRMAA cliffs, NIIT)? What is my real all-in effective rate? What withholding should I target?* The Share button encodes all settings into a compact URL that works from a local file or a web server — save it as a bookmark or paste it into a discussion to let someone else load your exact scenario.
+Uses 2026 IRS Rev. Proc. 2025-32 federal brackets inflated forward by your chosen CPI rate; IRMAA premiums grow at that rate plus a configurable Medicare-specific increment. Designed to answer four questions: *How sensitive is my tax burden to a $10k income change? Where are my sweet spots and danger zones (SS torpedo, IRMAA cliffs, NIIT)? What is my real all-in effective rate? What withholding should I target?* The Share button encodes all settings into a compact URL that works from a local file or a web server — save it as a bookmark or paste it into a discussion to let someone else replicate your exact scenario.
 
 
 ## The Retirement Optimizer
 
-This is the OG tool. And while I like it, it's definitely not for everyone. There is no "accumulation phase". It focusses on managing withdrawals from your various accounts. But it has something I haven't found in any tool: a withdrawal optimizer.  Currently it applies a flat growth rate (sooner or later it's going to feature some Monte Carlo "market shaking" - probably later).  
+This is the OG tool. And while I like it, it's definitely not for everyone. There is no "accumulation phase". The focus is managing withdrawals from your various accounts. But it has something I haven't found in any tool: a withdrawal optimizer.  Currently it applies a flat growth rate (Monte Carlo "market shaking" is in the works - probably later).  
 My primary motivations for this tool are: 
 1. What does the withdrawal phase look like?
-2. What happens to my assets?  
+2. What happens to my assets over time?  
 3. What withdrawal strategy results in: the lowest taxation, the highest ending wealth, and my favorite: the most **lifetime spending**.
 4. Is it really true that *heavy* Roth conversions, **no Roth conversions**, or "*some*" Roth conversions are BETTER? (Setting aside some of the significant advantages of Roth)
 5. How painful is the widow's penalty, really?
@@ -86,15 +86,17 @@ My primary motivations for this tool are:
 + Better organize the Annual Details tables. There are just too many columns to easily navigate. **NOTE** Release 7g has new selectable columns.
 + Allow exporting of the Annual Details table(s).
 + The tool should warn when a "Fill Bracket" is picked that is impossible to meet if the After-Tax Spend goal is high. For example, setting After-Tax Spend to 180,000 makes it impossible to stay in the 12% (or even the 22%) bracket unless there are lots of cash, brokerage or Roth assets already. 
-+ Allow selection of the quarter in which withdrawals will occur. I don't know if it makes a significant difference, but changing the model a bit will make it possible to know how much difference it might make. For example if you're trying to draw down an IRA, taking the withdrawals early in the year means you will accrue less growth in the IRA account (and more in the Roth or Brokerage if that's where the funds go). Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last quarter may help.
-+ There is and option to accumulate "surplus" amounts to cash or Roth - not to Brokerage. Surplus in this context means if your spend goal is exceeded, the amount above your planned spend is marked as a Roth conversion.  Since Roth is the "super account" for most purposes, it's not clear if an option to do anything else makes sense. However surplus going to cash (or brokerage) may make sense, too.
++ I'm always looking to include additional withdrawal scenarios. The most powerful recent addition was a +% addition to the proportional withdrawal.
++ Allow selection of the month(s) in which withdrawals will occur. My modeling shows it DOES make a difference. If you're trying to draw down an IRA, taking withdrawals early in the year means you will accrue less growth in the IRA account (and more in the Roth or Brokerage if that's where the funds go). Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last months may help.
++ Optimize tax payment: in this scenario you withhold taxes from a year-end withdrawal. So, for example, to stay in the good graces of the Internal Revenue Service, your final IRA withdrawal might be solely for the purpose of witholding funds to Federal and State taxing agencies. Waiting until the end of the year means you get to keep the interest to help pay the tax bill.
 + Oddly, I don't know of any specific bugs at this time. That's good.
-+ More state taxation options are *usually* easy. You can open an "Issue" in Github to request that I add your state.
++ More state taxation options are *usually* easy. You can [open an "Issue" in Github](https://github.com/nightskyguy/retirement_assets/issues/new/choose) to request that I add your state.
 
 ##### Recent Fixes / Improvements
-+ Optimizer now has an option to optimize the Spend Goal, not just find the best withdrawal.
++ Optimizer now can optimize Spending, not just find the best withdrawal.
++ You now have the option to reinvest Dividends, or collect them in cash.
 + Optimizer also highlights the "best" withdrawal strategy in each category, including the results of Spend Goal optimization. Just click the entry in the table, and it loads that scenario.
-+ Augmented the "Withdraw Proportional" with a "+%" option. This proved very helpful!
++ Augmented the "Withdraw Proportional" with a "+%" option. This proved very helpful! It allows you to withdraw a percentage more than your needs - often to build up cash, or to do Roth conversion. Turns out to be an effective way to keep your IRA balance from growing unbounded. I got this idea from [Ben Brandt of "Even Better Retirement"]()
 + A problem where shortfalls would occur when using the **💸Reduce IRA in *N* Years** strategy, and sometimes when using "📊Withdraw Proportional +%". Adding a third tax calculation phase nailed it. **FIXED**
 + In addition to the "Load/Save/Delete/Manage Scenarios", there is a new "share" option that creates a reusable URL. If you want to share a scenario with someone else (or bookmark it for yourself), you can use that method.
 + It should only be possible to move surplus IRA withdrawals into Roth - it was incorrectly moving extra cash. **FIXED** 
@@ -183,9 +185,12 @@ _ is what made me realize that writing a tool in JavaScript results in the most 
 Operational Tools (All Free, though one is only free to try)
 
 + [NestWise](https://www.nestwise.me/) - lots and lots of features. No login required. Includes things like budgeting, extensive Monte Carlo analysis, and even one of my favorite features which allows you to automatically iterate over different withdrawal rates (using different strategies) to find one that best suits you.  I've examined the source code for this tool and collaborated with the developer. No backdoors, or exploitable flaws were found.
+
 + [RetirementIQ](https://retirementiq.app/) Free for 7 days, $50/year. I've not dabbled much with this, partly because I prefer open source that I can inspect for possible flaws, backdoors, etc.  Directly invoke it here: [retirementiq.app](https://retirementiq.app/app/)
 
-+ [Retirement Figures](http://retirementfigures.com/) seems pretty robust and is currently free.  I have no  access to the source to look for problems.
++ [Retirement Figures](http://retirementfigures.com/) seems pretty robust and is currently free.  I have no access to the source to look for problems.
+
++ [RetirementScenarios](https://retirementscenarios.com) free to kick the tires, but wants you to buy it at $79. The UI is good, but the reliance on sliders and a few quirks make it less than ideal for use with a phone/small screen device.  I haven't tried reviewing the code to see what bugs/flaws/exploits may exist, but honestly, it seems well thought out.  One bug that bothers me: you either have to lie about your age, or not be actually retired to use it - it insists that you can NOT do projections until your retirement age is > your current age. 
 
 
 ## Ramblings and Observations

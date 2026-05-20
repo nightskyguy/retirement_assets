@@ -17,15 +17,15 @@ var TAXData = {
 			MFJ: {
 				brackets: [
 					{ l: 98900, r: 0.00 },      // 0% cap gains
-					{ l: 250000, r: 0.15 },     // 15% cap gains, no NIIT
-					{ l: Infinity, r: 0.20 }        // 20% + 3.8% NIIT = 23.8%
+					{ l: 250000, r: 0.15 },     // 15% cap gains, may be subject to NIIT
+					{ l: Infinity, r: 0.20 }    // 20% (+ likely 3.8% NIIT = 23.8)%
 				]
 			},
 			SGL: {
 				brackets: [
 					{ l: 49450, r: 0.00 },      // 0% cap gains
-					{ l: 200000, r: 0.15 },     // 15% cap gains, no NIIT
-					{ l: Infinity, r: 0.20 }        // 20% + 3.8% NIIT = 23.8%
+					{ l: 200000, r: 0.15 },     // 15% cap gains, may be subject to NIIT
+					{ l: Infinity, r: 0.20 }    // 20% (+ 3.8% NIIT = 23.8) %
 				]
 			}			
 		},

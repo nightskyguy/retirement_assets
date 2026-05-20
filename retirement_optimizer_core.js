@@ -952,45 +952,51 @@ function simulate(inputs) {
         inspectForErrors({ totalWealth: totalWealth })  // See if any numbers look fishy.
 
         log.push({
+            // Who
             year: currentYear,
             age1: alive1 ? age1 : '—',
             age2: alive2 ? age2 : '—',
             status: status,
+            // Income
             SSincome: fixedInc,
             pension: pension,
             spendGoal: targetSpend,
-            MAGI: tax.MAGI,
-            totalIncome: totalIncome,
             netIncome: netIncome,
+            totalIncome: totalIncome,
             surplus: surplus.Total,
             shortfall: surplus.Shortfall,
-            'RMD%': rmd1Pct,
-            'RMD1-': rmd1,
-            'RMD2-': rmd2,
             'RMDwd': totalRMD,
+            'cashD+I': taxableDividends + taxableInterest,
+            // Withdrawals
+            'IRAwd': netWithdrawals.IRA,
             'IRA1-': netWithdrawals.IRA1,
             'IRA2-': netWithdrawals.IRA2,
-            'IRAwd': netWithdrawals.IRA,
+            'RMD1-': rmd1,
+            'RMD2-': rmd2,
             'Brokerage-': netWithdrawals.Brokerage,
-            'CapGains': capitalGains,
             'RothWD': netWithdrawals.Roth,
             'CashWD': netWithdrawals.Cash,
-            'cashD+I': taxableDividends + taxableInterest,
+            'rothConv': totalConverted,
+            'surplusCash': surplus.Cash,
             'cashDividends': taxableDividends,
             'cashInterest': taxableInterest,
-            IRMAA: irmaa,
-            IRMAATier: getIRMAATier(balance.magiHistory[balance.magiHistory.length - 2], status, cpiRate),
-            FedTax: tax.federalTax,
-            StateTax: tax.state,
-            totalTax: totalTax,
-            'FedCap': tax.fedLimit,
-            'StateCap': tax.stLimit,
-            'BracketTarget': bracketTarget,
-            'BracketOverage': bracketOverage,
+            // Taxes
             'FedRate%': tax.fedRate,
             'StateRate%': tax.stRate,
+            IRMAATier: getIRMAATier(balance.magiHistory[balance.magiHistory.length - 2], status, cpiRate),
+            IRMAA: irmaa,
+            totalTax: totalTax,
+            FedTax: tax.federalTax,
+            StateTax: tax.state,
+            'CapGains': capitalGains,
+            MAGI: tax.MAGI,
             'NominalRate%': nominalTaxRate,
+            'FedCap': tax.fedLimit,
+            'StateCap': tax.stLimit,
             'SumTaxes': cumulativeTaxes,
+            'BracketTarget': bracketTarget,
+            'BracketOverage': bracketOverage,
+            // Balances
             IRA1: balance.IRA1,
             IRA2: balance.IRA2,
             TotalIRA: balance.IRA1 + balance.IRA2,
@@ -1000,11 +1006,11 @@ function simulate(inputs) {
             Basis: balance.BrokerageBasis,
             totalWealth: totalWealth,
             Spendable: totals.spend,
-            cashG: gains.Cash,
             brokerageG: gains.Brokerage,
+            cashG: gains.Cash,
             rothG: gains.Roth,
-            rothConv: totalConverted,
-            surplusCash: surplus.Cash,
+            'RMD%': rmd1Pct,
+            // Internal
             inflationFactor: inflation,
             loopMs: performance.now() - loopStart
         });
@@ -1744,13 +1750,13 @@ const columnCategories = {
     // Taxation
     'MAGI': ['Taxation'],
     'IRMAA': ['Taxation'],
-    'IRMAATier': ['Taxation'],
+    'IRMAATier': ['Taxation', 'Summary'],
     'FedTax': ['Taxation'],
     'StateTax': ['Taxation'],
     'CapGains': ['Taxation', 'Brokerage Δ', 'Income'],
     'SumTaxes': ['Taxation'],
-    'FedRate%': ['Taxation'],
-    'StateRate%': ['Taxation'],
+    'FedRate%': ['Taxation', 'Summary'],
+    'StateRate%': ['Taxation', 'Summary'],
     'FedCap': ['Taxation'],
     'StateCap': ['Taxation'],
     'BracketTarget': ['Taxation'],
@@ -1786,22 +1792,22 @@ const columnCategories = {
 // Maps each column key to a visual group label for the group header row
 const columnGroupDefs = {
     'year': 'Who', 'age1': 'Who', 'age2': 'Who', 'status': 'Who',
-    'spendGoal': 'Income', 'netIncome': 'Income', 'surplus': 'Income', 'shortfall': 'Income',
-    'SSincome': 'Income', 'pension': 'Income', 'totalIncome': 'Income',
-    'IRAwd': 'IRA / Roth', 'IRA1-': 'IRA / Roth', 'IRA2-': 'IRA / Roth',
-    'RMDwd': 'IRA / Roth', 'RMD%': 'IRA / Roth', 'RMD1-': 'IRA / Roth', 'RMD2-': 'IRA / Roth',
-    'rothConv': 'IRA / Roth', 'RothWD': 'IRA / Roth', 'rothG': 'IRA / Roth',
-    'Brokerage-': 'Brokerage', 'brokerageG': 'Brokerage',
-    'CapGains': 'Tax',
-    'CashWD': 'Cash', 'cashG': 'Cash', 'cashD+I': 'Cash', 'surplusCash': 'Cash',
-    'MAGI': 'Tax', 'IRMAA': 'Tax', 'IRMAATier': 'Tax',
-    'FedTax': 'Tax', 'StateTax': 'Tax', 'totalTax': 'Tax',
-    'FedRate%': 'Tax', 'StateRate%': 'Tax', 'NominalRate%': 'Tax',
-    'FedCap': 'Tax', 'StateCap': 'Tax', 'SumTaxes': 'Tax',
-    'BracketTarget': 'Tax', 'BracketOverage': 'Tax',
+    'SSincome': 'Income', 'pension': 'Income', 'spendGoal': 'Income',
+    'netIncome': 'Income', 'totalIncome': 'Income', 'surplus': 'Income',
+    'shortfall': 'Income', 'RMDwd': 'Income', 'cashD+I': 'Income',
+    'IRAwd': 'Withdrawals', 'IRA1-': 'Withdrawals', 'IRA2-': 'Withdrawals',
+    'RMD1-': 'Withdrawals', 'RMD2-': 'Withdrawals',
+    'Brokerage-': 'Withdrawals', 'RothWD': 'Withdrawals',
+    'CashWD': 'Withdrawals', 'rothConv': 'Withdrawals', 'surplusCash': 'Withdrawals',
+    'FedRate%': 'Taxes', 'StateRate%': 'Taxes', 'IRMAATier': 'Taxes',
+    'IRMAA': 'Taxes', 'totalTax': 'Taxes', 'FedTax': 'Taxes', 'StateTax': 'Taxes',
+    'CapGains': 'Taxes', 'MAGI': 'Taxes', 'NominalRate%': 'Taxes',
+    'FedCap': 'Taxes', 'StateCap': 'Taxes', 'SumTaxes': 'Taxes',
+    'BracketTarget': 'Taxes', 'BracketOverage': 'Taxes',
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
     'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
-    'Basis': 'Balances', 'Spendable': 'Balances', 'totalWealth': 'Balances',
+    'Basis': 'Balances', 'totalWealth': 'Balances', 'Spendable': 'Balances',
+    'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
 };
 
 // Get active categories based on checkbox state
@@ -1931,13 +1937,11 @@ function rebuildGroupRow(table) {
     groupRow.innerHTML = '';
 
     const groupColors = {
-        'Who':        '#e8eaf6',
-        'Income':     '#e8f5e9',
-        'IRA / Roth': '#fff3e0',
-        'Brokerage':  '#fce4ec',
-        'Cash':       '#f3e5f5',
-        'Tax':        '#e3f2fd',
-        'Balances':   '#e0f2f1',
+        'Who':          '#e8eaf6',
+        'Income':       '#e8f5e9',
+        'Withdrawals':  '#fff3e0',
+        'Taxes':        '#e3f2fd',
+        'Balances':     '#e0f2f1',
     };
 
     let currentGroup = null;
@@ -2066,7 +2070,15 @@ function updateTable(log) {
         const incomeShortfall = (netIncome < spendGoal * 0.99) || (totalWealth < spendGoal * 1.5);
         const deathOccurred = maritalStatus != row['status'];
 
-        // Pink takes priority over yellow
+        // IRMAA tier row tint (subtle, overridden by pink if underfunded)
+        const irmaaTierColors = {
+            'Tier 1': '#fffde7', 'Tier 2': '#fff8e1', 'Tier 3': '#fff3e0',
+            'Tier 4': '#fbe9e7', 'Tier 5': '#ffebee', 'Tier 6 (TOP)': '#ffcdd2',
+        };
+        const tierBg = irmaaTierColors[row['IRMAATier']];
+        if (tierBg) tr.style.backgroundColor = tierBg;
+
+        // Pink takes priority over tier color
         if (incomeShortfall) {
             tr.style.backgroundColor = '#ffb6c180';  // Light pink
         }
@@ -2105,7 +2117,10 @@ function updateTable(log) {
                         }
                     }
                 } else {
-                    td.textContent = value ?? '';
+                    // Normalize IRMAATier base value for display
+                    td.textContent = (key === 'IRMAATier' && (value === '-none-' || value === '-'))
+                        ? '—'
+                        : (value ?? '');
                 }
 
                 // Apply visibility based on category filter AND empty column filter

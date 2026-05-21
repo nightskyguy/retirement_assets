@@ -19,7 +19,7 @@ const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase s
 
 
 /** TAX CONSTANTS **/
-// Find these in retirement_optimizer_taxdata.js
+// Find these in taxengine.js
 
 // The default state to use for STATE calculations.
 let STATEname = 'CA'

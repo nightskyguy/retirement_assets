@@ -13,7 +13,7 @@
 <title>IRA Projection Tool</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- Inline fallback: Federal + IRMAA sections needed by this tool.
-     Keep in sync with retirement_optimizer_taxdata.js.
+     Keep in sync with taxengine.js.
      The external script below overrides this when the file is accessible. -->
 <script>
 var TAXData = {
@@ -68,7 +68,7 @@ var TAXData = {
   }
 };
 </script>
-<script src="retirement_optimizer_taxdata.js"></script>
+<script src="taxengine.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -273,7 +273,7 @@ var TAXData = {
       <li><b>IRA withdrawal</b> — min(available balance, max(inflation-adj target, RMD)); zero before Withdrawal 1 start age.</li>
       <li><b>Total income</b> — IRA withdrawal + My SS (if active) + Spouse SS (if active) + fixed income.</li>
       <li><b>SS amounts</b> — entered in today's dollars; inflation-adjusted from their start year before contributing each year.</li>
-      <li><b>Thresholds</b> — bracket floors and IRMAA tiers sourced from <code>retirement_optimizer_taxdata.js</code> (2026 federal tables). The standard deduction is added automatically and age-adjusted at 65 (one stdbump applied for MFJ — assumes one spouse at 65; actual may be higher if both spouses are 65+). For example, MFJ income enters the 10% bracket at the $32,200 standard deduction — only income above that is taxable. Bracket fills extend to the next bracket line — click any legend item to toggle.</li>
+      <li><b>Thresholds</b> — bracket floors and IRMAA tiers sourced from <code>taxengine.js</code> (2026 federal tables). The standard deduction is added automatically and age-adjusted at 65 (one stdbump applied for MFJ — assumes one spouse at 65; actual may be higher if both spouses are 65+). For example, MFJ income enters the 10% bracket at the $32,200 standard deduction — only income above that is taxable. Bracket fills extend to the next bracket line — click any legend item to toggle.</li>
       <li><b>NIIT</b> — not inflation-indexed; stored as a negative floor and plotted as a flat nominal line in Future $ mode.</li>
       <li><b>"Funded until"</b> — last year the IRA balance fully covers the active inflation-adjusted withdrawal target; the final projected year if never depleted.</li>
       <li><b>Amber table rows</b> — RMD exceeds your target withdrawal. <b>Red rows</b> — IRA depleted.</li>
@@ -788,7 +788,7 @@ function rmdFactor(age, rmdAge){
   return ULT[Math.min(Math.max(Math.round(age), rmdAge), 100)] || 6.4;
 }
 
-/* ── Threshold defaults — built from TAXData (retirement_optimizer_taxdata.js) ──
+/* ── Threshold defaults — built from TAXData (taxengine.js) ──
    t.amount = raw taxable income floor (no std deduction; compared directly to fedTaxableIncome).
    Bracket floor[i] = ceiling of bracket[i-1] (first bracket floor = 0).
    IRMAA floor = raw MAGI threshold (compared to totalIncome ≈ MAGI).

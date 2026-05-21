@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retirement Tax Payment Planner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      background: #F0F4F8;
+      color: #222;
+      margin: 0;
+      padding: 16px;
+    }
+    h1 {
+      font-size: 1.3em;
+      color: #1F4E79;
+      margin: 0 0 16px 0;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 400px 1fr;
+      gap: 16px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    /* ── Input panel ─────────────────────────────────────────────────── */
+    .inputs {
+      background: #fff;
+      border: 1px solid #BDD7EE;
+      border-radius: 6px;
+      padding: 14px 16px;
+      height: fit-content;
+    }
+    .section-hdr {
+      background: #2E75B6;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.82em;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 5px 8px;
+      margin: 12px -4px 8px -4px;
+      border-radius: 3px;
+    }
+    .section-hdr:first-child { margin-top: 0; }
+    label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 7px;
+      font-size: 0.88em;
+      color: #333;
+    }
+    label span { flex: 1; padding-right: 8px; }
+    input[type="number"], input[type="text"], select {
+      width: 120px;
+      padding: 4px 6px;
+      border: 1px solid #aaa;
+      border-radius: 3px;
+      font-size: 0.88em;
+      text-align: right;
+      background: #FFFDE8;
+    }
+    select { text-align: left; }
+    input[type="checkbox"] { width: auto; }
+    label.checkbox-label {
+      justify-content: flex-start;
+      gap: 8px;
+    }
+    .computed {
+      background: #F0F0F0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 8px 10px;
+      margin-top: 8px;
+      font-size: 0.84em;
+      color: #444;
+    }
+    .computed div { margin-bottom: 4px; }
+    .computed .key   { color: #1F4E79; font-weight: 600; }
+    .computed .win   { color: #375623; font-weight: 700; }
+    .computed .lose  { color: #8B0000; font-weight: 700; }
+    .today-display {
+      font-size: 0.80em;
+      color: #666;
+      margin-top: 4px;
+      font-style: italic;
+    }
+    button#compute {
+      width: 100%;
+      margin-top: 14px;
+      padding: 10px;
+      background: #1F4E79;
+      color: #fff;
+      font-size: 1em;
+      font-weight: 700;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+    }
+    button#compute:hover { background: #2E75B6; }
+
+    /* ── Output panel ────────────────────────────────────────────────── */
+    .output {
+      background: #fff;
+      border: 1px solid #BDD7EE;
+      border-radius: 6px;
+      padding: 0;
+      min-height: 300px;
+    }
+    .output-inner { padding: 16px; }
+    .placeholder {
+      color: #999;
+      padding: 40px;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* ── Tabs ────────────────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid #BDD7EE;
+      background: #EBF3FB;
+      border-radius: 6px 6px 0 0;
+    }
+    .tab {
+      padding: 8px 18px;
+      cursor: pointer;
+      font-size: 0.9em;
+      font-weight: 600;
+      color: #1F4E79;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .tab.active {
+      border-bottom: 2px solid #1F4E79;
+      background: #fff;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    pre {
+      background: #F8F8F8;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 14px;
+      font-size: 0.82em;
+      font-family: "Courier New", monospace;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      margin: 0;
+    }
+    .json-out { max-height: 620px; overflow-y: auto; }
+
+    /* ── State info tooltip-style box ────────────────────────────────── */
+    #state-info-box {
+      font-size: 0.78em;
+      color: #444;
+      background: #f5faff;
+      border: 1px solid #BDD7EE;
+      border-radius: 4px;
+      padding: 5px 8px;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .action-buttons button {
+      flex: 1;
+      padding: 7px 4px;
+      font-size: 0.82em;
+      font-weight: 600;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #btn-print { background: #5C6BC0; color: #fff; }
+    #btn-print:hover { background: #3949AB; }
+    #btn-ics   { background: #2E7D32; color: #fff; }
+    #btn-ics:hover { background: #1B5E20; }
+    #btn-ics:disabled { background: #aaa; cursor: not-allowed; }
+
+    /* ── Print styles ────────────────────────────────────────────────── */
+    @media print {
+      body { padding: 0; background: #fff; font-size: 12px; }
+      .inputs, .action-buttons, .tabs { display: none !important; }
+      .layout { display: block !important; }
+      .output { border: none; box-shadow: none; }
+      .tab-content { display: block !important; }
+      #tab-text, #tab-json { display: none !important; }
+      h1 { font-size: 1.1em; margin-bottom: 8px; }
+    }
+  </style>
+</head>
+<body>
+<h1>Retirement Tax Payment Planner</h1>
+
+<div class="layout">
+
+  <!-- ── Input Panel ──────────────────────────────────────────────────── -->
+  <div class="inputs">
+
+    <div class="section-hdr">Tax Year &amp; State</div>
+    <label><span>Tax Year</span>
+      <input type="number" id="taxYear" value="2026" min="2020" max="2040" step="1">
+    </label>
+    <label><span>State</span>
+      <select id="state" style="width:120px;">
+        <optgroup label="── No Income Tax ──">
+          <option value="AK">Alaska (AK)</option>
+          <option value="FL">Florida (FL)</option>
+          <option value="NV">Nevada (NV)</option>
+          <option value="NH">New Hampshire (NH)</option>
+          <option value="SD">South Dakota (SD)</option>
+          <option value="TN">Tennessee (TN)</option>
+          <option value="TX">Texas (TX)</option>
+          <option value="WA">Washington (WA)</option>
+          <option value="WY">Wyoming (WY)</option>
+        </optgroup>
+        <optgroup label="── IRA-Exempt ──">
+          <option value="IA">Iowa (IA)</option>
+          <option value="IL">Illinois (IL)</option>
+          <option value="MI">Michigan (MI)</option>
+          <option value="MS">Mississippi (MS)</option>
+          <option value="PA">Pennsylvania (PA)</option>
+        </optgroup>
+        <optgroup label="── Unique Schedule ──">
+          <option value="CA" selected>California (CA) — 30/40/30</option>
+          <option value="OR">Oregon (OR) — Q4 Dec 15</option>
+          <option value="VA">Virginia (VA) — Q1 May 1</option>
+        </optgroup>
+        <optgroup label="── Always 110% Safe Harbor ──">
+          <option value="MD">Maryland (MD)</option>
+        </optgroup>
+        <optgroup label="── Standard Schedule ──">
+          <option value="AL">Alabama (AL)</option>
+          <option value="AR">Arkansas (AR)</option>
+          <option value="AZ">Arizona (AZ)</option>
+          <option value="CO">Colorado (CO)</option>
+          <option value="CT">Connecticut (CT)</option>
+          <option value="DC">District of Columbia (DC)</option>
+          <option value="DE">Delaware (DE)</option>
+          <option value="GA">Georgia (GA)</option>
+          <option value="HI">Hawaii (HI)</option>
+          <option value="ID">Idaho (ID)</option>
+          <option value="IN">Indiana (IN)</option>
+          <option value="KS">Kansas (KS)</option>
+          <option value="KY">Kentucky (KY)</option>
+          <option value="LA">Louisiana (LA)</option>
+          <option value="MA">Massachusetts (MA)</option>
+          <option value="ME">Maine (ME)</option>
+          <option value="MN">Minnesota (MN)</option>
+          <option value="MO">Missouri (MO)</option>
+          <option value="MT">Montana (MT)</option>
+          <option value="NC">North Carolina (NC)</option>
+          <option value="ND">North Dakota (ND)</option>
+          <option value="NE">Nebraska (NE)</option>
+          <option value="NJ">New Jersey (NJ)</option>
+          <option value="NM">New Mexico (NM)</option>
+          <option value="NY">New York (NY)</option>
+          <option value="OH">Ohio (OH)</option>
+          <option value="OK">Oklahoma (OK)</option>
+          <option value="RI">Rhode Island (RI)</option>
+          <option value="SC">South Carolina (SC)</option>
+          <option value="UT">Utah (UT)</option>
+          <option value="VT">Vermont (VT)</option>
+          <option value="WI">Wisconsin (WI)</option>
+          <option value="WV">West Virginia (WV)</option>
+        </optgroup>
+        <optgroup label="── Territories ──">
+          <option value="AS">American Samoa (AS)</option>
+          <option value="GU">Guam (GU)</option>
+          <option value="MP">N. Mariana Islands (MP)</option>
+          <option value="PR">Puerto Rico (PR)</option>
+          <option value="VI">U.S. Virgin Islands (VI)</option>
+        </optgroup>
+      </select>
+    </label>
+    <div id="state-info-box">Select a state to see schedule details.</div>
+
+    <div class="section-hdr">Tax Liability (pre-calculated)</div>
+    <label><span>Federal Tax Due ($)</span>
+      <input type="number" id="federalTax" value="35000" min="0">
+    </label>
+    <label><span>State Tax Due ($)</span>
+      <input type="number" id="stateTax" value="12000" min="0">
+    </label>
+    <label><span>Prior-Year Federal Tax ($)</span>
+      <input type="number" id="priorYearFedTax" value="33000" min="0"
+             title="Used for safe-harbor. Leave 0 to estimate at 90% of current.">
+    </label>
+    <label><span>Prior-Year State Tax ($)</span>
+      <input type="number" id="priorYearStateTax" value="11500" min="0">
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" id="highIncomeFiler">
+      <span>High-income filer (Fed AGI &gt; $150K → 110% safe harbor)</span>
+    </label>
+
+    <div class="section-hdr">IRA 1 / Roth Draws</div>
+    <label><span>IRA 1 RMD ($)</span>
+      <input type="number" id="ira1Rmd" value="25000" min="0">
+    </label>
+    <label><span>IRA 1 Voluntary Withdrawal ($)</span>
+      <input type="number" id="ira1Voluntary" value="30000" min="0">
+    </label>
+    <label><span>IRA 1 RMD / Draw Month</span>
+      <select id="ira1RmdMonth">
+        <option value="1">January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12" selected>December</option>
+      </select>
+    </label>
+    <label><span>IRA 1 Roth Conversion ($)</span>
+      <input type="number" id="ira1RothConversion" value="0" min="0">
+    </label>
+    <label><span>IRA 1 Conversion Month</span>
+      <select id="ira1ConvMonth">
+        <option value="1" selected>January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
+    </label>
+    <div class="section-hdr">IRA 2 / Roth Draws</div>
+    <label><span>IRA 2 RMD ($)</span>
+      <input type="number" id="ira2Rmd" value="0" min="0">
+    </label>
+    <label><span>IRA 2 Voluntary Withdrawal ($)</span>
+      <input type="number" id="ira2Voluntary" value="0" min="0">
+    </label>
+    <label><span>IRA 2 RMD / Draw Month</span>
+      <select id="ira2RmdMonth">
+        <option value="1">January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12" selected>December</option>
+      </select>
+    </label>
+    <label><span>IRA 2 Roth Conversion ($)</span>
+      <input type="number" id="ira2RothConversion" value="0" min="0">
+    </label>
+    <label><span>IRA 2 Conversion Month</span>
+      <select id="ira2ConvMonth">
+        <option value="1" selected>January</option><option value="2">February</option>
+        <option value="3">March</option><option value="4">April</option>
+        <option value="5">May</option><option value="6">June</option>
+        <option value="7">July</option><option value="8">August</option>
+        <option value="9">September</option><option value="10">October</option>
+        <option value="11">November</option><option value="12">December</option>
+      </select>
+    </label>
+    <div class="section-hdr">Other Income Sources</div>
+    <label><span>Social Security ($)</span>
+      <input type="number" id="ssIncome" value="20000" min="0">
+    </label>
+    <label><span>Pension / Annuity ($)</span>
+      <input type="number" id="pensionIncome" value="15000" min="0">
+    </label>
+    <label><span>Interest Income ($)</span>
+      <input type="number" id="interest" value="5000" min="0">
+    </label>
+    <label><span>Qualified Dividends ($)</span>
+      <input type="number" id="qualifiedDivs" value="8000" min="0">
+    </label>
+    <label><span>Capital Gains ($)</span>
+      <input type="number" id="capitalGains" value="10000" min="0">
+    </label>
+
+    <div class="section-hdr">Rates</div>
+    <label><span>Portfolio Return Rate (%)</span>
+      <input type="number" id="portfolioRate" value="7.0" step="0.5" min="0" max="20">
+    </label>
+    <label><span>HYSA Gross Rate (%)</span>
+      <input type="number" id="hysaGross" value="3.8" step="0.25" min="0" max="10">
+    </label>
+    <label>
+      <span>Marginal Ordinary Rate (%) <small style="font-weight:400">(fed+state)</small></span>
+      <input type="number" id="marginalOrdRate" value="30" step="1" min="0" max="60">
+    </label>
+    <label><span>Blended LTCG Rate (%)</span>
+      <input type="number" id="cgRateBlended" value="20" step="1" min="0" max="40">
+    </label>
+    <label><span>Brokerage Appreciation (%)</span>
+      <input type="number" id="appreciationPct" value="40" step="5" min="0" max="100">
+    </label>
+
+    <!-- Live computed preview -->
+    <div class="computed" id="computed">
+      <div>Enter values and click <em>Compute</em>.</div>
+    </div>
+    <div class="today-display" id="todayDisplay"></div>
+
+    <button id="compute">Compute Payment Plan</button>
+
+    <div class="action-buttons">
+      <button id="btn-print" onclick="window.print()">🖨️ Print / PDF</button>
+      <button id="btn-ics" disabled>📅 Download .ics</button>
+    </div>
+
+  </div><!-- end .inputs -->
+
+  <!-- ── Output Panel ─────────────────────────────────────────────────── -->
+  <div class="output">
+    <div class="tabs">
+      <div class="tab active" data-tab="plan">Payment Plan</div>
+      <div class="tab"        data-tab="text">Plain Text</div>
+      <div class="tab"        data-tab="json">JSON (API)</div>
+    </div>
+    <div class="tab-content active" id="tab-plan">
+      <div class="placeholder" id="placeholder">
+        Fill in the inputs on the left and click <strong>Compute Payment Plan</strong>.
+      </div>
+      <div id="plan-html"></div>
+    </div>
+    <div class="tab-content" id="tab-text">
+      <pre id="plan-text"></pre>
+    </div>
+    <div class="tab-content" id="tab-json">
+      <pre id="plan-json" class="json-out"></pre>
+    </div>
+  </div>
+
+</div><!-- end .layout -->
+
+<script src="taxPaymentPlanner.js"></script>
+<script>
+  // ── Tab switching ──────────────────────────────────────────────────────────
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ── Today's date display ───────────────────────────────────────────────────
+  const todayDate = new Date();
+  const todayStr  = todayDate.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+  document.getElementById('todayDisplay').textContent =
+    'Using today\'s date for missed-payment detection: ' + todayStr;
+
+  // ── State info box ─────────────────────────────────────────────────────────
+  function updateStateInfo() {
+    const code = document.getElementById('state').value;
+    const info = TaxPaymentPlanner.getStateInfo(code);
+    const box  = document.getElementById('state-info-box');
+    if (!info.hasIncomeTax) {
+      box.innerHTML = `<strong style="color:#2E7D32;">No state income tax</strong> — no state estimated payments or IRA withholding needed.`;
+    } else if (info.iraExempt) {
+      box.innerHTML = `<strong style="color:#2E7D32;">IRA-exempt state</strong> — state tax is NOT withheld from IRA draws; state portion paid via quarterly estimates. ${info.paymentNote || ''}`;
+    } else {
+      const sch = info.quarterlySchedule.map(q => {
+        const yr = q.nextYear ? 'next year' : 'tax year';
+        return `${q.label}: ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][q.month-1]} ${q.day} (${yr}) — ${Math.round(q.w*100)}%`;
+      }).join('<br>');
+      const sh  = info.safeHarborAlways110
+                ? '⚠️ Safe harbor: always 110% of prior year'
+                : `Safe harbor threshold: $${(info.safeHarborHighIncomeThreshold/1000).toFixed(0)}K`;
+      box.innerHTML = `<strong>${info.name}</strong> quarterly schedule:<br>${sch}<br>${sh}`;
+    }
+  }
+  document.getElementById('state').addEventListener('change', updateStateInfo);
+  updateStateInfo();
+
+  // ── Read inputs ────────────────────────────────────────────────────────────
+  function readNum(id, scale) {
+    const v = parseFloat(document.getElementById(id).value) || 0;
+    return scale ? v / scale : v;
+  }
+  function readBool(id) { return document.getElementById(id).checked; }
+  function readInt(id)  { return parseInt(document.getElementById(id).value) || 0; }
+
+  function getParams() {
+    return {
+      taxYear:           readInt('taxYear') || new Date().getFullYear(),
+      state:             document.getElementById('state').value,
+      federalTax:        readNum('federalTax'),
+      stateTax:          readNum('stateTax'),
+      priorYearFedTax:   readNum('priorYearFedTax') || null,
+      priorYearStateTax: readNum('priorYearStateTax') || null,
+      highIncomeFiler:   readBool('highIncomeFiler'),
+
+      ira1Rmd:            readNum('ira1Rmd'),
+      ira1Voluntary:      readNum('ira1Voluntary'),
+      ira1RmdMonth:       readInt('ira1RmdMonth'),
+      ira1RothConversion: readNum('ira1RothConversion'),
+      ira1ConvMonth:      readInt('ira1ConvMonth'),
+
+      ira2Rmd:            readNum('ira2Rmd'),
+      ira2Voluntary:      readNum('ira2Voluntary'),
+      ira2RmdMonth:       readInt('ira2RmdMonth'),
+      ira2RothConversion: readNum('ira2RothConversion'),
+      ira2ConvMonth:      readInt('ira2ConvMonth'),
+
+      ssIncome:          readNum('ssIncome'),
+      pensionIncome:     readNum('pensionIncome'),
+      interest:          readNum('interest'),
+      qualifiedDivs:     readNum('qualifiedDivs'),
+      capitalGains:      readNum('capitalGains'),
+      portfolioRate:     readNum('portfolioRate',   100),
+      hysaGross:         readNum('hysaGross',       100),
+      marginalOrdRate:   readNum('marginalOrdRate', 100),
+      cgRateBlended:     readNum('cgRateBlended',   100),
+      appreciationPct:   readNum('appreciationPct', 100),
+      todayDate:         todayDate,
+    };
+  }
+
+  // ── Live computed preview ──────────────────────────────────────────────────
+  function updateComputed() {
+    const p       = getParams();
+    const hysaNet = p.hysaGross * (1 - p.marginalOrdRate);
+    const be      = p.portfolioRate / 2;
+    const wins    = hysaNet < be;
+    const totalTax  = p.federalTax + p.stateTax;
+    const ira1Draws = p.ira1Rmd + p.ira1Voluntary;
+    const ira2Draws = p.ira2Rmd + p.ira2Voluntary;
+    const allDraws  = ira1Draws + ira2Draws;
+    const iraWCap   = Math.min(allDraws, totalTax);
+    const covPct    = totalTax > 0 ? (iraWCap / totalTax * 100).toFixed(0) : 0;
+    const shortfall = Math.max(0, totalTax - iraWCap);
+
+    // Effective withhold month = latest draw month among IRAs that have draws
+    const ira1Month = ira1Draws > 0 ? (p.ira1RmdMonth || 12) : 0;
+    const ira2Month = ira2Draws > 0 ? (p.ira2RmdMonth || 12) : 0;
+    const effectiveMonth = Math.max(ira1Month, ira2Month) || 12;
+    const rmdFactor = TaxPaymentPlanner.iraOcFactor(effectiveMonth);
+
+    const stateInfo = TaxPaymentPlanner.getStateInfo(p.state);
+    const stateNote = stateInfo.iraExempt
+      ? `<span style="color:#2E7D32;font-weight:600;">${stateInfo.name}: IRA-exempt ✓</span>`
+      : !stateInfo.hasIncomeTax
+        ? `<span style="color:#2E7D32;font-weight:600;">${stateInfo.name}: no income tax ✓</span>`
+        : '';
+
+    const fmt$ = n => '$' + Math.round(Math.abs(n)).toLocaleString('en-US');
+    const fPct  = (n, d) => (n * 100).toFixed(d || 2) + '%';
+
+    document.getElementById('computed').innerHTML = `
+      <div><span class="key">Total Tax:</span> ${fmt$(totalTax)}</div>
+      <div><span class="key">IRA 1 Draws:</span> ${fmt$(ira1Draws)}${ira2Draws > 0 ? ` &nbsp;|&nbsp; <span class="key">IRA 2:</span> ${fmt$(ira2Draws)}` : ''} → covers <strong>${covPct}%</strong> of taxes</div>
+      ${shortfall > 0 ? `<div><span class="key">Shortfall:</span> ${fmt$(shortfall)} → quarterly estimates</div>` : ''}
+      <div><span class="key">HYSA Net:</span> ${fPct(hysaNet)} (${fPct(p.hysaGross)} × (1−${(p.marginalOrdRate*100).toFixed(0)}%))</div>
+      <div><span class="key">Break-even:</span> r/2 = ${fPct(be)} &nbsp;|&nbsp; IRA OC factor: ${fPct(rmdFactor,1)}</div>
+      <div class="${wins ? 'win' : 'lose'}">
+        ${wins ? '✓ YE-IRA wins (HYSA net &lt; break-even)' : '≈ Quarterly competitive (HYSA net ≥ break-even)'}
+      </div>
+      ${stateNote ? `<div style="margin-top:3px;">${stateNote}</div>` : ''}`;
+  }
+
+  document.querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('input', updateComputed);
+    el.addEventListener('change', updateComputed);
+  });
+  updateComputed();
+
+  // ── ICS calendar generator ────────────────────────────────────────────────
+  function generateIcs(plan) {
+    const esc = s => String(s || '')
+      .replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,')
+      .replace(/\r?\n/g, '\\n');
+    const fold = (key, val) => {
+      const line = `${key}:${val}`;
+      if (line.length <= 75) return line + '\r\n';
+      let out = line.substring(0, 75) + '\r\n';
+      for (let i = 75; i < line.length; i += 74)
+        out += ' ' + line.substring(i, i + 74) + '\r\n';
+      return out;
+    };
+    const pad2 = n => String(n).padStart(2, '0');
+
+    let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//RetirementTaxPlanner//EN\r\nCALSCALE:GREGORIAN\r\n';
+
+    const addEvents = (acts) => acts.filter(a => a.date).forEach(a => {
+      const { year: y, month: mo, day: d } = a.date;
+      const dtStart = `${y}${pad2(mo)}${pad2(d)}`;
+      // all-day end = next calendar day
+      const end = new Date(y, mo - 1, d + 1);
+      const dtEnd = `${end.getFullYear()}${pad2(end.getMonth()+1)}${pad2(end.getDate())}`;
+      const uid = `tax-${dtStart}-${a.seq}-${Date.now()}@retirementtaxplanner`;
+      const rawDesc = a.description.replace(/<[^>]+>/g, '') +
+        (a.notes.length ? '\n\n' + a.notes.map(n => '• ' + n.replace(/<[^>]+>/g, '')).join('\n') : '');
+
+      ics += 'BEGIN:VEVENT\r\n';
+      ics += fold('UID', esc(uid));
+      ics += fold('DTSTART;VALUE=DATE', dtStart);
+      ics += fold('DTEND;VALUE=DATE', dtEnd);
+      ics += fold('SUMMARY', esc(a.description.replace(/<[^>]+>/g, '').substring(0, 80)));
+      ics += fold('DESCRIPTION', esc(rawDesc));
+      ics += 'END:VEVENT\r\n';
+    });
+
+    addEvents(plan.actions);
+    if (plan.planB) addEvents(plan.planB.actions);
+    ics += 'END:VCALENDAR\r\n';
+    return ics;
+  }
+
+  // ── Main compute ──────────────────────────────────────────────────────────
+  function runCompute() {
+    const params = getParams();
+    let plan;
+    try {
+      plan = TaxPaymentPlanner.computePaymentPlan(params);
+    } catch (e) {
+      document.getElementById('plan-html').innerHTML =
+        `<div style="color:red;padding:16px;">Error: ${e.message}<br><pre>${e.stack}</pre></div>`;
+      return;
+    }
+
+    // Plan tab
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('plan-html').innerHTML = plan.html;
+
+    // Text tab
+    document.getElementById('plan-text').textContent = plan.text;
+
+    // JSON tab (compact — omit pre-rendered html/text)
+    const compact = {
+      strategy:  plan.strategy,
+      stateInfo: {
+        name:                       plan.stateInfo.name,
+        hasIncomeTax:               plan.stateInfo.hasIncomeTax,
+        iraExempt:                  plan.stateInfo.iraExempt,
+        withholdingCreditedProRata: plan.stateInfo.withholdingCreditedProRata,
+        safeHarborAlways110:        plan.stateInfo.safeHarborAlways110,
+        ocWeightedMonths:           plan.stateInfo.ocWeightedMonths,
+      },
+      summary:  plan.summary,
+      analysis: {
+        strategies:    plan.analysis.strategies,
+        iraCoverage:   plan.analysis.iraCoverage,
+        hysaNet:       plan.analysis.hysaNet,
+        breakeven:     plan.analysis.breakeven,
+        yeIraWins:     plan.analysis.yeIraWins,
+        iraOcFactor:   plan.analysis.iraOcFactor,
+        stateOcFactor: plan.analysis.stateOcFactor,
+      },
+      actions: plan.actions.map(a => ({
+        seq:                a.seq,
+        type:               a.type,
+        dateLabel:          a.dateLabel,
+        amount:             a.amount,
+        federalWithholding: a.federalWithholding,
+        stateWithholding:   a.stateWithholding,
+        netReceived:        a.netReceived,
+        fedWithholdPct:     +(a.fedWithholdPct * 100).toFixed(1),
+        stateWithholdPct:   +(a.stateWithholdPct * 100).toFixed(1),
+        description:        a.description,
+        notes:              a.notes,
+      })),
+    };
+    document.getElementById('plan-json').textContent = JSON.stringify(compact, null, 2);
+
+    // Enable ICS download
+    const icsBtn = document.getElementById('btn-ics');
+    icsBtn.disabled = false;
+    icsBtn.onclick = () => {
+      const blob = new Blob([generateIcs(plan)], { type: 'text/calendar;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `tax-plan-${params.taxYear}.ics`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+  }
+
+  document.getElementById('compute').addEventListener('click', runCompute);
+
+  // ── URL parameter support ─────────────────────────────────────────────────
+  //
+  // All parameters are passed as query-string key=value pairs.
+  // The page auto-computes when any recognized parameter is present.
+  //
+  // Parameters and their expected formats:
+  //   taxYear           {integer}   e.g. 2026
+  //   state             {string}    two-letter abbreviation, e.g. CA
+  //   federalTax        {number}    total federal tax due, e.g. 35000
+  //   stateTax          {number}    total state tax due, e.g. 12000
+  //   priorYearFedTax   {number}    prior-year federal tax (for safe-harbor)
+  //   priorYearStateTax {number}    prior-year state tax
+  //   highIncomeFiler   {boolean}   true/1 if fed AGI > $150K (→ 110% safe harbor)
+  //
+  //   ira1Rmd           {number}    IRA 1 RMD amount
+  //   ira1Voluntary     {number}    IRA 1 voluntary withdrawal
+  //   ira1RmdMonth      {integer}   1–12, month of IRA 1 RMD/draw
+  //   ira1RothConversion{number}    IRA 1 Roth conversion amount (gross)
+  //   ira1ConvMonth     {integer}   1–12, month of IRA 1 Roth conversion
+  //
+  //   ira2Rmd           {number}    IRA 2 RMD amount
+  //   ira2Voluntary     {number}    IRA 2 voluntary withdrawal
+  //   ira2RmdMonth      {integer}   1–12, month of IRA 2 RMD/draw
+  //   ira2RothConversion{number}    IRA 2 Roth conversion amount
+  //   ira2ConvMonth     {integer}   1–12, month of IRA 2 Roth conversion
+  //
+  //   ssIncome          {number}    Social Security gross benefit
+  //   pensionIncome     {number}    pension / annuity income
+  //   interest          {number}    taxable interest income
+  //   qualifiedDivs     {number}    qualified dividend income
+  //   capitalGains      {number}    scheduled realized capital gains
+  //
+  //   portfolioRate     {number}    annual portfolio return as a PERCENTAGE (e.g. 7.0)
+  //   hysaGross         {number}    gross HYSA yield as a PERCENTAGE (e.g. 3.8)
+  //   marginalOrdRate   {number}    marginal ordinary rate as a PERCENTAGE (e.g. 30)
+  //   cgRateBlended     {number}    blended LTCG rate as a PERCENTAGE (e.g. 20)
+  //   appreciationPct   {number}    brokerage unrealized gain fraction as a PERCENTAGE (e.g. 40)
+  //
+  // Example:
+  //   RetirementTaxPlanner.html?state=CA&federalTax=35000&stateTax=12000
+  //     &ira1Rmd=25000&ira1RmdMonth=12&ira1RothConversion=20000&ira1ConvMonth=6
+  //     &portfolioRate=7&hysaGross=3.8&marginalOrdRate=30
+
+  function loadFromUrl() {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.toString() === '') return false;
+
+    const NUM_FIELDS = [
+      'taxYear','federalTax','stateTax','priorYearFedTax','priorYearStateTax',
+      'ira1Rmd','ira1Voluntary','ira1RmdMonth','ira1RothConversion','ira1ConvMonth',
+      'ira2Rmd','ira2Voluntary','ira2RmdMonth','ira2RothConversion','ira2ConvMonth',
+      'ssIncome','pensionIncome','interest','qualifiedDivs','capitalGains',
+      'portfolioRate','hysaGross','marginalOrdRate','cgRateBlended','appreciationPct',
+    ];
+    const STR_FIELDS = ['state'];
+    const BOOL_FIELDS = ['highIncomeFiler'];
+
+    NUM_FIELDS.forEach(id => {
+      const v = sp.get(id);
+      if (v !== null) { const el = document.getElementById(id); if (el) el.value = v; }
+    });
+    STR_FIELDS.forEach(id => {
+      const v = sp.get(id);
+      if (v !== null) { const el = document.getElementById(id); if (el) el.value = v; }
+    });
+    BOOL_FIELDS.forEach(id => {
+      const v = sp.get(id);
+      if (v !== null) {
+        const el = document.getElementById(id);
+        if (el) el.checked = (v === 'true' || v === '1');
+      }
+    });
+
+    updateStateInfo();
+    updateComputed();
+    return true;
+  }
+
+  // Auto-compute when URL parameters are present
+  window.addEventListener('DOMContentLoaded', () => {
+    if (loadFromUrl()) runCompute();
+  });
+</script>
+</body>
+</html>

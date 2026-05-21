@@ -166,6 +166,36 @@
       margin-top: 4px;
       line-height: 1.4;
     }
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .action-buttons button {
+      flex: 1;
+      padding: 7px 4px;
+      font-size: 0.82em;
+      font-weight: 600;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #btn-print { background: #5C6BC0; color: #fff; }
+    #btn-print:hover { background: #3949AB; }
+    #btn-ics   { background: #2E7D32; color: #fff; }
+    #btn-ics:hover { background: #1B5E20; }
+    #btn-ics:disabled { background: #aaa; cursor: not-allowed; }
+
+    /* ── Print styles ────────────────────────────────────────────────── */
+    @media print {
+      body { padding: 0; background: #fff; font-size: 12px; }
+      .inputs, .action-buttons, .tabs { display: none !important; }
+      .layout { display: block !important; }
+      .output { border: none; box-shadow: none; }
+      .tab-content { display: block !important; }
+      #tab-text, #tab-json { display: none !important; }
+      h1 { font-size: 1.1em; margin-bottom: 8px; }
+    }
   </style>
 </head>
 <body>
@@ -303,11 +333,6 @@
         <option value="11">November</option><option value="12">December</option>
       </select>
     </label>
-    <label class="checkbox-label">
-      <input type="checkbox" id="ira1RothWithhold">
-      <span>IRA 1 — withhold from conversion (+ 60-day replace)</span>
-    </label>
-
     <div class="section-hdr">IRA 2 / Roth Draws</div>
     <label><span>IRA 2 RMD ($)</span>
       <input type="number" id="ira2Rmd" value="0" min="0">
@@ -338,11 +363,6 @@
         <option value="11">November</option><option value="12">December</option>
       </select>
     </label>
-    <label class="checkbox-label">
-      <input type="checkbox" id="ira2RothWithhold">
-      <span>IRA 2 — withhold from conversion (+ 60-day replace)</span>
-    </label>
-
     <div class="section-hdr">Other Income Sources</div>
     <label><span>Social Security ($)</span>
       <input type="number" id="ssIncome" value="20000" min="0">
@@ -365,7 +385,7 @@
       <input type="number" id="portfolioRate" value="7.0" step="0.5" min="0" max="20">
     </label>
     <label><span>HYSA Gross Rate (%)</span>
-      <input type="number" id="hysaGross" value="4.5" step="0.25" min="0" max="10">
+      <input type="number" id="hysaGross" value="3.8" step="0.25" min="0" max="10">
     </label>
     <label>
       <span>Marginal Ordinary Rate (%) <small style="font-weight:400">(fed+state)</small></span>
@@ -385,6 +405,11 @@
     <div class="today-display" id="todayDisplay"></div>
 
     <button id="compute">Compute Payment Plan</button>
+
+    <div class="action-buttons">
+      <button id="btn-print" onclick="window.print()">🖨️ Print / PDF</button>
+      <button id="btn-ics" disabled>📅 Download .ics</button>
+    </div>
 
   </div><!-- end .inputs -->
 
@@ -475,14 +500,12 @@
       ira1RmdMonth:       readInt('ira1RmdMonth'),
       ira1RothConversion: readNum('ira1RothConversion'),
       ira1ConvMonth:      readInt('ira1ConvMonth'),
-      ira1RothWithhold:   readBool('ira1RothWithhold'),
 
       ira2Rmd:            readNum('ira2Rmd'),
       ira2Voluntary:      readNum('ira2Voluntary'),
       ira2RmdMonth:       readInt('ira2RmdMonth'),
       ira2RothConversion: readNum('ira2RothConversion'),
       ira2ConvMonth:      readInt('ira2ConvMonth'),
-      ira2RothWithhold:   readBool('ira2RothWithhold'),
 
       ssIncome:          readNum('ssIncome'),
       pensionIncome:     readNum('pensionIncome'),
@@ -546,8 +569,50 @@
   });
   updateComputed();
 
-  // ── Main compute ─────────────────────────────────────────────────────────
-  document.getElementById('compute').addEventListener('click', () => {
+  // ── ICS calendar generator ────────────────────────────────────────────────
+  function generateIcs(plan) {
+    const esc = s => String(s || '')
+      .replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,')
+      .replace(/\r?\n/g, '\\n');
+    const fold = (key, val) => {
+      const line = `${key}:${val}`;
+      if (line.length <= 75) return line + '\r\n';
+      let out = line.substring(0, 75) + '\r\n';
+      for (let i = 75; i < line.length; i += 74)
+        out += ' ' + line.substring(i, i + 74) + '\r\n';
+      return out;
+    };
+    const pad2 = n => String(n).padStart(2, '0');
+
+    let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//RetirementTaxPlanner//EN\r\nCALSCALE:GREGORIAN\r\n';
+
+    const addEvents = (acts) => acts.filter(a => a.date).forEach(a => {
+      const { year: y, month: mo, day: d } = a.date;
+      const dtStart = `${y}${pad2(mo)}${pad2(d)}`;
+      // all-day end = next calendar day
+      const end = new Date(y, mo - 1, d + 1);
+      const dtEnd = `${end.getFullYear()}${pad2(end.getMonth()+1)}${pad2(end.getDate())}`;
+      const uid = `tax-${dtStart}-${a.seq}-${Date.now()}@retirementtaxplanner`;
+      const rawDesc = a.description.replace(/<[^>]+>/g, '') +
+        (a.notes.length ? '\n\n' + a.notes.map(n => '• ' + n.replace(/<[^>]+>/g, '')).join('\n') : '');
+
+      ics += 'BEGIN:VEVENT\r\n';
+      ics += fold('UID', esc(uid));
+      ics += fold('DTSTART;VALUE=DATE', dtStart);
+      ics += fold('DTEND;VALUE=DATE', dtEnd);
+      ics += fold('SUMMARY', esc(a.description.replace(/<[^>]+>/g, '').substring(0, 80)));
+      ics += fold('DESCRIPTION', esc(rawDesc));
+      ics += 'END:VEVENT\r\n';
+    });
+
+    addEvents(plan.actions);
+    if (plan.planB) addEvents(plan.planB.actions);
+    ics += 'END:VCALENDAR\r\n';
+    return ics;
+  }
+
+  // ── Main compute ──────────────────────────────────────────────────────────
+  function runCompute() {
     const params = getParams();
     let plan;
     try {
@@ -578,12 +643,12 @@
       },
       summary:  plan.summary,
       analysis: {
-        strategies:   plan.analysis.strategies,
-        iraCoverage:  plan.analysis.iraCoverage,
-        hysaNet:      plan.analysis.hysaNet,
-        breakeven:    plan.analysis.breakeven,
-        yeIraWins:    plan.analysis.yeIraWins,
-        iraOcFactor:  plan.analysis.iraOcFactor,
+        strategies:    plan.analysis.strategies,
+        iraCoverage:   plan.analysis.iraCoverage,
+        hysaNet:       plan.analysis.hysaNet,
+        breakeven:     plan.analysis.breakeven,
+        yeIraWins:     plan.analysis.yeIraWins,
+        iraOcFactor:   plan.analysis.iraOcFactor,
         stateOcFactor: plan.analysis.stateOcFactor,
       },
       actions: plan.actions.map(a => ({
@@ -601,6 +666,103 @@
       })),
     };
     document.getElementById('plan-json').textContent = JSON.stringify(compact, null, 2);
+
+    // Enable ICS download
+    const icsBtn = document.getElementById('btn-ics');
+    icsBtn.disabled = false;
+    icsBtn.onclick = () => {
+      const blob = new Blob([generateIcs(plan)], { type: 'text/calendar;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `tax-plan-${params.taxYear}.ics`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+  }
+
+  document.getElementById('compute').addEventListener('click', runCompute);
+
+  // ── URL parameter support ─────────────────────────────────────────────────
+  //
+  // All parameters are passed as query-string key=value pairs.
+  // The page auto-computes when any recognized parameter is present.
+  //
+  // Parameters and their expected formats:
+  //   taxYear           {integer}   e.g. 2026
+  //   state             {string}    two-letter abbreviation, e.g. CA
+  //   federalTax        {number}    total federal tax due, e.g. 35000
+  //   stateTax          {number}    total state tax due, e.g. 12000
+  //   priorYearFedTax   {number}    prior-year federal tax (for safe-harbor)
+  //   priorYearStateTax {number}    prior-year state tax
+  //   highIncomeFiler   {boolean}   true/1 if fed AGI > $150K (→ 110% safe harbor)
+  //
+  //   ira1Rmd           {number}    IRA 1 RMD amount
+  //   ira1Voluntary     {number}    IRA 1 voluntary withdrawal
+  //   ira1RmdMonth      {integer}   1–12, month of IRA 1 RMD/draw
+  //   ira1RothConversion{number}    IRA 1 Roth conversion amount (gross)
+  //   ira1ConvMonth     {integer}   1–12, month of IRA 1 Roth conversion
+  //
+  //   ira2Rmd           {number}    IRA 2 RMD amount
+  //   ira2Voluntary     {number}    IRA 2 voluntary withdrawal
+  //   ira2RmdMonth      {integer}   1–12, month of IRA 2 RMD/draw
+  //   ira2RothConversion{number}    IRA 2 Roth conversion amount
+  //   ira2ConvMonth     {integer}   1–12, month of IRA 2 Roth conversion
+  //
+  //   ssIncome          {number}    Social Security gross benefit
+  //   pensionIncome     {number}    pension / annuity income
+  //   interest          {number}    taxable interest income
+  //   qualifiedDivs     {number}    qualified dividend income
+  //   capitalGains      {number}    scheduled realized capital gains
+  //
+  //   portfolioRate     {number}    annual portfolio return as a PERCENTAGE (e.g. 7.0)
+  //   hysaGross         {number}    gross HYSA yield as a PERCENTAGE (e.g. 3.8)
+  //   marginalOrdRate   {number}    marginal ordinary rate as a PERCENTAGE (e.g. 30)
+  //   cgRateBlended     {number}    blended LTCG rate as a PERCENTAGE (e.g. 20)
+  //   appreciationPct   {number}    brokerage unrealized gain fraction as a PERCENTAGE (e.g. 40)
+  //
+  // Example:
+  //   RetirementTaxPlanner.html?state=CA&federalTax=35000&stateTax=12000
+  //     &ira1Rmd=25000&ira1RmdMonth=12&ira1RothConversion=20000&ira1ConvMonth=6
+  //     &portfolioRate=7&hysaGross=3.8&marginalOrdRate=30
+
+  function loadFromUrl() {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.toString() === '') return false;
+
+    const NUM_FIELDS = [
+      'taxYear','federalTax','stateTax','priorYearFedTax','priorYearStateTax',
+      'ira1Rmd','ira1Voluntary','ira1RmdMonth','ira1RothConversion','ira1ConvMonth',
+      'ira2Rmd','ira2Voluntary','ira2RmdMonth','ira2RothConversion','ira2ConvMonth',
+      'ssIncome','pensionIncome','interest','qualifiedDivs','capitalGains',
+      'portfolioRate','hysaGross','marginalOrdRate','cgRateBlended','appreciationPct',
+    ];
+    const STR_FIELDS = ['state'];
+    const BOOL_FIELDS = ['highIncomeFiler'];
+
+    NUM_FIELDS.forEach(id => {
+      const v = sp.get(id);
+      if (v !== null) { const el = document.getElementById(id); if (el) el.value = v; }
+    });
+    STR_FIELDS.forEach(id => {
+      const v = sp.get(id);
+      if (v !== null) { const el = document.getElementById(id); if (el) el.value = v; }
+    });
+    BOOL_FIELDS.forEach(id => {
+      const v = sp.get(id);
+      if (v !== null) {
+        const el = document.getElementById(id);
+        if (el) el.checked = (v === 'true' || v === '1');
+      }
+    });
+
+    updateStateInfo();
+    updateComputed();
+    return true;
+  }
+
+  // Auto-compute when URL parameters are present
+  window.addEventListener('DOMContentLoaded', () => {
+    if (loadFromUrl()) runCompute();
   });
 </script>
 </body>

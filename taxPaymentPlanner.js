@@ -42,7 +42,7 @@
  *   ira1RmdMonth         {Number}   1–12, month of IRA 1 RMD/draw (default 12)
  *   ira1RothConversion   {Number}   IRA 1 Roth conversion amount (gross)
  *   ira1ConvMonth        {Number}   1–12, month of IRA 1 conversion (default 1)
- *   ira1RothWithhold     {Boolean}  withhold from IRA 1 conversion + 60-day replace
+ *   ira1RothWithhold     {Boolean|null}  override 60-day replace decision; null=auto-compute
  *
  *   IRA 2 (second IRA account)
  *   ira2Rmd              {Number}   IRA 2 RMD amount
@@ -50,7 +50,7 @@
  *   ira2RmdMonth         {Number}   1–12, month of IRA 2 RMD/draw (default 12)
  *   ira2RothConversion   {Number}   IRA 2 Roth conversion amount (gross)
  *   ira2ConvMonth        {Number}   1–12, month of IRA 2 conversion (default 1)
- *   ira2RothWithhold     {Boolean}  withhold from IRA 2 conversion + 60-day replace
+ *   ira2RothWithhold     {Boolean|null}  override 60-day replace decision; null=auto-compute
  *
  *   Other income
  *   ssIncome             {Number}   Social Security gross benefit
@@ -362,14 +362,14 @@ const TaxPaymentPlanner = (() => {
       ira1RmdMonth:       12,
       ira1RothConversion: 0,
       ira1ConvMonth:      1,
-      ira1RothWithhold:   false,
+      ira1RothWithhold:   null,
 
       ira2Rmd:            0,
       ira2Voluntary:      0,
       ira2RmdMonth:       12,
       ira2RothConversion: 0,
       ira2ConvMonth:      1,
-      ira2RothWithhold:   false,
+      ira2RothWithhold:   null,
 
       ssIncome:          0,
       pensionIncome:     0,
@@ -377,7 +377,7 @@ const TaxPaymentPlanner = (() => {
       qualifiedDivs:     0,
       capitalGains:      0,
       portfolioRate:     0.07,
-      hysaGross:         0.045,
+      hysaGross:         0.038,
       marginalOrdRate:   0.30,
       cgRateBlended:     0.20,
       appreciationPct:   0.40,
@@ -432,25 +432,52 @@ const TaxPaymentPlanner = (() => {
     const ira2DrawTotal = p.ira2Rmd + p.ira2Voluntary;
     const allDrawsTotal = ira1DrawTotal + ira2DrawTotal;
 
-    // 5. Conversion withholding (optional, per user's rothWithhold flag)
+    // 5. Conversion withholding — auto-analyze 60-day replacement benefit vs. cost.
+    //    For each Roth conversion the engine computes:
+    //      benefit  = withheld × portfolioRate × monthsRemaining/12  (extra Roth tax-free growth)
+    //      cost60   = withheld × hysaNet × 60/365                    (cash tied up for ≤60 days)
+    //    If benefit > cost60 the 60-day replacement is recommended and the engine withholds from
+    //    the conversion automatically. Callers can override with explicit true/false.
     const grossIncome = allDrawsTotal + p.ira1RothConversion + p.ira2RothConversion +
                         p.ssIncome + p.pensionIncome + p.interest + p.qualifiedDivs + p.capitalGains;
+
+    function _estConvW(convAmt) {
+      if (convAmt <= 0) return { fed: 0, state: 0, total: 0 };
+      const fedW = Math.round(p.federalTax * (convAmt / Math.max(1, grossIncome)));
+      const stW  = stateIraExempt ? 0 : Math.round(fedW * stFrac / Math.max(0.001, fedFrac));
+      return { fed: fedW, state: stW, total: fedW + stW };
+    }
+
+    function _sixtyDayAnalysis(convAmt, convMonth, estW) {
+      const monthsRem = Math.max(0, 12 - convMonth);
+      const benefit   = estW.total * p.portfolioRate * monthsRem / 12;
+      const cost60    = estW.total * hysaNet * 60 / 365;
+      const net       = benefit - cost60;
+      return { benefit, cost60, net, monthsRem, recommended: net > 0 && convAmt > 0, estWithheld: estW.total };
+    }
+
+    const ira1EstConvW = _estConvW(p.ira1RothConversion);
+    const ira2EstConvW = _estConvW(p.ira2RothConversion);
+    const ira1SixtyDay = _sixtyDayAnalysis(p.ira1RothConversion, ira1.planAConvMonth, ira1EstConvW);
+    const ira2SixtyDay = _sixtyDayAnalysis(p.ira2RothConversion, ira2.planAConvMonth, ira2EstConvW);
+
+    // Explicit boolean overrides auto; null/undefined → auto-decision
+    const doWithhold1 = p.ira1RothConversion > 0 &&
+      (p.ira1RothWithhold === true ? true : p.ira1RothWithhold === false ? false : ira1SixtyDay.recommended);
+    const doWithhold2 = p.ira2RothConversion > 0 &&
+      (p.ira2RothWithhold === true ? true : p.ira2RothWithhold === false ? false : ira2SixtyDay.recommended);
 
     let convWithholdFed = 0, convWithholdState = 0;
     let ira1ConvFedW = 0, ira1ConvStW = 0;
     let ira2ConvFedW = 0, ira2ConvStW = 0;
 
-    if (p.ira1RothWithhold && p.ira1RothConversion > 0) {
-      ira1ConvFedW   = Math.round(p.federalTax * (p.ira1RothConversion / Math.max(1, grossIncome)));
-      ira1ConvStW    = stateIraExempt ? 0 : Math.round(ira1ConvFedW * stFrac / Math.max(0.001, fedFrac));
-      convWithholdFed   += ira1ConvFedW;
-      convWithholdState += ira1ConvStW;
+    if (doWithhold1) {
+      ira1ConvFedW = ira1EstConvW.fed;  ira1ConvStW = ira1EstConvW.state;
+      convWithholdFed += ira1ConvFedW;  convWithholdState += ira1ConvStW;
     }
-    if (p.ira2RothWithhold && p.ira2RothConversion > 0) {
-      ira2ConvFedW   = Math.round(p.federalTax * (p.ira2RothConversion / Math.max(1, grossIncome)));
-      ira2ConvStW    = stateIraExempt ? 0 : Math.round(ira2ConvFedW * stFrac / Math.max(0.001, fedFrac));
-      convWithholdFed   += ira2ConvFedW;
-      convWithholdState += ira2ConvStW;
+    if (doWithhold2) {
+      ira2ConvFedW = ira2EstConvW.fed;  ira2ConvStW = ira2EstConvW.state;
+      convWithholdFed += ira2ConvFedW;  convWithholdState += ira2ConvStW;
     }
 
     // 6. Cross-IRA withholding optimizer
@@ -619,16 +646,22 @@ const TaxPaymentPlanner = (() => {
     }
 
     // ── 11c. Roth conversion actions (per IRA) ──────────────────────────────
-    for (const [iraNum, ira, convFedW, convStW, convAmt, rothWithhold] of [
-      [1, ira1, ira1ConvFedW, ira1ConvStW, p.ira1RothConversion, p.ira1RothWithhold],
-      [2, ira2, ira2ConvFedW, ira2ConvStW, p.ira2RothConversion, p.ira2RothWithhold],
+    for (const [iraNum, ira, convFedW, convStW, convAmt, doWithhold, sda] of [
+      [1, ira1, ira1ConvFedW, ira1ConvStW, p.ira1RothConversion, doWithhold1, ira1SixtyDay],
+      [2, ira2, ira2ConvFedW, ira2ConvStW, p.ira2RothConversion, doWithhold2, ira2SixtyDay],
     ]) {
       if (convAmt <= 0) continue;
       const convDate    = { year: yr, month: ira.planAConvMonth, day: ira.planAConvDay };
       const convDateStr = fmtDate(yr, ira.planAConvMonth, ira.planAConvDay);
       const monthsOfGrowth = 12 - ira.planAConvMonth;
+      const sdaNote = sda.estWithheld > 0
+        ? `60-day replacement analysis: extra Roth growth = +${fmt$(sda.benefit)} ` +
+          `(${sda.monthsRem} month${sda.monthsRem !== 1 ? 's' : ''} × ${fmtPct(p.portfolioRate)} portfolio rate); ` +
+          `cash OC = −${fmt$(sda.cost60)} (${fmt$(sda.estWithheld)} out-of-pocket for 60 days at ${fmtPct(hysaNet, 2)} HYSA net). ` +
+          `Net = ${sda.net >= 0 ? '+' : ''}${fmt$(sda.net)} → ${sda.recommended ? 'replacement recommended' : 'not recommended'}.`
+        : '';
 
-      if (rothWithhold) {
+      if (doWithhold) {
         addAction({
           type: T.ROTH_CONV,
           iraNum,
@@ -642,14 +675,15 @@ const TaxPaymentPlanner = (() => {
             (convStW > 0 ? ` and ${fmt$(convStW)} ${stateInfo.name} (${fmtPct(convStW / convAmt)})` : '') +
             `. Restore ${fmt$(convFedW + convStW)} from outside cash into Roth within 60 days.`,
           notes: [
-            'Withholding reduces the Roth credit — the 60-day cash replacement makes the conversion whole.',
+            'Withholding reduces the Roth credit — the 60-day cash replacement makes the conversion whole so the full amount earns tax-free Roth growth.',
+            sdaNote,
             'CAUTION: The 60-day replacement counts as an indirect rollover — you are limited to ONE indirect rollover per rolling 12-month period across all IRAs combined.',
             ira.hasConflict
               ? `RMD ordering enforced: IRA ${iraNum} RMD distributed on ${MONTH_NAMES[ira.planARmdMonth-1]} ${ira.planARmdDay}; conversion follows on ${MONTH_NAMES[ira.planAConvMonth-1]} ${ira.planAConvDay}.`
               : monthsOfGrowth > 0
                 ? `Converting IRA ${iraNum} in ${MONTH_NAMES[ira.planAConvMonth-1]} gives ${monthsOfGrowth} months of tax-free Roth growth this year.`
                 : `Converting IRA ${iraNum} in January maximizes tax-free Roth growth for the year.`,
-          ],
+          ].filter(Boolean),
         });
       } else {
         addAction({
@@ -661,9 +695,15 @@ const TaxPaymentPlanner = (() => {
           stateWithholding:   0,
           description:
             `IRA ${iraNum} — Roth convert ${fmt$(convAmt)} on ${convDateStr}. ` +
-            `Do not withhold — taxes on this conversion are covered by the IRA draws shown below.`,
+            (sda.monthsRem === 0
+              ? `No withholding — December conversion has no remaining Roth growth to protect this year; taxes covered by IRA draws.`
+              : `Do not withhold — taxes on this conversion are covered by the IRA draws shown below.`),
           notes: [
-            'Withholding from a Roth conversion reduces the converted amount and is an avoidable taxable distribution — fund taxes via IRA draws instead.',
+            sda.monthsRem === 0
+              ? `60-day replacement analysis: December conversion → 0 months of remaining Roth growth; replacement cost (${fmt$(sda.cost60)}) exceeds benefit ($0) → not recommended. Taxes covered by IRA draws.`
+              : (sda.estWithheld > 0 && !sda.recommended
+                  ? sdaNote
+                  : `Taxes funded by IRA draw withholding — no cash from you required; 60-day replacement not needed.`),
             ira.hasConflict
               ? `RMD ordering enforced: IRA ${iraNum} RMD distributed first; this conversion follows.`
               : monthsOfGrowth > 0
@@ -943,8 +983,8 @@ const TaxPaymentPlanner = (() => {
       missedFedCount:      missedFed.length,
       missedStateCount:    missedState.length,
       effectiveWithholdMonth,
-      ira1: { rmdMonth: ira1.origRmdMonth, planARmdMonth: ira1.planARmdMonth, convMonth: ira1.planAConvMonth, hasConflict: ira1.hasConflict, withheld: ira1Withheld, convPassed: ira1ConvPassed, passedOrigMonth: ira1.passedOrigMonth },
-      ira2: { rmdMonth: ira2.origRmdMonth, planARmdMonth: ira2.planARmdMonth, convMonth: ira2.planAConvMonth, hasConflict: ira2.hasConflict, withheld: ira2Withheld, convPassed: ira2ConvPassed, passedOrigMonth: ira2.passedOrigMonth },
+      ira1: { rmdMonth: ira1.origRmdMonth, planARmdMonth: ira1.planARmdMonth, convMonth: ira1.planAConvMonth, hasConflict: ira1.hasConflict, withheld: ira1Withheld, convPassed: ira1ConvPassed, passedOrigMonth: ira1.passedOrigMonth, sixtyDay: ira1SixtyDay, doWithhold: doWithhold1 },
+      ira2: { rmdMonth: ira2.origRmdMonth, planARmdMonth: ira2.planARmdMonth, convMonth: ira2.planAConvMonth, hasConflict: ira2.hasConflict, withheld: ira2Withheld, convPassed: ira2ConvPassed, passedOrigMonth: ira2.passedOrigMonth, sixtyDay: ira2SixtyDay, doWithhold: doWithhold2 },
       todayDate: today,
       coverageSummary,
     };

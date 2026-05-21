@@ -325,6 +325,8 @@ const TaxPaymentPlanner = (() => {
 
   // ── Per-IRA ordering rule helper ──────────────────────────────────────────
   // Returns { planARmdMonth, planARmdDay, planAConvDay, hasConflict, sameMonth }
+  // When RMD and conversion fall in the same month, the RMD is scheduled on
+  // the 1st and the conversion on the 8th, ensuring a mandatory 7-day buffer.
   function resolveIraOrdering(rmd, rmdMonth, conv, convMonth) {
     const clamp = m => Math.max(1, Math.min(12, Math.round(m || 12)));
     const rm = clamp(rmdMonth);
@@ -335,8 +337,8 @@ const TaxPaymentPlanner = (() => {
     return {
       planARmdMonth,
       planAConvMonth: cm,
-      planARmdDay:  sameMonth ? 14 : 15,
-      planAConvDay: 15,
+      planARmdDay:  sameMonth ? 1 : 15,
+      planAConvDay: sameMonth ? 8 : 15,
       hasConflict,
       sameMonth,
       origRmdMonth: rm,
@@ -770,7 +772,7 @@ const TaxPaymentPlanner = (() => {
           if (sp.type === T.RMD) {
             notes.push(
               ira.sameMonth
-                ? `IRA ${iraNum} RMD must be completed before the Roth conversion in the same month. Take on or before the 14th; conversion follows on the 15th.`
+                ? `IRA ${iraNum} RMD must be completed before the Roth conversion in the same month. Complete RMD by the ${ira.planARmdDay}th; conversion follows on the ${ira.planAConvDay}th (7-day IRS ordering buffer).`
                 : `IRA ${iraNum} RMD must be completed by December 31.`
             );
           }

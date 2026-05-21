@@ -390,9 +390,28 @@ const TaxPaymentPlanner = (() => {
     const today     = p.todayDate instanceof Date ? p.todayDate : new Date(p.todayDate);
     const stateInfo = getStateInfo(p.state);
 
-    // 2. Per-IRA ordering rules
-    const ira1 = resolveIraOrdering(p.ira1Rmd, p.ira1RmdMonth, p.ira1RothConversion, p.ira1ConvMonth);
-    const ira2 = resolveIraOrdering(p.ira2Rmd, p.ira2RmdMonth, p.ira2RothConversion, p.ira2ConvMonth);
+    // 2. Per-IRA ordering rules + past-conversion detection
+    const currentMonth = today.getMonth() + 1;                     // 1–12
+    const nextMonth    = Math.min(currentMonth + 1, 12);
+
+    let ira1 = resolveIraOrdering(p.ira1Rmd, p.ira1RmdMonth, p.ira1RothConversion, p.ira1ConvMonth);
+    let ira2 = resolveIraOrdering(p.ira2Rmd, p.ira2RmdMonth, p.ira2RothConversion, p.ira2ConvMonth);
+
+    // If the user's preferred conversion month has already passed (and we are not
+    // generating the December baseline), bump it forward to next month.
+    const ira1ConvPassed = !p._baseline && p.ira1RothConversion > 0 && ira1.planAConvMonth < currentMonth;
+    const ira2ConvPassed = !p._baseline && p.ira2RothConversion > 0 && ira2.planAConvMonth < currentMonth;
+
+    if (ira1ConvPassed) {
+      const orig = ira1.planAConvMonth;
+      ira1 = resolveIraOrdering(p.ira1Rmd, p.ira1RmdMonth, p.ira1RothConversion, nextMonth);
+      ira1.passedOrigMonth = orig;
+    }
+    if (ira2ConvPassed) {
+      const orig = ira2.planAConvMonth;
+      ira2 = resolveIraOrdering(p.ira2Rmd, p.ira2RmdMonth, p.ira2RothConversion, nextMonth);
+      ira2.passedOrigMonth = orig;
+    }
 
     // 3. Core derived values
     const totalTax  = p.federalTax + p.stateTax;
@@ -519,9 +538,26 @@ const TaxPaymentPlanner = (() => {
       return a;
     };
 
-    // ── 11a. Per-IRA ordering rule notes ────────────────────────────────────
-    for (const [iraNum, ira] of [[1, ira1], [2, ira2]]) {
-      const iraP = { rmd: iraNum === 1 ? p.ira1Rmd : p.ira2Rmd, conv: iraNum === 1 ? p.ira1RothConversion : p.ira2RothConversion };
+    // ── 11a. Per-IRA ordering rule notes + passed-conversion alerts ──────────
+    for (const [iraNum, ira, convPassed] of [[1, ira1, ira1ConvPassed], [2, ira2, ira2ConvPassed]]) {
+      const convAmt = iraNum === 1 ? p.ira1RothConversion : p.ira2RothConversion;
+      // Alert when the user's preferred conversion month has already passed
+      if (convPassed && convAmt > 0) {
+        addAction({
+          type: T.ALERT,
+          description:
+            `IRA ${iraNum} — Roth conversion month (${MONTH_NAMES[ira.passedOrigMonth - 1]}) has already passed as of ` +
+            `${fmtDate(today.getFullYear(), today.getMonth() + 1, today.getDate())}. ` +
+            `The plan has been updated to target next month: ` +
+            `<strong>${MONTH_NAMES[ira.planAConvMonth - 1]}</strong>. ` +
+            `If you want to push to December instead, see Plan B below.`,
+          notes: [
+            `You can still do a Roth conversion any time before December 31 — there is no deadline other than year-end.`,
+            `Converting in ${MONTH_NAMES[ira.planAConvMonth - 1]} still provides ${12 - ira.planAConvMonth} months of tax-free Roth growth this year.`,
+          ],
+        });
+      }
+      const iraP = { rmd: iraNum === 1 ? p.ira1Rmd : p.ira2Rmd, conv: convAmt };
       if (iraP.rmd > 0 && iraP.conv > 0) {
         addAction({
           type: T.NOTE,
@@ -595,6 +631,7 @@ const TaxPaymentPlanner = (() => {
       if (rothWithhold) {
         addAction({
           type: T.ROTH_CONV,
+          iraNum,
           date: convDate,
           amount: convAmt,
           federalWithholding: convFedW,
@@ -617,6 +654,7 @@ const TaxPaymentPlanner = (() => {
       } else {
         addAction({
           type: T.ROTH_CONV,
+          iraNum,
           date: convDate,
           amount: convAmt,
           federalWithholding: 0,
@@ -699,6 +737,7 @@ const TaxPaymentPlanner = (() => {
 
           addAction({
             type: sp.type,
+            iraNum,
             date: rmdDate,
             amount: sp.amt,
             federalWithholding: fedW,
@@ -846,9 +885,33 @@ const TaxPaymentPlanner = (() => {
     });
     actions.forEach((a, i) => { a.seq = i + 1; });
 
-    // 13. Verify totals
+    // 13. Verify totals + coverage breakdown by category
     const verFed   = actions.reduce((s, a) => s + a.federalWithholding, 0);
     const verState = actions.reduce((s, a) => s + a.stateWithholding,   0);
+
+    // Coverage summary: how each withholding/payment category contributes to total tax
+    const coverageSummary = {
+      ira1Draw:   { fed: 0, state: 0 },
+      ira2Draw:   { fed: 0, state: 0 },
+      conversion: { fed: 0, state: 0 },
+      quarterly:  { fed: 0, state: 0 },
+    };
+    actions.forEach(a => {
+      if (a.iraNum === 1 && (a.type === T.RMD || a.type === T.IRA_VOL || a.type === T.SUPPL_IRA)) {
+        coverageSummary.ira1Draw.fed   += a.federalWithholding;
+        coverageSummary.ira1Draw.state += a.stateWithholding;
+      } else if (a.iraNum === 2 && (a.type === T.RMD || a.type === T.IRA_VOL || a.type === T.SUPPL_IRA)) {
+        coverageSummary.ira2Draw.fed   += a.federalWithholding;
+        coverageSummary.ira2Draw.state += a.stateWithholding;
+      } else if (a.type === T.ROTH_CONV) {
+        coverageSummary.conversion.fed   += a.federalWithholding;
+        coverageSummary.conversion.state += a.stateWithholding;
+      } else if (a.type === T.Q_FED) {
+        coverageSummary.quarterly.fed += a.federalWithholding;
+      } else if (a.type === T.Q_STATE) {
+        coverageSummary.quarterly.state += a.stateWithholding;
+      }
+    });
 
     // 14. OC analysis
     const analysis = buildAnalysis(p, {
@@ -880,9 +943,10 @@ const TaxPaymentPlanner = (() => {
       missedFedCount:      missedFed.length,
       missedStateCount:    missedState.length,
       effectiveWithholdMonth,
-      ira1: { rmdMonth: ira1.origRmdMonth, planARmdMonth: ira1.planARmdMonth, convMonth: ira1.planAConvMonth, hasConflict: ira1.hasConflict, withheld: ira1Withheld },
-      ira2: { rmdMonth: ira2.origRmdMonth, planARmdMonth: ira2.planARmdMonth, convMonth: ira2.planAConvMonth, hasConflict: ira2.hasConflict, withheld: ira2Withheld },
+      ira1: { rmdMonth: ira1.origRmdMonth, planARmdMonth: ira1.planARmdMonth, convMonth: ira1.planAConvMonth, hasConflict: ira1.hasConflict, withheld: ira1Withheld, convPassed: ira1ConvPassed, passedOrigMonth: ira1.passedOrigMonth },
+      ira2: { rmdMonth: ira2.origRmdMonth, planARmdMonth: ira2.planARmdMonth, convMonth: ira2.planAConvMonth, hasConflict: ira2.hasConflict, withheld: ira2Withheld, convPassed: ira2ConvPassed, passedOrigMonth: ira2.passedOrigMonth },
       todayDate: today,
+      coverageSummary,
     };
 
     // 16. Plan B (December baseline) when any IRA has a Roth conversion
@@ -1040,7 +1104,7 @@ const TaxPaymentPlanner = (() => {
     const ira2DrawTotal = p.ira2Rmd + p.ira2Voluntary;
     if (ira1DrawTotal > 0) lines.push(`IRA 1    : draw ${MONTH_NAMES[summary.ira1.planARmdMonth-1]}` + (p.ira1RothConversion > 0 ? `  | conversion ${MONTH_NAMES[summary.ira1.convMonth-1]}` : ''));
     if (ira2DrawTotal > 0) lines.push(`IRA 2    : draw ${MONTH_NAMES[summary.ira2.planARmdMonth-1]}` + (p.ira2RothConversion > 0 ? `  | conversion ${MONTH_NAMES[summary.ira2.convMonth-1]}` : ''));
-    lines.push(`Effective withhold month: ${MONTH_NAMES[summary.effectiveWithholdMonth-1]}  |  IRA OC factor: ${fmtPct(analysis.iraOcFactor, 1)} yrs`);
+    lines.push(`Effective withhold month: ${MONTH_NAMES[summary.effectiveWithholdMonth-1]}  |  Opportunity Cost factor: ${fmtPct(analysis.iraOcFactor, 1)} yrs`);
     lines.push(`OC savings vs. all-brokerage: ${fmt$(summary.savingsVsWorst)}`);
 
     if (summary.missedFedCount > 0 || summary.missedStateCount > 0) {
@@ -1145,7 +1209,7 @@ const TaxPaymentPlanner = (() => {
     h += badge(stateInfo.name, fmt$(p.stateTax), '#9C4A00');
     h += badge('Total Tax', fmt$(summary.totalTaxDue), '#222');
     h += badge('IRA Coverage', fmtPct(summary.iraCoveragePct), '#2E75B6');
-    h += badge('Opp. Cost', fmt$(summary.opportunityCost), '#596A2F');
+    h += badge('Opportunity Cost', fmt$(summary.opportunityCost), '#596A2F');
     h += badge('Saves vs Brokerage', fmt$(summary.savingsVsWorst), '#375623');
     h += `</div>`;
 
@@ -1158,7 +1222,7 @@ const TaxPaymentPlanner = (() => {
     if (ira2DrawTotal > 0) h += `IRA 2 draw: <strong>${MONTH_NAMES[summary.ira2.planARmdMonth-1]}</strong>` +
       (p.ira2RothConversion > 0 ? ` / conv: <strong>${MONTH_NAMES[summary.ira2.convMonth-1]}</strong>` : '') + ` &nbsp;|&nbsp; `;
     h += `Effective withhold: <strong>${MONTH_NAMES[summary.effectiveWithholdMonth-1]}</strong> &nbsp;|&nbsp; `;
-    h += `IRA OC factor: <strong>${fmtPct(analysis.iraOcFactor, 1)}</strong>`;
+    h += `Opp. Cost factor: <strong>${fmtPct(analysis.iraOcFactor, 1)}</strong>`;
     if (summary.stateIraExempt) h += ` &nbsp;|&nbsp; <span style="color:#2E7D32;font-weight:600;">${stateInfo.name}: IRA-exempt ✓</span>`;
     else if (!summary.stateHasIncomeTax) h += ` &nbsp;|&nbsp; <span style="color:#2E7D32;font-weight:600;">${stateInfo.name}: no income tax ✓</span>`;
     h += `</div>`;
@@ -1213,6 +1277,63 @@ const TaxPaymentPlanner = (() => {
       h += `<div style="font-size:0.81em;color:#555;border-top:1px solid #ddd;padding-top:8px;">`;
       h += `⚠️ <strong>First-year only.</strong> Early conversion provides compounding Roth growth for every subsequent year. Even when Plan B wins on the first-year number, Plan A often wins on a 5–10 year horizon.`;
       h += `</div></div></div>`;
+    }
+
+    // ── Coverage summary table ─────────────────────────────────────────────
+    {
+      const cs = summary.coverageSummary;
+      const rows = [
+        { label: 'IRA 1 withholding',         fed: cs.ira1Draw.fed,   state: cs.ira1Draw.state,   show: cs.ira1Draw.fed + cs.ira1Draw.state > 0 },
+        { label: 'IRA 2 withholding',         fed: cs.ira2Draw.fed,   state: cs.ira2Draw.state,   show: cs.ira2Draw.fed + cs.ira2Draw.state > 0 },
+        { label: 'Conversion withholding',    fed: cs.conversion.fed, state: cs.conversion.state, show: cs.conversion.fed + cs.conversion.state > 0 },
+        { label: 'Quarterly estimated taxes', fed: cs.quarterly.fed,  state: cs.quarterly.state,  show: cs.quarterly.fed + cs.quarterly.state > 0 },
+      ].filter(r => r.show);
+
+      const totalFed   = rows.reduce((s, r) => s + r.fed,   0);
+      const totalState = rows.reduce((s, r) => s + r.state, 0);
+      const totalAll   = totalFed + totalState;
+      const taxDue     = summary.totalTaxDue;
+      const balanced   = Math.abs(totalAll - taxDue) < 2;
+
+      h += `<div style="margin:12px 0;border:1px solid #BDD7EE;border-radius:6px;overflow:hidden;">`;
+      h += `<div style="background:#2E75B6;color:#fff;padding:8px 16px;font-weight:700;font-size:0.92em;">📊 Tax Coverage Summary</div>`;
+      h += `<table style="width:100%;border-collapse:collapse;font-size:0.88em;">`;
+      h += `<thead><tr style="background:#EBF3FB;">`;
+      h += `<th style="padding:6px 12px;text-align:left;color:#1F4E79;">Payment Source</th>`;
+      h += `<th style="padding:6px 12px;text-align:right;color:#1F4E79;">Federal</th>`;
+      h += `<th style="padding:6px 12px;text-align:right;color:#1F4E79;">State</th>`;
+      h += `<th style="padding:6px 12px;text-align:right;color:#1F4E79;">Total</th>`;
+      h += `</tr></thead><tbody>`;
+      rows.forEach((r, i) => {
+        const bg = i % 2 === 0 ? '#fff' : '#F9F9F9';
+        h += `<tr style="background:${bg};border-bottom:1px solid #eee;">`;
+        h += `<td style="padding:6px 12px;">${r.label}</td>`;
+        h += `<td style="padding:6px 12px;text-align:right;">${r.fed > 0 ? fmt$(r.fed) : '—'}</td>`;
+        h += `<td style="padding:6px 12px;text-align:right;">${r.state > 0 ? fmt$(r.state) : '—'}</td>`;
+        h += `<td style="padding:6px 12px;text-align:right;font-weight:600;">${fmt$(r.fed + r.state)}</td>`;
+        h += `</tr>`;
+      });
+      h += `<tr style="background:#E2EFDA;font-weight:700;border-top:2px solid #2E75B6;">`;
+      h += `<td style="padding:7px 12px;">Total covered</td>`;
+      h += `<td style="padding:7px 12px;text-align:right;">${fmt$(totalFed)}</td>`;
+      h += `<td style="padding:7px 12px;text-align:right;">${fmt$(totalState)}</td>`;
+      h += `<td style="padding:7px 12px;text-align:right;">${fmt$(totalAll)}</td>`;
+      h += `</tr>`;
+      h += `<tr style="background:#F5F5F5;border-top:1px solid #ccc;">`;
+      h += `<td style="padding:6px 12px;color:#555;">Tax due</td>`;
+      h += `<td style="padding:6px 12px;text-align:right;color:#555;">${fmt$(p.federalTax)}</td>`;
+      h += `<td style="padding:6px 12px;text-align:right;color:#555;">${fmt$(p.stateTax)}</td>`;
+      h += `<td style="padding:6px 12px;text-align:right;color:#555;">${fmt$(taxDue)}</td>`;
+      h += `</tr>`;
+      const balColor = balanced ? '#1B5E20' : '#8B0000';
+      const balText  = balanced
+        ? `✓ Fully covered`
+        : `${fmt$(Math.abs(taxDue - totalAll))} ${totalAll < taxDue ? 'uncovered — check inputs' : 'over-withheld (refund expected)'}`;
+      h += `<tr style="background:${balanced ? '#E8F5E9' : '#FFECEC'};">`;
+      h += `<td colspan="3" style="padding:6px 12px;font-weight:700;color:${balColor};">${balText}</td>`;
+      h += `<td style="padding:6px 12px;text-align:right;font-weight:700;color:${balColor};">${balanced ? '' : fmt$(Math.abs(taxDue - totalAll))}</td>`;
+      h += `</tr>`;
+      h += `</tbody></table></div>`;
     }
 
     // ── Render one action list ─────────────────────────────────────────────
@@ -1300,13 +1421,20 @@ const TaxPaymentPlanner = (() => {
     h += `<div style="font-size:0.84em;color:#555;padding:0 4px 6px;">Reference date: April 15 filing deadline. `;
     h += `HYSA net: ${fmtPct(summary.hysaNet, 2)} (${fmtPct(p.hysaGross)} × (1−${fmtPct(p.marginalOrdRate)})). `;
     h += `Break-even: r/2 = ${fmtPct(summary.breakeven, 2)}. `;
-    h += `Effective withhold month: ${MONTH_NAMES[summary.effectiveWithholdMonth-1]} → IRA OC factor: ${fmtPct(analysis.iraOcFactor, 1)}.`;
+    h += `Effective withhold month: ${MONTH_NAMES[summary.effectiveWithholdMonth-1]} → Opportunity Cost factor: ${fmtPct(analysis.iraOcFactor, 1)}.`;
     h += `</div>`;
 
     h += `<table style="width:100%;border-collapse:collapse;font-size:0.88em;margin-bottom:16px;">`;
     h += `<thead><tr style="background:#2E75B6;color:#fff;">`;
-    ['Strategy','Opp. Cost','Extra CG Tax','Total Extra Cost','vs. This Plan'].forEach(hdr => {
-      h += `<th style="padding:7px 10px;text-align:${hdr === 'Strategy' ? 'left' : 'right'};">${hdr}</th>`;
+    [
+      { label: 'Strategy',          title: '',                                                                   left: true },
+      { label: 'Opportunity Cost',  title: 'Foregone portfolio growth while tax money sits outside the IRA',     left: false },
+      { label: 'Extra CG Tax',      title: 'Capital Gains tax triggered by selling appreciated brokerage shares', left: false },
+      { label: 'Total Extra Cost',  title: 'Opportunity Cost + Capital Gains tax vs. this plan',                 left: false },
+      { label: 'vs. This Plan',     title: 'Additional cost compared to the recommended strategy',               left: false },
+    ].forEach(col => {
+      const titleAttr = col.title ? ` title="${col.title}"` : '';
+      h += `<th style="padding:7px 10px;text-align:${col.left ? 'left' : 'right'};cursor:${col.title ? 'help' : 'default'};"${titleAttr}>${col.label}${col.title ? ' ℹ️' : ''}</th>`;
     });
     h += `</tr></thead><tbody>`;
 

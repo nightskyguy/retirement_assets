@@ -1147,9 +1147,9 @@ assertEqual(
 		// Provisional income = 50000 + 0.5*20000 = 60000 > 44000
 		// Tier1=6000, Tier2=0.85*(60000-44000)=13600 → total=19600, max=0.85*20000=17000
 		// taxableSS=17000, AGI=50000+17000=67000
-		// OBBBA: 2 seniors, rawSenDed=8000, phaseoutExcess=max(0,67000-150000)=0
+		// OBBBA: 2 seniors, rawSenDed=12000, phaseoutExcess=max(0,67000-150000)=0
 		assertEqual(result.AGI, 67000, 'AGI');
-		assertEqual(result.seniorDeduction, 8000, 'Senior Deduction (full, below phase-out)');
+		assertEqual(result.seniorDeduction, 12000, 'Senior Deduction (full, below phase-out)');
 		assertEqual(result.useItemized, false, 'Not itemizing (SALT < std deduction)');
 	} // testCase10_OBBASeniorDeductionFull()
 
@@ -1175,9 +1175,9 @@ assertEqual(
 		});
 
 		// AGI = 200000; phaseoutExcess = 200000-150000 = 50000
-		// seniorDeduction = max(0, 8000 - 50000*0.06) = max(0, 8000-3000) = 5000
+		// seniorDeduction = max(0, 12000 - 50000*0.06) = max(0, 12000-3000) = 9000
 		assertEqual(result.AGI, 200000, 'AGI');
-		assertEqual(result.seniorDeduction, 5000, 'Senior Deduction (partial phase-out)');
+		assertEqual(result.seniorDeduction, 9000, 'Senior Deduction (partial phase-out)');
 	} // testCase11_OBBASeniorDeductionPartial()
 
 	// ============================================================================
@@ -1267,7 +1267,7 @@ assertEqual(
 	} // testCase14_SALTCapNotWorth()
 
 	// ============================================================================
-	// TEST CASE 15: SALT cap mid-phase-out (MAGI $520k → cap reduced to $20k)
+	// TEST CASE 15: SALT cap mid-phase-out (MAGI $540k → cap reduced to $28k, below std ded)
 	// ============================================================================
 	function testCase15_SALTPhaseoutMid() {
 		console.log('\n=== Test Case 15: SALT Cap Mid Phase-Out ===');
@@ -1275,7 +1275,7 @@ assertEqual(
 		const result = calculateTaxes({
 			filingStatus: 'MFJ',
 			ages: [55, 53],
-			earnedIncome: 520000,
+			earnedIncome: 540000,
 			totalSS: 0,
 			ordDivInterest: 0,
 			qualifiedDiv: 0,
@@ -1288,11 +1288,11 @@ assertEqual(
 			saltHigh: true
 		});
 
-		// saltMagi = 520000; excess = 520000-500000 = 20000
-		// saltCap = max(10000, 40000 - 20000) = 20000
-		// stateTax on 510000 (520000-10000 std) =
-		//   50000*0.05 + 50000*0.10 + 410000*0.15 = 2500+5000+61500 = 69000
-		// saltItemized = min(69000, 20000) = 20000 > federalStd=32200? No: 20000 < 32200
+		// saltMagi = 540000; excess = 540000-500000 = 40000
+		// saltCap = max(10000, 40000 - 40000*0.30) = max(10000, 28000) = 28000
+		// stateTax on 530000 (540000-10000 std) =
+		//   50000*0.05 + 50000*0.10 + 430000*0.15 = 2500+5000+64500 = 72000
+		// saltItemized = min(72000, 28000) = 28000 > federalStd=32200? No: 28000 < 32200
 		// → useItemized=false (phased-out cap fell below standard deduction)
 		assertEqual(result.useItemized, false, 'Phased-out SALT cap falls below std deduction');
 		assertEqual(result.federalStdDeduction, 32200, 'Uses standard deduction after phase-out');

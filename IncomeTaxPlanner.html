@@ -10,7 +10,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Income Tax Planner · 2026+ · v2</title>
+<title>Income Tax Planner · 2026+ · v2.1</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -125,15 +125,24 @@
   .zoom-btn:hover { border-color:var(--teal); color:var(--teal); }
   .zoom-btn.active { background:rgba(25,201,157,.15); border-color:rgba(25,201,157,.4); color:var(--teal); }
   .zoom-btn.zoomed { border-color:rgba(245,166,35,.5); color:var(--amber); }
+  /* ── dual range zoom slider ── */
+  .zoom-slider-row { display:flex; align-items:center; gap:.55rem; padding:.3rem .4rem; }
+  .zoom-slider-lbl { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
+  .zoom-slider-readout { font-family:var(--mono); font-size:11px; color:var(--teal); white-space:nowrap; min-width:9rem; text-align:right; }
+  .range-wrap { position:relative; flex:1; height:18px; }
+  .range-wrap input[type=range] { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); width:100%; height:3px; background:transparent; pointer-events:none; }
+  .range-wrap input[type=range]::-webkit-slider-thumb { pointer-events:all; }
+  .range-wrap input[type=range]::-moz-range-thumb { pointer-events:all; }
+  .range-track-fill { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); height:3px; border-radius:2px; pointer-events:none; }
 </style>
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="taxengine.js"></script>
 <script src="retirement_optimizer_core.js"></script>
-<script src="retirement_optimizer_tests.js"></script>
+<script src="retirement_optimizer_tests.js?v=2"></script>
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner<span class="ver">v2</span></h1>
+  <h1>Income Tax Planner<span class="ver">v2.1</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · 2026–2035 with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
@@ -172,6 +181,7 @@
         <option value="CT">Connecticut</option>
         <option value="DC">Washington D.C.</option>
         <option value="GA">Georgia</option>
+        <option value="ID">Idaho</option>
         <option value="IL">Illinois</option>
         <option value="MD">Maryland</option>
         <option value="MI">Michigan</option>
@@ -287,6 +297,17 @@
         </div>
       </div>
       <canvas id="chart-main" height="240"></canvas>
+      <div class="zoom-slider-row">
+        <span class="zoom-slider-lbl">View</span>
+        <div class="range-wrap" id="zoom-range-wrap">
+          <div class="range-track-fill" id="zoom-track-fill"></div>
+          <input type="range" id="sl-zoom-lo" min="0" max="1100000" step="10000" value="30000"
+                 oninput="onZoomLoInput()">
+          <input type="range" id="sl-zoom-hi" min="0" max="1100000" step="10000" value="620000"
+                 oninput="onZoomHiInput()">
+        </div>
+        <span class="zoom-slider-readout" id="zoom-readout">$30k – $620k</span>
+      </div>
       <div class="info-panel" id="info-panel">
         <div class="info-default">Click a column to pin · hover for quick summary</div>
       </div>
@@ -349,8 +370,10 @@ function calcAt(ordInc) {
   const medGrowth = Math.pow(1 + medicareExtra / 100, year - BASE_YEAR);
   const cgGain    = cgSale > 0 ? cgSale * (1 - cgBasisPct / 100) : 0;
 
-  // Suppress saltHigh after OBBBA SALT provisions sunset
+  // Suppress saltHigh after OBBBA SALT provisions sunset (2030+)
   const effectiveSaltHigh = saltHigh && year <= obbaSalt.sunsetYear;
+  // Suppress senior deduction after its sunset (2029+); SALT elevated cap continues through 2029
+  const effectiveObbaOn = obbaOn && year <= obbaSen.sunsetYear;
 
   const r = calculateTaxes({
     filingStatus:    status,
@@ -360,7 +383,7 @@ function calcAt(ordInc) {
     capGains:        cgGain,
     inflation:       inf,
     state:           state,
-    obbaOn:          obbaOn,
+    obbaOn:          effectiveObbaOn,
     saltHigh:        effectiveSaltHigh,
     propTax:         propTax,
     irmaaAnnualCost: 0   // computed below from MAGI
@@ -383,13 +406,14 @@ function calcAt(ordInc) {
     senDed:    r.seniorDeduction,
     fedDed:    r.federalStdDeduction,
     stDed:     r.stateStdDeduction,
+    stMarg:    r.stateMarginalRate,
     cgGain
   };
 }
 
 // ─── ZOOM STATE ──────────────────────────────────────────────────────────────
-let zoomMin      = 0;
-let zoomMax      = FULL_MAX;
+let zoomMin      = 30_000;
+let zoomMax      = 620_000;
 let zoomStep     = FULL_STEP;
 let autoZoomOn   = true;
 let pinnedIncome = null;  // actual $ income value of pinned column (null = none)
@@ -454,6 +478,44 @@ function toggleAutoZoom() {
 function updateZoomUI() {
   document.getElementById('btn-autozoom').classList.toggle('active', autoZoomOn);
   document.getElementById('btn-full').classList.toggle('zoomed', !isFullZoom());
+  syncRangeSlider();
+}
+
+function syncRangeSlider() {
+  const lo = document.getElementById('sl-zoom-lo');
+  const hi = document.getElementById('sl-zoom-hi');
+  const fill = document.getElementById('zoom-track-fill');
+  const readout = document.getElementById('zoom-readout');
+  if (!lo || !hi) return;
+  lo.value = zoomMin;
+  hi.value = zoomMax;
+  lo.style.zIndex = zoomMin > FULL_MAX / 2 ? '2' : '1';
+  hi.style.zIndex = zoomMin > FULL_MAX / 2 ? '1' : '2';
+  const loF = zoomMin / FULL_MAX * 100;
+  const hiF = zoomMax / FULL_MAX * 100;
+  fill.style.background =
+    `linear-gradient(to right,var(--border) 0%,var(--border) ${loF}%,` +
+    `var(--teal) ${loF}%,var(--teal) ${hiF}%,var(--border) ${hiF}%,var(--border) 100%)`;
+  const fmt = v => v === 0 ? '$0' : `$${(v/1000).toLocaleString(undefined,{maximumFractionDigits:0})}k`;
+  readout.textContent = `${fmt(zoomMin)} – ${fmt(zoomMax)}`;
+}
+
+const ZOOM_MIN_GAP = 50_000;
+
+function onZoomLoInput() {
+  let lo = +document.getElementById('sl-zoom-lo').value;
+  lo = Math.round(Math.min(lo, zoomMax - ZOOM_MIN_GAP) / FULL_STEP) * FULL_STEP;
+  zoomMin = Math.max(lo, 0);
+  zoomStep = pickStep(zoomMax - zoomMin);
+  updateZoomUI(); run();
+}
+
+function onZoomHiInput() {
+  let hi = +document.getElementById('sl-zoom-hi').value;
+  hi = Math.round(Math.max(hi, zoomMin + ZOOM_MIN_GAP) / FULL_STEP) * FULL_STEP;
+  zoomMax = Math.min(hi, FULL_MAX);
+  zoomStep = pickStep(zoomMax - zoomMin);
+  updateZoomUI(); run();
 }
 
 // Stored sweep results for info panel access
@@ -625,7 +687,7 @@ function fakeIRMAA() {
 }
 
 // ─── COMBINED CHART ───────────────────────────────────────────────────────────
-// Dataset slot indices: 0-3 rate lines, 4-8 dollar bars, 9 MAGI line, 10-14 fake IRMAA
+// Dataset slot indices: 0-4 rate lines, 5-9 dollar bars, 10 MAGI line, 11-15 fake IRMAA
 function renderChart(data) {
   const pct = v => parseFloat((v*100).toFixed(2));
 
@@ -634,7 +696,8 @@ function renderChart(data) {
   const stEff  = data.map(d => pct(d.stEff));
   const totEff = data.map(d => pct(d.totEff));
   const fedMrg = data.map(d => pct(Math.max(0, d.fedMarg)));
-  const yRMax  = Math.ceil(Math.max(...fedMrg, ...totEff, 40) / 5) * 5 + 5;
+  const stMrg  = data.map(d => pct(Math.max(0, d.stMarg)));
+  const yRMax  = Math.ceil(Math.max(...fedMrg, ...stMrg, ...totEff, 40) / 5) * 5 + 5;
 
   // Dollar datasets
   const fedOrd = data.map(d => Math.round(d.fedTax));
@@ -662,12 +725,13 @@ function renderChart(data) {
     ds[1].data = stEff;
     ds[2].data = totEff;
     ds[3].data = fedMrg;
-    ds[4].data = fedOrd;
-    ds[5].data = fedCG;
-    ds[6].data = irmaaD;
-    ds[7].data = stOrd;
-    ds[8].data = stCG;
-    ds[9].data = magiD;
+    ds[4].data = stMrg;
+    ds[5].data = fedOrd;
+    ds[6].data = fedCG;
+    ds[7].data = irmaaD;
+    ds[8].data = stOrd;
+    ds[9].data = stCG;
+    ds[10].data = magiD;
     chartMain.options.scales.yR.max = yRMax;
     chartMain.options.scales.yD.max = yDMax;
     chartMain.options.scales.y2.max = y2Max;
@@ -696,6 +760,9 @@ function renderChart(data) {
           borderWidth:2.5, pointRadius:0, tension:0, yAxisID:'yR', hidden:inR },
         { _rateDs:true, type:'line', label:'Fed Marginal (Ord+CG)',
           data:fedMrg, borderColor:'#a78bfa', backgroundColor:'transparent',
+          borderWidth:1.8, pointRadius:0, tension:0, borderDash:[6,3], yAxisID:'yR', hidden:inR },
+        { _rateDs:true, type:'line', label:'State Marginal',
+          data:stMrg, borderColor:'#facc15', backgroundColor:'transparent',
           borderWidth:1.8, pointRadius:0, tension:0, borderDash:[6,3], yAxisID:'yR', hidden:inR },
         // ─ DOLLAR BARS ─
         { _dollarDs:true, type:'bar', label:'Federal Ordinary Tax',
@@ -748,10 +815,14 @@ function renderChart(data) {
               if (!d) return [];
               return [
                 ` Eff ${(d.totEff*100).toFixed(1)}%   Fed ${(d.fedEff*100).toFixed(1)}%   St ${(d.stEff*100).toFixed(1)}%`,
-                ` Marg ${(d.fedMarg*100).toFixed(1)}%   Tax $${Math.round(d.totalTax).toLocaleString()}`
+                ` Fed Marg ${(d.fedMarg*100).toFixed(1)}%   St Marg ${(d.stMarg*100).toFixed(1)}%   Tax $${Math.round(d.totalTax).toLocaleString()}`
               ];
             },
             label: () => undefined,
+            labelColor(item) {
+              const c = item.dataset.borderColor;
+              return { borderColor: c, backgroundColor: c };
+            },
             footer(items) {
               if (!items.length) return [];
               const idx = items[0].dataIndex;
@@ -938,8 +1009,8 @@ function renderSummary(data) {
     `<div><strong>OBBBA:</strong> ${cfg.obbaOn?'<span class="hi-teal">ON</span>':'<span class="hi-amber">OFF</span>'} · SALT cap $${saltCap.toLocaleString()}</div>`,
     `<div><strong>Federal std. ded.:</strong> $${Math.round(stdF).toLocaleString()} (${nSen} bump${nSen!==1?'s':''})</div>`,
   ];
-  if (cfg.obbaOn && nSen>0)
-    rows.push(`<div><strong>OBBBA senior ded.:</strong> up to $${(obbaSen.perSenior*nSen).toLocaleString()}, phases out above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()}</div>`);
+  if (cfg.obbaOn && nSen>0 && cfg.year <= obbaSen.sunsetYear)
+    rows.push(`<div><strong>OBBBA senior ded.:</strong> up to $${(obbaSen.perSenior*nSen).toLocaleString()}, phases out above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} (expires after ${obbaSen.sunsetYear})</div>`);
   if (cfg.cgSale > 0)
     rows.push(`<div><strong>Capital gains:</strong> $${cgGain.toLocaleString()} taxable gain on $${cfg.cgSale.toLocaleString()} sale (${(100-cfg.cgBasisPct).toFixed(0)}% gain rate)</div>`);
   if (sample)
@@ -961,8 +1032,8 @@ function renderAssumptions() {
     <div><strong>Social Security:</strong> Provisional income = ordinary income + CG + ½ SS (real treatment). Thresholds $32k/$44k MFJ; $25k/$34k SGL — NOT inflation-adjusted per current law.</div>
     <div><strong>Capital gains:</strong> Federal uses combined CG+NIIT brackets (stacked on top of ordinary taxable income). State taxes CG at ordinary income rates (marginal increase). CG adds to MAGI and SS provisional income.</div>
     <div><strong>IRMAA:</strong> Step function applied to MAGI at each income level (2-year lookback "cheated" to current year). IRMAA costs grow at inflation + Medicare extra rate; expressed in 2026-base dollars. <span class="warn">IRMAA bracket values from TAXData — verify against CMS for exact 2026 amounts.</span></div>
-    <div><strong>OBBBA senior ded.:</strong> $${obbaSen.perSenior.toLocaleString()}/person ≥ 65. Phase-out at ${(obbaSen.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} AGI. <span class="warn">Phase-out parameters are estimates.</span></div>
-    <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing. OBBBA $${obbaSalt.capHigh.toLocaleString()} cap phases out $1-for-$1 above $${obbaSalt.phaseoutThreshold.toLocaleString()} MAGI, flooring at $${obbaSalt.capLow.toLocaleString()} (fully phased out at $${(obbaSalt.phaseoutThreshold + obbaSalt.capHigh - obbaSalt.capLow).toLocaleString()} MAGI); sunsets after ${obbaSalt.sunsetYear}. <span class="warn">Phase-out threshold and sunset year are estimates — verify with IRS guidance.</span></div>
+    <div><strong>OBBBA senior ded.:</strong> $${obbaSen.perSenior.toLocaleString()}/person ≥ 65. Phase-out at ${(obbaSen.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} AGI (P.L. 119-21; expires after ${obbaSen.sunsetYear}).</div>
+    <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing. OBBBA $${obbaSalt.capHigh.toLocaleString()} cap phases out ${(obbaSalt.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSalt.phaseoutThreshold.toLocaleString()} MAGI, flooring at $${obbaSalt.capLow.toLocaleString()} (fully phased out at $${(obbaSalt.phaseoutThreshold + Math.round((obbaSalt.capHigh - obbaSalt.capLow)/obbaSalt.phaseoutRate)).toLocaleString()} MAGI); sunsets after ${obbaSalt.sunsetYear}.</div>
     <div><strong>Top x-axis:</strong> Total income = ordinary income + Social Security + CG gain at each sweep point (fixed SS and CG amounts).</div>
     <div><strong>Excluded:</strong> AMT, SE tax, CA SDI, muni interest, qualif. dividends, CA personal exemption credits. Effective rate denominator = ordinary + SS + CG gain.</div>
   `;
@@ -1209,6 +1280,7 @@ function loadFromURL() {
   }
   if (p.has('az')) autoZoomOn = p.get('az') !== '0';
   updCgBasis();
+  syncRangeSlider();
 }
 </script>
 
@@ -1216,55 +1288,78 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner v2 — How to Use</h2>
+      <h2>Income Tax Planner v2.1 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+    </div>
+
+    <div class="modal-section">
+      <p class="modal-warn">&#9888; This tool is not guaranteed to be accurate. Use at your own risk.</p>
     </div>
 
     <div class="modal-section">
       <h3>What questions does this answer?</h3>
       <dl class="modal-kv">
         <dt>A · Marginal sensitivity</dt>
-        <dd>How does my total tax burden change if my income is $10k higher or lower? The chart shows the full sweep so you can see cliffs, humps, and flat regions at a glance.</dd>
+        <dd>How does my total tax burden change as income shifts? Zoom in on your income range for fine-grained detail — the chart step size shrinks automatically. Cliffs, humps, and flat regions are all visible at a glance.</dd>
         <dt>B · Sweet spots &amp; danger zones</dt>
-        <dd>Where are the SS torpedo, IRMAA tier crossings, and NIIT threshold? The vertical reference lines and marginal rate curve (purple dashed) make them immediately visible.</dd>
+        <dd>Where are the SS torpedo, IRMAA tier crossings, and NIIT threshold? The vertical reference lines and marginal rate curves (purple and yellow dashed) make them immediately visible.</dd>
         <dt>C · True all-in effective rate</dt>
         <dd>Federal + state + IRMAA combined, not just the marginal bracket. The white line on the Tax Rates view is the number that actually matters for planning.</dd>
         <dt>D · Withholding guidance</dt>
         <dd>Hover your expected income on the chart. The info panel below shows every component — rates and dollars — simultaneously at that income level.</dd>
+        <dt>E · Filing status changes</dt>
+        <dd>Switch the Filing Status control between MFJ and Single to see how marriage or becoming single shifts your brackets, standard deduction, IRMAA tiers, and effective rates — at every income level simultaneously.</dd>
+        <dt>F · State changes</dt>
+        <dd>Select a different state to instantly see how a move reshapes your all-in effective rate. States with no income tax, flat taxes, and progressive brackets all produce visibly different curves.</dd>
+        <dt>G · Aging and future-year projections</dt>
+        <dd>Increment your age to see how turning 65 (Medicare, IRMAA) or 73 (RMDs) affects the picture. Change the year to model the same income in the future — OBBBA senior deduction and SALT cap provisions sunset at different years, so you can see the tax landscape before and after those cliffs.</dd>
       </dl>
     </div>
 
     <div class="modal-section">
       <h3>How the income sweep works</h3>
-      <p>The x-axis sweeps <strong>ordinary income</strong> from $0 to $1.1M in $10k steps. Ordinary income covers wages, IRA/401k withdrawals, pensions, and RMDs — anything taxed at regular rates. <strong>Social Security</strong> and <strong>capital gains</strong> are entered as fixed amounts that apply at every point across the sweep, letting you see how they interact with the income ramp. The top x-axis shows the <strong>total income</strong> (ordinary + SS + CG gain) at each corresponding point.</p>
+      <p>The x-axis sweeps <strong>ordinary income</strong> across the visible range (default $30k–$620k; the View slider can extend it up to $1.1M). Ordinary income covers wages, IRA/401k withdrawals, pensions, and RMDs — anything taxed at regular rates. <strong>Social Security</strong> and <strong>capital gains</strong> are entered as fixed amounts that apply at every point across the sweep, letting you see how they interact with the income ramp. The top x-axis shows the <strong>total income</strong> (ordinary + SS + CG gain) at each corresponding point.</p>
+      <p style="margin-top:.5rem">The step size between data points and the x-axis label spacing both adapt automatically to the visible range — zoom into a narrower window and you get finer granularity with denser labels.</p>
+    </div>
+
+    <div class="modal-section">
+      <h3>Chart controls</h3>
+      <ul>
+        <li><strong>Tax Rates / Tax Dollars</strong> — toggles the chart between rate lines (effective + marginal) and dollar-amount stacked bars.</li>
+        <li><strong>Legend items</strong> — click any entry in the legend to toggle that line or bar series on/off. Useful for hiding distracting lines (e.g. IRMAA tiers you don't need).</li>
+        <li><strong>Click a column</strong> — pins that income level so the info panel stays visible. With AutoZoom on, clicking also centers and zooms the chart around that income level, adjusting the label step size automatically.</li>
+        <li><strong>AutoZoom button</strong> — when active (teal), clicking a column auto-zooms to a window around that income. Toggle it off to pin without zooming.</li>
+        <li><strong>Full button</strong> — resets the view back to the full $0–$1.1M range.</li>
+        <li><strong>View slider</strong> (below the chart) — drag either handle to set the lower or upper bound of the visible income range directly. The chart redraws and label spacing adapts immediately. The slider and AutoZoom/Full buttons all stay in sync.</li>
+      </ul>
     </div>
 
     <div class="modal-section">
       <h3>The chart</h3>
       <ul>
-        <li><strong>Tax Rates view</strong> — federal effective (blue), state effective (orange), total effective (white), and federal marginal on ordinary income + CG (purple dashed).</li>
+        <li><strong>Tax Rates view</strong> — federal effective (blue), state effective (orange), total effective (white), federal marginal on ordinary income + CG (purple dashed), and state marginal (yellow dashed).</li>
         <li><strong>Tax Dollars view</strong> — stacked bars for Federal Ordinary, Federal CG, IRMAA, State Ordinary, and State CG. The teal line (right axis) is your MAGI — the figure used to determine next year's IRMAA tier.</li>
         <li><strong>Info panel</strong> — hovering the chart shows all rates and dollar amounts for that income level simultaneously, regardless of which view is active.</li>
         <li><strong>IRMAA tier lines</strong> — click any IRMAA entry in the legend (Tax Dollars view) to toggle its vertical reference line.</li>
-        <li><strong>Top axis</strong> — shows total income (ordinary + SS + CG) at each $100k ordinary income mark. When SS and CG are zero it matches the bottom axis.</li>
-      </ul>
-    </div>
-
-    <div class="modal-section">
-      <h3>Caveats &amp; known simplifications</h3>
-      <ul>
-        <li><strong>IRMAA lookback:</strong> Medicare IRMAA uses your MAGI from <em>two years prior</em>. This tool applies it to <em>current-year</em> MAGI — convenient for planning but optimistic by about two years if you've recently had a high-income year.</li>
-        <li><strong>OBBBA provisions</strong> (senior deduction, elevated SALT cap) are modeled from best-available bill text as of mid-2025. All parameters (phase-out thresholds, caps, sunset year) are sourced from <code>TAXData.OBBBA</code> — update that block when IRS guidance is published. The $40k SALT cap automatically reverts to $10k for years after ${obbaSalt.sunsetYear}.</li>
-        <li><strong>Nebraska brackets</strong> are approximate based on the LB754 phase-down schedule; confirm with NE DOR for your specific year.</li>
-        <li><strong>SS provisional income thresholds</strong> ($32k/$44k MFJ, $25k/$34k Single) are intentionally <em>not</em> inflation-adjusted — that is current law, and the reason the SS torpedo worsens over time.</li>
-        <li><strong>NIIT threshold</strong> ($250k MFJ / $200k Single) is also not inflation-indexed — another orphan in the tax code, unchanged since 2013.</li>
-        <li><strong>Excluded:</strong> AMT, self-employment tax, CA SDI, qualified dividends (modeled as CG), muni bond interest, CA personal exemption credits.</li>
+        <li><strong>Top axis</strong> — shows total income (ordinary + SS + CG) at each major ordinary income mark. When SS and CG are zero it matches the bottom axis.</li>
       </ul>
     </div>
 
     <div class="modal-section">
       <h3>Share button</h3>
       <p>The <strong>Share</strong> button encodes all current settings into the URL and copies it to your clipboard. Paste it into any browser — or save it as a bookmark — to restore the exact same configuration. Works from a local file (<code>file://</code>) as well as a web server.</p>
+    </div>
+
+    <div class="modal-section">
+      <h3>Simplifications</h3>
+      <ul>
+        <li><strong>IRMAA lookback:</strong> Medicare IRMAA uses your MAGI from <em>two years prior</em>. This tool applies it to <em>current-year</em> MAGI — convenient for planning but optimistic by about two years if you've recently had a high-income year.</li>
+        <li><strong>OBBBA provisions</strong> (P.L. 119-21, signed July 4, 2025): the $6,000/person senior deduction applies through 2028 and phases out 6¢/$1 above $150k/$75k AGI. The $40,000 SALT cap (2025; +1%/yr through 2029) phases down 30¢/$1 above $500k MAGI and reverts to $10k in 2030. All parameters are sourced from <code>TAXData.OBBBA</code>.</li>
+        <li><strong>Nebraska brackets</strong> are approximate based on the LB754 phase-down schedule; confirm with NE DOR for your specific year.</li>
+        <li><strong>SS provisional income thresholds</strong> ($32k/$44k MFJ, $25k/$34k Single) are intentionally <em>not</em> inflation-adjusted — that is current law, and the reason the SS torpedo worsens over time.</li>
+        <li><strong>NIIT threshold</strong> ($250k MFJ / $200k Single) is also not inflation-indexed — another orphan in the tax code, unchanged since 2013.</li>
+        <li><strong>Excluded:</strong> AMT, self-employment tax, CA SDI, qualified dividends (modeled as CG), muni bond interest, CA personal exemption credits.</li>
+      </ul>
     </div>
   </div>
 </div>

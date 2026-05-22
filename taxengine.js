@@ -190,7 +190,28 @@ var TAXData = {
 		},
 		// Note: Rate will decrease 0.10% annually: 
 		// 2027: 5.09%, 2028: 4.99% (then stays at 4.99%)
-	}, // GEORGIA	
+	}, // GEORGIA
+
+	// IDAHO - flat 5.3% (HB 40, enacted March 2025, retroactive to Jan 1 2025); SS fully exempt
+	ID: {
+		STATE: 'Idaho',
+		YEAR: 2026,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		MFJ: {
+			std: 32200,
+			brackets: [
+				{ l: 9622,    r: 0.0   },  // 0% on first ~$9.6k
+				{ l: Infinity, r: 0.053 }   // 5.3% on income above threshold
+			]
+		},
+		SGL: {
+			std: 16100,
+			brackets: [
+				{ l: 4811,    r: 0.0   },
+				{ l: Infinity, r: 0.053 }
+			]
+		}
+	}, // IDAHO
 
 	// ILLINOIS - 
 	IL: {
@@ -439,20 +460,21 @@ var TAXData = {
 	
 }; // TAXdata
 
-// OBBBA provisions — update this block when law changes or provisions sunset.
+// OBBBA provisions — P.L. 119-21, signed July 4, 2025. Update this block if IRS issues amended guidance.
 // calculateTaxes() and IncomeTaxPlanner.html read from here; no values are hardcoded there.
 TAXData.OBBBA = {
     SALT: {
-        capHigh:           40000,   // elevated OBBBA cap
-        capLow:            10000,   // TCJA floor / fallback when OBBBA is off or sunset
-        phaseoutThreshold: 500000,  // MAGI above which capHigh phases out (MFJ & SGL per OBBBA)
-        phaseoutRate:      1.0,     // $1-for-$1 reduction above threshold
-        sunsetYear:        2029     // capHigh expires after this tax year; revert to capLow
+        capHigh:           40000,   // elevated cap (2025); increases 1%/yr through 2029
+        capLow:            10000,   // TCJA floor / fallback when OBBBA is off or after sunset
+        phaseoutThreshold: 500000,  // MAGI above which capHigh phases down (MFJ & SGL per OBBBA)
+        phaseoutRate:      0.30,    // 30¢ reduction per $1 above threshold ($40k→$10k over $100k of income)
+        sunsetYear:        2029     // capHigh expires after this tax year; reverts to capLow in 2030
     },
     SENIOR_DED: {
-        perSenior:    4000,                          // deduction per person aged ≥ 65
+        perSenior:    6000,                          // deduction per person aged ≥ 65 (P.L. 119-21)
         phaseoutAGI:  { MFJ: 150000, SGL: 75000 },  // AGI above which deduction phases out
-        phaseoutRate: 0.06                           // $0.06 reduction per $1 above threshold
+        phaseoutRate: 0.06,                          // $0.06 reduction per $1 above threshold
+        sunsetYear:   2028                           // deduction expires after this tax year (2025–2028 only)
     }
 };
 
@@ -592,7 +614,7 @@ function calculateTaxes(params = {}) {
     // ========================================================================
     const saltMagi = federalAGI + taxExemptInterest;
     const saltCap = (obbaOn && saltHigh)
-        ? Math.max(obbaSalt.capLow, saltBaseCap - Math.max(0, saltMagi - obbaSalt.phaseoutThreshold))
+        ? Math.max(obbaSalt.capLow, saltBaseCap - Math.max(0, saltMagi - obbaSalt.phaseoutThreshold) * obbaSalt.phaseoutRate)
         : saltBaseCap;
     const saltItemized = Math.min(stateTax + propTax, saltCap);
     const useItemized = saltItemized > federalStdDeduction;

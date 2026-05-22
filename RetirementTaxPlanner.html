@@ -182,9 +182,9 @@
     }
     #btn-print { background: #5C6BC0; color: #fff; }
     #btn-print:hover { background: #3949AB; }
-    #btn-ics   { background: #2E7D32; color: #fff; }
-    #btn-ics:hover { background: #1B5E20; }
-    #btn-ics:disabled { background: #aaa; cursor: not-allowed; }
+    #btn-copy-link { background: #00796B; color: #fff; }
+    #btn-copy-link:hover { background: #004D40; }
+    #btn-copy-link.copied { background: #2E7D32; }
 
     /* ── Print styles ────────────────────────────────────────────────── */
     @media print {
@@ -195,6 +195,7 @@
       .tab-content { display: block !important; }
       #tab-text, #tab-json { display: none !important; }
       h1 { font-size: 1.1em; margin-bottom: 8px; }
+      .plan-action-btns { display: none !important; }
     }
   </style>
 </head>
@@ -303,65 +304,49 @@
       <span>High-income filer (Fed AGI &gt; $150K → 110% safe harbor)</span>
     </label>
 
-    <div class="section-hdr">IRA 1 / Roth Draws</div>
+    <div class="section-hdr">IRA 1 Draws and Conversions</div>
     <label><span>IRA 1 RMD ($)</span>
-      <input type="number" id="ira1Rmd" value="25000" min="0">
+      <input type="number" id="ira1Rmd" value="25000" min="0" oninput="updateComputed()">
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" id="ira1RmdTaken" onchange="updateComputed()">
+      <span>RMD already taken this year</span>
     </label>
     <label><span>IRA 1 Voluntary Withdrawal ($)</span>
-      <input type="number" id="ira1Voluntary" value="30000" min="0">
+      <input type="number" id="ira1Voluntary" value="30000" min="0" oninput="updateComputed()">
     </label>
-    <label><span>IRA 1 RMD / Draw Month</span>
-      <select id="ira1RmdMonth">
-        <option value="1">January</option><option value="2">February</option>
-        <option value="3">March</option><option value="4">April</option>
-        <option value="5">May</option><option value="6">June</option>
-        <option value="7">July</option><option value="8">August</option>
-        <option value="9">September</option><option value="10">October</option>
-        <option value="11">November</option><option value="12" selected>December</option>
-      </select>
+    <label class="checkbox-label">
+      <input type="checkbox" id="ira1VolTaken" onchange="updateComputed()">
+      <span>Voluntary draw already taken this year</span>
     </label>
     <label><span>IRA 1 Roth Conversion ($)</span>
-      <input type="number" id="ira1RothConversion" value="0" min="0">
+      <input type="number" id="ira1RothConversion" value="0" min="0" oninput="updateComputed()">
     </label>
-    <label><span>IRA 1 Conversion Month</span>
-      <select id="ira1ConvMonth">
-        <option value="1" selected>January</option><option value="2">February</option>
-        <option value="3">March</option><option value="4">April</option>
-        <option value="5">May</option><option value="6">June</option>
-        <option value="7">July</option><option value="8">August</option>
-        <option value="9">September</option><option value="10">October</option>
-        <option value="11">November</option><option value="12">December</option>
-      </select>
+    <label class="checkbox-label">
+      <input type="checkbox" id="ira1ConvDone" onchange="updateComputed()">
+      <span>Conversion already done this year</span>
     </label>
-    <div class="section-hdr">IRA 2 / Roth Draws</div>
+    <div class="section-hdr">IRA 2 Draws and Conversions</div>
     <label><span>IRA 2 RMD ($)</span>
-      <input type="number" id="ira2Rmd" value="0" min="0">
+      <input type="number" id="ira2Rmd" value="0" min="0" oninput="updateComputed()">
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" id="ira2RmdTaken" onchange="updateComputed()">
+      <span>RMD already taken this year</span>
     </label>
     <label><span>IRA 2 Voluntary Withdrawal ($)</span>
-      <input type="number" id="ira2Voluntary" value="0" min="0">
+      <input type="number" id="ira2Voluntary" value="0" min="0" oninput="updateComputed()">
     </label>
-    <label><span>IRA 2 RMD / Draw Month</span>
-      <select id="ira2RmdMonth">
-        <option value="1">January</option><option value="2">February</option>
-        <option value="3">March</option><option value="4">April</option>
-        <option value="5">May</option><option value="6">June</option>
-        <option value="7">July</option><option value="8">August</option>
-        <option value="9">September</option><option value="10">October</option>
-        <option value="11">November</option><option value="12" selected>December</option>
-      </select>
+    <label class="checkbox-label">
+      <input type="checkbox" id="ira2VolTaken" onchange="updateComputed()">
+      <span>Voluntary draw already taken this year</span>
     </label>
     <label><span>IRA 2 Roth Conversion ($)</span>
-      <input type="number" id="ira2RothConversion" value="0" min="0">
+      <input type="number" id="ira2RothConversion" value="0" min="0" oninput="updateComputed()">
     </label>
-    <label><span>IRA 2 Conversion Month</span>
-      <select id="ira2ConvMonth">
-        <option value="1" selected>January</option><option value="2">February</option>
-        <option value="3">March</option><option value="4">April</option>
-        <option value="5">May</option><option value="6">June</option>
-        <option value="7">July</option><option value="8">August</option>
-        <option value="9">September</option><option value="10">October</option>
-        <option value="11">November</option><option value="12">December</option>
-      </select>
+    <label class="checkbox-label">
+      <input type="checkbox" id="ira2ConvDone" onchange="updateComputed()">
+      <span>Conversion already done this year</span>
     </label>
     <div class="section-hdr">Other Income Sources</div>
     <label><span>Social Security ($)</span>
@@ -408,7 +393,7 @@
 
     <div class="action-buttons">
       <button id="btn-print" onclick="window.print()">🖨️ Print / PDF</button>
-      <button id="btn-ics" disabled>📅 Download .ics</button>
+      <button id="btn-copy-link" onclick="copyLink()">🔗 Copy Link</button>
     </div>
 
   </div><!-- end .inputs -->
@@ -485,6 +470,68 @@
   function readBool(id) { return document.getElementById(id).checked; }
   function readInt(id)  { return parseInt(document.getElementById(id).value) || 0; }
 
+  // ── Copy shareable link ───────────────────────────────────────────────────
+  function copyLink() {
+    const p  = getParams();
+    const yr = new Date().getFullYear();
+    const sp = new URLSearchParams();
+
+    const set = (k, v) => { if (v !== null && v !== undefined && v !== 0 && v !== '' && v !== false) sp.set(k, v); };
+
+    if (p.taxYear !== yr)         sp.set('taxYear', p.taxYear);
+    sp.set('state', p.state);
+    set('federalTax',        p.federalTax);
+    set('stateTax',          p.stateTax);
+    set('priorYearFedTax',   p.priorYearFedTax);
+    set('priorYearStateTax', p.priorYearStateTax);
+    if (p.highIncomeFiler)        sp.set('highIncomeFiler', '1');
+
+    set('ira1Rmd',           p.ira1Rmd);
+    set('ira1Voluntary',     p.ira1Voluntary);
+    if (p.ira1RmdTaken)           sp.set('ira1RmdTaken', '1');
+    if (p.ira1VolTaken)           sp.set('ira1VolTaken', '1');
+    set('ira1RothConversion', p.ira1RothConversion);
+    if (p.ira1ConvDone)           sp.set('ira1ConvDone', '1');
+
+    set('ira2Rmd',           p.ira2Rmd);
+    set('ira2Voluntary',     p.ira2Voluntary);
+    if (p.ira2RmdTaken)           sp.set('ira2RmdTaken', '1');
+    if (p.ira2VolTaken)           sp.set('ira2VolTaken', '1');
+    set('ira2RothConversion', p.ira2RothConversion);
+    if (p.ira2ConvDone)           sp.set('ira2ConvDone', '1');
+
+    set('ssIncome',          p.ssIncome);
+    set('pensionIncome',     p.pensionIncome);
+    set('interest',          p.interest);
+    set('qualifiedDivs',     p.qualifiedDivs);
+    set('capitalGains',      p.capitalGains);
+
+    if (p.portfolioRate   !== 0.07)  sp.set('portfolioRate',   +(p.portfolioRate   * 100).toFixed(2));
+    if (p.hysaGross       !== 0.038) sp.set('hysaGross',       +(p.hysaGross       * 100).toFixed(2));
+    if (p.marginalOrdRate !== 0.30)  sp.set('marginalOrdRate', +(p.marginalOrdRate  * 100).toFixed(1));
+    if (p.cgRateBlended   !== 0.20)  sp.set('cgRateBlended',   +(p.cgRateBlended   * 100).toFixed(1));
+    if (p.appreciationPct !== 0.40)  sp.set('appreciationPct', +(p.appreciationPct * 100).toFixed(1));
+
+    const url = `${location.origin}${location.pathname}?${sp.toString()}`;
+    const btn = document.getElementById('btn-copy-link');
+
+    navigator.clipboard.writeText(url).then(() => {
+      btn.textContent = '✓ Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '🔗 Copy Link'; btn.classList.remove('copied'); }, 2500);
+    }).catch(() => {
+      // Fallback: select a temporary input
+      const inp = document.createElement('input');
+      inp.value = url;
+      document.body.appendChild(inp);
+      inp.select();
+      document.execCommand('copy');
+      document.body.removeChild(inp);
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => { btn.textContent = '🔗 Copy Link'; }, 2500);
+    });
+  }
+
   function getParams() {
     return {
       taxYear:           readInt('taxYear') || new Date().getFullYear(),
@@ -495,17 +542,19 @@
       priorYearStateTax: readNum('priorYearStateTax') || null,
       highIncomeFiler:   readBool('highIncomeFiler'),
 
-      ira1Rmd:            readNum('ira1Rmd'),
-      ira1Voluntary:      readNum('ira1Voluntary'),
-      ira1RmdMonth:       readInt('ira1RmdMonth'),
-      ira1RothConversion: readNum('ira1RothConversion'),
-      ira1ConvMonth:      readInt('ira1ConvMonth'),
+      ira1Rmd:             readNum('ira1Rmd'),
+      ira1Voluntary:       readNum('ira1Voluntary'),
+      ira1RmdTaken:        readBool('ira1RmdTaken'),
+      ira1VolTaken:        readBool('ira1VolTaken'),
+      ira1RothConversion:  readNum('ira1RothConversion'),
+      ira1ConvDone:        readBool('ira1ConvDone'),
 
-      ira2Rmd:            readNum('ira2Rmd'),
-      ira2Voluntary:      readNum('ira2Voluntary'),
-      ira2RmdMonth:       readInt('ira2RmdMonth'),
-      ira2RothConversion: readNum('ira2RothConversion'),
-      ira2ConvMonth:      readInt('ira2ConvMonth'),
+      ira2Rmd:             readNum('ira2Rmd'),
+      ira2Voluntary:       readNum('ira2Voluntary'),
+      ira2RmdTaken:        readBool('ira2RmdTaken'),
+      ira2VolTaken:        readBool('ira2VolTaken'),
+      ira2RothConversion:  readNum('ira2RothConversion'),
+      ira2ConvDone:        readBool('ira2ConvDone'),
 
       ssIncome:          readNum('ssIncome'),
       pensionIncome:     readNum('pensionIncome'),
@@ -521,8 +570,42 @@
     };
   }
 
+  // ── IRA checkbox enable/disable enforcement ────────────────────────────────
+  // Rules:
+  //   • "RMD taken"       disabled when RMD amount = $0
+  //   • "Voluntary taken" disabled when voluntary = $0 OR (RMD > 0 AND RMD not yet taken)
+  //   • "Conv done"       disabled when conversion = $0 OR (RMD > 0 AND RMD not yet taken)
+  // Unchecking a disabled box prevents stale flags reaching the engine.
+  function syncIraControls() {
+    for (const n of [1, 2]) {
+      const rmd  = parseFloat(document.getElementById(`ira${n}Rmd`).value)  || 0;
+      const vol  = parseFloat(document.getElementById(`ira${n}Voluntary`).value) || 0;
+      const conv = parseFloat(document.getElementById(`ira${n}RothConversion`).value) || 0;
+      const rmdTakenEl = document.getElementById(`ira${n}RmdTaken`);
+      const volTakenEl = document.getElementById(`ira${n}VolTaken`);
+      const convDoneEl = document.getElementById(`ira${n}ConvDone`);
+
+      const rmdTaken = rmdTakenEl.checked && !rmdTakenEl.disabled;
+
+      // RMD taken — disabled when no RMD amount
+      rmdTakenEl.disabled = rmd === 0;
+      if (rmdTakenEl.disabled) rmdTakenEl.checked = false;
+
+      // Voluntary taken — disabled when no voluntary amount, or RMD exists but not yet taken
+      const volDisabled = vol === 0 || (rmd > 0 && !rmdTaken);
+      volTakenEl.disabled = volDisabled;
+      if (volDisabled) volTakenEl.checked = false;
+
+      // Conversion done — disabled when no conversion amount, or RMD exists but not yet taken
+      const convDisabled = conv === 0 || (rmd > 0 && !rmdTaken);
+      convDoneEl.disabled = convDisabled;
+      if (convDisabled) convDoneEl.checked = false;
+    }
+  }
+
   // ── Live computed preview ──────────────────────────────────────────────────
   function updateComputed() {
+    syncIraControls();   // enforce ordering rules before reading params
     const p       = getParams();
     const hysaNet = p.hysaGross * (1 - p.marginalOrdRate);
     const be      = p.portfolioRate / 2;
@@ -535,9 +618,17 @@
     const covPct    = totalTax > 0 ? (iraWCap / totalTax * 100).toFixed(0) : 0;
     const shortfall = Math.max(0, totalTax - iraWCap);
 
-    // Effective withhold month = latest draw month among IRAs that have draws
-    const ira1Month = ira1Draws > 0 ? (p.ira1RmdMonth || 12) : 0;
-    const ira2Month = ira2Draws > 0 ? (p.ira2RmdMonth || 12) : 0;
+    // Effective withhold month preview — mirrors engine: Plan A = next month, already-taken = prev month.
+    // RMD and voluntary have independent taken flags; effective month = latest draw across both IRAs.
+    const cm   = new Date().getMonth() + 1;
+    const nxt  = Math.min(cm + 1, 12);
+    const prv  = cm > 1 ? cm - 1 : 1;
+    const ira1RmdMo = p.ira1Rmd > 0       ? (p.ira1RmdTaken ? prv : nxt) : 0;
+    const ira1VolMo = p.ira1Voluntary > 0  ? (p.ira1VolTaken ? prv : nxt) : 0;
+    const ira2RmdMo = p.ira2Rmd > 0       ? (p.ira2RmdTaken ? prv : nxt) : 0;
+    const ira2VolMo = p.ira2Voluntary > 0  ? (p.ira2VolTaken ? prv : nxt) : 0;
+    const ira1Month = Math.max(ira1RmdMo, ira1VolMo);
+    const ira2Month = Math.max(ira2RmdMo, ira2VolMo);
     const effectiveMonth = Math.max(ira1Month, ira2Month) || 12;
     const rmdFactor = TaxPaymentPlanner.iraOcFactor(effectiveMonth);
 
@@ -570,7 +661,7 @@
   updateComputed();
 
   // ── ICS calendar generator ────────────────────────────────────────────────
-  function generateIcs(plan) {
+  function generateIcs(actions) {
     const esc = s => String(s || '')
       .replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,')
       .replace(/\r?\n/g, '\\n');
@@ -586,10 +677,9 @@
 
     let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//RetirementTaxPlanner//EN\r\nCALSCALE:GREGORIAN\r\n';
 
-    const addEvents = (acts) => acts.filter(a => a.date).forEach(a => {
+    actions.filter(a => a.date).forEach(a => {
       const { year: y, month: mo, day: d } = a.date;
       const dtStart = `${y}${pad2(mo)}${pad2(d)}`;
-      // all-day end = next calendar day
       const end = new Date(y, mo - 1, d + 1);
       const dtEnd = `${end.getFullYear()}${pad2(end.getMonth()+1)}${pad2(end.getDate())}`;
       const uid = `tax-${dtStart}-${a.seq}-${Date.now()}@retirementtaxplanner`;
@@ -605,10 +695,32 @@
       ics += 'END:VEVENT\r\n';
     });
 
-    addEvents(plan.actions);
-    if (plan.planB) addEvents(plan.planB.actions);
     ics += 'END:VCALENDAR\r\n';
     return ics;
+  }
+
+  // ── Per-plan helpers (called from inline onclick in generated HTML) ────────
+  let _planData = null;
+
+  function downloadPlanIcs(which) {
+    if (!_planData) return;
+    const actions = which === 'B' ? _planData.planBActions : _planData.planAActions;
+    if (!actions) return;
+    const label = which === 'B' ? 'plan-b' : 'plan-a';
+    const blob = new Blob([generateIcs(actions)], { type: 'text/calendar;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `tax-${label}-${_planData.taxYear}.ics`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function printPlan(which) {
+    const otherId = which === 'A' ? 'plan-section-b' : 'plan-section-a';
+    const other = document.getElementById(otherId);
+    if (other) other.style.display = 'none';
+    window.print();
+    if (other) other.style.display = '';
   }
 
   // ── Main compute ──────────────────────────────────────────────────────────
@@ -667,17 +779,16 @@
     };
     document.getElementById('plan-json').textContent = JSON.stringify(compact, null, 2);
 
-    // Enable ICS download
-    const icsBtn = document.getElementById('btn-ics');
-    icsBtn.disabled = false;
-    icsBtn.onclick = () => {
-      const blob = new Blob([generateIcs(plan)], { type: 'text/calendar;charset=utf-8' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `tax-plan-${params.taxYear}.ics`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+    // Store plan data for per-plan ICS/print buttons embedded in generated HTML
+    _planData = {
+      taxYear:      params.taxYear,
+      planAActions: plan.actions,
+      planBActions: plan.planB ? plan.planB.actions : null,
     };
+
+    // Update global print button label
+    document.getElementById('btn-print').textContent =
+      plan.planB ? '🖨️ Print BOTH Plans' : '🖨️ Print / PDF';
   }
 
   document.getElementById('compute').addEventListener('click', runCompute);
@@ -698,15 +809,17 @@
   //
   //   ira1Rmd           {number}    IRA 1 RMD amount
   //   ira1Voluntary     {number}    IRA 1 voluntary withdrawal
-  //   ira1RmdMonth      {integer}   1–12, month of IRA 1 RMD/draw
+  //   ira1RmdTaken      {boolean}   1 if IRA 1 RMD already taken this year
+  //   ira1VolTaken      {boolean}   1 if IRA 1 voluntary withdrawal already taken (requires RMD taken or no RMD)
   //   ira1RothConversion{number}    IRA 1 Roth conversion amount (gross)
-  //   ira1ConvMonth     {integer}   1–12, month of IRA 1 Roth conversion
+  //   ira1ConvDone      {boolean}   1 if IRA 1 conversion already done (requires RMD taken or no RMD)
   //
   //   ira2Rmd           {number}    IRA 2 RMD amount
   //   ira2Voluntary     {number}    IRA 2 voluntary withdrawal
-  //   ira2RmdMonth      {integer}   1–12, month of IRA 2 RMD/draw
+  //   ira2RmdTaken      {boolean}   1 if IRA 2 RMD already taken this year
+  //   ira2VolTaken      {boolean}   1 if IRA 2 voluntary withdrawal already taken
   //   ira2RothConversion{number}    IRA 2 Roth conversion amount
-  //   ira2ConvMonth     {integer}   1–12, month of IRA 2 Roth conversion
+  //   ira2ConvDone      {boolean}   1 if IRA 2 conversion already done
   //
   //   ssIncome          {number}    Social Security gross benefit
   //   pensionIncome     {number}    pension / annuity income
@@ -722,7 +835,7 @@
   //
   // Example:
   //   RetirementTaxPlanner.html?state=CA&federalTax=35000&stateTax=12000
-  //     &ira1Rmd=25000&ira1RmdMonth=12&ira1RothConversion=20000&ira1ConvMonth=6
+  //     &ira1Rmd=25000&ira1Voluntary=30000&ira1RothConversion=20000
   //     &portfolioRate=7&hysaGross=3.8&marginalOrdRate=30
 
   function loadFromUrl() {
@@ -731,13 +844,13 @@
 
     const NUM_FIELDS = [
       'taxYear','federalTax','stateTax','priorYearFedTax','priorYearStateTax',
-      'ira1Rmd','ira1Voluntary','ira1RmdMonth','ira1RothConversion','ira1ConvMonth',
-      'ira2Rmd','ira2Voluntary','ira2RmdMonth','ira2RothConversion','ira2ConvMonth',
+      'ira1Rmd','ira1Voluntary','ira1RothConversion',
+      'ira2Rmd','ira2Voluntary','ira2RothConversion',
       'ssIncome','pensionIncome','interest','qualifiedDivs','capitalGains',
       'portfolioRate','hysaGross','marginalOrdRate','cgRateBlended','appreciationPct',
     ];
     const STR_FIELDS = ['state'];
-    const BOOL_FIELDS = ['highIncomeFiler'];
+    const BOOL_FIELDS = ['highIncomeFiler','ira1RmdTaken','ira1VolTaken','ira1ConvDone','ira2RmdTaken','ira2VolTaken','ira2ConvDone'];
 
     NUM_FIELDS.forEach(id => {
       const v = sp.get(id);
@@ -755,6 +868,7 @@
       }
     });
 
+    syncIraControls();   // enforce ordering constraints after URL params are loaded
     updateStateInfo();
     updateComputed();
     return true;

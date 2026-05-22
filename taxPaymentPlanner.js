@@ -39,17 +39,19 @@
  *   IRA 1 (first IRA account)
  *   ira1Rmd              {Number}   IRA 1 RMD amount
  *   ira1Voluntary        {Number}   IRA 1 voluntary withdrawal
- *   ira1RmdMonth         {Number}   1–12, month of IRA 1 RMD/draw (default 12)
+ *   ira1RmdTaken         {Boolean}  true if RMD already taken this year (dates action in prev month)
+ *   ira1VolTaken         {Boolean}  true if voluntary withdrawal already taken (requires RMD taken or no RMD)
  *   ira1RothConversion   {Number}   IRA 1 Roth conversion amount (gross)
- *   ira1ConvMonth        {Number}   1–12, month of IRA 1 conversion (default 1)
+ *   ira1ConvDone         {Boolean}  true if conversion already completed (requires RMD taken or no RMD)
  *   ira1RothWithhold     {Boolean|null}  override 60-day replace decision; null=auto-compute
  *
  *   IRA 2 (second IRA account)
  *   ira2Rmd              {Number}   IRA 2 RMD amount
  *   ira2Voluntary        {Number}   IRA 2 voluntary withdrawal
- *   ira2RmdMonth         {Number}   1–12, month of IRA 2 RMD/draw (default 12)
+ *   ira2RmdTaken         {Boolean}  true if IRA 2 RMD already taken this year
+ *   ira2VolTaken         {Boolean}  true if IRA 2 voluntary withdrawal already taken
  *   ira2RothConversion   {Number}   IRA 2 Roth conversion amount (gross)
- *   ira2ConvMonth        {Number}   1–12, month of IRA 2 conversion (default 1)
+ *   ira2ConvDone         {Boolean}  true if conversion already completed
  *   ira2RothWithhold     {Boolean|null}  override 60-day replace decision; null=auto-compute
  *
  *   Other income
@@ -75,15 +77,16 @@ const TaxPaymentPlanner = (() => {
 
   // ── Action type constants ──────────────────────────────────────────────────
   const T = {
-    ROTH_CONV: 'roth_conversion',
-    RMD:       'rmd_withdrawal',
-    IRA_VOL:   'ira_voluntary',
-    SUPPL_IRA: 'supplemental_ira',
-    Q_FED:     'quarterly_estimate_fed',
-    Q_STATE:   'quarterly_estimate_state',
-    SS_WHOLD:  'ss_withholding_election',
-    ALERT:     'alert',
-    NOTE:      'advisory_note',
+    ROTH_CONV:    'roth_conversion',
+    RMD:          'rmd_withdrawal',
+    IRA_VOL:      'ira_voluntary',
+    SUPPL_IRA:    'supplemental_ira',
+    CASH_RESTORE: 'cash_restore',
+    Q_FED:        'quarterly_estimate_fed',
+    Q_STATE:      'quarterly_estimate_state',
+    SS_WHOLD:     'ss_withholding_election',
+    ALERT:        'alert',
+    NOTE:         'advisory_note',
   };
 
   // ── Standard quarterly schedule template ───────────────────────────────────
@@ -324,14 +327,13 @@ const TaxPaymentPlanner = (() => {
   }
 
   // ── Per-IRA ordering rule helper ──────────────────────────────────────────
-  // Returns { planARmdMonth, planARmdDay, planAConvDay, hasConflict, sameMonth }
-  // When RMD and conversion fall in the same month, the RMD is scheduled on
-  // the 1st and the conversion on the 8th, ensuring a mandatory 7-day buffer.
-  function resolveIraOrdering(rmd, rmdMonth, conv, convMonth) {
+  // convFuture=false when the conversion is already completed — skip the
+  // pull-forward rule so a past conv month doesn't drag the draw backward.
+  function resolveIraOrdering(rmd, rmdMonth, conv, convMonth, convFuture = true) {
     const clamp = m => Math.max(1, Math.min(12, Math.round(m || 12)));
     const rm = clamp(rmdMonth);
     const cm = clamp(convMonth);
-    const hasConflict = rmd > 0 && conv > 0 && cm <= rm;
+    const hasConflict = convFuture && rmd > 0 && conv > 0 && cm <= rm;
     const planARmdMonth = hasConflict ? cm : rm;
     const sameMonth = rmd > 0 && conv > 0 && planARmdMonth === cm;
     return {
@@ -342,7 +344,6 @@ const TaxPaymentPlanner = (() => {
       hasConflict,
       sameMonth,
       origRmdMonth: rm,
-      origConvMonth: cm,
     };
   }
 
@@ -359,19 +360,21 @@ const TaxPaymentPlanner = (() => {
       priorYearStateTax: null,
       highIncomeFiler:   false,
 
-      ira1Rmd:            0,
-      ira1Voluntary:      0,
-      ira1RmdMonth:       12,
-      ira1RothConversion: 0,
-      ira1ConvMonth:      1,
-      ira1RothWithhold:   null,
+      ira1Rmd:             0,
+      ira1Voluntary:       0,
+      ira1RmdTaken:        false,   // RMD/draw already taken — must be true before VolTaken/ConvDone
+      ira1VolTaken:        false,   // voluntary withdrawal already taken (requires ira1Rmd=0 or ira1RmdTaken)
+      ira1RothConversion:  0,
+      ira1ConvDone:        false,   // conversion already done (requires ira1Rmd=0 or ira1RmdTaken)
+      ira1RothWithhold:    null,
 
-      ira2Rmd:            0,
-      ira2Voluntary:      0,
-      ira2RmdMonth:       12,
-      ira2RothConversion: 0,
-      ira2ConvMonth:      1,
-      ira2RothWithhold:   null,
+      ira2Rmd:             0,
+      ira2Voluntary:       0,
+      ira2RmdTaken:        false,
+      ira2VolTaken:        false,
+      ira2RothConversion:  0,
+      ira2ConvDone:        false,
+      ira2RothWithhold:    null,
 
       ssIncome:          0,
       pensionIncome:     0,
@@ -392,28 +395,24 @@ const TaxPaymentPlanner = (() => {
     const today     = p.todayDate instanceof Date ? p.todayDate : new Date(p.todayDate);
     const stateInfo = getStateInfo(p.state);
 
-    // 2. Per-IRA ordering rules + past-conversion detection
-    const currentMonth = today.getMonth() + 1;                     // 1–12
-    const nextMonth    = Math.min(currentMonth + 1, 12);
+    // 2. Per-IRA ordering rules
+    // Plan A targets the first of NEXT month — always in the future, no false urgency.
+    // Plan B (_baseline) targets December for any action not yet taken.
+    // Already-taken/done actions use the 1st of the PREVIOUS month (or January if in Jan).
+    const currentMonth = today.getMonth() + 1;                          // 1–12
+    const nextMonth    = Math.min(currentMonth + 1, 12);                // Plan A target
+    const prevMonth    = currentMonth > 1 ? currentMonth - 1 : 1;      // already-done target
 
-    let ira1 = resolveIraOrdering(p.ira1Rmd, p.ira1RmdMonth, p.ira1RothConversion, p.ira1ConvMonth);
-    let ira2 = resolveIraOrdering(p.ira2Rmd, p.ira2RmdMonth, p.ira2RothConversion, p.ira2ConvMonth);
+    const ira1ConvMonth = p.ira1ConvDone  ? prevMonth : (p._baseline ? 12 : nextMonth);
+    const ira1RmdMonth  = p.ira1RmdTaken  ? prevMonth : (p._baseline ? 12 : nextMonth);
+    const ira1VolMonth  = p.ira1VolTaken  ? prevMonth : (p._baseline ? 12 : nextMonth);
+    const ira2ConvMonth = p.ira2ConvDone  ? prevMonth : (p._baseline ? 12 : nextMonth);
+    const ira2RmdMonth  = p.ira2RmdTaken  ? prevMonth : (p._baseline ? 12 : nextMonth);
+    const ira2VolMonth  = p.ira2VolTaken  ? prevMonth : (p._baseline ? 12 : nextMonth);
 
-    // If the user's preferred conversion month has already passed (and we are not
-    // generating the December baseline), bump it forward to next month.
-    const ira1ConvPassed = !p._baseline && p.ira1RothConversion > 0 && ira1.planAConvMonth < currentMonth;
-    const ira2ConvPassed = !p._baseline && p.ira2RothConversion > 0 && ira2.planAConvMonth < currentMonth;
-
-    if (ira1ConvPassed) {
-      const orig = ira1.planAConvMonth;
-      ira1 = resolveIraOrdering(p.ira1Rmd, p.ira1RmdMonth, p.ira1RothConversion, nextMonth);
-      ira1.passedOrigMonth = orig;
-    }
-    if (ira2ConvPassed) {
-      const orig = ira2.planAConvMonth;
-      ira2 = resolveIraOrdering(p.ira2Rmd, p.ira2RmdMonth, p.ira2RothConversion, nextMonth);
-      ira2.passedOrigMonth = orig;
-    }
+    // resolveIraOrdering uses the RMD month (IRS ordering: RMD must precede conversion)
+    const ira1 = resolveIraOrdering(p.ira1Rmd, ira1RmdMonth, p.ira1RothConversion, ira1ConvMonth, !p.ira1ConvDone);
+    const ira2 = resolveIraOrdering(p.ira2Rmd, ira2RmdMonth, p.ira2RothConversion, ira2ConvMonth, !p.ira2ConvDone);
 
     // 3. Core derived values
     const totalTax  = p.federalTax + p.stateTax;
@@ -490,10 +489,14 @@ const TaxPaymentPlanner = (() => {
       ? Math.min(allDrawsTotal, Math.max(0, p.federalTax - convWithholdFed))
       : Math.min(allDrawsTotal, taxAfterConvW);
 
-    // Sort draw groups by month descending — latest-month draws get withholding first
+    // Sort draw groups by month descending — latest-month draws get withholding first.
+    // RMD and voluntary are tracked separately so a later voluntary draw (nextMonth) can
+    // carry the withholding even when the RMD was already taken (prevMonth).
     const drawGroups = [
-      { num: 1, month: ira1.planARmdMonth, total: ira1DrawTotal, withheld: 0 },
-      { num: 2, month: ira2.planARmdMonth, total: ira2DrawTotal, withheld: 0 },
+      { num: 1, tag: 'rmd', month: ira1.planARmdMonth, total: p.ira1Rmd,       withheld: 0 },
+      { num: 1, tag: 'vol', month: ira1VolMonth,        total: p.ira1Voluntary, withheld: 0 },
+      { num: 2, tag: 'rmd', month: ira2.planARmdMonth,  total: p.ira2Rmd,       withheld: 0 },
+      { num: 2, tag: 'vol', month: ira2VolMonth,         total: p.ira2Voluntary, withheld: 0 },
     ].filter(g => g.total > 0).sort((a, b) => b.month - a.month);
 
     let remaining = drawWithholdCap;
@@ -503,8 +506,8 @@ const TaxPaymentPlanner = (() => {
       if (remaining <= 0) break;
     }
 
-    const ira1Withheld = drawGroups.find(g => g.num === 1)?.withheld || 0;
-    const ira2Withheld = drawGroups.find(g => g.num === 2)?.withheld || 0;
+    const ira1Withheld = drawGroups.filter(g => g.num === 1).reduce((s, g) => s + g.withheld, 0);
+    const ira2Withheld = drawGroups.filter(g => g.num === 2).reduce((s, g) => s + g.withheld, 0);
     const totalIraDrawWithheld = ira1Withheld + ira2Withheld;
     const totalCovered = totalIraDrawWithheld + convWithholdFed + convWithholdState;
     const shortfall    = Math.max(0, totalTax - totalCovered);
@@ -567,42 +570,74 @@ const TaxPaymentPlanner = (() => {
       return a;
     };
 
-    // ── 11a. Per-IRA ordering rule notes + passed-conversion alerts ──────────
-    for (const [iraNum, ira, convPassed] of [[1, ira1, ira1ConvPassed], [2, ira2, ira2ConvPassed]]) {
+    // ── 11a. Per-IRA ordering rule notes ─────────────────────────────────────
+    for (const [iraNum, ira] of [[1, ira1], [2, ira2]]) {
       const convAmt = iraNum === 1 ? p.ira1RothConversion : p.ira2RothConversion;
-      // Alert when the user's preferred conversion month has already passed
-      if (convPassed && convAmt > 0) {
-        addAction({
-          type: T.ALERT,
-          description:
-            `IRA ${iraNum} — Roth conversion month (${MONTH_NAMES[ira.passedOrigMonth - 1]}) has already passed as of ` +
-            `${fmtDate(today.getFullYear(), today.getMonth() + 1, today.getDate())}. ` +
-            `The plan has been updated to target next month: ` +
-            `<strong>${MONTH_NAMES[ira.planAConvMonth - 1]}</strong>. ` +
-            `If you want to push to December instead, see Plan B below.`,
-          notes: [
-            `You can still do a Roth conversion any time before December 31 — there is no deadline other than year-end.`,
-            `Converting in ${MONTH_NAMES[ira.planAConvMonth - 1]} still provides ${12 - ira.planAConvMonth} months of tax-free Roth growth this year.`,
-          ],
-        });
-      }
-      const iraP = { rmd: iraNum === 1 ? p.ira1Rmd : p.ira2Rmd, conv: convAmt };
-      if (iraP.rmd > 0 && iraP.conv > 0) {
+      const rmdAmt  = iraNum === 1 ? p.ira1Rmd : p.ira2Rmd;
+      if (rmdAmt > 0 && convAmt > 0) {
+        const timing = ira.sameMonth
+          ? `Both are scheduled in ${MONTH_NAMES[ira.planARmdMonth - 1]}: draw on day ${ira.planARmdDay}, conversion on day ${ira.planAConvDay}.`
+          : `Draw in ${MONTH_NAMES[ira.planARmdMonth - 1]}, conversion in ${MONTH_NAMES[ira.planAConvMonth - 1]} — order satisfied.`;
         addAction({
           type: T.NOTE,
           description:
-            `IRA ${iraNum} — IRS ordering rule: the RMD (${fmt$(iraP.rmd)}) must be distributed ` +
-            `before the Roth conversion can take place in the same tax year. ` +
-            (ira.hasConflict
-              ? `The RMD has been moved from ${MONTH_NAMES[ira.origRmdMonth - 1]} to ` +
-                `${MONTH_NAMES[ira.planARmdMonth - 1]} (day ${ira.planARmdDay}) ` +
-                `so the conversion can proceed on ${MONTH_NAMES[ira.planAConvMonth - 1]} ${ira.planAConvDay}. `
-              : `Your specified IRA ${iraNum} RMD month (${MONTH_NAMES[ira.origRmdMonth - 1]}) already precedes ` +
-                `the conversion month (${MONTH_NAMES[ira.planAConvMonth - 1]}) — no adjustment needed. `) +
-            `See the two-plan comparison in the analysis section.`,
+            `IRA ${iraNum} — IRS ordering rule: the RMD (${fmt$(rmdAmt)}) must be distributed ` +
+            `before any Roth conversion in the same tax year. ${timing} ` +
+            `See the two-plan comparison below.`,
           notes: [
             'RMD amounts are not eligible for rollover or Roth conversion — only the balance beyond the RMD can be converted.',
             'QCD: directing this RMD to charity (up to $108,000/yr) satisfies the RMD requirement, excludes the amount from income, and allows an earlier conversion without taking the RMD cash first.',
+          ],
+        });
+      }
+    }
+
+    // ── 11a-w. Already-taken withholding reminder ─────────────────────────
+    if (!p._baseline) {
+      const items = [];
+      // RMD and voluntary are tracked independently — each gets its own withholding reminder
+      for (const [iraNum, rmdTaken, rmd, volTaken, vol] of [
+        [1, p.ira1RmdTaken, p.ira1Rmd, p.ira1VolTaken, p.ira1Voluntary],
+        [2, p.ira2RmdTaken, p.ira2Rmd, p.ira2VolTaken, p.ira2Voluntary],
+      ]) {
+        if (rmdTaken && rmd > 0) {
+          const g = drawGroups.find(h => h.num === iraNum && h.tag === 'rmd');
+          const wFed = Math.round((g?.withheld || 0) * wFedFrac);
+          const wSt  = Math.round((g?.withheld || 0) * wStFrac);
+          items.push(`IRA ${iraNum} RMD (${fmt$(rmd)}) — estimated withholding: ` +
+            `${fmt$(wFed)} federal` + (wSt > 0 ? ` + ${fmt$(wSt)} ${stateInfo.name}` : ''));
+        }
+        if (volTaken && vol > 0) {
+          const g = drawGroups.find(h => h.num === iraNum && h.tag === 'vol');
+          const wFed = Math.round((g?.withheld || 0) * wFedFrac);
+          const wSt  = Math.round((g?.withheld || 0) * wStFrac);
+          items.push(`IRA ${iraNum} voluntary withdrawal (${fmt$(vol)}) — estimated withholding: ` +
+            `${fmt$(wFed)} federal` + (wSt > 0 ? ` + ${fmt$(wSt)} ${stateInfo.name}` : ''));
+        }
+      }
+      if (p.ira1ConvDone && p.ira1RothConversion > 0) {
+        const wLabel = doWithhold1
+          ? `${fmt$(ira1ConvFedW)} federal` + (ira1ConvStW > 0 ? ` + ${fmt$(ira1ConvStW)} ${stateInfo.name}` : '')
+          : 'none (60-day replacement not warranted)';
+        items.push(`IRA 1 Roth conversion (${fmt$(p.ira1RothConversion)}) — estimated withholding: ${wLabel}`);
+      }
+      if (p.ira2ConvDone && p.ira2RothConversion > 0) {
+        const wLabel = doWithhold2
+          ? `${fmt$(ira2ConvFedW)} federal` + (ira2ConvStW > 0 ? ` + ${fmt$(ira2ConvStW)} ${stateInfo.name}` : '')
+          : 'none (60-day replacement not warranted)';
+        items.push(`IRA 2 Roth conversion (${fmt$(p.ira2RothConversion)}) — estimated withholding: ${wLabel}`);
+      }
+      if (items.length > 0) {
+        addAction({
+          type: T.ALERT,
+          description: `One or more distributions are marked as already taken. ` +
+            `Verify that you instructed your IRA custodian to withhold the amounts shown below. ` +
+            `If withholding was insufficient, a supplemental estimated tax payment may be needed.`,
+          notes: [
+            ...items,
+            `IRA withholding is voluntary and must be requested at the time of distribution — ` +
+            `custodians do not withhold automatically unless instructed.`,
+            `If you under-withheld, use Form 1040-ES to make a catch-up estimated payment by the next quarterly due date.`,
           ],
         });
       }
@@ -664,6 +699,15 @@ const TaxPaymentPlanner = (() => {
         : '';
 
       if (doWithhold) {
+        const restoreAmt = convFedW + convStW;
+        // Restore-cash deadline: 30 days after conversion or Dec 22, whichever is earlier
+        const convDateObj  = new Date(yr, ira.planAConvMonth - 1, ira.planAConvDay);
+        const restoreRaw   = new Date(convDateObj); restoreRaw.setDate(restoreRaw.getDate() + 30);
+        const dec22        = new Date(yr, 11, 22);
+        const restoreDateObj = restoreRaw < dec22 ? restoreRaw : dec22;
+        const restoreDate  = { year: restoreDateObj.getFullYear(), month: restoreDateObj.getMonth() + 1, day: restoreDateObj.getDate() };
+        const restoreDateStr = fmtDate(restoreDate.year, restoreDate.month, restoreDate.day);
+
         addAction({
           type: T.ROTH_CONV,
           iraNum,
@@ -675,7 +719,7 @@ const TaxPaymentPlanner = (() => {
             `IRA ${iraNum} — Roth convert ${fmt$(convAmt)} on ${convDateStr}. ` +
             `Withhold ${fmt$(convFedW)} federal (${fmtPct(convFedW / convAmt)})` +
             (convStW > 0 ? ` and ${fmt$(convStW)} ${stateInfo.name} (${fmtPct(convStW / convAmt)})` : '') +
-            `. Restore ${fmt$(convFedW + convStW)} from outside cash into Roth within 60 days.`,
+            `. See the restore-cash step below.`,
           notes: [
             'Withholding reduces the Roth credit — the 60-day cash replacement makes the conversion whole so the full amount earns tax-free Roth growth.',
             sdaNote,
@@ -686,6 +730,24 @@ const TaxPaymentPlanner = (() => {
                 ? `Converting IRA ${iraNum} in ${MONTH_NAMES[ira.planAConvMonth-1]} gives ${monthsOfGrowth} months of tax-free Roth growth this year.`
                 : `Converting IRA ${iraNum} in January maximizes tax-free Roth growth for the year.`,
           ].filter(Boolean),
+        });
+
+        // Restore-cash calendar entry
+        addAction({
+          type: T.CASH_RESTORE,
+          iraNum,
+          date: restoreDate,
+          amount: restoreAmt,
+          federalWithholding: 0,
+          stateWithholding:   0,
+          description:
+            `Restore ${fmt$(restoreAmt)} cash into IRA ${iraNum} Roth by ${restoreDateStr}. ` +
+            `This replaces the ${fmt$(restoreAmt)} withheld at conversion so the full ${fmt$(convAmt)} earns tax-free Roth growth.`,
+          notes: [
+            `Deadline: 30 days from conversion (${convDateStr}), capped at December 22 to avoid year-end processing delays. The IRS allows up to 60 days — the 30-day target provides a safety buffer.`,
+            `Source: any personal cash account (checking, HYSA, brokerage). Transfer directly into the Roth account.`,
+            `The IRS treats this as an indirect rollover. You are limited to ONE indirect rollover per rolling 12-month period across all IRAs combined — do not use this method if you have done another indirect rollover in the past 12 months.`,
+          ],
         });
       } else {
         addAction({
@@ -720,80 +782,105 @@ const TaxPaymentPlanner = (() => {
 
     // ── 11d. IRA draw actions (with cross-IRA optimized withholding) ─────────
     if (usesIraWithholding) {
-      for (const [iraNum, ira, iraTotal, iraWithheld] of [
-        [1, ira1, ira1DrawTotal, ira1Withheld],
-        [2, ira2, ira2DrawTotal, ira2Withheld],
-      ]) {
-        if (iraTotal <= 0) continue;
+      // Merge optimizer groups into action-level entries, combining same-IRA same-month subdraws
+      // into one action while keeping different-month subdraws as separate calendar entries.
+      const actionGroups = [];
+      for (const g of drawGroups) {
+        const ex = actionGroups.find(a => a.num === g.num && a.month === g.month);
+        if (ex) {
+          ex.total    += g.total;
+          ex.withheld += g.withheld;
+          if (g.tag === 'rmd') ex.rmdAmt += g.total; else ex.volAmt += g.total;
+        } else {
+          actionGroups.push({
+            num: g.num, month: g.month,
+            total: g.total, withheld: g.withheld,
+            rmdAmt: g.tag === 'rmd' ? g.total : 0,
+            volAmt: g.tag === 'vol' ? g.total : 0,
+          });
+        }
+      }
+      actionGroups.sort((a, b) => a.num - b.num || a.month - b.month);
+
+      for (const ag of actionGroups) {
+        const iraNum = ag.num;
+        const ira    = iraNum === 1 ? ira1 : ira2;
+        const iraWithheld = ag.withheld;
+        const iRmd   = ag.rmdAmt;
+        const iVol   = ag.volAmt;
 
         const iraFedW = Math.round(iraWithheld * wFedFrac);
         const iraStW  = Math.round(iraWithheld * wStFrac);
-        const rmdDate    = { year: yr, month: ira.planARmdMonth, day: ira.planARmdDay };
-        const rmdDateStr = fmtDate(yr, ira.planARmdMonth, ira.planARmdDay);
 
-        const iRmd = iraNum === 1 ? p.ira1Rmd : p.ira2Rmd;
-        const iVol = iraNum === 1 ? p.ira1Voluntary : p.ira2Voluntary;
-        const splits = [
-          { type: T.RMD,     amt: iRmd, label: `IRA ${iraNum} RMD` },
-          { type: T.IRA_VOL, amt: iVol, label: `IRA ${iraNum} voluntary withdrawal` },
-        ].filter(s => s.amt > 0);
+        // RMD groups use the day from resolveIraOrdering (may be day 1 for same-month conv);
+        // vol-only groups default to the 15th.
+        const actionDay  = iRmd > 0 ? ira.planARmdDay : 15;
+        const rmdDate    = { year: yr, month: ag.month, day: actionDay };
+        const rmdDateStr = fmtDate(yr, ag.month, actionDay);
 
-        for (const sp of splits) {
-          const frac  = sp.amt / iraTotal;
-          const fedW  = Math.round(iraFedW * frac);
-          const stW   = Math.round(iraStW  * frac);
-          const totW  = fedW + stW;
-          const net   = sp.amt - totW;
-          const pctFed = sp.amt > 0 ? fedW / sp.amt : 0;
-          const pctSt  = sp.amt > 0 ? stW  / sp.amt : 0;
-          const pctTot = sp.amt > 0 ? totW / sp.amt : 0;
+        const totW   = iraFedW + iraStW;
+        const net    = ag.total - totW;
+        const pctFed = ag.total > 0 ? iraFedW / ag.total : 0;
+        const pctSt  = ag.total > 0 ? iraStW  / ag.total : 0;
+        const pctTot = ag.total > 0 ? totW    / ag.total : 0;
 
-          const optimizerNote = drawGroups.length > 1 && iraWithheld === 0
-            ? `IRA ${iraNum} draw month (${MONTH_NAMES[ira.planARmdMonth-1]}) is earlier than another IRA draw — the cross-IRA optimizer directed all withholding to the later IRA draw to maximize tax-deferred growth. No withholding from IRA ${iraNum}.`
-            : drawGroups.length > 1
-              ? `Cross-IRA optimizer: IRA ${iraNum} carries withholding (${MONTH_NAMES[ira.planARmdMonth-1]}) because it has the latest draw month, keeping IRA money invested the longest.`
-              : null;
+        const optimizerNote = drawGroups.length > 1 && iraWithheld === 0
+          ? `This draw (${MONTH_NAMES[ag.month-1]}) is earlier than another scheduled draw — the optimizer directed all withholding to the later draw to maximize tax-deferred growth. No withholding from this entry.`
+          : drawGroups.length > 1
+            ? `Draw-order optimizer: this entry (${MONTH_NAMES[ag.month-1]}) carries withholding because it is the latest scheduled draw, keeping IRA funds invested the longest.`
+            : null;
 
-          const notes = [
-            totW > 0 ? `Total withholding: ${fmt$(totW)} (${fmtPct(pctTot)} of distribution).` : `No withholding on this draw — taxes covered by another IRA's draw.`,
-            'IRS credit rule: withholding from IRA distributions is deemed paid pro-rata on each quarterly due date — even a December draw satisfies the entire-year quarterly safe-harbor retroactively.',
-          ];
-          if (optimizerNote) notes.push(optimizerNote);
-          if (stateIraExempt) {
-            notes.push(`${stateInfo.name}: IRA distributions are exempt from state tax — no state withholding applied. State tax covered by quarterly estimates.`);
-          } else if (stateInfo.withholdingCreditedProRata) {
-            notes.push(`${stateInfo.name} similarly credits IRA withholding as if paid pro-rata throughout the year.`);
-          }
-          if (ira.planARmdMonth < 12) {
-            notes.push(`Taking this draw in ${MONTH_NAMES[ira.planARmdMonth-1]} is earlier than December — see the two-plan comparison to quantify the opportunity cost.`);
-          } else {
-            notes.push('Taking this draw in December maximises IRA tax-deferred growth through the year.');
-          }
-          if (sp.type === T.RMD) {
-            notes.push(
-              ira.sameMonth
-                ? `IRA ${iraNum} RMD must be completed before the Roth conversion in the same month. Complete RMD by the ${ira.planARmdDay}th; conversion follows on the ${ira.planAConvDay}th (7-day IRS ordering buffer).`
-                : `IRA ${iraNum} RMD must be completed by December 31.`
-            );
-          }
+        // Build description — combine RMD + voluntary into one line when both exist in this group
+        const drawLabel = iRmd > 0 && iVol > 0
+          ? `IRA ${iraNum} draw of ${fmt$(ag.total)} (RMD ${fmt$(iRmd)} + voluntary ${fmt$(iVol)})`
+          : iRmd > 0
+            ? `IRA ${iraNum} RMD of ${fmt$(iRmd)}`
+            : `IRA ${iraNum} voluntary withdrawal of ${fmt$(iVol)}`;
 
-          addAction({
-            type: sp.type,
-            iraNum,
-            date: rmdDate,
-            amount: sp.amt,
-            federalWithholding: fedW,
-            stateWithholding:   stW,
-            description:
-              `Withdraw ${sp.label} of ${fmt$(sp.amt)} on ${rmdDateStr}. ` +
-              (totW > 0
-                ? `Withhold ${fmt$(fedW)} federal (${fmtPct(pctFed)})` +
-                  (stW > 0 ? ` and ${fmt$(stW)} ${stateInfo.name} (${fmtPct(pctSt)})` : '') +
-                  `. Net deposited: ${fmt$(net)}.`
-                : `No withholding — taxes covered by other IRA draws. Net deposited: ${fmt$(net)}.`),
-            notes,
-          });
+        const notes = [];
+        if (iRmd > 0 && iVol > 0)
+          notes.push(`Breakdown: required RMD ${fmt$(iRmd)}, voluntary withdrawal ${fmt$(iVol)}.`);
+        notes.push(
+          totW > 0
+            ? `Total withholding: ${fmt$(totW)} (${fmtPct(pctTot)} of distribution).`
+            : `No withholding on this draw — taxes covered by another draw.`
+        );
+        notes.push('IRS credit rule: withholding from IRA distributions is deemed paid pro-rata on each quarterly due date — even a December draw satisfies the entire-year quarterly safe-harbor retroactively.');
+        if (optimizerNote) notes.push(optimizerNote);
+        if (stateIraExempt) {
+          notes.push(`${stateInfo.name}: IRA distributions are exempt from state tax — no state withholding applied. State tax covered by quarterly estimates.`);
+        } else if (stateInfo.withholdingCreditedProRata) {
+          notes.push(`${stateInfo.name} similarly credits IRA withholding as if paid pro-rata throughout the year.`);
         }
+        if (ag.month < 12) {
+          notes.push(`Taking this draw in ${MONTH_NAMES[ag.month-1]} is earlier than December — see the two-plan comparison to quantify the opportunity cost.`);
+        } else {
+          notes.push('Taking this draw in December maximises IRA tax-deferred growth through the year.');
+        }
+        if (iRmd > 0) {
+          notes.push(
+            ira.sameMonth
+              ? `RMD must be completed before the Roth conversion in the same month. Complete draw by the ${ira.planARmdDay}th; conversion follows on the ${ira.planAConvDay}th (7-day IRS ordering buffer).`
+              : `RMD must be completed by December 31.`
+          );
+        }
+
+        addAction({
+          type: iRmd > 0 ? T.RMD : T.IRA_VOL,
+          iraNum,
+          date: rmdDate,
+          amount: ag.total,
+          federalWithholding: iraFedW,
+          stateWithholding:   iraStW,
+          description:
+            `Withdraw ${drawLabel} on ${rmdDateStr}. ` +
+            (totW > 0
+              ? `Withhold ${fmt$(iraFedW)} federal (${fmtPct(pctFed)})` +
+                (iraStW > 0 ? ` and ${fmt$(iraStW)} ${stateInfo.name} (${fmtPct(pctSt)})` : '') +
+                `. Net deposited: ${fmt$(net)}.`
+              : `No withholding — taxes covered by other draws. Net deposited: ${fmt$(net)}.`),
+          notes,
+        });
       }
 
       // ── Shortfall quarterly estimates ──────────────────────────────────────
@@ -985,8 +1072,8 @@ const TaxPaymentPlanner = (() => {
       missedFedCount:      missedFed.length,
       missedStateCount:    missedState.length,
       effectiveWithholdMonth,
-      ira1: { rmdMonth: ira1.origRmdMonth, planARmdMonth: ira1.planARmdMonth, convMonth: ira1.planAConvMonth, hasConflict: ira1.hasConflict, withheld: ira1Withheld, convPassed: ira1ConvPassed, passedOrigMonth: ira1.passedOrigMonth, sixtyDay: ira1SixtyDay, doWithhold: doWithhold1 },
-      ira2: { rmdMonth: ira2.origRmdMonth, planARmdMonth: ira2.planARmdMonth, convMonth: ira2.planAConvMonth, hasConflict: ira2.hasConflict, withheld: ira2Withheld, convPassed: ira2ConvPassed, passedOrigMonth: ira2.passedOrigMonth, sixtyDay: ira2SixtyDay, doWithhold: doWithhold2 },
+      ira1: { rmdMonth: ira1.origRmdMonth, planARmdMonth: ira1.planARmdMonth, convMonth: ira1.planAConvMonth, hasConflict: ira1.hasConflict, withheld: ira1Withheld, sixtyDay: ira1SixtyDay, doWithhold: doWithhold1 },
+      ira2: { rmdMonth: ira2.origRmdMonth, planARmdMonth: ira2.planARmdMonth, convMonth: ira2.planAConvMonth, hasConflict: ira2.hasConflict, withheld: ira2Withheld, sixtyDay: ira2SixtyDay, doWithhold: doWithhold2 },
       todayDate: today,
       coverageSummary,
     };
@@ -996,11 +1083,7 @@ const TaxPaymentPlanner = (() => {
     let planB = null;
     let convComparison = null;
     if (hasAnyConversion && !p._baseline) {
-      planB = computePaymentPlan(Object.assign({}, p, {
-        ira1RmdMonth: 12, ira1ConvMonth: 12,
-        ira2RmdMonth: 12, ira2ConvMonth: 12,
-        _baseline: true,
-      }));
+      planB = computePaymentPlan(Object.assign({}, p, { _baseline: true }));
       convComparison = buildConvComparison(p, ira1, ira2, effectiveWithholdMonth, totalIraDrawWithheld);
     }
 
@@ -1218,13 +1301,15 @@ const TaxPaymentPlanner = (() => {
   // ── HTML output ───────────────────────────────────────────────────────────
   function buildHtml(p, actions, summary, analysis, yr, stateInfo, planB, convComparison) {
     const typeIcon = {
-      [T.ROTH_CONV]: '🔄', [T.RMD]: '🏦', [T.IRA_VOL]: '🏦',
-      [T.SUPPL_IRA]: '🏦', [T.Q_FED]: '🇺🇸', [T.Q_STATE]: '📋',
+      [T.ROTH_CONV]:    '🔄', [T.RMD]: '🏦', [T.IRA_VOL]: '🏦',
+      [T.SUPPL_IRA]:    '🏦', [T.CASH_RESTORE]: '💵',
+      [T.Q_FED]: '🇺🇸', [T.Q_STATE]: '📋',
       [T.SS_WHOLD]:  '📌', [T.NOTE]: 'ℹ️', [T.ALERT]: '⚠️',
     };
     const typeColor = {
-      [T.ROTH_CONV]: '#4A90D9', [T.RMD]: '#2E75B6', [T.IRA_VOL]: '#2E75B6',
-      [T.SUPPL_IRA]: '#2E75B6', [T.Q_FED]: '#C9360C', [T.Q_STATE]: '#9C4A00',
+      [T.ROTH_CONV]:    '#4A90D9', [T.RMD]: '#2E75B6', [T.IRA_VOL]: '#2E75B6',
+      [T.SUPPL_IRA]:    '#2E75B6', [T.CASH_RESTORE]: '#00796B',
+      [T.Q_FED]: '#C9360C', [T.Q_STATE]: '#9C4A00',
       [T.SS_WHOLD]:  '#596A2F', [T.NOTE]: '#555555', [T.ALERT]: '#8B0000',
     };
 
@@ -1429,14 +1514,23 @@ const TaxPaymentPlanner = (() => {
       });
     };
 
+    const planBtnStyle = `background:rgba(255,255,255,0.18);color:#fff;border:1px solid rgba(255,255,255,0.5);` +
+      `border-radius:4px;padding:3px 10px;font-size:0.8em;cursor:pointer;margin-left:6px;font-weight:600;`;
+
     // Plan A
     if (planB) {
       const cc = convComparison;
       const planAColor = cc && cc.planAWins ? '#1B5E20' : '#7B1FA2';
-      h += `<div style="border:2px solid ${planAColor};border-radius:6px;margin-bottom:16px;overflow:hidden;">`;
-      h += `<div style="background:${planAColor};color:#fff;padding:8px 16px;font-weight:700;">📅 Plan A — Early Conversion(s)`;
+      h += `<div id="plan-section-a" style="border:2px solid ${planAColor};border-radius:6px;margin-bottom:16px;overflow:hidden;">`;
+      h += `<div style="background:${planAColor};color:#fff;padding:8px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">`;
+      h += `<span>📅 Plan A — Early Conversion(s)`;
       if (cc) h += ` &nbsp;<span style="font-weight:400;font-size:0.88em;">(${cc.planAWins ? '✓ lower first-year cost' : 'higher first-year cost — stronger long-term'})</span>`;
-      h += `</div><div style="padding:8px;">`;
+      h += `</span>`;
+      h += `<span class="plan-action-btns" style="white-space:nowrap;">`;
+      h += `<button style="${planBtnStyle}" onclick="downloadPlanIcs('A')">📅 .ics</button>`;
+      h += `<button style="${planBtnStyle}" onclick="printPlan('A')">🖨️ Print</button>`;
+      h += `</span></div>`;
+      h += `<div style="padding:8px;">`;
       renderActionList(actions, summary);
       h += `</div></div>`;
     } else {
@@ -1450,10 +1544,16 @@ const TaxPaymentPlanner = (() => {
     if (planB) {
       const cc = convComparison;
       const planBColor = cc && !cc.planAWins ? '#1B5E20' : '#7B1FA2';
-      h += `<div style="border:2px solid ${planBColor};border-radius:6px;margin-bottom:16px;overflow:hidden;">`;
-      h += `<div style="background:${planBColor};color:#fff;padding:8px 16px;font-weight:700;">📅 Plan B — December Baseline (all RMDs and conversions in December)`;
+      h += `<div id="plan-section-b" style="border:2px solid ${planBColor};border-radius:6px;margin-bottom:16px;overflow:hidden;">`;
+      h += `<div style="background:${planBColor};color:#fff;padding:8px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">`;
+      h += `<span>📅 Plan B — December Baseline (all RMDs and conversions in December)`;
       if (cc) h += ` &nbsp;<span style="font-weight:400;font-size:0.88em;">(${!cc.planAWins ? '✓ lower first-year cost' : 'higher first-year cost'})</span>`;
-      h += `</div><div style="padding:8px;">`;
+      h += `</span>`;
+      h += `<span class="plan-action-btns" style="white-space:nowrap;">`;
+      h += `<button style="${planBtnStyle}" onclick="downloadPlanIcs('B')">📅 .ics</button>`;
+      h += `<button style="${planBtnStyle}" onclick="printPlan('B')">🖨️ Print</button>`;
+      h += `</span></div>`;
+      h += `<div style="padding:8px;">`;
       renderActionList(planB.actions, planB.summary);
       h += `</div></div>`;
     }

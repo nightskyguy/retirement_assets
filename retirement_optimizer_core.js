@@ -2056,7 +2056,7 @@ function updateTable(log) {
     // Create body
     const tbody = table.createTBody();
     let maritalStatus = 'MFJ';
-    log.forEach(row => {
+    log.forEach((row, i) => {
         const tr = tbody.insertRow();
 
         // Check conditions for highlighting
@@ -2096,6 +2096,12 @@ function updateTable(log) {
                 }
                 if (key === 'BracketOverage' && (row['BracketOverage'] ?? 0) > 0) {
                     td.style.backgroundColor = '#ff8c0099';  // Orange — MAGI exceeded bracket ceiling
+                }
+                if (key === 'totalTax' || key === 'year') {
+                    td.style.cursor = 'pointer';
+                    td.style.textDecoration = 'underline dotted';
+                    td.title = 'Click to open Tax Payment Planner for this year';
+                    td.onclick = () => openTaxPlanner(row, i > 0 ? log[i - 1] : null);
                 }
 
                 // Check if key indicates percentage
@@ -2153,8 +2159,56 @@ function updateTable(log) {
 }
 
 
+function openTaxPlanner(row, prevRow) {
+    const p = new URLSearchParams();
+
+    const set = (k, v) => { if (v != null && v !== '' && !isNaN(v)) p.set(k, Math.round(v)); };
+    const setF = (k, v) => { if (v != null && v !== '' && !isNaN(v)) p.set(k, v); };
+
+    set('taxYear', row.year);
+    set('federalTax', row.FedTax);
+    set('stateTax', row.StateTax);
+    if (prevRow) {
+        set('priorYearFedTax', prevRow.FedTax);
+        set('priorYearStateTax', prevRow.StateTax);
+    }
+    set('ssIncome', row.SSincome);
+    set('pensionIncome', row.pension);
+    set('interest', row.cashInterest);
+    set('qualifiedDivs', row.cashDividends);
+    set('capitalGains', row.CapGains);
+    set('ira1Rmd', row['RMD1-']);
+    set('ira2Rmd', row['RMD2-']);
+    set('ira1Voluntary', Math.max(0, (row['IRA1-'] || 0) - (row['RMD1-'] || 0)));
+    set('ira2Voluntary', Math.max(0, (row['IRA2-'] || 0) - (row['RMD2-'] || 0)));
+
+    const rothConv = row.rothConv || 0;
+    if (rothConv > 0) {
+        if ((row.IRA1 || 0) >= (row.IRA2 || 0)) {
+            set('ira1RothConversion', rothConv);
+        } else {
+            set('ira2RothConversion', rothConv);
+        }
+    }
+
+    const marginalOrd = ((row['FedRate%'] || 0) + (row['StateRate%'] || 0)) * 100;
+    if (marginalOrd > 0) setF('marginalOrdRate', marginalOrd.toFixed(1));
+
+    const stateEl = document.getElementById('STATEname');
+    if (stateEl?.value) p.set('state', stateEl.value);
+
+    const growthEl = document.getElementById('growth');
+    if (growthEl?.value) setF('portfolioRate', parseFloat(growthEl.value));
+
+    const cashYieldEl = document.getElementById('cashYield');
+    if (cashYieldEl?.value) setF('hysaGross', parseFloat(cashYieldEl.value));
+
+    window.open('RetirementTaxPlanner.html?' + p.toString(), '_blank');
+}
+
+
 /*calculateInflationAdjustedWithdrawal:
-* given the parameters, determines the first year withdrawal (subsequent years are 
+* given the parameters, determines the first year withdrawal (subsequent years are
 * adjusted for inflation).  At that rate, the asset would reach zero in *years*
 */
 function calculateInflationAdjustedWithdrawal(principal, growthRate, inflationRate, years) {

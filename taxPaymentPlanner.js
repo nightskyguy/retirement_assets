@@ -400,7 +400,8 @@ const TaxPaymentPlanner = (() => {
     // Plan B (_baseline) targets December for any action not yet taken.
     // Already-taken/done actions use the 1st of the PREVIOUS month (or January if in Jan).
     const currentMonth = today.getMonth() + 1;                          // 1–12
-    const nextMonth    = Math.min(currentMonth + 1, 12);                // Plan A target
+    const isFutureYear = yr > today.getFullYear();
+    const nextMonth    = isFutureYear ? 1 : Math.min(currentMonth + 1, 12);  // Jan for future years
     const prevMonth    = currentMonth > 1 ? currentMonth - 1 : 1;      // already-done target
 
     const ira1ConvMonth = p.ira1ConvDone  ? prevMonth : (p._baseline ? 12 : nextMonth);

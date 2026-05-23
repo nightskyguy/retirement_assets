@@ -31,9 +31,42 @@
       background: #fff;
       border: 1px solid #BDD7EE;
       border-radius: 6px;
-      padding: 14px 16px;
       height: fit-content;
+      min-width: 0;
     }
+    .inputs-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: #EBF3FB;
+      border-radius: 6px 6px 0 0;
+      cursor: pointer;
+      user-select: none;
+      font-weight: 700;
+      font-size: 0.9em;
+      color: #1F4E79;
+      border-bottom: 1px solid #BDD7EE;
+      white-space: nowrap;
+    }
+    .inputs-toggle:hover { background: #D6E8F7; }
+    .inputs-toggle .chevron { font-size: 0.75em; transition: transform 0.2s; flex-shrink: 0; }
+    .inputs-toggle .toggle-hint {
+      margin-left: auto;
+      font-size: 0.78em;
+      font-weight: 400;
+      color: #666;
+    }
+    .inputs-body {
+      padding: 14px 16px;
+    }
+    .inputs.collapsed .inputs-body  { display: none; }
+    .inputs.collapsed .inputs-toggle { border-radius: 6px; border-bottom: none; }
+    .inputs.collapsed .chevron       { transform: rotate(-90deg); }
+    .inputs.collapsed .toggle-hint   { display: none; }
+    /* When inputs are collapsed the grid gives the extra space to the output panel */
+    .layout { transition: grid-template-columns 0.25s ease; }
+    .layout.inputs-collapsed { grid-template-columns: max-content 1fr; }
     .section-hdr {
       background: #2E75B6;
       color: #fff;
@@ -120,9 +153,10 @@
       font-style: italic;
     }
 
-    /* ── Tabs ────────────────────────────────────────────────────────── */
+    /* ── Tabs + toolbar ─────────────────────────────────────────────── */
     .tabs {
       display: flex;
+      align-items: center;
       border-bottom: 2px solid #BDD7EE;
       background: #EBF3FB;
       border-radius: 6px 6px 0 0;
@@ -135,11 +169,28 @@
       color: #1F4E79;
       border-bottom: 2px solid transparent;
       margin-bottom: -2px;
+      white-space: nowrap;
     }
     .tab.active {
       border-bottom: 2px solid #1F4E79;
       background: #fff;
     }
+    .tabs-spacer { flex: 1; }
+    .tabs #btn-print, .tabs #btn-copy-link {
+      padding: 5px 10px;
+      font-size: 0.82em;
+      font-weight: 600;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 6px;
+      white-space: nowrap;
+    }
+    .tabs #btn-print { background: #5C6BC0; color: #fff; }
+    .tabs #btn-print:hover { background: #3949AB; }
+    .tabs #btn-copy-link { background: #00796B; color: #fff; }
+    .tabs #btn-copy-link:hover { background: #004D40; }
+    .tabs #btn-copy-link.copied { background: #2E7D32; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
     pre {
@@ -153,7 +204,6 @@
       white-space: pre-wrap;
       margin: 0;
     }
-    .json-out { max-height: 620px; overflow-y: auto; }
 
     /* ── State info tooltip-style box ────────────────────────────────── */
     #state-info-box {
@@ -166,34 +216,15 @@
       margin-top: 4px;
       line-height: 1.4;
     }
-    .action-buttons {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-    }
-    .action-buttons button {
-      flex: 1;
-      padding: 7px 4px;
-      font-size: 0.82em;
-      font-weight: 600;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    #btn-print { background: #5C6BC0; color: #fff; }
-    #btn-print:hover { background: #3949AB; }
-    #btn-copy-link { background: #00796B; color: #fff; }
-    #btn-copy-link:hover { background: #004D40; }
-    #btn-copy-link.copied { background: #2E7D32; }
 
     /* ── Print styles ────────────────────────────────────────────────── */
     @media print {
       body { padding: 0; background: #fff; font-size: 12px; }
-      .inputs, .action-buttons, .tabs { display: none !important; }
+      .inputs, .tabs { display: none !important; }
       .layout { display: block !important; }
       .output { border: none; box-shadow: none; }
       .tab-content { display: block !important; }
-      #tab-text, #tab-json { display: none !important; }
+      #tab-text { display: none !important; }
       h1 { font-size: 1.1em; margin-bottom: 8px; }
       .plan-action-btns { display: none !important; }
     }
@@ -205,7 +236,13 @@
 <div class="layout">
 
   <!-- ── Input Panel ──────────────────────────────────────────────────── -->
-  <div class="inputs">
+  <div class="inputs" id="inputs-panel">
+    <div class="inputs-toggle" id="inputs-toggle" onclick="toggleInputs()">
+      <span class="chevron">▼</span>
+      <span>Inputs</span>
+      <span class="toggle-hint" id="toggle-hint">click to collapse</span>
+    </div>
+    <div class="inputs-body">
 
     <div class="section-hdr">Tax Year &amp; State</div>
     <label><span>Tax Year</span>
@@ -391,11 +428,7 @@
 
     <button id="compute">Compute Payment Plan</button>
 
-    <div class="action-buttons">
-      <button id="btn-print" onclick="window.print()">🖨️ Print / PDF</button>
-      <button id="btn-copy-link" onclick="copyLink()">🔗 Copy Link</button>
-    </div>
-
+    </div><!-- end .inputs-body -->
   </div><!-- end .inputs -->
 
   <!-- ── Output Panel ─────────────────────────────────────────────────── -->
@@ -403,7 +436,9 @@
     <div class="tabs">
       <div class="tab active" data-tab="plan">Payment Plan</div>
       <div class="tab"        data-tab="text">Plain Text</div>
-      <div class="tab"        data-tab="json">JSON (API)</div>
+      <div class="tabs-spacer"></div>
+      <button id="btn-print"     onclick="window.print()">🖨️ Print / PDF</button>
+      <button id="btn-copy-link" onclick="copyLink()">🔗 Copy Link</button>
     </div>
     <div class="tab-content active" id="tab-plan">
       <div class="placeholder" id="placeholder">
@@ -413,9 +448,6 @@
     </div>
     <div class="tab-content" id="tab-text">
       <pre id="plan-text"></pre>
-    </div>
-    <div class="tab-content" id="tab-json">
-      <pre id="plan-json" class="json-out"></pre>
     </div>
   </div>
 
@@ -704,9 +736,12 @@
 
   function downloadPlanIcs(which) {
     if (!_planData) return;
-    const actions = which === 'B' ? _planData.planBActions : _planData.planAActions;
+    // Plan A = hybrid (_planC computation), Plan B = early (main), Plan C = December (_baseline)
+    const actions = which === 'A' ? _planData.planAActions
+                  : which === 'B' ? _planData.planBActions
+                  : _planData.planCActions;
     if (!actions) return;
-    const label = which === 'B' ? 'plan-b' : 'plan-a';
+    const label = `plan-${which.toLowerCase()}`;
     const blob = new Blob([generateIcs(actions)], { type: 'text/calendar;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -716,11 +751,15 @@
   }
 
   function printPlan(which) {
-    const otherId = which === 'A' ? 'plan-section-b' : 'plan-section-a';
-    const other = document.getElementById(otherId);
-    if (other) other.style.display = 'none';
+    const allIds = ['plan-section-a', 'plan-section-b', 'plan-section-c'];
+    const targetId = `plan-section-${which.toLowerCase()}`;
+    const others = allIds
+      .filter(id => id !== targetId)
+      .map(id => document.getElementById(id))
+      .filter(Boolean);
+    others.forEach(el => { el.style.display = 'none'; });
     window.print();
-    if (other) other.style.display = '';
+    others.forEach(el => { el.style.display = ''; });
   }
 
   // ── Main compute ──────────────────────────────────────────────────────────
@@ -742,53 +781,19 @@
     // Text tab
     document.getElementById('plan-text').textContent = plan.text;
 
-    // JSON tab (compact — omit pre-rendered html/text)
-    const compact = {
-      strategy:  plan.strategy,
-      stateInfo: {
-        name:                       plan.stateInfo.name,
-        hasIncomeTax:               plan.stateInfo.hasIncomeTax,
-        iraExempt:                  plan.stateInfo.iraExempt,
-        withholdingCreditedProRata: plan.stateInfo.withholdingCreditedProRata,
-        safeHarborAlways110:        plan.stateInfo.safeHarborAlways110,
-        ocWeightedMonths:           plan.stateInfo.ocWeightedMonths,
-      },
-      summary:  plan.summary,
-      analysis: {
-        strategies:    plan.analysis.strategies,
-        iraCoverage:   plan.analysis.iraCoverage,
-        hysaNet:       plan.analysis.hysaNet,
-        breakeven:     plan.analysis.breakeven,
-        yeIraWins:     plan.analysis.yeIraWins,
-        iraOcFactor:   plan.analysis.iraOcFactor,
-        stateOcFactor: plan.analysis.stateOcFactor,
-      },
-      actions: plan.actions.map(a => ({
-        seq:                a.seq,
-        type:               a.type,
-        dateLabel:          a.dateLabel,
-        amount:             a.amount,
-        federalWithholding: a.federalWithholding,
-        stateWithholding:   a.stateWithholding,
-        netReceived:        a.netReceived,
-        fedWithholdPct:     +(a.fedWithholdPct * 100).toFixed(1),
-        stateWithholdPct:   +(a.stateWithholdPct * 100).toFixed(1),
-        description:        a.description,
-        notes:              a.notes,
-      })),
-    };
-    document.getElementById('plan-json').textContent = JSON.stringify(compact, null, 2);
-
-    // Store plan data for per-plan ICS/print buttons embedded in generated HTML
+    // Store plan data for per-plan ICS/print buttons embedded in generated HTML.
+    // New plan convention: A=hybrid (_planC), B=early (main), C=December (_baseline)
     _planData = {
       taxYear:      params.taxYear,
-      planAActions: plan.actions,
-      planBActions: plan.planB ? plan.planB.actions : null,
+      planAActions: plan.planC  ? plan.planC.actions  : null,   // hybrid
+      planBActions: plan.actions,                                 // early everything (main)
+      planCActions: plan.planB  ? plan.planB.actions  : null,   // December baseline
     };
 
     // Update global print button label
+    const planCount = (plan.planC ? 1 : 0) + 1 + (plan.planB ? 1 : 0);
     document.getElementById('btn-print').textContent =
-      plan.planB ? '🖨️ Print BOTH Plans' : '🖨️ Print / PDF';
+      planCount >= 3 ? '🖨️ Print ALL Plans' : planCount === 2 ? '🖨️ Print BOTH Plans' : '🖨️ Print / PDF';
   }
 
   document.getElementById('compute').addEventListener('click', runCompute);
@@ -874,9 +879,31 @@
     return true;
   }
 
-  // Auto-compute when URL parameters are present
+  // ── Collapsible input panel ───────────────────────────────────────────────
+  function toggleInputs() {
+    const panel  = document.getElementById('inputs-panel');
+    const layout = document.querySelector('.layout');
+    const hint   = document.getElementById('toggle-hint');
+    const collapsed = panel.classList.toggle('collapsed');
+    layout.classList.toggle('inputs-collapsed', collapsed);
+    hint.textContent = collapsed ? 'click to expand' : 'click to collapse';
+  }
+
+  function collapseInputs() {
+    const panel  = document.getElementById('inputs-panel');
+    const layout = document.querySelector('.layout');
+    const hint   = document.getElementById('toggle-hint');
+    panel.classList.add('collapsed');
+    layout.classList.add('inputs-collapsed');
+    hint.textContent = 'click to expand';
+  }
+
+  // Auto-compute when URL parameters are present; collapse inputs when pre-filled
   window.addEventListener('DOMContentLoaded', () => {
-    if (loadFromUrl()) runCompute();
+    if (loadFromUrl()) {
+      collapseInputs();
+      runCompute();
+    }
   });
 </script>
 </body>

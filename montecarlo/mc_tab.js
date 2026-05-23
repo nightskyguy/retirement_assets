@@ -53,6 +53,11 @@ function runMonteCarlo() {
         base.birthyear2 + base.die2
     ) - (base.startYear ?? 2026) + 1;
 
+    // Calibrate timing on first run so the estimate shown during the run is meaningful.
+    if (estimateMCMs(numPaths, variations.length) == null) {
+        calibrateMCMs({ variations, mu, sigma, seed, years });
+    }
+
     // UI feedback
     setMCRunning(true);
 
@@ -106,14 +111,17 @@ function renderMCMetrics(msg) {
     const el = document.getElementById('mc-metrics');
     if (!el) return;
 
-    const ms   = msg.totalMs            != null ? Math.round(msg.totalMs)                        : null;
+    const ms   = msg.totalMs            != null ? msg.totalMs                                     : null;
     const grow = msg.medianAnnualReturn != null ? (msg.medianAnnualReturn * 100).toFixed(1)      : null;
     const lo   = msg.minAnnualReturn    != null ? (msg.minAnnualReturn    * 100).toFixed(1)      : null;
     const hi   = msg.maxAnnualReturn    != null ? (msg.maxAnnualReturn    * 100).toFixed(1)      : null;
     const inf  = msg.inflationRate      != null ? (msg.inflationRate      * 100).toFixed(1)      : null;
 
     const parts = [];
-    if (ms   != null) parts.push(`Completed in <strong>${ms.toLocaleString()} ms</strong>`);
+    if (ms != null) {
+        const sec = (ms / 1000).toFixed(ms < 10000 ? 1 : 0);
+        parts.push(`Completed in <strong>${sec} s</strong>`);
+    }
     if (grow != null) parts.push(`Median growth <strong>${grow}%/yr</strong> <span style="color:#888;font-size:0.85em;">(geometric)</span>`);
     if (lo != null && hi != null) parts.push(
         `Annual return range <strong style="color:${parseFloat(lo)<0?'#c0392b':'inherit'}">${lo}%</strong>`
@@ -381,12 +389,27 @@ function setMCRunning(running) {
     const runBtn     = document.getElementById('mc-run-btn');      // inside nerd panel
     const cancelWrap = document.getElementById('mc-cancel-wrap');  // always-accessible cancel
     const progWrap   = document.getElementById('mc-progress-wrap');
+    const runEst     = document.getElementById('mc-run-est');
 
     if (runBtn)     runBtn.disabled = running;
     // Use flex when showing so the cancel+path-count row lays out correctly.
     if (cancelWrap) cancelWrap.style.display = running ? 'flex' : 'none';
     if (progWrap)   progWrap.style.display   = running ? '' : 'none';
-    if (!running)   updateMCProgress(0);
+    if (!running) {
+        updateMCProgress(0);
+        if (runEst) runEst.textContent = '';
+    } else if (runEst) {
+        const numPaths = parseInt(document.getElementById('mc-num-paths')?.value ?? '500');
+        const base     = getInputs();
+        const numVar   = buildVariations(base).length;
+        const estMs    = estimateMCMs(numPaths, numVar);
+        if (estMs != null) {
+            const sec = (estMs / 1000).toFixed(1);
+            runEst.textContent = `May take approximately ${sec} seconds to complete`;
+        } else {
+            runEst.textContent = 'May take up to 20 seconds to complete';
+        }
+    }
 }
 
 function updateMCProgress(pct) {

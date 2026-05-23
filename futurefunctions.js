@@ -423,34 +423,103 @@ function projectRetirementYears(params) {
 // Helper Functions
 // ============================================================================
 
+// ============================================================================
+// Social Security Survivor Benefit (SSA formula, FRA = 67)
+// ============================================================================
+
+function calculateSurvivorBenefit(
+    userAgeAtDeath, userClaimAge, userMonthlyBenefit,
+    spouseClaimAge, spouseMonthlyBenefit
+) {
+    const FRA_MONTHS = 67 * 12;
+    const userClaimMonths   = Math.round(userClaimAge  * 12);
+    const userDeathMonths   = Math.round(userAgeAtDeath * 12);
+    const spouseClaimMonths = Math.round(Math.max(spouseClaimAge, 60) * 12);
+
+    let userPIA;
+    if (userClaimMonths >= FRA_MONTHS) {
+        const delayedMonths = userClaimMonths - FRA_MONTHS;
+        userPIA = userMonthlyBenefit / (1 + delayedMonths * (0.08 / 12));
+    } else {
+        const reductionMonths = FRA_MONTHS - userClaimMonths;
+        const reductionFactor = reductionMonths <= 36
+            ? reductionMonths * (5 / 9 / 100)
+            : (36 * (5 / 9 / 100)) + ((reductionMonths - 36) * (5 / 12 / 100));
+        userPIA = userMonthlyBenefit / (1 - reductionFactor);
+    }
+
+    const deceasedBaseline = userDeathMonths < FRA_MONTHS
+        ? userPIA
+        : userPIA * (1 + (userDeathMonths - FRA_MONTHS) * (0.08 / 12));
+
+    let rawSurvivorBenefit;
+    if (spouseClaimMonths >= FRA_MONTHS) {
+        rawSurvivorBenefit = deceasedBaseline;
+    } else {
+        const totalPossibleEarlyMonths = FRA_MONTHS - 720;
+        const earlyMonths = FRA_MONTHS - spouseClaimMonths;
+        rawSurvivorBenefit = deceasedBaseline * (1 - (earlyMonths / totalPossibleEarlyMonths) * 0.285);
+    }
+
+    return Math.floor(Math.max(rawSurvivorBenefit, spouseMonthlyBenefit));
+}
+
 /**
- * Calculate individual person's Social Security for the year
+ * Calculate what a person's SS would be if alive (ignores alive status)
  */
-function calculatePersonSS(person, currentYear, cumulativeSSInflation, ssBenefitFactor) {
-    if (!person.alive || !person.socialSecurity) return 0;
-    
-    const age = currentYear - person.birthYear;
+function calculatePersonSSPotential(person, currentYear, cumulativeSSInflation, ssBenefitFactor) {
+    if (!person.socialSecurity) return 0;
+
     const ssStartYear = person.birthYear + person.socialSecurity.startAge;
-    
     if (currentYear < ssStartYear) return 0;
-    
-    // First year proration
+
     let prorationFactor = 1.0;
     if (currentYear === ssStartYear) {
         const monthsCollecting = 13 - person.birthMonth;
         prorationFactor = monthsCollecting / 12;
-    } // first year proration
-    
-    return person.socialSecurity.annualAmount * 
-           cumulativeSSInflation * 
-           ssBenefitFactor * 
+    }
+
+    return person.socialSecurity.annualAmount *
+           cumulativeSSInflation *
+           ssBenefitFactor *
            prorationFactor;
+} // calculatePersonSSPotential()
+
+/**
+ * Calculate individual person's Social Security for the year
+ */
+function calculatePersonSS(person, currentYear, cumulativeSSInflation, ssBenefitFactor) {
+    if (!person.alive) return 0;
+    return calculatePersonSSPotential(person, currentYear, cumulativeSSInflation, ssBenefitFactor);
 } // calculatePersonSS()
 
 /**
- * Calculate total Social Security across all persons
+ * Calculate total Social Security across all persons.
+ * Survivor rule: when one of two spouses is deceased, applies the SSA survivor
+ * benefit formula (FRA=67) rather than a simple max.
  */
 function calculateTotalSocialSecurity(persons, currentYear, cumulativeSSInflation, ssBenefitFactor) {
+    if (persons.length === 2) {
+        const alive   = persons.filter(p => p.alive);
+        const deceased = persons.filter(p => !p.alive);
+        if (alive.length === 1 && deceased.length === 1) {
+            const survivor = alive[0];
+            const dec      = deceased[0];
+
+            // No benefit paid before survivor reaches their SS start age
+            const survivorStartYear = survivor.birthYear + (survivor.socialSecurity?.startAge ?? 999);
+            if (currentYear < survivorStartYear) return 0;
+
+            const monthly = calculateSurvivorBenefit(
+                dec.longevity,
+                dec.socialSecurity?.startAge       ?? 67,
+                (dec.socialSecurity?.annualAmount  ?? 0) / 12,
+                survivor.socialSecurity?.startAge      ?? 67,
+                (survivor.socialSecurity?.annualAmount ?? 0) / 12
+            );
+            return monthly * 12 * cumulativeSSInflation * ssBenefitFactor;
+        }
+    }
     return persons.reduce((total, person) => {
         return total + calculatePersonSS(person, currentYear, cumulativeSSInflation, ssBenefitFactor);
     }, 0);

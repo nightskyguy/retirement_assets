@@ -714,7 +714,7 @@ assertEqual(
     assertEqual(findLimitByRate('FEDERAL', 'MFJ', 0.24, 1), {limit: 403550, rate: 0.24}, 
                 '😭findLimitByRate: FEDERAL MFJ 24% bracket');
 	
-    assertEqual(findLimitByRate('CA', 'SGL', 0.06, 1), { limit: 54081, rate: 0.06 }, 
+    assertEqual(findLimitByRate('CA', 'SGL', 0.06, 1), { limit: 55867, rate: 0.06 },
                 '😭findLimitByRate: State SGL 6% bracket');
 
 		

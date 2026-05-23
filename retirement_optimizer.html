@@ -215,6 +215,7 @@
 			<!-- Cancel button + path count — visible during any run (nerd-mode or auto-run) -->
 			<div id="mc-cancel-wrap" style="display:none;margin-bottom:6px;align-items:center;gap:10px;">
 				<button id="mc-cancel-btn" onclick="cancelMC()" style="padding:6px 12px;font-size:0.9em;background:#dc3545;color:white;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
+				<span id="mc-run-est" style="font-size:1em;color:#555;"></span>
 				<span id="mc-path-count" style="font-size:0.8em;color:#888;margin-left:4px;"></span>
 			</div>
 			<!-- Post-run metrics bar -->
@@ -318,6 +319,7 @@
                         <li>It only uses the MFJ and Single tax brackets. (No head of household, or Married filing separately)</li>
                         <li>Because ROTH assets are not taxable, it merges all ROTH funds into one account. In real life, conversions/withdraws and earnings would occur in separate accounts.</li>
                         <li>There is no Federal Alternative Minimum Tax (AMT) calculation. This normally does not apply to retirees unless they have huge bond interest, or are exercising ISO stock. In the case of California the 1% additional tax for high earners is built into the embedded tax table.</li>
+                        <li><strong>Social Security survivor benefits</strong> are calculated using the SSA formula: the deceased's benefit is converted back to their Primary Insurance Amount (PIA), adjusted for any delayed credits earned up to the date of death, and then reduced if the survivor claims before their own Full Retirement Age (67). The survivor receives whichever is higher — the computed survivor benefit or their own retirement benefit. Limitations: FRA is fixed at 67 (born 1960+), WEP/GPO offsets are not modeled, and the survivor is assumed to claim at the same age as their own planned SS start age rather than optimizing a switch strategy. Consult SSA.gov or a financial planner for a personalized estimate.</li>
                         </ol>
                         Please read further details in the <A href="https://tools.netcitizen.us/">README.md</A>.
                     </div>                        

@@ -1309,7 +1309,7 @@ function buildVariations(base) {
                 { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
 
         for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25])
-            push('Fixed', `${n} yrs`, n,
+            push('Reduce', `${n} yrs`, n,
                 { strategy: 'fixed', nYears: n, maxConversion: maxConv });
 
         for (const rate of bracketRates) {
@@ -1319,7 +1319,7 @@ function buildVariations(base) {
         }
 
         for (const pct of [3, 4, 5, 6, 7, 8, 10])
-            push('Fixed % IRA', `${pct}%`, pct,
+            push('IRA Draw', `${pct}%`, pct,
                 { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
     }
 
@@ -1371,9 +1371,9 @@ function runOptimizer() {
             addResult('Proportional', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
         }
 
-        // Fixed N years
+        // Reduce IRA over N years
         for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
-            addResult('Fixed', `${n} yrs`, n, { strategy: 'fixed', nYears: n, maxConversion: maxConv });
+            addResult('Reduce', `${n} yrs`, n, { strategy: 'fixed', nYears: n, maxConversion: maxConv });
         }
 
         // Fill bracket — one row per bracket level
@@ -1382,9 +1382,9 @@ function runOptimizer() {
             addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
         }
 
-        // Fixed % IRA withdrawal
+        // IRA Draw — fixed % of IRA balance each year
         for (const pct of [3, 4, 5, 6, 7, 8, 10]) {
-            addResult('Fixed % IRA', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
+            addResult('IRA Draw', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
         }
     }
 

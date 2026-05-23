@@ -13,13 +13,26 @@ let _mcStartYear  = 2026;      // cached from getInputs() at run time
 function initMCTab() {
     const btn = document.getElementById('btn-mc');
     if (!btn) return;
-    // Gate the tab button on NERD_KNOBS (defined in retirement_optimizer_core.js)
-    btn.style.display = (typeof NERD_KNOBS !== 'undefined' && NERD_KNOBS) ? '' : 'none';
+    btn.style.display = '';  // Tab always visible.
 
-    // Also gate the advanced params panel within the tab
-    const panel = document.getElementById('mc-params-panel');
-    if (panel) {
-        panel.style.display = (typeof NERD_KNOBS !== 'undefined' && NERD_KNOBS) ? '' : 'none';
+    // Show the Simulation Parameters panel only for nerd-knob users.
+    // Normal users: panel stays hidden and the tab click auto-runs.
+    const nerdPanel = document.getElementById('mc-nerd-panel');
+    if (nerdPanel) {
+        nerdPanel.style.display = _mcNerdMode() ? '' : 'none';
+    }
+}
+
+// Returns true when NERD_KNOBS is active.
+function _mcNerdMode() {
+    return typeof NERD_KNOBS !== 'undefined' && NERD_KNOBS;
+}
+
+// Called by the Monte Carlo tab button.
+// In normal mode, runs immediately with default params (panel stays hidden).
+function mcTabActivated() {
+    if (!_mcNerdMode()) {
+        runMonteCarlo();
     }
 }
 
@@ -44,7 +57,7 @@ function runMonteCarlo() {
     setMCRunning(true);
 
     runMCWorker(
-        { variations, numPaths, mu, sigma, seed, years },
+        { variations, numPaths, mu, sigma, seed, years, inflationRate: base.inflation },
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);
@@ -69,6 +82,7 @@ function cancelMC() {
 
 function renderMCResults(msg) {
     document.getElementById('mc-error').style.display = 'none';
+    renderMCMetrics(msg);
     renderSurvivalTable(msg.variations, msg.numPaths);
 
     // Default chart: best-surviving variation per strategy family
@@ -86,6 +100,47 @@ function renderMCResults(msg) {
     syncTableCheckboxes();
 }
 
+// --- Metrics bar ----------------------------------------------------------
+
+function renderMCMetrics(msg) {
+    const el = document.getElementById('mc-metrics');
+    if (!el) return;
+
+    const ms   = msg.totalMs            != null ? Math.round(msg.totalMs)                        : null;
+    const grow = msg.medianAnnualReturn != null ? (msg.medianAnnualReturn * 100).toFixed(1)      : null;
+    const lo   = msg.minAnnualReturn    != null ? (msg.minAnnualReturn    * 100).toFixed(1)      : null;
+    const hi   = msg.maxAnnualReturn    != null ? (msg.maxAnnualReturn    * 100).toFixed(1)      : null;
+    const inf  = msg.inflationRate      != null ? (msg.inflationRate      * 100).toFixed(1)      : null;
+
+    const parts = [];
+    if (ms   != null) parts.push(`Completed in <strong>${ms.toLocaleString()} ms</strong>`);
+    if (grow != null) parts.push(`Median growth <strong>${grow}%/yr</strong> <span style="color:#888;font-size:0.85em;">(geometric)</span>`);
+    if (lo != null && hi != null) parts.push(
+        `Annual return range <strong style="color:${parseFloat(lo)<0?'#c0392b':'inherit'}">${lo}%</strong>`
+        + ` to <strong>${hi}%</strong>`
+        + ` <span style="color:#888;font-size:0.85em;">(worst/best simulated year)</span>`
+    );
+    if (inf  != null) parts.push(`Inflation <strong>${inf}%/yr</strong> <span style="color:#888;font-size:0.85em;">(fixed)</span>`);
+
+    el.innerHTML = parts.join(' &nbsp;·&nbsp; ');
+    el.style.display = parts.length ? '' : 'none';
+}
+
+// --- Time estimate --------------------------------------------------------
+
+function updateMCTimeEstimate() {
+    const el        = document.getElementById('mc-time-est');
+    if (!el) return;
+    const numPaths  = parseInt(document.getElementById('mc-num-paths')?.value ?? '500');
+    const base      = getInputs();
+    const numVar    = buildVariations(base).length;
+    const estMs     = estimateMCMs(numPaths, numVar);
+    if (estMs == null) { el.textContent = ''; return; }
+    el.textContent = estMs < 1000
+        ? `~${estMs} ms`
+        : `~${(estMs / 1000).toFixed(1)} s`;
+}
+
 // --- Survival Table -------------------------------------------------------
 
 function renderSurvivalTable(variations, numPaths) {
@@ -93,10 +148,15 @@ function renderSurvivalTable(variations, numPaths) {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Sort by survival rate descending
+    // Sort: primary = survival rate desc, secondary = median final balance desc
     const sorted = variations
         .map((v, i) => ({ ...v, _origIdx: i }))
-        .sort((a, b) => b.survivalRate - a.survivalRate);
+        .sort((a, b) => {
+            if (b.survivalRate !== a.survivalRate) return b.survivalRate - a.survivalRate;
+            const aFinal = a.percentiles.p50[a.percentiles.p50.length - 1] ?? 0;
+            const bFinal = b.percentiles.p50[b.percentiles.p50.length - 1] ?? 0;
+            return bFinal - aFinal;
+        });
 
     sorted.forEach(v => {
         const pct     = (v.survivalRate * 100).toFixed(1);
@@ -109,12 +169,15 @@ function renderSurvivalTable(variations, numPaths) {
         tr.style.background = color;
         tr.dataset.varIdx = v._origIdx;
 
+        const spendTxt = v.spendGoal != null ? '$' + fmt(v.spendGoal) : '—';
         tr.innerHTML = `
             <td style="padding:3px 6px;text-align:center;">
                 <input type="checkbox" class="mc-var-check" data-idx="${v._origIdx}">
             </td>
             <td style="padding:3px 6px;">${escapeHtml(v.strategyFamily)}</td>
             <td style="padding:3px 6px;">${escapeHtml(v.paramLabel)}</td>
+            <td style="padding:3px 6px;text-align:center;">${v.maxConversion ? '✓' : '—'}</td>
+            <td style="padding:3px 6px;text-align:right;">${spendTxt}</td>
             <td style="padding:3px 6px;text-align:right;font-weight:bold;">${pct}%</td>
             <td style="padding:3px 6px;text-align:right;">${ruinTxt}</td>
             <td style="padding:3px 6px;text-align:right;">$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
@@ -149,9 +212,9 @@ function syncTableCheckboxes() {
 // One color hue per strategy family, semi-transparent fills for bands.
 const FAMILY_COLORS = {
     'Proportional': { solid: '#1565C0', band75: 'rgba(21,101,192,0.18)', band95: 'rgba(21,101,192,0.08)' },
-    'Fixed':        { solid: '#2E7D32', band75: 'rgba(46,125,50,0.18)',  band95: 'rgba(46,125,50,0.08)'  },
+    'Reduce':       { solid: '#2E7D32', band75: 'rgba(46,125,50,0.18)',  band95: 'rgba(46,125,50,0.08)'  },
     'Fill Bracket': { solid: '#E65100', band75: 'rgba(230,81,0,0.18)',   band95: 'rgba(230,81,0,0.08)'   },
-    'Fixed % IRA':  { solid: '#6A1B9A', band75: 'rgba(106,27,154,0.18)','band95': 'rgba(106,27,154,0.08)'},
+    'IRA Draw':     { solid: '#6A1B9A', band75: 'rgba(106,27,154,0.18)', band95: 'rgba(106,27,154,0.08)' },
 };
 // Fallback palette for unexpected family names
 const FALLBACK_PALETTE = [
@@ -277,16 +340,17 @@ function renderMCChart(msg) {
                             const selArray = Array.from(_mcSelected);
                             const v = _mcResults?.variations[selArray[Math.floor(ctx.datasetIndex / 5)]];
                             const p = ctx.dataIndex;
-                            const pct = v?.percentiles;
-                            if (!pct) return ctx.dataset.label;
-                            return [
-                                ` ${ctx.dataset.label}`,
-                                `   p95  $${fmt(pct.p95[p])}`,
-                                `   p75  $${fmt(pct.p75[p])}`,
-                                `   p50  $${fmt(pct.p50[p])}`,
-                                `   p25  $${fmt(pct.p25[p])}`,
-                                `   p5   $${fmt(pct.p5[p])}`,
-                            ];
+                            const val = v?.percentiles?.p50?.[p];
+                            // Build name without survival rate (shown in legend + table already).
+                            const name = v
+                                ? `${v.strategyFamily} ${v.paramLabel}${v.maxConversion ? ' ✓' : ''}`
+                                : ctx.dataset.label;
+                            return `  ${name}  $${fmt(val)}`;
+                        },
+                        // Solid filled square instead of outlined-on-white box.
+                        labelColor: (ctx) => {
+                            const color = ctx.dataset.borderColor;
+                            return { backgroundColor: color, borderColor: color, borderWidth: 0 };
                         },
                     },
                 },
@@ -314,14 +378,15 @@ function renderMCChart(msg) {
 // --- Progress / State helpers ---------------------------------------------
 
 function setMCRunning(running) {
-    const runBtn    = document.getElementById('mc-run-btn');
-    const cancelBtn = document.getElementById('mc-cancel-btn');
-    const progWrap  = document.getElementById('mc-progress-wrap');
+    const runBtn     = document.getElementById('mc-run-btn');      // inside nerd panel
+    const cancelWrap = document.getElementById('mc-cancel-wrap');  // always-accessible cancel
+    const progWrap   = document.getElementById('mc-progress-wrap');
 
-    if (runBtn)    runBtn.disabled    =  running;
-    if (cancelBtn) cancelBtn.style.display = running ? '' : 'none';
-    if (progWrap)  progWrap.style.display  = running ? '' : 'none';
-    if (!running)  updateMCProgress(0);
+    if (runBtn)     runBtn.disabled = running;
+    // Use flex when showing so the cancel+path-count row lays out correctly.
+    if (cancelWrap) cancelWrap.style.display = running ? 'flex' : 'none';
+    if (progWrap)   progWrap.style.display   = running ? '' : 'none';
+    if (!running)   updateMCProgress(0);
 }
 
 function updateMCProgress(pct) {

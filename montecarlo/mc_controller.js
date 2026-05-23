@@ -28,6 +28,9 @@ function runMCWorker(cfg, onProgress, onComplete) {
             onProgress?.(msg.pct);
         } else if (msg.type === 'results') {
             _mcWorker = null;
+            if (msg.totalMs && msg.numPaths && cfg.variations?.length) {
+                _mcMsPerSim = msg.totalMs / (msg.numPaths * cfg.variations.length);
+            }
             onComplete?.(msg);
         }
     };
@@ -50,6 +53,16 @@ function cancelMCWorker() {
     _mcCancelled = true;
 }
 
+// ---- Throughput tracking (for time estimates) ------------------------------
+
+let _mcMsPerSim = null;  // ms per (variation × path), calibrated after each run
+
+// Returns estimated ms for a given number of paths and variations, or null if uncalibrated.
+function estimateMCMs(numPaths, numVariations) {
+    if (_mcMsPerSim == null) return null;
+    return Math.round(_mcMsPerSim * numPaths * numVariations);
+}
+
 // ---- Synchronous (chunked) fallback ----------------------------------------
 // Mirrors worker.js logic exactly, calling the globally-loaded simulate(),
 // mulberry32(), boxMuller(), and computePercentiles() functions.
@@ -57,6 +70,7 @@ function cancelMCWorker() {
 let _mcCancelled = false;
 
 async function _runMCMainThread(cfg, onProgress, onComplete) {
+    const t0 = performance.now();
     _mcCancelled = false;
     const { numPaths, mu, sigma, seed, years, variations } = cfg;
     const rng = mulberry32(seed ?? 42);
@@ -65,9 +79,15 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
     // Build shared scenario bank (CRN) — same draws for all variations.
     const scenarioBank = new Float64Array(numPaths * years);
+    let minAnnualReturn =  Infinity;
+    let maxAnnualReturn = -Infinity;
     for (let p = 0; p < numPaths; p++) {
         for (let y = 0; y < years; y++) {
-            scenarioBank[p * years + y] = logDrift + sigma * boxMuller(rng);
+            const shock = logDrift + sigma * boxMuller(rng);
+            scenarioBank[p * years + y] = shock;
+            const r = Math.exp(shock) - 1;
+            if (r < minAnnualReturn) minAnnualReturn = r;
+            if (r > maxAnnualReturn) maxAnnualReturn = r;
         }
     }
 
@@ -134,6 +154,8 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             label:          baseInputs._label          ?? `Variation ${vi + 1}`,
             strategyFamily: baseInputs._strategyFamily ?? '',
             paramLabel:     baseInputs._paramLabel     ?? '',
+            maxConversion:  baseInputs.maxConversion   ?? false,
+            spendGoal:      baseInputs.spendGoal       ?? null,
             survivalRate:   (numPaths - ruinCount) / numPaths,
             medianRuinYear: failures.length > 0 ? failures[Math.floor(failures.length / 2)] : null,
             percentiles: {
@@ -150,5 +172,17 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         }
     }
 
-    onComplete?.({ type: 'results', variations: varResults, numPaths, years });
+    const totalMs = performance.now() - t0;
+    _mcMsPerSim = totalMs / (numPaths * variations.length);
+    onComplete?.({
+        type: 'results',
+        variations: varResults,
+        numPaths,
+        years,
+        totalMs,
+        medianAnnualReturn: Math.exp(logDrift) - 1,
+        minAnnualReturn,
+        maxAnnualReturn,
+        inflationRate: cfg.inflationRate ?? null,
+    });
 }

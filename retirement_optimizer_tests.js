@@ -1561,7 +1561,7 @@ assertEqual(
 		  overrides: { strategy: 'propwd',  propWithdraw: 0,    maxConversion: false } },
 		{ strategyLabel: 'Fill Bracket', paramLabel: '22%', paramSortVal: 0.22,
 		  overrides: { strategy: 'bracket', stratRate: 0.22,    maxConversion: false } },
-		{ strategyLabel: 'Fixed',        paramLabel: '5 yrs', paramSortVal: 5,
+		{ strategyLabel: 'Reduce',       paramLabel: '5 yrs', paramSortVal: 5,
 		  overrides: { strategy: 'fixed',   nYears: 5,          maxConversion: false } },
 	];
 

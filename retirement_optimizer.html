@@ -39,7 +39,7 @@
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
 					<option value="bracket">🪣Fill Federal Tax Bracket</option>
 					<option value="minlimit" disabled style="color:#bbb;">🛑Lesser of IRMAA or TaxBracket (broken)</option>
-					<option value="fixedpct">📉Fixed % IRA Withdrawal</option>
+					<option value="fixedpct">📉IRA Draw</option>
 				</select></label>
 			</div>
 
@@ -179,38 +179,46 @@
             <label style="display:inline-flex;align-items:center;gap:4px;margin-left:8px;font-size:0.85em;cursor:pointer;" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
                 <input type="checkbox" id="optimizeSpend"> Optimize Spend
             </label>
-		    <button id="btn-mc" class="tab-btn" style="display:none;" onclick="{showTab('tab-mc')}">Monte Carlo 🎲</button>
+		    <button id="btn-mc" class="tab-btn" onclick="{showTab('tab-mc'); mcTabActivated();}">Monte Carlo 🎲</button>
 		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
 		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}">Documentation <strong id="testsFailed">🟢</strong></button>
 
         </div>
 
 		<div id="tab-mc" class="card hidden">
-			<!-- Simulation params — gated by NERD_KNOBS in initMCTab() -->
-			<div id="mc-params-panel" style="display:none;margin-bottom:12px;padding:10px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;">
+			<!-- Simulation Parameters panel — visible only when NERD_KNOBS is on.
+			     When hidden, clicking the tab auto-runs with default parameters. -->
+			<div id="mc-nerd-panel" style="display:none;margin-bottom:12px;padding:10px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;">
 				<strong style="font-size:0.9em;color:#555;">Simulation Parameters</strong>
 				<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;align-items:center;">
-					<label style="font-size:0.85em;">Paths
-						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;">
+					<label style="font-size:0.85em;" title="Number of simulated market scenarios. More paths = more stable results, slower run.">Paths
+						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
 					</label>
-					<label style="font-size:0.85em;" title="Expected annual arithmetic return (e.g. 7 = 7%)">Expected Return μ %
+					<label style="font-size:0.85em;" title="Expected annual arithmetic return. Replaces the form's Growth % for all MC paths.">Expected Return μ %
 						<input type="number" id="mc-mu" value="7" min="0" max="20" step="0.5" style="width:55px;margin-left:4px;">
+						<span style="margin-left:4px;font-size:0.78em;color:#888;" title="The form's Growth % is ignored during MC — returns are driven solely by μ and σ.">replaces Growth %</span>
 					</label>
-					<label style="font-size:0.85em;" title="Annual return volatility (e.g. 12 = 12% std dev)">Volatility σ %
+					<label style="font-size:0.85em;" title="Annual return volatility (standard deviation). Higher values produce more extreme best/worst years and widen the percentile bands.">Volatility σ %
 						<input type="number" id="mc-sigma" value="12" min="1" max="40" step="0.5" style="width:55px;margin-left:4px;">
 					</label>
-					<label style="font-size:0.85em;" title="Random seed for reproducibility">Seed
+					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results.">Seed
 						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
 					</label>
 				</div>
+				<div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+					<button id="mc-run-btn" onclick="runMonteCarlo()" style="padding:6px 18px;font-size:0.95em;">Run Monte Carlo</button>
+					<span id="mc-time-est" style="font-size:0.8em;color:#888;"></span>
+				</div>
+				<div style="margin-top:6px;font-size:0.78em;color:#888;">Inflation is not stochastic — all paths use the fixed inflation rate from the main form.</div>
 			</div>
 
-			<!-- Controls row -->
-			<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-				<button id="mc-run-btn" onclick="runMonteCarlo()" style="padding:6px 18px;font-size:0.95em;">Run Monte Carlo</button>
-				<button id="mc-cancel-btn" onclick="cancelMC()" style="display:none;padding:6px 12px;font-size:0.9em;background:#dc3545;color:white;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
-				<span id="mc-path-count" style="font-size:0.8em;color:#888;"></span>
+			<!-- Cancel button + path count — visible during any run (nerd-mode or auto-run) -->
+			<div id="mc-cancel-wrap" style="display:none;margin-bottom:6px;align-items:center;gap:10px;">
+				<button id="mc-cancel-btn" onclick="cancelMC()" style="padding:6px 12px;font-size:0.9em;background:#dc3545;color:white;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
+				<span id="mc-path-count" style="font-size:0.8em;color:#888;margin-left:4px;"></span>
 			</div>
+			<!-- Post-run metrics bar -->
+			<div id="mc-metrics" style="display:none;margin-bottom:10px;font-size:0.82em;color:#444;padding:5px 2px;border-bottom:1px solid #e9ecef;"></div>
 
 			<!-- Progress bar -->
 			<div id="mc-progress-wrap" style="display:none;margin-bottom:10px;">
@@ -226,7 +234,7 @@
 			<!-- Survival rate table -->
 			<div id="mc-table-wrap" style="display:none;margin-bottom:16px;">
 				<div style="font-size:0.85em;color:#555;margin-bottom:4px;">
-					Check rows to add/remove from chart. Sorted by survival rate. <span id="mc-path-count-tbl"></span>
+					Check rows to add/remove from chart. Sorted by survival rate, then median final balance. <span id="mc-path-count-tbl"></span>
 				</div>
 				<div style="max-height:280px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;">
 					<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
@@ -235,9 +243,11 @@
 								<th style="padding:4px 6px;width:28px;"></th>
 								<th style="padding:4px 6px;text-align:left;">Strategy</th>
 								<th style="padding:4px 6px;text-align:left;">Param</th>
+								<th style="padding:4px 6px;text-align:center;" title="Max Roth Conversion">Max Conv</th>
+								<th style="padding:4px 6px;text-align:right;">Spend Goal</th>
 								<th style="padding:4px 6px;text-align:right;">Survival</th>
-								<th style="padding:4px 6px;text-align:right;">Median Ruin Yr</th>
-								<th style="padding:4px 6px;text-align:right;">Median Final Bal</th>
+								<th style="padding:4px 6px;text-align:right;" title="Median year across failed paths when the portfolio could no longer cover required spending">Funds Exhausted</th>
+								<th style="padding:4px 6px;text-align:right;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</th>
 							</tr>
 						</thead>
 						<tbody id="mc-table-body"></tbody>

@@ -5,19 +5,28 @@
 importScripts('../taxengine.js', '../retirement_optimizer_core.js', 'prng.js', 'stats.js');
 
 self.onmessage = function ({ data: cfg }) {
+    const t0 = performance.now();
     const { numPaths, mu, sigma, seed, years, variations } = cfg;
     const rng = mulberry32(seed ?? 42);
 
     // GBM: arithmetic expected return = mu, so log-space drift = mu - 0.5*sigma^2.
     const logDrift = mu - 0.5 * sigma * sigma;
+    // Geometric median annual return = exp(logDrift) - 1 (Z has median 0, so exp cancels).
+    const medianAnnualReturn = Math.exp(logDrift) - 1;
 
     // Generate Common Random Numbers: one shared scenario bank so every variation
     // sees the exact same sequence of market shocks — apples-to-apples comparison.
     // scenarioBank[p * years + y] = log-space shock (drift + sigma*Z) for path p, year y.
     const scenarioBank = new Float64Array(numPaths * years);
+    let minAnnualReturn =  Infinity;
+    let maxAnnualReturn = -Infinity;
     for (let p = 0; p < numPaths; p++) {
         for (let y = 0; y < years; y++) {
-            scenarioBank[p * years + y] = logDrift + sigma * boxMuller(rng);
+            const shock = logDrift + sigma * boxMuller(rng);
+            scenarioBank[p * years + y] = shock;
+            const r = Math.exp(shock) - 1;
+            if (r < minAnnualReturn) minAnnualReturn = r;
+            if (r > maxAnnualReturn) maxAnnualReturn = r;
         }
     }
 
@@ -95,6 +104,8 @@ self.onmessage = function ({ data: cfg }) {
             label:          baseInputs._label          ?? `Variation ${vi + 1}`,
             strategyFamily: baseInputs._strategyFamily ?? '',
             paramLabel:     baseInputs._paramLabel     ?? '',
+            maxConversion:  baseInputs.maxConversion   ?? false,
+            spendGoal:      baseInputs.spendGoal       ?? null,
             survivalRate:   (numPaths - ruinCount) / numPaths,
             medianRuinYear,
             percentiles: {
@@ -112,5 +123,15 @@ self.onmessage = function ({ data: cfg }) {
         }
     }
 
-    postMessage({ type: 'results', variations: varResults, numPaths, years });
+    postMessage({
+        type: 'results',
+        variations: varResults,
+        numPaths,
+        years,
+        totalMs:           performance.now() - t0,
+        medianAnnualReturn,                        // geometric median, annualized
+        minAnnualReturn,                           // worst single year across all paths
+        maxAnnualReturn,                           // best single year across all paths
+        inflationRate:     cfg.inflationRate ?? null,  // fixed rate from user inputs
+    });
 };

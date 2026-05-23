@@ -6,15 +6,16 @@
 
 First, **NOTE this** I use the term "**IRA**" for any account that is "Pre-Tax". And "**Roth**" for any tax free account.  **IRA** in this context could be any number of actual account types: IRA, Traditional IRA, Solo IRA, SEP-IRA, Simple IRA, 401(k), 403(b), 457(b), Keogh plans, and probably more.  **Roth** includes Roth IRA, IRA 401(k), HSA, TFRAs. HSAs are a bit of a different animal, actually.
 
-Trivia for fun: "_IRA_" stands for "Individual Retirement *AGREEMENT*", not account. Yeah, weird. And it's not ROTH but Roth. It's named after Senator William *Roth* who introduced it.  Oh, and the "(k)" in 401(k) does NOT refer to Eugene Keogh, it's a reference to the Internal Revenue Code. 
+Trivia for fun: _IRA_ stands for "Individual Retirement *AGREEMENT*", not account. Yeah, weird. And it's not ROTH but Roth. It's named after Senator William *Roth* who introduced it.  Oh, and the "(k)" in 401(k) does NOT refer to Eugene Keogh, it's a reference to the Internal Revenue Code. 
 
 You can inspect or [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) in about any browser (Brave and Chrome have been tested).  Or you can directly run the tools from Cloudflare (_tools.netcitizen.us_).  You need internet access for the fonts and charts to work properly because those are downloaded from public sources.
 
 You can DIRECTLY invoke these tools:
 
++ **[Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html)**  A full tool, with optimizers!  This is the original, and most featured tool.
+
 + **[Income Tax Planner](https://tools.netcitizen.us/IncomeTaxPlanner.html)** What does taxation look like at different ordinary income levels (includes many states)
 + **[Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html)** Compares 3 ways to pay taxes in retirement - provides reminders. Retirement Optimizer calls it.
-+ **[Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html)**  A full tool, with optimizers!  This is the OG tool that I started, and have been tinkering with.
 + **[Retirement Projection](https://tools.netcitizen.us/Retirement_Projection.html)**  What will my retirement assets do? It's very VISUAL but not as rich as Retirement Optimizer.
 + **[IRMAA and Medicare Future costs](https://tools.netcitizen.us/FutureCost.html)** Will IRMAA kill me?
 + **[After Tax REAL Growth](https://tools.netcitizen.us/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
@@ -159,24 +160,26 @@ In this tool, we show each: IRMAA, state and Federal taxes to show the big pictu
 
 There are two reasons that these permanent *ignorances* apply
 
-A. It's not the author's reality, 
-B. More inputs and knobs and conditions make the tool far less simple. If you've got those situations, you can do some modeling here, but maybe a better tool will be MaxiFi, EMoney, Empower, Projection Labs, Pralana, Boldin, or similar.
+0. It's not the author's reality, 
+0. More inputs and knobs and conditions make the tool far less simple. If you've got those situations, you can do some modeling here, but maybe a better tool will be MaxiFi, EMoney, Empower, Projection Labs, Pralana, Boldin, or similar.
 
 
 #### Limitations and Restrictions
 
-A. The tool models things a year-at-a-time. This is not strictly accurate, because, for example, **when** you make withdrawals or conversions may affect the net. For example, 
-if you wait until the end of the year to make your withdrawals has a different result than making a withdrawal at the beginning of the year.  The order of calculations is:  RMD withdrawals, calculation of spending/conversion withdrawals (and removal of those funds from the needed accounts) THEN taxes, interest and dividends on the remainder are calculated. Surplus funds after minimum spending levels are deposited into a Roth.  In real life, you must do Roth conversions as a separate operation, but this tool can help forecast what that conversion would be.  The newly added [Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html) will show the trade off.
-B. As noted, it tracks ONE total Roth balance, even if you're married.
-C. IRA withdrawals are done *proportionately*. Some improvement may result by reducing a large balance first.  You can model this by moving the total balance to one person.
-D. There is no "Accumulation phase" and no plan to add one.  I.e. no way to say "stash X dollars per year" in an IRA or Roth, Brokerage or Cash. The goal is to keep the inputs simple.
-E. There is no plan to add "Part Time income", Annuities, windfalls, lumpy spending (well, we are thinking about that last one) ...
-F. Social Security Survivor benefits are roughly calculated. To be exact, the exact month of death is required, but we are not sure anybody knows that, let alone the year ;-) 
+0. The tool models things a year-at-a-time. This is not strictly accurate, because, for example, **when** you make withdrawals or conversions may affect the net. For example, 
+if you wait until the end of the year to make your withdrawals has a different result than making a withdrawal at the beginning of the year.  The order of calculations is:  RMD withdrawals, calculation of spending/conversion withdrawals (and removal of those funds from the needed accounts) THEN taxes, interest and dividends on the remainder are calculated. Surplus funds after minimum spending levels are deposited into a Roth.  In real life, you must do Roth conversions as a separate operation, but this tool can help forecast what that conversion would be.  The newly added [Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html) will show the trade off about WHEN to withdraw or convert.
+0. As noted, it tracks ONE total Roth balance, even if you're married.
+0. IRA withdrawals are done *proportionately*. Some improvement may result by reducing a large balance first.  You can model this by moving the total balance to one person.
+0. There is no "Accumulation phase" and no plan to add one.  I.e. no way to say "stash X dollars per year" in an IRA or Roth, Brokerage or Cash. The goal is to keep the inputs simple.
+0. There is no plan to add "Part Time income", Annuities, windfalls, lumpy spending (well, we are thinking about that last one) ...
+0. Social Security Survivor benefits are roughly calculated. To be exact, the exact month of death is required, but we are not sure anybody knows that, let alone the exact year of demise ;-) 
 
+---
 
 > [!CAUTION]
 > Remember: **There is no SUPPORT for this tool**. If you ask nicely, or offer a pull request to actually implement a feature, of course we can talk. It is a best effort/time available endeavor.
 
+---
 
 #### What about Other tools
 One of the lovely things about engineers is they like to build things. I've found many other free (or almost free) resources that both inspired me and made realize that there is more than one way to solve problems.  
@@ -189,7 +192,7 @@ The sources I found around the interweb.
 + Another [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nulys5i/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button) contribution by _Working-Schedule5000
 _ is what made me realize that writing a tool in JavaScript results in the most readability and tweakability of the code. Spreadsheets can become hard to follow.  To use download and save, then run in your browser: https://drive.google.com/file/d/1ZJNCg-HNXHZmzWv9zW1anaFpLNTOTf10/view
 
-+ [Visual Federal Tax Tool](https://engaging-data.com/tax-brackets/) - this tool shows how your federal taxes are calculated.  As of 2026-01-17, it doesn't handle taxability of Social Security income, and as best I can tell, doesn't handle the OBB (One Big Beautiful Bill) provisions for seniors.
++ [Visual Federal Tax Tool](https://engaging-data.com/tax-brackets/) - this tool shows how your federal taxes are calculated.  As of 2026-01-17, it doesn't handle taxability of Social Security income, and as best I can tell, doesn't handle the OBBB (One Big Beautiful Bill) provisions for seniors.
 
 Operational Tools (All Free, though one is only free to try)
 
@@ -201,7 +204,7 @@ Operational Tools (All Free, though one is only free to try)
 
 + [Retirement Scenarios](https://retirementscenarios.com) free to kick the tires, but $79 to fully unlock. The UI is good, but the reliance on sliders and a few quirks make it less than ideal for use with a phone/small screen device. I found no gotchas after doing a security audit of the code (as of May 22, 2026). The author recently fixed a problem that made the tool unusable unless your retirement age is greater than your current age. There is, unfortunately, nothing in the tool that helps you calculate "ideal" Roth conversions - but all the directional guidance is good. Like many tools these days, but unlike all the others, this tool integrates AI. You can ask the AI questions about your plan and/or about the tool. If you want to use the tool on multiple devices, you need to "login" using the email address you use to make a purchase.  
 
-
+---
 
 ## Ramblings and Observations
 
@@ -253,11 +256,9 @@ If you live in, or plan to move in a different state and you want to use this to
 
 #### Roth Conversion Gotchas
 
-The bad scenarios for Roth conversions are these - and most can be modeled with the [IRA Projection Tool](https://tools.netcitizen.us/IRA_projection.html)
-
-1. You withdraw/convert now at a (significantly) higher tax rate than you will face in your future. Converting into the 24% bracket might save you even if you expect to be in the 22% bracket, but converting into the 32% bracket will likely not help - at least this is the conventional wisdom.
-2. You withdraw + convert in an amount that pushes your taxation up (this is a specific case of 1)
-3. You convert before you're 59.5 and do not have funds to pay the taxes AND/or that conversion pushes you into a higher taxation situation.
+1. You withdraw/convert now at a (significantly) higher tax rate than you will face in your future. Converting into the 24% bracket might save you even if you expect to be in the 22% bracket, but converting into the 32% bracket will *likely* not help - at least this is the conventional wisdom, and I believe it is, like much conventional wisdom, incomplete and does not apply universally.
+2. You withdraw + convert in an amount that pushes your taxation up (this is a specific case of 1) significantly.
+3. You convert before you're 59.5 and do not have funds to pay the taxes AND/or that conversion pushes you into a significantly higher taxation situation.
 4. You have modest IRA balances and expect that to be the case once you start drawing them in retirement. Modest here means something less than 1 million with 12 or fewer years before you plan to start drawing down assets. If you have 1M now, 10 years of 10% gains like those from 2016 to 2025 could TRIPLE that 1M to 3M.  3M would force you to take about 115k from your IRA at age 75. If married the RMD plus 70k in social security and other income lands you in the Federal 24% bracket.  At 83 just the RMD will put you in the 24% Federal Bracket.  If single, your first RMD will land you in the 24% Federal Bracket above the IRMAA tier 1.
 5. Your remainder estate is going to charity (not people).  Charities pay zero tax regardless of the income source. If you can stomach the RMD forced income, it may not be necessary to bother with conversions.
 6. You plan to take advantage of QCDs (Qualified Chraritable Deductions) after 70.5 years of age. QCDs satisfy RMD requirements, and do not count against your MAGI so do not incur IRMAA penalties.

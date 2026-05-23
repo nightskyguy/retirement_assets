@@ -116,20 +116,24 @@ var TAXData = {
 		YEAR: 2026,
 		Default: true,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		// Thresholds inflation-adjusted by CA FTB (~2.971% CCPI); 13.3% = 12.3% + 1% MHSA surtax on income >$1M.
+		// MFJ brackets >$1M: $1M triggers MHSA (+1%), nominal 12.3% bracket starts at $1,442,628 (= 2×SGL).
         MFJ: {
-            std: 10804,
+            std: 11700,
             brackets: [
-                { l: 20824, r: 0.01 }, { l: 49368, r: 0.02 }, { l: 77918, r: 0.04 },
-                { l: 108162, r: 0.06 }, { l: 136700, r: 0.08 }, { l: 698274, r: 0.093 },
-                { l: 837922, r: 0.103 }, { l: 1000000, r: 0.123 }, { l: Infinity, r: 0.133 }
+                { l: 21512, r: 0.01 }, { l: 50998, r: 0.02 }, { l: 80490, r: 0.04 },
+                { l: 111734, r: 0.06 }, { l: 141212, r: 0.08 }, { l: 721318, r: 0.093 },
+                { l: 865574, r: 0.103 }, { l: 1000000, r: 0.113 }, { l: 1442628, r: 0.123 },
+                { l: Infinity, r: 0.133 }
             ]
         },
         SGL: {
-            std: 5402,
+            std: 5850,
             brackets: [
-                { l: 10412, r: 0.01 }, { l: 24684, r: 0.02 }, { l: 38959, r: 0.04 },
-                { l: 54081, r: 0.06 }, { l: 68350, r: 0.08 }, { l: 349137, r: 0.093 },
-                { l: 418961, r: 0.103 }, { l: 698271, r: 0.123 }, { l: Infinity, r: 0.133 }
+                { l: 10756, r: 0.01 }, { l: 25499, r: 0.02 }, { l: 40245, r: 0.04 },
+                { l: 55867, r: 0.06 }, { l: 70606, r: 0.08 }, { l: 360659, r: 0.093 },
+                { l: 432787, r: 0.103 }, { l: 721314, r: 0.113 }, { l: 1000000, r: 0.123 },
+                { l: Infinity, r: 0.133 }
             ]
         }
     }, // CALIFORNIA
@@ -168,28 +172,27 @@ var TAXData = {
 		}
 	}, // CONNECTICUT
 
-	// GEORGIA - 2025/2026
+	// GEORGIA - HB 463 (Georgia Economic Growth and Tax Relief Act of 2026)
 	GA: {
 		STATE: 'Georgia',
-		YEAR: 2025,
+		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: {2026: 0.0519, 2027: 0.0509, 2028: 0.499 }, // Will decrease to 5.09% on Jan 1, 2027
+		FLAT_RATE: {2026: 0.0499, 2027: 0.0489, 2028: 0.0479 }, // Decreasing 0.125%/yr toward 3.99%
 		MFJ: {
-			std: 24000,  // Increased from $18,500
+			std: 24000,  // Increases to $30,000 in 2027 per HB 463
 			exemption_dependent: 4000,  // $4,000 per dependent
 			brackets: [
-				{ l: Infinity, r: 0.0519 }  // Single flat rate
+				{ l: Infinity, r: 0.0499 }  // Single flat rate
 			]
 		},
 		SGL: {
-			std: 12000,  // Increased from $7,100
+			std: 12000,  // Increases to $15,000 in 2027 per HB 463
 			exemption_dependent: 4000,
 			brackets: [
-				{ l: Infinity, r: 0.0519 }
+				{ l: Infinity, r: 0.0499 }
 			]
 		},
-		// Note: Rate will decrease 0.10% annually: 
-		// 2027: 5.09%, 2028: 4.99% (then stays at 4.99%)
+		// Note: Rate decreases 0.125%/yr: 2027: 4.89%, etc., targeting 3.99%
 	}, // GEORGIA
 
 	// IDAHO - flat 5.3% (HB 40, enacted March 2025, retroactive to Jan 1 2025); SS fully exempt
@@ -213,22 +216,22 @@ var TAXData = {
 		}
 	}, // IDAHO
 
-	// ILLINOIS - 
+	// ILLINOIS -
 	IL: {
 		STATE: 'Illinois',
-		YEAR: 2025,  // Flat tax, no change for 2026
+		YEAR: 2026,  // Flat tax, rate unchanged; personal exemption increased to $2,925/person
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.0495,  // 4.95% flat rate for all filers
+		FLAT_RATE: 0.0495,  // 4.95% flat rate for all filers (unchanged)
 		MFJ: {
-			std: 5700,  // Illinois doesn't use standard deduction
-			exemption: 5700,  // $2,850 per person (2 × $2,850)
+			std: 5850,  // Illinois personal exemption: 2 × $2,925 per person
+			exemption: 5850,  // $2,925 per person (up from $2,850 in 2025)
 			brackets: [
 				{ l: Infinity, r: 0.0495 }  // Single flat rate
 			]
 		},
 		SGL: {
-			std: 2850,
-			exemption: 2850,  // $2,850 per person
+			std: 2925,
+			exemption: 2925,  // $2,925 per person (up from $2,850 in 2025)
 			brackets: [
 				{ l: Infinity, r: 0.0495 }
 			]
@@ -239,7 +242,7 @@ var TAXData = {
 	// MARYLAND - 2025/2026
 	MD: {
 		STATE: 'Maryland',
-		YEAR: 2025,  // New brackets effective July 1, 2025
+		YEAR: 2026,  // Brackets effective July 1, 2025 remain in effect; std deductions COLA-indexed (may be slightly higher)
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		CAPITAL_GAINS: {
 			MFJ: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: Infinity, r: 0.02 }] },
@@ -283,19 +286,19 @@ var TAXData = {
 
 	MI: {
 		STATE: 'Michigan',
-		YEAR: 2025,
+		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.0405,  // 4.05% flat rate for all filers
+		FLAT_RATE: 0.0425,  // 4.25% — general fund did not exceed inflation so no rate reduction triggered
 		MFJ: {
 			std: 5600,
 			brackets: [
-				{ l: Infinity, r: 0.0405 }  // Flat tax rate
+				{ l: Infinity, r: 0.0425 }  // Flat tax rate
 			]
 		},
 		SGL: {
 			std: 5600,
 			brackets: [
-				{ l: Infinity, r: 0.0405 }  // Flat tax rate
+				{ l: Infinity, r: 0.0425 }  // Flat tax rate
 			]
 		}
 	}, // MICHIGAN
@@ -303,21 +306,23 @@ var TAXData = {
 	
 	NY: {
 		STATE: 'New York',
-		YEAR: 2025,
+		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		// FY2026 budget (signed May 2025): first 5 brackets each cut 0.1%; top brackets unchanged.
+		// A further 0.1% cut phases in for 2027 (total 0.2% reduction fully phased in by 2027).
 		MFJ: {
 			std: 16050,
 			brackets: [
-				{ l: 17150, r: 0.04 }, { l: 23600, r: 0.045 }, { l: 27900, r: 0.0525 },
-				{ l: 161550, r: 0.055 }, { l: 323200, r: 0.06 }, { l: 2155350, r: 0.0685 },
+				{ l: 17150, r: 0.039 }, { l: 23600, r: 0.044 }, { l: 27900, r: 0.0515 },
+				{ l: 161550, r: 0.054 }, { l: 323200, r: 0.059 }, { l: 2155350, r: 0.0685 },
 				{ l: 5000000, r: 0.0965 }, { l: 25000000, r: 0.103 }, { l: Infinity, r: 0.109 }
 			]
 		},
 		SGL: {
 			std: 8000,
 			brackets: [
-				{ l: 8500, r: 0.04 }, { l: 11700, r: 0.045 }, { l: 13900, r: 0.0525 },
-				{ l: 80650, r: 0.055 }, { l: 215400, r: 0.06 }, { l: 1077550, r: 0.0685 },
+				{ l: 8500, r: 0.039 }, { l: 11700, r: 0.044 }, { l: 13900, r: 0.0515 },
+				{ l: 80650, r: 0.054 }, { l: 215400, r: 0.059 }, { l: 1077550, r: 0.0685 },
 				{ l: 5000000, r: 0.0965 }, { l: 25000000, r: 0.103 }, { l: Infinity, r: 0.109 }
 			]
 		}
@@ -325,38 +330,39 @@ var TAXData = {
 
 	NC: {
 		STATE: 'North Carolina',
-		YEAR: 2025,
+		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: 0.0475,  // 4.75% flat rate for all filers		
+		FLAT_RATE: 0.0399,  // 3.99% flat rate — final step in phasedown enacted by NC law
 		MFJ: {
 			std: 25500,
 			brackets: [
-				{ l: Infinity, r: 0.0475 }  // Flat tax rate
+				{ l: Infinity, r: 0.0399 }  // Flat tax rate
 			]
 		},
 		SGL: {
 			std: 12750,
 			brackets: [
-				{ l: Infinity, r: 0.0475 }  // Flat tax rate
+				{ l: Infinity, r: 0.0399 }  // Flat tax rate
 			]
 		}
 	}, // NORTHCAROLINA
 
 	OR: {
 		STATE: 'Oregon',
-		YEAR: 2025,
+		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		// Lower bracket thresholds indexed for inflation annually; rates unchanged
 		MFJ: {
-			std: 5200,
+			std: 5495,
 			brackets: [
-				{ l: 7300, r: 0.0475 }, { l: 18400, r: 0.0675 }, { l: 250000, r: 0.0875 },
+				{ l: 8100, r: 0.0475 }, { l: 20400, r: 0.0675 }, { l: 250000, r: 0.0875 },
 				{ l: Infinity, r: 0.099 }
 			]
 		},
 		SGL: {
-			std: 2605,
+			std: 2745,
 			brackets: [
-				{ l: 3650, r: 0.0475 }, { l: 9200, r: 0.0675 }, { l: 125000, r: 0.0875 },
+				{ l: 4050, r: 0.0475 }, { l: 10200, r: 0.0675 }, { l: 125000, r: 0.0875 },
 				{ l: Infinity, r: 0.099 }
 			]
 		}
@@ -380,27 +386,31 @@ var TAXData = {
 		}
 	}, // PENNSYLVANIA	
 
-	// VIRGINIA - 2025/2026
+	// VIRGINIA - HB1754 signed May 2025; effective TY2025+
 	VA: {
 		STATE: 'Virginia',
-		YEAR: 2025,  // 2026 data not significantly different
+		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		// HB1754: std deduction raised to $12,000/$24,000 (TY2025-2026, indexed for inflation); sunset after 2026 unless extended.
+		// HB1754 also adds 7% top bracket on income > $600,000 beginning TY2026.
 		MFJ: {
-			std: 17500,  // Increased from 17000 in 2024
+			std: 24000,
 			brackets: [
 				{ l: 3000, r: 0.02 },
 				{ l: 5000, r: 0.03 },
 				{ l: 17000, r: 0.05 },
-				{ l: Infinity, r: 0.0575 }
+				{ l: 600000, r: 0.0575 },
+				{ l: Infinity, r: 0.07 }
 			]
 		},
 		SGL: {
-			std: 8750,  // Increased from 8500 in 2024
+			std: 12000,
 			brackets: [
 				{ l: 3000, r: 0.02 },
 				{ l: 5000, r: 0.03 },
 				{ l: 17000, r: 0.05 },
-				{ l: Infinity, r: 0.0575 }
+				{ l: 600000, r: 0.0575 },
+				{ l: Infinity, r: 0.07 }
 			]
 		}
 	}, // VIRGINIA
@@ -408,10 +418,10 @@ var TAXData = {
 
 	DC: {
 		STATE: 'District of Columbia',
-		YEAR: 2025,
+		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
-			std: 29200,
+			std: 30000,
 			brackets: [
 				{ l: 10000, r: 0.04 }, { l: 40000, r: 0.06 }, { l: 60000, r: 0.065 },
 				{ l: 250000, r: 0.085 }, { l: 500000, r: 0.0925 }, { l: 1000000, r: 0.0975 },
@@ -419,32 +429,30 @@ var TAXData = {
 			]
 		},
 		SGL: {
-			std: 14600,
+			std: 15000,
 			brackets: [
 				{ l: 10000, r: 0.04 }, { l: 40000, r: 0.06 }, { l: 60000, r: 0.065 },
 				{ l: 250000, r: 0.085 }, { l: 500000, r: 0.0925 }, { l: 1000000, r: 0.0975 },
 				{ l: Infinity, r: 0.1075 }
 			]
-		} 
+		}
 	}, // WASHINGTONDC
 
-	// NEBRASKA - LB754 phase-down; SS exempt per LB873 (eff. 2024)
+	// NEBRASKA - LB754 phase-down: flat 4.55% in 2026 (was 5.20% in 2025, 5.84% in 2024); SS exempt per LB873
 	NE: {
 		STATE: 'Nebraska',
 		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits (LB873, eff. 2024)
 		MFJ: {
-			std: 13700,
+			std: 17200,  // Nebraska state standard deduction (approx. 2025 value; verify against NE DOR for 2026)
 			brackets: [
-				{ l: 6860, r: 0.0246 },
-				{ l: Infinity, r: 0.052 }
+				{ l: Infinity, r: 0.0455 }  // Flat 4.55% — final step in LB754 phase-down before 3.99% target
 			]
 		},
 		SGL: {
-			std: 6860,
+			std: 8600,
 			brackets: [
-				{ l: 3430, r: 0.0246 },
-				{ l: Infinity, r: 0.052 }
+				{ l: Infinity, r: 0.0455 }
 			]
 		}
 	}, // NEBRASKA

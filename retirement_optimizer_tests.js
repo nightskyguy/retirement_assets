@@ -1561,7 +1561,7 @@ assertEqual(
 		  overrides: { strategy: 'propwd',  propWithdraw: 0,    maxConversion: false } },
 		{ strategyLabel: 'Fill Bracket', paramLabel: '22%', paramSortVal: 0.22,
 		  overrides: { strategy: 'bracket', stratRate: 0.22,    maxConversion: false } },
-		{ strategyLabel: 'Fixed',        paramLabel: '5 yrs', paramSortVal: 5,
+		{ strategyLabel: 'Reduce',       paramLabel: '5 yrs', paramSortVal: 5,
 		  overrides: { strategy: 'fixed',   nYears: 5,          maxConversion: false } },
 	];
 
@@ -1599,8 +1599,9 @@ assertEqual(
 		assertEqual(opt.optimizedSpend > wealthyInputs.spendGoal, true,
 			'optimizeSpend: optimized spend exceeds baseline spend goal');
 		const last = opt.result.log[opt.result.log.length - 1];
-		assertEqual(last.totalWealth >= last.spendGoal * SUCCESS_WEALTH_YEARS, true,
-			'optimizeSpend: result satisfies 2-year ending wealth criterion');
+		const lastRequired = Math.max(0, last.spendGoal - (last.guaranteedIncome ?? 0));
+		assertEqual((last.portfolioBalance ?? 0) >= lastRequired, true,
+			'optimizeSpend: result satisfies ending portfolio-covers-required-draw criterion');
 	}
 
 	// (opt-2) Forward optimizer: returns null when baseline itself fails

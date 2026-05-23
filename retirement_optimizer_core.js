@@ -11,10 +11,13 @@ const STORAGE_KEY = 'SLCRetireOptimizeScenario';
 const OLD_STORAGE_KEY = 'retirementScenarios';
 
 // Spend optimizer constants
-const SUCCESS_WEALTH_YEARS   = 2.0;   // Ending wealth must be >= this multiple of final-year spend
 const SPEND_SEARCH_CEILING   = 0.50;  // Binary search upper bound: 50% above baseline spend
 const SPEND_SEARCH_TOLERANCE = 0.005; // Stop binary search when bounds are within 0.5%
 const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase spending" banner
+
+// Feature flags
+// NERD_KNOBS: shows advanced controls (Monte Carlo params, etc.). Will later be URL-driven.
+const NERD_KNOBS = true;
 
 
 
@@ -907,9 +910,12 @@ function simulate(inputs) {
         surplus.Total = 0;
 
         //!!!TODO: Need to tax the growth of Cash and Brokerage!
+        // Monte Carlo: use per-year return from injected sequence if provided; else constant rate.
+        // Cash keeps its own yield regardless (not market-correlated).
+        const yearReturn = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
         let growthRates = {
-            IRA: inputs.growth, IRA1: inputs.growth, IRA2: inputs.growth,
-            Brokerage: inputs.growth, Cash: inputs.cashYield, Roth: inputs.growth
+            IRA: yearReturn, IRA1: yearReturn, IRA2: yearReturn,
+            Brokerage: yearReturn, Cash: inputs.cashYield, Roth: yearReturn
         }
 
         // Grow Balances
@@ -942,7 +948,12 @@ function simulate(inputs) {
 
         let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage - balance.BrokerageBasis)) * (1 - nominalTaxRate) + balance.Roth + balance.Cash + balance.BrokerageBasis
 
-        if (netIncome < targetSpend * 0.99 || totalWealth < (targetSpend * 1.5)) {
+        // Fail when the portfolio can't cover its required draw (spend minus guaranteed income).
+        // This is strategy-agnostic and fires at the point of first real impairment.
+        const guaranteedIncome = s1 + s2 + pension;
+        const portfolioBalance = balance.IRA1 + balance.IRA2 + balance.Roth + balance.Brokerage + balance.Cash;
+        const requiredPortfolioDraw = Math.max(0, spendGoal - guaranteedIncome);
+        if (netIncome < targetSpend * 0.99 || portfolioBalance < requiredPortfolioDraw) {
             totals.success = false;
             totals.failedInYear.push(currentYear)
         } else {
@@ -1005,6 +1016,8 @@ function simulate(inputs) {
             Brokerage: balance.Brokerage,
             Basis: balance.BrokerageBasis,
             totalWealth: totalWealth,
+            portfolioBalance: portfolioBalance,
+            guaranteedIncome: guaranteedIncome,
             Spendable: totals.spend,
             brokerageG: gains.Brokerage,
             cashG: gains.Cash,
@@ -1230,14 +1243,15 @@ function optimizeSpendDown(baseInputs, strategyOverridesList) {
     return { optimizedSpend: lo, ...bestEntry };
 }
 
-// Returns the highest-spend simulation result that still meets the SUCCESS_WEALTH_YEARS
-// criterion, or null if the baseline itself fails.
+// Returns the highest-spend simulation result where the portfolio can still fund
+// its required draw (spendGoal minus guaranteed income) in the final year.
 // baseInputs: full inputs object at baseline spendGoal
 // overrides:  strategy overrides (same object passed to addResult for this row)
 function optimizeSpend(baseInputs, overrides) {
     function passes(res) {
         const last = res.log[res.log.length - 1];
-        return last.totalWealth >= last.spendGoal * SUCCESS_WEALTH_YEARS;
+        const required = Math.max(0, last.spendGoal - (last.guaranteedIncome ?? 0));
+        return (last.portfolioBalance ?? 0) >= required;
     }
 
     const baseSpend = baseInputs.spendGoal;
@@ -1268,6 +1282,48 @@ function optimizeSpend(baseInputs, overrides) {
         }
     }
     return { result: bestResult, optimizedSpend: lo, hitCeiling: false };
+}
+
+// Build the full variation list (same parameter sweep as the optimizer) without running
+// simulations. Used by both the optimizer and Monte Carlo module.
+// base: result of getInputs() — no DOM access needed after this point.
+function buildVariations(base) {
+    const bracketRates = TAXData.FEDERAL.MFJ.brackets.slice(0, -1).map(b => b.r);
+    const variations = [];
+
+    const push = (family, paramLabel, paramSortVal, overrides) => {
+        const conv = overrides.maxConversion;
+        variations.push({
+            ...base,
+            ...overrides,
+            _label:          `${family} ${paramLabel}${conv ? ' ✓' : ''}`,
+            _strategyFamily: family,
+            _paramLabel:     paramLabel,
+            _paramSortVal:   paramSortVal,
+        });
+    };
+
+    for (const maxConv of [false, true]) {
+        for (const pct of [0, 5, 10, 20, 50])
+            push('Proportional', `${pct}%`, pct,
+                { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
+
+        for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25])
+            push('Reduce', `${n} yrs`, n,
+                { strategy: 'fixed', nYears: n, maxConversion: maxConv });
+
+        for (const rate of bracketRates) {
+            const pct = Math.round(rate * 100);
+            push('Fill Bracket', `${pct}%`, rate,
+                { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
+        }
+
+        for (const pct of [3, 4, 5, 6, 7, 8, 10])
+            push('IRA Draw', `${pct}%`, pct,
+                { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
+    }
+
+    return variations;
 }
 
 function runOptimizer() {
@@ -1315,9 +1371,9 @@ function runOptimizer() {
             addResult('Proportional', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
         }
 
-        // Fixed N years
+        // Reduce IRA over N years
         for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
-            addResult('Fixed', `${n} yrs`, n, { strategy: 'fixed', nYears: n, maxConversion: maxConv });
+            addResult('Reduce', `${n} yrs`, n, { strategy: 'fixed', nYears: n, maxConversion: maxConv });
         }
 
         // Fill bracket — one row per bracket level
@@ -1326,9 +1382,9 @@ function runOptimizer() {
             addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
         }
 
-        // Fixed % IRA withdrawal
+        // IRA Draw — fixed % of IRA balance each year
         for (const pct of [3, 4, 5, 6, 7, 8, 10]) {
-            addResult('Fixed % IRA', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
+            addResult('IRA Draw', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
         }
     }
 
@@ -1432,7 +1488,7 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
         el.style.background = '#f8d7da';
         el.style.borderColor = '#f5c6cb';
         el.style.color = '#721c24';
-        el.textContent = `⚠️ No strategy can fund your current spend goal. The highest sustainable spending found is $${amt}/yr, with all years funded and ${SUCCESS_WEALTH_YEARS} years of wealth remaining. (Strategy: ${label})`;
+        el.textContent = `⚠️ No strategy can fund your current spend goal. The highest sustainable spending found is $${amt}/yr, with all years fully funded. (Strategy: ${label})`;
         el.style.display = 'block';
         return;
     }
@@ -1447,7 +1503,7 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
         el.style.background = '#fff3cd';
         el.style.borderColor = '#ffc107';
         el.style.color = '#856404';
-        el.textContent = `💡 It appears you can increase your spending to $${amt}/yr with all years funded and ${SUCCESS_WEALTH_YEARS} years of wealth remaining. (Strategy: ${label})`;
+        el.textContent = `💡 It appears you can increase your spending to $${amt}/yr with all years fully funded. (Strategy: ${label})`;
         el.style.display = 'block';
     } else {
         el.style.display = 'none';
@@ -2066,8 +2122,11 @@ function updateTable(log) {
         const age1 = row['Age1'] ?? row['age1'];
         const age2 = row['Age2'] ?? row['age2'];
 
-        // Allow up to 1% shortfall before flagging as underfunded.
-        const incomeShortfall = (netIncome < spendGoal * 0.99) || (totalWealth < spendGoal * 1.5);
+        // Underfunded when income falls short, or portfolio can't cover its required draw.
+        const rowGuaranteed = row['guaranteedIncome'] ?? 0;
+        const rowPortfolio  = row['portfolioBalance'] ?? (totalWealth ?? 0);
+        const rowRequired   = Math.max(0, spendGoal - rowGuaranteed);
+        const incomeShortfall = (netIncome < spendGoal * 0.99) || (rowPortfolio < rowRequired);
         const deathOccurred = maritalStatus != row['status'];
 
         // IRMAA tier row tint (subtle, overridden by pink if underfunded)

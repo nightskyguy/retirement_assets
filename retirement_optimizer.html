@@ -39,7 +39,7 @@
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
 					<option value="bracket">🪣Fill Federal Tax Bracket</option>
 					<option value="minlimit" disabled style="color:#bbb;">🛑Lesser of IRMAA or TaxBracket (broken)</option>
-					<option value="fixedpct">📉Fixed % IRA Withdrawal</option>
+					<option value="fixedpct">📉IRA Draw</option>
 				</select></label>
 			</div>
 
@@ -179,10 +179,92 @@
             <label style="display:inline-flex;align-items:center;gap:4px;margin-left:8px;font-size:0.85em;cursor:pointer;" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
                 <input type="checkbox" id="optimizeSpend"> Optimize Spend
             </label>
+		    <button id="btn-mc" class="tab-btn" onclick="{showTab('tab-mc'); mcTabActivated();}">Monte Carlo 🎲</button>
 		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
 		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}">Documentation <strong id="testsFailed">🟢</strong></button>
 
         </div>
+
+		<div id="tab-mc" class="card hidden">
+			<!-- Simulation Parameters panel — visible only when NERD_KNOBS is on.
+			     When hidden, clicking the tab auto-runs with default parameters. -->
+			<div id="mc-nerd-panel" style="display:none;margin-bottom:12px;padding:10px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;">
+				<strong style="font-size:0.9em;color:#555;">Simulation Parameters</strong>
+				<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;align-items:center;">
+					<label style="font-size:0.85em;" title="Number of simulated market scenarios. More paths = more stable results, slower run.">Paths
+						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
+					</label>
+					<label style="font-size:0.85em;" title="Expected annual arithmetic return. Replaces the form's Growth % for all MC paths.">Expected Return μ %
+						<input type="number" id="mc-mu" value="7" min="0" max="20" step="0.5" style="width:55px;margin-left:4px;">
+						<span style="margin-left:4px;font-size:0.78em;color:#888;" title="The form's Growth % is ignored during MC — returns are driven solely by μ and σ.">replaces Growth %</span>
+					</label>
+					<label style="font-size:0.85em;" title="Annual return volatility (standard deviation). Higher values produce more extreme best/worst years and widen the percentile bands.">Volatility σ %
+						<input type="number" id="mc-sigma" value="12" min="1" max="40" step="0.5" style="width:55px;margin-left:4px;">
+					</label>
+					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results.">Seed
+						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
+					</label>
+				</div>
+				<div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+					<button id="mc-run-btn" onclick="runMonteCarlo()" style="padding:6px 18px;font-size:0.95em;">Run Monte Carlo</button>
+					<span id="mc-time-est" style="font-size:0.8em;color:#888;"></span>
+				</div>
+				<div style="margin-top:6px;font-size:0.78em;color:#888;">Inflation is not stochastic — all paths use the fixed inflation rate from the main form.</div>
+			</div>
+
+			<!-- Cancel button + path count — visible during any run (nerd-mode or auto-run) -->
+			<div id="mc-cancel-wrap" style="display:none;margin-bottom:6px;align-items:center;gap:10px;">
+				<button id="mc-cancel-btn" onclick="cancelMC()" style="padding:6px 12px;font-size:0.9em;background:#dc3545;color:white;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
+				<span id="mc-path-count" style="font-size:0.8em;color:#888;margin-left:4px;"></span>
+			</div>
+			<!-- Post-run metrics bar -->
+			<div id="mc-metrics" style="display:none;margin-bottom:10px;font-size:0.82em;color:#444;padding:5px 2px;border-bottom:1px solid #e9ecef;"></div>
+
+			<!-- Progress bar -->
+			<div id="mc-progress-wrap" style="display:none;margin-bottom:10px;">
+				<div style="background:#e9ecef;border-radius:4px;height:18px;position:relative;overflow:hidden;">
+					<div id="mc-progress-bar" style="background:#2980b9;height:100%;width:0%;transition:width 0.2s;"></div>
+					<span id="mc-progress-txt" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:0.78em;color:#333;">0%</span>
+				</div>
+			</div>
+
+			<!-- Error display -->
+			<div id="mc-error" style="display:none;padding:8px 12px;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;color:#721c24;margin-bottom:10px;font-size:0.9em;"></div>
+
+			<!-- Survival rate table -->
+			<div id="mc-table-wrap" style="display:none;margin-bottom:16px;">
+				<div style="font-size:0.85em;color:#555;margin-bottom:4px;">
+					Check rows to add/remove from chart. Sorted by survival rate, then median final balance. <span id="mc-path-count-tbl"></span>
+				</div>
+				<div style="max-height:280px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;">
+					<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
+						<thead style="position:sticky;top:0;background:#f1f3f5;z-index:1;">
+							<tr>
+								<th style="padding:4px 6px;width:28px;"></th>
+								<th style="padding:4px 6px;text-align:left;">Strategy</th>
+								<th style="padding:4px 6px;text-align:left;">Param</th>
+								<th style="padding:4px 6px;text-align:center;" title="Max Roth Conversion">Max Conv</th>
+								<th style="padding:4px 6px;text-align:right;">Spend Goal</th>
+								<th style="padding:4px 6px;text-align:right;">Survival</th>
+								<th style="padding:4px 6px;text-align:right;" title="Median year across failed paths when the portfolio could no longer cover required spending">Funds Exhausted</th>
+								<th style="padding:4px 6px;text-align:right;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</th>
+							</tr>
+						</thead>
+						<tbody id="mc-table-body"></tbody>
+					</table>
+				</div>
+			</div>
+
+			<!-- Percentile band chart -->
+			<div id="mc-chart-wrap" style="display:none;">
+				<div style="font-size:0.8em;color:#888;margin-bottom:4px;">
+					Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0.
+				</div>
+				<div style="position:relative;height:420px;">
+					<canvas id="mc-chart"></canvas>
+				</div>
+			</div>
+		</div>
 
 		<div id="tab-fileio" class="card hidden">
 			<div class="scenario-controls">
@@ -224,14 +306,14 @@
                                 <li>Compare with <em>Reduce IRA in N Years</em> to amortize your IRAs in a fixed number of years (they will not be emptied, they will be drawn down to <i>IRA  Goal</i>.</li>
                                 <li><i>Fill Federal Tax Bracket</i> withdraws enough to max out the chosen federal tax bracket. NOTE: If your spend goal is in a bracket higher than you select, it will try to meet the spend goal instead of locking to the bracket.</li>
                                 <li><i>Lesser of IRMAA or TaxBracket</i> is not yet implemented, but here it's like <i>Fill Federal Tax Bracket</i>, but reduces the amount withdrawn to stay under the the lesser of the (next) IRMAA tier, the next state or next federal bracket - which ever is lower. It applies an inflation adjusted "safety threshold" of 2,000. There are three gotcha's here: a. the <i>After-Tax Spend</i> goal is in play so it may blow right past the next tier if you have insufficient non-taxable income, b. the current year IRMAA tax is based on income from two years ago - so this setting attempts to avoid FUTURE tax - not tax in this year, c. the current year filing status is what is used to avoid hitting a higher tier. Here is why that matters: If you or your spouse pass away, the careful work avoiding a higher tier two years ago will still <i>hurt </i> in the current year. For example if the MAGI is one dollar below the first tier while married, two years from now when filing status is Single, that MAGI falls into the 4th IRMAA tier - the only upside here, is that there is now half as much of the IRMAA tax since it is per-person. One solution is to remarry. :-) </li></ul>
-                            <li><strong>After Changes...</strong> selecting the Annual Details, Chart or Optimizer will cause a recalculation and show the page. On the <i>Annual Details</i> table, rows are highlighted in yellow if status changes to single. A pink/red backgrounds means there are not enough funds to meet two years of SpendGoal.
+                            <li><strong>After Changes...</strong> selecting the Annual Details, Chart or Optimizer will cause a recalculation and show the page. On the <i>Annual Details</i> table, rows are highlighted in yellow if status changes to single. A pink/red background means the portfolio balance is insufficient to cover the required draw (spend goal minus guaranteed income).
                             <I>Optimizer</I> finds the mathematical "sweet spot" for emptying IRAs to minimize lifetime total tax and maximize total spendable value. It checks different drawdown years - that is the same thing as the <i>Reduce IRA in N Years</i> but it loops through from 1 to 30 years.</li>
                             </li>
                         </ul>			
                         <h4>What is Missing</h4>
                         <p>This tool does not (currently) model <b>annuities</b>, multiple pensions, additional w2 (taxable) income</b>. The tool intentionally keeps the number of options low.  Currently the "optimize" option focuses on depleting the IRA balance(s) to the point where future RMDs will not force excess taxation (Federal, State and IRMAA). An additional optimization is planned that will iterate to maximize spendable - see the <B>Planned</B> tab. These 
                         features, however are <B>NOT in scope</B>.
-                        <ol><li>There is no Monte Carlo or other fancy strength tests.</li>
+                        <ol><li>Monte Carlo analysis is available via the <b>Monte Carlo 🎲</b> tab. It runs all withdrawal strategy variations against shared stochastic return sequences and reports survival rates with percentile band charts.</li>
                         <li>The RMD tables are the standard one, not the one that might apply if there is a 10 year or more difference in spouse ages</li>
                         <li>It only uses the MFJ and Single tax brackets. (No head of household, or Married filing separately)</li>
                         <li>Because ROTH assets are not taxable, it merges all ROTH funds into one account. In real life, conversions/withdraws and earnings would occur in separate accounts.</li>
@@ -395,6 +477,7 @@ window.addEventListener('DOMContentLoaded', function () {
     loadFromURL?.();   // Preset inputs from URL params if present (must run after dropdowns are built)
     toggleStrategyUI();
     setupAutoRecalc();
+    initMCTab();
 });
 
 // Auto-run tests when page loads (comment out if you don't want auto-run)
@@ -406,6 +489,10 @@ loadScenarioByName?.('default');
 runSimulation?.();
 </script>
 <script src="other_tools.js"></script>
+<script src="montecarlo/prng.js"></script>
+<script src="montecarlo/stats.js"></script>
+<script src="montecarlo/mc_controller.js"></script>
+<script src="montecarlo/mc_tab.js"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

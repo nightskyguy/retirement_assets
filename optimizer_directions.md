@@ -1,60 +1,30 @@
 # Retirement Optimizer — Future Directions
 
-Brainstormed 2026-05-18; updated 2026-05-22. Items lettered as originally raised; priority order at bottom.
+Brainstormed 2026-05-18; updated 2026-05-20. Items lettered as originally raised; priority order at bottom.
 
 ---
 
-## ✅ DONE
-
-### A — Fixed % IRA Withdrawal Strategy
+## A — Additional Withdrawal Methods
 
 Add a **fixed % of IRA** strategy: withdraw a set percentage of the IRA balance each year, supplement any shortfall from brokerage/cash. This mirrors how many retirees actually manage drawdown.
 
-**Status:** Implemented as the "📉 Fixed % IRA Withdrawal" strategy (`fixedpct`) in the optimizer strategy dropdown.
-
-Other candidates still worth considering:
+Other candidates worth considering:
 - **Guyton-Klinger guardrails**: cut spending if portfolio drops X%, resume when it recovers.
 - **Spend from dividends only**: draw only dividend/interest income, preserve principal.
 
----
-
-### B — Rethink Bracket / IRMAA Withdrawal Limits
-
-**Problem:** The original model asked "how much IRA do I need to cover my spend goal?" — the bracket acted as a cap but spend overrode it, making bracket and IRMAA strategies non-functional when desired spend exceeded bracket room.
-
-**Fix:** Inverted the logic. The bracket (or IRMAA threshold) sets the *maximum* IRA withdrawal; shortfalls draw from brokerage/cash first, then Roth.
-
-**Status:** Fixed in PR #32.
+The fixed-% strategy is the clearest win and fits naturally into the existing `calculateWithdrawals` architecture.
 
 ---
 
-### D + K — Annual Details: Reorganization + Bracket/IRMAA Columns
+## B — Rethink Bracket / IRMAA Withdrawal Limits
 
-Columns regrouped into Income / Withdrawals / Taxes / Balances sections with subtle header colors. Federal marginal bracket %, State marginal bracket %, and IRMAA tier columns added.
+**Problem:** The current model asks "how much IRA do I need to cover my spend goal?" — the bracket acts as a cap but spend overrides it. This makes bracket and IRMAA strategies non-functional when desired spend exceeds the bracket room.
 
-**Status:** Completed together in PR #33.
-
----
-
-### E — Click on Annual Detail / Chart Point to Launch Tax Planner
-
-Table rows in Annual Details now link to the Tax Payment Planner pre-populated with that year's values.
-
-**Status:** Implemented in PR #38.
+**Fix:** Invert the logic. The bracket (or IRMAA threshold) sets the *maximum* IRA withdrawal. If that's less than what's needed to fund spending, the shortfall draws from brokerage/cash first, then Roth. This is the architecturally correct model and unblocks IRMAA work entirely. Requires rethinking how `gapAmount` flows into `calculateWithdrawals`.
 
 ---
 
-### L — Tax Payment Optimization Model
-
-For each of the next 5 years, produces a step-by-step order of operations for *how* to execute the year's tax plan (RMD timing, Roth conversion, 60-day rollover, quarterly estimated payments, year-end true-up).
-
-**Status:** Implemented as `RetirementTaxPlanner.html` (sessions 1–4).
-
----
-
-## 📋 TODO
-
-### C — Mark/Save Multiple Scenarios and Compare Side by Side
+## C — Mark/Save Multiple Scenarios and Compare Side by Side
 
 Save/load infrastructure already exists. Needed: a comparison view.
 
@@ -62,7 +32,26 @@ Save/load infrastructure already exists. Needed: a comparison view.
 
 ---
 
-### F — Monte Carlo Analysis
+## D — Track Marginal State, Federal, and IRMAA Brackets Per Year
+
+**Pure display work** — bracket calculations already happen, they just aren't surfaced per row. Add columns to Annual Details for:
+- Federal marginal bracket %
+- State marginal bracket %
+- IRMAA tier
+
+Row-level color coding by IRMAA tier would make bracket-jump years visually obvious. Should be implemented together with K (Annual Details reorganization).
+
+---
+
+## E — Click on Annual Detail / Chart Point to Launch Tax Analyzer
+
+Use Chart.js `onClick` (and a click handler on table rows) to open the Tax Analyzer tool in a new window, pre-populated with that year's values.
+
+**Prerequisite:** Map out what parameters the Tax Analyzer accepts in its URL/input format. Once that's known, it's a URL-construction function per row/point.
+
+---
+
+## F — Monte Carlo Analysis
 
 Run the simulation 500–1000× with growth rate randomized (e.g., sampled from a normal distribution around the mean, or resampled from historical return sequences). Display results as probability bands (10th / 50th / 90th percentile) on the wealth chart, plus a summary: "X% of scenarios remain solvent through age Y."
 
@@ -70,15 +59,19 @@ Run the simulation 500–1000× with growth rate randomized (e.g., sampled from 
 
 ---
 
-### G — Roth Conversion Timing (Month of Year)
+## G — Withdrawal Timing (Month of Year)
 
-Converting in February means ~10 months of gains accrue tax-free in Roth. Waiting until November means those same gains grew inside the IRA, increasing the account balance, future RMDs, and the compounding tax obligation. The asymmetry is meaningful over a 20-year horizon.
+**Original framing:** Choose which month withdrawals/conversions occur; the Optimizer could compare March vs. November. Deprioritized as a general feature due to complexity-vs-value ratio.
 
-**Suggested approach:** Model this in a focused spreadsheet first — isolate one year, two conversion dates, trace the difference in Roth vs. IRA balance at year-end and projected RMD impact. If the effect is significant (likely yes), bring a simplified "conversion month" parameter into the optimizer for Roth conversion strategies only. N (monthly model) makes this native.
+**However — Roth conversion timing is a real effect worth modeling separately:**
+
+Converting in February means ~10 months of gains accrue tax-free in Roth. Waiting until November means those same gains grew inside the IRA, increasing the account balance, future RMDs, and the compounding tax obligation. The asymmetry is meaningful over a 20-year horizon, not just a rounding effect.
+
+**Suggested approach:** Model this in a focused spreadsheet first — isolate one year, two conversion dates, trace the difference in Roth vs. IRA balance at year-end and projected RMD impact. If the effect is significant (likely yes), bring a simplified "conversion month" parameter into the optimizer for Roth conversion strategies only.
 
 ---
 
-### H — Lumpy Spending (One-Time Expenses)
+## H — Lumpy Spending (One-Time Expenses)
 
 Allow a per-year spending override table: year → extra one-time spend (e.g., $60k kitchen renovation in 2027, $40k car in 2030). The simulation checks for an override and adds it to `spendGoal` for that year.
 
@@ -86,7 +79,7 @@ Allow a per-year spending override table: year → extra one-time spend (e.g., $
 
 ---
 
-### I — QCDs (Qualified Charitable Distributions)
+## I — QCDs (Qualified Charitable Distributions)
 
 After age 70½, up to ~$105k/year can be distributed directly from an IRA to a qualified charity. Counts toward RMD, excluded from AGI — reduces IRMAA exposure and taxable income.
 
@@ -94,7 +87,7 @@ After age 70½, up to ~$105k/year can be distributed directly from an IRA to a q
 
 ---
 
-### J — "Next 5 Years" Actionable Report
+## J — "Next 5 Years" Actionable Report
 
 Generate a clean one-page (print/export) view of years 1–5 from simulation results:
 - Account balances at start of year
@@ -103,11 +96,42 @@ Generate a clean one-page (print/export) view of years 1–5 from simulation res
 - Estimated federal + state taxes
 - Net spendable
 
-**Scope:** Pure reporting on already-computed data. L (Tax Payment Planner) provides the execution layer; this is the summary view from the optimizer side.
+**Scope:** Pure reporting on already-computed data. Defer until Annual Details (K) is in good shape, since it's the same data formatted for action rather than analysis.
 
 ---
 
-### M — Multi-Strategy Optimizer (Mixed Withdrawal Methods)
+## K — Annual Details: Reorganization and Clarity
+
+Current table has too many columns at equal visual weight. Proposed grouping:
+
+| Section | Columns |
+|---|---|
+| **Income** | SS, pension, RMD, dividends |
+| **Withdrawals** | IRA, brokerage, Roth, cash, Roth conversion |
+| **Taxes** | Fed bracket %, state bracket %, IRMAA tier, total tax |
+| **Balances** | IRA, brokerage, Roth, cash, net worth |
+
+Add subtle header-group colors. Add bracket/IRMAA columns from D here. Should be done as a paired task with D.
+
+---
+
+## L — Tax Payment Optimization Model
+
+For each of the next 5 years, produce a step-by-step order of operations for *how* to execute the year's tax plan — not just what the numbers are, but when and in what sequence to act:
+
+1. **RMD timing** — when to take the RMD, and whether to withhold taxes from it.
+2. **Roth conversion** — when to execute the conversion; whether to withhold from the conversion or pay separately.
+3. **60-day rollover** — if the state allows it, use a 60-day IRA rollover to "replace" taxes withheld from the conversion (effectively borrowing tax-free for 60 days). Flag states where this is restricted or disallowed.
+4. **Quarterly estimated payments** — compute and schedule Q1–Q4 safe-harbor or actual-liability payments.
+5. **Year-end true-up** — if a shortfall remains after estimated payments, cover it by withholding from a final IRA distribution before Dec 31 (withholding is treated as paid evenly throughout the year, avoiding underpayment penalties).
+
+**Goal:** Minimize underpayment penalties and cash-flow disruption while legally deferring as much tax payment as late in the year as possible.
+
+**Related to:** J (5-year actionable report) — this is the *execution* layer that J's report should link into.
+
+---
+
+## M — Multi-Strategy Optimizer (Mixed Withdrawal Methods)
 
 Allow the optimizer to switch withdrawal strategies mid-simulation rather than applying one strategy for the entire retirement horizon.
 
@@ -122,7 +146,7 @@ Allow the optimizer to switch withdrawal strategies mid-simulation rather than a
 
 ---
 
-### N — Monthly or Quarterly Calculation Model
+## N — Monthly or Quarterly Calculation Model
 
 Replace the current annual simulation step with monthly or quarterly granularity.
 
@@ -139,7 +163,7 @@ Replace the current annual simulation step with monthly or quarterly granularity
 
 ---
 
-### P — Per-Account Asset Mix and Historically-Based Growth Rates
+## P — Per-Account Asset Mix and Historically-Based Growth Rates
 
 Allow Roth, IRA, and Brokerage accounts to each specify an asset allocation (e.g., 60% US equity / 30% bonds / 10% international) and derive a historically-grounded expected return and volatility from that mix.
 
@@ -153,7 +177,7 @@ Allow Roth, IRA, and Brokerage accounts to each specify an asset allocation (e.g
 
 ---
 
-### Q — Variable Growth and Inflation Rates in the Optimizer
+## Q — Variable Growth and Inflation Rates in the Optimizer
 
 Allow the optimizer to run scenarios across a range of growth and/or inflation rate assumptions, not just a single point estimate.
 
@@ -167,15 +191,38 @@ Allow the optimizer to run scenarios across a range of growth and/or inflation r
 
 ---
 
-## Priority Order (remaining TODO items)
+## R — Improved Monte Carlo Simulation (Bootstrap + Multi-Asset)
 
-1. **H** — lumpy spending. Practical, contained, high value.
-2. **I** — QCDs. One new input, big AGI/IRMAA impact for charitable users.
-3. **C** — scenario comparison (summary table first, chart overlay later).
-4. **P** — per-account asset mix and historically-based growth rates. Feeds F and Q.
-5. **F** — Monte Carlo (separate tab, own scope; use per-account σ from P).
-6. **Q** — variable growth/inflation in optimizer: sensitivity grid first (Mode 1), Monte Carlo integration (Mode 2) after F exists.
-7. **M** — multi-strategy optimizer (mixed withdrawal methods); start with 2-phase brute force.
-8. **J** — 5-year actionable report (L provides the execution layer; J is the optimizer-side summary view).
-9. **N** — monthly/quarterly calculation model (optional high-fidelity mode; enables L and G natively).
-10. **G** — Roth conversion timing (model in spreadsheet first; N makes this native).
+Three-phase improvement to the Session 6 Monte Carlo tab. Full detail in **BootstrapPlan.md**.
+
+**Phase 1 — Historical bootstrap** (near-term, recommended first):
+Replace the current i.i.d. log-normal GBM with block-bootstrap sampling from embedded historical annual return data (S&P 1926–present). Eliminates unrealistic 60%+ single-year returns and prevents pathological 8-consecutive-loss runs. Add a `simulationMode` toggle in the nerd panel (GBM / Bootstrap). No changes to `simulate()` required — drop-in swap in the scenario-bank generation step.
+
+**Phase 2 — Separate asset classes with correlated returns** (medium-term):
+Model stocks and bonds independently using correlated GBM (Cholesky decomposition). Add a global stock/bond split (or per-account allocation grid). Each account's annual return becomes `stockPct × r_stocks + bondPct × r_bonds`. Properly models sequence-of-returns risk, which is the dominant retirement risk. Requires `simulate()` changes to accept per-account growth rates.
+
+**Phase 3 — Regime-switching model** (longer-term):
+Two-state Markov model (Bull: μ=+14%, σ=11%; Bear: μ=−8%, σ=22%) as a third simulation mode. Captures market trending and crash clustering without requiring historical data. Transparent and parameterizable.
+
+**Related to:** F (Monte Carlo tab, done in Session 6), P (per-account asset mix).
+
+---
+
+## Priority Order
+
+1. **K + D** — reorganize Annual Details and surface bracket/IRMAA columns. High impact, low risk, makes everything else more debuggable.  **DONE**
+2. **B** — fix bracket/IRMAA strategy logic. Unblocks correct strategy comparisons.
+3. **H** — lumpy spending. Practical and contained.
+4. **A** — fixed-% IRA withdrawal strategy. **DONE**
+5. **I** — QCDs.
+6. **C** — scenario comparison (summary table first, chart overlay later).
+7. **P** — per-account asset mix and historically-based growth rates. Feeds F and Q.
+8. **F** — Monte Carlo (separate tab, own scope; use per-account σ from P). **DONE** (Session 6 — basic GBM implementation).
+9. **R** — Improved MC simulation: Phase 1 (historical bootstrap) first, then Phase 2 (correlated multi-asset), then Phase 3 (regime-switching). See BootstrapPlan.md.
+10. **Q** — variable growth/inflation in optimizer: sensitivity grid first (Mode 1), Monte Carlo integration (Mode 2) after R Phase 1 exists.
+11. **M** — multi-strategy optimizer (mixed withdrawal methods); start with 2-phase brute force.
+12. **L** — tax payment optimization model (order-of-operations for RMD, conversion, rollovers, estimated payments, year-end true-up). **DONE** In RetirementTaxPlanner.html
+13. **J** — 5-year actionable report (after K is done; L provides the execution layer). **Not needed - L solved this**
+14. **N** — Quarterly calculation model (optional high-fidelity mode; enables L and G natively).
+15. **E** — Tax Analyzer click-through (scope the URL format first).
+16. **G** — Roth conversion timing (model in spreadsheet first; bring into optimizer if effect is confirmed significant; N makes this native).  **DONE** in RetirementTaxPlanner.html

@@ -66,10 +66,11 @@ Uses 2026 IRS Rev. Proc. 2025-32 federal brackets inflated forward by your chose
 
 ## The Retirement Optimizer
 
-This is the OG tool. And while I like it, it's definitely not for everyone. There is no "accumulation phase". The focus is managing withdrawals from your various accounts. But it has something I haven't found in any tool: a withdrawal optimizer.  Currently it applies a flat growth rate (Monte Carlo "market shaking" is in the works - probably later).  
+This is the OG tool. And while I like it, it's definitely not for everyone. There is no "accumulation phase". The focus is managing withdrawals from your accounts. But it has something I haven't found in any tool: a withdrawal optimizer — and a Monte Carlo stress-test tab to show you how your plan holds up across hundreds of simulated market scenarios.
+
 My primary motivations for this tool are: 
 1. What does the withdrawal phase look like?
-2. What happens to my assets over time?  
+2. What happens to my assets over time? Am I in RMD jeopardy? Will I experience tax bracket escalation?  
 3. What withdrawal strategy results in: the lowest taxation, the highest ending wealth, and my favorite: the most **lifetime spending**.
 4. Is it really true that *heavy* Roth conversions, **no Roth conversions**, or "*some*" Roth conversions are BETTER? (Setting aside some of the significant advantages of Roth)
 5. How painful is the widow's penalty, really?
@@ -78,13 +79,13 @@ My primary motivations for this tool are:
 
 
 > [!WARNING]
-> While I've renewed developing this tool and wiped out some of the daunting bugs, it's still a work in progress.
+> While I've renewed development of this tool and conquered some daunting bugs, it's still a work in progress.
 
 #### Features in the Works (and Known Bugs):
 
-+ Add a "taxcreep" to see what harm a creeping tax rate might do.  I notice some states (e.g. Georgia) are reducing their tax rates, while others are adding more brackets and increasing rates.
-+ Better organize the Annual Details tables. There are just too many columns to easily navigate. **NOTE** Release 7g has new selectable columns.
-+ Allow exporting of the Annual Details table(s).
++ Add a "tax creep" to see what harm a creeping tax rate might do.  I notice some states (e.g. Georgia) are reducing their tax rates, while others are adding more brackets and increasing rates.
++ Better organize the Annual Details tables. There are just too many columns to easily navigate.
++ Allow exporting of the Annual Details table(s). Including a 5 year plan.
 + The tool should warn when a "Fill Bracket" is picked that is impossible to meet if the After-Tax Spend goal is high. For example, setting After-Tax Spend to 180,000 makes it impossible to stay in the 12% (or even the 22%) bracket unless there are lots of cash, brokerage or Roth assets already. 
 + I'm always looking to include additional withdrawal scenarios. The most powerful recent addition was a +% addition to the proportional withdrawal.
 + Allow selection of the month(s) in which withdrawals will occur. My modeling shows it DOES make a difference. If you're trying to draw down an IRA, taking withdrawals early in the year means you will accrue less growth in the IRA account (and more in the Roth or Brokerage if that's where the funds go). Conversely, if you're trying to make the account grow a little more, taking withdrawals in the last months may help.
@@ -93,10 +94,10 @@ My primary motivations for this tool are:
 + More state taxation options are *usually* easy. You can [open an "Issue" in Github](https://github.com/nightskyguy/retirement_assets/issues/new/choose) to request that I add your state.
 
 ##### Recent Fixes / Improvements
-+ Optimizer now can optimize Spending, not just find the best withdrawal.
-+ You now have the option to reinvest Dividends, or collect them in cash.
++ Optimizer now can optimize Spending, not just find the best withdrawal strategy.
++ You now have the option to reinvest Dividends, or collect them into your cash account.
 + Optimizer also highlights the "best" withdrawal strategy in each category, including the results of Spend Goal optimization. Just click the entry in the table, and it loads that scenario.
-+ Augmented the "Withdraw Proportional" with a "+%" option. This proved very helpful! It allows you to withdraw a percentage more than your needs - often to build up cash, or to do Roth conversion. Turns out to be an effective way to keep your IRA balance from growing unbounded. I got this idea from [Ben Brandt of "Even Better Retirement"]()
++ Augmented the "Withdraw Proportional" with a "+%" option. This proved very helpful! It allows you to withdraw a percentage more than your needs - often to build up cash, or to do Roth conversion. Turns out to be an effective way to keep your IRA balance from growing unbounded. I got this idea from [Ben Brandt of "Even Better Retirement" on YouTube]()
 + A problem where shortfalls would occur when using the **💸Reduce IRA in *N* Years** strategy, and sometimes when using "📊Withdraw Proportional +%". Adding a third tax calculation phase nailed it. **FIXED**
 + In addition to the "Load/Save/Delete/Manage Scenarios", there is a new "share" option that creates a reusable URL. If you want to share a scenario with someone else (or bookmark it for yourself), you can use that method.
 + It should only be possible to move surplus IRA withdrawals into Roth - it was incorrectly moving extra cash. **FIXED** 
@@ -131,6 +132,7 @@ In this tool, we show each: IRMAA, state and Federal taxes to show the big pictu
 + Tweakable rates, withdrawal strategies, and charts and tables to match them - but NOT TOO many variables.
 + Withdrawal Strategies include: **📊Withdraw Proportional +%** — proportionately withdraws from all sources to meet the After-Tax Spend goal. So, for example if your IRA is 10 times the size of your Cash, it will use 10x more IRA than cash. The **+%** adds an IRA-only boost of 0–200% of the spend goal (configurable; 0% is the pure proportional baseline). The after-tax surplus from the boost flows to Roth (if Max Conversion is on) or Cash. The Optimizer tests this at 0/5/10/20/50% × Max Conversion on/off. A "**💸Reduce IRA in *N* Years**" attempts to amortize the IRA down to "IRA Goal" in the number of years specified (Note "**Optimizer 🎯**" checks years 1 to 30 automatically and highlights the best result in a table - click any line in the table to choose that scenario). A "**🪣Fill Federal Tax Bracket**" where you pick the Federal Bracket you want to fill, and it draws up to the top of that bracket (or a higher one if your Spend Goal is too high) with the intent of doing Roth conversion with any surplus. A "**🛑Lesser of IRMAA or TaxBracket**" which is not currently implemented.
 + There is also a "Max Conversion" option. It uses any surplus cash to increase Roth conversions from the largest IRA balance.
++ **Monte Carlo 🎲 stress-test tab** — despite the name, this has nothing to do with gambling. "Monte Carlo" is a mathematical technique that asks: *what if we ran your retirement plan five hundred times, each time with a different sequence of good years and bad years drawn from the same statistical range?* Some runs get lucky (strong markets early), some get unlucky (a crash right after you retire). The result is a survival rate — "97% of scenarios still had money at age 90" — plus a chart showing the spread from best-case to worst-case portfolios over time. This is far more informative than a single projected growth rate, because the *order* of good and bad years matters enormously in retirement: a crash in year two is far more damaging than the same crash in year twenty. The tab compares all withdrawal strategies side by side under identical market conditions so you can see which ones are merely good on average and which ones are resilient across bad luck.
 + Multiple (easily expandable) state tax tables. California tax table (is the default). 33 of the US states tax IRA withdrawals the same way - albeit at different tax rates.  Also, those same 33 states treat all capital gains as taxable income - and that can matter quite a lot. In fact, 8 different state tax rates are currently available. WARNING: only California calculations are done using the correct model. Other states may be off. Best to double check.
 + Moreover, most states do NOT tax Social Security (but, of course the Federal government DOES) but some DO tax Social Security.
 + Modeling can show the true cost of the widow penalty (when one spouse predeceases another) and the IRMAA penalty.
@@ -150,7 +152,7 @@ In this tool, we show each: IRMAA, state and Federal taxes to show the big pictu
 + The various short term benefits to seniors under the OBB (e.g. extra deductions and phaseouts) - I take that back, the engine does have them, but the author, has not extensively verified the calculations because those small helps will be gone before he manages to deplete his IRA sufficiently.
 + It does not track separate Roth accounts. - because Roth accounts have no tax consequences, so they are much like cash, but in fact, Roth's can't be co-owned.  
 + Forecasting variable growth rates, or growth rates that differ between different assets.  (It's silly to forecast 8% growth in an IRA and 4% growth in a Roth - or v.v.) because that may hide the value of one over the other, however it MAY make sense for Roth assets to be more aggressive than IRA assets.
-+ Monte-Carlo or historical models to determine plan robustness.  That may happen in the future.
++ Historical return models or per-asset-class volatility — the Monte Carlo tab uses a single statistical model (log-normal GBM) rather than sampling from actual market history. Improvements to the simulation realism are planned (see BootstrapPlan.md).
 + This is not a tool to attempt to model different asset class ratios, or different asset location arrangements.
 + Tax filing statuses other than MFJ (married filing jointly) and SGL (Single). There is no Head of Household, Married filing separately, etc.
 + There is no provision for itemized tax returns.  This tool assumes you rely on standard deductions (or exemptions, if that's what your state uses).  It also assumes that Single means one person, Married Filing Jointly is two. If you have a dependent adult, or children, it will not calculate the proper possible exemptions or deductions for these situations.
@@ -180,13 +182,13 @@ _ is what made me realize that writing a tool in JavaScript results in the most 
 
 + [Visual Federal Tax Tool](https://engaging-data.com/tax-brackets/) - this tool shows how your federal taxes are calculated.  As of 2026-01-17, it doesn't handle taxability of Social Security income, and as best I can tell, doesn't handle the OBB (One Big Beautiful Bill) provisions for seniors.
 
-+ [What IRA Balances Result in IRMAA due to RMDS](https://tools.netcitizen.us/irmaa_and_rmds.html) I wrote this tool, too, using AI. Given entered fixed income, it calculates what size IRA balance will cause RMDs that hit IRMAA tiers at various ages.  The tool uses current rates and does not attempt to adjust for inflation.  For example a married couple with a $16,607,550 balance at age **73** together with $130,000 income (pensions/social security/etc) will hit the highest IRMAA Tier 5 due to $626,700 forced RMD. Yeah, that is clearly not most of us. But at age **80** a $2,882,540 IRA balance together with that same income will hit **Tier 2** $5.2K annual charge) because that balance at that age forces a $142,000 RMD.  A balance of $1,286,740 for a single 80 year old lands in **Tier 4** with a $5,7k annual charge.  At 75 that same single person would be in Tier 4 with a 1.5M IRA balance. 
++ [What IRA Balances Result in IRMAA due to RMDS](https://tools.netcitizen.us/irmaa_and_rmds.html) I wrote this tool, too, using AI. Given entered fixed income, it calculates what size IRA balance will cause RMDs that hit IRMAA tiers at various ages.  The tool uses current rates and does not attempt to adjust for inflation.  For example a married couple with a $16,607,550 balance at age **73** together with $130,000 income (pensions/social security/etc) will hit the highest IRMAA Tier 5 due to $626,700 forced RMD. Yeah, that is clearly not most of us. But at age **80** a $2,882,540 IRA balance together with that same income will hit **Tier 2** $5.2K annual charge because that balance at that age forces a $142,000 RMD.  A balance of $1,286,740 for a single 80 year old lands in **Tier 4** with a $5,7k annual charge.  At 75 that same single person would be in Tier 4 with a 1.5M IRA balance. 
 
 Operational Tools (All Free, though one is only free to try)
 
-+ [NestWise](https://www.nestwise.me/) - lots and lots of features. No login required. Includes things like budgeting, extensive Monte Carlo analysis, and even one of my favorite features which allows you to automatically iterate over different withdrawal rates (using different strategies) to find one that best suits you.  I've examined the source code for this tool and collaborated with the developer. No backdoors, or exploitable flaws were found.
++ [NestWise](https://www.nestwise.me/) - lots and lots of features. No login required. Includes things like budgeting, extensive Monte Carlo analysis, and even one of my favorite features which allows you to automatically iterate over different withdrawal rates (using different strategies) to find one that best suits you.  I've examined the source code for this tool and collaborated with the developer. No back-doors, or exploitable flaws were found.
 
-+ [RetirementIQ](https://retirementiq.app/) Free for 7 days, $50/year. I've not dabbled much with this, partly because I prefer open source that I can inspect for possible flaws, backdoors, etc.  Directly invoke it here: [retirementiq.app](https://retirementiq.app/app/)
++ [RetirementIQ](https://retirementiq.app/) Free for 7 days, $50/year. I've not dabbled much with this, partly because I prefer open source that I can inspect for possible flaws, back-doors, etc.  Directly invoke it here: [retirementiq.app](https://retirementiq.app/app/)
 
 + [Retirement Figures](http://retirementfigures.com/) seems pretty robust and is currently free.  I have no access to the source to look for problems.
 

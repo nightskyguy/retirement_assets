@@ -179,10 +179,82 @@
             <label style="display:inline-flex;align-items:center;gap:4px;margin-left:8px;font-size:0.85em;cursor:pointer;" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
                 <input type="checkbox" id="optimizeSpend"> Optimize Spend
             </label>
+		    <button id="btn-mc" class="tab-btn" style="display:none;" onclick="{showTab('tab-mc')}">Monte Carlo 🎲</button>
 		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
 		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}">Documentation <strong id="testsFailed">🟢</strong></button>
 
         </div>
+
+		<div id="tab-mc" class="card hidden">
+			<!-- Simulation params — gated by NERD_KNOBS in initMCTab() -->
+			<div id="mc-params-panel" style="display:none;margin-bottom:12px;padding:10px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;">
+				<strong style="font-size:0.9em;color:#555;">Simulation Parameters</strong>
+				<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;align-items:center;">
+					<label style="font-size:0.85em;">Paths
+						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;">
+					</label>
+					<label style="font-size:0.85em;" title="Expected annual arithmetic return (e.g. 7 = 7%)">Expected Return μ %
+						<input type="number" id="mc-mu" value="7" min="0" max="20" step="0.5" style="width:55px;margin-left:4px;">
+					</label>
+					<label style="font-size:0.85em;" title="Annual return volatility (e.g. 12 = 12% std dev)">Volatility σ %
+						<input type="number" id="mc-sigma" value="12" min="1" max="40" step="0.5" style="width:55px;margin-left:4px;">
+					</label>
+					<label style="font-size:0.85em;" title="Random seed for reproducibility">Seed
+						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
+					</label>
+				</div>
+			</div>
+
+			<!-- Controls row -->
+			<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+				<button id="mc-run-btn" onclick="runMonteCarlo()" style="padding:6px 18px;font-size:0.95em;">Run Monte Carlo</button>
+				<button id="mc-cancel-btn" onclick="cancelMC()" style="display:none;padding:6px 12px;font-size:0.9em;background:#dc3545;color:white;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
+				<span id="mc-path-count" style="font-size:0.8em;color:#888;"></span>
+			</div>
+
+			<!-- Progress bar -->
+			<div id="mc-progress-wrap" style="display:none;margin-bottom:10px;">
+				<div style="background:#e9ecef;border-radius:4px;height:18px;position:relative;overflow:hidden;">
+					<div id="mc-progress-bar" style="background:#2980b9;height:100%;width:0%;transition:width 0.2s;"></div>
+					<span id="mc-progress-txt" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:0.78em;color:#333;">0%</span>
+				</div>
+			</div>
+
+			<!-- Error display -->
+			<div id="mc-error" style="display:none;padding:8px 12px;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;color:#721c24;margin-bottom:10px;font-size:0.9em;"></div>
+
+			<!-- Survival rate table -->
+			<div id="mc-table-wrap" style="display:none;margin-bottom:16px;">
+				<div style="font-size:0.85em;color:#555;margin-bottom:4px;">
+					Check rows to add/remove from chart. Sorted by survival rate. <span id="mc-path-count-tbl"></span>
+				</div>
+				<div style="max-height:280px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;">
+					<table style="width:100%;border-collapse:collapse;font-size:0.85em;">
+						<thead style="position:sticky;top:0;background:#f1f3f5;z-index:1;">
+							<tr>
+								<th style="padding:4px 6px;width:28px;"></th>
+								<th style="padding:4px 6px;text-align:left;">Strategy</th>
+								<th style="padding:4px 6px;text-align:left;">Param</th>
+								<th style="padding:4px 6px;text-align:right;">Survival</th>
+								<th style="padding:4px 6px;text-align:right;">Median Ruin Yr</th>
+								<th style="padding:4px 6px;text-align:right;">Median Final Bal</th>
+							</tr>
+						</thead>
+						<tbody id="mc-table-body"></tbody>
+					</table>
+				</div>
+			</div>
+
+			<!-- Percentile band chart -->
+			<div id="mc-chart-wrap" style="display:none;">
+				<div style="font-size:0.8em;color:#888;margin-bottom:4px;">
+					Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0.
+				</div>
+				<div style="position:relative;height:420px;">
+					<canvas id="mc-chart"></canvas>
+				</div>
+			</div>
+		</div>
 
 		<div id="tab-fileio" class="card hidden">
 			<div class="scenario-controls">
@@ -395,6 +467,7 @@ window.addEventListener('DOMContentLoaded', function () {
     loadFromURL?.();   // Preset inputs from URL params if present (must run after dropdowns are built)
     toggleStrategyUI();
     setupAutoRecalc();
+    initMCTab();
 });
 
 // Auto-run tests when page loads (comment out if you don't want auto-run)
@@ -406,6 +479,8 @@ loadScenarioByName?.('default');
 runSimulation?.();
 </script>
 <script src="other_tools.js"></script>
+<script src="montecarlo/mc_controller.js"></script>
+<script src="montecarlo/mc_tab.js"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

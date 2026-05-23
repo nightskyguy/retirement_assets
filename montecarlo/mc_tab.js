@@ -6,6 +6,7 @@
 let _mcChart      = null;
 let _mcResults    = null;
 let _mcSelected   = new Set(); // indices of variations currently on chart
+let _mcStartYear  = 2026;      // cached from getInputs() at run time
 
 // --- Initialization -------------------------------------------------------
 
@@ -32,6 +33,7 @@ function runMonteCarlo() {
     const sigma    = parseFloat(document.getElementById('mc-sigma')?.value    ?? '12') / 100;
     const seed     = parseInt(document.getElementById('mc-seed')?.value       ?? '42');
 
+    _mcStartYear = base.startYear ?? 2026;
     const variations = buildVariations(base);
     const years = Math.max(
         base.birthyear1 + base.die1,
@@ -166,11 +168,8 @@ function renderMCChart(msg) {
     const canvas = document.getElementById('mc-chart');
     if (!canvas || !msg?.variations?.length) return;
 
-    const startYear = _mcResults
-        ? (buildVariations(getInputs())[0]?.startYear ?? 2026)
-        : 2026;
     const years  = msg.years;
-    const labels = Array.from({ length: years }, (_, i) => startYear + i);
+    const labels = Array.from({ length: years }, (_, i) => _mcStartYear + i);
 
     const datasets = [];
     let fallbackIdx = 0;
@@ -252,29 +251,41 @@ function renderMCChart(msg) {
             interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: {
-                    // Only show the p50 "median" datasets (every 5th, index 4,9,14…)
+                    // Only show the p50 "median" entry per variation (every 5th dataset).
                     labels: {
                         filter: (item) => item.datasetIndex % 5 === 4,
                         font: { size: 12 },
+                        usePointStyle: true,
+                        pointStyle: 'line',
+                        boxWidth: 24,
                     },
                 },
                 tooltip: {
+                    // Solid dark background — no white box, no colored border.
+                    backgroundColor: 'rgba(22, 22, 22, 0.92)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#dddddd',
+                    borderWidth: 0,
+                    padding: 10,
                     filter: (item) => item.datasetIndex % 5 === 4,
                     callbacks: {
+                        title: (items) => {
+                            const year = items[0]?.label ?? '';
+                            return `Year ${year}`;
+                        },
                         label: (ctx) => {
-                            const v = _mcResults.variations[
-                                Array.from(_mcSelected)[Math.floor(ctx.datasetIndex / 5)]
-                            ];
+                            const selArray = Array.from(_mcSelected);
+                            const v = _mcResults?.variations[selArray[Math.floor(ctx.datasetIndex / 5)]];
                             const p = ctx.dataIndex;
                             const pct = v?.percentiles;
                             if (!pct) return ctx.dataset.label;
                             return [
-                                `${ctx.dataset.label}`,
-                                `  p95: $${fmt(pct.p95[p])}`,
-                                `  p75: $${fmt(pct.p75[p])}`,
-                                `  p50: $${fmt(pct.p50[p])}`,
-                                `  p25: $${fmt(pct.p25[p])}`,
-                                `  p5:  $${fmt(pct.p5[p])}`,
+                                ` ${ctx.dataset.label}`,
+                                `   p95  $${fmt(pct.p95[p])}`,
+                                `   p75  $${fmt(pct.p75[p])}`,
+                                `   p50  $${fmt(pct.p50[p])}`,
+                                `   p25  $${fmt(pct.p25[p])}`,
+                                `   p5   $${fmt(pct.p5[p])}`,
                             ];
                         },
                     },

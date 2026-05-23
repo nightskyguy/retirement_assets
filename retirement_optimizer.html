@@ -296,14 +296,14 @@
                                 <li>Compare with <em>Reduce IRA in N Years</em> to amortize your IRAs in a fixed number of years (they will not be emptied, they will be drawn down to <i>IRA  Goal</i>.</li>
                                 <li><i>Fill Federal Tax Bracket</i> withdraws enough to max out the chosen federal tax bracket. NOTE: If your spend goal is in a bracket higher than you select, it will try to meet the spend goal instead of locking to the bracket.</li>
                                 <li><i>Lesser of IRMAA or TaxBracket</i> is not yet implemented, but here it's like <i>Fill Federal Tax Bracket</i>, but reduces the amount withdrawn to stay under the the lesser of the (next) IRMAA tier, the next state or next federal bracket - which ever is lower. It applies an inflation adjusted "safety threshold" of 2,000. There are three gotcha's here: a. the <i>After-Tax Spend</i> goal is in play so it may blow right past the next tier if you have insufficient non-taxable income, b. the current year IRMAA tax is based on income from two years ago - so this setting attempts to avoid FUTURE tax - not tax in this year, c. the current year filing status is what is used to avoid hitting a higher tier. Here is why that matters: If you or your spouse pass away, the careful work avoiding a higher tier two years ago will still <i>hurt </i> in the current year. For example if the MAGI is one dollar below the first tier while married, two years from now when filing status is Single, that MAGI falls into the 4th IRMAA tier - the only upside here, is that there is now half as much of the IRMAA tax since it is per-person. One solution is to remarry. :-) </li></ul>
-                            <li><strong>After Changes...</strong> selecting the Annual Details, Chart or Optimizer will cause a recalculation and show the page. On the <i>Annual Details</i> table, rows are highlighted in yellow if status changes to single. A pink/red backgrounds means there are not enough funds to meet two years of SpendGoal.
+                            <li><strong>After Changes...</strong> selecting the Annual Details, Chart or Optimizer will cause a recalculation and show the page. On the <i>Annual Details</i> table, rows are highlighted in yellow if status changes to single. A pink/red background means the portfolio balance is insufficient to cover the required draw (spend goal minus guaranteed income).
                             <I>Optimizer</I> finds the mathematical "sweet spot" for emptying IRAs to minimize lifetime total tax and maximize total spendable value. It checks different drawdown years - that is the same thing as the <i>Reduce IRA in N Years</i> but it loops through from 1 to 30 years.</li>
                             </li>
                         </ul>			
                         <h4>What is Missing</h4>
                         <p>This tool does not (currently) model <b>annuities</b>, multiple pensions, additional w2 (taxable) income</b>. The tool intentionally keeps the number of options low.  Currently the "optimize" option focuses on depleting the IRA balance(s) to the point where future RMDs will not force excess taxation (Federal, State and IRMAA). An additional optimization is planned that will iterate to maximize spendable - see the <B>Planned</B> tab. These 
                         features, however are <B>NOT in scope</B>.
-                        <ol><li>There is no Monte Carlo or other fancy strength tests.</li>
+                        <ol><li>Monte Carlo analysis is available via the <b>Monte Carlo 🎲</b> tab. It runs all withdrawal strategy variations against shared stochastic return sequences and reports survival rates with percentile band charts.</li>
                         <li>The RMD tables are the standard one, not the one that might apply if there is a 10 year or more difference in spouse ages</li>
                         <li>It only uses the MFJ and Single tax brackets. (No head of household, or Married filing separately)</li>
                         <li>Because ROTH assets are not taxable, it merges all ROTH funds into one account. In real life, conversions/withdraws and earnings would occur in separate accounts.</li>
@@ -479,6 +479,8 @@ loadScenarioByName?.('default');
 runSimulation?.();
 </script>
 <script src="other_tools.js"></script>
+<script src="montecarlo/prng.js"></script>
+<script src="montecarlo/stats.js"></script>
 <script src="montecarlo/mc_controller.js"></script>
 <script src="montecarlo/mc_tab.js"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->

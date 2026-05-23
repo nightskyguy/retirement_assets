@@ -1599,8 +1599,9 @@ assertEqual(
 		assertEqual(opt.optimizedSpend > wealthyInputs.spendGoal, true,
 			'optimizeSpend: optimized spend exceeds baseline spend goal');
 		const last = opt.result.log[opt.result.log.length - 1];
-		assertEqual(last.totalWealth >= last.spendGoal * SUCCESS_WEALTH_YEARS, true,
-			'optimizeSpend: result satisfies 2-year ending wealth criterion');
+		const lastRequired = Math.max(0, last.spendGoal - (last.guaranteedIncome ?? 0));
+		assertEqual((last.portfolioBalance ?? 0) >= lastRequired, true,
+			'optimizeSpend: result satisfies ending portfolio-covers-required-draw criterion');
 	}
 
 	// (opt-2) Forward optimizer: returns null when baseline itself fails

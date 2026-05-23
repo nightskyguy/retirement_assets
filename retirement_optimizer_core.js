@@ -16,8 +16,8 @@ const SPEND_SEARCH_TOLERANCE = 0.005; // Stop binary search when bounds are with
 const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase spending" banner
 
 // Feature flags
-// NERD_KNOBS: shows advanced controls (Monte Carlo params, etc.). Will later be URL-driven.
-const NERD_KNOBS = true;
+// NERD_KNOBS: shows advanced controls (Monte Carlo params, etc.). Enabled via ?nerdknob URL param.
+const NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
 
 
 
@@ -489,6 +489,60 @@ function sumAccounts(obj, keys = ['IRA', 'IRA1', 'IRA2', 'Roth', 'Brokerage', 'C
 /////////////////////////////
 
 
+// ============================================================================
+// Social Security Survivor Benefit (SSA formula, FRA = 67)
+// ============================================================================
+
+/**
+ * Returns the final monthly SS benefit for a surviving spouse.
+ * @param {number} userAgeAtDeath       - Deceased's age at death
+ * @param {number} userClaimAge         - Age the deceased claimed (or planned to claim) SS
+ * @param {number} userMonthlyBenefit   - Deceased's monthly benefit at their claiming age
+ * @param {number} spouseClaimAge       - Age the survivor claims their benefit
+ * @param {number} spouseMonthlyBenefit - Survivor's own monthly benefit at their claiming age
+ * @returns {number} Monthly dollar amount the survivor receives
+ */
+function calculateSurvivorBenefit(
+    userAgeAtDeath, userClaimAge, userMonthlyBenefit,
+    spouseClaimAge, spouseMonthlyBenefit
+) {
+    const FRA_MONTHS = 67 * 12;
+    const userClaimMonths  = Math.round(userClaimAge  * 12);
+    const userDeathMonths  = Math.round(userAgeAtDeath * 12);
+    const spouseClaimMonths = Math.round(Math.max(spouseClaimAge, 60) * 12);
+
+    // Step 1: Derive deceased's PIA at FRA from their benefit at claiming age
+    let userPIA;
+    if (userClaimMonths >= FRA_MONTHS) {
+        const delayedMonths = userClaimMonths - FRA_MONTHS;
+        userPIA = userMonthlyBenefit / (1 + delayedMonths * (0.08 / 12));
+    } else {
+        const reductionMonths = FRA_MONTHS - userClaimMonths;
+        const reductionFactor = reductionMonths <= 36
+            ? reductionMonths * (5 / 9 / 100)
+            : (36 * (5 / 9 / 100)) + ((reductionMonths - 36) * (5 / 12 / 100));
+        userPIA = userMonthlyBenefit / (1 - reductionFactor);
+    }
+
+    // Step 2: Deceased's baseline — PIA plus any delayed credits earned before death
+    const deceasedBaseline = userDeathMonths < FRA_MONTHS
+        ? userPIA
+        : userPIA * (1 + (userDeathMonths - FRA_MONTHS) * (0.08 / 12));
+
+    // Step 3: Apply survivor's early-claiming reduction if before FRA
+    let rawSurvivorBenefit;
+    if (spouseClaimMonths >= FRA_MONTHS) {
+        rawSurvivorBenefit = deceasedBaseline;
+    } else {
+        const totalPossibleEarlyMonths = FRA_MONTHS - 720; // 67→60 = 84 months
+        const earlyMonths = FRA_MONTHS - spouseClaimMonths;
+        rawSurvivorBenefit = deceasedBaseline * (1 - (earlyMonths / totalPossibleEarlyMonths) * 0.285);
+    }
+
+    // Step 4: Higher-of rule — survivor gets their own benefit if larger
+    return Math.floor(Math.max(rawSurvivorBenefit, spouseMonthlyBenefit));
+}
+
 let simulationCount = 0;
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
@@ -589,16 +643,35 @@ function simulate(inputs) {
 
         // 2. Base Income
         let ssReduction = (inputs.ssFailYear > 2000 && currentYear >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
-        let s1 = (alive1 && age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate * ssReduction : 0;
-        let s2 = (alive2 && age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate * ssReduction : 0;
+        let potentialS1 = (age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate * ssReduction : 0;
+        let potentialS2 = (age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate * ssReduction : 0;
+        let s1 = alive1 ? potentialS1 : 0;
+        let s2 = alive2 ? potentialS2 : 0;
         let pension = inputs.pensionAnnual * (inputs.pensionCola ? inflation : 1);
 
         // One is deceased (if both decease, it won't get here)
         if (!alive1 || !alive2) {
-            // Survivor Logic: Max of SS + Survivorship % of Pension
-            s1 = Math.max(s1, s2);
+            let rawSurvivorMonthly;
+            if (!alive1) {
+                // Person 2 (spouse) is survivor
+                rawSurvivorMonthly = calculateSurvivorBenefit(
+                    inputs.die1, inputs.ss1Age, inputs.ss1 / 12,
+                    inputs.ss2Age, inputs.ss2 / 12
+                );
+                pension = pension * (inputs.survivorPct / 100);
+            } else {
+                // Person 1 (user) is survivor
+                rawSurvivorMonthly = calculateSurvivorBenefit(
+                    inputs.die2, inputs.ss2Age, inputs.ss2 / 12,
+                    inputs.ss1Age, inputs.ss1 / 12
+                );
+            }
+            const survivorAge      = alive1 ? age1 : age2;
+            const survivorStartAge = alive1 ? inputs.ss1Age : inputs.ss2Age;
+            s1 = survivorAge >= survivorStartAge
+                ? rawSurvivorMonthly * 12 * cpiRate * ssReduction
+                : 0;
             s2 = 0;
-            if (!alive1) { pension = pension * (inputs.survivorPct / 100); }
         }
         let fixedInc = s1 + s2;					// Social Security
         let taxableInc = pension;				// Pensions, W2, RMDs, IRA withdrawals, wdBrokerage

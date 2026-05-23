@@ -63,6 +63,26 @@ function estimateMCMs(numPaths, numVariations) {
     return Math.round(_mcMsPerSim * numPaths * numVariations);
 }
 
+// Run 1 path through all variations synchronously to calibrate _mcMsPerSim.
+// Takes ~1/numPaths of the full run time (imperceptible). Call before the first run.
+function calibrateMCMs(cfg) {
+    const { mu, sigma, seed, years, variations } = cfg;
+    const rng = mulberry32(seed ?? 42);
+    const logDrift = mu - 0.5 * sigma * sigma;
+
+    const returnSeq = new Float64Array(years);
+    for (let y = 0; y < years; y++) {
+        returnSeq[y] = Math.exp(logDrift + sigma * boxMuller(rng)) - 1;
+    }
+
+    const t0 = performance.now();
+    for (const v of variations) {
+        try { simulate({ ...v, returnSequence: returnSeq }); } catch (e) {}
+    }
+    // probeMs covers 1 path × all variations; normalize to per (variation × path)
+    _mcMsPerSim = (performance.now() - t0) / variations.length;
+}
+
 // ---- Synchronous (chunked) fallback ----------------------------------------
 // Mirrors worker.js logic exactly, calling the globally-loaded simulate(),
 // mulberry32(), boxMuller(), and computePercentiles() functions.

@@ -488,6 +488,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="displayhelpers.js"></script>
 <script>
   const BRACKETS = [
     { t: 0,    id: '0',  label: '0%',            color: '#4caf80', width: 1.5 },
@@ -656,6 +657,7 @@
     document.getElementById(id).addEventListener('input', update)
   );
   update();
+  DisplayHelpers.registerChartDismissal(document.getElementById('chart'));
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') document.getElementById('help-modal').classList.remove('open');

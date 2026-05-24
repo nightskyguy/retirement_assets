@@ -34,11 +34,10 @@
       desc: 'Calculate the real (inflation-adjusted, after-tax) growth rate needed to stay ahead of inflation.'
     },
     {
-      name: 'IRA Projection',
-      file: 'IRA_projection.html',
-      desc: 'Legacy IRA/401k projection tool.',
-      deprecated: true
-    }
+      name: 'Retirement Tax Planner',
+      file: 'RetirementTaxPlanner.html',
+      desc: 'Model IRA draws, Roth conversions, SS income, pension, dividends, and capital gains — with federal + state tax detail.'
+    },
   ];
 
   const currentFile = window.location.pathname.split('/').pop() || '';

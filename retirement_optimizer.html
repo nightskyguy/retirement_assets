@@ -12,6 +12,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Retirement Optimizer 8</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<script src="displayhelpers.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
 	<base target="_blank">	
 	<script src="retirement_optimizer_core.js"></script>	
@@ -489,6 +490,11 @@ runTests?.();
 loadScenarioByName?.('default');
 
 runSimulation?.();
+</script>
+<script>
+  DisplayHelpers.registerChartDismissal(document.getElementById('chartAssets'));
+  DisplayHelpers.registerChartDismissal(document.getElementById('chartIncomeSources'));
+  DisplayHelpers.registerChartDismissal(document.getElementById('mc-chart'));
 </script>
 <script src="other_tools.js"></script>
 <script src="montecarlo/prng.js"></script>

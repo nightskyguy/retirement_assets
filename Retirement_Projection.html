@@ -377,6 +377,13 @@ var TAXData = {
           <input type="range" id="infl" min="0" max="8" step="0.5" value="2.5">
         </div>
         <div class="ctrl">
+          <div class="ctrl-header"><label>Retirement start age</label><span class="val" id="vRetireAge">65</span></div>
+          <input type="range" id="retireAge" min="55" max="70" step="1" value="65">
+          <div class="ctrl-note" id="warnEarnedIncome" style="display:none;color:#f5a623">
+            ⚠ Contributions past retirement start require earned income.
+          </div>
+        </div>
+        <div class="ctrl">
           <div class="ctrl-header"><label>State income tax</label></div>
           <select id="stateSelect" class="state-select" style="margin-top:6px" onchange="applyStateThresholds(); update()"></select>
         </div>
@@ -453,6 +460,9 @@ var TAXData = {
                 <div class="ctrl" id="ctrlContribEndAge" style="opacity:0.4;pointer-events:none">
                   <div class="ctrl-header"><label>Stop contributing at age</label><span class="val" id="vContribEndAge">62</span></div>
                   <input type="range" id="contribEndAge" min="40" max="106" step="1" value="62">
+                </div>
+                <div class="ctrl-note" id="warnEarnedIncomeIRA" style="display:none;color:#f5a623">
+                  ⚠ Contributions past retirement start require earned income.
                 </div>
                 <div class="ctrl" id="ctrlContribInflate" style="opacity:0.4;pointer-events:none">
                   <div class="ctrl-header">
@@ -532,6 +542,29 @@ var TAXData = {
               Grows at shared growth rate. No RMDs. Tax-free — excluded from taxable income totals.
             </div>
           </div>
+
+          <details class="section-inner" id="secRothAccumulation">
+            <summary>Accumulation</summary>
+            <div class="section-body">
+              <div class="ctrl">
+                <div class="ctrl-header"><label>Annual contribution (today $)</label><span class="val" id="vRothContrib">$0</span></div>
+                <input type="range" id="rothContrib" min="0" max="70000" step="1000" value="0">
+              </div>
+              <div class="ctrl" id="ctrlRothContribEndAge" style="opacity:0.4;pointer-events:none">
+                <div class="ctrl-header"><label>Stop contributing at age</label><span class="val" id="vRothContribEndAge">62</span></div>
+                <input type="range" id="rothContribEndAge" min="40" max="106" step="1" value="62">
+              </div>
+              <div class="ctrl-note" id="warnEarnedIncomeRoth" style="display:none;color:#f5a623">
+                ⚠ Contributions past retirement start require earned income.
+              </div>
+              <div class="ctrl" id="ctrlRothContribInflate" style="opacity:0.4;pointer-events:none">
+                <div class="ctrl-header">
+                  <label>Grow contributions with inflation</label>
+                  <label class="switch"><input type="checkbox" id="rothContribInflate"><span class="slider-track"></span></label>
+                </div>
+              </div>
+            </div>
+          </details>
         </details>
 
         <!-- ── Brokerage account ── -->
@@ -684,6 +717,7 @@ var TAXData = {
             <span id="lgBaseWdWrap"    class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(3,'lgBaseWdWrap')"><span class="leg-sq" style="background:#a78bfa"></span><span id="lgBase">Withdrawal target</span></span>
             <span id="lgActualWrap"    class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(4,'lgActualWrap')"><span class="leg-sq" style="background:#e8eaf2"></span>Total Income</span>
             <span id="lgContribWrap"   class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(5,'lgContribWrap')"><span class="leg-sq" style="background:#5aab6b"></span>IRA Contribution</span>
+            <span id="lgRothContribWrap" class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(15,'lgRothContribWrap')"><span class="leg-sq" style="background:#fb7185"></span>Roth Contribution</span>
             <span id="lgLifestyleWrap"  class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(6,'lgLifestyleWrap')"><span class="leg-dash" style="border-color:#f5a623"></span><span id="lgLifestyle">Desired Income</span></span>
             <span id="lgTaxableWrap"   class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(11,'lgTaxableWrap')"><span class="leg-dash" style="border-color:#fb923c"></span>Taxable Income</span>
             <span id="lgFedTaxWrap"    class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(12,'lgFedTaxWrap')"><span class="leg-sq" style="background:#f87171"></span>Federal Tax</span>
@@ -1076,12 +1110,13 @@ function computeIrmaaInline(magi, status, inflMult) {
 /* ── Projection engine ── */
 function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, years, startAge,
                   ss1, ss1StartAge, ss2, ss2StartAge, fixedIncome, contrib, contribEndAge, contribInflate,
+                  rothContrib, rothContribEndAge, rothContribInflate,
                   ltAmt, ltMode, ltDecline,
                   brokStart, brokBasisPct, brokApp, brokDivPct, brokDrip,
                   cgMode, cgAmt, cgFreq, cgStartAge, cgInflate,
                   cashStart, cashRatePct,
                   myRmdStart, spouseStartAge, spouseRmdStart, spouseIRAStart, rothStart,
-                  selectedState, isSingle){
+                  selectedState, isSingle, retireAge){
   let bal       = start;
   let brokBal   = brokStart;
   let brokBasis = brokStart * (brokBasisPct / 100);
@@ -1097,7 +1132,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
     const inflMult = Math.pow(1 + inflRate/100, y - 1);
 
     // Active withdrawal period: Period 2 takes over at wd2StartAge (ignored if amount is 0)
-    const withdrawing = age >= wd1StartAge;
+    const withdrawing = age >= wd1StartAge && age >= retireAge;
     const activeWd    = (age >= wd2StartAge && wd2 > 0) ? wd2 : wd1;
     const targetWd    = withdrawing ? activeWd * inflMult : 0;
 
@@ -1164,6 +1199,9 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
 
     // ── Roth (no RMD, no taxable withdrawal) ──
     rothBal *= (1 + rate / 100);
+    const rothContribAmt    = rothContribInflate ? (rothContrib||0) * inflMult : (rothContrib||0);
+    const annualRothContrib = (rothContribAmt > 0 && age <= rothContribEndAge) ? rothContribAmt : 0;
+    rothBal += annualRothContrib;
 
     // ── Combined income ──
     const divPlusInt  = dividends + cashInterest + capitalGain;
@@ -1232,7 +1270,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
       actualWd,
       realActualWd:    actualWd / inflMult,
       growth,
-      annualContrib,
+      annualContrib, annualRothContrib,
       netGrowth:       growth - actualWd + annualContrib,
       ss1Contrib, ss2Contrib,
       brokBal, brokBasis,
@@ -1257,7 +1295,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
 }
 
 /* ── Chart setup ── */
-const FIXED_DS = 15;
+const FIXED_DS = 16;
 const chartCtx = document.getElementById('ch').getContext('2d');
 const chart = new Chart(chartCtx, {
   type:'line',
@@ -1276,7 +1314,8 @@ const chart = new Chart(chartCtx, {
     /*11 Taxable income */ { label:'Taxable Income',       data:[], borderColor:'#fb923c', backgroundColor:'transparent', fill:false, hidden:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd', borderDash:[4,3] },
     /*12 Federal Tax   */ { label:'Federal Tax',          data:[], borderColor:'#f87171', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
     /*13 State Tax     */ { label:'State Tax',            data:[], borderColor:'#34d399', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
-    /*14 IRMAA         */ { label:'IRMAA',                data:[], borderColor:'#c084fc', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' }
+    /*14 IRMAA         */ { label:'IRMAA',                data:[], borderColor:'#c084fc', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
+    /*15 Roth Contrib  */ { label:'Roth Contribution',   data:[], borderColor:'#fb7185', backgroundColor:'transparent', fill:false, hidden:true,  tension:0,   pointRadius:0, borderWidth:1.5, yAxisID:'yWd' }
   ]},
   options:{
     responsive:true, maintainAspectRatio:false,
@@ -1354,7 +1393,7 @@ const LEG_WRAP = [
   'lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap',
   'lgContribWrap','lgLifestyleWrap','lgBrokWrap','lgCashWrap',
   'lgSpouseIRAWrap','lgRothWrap','lgTaxableWrap',
-  'lgFedTaxWrap','lgStateTaxWrap','lgIrmaaTaxWrap'
+  'lgFedTaxWrap','lgStateTaxWrap','lgIrmaaTaxWrap','lgRothContribWrap'
 ];
 
 const CV_GROUPS = {
@@ -1511,6 +1550,7 @@ function rebuildLegend(){
 
 /* ── Main update ── */
 function update(){
+  syncEarnedIncomeWarning();
   const birthYear   = +document.getElementById('birthYear').value  || (CURRENT_YEAR - 65);
   const birthMonth  = +document.getElementById('birthMonth').value || 1;
   const startAge    = computeAge(birthYear, birthMonth);
@@ -1542,6 +1582,10 @@ function update(){
   const contrib        = +document.getElementById('contrib').value;
   const contribEndAge  = +document.getElementById('contribEndAge').value;
   const contribInflate = document.getElementById('contribInflate').checked;
+  const rothContrib        = +document.getElementById('rothContrib').value;
+  const rothContribEndAge  = +document.getElementById('rothContribEndAge').value;
+  const rothContribInflate = document.getElementById('rothContribInflate').checked;
+  const retireAge      = +document.getElementById('retireAge').value;
   const ltAmt          = +document.getElementById('ltAmt').value;
   const ltMode         = document.querySelector('input[name="ltMode"]:checked')?.value || 'flat';
   const ltDecline      = +document.getElementById('ltDecline').value;
@@ -1571,6 +1615,9 @@ function update(){
   document.getElementById('vFixedInc').textContent    = fmt(fixedIncome);
   document.getElementById('vContrib').textContent      = fmt(contrib);
   document.getElementById('vContribEndAge').textContent= contribEndAge;
+  document.getElementById('vRothContrib').textContent      = fmt(rothContrib);
+  document.getElementById('vRothContribEndAge').textContent = rothContribEndAge;
+  document.getElementById('vRetireAge').textContent    = retireAge;
   document.getElementById('vLtAmt').textContent        = fmt(ltAmt);
   document.getElementById('vLtDecline').textContent    = ltDecline.toFixed(1) + '%';
   document.getElementById('vBrokBasis').textContent    = brokBasisPct + '% · ' + fmt(Math.round(brokStartVal * brokBasisPct / 100));
@@ -1596,13 +1643,14 @@ function update(){
 
   const rows   = project(start, rate, wd1, wd2, wdStartAge, wd2StartAge, infl, years, startAge,
                           ss1, ss1Age, ss2, ss2Age, fixedIncome, contrib, contribEndAge, contribInflate,
+                          rothContrib, rothContribEndAge, rothContribInflate,
                           ltAmt, ltMode, ltDecline,
                           brokStartVal, brokBasisPct, brokAppVal, brokDivVal, brokDrip,
                           cgMode, cgAmtVal, cgFreqVal, cgStartAgeVal, cgInflate,
                           cashStartVal, cashRateVal,
                           myRmdStartAge, spouseStartAge, spouseRmdStartAge,
                           spouseIRAStartVal, rothStartVal,
-                          selectedState, isSingle);
+                          selectedState, isSingle, retireAge);
   const labels = rows.map(r => `Age ${r.age}`);
 
   chart.data.labels           = labels;
@@ -1627,6 +1675,11 @@ function update(){
   // Annual Contribution line
   chart.data.datasets[5].data = rows.map(r =>
     r.annualContrib > 0 ? Math.round(useReal ? r.annualContrib / r.inflMult : r.annualContrib) : null
+  );
+
+  // Roth Contribution line
+  chart.data.datasets[15].data = rows.map(r =>
+    r.annualRothContrib > 0 ? Math.round(useReal ? r.annualRothContrib / r.inflMult : r.annualRothContrib) : null
   );
 
   // Lifestyle target line
@@ -1751,6 +1804,7 @@ function update(){
      useReal ? r.activeWd : r.activeWd * r.inflMult,
      useReal ? r.realTotalIncome : r.totalIncome,
      useReal ? r.annualContrib / r.inflMult : r.annualContrib,
+     useReal ? r.annualRothContrib / r.inflMult : r.annualRothContrib,
      useReal ? r.lifestyleTargetReal : r.lifestyleTarget
     ].forEach(v => { if(v && v > yWdMax) yWdMax = v; });
   });
@@ -1851,6 +1905,10 @@ function buildBookmarkUrl(){
   p.set('contrib',     document.getElementById('contrib').value);
   p.set('contribEnd',  document.getElementById('contribEndAge').value);
   if(document.getElementById('contribInflate').checked) p.set('contribInflate', '1');
+  p.set('rothContrib',    document.getElementById('rothContrib').value);
+  p.set('rothContribEnd', document.getElementById('rothContribEndAge').value);
+  if(document.getElementById('rothContribInflate').checked) p.set('rothContribInflate', '1');
+  p.set('retireAge',   document.getElementById('retireAge').value);
 
   p.set('ltamt',   document.getElementById('ltAmt').value);
   p.set('ltmode',  document.querySelector('input[name="ltMode"]:checked')?.value || 'flat');
@@ -1930,6 +1988,10 @@ function applyUrlParams(){
   setSlider('contrib',      'contrib');
   setSlider('contribEndAge','contribEnd');
   document.getElementById('contribInflate').checked = p.get('contribInflate') === '1';
+  setSlider('rothContrib',       'rothContrib');
+  setSlider('rothContribEndAge', 'rothContribEnd');
+  document.getElementById('rothContribInflate').checked = p.get('rothContribInflate') === '1';
+  setSlider('retireAge', 'retireAge');
 
   setSlider('ltAmt',   'ltamt');
   setSlider('ltDecline','ltdecl');
@@ -2119,9 +2181,32 @@ function syncWd2UI(){
   el.style.pointerEvents = disabled ? 'none' : '';
 }
 
+function syncEarnedIncomeWarning(){
+  const retireAge  = +document.getElementById('retireAge').value;
+  const iraActive  = +document.getElementById('contrib').value > 0
+                     && +document.getElementById('contribEndAge').value > retireAge;
+  const rothActive = +document.getElementById('rothContrib').value > 0
+                     && +document.getElementById('rothContribEndAge').value > retireAge;
+  document.getElementById('warnEarnedIncome').style.display =
+    (iraActive || rothActive) ? 'block' : 'none';
+  document.getElementById('warnEarnedIncomeIRA').style.display =
+    iraActive ? 'block' : 'none';
+  document.getElementById('warnEarnedIncomeRoth').style.display =
+    rothActive ? 'block' : 'none';
+}
+
 function syncContribUI(){
   const disabled = +document.getElementById('contrib').value === 0;
   ['ctrlContribEndAge','ctrlContribInflate'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.opacity       = disabled ? '0.4' : '1';
+    el.style.pointerEvents = disabled ? 'none' : '';
+  });
+}
+
+function syncRothContribUI(){
+  const disabled = +document.getElementById('rothContrib').value === 0;
+  ['ctrlRothContribEndAge','ctrlRothContribInflate'].forEach(id => {
     const el = document.getElementById(id);
     el.style.opacity       = disabled ? '0.4' : '1';
     el.style.pointerEvents = disabled ? 'none' : '';
@@ -2144,6 +2229,10 @@ function enforceBirthAgeConstraints(){
   const ceEl = document.getElementById('contribEndAge');
   ceEl.min = startAge;
   if(+ceEl.value < startAge) ceEl.value = startAge;
+  const raEl = document.getElementById('retireAge');
+  const raMin = Math.min(Math.max(62, startAge), 70);
+  raEl.min = raMin;
+  if(+raEl.value < raMin) raEl.value = raMin;
 }
 
 document.getElementById('wdAge').addEventListener('input', () => {
@@ -2156,7 +2245,9 @@ document.getElementById('wdAge').addEventListener('input', () => {
 });
 
 document.getElementById('wd2').addEventListener('input', () => { syncWd2UI(); update(); });
-document.getElementById('contrib').addEventListener('input', () => { syncContribUI(); update(); });
+document.getElementById('contrib').addEventListener('input', () => { syncContribUI(); syncEarnedIncomeWarning(); update(); });
+document.getElementById('rothContrib').addEventListener('input', () => { syncRothContribUI(); syncEarnedIncomeWarning(); update(); });
+document.getElementById('retireAge').addEventListener('input', () => { syncEarnedIncomeWarning(); update(); });
 document.getElementById('ltAmt').addEventListener('input', () => { updateLtControls(); update(); });
 document.querySelectorAll('input[name="ltMode"]').forEach(r =>
   r.addEventListener('change', () => { updateLtControls(); update(); })
@@ -2164,6 +2255,7 @@ document.querySelectorAll('input[name="ltMode"]').forEach(r =>
 document.getElementById('ltDecline').addEventListener('input', update);
 
 ['wd2Age','rate','wd','infl','ss1','ss1Age','ss2','ss2Age','fixedInc','contribEndAge','contribInflate',
+ 'rothContribEndAge','rothContribInflate',
  'brokBasis','brokApp','brokDiv','cgAmt','cgFreq','cgStartAge','cashRate'
 ].forEach(id => document.getElementById(id).addEventListener('input', update));
 
@@ -2205,6 +2297,7 @@ initStateSelect();
 applyUrlParams();
 syncWd2UI();
 syncContribUI();
+syncRothContribUI();
 updateLtControls();
 setCgMode('none');
 setBrokDivMode(false);
@@ -2220,6 +2313,29 @@ setIraView('combined');
   ceEl.min = startAge;
   if(+ceEl.value < startAge) ceEl.value = startAge;
 }
+// Set rothContribEndAge min to match starting age
+{
+  const ceEl    = document.getElementById('rothContribEndAge');
+  const startAge = computeAge(
+    +document.getElementById('birthYear').value  || (CURRENT_YEAR - 65),
+    +document.getElementById('birthMonth').value || 1
+  );
+  ceEl.min = startAge;
+  if(+ceEl.value < startAge) ceEl.value = startAge;
+}
+// Set retireAge default and min
+{
+  const raEl     = document.getElementById('retireAge');
+  const startAge = computeAge(
+    +document.getElementById('birthYear').value  || (CURRENT_YEAR - 65),
+    +document.getElementById('birthMonth').value || 1
+  );
+  const defaultAge = Math.max(62, startAge);
+  raEl.min   = Math.min(defaultAge, 70);
+  raEl.value = Math.min(Math.max(+raEl.value, defaultAge), 70);
+  document.getElementById('vRetireAge').textContent = raEl.value;
+}
+syncEarnedIncomeWarning();
 applyStateThresholds();  // populates state brackets then calls renderThreshEditor
 update();
 

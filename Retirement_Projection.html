@@ -12,6 +12,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Retirement Projection Tool</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="displayhelpers.js"></script>
 <!-- Inline fallback: Federal + IRMAA sections needed by this tool.
      Keep in sync with taxengine.js.
      The external script below overrides this when the file is accessible. -->
@@ -331,7 +332,7 @@ var TAXData = {
     <input id="shareUrl" type="text" readonly>
     <p id="shareNote" style="display:none;margin-top:.5rem;font-size:10px;color:var(--muted);font-family:var(--mono);line-height:1.6">
       Append to the filename when opening directly:<br>
-      <code>IRA_projection.html<b>?v=8&amp;age=…</b></code>
+      <code>Retirement_Projection.html<b>?v=8&amp;age=…</b></code>
     </p>
     <div class="share-actions">
       <button class="help-btn" style="margin-left:0" onclick="copyShareUrl()">Copy</button>
@@ -936,21 +937,13 @@ function hexToRgba(hex, a){
 }
 
 function parseStart(){
-  let raw = document.getElementById('start').value.trim().replace(/[$,\s]/g,'');
-  let mult = 1;
-  if(/[mM]$/.test(raw))      { mult = 1e6; raw = raw.slice(0,-1); }
-  else if(/[kK]$/.test(raw)) { mult = 1e3; raw = raw.slice(0,-1); }
-  const v = parseFloat(raw) * mult;
-  return Math.min(20000000, Math.max(1000, isNaN(v) ? 2000000 : v));
+  const v = DisplayHelpers.parseShorthand(document.getElementById('start').value);
+  return Math.min(20000000, Math.max(1000, v == null ? 2000000 : v));
 }
 
 function parseBalInput(id){
-  let raw = (document.getElementById(id)?.value || '0').trim().replace(/[$,\s]/g,'');
-  let mult = 1;
-  if(/[mM]$/.test(raw))      { mult = 1e6; raw = raw.slice(0,-1); }
-  else if(/[kK]$/.test(raw)) { mult = 1e3; raw = raw.slice(0,-1); }
-  const v = parseFloat(raw) * mult;
-  return Math.min(20_000_000, Math.max(0, isNaN(v) ? 0 : v));
+  const v = DisplayHelpers.parseShorthand(document.getElementById(id)?.value || '0');
+  return Math.min(20_000_000, Math.max(0, v == null ? 0 : v));
 }
 function parseBrokStart(){ return parseBalInput('brokStart'); }
 function parseCashStart(){ return parseBalInput('cashStart'); }
@@ -2236,6 +2229,9 @@ if(window.innerWidth > 740){
     document.getElementById(id).open = true;
   });
 }
+</script>
+<script>
+  DisplayHelpers.registerChartDismissal(document.getElementById('ch'));
 </script>
 <script src="other_tools.js"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->

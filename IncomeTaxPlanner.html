@@ -136,6 +136,7 @@
   .range-track-fill { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); height:3px; border-radius:2px; pointer-events:none; }
 </style>
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
+<script src="displayhelpers.js"></script>
 <script src="taxengine.js"></script>
 <script src="retirement_optimizer_core.js"></script>
 <script src="retirement_optimizer_tests.js?v=2"></script>
@@ -209,13 +210,13 @@
       <input type="range" id="sl-ss" min="0" max="80000" step="1000" value="0"
              oninput="sliderToNum('sl-ss','num-ss','ss-val'); run()">
       <div class="range-ends"><span>$0</span><span>$80k</span></div>
-      <input type="number" id="num-ss" min="0" max="300000" step="1000" value="0"
+      <input type="text" id="num-ss" value="0" autocomplete="off"
              style="margin-top:5px" oninput="numToSlider('num-ss','sl-ss','ss-val'); run()">
     </div>
 
     <div class="ctrl">
       <div class="ctrl-hdr"><label>Property / Local Taxes (SALT input)</label><span class="val" id="prop-val">$0</span></div>
-      <input type="number" id="num-prop" min="0" max="100000" step="500" value="0"
+      <input type="text" id="num-prop" value="0" autocomplete="off"
              placeholder="Annual property + local tax" oninput="updProp(); run()">
     </div>
 
@@ -227,7 +228,7 @@
       <input type="range" id="sl-cg-sale" min="0" max="500000" step="5000" value="0"
              oninput="sliderToNum('sl-cg-sale','num-cg-sale','cg-sale-val'); run()">
       <div class="range-ends"><span>$0</span><span>$500k</span></div>
-      <input type="number" id="num-cg-sale" min="0" max="5000000" step="5000" value="0"
+      <input type="text" id="num-cg-sale" value="0" autocomplete="off"
              style="margin-top:5px" oninput="numToSlider('num-cg-sale','sl-cg-sale','cg-sale-val'); run()">
     </div>
 
@@ -1042,23 +1043,23 @@ function renderAssumptions() {
 // ─── UI HELPERS ──────────────────────────────────────────────────────────────
 function sliderToNum(sid, nid, vid) {
   const v = +document.getElementById(sid).value;
-  document.getElementById(nid).value = v;
-  document.getElementById(vid).textContent = '$'+v.toLocaleString();
+  document.getElementById(nid).value = DisplayHelpers.formatDollar(v);
+  document.getElementById(vid).textContent = DisplayHelpers.formatDollar(v);
 }
 function numToSlider(nid, sid, vid) {
-  const v = +document.getElementById(nid).value||0;
+  const v = DisplayHelpers.parseShorthand(document.getElementById(nid).value) || 0;
   const sl = document.getElementById(sid);
   sl.value = Math.min(v, +sl.max);
-  document.getElementById(vid).textContent = '$'+v.toLocaleString();
+  document.getElementById(vid).textContent = DisplayHelpers.formatDollar(v);
 }
-function updProp()   { document.getElementById('prop-val').textContent = '$'+(+document.getElementById('num-prop').value||0).toLocaleString(); }
+function updProp()   { document.getElementById('prop-val').textContent = DisplayHelpers.formatDollar(DisplayHelpers.parseShorthand(document.getElementById('num-prop').value) || 0); }
 function updYear()   { document.getElementById('year-display').textContent = document.getElementById('sl-year').value; }
 function updInf()    { document.getElementById('inf-val').textContent  = document.getElementById('sl-inf').value+'%'; }
 function updMed()    { document.getElementById('med-val').textContent  = '+'+document.getElementById('sl-med').value+'%'; }
 function updCgBasis(){
   const b = +document.getElementById('sl-cg-basis').value;
   document.getElementById('cg-basis-val').textContent = b+'%';
-  const sale = +document.getElementById('num-cg-sale').value||0;
+  const sale = DisplayHelpers.parseShorthand(document.getElementById('num-cg-sale').value) || 0;
   const gain = sale*(1-b/100);
   document.getElementById('cg-note').textContent = `Taxable gain: $${gain.toLocaleString(undefined,{maximumFractionDigits:0})}`;
 }
@@ -1093,9 +1094,9 @@ function readCfg() {
   cfg.state       = document.getElementById('sel-state').value;
   cfg.ages[0]     = +document.getElementById('age1').value  || 40;
   cfg.ages[1]     = +document.getElementById('age2').value  || 40;
-  cfg.ssIncome    = +document.getElementById('num-ss').value    || 0;
-  cfg.propTax     = +document.getElementById('num-prop').value  || 0;
-  cfg.cgSale      = +document.getElementById('num-cg-sale').value || 0;
+  cfg.ssIncome    = DisplayHelpers.parseShorthand(document.getElementById('num-ss').value)     || 0;
+  cfg.propTax     = DisplayHelpers.parseShorthand(document.getElementById('num-prop').value)   || 0;
+  cfg.cgSale      = DisplayHelpers.parseShorthand(document.getElementById('num-cg-sale').value)|| 0;
   cfg.cgBasisPct  = +document.getElementById('sl-cg-basis').value;
   cfg.year        = +document.getElementById('sl-year').value;
   cfg.inflation   = +document.getElementById('sl-inf').value;
@@ -1125,6 +1126,14 @@ run();
 const _initPi = getPinnedIdx();
 if (_initPi !== null) updateInfoPanel(_initPi);
 initInfoPanel();
+
+// Attach numeric formatting to dollar inputs (after init so URL-loaded values are formatted)
+['num-ss', 'num-prop', 'num-cg-sale'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0 });
+});
+// Register chart canvas for tap-outside-to-dismiss on mobile
+DisplayHelpers.registerChartDismissal(document.getElementById('chart-main'));
 runTests();
 
 // ─── HOW TO USE MODAL ────────────────────────────────────────────────────────

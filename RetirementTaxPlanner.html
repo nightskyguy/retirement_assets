@@ -324,17 +324,17 @@
 
     <div class="section-hdr">Tax Liability (pre-calculated)</div>
     <label><span>Federal Tax Due ($)</span>
-      <input type="number" id="federalTax" value="35000" min="0">
+      <input type="text" id="federalTax" value="35000" autocomplete="off">
     </label>
     <label><span>State Tax Due ($)</span>
-      <input type="number" id="stateTax" value="12000" min="0">
+      <input type="text" id="stateTax" value="12000" autocomplete="off">
     </label>
     <label><span>Prior-Year Federal Tax ($)</span>
-      <input type="number" id="priorYearFedTax" value="33000" min="0"
+      <input type="text" id="priorYearFedTax" value="33000" autocomplete="off"
              title="Used for safe-harbor. Leave 0 to estimate at 90% of current.">
     </label>
     <label><span>Prior-Year State Tax ($)</span>
-      <input type="number" id="priorYearStateTax" value="11500" min="0">
+      <input type="text" id="priorYearStateTax" value="11500" autocomplete="off">
     </label>
     <label class="checkbox-label">
       <input type="checkbox" id="highIncomeFiler">
@@ -343,21 +343,21 @@
 
     <div class="section-hdr">IRA 1 Draws and Conversions</div>
     <label><span>IRA 1 RMD ($)</span>
-      <input type="number" id="ira1Rmd" value="25000" min="0" oninput="updateComputed()">
+      <input type="text" id="ira1Rmd" value="25000" autocomplete="off" oninput="updateComputed()">
     </label>
     <label class="checkbox-label">
       <input type="checkbox" id="ira1RmdTaken" onchange="updateComputed()">
       <span>RMD already taken this year</span>
     </label>
     <label><span>IRA 1 Voluntary Withdrawal ($)</span>
-      <input type="number" id="ira1Voluntary" value="30000" min="0" oninput="updateComputed()">
+      <input type="text" id="ira1Voluntary" value="30000" autocomplete="off" oninput="updateComputed()">
     </label>
     <label class="checkbox-label">
       <input type="checkbox" id="ira1VolTaken" onchange="updateComputed()">
       <span>Voluntary draw already taken this year</span>
     </label>
     <label><span>IRA 1 Roth Conversion ($)</span>
-      <input type="number" id="ira1RothConversion" value="0" min="0" oninput="updateComputed()">
+      <input type="text" id="ira1RothConversion" value="0" autocomplete="off" oninput="updateComputed()">
     </label>
     <label class="checkbox-label">
       <input type="checkbox" id="ira1ConvDone" onchange="updateComputed()">
@@ -365,21 +365,21 @@
     </label>
     <div class="section-hdr">IRA 2 Draws and Conversions</div>
     <label><span>IRA 2 RMD ($)</span>
-      <input type="number" id="ira2Rmd" value="0" min="0" oninput="updateComputed()">
+      <input type="text" id="ira2Rmd" value="0" autocomplete="off" oninput="updateComputed()">
     </label>
     <label class="checkbox-label">
       <input type="checkbox" id="ira2RmdTaken" onchange="updateComputed()">
       <span>RMD already taken this year</span>
     </label>
     <label><span>IRA 2 Voluntary Withdrawal ($)</span>
-      <input type="number" id="ira2Voluntary" value="0" min="0" oninput="updateComputed()">
+      <input type="text" id="ira2Voluntary" value="0" autocomplete="off" oninput="updateComputed()">
     </label>
     <label class="checkbox-label">
       <input type="checkbox" id="ira2VolTaken" onchange="updateComputed()">
       <span>Voluntary draw already taken this year</span>
     </label>
     <label><span>IRA 2 Roth Conversion ($)</span>
-      <input type="number" id="ira2RothConversion" value="0" min="0" oninput="updateComputed()">
+      <input type="text" id="ira2RothConversion" value="0" autocomplete="off" oninput="updateComputed()">
     </label>
     <label class="checkbox-label">
       <input type="checkbox" id="ira2ConvDone" onchange="updateComputed()">
@@ -387,19 +387,19 @@
     </label>
     <div class="section-hdr">Other Income Sources</div>
     <label><span>Social Security ($)</span>
-      <input type="number" id="ssIncome" value="20000" min="0">
+      <input type="text" id="ssIncome" value="20000" autocomplete="off">
     </label>
     <label><span>Pension / Annuity ($)</span>
-      <input type="number" id="pensionIncome" value="15000" min="0">
+      <input type="text" id="pensionIncome" value="15000" autocomplete="off">
     </label>
     <label><span>Interest Income ($)</span>
-      <input type="number" id="interest" value="5000" min="0">
+      <input type="text" id="interest" value="5000" autocomplete="off">
     </label>
     <label><span>Qualified Dividends ($)</span>
-      <input type="number" id="qualifiedDivs" value="8000" min="0">
+      <input type="text" id="qualifiedDivs" value="8000" autocomplete="off">
     </label>
     <label><span>Capital Gains ($)</span>
-      <input type="number" id="capitalGains" value="10000" min="0">
+      <input type="text" id="capitalGains" value="10000" autocomplete="off">
     </label>
 
     <div class="section-hdr">Rates</div>
@@ -453,6 +453,7 @@
 
 </div><!-- end .layout -->
 
+<script src="displayhelpers.js"></script>
 <script src="taxPaymentPlanner.js"></script>
 <script>
   // ── Tab switching ──────────────────────────────────────────────────────────
@@ -496,7 +497,7 @@
 
   // ── Read inputs ────────────────────────────────────────────────────────────
   function readNum(id, scale) {
-    const v = parseFloat(document.getElementById(id).value) || 0;
+    const v = DisplayHelpers.parseShorthand(document.getElementById(id).value) || 0;
     return scale ? v / scale : v;
   }
   function readBool(id) { return document.getElementById(id).checked; }
@@ -610,9 +611,9 @@
   // Unchecking a disabled box prevents stale flags reaching the engine.
   function syncIraControls() {
     for (const n of [1, 2]) {
-      const rmd  = parseFloat(document.getElementById(`ira${n}Rmd`).value)  || 0;
-      const vol  = parseFloat(document.getElementById(`ira${n}Voluntary`).value) || 0;
-      const conv = parseFloat(document.getElementById(`ira${n}RothConversion`).value) || 0;
+      const rmd  = DisplayHelpers.parseShorthand(document.getElementById(`ira${n}Rmd`).value)  || 0;
+      const vol  = DisplayHelpers.parseShorthand(document.getElementById(`ira${n}Voluntary`).value) || 0;
+      const conv = DisplayHelpers.parseShorthand(document.getElementById(`ira${n}RothConversion`).value) || 0;
       const rmdTakenEl = document.getElementById(`ira${n}RmdTaken`);
       const volTakenEl = document.getElementById(`ira${n}VolTaken`);
       const convDoneEl = document.getElementById(`ira${n}ConvDone`);
@@ -904,6 +905,20 @@
       collapseInputs();
       runCompute();
     }
+  });
+
+  // Attach smart numeric formatting to all dollar-amount inputs
+  window.addEventListener('DOMContentLoaded', () => {
+    const dollarIds = [
+      'federalTax', 'stateTax', 'priorYearFedTax', 'priorYearStateTax',
+      'ira1Rmd', 'ira1Voluntary', 'ira1RothConversion',
+      'ira2Rmd', 'ira2Voluntary', 'ira2RothConversion',
+      'ssIncome', 'pensionIncome', 'interest', 'qualifiedDivs', 'capitalGains',
+    ];
+    dollarIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0, onChange: updateComputed });
+    });
   });
 </script>
 </body>

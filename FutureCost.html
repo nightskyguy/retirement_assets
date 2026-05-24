@@ -602,6 +602,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="displayhelpers.js"></script>
 <script>
   function calcNPV(pmt, g, r, n) {
     if (Math.abs(r - g) < 1e-9) return pmt * n / (1 + r);
@@ -717,6 +718,8 @@
     document.getElementById(id).addEventListener('input', update)
   );
   update();
+  DisplayHelpers.registerChartDismissal(document.getElementById('chart'));
+  DisplayHelpers.registerChartDismissal(document.getElementById('chart2'));
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') document.getElementById('help-modal').classList.remove('open');

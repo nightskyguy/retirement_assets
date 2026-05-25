@@ -97,7 +97,8 @@ table td.empty-column {
     box-sizing: border-box;
 }
 
-.sidebar input[type="number"], 
+.sidebar input[type="number"],
+.sidebar input[type="text"],
 .sidebar select {
     width: 100%;
     max-width: none;
@@ -162,6 +163,80 @@ h3 {
 #strategy {
     max-width: 100% !important;
     width: 100%;
+}
+
+.spouse-field.spouse-disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+/* ── Compact 3-field profile row (Born / Mo. / Life Exp.) ── */
+.compact-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: flex-end;
+    margin-bottom: 6px;
+}
+.compact-row > label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: #666;
+    gap: 2px;
+}
+.compact-row input[type="number"] {
+    width: 62px !important;
+    max-width: 62px !important;
+    padding: 5px 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-top: 0;
+}
+.compact-row select {
+    width: 64px !important;
+    max-width: 64px !important;
+    padding: 5px 2px;
+    font-size: 14px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-top: 0;
+}
+.compact-age input[type="number"] {
+    width: 46px !important;
+    max-width: 46px !important;
+}
+
+/* ── Collapsible sidebar sections ── */
+details.section {
+    margin-bottom: 2px;
+}
+details.section > summary {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--primary);
+    border-bottom: 2px solid #eee;
+    padding: 5px 0 3px;
+    margin-top: 12px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+details.section > summary::-webkit-details-marker { display: none; }
+details.section > summary::before {
+    content: '▸ ';
+    font-size: 0.75em;
+    color: #aaa;
+}
+details.section[open] > summary::before {
+    content: '▾ ';
+}
+details.section > *:not(summary):first-of-type {
+    margin-top: 8px;
 }
 
 #strategy-container {
@@ -673,7 +748,8 @@ table th.empty-column {
         width: calc(100% - 350px);
     }
     
-    .sidebar input[type="number"], 
+    .sidebar input[type="number"],
+    .sidebar input[type="text"],
     .sidebar select {
         max-width: 120px;
         padding: 4px;

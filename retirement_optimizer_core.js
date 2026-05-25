@@ -546,6 +546,9 @@ function calculateSurvivorBenefit(
 let simulationCount = 0;
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
+    if (!inputs.hasSpouse) {
+        inputs = { ...inputs, birthyear2: 0, die2: 0, IRA2: 0, ss2: 0 };
+    }
     let balance = {
         IRA1: inputs.IRA1, IRA2: inputs.IRA2, Roth: inputs.Roth,
         Brokerage: inputs.Brokerage, BrokerageBasis: inputs.BrokerageBasis, Cash: inputs.Cash,
@@ -735,21 +738,52 @@ function simulate(inputs) {
             withdrawals = { IRA: IRAwd, netAmount: IRAwd }
 
         } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit') {
-            let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
-            let limit = fedLimit.limit;
-            let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation);
-            nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit;
-            marginalFedTaxRate = fedLimit.rate;
+            let limit;
 
-            let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
-            marginalStateTaxRate = stLimit.rate;
-            stateLimit = stLimit.limit;
-            nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / limit;
+            if ((inputs.stratIRMAATier ?? -1) >= 0) {
+                // IRMAA tier ceiling mode: fill MAGI up to the top of the chosen IRMAA tier.
+                // Tier 0 = stay below Tier 1 threshold; Tier N = stay below Tier N+1 threshold.
+                // IRMAA thresholds grow at CPI (see taxengine.js comment).
+                const irmaaBrks = getRateBracket('IRMAA', status);
+                limit = irmaaBrks[inputs.stratIRMAATier + 1].l * cpiRate - 1;
+                // Approximate tax rates at this limit for downstream calcs
+                const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
+                marginalFedTaxRate = fedAtLimit.rate;
+                nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation).cumulative / (limit || 1);
+                const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
+                marginalStateTaxRate = stAtLimit.rate;
+                nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
+            } else if ((inputs.stratACAMultiple ?? 0) > 0) {
+                // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
+                // FPL base values (2025): 2-person household $20,440; 1-person $15,060.
+                // FPL is approximated as CPI-adjusted from 2025 (HHS updates annually).
+                const FPL_2025 = status === 'MFJ' ? 20440 : 15060;
+                // cpiRate at this point = (1+cpi)^y (year 0 = 2026). FPL adj from 2025 = (1+cpi)^(1+y).
+                limit = Math.round(FPL_2025 * inputs.stratACAMultiple / 100 * cpiRate * (1 + inputs.cpi)) - 1;
+                const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
+                marginalFedTaxRate = fedAtLimit.rate;
+                nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation).cumulative / (limit || 1);
+                const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
+                marginalStateTaxRate = stAtLimit.rate;
+                nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
+            } else {
+                // Federal bracket ceiling mode (original logic)
+                let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
+                limit = fedLimit.limit;
+                let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation);
+                nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit;
+                marginalFedTaxRate = fedLimit.rate;
 
-            limit = Math.min(stateLimit, limit);
+                let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
+                marginalStateTaxRate = stLimit.rate;
+                stateLimit = stLimit.limit;
+                nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / limit;
 
-            if (inputs.strategy === 'minlimit') {
-                limit = Math.min(limit, irmaLimit);
+                limit = Math.min(stateLimit, limit);
+
+                if (inputs.strategy === 'minlimit') {
+                    limit = Math.min(limit, irmaLimit);
+                }
             }
 
             bracketTarget = limit;
@@ -1184,7 +1218,17 @@ function getInputs() {
         STATEname: val('STATEname'),
         strategy: val('strategy'),
         nYears: +val('nYears'),
-        stratRate: +val('stratRate') / 100.0,
+        ...(() => {
+            const raw = val('stratRate') ?? '';
+            if (raw.startsWith('irmaa')) {
+                return { stratRate: 0, stratIRMAATier: +raw.replace('irmaa', ''), stratACAMultiple: 0 };
+            }
+            if (raw.startsWith('aca')) {
+                return { stratRate: 0, stratIRMAATier: -1, stratACAMultiple: +raw.replace('aca', '') };
+            }
+            return { stratRate: +raw / 100.0, stratIRMAATier: -1, stratACAMultiple: 0 };
+        })(),
+        hasSpouse: !!valChecked('hasSpouse'),
         birthyear1: +val('birthyear1'),
         birthmonth1: +val('birthmonth1') || 12,
         die1: +val('die1'),
@@ -1194,6 +1238,8 @@ function getInputs() {
         IRA1: +val('IRA1'),
         IRA2: +val('IRA2'),
         Roth: +val('Roth'),
+        Roth2: +val('Roth2') || 0,         // stored, not yet used in simulation
+        CashReserve: +val('CashReserve') || 0, // stored, never drawn by simulation
         Brokerage: Brokerage,
         BrokerageBasis: BrokerageBasis,
         Cash: +val('Cash'),
@@ -1247,13 +1293,14 @@ function updateIRAGoalHint() {
         hint.textContent = `Suggested IRA Goal: $${rounded.toLocaleString()}`;
         hint.title = `IRA balance today that would produce RMDs ≤ your spend goal at age ${targetAge} (IRS table: ${(rmdPctAtTarget * 100).toFixed(2)}% RMD rate, ${yearsUntil} yrs at ${(growth * 100).toFixed(1)}% growth). Click to apply.`;
         hint.style.cursor = 'pointer';
-        hint.onclick = () => { document.getElementById('iraBaseGoal').value = rounded; runSimulation(); };
+        hint.onclick = () => { DisplayHelpers.setDollarValue('iraBaseGoal', rounded); runSimulation(); };
     } catch(e) {
         hint.textContent = '';
     }
 }
 
 function runSimulation() {
+    refreshStratRateOptions();   // keep bracket dropdown labels in sync with CPI + filing status
     let res = simulate(getInputs());
     lastSimulationLog = res.log;
     lastTotals = res.totals;
@@ -1417,9 +1464,13 @@ function runOptimizer() {
         const inputs = Object.assign({}, base, overrides);
         const res = simulate(inputs);
         const lastEntry = res.log[res.log.length - 1];
+        const totalYears = res.log.length;
+        const ovYears = res.log.filter(e => (e['BracketOverage'] ?? 0) > 0).length;
+        const bracketOveragePct = totalYears > 0 ? ovYears / totalYears : 0;
+        const isBracketInfeasible = overrides.strategy === 'bracket' && bracketOveragePct > 0.5;
         const row = {
             _id: results.length,
-            _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : ''),
+            _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : '') + (isBracketInfeasible ? ' ⚠️' : ''),
             _paramLabel: paramLabel,
             _paramSortVal: paramSortVal,
             _maxConversion: overrides.maxConversion,
@@ -1427,9 +1478,13 @@ function runOptimizer() {
             _strategy: overrides.strategy,
             _nYears: overrides.nYears ?? null,
             _stratRate: overrides.stratRate ?? null,
+            _stratIRMAATier: overrides.stratIRMAATier ?? null,
+            _stratACAMultiple: overrides.stratACAMultiple ?? 0,
             _propWithdraw: overrides.propWithdraw ?? null,
             _iraWithdrawPct: overrides.iraWithdrawPct ?? null,
             _isSpendOptimized: false,
+            _bracketOveragePct: bracketOveragePct,
+            _isBracketInfeasible: isBracketInfeasible,
             totals: res.totals,
             finalNW: res.finalNW,
             finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
@@ -1452,7 +1507,20 @@ function runOptimizer() {
         // Fill bracket — one row per bracket level
         for (const rate of bracketRates) {
             const pct = Math.round(rate * 100);
-            addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
+            addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, stratIRMAATier: -1, maxConversion: maxConv });
+        }
+
+        // Fill bracket — IRMAA tier ceilings (tiers 0=Below IRMAA through 4=Tier 4 ceiling)
+        const irmaaTierLabels = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
+        for (let tier = 0; tier <= 4; tier++) {
+            addResult('IRMAA Ceil', irmaaTierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, maxConversion: maxConv });
+        }
+
+        // Fill bracket — ACA FPL cliffs
+        const acaMultiples = [200, 250, 300, 400];
+        const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL ⚠️' };
+        for (const pct of acaMultiples) {
+            addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'bracket', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, maxConversion: maxConv });
         }
 
         // IRA Draw — fixed % of IRA balance each year
@@ -1706,13 +1774,19 @@ function renderOptimizerTable(results) {
     // Rows — per-cell green for metric winners, full-row green if winner, blue tint if spend-optimized
     const rowsHtml = display.map(r => {
         const isWinner = bestIds.has(r._id);
-        const rowStyle = isWinner
-            ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
-            : r._isReverseOptimized
-                ? 'background-color:#fde8d8;font-style:italic;cursor:pointer;'
-                : r._isSpendOptimized
-                    ? 'background-color:#dbeafe;font-style:italic;cursor:pointer;'
-                    : 'cursor:pointer;';
+        const isInfeasible = r._isBracketInfeasible && !isWinner;
+        const rowStyle = isInfeasible
+            ? 'background-color:#e8e8e8;opacity:0.55;text-decoration:line-through;cursor:pointer;'
+            : isWinner
+                ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
+                : r._isReverseOptimized
+                    ? 'background-color:#fde8d8;font-style:italic;cursor:pointer;'
+                    : r._isSpendOptimized
+                        ? 'background-color:#dbeafe;font-style:italic;cursor:pointer;'
+                        : 'cursor:pointer;';
+        const rowTitle = isInfeasible
+            ? 'Bracket target exceeded in >50% of years — income sources already push MAGI above this ceiling'
+            : 'Click to load this strategy';
         const cells = columns.map(col => {
             // Highlight the specific winning cell with a slightly deeper green
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
@@ -1723,7 +1797,7 @@ function renderOptimizerTable(results) {
             const cellStyle = cellWin ? ' style="background-color:#4CAF5080;"' : '';
             return `<td${cellStyle}>${col.getValue(r)}</td>`;
         }).join('');
-        return `<tr style="${rowStyle}" onclick="loadOptimizerResult(${r._id})" title="Click to load this strategy">${cells}</tr>`;
+        return `<tr style="${rowStyle}" onclick="loadOptimizerResult(${r._id})" title="${rowTitle}">${cells}</tr>`;
     }).join('');
 
     document.querySelector('#opt-table thead').innerHTML = headerHtml;
@@ -1826,6 +1900,10 @@ function loadOptimizerResult(id) {
 
     if (result._strategy === 'fixed' && result._nYears != null) {
         document.getElementById('nYears').value = result._nYears;
+    } else if (result._strategy === 'bracket' && (result._stratIRMAATier ?? -1) >= 0) {
+        document.getElementById('stratRate').value = `irmaa${result._stratIRMAATier}`;
+    } else if (result._strategy === 'bracket' && (result._stratACAMultiple ?? 0) > 0) {
+        document.getElementById('stratRate').value = `aca${result._stratACAMultiple}`;
     } else if (result._strategy === 'bracket' && result._stratRate != null) {
         document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
     } else if (result._strategy === 'propwd' && result._propWithdraw != null) {
@@ -1837,7 +1915,7 @@ function loadOptimizerResult(id) {
     document.getElementById('maxConversion').checked = result._maxConversion;
     // For spend-optimized rows, restore the optimized spend goal
     if (result._spendGoal != null) {
-        document.getElementById('spendGoal').value = Math.round(result._spendGoal);
+        DisplayHelpers.setDollarValue('spendGoal', Math.round(result._spendGoal));
     }
     toggleStrategyUI();
     runSimulation();
@@ -2651,7 +2729,7 @@ function updateCharts(log) {
     });
 }
 
-function val(id) { return document.getElementById(id)?.value; }
+function val(id) { const el = document.getElementById(id); if (!el) return undefined; return el.dataset.numVal !== undefined ? el.dataset.numVal : el.value; }
 function valChecked(id) { return document.getElementById(id)?.checked; }
 
 
@@ -2709,6 +2787,12 @@ function setupAutoRecalc() {
 }
 
 
+function toggleSpouseUI() {
+    const on = !!valChecked('hasSpouse');
+    document.querySelectorAll('.spouse-field').forEach(el => el.classList.toggle('spouse-disabled', !on));
+    if (typeof refreshStratRateOptions === 'function') refreshStratRateOptions();
+}
+
 function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
@@ -2730,7 +2814,7 @@ function buildShareURL() {
         if (el.type === 'checkbox') {
             params.set(el.id, el.checked ? 'true' : 'false');
         } else {
-            params.set(el.id, el.value);
+            params.set(el.id, el.dataset.numVal !== undefined ? el.dataset.numVal : el.value);
         }
     });
     const base = location.href.split('?')[0].split('#')[0];
@@ -2965,23 +3049,57 @@ function loadScenario() {
  * Triggers recalculate() function if it exists
  * @param {Object} data - Scenario data object with keys matching form input IDs
  */
+const DOLLAR_INPUT_IDS = new Set([
+    'spendGoal', 'iraBaseGoal', 'IRA1', 'IRA2', 'Roth', 'Roth2',
+    'Brokerage', 'BrokerageBasis', 'Cash', 'CashReserve', 'ss1', 'ss2', 'pensionAnnual'
+]);
+
 function applyScenario(data) {
+    // Handle IRMAA / ACA stratRate values that don't map to a plain numeric key
+    if ((data.stratIRMAATier ?? -1) >= 0) {
+        const el = document.getElementById('stratRate');
+        if (el) el.value = `irmaa${data.stratIRMAATier}`;
+    } else if ((data.stratACAMultiple ?? 0) > 0) {
+        const el = document.getElementById('stratRate');
+        if (el) el.value = `aca${data.stratACAMultiple}`;
+    }
+
     for (const [key, value] of Object.entries(data)) {
+        // stratIRMAATier has no standalone form element; handled above via stratRate dropdown
+        if (key === 'stratIRMAATier') continue;
+        if (key === 'stratACAMultiple') continue;
         const element = document.getElementById(key);
         if (element) {
             // Handle percentage values (multiply by 100 for display)
-            if (['stratRate', 'spendChange', 'inflation', 'cpi', 'growth',
-                'cashYield', 'dividendRate', 'ssFailPct'].includes(key)) {
+            if (['spendChange', 'inflation', 'cpi', 'growth',
+                'cashYield', 'dividendRate', 'ssFailPct',
+                'propWithdraw', 'iraWithdrawPct'].includes(key)) {
+                element.value = (value * 100).toFixed(3);
+            } else if (key === 'stratRate' && ((data.stratIRMAATier ?? -1) >= 0 || (data.stratACAMultiple ?? 0) > 0)) {
+                // Already set the dropdown above (IRMAA or ACA); skip numeric override
+            } else if (key === 'stratRate') {
                 element.value = (value * 100).toFixed(3);
             } else {
                 if (['maxConversion'].includes(key)) {
                     document.getElementById('maxConversion').checked = value
+                } else if (DOLLAR_INPUT_IDS.has(key)) {
+                    DisplayHelpers.setDollarValue(key, value);
                 } else {
                     element.value = value;
                 }
             }
         }
     }
+
+    // Infer hasSpouse from data (explicit flag, or legacy: birthyear2 > 0)
+    const hasSpouseEl = document.getElementById('hasSpouse');
+    if (hasSpouseEl) {
+        hasSpouseEl.checked = data.hasSpouse !== undefined ? !!data.hasSpouse : (data.birthyear2 > 0);
+        if (typeof toggleSpouseUI === 'function') toggleSpouseUI();
+    }
+
+    // Sync strategy sub-UI to the newly loaded strategy value
+    if (typeof toggleStrategyUI === 'function') toggleStrategyUI();
 
     // Trigger any recalculations your app needs
     if (typeof runSimulation === 'function') {
@@ -3329,29 +3447,124 @@ function generateStateOptions() {
     return html;
 }
 
-// 
-function generateStratRateOptions() {
-    const federal = TAXData.FEDERAL;
-    const mfjBrackets = federal.MFJ.brackets;
-    const sglBrackets = federal.SGL.brackets;
+// Base year of the TAXData bracket values. Used to CPI-adjust displayed limits.
+const TAX_DATA_BASE_YEAR = 2025;
 
-    let html = '';
+/**
+ * Returns the filing status (MFJ or SGL) to use for the bracket dropdown.
+ * MFJ if both spouses survive into the current calendar year, SGL otherwise.
+ */
+function getDropdownStatus() {
+    if (!valChecked('hasSpouse')) return 'SGL';
+    const currentYear = new Date().getFullYear();
+    const die1Year = (+document.getElementById('birthyear1')?.value || 1960)
+                   + (+document.getElementById('die1')?.value || 88);
+    const die2Year = (+document.getElementById('birthyear2')?.value || 1952)
+                   + (+document.getElementById('die2')?.value || 98);
+    return (die1Year > currentYear && die2Year > currentYear) ? 'MFJ' : 'SGL';
+}
 
-    // Skip the last bracket (Infinity)
-    //!!! TODO: This logic assumes sgl and mfj brackets have the same number of elements, and the same rates. Probably safe, but not good practice.
-    for (let i = 0; i < mfjBrackets.length - 1; i++) {
-        const rate = Math.round(mfjBrackets[i].r * 100);
-        const mfjLimit = Math.trunc(mfjBrackets[i].l).toLocaleString();
-
-        // const mfjLimit = Math.floor(mfjBrackets[i].l / 1000);
-        const sglLimit = Math.trunc(sglBrackets[i].l).toLocaleString();
-        // const sglLimit = Math.floor(sglBrackets[i].l / 1000);
-
-        // Mark 24% as selected (or choose a different default)
-        const selected = (rate === 24) ? ' selected' : '';
-
-        html += `<option value="${rate}"${selected}>${rate}%&nbsp;&nbsp; ${mfjLimit}/${sglLimit}</option>\n`;
+/**
+ * Rebuilds the stratRate dropdown preserving the current selection.
+ * Should be called whenever CPI or marital-status inputs change.
+ */
+function refreshStratRateOptions() {
+    const sel = document.getElementById('stratRate');
+    if (!sel) return;
+    const saved = sel.value;                          // preserve current selection
+    sel.innerHTML = generateStratRateOptions();
+    // Restore if the option still exists in the new list
+    if (saved && [...sel.options].some(o => o.value === saved)) {
+        sel.value = saved;
     }
+}
+
+/**
+ * Builds the bracket/IRMAA ceiling dropdown options.
+ *
+ * - All limits are CPI-adjusted from TAX_DATA_BASE_YEAR to the current calendar year
+ *   so the displayed dollar amounts match approximately what the tool uses in year 1.
+ * - Options are interleaved (federal + IRMAA) and sorted lowest → highest limit.
+ * - Only the applicable filing-status limit is shown (MFJ or SGL from inputs).
+ */
+function generateStratRateOptions() {
+    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const status = getDropdownStatus();
+    const isMFJ = status === 'MFJ';
+
+    // Compound CPI from TAX_DATA_BASE_YEAR to current year
+    const currentYear = new Date().getFullYear();
+    const yearsFromBase = Math.max(0, currentYear - TAX_DATA_BASE_YEAR);
+    const cpiAdj = Math.pow(1 + cpi, yearsFromBase);
+
+    const options = [];
+
+    // ── Federal brackets (skip the top/Infinity bracket) ──────────────────────
+    const fedBrks = isMFJ
+        ? TAXData.FEDERAL.MFJ.brackets
+        : TAXData.FEDERAL.SGL.brackets;
+    for (let i = 0; i < fedBrks.length - 1; i++) {
+        const ratePct = Math.round(fedBrks[i].r * 100);
+        const limit   = Math.round(fedBrks[i].l * cpiAdj);
+        options.push({
+            value: String(ratePct),
+            label: `${ratePct}% Fed  ·  $${limit.toLocaleString()}`,
+            limit,
+            defaultSelected: ratePct === 24
+        });
+    }
+
+    // ── IRMAA tier ceilings (tiers 0-4) ───────────────────────────────────────
+    // Ceiling = start of NEXT tier - 1. IRMAA thresholds also grow at CPI.
+    const irmaaBrks = isMFJ
+        ? TAXData.IRMAA.MFJ.brackets
+        : TAXData.IRMAA.SGL.brackets;
+    const irmaaLabels = [
+        'Below IRMAA',
+        'IRMAA Tier 1',
+        'IRMAA Tier 2',
+        'IRMAA Tier 3',
+        'IRMAA Tier 4'
+    ];
+    for (let i = 0; i < 5; i++) {
+        const limit = Math.round((irmaaBrks[i + 1].l - 1) * cpiAdj);
+        options.push({
+            value: `irmaa${i}`,
+            label: `${irmaaLabels[i]}  ·  $${limit.toLocaleString()}`,
+            limit,
+            defaultSelected: false
+        });
+    }
+
+    // ── ACA FPL cliffs ────────────────────────────────────────────────────────
+    // FPL base (2025): 2-person $20,440; 1-person $15,060. CPI-approx for future years.
+    const FPL_BASE_YEAR = 2025;
+    const fplBase = isMFJ ? 20440 : 15060;
+    const fplCpiAdj = Math.pow(1 + cpi, Math.max(0, currentYear - FPL_BASE_YEAR + 1));
+    const acaEntries = [
+        { pct: 200, label: 'ACA 200% FPL' },
+        { pct: 250, label: 'ACA 250% FPL' },
+        { pct: 300, label: 'ACA 300% FPL' },
+        { pct: 400, label: 'ACA 400% FPL ⚠️' },
+    ];
+    for (const { pct, label } of acaEntries) {
+        const limit = Math.round(fplBase * pct / 100 * fplCpiAdj);
+        options.push({ value: `aca${pct}`, label: `${label}  ·  $${limit.toLocaleString()}`, limit });
+    }
+
+    // ── Sort all options by income limit, lowest → highest ─────────────────────
+    options.sort((a, b) => a.limit - b.limit);
+
+    // ── Build HTML ─────────────────────────────────────────────────────────────
+    const statusLabel  = isMFJ ? 'MFJ' : 'Single';
+    const cpiLabel     = `${(cpi * 100).toFixed(1)}% CPI`;
+    const yearLabel    = yearsFromBase > 0 ? ` · ~${currentYear}` : ` · ${TAX_DATA_BASE_YEAR}`;
+    let html = `<optgroup label="${statusLabel} · ${cpiLabel}${yearLabel}">`;
+    for (const opt of options) {
+        const selected = opt.defaultSelected ? ' selected' : '';
+        html += `<option value="${opt.value}"${selected}>${opt.label}</option>\n`;
+    }
+    html += '</optgroup>';
 
     return html;
 }

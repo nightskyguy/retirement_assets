@@ -140,12 +140,22 @@
     }, { passive: true });
   }
 
+  // ── Programmatic value setter ─────────────────────────────────────────────
+
+  function setDollarValue(id, num) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.dataset.numVal = String(num);
+    el.value = formatDollar(num);
+  }
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   window.DisplayHelpers = {
     parseShorthand: parseShorthand,
     formatDollar: formatDollar,
     attachNumericDollarInput: attachNumericDollarInput,
+    setDollarValue: setDollarValue,
     registerChartDismissal: registerChartDismissal,
     initTouchTooltips: initTouchTooltips
   };

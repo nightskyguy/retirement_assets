@@ -10,7 +10,7 @@
 </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer 8</title>
+    <title>Retirement Optimizer 10</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<script src="displayhelpers.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
@@ -27,7 +27,7 @@
 		<div id="strategy-container">
 		    <div class="row"><div  id="spending">
 				<div><label>After-Tax Spend &nbsp;
-				<input type="number" id="spendGoal" value="140000"></label></div>
+				<input type="text" id="spendGoal" value="140000"></label></div>
 				<div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. -2% means you spend 2% less each year. 0 means no change.">Spend Delta %&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0"></label></div>
 				</div><!-- spending -->
@@ -38,8 +38,7 @@
 				<label><select id="strategy" onchange="toggleStrategyUI()">
 					<option value="propwd">📊Withdraw Proportional +%</option>
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
-					<option value="bracket">🪣Fill Federal Tax Bracket</option>
-					<option value="minlimit" disabled style="color:#bbb;">🛑Lesser of IRMAA or TaxBracket (broken)</option>
+					<option value="bracket">🪣Fill Federal Tax / IRMAA Bracket</option>
 					<option value="fixedpct">📉IRA Draw</option>
 				</select></label>
 			</div>
@@ -65,70 +64,84 @@
 				<label title="Withdraw this % of the total IRA balance each year. RMDs count toward this amount. Any spending shortfall draws from Cash → Brokerage → Roth.">IRA Withdraw %
 				<input type="number" id="iraWithdrawPct" value="5" min="0.5" max="20" step="0.5"></label>
 			</div>
-		</div>  <!-- strategy-container -->
-        <div class="row">
-		</div>
 
-        <div class="row">
-			<label title="Draw down total IRA(s) to this amount or less - to avoid IRMAA/tax bracket issues in RMDS.">IRA Goal
-            <input type="number" id="iraBaseGoal" value="750000" width="50%"></label>
-			<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div><BR>
+		</div>  <!-- strategy-container -->
+
+		<div class="row" style="margin-top:8px;">
+			<label title="IRA floor for all strategies. For 'Reduce IRA in N Years' this is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.">IRA Goal
+			<input type="text" id="iraBaseGoal" value="750000" width="50%"></label>
+			<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div>
 			<label title='If checked, it will use available cash to maximize Roth conversions'>
 			  <input type="checkbox" id="maxConversion" name="maxConversion">
 			  Max Conversion
 			</label>
-			
-		</div>	
-	
-		
-        <h3>1. Profile & Ages</h3>
-        <div class="row">
-            <div><label><B>Your</B> Birth Year<input type="number" id="birthyear1" value="1960"></label>
-            &nbsp;<label>Month<select id="birthmonth1"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label></div>
-            <div><label>Life Expectancy<input type="number" id="die1" value="88"></label></div>
-        </div>
-        <div class="row">
-            <div><label><B><I>Spouse</I></B> Birth Year<input type="number" id="birthyear2" value="1952"></label>
-            &nbsp;<label>Month<select id="birthmonth2"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label></div>
-            <div><label><B><I>Spouse</I></B> Expectancy<input type="number" id="die2" value="98"></label></div>
-        </div>
+		</div>
 
-        <h3>2. Assets (Current)</h3>
+		
+        <details class="section" open>
+        <summary>1. Profile &amp; Ages</summary>
+        <div class="compact-row">
+            <label title="Your year of birth (e.g. 1960). Used to calculate your current age and RMD schedule.">Birth Year<input type="number" id="birthyear1" value="1960"></label>
+            <label title="Your birth month. Combined with birth year to determine the exact year you reach key ages (RMD start, SS claiming, etc.).">Mo.<select id="birthmonth1"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
+            <label class="compact-age" title="The age you expect to live to. The simulation runs until this age. Use a conservative (older) estimate to stress-test your plan.">Life Exp.<input type="number" id="die1" value="88"></label>
+        </div>
+        <div style="margin:4px 0 2px;">
+            <label style="font-size:0.85em;font-weight:bold;color:#666;">
+                <input type="checkbox" id="hasSpouse" checked onchange="toggleSpouseUI()"> Include Spouse
+            </label>
+        </div>
+        <div class="compact-row spouse-field">
+            <label title="Spouse's year of birth. Used to calculate their age, RMD schedule, and when survivor filing status applies."><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952"></label>
+            <label title="Spouse's birth month. Used with birth year to determine exact ages for RMDs and Social Security."><i>Mo.</i><select id="birthmonth2"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
+            <label class="compact-age" title="The age your spouse is expected to live to. After this age the simulation switches to Single filing status and survivor Social Security rules apply."><i>Sp. Life</i><input type="number" id="die2" value="98"></label>
+        </div>
+        </details>
+
+        <details class="section" open>
+        <summary>2. Assets (Current)</summary>
         <div class="row">
-            <div><label><B>Your</B> IRA  <input type="number" id="IRA1" value="1000000"></label></div>
-            <div><label><B><I>Spouse</I></B> IRA<input type="number" id="IRA2"  value="400000"></label></div>
+            <div><label title="Your traditional IRA balance."><B>Your</B> IRA<input type="text" id="IRA1" value="1000000"></label></div>
+            <div class="spouse-field"><label title="Spouse's traditional IRA balance."><B><I>Spouse</I></B> IRA<input type="text" id="IRA2" value="400000"></label></div>
         </div>
         <div class="row">
-            <div><label>Brokerage<input type="number" id="Brokerage" value="100000"></label></div>
-            <div><label>Brokerage Basis<input type="number" id="BrokerageBasis" value="100000"></label></div>
+            <div><label title="Your Roth IRA balance. Withdrawals are tax-free and not subject to RMDs."><B>Your</B> Roth IRA<input type="text" id="Roth" value="50000"></label></div>
+            <div class="spouse-field"><label title="Spouse's Roth IRA balance. Not yet included in the simulation — stored for future use."><B><I>Spouse</I></B> Roth IRA<input type="text" id="Roth2" value="0" placeholder="0"></label></div>
+        </div>
+        <hr style="border:none;border-top:1px solid #ddd;margin:8px 0 4px;">
+        <div class="row">
+            <div><label title="Taxable brokerage account balance. Shared between both spouses in the simulation. Withdrawals may trigger capital gains taxes based on the Basis below.">Brokerage<input type="text" id="Brokerage" value="100000"></label></div>
+            <div><label title="Your cost basis in the brokerage account. Used to calculate capital gains taxes on withdrawals. Shared account.">Brokerage Basis<input type="text" id="BrokerageBasis" value="100000"></label></div>
         </div>
         <div class="row">
             <div><label title="When checked, dividends stay in the brokerage (balance and basis both increase). When unchecked, dividends flow to the Cash account."><input type="checkbox" id="dividendReinvest"> Reinvest Brokerage Dividends</label></div>
         </div>
         <div class="row">
-            <div><label>Roth IRA<input type="number" id="Roth" value="50000"></label></div>
-            <div><label>Cash Balance<input type="number" id="Cash" value="50000"></label></div>
+            <div><label title="Combined liquid cash balance (HYSA, money market, etc.). Shared between both spouses — the simulation draws from this to cover spending shortfalls before tapping investments.">Cash Balance<input type="text" id="Cash" value="50000"></label></div>
+            <div><label title="Emergency / untouchable cash reserve. Shared account. Not yet implemented — the simulation will never draw from this amount. Stored for future use.">Cash Reserve<input type="text" id="CashReserve" value="0" placeholder="0"></label></div>
         </div>
+        </details>
 
-        <h3>3. Income (annual)</h3>
+        <details class="section" open>
+        <summary>3. Income (annual)</summary>
         <div class="row">
-            <div><label>Social Security Amt<input type="number" id="ss1" value="48000"></label></div>
+            <div><label>Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
             <div><label>Start Age<input type="number" id="ss1Age" value="70"></label></div>
         </div>
-        <div class="row">
-            <div><label><B><I>Spouse</I></B> SS Amt<input type="number" id="ss2" value="24000"></label></div>
-            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></label></div><BR>
+        <div class="row spouse-field">
+            <div><label><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
+            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></label></div>
         </div>
         <div class="row">
-            <div><label><B>Your</B> Pension<input type="number" id="pensionAnnual" value="15000"></label></div>
-            <div><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
+            <div><label><B>Your</B> Pension<input type="text" id="pensionAnnual" value="15000"></label></div>
+            <div class="spouse-field"><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
         </div>
         <div class="row">
             <div><label title="Most pensions have no inflation adjustment. Enable only if your pension includes a cost-of-living adjustment (COLA)."><input type="checkbox" id="pensionCola"> Pension has COLA (inflation-adjusted)</label></div>
         </div>
+        </details>
 
-
-        <h3>4. Assumptions</h3>
+        <details class="section" open>
+        <summary>4. Assumptions</summary>
         <div class="row">
             <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
             <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
@@ -143,12 +156,13 @@
             <select id="STATEname">
                 <option   value="CA" selected>California</option>
             </select></label>
-			</div>			
+			</div>
 		</div>
         <div class="row">
 			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail <input type="number" id="ssFailYear" value="2033"></label></div>
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
+        </details>
 
     </div> <!-- sidebar -->
 
@@ -366,6 +380,7 @@
 				<H3>Change Log</H3>
 				For the most details, please <STRONG>consult the <A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.
 				<ul>
+				<li><b>10</b> Shorthand dollar inputs (1.2M, 48k); Include Spouse toggle replacing birthyear=0 hack; ACA FPL cliffs in bracket dropdown; collapsible sidebar sections; assets section reorganized with Roth2/CashReserve placeholders; IRMAA tier ceilings and dynamic MFJ/SGL bracket dropdown recovered from stranded branch.</li>
 				<li><b>8</b> Added "Proportional Withdraw %" strategy with configurable IRA withdrawal boost (0–200% above spend goal); optimizer tests it at 0/5/10/20/50% × Max Conversion on/off; Roth Conv bar now stacks on top of taxes in the lower chart; optimizer table highlights best row per column (lowest tax, lowest tax rate, highest spend, highest wealth).</li>
 				<li><b>7g</b> Found one source of over-withdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it over-withdrew to make up for the excluded pension.  Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed.
 					<B>BUG</B>Unfortunately, there are still scenarios where under-withdrawal occurs (though not over-withdrawals anymore!).
@@ -495,6 +510,18 @@ runSimulation?.();
   DisplayHelpers.registerChartDismissal(document.getElementById('chartAssets'));
   DisplayHelpers.registerChartDismissal(document.getElementById('chartIncomeSources'));
   DisplayHelpers.registerChartDismissal(document.getElementById('mc-chart'));
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var dollarIds = [
+      'spendGoal', 'iraBaseGoal',
+      'IRA1', 'IRA2', 'Roth', 'Roth2', 'Brokerage', 'BrokerageBasis', 'Cash', 'CashReserve',
+      'ss1', 'ss2', 'pensionAnnual'
+    ];
+    dollarIds.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0 });
+    });
+  });
 </script>
 <script src="other_tools.js"></script>
 <script src="montecarlo/prng.js"></script>

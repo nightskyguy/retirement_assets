@@ -10,7 +10,7 @@
 </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer 10</title>
+    <title>Retirement Optimizer 11.DA6</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<script src="displayhelpers.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
@@ -163,7 +163,7 @@
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
         <details style="margin-top:8px;">
-        <summary style="font-size:0.88em;color:#666;cursor:pointer;user-select:none;">▶ Account Composition (aspirational)</summary>
+        <summary style="font-size:0.88em;color:#666;cursor:pointer;user-select:none;">Account Composition (aspirational)</summary>
         <div style="margin-top:6px;overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:0.82em;">
           <thead>
@@ -446,6 +446,7 @@
 				<H3>Change Log</H3>
 				For the most details, please <STRONG>consult the <A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.
 				<ul>
+				<li><b>11.DA6</b> Account composition (equity/bond ratio + intl equity %) per account in Assumptions; Spouse Roth IRA now fully simulated — withdrawals split proportionally, conversions routed IRA→Roth per person; Balances chart Both/Mine/Spouse toggle; Optimizer and Monte Carlo skip rebuild when inputs are unchanged. Minor version is hex((day-of-year × 24) + hour).</li>
 				<li><b>10</b> Shorthand dollar inputs (1.2M, 48k); Include Spouse toggle replacing birthyear=0 hack; ACA FPL cliffs in bracket dropdown; collapsible sidebar sections; assets section reorganized with Roth2/CashReserve placeholders; IRMAA tier ceilings and dynamic MFJ/SGL bracket dropdown recovered from stranded branch.</li>
 				<li><b>8</b> Added "Proportional Withdraw %" strategy with configurable IRA withdrawal boost (0–200% above spend goal); optimizer tests it at 0/5/10/20/50% × Max Conversion on/off; Roth Conv bar now stacks on top of taxes in the lower chart; optimizer table highlights best row per column (lowest tax, lowest tax rate, highest spend, highest wealth).</li>
 				<li><b>7g</b> Found one source of over-withdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it over-withdrew to make up for the excluded pension.  Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed.

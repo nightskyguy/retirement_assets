@@ -81,9 +81,9 @@
         <details class="section" open>
         <summary>1. Profile &amp; Ages</summary>
         <div class="compact-row">
-            <label>Birth Year<input type="number" id="birthyear1" value="1960"></label>
-            <label>Mo.<select id="birthmonth1"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
-            <label class="compact-age">Life Exp.<input type="number" id="die1" value="88"></label>
+            <label title="Your year of birth (e.g. 1960). Used to calculate your current age and RMD schedule.">Birth Year<input type="number" id="birthyear1" value="1960"></label>
+            <label title="Your birth month. Combined with birth year to determine the exact year you reach key ages (RMD start, SS claiming, etc.).">Mo.<select id="birthmonth1"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
+            <label class="compact-age" title="The age you expect to live to. The simulation runs until this age. Use a conservative (older) estimate to stress-test your plan.">Life Exp.<input type="number" id="die1" value="88"></label>
         </div>
         <div style="margin:4px 0 2px;">
             <label style="font-size:0.85em;font-weight:bold;color:#666;">
@@ -91,9 +91,9 @@
             </label>
         </div>
         <div class="compact-row spouse-field">
-            <label><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952"></label>
-            <label><i>Mo.</i><select id="birthmonth2"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
-            <label class="compact-age"><i>Sp. Life</i><input type="number" id="die2" value="98"></label>
+            <label title="Spouse's year of birth. Used to calculate their age, RMD schedule, and when survivor filing status applies."><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952"></label>
+            <label title="Spouse's birth month. Used with birth year to determine exact ages for RMDs and Social Security."><i>Mo.</i><select id="birthmonth2"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
+            <label class="compact-age" title="The age your spouse is expected to live to. After this age the simulation switches to Single filing status and survivor Social Security rules apply."><i>Sp. Life</i><input type="number" id="die2" value="98"></label>
         </div>
         </details>
 

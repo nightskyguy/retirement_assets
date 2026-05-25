@@ -1278,6 +1278,7 @@ function updateIRAGoalHint() {
 }
 
 function runSimulation() {
+    refreshStratRateOptions();   // keep bracket dropdown labels in sync with CPI + filing status
     let res = simulate(getInputs());
     lastSimulationLog = res.log;
     lastTotals = res.totals;
@@ -3387,39 +3388,105 @@ function generateStateOptions() {
     return html;
 }
 
-//
-function generateStratRateOptions() {
-    const federal = TAXData.FEDERAL;
-    const mfjBrackets = federal.MFJ.brackets;
-    const sglBrackets = federal.SGL.brackets;
+// Base year of the TAXData bracket values. Used to CPI-adjust displayed limits.
+const TAX_DATA_BASE_YEAR = 2025;
 
-    let html = '<optgroup label="Federal Tax Bracket">';
+/**
+ * Returns the filing status (MFJ or SGL) to use for the bracket dropdown.
+ * MFJ if both spouses survive into the current calendar year, SGL otherwise.
+ */
+function getDropdownStatus() {
+    const currentYear = new Date().getFullYear();
+    const die1Year = (+document.getElementById('birthyear1')?.value || 1960)
+                   + (+document.getElementById('die1')?.value || 88);
+    const die2Year = (+document.getElementById('birthyear2')?.value || 1952)
+                   + (+document.getElementById('die2')?.value || 98);
+    return (die1Year > currentYear && die2Year > currentYear) ? 'MFJ' : 'SGL';
+}
 
-    // Skip the last bracket (Infinity)
-    //!!! TODO: This logic assumes sgl and mfj brackets have the same number of elements, and the same rates. Probably safe, but not good practice.
-    for (let i = 0; i < mfjBrackets.length - 1; i++) {
-        const rate = Math.round(mfjBrackets[i].r * 100);
-        const mfjLimit = Math.trunc(mfjBrackets[i].l).toLocaleString();
-        const sglLimit = Math.trunc(sglBrackets[i].l).toLocaleString();
-
-        // Mark 24% as selected (or choose a different default)
-        const selected = (rate === 24) ? ' selected' : '';
-
-        html += `<option value="${rate}"${selected}>${rate}%&nbsp;&nbsp; ${mfjLimit}/${sglLimit}</option>\n`;
+/**
+ * Rebuilds the stratRate dropdown preserving the current selection.
+ * Should be called whenever CPI or marital-status inputs change.
+ */
+function refreshStratRateOptions() {
+    const sel = document.getElementById('stratRate');
+    if (!sel) return;
+    const saved = sel.value;                          // preserve current selection
+    sel.innerHTML = generateStratRateOptions();
+    // Restore if the option still exists in the new list
+    if (saved && [...sel.options].some(o => o.value === saved)) {
+        sel.value = saved;
     }
-    html += '</optgroup>';
+}
 
-    // IRMAA tier ceiling options — tiers 0-4 (0=below IRMAA, 1-4=within that tier)
-    // Threshold is the START of the NEXT tier (i.e., the upper bound of the chosen tier).
-    // IRMAA thresholds grow at CPI; values shown are 2025 MFJ base amounts.
-    const irmaaMFJBrks = TAXData.IRMAA.MFJ.brackets;
-    const irmaaSGLBrks = TAXData.IRMAA.SGL.brackets;
-    const irmaaLabels = ['Below IRMAA', 'IRMAA Tier 1', 'IRMAA Tier 2', 'IRMAA Tier 3', 'IRMAA Tier 4'];
-    html += '<optgroup label="── IRMAA Tier Ceiling ──">';
+/**
+ * Builds the bracket/IRMAA ceiling dropdown options.
+ *
+ * - All limits are CPI-adjusted from TAX_DATA_BASE_YEAR to the current calendar year
+ *   so the displayed dollar amounts match approximately what the tool uses in year 1.
+ * - Options are interleaved (federal + IRMAA) and sorted lowest → highest limit.
+ * - Only the applicable filing-status limit is shown (MFJ or SGL from inputs).
+ */
+function generateStratRateOptions() {
+    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const status = getDropdownStatus();
+    const isMFJ = status === 'MFJ';
+
+    // Compound CPI from TAX_DATA_BASE_YEAR to current year
+    const currentYear = new Date().getFullYear();
+    const yearsFromBase = Math.max(0, currentYear - TAX_DATA_BASE_YEAR);
+    const cpiAdj = Math.pow(1 + cpi, yearsFromBase);
+
+    const options = [];
+
+    // ── Federal brackets (skip the top/Infinity bracket) ──────────────────────
+    const fedBrks = isMFJ
+        ? TAXData.FEDERAL.MFJ.brackets
+        : TAXData.FEDERAL.SGL.brackets;
+    for (let i = 0; i < fedBrks.length - 1; i++) {
+        const ratePct = Math.round(fedBrks[i].r * 100);
+        const limit   = Math.round(fedBrks[i].l * cpiAdj);
+        options.push({
+            value: String(ratePct),
+            label: `${ratePct}% Fed  ·  $${limit.toLocaleString()}`,
+            limit,
+            defaultSelected: ratePct === 24
+        });
+    }
+
+    // ── IRMAA tier ceilings (tiers 0-4) ───────────────────────────────────────
+    // Ceiling = start of NEXT tier - 1. IRMAA thresholds also grow at CPI.
+    const irmaaBrks = isMFJ
+        ? TAXData.IRMAA.MFJ.brackets
+        : TAXData.IRMAA.SGL.brackets;
+    const irmaaLabels = [
+        'Below IRMAA',
+        'IRMAA Tier 1',
+        'IRMAA Tier 2',
+        'IRMAA Tier 3',
+        'IRMAA Tier 4'
+    ];
     for (let i = 0; i < 5; i++) {
-        const mfjCeil = Math.trunc(irmaaMFJBrks[i + 1].l - 1).toLocaleString();
-        const sglCeil = Math.trunc(irmaaSGLBrks[i + 1].l - 1).toLocaleString();
-        html += `<option value="irmaa${i}">${irmaaLabels[i]}&nbsp;&nbsp; ${mfjCeil}/${sglCeil}</option>\n`;
+        const limit = Math.round((irmaaBrks[i + 1].l - 1) * cpiAdj);
+        options.push({
+            value: `irmaa${i}`,
+            label: `${irmaaLabels[i]}  ·  $${limit.toLocaleString()}`,
+            limit,
+            defaultSelected: false
+        });
+    }
+
+    // ── Sort all options by income limit, lowest → highest ─────────────────────
+    options.sort((a, b) => a.limit - b.limit);
+
+    // ── Build HTML ─────────────────────────────────────────────────────────────
+    const statusLabel  = isMFJ ? 'MFJ' : 'Single';
+    const cpiLabel     = `${(cpi * 100).toFixed(1)}% CPI`;
+    const yearLabel    = yearsFromBase > 0 ? ` · ~${currentYear}` : ` · ${TAX_DATA_BASE_YEAR}`;
+    let html = `<optgroup label="${statusLabel} · ${cpiLabel}${yearLabel}">`;
+    for (const opt of options) {
+        const selected = opt.defaultSelected ? ' selected' : '';
+        html += `<option value="${opt.value}"${selected}>${opt.label}</option>\n`;
     }
     html += '</optgroup>';
 

@@ -3049,6 +3049,9 @@ function applyScenario(data) {
         }
     }
 
+    // Sync strategy sub-UI to the newly loaded strategy value
+    if (typeof toggleStrategyUI === 'function') toggleStrategyUI();
+
     // Trigger any recalculations your app needs
     if (typeof runSimulation === 'function') {
         runSimulation();

@@ -1271,7 +1271,7 @@ function updateIRAGoalHint() {
         hint.textContent = `Suggested IRA Goal: $${rounded.toLocaleString()}`;
         hint.title = `IRA balance today that would produce RMDs ≤ your spend goal at age ${targetAge} (IRS table: ${(rmdPctAtTarget * 100).toFixed(2)}% RMD rate, ${yearsUntil} yrs at ${(growth * 100).toFixed(1)}% growth). Click to apply.`;
         hint.style.cursor = 'pointer';
-        hint.onclick = () => { document.getElementById('iraBaseGoal').value = rounded; runSimulation(); };
+        hint.onclick = () => { DisplayHelpers.setDollarValue('iraBaseGoal', rounded); runSimulation(); };
     } catch(e) {
         hint.textContent = '';
     }
@@ -1883,7 +1883,7 @@ function loadOptimizerResult(id) {
     document.getElementById('maxConversion').checked = result._maxConversion;
     // For spend-optimized rows, restore the optimized spend goal
     if (result._spendGoal != null) {
-        document.getElementById('spendGoal').value = Math.round(result._spendGoal);
+        DisplayHelpers.setDollarValue('spendGoal', Math.round(result._spendGoal));
     }
     toggleStrategyUI();
     runSimulation();
@@ -2697,7 +2697,7 @@ function updateCharts(log) {
     });
 }
 
-function val(id) { return document.getElementById(id)?.value; }
+function val(id) { const el = document.getElementById(id); if (!el) return undefined; return el.dataset.numVal !== undefined ? el.dataset.numVal : el.value; }
 function valChecked(id) { return document.getElementById(id)?.checked; }
 
 
@@ -2776,7 +2776,7 @@ function buildShareURL() {
         if (el.type === 'checkbox') {
             params.set(el.id, el.checked ? 'true' : 'false');
         } else {
-            params.set(el.id, el.value);
+            params.set(el.id, el.dataset.numVal !== undefined ? el.dataset.numVal : el.value);
         }
     });
     const base = location.href.split('?')[0].split('#')[0];
@@ -3011,6 +3011,11 @@ function loadScenario() {
  * Triggers recalculate() function if it exists
  * @param {Object} data - Scenario data object with keys matching form input IDs
  */
+const DOLLAR_INPUT_IDS = new Set([
+    'spendGoal', 'iraBaseGoal', 'IRA1', 'IRA2', 'Roth',
+    'Brokerage', 'BrokerageBasis', 'Cash', 'ss1', 'ss2', 'pensionAnnual'
+]);
+
 function applyScenario(data) {
     // Handle IRMAA tier ceiling scenarios: restore dropdown to "irmaaX" value
     if ((data.stratIRMAATier ?? -1) >= 0) {
@@ -3035,6 +3040,8 @@ function applyScenario(data) {
             } else {
                 if (['maxConversion'].includes(key)) {
                     document.getElementById('maxConversion').checked = value
+                } else if (DOLLAR_INPUT_IDS.has(key)) {
+                    DisplayHelpers.setDollarValue(key, value);
                 } else {
                     element.value = value;
                 }

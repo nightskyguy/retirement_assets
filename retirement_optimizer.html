@@ -27,7 +27,7 @@
 		<div id="strategy-container">
 		    <div class="row"><div  id="spending">
 				<div><label>After-Tax Spend &nbsp;
-				<input type="number" id="spendGoal" value="140000"></label></div>
+				<input type="text" id="spendGoal" value="140000"></label></div>
 				<div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. -2% means you spend 2% less each year. 0 means no change.">Spend Delta %&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0"></label></div>
 				</div><!-- spending -->
@@ -67,7 +67,7 @@
 
 			<div class="row">
 				<label title="IRA floor for all strategies. For 'Reduce IRA in N Years' this is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.">IRA Goal
-				<input type="number" id="iraBaseGoal" value="750000" width="50%"></label>
+				<input type="text" id="iraBaseGoal" value="750000" width="50%"></label>
 				<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div><BR>
 				<label title='If checked, it will use available cash to maximize Roth conversions'>
 				  <input type="checkbox" id="maxConversion" name="maxConversion">
@@ -91,32 +91,32 @@
 
         <h3>2. Assets (Current)</h3>
         <div class="row">
-            <div><label><B>Your</B> IRA  <input type="number" id="IRA1" value="1000000"></label></div>
-            <div><label><B><I>Spouse</I></B> IRA<input type="number" id="IRA2"  value="400000"></label></div>
+            <div><label><B>Your</B> IRA  <input type="text" id="IRA1" value="1000000"></label></div>
+            <div><label><B><I>Spouse</I></B> IRA<input type="text" id="IRA2"  value="400000"></label></div>
         </div>
         <div class="row">
-            <div><label>Brokerage<input type="number" id="Brokerage" value="100000"></label></div>
-            <div><label>Brokerage Basis<input type="number" id="BrokerageBasis" value="100000"></label></div>
+            <div><label>Brokerage<input type="text" id="Brokerage" value="100000"></label></div>
+            <div><label>Brokerage Basis<input type="text" id="BrokerageBasis" value="100000"></label></div>
         </div>
         <div class="row">
             <div><label title="When checked, dividends stay in the brokerage (balance and basis both increase). When unchecked, dividends flow to the Cash account."><input type="checkbox" id="dividendReinvest"> Reinvest Brokerage Dividends</label></div>
         </div>
         <div class="row">
-            <div><label>Roth IRA<input type="number" id="Roth" value="50000"></label></div>
-            <div><label>Cash Balance<input type="number" id="Cash" value="50000"></label></div>
+            <div><label>Roth IRA<input type="text" id="Roth" value="50000"></label></div>
+            <div><label>Cash Balance<input type="text" id="Cash" value="50000"></label></div>
         </div>
 
         <h3>3. Income (annual)</h3>
         <div class="row">
-            <div><label>Social Security Amt<input type="number" id="ss1" value="48000"></label></div>
+            <div><label>Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
             <div><label>Start Age<input type="number" id="ss1Age" value="70"></label></div>
         </div>
         <div class="row">
-            <div><label><B><I>Spouse</I></B> SS Amt<input type="number" id="ss2" value="24000"></label></div>
+            <div><label><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
             <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></label></div><BR>
         </div>
         <div class="row">
-            <div><label><B>Your</B> Pension<input type="number" id="pensionAnnual" value="15000"></label></div>
+            <div><label><B>Your</B> Pension<input type="text" id="pensionAnnual" value="15000"></label></div>
             <div><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
         </div>
         <div class="row">
@@ -491,6 +491,18 @@ runSimulation?.();
   DisplayHelpers.registerChartDismissal(document.getElementById('chartAssets'));
   DisplayHelpers.registerChartDismissal(document.getElementById('chartIncomeSources'));
   DisplayHelpers.registerChartDismissal(document.getElementById('mc-chart'));
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var dollarIds = [
+      'spendGoal', 'iraBaseGoal',
+      'IRA1', 'IRA2', 'Roth', 'Brokerage', 'BrokerageBasis', 'Cash',
+      'ss1', 'ss2', 'pensionAnnual'
+    ];
+    dollarIds.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0 });
+    });
+  });
 </script>
 <script src="other_tools.js"></script>
 <script src="montecarlo/prng.js"></script>

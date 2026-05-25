@@ -97,7 +97,8 @@ table td.empty-column {
     box-sizing: border-box;
 }
 
-.sidebar input[type="number"], 
+.sidebar input[type="number"],
+.sidebar input[type="text"],
 .sidebar select {
     width: 100%;
     max-width: none;
@@ -673,7 +674,8 @@ table th.empty-column {
         width: calc(100% - 350px);
     }
     
-    .sidebar input[type="number"], 
+    .sidebar input[type="number"],
+    .sidebar input[type="text"],
     .sidebar select {
         max-width: 120px;
         padding: 4px;

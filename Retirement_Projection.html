@@ -238,8 +238,8 @@ var TAXData = {
     <h2>Retirement Projection Tool — How to Use</h2>
 
     <h3 class="teal">What is this?</h3>
-    <p>A visual model for understanding how a pre-tax IRA grows or depletes over time — and what that means for your taxes. It shows how Required Minimum Distributions (RMDs) can <em>force</em> income you may not need, and lets you explore different futures by adjusting growth rates, withdrawal rates, and outside income sources.</p>
-    <p>This tool was built specifically to model <b>large IRA balances</b> and the cascading RMD effects that can follow unexpected growth. Once an IRA grows large enough, RMDs can push you into higher tax brackets, trigger IRMAA surcharges, and — for a surviving spouse filing single — cause a severe "Widow's Tax" cliff. This tool makes those dynamics visible.</p>
+    <p>A visual model for planning <b>retirement asset growth and consumption</b> — showing how multiple account types (pre-tax IRA/401k, Roth, brokerage, cash) grow, interact with Social Security and fixed income, generate Required Minimum Distributions, and draw down over time. It makes the tax consequences of each dollar visible so you can make informed decisions about withdrawals, Roth conversions, and spending.</p>
+    <p>The tool is particularly well-suited to modeling <b>large pre-tax balances</b> and the cascading RMD effects that can follow unexpected growth. Once an IRA grows large enough, RMDs can push you into higher tax brackets, trigger IRMAA surcharges, and — for a surviving spouse filing single — cause a severe "Widow's Tax" cliff. This tool makes those dynamics visible across all your retirement accounts, not just the IRA.</p>
 
     <h3 class="teal">What can I explore?</h3>
     <ul>
@@ -251,16 +251,46 @@ var TAXData = {
     </ul>
 
     <h3 class="amber">Left Panel — Inputs</h3>
+    <p style="margin-top:0;margin-bottom:.4rem"><b>Display / Filing status</b> (top toggles)</p>
     <ul>
-      <li><b>Current age</b> — projection begins at this age.</li>
-      <li><b>Withdrawal 1 start age / amount</b> — Period 1 withdrawals begin at this age; amount in today's dollars, grown with inflation each year.</li>
-      <li><b>Withdrawal 2 start age / amount</b> — Period 2 takes over at this age (must be ≥ Period 1 start, ≤ 85). If both start ages are equal, Period 2 applies.</li>
-      <li><b>Starting balance / Annual growth</b> — today's pre-tax IRA balance and expected nominal annual return.</li>
-      <li><b>Inflation rate / Years to project</b> — assumed annual inflation and projection window.</li>
-      <li><b>My SS / Spouse SS</b> — each person's Social Security (or other inflation-linked) income in today's dollars, with a separate start age. Ages are relative to <em>your</em> current age — e.g., if you are 50 and your spouse is already collecting, set Spouse SS start age to 50. Both streams are inflation-adjusted and fully additive.</li>
-      <li><b>Fixed add'l income</b> — income fixed in nominal terms: pension, interest, dividends, cap gains.</li>
+      <li><b>Display</b> — <em>Future $</em> shows nominal (inflated) values; <em>Today's $</em> deflates all amounts back to today's purchasing power for a real-terms view.</li>
+      <li><b>Filing status</b> — MFJ or Single. Toggle to model the "Widow's Tax" effect: bracket thresholds roughly halve when filing single, often triggering IRMAA tiers that were previously clear. This is a <em>filing-status</em> switch, not a "no spouse" switch — the spouse's accounts and income still contribute to the projection.</li>
     </ul>
-    <p style="margin-top:.35rem">The <b>Total Income</b> line includes all sources (IRA + SS + fixed). Threshold lines show raw inflated amounts so you can see directly which bracket your total income falls in.</p>
+    <p style="margin-top:.5rem;margin-bottom:.4rem"><b>Personal Information</b></p>
+    <ul>
+      <li><b>Your birth year / Birth month</b> — Determines your current age, RMD start age (SECURE 2.0), and age-adjusted standard deduction.</li>
+      <li><b>Retirement start age</b> — Contributions past this age require earned income (a warning appears if active).</li>
+      <li><b>Spouse birth year / Birth month</b> — Used to compute spouse's age and RMD schedule independently.</li>
+    </ul>
+    <p style="margin-top:.5rem;margin-bottom:.4rem"><b>Desired Spendable Income</b></p>
+    <ul>
+      <li><b>Annual target</b> — Lifestyle spending goal in today's dollars. Used to calculate Roth conversion headroom above the withdrawal target and to drive the spending-smile curve.</li>
+      <li><b>Mode</b> — Constant $ (flat nominal), + Inflation (maintains real purchasing power), or Spending smile (real spending declines gradually with age).</li>
+    </ul>
+    <p style="margin-top:.5rem;margin-bottom:.4rem"><b>Assumptions</b></p>
+    <ul>
+      <li><b>Annual growth rate</b> — Nominal pre-tax return applied to IRA, Spouse IRA, and Roth balances each year.</li>
+      <li><b>Inflation rate</b> — Annual CPI assumption used to grow contributions, withdrawals, SS income, and tax thresholds.</li>
+      <li><b>State income tax</b> — Select a state; its brackets are added to the Tax &amp; IRMAA threshold lines.</li>
+    </ul>
+    <p style="margin-top:.5rem;margin-bottom:.4rem"><b>Accounts</b></p>
+    <ul>
+      <li><b>My IRA</b> — Pre-tax account (Traditional IRA, 401k, 403b, 457b, SEP-IRA, etc.). Set starting balance; optionally configure annual contributions (with inflation-grow option and stop age) and planned withdrawals across two periods.</li>
+      <li><b>Spouse IRA</b> — Spouse's pre-tax account. Enter starting balance; RMDs are calculated separately from the spouse's birth year per SECURE 2.0.</li>
+      <li><b>Roth</b> — Tax-free account (Roth IRA, Roth 401k, Roth 403b, etc.). Enter starting balance and optional annual contributions. No RMDs; excluded from taxable income.</li>
+      <li><b>Brokerage</b> — Taxable account with configurable basis, appreciation rate, dividends, and periodic capital gains events.</li>
+      <li><b>Cash</b> — Liquid savings earning a configurable interest rate.</li>
+    </ul>
+    <p style="margin-top:.5rem;margin-bottom:.4rem"><b>Income</b></p>
+    <ul>
+      <li><b>Social Security (×2)</b> — Up to two SS (or other inflation-linked) income streams, each in today's dollars with a start age. Both are inflation-adjusted from their start year and fully additive to total income.</li>
+      <li><b>Fixed income</b> — Nominal income that does not grow with inflation: pension payments, bond interest, dividends, cap gains distributions.</li>
+    </ul>
+    <p style="margin-top:.5rem;margin-bottom:.4rem"><b>Tax &amp; IRMAA Thresholds</b></p>
+    <ul>
+      <li>Editable bracket and IRMAA threshold lines sourced from 2026 federal tables. Amounts are in today's dollars and grown with inflation each year (except NIIT, which is flat). Add, remove, or adjust any line.</li>
+    </ul>
+    <p style="margin-top:.35rem">The <b>Total Income</b> line includes all sources (IRA withdrawals + Spouse IRA RMDs + SS + fixed income + brokerage distributions). Threshold lines grow with inflation so you can see directly which bracket your income falls in each year.</p>
 
     <h3 class="amber">Withdrawal Logic</h3>
     <ul>
@@ -303,11 +333,10 @@ var TAXData = {
 
     <h3 class="amber">Limitations</h3>
     <ul>
-      <li><b>Growth is constant here; markets are not.</b> A single annual rate is a useful fiction.</li>
+      <li><b>Growth is constant here; markets are not.</b> A single annual rate is a useful fiction — actual returns vary year to year and sequence of returns matters.</li>
       <li><b>Tax law changes.</b> Brackets, standard deductions, and IRMAA thresholds are all subject to legislation.</li>
-      <li><b>Net spendable income is not calculated.</b> The tool shows gross income and bracket placement, not after-tax cash.</li>
-      <li><b>No state taxes.</b> Most states tax IRA withdrawals; some exempt Social Security.</li>
-      <li><b>No external assets.</b> Brokerage accounts, savings, and real estate are not modeled.</li>
+      <li><b>Net spendable income is not calculated.</b> The tool shows gross income and bracket placement, not after-tax cash in hand.</li>
+      <li><b>State tax is approximate.</b> State brackets are modeled, but not every state exemption (e.g. SS exclusions, pension exclusions) is captured.</li>
       <li><b>Longevity is unknown.</b> Neither your lifespan nor your spouse's is factored in.</li>
     </ul>
 
@@ -364,6 +393,81 @@ var TAXData = {
       </div>
     </div>
 
+    <details class="section" id="secPersonalInfo">
+      <summary>Personal Information</summary>
+      <div class="section-body">
+        <div class="ctrl">
+          <div class="ctrl-header"><label><b>Your</b> birth year</label><span class="val" id="vAge">Age 65 · RMD starts 75</span></div>
+          <input type="number" id="birthYear" value="1961" min="1930" max="2005"
+                 style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label><b>Your</b> birth month</label></div>
+          <select id="birthMonth" style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
+            <option value="1">January</option><option value="2">February</option>
+            <option value="3">March</option><option value="4">April</option>
+            <option value="5" selected>May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option>
+            <option value="9">September</option><option value="10">October</option>
+            <option value="11">November</option><option value="12">December</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label><b>Your</b> retirement start age</label><span class="val" id="vRetireAge">65</span></div>
+          <input type="range" id="retireAge" min="55" max="70" step="1" value="65">
+          <div class="ctrl-note" id="warnEarnedIncome" style="display:none;color:#f5a623">
+            ⚠ Contributions past retirement start require earned income.
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);margin:.6rem 0 .5rem;padding-top:.5rem;display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="hasSpouse" checked style="cursor:pointer;accent-color:var(--teal);width:14px;height:14px;flex-shrink:0">
+          <label for="hasSpouse" style="font-family:var(--mono);font-size:11px;color:var(--text);cursor:pointer;user-select:none">Has spouse / partner</label>
+        </div>
+        <div id="spouseFields">
+          <div class="ctrl">
+            <div class="ctrl-header"><label><b>Spouse</b> birth year</label><span class="val" id="vSpouseAge">Age —</span></div>
+            <input type="number" id="spouseBirthYear" value="1963" min="1930" max="2005"
+                   style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-header"><label><b>Spouse</b> birth month</label></div>
+            <select id="spouseBirthMonth" style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
+              <option value="1">January</option><option value="2">February</option>
+              <option value="3">March</option><option value="4">April</option>
+              <option value="5" selected>May</option><option value="6">June</option>
+              <option value="7">July</option><option value="8">August</option>
+              <option value="9">September</option><option value="10">October</option>
+              <option value="11">November</option><option value="12">December</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="section" id="secLifestyle">
+      <summary>Desired Spendable Income</summary>
+      <div class="section-body">
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Annual target (today's $)</label><span class="val" id="vLtAmt">$0</span></div>
+          <input type="range" id="ltAmt" min="0" max="500000" step="5000" value="0">
+        </div>
+        <div class="ctrl" id="ltModeRow">
+          <div class="ctrl-header"><label>Mode</label></div>
+          <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--text)">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="flat" checked> Constant $</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="infl"> + Inflation</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="smile"> Spending smile</label>
+            <label style="display:flex;align-items:center;gap:6px;opacity:0.4;pointer-events:none"><input type="radio" name="ltMode" value="bestfit" disabled> Best fit <span style="color:var(--muted)">(coming soon)</span></label>
+          </div>
+        </div>
+        <div class="ctrl" id="ltDeclineRow">
+          <div class="ctrl-header"><label>Annual real decline</label><span class="val" id="vLtDecline">1.5%</span></div>
+          <input type="range" id="ltDecline" min="0.1" max="5" step="0.1" value="1.5">
+          <div class="ctrl-note">% per year spending decreases in real terms (spending smile mode only)</div>
+        </div>
+      </div>
+    </details>
+
     <details class="section" id="secAssumptions">
       <summary>Assumptions</summary>
       <div class="section-body">
@@ -377,39 +481,9 @@ var TAXData = {
           <input type="range" id="infl" min="0" max="8" step="0.5" value="2.5">
         </div>
         <div class="ctrl">
-          <div class="ctrl-header"><label>Retirement start age</label><span class="val" id="vRetireAge">65</span></div>
-          <input type="range" id="retireAge" min="55" max="70" step="1" value="65">
-          <div class="ctrl-note" id="warnEarnedIncome" style="display:none;color:#f5a623">
-            ⚠ Contributions past retirement start require earned income.
-          </div>
-        </div>
-        <div class="ctrl">
           <div class="ctrl-header"><label>State income tax</label></div>
           <select id="stateSelect" class="state-select" style="margin-top:6px" onchange="applyStateThresholds(); update()"></select>
         </div>
-        <details class="section-sub" id="secLifestyle">
-          <summary>Desired Spendable Income</summary>
-          <div class="section-body" style="padding-left:0;padding-bottom:0">
-            <div class="ctrl">
-              <div class="ctrl-header"><label>Annual target (today's $)</label><span class="val" id="vLtAmt">$0</span></div>
-              <input type="range" id="ltAmt" min="0" max="500000" step="5000" value="0">
-            </div>
-            <div class="ctrl" id="ltModeRow">
-              <div class="ctrl-header"><label>Mode</label></div>
-              <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--text)">
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="flat" checked> Constant $</label>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="infl"> + Inflation</label>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="ltMode" value="smile"> Spending smile</label>
-                <label style="display:flex;align-items:center;gap:6px;opacity:0.4;pointer-events:none"><input type="radio" name="ltMode" value="bestfit" disabled> Best fit <span style="color:var(--muted)">(coming soon)</span></label>
-              </div>
-            </div>
-            <div class="ctrl" id="ltDeclineRow">
-              <div class="ctrl-header"><label>Annual real decline</label><span class="val" id="vLtDecline">1.5%</span></div>
-              <input type="range" id="ltDecline" min="0.1" max="5" step="0.1" value="1.5">
-              <div class="ctrl-note">% per year spending decreases in real terms (spending smile mode only)</div>
-            </div>
-          </div>
-        </details>
       </div>
     </details>
 
@@ -419,43 +493,25 @@ var TAXData = {
 
         <!-- ── IRA account ── -->
         <details class="section-sub" id="secIRA">
-          <summary>My IRA</summary>
+          <summary title="Includes any pre-tax retirement account: 401(k), 403(b), 457(b), Traditional IRA, SEP-IRA, SIMPLE IRA, etc.">My IRA</summary>
           <div class="section-body" style="padding-left:0;padding-bottom:0">
 
-            <details class="section-inner" id="secBalance">
-              <summary>Balance &amp; Growth</summary>
-              <div class="section-body">
-                <!-- Birth year + month (replaces age slider) -->
-                <div class="ctrl">
-                  <div class="ctrl-header"><label>Your birth year</label><span class="val" id="vAge">Age 65</span></div>
-                  <input type="number" id="birthYear" value="1961" min="1930" max="2005"
-                         style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
-                </div>
-                <div class="ctrl">
-                  <div class="ctrl-header"><label>Birth month</label></div>
-                  <select id="birthMonth" style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
-                    <option value="1">January</option><option value="2">February</option>
-                    <option value="3">March</option><option value="4">April</option>
-                    <option value="5" selected>May</option><option value="6">June</option>
-                    <option value="7">July</option><option value="8">August</option>
-                    <option value="9">September</option><option value="10">October</option>
-                    <option value="11">November</option><option value="12">December</option>
-                  </select>
-                </div>
-                <div class="ctrl">
-                  <div class="ctrl-header"><label>Starting IRA balance</label></div>
-                  <input type="text" id="start" class="bal-input" value="$2,000,000" autocomplete="off" spellcheck="false">
-                  <div class="ctrl-note">Type amount with optional suffix: 2M, 500k, 1.5M · Enter to confirm</div>
-                </div>
-              </div>
-            </details>
+            <div class="ctrl" style="padding:0 1rem .5rem">
+              <div class="ctrl-header"><label>Starting balance</label></div>
+              <input type="text" id="start" class="bal-input" value="$2,000,000" autocomplete="off" spellcheck="false">
+              <div class="ctrl-note">Type amount with optional suffix: 2M, 500k, 1.5M · Enter to confirm</div>
+            </div>
 
             <details class="section-inner" id="secAccumulation">
               <summary>Accumulation</summary>
               <div class="section-body">
                 <div class="ctrl">
-                  <div class="ctrl-header"><label>Annual contribution (today $)</label><span class="val" id="vContrib">$0</span></div>
-                  <input type="range" id="contrib" min="0" max="70000" step="1000" value="0">
+                  <div class="ctrl-header"><label>Annual contribution (today $)</label></div>
+                  <input type="text" id="contrib" value="$0" class="bal-input" autocomplete="off" spellcheck="false">
+                  <div class="ctrl-note">e.g. 7k, 23k, 70k · Enter to confirm</div>
+                </div>
+                <div class="ctrl-note" id="warnIRAContribLimit" style="display:none;color:#f5a623">
+                  ⚠ Based on 2026 limits — contribution may exceed the annual maximum. Verify with a tax advisor.
                 </div>
                 <div class="ctrl" id="ctrlContribEndAge" style="opacity:0.4;pointer-events:none">
                   <div class="ctrl-header"><label>Stop contributing at age</label><span class="val" id="vContribEndAge">62</span></div>
@@ -500,38 +556,22 @@ var TAXData = {
 
         <!-- ── Spouse IRA ── -->
         <details class="section-sub" id="secSpouseIRA">
-          <summary>Spouse IRA</summary>
+          <summary title="Includes any pre-tax retirement account: 401(k), 403(b), 457(b), Traditional IRA, SEP-IRA, SIMPLE IRA, etc.">Spouse IRA</summary>
           <div class="section-body">
-            <div class="ctrl">
-              <div class="ctrl-header"><label>Spouse birth year</label><span class="val" id="vSpouseAge">Age —</span></div>
-              <input type="number" id="spouseBirthYear" value="1963" min="1930" max="2005"
-                     style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
-            </div>
-            <div class="ctrl">
-              <div class="ctrl-header"><label>Spouse birth month</label></div>
-              <select id="spouseBirthMonth" style="width:100%;font-family:var(--mono);font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
-                <option value="1">January</option><option value="2">February</option>
-                <option value="3">March</option><option value="4">April</option>
-                <option value="5" selected>May</option><option value="6">June</option>
-                <option value="7">July</option><option value="8">August</option>
-                <option value="9">September</option><option value="10">October</option>
-                <option value="11">November</option><option value="12">December</option>
-              </select>
-            </div>
             <div class="ctrl">
               <div class="ctrl-header"><label>Starting balance</label></div>
               <input type="text" id="spouseIRAStart" value="$0" class="bal-input">
               <div class="ctrl-note">e.g. 500k, 1.2M · Enter to confirm</div>
             </div>
             <div class="ctrl-note" style="padding:.5rem 0 .25rem">
-              Grows at shared growth rate. RMDs calculated per SECURE 2.0 from spouse's birth year. Planned withdrawals can be added later.
+              Grows at shared growth rate. RMDs calculated per SECURE 2.0 from spouse's birth year (set in Assumptions → Personal Information).
             </div>
           </div>
         </details>
 
         <!-- ── Roth ── -->
         <details class="section-sub" id="secRoth">
-          <summary>Roth</summary>
+          <summary title="Includes any Roth-style account: Roth IRA, Roth 401(k), Roth 403(b), Roth 457(b), etc.">Roth</summary>
           <div class="section-body">
             <div class="ctrl">
               <div class="ctrl-header"><label>Starting balance</label></div>
@@ -547,8 +587,12 @@ var TAXData = {
             <summary>Accumulation</summary>
             <div class="section-body">
               <div class="ctrl">
-                <div class="ctrl-header"><label>Annual contribution (today $)</label><span class="val" id="vRothContrib">$0</span></div>
-                <input type="range" id="rothContrib" min="0" max="70000" step="1000" value="0">
+                <div class="ctrl-header"><label>Annual contribution (today $)</label></div>
+                <input type="text" id="rothContrib" value="$0" class="bal-input" autocomplete="off" spellcheck="false">
+                <div class="ctrl-note">e.g. 7k, 14k, 82.5k · Enter to confirm</div>
+              </div>
+              <div class="ctrl-note" id="warnRothContribLimit" style="display:none;color:#f5a623">
+                ⚠ Based on 2026 limits — contribution may exceed the annual maximum. Verify with a tax advisor.
               </div>
               <div class="ctrl" id="ctrlRothContribEndAge" style="opacity:0.4;pointer-events:none">
                 <div class="ctrl-header"><label>Stop contributing at age</label><span class="val" id="vRothContribEndAge">62</span></div>
@@ -660,14 +704,16 @@ var TAXData = {
           <input type="range" id="ss1" min="0" max="100000" step="500" value="0">
           <div class="ctrl-note">SS × 85%, TIPS, or other infl-linked income. Grows with inflation from start year. Age relative to you.</div>
         </div>
-        <div class="ctrl">
-          <div class="ctrl-header"><label>Spouse SS start age</label><span class="val" id="vSS2Age">70</span></div>
-          <input type="range" id="ss2Age" min="50" max="70" step="1" value="70">
-        </div>
-        <div class="ctrl">
-          <div class="ctrl-header"><label>Spouse SS (today $)</label><span class="val" id="vSS2">$0</span></div>
-          <input type="range" id="ss2" min="0" max="100000" step="500" value="0">
-          <div class="ctrl-note">Spouse's Social Security or other inflation-linked income. Age relative to you.</div>
+        <div id="spouseSSFields">
+          <div class="ctrl">
+            <div class="ctrl-header"><label>Spouse SS start age</label><span class="val" id="vSS2Age">70</span></div>
+            <input type="range" id="ss2Age" min="50" max="70" step="1" value="70">
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-header"><label>Spouse SS (today $)</label><span class="val" id="vSS2">$0</span></div>
+            <input type="range" id="ss2" min="0" max="100000" step="500" value="0">
+            <div class="ctrl-note">Spouse's Social Security or other inflation-linked income. Age relative to you.</div>
+          </div>
         </div>
         <div class="ctrl">
           <div class="ctrl-header"><label>Fixed add'l income</label><span class="val" id="vFixedInc">$0</span></div>
@@ -728,8 +774,8 @@ var TAXData = {
         <div class="leg-group">
           <span class="leg-group-hdr" onclick="toggleLegendGroup('grpBal')">▼ Balances</span>
           <div class="leg-group-body" id="grpBal">
-            <span id="lgNomWrap"    class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(0,'lgNomWrap')"><span class="leg-sq" style="background:#19c99d"></span>Nominal balance</span>
-            <span id="lgRealWrap"   class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(1,'lgRealWrap')"><span class="leg-sq" style="background:#4f9cf9"></span>Real balance</span>
+            <span id="lgNomWrap"    class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(0,'lgNomWrap')"><span class="leg-sq" style="background:#19c99d"></span>My IRA (nominal)</span>
+            <span id="lgRealWrap"   class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(1,'lgRealWrap')"><span class="leg-sq" style="background:#4f9cf9"></span>My IRA (today's $)</span>
             <span id="lgBrokWrap"   class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(7,'lgBrokWrap')"><span class="leg-sq" style="background:#2dd4bf"></span>Brokerage</span>
             <span id="lgCashWrap"   class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(8,'lgCashWrap')"><span class="leg-sq" style="background:#4ade80"></span>Cash</span>
             <span id="lgSpouseIRAWrap" class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(9,'lgSpouseIRAWrap')"><span class="leg-sq" style="background:#818cf8"></span>Spouse IRA</span>
@@ -978,6 +1024,10 @@ function parseStart(){
 function parseBalInput(id){
   const v = DisplayHelpers.parseShorthand(document.getElementById(id)?.value || '0');
   return Math.min(20_000_000, Math.max(0, v == null ? 0 : v));
+}
+function parseContribInput(id){
+  const v = DisplayHelpers.parseShorthand(document.getElementById(id)?.value || '0');
+  return Math.max(0, v == null ? 0 : v);
 }
 function parseBrokStart(){ return parseBalInput('brokStart'); }
 function parseCashStart(){ return parseBalInput('cashStart'); }
@@ -1300,8 +1350,8 @@ const chartCtx = document.getElementById('ch').getContext('2d');
 const chart = new Chart(chartCtx, {
   type:'line',
   data:{ labels:[], datasets:[
-    /* 0 Nominal bal    */ { label:'Nominal balance',      data:[], borderColor:'#19c99d', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
-    /* 1 Real bal       */ { label:'Real balance',         data:[], borderColor:'#4f9cf9', backgroundColor:'transparent', fill:false, hidden:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 0 Nominal bal    */ { label:'My IRA (nominal)',      data:[], borderColor:'#19c99d', backgroundColor:'transparent', fill:false, hidden:true,  tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
+    /* 1 Real bal       */ { label:'My IRA (today\'s $)',  data:[], borderColor:'#4f9cf9', backgroundColor:'transparent', fill:false, hidden:false, tension:0.3, pointRadius:0, borderWidth:2,   yAxisID:'yBal' },
     /* 2 RMD            */ { label:'RMD',                  data:[], borderColor:'rgba(245,166,35,0.85)', backgroundColor:'transparent', fill:false, spanGaps:false, tension:0.2, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
     /* 3 Wd target      */ { label:'Withdrawal target',    data:[], borderColor:'#a78bfa', backgroundColor:'transparent', fill:false, tension:0, pointRadius:0, borderWidth:1.5, yAxisID:'yWd' },
     /* 4 Total income   */ { label:'Total Income',         data:[], borderColor:'#e8eaf2', backgroundColor:'transparent', fill:false, tension:0.2, pointRadius:0, borderWidth:2, yAxisID:'yWd' },
@@ -1561,7 +1611,8 @@ function update(){
   const spouseStartAge   = computeAge(spouseBirthYear, spouseBirthMonth);
   const spouseRmdStartAge = rmdStartAge(spouseBirthYear);
 
-  const spouseIRAStartVal = parseBalInput('spouseIRAStart');
+  const hasSpouse         = document.getElementById('hasSpouse').checked;
+  const spouseIRAStartVal = hasSpouse ? parseBalInput('spouseIRAStart') : 0;
   const rothStartVal      = parseBalInput('rothStart');
 
   const wdStartAge  = +document.getElementById('wdAge').value;
@@ -1576,13 +1627,13 @@ function update(){
   const isSingle    = document.getElementById('singleToggle').checked;
   const ss1         = +document.getElementById('ss1').value;
   const ss1Age      = +document.getElementById('ss1Age').value;
-  const ss2         = +document.getElementById('ss2').value;
+  const ss2         = hasSpouse ? +document.getElementById('ss2').value : 0;
   const ss2Age      = +document.getElementById('ss2Age').value;
   const fixedIncome    = +document.getElementById('fixedInc').value;
-  const contrib        = +document.getElementById('contrib').value;
+  const contrib        = parseContribInput('contrib');
   const contribEndAge  = +document.getElementById('contribEndAge').value;
   const contribInflate = document.getElementById('contribInflate').checked;
-  const rothContrib        = +document.getElementById('rothContrib').value;
+  const rothContrib        = parseContribInput('rothContrib');
   const rothContribEndAge  = +document.getElementById('rothContribEndAge').value;
   const rothContribInflate = document.getElementById('rothContribInflate').checked;
   const retireAge      = +document.getElementById('retireAge').value;
@@ -1613,9 +1664,7 @@ function update(){
   document.getElementById('vSS2Age').textContent  = ss2Age;
   document.getElementById('vSS2').textContent     = fmt(ss2);
   document.getElementById('vFixedInc').textContent    = fmt(fixedIncome);
-  document.getElementById('vContrib').textContent      = fmt(contrib);
   document.getElementById('vContribEndAge').textContent= contribEndAge;
-  document.getElementById('vRothContrib').textContent      = fmt(rothContrib);
   document.getElementById('vRothContribEndAge').textContent = rothContribEndAge;
   document.getElementById('vRetireAge').textContent    = retireAge;
   document.getElementById('vLtAmt').textContent        = fmt(ltAmt);
@@ -1902,10 +1951,10 @@ function buildBookmarkUrl(){
   const visIds = thresholds.filter(t => t.id && t.visible).map(t => t.id).join(',');
   if(visIds) p.set('tv', visIds);
 
-  p.set('contrib',     document.getElementById('contrib').value);
+  p.set('contrib',     parseContribInput('contrib'));
   p.set('contribEnd',  document.getElementById('contribEndAge').value);
   if(document.getElementById('contribInflate').checked) p.set('contribInflate', '1');
-  p.set('rothContrib',    document.getElementById('rothContrib').value);
+  p.set('rothContrib',    parseContribInput('rothContrib'));
   p.set('rothContribEnd', document.getElementById('rothContribEndAge').value);
   if(document.getElementById('rothContribInflate').checked) p.set('rothContribInflate', '1');
   p.set('retireAge',   document.getElementById('retireAge').value);
@@ -1929,6 +1978,7 @@ function buildBookmarkUrl(){
 
   p.set('birthYear',       document.getElementById('birthYear').value);
   p.set('birthMonth',      document.getElementById('birthMonth').value);
+  if(!document.getElementById('hasSpouse').checked) p.set('noSpouse','1');
   p.set('spouseBirthYear', document.getElementById('spouseBirthYear').value);
   p.set('spouseBirthMonth',document.getElementById('spouseBirthMonth').value);
   p.set('spouseIRA',       parseBalInput('spouseIRAStart'));
@@ -1985,10 +2035,10 @@ function applyUrlParams(){
   setSlider('ss2',      'ss2');
   setSlider('ss2Age',   'ss2age');
   setSlider('fixedInc',     'fixed');
-  setSlider('contrib',      'contrib');
+  if(p.has('contrib'))    document.getElementById('contrib').value    = fmt(+p.get('contrib')    || 0);
   setSlider('contribEndAge','contribEnd');
   document.getElementById('contribInflate').checked = p.get('contribInflate') === '1';
-  setSlider('rothContrib',       'rothContrib');
+  if(p.has('rothContrib')) document.getElementById('rothContrib').value = fmt(+p.get('rothContrib') || 0);
   setSlider('rothContribEndAge', 'rothContribEnd');
   document.getElementById('rothContribInflate').checked = p.get('rothContribInflate') === '1';
   setSlider('retireAge', 'retireAge');
@@ -2014,6 +2064,7 @@ function applyUrlParams(){
   if(p.has('cash'))  document.getElementById('cashStart').value = fmt(+p.get('cash') || 0);
   setSlider('cashRate',   'cashRate');
 
+  if(p.get('noSpouse') === '1') document.getElementById('hasSpouse').checked = false;
   if(p.has('spouseIRA')) document.getElementById('spouseIRAStart').value = fmt(+p.get('spouseIRA') || 0);
   if(p.has('roth'))      document.getElementById('rothStart').value      = fmt(+p.get('roth')      || 0);
   if(p.has('iraView'))   setIraView(p.get('iraView'));
@@ -2183,9 +2234,9 @@ function syncWd2UI(){
 
 function syncEarnedIncomeWarning(){
   const retireAge  = +document.getElementById('retireAge').value;
-  const iraActive  = +document.getElementById('contrib').value > 0
+  const iraActive  = parseContribInput('contrib') > 0
                      && +document.getElementById('contribEndAge').value > retireAge;
-  const rothActive = +document.getElementById('rothContrib').value > 0
+  const rothActive = parseContribInput('rothContrib') > 0
                      && +document.getElementById('rothContribEndAge').value > retireAge;
   document.getElementById('warnEarnedIncome').style.display =
     (iraActive || rothActive) ? 'block' : 'none';
@@ -2196,7 +2247,7 @@ function syncEarnedIncomeWarning(){
 }
 
 function syncContribUI(){
-  const disabled = +document.getElementById('contrib').value === 0;
+  const disabled = parseContribInput('contrib') === 0;
   ['ctrlContribEndAge','ctrlContribInflate'].forEach(id => {
     const el = document.getElementById(id);
     el.style.opacity       = disabled ? '0.4' : '1';
@@ -2205,12 +2256,38 @@ function syncContribUI(){
 }
 
 function syncRothContribUI(){
-  const disabled = +document.getElementById('rothContrib').value === 0;
+  const disabled = parseContribInput('rothContrib') === 0;
   ['ctrlRothContribEndAge','ctrlRothContribInflate'].forEach(id => {
     const el = document.getElementById(id);
     el.style.opacity       = disabled ? '0.4' : '1';
     el.style.pointerEvents = disabled ? 'none' : '';
   });
+}
+
+function syncContribLimitWarning(){
+  const v = parseContribInput('contrib');
+  document.getElementById('warnIRAContribLimit').style.display = v > 82500 ? 'block' : 'none';
+}
+
+function syncRothContribLimitWarning(){
+  const v = parseContribInput('rothContrib');
+  document.getElementById('warnRothContribLimit').style.display = v > 165000 ? 'block' : 'none';
+}
+
+function syncSpouseUI(){
+  const has = document.getElementById('hasSpouse').checked;
+  ['spouseFields','secSpouseIRA','spouseSSFields'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.style.opacity       = has ? '' : '0.35';
+    el.style.pointerEvents = has ? '' : 'none';
+  });
+  const spouseBtn = document.getElementById('optIra_spouse');
+  if(spouseBtn){
+    spouseBtn.style.opacity       = has ? '' : '0.35';
+    spouseBtn.style.pointerEvents = has ? '' : 'none';
+    if(!has && iraView === 'spouse') setIraView('combined');
+  }
 }
 
 /* ── Event listeners ── */
@@ -2245,8 +2322,17 @@ document.getElementById('wdAge').addEventListener('input', () => {
 });
 
 document.getElementById('wd2').addEventListener('input', () => { syncWd2UI(); update(); });
-document.getElementById('contrib').addEventListener('input', () => { syncContribUI(); syncEarnedIncomeWarning(); update(); });
-document.getElementById('rothContrib').addEventListener('input', () => { syncRothContribUI(); syncEarnedIncomeWarning(); update(); });
+document.getElementById('hasSpouse').addEventListener('change', () => { syncSpouseUI(); update(); });
+
+/* ── IRA / Roth annual contribution text inputs ── */
+[['contrib', syncContribUI, syncContribLimitWarning],
+ ['rothContrib', syncRothContribUI, syncRothContribLimitWarning]
+].forEach(([id, syncUI, syncLimit]) => {
+  const el = document.getElementById(id);
+  el.addEventListener('input',   () => { syncUI(); syncLimit(); syncEarnedIncomeWarning(); update(); });
+  el.addEventListener('blur',    () => { el.value = fmt(parseContribInput(id)); syncUI(); syncLimit(); syncEarnedIncomeWarning(); update(); });
+  el.addEventListener('keydown', e  => { if(e.key === 'Enter') el.blur(); });
+});
 document.getElementById('retireAge').addEventListener('input', () => { syncEarnedIncomeWarning(); update(); });
 document.getElementById('ltAmt').addEventListener('input', () => { updateLtControls(); update(); });
 document.querySelectorAll('input[name="ltMode"]').forEach(r =>
@@ -2297,7 +2383,10 @@ initStateSelect();
 applyUrlParams();
 syncWd2UI();
 syncContribUI();
+syncContribLimitWarning();
 syncRothContribUI();
+syncRothContribLimitWarning();
+syncSpouseUI();
 updateLtControls();
 setCgMode('none');
 setBrokDivMode(false);
@@ -2341,7 +2430,7 @@ update();
 
 // Open Assumptions + IRA subtree on desktop; collapse all on mobile
 if(window.innerWidth > 740){
-  ['secAssumptions','secAccounts','secIRA','secBalance','secAccumulation','secWithdrawals'].forEach(id => {
+  ['secPersonalInfo','secLifestyle','secAssumptions','secAccounts','secIRA','secAccumulation','secWithdrawals'].forEach(id => {
     document.getElementById(id).open = true;
   });
 }

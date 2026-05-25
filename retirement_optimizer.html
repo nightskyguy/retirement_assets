@@ -78,24 +78,27 @@
 		</div>
 
 		
-        <h3>1. Profile & Ages</h3>
-        <div class="row">
-            <div><label><B>Your</B> Birth Year<input type="number" id="birthyear1" value="1960"></label>
-            &nbsp;<label>Month<select id="birthmonth1"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label></div>
-            <div><label>Life Expectancy<input type="number" id="die1" value="88"></label></div>
+        <details class="section" open>
+        <summary>1. Profile &amp; Ages</summary>
+        <div class="compact-row">
+            <label>Birth Year<input type="number" id="birthyear1" value="1960"></label>
+            <label>Mo.<select id="birthmonth1"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
+            <label class="compact-age">Life Exp.<input type="number" id="die1" value="88"></label>
         </div>
         <div style="margin:4px 0 2px;">
             <label style="font-size:0.85em;font-weight:bold;color:#666;">
                 <input type="checkbox" id="hasSpouse" checked onchange="toggleSpouseUI()"> Include Spouse
             </label>
         </div>
-        <div class="row spouse-field">
-            <div><label><B><I>Spouse</I></B> Birth Year<input type="number" id="birthyear2" value="1952"></label>
-            &nbsp;<label>Month<select id="birthmonth2"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label></div>
-            <div><label><B><I>Spouse</I></B> Expectancy<input type="number" id="die2" value="98"></label></div>
+        <div class="compact-row spouse-field">
+            <label><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952"></label>
+            <label><i>Mo.</i><select id="birthmonth2"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
+            <label class="compact-age"><i>Sp. Life</i><input type="number" id="die2" value="98"></label>
         </div>
+        </details>
 
-        <h3>2. Assets (Current)</h3>
+        <details class="section" open>
+        <summary>2. Assets (Current)</summary>
         <div class="row">
             <div><label><B>Your</B> IRA  <input type="text" id="IRA1" value="1000000"></label></div>
             <div class="spouse-field"><label><B><I>Spouse</I></B> IRA<input type="text" id="IRA2"  value="400000"></label></div>
@@ -111,15 +114,17 @@
             <div><label>Roth IRA<input type="text" id="Roth" value="50000"></label></div>
             <div><label>Cash Balance<input type="text" id="Cash" value="50000"></label></div>
         </div>
+        </details>
 
-        <h3>3. Income (annual)</h3>
+        <details class="section" open>
+        <summary>3. Income (annual)</summary>
         <div class="row">
             <div><label>Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
             <div><label>Start Age<input type="number" id="ss1Age" value="70"></label></div>
         </div>
         <div class="row spouse-field">
             <div><label><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
-            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></label></div><BR>
+            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></label></div>
         </div>
         <div class="row">
             <div><label><B>Your</B> Pension<input type="text" id="pensionAnnual" value="15000"></label></div>
@@ -128,9 +133,10 @@
         <div class="row">
             <div><label title="Most pensions have no inflation adjustment. Enable only if your pension includes a cost-of-living adjustment (COLA)."><input type="checkbox" id="pensionCola"> Pension has COLA (inflation-adjusted)</label></div>
         </div>
+        </details>
 
-
-        <h3>4. Assumptions</h3>
+        <details class="section" open>
+        <summary>4. Assumptions</summary>
         <div class="row">
             <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
             <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
@@ -145,12 +151,13 @@
             <select id="STATEname">
                 <option   value="CA" selected>California</option>
             </select></label>
-			</div>			
+			</div>
 		</div>
         <div class="row">
 			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail <input type="number" id="ssFailYear" value="2033"></label></div>
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
+        </details>
 
     </div> <!-- sidebar -->
 

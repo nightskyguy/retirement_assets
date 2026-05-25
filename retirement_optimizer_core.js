@@ -753,6 +753,19 @@ function simulate(inputs) {
                 const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
                 marginalStateTaxRate = stAtLimit.rate;
                 nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
+            } else if ((inputs.stratACAMultiple ?? 0) > 0) {
+                // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
+                // FPL base values (2025): 2-person household $20,440; 1-person $15,060.
+                // FPL is approximated as CPI-adjusted from 2025 (HHS updates annually).
+                const FPL_2025 = status === 'MFJ' ? 20440 : 15060;
+                // cpiRate at this point = (1+cpi)^y (year 0 = 2026). FPL adj from 2025 = (1+cpi)^(1+y).
+                limit = Math.round(FPL_2025 * inputs.stratACAMultiple / 100 * cpiRate * (1 + inputs.cpi)) - 1;
+                const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
+                marginalFedTaxRate = fedAtLimit.rate;
+                nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation).cumulative / (limit || 1);
+                const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
+                marginalStateTaxRate = stAtLimit.rate;
+                nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
             } else {
                 // Federal bracket ceiling mode (original logic)
                 let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
@@ -1208,9 +1221,12 @@ function getInputs() {
         ...(() => {
             const raw = val('stratRate') ?? '';
             if (raw.startsWith('irmaa')) {
-                return { stratRate: 0, stratIRMAATier: +raw.replace('irmaa', '') };
+                return { stratRate: 0, stratIRMAATier: +raw.replace('irmaa', ''), stratACAMultiple: 0 };
             }
-            return { stratRate: +raw / 100.0, stratIRMAATier: -1 };
+            if (raw.startsWith('aca')) {
+                return { stratRate: 0, stratIRMAATier: -1, stratACAMultiple: +raw.replace('aca', '') };
+            }
+            return { stratRate: +raw / 100.0, stratIRMAATier: -1, stratACAMultiple: 0 };
         })(),
         hasSpouse: !!valChecked('hasSpouse'),
         birthyear1: +val('birthyear1'),
@@ -1461,6 +1477,7 @@ function runOptimizer() {
             _nYears: overrides.nYears ?? null,
             _stratRate: overrides.stratRate ?? null,
             _stratIRMAATier: overrides.stratIRMAATier ?? null,
+            _stratACAMultiple: overrides.stratACAMultiple ?? 0,
             _propWithdraw: overrides.propWithdraw ?? null,
             _iraWithdrawPct: overrides.iraWithdrawPct ?? null,
             _isSpendOptimized: false,
@@ -1494,7 +1511,14 @@ function runOptimizer() {
         // Fill bracket — IRMAA tier ceilings (tiers 0=Below IRMAA through 4=Tier 4 ceiling)
         const irmaaTierLabels = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
         for (let tier = 0; tier <= 4; tier++) {
-            addResult('IRMAA Ceil', irmaaTierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, maxConversion: maxConv });
+            addResult('IRMAA Ceil', irmaaTierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, maxConversion: maxConv });
+        }
+
+        // Fill bracket — ACA FPL cliffs
+        const acaMultiples = [200, 250, 300, 400];
+        const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL ⚠️' };
+        for (const pct of acaMultiples) {
+            addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'bracket', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, maxConversion: maxConv });
         }
 
         // IRA Draw — fixed % of IRA balance each year
@@ -1876,6 +1900,8 @@ function loadOptimizerResult(id) {
         document.getElementById('nYears').value = result._nYears;
     } else if (result._strategy === 'bracket' && (result._stratIRMAATier ?? -1) >= 0) {
         document.getElementById('stratRate').value = `irmaa${result._stratIRMAATier}`;
+    } else if (result._strategy === 'bracket' && (result._stratACAMultiple ?? 0) > 0) {
+        document.getElementById('stratRate').value = `aca${result._stratACAMultiple}`;
     } else if (result._strategy === 'bracket' && result._stratRate != null) {
         document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
     } else if (result._strategy === 'propwd' && result._propWithdraw != null) {
@@ -2762,6 +2788,7 @@ function setupAutoRecalc() {
 function toggleSpouseUI() {
     const on = !!valChecked('hasSpouse');
     document.querySelectorAll('.spouse-field').forEach(el => el.classList.toggle('spouse-disabled', !on));
+    if (typeof refreshStratRateOptions === 'function') refreshStratRateOptions();
 }
 
 function toggleStrategyUI() {
@@ -3026,15 +3053,19 @@ const DOLLAR_INPUT_IDS = new Set([
 ]);
 
 function applyScenario(data) {
-    // Handle IRMAA tier ceiling scenarios: restore dropdown to "irmaaX" value
+    // Handle IRMAA / ACA stratRate values that don't map to a plain numeric key
     if ((data.stratIRMAATier ?? -1) >= 0) {
         const el = document.getElementById('stratRate');
         if (el) el.value = `irmaa${data.stratIRMAATier}`;
+    } else if ((data.stratACAMultiple ?? 0) > 0) {
+        const el = document.getElementById('stratRate');
+        if (el) el.value = `aca${data.stratACAMultiple}`;
     }
 
     for (const [key, value] of Object.entries(data)) {
         // stratIRMAATier has no standalone form element; handled above via stratRate dropdown
         if (key === 'stratIRMAATier') continue;
+        if (key === 'stratACAMultiple') continue;
         const element = document.getElementById(key);
         if (element) {
             // Handle percentage values (multiply by 100 for display)
@@ -3042,8 +3073,8 @@ function applyScenario(data) {
                 'cashYield', 'dividendRate', 'ssFailPct',
                 'propWithdraw', 'iraWithdrawPct'].includes(key)) {
                 element.value = (value * 100).toFixed(3);
-            } else if (key === 'stratRate' && (data.stratIRMAATier ?? -1) >= 0) {
-                // Already set the dropdown above; skip numeric override
+            } else if (key === 'stratRate' && ((data.stratIRMAATier ?? -1) >= 0 || (data.stratACAMultiple ?? 0) > 0)) {
+                // Already set the dropdown above (IRMAA or ACA); skip numeric override
             } else if (key === 'stratRate') {
                 element.value = (value * 100).toFixed(3);
             } else {
@@ -3422,6 +3453,7 @@ const TAX_DATA_BASE_YEAR = 2025;
  * MFJ if both spouses survive into the current calendar year, SGL otherwise.
  */
 function getDropdownStatus() {
+    if (!valChecked('hasSpouse')) return 'SGL';
     const currentYear = new Date().getFullYear();
     const die1Year = (+document.getElementById('birthyear1')?.value || 1960)
                    + (+document.getElementById('die1')?.value || 88);
@@ -3500,6 +3532,22 @@ function generateStratRateOptions() {
             limit,
             defaultSelected: false
         });
+    }
+
+    // ── ACA FPL cliffs ────────────────────────────────────────────────────────
+    // FPL base (2025): 2-person $20,440; 1-person $15,060. CPI-approx for future years.
+    const FPL_BASE_YEAR = 2025;
+    const fplBase = isMFJ ? 20440 : 15060;
+    const fplCpiAdj = Math.pow(1 + cpi, Math.max(0, currentYear - FPL_BASE_YEAR + 1));
+    const acaEntries = [
+        { pct: 200, label: 'ACA 200% FPL' },
+        { pct: 250, label: 'ACA 250% FPL' },
+        { pct: 300, label: 'ACA 300% FPL' },
+        { pct: 400, label: 'ACA 400% FPL ⚠️' },
+    ];
+    for (const { pct, label } of acaEntries) {
+        const limit = Math.round(fplBase * pct / 100 * fplCpiAdj);
+        options.push({ value: `aca${pct}`, label: `${label}  ·  $${limit.toLocaleString()}`, limit });
     }
 
     // ── Sort all options by income limit, lowest → highest ─────────────────────

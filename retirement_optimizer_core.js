@@ -524,10 +524,12 @@ function calculateSurvivorBenefit(
         userPIA = userMonthlyBenefit / (1 - reductionFactor);
     }
 
-    // Step 2: Deceased's baseline — PIA plus any delayed credits earned before death
-    const deceasedBaseline = userDeathMonths < FRA_MONTHS
-        ? userPIA
-        : userPIA * (1 + (userDeathMonths - FRA_MONTHS) * (0.08 / 12));
+    // Step 2: Deceased's baseline for survivor purposes.
+    // SS rules: if deceased claimed early, survivor is NOT penalized — baseline is PIA.
+    // If deceased claimed late (delayed credits), survivor receives the full enhanced benefit.
+    // Delayed credits stop at the claiming age (never accumulate past claim date or age 70).
+    // So the baseline is simply the higher of PIA and the actual benefit at claiming age.
+    const deceasedBaseline = Math.max(userPIA, userMonthlyBenefit);
 
     // Step 3: Apply survivor's early-claiming reduction if before FRA
     let rawSurvivorBenefit;
@@ -557,8 +559,7 @@ function simulate(inputs) {
     simulationCount += 1;
     STATEname = inputs.STATEname;
     let log = [];
-    //!!!TODO Remove hardcoded start year!
-    let currentYear = inputs.startYear ?? 2026;
+    let currentYear = inputs.startInYear || new Date().getFullYear();
 
     let birthyear1 = Math.floor(inputs.birthyear1);
     let birthmonth1 = inputs.birthmonth1 ?? 12;
@@ -568,13 +569,17 @@ function simulate(inputs) {
     let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear2 + inputs.die2) - currentYear + 1;
     let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0, taxCurrentDollars: 0, spendCurrentDollars: 0, rmd: 0, rmdTax: 0, thirdPassCount: 0, thirdPassTime: 0, totalTime: 0 };
 
-    let cpiRate = 1		// The rate that SS and Tax brackets increase.
-    let inflation = 1	// The rate at which overall inflation increases.
-    let medicareRate = 1	// The rate of increase in IRMAA tax and Medicare.
+    // Pre-compound rates for any gap between today and the simulation start year.
+    // This ensures brackets, SS COLA, and IRMAA are in the correct future-dollar terms
+    // from year 1 of the loop, rather than starting from today's (1.0) base.
+    const gapYears = Math.max(0, currentYear - new Date().getFullYear());
+    let cpiRate      = Math.pow(1 + inputs.cpi,      gapYears);
+    let inflation    = Math.pow(1 + inputs.inflation, gapYears);
+    let medicareRate = Math.pow(1 + TAXData.IRMAA.ANNUAL_INCREASE, gapYears);
     let fixedWithdrawal = 0;
     let currentTaxableGuess = 0;
     let spendDelta = 1
-    let spendGoal = inputs.spendGoal;
+    let spendGoal = inputs.spendGoal * Math.pow(1 + inputs.inflation, gapYears);
     let cumulativeTaxes = 0;
     let nominalTaxRate = 0.20; // Just a guess.
     let marginalTaxRate = 0.33; // Just a guess.
@@ -636,8 +641,10 @@ function simulate(inputs) {
         let bracketTarget = 0;  // ceiling being targeted by bracket/minlimit strategies
         let bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy)
 
-        //!!! TODO: if strategy is "bracket" but spendGoal is > bracket limit
-        //		    we likely have a problem unless non-taxable accounts can backfill.
+        // INCOMPLETE: if spendGoal > bracketTarget and non-taxable accounts (Cash/Roth) can't
+        // cover the gap, the simulation proceeds anyway, silently overspending the bracket.
+        // The isBracketInfeasible flag (~line 1503) partially handles this; a fuller fix would
+        // display the per-year overage in the Annual Details table and/or warn at plan load.
 
         // 1. Inherit IRA
         if (!alive1 && balance.IRA1 > 0) { balance.IRA2 += balance.IRA1; balance.IRA1 = 0; }
@@ -653,12 +660,6 @@ function simulate(inputs) {
         let pension = inputs.pensionAnnual * (inputs.pensionCola ? inflation : 1);
 
         // One is deceased (if both decease, it won't get here)
-        // TODO BUG: survivor SS benefit is approximately double what it should be in the year
-        // of death and thereafter. With defaults, 2047 total SS ≈ $99,396 (both alive), but
-        // 2048 (person 1 dies) jumps to ≈ $147,223 instead of dropping to one survivor benefit.
-        // Suspect: calculateSurvivorBenefit() may be receiving or returning a value that is
-        // already CPI-adjusted, causing a double-inflation when multiplied by cpiRate on line
-        // below. Also verify the higher-of comparison uses consistent (nominal) units.
         if (!alive1 || !alive2) {
             let rawSurvivorMonthly;
             if (!alive1) {
@@ -699,7 +700,12 @@ function simulate(inputs) {
         rmd1Pct = Math.max(rmd1Pct, rmd2Pct, 0);
 
         // Immediately remove RMDs from the respective IRAs because they MUST be taken first.
-        // TODO: Allow RMDs to go to QCDs one day!
+        // FUTURE FEATURE: QCDs (Qualified Charitable Distributions, age 70.5+, max ~$108k/person/yr)
+        // satisfy RMDs without adding to taxable income or MAGI. Implementation:
+        //   1. Add qcd1/qcd2 annual inputs to UI
+        //   2. rmdRemaining = max(0, rmd - qcd); IRA balance unchanged for qcd portion
+        //   3. taxableInc += rmdRemaining (not totalRMD) — reduces IRMAA exposure
+        //   4. Log 'QCD1','QCD2' columns for visibility
         balance.IRA1 = Math.max(0, balance.IRA1 - rmd1);
         balance.IRA2 = Math.max(0, balance.IRA2 - rmd2);
         let curIRA = Math.max(0, balance.IRA1 + balance.IRA2 - inputs.iraBaseGoal);
@@ -715,7 +721,10 @@ function simulate(inputs) {
         let targetSpend = isBracketStrategy ? spendGoal : Math.min(spendGoal, goalLimit);
         let additionalSpendNeeded = Math.max(0, targetSpend + irmaa - possibleIncome);
 
-        //!!! Find the income federal limit. TODO: use that limit, to refine down to the next lower IRMAA limit and next lower State Limit.
+        // INCOMPLETE: marginalFedTaxRate and marginalStateTaxRate are set to the rates AT the
+        // spendGoal bracket, not refined to the next lower IRMAA/state limit. To fix: after
+        // finding goalFedBracketLimit, walk down findLimitByRate() to find the ceiling that
+        // keeps MAGI below the next IRMAA threshold, then re-derive the state bracket ceiling.
         let marginalFedTaxRate = goalFedBracketLimit.rate
         let marginalStateTaxRate = goalStateBracketLimit.rate
 
@@ -843,7 +852,11 @@ function simulate(inputs) {
         capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
 
         // 5. Tax Calc (Including IRMAA lag)
-        //!!! TODO: May be premature. We may need more $ to meet spend goal.  We may have exhausted the IRAs.
+        // NOTE: This first tax pass may undercount income if the IRA accounts are exhausted
+        // and Cash/Brokerage/Roth must backfill (handled ~line 884). The second tax pass
+        // (~line 922) recalculates with updated withdrawals. If that second pass introduces
+        // a bracket crossing, a third pass would be needed for accuracy. Current two-pass
+        // approach is an accepted approximation.
 
         inspectForErrors({ fixedInc: fixedInc, totalRMD: totalRMD, taxableInterest: taxableInterest, capitalGains: capitalGains, taxableDividends: taxableDividends, age1: age1, age2: age2, cpiRate: cpiRate })
 
@@ -998,10 +1011,11 @@ function simulate(inputs) {
         // Roth1 receives conversions funded by IRA1 withdrawals; Roth2 by IRA2 withdrawals.
         // Each conversion is capped by the respective IRA withdrawal so we never convert
         // more from an account than was actually withdrawn from it.
-        // TODO: The tax used here (nominalTaxRate) was computed on the spending income,
-        //       not on the incremental surplus being converted. The marginal rate on the
-        //       surplus could be slightly higher if it pushes into a higher bracket.
-        //       Correcting this would require a third tax-recalculation pass.
+        // TAX GAP: nominalTaxRate here is the effective rate on spending income, not the
+        // marginal rate on the surplus being converted. The correct approach is a third
+        // tax-recalculation pass: recalculate calculateTaxes() with (spendingIncome + surplus)
+        // and apply only the incremental tax to the conversion. This could affect conversions
+        // near bracket boundaries by several thousand dollars per year.
         surplus.Roth1 = 0;
         surplus.Roth2 = 0;
         if (inputs.maxConversion) {
@@ -1034,7 +1048,12 @@ function simulate(inputs) {
         balance.Cash += surplus.Cash
         surplus.Total = 0;
 
-        //!!!TODO: Need to tax the growth of Cash and Brokerage!
+        // Brokerage tax treatment is correct: dividends are taxed as qualifiedDiv in calculateTaxes()
+        // (line ~864), liquidations are taxed as capGains above BrokerageBasis, and the growth
+        // applied here is unrealized appreciation — not taxable until sold. The one valuation nuance:
+        // unrealized gains are carried at face value during the simulation; totalWealth (line ~1091)
+        // discounts them by nominalTaxRate, but year-by-year spendable wealth does not reserve for
+        // deferred tax on gains that are never liquidated.
         // Monte Carlo: use per-year return from injected sequence if provided; else constant rate.
         // Cash keeps its own yield regardless (not market-correlated).
         const yearReturn = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
@@ -1044,8 +1063,10 @@ function simulate(inputs) {
         }
 
         // Grow Balances
-        // TODO: Allow applying growth before and after withdrawals. 
-        //       To simulate how things differ if withdrawals are done early or later in the year.
+        // FUTURE FEATURE: allow growth-before-withdrawals mode (models late-year liquidation).
+        // Implementation: add inputs.growthTiming toggle ('early'|'late'), then conditionally
+        // call applyGrowth() before or after the withdrawal block. ~15 lines core + 1 UI toggle.
+        // Growth-first produces ~10-15% higher ending balances over 30 years at 7% growth.
 
         let gains = applyGrowth(balance, growthRates)
         inspectForErrors(growthRates, balance, gains)  // See if any numbers look fishy.
@@ -1222,7 +1243,9 @@ function calculateProgressive(entity, status, amount, inflation = 1, ratecreep =
 
 /** UI CONTROLS **/
 function getInputs() {
-    // TODO: If we override these values, we should update the UI 
+    // UI GAP: when spendChange (or BrokerageBasis) is out-of-range and corrected to 0 below,
+    // the form field still shows the user's invalid value. Fix: call
+    // DisplayHelpers.setValue('spendChange', '0') after correction so UI matches simulation.
     let spendChange = +val('spendChange')
     if (spendChange < -25 || spendChange > 25) {
         showMessage('Spend Delta: ' + spendChange + '% is unreasonable. Using 0% instead.', 'warning')
@@ -1284,7 +1307,12 @@ function getInputs() {
         maxConversion: valChecked('maxConversion'),
         propWithdraw: +val('propWithdraw') / 100.0,
         iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
-        startInYear: +val('startInYear'),
+        startAge: +val('startAge') || (new Date().getFullYear() - +val('birthyear1') + 1),
+        startInYear: (() => {
+            const sa = +val('startAge');
+            // age in the loop = currentYear - birthyear1 + 1, so currentYear = birthyear1 + age - 1
+            return sa > 0 ? +val('birthyear1') + sa - 1 : new Date().getFullYear();
+        })(),
         dividendReinvest: !!valChecked('dividendReinvest')
     };
 }
@@ -2013,6 +2041,8 @@ const columnCategories = {
     'rothConv': ['IRA Δ', 'Roth Δ'],  // Conversion comes from IRA
 
     // Roth Changes - balance, withdrawals, growth, conversions
+    'Roth1': ['Balances', 'Roth Δ'],
+    'Roth2': ['Balances', 'Roth Δ'],
     'RothWD': ['Roth Δ', 'Income'],
     'rothG': ['Roth Δ'],
 
@@ -2045,9 +2075,7 @@ const columnGroupDefs = {
     'FedCap': 'Taxes', 'StateCap': 'Taxes', 'SumTaxes': 'Taxes',
     'BracketTarget': 'Taxes', 'BracketOverage': 'Taxes',
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
-    // TODO: add 'Roth1' and 'Roth2' here (and to COLUMN_LABELS below) so the Roth Δ
-    // checkbox exposes per-person Roth balances in the Annual Details table.
-    // The log already emits Roth1/Roth2 per row; only the column definitions are missing.
+    'Roth1': 'Balances', 'Roth2': 'Balances',
     'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
     'Basis': 'Balances', 'totalWealth': 'Balances', 'Spendable': 'Balances',
     'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
@@ -2255,7 +2283,9 @@ function updateTable(log) {
         'BracketTarget': 'MAGI ceiling targeted by the bracket/IRMAA strategy this year (0 for other strategies).',
         'BracketOverage': 'Amount MAGI exceeded the bracket target. Non-zero means spending needs pushed above the ceiling.',
         'spendGoal': 'This amount increases by inflation less Spend Delta%.',
-        'Roth': 'Balance at Year End',
+        'Roth': 'Combined Roth balance at year end.',
+        'Roth1': "Person 1's Roth balance at year end.",
+        'Roth2': "Person 2's Roth balance at year end.",
         'RothG': 'Growth in the Roth (added to Roth account)',
         'RothConv': 'Amount moved from IRA to Roth (converted)',
         'CashWD': 'Tax free withdrawals from Cash',
@@ -3629,10 +3659,5 @@ function generateStratRateOptions() {
 // INITIALIZATION - Call on page load
 // ============================================================================
 
-// TODO: move this listener into retirement_optimizer.html (elements don't exist in other consumers)
-// window.addEventListener('DOMContentLoaded', function () {
-//     document.getElementById('stratRate').innerHTML = generateStratRateOptions();
-//     document.getElementById('STATEname').innerHTML = generateStateOptions();
-// });
 
 

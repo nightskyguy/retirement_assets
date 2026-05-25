@@ -547,10 +547,10 @@ let simulationCount = 0;
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
     if (!inputs.hasSpouse) {
-        inputs = { ...inputs, birthyear2: 0, die2: 0, IRA2: 0, ss2: 0 };
+        inputs = { ...inputs, birthyear2: 0, die2: 0, IRA2: 0, ss2: 0, Roth2: 0 };
     }
     let balance = {
-        IRA1: inputs.IRA1, IRA2: inputs.IRA2, Roth: inputs.Roth,
+        IRA1: inputs.IRA1, IRA2: inputs.IRA2, Roth1: inputs.Roth, Roth2: inputs.Roth2 || 0,
         Brokerage: inputs.Brokerage, BrokerageBasis: inputs.BrokerageBasis, Cash: inputs.Cash,
         magiHistory: []
     };
@@ -653,6 +653,12 @@ function simulate(inputs) {
         let pension = inputs.pensionAnnual * (inputs.pensionCola ? inflation : 1);
 
         // One is deceased (if both decease, it won't get here)
+        // TODO BUG: survivor SS benefit is approximately double what it should be in the year
+        // of death and thereafter. With defaults, 2047 total SS ≈ $99,396 (both alive), but
+        // 2048 (person 1 dies) jumps to ≈ $147,223 instead of dropping to one survivor benefit.
+        // Suspect: calculateSurvivorBenefit() may be receiving or returning a value that is
+        // already CPI-adjusted, causing a double-inflation when multiplied by cpiRate on line
+        // below. Also verify the higher-of comparison uses consistent (nominal) units.
         if (!alive1 || !alive2) {
             let rawSurvivorMonthly;
             if (!alive1) {
@@ -719,7 +725,7 @@ function simulate(inputs) {
         let nominalStateTaxAtLimit = 0.07
         let withdrawStrategy = { order: [], weight: [], taxrate: [] };
 
-        let curBalances = { IRA: balance.IRA1 + balance.IRA2, Brokerage: balance.Brokerage, BrokerageBasis: balance.BrokerageBasis, Roth: balance.Roth, Cash: balance.Cash, IRA1: balance.IRA1, IRA2: balance.IRA2 };
+        let curBalances = { IRA: balance.IRA1 + balance.IRA2, Brokerage: balance.Brokerage, BrokerageBasis: balance.BrokerageBasis, Roth: balance.Roth1 + balance.Roth2, Cash: balance.Cash, IRA1: balance.IRA1, IRA2: balance.IRA2 };
 
         let capGainsPercentage = balance.Brokerage !== 0
             ? (balance.Brokerage - balance.BrokerageBasis) / balance.Brokerage
@@ -989,16 +995,21 @@ function simulate(inputs) {
         surplus.Total -= rothRefund;
 
         // With MaxConversion: route the IRA-sourced surplus to Roth instead of Cash.
-        // This does NOT change how much was withdrawn — it only redirects where the
-        // after-tax excess lands. Taxes were already paid on the full IRA withdrawal.
+        // Roth1 receives conversions funded by IRA1 withdrawals; Roth2 by IRA2 withdrawals.
+        // Each conversion is capped by the respective IRA withdrawal so we never convert
+        // more from an account than was actually withdrawn from it.
         // TODO: The tax used here (nominalTaxRate) was computed on the spending income,
         //       not on the incremental surplus being converted. The marginal rate on the
         //       surplus could be slightly higher if it pushes into a higher bracket.
         //       Correcting this would require a third tax-recalculation pass.
-        surplus.Roth = 0;
+        surplus.Roth1 = 0;
+        surplus.Roth2 = 0;
         if (inputs.maxConversion) {
-            surplus.Roth = Math.min(surplus.Total, netWithdrawals.IRA);
-            surplus.Total -= surplus.Roth;
+            const conv1 = Math.min(surplus.Total * ira1_ratio,       netWithdrawals.IRA1 || 0);
+            const conv2 = Math.min(surplus.Total * (1 - ira1_ratio), netWithdrawals.IRA2 || 0);
+            surplus.Roth1 = conv1;
+            surplus.Roth2 = conv2;
+            surplus.Total -= (conv1 + conv2);
         }
 
         // If there is still a surplus, replace any excess Cash withdrawal.
@@ -1006,10 +1017,17 @@ function simulate(inputs) {
         netWithdrawals.Cash -= surplus.Cash;
         surplus.Total -= surplus.Cash;
 
+        // Split the Roth withdrawal proportionally between Roth1 and Roth2 before applying.
+        const rothWdTotal = balance.Roth1 + balance.Roth2;
+        const roth1Share = rothWdTotal > 0 ? balance.Roth1 / rothWdTotal : 0.5;
+        netWithdrawals.Roth1 = (netWithdrawals.Roth || 0) * roth1Share;
+        netWithdrawals.Roth2 = (netWithdrawals.Roth || 0) * (1 - roth1Share);
+        delete netWithdrawals.Roth;
+
         // Decrement the proposed withdrawals from the balance(s).
         applyWithdrawals(balance, netWithdrawals)
 
-        const totalConverted = surplus.Roth;
+        const totalConverted = surplus.Roth1 + surplus.Roth2;
 
         // If there is STILL a surplus, put it in Cash.
         surplus.Cash = surplus.Total;
@@ -1022,7 +1040,7 @@ function simulate(inputs) {
         const yearReturn = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
         let growthRates = {
             IRA: yearReturn, IRA1: yearReturn, IRA2: yearReturn,
-            Brokerage: yearReturn, Cash: inputs.cashYield, Roth: yearReturn
+            Brokerage: yearReturn, Cash: inputs.cashYield, Roth1: yearReturn, Roth2: yearReturn
         }
 
         // Grow Balances
@@ -1050,15 +1068,16 @@ function simulate(inputs) {
         totals.rmd += totalRMD;
         // Estimate tax attributable to RMDs proportionally (RMD / totalIncome × totalTax)
         totals.rmdTax += totalIncome > 0 ? (totalRMD / totalIncome) * totalTax : 0;
-        balance.Roth += totalConverted;  // surplus.Roth === totalConverted; surplus.Total is 0 here
+        balance.Roth1 += surplus.Roth1;
+        balance.Roth2 += surplus.Roth2;
         totals.shortfall += surplus.Shortfall;
 
-        let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage - balance.BrokerageBasis)) * (1 - nominalTaxRate) + balance.Roth + balance.Cash + balance.BrokerageBasis
+        let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage - balance.BrokerageBasis)) * (1 - nominalTaxRate) + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
 
         // Fail when the portfolio can't cover its required draw (spend minus guaranteed income).
         // This is strategy-agnostic and fires at the point of first real impairment.
         const guaranteedIncome = s1 + s2 + pension;
-        const portfolioBalance = balance.IRA1 + balance.IRA2 + balance.Roth + balance.Brokerage + balance.Cash;
+        const portfolioBalance = balance.IRA1 + balance.IRA2 + balance.Roth1 + balance.Roth2 + balance.Brokerage + balance.Cash;
         const requiredPortfolioDraw = Math.max(0, spendGoal - guaranteedIncome);
         if (netIncome < targetSpend * 0.99 || portfolioBalance < requiredPortfolioDraw) {
             totals.success = false;
@@ -1119,7 +1138,9 @@ function simulate(inputs) {
             IRA2: balance.IRA2,
             TotalIRA: balance.IRA1 + balance.IRA2,
             Cash: balance.Cash,
-            Roth: balance.Roth,
+            Roth: balance.Roth1 + balance.Roth2,
+            Roth1: balance.Roth1,
+            Roth2: balance.Roth2,
             Brokerage: balance.Brokerage,
             Basis: balance.BrokerageBasis,
             totalWealth: totalWealth,
@@ -1128,7 +1149,7 @@ function simulate(inputs) {
             Spendable: totals.spend,
             brokerageG: gains.Brokerage,
             cashG: gains.Cash,
-            rothG: gains.Roth,
+            rothG: (gains.Roth1 || 0) + (gains.Roth2 || 0),
             'RMD%': rmd1Pct,
             // Internal
             inflationFactor: inflation,
@@ -1238,7 +1259,7 @@ function getInputs() {
         IRA1: +val('IRA1'),
         IRA2: +val('IRA2'),
         Roth: +val('Roth'),
-        Roth2: +val('Roth2') || 0,         // stored, not yet used in simulation
+        Roth2: +val('Roth2') || 0,
         CashReserve: +val('CashReserve') || 0, // stored, never drawn by simulation
         Brokerage: Brokerage,
         BrokerageBasis: BrokerageBasis,
@@ -1311,6 +1332,8 @@ function runSimulation() {
     updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
     updateIRAGoalHint();
+    const spouseBtn = document.getElementById('chartPerson_spouse');
+    if (spouseBtn) spouseBtn.style.display = getInputs().hasSpouse ? '' : 'none';
 }
 
 function updateCurrentDollarsView() {
@@ -1446,8 +1469,18 @@ function buildVariations(base) {
     return variations;
 }
 
+let _lastOptimizerHash = null;
+
 function runOptimizer() {
     const base = getInputs();
+    const currentHash = JSON.stringify(base);
+    if (currentHash === _lastOptimizerHash && window.optimizerResults) {
+        renderOptimizerTable(window.optimizerResults);
+        showTab('tab-opt');
+        return;
+    }
+    _lastOptimizerHash = currentHash;
+
     const results = [];
     simulationCount = 0;
     const optimizerStart = performance.now();
@@ -2012,6 +2045,9 @@ const columnGroupDefs = {
     'FedCap': 'Taxes', 'StateCap': 'Taxes', 'SumTaxes': 'Taxes',
     'BracketTarget': 'Taxes', 'BracketOverage': 'Taxes',
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
+    // TODO: add 'Roth1' and 'Roth2' here (and to COLUMN_LABELS below) so the Roth Δ
+    // checkbox exposes per-person Roth balances in the Annual Details table.
+    // The log already emits Roth1/Roth2 per row; only the column definitions are missing.
     'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
     'Basis': 'Balances', 'totalWealth': 'Balances', 'Spendable': 'Balances',
     'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
@@ -2561,6 +2597,17 @@ function setupChartSync() {
     iCanvas.addEventListener('mousemove', e => syncOthers(incomeChart, [assetChart], e));
     iCanvas.addEventListener('mouseleave', () => clearOthers([assetChart]));
 }
+let chartPersonView = 'both';
+
+function setChartPersonView(v) {
+    chartPersonView = v;
+    ['both', 'mine', 'spouse'].forEach(k => {
+        const btn = document.getElementById(`chartPerson_${k}`);
+        if (btn) btn.classList.toggle('active', k === v);
+    });
+    if (lastSimulationLog) updateCharts(lastSimulationLog);
+}
+
 function updateCharts(log) {
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
     const adj = r => inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1;
@@ -2595,13 +2642,18 @@ function updateCharts(log) {
 
     const ctxA = document.getElementById('chartAssets').getContext('2d');
     (Chart.getChart(ctxA.canvas) ?? assetChart)?.destroy();
+    const iraLabel  = chartPersonView === 'mine' ? 'My IRA'    : chartPersonView === 'spouse' ? 'Spouse IRA'  : 'IRAs';
+    const rothLabel = chartPersonView === 'mine' ? 'My Roth'   : chartPersonView === 'spouse' ? 'Spouse Roth' : 'Roth';
+    const iraData   = r => (chartPersonView === 'mine' ? r.IRA1 : chartPersonView === 'spouse' ? r.IRA2 : r.TotalIRA) * adj(r);
+    const rothData  = r => (chartPersonView === 'mine' ? (r.Roth1 || 0) : chartPersonView === 'spouse' ? (r.Roth2 || 0) : r.Roth) * adj(r);
+
     assetChart = new Chart(ctxA, {
         type: 'line',
         data: {
             labels: log.map(r => r.year),
             datasets: [
-                mkLine('IRAs',        '#e67e22', r => r.TotalIRA    * adj(r)),
-                mkLine('Roth',        '#8e44ad', r => r.Roth        * adj(r)),
+                mkLine(iraLabel,      '#e67e22', iraData),
+                mkLine(rothLabel,     '#8e44ad', rothData),
                 mkLine('Brokerage',   '#2980b9', r => r.Brokerage   * adj(r)),
                 mkLine('Cash',        '#27ae60', r => r.Cash        * adj(r)),
                 mkLine('TotalWealth', '#555555', r => r.totalWealth * adj(r))

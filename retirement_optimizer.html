@@ -10,7 +10,10 @@
 </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retirement Optimizer 10</title>
+    <!-- Version: major.MINOR where MINOR = uppercase hex((day-of-year * 24) + hour-of-day) at build time.
+         Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xDA6 → "11.DA6"
+         Bump major manually for significant feature batches. -->
+    <title>Retirement Optimizer 11.DA6</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<script src="displayhelpers.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
@@ -105,7 +108,7 @@
         </div>
         <div class="row">
             <div><label title="Your Roth IRA balance. Withdrawals are tax-free and not subject to RMDs."><B>Your</B> Roth IRA<input type="text" id="Roth" value="50000"></label></div>
-            <div class="spouse-field"><label title="Spouse's Roth IRA balance. Not yet included in the simulation — stored for future use."><B><I>Spouse</I></B> Roth IRA<input type="text" id="Roth2" value="0" placeholder="0"></label></div>
+            <div class="spouse-field"><label title="Spouse's Roth IRA balance. Tracked separately; withdrawals split proportionally with Your Roth. Conversions funded by Spouse IRA withdrawals only."><B><I>Spouse</I></B> Roth IRA<input type="text" id="Roth2" value="0" placeholder="0"></label></div>
         </div>
         <hr style="border:none;border-top:1px solid #ddd;margin:8px 0 4px;">
         <div class="row">
@@ -162,6 +165,72 @@
 			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail <input type="number" id="ssFailYear" value="2033"></label></div>
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
+        <details style="margin-top:8px;">
+        <summary style="font-size:0.88em;color:#666;cursor:pointer;user-select:none;">Account Composition (aspirational)</summary>
+        <div style="margin-top:6px;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.82em;">
+          <thead>
+            <tr style="color:#888;text-align:left;">
+              <th style="padding:3px 6px;">Account</th>
+              <th style="padding:3px 6px;">Equity / Bond</th>
+              <th style="padding:3px 6px;" title="International equity as % of total equity. Bounded by the equity allocation chosen.">Intl Equity %</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:3px 6px;">Your IRA</td>
+              <td style="padding:3px 6px;"><select id="comp_IRA1_ratio" onchange="clampIntlInput('comp_IRA1_intl',this.value)" style="font-size:0.9em;">
+                <option value="100">100 / 0</option><option value="80">80 / 20</option><option value="75">75 / 25</option>
+                <option value="70">70 / 30</option><option value="65">65 / 35</option><option value="60" selected>60 / 40</option>
+                <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
+                <option value="20">20 / 80</option><option value="0">0 / 100</option>
+              </select></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_IRA1_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;" oninput="validateIntlInput(this)"></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 6px;"><i>Spouse IRA</i></td>
+              <td style="padding:3px 6px;"><select id="comp_IRA2_ratio" onchange="clampIntlInput('comp_IRA2_intl',this.value)" style="font-size:0.9em;">
+                <option value="100">100 / 0</option><option value="80">80 / 20</option><option value="75">75 / 25</option>
+                <option value="70">70 / 30</option><option value="65">65 / 35</option><option value="60" selected>60 / 40</option>
+                <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
+                <option value="20">20 / 80</option><option value="0">0 / 100</option>
+              </select></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_IRA2_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;" oninput="validateIntlInput(this)"></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 6px;">Brokerage</td>
+              <td style="padding:3px 6px;"><select id="comp_Brokerage_ratio" onchange="clampIntlInput('comp_Brokerage_intl',this.value)" style="font-size:0.9em;">
+                <option value="100">100 / 0</option><option value="80">80 / 20</option><option value="75">75 / 25</option>
+                <option value="70">70 / 30</option><option value="65">65 / 35</option><option value="60" selected>60 / 40</option>
+                <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
+                <option value="20">20 / 80</option><option value="0">0 / 100</option>
+              </select></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_Brokerage_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;" oninput="validateIntlInput(this)"></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 6px;">Your Roth</td>
+              <td style="padding:3px 6px;"><select id="comp_Roth1_ratio" onchange="clampIntlInput('comp_Roth1_intl',this.value)" style="font-size:0.9em;">
+                <option value="100" selected>100 / 0</option><option value="80">80 / 20</option><option value="75">75 / 25</option>
+                <option value="70">70 / 30</option><option value="65">65 / 35</option><option value="60">60 / 40</option>
+                <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
+                <option value="20">20 / 80</option><option value="0">0 / 100</option>
+              </select></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_Roth1_intl" value="0" min="0" max="100" step="1" style="width:54px;font-size:0.9em;" oninput="validateIntlInput(this)"></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 6px;"><i>Spouse Roth</i></td>
+              <td style="padding:3px 6px;"><select id="comp_Roth2_ratio" onchange="clampIntlInput('comp_Roth2_intl',this.value)" style="font-size:0.9em;">
+                <option value="100" selected>100 / 0</option><option value="80">80 / 20</option><option value="75">75 / 25</option>
+                <option value="70">70 / 30</option><option value="65">65 / 35</option><option value="60">60 / 40</option>
+                <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
+                <option value="20">20 / 80</option><option value="0">0 / 100</option>
+              </select></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_Roth2_intl" value="0" min="0" max="100" step="1" style="width:54px;font-size:0.9em;" oninput="validateIntlInput(this)"></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        </details>
         </details>
 
     </div> <!-- sidebar -->
@@ -311,10 +380,10 @@
 					<summary>How to Use</summary>
 					<div class="drawer-content" id="drawer-howto">
                         <div class="log-entry"><ul>
-                            <li><strong>1. Profile &amp; Ages:</strong> Enter the birth year of each person and estimated life expectancy for both partners. To model a single taxpayer, set the <I>Spouse Birth Year</I>, <i>Spouse  Life expectancy</i> and <i>Spouse IRA</i> to zero.</li>
-                            <li><strong>2. Assets:</strong> Enter balances. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Brokerage withdrawals will be assumed to be part subject to capital gains. Total all after tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. <i>For Roth</i>, sum the existing ROTH balances into one total.</li>
+                            <li><strong>1. Profile &amp; Ages:</strong> Enter the birth year of each person and estimated life expectancy for both partners. Use the <i>Include Spouse</i> checkbox to model a single taxpayer — unchecking it hides all spouse fields and excludes the spouse from the simulation.</li>
+                            <li><strong>2. Assets:</strong> Enter balances. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Brokerage withdrawals will be assumed to be part subject to capital gains. Total all after tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. Enter Roth balances separately — <i>Your Roth IRA</i> and <i>Spouse Roth IRA</i> are tracked independently throughout the simulation.</li>
                             <li><strong>3. Income (annual)</strong> Input annual Social Security and pensions. Set the start ages to see the impact of delaying benefits. Amounts you enter for <i>Social Security Amt</i> will be adjusted annually by the <i>CPI/COLA</i> (next options). <i>Survivorship</i> is the percentage of the pension that will continue to be paid after You pass away.</li>
-                            <li><strong>4. Assumptions:</strong> choose the Inflation rate, the CPI rate (which is the expected change in tax brackets rather than actual inflation), the <i>Growth</i> rate for the IRA/401K, Brokerage &amp; ROTH.  <i>Cash Interest</i> is the expected interest on cash and cash-like investments (e.g. Mutual Funds/Bonds). To make these numbers accurate, it's best to separate all investments into "Brokerage" and cash into Cash.</li>. <i>Social Security Fail</i> &amp; <i>SSecurity Net Payout</i>.
+                            <li><strong>4. Assumptions:</strong> choose the Inflation rate, the CPI rate (which is the expected change in tax brackets rather than actual inflation), the <i>Growth</i> rate for the IRA/401K, Brokerage &amp; ROTH.  <i>Cash Interest</i> is the expected interest on cash and cash-like investments (e.g. Mutual Funds/Bonds). To make these numbers accurate, it's best to separate all investments into "Brokerage" and cash into Cash. The collapsible <i>Account Composition</i> subsection lets you record the Equity/Bond ratio and international equity % for each account — this is aspirational/informational and does not affect the simulation. <i>Social Security Fail</i> &amp; <i>SS Net Payout</i> model a projected partial benefit cut.</li>
                             <li><strong>Strategy:</strong> 
                                 Find this unlabeled item at the top left of the display.
                                 Set the <i>After-Tax Send</i> to the amount of after-tax income you need per year. And set the <i>Spend Delta</i> percentage. A Spend Delta of 0 means no change, while -1.5 would reduce spending by 1.5% each year. To have spending grow, use a number greater than 0, like 2%.  Default is -1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile"> historical data</A>.
@@ -323,7 +392,8 @@
                                 <li><i>Fill Federal Tax Bracket</i> withdraws enough to max out the chosen federal tax bracket. NOTE: If your spend goal is in a bracket higher than you select, it will try to meet the spend goal instead of locking to the bracket.</li>
                                 <li><i>Lesser of IRMAA or TaxBracket</i> is not yet implemented, but here it's like <i>Fill Federal Tax Bracket</i>, but reduces the amount withdrawn to stay under the the lesser of the (next) IRMAA tier, the next state or next federal bracket - which ever is lower. It applies an inflation adjusted "safety threshold" of 2,000. There are three gotcha's here: a. the <i>After-Tax Spend</i> goal is in play so it may blow right past the next tier if you have insufficient non-taxable income, b. the current year IRMAA tax is based on income from two years ago - so this setting attempts to avoid FUTURE tax - not tax in this year, c. the current year filing status is what is used to avoid hitting a higher tier. Here is why that matters: If you or your spouse pass away, the careful work avoiding a higher tier two years ago will still <i>hurt </i> in the current year. For example if the MAGI is one dollar below the first tier while married, two years from now when filing status is Single, that MAGI falls into the 4th IRMAA tier - the only upside here, is that there is now half as much of the IRMAA tax since it is per-person. One solution is to remarry. :-) </li></ul>
                             <li><strong>After Changes...</strong> selecting the Annual Details, Chart or Optimizer will cause a recalculation and show the page. On the <i>Annual Details</i> table, rows are highlighted in yellow if status changes to single. A pink/red background means the portfolio balance is insufficient to cover the required draw (spend goal minus guaranteed income).
-                            <I>Optimizer</I> finds the mathematical "sweet spot" for emptying IRAs to minimize lifetime total tax and maximize total spendable value. It checks different drawdown years - that is the same thing as the <i>Reduce IRA in N Years</i> but it loops through from 1 to 30 years.</li>
+                            The <i>Balances</i> chart has a <i>Both / Mine / Spouse</i> toggle that filters the IRA and Roth series by person; Brokerage, Cash, and Total Wealth are always shown as a combined total.
+                            <I>Optimizer</I> finds the mathematical "sweet spot" for emptying IRAs to minimize lifetime total tax and maximize total spendable value. It checks different drawdown years - that is the same thing as the <i>Reduce IRA in N Years</i> but it loops through from 1 to 30 years. The Optimizer and Monte Carlo tabs skip a full rebuild if no inputs have changed since the last run.</li>
                             </li>
                         </ul>			
                         <h4>What is Missing</h4>
@@ -332,7 +402,7 @@
                         <ol><li>Monte Carlo analysis is available via the <b>Monte Carlo 🎲</b> tab. It runs all withdrawal strategy variations against shared stochastic return sequences and reports survival rates with percentile band charts.</li>
                         <li>The RMD tables are the standard one, not the one that might apply if there is a 10 year or more difference in spouse ages</li>
                         <li>It only uses the MFJ and Single tax brackets. (No head of household, or Married filing separately)</li>
-                        <li>Because ROTH assets are not taxable, it merges all ROTH funds into one account. In real life, conversions/withdraws and earnings would occur in separate accounts.</li>
+                        <li>Your Roth and Spouse Roth are tracked as separate balances. Within each person's Roth, multiple individual accounts are not modeled — one combined balance per person is assumed.</li>
                         <li>There is no Federal Alternative Minimum Tax (AMT) calculation. This normally does not apply to retirees unless they have huge bond interest, or are exercising ISO stock. In the case of California the 1% additional tax for high earners is built into the embedded tax table.</li>
                         <li><strong>Social Security survivor benefits</strong> are calculated using the SSA formula: the deceased's benefit is converted back to their Primary Insurance Amount (PIA), adjusted for any delayed credits earned up to the date of death, and then reduced if the survivor claims before their own Full Retirement Age (67). The survivor receives whichever is higher — the computed survivor benefit or their own retirement benefit. Limitations: FRA is fixed at 67 (born 1960+), WEP/GPO offsets are not modeled, and the survivor is assumed to claim at the same age as their own planned SS start age rather than optimizing a switch strategy. Consult SSA.gov or a financial planner for a personalized estimate.</li>
                         </ol>
@@ -357,11 +427,8 @@
 
 			You can directly <strong>run</strong> the code from GitHub: <A HREF="https://tools.netcitizen.us/retirement_optimizer.html">tools.netcitizen.us/retirement_optimizer.html</a>
 			
-			<H4>Other Tools</H4>		
-			There is a standalone tool to determine what IRA balances (with RMDs) cause IRMAA taxation:  
-			<A HREF="https://tools.netcitizen.us/irmaa_and_rmds.html">tools.netcitizen.us/irmaa_and_rmds.html</A>
-			
-			
+			<p><button onclick="showOtherTools()" style="cursor:pointer;padding:3px 12px;font-size:0.85em;background:#f0f0f0;color:#333;border:1px solid #bbb;border-radius:4px;width:auto;">Other Tools</button></p>
+
 			<p>Page loads are tracked anonymously using Google Analytics and Cloudflare Web Analytics — just enough to know that someone visited, and roughly where in the world they came from. No personally identifiable information is collected, kept, or transmitted. No account data you enter is ever sent anywhere; it stays entirely in your browser. You are welcome to read the source code if you'd like to verify that.</p>
 			</div>	
 
@@ -380,6 +447,7 @@
 				<H3>Change Log</H3>
 				For the most details, please <STRONG>consult the <A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.
 				<ul>
+				<li><b>11.DA6</b> Account composition (equity/bond ratio + intl equity %) per account in Assumptions; Spouse Roth IRA now fully simulated — withdrawals split proportionally, conversions routed IRA→Roth per person; Balances chart Both/Mine/Spouse toggle; Optimizer and Monte Carlo skip rebuild when inputs are unchanged. Minor version is hex((day-of-year × 24) + hour).</li>
 				<li><b>10</b> Shorthand dollar inputs (1.2M, 48k); Include Spouse toggle replacing birthyear=0 hack; ACA FPL cliffs in bracket dropdown; collapsible sidebar sections; assets section reorganized with Roth2/CashReserve placeholders; IRMAA tier ceilings and dynamic MFJ/SGL bracket dropdown recovered from stranded branch.</li>
 				<li><b>8</b> Added "Proportional Withdraw %" strategy with configurable IRA withdrawal boost (0–200% above spend goal); optimizer tests it at 0/5/10/20/50% × Max Conversion on/off; Roth Conv bar now stacks on top of taxes in the lower chart; optimizer table highlights best row per column (lowest tax, lowest tax rate, highest spend, highest wealth).</li>
 				<li><b>7g</b> Found one source of over-withdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it over-withdrew to make up for the excluded pension.  Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed.
@@ -458,7 +526,14 @@
 		</div>
 
         <div id="tab-chart" class="card hidden">
-            <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Balances</h4>
+            <div style="display:flex;align-items:center;gap:10px;margin:8px 0 2px 8px;">
+              <h4 style="margin:0;color:#555;font-size:0.95em;">Balances</h4>
+              <span style="display:inline-flex;gap:3px;">
+                <button id="chartPerson_both"   class="tog active" onclick="setChartPersonView('both')">Both</button>
+                <button id="chartPerson_mine"   class="tog"        onclick="setChartPersonView('mine')">Mine</button>
+                <button id="chartPerson_spouse" class="tog"        onclick="setChartPersonView('spouse')">Spouse</button>
+              </span>
+            </div>
             <canvas id="chartAssets" style="max-height:403px;"></canvas>
             <hr>
             <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Income and Expenses</h4>
@@ -481,6 +556,21 @@
 </div>
 
 <script type="text/javascript">
+function clampIntlInput(intlId, equityPct) {
+    const el = document.getElementById(intlId);
+    if (!el) return;
+    const max = parseInt(equityPct, 10);
+    el.max = max;
+    if (parseInt(el.value, 10) > max) el.value = max;
+    validateIntlInput(el);
+}
+
+function validateIntlInput(el) {
+    const val = parseInt(el.value, 10);
+    const max = parseInt(el.max, 10);
+    el.style.background = (!isNaN(val) && !isNaN(max) && val > max) ? '#fca5a5' : '';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // document.getElementById('drawer-changelog').innerHTML = drawerContent.changelog;
     // document.getElementById('drawer-howto').innerHTML = drawerContent.howToUse;

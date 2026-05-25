@@ -7,6 +7,7 @@ let _mcChart      = null;
 let _mcResults    = null;
 let _mcSelected   = new Set(); // indices of variations currently on chart
 let _mcStartYear  = 2026;      // cached from getInputs() at run time
+let _lastMCHash   = null;
 
 // --- Initialization -------------------------------------------------------
 
@@ -32,13 +33,31 @@ function _mcNerdMode() {
 // In normal mode, runs immediately with default params (panel stays hidden).
 function mcTabActivated() {
     if (!_mcNerdMode()) {
+        const hash = _buildMCHash();
+        if (hash === _lastMCHash && _mcResults) {
+            renderMCResults(_mcResults);
+            return;
+        }
         runMonteCarlo();
     }
+}
+
+function _buildMCHash() {
+    const base = getInputs();
+    return JSON.stringify({
+        inputs: base,
+        numPaths: document.getElementById('mc-num-paths')?.value ?? '500',
+        mu:       document.getElementById('mc-mu')?.value       ?? '7',
+        sigma:    document.getElementById('mc-sigma')?.value    ?? '12',
+        seed:     document.getElementById('mc-seed')?.value     ?? '42',
+    });
 }
 
 // --- Run ------------------------------------------------------------------
 
 function runMonteCarlo() {
+    _lastMCHash = _buildMCHash();
+
     const base = getInputs();
 
     const numPaths = parseInt(document.getElementById('mc-num-paths')?.value  ?? '500');

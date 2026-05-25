@@ -380,22 +380,22 @@ th[title] {
     flex-wrap: wrap;
 }
 
-.tab-btn { 
-    background: #ddd; 
-    color: #333; 
-    padding: 10px 12px; 
-    border: none; 
-    border-radius: 4px; 
-    cursor: pointer; 
+.tab-btn {
+    background: #ddd;
+    color: #333;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
     font-size: 0.9rem;
     min-height: 44px; /* Touch-friendly */
     flex: 1;
     min-width: 120px;
 }
 
-.tab-btn.active { 
-    background: #2980b9; 
-    color: white; 
+.tab-btn.active {
+    background: #2980b9;
+    color: white;
 }
 
 .tab-btn:hover {
@@ -404,6 +404,29 @@ th[title] {
 
 .tab-btn.active:hover {
     background: #3498db;
+}
+
+/* Small inline toggle buttons (Mine/Spouse/Both, Me/Spouse, All/Fed/State…).
+   Intentionally smaller and a different active colour from .tab-btn so they
+   are not confused with the main navigation tabs. */
+.tog {
+    background: #e9ecef;
+    color: #444;
+    padding: 2px 7px;
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.78em;
+    font-weight: 500;
+    line-height: 1.5;
+}
+.tog.active {
+    background: #0f766e;   /* teal — clearly distinct from the blue .tab-btn */
+    color: white;
+    border-color: #0f766e;
+}
+.tog:hover:not(.active) {
+    background: #dee2e6;
 }
 
 .hidden { 

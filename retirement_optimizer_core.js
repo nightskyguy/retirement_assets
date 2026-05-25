@@ -653,6 +653,12 @@ function simulate(inputs) {
         let pension = inputs.pensionAnnual * (inputs.pensionCola ? inflation : 1);
 
         // One is deceased (if both decease, it won't get here)
+        // TODO BUG: survivor SS benefit is approximately double what it should be in the year
+        // of death and thereafter. With defaults, 2047 total SS ≈ $99,396 (both alive), but
+        // 2048 (person 1 dies) jumps to ≈ $147,223 instead of dropping to one survivor benefit.
+        // Suspect: calculateSurvivorBenefit() may be receiving or returning a value that is
+        // already CPI-adjusted, causing a double-inflation when multiplied by cpiRate on line
+        // below. Also verify the higher-of comparison uses consistent (nominal) units.
         if (!alive1 || !alive2) {
             let rawSurvivorMonthly;
             if (!alive1) {

@@ -2039,6 +2039,9 @@ const columnGroupDefs = {
     'FedCap': 'Taxes', 'StateCap': 'Taxes', 'SumTaxes': 'Taxes',
     'BracketTarget': 'Taxes', 'BracketOverage': 'Taxes',
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
+    // TODO: add 'Roth1' and 'Roth2' here (and to COLUMN_LABELS below) so the Roth Δ
+    // checkbox exposes per-person Roth balances in the Annual Details table.
+    // The log already emits Roth1/Roth2 per row; only the column definitions are missing.
     'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
     'Basis': 'Balances', 'totalWealth': 'Balances', 'Spendable': 'Balances',
     'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',

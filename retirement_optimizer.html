@@ -100,19 +100,24 @@
         <details class="section" open>
         <summary>2. Assets (Current)</summary>
         <div class="row">
-            <div><label><B>Your</B> IRA  <input type="text" id="IRA1" value="1000000"></label></div>
-            <div class="spouse-field"><label><B><I>Spouse</I></B> IRA<input type="text" id="IRA2"  value="400000"></label></div>
+            <div><label title="Your traditional IRA balance."><B>Your</B> IRA<input type="text" id="IRA1" value="1000000"></label></div>
+            <div class="spouse-field"><label title="Spouse's traditional IRA balance."><B><I>Spouse</I></B> IRA<input type="text" id="IRA2" value="400000"></label></div>
         </div>
         <div class="row">
-            <div><label>Brokerage<input type="text" id="Brokerage" value="100000"></label></div>
-            <div><label>Brokerage Basis<input type="text" id="BrokerageBasis" value="100000"></label></div>
+            <div><label title="Your Roth IRA balance. Withdrawals are tax-free and not subject to RMDs."><B>Your</B> Roth IRA<input type="text" id="Roth" value="50000"></label></div>
+            <div class="spouse-field"><label title="Spouse's Roth IRA balance. Not yet included in the simulation — stored for future use."><B><I>Spouse</I></B> Roth IRA<input type="text" id="Roth2" value="0" placeholder="0"></label></div>
+        </div>
+        <hr style="border:none;border-top:1px solid #ddd;margin:8px 0 4px;">
+        <div class="row">
+            <div><label title="Taxable brokerage account balance. Shared between both spouses in the simulation. Withdrawals may trigger capital gains taxes based on the Basis below.">Brokerage<input type="text" id="Brokerage" value="100000"></label></div>
+            <div><label title="Your cost basis in the brokerage account. Used to calculate capital gains taxes on withdrawals. Shared account.">Brokerage Basis<input type="text" id="BrokerageBasis" value="100000"></label></div>
         </div>
         <div class="row">
             <div><label title="When checked, dividends stay in the brokerage (balance and basis both increase). When unchecked, dividends flow to the Cash account."><input type="checkbox" id="dividendReinvest"> Reinvest Brokerage Dividends</label></div>
         </div>
         <div class="row">
-            <div><label>Roth IRA<input type="text" id="Roth" value="50000"></label></div>
-            <div><label>Cash Balance<input type="text" id="Cash" value="50000"></label></div>
+            <div><label title="Combined liquid cash balance (HYSA, money market, etc.). Shared between both spouses — the simulation draws from this to cover spending shortfalls before tapping investments.">Cash Balance<input type="text" id="Cash" value="50000"></label></div>
+            <div><label title="Emergency / untouchable cash reserve. Shared account. Not yet implemented — the simulation will never draw from this amount. Stored for future use.">Cash Reserve<input type="text" id="CashReserve" value="0" placeholder="0"></label></div>
         </div>
         </details>
 
@@ -508,7 +513,7 @@ runSimulation?.();
   window.addEventListener('DOMContentLoaded', function () {
     var dollarIds = [
       'spendGoal', 'iraBaseGoal',
-      'IRA1', 'IRA2', 'Roth', 'Brokerage', 'BrokerageBasis', 'Cash',
+      'IRA1', 'IRA2', 'Roth', 'Roth2', 'Brokerage', 'BrokerageBasis', 'Cash', 'CashReserve',
       'ss1', 'ss2', 'pensionAnnual'
     ];
     dollarIds.forEach(function (id) {

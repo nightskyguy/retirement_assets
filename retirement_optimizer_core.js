@@ -1238,6 +1238,8 @@ function getInputs() {
         IRA1: +val('IRA1'),
         IRA2: +val('IRA2'),
         Roth: +val('Roth'),
+        Roth2: +val('Roth2') || 0,         // stored, not yet used in simulation
+        CashReserve: +val('CashReserve') || 0, // stored, never drawn by simulation
         Brokerage: Brokerage,
         BrokerageBasis: BrokerageBasis,
         Cash: +val('Cash'),
@@ -3048,8 +3050,8 @@ function loadScenario() {
  * @param {Object} data - Scenario data object with keys matching form input IDs
  */
 const DOLLAR_INPUT_IDS = new Set([
-    'spendGoal', 'iraBaseGoal', 'IRA1', 'IRA2', 'Roth',
-    'Brokerage', 'BrokerageBasis', 'Cash', 'ss1', 'ss2', 'pensionAnnual'
+    'spendGoal', 'iraBaseGoal', 'IRA1', 'IRA2', 'Roth', 'Roth2',
+    'Brokerage', 'BrokerageBasis', 'Cash', 'CashReserve', 'ss1', 'ss2', 'pensionAnnual'
 ]);
 
 function applyScenario(data) {

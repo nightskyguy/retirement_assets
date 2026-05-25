@@ -1056,10 +1056,14 @@ function simulate(inputs) {
         // deferred tax on gains that are never liquidated.
         // Monte Carlo: use per-year return from injected sequence if provided; else constant rate.
         // Cash keeps its own yield regardless (not market-correlated).
+        // IRA and Roth always reinvest dividends into the source account (tax-deferred / tax-free),
+        // so their effective return = capital appreciation + dividendRate.
+        // Brokerage dividends are handled separately below (taxed first, then reinvested or sent to Cash).
         const yearReturn = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
+        const div = inputs.dividendRate ?? 0;
         let growthRates = {
-            IRA: yearReturn, IRA1: yearReturn, IRA2: yearReturn,
-            Brokerage: yearReturn, Cash: inputs.cashYield, Roth1: yearReturn, Roth2: yearReturn
+            IRA: yearReturn + div, IRA1: yearReturn + div, IRA2: yearReturn + div,
+            Brokerage: yearReturn, Cash: inputs.cashYield, Roth1: yearReturn + div, Roth2: yearReturn + div
         }
 
         // Grow Balances
@@ -1307,11 +1311,14 @@ function getInputs() {
         maxConversion: valChecked('maxConversion'),
         propWithdraw: +val('propWithdraw') / 100.0,
         iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
-        startAge: +val('startAge') || (new Date().getFullYear() - +val('birthyear1') + 1),
+        startAge: +val('startAge') || (new Date().getFullYear() - +val('birthyear1')),
         startInYear: (() => {
             const sa = +val('startAge');
-            // age in the loop = currentYear - birthyear1 + 1, so currentYear = birthyear1 + age - 1
-            return sa > 0 ? +val('birthyear1') + sa - 1 : new Date().getFullYear();
+            const by1 = +val('birthyear1');
+            // startAge is the user's real-world age: the year they ARE that age = birthyear + startAge.
+            // Clamp to the current calendar year — can't start a simulation in the past.
+            const computed = sa > 0 ? by1 + sa : new Date().getFullYear();
+            return Math.max(computed, new Date().getFullYear());
         })(),
         dividendReinvest: !!valChecked('dividendReinvest')
     };

@@ -546,6 +546,9 @@ function calculateSurvivorBenefit(
 let simulationCount = 0;
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
+    if (!inputs.hasSpouse) {
+        inputs = { ...inputs, birthyear2: 0, die2: 0, IRA2: 0, ss2: 0 };
+    }
     let balance = {
         IRA1: inputs.IRA1, IRA2: inputs.IRA2, Roth: inputs.Roth,
         Brokerage: inputs.Brokerage, BrokerageBasis: inputs.BrokerageBasis, Cash: inputs.Cash,
@@ -1209,6 +1212,7 @@ function getInputs() {
             }
             return { stratRate: +raw / 100.0, stratIRMAATier: -1 };
         })(),
+        hasSpouse: !!valChecked('hasSpouse'),
         birthyear1: +val('birthyear1'),
         birthmonth1: +val('birthmonth1') || 12,
         die1: +val('die1'),
@@ -2755,6 +2759,11 @@ function setupAutoRecalc() {
 }
 
 
+function toggleSpouseUI() {
+    const on = !!valChecked('hasSpouse');
+    document.querySelectorAll('.spouse-field').forEach(el => el.classList.toggle('spouse-disabled', !on));
+}
+
 function toggleStrategyUI() {
     let m = val('strategy');
     document.getElementById('ui-fixed').classList.toggle('hidden', m !== 'fixed');
@@ -3047,6 +3056,13 @@ function applyScenario(data) {
                 }
             }
         }
+    }
+
+    // Infer hasSpouse from data (explicit flag, or legacy: birthyear2 > 0)
+    const hasSpouseEl = document.getElementById('hasSpouse');
+    if (hasSpouseEl) {
+        hasSpouseEl.checked = data.hasSpouse !== undefined ? !!data.hasSpouse : (data.birthyear2 > 0);
+        if (typeof toggleSpouseUI === 'function') toggleSpouseUI();
     }
 
     // Sync strategy sub-UI to the newly loaded strategy value

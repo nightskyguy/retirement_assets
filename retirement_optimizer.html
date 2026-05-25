@@ -84,7 +84,12 @@
             &nbsp;<label>Month<select id="birthmonth1"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label></div>
             <div><label>Life Expectancy<input type="number" id="die1" value="88"></label></div>
         </div>
-        <div class="row">
+        <div style="margin:4px 0 2px;">
+            <label style="font-size:0.85em;font-weight:bold;color:#666;">
+                <input type="checkbox" id="hasSpouse" checked onchange="toggleSpouseUI()"> Include Spouse
+            </label>
+        </div>
+        <div class="row spouse-field">
             <div><label><B><I>Spouse</I></B> Birth Year<input type="number" id="birthyear2" value="1952"></label>
             &nbsp;<label>Month<select id="birthmonth2"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label></div>
             <div><label><B><I>Spouse</I></B> Expectancy<input type="number" id="die2" value="98"></label></div>
@@ -93,7 +98,7 @@
         <h3>2. Assets (Current)</h3>
         <div class="row">
             <div><label><B>Your</B> IRA  <input type="text" id="IRA1" value="1000000"></label></div>
-            <div><label><B><I>Spouse</I></B> IRA<input type="text" id="IRA2"  value="400000"></label></div>
+            <div class="spouse-field"><label><B><I>Spouse</I></B> IRA<input type="text" id="IRA2"  value="400000"></label></div>
         </div>
         <div class="row">
             <div><label>Brokerage<input type="text" id="Brokerage" value="100000"></label></div>
@@ -112,13 +117,13 @@
             <div><label>Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
             <div><label>Start Age<input type="number" id="ss1Age" value="70"></label></div>
         </div>
-        <div class="row">
+        <div class="row spouse-field">
             <div><label><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
             <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></label></div><BR>
         </div>
         <div class="row">
             <div><label><B>Your</B> Pension<input type="text" id="pensionAnnual" value="15000"></label></div>
-            <div><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
+            <div class="spouse-field"><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
         </div>
         <div class="row">
             <div><label title="Most pensions have no inflation adjustment. Enable only if your pension includes a cost-of-living adjustment (COLA)."><input type="checkbox" id="pensionCola"> Pension has COLA (inflation-adjusted)</label></div>

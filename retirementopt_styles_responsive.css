@@ -165,6 +165,11 @@ h3 {
     width: 100%;
 }
 
+.spouse-field.spouse-disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
 #strategy-container {
     width: 100% !important;   
     max-width: 100% !important;

@@ -38,8 +38,7 @@
 				<label><select id="strategy" onchange="toggleStrategyUI()">
 					<option value="propwd">📊Withdraw Proportional +%</option>
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
-					<option value="bracket">🪣Fill Federal Tax Bracket</option>
-					<option value="minlimit" disabled style="color:#bbb;">🛑Lesser of IRMAA or TaxBracket (broken)</option>
+					<option value="bracket">🪣Fill Federal Tax / IRMAA Bracket</option>
 					<option value="fixedpct">📉IRA Draw</option>
 				</select></label>
 			</div>
@@ -65,21 +64,18 @@
 				<label title="Withdraw this % of the total IRA balance each year. RMDs count toward this amount. Any spending shortfall draws from Cash → Brokerage → Roth.">IRA Withdraw %
 				<input type="number" id="iraWithdrawPct" value="5" min="0.5" max="20" step="0.5"></label>
 			</div>
-		</div>  <!-- strategy-container -->
-        <div class="row">
-		</div>
 
-        <div class="row">
-			<label title="Draw down total IRA(s) to this amount or less - to avoid IRMAA/tax bracket issues in RMDS.">IRA Goal
-            <input type="number" id="iraBaseGoal" value="750000" width="50%"></label>
-			<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div><BR>
-			<label title='If checked, it will use available cash to maximize Roth conversions'>
-			  <input type="checkbox" id="maxConversion" name="maxConversion">
-			  Max Conversion
-			</label>
-			
-		</div>	
-	
+			<div class="row">
+				<label title="IRA floor for all strategies. For 'Reduce IRA in N Years' this is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.">IRA Goal
+				<input type="number" id="iraBaseGoal" value="750000" width="50%"></label>
+				<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div><BR>
+				<label title='If checked, it will use available cash to maximize Roth conversions'>
+				  <input type="checkbox" id="maxConversion" name="maxConversion">
+				  Max Conversion
+				</label>
+			</div>
+		</div>  <!-- strategy-container -->
+
 		
         <h3>1. Profile & Ages</h3>
         <div class="row">

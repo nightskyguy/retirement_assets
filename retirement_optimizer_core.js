@@ -735,21 +735,39 @@ function simulate(inputs) {
             withdrawals = { IRA: IRAwd, netAmount: IRAwd }
 
         } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit') {
-            let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
-            let limit = fedLimit.limit;
-            let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation);
-            nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit;
-            marginalFedTaxRate = fedLimit.rate;
+            let limit;
 
-            let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
-            marginalStateTaxRate = stLimit.rate;
-            stateLimit = stLimit.limit;
-            nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / limit;
+            if ((inputs.stratIRMAATier ?? -1) >= 0) {
+                // IRMAA tier ceiling mode: fill MAGI up to the top of the chosen IRMAA tier.
+                // Tier 0 = stay below Tier 1 threshold; Tier N = stay below Tier N+1 threshold.
+                // IRMAA thresholds grow at CPI (see taxengine.js comment).
+                const irmaaBrks = getRateBracket('IRMAA', status);
+                limit = irmaaBrks[inputs.stratIRMAATier + 1].l * cpiRate - 1;
+                // Approximate tax rates at this limit for downstream calcs
+                const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
+                marginalFedTaxRate = fedAtLimit.rate;
+                nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation).cumulative / (limit || 1);
+                const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
+                marginalStateTaxRate = stAtLimit.rate;
+                nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
+            } else {
+                // Federal bracket ceiling mode (original logic)
+                let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
+                limit = fedLimit.limit;
+                let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation);
+                nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit;
+                marginalFedTaxRate = fedLimit.rate;
 
-            limit = Math.min(stateLimit, limit);
+                let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
+                marginalStateTaxRate = stLimit.rate;
+                stateLimit = stLimit.limit;
+                nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / limit;
 
-            if (inputs.strategy === 'minlimit') {
-                limit = Math.min(limit, irmaLimit);
+                limit = Math.min(stateLimit, limit);
+
+                if (inputs.strategy === 'minlimit') {
+                    limit = Math.min(limit, irmaLimit);
+                }
             }
 
             bracketTarget = limit;
@@ -1184,7 +1202,13 @@ function getInputs() {
         STATEname: val('STATEname'),
         strategy: val('strategy'),
         nYears: +val('nYears'),
-        stratRate: +val('stratRate') / 100.0,
+        ...(() => {
+            const raw = val('stratRate') ?? '';
+            if (raw.startsWith('irmaa')) {
+                return { stratRate: 0, stratIRMAATier: +raw.replace('irmaa', '') };
+            }
+            return { stratRate: +raw / 100.0, stratIRMAATier: -1 };
+        })(),
         birthyear1: +val('birthyear1'),
         birthmonth1: +val('birthmonth1') || 12,
         die1: +val('die1'),
@@ -1417,9 +1441,13 @@ function runOptimizer() {
         const inputs = Object.assign({}, base, overrides);
         const res = simulate(inputs);
         const lastEntry = res.log[res.log.length - 1];
+        const totalYears = res.log.length;
+        const ovYears = res.log.filter(e => (e['BracketOverage'] ?? 0) > 0).length;
+        const bracketOveragePct = totalYears > 0 ? ovYears / totalYears : 0;
+        const isBracketInfeasible = overrides.strategy === 'bracket' && bracketOveragePct > 0.5;
         const row = {
             _id: results.length,
-            _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : ''),
+            _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : '') + (isBracketInfeasible ? ' ⚠️' : ''),
             _paramLabel: paramLabel,
             _paramSortVal: paramSortVal,
             _maxConversion: overrides.maxConversion,
@@ -1427,9 +1455,12 @@ function runOptimizer() {
             _strategy: overrides.strategy,
             _nYears: overrides.nYears ?? null,
             _stratRate: overrides.stratRate ?? null,
+            _stratIRMAATier: overrides.stratIRMAATier ?? null,
             _propWithdraw: overrides.propWithdraw ?? null,
             _iraWithdrawPct: overrides.iraWithdrawPct ?? null,
             _isSpendOptimized: false,
+            _bracketOveragePct: bracketOveragePct,
+            _isBracketInfeasible: isBracketInfeasible,
             totals: res.totals,
             finalNW: res.finalNW,
             finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
@@ -1452,7 +1483,13 @@ function runOptimizer() {
         // Fill bracket — one row per bracket level
         for (const rate of bracketRates) {
             const pct = Math.round(rate * 100);
-            addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
+            addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, stratIRMAATier: -1, maxConversion: maxConv });
+        }
+
+        // Fill bracket — IRMAA tier ceilings (tiers 0=Below IRMAA through 4=Tier 4 ceiling)
+        const irmaaTierLabels = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
+        for (let tier = 0; tier <= 4; tier++) {
+            addResult('IRMAA Ceil', irmaaTierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, maxConversion: maxConv });
         }
 
         // IRA Draw — fixed % of IRA balance each year
@@ -1706,13 +1743,19 @@ function renderOptimizerTable(results) {
     // Rows — per-cell green for metric winners, full-row green if winner, blue tint if spend-optimized
     const rowsHtml = display.map(r => {
         const isWinner = bestIds.has(r._id);
-        const rowStyle = isWinner
-            ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
-            : r._isReverseOptimized
-                ? 'background-color:#fde8d8;font-style:italic;cursor:pointer;'
-                : r._isSpendOptimized
-                    ? 'background-color:#dbeafe;font-style:italic;cursor:pointer;'
-                    : 'cursor:pointer;';
+        const isInfeasible = r._isBracketInfeasible && !isWinner;
+        const rowStyle = isInfeasible
+            ? 'background-color:#e8e8e8;opacity:0.55;text-decoration:line-through;cursor:pointer;'
+            : isWinner
+                ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
+                : r._isReverseOptimized
+                    ? 'background-color:#fde8d8;font-style:italic;cursor:pointer;'
+                    : r._isSpendOptimized
+                        ? 'background-color:#dbeafe;font-style:italic;cursor:pointer;'
+                        : 'cursor:pointer;';
+        const rowTitle = isInfeasible
+            ? 'Bracket target exceeded in >50% of years — income sources already push MAGI above this ceiling'
+            : 'Click to load this strategy';
         const cells = columns.map(col => {
             // Highlight the specific winning cell with a slightly deeper green
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
@@ -1723,7 +1766,7 @@ function renderOptimizerTable(results) {
             const cellStyle = cellWin ? ' style="background-color:#4CAF5080;"' : '';
             return `<td${cellStyle}>${col.getValue(r)}</td>`;
         }).join('');
-        return `<tr style="${rowStyle}" onclick="loadOptimizerResult(${r._id})" title="Click to load this strategy">${cells}</tr>`;
+        return `<tr style="${rowStyle}" onclick="loadOptimizerResult(${r._id})" title="${rowTitle}">${cells}</tr>`;
     }).join('');
 
     document.querySelector('#opt-table thead').innerHTML = headerHtml;
@@ -1826,6 +1869,8 @@ function loadOptimizerResult(id) {
 
     if (result._strategy === 'fixed' && result._nYears != null) {
         document.getElementById('nYears').value = result._nYears;
+    } else if (result._strategy === 'bracket' && (result._stratIRMAATier ?? -1) >= 0) {
+        document.getElementById('stratRate').value = `irmaa${result._stratIRMAATier}`;
     } else if (result._strategy === 'bracket' && result._stratRate != null) {
         document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
     } else if (result._strategy === 'propwd' && result._propWithdraw != null) {
@@ -2966,12 +3011,25 @@ function loadScenario() {
  * @param {Object} data - Scenario data object with keys matching form input IDs
  */
 function applyScenario(data) {
+    // Handle IRMAA tier ceiling scenarios: restore dropdown to "irmaaX" value
+    if ((data.stratIRMAATier ?? -1) >= 0) {
+        const el = document.getElementById('stratRate');
+        if (el) el.value = `irmaa${data.stratIRMAATier}`;
+    }
+
     for (const [key, value] of Object.entries(data)) {
+        // stratIRMAATier has no standalone form element; handled above via stratRate dropdown
+        if (key === 'stratIRMAATier') continue;
         const element = document.getElementById(key);
         if (element) {
             // Handle percentage values (multiply by 100 for display)
-            if (['stratRate', 'spendChange', 'inflation', 'cpi', 'growth',
-                'cashYield', 'dividendRate', 'ssFailPct'].includes(key)) {
+            if (['spendChange', 'inflation', 'cpi', 'growth',
+                'cashYield', 'dividendRate', 'ssFailPct',
+                'propWithdraw', 'iraWithdrawPct'].includes(key)) {
+                element.value = (value * 100).toFixed(3);
+            } else if (key === 'stratRate' && (data.stratIRMAATier ?? -1) >= 0) {
+                // Already set the dropdown above; skip numeric override
+            } else if (key === 'stratRate') {
                 element.value = (value * 100).toFixed(3);
             } else {
                 if (['maxConversion'].includes(key)) {
@@ -3329,29 +3387,41 @@ function generateStateOptions() {
     return html;
 }
 
-// 
+//
 function generateStratRateOptions() {
     const federal = TAXData.FEDERAL;
     const mfjBrackets = federal.MFJ.brackets;
     const sglBrackets = federal.SGL.brackets;
 
-    let html = '';
+    let html = '<optgroup label="Federal Tax Bracket">';
 
     // Skip the last bracket (Infinity)
     //!!! TODO: This logic assumes sgl and mfj brackets have the same number of elements, and the same rates. Probably safe, but not good practice.
     for (let i = 0; i < mfjBrackets.length - 1; i++) {
         const rate = Math.round(mfjBrackets[i].r * 100);
         const mfjLimit = Math.trunc(mfjBrackets[i].l).toLocaleString();
-
-        // const mfjLimit = Math.floor(mfjBrackets[i].l / 1000);
         const sglLimit = Math.trunc(sglBrackets[i].l).toLocaleString();
-        // const sglLimit = Math.floor(sglBrackets[i].l / 1000);
 
         // Mark 24% as selected (or choose a different default)
         const selected = (rate === 24) ? ' selected' : '';
 
         html += `<option value="${rate}"${selected}>${rate}%&nbsp;&nbsp; ${mfjLimit}/${sglLimit}</option>\n`;
     }
+    html += '</optgroup>';
+
+    // IRMAA tier ceiling options — tiers 0-4 (0=below IRMAA, 1-4=within that tier)
+    // Threshold is the START of the NEXT tier (i.e., the upper bound of the chosen tier).
+    // IRMAA thresholds grow at CPI; values shown are 2025 MFJ base amounts.
+    const irmaaMFJBrks = TAXData.IRMAA.MFJ.brackets;
+    const irmaaSGLBrks = TAXData.IRMAA.SGL.brackets;
+    const irmaaLabels = ['Below IRMAA', 'IRMAA Tier 1', 'IRMAA Tier 2', 'IRMAA Tier 3', 'IRMAA Tier 4'];
+    html += '<optgroup label="── IRMAA Tier Ceiling ──">';
+    for (let i = 0; i < 5; i++) {
+        const mfjCeil = Math.trunc(irmaaMFJBrks[i + 1].l - 1).toLocaleString();
+        const sglCeil = Math.trunc(irmaaSGLBrks[i + 1].l - 1).toLocaleString();
+        html += `<option value="irmaa${i}">${irmaaLabels[i]}&nbsp;&nbsp; ${mfjCeil}/${sglCeil}</option>\n`;
+    }
+    html += '</optgroup>';
 
     return html;
 }

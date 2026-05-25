@@ -689,7 +689,7 @@ assertEqual(
     assertEqual(findUpperLimitByAmount('TEST', 'SGL', 998, 1), {"limit": 999,"rate": 0.1, "nominalRate": 0.1}, 
                 'findUpperLimitByAmount: TEST SGL 998 finds limit: 999, rate: 0.1');
 				
-	// TODO: move getInputs() test back to retirement_optimizer.html (requires its DOM elements)
+	// getInputs() requires live DOM — test manually in retirement_optimizer.html or in a future Playwright/DOM test suite
 	// assertEqual(getInputs(), { ... }, 'getInputs()')
 		
 

@@ -176,6 +176,11 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             paramLabel:     baseInputs._paramLabel     ?? '',
             maxConversion:  baseInputs.maxConversion   ?? false,
             spendGoal:      baseInputs.spendGoal       ?? null,
+            strategy:       baseInputs.strategy,
+            propWithdraw:   baseInputs.propWithdraw,
+            nYears:         baseInputs.nYears,
+            stratRate:      baseInputs.stratRate,
+            iraWithdrawPct: baseInputs.iraWithdrawPct,
             survivalRate:   (numPaths - ruinCount) / numPaths,
             medianRuinYear: failures.length > 0 ? failures[Math.floor(failures.length / 2)] : null,
             percentiles: {

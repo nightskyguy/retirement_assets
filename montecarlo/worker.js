@@ -106,6 +106,11 @@ self.onmessage = function ({ data: cfg }) {
             paramLabel:     baseInputs._paramLabel     ?? '',
             maxConversion:  baseInputs.maxConversion   ?? false,
             spendGoal:      baseInputs.spendGoal       ?? null,
+            strategy:       baseInputs.strategy,
+            propWithdraw:   baseInputs.propWithdraw,
+            nYears:         baseInputs.nYears,
+            stratRate:      baseInputs.stratRate,
+            iraWithdrawPct: baseInputs.iraWithdrawPct,
             survivalRate:   (numPaths - ruinCount) / numPaths,
             medianRuinYear,
             percentiles: {

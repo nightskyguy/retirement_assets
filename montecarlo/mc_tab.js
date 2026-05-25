@@ -194,6 +194,8 @@ function renderSurvivalTable(variations, numPaths) {
 
         const tr = document.createElement('tr');
         tr.style.background = color;
+        tr.style.cursor = 'pointer';
+        tr.title = `${v.strategyFamily} ${v.paramLabel}${v.maxConversion ? ' ✓' : ''} — click to load`;
         tr.dataset.varIdx = v._origIdx;
 
         const spendTxt = v.spendGoal != null ? '$' + fmt(v.spendGoal) : '—';
@@ -203,14 +205,15 @@ function renderSurvivalTable(variations, numPaths) {
             </td>
             <td style="padding:3px 6px;">${escapeHtml(v.strategyFamily)}</td>
             <td style="padding:3px 6px;">${escapeHtml(v.paramLabel)}</td>
-            <td style="padding:3px 6px;text-align:center;">${v.maxConversion ? '✓' : '—'}</td>
-            <td style="padding:3px 6px;text-align:right;">${spendTxt}</td>
-            <td style="padding:3px 6px;text-align:right;font-weight:bold;">${pct}%</td>
-            <td style="padding:3px 6px;text-align:right;">${ruinTxt}</td>
-            <td style="padding:3px 6px;text-align:right;">$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
+            <td style="padding:3px 6px;">${v.maxConversion ? '✓' : '—'}</td>
+            <td style="padding:3px 6px;">${spendTxt}</td>
+            <td style="padding:3px 6px;font-weight:bold;">${pct}%</td>
+            <td style="padding:3px 6px;">${ruinTxt}</td>
+            <td style="padding:3px 6px;">$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
         `;
 
         tr.querySelector('.mc-var-check').addEventListener('change', (e) => {
+            e.stopPropagation();
             const idx = parseInt(e.target.dataset.idx);
             if (e.target.checked) {
                 _mcSelected.add(idx);
@@ -220,12 +223,31 @@ function renderSurvivalTable(variations, numPaths) {
             renderMCChart(_mcResults);
         });
 
+        tr.addEventListener('click', (e) => {
+            if (e.target.type === 'checkbox') return;
+            loadMCVariation(v);
+        });
+
         tbody.appendChild(tr);
     });
 
     document.getElementById('mc-table-wrap').style.display = '';
     document.getElementById('mc-path-count').textContent =
         `${numPaths.toLocaleString()} paths`;
+}
+
+function loadMCVariation(v) {
+    if (!v.strategy) return;
+    document.getElementById('strategy').value = v.strategy;
+    if (v.strategy === 'propwd'    && v.propWithdraw   != null) document.getElementById('propWithdraw').value   = Math.round(v.propWithdraw * 100);
+    if (v.strategy === 'fixed'     && v.nYears         != null) document.getElementById('nYears').value          = v.nYears;
+    if (v.strategy === 'bracket'   && v.stratRate      != null) document.getElementById('stratRate').value       = Math.round(v.stratRate * 100);
+    if (v.strategy === 'fixedpct'  && v.iraWithdrawPct != null) document.getElementById('iraWithdrawPct').value  = Math.round(v.iraWithdrawPct * 100);
+    document.getElementById('maxConversion').checked = !!v.maxConversion;
+    if (v.spendGoal != null) DisplayHelpers.setDollarValue('spendGoal', Math.round(v.spendGoal));
+    toggleStrategyUI();
+    runSimulation();
+    showTab('tab-chart');
 }
 
 function syncTableCheckboxes() {

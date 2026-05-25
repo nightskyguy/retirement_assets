@@ -182,7 +182,7 @@
                 <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
                 <option value="20">20 / 80</option><option value="0">0 / 100</option>
               </select></td>
-              <td style="padding:3px 6px;"><input type="number" id="comp_IRA1_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;"></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_IRA1_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;" oninput="validateIntlInput(this)"></td>
             </tr>
             <tr>
               <td style="padding:3px 6px;"><i>Spouse IRA</i></td>
@@ -192,7 +192,7 @@
                 <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
                 <option value="20">20 / 80</option><option value="0">0 / 100</option>
               </select></td>
-              <td style="padding:3px 6px;"><input type="number" id="comp_IRA2_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;"></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_IRA2_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;" oninput="validateIntlInput(this)"></td>
             </tr>
             <tr>
               <td style="padding:3px 6px;">Brokerage</td>
@@ -202,7 +202,7 @@
                 <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
                 <option value="20">20 / 80</option><option value="0">0 / 100</option>
               </select></td>
-              <td style="padding:3px 6px;"><input type="number" id="comp_Brokerage_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;"></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_Brokerage_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;" oninput="validateIntlInput(this)"></td>
             </tr>
             <tr>
               <td style="padding:3px 6px;">Your Roth</td>
@@ -212,7 +212,7 @@
                 <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
                 <option value="20">20 / 80</option><option value="0">0 / 100</option>
               </select></td>
-              <td style="padding:3px 6px;"><input type="number" id="comp_Roth1_intl" value="0" min="0" max="100" step="1" style="width:54px;font-size:0.9em;"></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_Roth1_intl" value="0" min="0" max="100" step="1" style="width:54px;font-size:0.9em;" oninput="validateIntlInput(this)"></td>
             </tr>
             <tr>
               <td style="padding:3px 6px;"><i>Spouse Roth</i></td>
@@ -222,7 +222,7 @@
                 <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
                 <option value="20">20 / 80</option><option value="0">0 / 100</option>
               </select></td>
-              <td style="padding:3px 6px;"><input type="number" id="comp_Roth2_intl" value="0" min="0" max="100" step="1" style="width:54px;font-size:0.9em;"></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_Roth2_intl" value="0" min="0" max="100" step="1" style="width:54px;font-size:0.9em;" oninput="validateIntlInput(this)"></td>
             </tr>
           </tbody>
         </table>
@@ -560,6 +560,13 @@ function clampIntlInput(intlId, equityPct) {
     const max = parseInt(equityPct, 10);
     el.max = max;
     if (parseInt(el.value, 10) > max) el.value = max;
+    validateIntlInput(el);
+}
+
+function validateIntlInput(el) {
+    const val = parseInt(el.value, 10);
+    const max = parseInt(el.max, 10);
+    el.style.background = (!isNaN(val) && !isNaN(max) && val > max) ? '#fca5a5' : '';
 }
 
 document.addEventListener('DOMContentLoaded', function() {

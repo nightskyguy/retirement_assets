@@ -1463,8 +1463,18 @@ function buildVariations(base) {
     return variations;
 }
 
+let _lastOptimizerHash = null;
+
 function runOptimizer() {
     const base = getInputs();
+    const currentHash = JSON.stringify(base);
+    if (currentHash === _lastOptimizerHash && window.optimizerResults) {
+        renderOptimizerTable(window.optimizerResults);
+        showTab('tab-opt');
+        return;
+    }
+    _lastOptimizerHash = currentHash;
+
     const results = [];
     simulationCount = 0;
     const optimizerStart = performance.now();

@@ -105,7 +105,7 @@
         </div>
         <div class="row">
             <div><label title="Your Roth IRA balance. Withdrawals are tax-free and not subject to RMDs."><B>Your</B> Roth IRA<input type="text" id="Roth" value="50000"></label></div>
-            <div class="spouse-field"><label title="Spouse's Roth IRA balance. Not yet included in the simulation — stored for future use."><B><I>Spouse</I></B> Roth IRA<input type="text" id="Roth2" value="0" placeholder="0"></label></div>
+            <div class="spouse-field"><label title="Spouse's Roth IRA balance. Tracked separately; withdrawals split proportionally with Your Roth. Conversions funded by Spouse IRA withdrawals only."><B><I>Spouse</I></B> Roth IRA<input type="text" id="Roth2" value="0" placeholder="0"></label></div>
         </div>
         <hr style="border:none;border-top:1px solid #ddd;margin:8px 0 4px;">
         <div class="row">
@@ -162,6 +162,72 @@
 			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail <input type="number" id="ssFailYear" value="2033"></label></div>
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
+        <details style="margin-top:8px;">
+        <summary style="font-size:0.88em;color:#666;cursor:pointer;user-select:none;">▶ Account Composition (aspirational)</summary>
+        <div style="margin-top:6px;overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.82em;">
+          <thead>
+            <tr style="color:#888;text-align:left;">
+              <th style="padding:3px 6px;">Account</th>
+              <th style="padding:3px 6px;">Equity / Bond</th>
+              <th style="padding:3px 6px;" title="International equity as % of total equity. Bounded by the equity allocation chosen.">Intl Equity %</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:3px 6px;">Your IRA</td>
+              <td style="padding:3px 6px;"><select id="comp_IRA1_ratio" onchange="clampIntlInput('comp_IRA1_intl',this.value)" style="font-size:0.9em;">
+                <option value="100">100 / 0</option><option value="80">80 / 20</option><option value="75">75 / 25</option>
+                <option value="70">70 / 30</option><option value="65">65 / 35</option><option value="60" selected>60 / 40</option>
+                <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
+                <option value="20">20 / 80</option><option value="0">0 / 100</option>
+              </select></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_IRA1_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;"></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 6px;"><i>Spouse IRA</i></td>
+              <td style="padding:3px 6px;"><select id="comp_IRA2_ratio" onchange="clampIntlInput('comp_IRA2_intl',this.value)" style="font-size:0.9em;">
+                <option value="100">100 / 0</option><option value="80">80 / 20</option><option value="75">75 / 25</option>
+                <option value="70">70 / 30</option><option value="65">65 / 35</option><option value="60" selected>60 / 40</option>
+                <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
+                <option value="20">20 / 80</option><option value="0">0 / 100</option>
+              </select></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_IRA2_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;"></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 6px;">Brokerage</td>
+              <td style="padding:3px 6px;"><select id="comp_Brokerage_ratio" onchange="clampIntlInput('comp_Brokerage_intl',this.value)" style="font-size:0.9em;">
+                <option value="100">100 / 0</option><option value="80">80 / 20</option><option value="75">75 / 25</option>
+                <option value="70">70 / 30</option><option value="65">65 / 35</option><option value="60" selected>60 / 40</option>
+                <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
+                <option value="20">20 / 80</option><option value="0">0 / 100</option>
+              </select></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_Brokerage_intl" value="0" min="0" max="60" step="1" style="width:54px;font-size:0.9em;"></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 6px;">Your Roth</td>
+              <td style="padding:3px 6px;"><select id="comp_Roth1_ratio" onchange="clampIntlInput('comp_Roth1_intl',this.value)" style="font-size:0.9em;">
+                <option value="100" selected>100 / 0</option><option value="80">80 / 20</option><option value="75">75 / 25</option>
+                <option value="70">70 / 30</option><option value="65">65 / 35</option><option value="60">60 / 40</option>
+                <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
+                <option value="20">20 / 80</option><option value="0">0 / 100</option>
+              </select></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_Roth1_intl" value="0" min="0" max="100" step="1" style="width:54px;font-size:0.9em;"></td>
+            </tr>
+            <tr>
+              <td style="padding:3px 6px;"><i>Spouse Roth</i></td>
+              <td style="padding:3px 6px;"><select id="comp_Roth2_ratio" onchange="clampIntlInput('comp_Roth2_intl',this.value)" style="font-size:0.9em;">
+                <option value="100" selected>100 / 0</option><option value="80">80 / 20</option><option value="75">75 / 25</option>
+                <option value="70">70 / 30</option><option value="65">65 / 35</option><option value="60">60 / 40</option>
+                <option value="50">50 / 50</option><option value="40">40 / 60</option><option value="30">30 / 70</option>
+                <option value="20">20 / 80</option><option value="0">0 / 100</option>
+              </select></td>
+              <td style="padding:3px 6px;"><input type="number" id="comp_Roth2_intl" value="0" min="0" max="100" step="1" style="width:54px;font-size:0.9em;"></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+        </details>
         </details>
 
     </div> <!-- sidebar -->
@@ -458,7 +524,14 @@
 		</div>
 
         <div id="tab-chart" class="card hidden">
-            <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Balances</h4>
+            <div style="display:flex;align-items:center;gap:10px;margin:8px 0 2px 8px;">
+              <h4 style="margin:0;color:#555;font-size:0.95em;">Balances</h4>
+              <span style="display:inline-flex;gap:3px;">
+                <button id="chartPerson_both"   class="tog active" onclick="setChartPersonView('both')">Both</button>
+                <button id="chartPerson_mine"   class="tog"        onclick="setChartPersonView('mine')">Mine</button>
+                <button id="chartPerson_spouse" class="tog"        onclick="setChartPersonView('spouse')">Spouse</button>
+              </span>
+            </div>
             <canvas id="chartAssets" style="max-height:403px;"></canvas>
             <hr>
             <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Income and Expenses</h4>
@@ -481,6 +554,14 @@
 </div>
 
 <script type="text/javascript">
+function clampIntlInput(intlId, equityPct) {
+    const el = document.getElementById(intlId);
+    if (!el) return;
+    const max = parseInt(equityPct, 10);
+    el.max = max;
+    if (parseInt(el.value, 10) > max) el.value = max;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // document.getElementById('drawer-changelog').innerHTML = drawerContent.changelog;
     // document.getElementById('drawer-howto').innerHTML = drawerContent.howToUse;

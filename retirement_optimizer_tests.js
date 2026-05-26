@@ -724,14 +724,14 @@ assertEqual(
 
 	// RMD Percentages.  First should be 0, second should match.
     // RMD percentage lookup
-    let rmd73 = getRMDPercentage(1952+72, 1952);
+    let rmd73 = getRMDPercentage(1952+73, 1952);
     assertEqual(rmd73 > 0.037 && rmd73 < 0.038, true,
                     'RMD: Age 73 should be ~3.77% (divisor 26.5)');
 
 	assertEqual(getRMDPercentage(1960+73, 1960), 0,
 			'getRMDPercentage for age 74, birth year 1960 correct (0)');	
 
-	assertEqual(getRMDPercentage(1950+75, 1950), 0.042,
+	assertEqual(getRMDPercentage(1950+76, 1950), 0.042,
 			'getRMDPercentage for age 76, birth year 1950 correct (4.2%)');
 
 	assertEqual(calcIRMAA(100, 'SGL', 1), 0,

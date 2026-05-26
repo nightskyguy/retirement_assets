@@ -52,7 +52,8 @@ function inspectForErrors(namedObjects) {
 
 function getRMDPercentage(currentYear, birthYear) {
     const startAge = (birthYear >= 1960) ? 75 : 73;
-    const age = currentYear - birthYear + 1;
+    // IRS uses "age attained during the year" = currentYear - birthYear (no +1).
+    const age = currentYear - birthYear;
     if (age < startAge) return 0;
     if (age > 120) return 1 / RMD_TABLE[120];
     return 1 / (RMD_TABLE[age]);
@@ -614,8 +615,10 @@ function simulate(inputs) {
         let withdrawals = { IRA: 0, IRA1: 0, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0 };
         let netWithdrawals = withdrawals;
 
-        let age1 = currentYear - birthyear1 + 1;
-        let age2 = currentYear - birthyear2 + 1;
+        // Age at December 31 of the simulation year — the IRS convention for RMD eligibility.
+        // Everyone has had their birthday by Dec 31, so no birth-month adjustment is needed.
+        let age1 = currentYear - birthyear1;
+        let age2 = currentYear - birthyear2;
         let alive1 = age1 <= inputs.die1;
         let alive2 = age2 <= inputs.die2;
         if (!alive1 && !alive2) break;
@@ -1320,7 +1323,18 @@ function getInputs() {
             const computed = sa > 0 ? by1 + sa : new Date().getFullYear();
             return Math.max(computed, new Date().getFullYear());
         })(),
-        dividendReinvest: !!valChecked('dividendReinvest')
+        dividendReinvest: !!valChecked('dividendReinvest'),
+        // Account Composition (equity/bond ratio selects + intl equity % inputs)
+        comp_IRA1_ratio: +val('comp_IRA1_ratio'),
+        comp_IRA1_intl: +val('comp_IRA1_intl'),
+        comp_IRA2_ratio: +val('comp_IRA2_ratio'),
+        comp_IRA2_intl: +val('comp_IRA2_intl'),
+        comp_Brokerage_ratio: +val('comp_Brokerage_ratio'),
+        comp_Brokerage_intl: +val('comp_Brokerage_intl'),
+        comp_Roth1_ratio: +val('comp_Roth1_ratio'),
+        comp_Roth1_intl: +val('comp_Roth1_intl'),
+        comp_Roth2_ratio: +val('comp_Roth2_ratio'),
+        comp_Roth2_intl: +val('comp_Roth2_intl')
     };
 }
 
@@ -1328,13 +1342,32 @@ function getInputs() {
  *
  *
  */
+function updateProfileAgeDisplay() {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
+    function ageInfo(birthYear, birthMonth) {
+        if (!birthYear) return null;
+        const age = currentYear - birthYear - (currentMonth <= birthMonth ? 1 : 0);
+        const rmdStart = birthYear >= 1960 ? 75 : 73;
+        return `Age ${age} | RMD starts ${rmdStart}`;
+    }
+
+    const el1 = document.getElementById('age-display-1');
+    if (el1) el1.textContent = ageInfo(+val('birthyear1'), +val('birthmonth1') || 12) ?? '';
+
+    const el2 = document.getElementById('age-display-2');
+    if (el2) el2.textContent = ageInfo(+val('birthyear2'), +val('birthmonth2') || 12) ?? '';
+}
+
 function updateIRAGoalHint() {
     const hint = document.getElementById('ira-goal-hint');
     if (!hint) return;
     try {
         const birthyear1 = +val('birthyear1');
         const currentYear = new Date().getFullYear();
-        const age1 = currentYear - birthyear1 + 1;
+        const age1 = currentYear - birthyear1;
         const growth = +val('growth') / 100;
         const spendGoal = +val('spendGoal');
         const targetAge = 84;
@@ -1481,25 +1514,25 @@ function buildVariations(base) {
         });
     };
 
-    for (const maxConv of [false, true]) {
-        for (const pct of [0, 5, 10, 20, 50])
-            push('Proportional', `${pct}%`, pct,
-                { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
+    const maxConv = true;
 
-        for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25])
-            push('Reduce', `${n} yrs`, n,
-                { strategy: 'fixed', nYears: n, maxConversion: maxConv });
+    for (const pct of [0, 5, 10, 20, 50])
+        push('Proportional', `${pct}%`, pct,
+            { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
 
-        for (const rate of bracketRates) {
-            const pct = Math.round(rate * 100);
-            push('Fill Bracket', `${pct}%`, rate,
-                { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
-        }
+    for (const n of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25])
+        push('Reduce', `${n} yrs`, n,
+            { strategy: 'fixed', nYears: n, maxConversion: maxConv });
 
-        for (const pct of [3, 4, 5, 6, 7, 8, 10])
-            push('IRA Draw', `${pct}%`, pct,
-                { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
+    for (const rate of bracketRates) {
+        const pct = Math.round(rate * 100);
+        push('Fill Bracket', `${pct}%`, rate,
+            { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
     }
+
+    for (const pct of [5, 6, 7, 8, 10])
+        push('IRA Draw', `${pct}%`, pct,
+            { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
 
     return variations;
 }
@@ -1561,40 +1594,40 @@ function runOptimizer() {
         strategyOverridesList.push({ strategyLabel, paramLabel, paramSortVal, overrides });
     }
 
-    for (const maxConv of [false, true]) {
-        // Proportional +% — 0% is the pure baseline; 5/10/20/50% add IRA-only boost
-        for (const pct of [0, 5, 10, 20, 50]) {
-            addResult('Proportional', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
-        }
+    const maxConv = true;
 
-        // Reduce IRA over N years
-        for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
-            addResult('Reduce', `${n} yrs`, n, { strategy: 'fixed', nYears: n, maxConversion: maxConv });
-        }
+    // Proportional +% — 0% is the pure baseline; 5/10/20/50% add IRA-only boost
+    for (const pct of [0, 5, 10, 20, 50]) {
+        addResult('Proportional', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
+    }
 
-        // Fill bracket — one row per bracket level
-        for (const rate of bracketRates) {
-            const pct = Math.round(rate * 100);
-            addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, stratIRMAATier: -1, maxConversion: maxConv });
-        }
+    // Reduce IRA over N years
+    for (const n of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
+        addResult('Reduce', `${n} yrs`, n, { strategy: 'fixed', nYears: n, maxConversion: maxConv });
+    }
 
-        // Fill bracket — IRMAA tier ceilings (tiers 0=Below IRMAA through 4=Tier 4 ceiling)
-        const irmaaTierLabels = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
-        for (let tier = 0; tier <= 4; tier++) {
-            addResult('IRMAA Ceil', irmaaTierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, maxConversion: maxConv });
-        }
+    // Fill bracket — one row per bracket level
+    for (const rate of bracketRates) {
+        const pct = Math.round(rate * 100);
+        addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, stratIRMAATier: -1, maxConversion: maxConv });
+    }
 
-        // Fill bracket — ACA FPL cliffs
-        const acaMultiples = [200, 250, 300, 400];
-        const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL ⚠️' };
-        for (const pct of acaMultiples) {
-            addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'bracket', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, maxConversion: maxConv });
-        }
+    // Fill bracket — IRMAA tier ceilings (tiers 0=Below IRMAA through 4=Tier 4 ceiling)
+    const irmaaTierLabels = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
+    for (let tier = 0; tier <= 4; tier++) {
+        addResult('IRMAA Ceil', irmaaTierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, maxConversion: maxConv });
+    }
 
-        // IRA Draw — fixed % of IRA balance each year
-        for (const pct of [3, 4, 5, 6, 7, 8, 10]) {
-            addResult('IRA Draw', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
-        }
+    // Fill bracket — ACA FPL cliffs
+    const acaMultiples = [200, 250, 300, 400];
+    const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL ⚠️' };
+    for (const pct of acaMultiples) {
+        addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'bracket', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, maxConversion: maxConv });
+    }
+
+    // IRA Draw — fixed % of IRA balance each year
+    for (const pct of [5, 6, 7, 8, 10]) {
+        addResult('IRA Draw', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
     }
 
     // Spend optimizer second pass — only runs when user enabled the toggle
@@ -2275,6 +2308,8 @@ function updateTable(log) {
 
     const tooltips = {
         'year': 'When yellow, it indicates a single survivor. If the rest of the row is pink, it means the year was underfunded.',
+        'age1': 'Age at end of year (Dec 31). Used for RMD eligibility. May differ from current age shown in Profile & Ages if birthday falls late in the year.',
+        'age2': 'Spouse age at end of year (Dec 31). Used for RMD eligibility. May differ from current age shown in Profile & Ages if birthday falls late in the year.',
         'RMDwd': 'Total of all Required Minimum Distributions (RMDs)',
         'RMD%': 'The highest percentage RMD required for IRA1 or IRA2.',
         'Brokerage': 'Year end Brokerage balance',
@@ -2298,8 +2333,8 @@ function updateTable(log) {
         'CashWD': 'Tax free withdrawals from Cash',
         'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
         'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',
-        'totalTax': 'Federal,IRMAA,NIIT,CapGains & IRMAA - in total.',
-        'SumTaxes': 'Running total of Federal,IRMAA,NIIT,CapGains & IRMAA.',
+        'totalTax': 'Federal, State, IRMAA, NIIT, and CapGains taxes — in total.',
+        'SumTaxes': 'Running total of Federal, State, IRMAA, NIIT, and CapGains taxes.',
         'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Likely due to errors in the calculation or unexpected bracket changes - or running out of assets.',
         'totalIncome': 'Funds from all sources, taxable and tax-free.',
         'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA'
@@ -2740,6 +2775,7 @@ function updateCharts(log) {
     });
 
     incomeChart = new Chart(ctxI, {
+        type: 'bar',  // required for mixed bar+line; per-dataset type overrides still apply
         data: {
             labels: log.map(r => r.year),
             datasets: [
@@ -2760,13 +2796,14 @@ function updateCharts(log) {
                 mkAbs('State Tax',      '#FF2E2EC0', r => r.StateTax),
                 mkAbs('IRMAA',          '#FFB8B8C0', r => r.IRMAA),
                 mkAbs('Roth Conv',      '#8e44ad80', r => r.rothConv),
-                // Spendable Income line sits exactly at the income/tax seam
+                // Spendable Income line sits exactly at the income/tax seam.
+                // order:3 ensures it is drawn AFTER all bars (order:2) so it is visible on top.
                 {
                     label: 'Net Income',
                     data: log.map(r => (visibleSum(r) - r.totalTax) * adj(r)),
                     type: 'line', borderColor: '#27ae60', borderWidth: 2.5,
                     backgroundColor: '#27ae60', pointBackgroundColor: '#27ae60',
-                    fill: false, order: 1
+                    fill: false, order: 3
                 }
             ]
         },

@@ -591,18 +591,48 @@ function simulate(inputs) {
 
     /**************************************
      * PROCESS:
-        Determine tax status 
-        Determine SS & pension income.
-        Determine targetIncome based on strategy:
-            For fixed, use larger of amortization rate or spendGoal
-                WithdrawalStrategy = [IRA:100, Cash:0, Brok:0]
-            For baseline, use SpendGoal 
-                WithdrawalStrategy = [IRA, Brok, Cash, Roth] by balance percent.
-            For delay, use SpendGoal
-                WithdrawalStrategy = [Brok: 100, IRA: 0, Cash: 0
-            For bracket, use larger of bracket limit or spendGoal
-                WithdrawalStrategy = [IRA:*, Brok:*, Cash:0]
-                	
+     *   Determine tax status.
+     *   Determine SS & pension income.
+     *   Determine withdrawal target and order based on strategy:
+     *
+     *   strategy='fixed'    — "Reduce IRA in N Years"
+     *       Amortizes the IRA over nYears. Each year withdraws the amortized
+     *       amount from IRA only (RMDs count toward the target). Spending
+     *       shortfall after IRA draw is filled from Cash → Brokerage → Roth.
+     *       WithdrawalOrder = [IRA first, then gap-fill]
+     *
+     *   strategy='propwd'   — "Proportional Withdraw +%"
+     *       Withdraws proportionally across IRA/Brokerage/Cash to meet the
+     *       spend goal (original "baseline" behavior at 0%). An optional IRA
+     *       boost of propWithdraw × spendGoal is added on top; the after-tax
+     *       surplus flows to Roth conversion or Cash. At 0% this is the pure
+     *       proportional baseline.
+     *       WithdrawalOrder = [IRA, Brokerage, Cash] proportionally
+     *
+     *   strategy='bracket'  — "Fill Federal Tax Bracket" / "IRMAA Ceil" / "ACA Cliff"
+     *       Draws IRA up to a ceiling (federal bracket top, an IRMAA tier, or
+     *       an ACA FPL multiple). Spending shortfall fills from Cash →
+     *       Brokerage → Roth. Also covers strategy='minlimit' (Lesser of
+     *       IRMAA or Tax Bracket).
+     *       WithdrawalOrder = [IRA up to ceiling, then gap-fill]
+     *
+     *   strategy='fixedpct' — "IRA Draw %"
+     *       Withdraws a fixed percentage of the starting-year IRA balance each
+     *       year regardless of spend goal. RMDs count toward the target.
+     *       Spending shortfall fills from Cash → Brokerage → Roth.
+     *       WithdrawalOrder = [IRA first, then gap-fill]
+     *
+     *   (else / fallback)   — legacy proportional baseline
+     *       Same proportional logic as propwd at 0%, retained for backwards
+     *       compatibility. No UI option currently routes here.
+     *       WithdrawalOrder = [IRA, Brokerage, Cash] proportionally
+     *
+     *   NOTE — future strategy='baseline' (not yet implemented):
+     *       A rigorous tax-efficient depletion order: RMD first, then taxable
+     *       accounts (Brokerage, Cash) until exhausted, then IRA, then Roth.
+     *       Intended as a comparison baseline that never voluntarily draws down
+     *       tax-deferred assets ahead of taxable ones.
+     *       WithdrawalOrder = [RMD → Brokerage/Cash → IRA → Roth]
      *
      *************************************/
 
@@ -1139,7 +1169,7 @@ function simulate(inputs) {
             'RMD1-': rmd1,
             'RMD2-': rmd2,
             'Brokerage-': netWithdrawals.Brokerage,
-            'RothWD': netWithdrawals.Roth,
+            'RothWD': (netWithdrawals.Roth1 ?? 0) + (netWithdrawals.Roth2 ?? 0),
             'CashWD': netWithdrawals.Cash,
             'rothConv': totalConverted,
             'surplusCash': surplus.Cash,
@@ -1519,20 +1549,39 @@ function buildVariations(base) {
     for (const pct of [0, 5, 10, 20, 50])
         push('Proportional', `${pct}%`, pct,
             { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
+    // Include user's current value if it isn't one of the standard Proportional steps
+    const userPropPct = Math.round((base.propWithdraw ?? 0) * 100);
+    if (base.strategy === 'propwd' && ![0, 5, 10, 20, 50].includes(userPropPct))
+        push('Proportional', `${userPropPct}%`, userPropPct,
+            { strategy: 'propwd', propWithdraw: base.propWithdraw, maxConversion: maxConv });
 
     for (const n of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25])
         push('Reduce', `${n} yrs`, n,
             { strategy: 'fixed', nYears: n, maxConversion: maxConv });
+    // Include user's current value if it isn't one of the standard Reduce steps
+    if (base.strategy === 'fixed' && ![2,3,4,5,6,7,8,9,10,11,12,13,14,15,20,25].includes(base.nYears))
+        push('Reduce', `${base.nYears} yrs`, base.nYears,
+            { strategy: 'fixed', nYears: base.nYears, maxConversion: maxConv });
 
     for (const rate of bracketRates) {
         const pct = Math.round(rate * 100);
         push('Fill Bracket', `${pct}%`, rate,
             { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
     }
+    // Include user's current value if it isn't one of the standard Fill Bracket rates
+    const userBracketPct = Math.round((base.stratRate ?? 0) * 100);
+    if (base.strategy === 'bracket' && !bracketRates.map(r => Math.round(r * 100)).includes(userBracketPct))
+        push('Fill Bracket', `${userBracketPct}%`, base.stratRate,
+            { strategy: 'bracket', stratRate: base.stratRate, maxConversion: maxConv });
 
     for (const pct of [5, 6, 7, 8, 10])
         push('IRA Draw', `${pct}%`, pct,
             { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
+    // Include user's current value if it isn't one of the standard IRA Draw steps
+    const userDrawPct = Math.round((base.iraWithdrawPct ?? 0) * 100);
+    if (base.strategy === 'fixedpct' && ![5, 6, 7, 8, 10].includes(userDrawPct))
+        push('IRA Draw', `${userDrawPct}%`, userDrawPct,
+            { strategy: 'fixedpct', iraWithdrawPct: base.iraWithdrawPct, maxConversion: maxConv });
 
     return variations;
 }
@@ -2775,7 +2824,7 @@ function updateCharts(log) {
     });
 
     incomeChart = new Chart(ctxI, {
-        type: 'bar',  // required for mixed bar+line; per-dataset type overrides still apply
+        type: 'bar',  // required for Chart.js 4.x mixed bar+line; per-dataset type overrides apply
         data: {
             labels: log.map(r => r.year),
             datasets: [
@@ -2797,13 +2846,14 @@ function updateCharts(log) {
                 mkAbs('IRMAA',          '#FFB8B8C0', r => r.IRMAA),
                 mkAbs('Roth Conv',      '#8e44ad80', r => r.rothConv),
                 // Spendable Income line sits exactly at the income/tax seam.
-                // order:3 ensures it is drawn AFTER all bars (order:2) so it is visible on top.
+                // order:1 (lower than bars' order:2) ensures Chart.js draws this line
+                // AFTER the bars so it appears on top. Higher order = drawn first = behind.
                 {
                     label: 'Net Income',
                     data: log.map(r => (visibleSum(r) - r.totalTax) * adj(r)),
                     type: 'line', borderColor: '#27ae60', borderWidth: 2.5,
                     backgroundColor: '#27ae60', pointBackgroundColor: '#27ae60',
-                    fill: false, order: 3
+                    fill: false, order: 1
                 }
             ]
         },

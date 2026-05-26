@@ -8,6 +8,7 @@ let _mcResults    = null;
 let _mcSelected   = new Set(); // indices of variations currently on chart
 let _mcStartYear  = 2026;      // cached from getInputs() at run time
 let _lastMCHash   = null;
+let _mcBase       = null;      // getInputs() snapshot captured at run time
 
 // --- Initialization -------------------------------------------------------
 
@@ -66,6 +67,7 @@ function runMonteCarlo() {
     const seed     = parseInt(document.getElementById('mc-seed')?.value       ?? '42');
 
     _mcStartYear = base.startYear ?? 2026;
+    _mcBase = base;
     const variations = buildVariations(base);
     const years = Math.max(
         base.birthyear1 + base.die1,
@@ -104,21 +106,41 @@ function cancelMC() {
 
 // --- Rendering ------------------------------------------------------------
 
+// Returns the index of the variation that matches the user's current strategy settings,
+// or -1 if no match is found (e.g. the strategy isn't in the variation list).
+function findCurrentStrategyIdx(variations, base) {
+    if (!base) return -1;
+    return variations.findIndex(v => {
+        if (v.strategy !== base.strategy) return false;
+        if (base.strategy === 'propwd')   return Math.abs((v.propWithdraw   ?? 0) - (base.propWithdraw   ?? 0)) < 0.001;
+        if (base.strategy === 'fixed')    return v.nYears === base.nYears;
+        if (base.strategy === 'bracket')  return Math.abs((v.stratRate      ?? 0) - (base.stratRate      ?? 0)) < 0.001;
+        if (base.strategy === 'fixedpct') return Math.abs((v.iraWithdrawPct ?? 0) - (base.iraWithdrawPct ?? 0)) < 0.001;
+        return false;
+    });
+}
+
 function renderMCResults(msg) {
     document.getElementById('mc-error').style.display = 'none';
     renderMCMetrics(msg);
     renderSurvivalTable(msg.variations, msg.numPaths);
 
-    // Default chart: best-surviving variation per strategy family
+    // Default chart: the variation matching the user's current strategy settings.
+    // Falls back to best-surviving per family if no match is found.
     _mcSelected.clear();
-    const byFamily = {};
-    msg.variations.forEach((v, i) => {
-        const f = v.strategyFamily;
-        if (!byFamily[f] || v.survivalRate > msg.variations[byFamily[f]].survivalRate) {
-            byFamily[f] = i;
-        }
-    });
-    Object.values(byFamily).forEach(i => _mcSelected.add(i));
+    const currentIdx = findCurrentStrategyIdx(msg.variations, _mcBase);
+    if (currentIdx >= 0) {
+        _mcSelected.add(currentIdx);
+    } else {
+        const byFamily = {};
+        msg.variations.forEach((v, i) => {
+            const f = v.strategyFamily;
+            if (!byFamily[f] || v.survivalRate > msg.variations[byFamily[f]].survivalRate) {
+                byFamily[f] = i;
+            }
+        });
+        Object.values(byFamily).forEach(i => _mcSelected.add(i));
+    }
 
     renderMCChart(msg);
     syncTableCheckboxes();
@@ -193,14 +215,13 @@ function renderSurvivalTable(variations, numPaths) {
                       : '#f8d7da';
 
         const tr = document.createElement('tr');
-        tr.style.background = color;
         tr.style.cursor = 'pointer';
         tr.title = `${v.strategyFamily} ${v.paramLabel}${v.maxConversion ? ' ✓' : ''} — click to load`;
         tr.dataset.varIdx = v._origIdx;
 
         const spendTxt = v.spendGoal != null ? '$' + fmt(v.spendGoal) : '—';
         tr.innerHTML = `
-            <td style="padding:3px 6px;text-align:center;">
+            <td style="padding:3px 10px 3px 6px;text-align:center;background:#fff;border-right:2px solid #dee2e6;">
                 <input type="checkbox" class="mc-var-check" data-idx="${v._origIdx}">
             </td>
             <td style="padding:3px 6px;">${escapeHtml(v.strategyFamily)}</td>
@@ -211,6 +232,8 @@ function renderSurvivalTable(variations, numPaths) {
             <td style="padding:3px 6px;">${ruinTxt}</td>
             <td style="padding:3px 6px;">$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
         `;
+        // Apply row shading to data cells only (not the checkbox column)
+        Array.from(tr.querySelectorAll('td')).slice(1).forEach(td => td.style.background = color);
 
         tr.querySelector('.mc-var-check').addEventListener('change', (e) => {
             e.stopPropagation();

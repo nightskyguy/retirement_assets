@@ -12,9 +12,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Version: major.minor where minor = lowercase hex((day-of-year * 24) + hour-of-day) at build time.
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
-         Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6"
+         Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.dad)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.da6</title>
+    <title>Retirement Optimizer 11.dad</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 	<script src="displayhelpers.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
@@ -85,10 +85,11 @@
         <details class="section" open>
         <summary>1. Profile &amp; Ages</summary>
         <div class="compact-row">
-            <label title="Your year of birth (e.g. 1960). Used to calculate your current age and RMD schedule.">Birth Year<input type="number" id="birthyear1" value="1960"></label>
-            <label title="Your birth month. Combined with birth year to determine the exact year you reach key ages (RMD start, SS claiming, etc.).">Mo.<select id="birthmonth1"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
+            <label title="Your year of birth (e.g. 1960). Used to calculate your current age and RMD schedule.">Birth Year<input type="number" id="birthyear1" value="1960" oninput="updateProfileAgeDisplay()"></label>
+            <label title="Your birth month. Combined with birth year to determine the exact year you reach key ages (RMD start, SS claiming, etc.).">Mo.<select id="birthmonth1" onchange="updateProfileAgeDisplay()"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
             <label class="compact-age" title="The age you expect to live to. The simulation runs until this age. Use a conservative (older) estimate to stress-test your plan.">Life Exp.<input type="number" id="die1" value="88"></label>
         </div>
+        <div class="compact-row" style="font-size:0.82em;color:#555;margin-top:0;padding-top:0;" id="age-display-1"></div>
         <div class="compact-row" style="margin-top:6px;">
             <label title="The age at which you plan to retire (stop earning income and begin drawing assets). Enter your assets and spending goal in today's dollars — the simulation inflates brackets, SS COLA, and spending forward to this age. Defaults to your current age.">Retirement Start Age
             <input type="number" id="startAge" min="50" max="100" step="1" placeholder="current age"></label>
@@ -100,88 +101,30 @@
             </label>
         </div>
         <div class="compact-row spouse-field">
-            <label title="Spouse's year of birth. Used to calculate their age, RMD schedule, and when survivor filing status applies."><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952"></label>
-            <label title="Spouse's birth month. Used with birth year to determine exact ages for RMDs and Social Security."><i>Mo.</i><select id="birthmonth2"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
+            <label title="Spouse's year of birth. Used to calculate their age, RMD schedule, and when survivor filing status applies."><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952" oninput="updateProfileAgeDisplay()"></label>
+            <label title="Spouse's birth month. Used with birth year to determine exact ages for RMDs and Social Security."><i>Mo.</i><select id="birthmonth2" onchange="updateProfileAgeDisplay()"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
             <label class="compact-age" title="The age your spouse is expected to live to. After this age the simulation switches to Single filing status and survivor Social Security rules apply."><i>Sp. Life</i><input type="number" id="die2" value="98"></label>
         </div>
+        <div class="compact-row spouse-field" style="font-size:0.82em;color:#555;margin-top:0;padding-top:0;" id="age-display-2"></div>
         </details>
 
-        <!-- TODO: Rename section title from "Assets (at Start Age)" to "Assets (at Retirement Age)"
-             and update README + inline tooltip documentation to explain that all asset values
-             should be entered in today's dollars — the simulation inflates them forward to
-             retirement age automatically. -->
         <details class="section" open>
-        <summary>2. Assets (at Start Age)</summary>
+        <summary>2. Assets at Retirement Age</summary>
         <div class="row">
             <div><label title="Your traditional IRA balance."><B>Your</B> IRA<input type="text" id="IRA1" value="1000000"></label></div>
             <div class="spouse-field"><label title="Spouse's traditional IRA balance."><B><I>Spouse</I></B> IRA<input type="text" id="IRA2" value="400000"></label></div>
         </div>
         <div class="row">
             <div><label title="Your Roth IRA balance. Withdrawals are tax-free and not subject to RMDs."><B>Your</B> Roth IRA<input type="text" id="Roth" value="50000"></label></div>
-            <div class="spouse-field"><label title="Spouse's Roth IRA balance. Tracked separately; withdrawals split proportionally with Your Roth. Conversions funded by Spouse IRA withdrawals only."><B><I>Spouse</I></B> Roth IRA<input type="text" id="Roth2" value="0" placeholder="0"></label></div>
+            <div class="spouse-field"><label title="Spouse's Roth IRA balance. Tracked separately; withdrawals split proportionally with Your Roth. Conversions funded by Spouse IRA withdrawals only."><B><I>Spouse</I></B> Roth IRA<input type="text" id="Roth2" value="20000" placeholder="0"></label></div>
         </div>
         <hr style="border:none;border-top:1px solid #ddd;margin:8px 0 4px;">
         <div class="row">
             <div><label title="Taxable brokerage account balance. Shared between both spouses in the simulation. Withdrawals may trigger capital gains taxes based on the Basis below.">Brokerage<input type="text" id="Brokerage" value="100000"></label></div>
-            <!-- TODO: Change default Brokerage Basis from 100000 to 50000. -->
-            <div><label title="Your cost basis in the brokerage account. Used to calculate capital gains taxes on withdrawals. Shared account.">Brokerage Basis<input type="text" id="BrokerageBasis" value="100000"></label></div>
+            <div><label title="Your cost basis in the brokerage account. Used to calculate capital gains taxes on withdrawals. Shared account.">Brokerage Basis<input type="text" id="BrokerageBasis" value="50000"></label></div>
         </div>
         <div class="row">
             <div><label title="When checked, dividends stay in the brokerage (balance and basis both increase). When unchecked, dividends flow to the Cash account."><input type="checkbox" id="dividendReinvest"> Reinvest Brokerage Dividends</label></div>
-        </div>
-        <div class="row">
-            <div><label title="Combined liquid cash balance (HYSA, money market, etc.). Shared between both spouses — the simulation draws from this to cover spending shortfalls before tapping investments.">Cash Balance<input type="text" id="Cash" value="50000"></label></div>
-            <div><label title="Emergency / untouchable cash reserve. Shared account. Not yet implemented — the simulation will never draw from this amount. Stored for future use.">Cash Reserve<input type="text" id="CashReserve" value="0" placeholder="0"></label></div>
-        </div>
-        </details>
-
-        <details class="section" open>
-        <summary>3. Income (annual)</summary>
-        <div class="row">
-            <div><label>Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
-            <div><label>Start Age<input type="number" id="ss1Age" value="70"></label></div>
-        </div>
-        <div class="row spouse-field">
-            <div><label><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
-            <!-- TODO: Change default Spouse SS Start Age from 70 to 62. -->
-            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></label></div>
-        </div>
-        <div class="row">
-            <div><label><B>Your</B> Pension<input type="text" id="pensionAnnual" value="15000"></label></div>
-            <div class="spouse-field"><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
-        </div>
-        <div class="row">
-            <div><label title="Most pensions have no inflation adjustment. Enable only if your pension includes a cost-of-living adjustment (COLA)."><input type="checkbox" id="pensionCola"> Pension has COLA (inflation-adjusted)</label></div>
-        </div>
-        </details>
-
-        <!-- TODO: Reorder Assumptions section rows so the most-impactful/most-changed inputs appear first:
-             1. Dividend Rate % + State Taxation  (currently last)
-             2. SS COLA failure / SS benefit reduction  (if/when added)
-             3. Growth % + Cash Interest %  (currently second)
-             4. Inflation % + CPI/COLA %  (currently first, move to last)
-        -->
-        <details class="section" open>
-        <summary>4. Assumptions</summary>
-        <div class="row">
-            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
-            <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
-        </div>
-        <div class="row">
-            <div><label title="Your asset mix will dictate what growth rate to expect. In a brokerage, your basis doesn't grow at the rate the account does. Note that the dividend rate is additive. 4% growth and 2% dividends = 6% total.">Growth (6)%<input type="number" id="growth" value="6.0"></label></div>
-            <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
-        </div>
-        <div class="row">
-			<div><label title="This is the rate that your asset mix emits dividends. Brokerage dividends accrue to the Cash account. Others to their own account.">Dividend Rate %<BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00"></label></div>
-			<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation<BR>
-            <select id="STATEname">
-                <option   value="CA" selected>California</option>
-            </select></label>
-			</div>
-		</div>
-        <div class="row">
-			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail <input type="number" id="ssFailYear" value="2033"></label></div>
-            <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
         <details style="margin-top:8px;">
         <summary style="font-size:0.88em;color:#666;cursor:pointer;user-select:none;">Account Composition (aspirational)</summary>
@@ -249,6 +192,55 @@
         </table>
         </div>
         </details>
+        <hr style="border:none;border-top:1px solid #ddd;margin:8px 0 4px;">
+        <div class="row">
+            <div><label title="Combined liquid cash balance (HYSA, money market, etc.). Shared between both spouses — the simulation draws from this to cover spending shortfalls before tapping investments.">Cash Balance<input type="text" id="Cash" value="50000"></label></div>
+            <div><label title="Emergency / untouchable cash reserve. Shared account. Not yet implemented — the simulation will never draw from this amount. Stored for future use.">Cash Reserve<input type="text" id="CashReserve" value="0" placeholder="0"></label></div>
+        </div>
+        </details>
+
+        <details class="section" open>
+        <summary>3. Income (annual)</summary>
+        <div class="row">
+            <div><label>Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
+            <div><label>Start Age<input type="number" id="ss1Age" value="70"></label></div>
+        </div>
+        <div class="row spouse-field">
+            <div><label><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
+            <!-- TODO: Change default Spouse SS Start Age from 70 to 62. -->
+            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></label></div>
+        </div>
+        <div class="row">
+            <div><label><B>Your</B> Pension<input type="text" id="pensionAnnual" value="15000"></label></div>
+            <div class="spouse-field"><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
+        </div>
+        <div class="row">
+            <div><label title="Most pensions have no inflation adjustment. Enable only if your pension includes a cost-of-living adjustment (COLA)."><input type="checkbox" id="pensionCola"> Pension has COLA (inflation-adjusted)</label></div>
+        </div>
+        </details>
+
+        <details class="section" open>
+        <summary>4. Assumptions</summary>
+        <div class="row">
+			<div><label title="This is the rate that your asset mix emits dividends. Brokerage dividends accrue to the Cash account. Others to their own account.">Dividend Rate %<BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00"></label></div>
+			<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation<BR>
+            <select id="STATEname">
+                <option   value="CA" selected>California</option>
+            </select></label>
+			</div>
+		</div>
+        <div class="row">
+			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail <input type="number" id="ssFailYear" value="2033"></label></div>
+            <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
+        </div>
+        <div class="row">
+            <div><label title="Your asset mix will dictate what growth rate to expect. In a brokerage, your basis doesn't grow at the rate the account does. Note that the dividend rate is additive. 4% growth and 2% dividends = 6% total.">Growth (6)%<input type="number" id="growth" value="6.0"></label></div>
+            <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
+        </div>
+        <div class="row">
+            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
+            <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
+        </div>
         </details>
 
     </div> <!-- sidebar -->
@@ -339,22 +331,28 @@
 				<div style="font-size:0.85em;color:#555;margin-bottom:4px;">
 					Check rows to add/remove from chart. Sorted by survival rate, then median final balance. <span id="mc-path-count-tbl"></span>
 				</div>
-				<!-- TODO: MC table header/column alignment still broken in wide browser (headers misalign with columns).
-				     Investigate whether sticky thead + table-layout:auto causes offset at large viewports.
-				     Try: table-layout:fixed with explicit column widths, or a CSS grid approach.
-				     Reported: visual misalignment persists after width:auto;min-width:100% fix. -->
 				<div style="max-height:280px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;">
-					<table style="width:auto;min-width:100%;border-collapse:collapse;font-size:0.85em;">
+					<table style="width:100%;border-collapse:collapse;font-size:0.85em;table-layout:fixed;">
+						<colgroup>
+							<col style="width:30px">
+							<col style="width:17%">
+							<col style="width:8%">
+							<col style="width:8%">
+							<col style="width:12%">
+							<col style="width:9%">
+							<col style="width:14%">
+							<col>
+						</colgroup>
 						<thead style="position:sticky;top:0;background:#f1f3f5;z-index:1;">
 							<tr>
-								<th style="padding:4px 6px;width:28px;"></th>
-								<th style="padding:4px 6px;text-align:left;white-space:nowrap;">Strategy</th>
-								<th style="padding:4px 6px;text-align:left;white-space:nowrap;">Param</th>
-								<th style="padding:4px 6px;text-align:left;white-space:nowrap;" title="Max Roth Conversion">Max Conv</th>
-								<th style="padding:4px 6px;text-align:left;white-space:nowrap;">Spend Goal</th>
-								<th style="padding:4px 6px;text-align:left;white-space:nowrap;">Survival</th>
-								<th style="padding:4px 6px;text-align:left;white-space:nowrap;" title="Median year across failed paths when the portfolio could no longer cover required spending">Funds Exhausted</th>
-								<th style="padding:4px 6px;text-align:left;white-space:nowrap;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</th>
+								<th style="padding:4px 6px;"></th>
+								<th style="padding:4px 6px;text-align:left;">Strategy</th>
+								<th style="padding:4px 6px;text-align:left;">Param</th>
+								<th style="padding:4px 6px;text-align:left;" title="Max Roth Conversion">Max Conv</th>
+								<th style="padding:4px 6px;text-align:left;">Spend Goal</th>
+								<th style="padding:4px 6px;text-align:left;">Survival</th>
+								<th style="padding:4px 6px;text-align:left;" title="Median year across failed paths when the portfolio could no longer cover required spending">Funds Exhausted</th>
+								<th style="padding:4px 6px;text-align:left;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</th>
 							</tr>
 						</thead>
 						<tbody id="mc-table-body"></tbody>
@@ -397,62 +395,78 @@
 		</div>
 
 		<div id="tab-docs" class="card hidden">
-			<div class="header-drawers">
-				<details class="top-drawer">
-					<summary>How to Use</summary>
-					<div class="drawer-content" id="drawer-howto">
-                        <div class="log-entry"><ul>
-                            <li><strong>1. Profile &amp; Ages:</strong> Enter the birth year of each person and estimated life expectancy for both partners. Use the <i>Include Spouse</i> checkbox to model a single taxpayer — unchecking it hides all spouse fields and excludes the spouse from the simulation.</li>
-                            <li><strong>2. Assets:</strong> Enter balances. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Brokerage withdrawals will be assumed to be part subject to capital gains. Total all after tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. Enter Roth balances separately — <i>Your Roth IRA</i> and <i>Spouse Roth IRA</i> are tracked independently throughout the simulation.</li>
-                            <li><strong>3. Income (annual)</strong> Input annual Social Security and pensions. Set the start ages to see the impact of delaying benefits. Amounts you enter for <i>Social Security Amt</i> will be adjusted annually by the <i>CPI/COLA</i> (next options). <i>Survivorship</i> is the percentage of the pension that will continue to be paid after You pass away.</li>
-                            <li><strong>4. Assumptions:</strong> choose the Inflation rate, the CPI rate (which is the expected change in tax brackets rather than actual inflation), the <i>Growth</i> rate for the IRA/401K, Brokerage &amp; ROTH.  <i>Cash Interest</i> is the expected interest on cash and cash-like investments (e.g. Mutual Funds/Bonds). To make these numbers accurate, it's best to separate all investments into "Brokerage" and cash into Cash. The collapsible <i>Account Composition</i> subsection lets you record the Equity/Bond ratio and international equity % for each account — this is aspirational/informational and does not affect the simulation. <i>Social Security Fail</i> &amp; <i>SS Net Payout</i> model a projected partial benefit cut.</li>
-                            <li><strong>Strategy:</strong> 
-                                Find this unlabeled item at the top left of the display.
-                                Set the <i>After-Tax Send</i> to the amount of after-tax income you need per year. And set the <i>Spend Delta</i> percentage. A Spend Delta of 0 means no change, while -1.5 would reduce spending by 1.5% each year. To have spending grow, use a number greater than 0, like 2%.  Default is -1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile"> historical data</A>.
-                                <ul><li>In <em>Withdraw Proportional +%</em> it proportionately withdraws enough from all sources to reach the <i>After-Tax Spend</i> goal, then adds an extra IRA-only boost of 0–200% of that spend goal. At 0% it is the pure proportional baseline; higher percentages accelerate IRA drawdown, with the after-tax surplus flowing to Roth (if Max Conversion is on) or Cash.</li>
-                                <li>Compare with <em>Reduce IRA in N Years</em> to amortize your IRAs in a fixed number of years (they will not be emptied, they will be drawn down to <i>IRA  Goal</i>.</li>
-                                <li><i>Fill Federal Tax Bracket</i> withdraws enough to max out the chosen federal tax bracket. NOTE: If your spend goal is in a bracket higher than you select, it will try to meet the spend goal instead of locking to the bracket.</li>
-                                <li><i>Lesser of IRMAA or TaxBracket</i> is not yet implemented, but here it's like <i>Fill Federal Tax Bracket</i>, but reduces the amount withdrawn to stay under the the lesser of the (next) IRMAA tier, the next state or next federal bracket - which ever is lower. It applies an inflation adjusted "safety threshold" of 2,000. There are three gotcha's here: a. the <i>After-Tax Spend</i> goal is in play so it may blow right past the next tier if you have insufficient non-taxable income, b. the current year IRMAA tax is based on income from two years ago - so this setting attempts to avoid FUTURE tax - not tax in this year, c. the current year filing status is what is used to avoid hitting a higher tier. Here is why that matters: If you or your spouse pass away, the careful work avoiding a higher tier two years ago will still <i>hurt </i> in the current year. For example if the MAGI is one dollar below the first tier while married, two years from now when filing status is Single, that MAGI falls into the 4th IRMAA tier - the only upside here, is that there is now half as much of the IRMAA tax since it is per-person. One solution is to remarry. :-) </li></ul>
-                            <li><strong>After Changes...</strong> selecting the Annual Details, Chart or Optimizer will cause a recalculation and show the page. On the <i>Annual Details</i> table, rows are highlighted in yellow if status changes to single. A pink/red background means the portfolio balance is insufficient to cover the required draw (spend goal minus guaranteed income).
-                            The <i>Balances</i> chart has a <i>Both / Mine / Spouse</i> toggle that filters the IRA and Roth series by person; Brokerage, Cash, and Total Wealth are always shown as a combined total.
-                            <I>Optimizer</I> finds the mathematical "sweet spot" for emptying IRAs to minimize lifetime total tax and maximize total spendable value. It checks different drawdown years - that is the same thing as the <i>Reduce IRA in N Years</i> but it loops through from 1 to 30 years. The Optimizer and Monte Carlo tabs skip a full rebuild if no inputs have changed since the last run.</li>
-                            </li>
-                        </ul>			
-                        <h4>What is Missing</h4>
-                        <p>This tool does not (currently) model <b>annuities</b>, multiple pensions, additional w2 (taxable) income</b>. The tool intentionally keeps the number of options low.  Currently the "optimize" option focuses on depleting the IRA balance(s) to the point where future RMDs will not force excess taxation (Federal, State and IRMAA). An additional optimization is planned that will iterate to maximize spendable - see the <B>Planned</B> tab. These 
-                        features, however are <B>NOT in scope</B>.
-                        <ol><li>Monte Carlo analysis is available via the <b>Monte Carlo 🎲</b> tab. It runs all withdrawal strategy variations against shared stochastic return sequences and reports survival rates with percentile band charts.</li>
-                        <li>The RMD tables are the standard one, not the one that might apply if there is a 10 year or more difference in spouse ages</li>
-                        <li>It only uses the MFJ and Single tax brackets. (No head of household, or Married filing separately)</li>
-                        <li>Your Roth and Spouse Roth are tracked as separate balances. Within each person's Roth, multiple individual accounts are not modeled — one combined balance per person is assumed.</li>
-                        <li>There is no Federal Alternative Minimum Tax (AMT) calculation. This normally does not apply to retirees unless they have huge bond interest, or are exercising ISO stock. In the case of California the 1% additional tax for high earners is built into the embedded tax table.</li>
-                        <li><strong>Social Security survivor benefits</strong> are calculated using the SSA formula: the deceased's benefit is converted back to their Primary Insurance Amount (PIA), adjusted for any delayed credits earned up to the date of death, and then reduced if the survivor claims before their own Full Retirement Age (67). The survivor receives whichever is higher — the computed survivor benefit or their own retirement benefit. Limitations: FRA is fixed at 67 (born 1960+), WEP/GPO offsets are not modeled, and the survivor is assumed to claim at the same age as their own planned SS start age rather than optimizing a switch strategy. Consult SSA.gov or a financial planner for a personalized estimate.</li>
-                        </ol>
-                        Please read further details in the <A href="https://tools.netcitizen.us/">README.md</A>.
-                    </div>                        
-                    </div>
-				</details>
-				<details class="top-drawer">
-					<summary>Other Tools</summary>
-					<div class="drawer-content" id="ot-drawer-content"></div>
-				</details>
-			</div> <!-- header-drawers -->
-			<div id="insights">
-			🛑 Some pithy insights will appear here. Right now they are not implemented. Insights shall   
-			include observations like: which strategy seems most effective, what the net withdrawal rate will be for the given <i>After-Tax Spend</i> 
+			<h3>How to Use</h3>
+			<div class="log-entry"><ul>
+				<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year and month of each person and estimated life expectancy. The current age and RMD start age are shown below each person's birth fields and update live. Use the <i>Include Spouse</i> checkbox to model a single taxpayer — unchecking it hides all spouse fields and excludes the spouse from the simulation. <i>Retirement Start Age</i> is the age at which you stop earning income; the simulation inflates tax brackets, SS COLA, and spending forward to that year automatically.</li>
+				<li><strong>2. Assets at Retirement Age:</strong> Enter balances in today's dollars. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Total all after-tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. Enter Roth balances separately — <i>Your Roth IRA</i> and <i>Spouse Roth IRA</i> are tracked independently throughout the simulation.</li>
+				<li><strong>3. Income (annual):</strong> Input annual Social Security and pension amounts. Set the start ages to see the impact of delaying benefits. SS amounts are adjusted annually by the <i>CPI/COLA</i> rate. <i>Survivorship</i> is the percentage of the pension that continues after You pass away.</li>
+				<li><strong>4. Assumptions:</strong> <i>Dividend Rate</i> and <i>State Taxation</i> are the most-changed inputs — set these first. <i>Social Security Fail</i> models the projected trust fund shortfall year and reduced payout. <i>Growth</i> is the annual return for IRA/Roth/Brokerage (note: dividend rate is additive — 6% growth + 1.5% dividends = 7.5% total). <i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> and <i>CPI/COLA</i> drive bracket indexing and SS cost-of-living adjustments. The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios — informational only, does not affect the simulation.</li>
+				<li><strong>Strategy:</strong> Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change — default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>).
+					<ul>
+						<li><em>Withdraw Proportional +%</em> withdraws proportionally from all sources to meet the spend goal, then adds an IRA-only boost of 0–200% on top. At 0% it is the pure proportional baseline; higher percentages accelerate IRA drawdown, with surplus flowing to Roth via conversion.</li>
+						<li><em>Reduce IRA in N Years</em> amortizes your IRA(s) to the <i>IRA Goal</i> balance over the chosen number of years. The Optimizer tests 2–25 years automatically.</li>
+						<li><em>Fill Federal Tax Bracket</em> withdraws enough to fill the chosen bracket. If the spend goal requires more, spending takes priority.</li>
+						<li><em>IRMAA Tier ceilings</em> withdraws up to the ceiling of the selected Medicare IRMAA surcharge tier, avoiding the next tier's higher premium.</li>
+						<li><em>ACA FPL cliffs</em> targets income at 200/250/300/400% of the Federal Poverty Level to preserve ACA premium subsidy eligibility.</li>
+						<li><em>IRA Draw %</em> withdraws a fixed percentage of the IRA balance each year (5–10% in the Optimizer).</li>
+						<li>The Optimizer always runs with <em>Max Roth Conversion</em> on — surplus after spending is converted to Roth. Enable it in the strategy panel to match the optimizer's assumption in single-scenario mode.</li>
+					</ul>
+				</li>
+				<li><strong>After Changes...</strong> clicking Annual Details, Chart, Optimizer, or Monte Carlo triggers a recalculation. On the <i>Annual Details</i> table, rows are highlighted yellow when filing status changes to Single; pink/red means the portfolio cannot cover the required draw. The <i>Balances</i> chart has a <i>Both / Mine / Spouse</i> toggle. The <i>Optimizer</i> sweeps all strategy variations and highlights the best result per column. The <i>Monte Carlo</i> tab runs all variations against stochastic return sequences and reports survival rates. Both tabs skip a full rebuild if inputs are unchanged.</li>
+			</ul></div>
+
+			<p>For limitations and features not currently modeled, see the <a href="https://github.com/nightskyguy/retirement_assets" target="_blank">README.md</a>.</p>
+
 			<h4>Where is the Code</h4>
-			This might be useful to know: you can run this locally (download the *.html and *.js and *.css files from GitHub)
-			<A HREF="https://github.com/nightskyguy/retirement_assets">https://github.com/nightskyguy/retirement_assets</A>.
-			
-			The charts require the ability to load this file remotely: <A HREF="https://cdn.jsdelivr.net/npm/chart.js">cdn.jsdelivr.net/npm/chart.js</A>.
-			<p>And you can also take a look at the source, make comments, or even open a pull request to propose changes. Just follow the link above.
+			<p>You can run this locally (download the *.html and *.js and *.css files from GitHub):
+			<A HREF="https://github.com/nightskyguy/retirement_assets">github.com/nightskyguy/retirement_assets</A>.
+			Charts require loading remotely: <A HREF="https://cdn.jsdelivr.net/npm/chart.js">cdn.jsdelivr.net/npm/chart.js</A>.</p>
+			<p>You can directly <strong>run</strong> the code from GitHub: <A HREF="https://tools.netcitizen.us/retirement_optimizer.html">tools.netcitizen.us/retirement_optimizer.html</a></p>
+			<p>Page loads are tracked anonymously using Google Analytics and Cloudflare Web Analytics. No personally identifiable information is collected; no account data you enter is ever sent anywhere — it stays entirely in your browser.</p>
 
-			You can directly <strong>run</strong> the code from GitHub: <A HREF="https://tools.netcitizen.us/retirement_optimizer.html">tools.netcitizen.us/retirement_optimizer.html</a>
-			
-			<p><button onclick="showOtherTools()" style="cursor:pointer;padding:3px 12px;font-size:0.85em;background:#f0f0f0;color:#333;border:1px solid #bbb;border-radius:4px;width:auto;">Other Tools</button></p>
+			<h3>Other Tools</h3>
+			<div class="drawer-content" id="ot-drawer-content"></div>
 
-			<p>Page loads are tracked anonymously using Google Analytics and Cloudflare Web Analytics — just enough to know that someone visited, and roughly where in the world they came from. No personally identifiable information is collected, kept, or transmitted. No account data you enter is ever sent anywhere; it stays entirely in your browser. You are welcome to read the source code if you'd like to verify that.</p>
-			</div>	
+			<details style="margin-top:16px;">
+				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
+				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
+				<ul>
+				<li><b>11.dad</b> UI improvements: Account Composition expander moved from Assumptions to Assets section; age display added to Profile &amp; Ages (current age and RMD start age, live-updating); Annual Details Age1/Age2 column header tooltips clarify end-of-year convention; MC table header alignment fixed with table-layout:fixed; Assumptions section reordered (Dividend/State first, Inflation last); Documentation tab restructured (no green sub-tabs, How to Use inline, changelog restored); optimizer always runs Max Conversion on; Reduce starts at 2 yrs; IRA Draw starts at 5%; default Brokerage Basis 50k, Spouse Roth 20k; age calculation corrected to Dec 31 end-of-year (IRS RMD convention).</li>
+				<li><b>11.da6</b> Bug fixes: survivor SS benefit was ~2× correct (delayed credits were accruing past claiming age — fixed); dividends now correctly compound inside IRA and Roth accounts (previously only Brokerage received the dividend growth component). New feature: Retirement Start Age — enter the age you plan to retire; the simulation inflates brackets, SS COLA, and spend goal forward to that year automatically. Start age defaults to your current real-world age (birth-month aware) and is clamped so you can't accidentally start in the past. Monte Carlo: click any result row to load that strategy into the form. Annual Details: Roth1/Roth2 per-person balance columns now available under Roth Δ. Version minor is lowercase hex((day-of-year × 24) + hour).</li>
+				<li><b>11</b> Account composition (equity/bond ratio + intl equity %) per account in Assumptions; Spouse Roth IRA now fully simulated — withdrawals split proportionally, conversions routed IRA→Roth per person; Balances chart Both/Mine/Spouse toggle; Optimizer and Monte Carlo skip rebuild when inputs are unchanged.</li>
+				<li><b>10</b> Shorthand dollar inputs (1.2M, 48k); Include Spouse toggle replacing birthyear=0 hack; ACA FPL cliffs in bracket dropdown; collapsible sidebar sections; assets section reorganized with Roth2/CashReserve placeholders; IRMAA tier ceilings and dynamic MFJ/SGL bracket dropdown recovered from stranded branch.</li>
+				</ul>
+				<details>
+					<summary style="cursor:pointer;color:#888;font-size:0.9em;">Older changes…</summary>
+					<ul>
+					<li><b>8</b> Added "Proportional Withdraw %" strategy with configurable IRA withdrawal boost (0–200% above spend goal); optimizer tests it at 0/5/10/20/50%; Roth Conv bar now stacks on top of taxes in the lower chart; optimizer table highlights best row per column (lowest tax, lowest tax rate, highest spend, highest wealth).</li>
+					<li><b>7g</b> Found one source of over-withdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it over-withdrew to make up for the excluded pension. Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed. The mass of columns have been tamed somewhat with live selectable options, including suppressing columns that have only zeros, grouping by association.</li>
+					<li><b>7f</b> Fixed HTML cautions. Fixed error in calculating what to do with surplus. It was putting some surplus into Roth even though no IRA withdrawals had occurred. CapitalGains calculation was wrong, and the tax burden for Brokerage withdrawals was also incorrect.</li>
+					<li><b>7e</b> Fixed more bugs, added much more information (See the <A HREF="https://tools.netcitizen.us/">README.md</A>). And added a new standalone tool.</li>
+					<li><b>7d</b> Updated taxation calculations to use a more thorough calculator.</li>
+					<li><b>7c</b> Prior update(s) broke the save/load functionality due to case changes. Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years.</li>
+					<li><b>7b</b> More state rates. Fixed most calculations. Minor UI changes.</li>
+					<li><b>7a</b> Now has various state rates. Fixed most calculations.</li>
+					<li><b>6v</b> Implemented Save/Load/Export/Delete Scenarios.</li>
+					<li><b>6u</b> Implemented SS Fail. More UI fixes. Moved all strategy items to the top.</li>
+					<li><b>6t</b> Solved a math issue causing NaN to occur. Cleaned up the visuals.</li>
+					<li><b>6s</b> Some more fancy highlighting of the tables. Fixed broken strategy changer. Tests moved into separate file, too.</li>
+					<li><b>6r</b> Moved the heavy text (top drawers) into a separate file.</li>
+					<li><b>6q</b> Beautifications and hover notes. More self tests with an indicator on screen if they fail. Started the Social Security "meltdown" implementation. Added (empty) Insights tab.</li>
+					<li><b>6p</b> Corrected instructions for Single filer usage. Fixed error in brokerage tracking. Added brokerage dividend rate. Dividends automatically accrue to Cash.</li>
+					<li><b>6n</b> Calculation fixes.</li>
+					<li><b>6m</b> More self tests, some rework.</li>
+					<li><b>6k</b> Reworked tax brackets for sanity ease of update. Added more instructions.</li>
+					<li><b>6j</b> Move style sheet out for readability.</li>
+					<li><b>6i</b> Remove the Recalculate and Optimize buttons. Use the similarly named tabs as the buttons.</li>
+					<li><b>5hp</b> Integrated Federal SS "Tax Torpedo" logic, California HSA add-backs, and IRMAA cliff surcharges.</li>
+					<li><b>5h</b> Added change log and instructions.</li>
+					<li><b>4g</b> Do rate limit lookups based on inflation. Add suggested values.</li>
+					<li><b>4f</b> Use cpi% to adjust taxation (brackets).</li>
+					<li><b>4e</b> Use calculated birthyear for correct RMDs.</li>
+					</ul>
+				</details>
+			</details>
 
 			<div id="tab-insight" class="card hidden">
 				<table id="insights-table">
@@ -463,43 +477,6 @@
 					<tbody id="ins_tableBody"></tbody>
 				</table>
 			</div>
-				<!--details class="top-drawer"><summary>Change Log</summary>			
-				<div class="drawer-content" id="drawer-changelog"> 
-				!-- CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG     CHANGE LOG -->
-				<H3>Change Log</H3>
-				For the most details, please <STRONG>consult the <A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.
-				<ul>
-				<li><b>11.da6</b> Bug fixes: survivor SS benefit was ~2× correct (delayed credits were accruing past claiming age — fixed); dividends now correctly compound inside IRA and Roth accounts (previously only Brokerage received the dividend growth component). New feature: Retirement Start Age — enter the age you plan to retire; the simulation inflates brackets, SS COLA, and spend goal forward to that year automatically. Start age defaults to your current real-world age (birth-month aware) and is clamped so you can't accidentally start in the past. Monte Carlo: click any result row to load that strategy into the form. Annual Details: Roth1/Roth2 per-person balance columns now available under Roth Δ. Version minor is lowercase hex((day-of-year × 24) + hour).</li>
-				<li>11 (prior) Account composition (equity/bond ratio + intl equity %) per account in Assumptions; Spouse Roth IRA now fully simulated — withdrawals split proportionally, conversions routed IRA→Roth per person; Balances chart Both/Mine/Spouse toggle; Optimizer and Monte Carlo skip rebuild when inputs are unchanged.</li>
-				<li>10 Shorthand dollar inputs (1.2M, 48k); Include Spouse toggle replacing birthyear=0 hack; ACA FPL cliffs in bracket dropdown; collapsible sidebar sections; assets section reorganized with Roth2/CashReserve placeholders; IRMAA tier ceilings and dynamic MFJ/SGL bracket dropdown recovered from stranded branch.</li>
-				<li>8 Added "Proportional Withdraw %" strategy with configurable IRA withdrawal boost (0–200% above spend goal); optimizer tests it at 0/5/10/20/50% × Max Conversion on/off; Roth Conv bar now stacks on top of taxes in the lower chart; optimizer table highlights best row per column (lowest tax, lowest tax rate, highest spend, highest wealth).</li>
-				<li>7g Found one source of over-withdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it over-withdrew to make up for the excluded pension.  Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed. BUG: Unfortunately, there are still scenarios where under-withdrawal occurs (though not over-withdrawals anymore!). The mass of columns have been tamed somewhat with live selectable options, including suppressing columns that have only zeros, grouping by association.</li>
-				<li>7f Fixed HTML cautions. Fixed error in calculating what to do with surplus. It was putting some surplus into Roth even though no IRA withdrawals had occurred. CapitalGains calculation was wrong, and the tax burden for Brokerage withdrawals was also incorrect. However it is still significantly over-withdrawing.</li>
-				<li>7e Fixed more bugs, added much more information (See the <A HREF="https://tools.netcitizen.us/">README.md</A>). And added a new standalone tool.</li>
-				<li>7d Updated taxation calculations to use a more thorough calculator.</li>
-				<li>7c Prior update(s) broke the save/load functionality due to case changes. Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years.</li>
-				<li>7b More state rates. Fixed most calculations. Minor UI changes.</li>
-				<li>7a Now has various state rates. Fixed most calculations.</li>
-				<li>6v Implemented Save/Load/Export/Delete Scenarios.</li>
-				<li>6u Implemented SS Fail. More UI fixes. Moved all strategy items to the top.</li>
-				<li>6t Solved a math issue causing NaN to occur. Cleaned up the visuals.</li>
-				<li>6s Some more fancy highlighting of the tables. Fixed broken strategy changer. Tests moved into separate file, too.</li>
-				<li>6r Moved the heavy text (top drawers) into a separate file.</li>
-				<li>6q Beautifications and hover notes. More self tests with an indicator on screen if they fail. Started the Social Security "meltdown" implementation. Added (empty) Insights tab.</li>
-				<li>6p Corrected instructions for Single filer usage. Fixed error in brokerage tracking. Added brokerage dividend rate. Dividends automatically accrue to Cash.</li>
-				<li>6n Calculation fixes.</li>
-				<li>6m More self tests, some rework.</li>
-				<li>6k Reworked tax brackets for sanity ease of update. Added more instructions.</li>
-				<li>6j Move style sheet out for readability.</li>
-				<li>6i Remove the Recalculate and Optimize buttons. Use the similarly named tabs as the buttons.</li>
-				<li>5hp Integrated Federal SS "Tax Torpedo" logic, California HSA add-backs, and IRMAA cliff surcharges.</li>
-				<li>5h Added change log and instructions.</li>
-				<li>4g Do rate limit lookups based on inflation. Add suggested values.</li>
-				<li>4f Use cpi% to adjust taxation (brackets).</li>
-				<li>4e Use calculated birthyear for correct RMDs.</li>
-				</ul>
-				<!-- </div> !-- changelog --
-				</details>	-->
 		</div> <!-- id=tab-docs -->
 
 		<div id="tab-tbl" class="card table-wrap">
@@ -615,6 +592,7 @@ window.addEventListener('DOMContentLoaded', function () {
     toggleStrategyUI();
     setupAutoRecalc();
     initMCTab();
+    updateProfileAgeDisplay();
 });
 
 // Auto-run tests when page loads (comment out if you don't want auto-run)

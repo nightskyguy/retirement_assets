@@ -40,7 +40,7 @@
 		
 			<div class="input-group">
 				<label><select id="strategy" onchange="toggleStrategyUI()">
-					<option value="propwd">📊Withdraw Proportional +%</option>
+					<option value="propwd">📊Proportional Withdraw +%</option>
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
 					<option value="bracket">🪣Fill Federal Tax / IRMAA Bracket</option>
 					<option value="fixedpct">📉IRA Draw</option>
@@ -331,10 +331,16 @@
 				<div style="font-size:0.85em;color:#555;margin-bottom:4px;">
 					Check rows to add/remove from chart. Sorted by survival rate, then median final balance. <span id="mc-path-count-tbl"></span>
 				</div>
-				<div style="max-height:280px;overflow-y:auto;border:1px solid #dee2e6;border-radius:4px;">
+				<div style="font-size:0.8em;margin-bottom:6px;">
+					Row shading:
+					<span style="background:#d4edda;padding:1px 8px;border-radius:3px;margin-right:4px;">≥ 90% survival</span>
+					<span style="background:#fff3cd;padding:1px 8px;border-radius:3px;margin-right:4px;">75 – 89%</span>
+					<span style="background:#f8d7da;padding:1px 8px;border-radius:3px;">below 75%</span>
+				</div>
+				<div style="max-height:280px;overflow-y:auto;scrollbar-gutter:stable;border:1px solid #dee2e6;border-radius:4px;">
 					<table style="width:100%;border-collapse:collapse;font-size:0.85em;table-layout:fixed;">
 						<colgroup>
-							<col style="width:30px">
+							<col style="width:44px">
 							<col style="width:17%">
 							<col style="width:8%">
 							<col style="width:8%">
@@ -343,16 +349,16 @@
 							<col style="width:14%">
 							<col>
 						</colgroup>
-						<thead style="position:sticky;top:0;background:#f1f3f5;z-index:1;">
+						<thead>
 							<tr>
-								<th style="padding:4px 6px;"></th>
-								<th style="padding:4px 6px;text-align:left;">Strategy</th>
-								<th style="padding:4px 6px;text-align:left;">Param</th>
-								<th style="padding:4px 6px;text-align:left;" title="Max Roth Conversion">Max Conv</th>
-								<th style="padding:4px 6px;text-align:left;">Spend Goal</th>
-								<th style="padding:4px 6px;text-align:left;">Survival</th>
-								<th style="padding:4px 6px;text-align:left;" title="Median year across failed paths when the portfolio could no longer cover required spending">Funds Exhausted</th>
-								<th style="padding:4px 6px;text-align:left;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</th>
+								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;border-right:2px solid #dee2e6;"></th>
+								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:left;">Strategy</th>
+								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:left;">Param</th>
+								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:left;" title="Max Roth Conversion">Max Conv</th>
+								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:left;">Spend Goal</th>
+								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:left;">Survival</th>
+								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:left;" title="Median year across failed paths when the portfolio could no longer cover required spending">Funds Exhausted</th>
+								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:left;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</th>
 							</tr>
 						</thead>
 						<tbody id="mc-table-body"></tbody>
@@ -403,7 +409,7 @@
 				<li><strong>4. Assumptions:</strong> <i>Dividend Rate</i> and <i>State Taxation</i> are the most-changed inputs — set these first. <i>Social Security Fail</i> models the projected trust fund shortfall year and reduced payout. <i>Growth</i> is the annual return for IRA/Roth/Brokerage (note: dividend rate is additive — 6% growth + 1.5% dividends = 7.5% total). <i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> and <i>CPI/COLA</i> drive bracket indexing and SS cost-of-living adjustments. The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios — informational only, does not affect the simulation.</li>
 				<li><strong>Strategy:</strong> Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change — default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>).
 					<ul>
-						<li><em>Withdraw Proportional +%</em> withdraws proportionally from all sources to meet the spend goal, then adds an IRA-only boost of 0–200% on top. At 0% it is the pure proportional baseline; higher percentages accelerate IRA drawdown, with surplus flowing to Roth via conversion.</li>
+						<li><em>Proportional Withdraw +%</em> withdraws proportionally from all sources to meet the spend goal, then adds an IRA-only boost of 0–200% on top. At 0% it is the pure proportional baseline; higher percentages accelerate IRA drawdown, with surplus flowing to Roth via conversion.</li>
 						<li><em>Reduce IRA in N Years</em> amortizes your IRA(s) to the <i>IRA Goal</i> balance over the chosen number of years. The Optimizer tests 2–25 years automatically.</li>
 						<li><em>Fill Federal Tax Bracket</em> withdraws enough to fill the chosen bracket. If the spend goal requires more, spending takes priority.</li>
 						<li><em>IRMAA Tier ceilings</em> withdraws up to the ceiling of the selected Medicare IRMAA surcharge tier, avoiding the next tier's higher premium.</li>

@@ -751,7 +751,34 @@ function simulate(inputs) {
 
         // 4. Determine Target Spending amount based on Strategy
         const isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'fixedpct';
-        let targetSpend = isBracketStrategy ? spendGoal : Math.min(spendGoal, goalLimit);
+        const isOrderedStrategy = inputs.strategy === 'ordered';
+
+        function resolveOrderedSeq(seq) {
+            const taxB = capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit);
+            const taxI = Math.max(nominalTaxRate, marginalFedTaxRate + marginalStateTaxRate);
+            const map = {
+                CBIR: [['Cash', 0], ['Brokerage', taxB], ['IRA', taxI], ['Roth', 0]],
+                RIBC: [['Roth', 0], ['IRA', taxI], ['Brokerage', taxB], ['Cash', 0]],
+                BIRC: [['Brokerage', taxB], ['IRA', taxI], ['Roth', 0], ['Cash', 0]],
+            };
+            return map[seq] ?? map['CBIR'];
+        }
+
+        function runOrderedWithdrawal(balances, need, seq, accumulate, applyFn) {
+            let result = accumulate;
+            let rem = need;
+            for (const [acct, taxrate] of seq) {
+                if (rem <= 1 || (balances[acct] ?? 0) <= 0) continue;
+                const w = calculateWithdrawals(balances, rem, { order: [acct], weight: [1], taxrate: [taxrate] });
+                result = accumulateWithdrawals([result, w]);
+                applyFn(balances, w);
+                rem = w.shortfall ?? 0;
+                if (rem <= 1) break;
+            }
+            return result;
+        }
+
+        let targetSpend = (isBracketStrategy || isOrderedStrategy) ? spendGoal : Math.min(spendGoal, goalLimit);
         let additionalSpendNeeded = Math.max(0, targetSpend + irmaa - possibleIncome);
 
         // INCOMPLETE: marginalFedTaxRate and marginalStateTaxRate are set to the rates AT the
@@ -866,6 +893,11 @@ function simulate(inputs) {
                 withdrawals.IRA = (withdrawals.IRA || 0) + boost;
             }
 
+        } else if (inputs.strategy === 'ordered') {
+            // Ordered strategy: all spending handled in gap-fill to avoid surplus distortion.
+            // Cash draws in the main block don't reduce possibleIncome, causing overdraw + refund loops.
+            withdrawals = {};
+
         } else {
             /*********************/
             /* BASELINE Strategy */
@@ -947,6 +979,10 @@ function simulate(inputs) {
                         applyWithdrawals(curBalances, rothWithdrawals);
                     }
                 }
+            } else if (isOrderedStrategy) {
+                const seq = resolveOrderedSeq(inputs.orderedSeq);
+                netWithdrawals = runOrderedWithdrawal(curBalances, gap, seq, netWithdrawals, applyWithdrawals);
+
             } else {
                 // Default: Brokerage + Cash proportional, then Roth fallback.
                 withdrawStrategy.order = ['Brokerage', 'Cash'];
@@ -982,6 +1018,9 @@ function simulate(inputs) {
         // Now we have the "real tax"
         totalTax = tax.totalTax + irmaa;
         bracketOverage = bracketTarget > 0 ? Math.max(0, tax.MAGI - bracketTarget) : 0;
+        // Update marginal rates so the third pass grosses up correctly at actual bracket.
+        marginalFedTaxRate = tax.fedRate;
+        marginalStateTaxRate = tax.stRate;
 
         // Third pass: if second-pass taxes created a residual shortfall, withdraw more and recalc once.
         // This handles cases where the gap fill (brokerage cap gains) raised taxes above the initial estimate.
@@ -991,12 +1030,17 @@ function simulate(inputs) {
         const residualGap = targetSpend - (incomeAfterGapFill - totalTax);
         if (residualGap > 1) {
             const thirdPassStart = performance.now();
-            const thirdWdStrategy = isBracketStrategy
-                ? { order: ['Cash'], weight: [1], taxrate: [0] }
-                : { order: ['Brokerage', 'Cash'], weight: [40, 60], taxrate: [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0] };
-            const thirdWd = calculateWithdrawals(curBalances, residualGap, thirdWdStrategy);
-            netWithdrawals = accumulateWithdrawals([netWithdrawals, thirdWd]);
-            applyWithdrawals(curBalances, thirdWd);
+            if (isOrderedStrategy) {
+                const seq = resolveOrderedSeq(inputs.orderedSeq);
+                netWithdrawals = runOrderedWithdrawal(curBalances, residualGap, seq, netWithdrawals, applyWithdrawals);
+            } else {
+                const thirdWdStrategy = isBracketStrategy
+                    ? { order: ['Cash'], weight: [1], taxrate: [0] }
+                    : { order: ['Brokerage', 'Cash'], weight: [40, 60], taxrate: [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0] };
+                const thirdWd = calculateWithdrawals(curBalances, residualGap, thirdWdStrategy);
+                netWithdrawals = accumulateWithdrawals([netWithdrawals, thirdWd]);
+                applyWithdrawals(curBalances, thirdWd);
+            }
             capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
             tax = calculateTaxes({
                 filingStatus: status, ages: [age1, age2],
@@ -1298,6 +1342,7 @@ function getInputs() {
     return {
         STATEname: val('STATEname'),
         strategy: val('strategy'),
+        orderedSeq: val('orderedSeq') || 'CBIR',
         nYears: +val('nYears'),
         ...(() => {
             const raw = val('stratRate') ?? '';
@@ -1583,6 +1628,9 @@ function buildVariations(base) {
         push('IRA Draw', `${userDrawPct}%`, userDrawPct,
             { strategy: 'fixedpct', iraWithdrawPct: base.iraWithdrawPct, maxConversion: maxConv });
 
+    for (const seq of ['CBIR', 'RIBC', 'BIRC'])
+        push('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
+
     return variations;
 }
 
@@ -1677,6 +1725,11 @@ function runOptimizer() {
     // IRA Draw — fixed % of IRA balance each year
     for (const pct of [5, 6, 7, 8, 10]) {
         addResult('IRA Draw', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
+    }
+
+    // Ordered — strict account sequence
+    for (const seq of ['CBIR', 'RIBC', 'BIRC']) {
+        addResult('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
     }
 
     // Spend optimizer second pass — only runs when user enabled the toggle
@@ -2975,6 +3028,7 @@ function toggleStrategyUI() {
     document.getElementById('ui-bracket').classList.toggle('hidden', m !== 'bracket' && m !== 'minlimit');
     document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
+    document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 

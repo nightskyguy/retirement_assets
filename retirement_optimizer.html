@@ -44,6 +44,7 @@
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
 					<option value="bracket">🪣Fill Federal Tax / IRMAA Bracket</option>
 					<option value="fixedpct">📉IRA Draw</option>
+					<option value="ordered">➡️Ordered</option>
 				</select></label>
 			</div>
 
@@ -67,6 +68,15 @@
 			<div id="ui-fixedpct" class="input-group hidden">
 				<label title="Withdraw this % of the total IRA balance each year. RMDs count toward this amount. Any spending shortfall draws from Cash → Brokerage → Roth.">IRA Withdraw %
 				<input type="number" id="iraWithdrawPct" value="5" min="0.5" max="20" step="0.5"></label>
+			</div>
+
+			<div id="ui-ordered" class="input-group hidden">
+				<label>Order
+				<select id="orderedSeq">
+					<option value="CBIR">CBIR: Cash→Brok→IRA→Roth</option>
+					<option value="RIBC">RIBC: Roth→IRA→Brok→Cash</option>
+					<option value="BIRC">BIRC: Brok→IRA→Roth→Cash</option>
+				</select></label>
 			</div>
 
 		</div>  <!-- strategy-container -->

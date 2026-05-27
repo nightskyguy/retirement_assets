@@ -95,6 +95,16 @@ function calculateAmortizedWithdrawal(currentIRA, targetIRA, years, growthRate) 
 
 
 /**
+ * Calculate max IRA withdrawal that keeps MAGI within bracket limit.
+ * @param {number} bracketTarget - MAGI ceiling (e.g., 100000 for 24% bracket)
+ * @param {number} baseIncome - Fixed income components (pension + RMD + SS + interest/dividends + capital gains)
+ * @returns {number} Maximum IRA withdrawal that keeps (baseIncome + IRA withdrawal) <= bracketTarget
+ */
+function calculateMaxIRAWithdrawalForBracket(bracketTarget, baseIncome) {
+    return Math.max(0, bracketTarget - baseIncome);
+}
+
+/**
  * Find the income limit for a specified marginal tax rate within tax brackets.
  * Returns the highest bracket limit where the rate is less than or equal to the target rate.
  * Uses TAXdata structure to retrieve bracket information.
@@ -579,7 +589,7 @@ function simulate(inputs) {
     let medicareRate = Math.pow(1 + TAXData.IRMAA.ANNUAL_INCREASE, gapYears);
     let fixedWithdrawal = 0;
     let currentTaxableGuess = 0;
-    let spendDelta = 1
+    let spendDelta = 1 + inputs.spendChange;
     let spendGoal = inputs.spendGoal * Math.pow(1 + inputs.inflation, gapYears);
     let cumulativeTaxes = 0;
     let nominalTaxRate = 0.20; // Just a guess.
@@ -638,7 +648,6 @@ function simulate(inputs) {
 
     for (let y = 0; y < maxYears; y++) {
         const loopStart = performance.now();
-        spendGoal = spendGoal * spendDelta * (1 + inputs.inflation);
         fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, inputs.iraBaseGoal, inputs.nYears - y, inputs.growth)
 
 
@@ -1258,12 +1267,16 @@ function simulate(inputs) {
             loopMs: performance.now() - loopStart
         });
         totals.totalTime += log[log.length - 1].loopMs;
+        // Advance spend goal: apply user's spend-change preference and inflation.
+        // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
+        // keeps year-0 spendGoal equal to the user's input in today's dollars.
+        spendGoal = spendGoal * spendDelta * (1 + inputs.inflation);
+
         currentYear += 1;
 
         // Adjust inflation rates for subsequent rounds.
         cpiRate *= (1 + inputs.cpi);
         inflation *= (1 + inputs.inflation);
-        spendDelta = 1 + inputs.spendChange;
         medicareRate *= (1 + TAXData.IRMAA.ANNUAL_INCREASE)
     } // end for (let y = 0; y < maxYears; y++)
 
@@ -3695,6 +3708,58 @@ function getDropdownStatus() {
 }
 
 /**
+ * Update bracket constraint feedback display.
+ * Shows current bracket limit and warns if desired spend exceeds feasible amount.
+ */
+function updateBracketFeedback() {
+    const stratRateEl = document.getElementById('stratRate');
+    const feedbackEl = document.getElementById('bracket-feedback');
+    const spendGoalEl = document.getElementById('spendGoal');
+
+    if (!stratRateEl || !feedbackEl || !spendGoalEl) return;
+
+    const selectedOption = stratRateEl.options[stratRateEl.selectedIndex];
+    if (!selectedOption) return;
+
+    const spendGoalStr = (spendGoalEl.value || '140000').toString().replace(/[^\d.-]/g, '');
+    const spendGoal = parseFloat(spendGoalStr) || 140000;
+    const label = selectedOption.text; // e.g., "24% Fed  ·  $414,849"
+
+    // Extract bracket limit from option text
+    // Try multiple patterns: "$414,849", "$414849", etc.
+    let bracketLimit = null;
+    const limitMatches = label.match(/\$[\s]*(\d+(?:,\d{3})*|\d+)/g);
+    if (limitMatches && limitMatches.length > 0) {
+        // Get the last dollar amount (usually the limit)
+        const lastMatch = limitMatches[limitMatches.length - 1];
+        bracketLimit = parseInt(lastMatch.replace(/[^\d]/g, ''));
+    }
+
+    if (!bracketLimit || isNaN(bracketLimit)) {
+        feedbackEl.innerHTML = '';
+        return;
+    }
+
+    // Estimate max feasible spend (simplified: bracket limit is approx max MAGI)
+    // In reality this depends on tax rates and account composition, but this gives a rough indicator
+    const estimatedMaxSpend = Math.round(bracketLimit * 0.95); // Slight buffer for estimation error
+
+    if (spendGoal <= estimatedMaxSpend) {
+        // Within bracket
+        feedbackEl.innerHTML = `✓ Bracket allows ~$${estimatedMaxSpend.toLocaleString()} / year`;
+        feedbackEl.style.color = '#4a7c4e';
+    } else {
+        // Over bracket — clicking adjusts spendGoal down to the bracket max
+        const shortfall = Math.round(spendGoal - estimatedMaxSpend);
+        feedbackEl.innerHTML = `<span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;"
+            title="Click to set After-Tax Spend to bracket maximum"
+            onclick="DisplayHelpers.setDollarValue('spendGoal',${estimatedMaxSpend});runSimulation();"
+            >⚠ Over bracket by ~$${shortfall.toLocaleString()} / year — click to adjust</span>`;
+        feedbackEl.style.color = '#d4811f';
+    }
+}
+
+/**
  * Rebuilds the stratRate dropdown preserving the current selection.
  * Should be called whenever CPI or marital-status inputs change.
  */
@@ -3707,6 +3772,7 @@ function refreshStratRateOptions() {
     if (saved && [...sel.options].some(o => o.value === saved)) {
         sel.value = saved;
     }
+    updateBracketFeedback(); // Update feedback after options change
 }
 
 /**
@@ -3740,7 +3806,7 @@ function generateStratRateOptions() {
             value: String(ratePct),
             label: `${ratePct}% Fed  ·  $${limit.toLocaleString()}`,
             limit,
-            defaultSelected: ratePct === 24
+            defaultSelected: false
         });
     }
 
@@ -3762,7 +3828,7 @@ function generateStratRateOptions() {
             value: `irmaa${i}`,
             label: `${irmaaLabels[i]}  ·  $${limit.toLocaleString()}`,
             limit,
-            defaultSelected: false
+            defaultSelected: i === 0
         });
     }
 

@@ -102,7 +102,11 @@
         <div class="compact-row" style="font-size:0.82em;color:#555;margin-top:0;padding-top:0;" id="age-display-1"></div>
         <div class="compact-row" style="margin-top:6px;">
             <label title="The age at which you plan to retire (stop earning income and begin drawing assets). Enter your assets and spending goal in today's dollars — the simulation inflates brackets, SS COLA, and spending forward to this age. Defaults to your current age.">Retirement Start Age
-            <input type="number" id="startAge" min="50" max="100" step="1" placeholder="current age"></label>
+            <input type="number" id="startAge" min="50" max="100" step="1" placeholder="current age"
+              oninput="document.getElementById('startAge-warn').style.display=(+this.value>0&&+this.value<60)?'block':'none'"></label>
+        </div>
+        <div id="startAge-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;">
+          &#9888; Early withdrawal penalties may apply when starting withdrawals before 59&#189; and those are NOT modeled.
         </div>
         <hr style="border:none;border-top:1px solid #ddd;margin:8px 0 4px;">
         <div style="margin:4px 0 2px;">
@@ -219,13 +223,17 @@
         <summary>3. Income (annual)</summary>
         <div class="row">
             <div><label>Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
-            <div><label>Start Age<input type="number" id="ss1Age" value="70"></label></div>
+            <div><label>Start Age<input type="number" id="ss1Age" value="70"
+              oninput="(function(v,el){el.style.display=v>0&&v<62?'block':v>70?'block':'none';el.textContent=v<62?'⚠ SS eligibility usually begins at 62.':'⚠ SS benefits do not increase after 70.';})(+this.value,document.getElementById('ss1Age-warn'))"></label></div>
         </div>
+        <div id="ss1Age-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;"></div>
         <div class="row spouse-field">
             <div><label><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
             <!-- TODO: Change default Spouse SS Start Age from 70 to 62. -->
-            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"></label></div>
+            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"
+              oninput="(function(v,el){el.style.display=v>0&&v<62?'block':v>70?'block':'none';el.textContent=v<62?'⚠ SS eligibility usually begins at 62.':'⚠ SS benefits do not increase after 70.';})(+this.value,document.getElementById('ss2Age-warn'))"></label></div>
         </div>
+        <div id="ss2Age-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;"></div>
         <div class="row">
             <div><label><B>Your</B> Pension<input type="text" id="pensionAnnual" value="15000"></label></div>
             <div class="spouse-field"><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>

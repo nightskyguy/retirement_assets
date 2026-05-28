@@ -80,7 +80,7 @@ var TAXData = {
     --mono:'DM Mono',monospace; --sans:'DM Sans',sans-serif;
   }
   body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:14px; min-height:100vh; padding:2rem 1.5rem 4rem; }
-  header { max-width:1100px; margin:0 auto 2rem; border-bottom:1px solid var(--border); padding-bottom:1.25rem; display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
+  header { max-width:none; margin:0 0 2rem; border-bottom:1px solid var(--border); padding-bottom:1.25rem; display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
   header h1 { font-family:var(--mono); font-size:1.1rem; font-weight:500; letter-spacing:.04em; color:var(--teal); }
   header p  { font-size:12px; color:var(--muted); font-family:var(--mono); flex:1; }
   .help-btn { margin-left:auto; background:transparent; border:1px solid var(--border); border-radius:5px; color:var(--muted); font-family:var(--mono); font-size:11px; padding:4px 12px; cursor:pointer; transition:border-color .15s, color .15s; white-space:nowrap; align-self:center; }
@@ -110,7 +110,7 @@ var TAXData = {
   .share-actions { display:flex; justify-content:flex-end; gap:.5rem; }
 
   /* ── Layout ── */
-  .shell { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:290px 1fr; gap:1.5rem; align-items:start; }
+  .shell { max-width:none; margin:0; display:grid; grid-template-columns:290px 1fr; gap:1.5rem; align-items:start; }
   .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem; }
   .panel-title { font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--muted); text-transform:uppercase; margin-bottom:1.25rem; }
   .ctrl { margin-bottom:1.1rem; }
@@ -300,6 +300,12 @@ var TAXData = {
       <li>SECURE 2.0: RMDs start at 75 for those born after 1958.</li>
     </ul>
 
+    <h3 class="amber">Model Limitations</h3>
+    <ul>
+      <li>Taking Social Security before full retirement age comes with a SS penalty that is <b>not</b> modeled.</li>
+      <li>Withdrawing IRA or Roth funds does not model the age 59&frac12; requirement and early withdrawal penalties.</li>
+    </ul>
+
     <h3 class="amber">Calculations</h3>
     <ul>
       <li><b>RMD</b> — prior year-end balance ÷ IRS Uniform Lifetime Table factor (age 75+, SECURE 2.0, born after 1958).</li>
@@ -414,7 +420,7 @@ var TAXData = {
         </div>
         <div class="ctrl">
           <div class="ctrl-header"><label><b>Your</b> retirement start age</label><span class="val" id="vRetireAge">65</span></div>
-          <input type="range" id="retireAge" min="55" max="70" step="1" value="65">
+          <input type="range" id="retireAge" min="55" max="80" step="1" value="65">
           <div class="ctrl-note" id="warnEarnedIncome" style="display:none;color:#f5a623">
             ⚠ Contributions past retirement start require earned income.
           </div>
@@ -535,6 +541,9 @@ var TAXData = {
                 <div class="ctrl">
                   <div class="ctrl-header"><label>Withdrawal 1 start age</label><span class="val" id="vWdAge">65</span></div>
                   <input type="range" id="wdAge" min="40" max="80" step="1" value="65">
+                  <div id="wdEarlyWarn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:4px;">
+                    &#9888; Tax penalties may accrue (IRA/Roth withdrawals before age 59&frac12;)
+                  </div>
                 </div>
                 <div class="ctrl">
                   <div class="ctrl-header"><label>Withdrawal 1 (today $)</label><span class="val" id="vW">$75,000</span></div>
@@ -697,7 +706,7 @@ var TAXData = {
       <div class="section-body">
         <div class="ctrl">
           <div class="ctrl-header"><label>My SS start age</label><span class="val" id="vSS1Age">62</span></div>
-          <input type="range" id="ss1Age" min="50" max="70" step="1" value="62">
+          <input type="range" id="ss1Age" min="62" max="72" step="1" value="62">
         </div>
         <div class="ctrl">
           <div class="ctrl-header"><label>My SS (today $)</label><span class="val" id="vSS1">$0</span></div>
@@ -707,7 +716,7 @@ var TAXData = {
         <div id="spouseSSFields">
           <div class="ctrl">
             <div class="ctrl-header"><label>Spouse SS start age</label><span class="val" id="vSS2Age">70</span></div>
-            <input type="range" id="ss2Age" min="50" max="70" step="1" value="70">
+            <input type="range" id="ss2Age" min="62" max="72" step="1" value="70">
           </div>
           <div class="ctrl">
             <div class="ctrl-header"><label>Spouse SS (today $)</label><span class="val" id="vSS2">$0</span></div>
@@ -751,8 +760,8 @@ var TAXData = {
 
     <div class="chart-wrap">
       <div class="chart-view-row">
-        <button id="cvBal" class="tog active" onclick="setChartView('balances')">Balances</button>
-        <button id="cvTax" class="tog"        onclick="setChartView('taxation')">Taxation</button>
+        <button id="cvBal" class="tog"        onclick="setChartView('balances')">Balances</button>
+        <button id="cvTax" class="tog active" onclick="setChartView('taxation')">Taxation</button>
         <button id="cvInc" class="tog"        onclick="setChartView('income')">Income</button>
       </div>
       <div class="legend" id="legend">
@@ -1430,7 +1439,7 @@ const chart = new Chart(chartCtx, {
 });
 
 /* ── Chart view (Balances / Taxation / Income) ── */
-let chartView = 'balances';
+let chartView = 'taxation';
 let _cvInit   = false;
 
 const CV = {
@@ -1926,7 +1935,7 @@ function update(){
   lastFixedIncome = fixedIncome;
   lastUseReal     = useReal;
   buildTable(rows);
-  if (!_cvInit) { _cvInit = true; setChartView('balances'); }
+  if (!_cvInit) { _cvInit = true; setChartView('taxation'); }
 }
 
 /* ── URL bookmark / share ── */
@@ -2307,17 +2316,23 @@ function enforceBirthAgeConstraints(){
   ceEl.min = startAge;
   if(+ceEl.value < startAge) ceEl.value = startAge;
   const raEl = document.getElementById('retireAge');
-  const raMin = Math.min(Math.max(62, startAge), 70);
-  raEl.min = raMin;
-  if(+raEl.value < raMin) raEl.value = raMin;
+  raEl.min = startAge;
+  raEl.max = 80;
+  if(+raEl.value < startAge) raEl.value = startAge;
+  if(+raEl.value > 80) raEl.value = 80;
 }
 
+function syncWdEarlyWarn() {
+  const v = +document.getElementById('wdAge').value;
+  document.getElementById('wdEarlyWarn').style.display = (v > 0 && v < 60) ? 'block' : 'none';
+}
 document.getElementById('wdAge').addEventListener('input', () => {
   const wd1Age = +document.getElementById('wdAge').value;
   const wd2El  = document.getElementById('wd2Age');
   wd2El.min    = wd1Age;
   if(+wd2El.value < wd1Age) wd2El.value = wd1Age;
   document.getElementById('vWd2Age').textContent = wd2El.value;
+  syncWdEarlyWarn();
   update();
 });
 
@@ -2425,6 +2440,7 @@ setIraView('combined');
   document.getElementById('vRetireAge').textContent = raEl.value;
 }
 syncEarnedIncomeWarning();
+syncWdEarlyWarn();
 applyStateThresholds();  // populates state brackets then calls renderThreshEditor
 update();
 

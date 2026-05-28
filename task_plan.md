@@ -134,6 +134,7 @@ EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12
 - [ ] Build Mode 1: Sensitivity grid (e.g., growth: 4%, 6%, 8%; inflation: 2%, 3%, 4%)
 - [ ] Show which strategy ranks best under each combo
 - [ ] Mode 2 (Monte Carlo integration) after Phase 2 complete
+- [ ] **TODO:** Add "Historical inflation" as an MC option — sample CPI annual changes (1928–2024) synchronized with the bootstrap return blocks so inflation correlates with market regimes (high inflation often aligns with poor real returns). Deflate each path's spend goal by sampled inflation rather than the fixed inflation rate.
 - **Status:** pending
 
 ### Phase 9: ACA Limit Strategy Refinement

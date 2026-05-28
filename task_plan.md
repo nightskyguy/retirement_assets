@@ -3,49 +3,80 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-Phase 0 — Planning
+Phase 6 — complete; next: Phase 3 (Lumpy Spending) or Phase 7 (Correlated MC)
+
+## Dependency Graph
+```
+0b (Cleanup)
+├─→ 1 (Bracket/IRMAA)
+│   ├─→ 5 (Scenario Comparison)
+│   └─→ 9 (ACA Refinement)
+│       └─→ 10 (Multi-Strategy)
+├─→ 2 (Bootstrap MC)
+│   ├─→ 7 (Correlated MC) [also needs 6]
+│   └─→ 11 (Regime-Switching)
+├─→ 3 (Lumpy Spending) [independent]
+├─→ 4 (QCDs) [independent]
+├─→ 6 (Per-Account Asset Mix)
+│   └─→ 7 (Correlated MC)
+├─→ 8 (Variable Growth/Inflation) [independent]
+└─→ 12 (Quarterly Mode) [independent]
+
+EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12
+```
+
+**Critical Path:** 0b → 1 → 9 → 10 (longest chain)
+**Unblocked quickwins:** 3, 4, 8, 12 (can start anytime after cleanup)
 
 ## Phases
 
 ### Phase 0: Planning & Context
 - [x] Read BootstrapPlan.md (Monte Carlo improvements)
 - [x] Read optimizer_directions.md (feature priority list)
-- [ ] Consolidate ideas into actionable phases
-- [ ] Identify blockers and dependencies
-- **Status:** in_progress
+- [x] Consolidate ideas into actionable phases
+- [x] Identify blockers and dependencies
+- **Status:** complete
+
+### Phase 0b: Remove Orphaned Files (Code Cleanup)
+**Why:** Clean up unused files before implementing new features.
+
+**Orphaned Files:**
+- ~~`calculateTaxes.js`~~ — DELETED
+
+**Status:** complete
 
 ### Phase 1: Fix Bracket/IRMAA Strategy Logic (Priority B)
 **Why:** Currently bracket acts as cap but spend overrides it, making strategies non-functional when desired spend > bracket room. Need to invert logic: bracket/IRMAA sets *maximum* IRA withdrawal.
 
 **Approach:** Binary search all bracket options to find max feasible spend per bracket. Show constraints inline (no modals). User can override constraints; calculation shows impact.
 
-- [ ] Review current calculateWithdrawals() logic
-- [ ] Invert bracket/IRMAA constraint: bracket limits IRA withdrawal, not spend goal
-- [ ] Shortfall draws from brokerage/cash first, then Roth
-- [ ] Implement `calculateMaxSpendPerBracket(bracket, assets, income, years)` using binary search
-- [ ] When spend goal changes, recalculate max spend for ALL bracket options (real-time)
-- [ ] **UI:** Bracket selector shows each option: "Bracket 22% — max $85k"
-- [ ] **UI:** Spend input field next to brackets
-- [ ] **UI:** Below brackets, feedback line: "Bracket 22% allows up to $85k; you want $100k (gap: -$15k)"
-- [ ] **UI:** Status indicator: Green checkmark if spend ≤ max; Yellow warning if over
-- [ ] **UI:** Real-time updates as user changes bracket or spend
-- [ ] Annual Details shows constraint violations (e.g., "Withdrew $50k but bracket allows $35k")
-- [ ] Test with IRMAA scenarios; verify calculation respects constraint
-- [ ] Test with spend > bracket; verify shortfall draws from brokerage/cash first, then Roth
-- [ ] Test real-time feedback updates
-- **Status:** pending
+- [x] Review current calculateWithdrawals() logic
+- [x] Invert bracket/IRMAA constraint: bracket limits IRA withdrawal, not spend goal
+- [x] Shortfall draws from brokerage/cash first, then Roth
+- [x] Implement `calculateMaxSpendPerBracket(bracket, assets, income, years)` using binary search
+- [x] When spend goal changes, recalculate max spend for ALL bracket options (real-time)
+- [x] **UI:** Bracket selector shows each option: "Bracket 22% — max $85k"
+- [x] **UI:** Spend input field next to brackets
+- [x] **UI:** Below brackets, feedback line: "Bracket 22% allows up to $85k; you want $100k (gap: -$15k)"
+- [x] **UI:** Status indicator: Green checkmark if spend ≤ max; Yellow warning if over
+- [x] **UI:** Real-time updates as user changes bracket or spend
+- [x] Annual Details shows constraint violations (e.g., "Withdrew $50k but bracket allows $35k")
+- [x] Test with IRMAA scenarios; verify calculation respects constraint
+- [x] Test with spend > bracket; verify shortfall draws from brokerage/cash first, then Roth
+- [x] Test real-time feedback updates
+- **Status:** complete
 - **Blocks:** Better strategy comparisons, IRMAA work, ACA age-gating (Phase 9)
 
 ### Phase 2: Historical Bootstrap for Monte Carlo (BootstrapPlan Phase 1)
 **Why:** Current GBM produces unrealistic single-year returns (60%+) and consecutive-loss runs (8+ years). Bootstrap captures true return distribution with realistic caps.
 
-- [ ] Embed historical annual returns by asset class (S&P 1926–2024, bonds, intl)
-- [ ] Implement bootstrapScenarioBank() in montecarlo/prng.js with block size=3
-- [ ] Modify worker.js and mc_controller.js to accept simulationMode parameter
-- [ ] Add mode toggle to nerd panel (GBM vs Historical Bootstrap)
-- [ ] Test that bootstrap results are more realistic (no 60%+ years, no 8+ loss runs)
-- **Status:** pending
-- **Blocks:** Phase 3 (correlated asset classes)
+- [x] Embed historical annual returns by asset class (S&P 1928–2024, bonds, intl) → `montecarlo/historical_returns.js`
+- [x] Implement bootstrapScenarioBank() in montecarlo/prng.js with block size=3
+- [x] Modify worker.js and mc_controller.js to accept simulationMode parameter
+- [x] Add mode toggle to nerd panel (GBM vs Historical Bootstrap)
+- [x] Test that bootstrap results are more realistic — range −43.8% to +52.6% (vs GBM 60%+); μ/σ correctly disabled
+- **Status:** complete
+- **Blocks:** Phase 7 (correlated asset classes)
 
 ### Phase 3: Lumpy Spending (Priority H)
 **Why:** Users have one-time expenses (home renovation, car, etc.). Currently no way to model them.
@@ -76,12 +107,16 @@ Phase 0 — Planning
 ### Phase 6: Per-Account Asset Mix (Priority P)
 **Why:** Different accounts (Roth, IRA, Brokerage) have different allocations. Need to derive historically-grounded growth rates per account.
 
-- [ ] Embed historical real returns by asset class (US equity, bonds, intl)
-- [ ] Add allocation grid per account (percentages sum to 100%)
-- [ ] Weighted-average allocations to compute per-account expected return and σ
-- [ ] Surface derived return so user can see/override
-- **Status:** pending
-- **Blocks:** Improved MC (Phase 2 + P), Variable Growth/Inflation (Phase 7)
+- [x] Embed historical real returns by asset class (US equity, bonds, intl) — already in historical_returns.js (Phase 2)
+- [x] Add allocation grid per account — already in HTML (aspirational)
+- [x] Weighted-average allocations to compute per-account expected return (bootstrapMultiAssetBank)
+- [x] Surface derived return as "Est. Rtn" advisory column in Account Composition table
+- [x] bootstrapMultiAssetBank() — synchronized block bootstrap equity/bonds/intl (1970-2024 window)
+- [x] simulate() accepts returnSequencePerAccount; per-account growthRates use it with baseReturn fallback
+- [x] worker.js and mc_controller.js build returnSequencePerAccount per path in bootstrap mode
+- [x] MC metrics shows per-asset-class ranges (equity/bonds/intl) when in bootstrap mode
+- **Status:** complete
+- **Blocks:** Correlated MC (Phase 7) — now superseded (Phase 6 bootstrap achieves historical correlation naturally)
 
 ### Phase 7: Correlated Multi-Asset MC (BootstrapPlan Phase 2)
 **Why:** Single σ cannot model both 100% equity and 60/40 portfolios. Need stocks and bonds separately with correlation matrix.
@@ -149,11 +184,12 @@ Phase 0 — Planning
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
-| Phase 1 before Phase 3 | Bracket fix unblocks correct strategy comparisons |
-| Bootstrap Phase 2 before correlated multi-asset | Bootstrap is simpler, lower-risk drop-in; Phase 7 requires simulate() changes |
-| Phases 2-4 before complex features | Core functionality (bootstrap, lumpy spend, QCDs) before multi-strategy or regime-switching |
-| ACA limits age-gate at 65+ | Medicare replaces ACA at 65, making ACA subsidies irrelevant; disable strategy option for retirees 65+ |
-| Phase 9 (ACA) before Phase 10 (multi-strategy) | Multi-strategy needs clean ACA handling to avoid invalid strategy combos |
+| Execute 0b → {1,2,3,4,6,8} in parallel (except 0b) | Cleanup is 1 file, fast. Bracket fix (1) critical path. Bootstrap (2) unblocks MC work. Three quickwins (3,4,8) independent. Asset mix (6) needed for Phase 7. |
+| Phase 1 (bracket) before Phase 9 (ACA) | Bracket fix inverts withdrawal logic; ACA refinement depends on working bracket/IRMAA logic. Critical path: 1 → 9 → 10. |
+| Bootstrap (Phase 2) before correlated MC (Phase 7) | Bootstrap is simpler, captures distribution shape. Phase 7 (Cholesky correlation) builds on Phase 2 framework. Regime-switching (11) also references bootstrap for comparison. |
+| Phase 6 (per-account asset mix) before Phase 7 | Correlated MC needs per-account allocation grids. Phase 6 defines allocation framework. |
+| Phases 3,4,8,12 can start anytime after 0b | Lumpy spending, QCDs, variable growth optimizer, and quarterly mode are all independent. Schedule per team capacity. |
+| Phase 9 (ACA) before Phase 10 (multi-strategy) | Multi-strategy optimizer needs clean ACA constraint handling to avoid generating invalid 2-phase combos where both phases use deprecated ACA limits post-65. |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |

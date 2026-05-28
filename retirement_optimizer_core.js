@@ -1145,11 +1145,17 @@ function simulate(inputs) {
         // IRA and Roth always reinvest dividends into the source account (tax-deferred / tax-free),
         // so their effective return = capital appreciation + dividendRate.
         // Brokerage dividends are handled separately below (taxed first, then reinvested or sent to Cash).
-        const yearReturn = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
+        const baseReturn = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
         const div = inputs.dividendRate ?? 0;
+        const psa = inputs.returnSequencePerAccount;
         let growthRates = {
-            IRA: yearReturn + div, IRA1: yearReturn + div, IRA2: yearReturn + div,
-            Brokerage: yearReturn, Cash: inputs.cashYield, Roth1: yearReturn + div, Roth2: yearReturn + div
+            IRA:       (psa?.IRA1?.[y]      ?? baseReturn) + div,
+            IRA1:      (psa?.IRA1?.[y]      ?? baseReturn) + div,
+            IRA2:      (psa?.IRA2?.[y]      ?? baseReturn) + div,
+            Brokerage:  psa?.Brokerage?.[y] ?? baseReturn,
+            Cash:      inputs.cashYield,
+            Roth1:     (psa?.Roth1?.[y]     ?? baseReturn) + div,
+            Roth2:     (psa?.Roth2?.[y]     ?? baseReturn) + div,
         }
 
         // Grow Balances

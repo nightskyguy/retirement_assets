@@ -2,31 +2,53 @@
 // Receives a config message, runs all variations against a shared scenario bank (CRN),
 // posts progress updates, then posts the final results.
 
-importScripts('../taxengine.js', '../retirement_optimizer_core.js', 'prng.js', 'stats.js');
+importScripts('../taxengine.js', '../retirement_optimizer_core.js', 'prng.js', 'stats.js', 'historical_returns.js');
 
 self.onmessage = function ({ data: cfg }) {
     const t0 = performance.now();
-    const { numPaths, mu, sigma, seed, years, variations } = cfg;
+    const { numPaths, mu, sigma, seed, years, variations, simulationMode } = cfg;
     const rng = mulberry32(seed ?? 42);
 
-    // GBM: arithmetic expected return = mu, so log-space drift = mu - 0.5*sigma^2.
-    const logDrift = mu - 0.5 * sigma * sigma;
-    // Geometric median annual return = exp(logDrift) - 1 (Z has median 0, so exp cancels).
-    const medianAnnualReturn = Math.exp(logDrift) - 1;
-
-    // Generate Common Random Numbers: one shared scenario bank so every variation
-    // sees the exact same sequence of market shocks — apples-to-apples comparison.
-    // scenarioBank[p * years + y] = log-space shock (drift + sigma*Z) for path p, year y.
-    const scenarioBank = new Float64Array(numPaths * years);
+    // Build scenario bank — Common Random Numbers so every variation sees identical shocks.
+    let scenarioBank, multiAssetBank, medianAnnualReturn, logDrift;
     let minAnnualReturn =  Infinity;
     let maxAnnualReturn = -Infinity;
-    for (let p = 0; p < numPaths; p++) {
-        for (let y = 0; y < years; y++) {
-            const shock = logDrift + sigma * boxMuller(rng);
-            scenarioBank[p * years + y] = shock;
-            const r = Math.exp(shock) - 1;
-            if (r < minAnnualReturn) minAnnualReturn = r;
-            if (r > maxAnnualReturn) maxAnnualReturn = r;
+    let assetRanges = null;
+
+    if (simulationMode === 'bootstrap') {
+        // Multi-asset block bootstrap: synchronized draws from equity, bonds, intl (1970–2024 window).
+        multiAssetBank = bootstrapMultiAssetBank(rng, numPaths, years);
+        scenarioBank = multiAssetBank.equity;  // used for min/max/median reporting (equity proxy)
+        for (let i = 0; i < scenarioBank.length; i++) {
+            if (scenarioBank[i] < minAnnualReturn) minAnnualReturn = scenarioBank[i];
+            if (scenarioBank[i] > maxAnnualReturn) maxAnnualReturn = scenarioBank[i];
+        }
+        const sortedEq = [...HISTORICAL_RETURNS.equity].sort((a, b) => a - b);
+        medianAnnualReturn = sortedEq[Math.floor(sortedEq.length / 2)];
+        // Compute per-asset-class ranges for metrics display
+        let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity, itMin = Infinity, itMax = -Infinity;
+        for (let i = 0; i < multiAssetBank.equity.length; i++) {
+            if (multiAssetBank.equity[i] < eqMin) eqMin = multiAssetBank.equity[i];
+            if (multiAssetBank.equity[i] > eqMax) eqMax = multiAssetBank.equity[i];
+            if (multiAssetBank.bonds[i]  < bdMin) bdMin = multiAssetBank.bonds[i];
+            if (multiAssetBank.bonds[i]  > bdMax) bdMax = multiAssetBank.bonds[i];
+            if (multiAssetBank.intl[i]   < itMin) itMin = multiAssetBank.intl[i];
+            if (multiAssetBank.intl[i]   > itMax) itMax = multiAssetBank.intl[i];
+        }
+        assetRanges = { equity: [eqMin, eqMax], bonds: [bdMin, bdMax], intl: [itMin, itMax] };
+    } else {
+        // GBM (default): bank[p*years+y] = log-space shock; convert with Math.exp()-1.
+        logDrift = mu - 0.5 * sigma * sigma;
+        medianAnnualReturn = Math.exp(logDrift) - 1;
+        scenarioBank = new Float64Array(numPaths * years);
+        for (let p = 0; p < numPaths; p++) {
+            for (let y = 0; y < years; y++) {
+                const shock = logDrift + sigma * boxMuller(rng);
+                scenarioBank[p * years + y] = shock;
+                const r = Math.exp(shock) - 1;
+                if (r < minAnnualReturn) minAnnualReturn = r;
+                if (r > maxAnnualReturn) maxAnnualReturn = r;
+            }
         }
     }
 
@@ -41,16 +63,37 @@ self.onmessage = function ({ data: cfg }) {
         let ruinCount = 0;
 
         for (let p = 0; p < numPaths; p++) {
-            // Convert scenario bank log-shocks to annual fractional return rates.
-            // applyGrowth() multiplies balance by rate, so rate=0.07 → +7%.
             const returnSeq = new Float64Array(years);
             for (let y = 0; y < years; y++) {
-                returnSeq[y] = Math.exp(scenarioBank[p * years + y]) - 1;
+                const raw = scenarioBank[p * years + y];
+                returnSeq[y] = simulationMode === 'bootstrap' ? raw : Math.exp(raw) - 1;
+            }
+
+            // Build per-account return sequences from multi-asset bank when available.
+            let returnSequencePerAccount = null;
+            if (simulationMode === 'bootstrap' && multiAssetBank) {
+                const accts = ['IRA1', 'IRA2', 'Brokerage', 'Roth1', 'Roth2'];
+                returnSequencePerAccount = {};
+                for (const acct of accts) {
+                    const eqPct   = (baseInputs[`comp_${acct}_ratio`] ?? 60) / 100;
+                    const intlPct = (baseInputs[`comp_${acct}_intl`]  ?? 0)  / 100;
+                    const domEq   = eqPct * (1 - intlPct);
+                    const intl    = eqPct * intlPct;
+                    const bond    = 1 - eqPct;
+                    const seq = new Float64Array(years);
+                    for (let y = 0; y < years; y++) {
+                        const i = p * years + y;
+                        seq[y] = domEq * multiAssetBank.equity[i]
+                               + intl  * multiAssetBank.intl[i]
+                               + bond  * multiAssetBank.bonds[i];
+                    }
+                    returnSequencePerAccount[acct] = seq;
+                }
             }
 
             let result;
             try {
-                result = simulate({ ...baseInputs, returnSequence: returnSeq });
+                result = simulate({ ...baseInputs, returnSequence: returnSeq, returnSequencePerAccount });
             } catch (e) {
                 // Treat a crashed simulation as immediate ruin
                 ruinYears[p] = baseInputs.startYear ?? 2026;
@@ -138,5 +181,6 @@ self.onmessage = function ({ data: cfg }) {
         minAnnualReturn,                           // worst single year across all paths
         maxAnnualReturn,                           // best single year across all paths
         inflationRate:     cfg.inflationRate ?? null,  // fixed rate from user inputs
+        assetRanges,                               // { equity, bonds, intl } [min,max] (bootstrap only)
     });
 };

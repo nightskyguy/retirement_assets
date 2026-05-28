@@ -30,6 +30,17 @@ function _mcNerdMode() {
     return typeof NERD_KNOBS !== 'undefined' && NERD_KNOBS;
 }
 
+// Dim μ/σ inputs when bootstrap is selected (they're unused in that mode).
+function updateMCModeUI() {
+    const isBootstrap = (document.getElementById('mc-sim-mode')?.value === 'bootstrap');
+    ['mc-mu', 'mc-sigma'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.disabled = isBootstrap;
+        el.closest('label').style.opacity = isBootstrap ? '0.4' : '';
+    });
+}
+
 // Called by the Monte Carlo tab button.
 // In normal mode, runs immediately with default params (panel stays hidden).
 function mcTabActivated() {
@@ -46,11 +57,12 @@ function mcTabActivated() {
 function _buildMCHash() {
     const base = getInputs();
     return JSON.stringify({
-        inputs: base,
-        numPaths: document.getElementById('mc-num-paths')?.value ?? '500',
-        mu:       document.getElementById('mc-mu')?.value       ?? '7',
-        sigma:    document.getElementById('mc-sigma')?.value    ?? '12',
-        seed:     document.getElementById('mc-seed')?.value     ?? '42',
+        inputs:   base,
+        numPaths: document.getElementById('mc-num-paths')?.value  ?? '500',
+        mu:       document.getElementById('mc-mu')?.value         ?? '7',
+        sigma:    document.getElementById('mc-sigma')?.value      ?? '12',
+        seed:     document.getElementById('mc-seed')?.value       ?? '42',
+        simMode:  document.getElementById('mc-sim-mode')?.value   ?? 'gbm',
     });
 }
 
@@ -61,10 +73,11 @@ function runMonteCarlo() {
 
     const base = getInputs();
 
-    const numPaths = parseInt(document.getElementById('mc-num-paths')?.value  ?? '500');
-    const mu       = parseFloat(document.getElementById('mc-mu')?.value       ?? '7')  / 100;
-    const sigma    = parseFloat(document.getElementById('mc-sigma')?.value    ?? '12') / 100;
-    const seed     = parseInt(document.getElementById('mc-seed')?.value       ?? '42');
+    const numPaths       = parseInt(document.getElementById('mc-num-paths')?.value  ?? '500');
+    const mu             = parseFloat(document.getElementById('mc-mu')?.value       ?? '7')  / 100;
+    const sigma          = parseFloat(document.getElementById('mc-sigma')?.value    ?? '12') / 100;
+    const seed           = parseInt(document.getElementById('mc-seed')?.value       ?? '42');
+    const simulationMode = document.getElementById('mc-sim-mode')?.value ?? 'gbm';
 
     _mcStartYear = base.startYear ?? 2026;
     _mcBase = base;
@@ -83,7 +96,7 @@ function runMonteCarlo() {
     setMCRunning(true);
 
     runMCWorker(
-        { variations, numPaths, mu, sigma, seed, years, inflationRate: base.inflation },
+        { variations, numPaths, mu, sigma, seed, years, simulationMode, inflationRate: base.inflation },
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);
@@ -152,11 +165,13 @@ function renderMCMetrics(msg) {
     const el = document.getElementById('mc-metrics');
     if (!el) return;
 
-    const ms   = msg.totalMs            != null ? msg.totalMs                                     : null;
-    const grow = msg.medianAnnualReturn != null ? (msg.medianAnnualReturn * 100).toFixed(1)      : null;
-    const lo   = msg.minAnnualReturn    != null ? (msg.minAnnualReturn    * 100).toFixed(1)      : null;
-    const hi   = msg.maxAnnualReturn    != null ? (msg.maxAnnualReturn    * 100).toFixed(1)      : null;
-    const inf  = msg.inflationRate      != null ? (msg.inflationRate      * 100).toFixed(1)      : null;
+    const ms   = msg.totalMs            != null ? msg.totalMs                                : null;
+    const grow = msg.medianAnnualReturn != null ? (msg.medianAnnualReturn * 100).toFixed(1) : null;
+    const lo   = msg.minAnnualReturn    != null ? (msg.minAnnualReturn    * 100).toFixed(1) : null;
+    const hi   = msg.maxAnnualReturn    != null ? (msg.maxAnnualReturn    * 100).toFixed(1) : null;
+    const inf  = msg.inflationRate      != null ? (msg.inflationRate      * 100).toFixed(1) : null;
+
+    const pct = (v, decimals = 1) => (v >= 0 ? '+' : '') + (v * 100).toFixed(decimals) + '%';
 
     const parts = [];
     if (ms != null) {
@@ -170,6 +185,22 @@ function renderMCMetrics(msg) {
         + ` <span style="color:#888;font-size:0.85em;">(worst/best simulated year)</span>`
     );
     if (inf  != null) parts.push(`Inflation <strong>${inf}%/yr</strong> <span style="color:#888;font-size:0.85em;">(fixed)</span>`);
+
+    // Per-asset-class ranges (bootstrap mode only)
+    if (msg.assetRanges) {
+        const ar = msg.assetRanges;
+        const fmt = (range) => {
+            const lo = pct(range[0]);
+            const hi = pct(range[1]);
+            return `<strong style="color:${range[0]<0?'#c0392b':'inherit'}">${lo}</strong> to <strong>${hi}</strong>`;
+        };
+        parts.push(
+            `<span style="color:#888;font-size:0.85em;">Asset ranges —</span>`
+            + ` Eq: ${fmt(ar.equity)}`
+            + ` &nbsp;Bonds: ${fmt(ar.bonds)}`
+            + ` &nbsp;Intl: ${fmt(ar.intl)}`
+        );
+    }
 
     el.innerHTML = parts.join(' &nbsp;·&nbsp; ');
     el.style.display = parts.length ? '' : 'none';

@@ -92,22 +92,45 @@ let _mcCancelled = false;
 async function _runMCMainThread(cfg, onProgress, onComplete) {
     const t0 = performance.now();
     _mcCancelled = false;
-    const { numPaths, mu, sigma, seed, years, variations } = cfg;
+    const { numPaths, mu, sigma, seed, years, variations, simulationMode } = cfg;
     const rng = mulberry32(seed ?? 42);
 
-    const logDrift = mu - 0.5 * sigma * sigma;
-
-    // Build shared scenario bank (CRN) — same draws for all variations.
-    const scenarioBank = new Float64Array(numPaths * years);
+    let scenarioBank, multiAssetBank, medianAnnualReturn, logDrift;
     let minAnnualReturn =  Infinity;
     let maxAnnualReturn = -Infinity;
-    for (let p = 0; p < numPaths; p++) {
-        for (let y = 0; y < years; y++) {
-            const shock = logDrift + sigma * boxMuller(rng);
-            scenarioBank[p * years + y] = shock;
-            const r = Math.exp(shock) - 1;
-            if (r < minAnnualReturn) minAnnualReturn = r;
-            if (r > maxAnnualReturn) maxAnnualReturn = r;
+    let assetRanges = null;
+
+    if (simulationMode === 'bootstrap') {
+        multiAssetBank = bootstrapMultiAssetBank(rng, numPaths, years);
+        scenarioBank = multiAssetBank.equity;
+        for (let i = 0; i < scenarioBank.length; i++) {
+            if (scenarioBank[i] < minAnnualReturn) minAnnualReturn = scenarioBank[i];
+            if (scenarioBank[i] > maxAnnualReturn) maxAnnualReturn = scenarioBank[i];
+        }
+        const sortedEq = [...HISTORICAL_RETURNS.equity].sort((a, b) => a - b);
+        medianAnnualReturn = sortedEq[Math.floor(sortedEq.length / 2)];
+        let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity, itMin = Infinity, itMax = -Infinity;
+        for (let i = 0; i < multiAssetBank.equity.length; i++) {
+            if (multiAssetBank.equity[i] < eqMin) eqMin = multiAssetBank.equity[i];
+            if (multiAssetBank.equity[i] > eqMax) eqMax = multiAssetBank.equity[i];
+            if (multiAssetBank.bonds[i]  < bdMin) bdMin = multiAssetBank.bonds[i];
+            if (multiAssetBank.bonds[i]  > bdMax) bdMax = multiAssetBank.bonds[i];
+            if (multiAssetBank.intl[i]   < itMin) itMin = multiAssetBank.intl[i];
+            if (multiAssetBank.intl[i]   > itMax) itMax = multiAssetBank.intl[i];
+        }
+        assetRanges = { equity: [eqMin, eqMax], bonds: [bdMin, bdMax], intl: [itMin, itMax] };
+    } else {
+        logDrift = mu - 0.5 * sigma * sigma;
+        medianAnnualReturn = Math.exp(logDrift) - 1;
+        scenarioBank = new Float64Array(numPaths * years);
+        for (let p = 0; p < numPaths; p++) {
+            for (let y = 0; y < years; y++) {
+                const shock = logDrift + sigma * boxMuller(rng);
+                scenarioBank[p * years + y] = shock;
+                const r = Math.exp(shock) - 1;
+                if (r < minAnnualReturn) minAnnualReturn = r;
+                if (r > maxAnnualReturn) maxAnnualReturn = r;
+            }
         }
     }
 
@@ -127,12 +150,34 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         for (let p = 0; p < numPaths; p++) {
             const returnSeq = new Float64Array(years);
             for (let y = 0; y < years; y++) {
-                returnSeq[y] = Math.exp(scenarioBank[p * years + y]) - 1;
+                const raw = scenarioBank[p * years + y];
+                returnSeq[y] = simulationMode === 'bootstrap' ? raw : Math.exp(raw) - 1;
+            }
+
+            let returnSequencePerAccount = null;
+            if (simulationMode === 'bootstrap' && multiAssetBank) {
+                const accts = ['IRA1', 'IRA2', 'Brokerage', 'Roth1', 'Roth2'];
+                returnSequencePerAccount = {};
+                for (const acct of accts) {
+                    const eqPct   = (baseInputs[`comp_${acct}_ratio`] ?? 60) / 100;
+                    const intlPct = (baseInputs[`comp_${acct}_intl`]  ?? 0)  / 100;
+                    const domEq   = eqPct * (1 - intlPct);
+                    const intl    = eqPct * intlPct;
+                    const bond    = 1 - eqPct;
+                    const seq = new Float64Array(years);
+                    for (let y = 0; y < years; y++) {
+                        const i = p * years + y;
+                        seq[y] = domEq * multiAssetBank.equity[i]
+                               + intl  * multiAssetBank.intl[i]
+                               + bond  * multiAssetBank.bonds[i];
+                    }
+                    returnSequencePerAccount[acct] = seq;
+                }
             }
 
             let result;
             try {
-                result = simulate({ ...baseInputs, returnSequence: returnSeq });
+                result = simulate({ ...baseInputs, returnSequence: returnSeq, returnSequencePerAccount });
             } catch (e) {
                 ruinYears[p] = baseInputs.startYear ?? 2026;
                 ruinCount++;
@@ -205,9 +250,10 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         numPaths,
         years,
         totalMs,
-        medianAnnualReturn: Math.exp(logDrift) - 1,
+        medianAnnualReturn,
         minAnnualReturn,
         maxAnnualReturn,
         inflationRate: cfg.inflationRate ?? null,
+        assetRanges,
     });
 }

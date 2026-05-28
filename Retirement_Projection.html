@@ -891,7 +891,7 @@ function rmdFactor(age, rmdAge){
 const BRACKET_COLORS   = ['#fef08a','#fbbf24','#f97316','#ea580c','#c2410c','#9a3412','#7c2d12'];
 const BRACKET_VISIBLE  = [false, true, true, false, false, false, false];
 const IRMAA_COLORS     = ['#d8b4fe','#c084fc','#a855f7','#7c3aed','#5b21b6'];
-const IRMAA_VISIBLE    = [true, false, false, false, false];
+const IRMAA_VISIBLE    = [false, false, false, false, false];
 
 function buildDefaults(status) {  // status: 'MFJ' or 'SGL'
   const fd  = TAXData.FEDERAL[status];
@@ -920,7 +920,7 @@ function buildDefaults(status) {  // status: 'MFJ' or 'SGL'
   const niit = {
     id: 'niit', label: 'NIIT',
     amount:  -(TAXData.FEDERAL.NIIT[status]),   // negative → not inflation-indexed
-    color:   '#818cf8', visible: true, type: 'irmaa'
+    color:   '#818cf8', visible: true, type: 'bracket'
   };
 
   return [...brackets, ...irmaaTiers, niit]
@@ -946,7 +946,7 @@ function buildStateThresholds(stateKey, status) {
       label:   stateKey + ' ' + parseFloat((b.r * 100).toFixed(1)) + '% bracket',
       amount:  floor,
       color:   STATE_THRESH_COLORS[result.length % STATE_THRESH_COLORS.length],
-      visible: result.length < 2,
+      visible: false,
       type:    'state',
     });
   });
@@ -1414,11 +1414,12 @@ const chart = new Chart(chartCtx, {
             const irmaaHit = [];
             for(const t of sorted){
               const threshold = threshAmt(t, r, useReal);
-              const compare   = t.type === 'bracket' ? taxableInc : (t.type === 'state' ? stateTaxInc : totalIncome);
+              const isNiit    = t.id === 'niit';
+              const compare   = (t.type === 'bracket' && !isNiit) ? taxableInc : (t.type === 'state' ? stateTaxInc : totalIncome);
               if(compare >= threshold){
-                if(t.type === 'bracket') bracket = t.label;
+                if(t.type === 'bracket' && !isNiit) bracket = t.label;
                 else if(t.type === 'state') stateBracket = t.label;
-                else if(t.type === 'irmaa') irmaaHit.push(t.label);
+                else irmaaHit.push(t.label);  // irmaa tiers + NIIT
               }
             }
             const lines = ['', ` Total income: ${fmt(totalIncome)}`, ` Taxable income: ${fmt(taxableInc)}`];

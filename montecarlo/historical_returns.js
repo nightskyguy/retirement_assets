@@ -1,5 +1,6 @@
-// Historical annual return data for Monte Carlo bootstrap simulation.
-// Source: Damodaran (S&P 500 proxy, US 10-yr Treasury), MSCI (EAFE).
+// Historical annual return and inflation data for Monte Carlo bootstrap simulation.
+// Sources: Damodaran (S&P 500 proxy, US 10-yr Treasury), MSCI (EAFE),
+//          BLS CPI-U (December-over-December, 1928–2024).
 // All values are decimal fractions: 0.10 = 10%, -0.37 = -37%.
 // Loadable via <script src="..."> (browser) or importScripts() (web worker).
 
@@ -88,7 +89,42 @@ const HISTORICAL_RETURNS = {
          0.2200,  0.0780,  0.1130, -0.1450,  0.1820,  0.0470,
     ],
 
-    equityStartYear: 1928,
-    bondsStartYear:  1928,
-    intlStartYear:   1970,
+    // US CPI-U annual inflation (December-over-December), 1928–2024.  97 observations.
+    // Great Depression deflation, WWII price controls, post-war surge, Volcker disinflation,
+    // and 2021–2022 post-COVID spike are all captured.
+    inflation: [
+        // 1928–1934
+        -0.0170,  0.0000, -0.0230, -0.0900, -0.0990, -0.0510,  0.0340,
+        // 1935–1941
+         0.0260,  0.0100,  0.0370, -0.0280, -0.0050,  0.0070,  0.0970,
+        // 1942–1948
+         0.1090,  0.0610,  0.0170,  0.0230,  0.0830,  0.1440,  0.0770,
+        // 1949–1955
+        -0.0100,  0.0100,  0.0790,  0.0190,  0.0080,  0.0070, -0.0040,
+        // 1956–1962
+         0.0150,  0.0330,  0.0280,  0.0070,  0.0170,  0.0100,  0.0100,
+        // 1963–1969
+         0.0130,  0.0130,  0.0160,  0.0290,  0.0280,  0.0420,  0.0550,
+        // 1970–1976
+         0.0570,  0.0440,  0.0320,  0.0870,  0.1230,  0.0690,  0.0490,
+        // 1977–1983
+         0.0670,  0.0900,  0.1330,  0.1250,  0.0890,  0.0380,  0.0380,
+        // 1984–1990
+         0.0390,  0.0380,  0.0110,  0.0440,  0.0440,  0.0460,  0.0610,
+        // 1991–1997
+         0.0310,  0.0290,  0.0270,  0.0270,  0.0250,  0.0330,  0.0170,
+        // 1998–2004
+         0.0160,  0.0270,  0.0340,  0.0280,  0.0160,  0.0230,  0.0270,
+        // 2005–2011
+         0.0340,  0.0320,  0.0290,  0.0380, -0.0040,  0.0160,  0.0320,
+        // 2012–2018
+         0.0210,  0.0150,  0.0160,  0.0010,  0.0210,  0.0210,  0.0240,
+        // 2019–2024
+         0.0230,  0.0140,  0.0700,  0.0650,  0.0340,  0.0290,
+    ],
+
+    equityStartYear:    1928,
+    bondsStartYear:     1928,
+    intlStartYear:      1970,
+    inflationStartYear: 1928,
 };

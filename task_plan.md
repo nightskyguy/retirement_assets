@@ -4,6 +4,7 @@ Goal: Implement remaining features from optimizer_directions.md priority list (i
 
 ## Current Phase
 Phase 7 — complete; next: Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 9 (ACA Refinement), or Phase 10 (Multi-Strategy)
+Retirement_Projection fixes added: Phase 13 (responsive layout), Phase 14 (Simple mode), Phase 15 (Tax Planner linkage)
 
 ## Dependency Graph
 ```
@@ -206,6 +207,104 @@ With 3 segments × 42 strategies = 42³ = 74,088 max combos. After filtering inv
 - [ ] Aggregate back up to yearly rows for readability
 - [ ] Drill-down to monthly detail
 - **Status:** pending
+
+---
+## CSS / Layout Makeover — All HTML Tools
+
+### Phase 16: Global CSS/Layout Overhaul (All 7 Tools)
+**Why:** Tools share two systemic layout problems: (A) fixed-px sidebars and missing breakpoints make them unusable on small screens; (B) poor space utilization — tables/containers either overflow or wastefully cap width on wide screens.
+
+**Tools in scope:**
+| File | Layout pattern | Known issues |
+|------|---------------|--------------|
+| `retirement_optimizer.html` | inline table styles, `width:100%` | Tables fill full width; no sidebar grid; minimal responsiveness |
+| `Retirement_Projection.html` | `290px 1fr` grid, breakpoint @740px | Fixed sidebar overflows <740px; single breakpoint insufficient |
+| `IncomeTaxPlanner.html` | `272px 1fr` grid, max-width 1300px | Fixed sidebar; no small-screen breakpoint found |
+| `RetirementTaxPlanner.html` | `400px 1fr` grid, max-width 1280px | 400px sidebar very wide on mobile; only print media query |
+| `AfterTaxRealGrowth.html` | `max-width:720px`, breakpoint @540px | Too narrow on wide screens; sidebar cols fixed |
+| `FutureCost.html` | `max-width:720px`, breakpoint @540px | Same as AfterTaxRealGrowth |
+| `irmaa_and_rmds.html` | `max-width:1000px` | Need audit for sidebar/table behavior |
+
+**Goal A — Responsiveness:**
+- Replace all fixed-px sidebar widths with `clamp(min, preferred, max)` (e.g. `clamp(220px, 25vw, 320px)`)
+- Add breakpoints: ≤480px (phone portrait), ≤768px (tablet/phone landscape), ≤1024px (small laptop)
+- At ≤768px: sidebars collapse below content (single-column); nav/header wraps gracefully
+- Font sizes use `clamp()` or `min()` so labels/values stay legible at any width
+- Sliders: ensure `width:calc(100% - 16px)` doesn't break in collapsed layout
+- Touch targets ≥44px for sliders, buttons, toggle rows
+
+**Goal B — Space utilization:**
+- Tables: use `width: fit-content; max-width: 100%` instead of `width:100%` for narrow-content tables
+- Wide-content tables (multi-column data): use `overflow-x: auto` wrapper + `min-width` on table
+- Metric grids: cap column count at viewport width (don't stretch 3-col metrics across 2400px screen)
+- Containers: tools capped at `max-width:720px` should expand to `max-width: min(900px, 100%)` or similar — no reason to cap narrow on large screens
+- Sidebar panels: content should not stretch to fill full sidebar height; `align-items:start` on grid
+
+**Shared CSS patterns to standardize (consider `shared.css` or per-file):**
+- Fluid sidebar mixin: `clamp(220px, 25vw, 320px) 1fr`
+- Responsive breakpoint set: 480 / 768 / 1024
+- Table wrapper: `<div class="tbl-wrap">` with `overflow-x:auto`
+- Metric grid: `grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))`
+
+**Per-tool tasks:**
+- [ ] **Audit phase:** Screenshot each tool at 375px, 768px, 1440px — document overflow/cramping issues
+- [ ] `Retirement_Projection.html` — fluid sidebar, breakpoints (supersedes Phase 13 scope A)
+- [ ] `IncomeTaxPlanner.html` — fluid sidebar, add breakpoints
+- [ ] `RetirementTaxPlanner.html` — fluid 400px→clamp sidebar, add mobile breakpoints
+- [ ] `AfterTaxRealGrowth.html` — expand max-width cap, improve space utilization
+- [ ] `FutureCost.html` — expand max-width cap, improve space utilization
+- [ ] `irmaa_and_rmds.html` — audit + fix
+- [ ] `retirement_optimizer.html` — fix table width/overflow, add responsive behavior
+- [ ] Cross-tool: standardize breakpoints and fluid sidebar pattern (DRY where feasible)
+- [ ] Re-test all tools at 375px / 768px / 1440px after changes
+
+- **Status:** pending
+- **Note:** Phase 13 (Retirement_Projection responsive) is a subset of this phase. Execute together or absorb Phase 13 here.
+
+---
+## Retirement_Projection.html — Standalone Fixes
+
+### Phase 13: Small-Screen Responsive Layout (Retirement_Projection.html)
+**Why:** On small screens, the 290px fixed sidebar + right panel grid overflows; sliders and values are cut off. Input panel should fill available width at a readable font size.
+
+- [ ] Audit current CSS: `.shell` uses `grid-template-columns:290px 1fr`; single breakpoint at `max-width:740px` collapses to `1fr`
+- [ ] Verify slider width calculation (`width:calc(100% - 16px)`) renders correctly at narrower widths
+- [ ] Replace fixed `290px` sidebar with `min(290px, 100%)` or fluid `clamp(240px, 30vw, 320px)`
+- [ ] Ensure font-size scales legibly on mobile (consider `font-size: clamp(12px, 2vw, 14px)` for `.ctrl-header label`)
+- [ ] Add breakpoint ≤480px: stack metrics to single column, reduce panel padding
+- [ ] Test at 375px (iPhone SE), 414px (iPhone 14), 768px (iPad portrait)
+- **Status:** pending
+- **Files:** `Retirement_Projection.html` (CSS only, no logic changes)
+
+### Phase 14: Simple Mode (Retirement_Projection.html)
+**Why:** Tool has too many controls for basic use-case (single-account growth modeling). `IRA_Projection` was removed; need lightweight replacement.
+
+**Simple mode scope:** Single account type (IRA, Roth, or Brokerage), balance + growth rate + years + withdrawal rate → balance/value over time chart. No SS, no RMDs, no tax engine, no multi-account complexity.
+
+**Implementation approach:** Toggle button in header ("Simple / Advanced"). Simple mode hides all `<details>` sections except the selected account sub-section; shows a stripped metric set (final balance, depletion year, total withdrawn). Advanced mode = current behavior unchanged.
+
+- [ ] Add "Simple / Advanced" toggle to header (persisted to URL hash)
+- [ ] Determine which controls survive in Simple mode: account selector (IRA/Roth/Brokerage), balance, growth rate, annual withdrawal, years. Hide everything else.
+- [ ] Simple mode hides: SS section, filing status, second spouse, IRMAA details, brokerage tax details, threshold editor, most metrics
+- [ ] Simple mode shows: account balance, growth rate, withdrawal, projection chart, 3 key metrics (final balance, depletion year, CAGR)
+- [ ] Ensure URL-sharing works in both modes (hash encodes mode flag)
+- [ ] Test: Simple mode produces same numbers as Advanced mode with equivalent single-account inputs
+- **Status:** pending
+- **Files:** `Retirement_Projection.html`
+
+### Phase 15: Link to RetirementTaxPlanner (Retirement_Projection.html)
+**Why:** User wants to click a specific year row in the projection table and open/link to RetirementTaxPlanner pre-populated with that year's values.
+
+**What to pass:** Year's AGI (or IRA withdrawal amount), filing status, SS income for that year → URL hash params on RetirementTaxPlanner.
+
+- [ ] Identify what RetirementTaxPlanner.html accepts as URL params / hash
+- [ ] Add clickable year column to projection table (or row click handler)
+- [ ] On click: build URL with year's key values (withdrawal, SS, filing status, age) → open in new tab
+- [ ] Add visual affordance: row hover shows link cursor + subtle highlight
+- [ ] Test: clicking year opens RetirementTaxPlanner with correct pre-filled values
+- **Status:** pending
+- **Files:** `Retirement_Projection.html`, possibly `RetirementTaxPlanner.html` (if it needs new param support)
+- **Depends on:** Understanding RetirementTaxPlanner.html's existing URL param schema
 
 ## Key Questions
 1. Should Phase 1 (bracket/IRMAA fix) be done before strategy comparisons work correctly?

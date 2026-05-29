@@ -98,27 +98,51 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
     let scenarioBank, multiAssetBank, medianAnnualReturn, logDrift;
     let minAnnualReturn =  Infinity;
     let maxAnnualReturn = -Infinity;
-    let assetRanges = null;
+    let assetRanges    = null;
+    let inflationStats = null;
 
     if (simulationMode === 'bootstrap') {
         multiAssetBank = bootstrapMultiAssetBank(rng, numPaths, years);
-        scenarioBank = multiAssetBank.equity;
+        scenarioBank = multiAssetBank.equity;  // used for equity min/max/median reporting
+        // Single scan: collect min/max for all asset classes and inflation simultaneously.
+        let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity,
+            itMin = Infinity, itMax = -Infinity, infMin = Infinity, infMax = -Infinity;
         for (let i = 0; i < scenarioBank.length; i++) {
-            if (scenarioBank[i] < minAnnualReturn) minAnnualReturn = scenarioBank[i];
-            if (scenarioBank[i] > maxAnnualReturn) maxAnnualReturn = scenarioBank[i];
+            const eq  = scenarioBank[i];
+            const bd  = multiAssetBank.bonds[i];
+            const it  = multiAssetBank.intl[i];
+            const inf = multiAssetBank.inflation[i];
+            if (eq  < eqMin)  eqMin  = eq;   if (eq  > eqMax)  eqMax  = eq;
+            if (bd  < bdMin)  bdMin  = bd;   if (bd  > bdMax)  bdMax  = bd;
+            if (it  < itMin)  itMin  = it;   if (it  > itMax)  itMax  = it;
+            if (inf < infMin) infMin = inf;  if (inf > infMax) infMax = inf;
         }
-        const sortedEq = [...HISTORICAL_RETURNS.equity].sort((a, b) => a - b);
-        medianAnnualReturn = sortedEq[Math.floor(sortedEq.length / 2)];
-        let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity, itMin = Infinity, itMax = -Infinity;
-        for (let i = 0; i < multiAssetBank.equity.length; i++) {
-            if (multiAssetBank.equity[i] < eqMin) eqMin = multiAssetBank.equity[i];
-            if (multiAssetBank.equity[i] > eqMax) eqMax = multiAssetBank.equity[i];
-            if (multiAssetBank.bonds[i]  < bdMin) bdMin = multiAssetBank.bonds[i];
-            if (multiAssetBank.bonds[i]  > bdMax) bdMax = multiAssetBank.bonds[i];
-            if (multiAssetBank.intl[i]   < itMin) itMin = multiAssetBank.intl[i];
-            if (multiAssetBank.intl[i]   > itMax) itMax = multiAssetBank.intl[i];
+        minAnnualReturn = eqMin;
+        maxAnnualReturn = eqMax;
+        // Compute per-asset CAGR (geometric mean = exp(mean(log(1+r))) - 1) from sampled banks.
+        // CAGR is the right "center" statistic — matches what investors call "average annual return".
+        // Arithmetic median of annual returns is ~16% for S&P (right-skewed), which misleads users
+        // who expect CAGR (~10–11%). Single O(n) pass; avoids expensive sort.
+        let eqLogSum = 0, bdLogSum = 0, itLogSum = 0, infLogSum = 0;
+        const bankLen = scenarioBank.length;
+        for (let i = 0; i < bankLen; i++) {
+            eqLogSum  += Math.log1p(scenarioBank[i]);
+            bdLogSum  += Math.log1p(multiAssetBank.bonds[i]);
+            itLogSum  += Math.log1p(multiAssetBank.intl[i]);
+            infLogSum += Math.log1p(multiAssetBank.inflation[i]);
         }
-        assetRanges = { equity: [eqMin, eqMax], bonds: [bdMin, bdMax], intl: [itMin, itMax] };
+        const eqCAGR  = Math.exp(eqLogSum  / bankLen) - 1;
+        const bdCAGR  = Math.exp(bdLogSum  / bankLen) - 1;
+        const itCAGR  = Math.exp(itLogSum  / bankLen) - 1;
+        const infCAGR = Math.exp(infLogSum / bankLen) - 1;
+        // Bootstrap mode: suppress top-level medianAnnualReturn (equity-only, confuses blended portfolios).
+        medianAnnualReturn = null;
+        assetRanges    = {
+            equity: [eqMin, eqCAGR, eqMax],
+            bonds:  [bdMin, bdCAGR, bdMax],
+            intl:   [itMin, itCAGR, itMax],
+        };
+        inflationStats = { min: infMin, cagr: infCAGR, max: infMax };
     } else {
         logDrift = mu - 0.5 * sigma * sigma;
         medianAnnualReturn = Math.exp(logDrift) - 1;
@@ -175,9 +199,17 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
                 }
             }
 
+            let inflationSequence = null;
+            if (simulationMode === 'bootstrap' && multiAssetBank?.inflation) {
+                inflationSequence = new Float64Array(years);
+                for (let y = 0; y < years; y++) {
+                    inflationSequence[y] = multiAssetBank.inflation[p * years + y];
+                }
+            }
+
             let result;
             try {
-                result = simulate({ ...baseInputs, returnSequence: returnSeq, returnSequencePerAccount });
+                result = simulate({ ...baseInputs, returnSequence: returnSeq, returnSequencePerAccount, inflationSequence });
             } catch (e) {
                 ruinYears[p] = baseInputs.startYear ?? 2026;
                 ruinCount++;
@@ -255,5 +287,6 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         maxAnnualReturn,
         inflationRate: cfg.inflationRate ?? null,
         assetRanges,
+        inflationStats,                            // { min, median, max } observed inflation (bootstrap only)
     });
 }

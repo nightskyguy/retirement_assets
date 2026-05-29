@@ -3,7 +3,7 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-Phase 6 — complete; next: Phase 3 (Lumpy Spending) or Phase 7 (Correlated MC)
+Phase 7 — complete; next: Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 9 (ACA Refinement), or Phase 10 (Multi-Strategy)
 
 ## Dependency Graph
 ```
@@ -118,15 +118,18 @@ EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12
 - **Status:** complete
 - **Blocks:** Correlated MC (Phase 7) — now superseded (Phase 6 bootstrap achieves historical correlation naturally)
 
-### Phase 7: Correlated Multi-Asset MC (BootstrapPlan Phase 2)
-**Why:** Single σ cannot model both 100% equity and 60/40 portfolios. Need stocks and bonds separately with correlation matrix.
+### Phase 7: Historical Inflation Bootstrap + CAGR Stats
+**Why:** `HISTORICAL_RETURNS.inflation` existed but wasn't sampled — all MC paths used fixed inflation. Also per-account asset-mix growth needed real per-path returns.
 
-- [ ] Implement Cholesky decomposition for correlated returns
-- [ ] Modify mc_controller.js to accept per-account (r_stocks, r_bonds) pairs
-- [ ] Recompute account returns as stockPct × r_stocks + bondPct × r_bonds
-- [ ] Test correlation structure (negative correlation between stocks/bonds)
-- **Status:** pending
-- **Depends on:** Phase 6 (per-account asset mix)
+- [x] Extend `bootstrapMultiAssetBank()` to return inflation bank (prng.js)
+- [x] Expand history window from 1970–2024 to full 1928–2024 (97 years); proxy pre-1970 intl with equity
+- [x] Build `inflationSequence` per path in worker.js and mc_controller.js
+- [x] Consume `inflationSequence` in simulate() year loop (yearInflation)
+- [x] Replace arithmetic median with CAGR (geometric mean) for all asset stats
+- [x] Show CAGR column in bootstrap metrics table; expose inflationStats
+- [x] Fix Current Dollars toggle in MC chart; fix path-count ID mismatch
+- [x] Fix bootstrap mode not graying out μ/σ fields after scenario load
+- **Status:** complete
 
 ### Phase 8: Variable Growth/Inflation Optimizer (Priority Q)
 **Why:** Single-point estimates hide assumptions. Need sensitivity grid (multiple growth/inflation combos).
@@ -149,14 +152,42 @@ EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12
 - **Blocks:** Phase 10 (multi-strategy needs clean ACA handling)
 
 ### Phase 10: Multi-Strategy Optimizer (Priority M)
-**Why:** Optimal plan may switch strategies mid-retirement (e.g., Bracket → Fixed % at age 72).
+**Why:** Optimal plan may switch strategies mid-retirement (e.g., ACA limit pre-65 → Bracket 22% → RMD-only post-73). Per-year free choice is intractable (42^40); segment-based search over natural breakpoints is not.
 
-- [ ] Start with 2-phase combinations (strategy A for years 1–N, B for years N+1–end)
-- [ ] Brute-force all permutations over phase breakpoints
-- [ ] Extend to 3+ phases if performance allows
-- [ ] Surface top N combos in optimizer table with "phases" column
+**Architecture: Segment-based search, NOT per-year**
+
+Natural breakpoints define segments (not arbitrary year boundaries):
+| Breakpoint | Reason |
+|------------|--------|
+| Retirement start | Segment 0 begins |
+| Age 65 | Medicare → ACA strategies invalid |
+| Age 73 | RMDs begin → IRA withdrawal dynamics change |
+| (optional) User-defined | e.g. spouse retires, pension starts |
+
+With 3 segments × 42 strategies = 42³ = 74,088 max combos. After filtering invalid combos (e.g. ACA post-65 eliminated by Phase 9), realistic search space ~10,000 combos.
+
+**2-Stage execution to keep MC cost manageable:**
+- Stage 1: Deterministic sweep over all valid segment combos → score each → pick top-K (e.g. 10)
+- Stage 2: Run full MC (500 paths) on top-K only → 10 × 500 = 5,000 paths
+- Net cost less than current optimizer (42 × 500 = 21,000 paths already)
+
+**Output format:** Human-readable segment descriptions, not a 40-year policy table.
+- Example: "Phase 1 (age 60–65): ACA limit $68k. Phase 2 (65–73): Bracket 22% $85k. Phase 3 (73+): RMDs only."
+
+**DP alternative:** O(years × strategies²) ≈ 70k evals, finds global optimum, but output is a per-year policy table — hard for users to reason about. Deprioritized.
+
+**Tasks:**
+- [ ] Modify simulate() to accept `strategySequence[]` (strategy per segment) instead of single strategy
+- [ ] Define natural breakpoints from user inputs (ages, RMD trigger age)
+- [ ] Filter invalid strategy-segment combos (Phase 9 age-gating feeds directly here)
+- [ ] Stage 1: Cartesian product of valid strategies per segment; run deterministic simulate() for each
+- [ ] Score each combo (lifetime tax paid, funded years, final wealth — use same scoring as optimizer)
+- [ ] Stage 2: Run MC on top-K combos; rank by median outcome / 10th-percentile survival
+- [ ] Surface top-N composite strategies in optimizer table with "Phases" column showing segment breakdown
+- [ ] Test: verify ACA-only strategy never appears in post-65 segments
+- [ ] Test: verify top combo beats any single-strategy result on same inputs
 - **Status:** pending
-- **Depends on:** Phase 9 (clean ACA handling)
+- **Depends on:** Phase 9 (ACA age-gating eliminates invalid combos)
 
 ### Phase 11: Regime-Switching MC (BootstrapPlan Phase 3)
 **Why:** Markets trend (bull/bear persistence). Regime-switching captures this without requiring historical data.

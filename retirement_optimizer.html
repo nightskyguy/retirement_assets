@@ -312,7 +312,7 @@
 					<label style="font-size:0.85em;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1970–2024) — realistic distribution, historically correlated across asset classes. GBM: parametric model using μ and σ.">Mode
 						<select id="mc-sim-mode" style="margin-left:4px;" onchange="updateMCModeUI()">
 							<option value="bootstrap" selected>Historical</option>
-							<option value="gbm">GBM (parametric)</option>
+							<option value="gbm">Synthetic (parametric)</option>
 						</select>
 					</label>
 					<label style="font-size:0.85em;" title="Number of simulated market scenarios. More paths = more stable results, slower run.">Paths
@@ -333,7 +333,7 @@
 					<button id="mc-run-btn" onclick="runMonteCarlo()" style="padding:6px 18px;font-size:0.95em;">Run Monte Carlo</button>
 					<span id="mc-time-est" style="font-size:0.8em;color:#888;"></span>
 				</div>
-				<div style="margin-top:6px;font-size:0.78em;color:#888;">Inflation is not stochastic — all paths use the fixed inflation rate from the main form.</div>
+				<div style="margin-top:6px;font-size:0.78em;color:#888;">Historical: returns and inflation are block-sampled from 1928–2024 data; each path sees a different sequence. Synthetic: parametric model using the μ and σ inputs; inflation is fixed.</div>
 			</div>
 
 			<!-- Cancel button + path count — visible during any run (nerd-mode or auto-run) -->

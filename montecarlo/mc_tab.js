@@ -44,6 +44,10 @@ function updateMCModeUI() {
 // Called by the Monte Carlo tab button.
 // In normal mode, runs immediately with default params (panel stays hidden).
 function mcTabActivated() {
+    // Always sync mode UI — handles scenario-load case where mc-sim-mode was restored
+    // but the tab wasn't visible when applyScenario() ran.
+    updateMCModeUI();
+
     if (!_mcNerdMode()) {
         const hash = _buildMCHash();
         if (hash === _lastMCHash && _mcResults) {
@@ -170,6 +174,7 @@ function renderMCMetrics(msg) {
     const lo   = msg.minAnnualReturn    != null ? (msg.minAnnualReturn    * 100).toFixed(1) : null;
     const hi   = msg.maxAnnualReturn    != null ? (msg.maxAnnualReturn    * 100).toFixed(1) : null;
     const inf  = msg.inflationRate      != null ? (msg.inflationRate      * 100).toFixed(1) : null;
+    const infS = msg.inflationStats;   // { min, cagr, max } — bootstrap mode only
 
     const pct = (v, decimals = 1) => (v >= 0 ? '+' : '') + (v * 100).toFixed(decimals) + '%';
 
@@ -178,28 +183,45 @@ function renderMCMetrics(msg) {
         const sec = (ms / 1000).toFixed(ms < 10000 ? 1 : 0);
         parts.push(`Completed in <strong>${sec} s</strong>`);
     }
-    if (grow != null) parts.push(`Median growth <strong>${grow}%/yr</strong> <span style="color:#888;font-size:0.85em;">(geometric)</span>`);
-    if (lo != null && hi != null) parts.push(
-        `Annual return range <strong style="color:${parseFloat(lo)<0?'#c0392b':'inherit'}">${lo}%</strong>`
-        + ` to <strong>${hi}%</strong>`
-        + ` <span style="color:#888;font-size:0.85em;">(worst/best simulated year)</span>`
-    );
-    if (inf  != null) parts.push(`Inflation <strong>${inf}%/yr</strong> <span style="color:#888;font-size:0.85em;">(fixed)</span>`);
 
-    // Per-asset-class ranges (bootstrap mode only)
-    if (msg.assetRanges) {
-        const ar = msg.assetRanges;
-        const fmt = (range) => {
-            const lo = pct(range[0]);
-            const hi = pct(range[1]);
-            return `<strong style="color:${range[0]<0?'#c0392b':'inherit'}">${lo}</strong> to <strong>${hi}</strong>`;
-        };
-        parts.push(
-            `<span style="color:#888;font-size:0.85em;">Asset ranges —</span>`
-            + ` Eq: ${fmt(ar.equity)}`
-            + ` &nbsp;Bonds: ${fmt(ar.bonds)}`
-            + ` &nbsp;Intl: ${fmt(ar.intl)}`
+    // Bootstrap mode: all return/inflation data is in the compact table — no redundant text lines.
+    // Synthetic (GBM) mode: no table, show the summary lines instead.
+    if (!msg.assetRanges) {
+        if (grow != null) parts.push(`Median growth <strong>${grow}%/yr</strong> <span style="color:#888;font-size:0.85em;">(geometric)</span>`);
+        if (lo != null && hi != null) parts.push(
+            `Equity range <strong style="color:${parseFloat(lo)<0?'#c0392b':'inherit'}">${lo}%</strong>`
+            + ` to <strong>${hi}%</strong>`
+            + ` <span style="color:#888;font-size:0.85em;">(worst/best yr)</span>`
         );
+        if (inf != null) parts.push(`Inflation <strong>${inf}%/yr</strong> <span style="color:#888;font-size:0.85em;">(fixed)</span>`);
+    }
+
+    // Bootstrap: compact min/CAGR/max table — includes inflation as 4th row.
+    // assetRanges values are [min, cagr, max] tuples.
+    if (msg.assetRanges) {
+        const ar  = msg.assetRanges;
+        const iS  = msg.inflationStats;
+        const td  = 'style="padding:1px 5px;text-align:right;"';
+        const tdL = 'style="padding:1px 6px 1px 0;color:#555;white-space:nowrap;"';
+        const thS = 'style="padding:0 5px;font-weight:normal;color:#888;text-align:right;"';
+        const fmtV = (v) => {
+            const s = (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+            return `<span style="color:${v < 0 ? '#c0392b' : '#1a7a1a'}">${s}</span>`;
+        };
+        const row = (label, range) =>
+            `<tr><td ${tdL}>${label}</td>`
+            + `<td ${td}>${fmtV(range[0])}</td>`
+            + `<td ${td}><strong>${fmtV(range[1])}</strong></td>`
+            + `<td ${td}>${fmtV(range[2])}</td></tr>`;
+        let tbl =
+            `<table style="display:inline-table;border-collapse:collapse;font-size:0.8em;vertical-align:middle;margin-left:4px;">`
+            + `<tr><th></th><th ${thS}>Min</th><th ${thS}>CAGR</th><th ${thS}>Max</th></tr>`
+            + row('Equity',    ar.equity)
+            + row('Bonds',     ar.bonds)
+            + row('Intl',      ar.intl);
+        if (iS) tbl += row('Inflation', [iS.min, iS.cagr, iS.max]);
+        tbl += `</table>`;
+        parts.push(`<span style="color:#888;font-size:0.8em;">Sampled (1928–2024)</span>${tbl}`);
     }
 
     el.innerHTML = parts.join(' &nbsp;·&nbsp; ');
@@ -252,16 +274,16 @@ function renderSurvivalTable(variations, numPaths) {
 
         const spendTxt = v.spendGoal != null ? '$' + fmt(v.spendGoal) : '—';
         tr.innerHTML = `
-            <td style="padding:3px 10px 3px 6px;text-align:center;background:#fff;border-right:2px solid #dee2e6;">
+            <td style="padding:2px 6px 2px 4px;text-align:center;background:#fff;border-right:2px solid #dee2e6;">
                 <input type="checkbox" class="mc-var-check" data-idx="${v._origIdx}">
             </td>
-            <td style="padding:3px 6px;">${escapeHtml(v.strategyFamily)}</td>
-            <td style="padding:3px 6px;">${escapeHtml(v.paramLabel)}</td>
-            <td style="padding:3px 6px;">${v.maxConversion ? '✓' : '—'}</td>
-            <td style="padding:3px 6px;">${spendTxt}</td>
-            <td style="padding:3px 6px;font-weight:bold;">${pct}%</td>
-            <td style="padding:3px 6px;">${ruinTxt}</td>
-            <td style="padding:3px 6px;">$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
+            <td style="padding:2px 4px;">${escapeHtml(v.strategyFamily)}</td>
+            <td style="padding:2px 4px;">${escapeHtml(v.paramLabel)}</td>
+            <td style="padding:2px 4px;">${v.maxConversion ? '✓' : '—'}</td>
+            <td style="padding:2px 4px;">${spendTxt}</td>
+            <td style="padding:2px 4px;font-weight:bold;">${pct}%</td>
+            <td style="padding:2px 4px;">${ruinTxt}</td>
+            <td style="padding:2px 4px;">$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
         `;
         // Apply row shading to data cells only (not the checkbox column)
         Array.from(tr.querySelectorAll('td')).slice(1).forEach(td => td.style.background = color);
@@ -286,8 +308,11 @@ function renderSurvivalTable(variations, numPaths) {
     });
 
     document.getElementById('mc-table-wrap').style.display = '';
-    document.getElementById('mc-path-count').textContent =
-        `${numPaths.toLocaleString()} paths`;
+    const _pathTxt = `${numPaths.toLocaleString()} paths`;
+    const _pcBar = document.getElementById('mc-path-count');
+    const _pcTbl = document.getElementById('mc-path-count-tbl');
+    if (_pcBar) _pcBar.textContent = _pathTxt;
+    if (_pcTbl) _pcTbl.textContent = _pathTxt;
 }
 
 function loadMCVariation(v) {
@@ -337,6 +362,15 @@ function renderMCChart(msg) {
     const years  = msg.years;
     const labels = Array.from({ length: years }, (_, i) => _mcStartYear + i);
 
+    // Current-dollar deflation: divide each year's balance by cumulative inflation factor.
+    // Uses median sampled inflation (bootstrap) or fixed user rate (GBM) as the deflator.
+    const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
+    const inflRate = msg.inflationStats?.cagr ?? msg.inflationRate ?? 0;
+    const deflate = (arr) => {
+        if (!inCurrentDollars || !arr) return arr;
+        return arr.map((v, y) => v / Math.pow(1 + inflRate, y + 1));
+    };
+
     const datasets = [];
     let fallbackIdx = 0;
 
@@ -356,7 +390,7 @@ function renderMCChart(msg) {
 
         datasets.push({
             label: `${v.label} p5`,
-            data:  v.percentiles.p5,
+            data:  deflate(v.percentiles.p5),
             borderColor: 'transparent',
             backgroundColor: 'transparent',
             pointRadius: 0,
@@ -365,7 +399,7 @@ function renderMCChart(msg) {
         });
         datasets.push({
             label: `${v.label} p95`,
-            data:  v.percentiles.p95,
+            data:  deflate(v.percentiles.p95),
             borderColor: 'transparent',
             backgroundColor: c.band95,
             pointRadius: 0,
@@ -374,7 +408,7 @@ function renderMCChart(msg) {
         });
         datasets.push({
             label: `${v.label} p25`,
-            data:  v.percentiles.p25,
+            data:  deflate(v.percentiles.p25),
             borderColor: 'transparent',
             backgroundColor: 'transparent',
             pointRadius: 0,
@@ -383,7 +417,7 @@ function renderMCChart(msg) {
         });
         datasets.push({
             label: `${v.label} p75`,
-            data:  v.percentiles.p75,
+            data:  deflate(v.percentiles.p75),
             borderColor: 'transparent',
             backgroundColor: c.band75,
             pointRadius: 0,
@@ -392,7 +426,7 @@ function renderMCChart(msg) {
         });
         datasets.push({
             label: v.label + ` (${(v.survivalRate * 100).toFixed(0)}%)`,
-            data:  v.percentiles.p50,
+            data:  deflate(v.percentiles.p50),
             borderColor: c.solid,
             backgroundColor: 'transparent',
             borderWidth: 2.5,
@@ -464,7 +498,7 @@ function renderMCChart(msg) {
                     ticks: { maxTicksLimit: 10 },
                 },
                 y: {
-                    title: { display: true, text: 'Portfolio Balance' },
+                    title: { display: true, text: inCurrentDollars ? 'Portfolio Balance (Current $)' : 'Portfolio Balance' },
                     ticks: {
                         callback: (v) => '$' + (v >= 1e6
                             ? (v / 1e6).toFixed(1) + 'M'

@@ -142,22 +142,32 @@ function renderMCResults(msg) {
     renderMCMetrics(msg);
     renderSurvivalTable(msg.variations, msg.numPaths);
 
-    // Default chart: the variation matching the user's current strategy settings.
-    // Falls back to best-surviving per family if no match is found.
+    // Default chart: best variation per strategy family (highest survival, then highest median
+    // final balance as tiebreaker).  Exception: the family of the user's current strategy uses
+    // the exact current-settings variation instead of the best one.
     _mcSelected.clear();
     const currentIdx = findCurrentStrategyIdx(msg.variations, _mcBase);
+
+    // Build best-per-family map.
+    const byFamily = {};
+    msg.variations.forEach((v, i) => {
+        const f    = v.strategyFamily;
+        const best = byFamily[f] != null ? msg.variations[byFamily[f]] : null;
+        if (!best) { byFamily[f] = i; return; }
+        const vFinal    = v.percentiles.p50[v.percentiles.p50.length - 1] ?? 0;
+        const bestFinal = best.percentiles.p50[best.percentiles.p50.length - 1] ?? 0;
+        if (v.survivalRate > best.survivalRate ||
+            (v.survivalRate === best.survivalRate && vFinal > bestFinal)) {
+            byFamily[f] = i;
+        }
+    });
+
+    // Override the current strategy's family with the exact current variation.
     if (currentIdx >= 0) {
-        _mcSelected.add(currentIdx);
-    } else {
-        const byFamily = {};
-        msg.variations.forEach((v, i) => {
-            const f = v.strategyFamily;
-            if (!byFamily[f] || v.survivalRate > msg.variations[byFamily[f]].survivalRate) {
-                byFamily[f] = i;
-            }
-        });
-        Object.values(byFamily).forEach(i => _mcSelected.add(i));
+        byFamily[msg.variations[currentIdx].strategyFamily] = currentIdx;
     }
+
+    Object.values(byFamily).forEach(i => _mcSelected.add(i));
 
     renderMCChart(msg);
     syncTableCheckboxes();
@@ -273,17 +283,18 @@ function renderSurvivalTable(variations, numPaths) {
         tr.dataset.varIdx = v._origIdx;
 
         const spendTxt = v.spendGoal != null ? '$' + fmt(v.spendGoal) : '—';
+        const tdR = 'style="padding:2px 4px;text-align:right;"';
         tr.innerHTML = `
             <td style="padding:2px 6px 2px 4px;text-align:center;background:#fff;border-right:2px solid #dee2e6;">
                 <input type="checkbox" class="mc-var-check" data-idx="${v._origIdx}">
             </td>
-            <td style="padding:2px 4px;">${escapeHtml(v.strategyFamily)}</td>
-            <td style="padding:2px 4px;">${escapeHtml(v.paramLabel)}</td>
-            <td style="padding:2px 4px;">${v.maxConversion ? '✓' : '—'}</td>
-            <td style="padding:2px 4px;">${spendTxt}</td>
-            <td style="padding:2px 4px;font-weight:bold;">${pct}%</td>
-            <td style="padding:2px 4px;">${ruinTxt}</td>
-            <td style="padding:2px 4px;">$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
+            <td ${tdR}>${v.maxConversion ? '✓' : '—'}</td>
+            <td ${tdR}>${escapeHtml(v.strategyFamily)}</td>
+            <td ${tdR}>${escapeHtml(v.paramLabel)}</td>
+            <td ${tdR}>${spendTxt}</td>
+            <td ${tdR}>${ruinTxt}</td>
+            <td ${tdR}>$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
+            <td ${tdR} style="padding:2px 4px;text-align:right;font-weight:bold;">${pct}%</td>
         `;
         // Apply row shading to data cells only (not the checkbox column)
         Array.from(tr.querySelectorAll('td')).slice(1).forEach(td => td.style.background = color);

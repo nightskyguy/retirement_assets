@@ -209,9 +209,9 @@ With 3 segments × 42 strategies = 42³ = 74,088 max combos. After filtering inv
 
 ## Key Questions
 1. Should Phase 1 (bracket/IRMAA fix) be done before strategy comparisons work correctly?
-2. For Phase 2 (bootstrap), which years of historical data? Full history (1926+) or post-1970?
-3. For Phase 6 (per-account asset mix), should allocation grids be per-account or global?
-4. What is the user's order of implementation preference (v11 features in PR #48)?
+2. ~~For Phase 2 (bootstrap), which years of historical data?~~ **Resolved:** Full 1928–2024 (97 years), pre-1970 intl proxied by equity.
+3. ~~For Phase 6 (per-account asset mix), should allocation grids be per-account or global?~~ **Resolved:** Per-account, done in Phase 6.
+4. What is the user's order of implementation preference for remaining phases (3, 4, 9, 10)?
 
 ## Decisions Made
 | Decision | Rationale |

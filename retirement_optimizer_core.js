@@ -1145,7 +1145,9 @@ function simulate(inputs) {
         // IRA and Roth always reinvest dividends into the source account (tax-deferred / tax-free),
         // so their effective return = capital appreciation + dividendRate.
         // Brokerage dividends are handled separately below (taxed first, then reinvested or sent to Cash).
-        const baseReturn = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
+        const baseReturn    = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
+        // Bootstrap MC passes per-year sampled inflation; GBM and deterministic use the fixed rate.
+        const yearInflation = inputs.inflationSequence?.[y] ?? inputs.inflation;
         const div = inputs.dividendRate ?? 0;
         const psa = inputs.returnSequencePerAccount;
         let growthRates = {
@@ -1276,13 +1278,13 @@ function simulate(inputs) {
         // Advance spend goal: apply user's spend-change preference and inflation.
         // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
         // keeps year-0 spendGoal equal to the user's input in today's dollars.
-        spendGoal = spendGoal * spendDelta * (1 + inputs.inflation);
+        spendGoal = spendGoal * spendDelta * (1 + yearInflation);
 
         currentYear += 1;
 
         // Adjust inflation rates for subsequent rounds.
         cpiRate *= (1 + inputs.cpi);
-        inflation *= (1 + inputs.inflation);
+        inflation *= (1 + yearInflation);
         medicareRate *= (1 + TAXData.IRMAA.ANNUAL_INCREASE)
     } // end for (let y = 0; y < maxYears; y++)
 
@@ -1505,6 +1507,10 @@ function updateCurrentDollarsView() {
         updateStats(lastTotals, lastFinalNW, lastFinalNWCurrentDollars);
     }
     if (window.optimizerResults) renderOptimizerTable(window.optimizerResults);
+    // Re-render MC chart so current-dollar deflation is applied (or removed).
+    if (typeof _mcResults !== 'undefined' && _mcResults) {
+        if (typeof renderMCChart === 'function') renderMCChart(_mcResults);
+    }
 }
 // //////////////////////////////////////////////////////////////////
 
@@ -3349,6 +3355,9 @@ function applyScenario(data) {
 
     // Sync strategy sub-UI to the newly loaded strategy value
     if (typeof toggleStrategyUI === 'function') toggleStrategyUI();
+
+    // Sync MC mode UI (grays out μ/σ when bootstrap mode is restored from scenario)
+    if (typeof updateMCModeUI === 'function') updateMCModeUI();
 
     // Trigger any recalculations your app needs
     if (typeof runSimulation === 'function') {

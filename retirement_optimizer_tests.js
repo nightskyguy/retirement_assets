@@ -1551,6 +1551,52 @@ assertEqual(
 	}
 
 	// ============================================================================
+	// INFLATION SEQUENCE TESTS  (Phase 7 — inflationSequence per-path sampling)
+	// ============================================================================
+	console.log('\n=== inflationSequence (Phase 7) Tests ===');
+
+	// Shared base: ample portfolio, constant 6% returns, spendChange=0 so spend escalation
+	// is purely inflation-driven.  returnSequence is long enough to cover any plan horizon.
+	const inflBase = {
+		...baseInputs,
+		returnSequence: new Float64Array(40).fill(0.06),
+		IRA1: 800000, Cash: 200000,
+	};
+
+	// (inf-1) inflationSequence overrides inputs.inflation for spend escalation.
+	// With a 10% sampled rate and 3% fixed rate, log[1].spendGoal must reflect 10%.
+	{
+		const seq = new Float64Array(40).fill(0.10);
+		const result = simulate({ ...inflBase, inflation: 0.03, inflationSequence: seq });
+		const y0 = result.log[0].spendGoal;
+		const y1 = result.log[1].spendGoal;
+		assertEqual(Math.abs(y1 / y0 - 1.10) < 0.001, true,
+			'inflationSequence: spend goal escalates at sampled rate (10%), not fixed inflation (3%)');
+	}
+
+	// (inf-2) Without inflationSequence, spend escalates at inputs.inflation (existing behaviour unchanged).
+	{
+		const result = simulate({ ...inflBase, inflation: 0.03 });
+		const y0 = result.log[0].spendGoal;
+		const y1 = result.log[1].spendGoal;
+		assertEqual(Math.abs(y1 / y0 - 1.03) < 0.001, true,
+			'inflationSequence absent: spend goal escalates at fixed inputs.inflation (3%)');
+	}
+
+	// (inf-3) Partial inflationSequence: year 0 uses sampled rate, year 1+ falls back to inputs.inflation.
+	{
+		const seq = new Float64Array(1).fill(0.10);   // only year 0 provided
+		const result = simulate({ ...inflBase, inflation: 0.03, inflationSequence: seq });
+		const y0 = result.log[0].spendGoal;
+		const y1 = result.log[1].spendGoal;
+		const y2 = result.log[2].spendGoal;
+		assertEqual(Math.abs(y1 / y0 - 1.10) < 0.001, true,
+			'inflationSequence partial: year 0 uses sampled 10%');
+		assertEqual(Math.abs(y2 / y1 - 1.03) < 0.001, true,
+			'inflationSequence partial: year 1 falls back to fixed 3%');
+	}
+
+	// ============================================================================
 	// SPEND OPTIMIZER TESTS
 	// ============================================================================
 	console.log('\n=== Spend Optimizer Tests ===');

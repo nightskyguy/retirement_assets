@@ -167,6 +167,8 @@ Natural breakpoints define segments (not arbitrary year boundaries):
 
 With 3 segments × 42 strategies = 42³ = 74,088 max combos. After filtering invalid combos (e.g. ACA post-65 eliminated by Phase 9), realistic search space ~10,000 combos.
 
+**Timing as a 3rd optimization axis (from Phase 12 insight):** Add `timingSequence[]` per segment (4 options: BOY/Early/Mid/Late). Conversion-heavy segments → BOY maximizes Roth growth. Spending-only segments → Late/EOY preserves portfolio. Search space with timing: 4 timings × ~10,000 strategy combos = ~40,000 Stage 1 evals (still fast, deterministic). This should be the default sweep — "Early conversion + Late spending" combos are expected to dominate all single-timing runs.
+
 **2-Stage execution to keep MC cost manageable:**
 - Stage 1: Deterministic sweep over all valid segment combos → score each → pick top-K (e.g. 10)
 - Stage 2: Run full MC (500 paths) on top-K only → 10 × 500 = 5,000 paths
@@ -199,14 +201,84 @@ With 3 segments × 42 strategies = 42³ = 74,088 max combos. After filtering inv
 - **Status:** pending
 - **Depends on:** Phase 2 (historical bootstrap) for comparison
 
-### Phase 12: Quarterly Calculation Mode (Priority N)
-**Why:** Monthly/quarterly granularity enables intra-year cash-flow events and L/G natively.
+### Phase 12: Withdrawal Timing Model — Early / Mid / Late (replaces Quarterly)
+**Why:** No good quarterly data source exists. Instead, model *when in the year* withdrawals/RMDs/conversions occur — this meaningfully changes growth compounding outcomes and is more tractable to implement.
 
-- [ ] Build monthly as optional "high-fidelity mode" toggle
-- [ ] Validate monthly and annual agree on simple cases first
-- [ ] Aggregate back up to yearly rows for readability
-- [ ] Drill-down to monthly detail
+**Three modes (all sandwiching withdrawals between two growth phases):**
+| Mode | Pre-withdrawal growth | Post-withdrawal growth | Description |
+|------|-----------------------|------------------------|-------------|
+| Early | 1 month (January) | 11 months (Feb–Dec) | Liquidate/convert soon after Jan; run rest of year |
+| Mid | 6 months (Jan–Jun) | 6 months (Jul–Dec) | Midyear transactions; best model for spread-out monthly spending |
+| Late | 11 months (Jan–Nov) | 1 month (December) | Maximize growth before year-end transactions |
+
+**Current model (BOY):** Withdraw first, then grow full 12 months = f=0 (deductions at very start of year). This is the existing behavior; will be preserved as `"current"` option.
+
+**Critical asymmetry — conversions vs spending withdrawals have OPPOSITE optimal timing:**
+
+| Transaction type | BOY (Early) better? | EOY (Late) better? | Why |
+|-----------------|--------------------|--------------------|-----|
+| Roth conversion | ✓ YES | | Converted D enters Roth at t=0, grows tax-free all year. IRA base reduced earlier → lower future RMDs. Net: earlier conversion = more Roth growth compounded. |
+| Pure spending withdrawal | | ✓ YES | D exits portfolio entirely. With BOY: portfolio starts at (B−D) and grows from smaller base. With EOY: B grows full year, then D leaves. EOY wins because full portfolio compounded the whole year. |
+| RMDs (forced, then possibly converted) | Depends | Depends | If RMD is re-invested elsewhere: EOY. If RMD is converted to Roth: BOY. |
+
+**Implication for optimization:** Timing mode is not a single best answer — it depends on the *strategy phase*:
+- **Conversion-heavy phase** (early retirement, age 60–72): BOY maximizes Roth growth, minimizes future RMDs. Aggressive conversion + BOY = best IRA depletion path.
+- **Spending-preservation phase** (post-conversion, age 73+): EOY maximizes portfolio longevity. Once IRA is depleted or conversions complete, late timing preserves remaining assets longer.
+- **Optimal hybrid:** BOY during conversion segment, Late/EOY during spending-only segment. This is a timing strategy analogous to the withdrawal strategy segments in Phase 10.
+
+**Possible extension (Phase 12b or merge into Phase 10):** Add `timingSequence[]` as a per-segment parameter alongside `strategySequence[]`. Optimizer sweeps both dimensions for top-K combos. Search space: 4 timings × 3 segments × strategies. The combo "Early conversions + Late spending" should outperform any single timing assumption.
+
+**Mathematical summary** — end-of-year balance = B×(1+r) − D×(1+r)^(1−f):
+For spending (D exits): higher f → larger D×(1+r)^(1-f) reduction → worse. But:
+For conversions (D moves IRA→Roth): Roth gains D×(1+r)^(1-f) additional growth vs IRA losing the same. Net Roth advantage = (D×(1+r)^(1-f) − D) = D×((1+r)^(1-f) − 1). **Lower f = more Roth growth from conversion.** BOY conversion is always better than EOY conversion.
+
+At r=7%, D=$50k over 30 years: Early vs Late difference ≈ ~$100k–200k final wealth. Not trivial.
+
+**Why simple-interest approximation is fine:** `applyGrowth()` already uses `balance * rate * (months/12)`. For sub-year splits, compound vs simple differs by <0.1% at typical retirement growth rates — negligible.
+
+**Key finding from code audit:** `applyGrowth()` at line 478 already accepts a `months` param. The withdrawal block (lines ~800–1128) already ends with `applyWithdrawals()` at line 1128. The comment at line 1164 literally anticipates this feature. Implementation is ~20 lines of changes to `simulate()`.
+
+**Implementation plan:**
+
+*In `simulate()` year loop:*
+```javascript
+// Resolve timing fractions from inputs.growthTiming
+const preMonths  = { early: 1, mid: 6, late: 11, current: 0 }[inputs.growthTiming ?? 'current'];
+const postMonths = 12 - preMonths;
+
+// --- Phase 1: pre-withdrawal growth ---
+let preGains = preMonths > 0 ? applyGrowth(balance, growthRates, preMonths) : {};
+
+// [EXISTING: tax calc → applyWithdrawals() block, lines ~800–1128 — unchanged]
+
+// --- Phase 2: post-withdrawal growth (replaces the single applyGrowth at line 1169) ---
+let gains = applyGrowth(balance, growthRates, postMonths);
+
+// Merge preGains into gains for reporting (so gain column in Annual Details reflects full year)
+for (const k of Object.keys(preGains)) gains[k] = (gains[k] ?? 0) + preGains[k];
+```
+
+*Note:* Tax calculation block uses withdrawal amounts (not post-growth balances) — stays correct regardless of timing split. RMD calculation uses prior-year-end balance — also unaffected (calculated before the loop body).
+
+**UI:**
+- Add radio/select in sidebar (near growth rate input): `Withdrawal Timing: ○ Current (BOY) ○ Early ○ Mid ○ Late`
+- Tooltip: "When in the year are RMDs, withdrawals, and conversions taken? Mid is most realistic for monthly spending; Late maximizes growth before transactions."
+- Default: `current` (preserves existing behavior)
+
+**Tasks:**
+- [ ] Read `simulate()` year-loop structure (lines ~800–1200) to confirm withdrawal block boundaries before touching
+- [ ] Add `inputs.growthTiming` param ('current'|'early'|'mid'|'late') to `simulate()` and optimizer call
+- [ ] Split `applyGrowth` at line 1169: replace with pre/post calls around existing withdrawal block
+- [ ] Merge preGains + postGains into `gains` object for Annual Details reporting
+- [ ] Add UI selector to sidebar; persist to URL hash
+- [ ] Add to optimizer: run same strategy under all 4 timings? Or honor global setting only? → **Global setting only** (user picks their assumption; optimizer respects it)
+- [ ] Test: `current` mode produces identical results to pre-change output (regression baseline)
+- [ ] Test: Late mode produces higher final wealth than Early mode on same inputs (sanity check)
+- [ ] Test: Mid mode result between Early and Late (monotonicity check)
+- [ ] Update version + changelog
+
 - **Status:** pending
+- **Note:** Replaces original "Quarterly Mode" concept. No external data source needed.
 
 ---
 ## CSS / Layout Makeover — All HTML Tools
@@ -305,6 +377,69 @@ With 3 segments × 42 strategies = 42³ = 74,088 max combos. After filtering inv
 - **Status:** pending
 - **Files:** `Retirement_Projection.html`, possibly `RetirementTaxPlanner.html` (if it needs new param support)
 - **Depends on:** Understanding RetirementTaxPlanner.html's existing URL param schema
+
+### Phase 17: Upgrade Equity Data — S&P 500 → Total US Market (Priority: Research → Implement)
+**Why:** Current `equity` array in `historical_returns.js` is Damodaran's S&P 500 proxy (large-cap only, ~500 stocks). S&P 500 ≈ 80% of US market cap by weight but excludes ~3,500 mid/small-cap stocks. The Fama-French small-cap premium shows small caps historically outperform large caps by ~1–2%/yr. Using S&P 500 understates both volatility and expected long-run returns for a diversified investor.
+
+**Research findings:**
+| Source | Coverage | Years | Free? | Notes |
+|--------|----------|-------|-------|-------|
+| **Fama-French Market Portfolio** | All NYSE/AMEX/NASDAQ, value-weighted | 1926–present | Yes | `Mkt-RF + RF` = total market return; gold standard in academic finance |
+| **CRSP US Total Market** | ~4,000 stocks, same universe | 1926–present | Subscription | Used internally by VTSAX; not freely accessible |
+| **Wilshire 5000** | Total US market | 1971–present (back-extended) | Partial | Only ~55 years direct data |
+| **Damodaran S&P 500** | Large-cap 500 | 1928–present | Yes | **Current source** |
+
+**Recommended replacement:** Fama-French Market Portfolio (`Mkt-RF + RF`) — freely downloadable from [Ken French's data library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html). Covers 1926–present, value-weighted over all NYSE/AMEX/NASDAQ stocks. This IS "total US stock market."
+
+**Practical impact of the change:**
+- Long-run CAGR likely slightly higher (~0.5–1%/yr) vs S&P 500 due to small-cap premium
+- Slightly higher volatility (small caps are more volatile)
+- Distribution of bad years similar — crashes affect all caps; 1929/1931/2008 still dominate worst-year list
+- S&P 500 and total market move very similarly year-to-year (correlation ~0.99 post-1970)
+
+**Decision:** Add as a **selectable toggle** — keep both, let user compare. Rationale: user wants to visually compare outcomes between the two sources (Phase 18 fan chart will make this comparison meaningful).
+
+**Tasks:**
+- [ ] Download `F-F_Research_Data_Factors_annual.CSV` from French's site (1926–2024)
+- [ ] Compute annual total return = `(1 + Mkt-RF/100) * (1 + RF/100) - 1` for 1926–2024
+- [ ] Add `equityFF` array to `historical_returns.js` alongside existing `equity` (S&P 500 proxy)
+- [ ] Add equity-source toggle to nerd panel: `"S&P 500 (Damodaran)" | "Total Market (Fama-French)"` — default S&P 500 to preserve existing behavior
+- [ ] Worker/prng: use `HISTORICAL_RETURNS.equityFF` when FF mode selected, else `HISTORICAL_RETURNS.equity`
+- [ ] MC metrics panel: label equity series by source name (not just "Equity")
+- [ ] Update tests to cover both modes (CAGR ranges differ — FF slightly higher)
+
+- **Status:** pending
+- **Depends on:** Phase 7 ✓, Phase 18 (fan chart makes the comparison useful to show)
+
+### Phase 18: MC Input Transparency — Return & Inflation Fan Charts
+**Why:** Simulation is a black box: users see output (survival rate, final balance) but not what return/inflation sequences were actually sampled. Making the input distributions visible lets users verify the simulation is plausible, compare S&P vs Fama-French data sources, and understand why outcomes vary.
+
+**What to show:** For each simulation year (year 0 to N), across all paths, show the distribution of:
+1. **Equity return** (or weighted portfolio return if per-account allocations differ)
+2. **Inflation rate**
+
+Plot per year: min, p10, median, p90, max → 5-line fan (or shaded band with median line).
+
+**UI placement:** New sub-tab or collapsible section within the MC tab, labeled "Input Distributions". Separate chart for returns, separate chart for inflation. X-axis = simulation year. Y-axis = annual rate (%).
+
+**Data already available:** `worker.js` builds `returnSequencePerAccount` and `inflationSequence` per path. These need to be aggregated at the controller level and returned with MC results.
+
+**Architecture:**
+- `mc_controller.js`: after all paths complete, compute per-year percentiles for equity return (use equity weight from first account, or weighted average) and inflation. Add `inputFan: { equity: [{min,p10,med,p90,max},...], inflation: [...] }` to results object.
+- `mc_tab.js`: render two Chart.js fan charts from `inputFan`. Reuse existing chart patterns (shaded band = fill between p10/p90, solid line = median, thin lines for min/max).
+- Toggle off/on (collapsed by default) to avoid cluttering main MC view.
+
+**Tasks:**
+- [ ] `mc_controller.js`: aggregate per-year equity return and inflation percentiles across all paths; add `inputFan` to results
+- [ ] `mc_tab.js`: add "Input Distributions" collapsible section with two fan charts (equity, inflation)
+- [ ] Chart: shaded p10–p90 band, median solid, min/max thin dashed — match existing chart palette
+- [ ] X-axis label: "Year N (age X)" using retirement start age; Y-axis: percentage
+- [ ] Add source label in chart title: "Equity Returns (S&P 500 proxy)" or "Equity Returns (Fama-French Total Market)" based on Phase 17 toggle
+- [ ] Test: fan chart updates correctly when simulation mode changes (GBM vs Bootstrap)
+- [ ] Test: fan chart updates when equity source toggle changes (Phase 17)
+
+- **Status:** complete
+- **Depends on:** Phase 7 ✓ (inflation sequences exist), Phase 17 (equity source toggle feeds chart label)
 
 ## Key Questions
 1. Should Phase 1 (bracket/IRMAA fix) be done before strategy comparisons work correctly?

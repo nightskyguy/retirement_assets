@@ -3,12 +3,14 @@
 //             montecarlo/mc_controller.js (runMCWorker, cancelMCWorker),
 //             Chart.js (global Chart)
 
-let _mcChart      = null;
-let _mcResults    = null;
-let _mcSelected   = new Set(); // indices of variations currently on chart
-let _mcStartYear  = 2026;      // cached from getInputs() at run time
-let _lastMCHash   = null;
-let _mcBase       = null;      // getInputs() snapshot captured at run time
+let _mcChart             = null;
+let _mcResults           = null;
+let _mcSelected          = new Set(); // indices of variations currently on chart
+let _mcStartYear         = 2026;      // cached from getInputs() at run time
+let _lastMCHash          = null;
+let _mcBase              = null;      // getInputs() snapshot captured at run time
+let _inputEquityChart    = null;
+let _inputInflationChart = null;
 
 // --- Initialization -------------------------------------------------------
 
@@ -23,6 +25,8 @@ function initMCTab() {
     if (nerdPanel) {
         nerdPanel.style.display = _mcNerdMode() ? '' : 'none';
     }
+    const inputDist = document.getElementById('mc-input-dist');
+    if (inputDist) inputDist.style.display = _mcNerdMode() ? '' : 'none';
 }
 
 // Returns true when NERD_KNOBS is active.
@@ -170,6 +174,7 @@ function renderMCResults(msg) {
     Object.values(byFamily).forEach(i => _mcSelected.add(i));
 
     renderMCChart(msg);
+    if (_mcNerdMode()) renderInputFanCharts(msg.inputFan, msg.years);
     syncTableCheckboxes();
 }
 
@@ -472,12 +477,6 @@ function renderMCChart(msg) {
                     },
                 },
                 tooltip: {
-                    // Solid dark background — no white box, no colored border.
-                    backgroundColor: 'rgba(22, 22, 22, 0.92)',
-                    titleColor: '#ffffff',
-                    bodyColor: '#dddddd',
-                    borderWidth: 0,
-                    padding: 10,
                     filter: (item) => item.datasetIndex % 5 === 4,
                     callbacks: {
                         title: (items) => {
@@ -494,11 +493,6 @@ function renderMCChart(msg) {
                                 ? `${v.strategyFamily} ${v.paramLabel}${v.maxConversion ? ' ✓' : ''}`
                                 : ctx.dataset.label;
                             return `  ${name}  $${fmt(val)}`;
-                        },
-                        // Solid filled square instead of outlined-on-white box.
-                        labelColor: (ctx) => {
-                            const color = ctx.dataset.borderColor;
-                            return { backgroundColor: color, borderColor: color, borderWidth: 0 };
                         },
                     },
                 },
@@ -558,6 +552,103 @@ function updateMCProgress(pct) {
     const pPct = Math.round(pct * 100);
     if (bar) { bar.style.width = pPct + '%'; }
     if (txt) { txt.textContent = pPct + '%'; }
+}
+
+// --- Input Distribution Fan Charts ----------------------------------------
+
+function renderInputFanCharts(inputFan, years) {
+    if (!inputFan) return;
+    const labels = Array.from({ length: years }, (_, i) => `Yr ${i + 1}`);
+
+    function buildDatasets(fan, solidColor, bandColor) {
+        return [
+            // [0] p10 anchor — transparent fill target; label shown in tooltip
+            { label: 'p10', data: fan.p10, borderColor: 'transparent', backgroundColor: 'transparent',
+              pointRadius: 0, fill: false, tension: 0.3 },
+            // [1] p90 — fills down to p10 (shaded band); also shown in tooltip
+            { label: 'p90', data: fan.p90, borderColor: 'transparent', backgroundColor: bandColor,
+              pointRadius: 0, fill: '-1', tension: 0.3 },
+            // [2] Median — solid line, always visible
+            { label: 'Median', data: fan.p50, borderColor: solidColor,
+              backgroundColor: 'transparent', borderWidth: 2,
+              pointRadius: 0, fill: false, tension: 0.3 },
+            // [3] Min — hidden by default; click legend to enable
+            { label: 'Min', data: fan.min, borderColor: solidColor, borderDash: [4, 4],
+              borderWidth: 1, backgroundColor: 'transparent',
+              pointRadius: 0, fill: false, tension: 0.3, hidden: true },
+            // [4] Max — hidden by default; click legend to enable
+            { label: 'Max', data: fan.max, borderColor: solidColor, borderDash: [4, 4],
+              borderWidth: 1, backgroundColor: 'transparent',
+              pointRadius: 0, fill: false, tension: 0.3, hidden: true },
+        ];
+    }
+
+    const yPctAxis = {
+        ticks: { callback: v => (v * 100).toFixed(0) + '%' },
+        grid:  { color: 'rgba(0,0,0,0.06)' },
+    };
+    const xAxis = { ticks: { maxTicksLimit: 10 } };
+
+    // Legend: skip p10 anchor (idx 0) — the band already represents p10–p90 range visually.
+    const legendCfg = {
+        filter: item => item.datasetIndex !== 0,
+        font: { size: 11 },
+        usePointStyle: true,
+        pointStyle: 'line',
+    };
+
+    // Tooltip: show all 5 values (including hidden Min/Max) formatted as percentages.
+    // Dark background and solid label colors come from Chart.defaults (set globally in HTML).
+    const tooltipCfg = {
+        filter: () => true,  // include hidden datasets (Min/Max)
+        callbacks: {
+            title: items => `Year ${(items[0]?.dataIndex ?? 0) + 1}`,
+            label: ctx => {
+                const v = ctx.parsed.y;
+                const sign = v >= 0 ? '+' : '';
+                return `  ${ctx.dataset.label}: ${sign}${(v * 100).toFixed(1)}%`;
+            },
+        },
+    };
+
+    function chartOpts(title) {
+        return {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: legendCfg },
+                tooltip: tooltipCfg,
+                title: { display: true, text: title, font: { size: 12 } },
+            },
+            scales: { x: xAxis, y: yPctAxis },
+        };
+    }
+
+    // Equity chart (both GBM and bootstrap)
+    if (_inputEquityChart) _inputEquityChart.destroy();
+    const eqCtx = document.getElementById('mc-input-equity-chart')?.getContext('2d');
+    if (eqCtx) {
+        _inputEquityChart = new Chart(eqCtx, {
+            type: 'line',
+            data: { labels, datasets: buildDatasets(inputFan.equity, '#1565C0', 'rgba(21,101,192,0.15)') },
+            options: chartOpts('Equity Return Distribution (per year)'),
+        });
+    }
+
+    // Inflation chart (bootstrap only — null in GBM)
+    const inflWrap = document.getElementById('mc-input-inflation-wrap');
+    if (inflWrap) inflWrap.style.display = inputFan.inflation ? '' : 'none';
+    if (_inputInflationChart) { _inputInflationChart.destroy(); _inputInflationChart = null; }
+    if (inputFan.inflation) {
+        const infCtx = document.getElementById('mc-input-inflation-chart')?.getContext('2d');
+        if (infCtx) {
+            _inputInflationChart = new Chart(infCtx, {
+                type: 'line',
+                data: { labels, datasets: buildDatasets(inputFan.inflation, '#E65100', 'rgba(230,81,0,0.15)') },
+                options: chartOpts('Inflation Distribution (per year)'),
+            });
+        }
+    }
 }
 
 // --- Utility --------------------------------------------------------------

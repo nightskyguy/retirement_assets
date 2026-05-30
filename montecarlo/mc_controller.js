@@ -274,6 +274,20 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         }
     }
 
+    // Build input fan — mirrors worker.js exactly.
+    let equityBankForFan;
+    if (simulationMode === 'bootstrap') {
+        equityBankForFan = multiAssetBank.equity;
+    } else {
+        equityBankForFan = new Float64Array(numPaths * years);
+        for (let i = 0; i < scenarioBank.length; i++) {
+            equityBankForFan[i] = Math.exp(scenarioBank[i]) - 1;
+        }
+    }
+    const inflationBankForFan = (simulationMode === 'bootstrap' && multiAssetBank?.inflation)
+        ? multiAssetBank.inflation : null;
+    const inputFan = computeInputFan(equityBankForFan, inflationBankForFan, numPaths, years);
+
     const totalMs = performance.now() - t0;
     _mcMsPerSim = totalMs / (numPaths * variations.length);
     onComplete?.({
@@ -288,5 +302,6 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         inflationRate: cfg.inflationRate ?? null,
         assetRanges,
         inflationStats,                            // { min, median, max } observed inflation (bootstrap only)
+        inputFan,                                  // { equity, inflation } per-year percentile bands
     });
 }

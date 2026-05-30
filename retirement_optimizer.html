@@ -14,8 +14,26 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.df0)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.df0</title>
+    <title>Retirement Optimizer 11.e1a</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Global Chart.js tooltip defaults — applied to every chart so individual
+        // chart configs only need to specify what differs.
+        Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(22,22,22,0.92)';
+        Chart.defaults.plugins.tooltip.titleColor       = '#ffffff';
+        Chart.defaults.plugins.tooltip.bodyColor        = '#dddddd';
+        Chart.defaults.plugins.tooltip.borderWidth      = 0;
+        Chart.defaults.plugins.tooltip.padding          = 10;
+        // Solid filled color swatch — replaces the default white box with border.
+        // Prefers borderColor; falls back to backgroundColor; grey if both transparent.
+        Chart.defaults.plugins.tooltip.callbacks.labelColor = function(ctx) {
+            const bc = ctx.dataset.borderColor;
+            const bg = ctx.dataset.backgroundColor;
+            const raw = (!bc || bc === 'transparent') ? bg : bc;
+            const c   = (!raw || raw === 'transparent') ? '#888888' : raw;
+            return { backgroundColor: c, borderColor: c, borderWidth: 0 };
+        };
+    </script>
 	<script src="displayhelpers.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
 	<base target="_blank">	
@@ -395,6 +413,22 @@
 					<canvas id="mc-chart"></canvas>
 				</div>
 			</div>
+			<div id="mc-input-dist" style="display:none;margin-top:14px;">
+				<details>
+					<summary style="font-size:0.88em;color:#555;cursor:pointer;user-select:none;font-weight:600;">Input Distributions</summary>
+					<div style="margin-top:8px;">
+						<p style="font-size:0.78em;color:#888;margin:0 0 8px;">Per-year distribution of sampled returns and inflation across all paths. Band = p10–p90 · solid = median · dashed = min/max.</p>
+						<div style="position:relative;height:200px;margin-bottom:12px;">
+							<canvas id="mc-input-equity-chart"></canvas>
+						</div>
+						<div id="mc-input-inflation-wrap">
+							<div style="position:relative;height:180px;">
+								<canvas id="mc-input-inflation-chart"></canvas>
+							</div>
+						</div>
+					</div>
+				</details>
+			</div>
 		</div>
 
 		<div id="tab-fileio" class="card hidden">
@@ -425,29 +459,30 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.df0</b> Monte Carlo now samples historical inflation (1928&ndash;2024) per path alongside returns &mdash; spend-goal escalation varies with each scenario rather than using a fixed rate. Return stats display CAGR (geometric mean) instead of arithmetic median; chart defaults to the best variation per strategy family. Strategy table: right-aligned, compacted columns, &ldquo;Exhausted&rdquo; column replaces &ldquo;Fund Exhaust&rdquo;, Survival moved to rightmost column.</li>
+				<li><b>11.e1a</b> New nerd feature: view input distributions.</li>
+				<li><b>11.df0</b> Monte Carlo uses historical inflation 1928&ndash;2024 and growth (based on S&P), that historical inflaton also is used to escalate the spend-goal rather than using a fixed rate. Stats display CAGR (combined aggregate geometric mean) instead of arithmetic median - e.g. the CAGR growth rate is the "true" rate where the median rate is the "middle" rate over the entire period. Example: -20% growth for 3 years, 10% growth for one year, then +20% growth for 3 years the CAGR is about 0.38%, but the median is 10%. CAGR gives you the real net growth.</li>
 					<li><b>11.dd9</b> Monte Carlo uses <em>Historical</em> data from real S&amp;P 500, bond, and international returns (1970–2024). Account Composition shows <em>Est.Rtn</em> advisory column (median before inflation); Monte Carlo shows per-asset-class return ranges (Eq/Bonds/Intl).</li>
-				<li><b>11.dd6</b> Ordered withdrawal strategy (CBIR/RIBC/BIRC) added. Spend goal inflation was premature in year 1. Bracket strategy renamed to "Fill Fed/IRMAA Bracket"; defaults to Below IRMAA. Fill provides feedback: ✓ or ⚠ status with max feasible spend estimate; clicking ⚠ sets After-Tax Spend to the bracket maximum and triggers recalculation.</li>
+				<li><b>11.dd6</b> Added ordered withdrawal strategy (CBIR/RIBC/BIRC). Fixed error where Spend Goal was inflated prematurely.Defaults bracket strategy changed to `Below IRMAA`. Fill provides feedback: ✓ or ⚠ status with max feasible spend estimate; clicking ⚠ sets After-Tax Spend to the bracket maximum and triggers recalculation.</li>
 				</ul>
 				<details>
 					<summary style="cursor:pointer;color:#888;font-size:0.9em;">Older changes…</summary>
 					<ul>
-					<li><b>11.dad</b> UI improvements: Account Composition expander moved from Assumptions to Assets section; age display added to Profile &amp; Ages (current age and RMD start age, live-updating); Annual Details Age1/Age2 column header tooltips clarify end-of-year convention; MC table header alignment fixed with table-layout:fixed; Assumptions section reordered (Dividend/State first, Inflation last); Documentation tab restructured (no green sub-tabs, How to Use inline, changelog restored); optimizer always runs Max Conversion on; Reduce starts at 2 yrs; IRA Draw starts at 5%; default Brokerage Basis 50k, Spouse Roth 20k; age calculation corrected to Dec 31 end-of-year (IRS RMD convention).</li>
-					<li><b>11.da6</b> Bug fixes: survivor SS benefit was ~2× correct (delayed credits were accruing past claiming age — fixed); dividends now correctly compound inside IRA and Roth accounts (previously only Brokerage received the dividend growth component). New feature: Retirement Start Age — enter the age you plan to retire; the simulation inflates brackets, SS COLA, and spend goal forward to that year automatically. Start age defaults to your current real-world age (birth-month aware) and is clamped so you can't accidentally start in the past. Monte Carlo: click any result row to load that strategy into the form. Annual Details: Roth1/Roth2 per-person balance columns now available under Roth Δ. Version minor is lowercase hex((day-of-year × 24) + hour).</li>
-					<li><b>11</b> Account composition (equity/bond ratio + intl equity %) per account in Assumptions; Spouse Roth IRA now fully simulated — withdrawals split proportionally, conversions routed IRA→Roth per person; Balances chart Both/Mine/Spouse toggle; Optimizer and Monte Carlo skip rebuild when inputs are unchanged.</li>
+					<li><b>11.dad</b> Ages (current age and RMD start age, live-updating) added; optimizer always runs with Max Conversion on (it was almost always better); Strategy defaults were changed; other defaults changed, too.</li>
+					<li><b>11.da6</b> Bug fixes: survivor SS benefit was ~2× correct (delayed credits were accruing past claiming age — fixed); dividends now correctly compound inside IRA and Roth accounts (previously only Brokerage received the dividend growth component). New feature: Retirement Start Age — enter the age you plan to retire; the simulation inflates brackets, SS COLA, and spend goal forward to that year automatically. Start age defaults to your current real-world age (birth-month aware). You may have retired already, but this tool starts where you are. Monte Carlo: click any result row to load that strategy. Annual Details: Roth1/Roth2 per-person balance columns now available under Roth Δ. Minor Version numbering changed: lowercase hex((day-of-year × 24) + hour).</li>
+					<li><b>11</b> Account composition (equity/bond ratio + intl equity %) per account in Assumptions; Spouse Roth account now fully simulated — withdrawals split proportionally, conversions routed IRA→Roth per person; Balances chart Both/Mine/Spouse toggle; Optimizer and Monte Carlo skip rebuild when inputs are unchanged.</li>
 					<li><b>10</b> Shorthand dollar inputs (1.2M, 48k); Include Spouse toggle replacing birthyear=0 hack; ACA FPL cliffs in bracket dropdown; collapsible sidebar sections; assets section reorganized with Roth2/CashReserve placeholders; IRMAA tier ceilings and dynamic MFJ/SGL bracket dropdown recovered from stranded branch.</li>
 					<li><b>8</b> Added "Proportional Withdraw %" strategy with configurable IRA withdrawal boost (0–200% above spend goal); optimizer tests it at 0/5/10/20/50%; Roth Conv bar now stacks on top of taxes in the lower chart; optimizer table highlights best row per column (lowest tax, lowest tax rate, highest spend, highest wealth).</li>
-					<li><b>7g</b> Found one source of over-withdrawal: the tax rate on capital gains should be proportional to the basis. Another problem was that the pension was not included in the total so it over-withdrew to make up for the excluded pension. Another error was that the cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed. The mass of columns have been tamed somewhat with live selectable options, including suppressing columns that have only zeros, grouping by association.</li>
+					<li><b>7g</b> The tax rate on capital gains is now  proportional to the basis. Pension is now included in the total so over withdrawal was prevented. Cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed. The mass of columns have been tamed with live selectable options, including suppressing columns that have only zeros, grouping by association.</li>
 					<li><b>7f</b> Fixed HTML cautions. Fixed error in calculating what to do with surplus. It was putting some surplus into Roth even though no IRA withdrawals had occurred. CapitalGains calculation was wrong, and the tax burden for Brokerage withdrawals was also incorrect.</li>
 					<li><b>7e</b> Fixed more bugs, added much more information (See the <A HREF="https://tools.netcitizen.us/">README.md</A>). And added a new standalone tool.</li>
 					<li><b>7d</b> Updated taxation calculations to use a more thorough calculator.</li>
-					<li><b>7c</b> Prior update(s) broke the save/load functionality due to case changes. Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years.</li>
+					<li><b>7c</b> Save/load functionality fixed. Adjust IRMAA calculations to account for different growth rate of the tax from the CPI rate. IRMAA is tied to Medicare which annually increases by 5.6% over the last 20 years.</li>
 					<li><b>7b</b> More state rates. Fixed most calculations. Minor UI changes.</li>
 					<li><b>7a</b> Now has various state rates. Fixed most calculations.</li>
 					<li><b>6v</b> Implemented Save/Load/Export/Delete Scenarios.</li>
 					<li><b>6u</b> Implemented SS Fail. More UI fixes. Moved all strategy items to the top.</li>
 					<li><b>6t</b> Solved a math issue causing NaN to occur. Cleaned up the visuals.</li>
-					<li><b>6s</b> Some more fancy highlighting of the tables. Fixed broken strategy changer. Tests moved into separate file, too.</li>
+					<li><b>6s</b> Fancy highlighting of the tables. Fixed broken strategy changer. Tests moved into separate file.</li>
 					<li><b>6r</b> Moved the heavy text (top drawers) into a separate file.</li>
 					<li><b>6q</b> Beautifications and hover notes. More self tests with an indicator on screen if they fail. Started the Social Security "meltdown" implementation. Added (empty) Insights tab.</li>
 					<li><b>6p</b> Corrected instructions for Single filer usage. Fixed error in brokerage tracking. Added brokerage dividend rate. Dividends automatically accrue to Cash.</li>

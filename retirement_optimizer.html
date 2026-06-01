@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.df0)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.e1a</title>
+    <title>Retirement Optimizer 11.e4a</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -459,20 +459,21 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.e1a</b> New nerd feature: view input distributions.</li>
-				<li><b>11.df0</b> Monte Carlo uses historical inflation 1928&ndash;2024 and growth (based on S&P), that historical inflaton also is used to escalate the spend-goal rather than using a fixed rate. Stats display CAGR (combined aggregate geometric mean) instead of arithmetic median - e.g. the CAGR growth rate is the "true" rate where the median rate is the "middle" rate over the entire period. Example: -20% growth for 3 years, 10% growth for one year, then +20% growth for 3 years the CAGR is about 0.38%, but the median is 10%. CAGR gives you the real net growth.</li>
-					<li><b>11.dd9</b> Monte Carlo uses <em>Historical</em> data from real S&amp;P 500, bond, and international returns (1970–2024). Account Composition shows <em>Est.Rtn</em> advisory column (median before inflation); Monte Carlo shows per-asset-class return ranges (Eq/Bonds/Intl).</li>
-				<li><b>11.dd6</b> Added ordered withdrawal strategy (CBIR/RIBC/BIRC). Fixed error where Spend Goal was inflated prematurely.Defaults bracket strategy changed to `Below IRMAA`. Fill provides feedback: ✓ or ⚠ status with max feasible spend estimate; clicking ⚠ sets After-Tax Spend to the bracket maximum and triggers recalculation.</li>
+				<li><b>11.e4a</b> Fixed start age bug (table now starts at retirement year on URL load). Updated withdrawal strategy descriptions in How To. Added color legend to Annual Details table.</li>
 				</ul>
 				<details>
 					<summary style="cursor:pointer;color:#888;font-size:0.9em;">Older changes…</summary>
 					<ul>
+					<li><b>11.e1a</b> New (nerd) feature: view input distributions in Monte Carlo.</li>
+					<li><b>11.df0</b> Monte Carlo uses historical inflation 1928&ndash;2024 and growth (based on S&P), that historical inflation also is used to escalate the spend-goal rather than using a fixed rate. Stats display CAGR (Compound Annual Growth Rate) instead of arithmetic median - e.g. the CAGR growth rate is the "true" rate where the median rate is the "middle" rate over the entire period. Example: -20% growth for 3 years, 10% growth for one year, then +20% growth for 3 years the CAGR is about -0.38%, but the median is 10%. CAGR gives you the real net growth.</li>
+					<li><b>11.dd9</b> Monte Carlo uses <em>Historical</em> data from real S&amp;P 500, bond, and international returns (1970–2024). Account Composition shows <em>Est.Rtn</em> advisory column (median before inflation); Monte Carlo shows per-asset-class return ranges (Eq/Bonds/Intl).</li>
+					<li><b>11.dd6</b> Added ordered withdrawal strategy (CBIR/RIBC/BIRC). Fixed error where Spend Goal was inflated prematurely.Defaults bracket strategy changed to `Below IRMAA`. Fill provides feedback: ✓ or ⚠ status with max feasible spend estimate; clicking ⚠ sets After-Tax Spend to the bracket maximum and triggers recalculation.</li>						
 					<li><b>11.dad</b> Ages (current age and RMD start age, live-updating) added; optimizer always runs with Max Conversion on (it was almost always better); Strategy defaults were changed; other defaults changed, too.</li>
 					<li><b>11.da6</b> Bug fixes: survivor SS benefit was ~2× correct (delayed credits were accruing past claiming age — fixed); dividends now correctly compound inside IRA and Roth accounts (previously only Brokerage received the dividend growth component). New feature: Retirement Start Age — enter the age you plan to retire; the simulation inflates brackets, SS COLA, and spend goal forward to that year automatically. Start age defaults to your current real-world age (birth-month aware). You may have retired already, but this tool starts where you are. Monte Carlo: click any result row to load that strategy. Annual Details: Roth1/Roth2 per-person balance columns now available under Roth Δ. Minor Version numbering changed: lowercase hex((day-of-year × 24) + hour).</li>
 					<li><b>11</b> Account composition (equity/bond ratio + intl equity %) per account in Assumptions; Spouse Roth account now fully simulated — withdrawals split proportionally, conversions routed IRA→Roth per person; Balances chart Both/Mine/Spouse toggle; Optimizer and Monte Carlo skip rebuild when inputs are unchanged.</li>
 					<li><b>10</b> Shorthand dollar inputs (1.2M, 48k); Include Spouse toggle replacing birthyear=0 hack; ACA FPL cliffs in bracket dropdown; collapsible sidebar sections; assets section reorganized with Roth2/CashReserve placeholders; IRMAA tier ceilings and dynamic MFJ/SGL bracket dropdown recovered from stranded branch.</li>
 					<li><b>8</b> Added "Proportional Withdraw %" strategy with configurable IRA withdrawal boost (0–200% above spend goal); optimizer tests it at 0/5/10/20/50%; Roth Conv bar now stacks on top of taxes in the lower chart; optimizer table highlights best row per column (lowest tax, lowest tax rate, highest spend, highest wealth).</li>
-					<li><b>7g</b> The tax rate on capital gains is now  proportional to the basis. Pension is now included in the total so over withdrawal was prevented. Cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed. The mass of columns have been tamed with live selectable options, including suppressing columns that have only zeros, grouping by association.</li>
+					<li><b>7g</b> The tax rate on capital gains is now proportional to the basis. Pension is now included in the total so over withdrawal was prevented. Cash gains were not included (interest and dividends) in the initial withdrawal, but were added at the end - above and beyond what was actually needed. The mass of columns have been tamed with live selectable options, including suppressing columns that have only zeros, grouping by association.</li>
 					<li><b>7f</b> Fixed HTML cautions. Fixed error in calculating what to do with surplus. It was putting some surplus into Roth even though no IRA withdrawals had occurred. CapitalGains calculation was wrong, and the tax burden for Brokerage withdrawals was also incorrect.</li>
 					<li><b>7e</b> Fixed more bugs, added much more information (See the <A HREF="https://tools.netcitizen.us/">README.md</A>). And added a new standalone tool.</li>
 					<li><b>7d</b> Updated taxation calculations to use a more thorough calculator.</li>
@@ -506,16 +507,24 @@
 				<li><strong>3. Income (annual):</strong> Input annual Social Security and pension amounts. Set the start ages to see the impact of delaying benefits. SS amounts are adjusted annually by the <i>CPI/COLA</i> rate. <i>Survivorship</i> is the percentage of the pension that continues after You pass away.</li>
 				<li><strong>4. Assumptions:</strong> <i>Dividend Rate</i> and <i>State Taxation</i> are the most-changed inputs — set these first. <i>Social Security Fail</i> models the projected trust fund shortfall year and reduced payout. <i>Growth</i> is the annual return for IRA/Roth/Brokerage (note: dividend rate is additive — 6% growth + 1.5% dividends = 7.5% total). <i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> and <i>CPI/COLA</i> drive bracket indexing and SS cost-of-living adjustments. The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios — informational only, does not affect the simulation.</li>
 				<li><strong>Strategy:</strong> Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change — default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>).
-					<ul>
-						<li><em>Proportional Withdraw +%</em> withdraws proportionally from all sources to meet the spend goal, then adds an IRA-only boost of 0–200% on top. At 0% it is the pure proportional baseline; higher percentages accelerate IRA drawdown, with surplus flowing to Roth via conversion.</li>
-						<li><em>Reduce IRA in N Years</em> amortizes your IRA(s) to the <i>IRA Goal</i> balance over the chosen number of years. The Optimizer tests 2–25 years automatically.</li>
-						<li><em>Fill Federal Tax Bracket</em> withdraws enough to fill the chosen bracket. If the spend goal requires more, spending takes priority.</li>
-						<li><em>IRMAA Tier ceilings</em> withdraws up to the ceiling of the selected Medicare IRMAA surcharge tier, avoiding the next tier's higher premium.</li>
-						<li><em>ACA FPL cliffs</em> targets income at 200/250/300/400% of the Federal Poverty Level to preserve ACA premium subsidy eligibility.</li>
-						<li><em>IRA Draw %</em> withdraws a fixed percentage of the IRA balance each year (5–10% in the Optimizer).</li>
-						<li><em>Ordered</em> withdraws from accounts in a fixed sequence until the spend goal is met: <em>CBIR</em> (Cash→Brokerage→IRA→Roth) depletes taxable accounts first to let tax-advantaged accounts grow; <em>RIBC</em> (Roth→IRA→Brokerage→Cash) depletes tax-free first; <em>BIRC</em> (Brokerage→IRA→Roth→Cash) depletes brokerage before tax-deferred. Useful for modeling specific depletion-order preferences.</li>
-						<li>The Optimizer always runs with <em>Max Roth Conversion</em> on — surplus after spending is converted to Roth. Enable it in the strategy panel to match the optimizer's assumption in single-scenario mode.</li>
+					<details style="margin-top:8px;">
+					<summary style="font-size:0.88em;color:#555;cursor:pointer;user-select:none;font-weight:600;">Detailed Strategy Discussion…</summary>
+					<div style="margin-top:6px;font-size:0.88em;line-height:1.5;">
+					<p><strong>Common to all strategies:</strong> RMDs are always taken first — they are mandatory, count as taxable income, and count toward any IRA ceiling before strategy logic runs.</p>
+					<p><strong>Proportional Withdraw +%</strong> — draws IRA, Brokerage, and Cash proportionally (relative to their balances) to cover the spend goal. An optional IRA-only boost adds <em>boost% × spend goal</em> on top of that; the after-tax surplus flows to Roth conversion. At 0% boost this is the pure proportional baseline. Gap fill if still short: Brokerage + Cash (60/40), then Roth as last resort.</p>
+					<p><strong>Reduce IRA in N Years</strong> — calculates the annual IRA draw needed to amortize the IRA down to the IRA Goal over the remaining simulation years (similar to a mortgage payment). RMDs count toward that target; the strategy draws any remaining amount beyond RMDs. Gap fill if the IRA draw alone doesn't cover spending: Cash → Brokerage → Roth.</p>
+					<p><strong>Fill Federal Tax Bracket / IRMAA Tier / ACA Cliff</strong> — draws IRA up to a chosen ceiling (top of a federal bracket, an IRMAA tier threshold, or an ACA FPL multiple), then stops. Any spending beyond what that IRA draw covers is filled from non-taxable sources in order: Cash → Brokerage → Roth. This keeps the IRA draw from crossing the ceiling even when spending requires more. The bracket/tier ceiling also defines the room available for Roth conversions.</p>
+					<p><strong>IRA Draw %</strong> — withdraws a fixed percentage of the current IRA balance each year regardless of the spend goal (RMDs count toward the target). Gap fill if the after-tax IRA draw falls short of spending: Cash → Brokerage → Roth. Useful for a mechanical, balance-proportional drawdown pace.</p>
+					<p><strong>Ordered (CBIR / RIBC / BIRC)</strong> — draws from accounts in a strict sequence until the spend goal is met; unlike other strategies, all spending is handled in this ordered pass (nothing is pre-withdrawn).
+					<ul style="margin:4px 0 0 16px;">
+						<li><em>CBIR</em> (Cash → Brokerage → IRA → Roth): depletes taxable accounts first, letting tax-advantaged balances compound longest. The conventional "textbook" depletion order.</li>
+						<li><em>RIBC</em> (Roth → IRA → Brokerage → Cash): burns tax-free Roth first; useful for stress-testing Roth-heavy portfolios or modeling an intentional Roth-first drawdown.</li>
+						<li><em>BIRC</em> (Brokerage → IRA → Roth → Cash): clears brokerage before tax-deferred; useful when brokerage gains are low and IRA deferral is still valuable.</li>
 					</ul>
+					</p>
+					<p><strong>Optimizer note:</strong> The Optimizer always runs with <em>Max Roth Conversion</em> on — surplus after spending is converted to Roth. Enable it in the strategy panel to match the optimizer's assumption in single-scenario mode.</p>
+					</div>
+					</details>
 				</li>
 				<li><strong>After Changes...</strong> clicking Annual Details, Chart, Optimizer, or Monte Carlo triggers a recalculation. On the <i>Annual Details</i> table, rows are highlighted yellow when filing status changes to Single; pink/red means the portfolio cannot cover the required draw. The <i>Balances</i> chart has a <i>Both / Mine / Spouse</i> toggle. The <i>Optimizer</i> sweeps all strategy variations and highlights the best result per column. The <i>Monte Carlo</i> tab runs all variations against stochastic return sequences and reports survival rates. Both tabs skip a full rebuild if inputs are unchanged.</li>
 			</ul></div>
@@ -576,6 +585,14 @@
 					<input type="checkbox" id="cat-cash" onchange="updateColumnVisibility()"> Cash Δ
 				</label>
 			</div><!-- class="column-controls" -->
+			<div style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:0.8em;color:#444;padding:4px 6px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
+				<span style="font-weight:600;color:#666;">Row colors:</span>
+				<span><span style="display:inline-block;width:14px;height:14px;background:#ffb6c180;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Underfunded — income falls short of spend goal or portfolio depleted</span>
+				<span><span style="display:inline-block;width:14px;height:14px;background:#fffde7;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>IRMAA Tier 1–6 (progressively darker warm tint as tier rises)</span>
+				<span style="font-weight:600;color:#666;">Cell colors:</span>
+				<span><span style="display:inline-block;width:14px;height:14px;background:#ffff99;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Year/age cells — first year a spouse has died (filing status → Single)</span>
+				<span><span style="display:inline-block;width:14px;height:14px;background:#ff8c0099;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>BracketOverage — MAGI exceeded the bracket/IRMAA ceiling this year</span>
+			</div>
 			<table id="main-table">
 				<thead>
 					<tr id="groupRow"></tr>
@@ -604,6 +621,13 @@
             <div id="opt-perf" style="display:none;margin-bottom:8px;padding:10px 14px;background:#ffeb3b;border:1px solid #f9a825;border-radius:6px;font-size:1.2em;color:#333;font-family:monospace;"></div>
             <div id="opt-spend-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
             <div id="opt-best" style="display:none;"></div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:0.8em;color:#444;padding:4px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
+                <span style="font-weight:600;color:#666;">Row colors:</span>
+                <span><span style="display:inline-block;width:14px;height:14px;background:#90EE90;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Best — wins at least one metric (cell highlight = the winning metric)</span>
+                <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Spend-optimized (✦) — binary search found a higher sustainable spend</span>
+                <span><span style="display:inline-block;width:14px;height:14px;background:#fde8d8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Reverse-optimized (▼) — all strategies failed; highest feasible spend shown</span>
+                <span><span style="display:inline-block;width:14px;height:14px;background:#e8e8e8;opacity:0.8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;text-decoration:line-through;"></span>Infeasible — existing income already exceeds this bracket ceiling</span>
+            </div>
             <table id="opt-table">
                 <thead>
 

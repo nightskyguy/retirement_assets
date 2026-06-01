@@ -1663,7 +1663,7 @@ let _lastOptimizerHash = null;
 
 function runOptimizer() {
     const base = getInputs();
-    const currentHash = JSON.stringify(base);
+    const currentHash = JSON.stringify(base) + ';optimizeSpend=' + (document.getElementById('optimizeSpend')?.checked ?? false);
     if (currentHash === _lastOptimizerHash && window.optimizerResults) {
         renderOptimizerTable(window.optimizerResults);
         showTab('tab-opt');
@@ -3103,6 +3103,7 @@ function loadFromURL() {
         }
     });
     toggleStrategyUI();
+    runSimulation();
 }
 
 

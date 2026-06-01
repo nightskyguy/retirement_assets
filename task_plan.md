@@ -441,6 +441,38 @@ Plot per year: min, p10, median, p90, max → 5-line fan (or shaded band with me
 - **Status:** complete
 - **Depends on:** Phase 7 ✓ (inflation sequences exist), Phase 17 (equity source toggle feeds chart label)
 
+### Phase 19: URL Parameter Compression (Cross-Tool)
+**Why:** The share URL for `retirement_optimizer.html` currently has ~50 full-name params (e.g. `birthyear1=`, `BrokerageBasis=`, `comp_IRA1_ratio=`, etc.), producing URLs 800–1200 chars long — hard to share, over SMS limits, and visually opaque. Goal: ≥50% shorter URL without breaking existing bookmarks.
+
+**Approach — short-key aliasing with backward compat:**
+Define a compact alias map (e.g. `birthyear1` → `by1`, `BrokerageBasis` → `bb`, `spendGoal` → `sg`, `comp_IRA1_ratio` → `c1r`, etc.). On read: accept both long and short keys. On write (Share): emit short keys only.
+
+This preserves all existing bookmarks (long keys still decode), while new shares are ~50–60% shorter.
+
+**Alias design principles:**
+- Person suffixes: `1`/`2` for person 1/person 2
+- Account prefixes: `i`=IRA, `r`=Roth, `b`=Brokerage, `ca`=Cash, `cr`=CashReserve
+- Composition: `c` prefix + account + field initial (e.g. `c_i1_r`=comp_IRA1_ratio, `c_i1_x`=comp_IRA1_intl)
+- Boolean flags: 1–2 chars (e.g. `mc`=maxConversion, `hs`=hasSpouse, `dr`=dividendReinvest)
+- Numeric params: 2–4 chars (e.g. `sg`=spendGoal, `sc`=spendChange, `ny`=nYears, `sr`=stratRate)
+
+**Estimate:** Current URL ~1100 chars → target ~500 chars (55% reduction).
+
+**Cross-tool applicability:** `IncomeTaxPlanner.html` and `RetirementTaxPlanner.html` also use URL sharing. The alias approach is identical; apply after `retirement_optimizer.html` pattern is established.
+
+**Tasks:**
+- [ ] Audit all URL params used by `loadFromURL` / `generateShareURL` in `retirement_optimizer_core.js`
+- [ ] Design alias map (short-key → element id); verify no collisions
+- [ ] Update `loadFromURL`: accept both short and long keys (long for compat, short for new shares)
+- [ ] Update `generateShareURL` (or equivalent): emit short keys
+- [ ] Write tests: round-trip encode/decode produces identical inputs for both key sets
+- [ ] Verify existing long-key bookmarks still load correctly after change
+- [ ] Apply same alias map to IncomeTaxPlanner and RetirementTaxPlanner share functions
+- [ ] Measure before/after URL length on the sample URL above
+
+- **Status:** pending
+- **Independent:** can start anytime (no phase dependencies)
+
 ## Key Questions
 1. Should Phase 1 (bracket/IRMAA fix) be done before strategy comparisons work correctly?
 2. ~~For Phase 2 (bootstrap), which years of historical data?~~ **Resolved:** Full 1928–2024 (97 years), pre-1970 intl proxied by equity.

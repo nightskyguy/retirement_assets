@@ -1064,12 +1064,22 @@ function simulate(inputs) {
                 const seq = resolveOrderedSeq(inputs.orderedSeq);
                 netWithdrawals = runOrderedWithdrawal(curBalances, residualGap, seq, netWithdrawals, applyWithdrawals);
             } else {
-                const thirdWdStrategy = isBracketStrategy
-                    ? { order: ['Cash'], weight: [1], taxrate: [0] }
-                    : { order: ['Brokerage', 'Cash'], weight: [40, 60], taxrate: [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0] };
-                const thirdWd = calculateWithdrawals(curBalances, residualGap, thirdWdStrategy);
+                // Always use Cash-only in the 3rd pass — adding more Brokerage here creates a
+                // cap-gains spiral: more gains → higher SS taxation → bigger residual → repeat.
+                // The 2nd-pass gap-fill already grossed up Brokerage; the 3rd pass handles the
+                // leftover tax from SS phaseout and NIIT cliffs that the gross-up couldn't predict.
+                // Cash (and Roth as fallback) carry no new cap gains, so they break the cycle.
+                const thirdWd = calculateWithdrawals(curBalances, residualGap,
+                    { order: ['Cash'], weight: [1], taxrate: [0] });
                 netWithdrawals = accumulateWithdrawals([netWithdrawals, thirdWd]);
                 applyWithdrawals(curBalances, thirdWd);
+                // Roth fallback if Cash ran out (still no cap gains)
+                if ((thirdWd.shortfall ?? 0) > 1 && curBalances.Roth > 0) {
+                    const rothWd3 = calculateWithdrawals(curBalances, thirdWd.shortfall,
+                        { order: ['Roth'], weight: [1], taxrate: [0] });
+                    netWithdrawals = accumulateWithdrawals([netWithdrawals, rothWd3]);
+                    applyWithdrawals(curBalances, rothWd3);
+                }
             }
             capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
             tax = calculateTaxes({

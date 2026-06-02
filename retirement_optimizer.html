@@ -12,9 +12,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Version: major.minor where minor = lowercase hex((day-of-year * 24) + hour-of-day) at build time.
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
-         Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e50)
+         Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.e50</title>
+    <title>Retirement Optimizer 11.e52</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -36,7 +36,17 @@
     </script>
 	<script src="displayhelpers.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
-	<style>.toggle { display: flex !important; }</style>
+	<style>
+    .toggle { display: flex !important; }
+    .share-panel { display:none; position:fixed; top:60px; right:1.5rem; z-index:800; background:#fff; border:1px solid #27ae60; border-radius:8px; padding:.85rem 1rem; width:min(520px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.2); }
+    .share-panel label { font-size:11px; color:#555; display:block; margin-bottom:.4rem; font-family:monospace; }
+    .share-panel .share-row { display:flex; gap:6px; }
+    .share-panel .share-row input { flex:1; background:#f8f9fa; border:1px solid #ccc; border-radius:4px; color:#222; font-family:monospace; font-size:11px; padding:5px 8px; outline:none; }
+    .share-panel .share-row input:focus { border-color:#27ae60; }
+    .share-panel .share-copy { background:rgba(39,174,96,.15); border:1px solid rgba(39,174,96,.4); border-radius:4px; color:#1a7a1a; font-family:monospace; font-size:11px; padding:5px 12px; cursor:pointer; white-space:nowrap; }
+    .share-panel .share-copy:hover { background:rgba(39,174,96,.25); }
+    .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
+	</style>
 	<base target="_blank">	
 	<script src="retirement_optimizer_core.js"></script>	
 	<script src="retirement_optimizer_tests.js"></script>	
@@ -310,9 +320,16 @@
                 <div title="First year when the actual portfolio (Roth + Taxable) outpaces the no-conversion shadow after taxes. Uses Future IRA Tax % assumption. See Opp. Cost columns in Annual Details. '—' means never or no conversions."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;">—</strong></div>
 				<div id="popUpMessage" class="scenario-message"></div>
 				<div title="Generate a URL with all current settings for bookmarking or sharing" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-					<div>
-						<button onclick="copyShareURL()" style="font-size:0.8em;padding:4px 8px;">🔗 Share</button>
-						<span id="share-confirm" style="font-size:0.75em;color:#1a7a1a;display:none;margin-left:4px;">Copied!</span>
+					<div style="position:relative">
+						<button onclick="toggleSharePanel()" style="font-size:0.8em;padding:4px 8px;">&#8258; Share</button>
+						<div class="share-panel" id="share-panel">
+							<label>Copy this URL to restore your settings in any browser:</label>
+							<div class="share-row">
+								<input type="text" id="share-url-input" readonly onclick="this.select()">
+								<button class="share-copy" onclick="copyShareURL()">Copy</button>
+							</div>
+							<div class="share-status" id="share-status"></div>
+						</div>
 					</div>
 					<label class="toggle" style="font-size:0.8em;" title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
 						<input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()">
@@ -476,6 +493,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.e52</b> URL compression: all share URLs now use short parameter names (57% shorter). Share button opens a copyable popup panel on all tools matching Income Tax Planner style. Income Tax Planner gets an "Open in Tax Planner →" button that pre-fills Retirement Tax Planner with state, SS income, and capital gains. Backward compatible — existing long-key bookmarks still load.</li>
 				<li><b>11.e4f</b> User Experience polish throughout. Roth conversion &amp; opportunity cost tracking calculates when conversions or cash withdrawals "pay off". <B>Break Even</B> at the top says when that year is. New Opp. Cost category and columns added to Annual Details. Future IRA Tax % marginal rate when IRA is eventually distributed; auto defaults the last simulation year marginal rate. Choose your heirs total tax rate.</li>
 				<li><b>11.e4a</b> Fixed start age bug (table now starts at retirement year on URL load). Updated withdrawal strategy descriptions in How To. Added color legend to Annual Details table.</li>
 				</ul>

@@ -3,7 +3,7 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-Phase 7 — complete; next: Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 9 (ACA Refinement), or Phase 10 (Multi-Strategy)
+Phase 19 — complete; next: Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 9 (ACA Refinement), Phase 12 (Withdrawal Timing), or Phase 8 (Variable Growth)
 Retirement_Projection fixes added: Phase 13 (responsive layout), Phase 14 (Simple mode), Phase 15 (Tax Planner linkage)
 
 ## Dependency Graph
@@ -473,7 +473,7 @@ This preserves all existing bookmarks (long keys still decode), while new shares
 - [ ] Apply same alias map to IncomeTaxPlanner and RetirementTaxPlanner share functions
 - [ ] Measure before/after URL length on the sample URL above
 
-- **Status:** pending
+- **Status:** complete — short alias maps implemented in optimizer_core.js + RetirementTaxPlanner.html; share panel popup standardized across all tools; ITP→RTP button added; 57% URL reduction (1100→468 chars); backward compat verified.
 - **Independent:** can start anytime (no phase dependencies)
 
 ### Phase 20: Roth Conversion Opportunity Cost Accounting

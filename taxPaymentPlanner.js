@@ -532,31 +532,39 @@ const TaxPaymentPlanner = (() => {
     // If draws (+ any forced override withholding) don't cover everything, add the minimum
     // conversion withholding needed to close the gap. Split pro-rata across IRAs by conv size.
     // Skipped when ira1RothWithhold === false (explicit "no conv withholding") or already applied (true).
+    // Also skipped when the conversion is in December (monthsRem=0) — no Roth growth remaining,
+    // so the 60-day replacement is not worthwhile; the residual shortfall flows to quarterly estimates.
     if (shortfall > 0) {
       const totalConv = p.ira1RothConversion + p.ira2RothConversion;
       if (totalConv > 0) {
         if (p.ira1RothConversion > 0 && p.ira1RothWithhold !== false && !doWithhold1) {
-          const share = p.ira1RothConversion / totalConv;
-          ira1ConvFedW = Math.round(shortfall * share * (stateIraExempt ? 1.0 : fedFrac));
-          ira1ConvStW  = stateIraExempt ? 0 : Math.round(shortfall * share * stFrac);
-          if (ira1ConvFedW + ira1ConvStW > 0) {
-            doWithhold1 = true;
-            convWithholdFed   += ira1ConvFedW;
-            convWithholdState += ira1ConvStW;
-            ira1SixtyDay = _sixtyDayAnalysis(p.ira1RothConversion, ira1.planAConvMonth,
-              { total: ira1ConvFedW + ira1ConvStW, fed: ira1ConvFedW, state: ira1ConvStW });
+          const monthsRem1 = Math.max(0, 12 - ira1.planAConvMonth);
+          if (monthsRem1 > 0) {
+            const share = p.ira1RothConversion / totalConv;
+            ira1ConvFedW = Math.round(shortfall * share * (stateIraExempt ? 1.0 : fedFrac));
+            ira1ConvStW  = stateIraExempt ? 0 : Math.round(shortfall * share * stFrac);
+            if (ira1ConvFedW + ira1ConvStW > 0) {
+              doWithhold1 = true;
+              convWithholdFed   += ira1ConvFedW;
+              convWithholdState += ira1ConvStW;
+              ira1SixtyDay = _sixtyDayAnalysis(p.ira1RothConversion, ira1.planAConvMonth,
+                { total: ira1ConvFedW + ira1ConvStW, fed: ira1ConvFedW, state: ira1ConvStW });
+            }
           }
         }
         if (p.ira2RothConversion > 0 && p.ira2RothWithhold !== false && !doWithhold2) {
-          const share = p.ira2RothConversion / totalConv;
-          ira2ConvFedW = Math.round(shortfall * share * (stateIraExempt ? 1.0 : fedFrac));
-          ira2ConvStW  = stateIraExempt ? 0 : Math.round(shortfall * share * stFrac);
-          if (ira2ConvFedW + ira2ConvStW > 0) {
-            doWithhold2 = true;
-            convWithholdFed   += ira2ConvFedW;
-            convWithholdState += ira2ConvStW;
-            ira2SixtyDay = _sixtyDayAnalysis(p.ira2RothConversion, ira2.planAConvMonth,
-              { total: ira2ConvFedW + ira2ConvStW, fed: ira2ConvFedW, state: ira2ConvStW });
+          const monthsRem2 = Math.max(0, 12 - ira2.planAConvMonth);
+          if (monthsRem2 > 0) {
+            const share = p.ira2RothConversion / totalConv;
+            ira2ConvFedW = Math.round(shortfall * share * (stateIraExempt ? 1.0 : fedFrac));
+            ira2ConvStW  = stateIraExempt ? 0 : Math.round(shortfall * share * stFrac);
+            if (ira2ConvFedW + ira2ConvStW > 0) {
+              doWithhold2 = true;
+              convWithholdFed   += ira2ConvFedW;
+              convWithholdState += ira2ConvStW;
+              ira2SixtyDay = _sixtyDayAnalysis(p.ira2RothConversion, ira2.planAConvMonth,
+                { total: ira2ConvFedW + ira2ConvStW, fed: ira2ConvFedW, state: ira2ConvStW });
+            }
           }
         }
         totalCovered = totalIraDrawWithheld + convWithholdFed + convWithholdState;
@@ -940,7 +948,9 @@ const TaxPaymentPlanner = (() => {
       }
 
       // ── Shortfall quarterly estimates ──────────────────────────────────────
-      if (shortfall > 0) {
+      // Baseline and planC are comparison plans — skip quarterly estimates so the
+      // summary.shortfall accurately reflects uncovered IRA-draw gap for invariant checks.
+      if (shortfall > 0 && !isBaseline && !isPlanC) {
         const sfFed   = stateIraExempt
           ? Math.max(0, p.federalTax - totalIraDrawWithheld - convWithholdFed)
           : Math.round(shortfall * fedFrac);
@@ -1117,7 +1127,7 @@ const TaxPaymentPlanner = (() => {
       balanced:            Math.abs((verFed + verState) - totalTax) < 2,
       iraWithholdingUsed:  totalIraDrawWithheld + convWithholdFed + convWithholdState,
       iraCoveragePct:      totalTax > 0 ? (totalIraDrawWithheld + convWithholdFed + convWithholdState) / totalTax : 0,
-      shortfall,
+      shortfall:           strategy === 'all_quarterly' ? 0 : shortfall,
       hysaNet, breakeven, yeIraWins,
       safeHarborFed:       shFed,
       safeHarborState:     shState,

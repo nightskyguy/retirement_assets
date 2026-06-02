@@ -1022,6 +1022,7 @@ function renderSummary(data) {
     rows.push(`<div class="${cls}"><strong>SS torpedo peak:</strong> ~${(peakMarg*100).toFixed(1)}% fed marginal @ $${peakInc.toLocaleString()} ordinary income</div>`);
     rows.push(`<div><strong>SS torpedo starts:</strong> ~$${Math.round(torpEntry).toLocaleString()} ordinary income</div>`);
   }
+  rows.push(`<div style="margin-top:8px;text-align:center"><button onclick="openInTaxPlanner()" class="hdr-btn" style="font-size:11px;padding:5px 14px">Open in Tax Planner →</button></div>`);
   document.getElementById('summary').innerHTML = rows.join('');
 }
 
@@ -1204,6 +1205,18 @@ async function copyShareURL() {
   } catch {
     status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C';
   }
+}
+
+// ─── OPEN IN RETIREMENT TAX PLANNER ─────────────────────────────────────────
+function openInTaxPlanner() {
+  const sp = new URLSearchParams({ yr: cfg.year, s: cfg.state, ss: cfg.ssIncome });
+  const gain = cfg.cgSale * (1 - cfg.cgBasisPct / 100);
+  if (gain > 0) sp.set('cg', Math.round(gain));
+  if (pinnedIncome !== null) {
+    const iraEst = Math.max(0, Math.round(pinnedIncome - cfg.ssIncome));
+    if (iraEst > 0) sp.set('i1v', iraEst);
+  }
+  window.open('RetirementTaxPlanner.html?' + sp, '_blank');
 }
 
 // Close share panel when clicking outside it

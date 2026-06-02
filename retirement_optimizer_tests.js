@@ -1811,9 +1811,10 @@ assertEqual(
 			'gap-1: no spurious shortfall in early years with large brokerage unrealized gains (propwd strategy)');
 	}
 
-	// (gap-2) No spurious shortfall near MFJ→SGL transition when brokerage gap-fill involved.
-	// Regression for: brokerage cap gains pushing SS taxation in SGL bracket → 3rd-pass spiral.
-	// Uses fixedpct strategy (non-bracket) to match the reported failing scenario.
+	// (gap-2) No spurious shortfall when brokerage gap-fill and SS phaseout interact.
+	// Root cause: brokerage cap gains raise AGI → more SS becomes taxable → 3rd-pass residual →
+	// old code drew brokerage again → more cap gains → spiral. Not specific to MFJ→SGL; that was
+	// just where it was first noticed. Uses fixedpct (non-bracket) to trigger the old code path.
 	{
 		const spouseDeathAge = 75; // born 1952, dies 2027 → status changes to SGL
 		const r = simulate({

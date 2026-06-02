@@ -3041,15 +3041,8 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     _prevStatsFinalNWCD = finalNWCurrentDollars;
 }
 
-// Phase 23: IRS Uniform Lifetime Table factors (SECURE 2.0, effective 2022+).
-// Divisor for first-year RMD calculation: projectedIRA / factor = first RMD.
-const IRS_ULT_FACTORS = {
-    72:27.4, 73:26.5, 74:25.5, 75:24.6, 76:23.7, 77:22.9, 78:22.0, 79:21.1,
-    80:20.2, 81:19.4, 82:18.5, 83:17.7, 84:16.8, 85:16.0, 86:15.2, 87:14.4,
-    88:13.7, 89:12.9, 90:12.2,
-};
-
 // Phase 23: update projected-RMD stats in the stats bar.
+// RMD divisors come from RMD_TABLE in taxengine.js (full table, ages 72–120).
 // Reads IRA balances, birth years, and growth rate from DOM inputs — no totals arg needed.
 function updateProjectedRMDStat() {
     const now = new Date();
@@ -3063,11 +3056,11 @@ function updateProjectedRMDStat() {
         const yearsTo = rmdAge - age;
         if (yearsTo <= 0) {
             // Already in RMD — estimate current RMD from current IRA balance
-            const factor = IRS_ULT_FACTORS[Math.min(age, 90)] ?? 12.2;
+            const factor = RMD_TABLE[Math.min(age, 120)] ?? 2.0;
             return { rmdAge, rmdYear: curYear, projIRA: iraBalance, firstRMD: iraBalance / factor, alreadyRMD: true };
         }
         const projIRA = iraBalance * Math.pow(1 + growthRate, yearsTo);
-        const factor = IRS_ULT_FACTORS[rmdAge] ?? 26.5;
+        const factor = RMD_TABLE[rmdAge] ?? 26.5;
         return { rmdAge, rmdYear: curYear + yearsTo, projIRA, firstRMD: projIRA / factor, alreadyRMD: false };
     }
 

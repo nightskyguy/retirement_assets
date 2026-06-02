@@ -1788,6 +1788,75 @@ assertEqual(
 	}
 
 	// ============================================================================
+	// BROKERAGE GAP-FILL SPIRAL REGRESSION (bug fix: 3rd-pass cap-gains cycle)
+	// ============================================================================
+	console.log('\n=== Brokerage Gap-Fill Spiral Regression Tests ===');
+
+	// (gap-1) No spurious shortfall when brokerage has high unrealized gains and a gap
+	// requires withdrawal — non-bracket strategy, status stays MFJ throughout.
+	// The 3rd-pass fix prevents: brokerage withdrawal → higher cap gains → higher SS taxation
+	// → residual gap → more brokerage → spiral.
+	{
+		const r = simulate({
+			...baseInputs,
+			strategy: 'propwd', propWithdraw: 0, maxConversion: false,
+			IRA1: 400000, Brokerage: 500000, BrokerageBasis: 80000, // 84% unrealized gains ratio
+			Cash: 20000, Roth: 30000,
+			spendGoal: 110000, ss1: 35000, ss2: 0, hasSpouse: false,
+		});
+		const shortfallYears = r.log.filter(row => (row.shortfall ?? 0) < -100);
+		// With adequate portfolio, no shortfall in first several years
+		const earlyShortfalls = shortfallYears.filter(row => row.year <= baseInputs.birthyear1 + baseInputs.die1 - 10);
+		assertEqual(earlyShortfalls.length, 0,
+			'gap-1: no spurious shortfall in early years with large brokerage unrealized gains (propwd strategy)');
+	}
+
+	// (gap-2) No spurious shortfall near MFJ→SGL transition when brokerage gap-fill involved.
+	// Regression for: brokerage cap gains pushing SS taxation in SGL bracket → 3rd-pass spiral.
+	// Uses fixedpct strategy (non-bracket) to match the reported failing scenario.
+	{
+		const spouseDeathAge = 75; // born 1952, dies 2027 → status changes to SGL
+		const r = simulate({
+			...baseInputs,
+			strategy: 'fixedpct', iraWithdrawPct: 0.10, maxConversion: false,
+			birthyear1: 1955, die1: 88, birthyear2: 1952, die2: spouseDeathAge,
+			hasSpouse: true,
+			IRA1: 600000, IRA2: 100000, Roth: 80000, Roth2: 10000,
+			Brokerage: 400000, BrokerageBasis: 60000, // 85% unrealized gains
+			Cash: 50000, spendGoal: 100000,
+			ss1: 28000, ss2: 18000,
+		});
+		// Find MFJ→SGL transition year
+		const transitionIdx = r.log.findIndex((row, i) => i > 0 && row.status !== r.log[i - 1].status);
+		const transitionYear = transitionIdx >= 0 ? r.log[transitionIdx].year : null;
+		if (transitionYear !== null) {
+			// Check ±2 years around transition for spurious shortfalls
+			const window = r.log.filter(row =>
+				Math.abs(row.year - transitionYear) <= 2 && (row.shortfall ?? 0) < -100
+			);
+			assertEqual(window.length, 0,
+				`gap-2: no spurious shortfall within 2 years of MFJ→SGL transition (year ${transitionYear})`);
+		} else {
+			assertEqual(true, true, 'gap-2: no status change in scenario (skipped)');
+		}
+	}
+
+	// (gap-3) Genuine shortfall (truly exhausted portfolio) still fires — fix must not suppress real shortfalls.
+	{
+		const r = simulate({
+			...baseInputs,
+			strategy: 'propwd', propWithdraw: 0, maxConversion: false,
+			IRA1: 20000, Brokerage: 5000, BrokerageBasis: 5000, Cash: 2000, Roth: 0,
+			spendGoal: 150000, ss1: 15000, ss2: 0, hasSpouse: false,
+		});
+		assertEqual(r.totals.success, false,
+			'gap-3: genuine shortfall (exhausted portfolio) still marks success=false');
+		const realShortfalls = r.log.filter(row => (row.shortfall ?? 0) < -1000);
+		assertEqual(realShortfalls.length > 0, true,
+			'gap-3: exhausted portfolio produces real shortfall entries in log');
+	}
+
+	// ============================================================================
 	// Run all tests
 	// ============================================================================
 	function runAllTaxTests() {

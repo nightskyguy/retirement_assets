@@ -1686,6 +1686,108 @@ assertEqual(
 	}
 
 	// ============================================================================
+	// BETR TESTS (Phase 21)
+	// ============================================================================
+	console.log('\n=== BETR Tests (Phase 21) ===');
+
+	// (betr-1) Identity: when r_taxable = r_ira, BETR = t_now exactly.
+	{
+		const betr = computeBETR(0.22, 0.07, 0.07, 10);
+		assertEqual(Math.abs(betr - 0.22) < 0.0001, true,
+			'computeBETR identity: r_taxable=r_ira → BETR = t_now');
+	}
+
+	// (betr-2) Drag: when r_taxable < r_ira (taxable drag present), BETR < t_now.
+	// drag = dividendYield × capGainsRate = 0.02 × 0.15 = 0.003; r_taxable = 0.067
+	{
+		const betr = computeBETR(0.22, 0.07, 0.067, 10);
+		assertEqual(betr < 0.22, true,
+			'computeBETR drag: r_taxable < r_ira → BETR < t_now');
+	}
+
+	// (betr-3) Horizon effect: longer horizon with drag lowers BETR further (more drag accumulates).
+	{
+		const betr10 = computeBETR(0.22, 0.07, 0.067, 10);
+		const betr20 = computeBETR(0.22, 0.07, 0.067, 20);
+		assertEqual(betr20 < betr10, true,
+			'computeBETR horizon: longer n with drag → lower BETR (conversion more compelling)');
+	}
+
+	// (betr-4) null inputs: returns null when tNow is 0 or n <= 0.
+	{
+		assertEqual(computeBETR(0, 0.07, 0.07, 10), null, 'computeBETR: tNow=0 → null');
+		assertEqual(computeBETR(0.22, 0.07, 0.07, 0), null, 'computeBETR: n=0 → null');
+	}
+
+	// (betr-5) BETR appears in Annual Details log when conversions occur.
+	{
+		const r = simulate({ ...baseInputs, IRA1: 600000, maxConversion: true });
+		const convYears = r.log.filter(row => (row.rothConv ?? 0) > 0 || (row.extraConv ?? 0) > 0);
+		const withBETR = convYears.filter(row => row['BETR%'] !== null && row['BETR%'] !== undefined);
+		assertEqual(withBETR.length > 0, true,
+			'BETR% appears in log for years with conversions');
+		// betrAvg should be set on totals
+		assertEqual(r.totals.betrAvg !== null && r.totals.betrAvg !== undefined, true,
+			'totals.betrAvg is set when conversions occur');
+	}
+
+	// ============================================================================
+	// extraConversionAmount TESTS (Phase 23)
+	// ============================================================================
+	console.log('\n=== extraConversionAmount Tests (Phase 23) ===');
+
+	// (conv23-1) Regression: extraConversionAmount=0 produces bit-identical results to baseline.
+	{
+		const base = simulate({ ...baseInputs, IRA1: 500000, maxConversion: true });
+		const withZero = simulate({ ...baseInputs, IRA1: 500000, maxConversion: true, extraConversionAmount: 0 });
+		assertEqual(
+			Math.abs(base.finalNW - withZero.finalNW) < 1,
+			true,
+			'extraConversionAmount=0: finalNW identical to no-param baseline'
+		);
+		assertEqual(
+			Math.abs(base.totals.tax - withZero.totals.tax) < 1,
+			true,
+			'extraConversionAmount=0: totals.tax identical to no-param baseline'
+		);
+	}
+
+	// (conv23-2) Extra conversion increases Roth balance in first year (log[0]).
+	{
+		const base  = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false });
+		const extra = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false, extraConversionAmount: 50000 });
+		const baseRoth  = base.log[0].Roth;
+		const extraRoth = extra.log[0].Roth;
+		assertEqual(extraRoth > baseRoth, true,
+			'extraConversionAmount=50k: Roth balance higher than no-extra-conv baseline in year 0');
+	}
+
+	// (conv23-3) Extra conversion reduces IRA balance by approximately the gross amount in year 0.
+	{
+		const base  = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false });
+		const extra = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false, extraConversionAmount: 50000 });
+		const ira0Base  = base.log[0].TotalIRA;
+		const ira0Extra = extra.log[0].TotalIRA;
+		assertEqual(ira0Base - ira0Extra > 40000, true,
+			'extraConversionAmount=50k: IRA balance reduced by approximately 50k in year 0');
+	}
+
+	// (conv23-4) Array form: per-year conversion schedule.
+	// Year 0 gets 30k extra, year 1 gets 0. Verify year-0 Roth > base.
+	{
+		const schedule = [30000, 0];
+		const extra = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false, extraConversionAmount: schedule });
+		const base  = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false });
+		assertEqual(extra.log[0].Roth > base.log[0].Roth, true,
+			'extraConversionAmount array: year 0 Roth higher with 30k extra conv');
+		// Year 1 IRA delta should be smaller than year 0 delta (no further extra conv in year 1)
+		const ira1Delta = base.log[1].TotalIRA - extra.log[1].TotalIRA;
+		const ira0Delta = base.log[0].TotalIRA - extra.log[0].TotalIRA;
+		assertEqual(ira1Delta < ira0Delta + 5000, true,
+			'extraConversionAmount array: year 1 IRA delta not growing (no extra conv after year 0)');
+	}
+
+	// ============================================================================
 	// Run all tests
 	// ============================================================================
 	function runAllTaxTests() {

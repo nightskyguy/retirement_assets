@@ -24,13 +24,15 @@ Retirement_Projection fixes added: Phase 13 (responsive layout), Phase 14 (Simpl
 ├─→ 12 (Quarterly Mode) [independent]
 ├─→ 20 (Roth Conv. Opp. Cost) [needs Phase 1]
 │   └─→ 21 (BETR) [also needs Phase 20]
+│       └─→ 23 (Conversion Amount Optimizer) [also needs Phase 20]
 └─→ 22 (Guyton-Klinger) [independent, integrates with Phase 10]
 
-EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12,20,22 → 21,10
+EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12,20,22 → 21 → 23,10
 ```
 
-**Critical Path:** 0b → 1 → 9 → 10 (longest chain)
+**Critical Path:** 0b → 1 → 9 → 10 (longest chain; Phase 10 deprioritized — see decisions)
 **Unblocked quickwins:** 3, 4, 8, 12 (can start anytime after cleanup)
+**New critical path for conversion work:** 1 → 20 → 21 → 23
 
 ## Phases
 
@@ -523,7 +525,7 @@ TaxLiability = TradShadow × TaxFuture
 
 **Core formula (Kitces/standard — taxes paid from outside the IRA, e.g. from taxable account):**
 ```
-BETR = 1 − t_now × (1 + r_taxable)^n / (1 + r_ira)^n
+BETR = t_now × (1 + r_taxable)^n / (1 + r_ira)^n
 
 where:
   t_now       = current marginal tax rate on the conversion amount
@@ -541,37 +543,33 @@ If `r_taxable ≈ r_ira` (no taxable drag), BETR = t_now — trivially break-eve
 
 **Recommended approach:** Implement Kitces standard formula first (well-validated, fully public). Note Vanguard adds RMD drag and heir factors — add those as Phase 21b if desired.
 
-**Where it fits:** BETR is a *per-conversion-decision* metric, not an annual simulator metric. Best shown:
-1. In the Roth conversion section alongside max conversion input — "BETR for this conversion: 28.4%" with annotation "your expected future rate is X% — conversion is [advantageous / not advantageous]"
-2. Optionally: table showing BETR sensitivity across time horizons (n = 5, 10, 15, 20, 25 years) to show how BETR evolves
+**Revised exposure (2026-06-02):** BETR is a per-year signal, best surfaced three ways:
+1. **Annual Details column** (`betr`) in the Opp. Cost category — each row shows BETR % + ▲ (future rate > BETR = beneficial) or ▼ (below = detrimental). Primary display.
+2. **Summary stat** `stat-betr-avg` near `stat-conv-be` — average BETR across all conversion years.
+3. **Collapsible sensitivity table** near max-conversion input — BETR at n = 5/10/15/20/25 yr horizons.
 
-**Inputs needed:**
-- `t_now` — derives from `calculateTaxes()` on the conversion amount (marginal rate at conversion bracket boundary)
-- `r_taxable` — user-configurable "taxable drag rate" or auto-derive: `r_ira × (1 − dividendTaxRate × dividendYield)` from brokerage allocation
-- `n` — years to expected withdrawal onset (e.g., retirement year − current year, or RMD onset)
-- `t_expected_future` — user inputs their expected future marginal rate (existing `futureIRATaxRate` input from Phase 20)
-
-**Output:**
-- `BETR` as a % shown near max conversion input
-- Comparison: "BETR: 24.3% — your expected future rate (28%) exceeds BETR → conversion advantageous"
-- Color-coded: green if future rate > BETR (convert), amber if within 2pp (marginal), red if future rate < BETR (don't convert)
+**Inputs:**
+- `t_now` — derives from `calculateTaxes()` marginal rate at conversion bracket boundary
+- `r_taxable` — auto-derive: `r_ira × (1 − dividendYield × dividendTaxRate)` from brokerage allocation
+- `n` — years to RMD onset (or user-specified horizon)
+- `t_expected_future` — existing `futureIRATaxRate` input (Phase 20)
 
 **Tasks:**
-- [ ] Research: find Kitces' most recent published BETR formula (verify formula handles partial-year RMD drag optionally)
 - [ ] Implement `computeBETR(tNow, rIRA, rTaxable, n)` in `retirement_optimizer_core.js`
-- [ ] Derive `r_taxable` from brokerage allocation (dividend yield × dividend tax rate drag) or let user override
-- [ ] Compute BETR live whenever conversion amount, horizon, or tax rate changes
-- [ ] UI: display BETR near max conversion input with comparison to `futureIRATaxRate`
-- [ ] UI: optional BETR-by-horizon table (n = 5/10/15/20/25 yr columns)
-- [ ] Test: when `r_taxable = r_ira`, BETR = t_now (verify trivial identity)
-- [ ] Test: when `r_taxable < r_ira` (taxable drag), BETR < t_now (verify drag lowers break-even rate)
-- [ ] Test: increasing n with drag → BETR decreases (longer horizon, more drag cumulates → conversion more compelling)
+- [ ] Derive `r_taxable` from brokerage allocation (dividend yield × cap gains drag)
+- [ ] Compute BETR each year inside `simulate()` year loop when conversion occurs; store in log
+- [ ] Annual Details: add `betr` column (Opp. Cost category); ▲/▼ flag vs `futureIRATaxRate`
+- [ ] Stats bar: add `stat-betr-avg` element; `updateStats()` populates from log averages
+- [ ] UI: collapsible BETR sensitivity table (5/10/15/20/25 yr) near max-conversion input
+- [ ] Test: `r_taxable = r_ira` → BETR = t_now (identity)
+- [ ] Test: `r_taxable < r_ira` → BETR < t_now (drag lowers break-even rate)
+- [ ] Test: increasing n with drag → BETR decreases (longer horizon, more drag accumulates)
 - [ ] Update version + changelog
 
 - **Status:** pending
 - **Depends on:** Phase 20 ✓ (futureIRATaxRate input exists), Phase 1 ✓ (bracket/marginal rate correct)
-- **Reference:** Kitces (2013) [Roth Conversion Analysis: The True Marginal Tax Rate Equivalency Principle](https://www.kitces.com/blog/roth-conversion-analysis-value-calculate-timing-true-marginal-tax-rate-equivalency-principle/)
-- **Note:** Research phase needed first — confirm Kitces formula variant, check if Vanguard has published methodology since this plan was written
+- **Blocks:** Phase 23 (BETR column data feeds Phase 23 optimizer table)
+- **Reference:** Kitces (2013) "Roth Conversion Analysis: The True Marginal Tax Rate Equivalency Principle"
 
 ---
 
@@ -665,6 +663,89 @@ inputs.spendGoal = gkSpend; // override spend for this year
 
 ---
 
+### Phase 23: Roth Conversion Amount Optimizer
+**Why:** Current tool converts surplus only — whatever IRA withdrawal exceeds spending need. This couples two independent decisions: (1) where to source spending, (2) how much to convert. A user spending from Roth/brokerage this year has no way to also convert $80k from IRA. The optimal conversion amount is different every year (IRA balance, bracket inflation, SS phase-in, RMD proximity all change), so the tool must compute a per-year schedule, not a single bracket choice. BETR answers "should I?" — Phase 23 answers "how much?"
+
+**Research basis:** MaxiFi (Kotlikoff) uses full iterative DP to maximize lifetime discretionary spending; "go big" conversions above bracket limits can win by eliminating decades of RMD compounding. Phase 23 approximates this via greedy DP using the existing `simulate()` as the evaluation function.
+
+**Core architecture: `simulate()` gets `inputs.extraConversionAmount`**
+
+New input (scalar $ or per-year array) — after the spending/withdrawal block (after line 1120), withdraw this amount from IRA and route directly to Roth, independent of spending strategy. Additive and independent; tax recalculation pass captures incremental tax on the extra IRA withdrawal. Array form: `inputs.extraConversionAmount[y] ?? scalar ?? 0`.
+
+**Finding the optimal amount — $10k sweep (not pure binary search)**
+
+The objective function (final wealth) is non-convex (converting more helps then hurts). Binary search can miss the global optimum. Instead: sweep `extraConversionAmount` from $0 to totalIRA in $10k increments (~100–200 `simulate()` calls per strategy, fast). Pick the amount with best score.
+
+```
+optimizeConversionAmount(baseInputs, strategyOverrides, metric='finalNW'):
+  for conv in range(0, totalIRA, 10000):
+    res = simulate({...base, ...overrides, extraConversionAmount: conv})
+    score = res.finalNW (or totals.spend, or totals.tax)
+  return conv with best score
+```
+
+**Greedy DP per-year schedule**
+
+For each year t from retirement to max(RMD ages):
+1. Run conversion sweep for year t (holding prior years fixed at their already-determined amounts)
+2. Lock in optimal C_t; advance to year t+1 with updated balance state
+3. Result: array `convSchedule[y]` — per-year optimal conversion amounts
+
+Output table (stored in log, shown in Annual Details):
+```
+Year | Age | Opt Conv  | Bracket | BETR | Beneficial?
+2025 | 60  | $62,400   | 22%     | 19%  | ▲
+2026 | 61  | $58,900   | 22%     | 19%  | ▲
+2033 | 68  |      $0   | —       | —    | — ← SS fills bracket
+```
+
+**Optimizer integration — "Include conversion optimization" checkbox**
+
+When enabled (opt-in), for each strategy row in `buildVariations()`, run `optimizeConversionAmount()` → add new rows showing the strategy + optimized conversion. New optimizer table columns:
+| Column | Shows |
+|--------|-------|
+| **Opt Conv $/yr** | Average optimal annual conversion for this strategy |
+| **Conv Savings $** | Lifetime tax saved vs same strategy with zero conversion |
+| **MC Survival (conv)** | Stage 2 MC survival at optimal conversion (top-K only) |
+| **BETR avg** | Average BETR across conversion years |
+
+**MC validation (Stage 2)**
+
+Stage 1 deterministic sweep → top-K (strategy + optimal conversion amount) pairs → Stage 2 MC (500 paths) runs those K pairs with the deterministic conversion schedule locked in. Adds MC survival column. Deterministic winner vs MC winner shown if they differ.
+
+**Projected RMD stat (always shown)**
+
+Add to stats bar:
+- `stat-proj-rmd1`: "Person 1 RMD (age 73 in 2031): est. $28k/yr"
+- `stat-proj-rmd2`: "Spouse RMD (age 75 in 2036): est. $14k/yr"
+
+RMD age per SECURE 2.0: born 1951–1959 → 73, born 1960+ → 75. If already past RMD age: show actual current-year RMD from simulation log. Both lines always shown; spouse line hidden if no spouse. Computed in `updateStats()`:
+1. `rmdStartAge` per birth year
+2. `projIRA = balance × (1 + iraRate)^yearsToRMD`
+3. `firstRMD = projIRA ÷ IRS_ULT_factor[rmdStartAge]` (Uniform Lifetime Table)
+
+**Tasks:**
+- [ ] Add `extraConversionAmount` param to `simulate()` (scalar or array); conversion top-up block after line 1120 with 4th tax-recalculation pass
+- [ ] Implement `optimizeConversionAmount(baseInputs, overrides, metric)` — $10k sweep
+- [ ] Implement `buildConversionSchedule(baseInputs, overrides)` — greedy DP year-by-year
+- [ ] `buildVariations()`: when `includeConvOpt` flag set, run `optimizeConversionAmount()` per strategy row; add results as new rows
+- [ ] `renderOptimizerTable()`: add Opt Conv $/yr, Conv Savings $, MC Survival (conv), BETR avg columns
+- [ ] MC Stage 2: identify top-K from conversion-optimized rows; run MC with locked schedule
+- [ ] `updateStats()`: compute + display `stat-proj-rmd1/2` per SECURE 2.0 rules; use IRS ULT table
+- [ ] Annual Details: show `convSchedule` amounts as a log column (Opp. Cost category)
+- [ ] `retirement_optimizer.html`: "Include conversion optimization" checkbox near optimizer; `stat-proj-rmd1/2` in stats bar; new optimizer columns
+- [ ] Test: `extraConversionAmount = 0` → bit-identical to pre-change baseline (regression)
+- [ ] Test: conversion sweep — "opt conv" row beats surplus-only row on Final NW for large-IRA ($800k+) scenario
+- [ ] Test: greedy DP schedule tapers to $0 near RMD onset (sanity)
+- [ ] Test: projected RMD stat updates when IRA balance changes; spouse line hidden if no spouse
+- [ ] Update version + changelog
+
+- **Status:** pending
+- **Depends on:** Phase 21 ✓ (BETR data for avg column), Phase 20 ✓ (shadow tracking context), Phase 1 ✓ (bracket logic correct)
+- **Note:** Subsumes most of Phase 10's conversion dimension. Phase 10 remains but is deprioritized — its remaining unique value is spending-source segmentation (which accounts fund spending per segment), not conversion optimization.
+
+---
+
 ## Key Questions
 1. Should Phase 1 (bracket/IRMAA fix) be done before strategy comparisons work correctly?
 2. ~~For Phase 2 (bootstrap), which years of historical data?~~ **Resolved:** Full 1928–2024 (97 years), pre-1970 intl proxied by equity.
@@ -680,6 +761,8 @@ inputs.spendGoal = gkSpend; // override spend for this year
 | Phase 6 (per-account asset mix) before Phase 7 | Correlated MC needs per-account allocation grids. Phase 6 defines allocation framework. |
 | Phases 3,4,8,12 can start anytime after 0b | Lumpy spending, QCDs, variable growth optimizer, and quarterly mode are all independent. Schedule per team capacity. |
 | Phase 9 (ACA) before Phase 10 (multi-strategy) | Multi-strategy optimizer needs clean ACA constraint handling to avoid generating invalid 2-phase combos where both phases use deprecated ACA limits post-65. |
+| Phase 23 before Phase 10 | Phase 23 (greedy DP conversion optimizer) subsumes Phase 10's conversion dimension. Phase 10's remaining unique value is spending-source segmentation only. Deprioritize Phase 10 until Phase 23 is shipped. |
+| Phase 21 before Phase 23 | BETR data (per-year `betr` log column) feeds Phase 23's optimizer table BETR avg column. Implement BETR first. |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |

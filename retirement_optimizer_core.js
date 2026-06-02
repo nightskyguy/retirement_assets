@@ -2187,16 +2187,13 @@ function getOptimizerColumns() {
         },
         {
             key: 'betrAvg', label: 'Avg BETR',
+            title: 'Average Break-Even Tax Rate across conversion years. If your expected future marginal rate exceeds this, conversions were advantageous on average. Appears for Conv Optimizer rows (🔁) and standard rows with conversions.',
             getValue: r => r.totals.betrAvg != null ? `${(r.totals.betrAvg * 100).toFixed(1)}%` : '—',
             getSortValue: r => r.totals.betrAvg ?? 999
         },
         {
-            key: 'optConv', label: 'Opt Conv/yr',
-            getValue: r => r._optConvAmt != null ? '$' + Math.round(r._optConvAmt).toLocaleString() : '—',
-            getSortValue: r => r._optConvAmt ?? -1
-        },
-        {
             key: 'convSavings', label: 'Conv Savings',
+            title: 'Lifetime tax savings from the additional IRA→Roth conversions run by Conv Optimizer, vs the same strategy with no extra conversions. Positive = converting more reduces your total lifetime tax bill.',
             getValue: r => r._convSavings != null ? '$' + Math.round(r._convSavings).toLocaleString() : '—',
             getSortValue: r => r._convSavings ?? -Infinity
         }
@@ -2257,7 +2254,8 @@ function renderOptimizerTable(results) {
     const headerHtml = '<tr>' + columns.map(col => {
         const active = sortState.colKey === col.key;
         const arrow = active ? (sortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
-        return `<th style="cursor:pointer;user-select:none;" onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</th>`;
+        const tip = col.title ? ` title="${col.title.replace(/"/g, '&quot;')}"` : '';
+        return `<th style="cursor:pointer;user-select:none;"${tip} onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</th>`;
     }).join('') + '</tr>';
 
     // Rows — per-cell green for metric winners, full-row green if winner, blue tint if spend-optimized

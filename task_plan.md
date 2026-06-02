@@ -22,9 +22,11 @@ Retirement_Projection fixes added: Phase 13 (responsive layout), Phase 14 (Simpl
 │   └─→ 7 (Correlated MC)
 ├─→ 8 (Variable Growth/Inflation) [independent]
 ├─→ 12 (Quarterly Mode) [independent]
-└─→ 20 (Roth Conv. Opp. Cost) [needs Phase 1]
+├─→ 20 (Roth Conv. Opp. Cost) [needs Phase 1]
+│   └─→ 21 (BETR) [also needs Phase 20]
+└─→ 22 (Guyton-Klinger) [independent, integrates with Phase 10]
 
-EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12,20
+EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12,20,22 → 21,10
 ```
 
 **Critical Path:** 0b → 1 → 9 → 10 (longest chain)
@@ -513,6 +515,155 @@ TaxLiability = TradShadow × TaxFuture
 - [x] `totals.convBEYear` / `totals.excessBEYear` — first year NetValue >= 0; shown in `stat-conv-be`
 - [x] Version bumped to 11.e4f with changelog entry
 - **Status:** complete
+
+### Phase 21: Vanguard BETR (Break-Even Tax Rate) for Roth Conversions
+**Why:** Phase 20 computes shadow-account opportunity cost. BETR answers a different question: "What future tax rate must I face to justify converting today?" Directly complements the existing `stat-conv-be` break-even year metric — BETR is the *rate* break-even, break-even year is the *time* break-even.
+
+**What BETR measures:** The future marginal rate at which the user is indifferent between converting now vs leaving in IRA. If expected future rate > BETR → convert. If expected future rate < BETR → don't convert.
+
+**Core formula (Kitces/standard — taxes paid from outside the IRA, e.g. from taxable account):**
+```
+BETR = 1 − t_now × (1 + r_taxable)^n / (1 + r_ira)^n
+
+where:
+  t_now       = current marginal tax rate on the conversion amount
+  r_taxable   = after-tax annual return on taxable account (r × (1 − effective_drag))
+  r_ira       = IRA growth rate (same as r_taxable if tax-equivalent, often r itself)
+  n           = years until withdrawal (retirement horizon)
+```
+
+If `r_taxable ≈ r_ira` (no taxable drag), BETR = t_now — trivially break-even at the current rate. The value of the metric emerges when taxable drag (`r_taxable < r_ira`) reduces BETR below t_now, meaning conversion is advantageous even at a *lower* future rate.
+
+**Vanguard's tool note:** Vanguard has not published their exact formula. Their tool at [advisors.vanguard.com/tax-center/tools/roth-betr-calculator](https://advisors.vanguard.com/tax-center/tools/roth-betr-calculator/#/) is black-box to advisors. The formula above is the standard academic version (Kitces, Reichenstein). Vanguard's version likely adds:
+- **RMD drag:** forced IRA distributions reinvested taxably create cumulative tax friction that Roth avoids; this lowers BETR (makes conversion more attractive)
+- **State tax differential:** if state taxes differ between now and future (e.g., moving states)
+- **SECURE Act heir factor:** beneficiaries face 10-year distribution rule on inherited IRA; Roth avoids this drag; extends BETR benefit for estate planning scenarios
+
+**Recommended approach:** Implement Kitces standard formula first (well-validated, fully public). Note Vanguard adds RMD drag and heir factors — add those as Phase 21b if desired.
+
+**Where it fits:** BETR is a *per-conversion-decision* metric, not an annual simulator metric. Best shown:
+1. In the Roth conversion section alongside max conversion input — "BETR for this conversion: 28.4%" with annotation "your expected future rate is X% — conversion is [advantageous / not advantageous]"
+2. Optionally: table showing BETR sensitivity across time horizons (n = 5, 10, 15, 20, 25 years) to show how BETR evolves
+
+**Inputs needed:**
+- `t_now` — derives from `calculateTaxes()` on the conversion amount (marginal rate at conversion bracket boundary)
+- `r_taxable` — user-configurable "taxable drag rate" or auto-derive: `r_ira × (1 − dividendTaxRate × dividendYield)` from brokerage allocation
+- `n` — years to expected withdrawal onset (e.g., retirement year − current year, or RMD onset)
+- `t_expected_future` — user inputs their expected future marginal rate (existing `futureIRATaxRate` input from Phase 20)
+
+**Output:**
+- `BETR` as a % shown near max conversion input
+- Comparison: "BETR: 24.3% — your expected future rate (28%) exceeds BETR → conversion advantageous"
+- Color-coded: green if future rate > BETR (convert), amber if within 2pp (marginal), red if future rate < BETR (don't convert)
+
+**Tasks:**
+- [ ] Research: find Kitces' most recent published BETR formula (verify formula handles partial-year RMD drag optionally)
+- [ ] Implement `computeBETR(tNow, rIRA, rTaxable, n)` in `retirement_optimizer_core.js`
+- [ ] Derive `r_taxable` from brokerage allocation (dividend yield × dividend tax rate drag) or let user override
+- [ ] Compute BETR live whenever conversion amount, horizon, or tax rate changes
+- [ ] UI: display BETR near max conversion input with comparison to `futureIRATaxRate`
+- [ ] UI: optional BETR-by-horizon table (n = 5/10/15/20/25 yr columns)
+- [ ] Test: when `r_taxable = r_ira`, BETR = t_now (verify trivial identity)
+- [ ] Test: when `r_taxable < r_ira` (taxable drag), BETR < t_now (verify drag lowers break-even rate)
+- [ ] Test: increasing n with drag → BETR decreases (longer horizon, more drag cumulates → conversion more compelling)
+- [ ] Update version + changelog
+
+- **Status:** pending
+- **Depends on:** Phase 20 ✓ (futureIRATaxRate input exists), Phase 1 ✓ (bracket/marginal rate correct)
+- **Reference:** Kitces (2013) [Roth Conversion Analysis: The True Marginal Tax Rate Equivalency Principle](https://www.kitces.com/blog/roth-conversion-analysis-value-calculate-timing-true-marginal-tax-rate-equivalency-principle/)
+- **Note:** Research phase needed first — confirm Kitces formula variant, check if Vanguard has published methodology since this plan was written
+
+---
+
+### Phase 22: Guyton-Klinger Guardrails Withdrawal Strategy
+**Why:** All current strategies use fixed annual spend (possibly inflation-adjusted). Guyton-Klinger (GK) uses dynamic spending: adjust up when portfolio outperforms, adjust down when it underperforms. Published research (Guyton 2004, Guyton & Klinger 2006) shows GK supports materially higher initial withdrawal rates (~5.2–5.5%) than static SWR (~4%) with comparable ruin probability, because spending flexibility absorbs sequence-of-returns risk.
+
+**Four GK Rules (from Guyton & Klinger 2006):**
+
+| Rule | Condition | Action |
+|------|-----------|--------|
+| **Withdrawal Rule (base)** | Every year | Take previous year's spend, adjusted per rules below |
+| **Inflation Rule** | Prior year portfolio return was negative AND current WR > IWR | Skip inflation adjustment this year |
+| **Capital Preservation Rule** | Current WR > IWR × (1 + upper_guard) | Reduce spending by `cut_pct` (e.g. 10%) |
+| **Prosperity Rule** | Current WR < IWR × (1 − lower_guard) | Increase spending by `raise_pct` (e.g. 10%) |
+
+Where:
+- `IWR` = initial withdrawal rate = first year spend / initial portfolio at retirement
+- `current WR` = current annual spend / current portfolio value
+- `upper_guard` = default 0.20 (20% above IWR triggers cut)
+- `lower_guard` = default 0.20 (20% below IWR triggers raise)
+- `cut_pct` / `raise_pct` = default 10%
+
+**Interaction with existing strategies:** GK is a spending-adjustment layer, not a tax/withdrawal-account strategy. It determines *how much* to spend each year; the existing bracket/IRMAA/RMD logic then determines *how* to source that spend. GK strategy = "Guyton-Klinger" as the top-level strategy choice, then per-existing-logic for account sourcing.
+
+**Key constraint — "no adjustment in final years" rule (optional):** Some implementations disable the Prosperity Rule within 15 years of plan end to prevent excessive late-life spending increases. Make configurable.
+
+**Implementation in `simulate()`:**
+```javascript
+// GK state (persisted across years)
+let gkSpend = inputs.spendGoal; // initial spend at retirement
+const iwr = gkSpend / totalPortfolio_at_retirement;
+
+// Each year:
+const currentWR = gkSpend / totalPortfolio;
+const priorReturn = totalPortfolio / priorPortfolio - 1;
+
+// Inflation Rule: skip CPI adjustment if negative return year AND over-withdrawn
+if (priorReturn < 0 && currentWR > iwr) {
+  // no inflation adjustment
+} else {
+  gkSpend *= (1 + inflation);
+}
+
+// Capital Preservation Rule
+if (currentWR > iwr * (1 + upperGuard)) {
+  gkSpend *= (1 - cutPct);
+}
+
+// Prosperity Rule
+if (currentWR < iwr * (1 - lowerGuard)) {
+  gkSpend *= (1 + raisePct);
+}
+
+inputs.spendGoal = gkSpend; // override spend for this year
+```
+
+**UI inputs** (collapsible sub-section when GK strategy selected):
+- Initial withdrawal rate % (or derive from spendGoal / initial portfolio — show derived IWR)
+- Upper guardrail % (default 20%)
+- Lower guardrail % (default 20%)
+- Cut % (default 10%)
+- Raise % (default 10%)
+- Disable Prosperity Rule in final N years (default: 0 / off)
+
+**Annual Details additions:**
+- `gkSpend` column (actual GK spending target that year)
+- `gkAdjustment` column: "−10% cap. pres." / "+10% prosperity" / "inflation skipped" / "—"
+- Filter checkbox: "GK Adjustments" category
+
+**MC compatibility:** GK is inherently Monte Carlo-friendly — the dynamic adjustments are the mechanism for sequence-of-returns resilience. Running GK in MC mode (Phase 2 bootstrap) should show meaningfully better survival rates vs fixed spending at same IWR. This comparison is a key validation test.
+
+**Tasks:**
+- [ ] Add "Guyton-Klinger" to strategy selector in UI
+- [ ] Add GK sub-inputs (IWR display, guardrail %, cut/raise %) that appear when GK selected
+- [ ] Add GK state variables to `simulate()`: `gkSpend`, `iwr`, `priorPortfolio`
+- [ ] Implement four GK rules in year loop (order matters: Inflation Rule first, then guardrail checks)
+- [ ] Annual Details: `gkSpend` and `gkAdjustment` columns
+- [ ] Test: fixed market returns → verify no guardrail triggers (stable scenario)
+- [ ] Test: sustained bear market → verify Capital Preservation triggers at correct WR threshold
+- [ ] Test: strong bull run → verify Prosperity triggers at correct WR threshold
+- [ ] Test: Inflation Rule — verify skip fires only when both conditions true simultaneously
+- [ ] MC test: GK at 5.2% IWR vs fixed 4% SWR — GK should show comparable or better MC survival rate
+- [ ] Test: GK integrates with existing bracket/IRMAA account-sourcing logic (GK sets spend level; bracket picks IRA split)
+- [ ] Phase 10 integration note: GK should be a valid strategy option in multi-strategy segment optimizer (Phase 10)
+- [ ] Update version + changelog
+
+- **Status:** pending
+- **Independent:** no phase dependencies (GK is a new strategy type; bracket logic from Phase 1 already works)
+- **Integrates with:** Phase 10 (GK as one of the segment strategy options), Phase 12 (timing model applies to GK withdrawals)
+- **Reference:** Guyton (2004) "Decision Rules and Portfolio Management for Retirees", Guyton & Klinger (2006) "Decision Rules and Maximum Initial Withdrawal Rates"
+
+---
 
 ## Key Questions
 1. Should Phase 1 (bracket/IRMAA fix) be done before strategy comparisons work correctly?

@@ -21,9 +21,10 @@ Retirement_Projection fixes added: Phase 13 (responsive layout), Phase 14 (Simpl
 ├─→ 6 (Per-Account Asset Mix)
 │   └─→ 7 (Correlated MC)
 ├─→ 8 (Variable Growth/Inflation) [independent]
-└─→ 12 (Quarterly Mode) [independent]
+├─→ 12 (Quarterly Mode) [independent]
+└─→ 20 (Roth Conv. Opp. Cost) [needs Phase 1]
 
-EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12
+EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12,20
 ```
 
 **Critical Path:** 0b → 1 → 9 → 10 (longest chain)
@@ -472,6 +473,46 @@ This preserves all existing bookmarks (long keys still decode), while new shares
 
 - **Status:** pending
 - **Independent:** can start anytime (no phase dependencies)
+
+### Phase 20: Roth Conversion Opportunity Cost Accounting
+**Why:** Conversions pay taxes now from real assets (taxable or IRA) that could have grown. Current model shows net worth but not whether conversion was a net gain vs the "no-conversion" counterfactual. Shadow accounts track what portfolio would hold had no conversion (or over-withdrawal) occurred.
+
+**Core formula (annual):**
+```
+NetValue    = (RothActual + TaxableActual) − (TradShadow + TaxableShadow − TaxLiability)
+TaxLiability = TradShadow × TaxFuture
+```
+- `RothActual`, `TaxableActual` — real balances after conversion + tax payment
+- `TradShadow` — IRA if no conversion outflow this year (same growth rate, no conversion drawn)
+- `TaxableShadow` — taxable account if conversion taxes not paid from it
+- `TaxFuture` — expected marginal rate when `TradShadow` eventually distributed (user input or bracket estimate)
+- **NetValue > 0** → conversion net positive; **NetValue < 0** → net negative this period
+
+**Same regime for over-withdrawal:**
+`TradShadow` = IRA if only minimum required withdrawal taken. `TaxableShadow` = taxable if no excess withdrawal taxes paid. NetValue formula identical — measures whether extra withdrawal was worth lost growth.
+
+**Implementation in simulate():**
+- Track `iraShadow` / `taxableShadow` in parallel with real accounts each year
+- Conversion year: `iraShadow` skips conversion outflow; `taxableShadow` skips tax payment
+- Over-withdrawal: same shadow treatment
+- Year-end: compute `annualNetValue`; accumulate `cumulativeNetValue[]`
+- `conversionBEYear` = first year `cumulativeNetValue > 0` (break-even)
+
+**TaxFuture options (priority order):**
+1. User input: "Expected future IRA tax rate" field (default: current bracket rate)
+2. Auto-estimate from highest bracket rate in strategy (future work)
+
+**Tasks:**
+- [x] Add `convShadowDeltaIRA/Taxable` + `excessShadowDeltaIRA/Taxable` before year loop
+- [x] Conversion year: compute incremental conv tax via shadow `calculateTaxes()` call; update `convShadowDeltaIRA`
+- [x] Excess withdrawal year: same treatment for `surplus.Cash`; `excessShadowDeltaTaxable -= excessCashOC`
+- [x] Grow shadow deltas at IRA/taxable blended rates each year (after `applyGrowth`)
+- [x] Compute `convNetValue` and `excessNetValue` after Roth credited each year
+- [x] Add "Future IRA Tax %" input; wired via `inputs.futureIRATaxRate` (defaults to current marginal rate)
+- [x] Annual Details: `convOC`, `excessOC`, `convTax`, `excessTax` columns (Opp. Cost category + checkbox)
+- [x] `totals.convBEYear` / `totals.excessBEYear` — first year NetValue >= 0; shown in `stat-conv-be`
+- [x] Version bumped to 11.e4f with changelog entry
+- **Status:** complete
 
 ## Key Questions
 1. Should Phase 1 (bracket/IRMAA fix) be done before strategy comparisons work correctly?

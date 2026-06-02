@@ -556,6 +556,19 @@ function calculateSurvivorBenefit(
     return Math.floor(Math.max(rawSurvivorBenefit, spouseMonthlyBenefit));
 }
 
+// Phase 21: Break-Even Tax Rate (Kitces formula, taxes paid from outside IRA).
+// BETR = t_now × (1 + r_taxable)^n / (1 + r_ira)^n
+// Derivation: at break-even, Roth outcome = IRA outcome.
+// Roth: D grows tax-free → D×(1+r_ira)^n
+// IRA (no-convert): D grows → D×(1+r_ira)^n×(1-t_future); taxable account keeps t_now×D → grows to t_now×D×(1+r_taxable)^n
+// Solve for t_future that equalizes both paths.
+// When r_taxable = r_ira: BETR = t_now (trivially break-even at same rate).
+// When r_taxable < r_ira (taxable drag): BETR < t_now (conversion beneficial even at lower future rate).
+function computeBETR(tNow, rIRA, rTaxable, n) {
+    if (!tNow || n <= 0 || rIRA <= -1 || rTaxable <= -1) return null;
+    return tNow * Math.pow(1 + rTaxable, n) / Math.pow(1 + rIRA, n);
+}
+
 let simulationCount = 0;
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
@@ -1051,12 +1064,22 @@ function simulate(inputs) {
                 const seq = resolveOrderedSeq(inputs.orderedSeq);
                 netWithdrawals = runOrderedWithdrawal(curBalances, residualGap, seq, netWithdrawals, applyWithdrawals);
             } else {
-                const thirdWdStrategy = isBracketStrategy
-                    ? { order: ['Cash'], weight: [1], taxrate: [0] }
-                    : { order: ['Brokerage', 'Cash'], weight: [40, 60], taxrate: [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0] };
-                const thirdWd = calculateWithdrawals(curBalances, residualGap, thirdWdStrategy);
+                // Always use Cash-only in the 3rd pass — adding more Brokerage here creates a
+                // cap-gains spiral: more gains → higher SS taxation → bigger residual → repeat.
+                // The 2nd-pass gap-fill already grossed up Brokerage; the 3rd pass handles the
+                // leftover tax from SS phaseout and NIIT cliffs that the gross-up couldn't predict.
+                // Cash (and Roth as fallback) carry no new cap gains, so they break the cycle.
+                const thirdWd = calculateWithdrawals(curBalances, residualGap,
+                    { order: ['Cash'], weight: [1], taxrate: [0] });
                 netWithdrawals = accumulateWithdrawals([netWithdrawals, thirdWd]);
                 applyWithdrawals(curBalances, thirdWd);
+                // Roth fallback if Cash ran out (still no cap gains)
+                if ((thirdWd.shortfall ?? 0) > 1 && curBalances.Roth > 0) {
+                    const rothWd3 = calculateWithdrawals(curBalances, thirdWd.shortfall,
+                        { order: ['Roth'], weight: [1], taxrate: [0] });
+                    netWithdrawals = accumulateWithdrawals([netWithdrawals, rothWd3]);
+                    applyWithdrawals(curBalances, rothWd3);
+                }
             }
             capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
             tax = calculateTaxes({
@@ -1135,12 +1158,46 @@ function simulate(inputs) {
         // Decrement the proposed withdrawals from the balance(s).
         applyWithdrawals(balance, netWithdrawals)
 
-        const totalConverted = surplus.Roth1 + surplus.Roth2;
+        let totalConverted = surplus.Roth1 + surplus.Roth2;
 
         // If there is STILL a surplus, put it in Cash.
         surplus.Cash = surplus.Total;
         balance.Cash += surplus.Cash
         surplus.Total = 0;
+
+        // Phase 23: extra conversion — additional IRA→Roth independent of spending strategy.
+        // extraConversionAmount[y] (or scalar $) = gross IRA to additionally withdraw and convert.
+        // Taxes come from IRA gross (same convention as maxConversion surplus). Net Roth = gross - tax.
+        const _extraConvReq = Array.isArray(inputs.extraConversionAmount)
+            ? (inputs.extraConversionAmount[y] ?? 0)
+            : (inputs.extraConversionAmount ?? 0);
+        let extraConvGross = 0, incrementalExtraConvTax = 0;
+        if (_extraConvReq > 0) {
+            const _availIRA = balance.IRA1 + balance.IRA2;
+            const _gross = Math.min(_extraConvReq, _availIRA);
+            if (_gross > 0) {
+                // Incremental tax on extra IRA withdrawal via marginal-method re-calc
+                const _baseEI = pension + totalRMD + taxableInterest + (netWithdrawals.IRA ?? 0);
+                const _exTaxCalc = calculateTaxes({
+                    filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
+                    irmaaAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: cpiRate,
+                    qualifiedDiv: taxableDividends, capGains: capitalGains,
+                    hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+                });
+                incrementalExtraConvTax = Math.max(0, _exTaxCalc.totalTax - (totalTax - irmaa));
+                extraConvGross = _gross;
+                const _net = _gross - incrementalExtraConvTax;
+                const _ec1 = _gross * ira1_ratio;
+                const _ec2 = _gross * (1 - ira1_ratio);
+                balance.IRA1 -= _ec1;
+                balance.IRA2 -= _ec2;
+                surplus.Roth1 = (surplus.Roth1 || 0) + _net * ira1_ratio;
+                surplus.Roth2 = (surplus.Roth2 || 0) + _net * (1 - ira1_ratio);
+                totalConverted += _net;
+                totalTax += incrementalExtraConvTax;
+                cumulativeTaxes += incrementalExtraConvTax;
+            }
+        }
 
         // Phase 20: opportunity cost shadow tracking.
         // For each action (Roth conversion, excess withdrawal to Cash), compute the incremental tax
@@ -1262,6 +1319,24 @@ function simulate(inputs) {
         const excessTaxableShadow = _taxable + excessShadowDeltaTaxable;
         const excessNetValue = (_roth + _taxable) - (excessTradShadow + excessTaxableShadow - excessTradShadow * _taxFuture);
 
+        // Phase 21: BETR per-year signal.
+        // Computed when there was any conversion this year (standard or extra). BETR answers: "what future
+        // marginal rate makes this conversion break-even?" Comparison to futureIRATaxRate gives ▲/▼ flag.
+        let yearBETR = null, yearBETRflag = null;
+        if (totalConverted > 0) {
+            const _rIRA = growthRates.IRA1 ?? inputs.growth ?? 0.06;
+            const _drag = (inputs.dividendRate ?? 0) * (tax.capitalGainsRate ?? 0.15);
+            const _rTax = Math.max(0, (inputs.growth ?? _rIRA) - _drag);
+            const _rmdAge1 = (inputs.birthyear1 ?? 1960) >= 1960 ? 75 : 73;
+            const _yearsToRMD = Math.max(1, _rmdAge1 - age1);
+            yearBETR = computeBETR(tax.fedRate + (tax.stRate ?? 0), _rIRA, _rTax, _yearsToRMD);
+            if (yearBETR !== null) {
+                const _futureRate = _taxFuture; // already resolved above
+                yearBETRflag = _futureRate > yearBETR + 0.02 ? '▲'
+                             : _futureRate < yearBETR - 0.02 ? '▼' : '≈';
+            }
+        }
+
         let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage - balance.BrokerageBasis)) * (1 - nominalTaxRate) + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
 
         // Fail when the portfolio can't cover its required draw (spend minus guaranteed income).
@@ -1341,11 +1416,14 @@ function simulate(inputs) {
             cashG: gains.Cash,
             rothG: (gains.Roth1 || 0) + (gains.Roth2 || 0),
             'RMD%': rmd1Pct,
-            // Opportunity cost (Phase 20)
+            // Opportunity cost (Phase 20) + BETR signal (Phase 21) + extra conversion (Phase 23)
             convOC: convNetValue,
             excessOC: excessNetValue,
             convTax: incrementalConvTax,
             excessTax: incrementalExcessTax,
+            'BETR%': yearBETR,
+            betrFlag: yearBETRflag,
+            extraConv: extraConvGross || null,
             // Internal
             inflationFactor: inflation,
             loopMs: performance.now() - loopStart
@@ -1367,6 +1445,12 @@ function simulate(inputs) {
     // Phase 20: find break-even years (first year NetValue goes non-negative).
     totals.convBEYear   = log.find(r => r.convOC  >= 0)?.year ?? null;
     totals.excessBEYear = log.find(r => r.excessOC >= 0)?.year ?? null;
+
+    // Phase 21: average BETR across all years with conversions.
+    const _betrYears = log.filter(r => r['BETR%'] !== null && r['BETR%'] !== undefined);
+    totals.betrAvg = _betrYears.length > 0
+        ? _betrYears.reduce((s, r) => s + r['BETR%'], 0) / _betrYears.length
+        : null;
 
     return { log, totals, finalNW: log[log.length - 1].totalWealth };
 }
@@ -1688,6 +1772,33 @@ function optimizeSpend(baseInputs, overrides) {
     return { result: bestResult, optimizedSpend: lo, hitCeiling: false };
 }
 
+// Phase 23: find the extraConversionAmount (flat annual $) that maximizes a given metric for
+// a fixed strategy. Sweeps from $0 to totalIRA in $25k steps; returns best amount found.
+// metric: 'finalNW' (default), 'spend' (max spendable), 'minTax' (min lifetime taxes).
+// baseInputs: inputs object with a fixed strategy already set; strategyOverrides layered on top.
+function optimizeConversionAmount(baseInputs, strategyOverrides = {}, metric = 'finalNW') {
+    const totalIRA = (baseInputs.IRA1 || 0) + (baseInputs.IRA2 || 0);
+    if (totalIRA <= 0) return { optConv: 0, optResult: null };
+
+    const STEP = 25000;
+    let bestScore = -Infinity, bestConv = 0, bestResult = null;
+
+    const score = (res) => {
+        if (metric === 'spend')   return res.totals.spend;
+        if (metric === 'minTax')  return -res.totals.tax;
+        return res.finalNW; // default: finalNW
+    };
+
+    for (let conv = 0; conv <= totalIRA + STEP; conv += STEP) {
+        const c = Math.min(conv, totalIRA);
+        const res = simulate({ ...baseInputs, ...strategyOverrides, extraConversionAmount: c });
+        const s = score(res);
+        if (s > bestScore) { bestScore = s; bestConv = c; bestResult = res; }
+        if (c >= totalIRA) break;
+    }
+    return { optConv: bestConv, optResult: bestResult };
+}
+
 // Build the full variation list (same parameter sweep as the optimizer) without running
 // simulations. Used by both the optimizer and Monte Carlo module.
 // base: result of getInputs() — no DOM access needed after this point.
@@ -1756,7 +1867,9 @@ let _lastOptimizerHash = null;
 
 function runOptimizer() {
     const base = getInputs();
-    const currentHash = JSON.stringify(base) + ';optimizeSpend=' + (document.getElementById('optimizeSpend')?.checked ?? false);
+    const currentHash = JSON.stringify(base)
+        + ';optimizeSpend=' + (document.getElementById('optimizeSpend')?.checked ?? false)
+        + ';convOpt=' + (document.getElementById('includeConvOpt')?.checked ?? false);
     if (currentHash === _lastOptimizerHash && window.optimizerResults) {
         renderOptimizerTable(window.optimizerResults);
         showTab('tab-opt');
@@ -1914,6 +2027,50 @@ function runOptimizer() {
         }
     }
 
+    // Phase 23: Conversion Amount Optimizer — when checkbox enabled, sweep extraConversionAmount
+    // for the top 5 successful strategies and add new rows showing the optimized conversion result.
+    if (document.getElementById('includeConvOpt')?.checked) {
+        const successes = results.filter(r => r.totals.success);
+        const top5 = successes
+            .slice().sort((a, b) => b.finalNW - a.finalNW)
+            .slice(0, 5);
+        for (const baseRow of top5) {
+            const overrides = {
+                strategy: baseRow._strategy,
+                maxConversion: baseRow._maxConversion,
+                ...(baseRow._stratRate   != null ? { stratRate:      baseRow._stratRate }   : {}),
+                ...(baseRow._nYears      != null ? { nYears:         baseRow._nYears }      : {}),
+                ...(baseRow._propWithdraw!= null ? { propWithdraw:   baseRow._propWithdraw }: {}),
+                ...(baseRow._iraWithdrawPct != null ? { iraWithdrawPct: baseRow._iraWithdrawPct } : {}),
+            };
+            const { optConv, optResult } = optimizeConversionAmount(base, overrides, 'finalNW');
+            if (!optResult || optConv === 0) continue;
+            const lastEntry = optResult.log[optResult.log.length - 1];
+            results.push({
+                _id: results.length,
+                _strategyLabel: baseRow._strategyLabel + ' 🔁',
+                _paramLabel: baseRow._paramLabel,
+                _paramSortVal: baseRow._paramSortVal,
+                _maxConversion: baseRow._maxConversion,
+                _spendGoal: base.spendGoal,
+                _strategy: baseRow._strategy,
+                _nYears: baseRow._nYears,
+                _stratRate: baseRow._stratRate,
+                _stratIRMAATier: baseRow._stratIRMAATier ?? null,
+                _stratACAMultiple: baseRow._stratACAMultiple ?? 0,
+                _propWithdraw: baseRow._propWithdraw ?? null,
+                _iraWithdrawPct: baseRow._iraWithdrawPct ?? null,
+                _isSpendOptimized: false,
+                _isConvOptimized: true,
+                _optConvAmt: optConv,
+                _convSavings: (baseRow.totals.tax - optResult.totals.tax),
+                totals: optResult.totals,
+                finalNW: optResult.finalNW,
+                finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
+            });
+        }
+    }
+
     // Update top-bar stats using the 0% propwd/no-maxConv row (first result, equivalent to baseline)
     const baseline = results[0];
     if (baseline) {
@@ -2031,6 +2188,18 @@ function getOptimizerColumns() {
             key: 'rmdtax', label: 'RMD Tax%',
             getValue: r => r.totals.tax > 0 ? `${(r.totals.rmdTax / r.totals.tax * 100).toFixed(0)}%` : '—',
             getSortValue: r => r.totals.rmdTax / (r.totals.tax || 1)
+        },
+        {
+            key: 'betrAvg', label: 'Avg BETR',
+            title: 'Average Break-Even Tax Rate across conversion years. If your expected future marginal rate exceeds this, conversions were advantageous on average. Appears for Conv Optimizer rows (🔁) and standard rows with conversions.',
+            getValue: r => r.totals.betrAvg != null ? `${(r.totals.betrAvg * 100).toFixed(1)}%` : '—',
+            getSortValue: r => r.totals.betrAvg ?? 999
+        },
+        {
+            key: 'convSavings', label: 'Conv Savings',
+            title: 'Lifetime tax savings from the additional IRA→Roth conversions run by Conv Optimizer, vs the same strategy with no extra conversions. Positive = converting more reduces your total lifetime tax bill.',
+            getValue: r => r._convSavings != null ? '$' + Math.round(r._convSavings).toLocaleString() : '—',
+            getSortValue: r => r._convSavings ?? -Infinity
         }
     ];
     if (nerdknob) {
@@ -2089,7 +2258,8 @@ function renderOptimizerTable(results) {
     const headerHtml = '<tr>' + columns.map(col => {
         const active = sortState.colKey === col.key;
         const arrow = active ? (sortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
-        return `<th style="cursor:pointer;user-select:none;" onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</th>`;
+        const tip = col.title ? ` title="${col.title.replace(/"/g, '&quot;')}"` : '';
+        return `<th style="cursor:pointer;user-select:none;"${tip} onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</th>`;
     }).join('') + '</tr>';
 
     // Rows — per-cell green for metric winners, full-row green if winner, blue tint if spend-optimized
@@ -2102,6 +2272,8 @@ function renderOptimizerTable(results) {
                 ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
                 : r._isReverseOptimized
                     ? 'background-color:#fde8d8;font-style:italic;cursor:pointer;'
+                    : r._isConvOptimized
+                        ? 'background-color:#e8f5e9;font-style:italic;cursor:pointer;'
                     : r._isSpendOptimized
                         ? 'background-color:#dbeafe;font-style:italic;cursor:pointer;'
                         : 'cursor:pointer;';
@@ -2318,11 +2490,14 @@ const columnCategories = {
     // Debug / performance — only visible under Show All (no checkbox maps to 'Debug')
     'loopMs': ['Debug'],
 
-    // Opportunity cost (Phase 20)
+    // Opportunity cost (Phase 20) + BETR signal (Phase 21) + extra conversion (Phase 23)
     'convOC':    ['Opp. Cost'],
     'excessOC':  ['Opp. Cost'],
     'convTax':   ['Opp. Cost'],
     'excessTax': ['Opp. Cost'],
+    'BETR%':     ['Opp. Cost'],
+    'betrFlag':  ['Opp. Cost'],
+    'extraConv': ['Opp. Cost'],
 };
 
 // Maps each column key to a visual group label for the group header row
@@ -2346,6 +2521,7 @@ const columnGroupDefs = {
     'Basis': 'Balances', 'totalWealth': 'Balances', 'Spendable': 'Balances',
     'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
     'convOC': 'Opp. Cost', 'excessOC': 'Opp. Cost', 'convTax': 'Opp. Cost', 'excessTax': 'Opp. Cost',
+    'BETR%': 'Opp. Cost', 'betrFlag': 'Opp. Cost', 'extraConv': 'Opp. Cost',
 };
 
 // Get active categories based on checkbox state
@@ -2570,6 +2746,9 @@ function updateTable(log) {
         'excessOC': 'Excess Withdrawal Opportunity Cost. Same formula as Conv OC but applied to surplus IRA withdrawals routed to Cash rather than Roth. TaxableShadow is reduced by the after-tax excess cash (actual has more; shadow has less). Positive = having the extra cash outweighs the lost IRA growth.',
         'convTax': 'Incremental federal + state tax attributable to this year\'s Roth conversion (true marginal method: re-runs tax calculation without the conversion and takes the difference). Does not include IRMAA.',
         'excessTax': 'Incremental federal + state tax attributable to this year\'s excess IRA withdrawal routed to Cash (same method as Conv Tax).',
+        'BETR%': 'Break-Even Tax Rate (Kitces formula): t_now × (1 + r_taxable)^n / (1 + r_ira)^n. The future marginal rate at which converting now is tax-neutral vs leaving in IRA. If your expected future rate (Future IRA Tax %) exceeds BETR → conversion advantageous (▲). When r_taxable < r_ira (taxable drag), BETR falls below current rate, making conversion even more compelling.',
+        'betrFlag': '▲ = expected future rate exceeds BETR by >2pp → conversion beneficial. ▼ = expected future rate is below BETR → conversion costly. ≈ = within 2pp either way (marginal).',
+        'extraConv': 'Gross IRA amount additionally withdrawn and converted to Roth by the Phase 23 conversion optimizer, independent of spending strategy. Taxes come from IRA gross; net Roth credit = extraConv − incremental tax.',
     };
 
     keys.forEach(key => {
@@ -2810,6 +2989,19 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     const convBEEl = document.getElementById('stat-conv-be');
     if (convBEEl) convBEEl.innerText = totals.convBEYear ?? '—';
 
+    // Phase 21: BETR average display
+    const betrAvgEl = document.getElementById('stat-betr-avg');
+    if (betrAvgEl) {
+        if (totals.betrAvg !== null && totals.betrAvg !== undefined) {
+            betrAvgEl.innerText = (totals.betrAvg * 100).toFixed(1) + '%';
+        } else {
+            betrAvgEl.innerText = '—';
+        }
+    }
+
+    // Phase 23: projected RMD stat (reads from DOM inputs directly)
+    updateProjectedRMDStat();
+
     // Delta vs previous run
     if (_prevStatsTotals) {
         const pTax   = inCD ? _prevStatsTotals.taxCurrentDollars   : _prevStatsTotals.tax;
@@ -2847,6 +3039,72 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     _prevStatsTotals    = { ...totals };
     _prevStatsFinalNW   = finalNW;
     _prevStatsFinalNWCD = finalNWCurrentDollars;
+}
+
+// Phase 23: update projected-RMD stats in the stats bar.
+// RMD divisors come from RMD_TABLE in taxengine.js (full table, ages 72–120).
+// Reads IRA balances, birth years, and growth rate from DOM inputs — no totals arg needed.
+function updateProjectedRMDStat() {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+
+    function calcRMDProjection(birthYear, birthMonth, iraBalance, growthRate) {
+        if (!birthYear || !iraBalance || iraBalance <= 0) return null;
+        const rmdAge = birthYear >= 1960 ? 75 : 73;
+        const age = curYear - birthYear - (curMonth <= (birthMonth || 12) ? 1 : 0);
+        const yearsTo = rmdAge - age;
+        if (yearsTo <= 0) {
+            // Already in RMD — estimate current RMD from current IRA balance
+            const factor = RMD_TABLE[Math.min(age, 120)] ?? 2.0;
+            return { rmdAge, rmdYear: curYear, projIRA: iraBalance, firstRMD: iraBalance / factor, alreadyRMD: true };
+        }
+        const projIRA = iraBalance * Math.pow(1 + growthRate, yearsTo);
+        const factor = RMD_TABLE[rmdAge] ?? 26.5;
+        return { rmdAge, rmdYear: curYear + yearsTo, projIRA, firstRMD: projIRA / factor, alreadyRMD: false };
+    }
+
+    const growthRate = (+val('growth') / 100) || 0.06;
+    const ira1 = +val('IRA1') || 0;
+    const ira2 = +val('IRA2') || 0;
+    const by1 = +val('birthyear1');
+    const bm1 = +val('birthmonth1') || 12;
+    const by2 = +val('birthyear2');
+    const bm2 = +val('birthmonth2') || 12;
+    const hasSpouse = !!(by2 && ira2 > 0);
+
+    const rmd1 = calcRMDProjection(by1, bm1, ira1, growthRate);
+    const rmd2 = hasSpouse ? calcRMDProjection(by2, bm2, ira2, growthRate) : null;
+
+    function fmtRMD(rmd, label) {
+        if (!rmd) return '';
+        const amt = '$' + Math.round(rmd.firstRMD).toLocaleString();
+        return rmd.alreadyRMD
+            ? `${label} RMD (est. now): ${amt}/yr`
+            : `${label} RMD at ${rmd.rmdAge} (${rmd.rmdYear}): ~${amt}/yr`;
+    }
+
+    const el1 = document.getElementById('stat-proj-rmd1');
+    const el2 = document.getElementById('stat-proj-rmd2');
+
+    if (el1) {
+        if (rmd1) {
+            el1.innerText = fmtRMD(rmd1, 'You');
+            el1.title = `IRA1 projected at age ${rmd1.rmdAge}: $${Math.round(rmd1.projIRA).toLocaleString()}`;
+            el1.style.display = '';
+        } else {
+            el1.style.display = 'none';
+        }
+    }
+    if (el2) {
+        if (rmd2) {
+            el2.innerText = fmtRMD(rmd2, 'Spouse');
+            el2.title = `IRA2 projected at age ${rmd2.rmdAge}: $${Math.round(rmd2.projIRA).toLocaleString()}`;
+            el2.style.display = '';
+        } else {
+            el2.style.display = 'none';
+        }
+    }
 }
 
 let lastSimulationLog = null;

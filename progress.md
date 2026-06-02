@@ -59,6 +59,28 @@
 - **retirement_optimizer.html:** `futureIRATaxRate` input near Max Conversion. `cat-oppcost` checkbox in column filter. `stat-conv-be` in summary stats bar. Version 11.e4f + changelog.
 - **Verified:** 186 tests pass, 0 fail. `convOC`, `excessOC`, break-even years all computed live (conv BE=2047, excess BE=2049 on default inputs).
 
+## Session: 2026-06-02
+
+### Phase 19: URL Parameter Compression — complete
+- **retirement_optimizer_core.js + retirement_optimizer.html:** Short-key alias map implemented; `loadFromURL` accepts both long + short keys (backward compat). `generateShareURL` emits short keys. 57% URL reduction (1100 → 468 chars).
+- **RetirementTaxPlanner.html + IncomeTaxPlanner.html:** Same alias approach applied. Share panel popup standardized across all tools.
+- **ITP → RTP cross-link:** Button in IncomeTaxPlanner opens RetirementTaxPlanner pre-populated with matching values.
+- **Tax planner bug fixes:** included in commit 440665f (v11.e52).
+- **Plan items 21 + 22 added to roadmap:** BETR (Phase 21) and Guyton-Klinger (Phase 22) documented in task_plan.md.
+
+## Session: 2026-06-02 (continued)
+
+### Phase 21 (BETR) + Phase 23 (Conversion Optimizer) — complete (core)
+
+- **computeBETR():** Kitces formula `t_now × (1+r_taxable)^n / (1+r_ira)^n`. Formula correction: plan had `1 − t_now×(...)` — wrong.
+- **BETR in simulate():** per-year `BETR%` and `betrFlag` (▲/≈/▼) in log; `totals.betrAvg`; displayed as `stat-betr-avg` in stats bar.
+- **extraConversionAmount in simulate():** scalar or per-year array; IRA→Roth extra conversion after spending block; marginal tax recalculated.
+- **optimizeConversionAmount():** $25k sweep finds optimal extra conversion per strategy (67ms; $150k/yr adds $773k wealth on $2M IRA scenario).
+- **Conv Optimizer toggle:** opt-in checkbox; sweeps top-5 strategies; adds 🔁 rows with Opt Conv/yr + Conv Savings + Avg BETR columns.
+- **Projected RMD stat:** `updateProjectedRMDStat()` with SECURE 2.0 ages and IRS ULT table; `stat-proj-rmd1/2` in scrollable stats bar.
+- **Tests:** 199 pass, 0 fail (13 new).
+- **Deferred (Phase 23b):** greedy DP per-year schedule; MC Stage 2 top-K validation.
+
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
 |-----------|-------|---------|------------|
@@ -67,11 +89,11 @@
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 0 (Planning & Context) — consolidating feature ideas |
-| Where am I going? | Phase 1–11 covering bracket fix → regime-switching MC → quarterly mode |
+| Where am I? | Phase 20 complete (Roth OC), Phase 19 complete (URL compression), Phase 18 complete (fan charts) — at v11.e52 |
+| Where am I going? | Phase 21 (BETR, unblocked), Phase 22 (Guyton-Klinger), Phase 3/4/8/9/12 (all independent quickwins) |
 | What's the goal? | Implement remaining features from optimizer_directions.md priority list |
-| What have I learned? | Monte Carlo needs bootstrap for realism; bracket logic is inverted and needs fixing; many features are interdependent (P→Phase2, Phase1→strategy comparisons) |
-| What have I done? | Read two planning docs, created three planning files, identified key blockers and dependencies |
+| What have I learned? | Phases 1,2,6,7,18,19,20 done. Bootstrap MC live with per-asset-class returns + inflation. OC shadow tracking done. URL compression done with compat. |
+| What have I done? | Phases 0,0b,1,2,6,7,18,19,20 complete; plan expanded with Phases 21 and 22 |
 
 ---
 *Update after completing each phase or encountering errors*

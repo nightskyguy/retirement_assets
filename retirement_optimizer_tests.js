@@ -1686,6 +1686,178 @@ assertEqual(
 	}
 
 	// ============================================================================
+	// BETR TESTS (Phase 21)
+	// ============================================================================
+	console.log('\n=== BETR Tests (Phase 21) ===');
+
+	// (betr-1) Identity: when r_taxable = r_ira, BETR = t_now exactly.
+	{
+		const betr = computeBETR(0.22, 0.07, 0.07, 10);
+		assertEqual(Math.abs(betr - 0.22) < 0.0001, true,
+			'computeBETR identity: r_taxable=r_ira → BETR = t_now');
+	}
+
+	// (betr-2) Drag: when r_taxable < r_ira (taxable drag present), BETR < t_now.
+	// drag = dividendYield × capGainsRate = 0.02 × 0.15 = 0.003; r_taxable = 0.067
+	{
+		const betr = computeBETR(0.22, 0.07, 0.067, 10);
+		assertEqual(betr < 0.22, true,
+			'computeBETR drag: r_taxable < r_ira → BETR < t_now');
+	}
+
+	// (betr-3) Horizon effect: longer horizon with drag lowers BETR further (more drag accumulates).
+	{
+		const betr10 = computeBETR(0.22, 0.07, 0.067, 10);
+		const betr20 = computeBETR(0.22, 0.07, 0.067, 20);
+		assertEqual(betr20 < betr10, true,
+			'computeBETR horizon: longer n with drag → lower BETR (conversion more compelling)');
+	}
+
+	// (betr-4) null inputs: returns null when tNow is 0 or n <= 0.
+	{
+		assertEqual(computeBETR(0, 0.07, 0.07, 10), null, 'computeBETR: tNow=0 → null');
+		assertEqual(computeBETR(0.22, 0.07, 0.07, 0), null, 'computeBETR: n=0 → null');
+	}
+
+	// (betr-5) BETR appears in Annual Details log when conversions occur.
+	{
+		const r = simulate({ ...baseInputs, IRA1: 600000, maxConversion: true });
+		const convYears = r.log.filter(row => (row.rothConv ?? 0) > 0 || (row.extraConv ?? 0) > 0);
+		const withBETR = convYears.filter(row => row['BETR%'] !== null && row['BETR%'] !== undefined);
+		assertEqual(withBETR.length > 0, true,
+			'BETR% appears in log for years with conversions');
+		// betrAvg should be set on totals
+		assertEqual(r.totals.betrAvg !== null && r.totals.betrAvg !== undefined, true,
+			'totals.betrAvg is set when conversions occur');
+	}
+
+	// ============================================================================
+	// extraConversionAmount TESTS (Phase 23)
+	// ============================================================================
+	console.log('\n=== extraConversionAmount Tests (Phase 23) ===');
+
+	// (conv23-1) Regression: extraConversionAmount=0 produces bit-identical results to baseline.
+	{
+		const base = simulate({ ...baseInputs, IRA1: 500000, maxConversion: true });
+		const withZero = simulate({ ...baseInputs, IRA1: 500000, maxConversion: true, extraConversionAmount: 0 });
+		assertEqual(
+			Math.abs(base.finalNW - withZero.finalNW) < 1,
+			true,
+			'extraConversionAmount=0: finalNW identical to no-param baseline'
+		);
+		assertEqual(
+			Math.abs(base.totals.tax - withZero.totals.tax) < 1,
+			true,
+			'extraConversionAmount=0: totals.tax identical to no-param baseline'
+		);
+	}
+
+	// (conv23-2) Extra conversion increases Roth balance in first year (log[0]).
+	{
+		const base  = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false });
+		const extra = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false, extraConversionAmount: 50000 });
+		const baseRoth  = base.log[0].Roth;
+		const extraRoth = extra.log[0].Roth;
+		assertEqual(extraRoth > baseRoth, true,
+			'extraConversionAmount=50k: Roth balance higher than no-extra-conv baseline in year 0');
+	}
+
+	// (conv23-3) Extra conversion reduces IRA balance by approximately the gross amount in year 0.
+	{
+		const base  = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false });
+		const extra = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false, extraConversionAmount: 50000 });
+		const ira0Base  = base.log[0].TotalIRA;
+		const ira0Extra = extra.log[0].TotalIRA;
+		assertEqual(ira0Base - ira0Extra > 40000, true,
+			'extraConversionAmount=50k: IRA balance reduced by approximately 50k in year 0');
+	}
+
+	// (conv23-4) Array form: per-year conversion schedule.
+	// Year 0 gets 30k extra, year 1 gets 0. Verify year-0 Roth > base.
+	{
+		const schedule = [30000, 0];
+		const extra = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false, extraConversionAmount: schedule });
+		const base  = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false });
+		assertEqual(extra.log[0].Roth > base.log[0].Roth, true,
+			'extraConversionAmount array: year 0 Roth higher with 30k extra conv');
+		// Year 1 IRA delta should be smaller than year 0 delta (no further extra conv in year 1)
+		const ira1Delta = base.log[1].TotalIRA - extra.log[1].TotalIRA;
+		const ira0Delta = base.log[0].TotalIRA - extra.log[0].TotalIRA;
+		assertEqual(ira1Delta < ira0Delta + 5000, true,
+			'extraConversionAmount array: year 1 IRA delta not growing (no extra conv after year 0)');
+	}
+
+	// ============================================================================
+	// BROKERAGE GAP-FILL SPIRAL REGRESSION (bug fix: 3rd-pass cap-gains cycle)
+	// ============================================================================
+	console.log('\n=== Brokerage Gap-Fill Spiral Regression Tests ===');
+
+	// (gap-1) No spurious shortfall when brokerage has high unrealized gains and a gap
+	// requires withdrawal — non-bracket strategy, status stays MFJ throughout.
+	// The 3rd-pass fix prevents: brokerage withdrawal → higher cap gains → higher SS taxation
+	// → residual gap → more brokerage → spiral.
+	{
+		const r = simulate({
+			...baseInputs,
+			strategy: 'propwd', propWithdraw: 0, maxConversion: false,
+			IRA1: 400000, Brokerage: 500000, BrokerageBasis: 80000, // 84% unrealized gains ratio
+			Cash: 20000, Roth: 30000,
+			spendGoal: 110000, ss1: 35000, ss2: 0, hasSpouse: false,
+		});
+		const shortfallYears = r.log.filter(row => (row.shortfall ?? 0) < -100);
+		// With adequate portfolio, no shortfall in first several years
+		const earlyShortfalls = shortfallYears.filter(row => row.year <= baseInputs.birthyear1 + baseInputs.die1 - 10);
+		assertEqual(earlyShortfalls.length, 0,
+			'gap-1: no spurious shortfall in early years with large brokerage unrealized gains (propwd strategy)');
+	}
+
+	// (gap-2) No spurious shortfall when brokerage gap-fill and SS phaseout interact.
+	// Root cause: brokerage cap gains raise AGI → more SS becomes taxable → 3rd-pass residual →
+	// old code drew brokerage again → more cap gains → spiral. Not specific to MFJ→SGL; that was
+	// just where it was first noticed. Uses fixedpct (non-bracket) to trigger the old code path.
+	{
+		const spouseDeathAge = 75; // born 1952, dies 2027 → status changes to SGL
+		const r = simulate({
+			...baseInputs,
+			strategy: 'fixedpct', iraWithdrawPct: 0.10, maxConversion: false,
+			birthyear1: 1955, die1: 88, birthyear2: 1952, die2: spouseDeathAge,
+			hasSpouse: true,
+			IRA1: 600000, IRA2: 100000, Roth: 80000, Roth2: 10000,
+			Brokerage: 400000, BrokerageBasis: 60000, // 85% unrealized gains
+			Cash: 50000, spendGoal: 100000,
+			ss1: 28000, ss2: 18000,
+		});
+		// Find MFJ→SGL transition year
+		const transitionIdx = r.log.findIndex((row, i) => i > 0 && row.status !== r.log[i - 1].status);
+		const transitionYear = transitionIdx >= 0 ? r.log[transitionIdx].year : null;
+		if (transitionYear !== null) {
+			// Check ±2 years around transition for spurious shortfalls
+			const window = r.log.filter(row =>
+				Math.abs(row.year - transitionYear) <= 2 && (row.shortfall ?? 0) < -100
+			);
+			assertEqual(window.length, 0,
+				`gap-2: no spurious shortfall within 2 years of MFJ→SGL transition (year ${transitionYear})`);
+		} else {
+			assertEqual(true, true, 'gap-2: no status change in scenario (skipped)');
+		}
+	}
+
+	// (gap-3) Genuine shortfall (truly exhausted portfolio) still fires — fix must not suppress real shortfalls.
+	{
+		const r = simulate({
+			...baseInputs,
+			strategy: 'propwd', propWithdraw: 0, maxConversion: false,
+			IRA1: 20000, Brokerage: 5000, BrokerageBasis: 5000, Cash: 2000, Roth: 0,
+			spendGoal: 150000, ss1: 15000, ss2: 0, hasSpouse: false,
+		});
+		assertEqual(r.totals.success, false,
+			'gap-3: genuine shortfall (exhausted portfolio) still marks success=false');
+		const realShortfalls = r.log.filter(row => (row.shortfall ?? 0) < -1000);
+		assertEqual(realShortfalls.length > 0, true,
+			'gap-3: exhausted portfolio produces real shortfall entries in log');
+	}
+
+	// ============================================================================
 	// Run all tests
 	// ============================================================================
 	function runAllTaxTests() {

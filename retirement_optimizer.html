@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.e52</title>
+    <title>Retirement Optimizer 11.e64</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -309,7 +309,7 @@
 
     <div class="main">
         <div class="top-bar">
-            <div id="summary-stats" style="display:flex; gap:30px;">
+            <div id="summary-stats" style="display:flex; gap:30px; overflow-x:auto; padding-bottom:4px;">
 				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;min-width:60px;"></div>
 				<div title="Years of life fully funded — portfolio covers spending goal without running out. Red when fewer than expected."><small>Funded Yrs</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Lifetime tax rate: total taxes paid ÷ total gross income. Lower is better."><small>Tax Rate</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
@@ -318,6 +318,11 @@
                 <div title="Total after-tax spendable income produced across all years."><small>Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total portfolio value (after-tax) remaining at the end of the final simulation year."><small>End Wealth</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="First year when the actual portfolio (Roth + Taxable) outpaces the no-conversion shadow after taxes. Uses Future IRA Tax % assumption. See Opp. Cost columns in Annual Details. '—' means never or no conversions."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;">—</strong></div>
+                <div title="Average Break-Even Tax Rate across all conversion years (Kitces formula). If your expected future rate exceeds this, conversions are advantageous on average. See BETR% column in Annual Details (Opp. Cost category). '—' means no conversions."><small>Avg BETR</small><br><strong id="stat-betr-avg" style="font-size:0.9em;">—</strong></div>
+                <div title="Projected first-year RMD for each person's IRA at their SECURE 2.0 RMD age (born 1951–1959 → age 73; born 1960+ → age 75). IRA balance projected at current growth rate. Shows why pre-RMD conversions matter." style="font-size:0.75em;color:#555;line-height:1.6;">
+                    <div id="stat-proj-rmd1" style="white-space:nowrap;"></div>
+                    <div id="stat-proj-rmd2" style="white-space:nowrap;"></div>
+                </div>
 				<div id="popUpMessage" class="scenario-message"></div>
 				<div title="Generate a URL with all current settings for bookmarking or sharing" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
 					<div style="position:relative">
@@ -347,6 +352,11 @@
             <label class="toggle" style="margin-left:8px;font-size:0.85em;" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
                 <input type="checkbox" id="optimizeSpend" onchange="document.getElementById('tab-opt').classList.contains('hidden') ? (_lastOptimizerHash = null) : runOptimizer()">
                 <span class="toggle-label">Optimize Spend</span>
+                <span class="toggle-switch"></span>
+            </label>
+            <label class="toggle" style="margin-left:8px;font-size:0.85em;" title="For each of the top 5 strategies, sweep extra IRA→Roth conversion amounts ($25k steps) to find the optimal annual conversion. Adds new rows showing the conversion-optimized result. Slower — ~5–15 sec for large IRAs.">
+                <input type="checkbox" id="includeConvOpt" onchange="document.getElementById('tab-opt').classList.contains('hidden') ? (_lastOptimizerHash = null) : runOptimizer()">
+                <span class="toggle-label">Conv Optimizer</span>
                 <span class="toggle-switch"></span>
             </label>
 		    <button id="btn-mc" class="tab-btn" onclick="{showTab('tab-mc'); mcTabActivated();}">Monte Carlo 🎲</button>
@@ -493,6 +503,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.e64</b> <strong>BETR (Break-Even Tax Rate):</strong> Annual Details now shows the break-even future tax rate for each year's Roth conversion. <em>Avg BETR</em> summary stat shows the average across all conversion years. <strong>Conversion Optimizer:</strong> new <em>Conv Optimizer</em> toggle in the Optimizer runs the top 5 strategies with additional IRA→Roth conversions to find how much converting improves your outcome; optimized rows (🔁) show tax savings vs not converting. <strong>Bug fix:</strong> eliminated shortfalls in cases invoving brokerage withdrawals.</li>
 				<li><b>11.e52</b> URL compression: all share URLs now use short parameter names (57% shorter). Share button opens a copyable popup panel on all tools matching Income Tax Planner style. Income Tax Planner gets an "Open in Tax Planner →" button that pre-fills Retirement Tax Planner with state, SS income, and capital gains. Backward compatible — existing long-key bookmarks still load.</li>
 				<li><b>11.e4f</b> User Experience polish throughout. Roth conversion &amp; opportunity cost tracking calculates when conversions or cash withdrawals "pay off". <B>Break Even</B> at the top says when that year is. New Opp. Cost category and columns added to Annual Details. Future IRA Tax % marginal rate when IRA is eventually distributed; auto defaults the last simulation year marginal rate. Choose your heirs total tax rate.</li>
 				<li><b>11.e4a</b> Fixed start age bug (table now starts at retirement year on URL load). Updated withdrawal strategy descriptions in How To. Added color legend to Annual Details table.</li>

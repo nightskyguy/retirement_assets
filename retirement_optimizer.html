@@ -12,9 +12,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Version: major.minor where minor = lowercase hex((day-of-year * 24) + hour-of-day) at build time.
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
-         Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.df0)
+         Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e50)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.e4a</title>
+    <title>Retirement Optimizer 11.e50</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -36,6 +36,7 @@
     </script>
 	<script src="displayhelpers.js"></script>
 	<link rel="stylesheet" href="retirementopt_styles_responsive.css">
+	<style>.toggle { display: flex !important; }</style>
 	<base target="_blank">	
 	<script src="retirement_optimizer_core.js"></script>	
 	<script src="retirement_optimizer_tests.js"></script>	
@@ -97,16 +98,19 @@
 				</select></label>
 			</div>
 
+			<div class="input-group" style="margin-top:4px;">
+				<label class="toggle" title="If checked, uses available IRA withdrawal surplus to maximize Roth conversions each year">
+				  <input type="checkbox" id="maxConversion" name="maxConversion">
+				  <span class="toggle-label">Max Conversion</span>
+				  <span class="toggle-switch"></span>
+				</label>
+			</div>
 		</div>  <!-- strategy-container -->
 
 		<div class="row" style="margin-top:8px;">
 			<label title="IRA floor for all strategies. For 'Reduce IRA in N Years' this is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.">IRA Goal
 			<input type="text" id="iraBaseGoal" value="750000" width="50%"></label>
 			<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div>
-			<label title='If checked, it will use available cash to maximize Roth conversions'>
-			  <input type="checkbox" id="maxConversion" name="maxConversion">
-			  Max Conversion
-			</label>
 		</div>
 
 		
@@ -283,6 +287,12 @@
             <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
             <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
+        <div class="row" style="margin-top:6px;">
+            <div><label title="Expected marginal tax rate when the traditional IRA shadow is eventually distributed. Used for Roth conversion break-even (Opp. Cost). Leave blank to use the current year's computed marginal rate automatically.">Future IRA Tax %
+                <input type="number" id="futureIRATaxRate" min="0" max="60" step="1" placeholder="auto" style="width:54px;">
+                <span id="future-ira-tax-auto" style="font-size:0.8em;color:#888;margin-left:4px;"></span>
+            </label></div>
+        </div>
         </details>
 
     </div> <!-- sidebar -->
@@ -291,19 +301,24 @@
         <div class="top-bar">
             <div id="summary-stats" style="display:flex; gap:30px;">
 				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;min-width:60px;"></div>
-				<div title="How many years of life are fully funded."><small>Funded/Years of Life</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
-                <div title="Total taxes paid/total spendable wealth"><small>LIFETIME TAX RATE</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
-                <div title="Sum of all taxes paid."><small>TOTAL TAX</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
-                <div title="Total Required Minimum Distributions taken. Percentage is the share of lifetime taxes attributable to RMDs."><small>TOTAL RMDs</small><br><strong id="stat-rmd">$0</strong><div id="stat-rmd-pct" style="font-size:0.75em;min-height:1em;color:#888;"></div></div>
-                <div title="How much spendable income was produced."><small>TOTAL Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
-                <div title="Remaining wealth at the end of life."><small>FINAL WEALTH</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+				<div title="Years of life fully funded — portfolio covers spending goal without running out. Red when fewer than expected."><small>Funded Yrs</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Lifetime tax rate: total taxes paid ÷ total gross income. Lower is better."><small>Tax Rate</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Total federal + state taxes paid over the entire simulation."><small>All Taxes</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Total Required Minimum Distributions taken. Sub-label shows RMDs' share of lifetime taxes."><small>All RMDs</small><br><strong id="stat-rmd">$0</strong><div id="stat-rmd-pct" style="font-size:0.75em;min-height:1em;color:#888;"></div></div>
+                <div title="Total after-tax spendable income produced across all years."><small>Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Total portfolio value (after-tax) remaining at the end of the final simulation year."><small>End Wealth</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="First year when the actual portfolio (Roth + Taxable) outpaces the no-conversion shadow after taxes. Uses Future IRA Tax % assumption. See Opp. Cost columns in Annual Details. '—' means never or no conversions."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;">—</strong></div>
 				<div id="popUpMessage" class="scenario-message"></div>
-				<div title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
-					<label><input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()"> Current $</label>
-				</div>
-				<div title="Generate a URL with all current settings for bookmarking or sharing">
-					<button onclick="copyShareURL()" style="font-size:0.8em;padding:4px 8px;">🔗 Share</button>
-					<span id="share-confirm" style="font-size:0.75em;color:#1a7a1a;display:none;margin-left:4px;">Copied!</span>
+				<div title="Generate a URL with all current settings for bookmarking or sharing" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+					<div>
+						<button onclick="copyShareURL()" style="font-size:0.8em;padding:4px 8px;">🔗 Share</button>
+						<span id="share-confirm" style="font-size:0.75em;color:#1a7a1a;display:none;margin-left:4px;">Copied!</span>
+					</div>
+					<label class="toggle" style="font-size:0.8em;" title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
+						<input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()">
+						<span class="toggle-label">Current $</span>
+						<span class="toggle-switch"></span>
+					</label>
 				</div>
             </div>
         </div>
@@ -312,8 +327,10 @@
             <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
             <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer 🎯</button>
-            <label style="display:inline-flex;align-items:center;gap:4px;margin-left:8px;font-size:0.85em;cursor:pointer;" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
-                <input type="checkbox" id="optimizeSpend" onchange="document.getElementById('tab-opt').classList.contains('hidden') ? (_lastOptimizerHash = null) : runOptimizer()"> Optimize Spend
+            <label class="toggle" style="margin-left:8px;font-size:0.85em;" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
+                <input type="checkbox" id="optimizeSpend" onchange="document.getElementById('tab-opt').classList.contains('hidden') ? (_lastOptimizerHash = null) : runOptimizer()">
+                <span class="toggle-label">Optimize Spend</span>
+                <span class="toggle-switch"></span>
             </label>
 		    <button id="btn-mc" class="tab-btn" onclick="{showTab('tab-mc'); mcTabActivated();}">Monte Carlo 🎲</button>
 		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
@@ -459,6 +476,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.e4f</b> Roth conversion &amp; excess-withdrawal opportunity cost tracking + UX polish. Shadow accounts compute incremental tax (true marginal method) for each year's conversion and excess IRA-to-cash withdrawal. New columns in Annual Details (Opp. Cost category): Conv OC, Excess OC, Conv Tax, Excess Tax. New stat: Conv Break-Even year (first year the actual portfolio outpaces the no-conversion shadow). New input: Future IRA Tax % (expected marginal rate when shadow IRA is eventually distributed; defaults to current year's marginal rate). Stat bar labels shortened; Current $, Optimize Spend, and Max Conversion converted to toggle switches; Max Conversion moved into the strategy panel.</li>
 				<li><b>11.e4a</b> Fixed start age bug (table now starts at retirement year on URL load). Updated withdrawal strategy descriptions in How To. Added color legend to Annual Details table.</li>
 				</ul>
 				<details>
@@ -584,14 +602,21 @@
 				<label>
 					<input type="checkbox" id="cat-cash" onchange="updateColumnVisibility()"> Cash Δ
 				</label>
+				<label>
+					<input type="checkbox" id="cat-oppcost" onchange="updateColumnVisibility()"> Opp. Cost
+				</label>
 			</div><!-- class="column-controls" -->
-			<div style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:0.8em;color:#444;padding:4px 6px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
-				<span style="font-weight:600;color:#666;">Row colors:</span>
-				<span><span style="display:inline-block;width:14px;height:14px;background:#ffb6c180;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Underfunded — income falls short of spend goal or portfolio depleted</span>
-				<span><span style="display:inline-block;width:14px;height:14px;background:#fffde7;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>IRMAA Tier 1–6 (progressively darker warm tint as tier rises)</span>
-				<span style="font-weight:600;color:#666;">Cell colors:</span>
-				<span><span style="display:inline-block;width:14px;height:14px;background:#ffff99;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Year/age cells — first year a spouse has died (filing status → Single)</span>
-				<span><span style="display:inline-block;width:14px;height:14px;background:#ff8c0099;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>BracketOverage — MAGI exceeded the bracket/IRMAA ceiling this year</span>
+			<div style="font-size:0.8em;color:#444;padding:4px 6px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
+				<div style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin-bottom:4px;">
+					<span style="font-weight:600;color:#666;">Row colors:</span>
+					<span><span style="display:inline-block;width:14px;height:14px;background:#ffb6c180;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Underfunded — income falls short of spend goal or portfolio depleted</span>
+					<span><span style="display:inline-block;width:14px;height:14px;background:#90BBFF;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>IRMAA Tier 1–6 (progressively deeper blue as tier rises)</span>
+				</div>
+				<div style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;">
+					<span style="font-weight:600;color:#666;">Cell colors:</span>
+					<span><span style="display:inline-block;width:14px;height:14px;background:#ffff99;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Year/age cells — first year a spouse has died (filing status → Single)</span>
+					<span><span style="display:inline-block;width:14px;height:14px;background:#ff8c0099;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>BracketOverage / Net Income — MAGI exceeded the bracket/IRMAA ceiling this year</span>
+				</div>
 			</div>
 			<table id="main-table">
 				<thead>

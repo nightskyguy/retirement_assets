@@ -597,6 +597,14 @@ function simulate(inputs) {
     let capitalGainsRate = 0.15; // A guess.
     let tax = {};
 
+    // Phase 20: opportunity cost shadow tracking.
+    // convShadowDeltaIRA: cumulative gross conversion amounts that would have stayed in IRA (grown each year).
+    // convShadowDeltaTaxable: cumulative conv taxes not paid from taxable (0 in current model; taxes come from IRA gross).
+    // excessShadowDeltaIRA: cumulative gross excess-to-cash amounts that would have stayed in IRA.
+    // excessShadowDeltaTaxable: negative — actual taxable has more cash from excess withdrawal; shadow has less.
+    let convShadowDeltaIRA = 0, convShadowDeltaTaxable = 0;
+    let excessShadowDeltaIRA = 0, excessShadowDeltaTaxable = 0;
+
 
 
     /**************************************
@@ -1134,6 +1142,43 @@ function simulate(inputs) {
         balance.Cash += surplus.Cash
         surplus.Total = 0;
 
+        // Phase 20: opportunity cost shadow tracking.
+        // For each action (Roth conversion, excess withdrawal to Cash), compute the incremental tax
+        // attributable to that action by re-running calculateTaxes() without it, then derive the gross
+        // (pre-tax) IRA over-withdrawal that would have stayed in the IRA in the shadow scenario.
+        let incrementalConvTax = 0, grossConv = 0;
+        if (totalConverted > 0) {
+            const baseEI = pension + totalRMD + taxableInterest;
+            const convShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - totalConverted);
+            const shadowConvCalc = calculateTaxes({
+                filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
+                irmaaAnnualCost: 0, earnedIncome: convShadowEI, inflation: cpiRate,
+                qualifiedDiv: taxableDividends, capGains: capitalGains,
+                hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+            });
+            incrementalConvTax = Math.max(0, (totalTax - irmaa) - shadowConvCalc.totalTax);
+            grossConv = totalConverted + incrementalConvTax;
+            convShadowDeltaIRA += grossConv;
+            // convShadowDeltaTaxable += 0 — taxes came from IRA gross; taxable accounts unaffected
+        }
+
+        let incrementalExcessTax = 0, grossExcess = 0;
+        const excessCashOC = surplus.Cash;
+        if (excessCashOC > 0 && (netWithdrawals.IRA ?? 0) > 0) {
+            const baseEI = pension + totalRMD + taxableInterest;
+            const excessShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - excessCashOC);
+            const shadowExcessCalc = calculateTaxes({
+                filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
+                irmaaAnnualCost: 0, earnedIncome: excessShadowEI, inflation: cpiRate,
+                qualifiedDiv: taxableDividends, capGains: capitalGains,
+                hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+            });
+            incrementalExcessTax = Math.max(0, (totalTax - irmaa) - shadowExcessCalc.totalTax);
+            grossExcess = excessCashOC + incrementalExcessTax;
+            excessShadowDeltaIRA   += grossExcess;
+            excessShadowDeltaTaxable -= excessCashOC; // actual taxable has more cash; shadow has less
+        }
+
         // Brokerage tax treatment is correct: dividends are taxed as qualifiedDiv in calculateTaxes()
         // (line ~864), liquidations are taxed as capGains above BrokerageBasis, and the growth
         // applied here is unrealized appreciation — not taxable until sold. The one valuation nuance:
@@ -1169,6 +1214,17 @@ function simulate(inputs) {
         let gains = applyGrowth(balance, growthRates)
         inspectForErrors(growthRates, balance, gains)  // See if any numbers look fishy.
 
+        // Grow shadow deltas at same rates as actual accounts (post-growth weights are close enough).
+        {
+            const _bt = balance.Brokerage + balance.Cash;
+            const _bw = _bt > 0 ? balance.Brokerage / _bt : 0.5;
+            const _taxableRate = _bw * (growthRates.Brokerage ?? 0) + (1 - _bw) * (inputs.cashYield ?? 0);
+            convShadowDeltaIRA     *= (1 + growthRates.IRA);
+            convShadowDeltaTaxable *= (1 + _taxableRate);
+            excessShadowDeltaIRA   *= (1 + growthRates.IRA);
+            excessShadowDeltaTaxable *= (1 + _taxableRate);
+        }
+
         // Accrue dividends — reinvest into brokerage (basis steps up) or flow to cash
         if (inputs.dividendReinvest) {
             gains.Brokerage = (gains.Brokerage || 0) + taxableDividends;
@@ -1190,6 +1246,21 @@ function simulate(inputs) {
         balance.Roth1 += surplus.Roth1;
         balance.Roth2 += surplus.Roth2;
         totals.shortfall += surplus.Shortfall;
+
+        // Phase 20: compute opportunity cost NetValue.
+        // NetValue = (RothActual + TaxableActual) - (TradShadow + TaxableShadow - TaxLiability)
+        // TaxLiability = TradShadow × TaxFuture
+        // Positive = conversions/excess withdrawals have paid off vs the no-action shadow.
+        const _taxFuture = inputs.futureIRATaxRate ?? (marginalFedTaxRate + marginalStateTaxRate);
+        const _roth = balance.Roth1 + balance.Roth2;
+        const _taxable = balance.Brokerage + balance.Cash;
+        const _ira = balance.IRA1 + balance.IRA2;
+        const convTradShadow    = _ira + convShadowDeltaIRA;
+        const convTaxableShadow = _taxable + convShadowDeltaTaxable;
+        const convNetValue  = (_roth + _taxable) - (convTradShadow + convTaxableShadow - convTradShadow * _taxFuture);
+        const excessTradShadow    = _ira + excessShadowDeltaIRA;
+        const excessTaxableShadow = _taxable + excessShadowDeltaTaxable;
+        const excessNetValue = (_roth + _taxable) - (excessTradShadow + excessTaxableShadow - excessTradShadow * _taxFuture);
 
         let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage - balance.BrokerageBasis)) * (1 - nominalTaxRate) + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
 
@@ -1270,6 +1341,11 @@ function simulate(inputs) {
             cashG: gains.Cash,
             rothG: (gains.Roth1 || 0) + (gains.Roth2 || 0),
             'RMD%': rmd1Pct,
+            // Opportunity cost (Phase 20)
+            convOC: convNetValue,
+            excessOC: excessNetValue,
+            convTax: incrementalConvTax,
+            excessTax: incrementalExcessTax,
             // Internal
             inflationFactor: inflation,
             loopMs: performance.now() - loopStart
@@ -1287,6 +1363,10 @@ function simulate(inputs) {
         inflation *= (1 + yearInflation);
         medicareRate *= (1 + TAXData.IRMAA.ANNUAL_INCREASE)
     } // end for (let y = 0; y < maxYears; y++)
+
+    // Phase 20: find break-even years (first year NetValue goes non-negative).
+    totals.convBEYear   = log.find(r => r.convOC  >= 0)?.year ?? null;
+    totals.excessBEYear = log.find(r => r.excessOC >= 0)?.year ?? null;
 
     return { log, totals, finalNW: log[log.length - 1].totalWealth };
 }
@@ -1430,7 +1510,8 @@ function getInputs() {
         comp_Roth1_ratio: +val('comp_Roth1_ratio'),
         comp_Roth1_intl: +val('comp_Roth1_intl'),
         comp_Roth2_ratio: +val('comp_Roth2_ratio'),
-        comp_Roth2_intl: +val('comp_Roth2_intl')
+        comp_Roth2_intl: +val('comp_Roth2_intl'),
+        futureIRATaxRate: (() => { const v = val('futureIRATaxRate'); return (v && +v > 0) ? +v / 100.0 : undefined; })(),
     };
 }
 
@@ -1496,6 +1577,18 @@ function runSimulation() {
     updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
     updateIRAGoalHint();
+    // Show computed marginal rate in the auto label when futureIRATaxRate is blank
+    const _autoRateEl = document.getElementById('future-ira-tax-auto');
+    if (_autoRateEl) {
+        const _blank = !val('futureIRATaxRate');
+        if (_blank && res.log.length > 0) {
+            const r0 = res.log[0];
+            const autoRatePct = Math.round(((r0['FedRate%'] || 0) + (r0['StateRate%'] || 0)) * 100);
+            _autoRateEl.textContent = autoRatePct > 0 ? `(auto: ${autoRatePct}%)` : '';
+        } else {
+            _autoRateEl.textContent = '';
+        }
+    }
     const spouseBtn = document.getElementById('chartPerson_spouse');
     if (spouseBtn) spouseBtn.style.display = getInputs().hasSpouse ? '' : 'none';
 }
@@ -2223,7 +2316,13 @@ const columnCategories = {
     'surplusCash': ['Cash Δ', 'Income'],
 
     // Debug / performance — only visible under Show All (no checkbox maps to 'Debug')
-    'loopMs': ['Debug']
+    'loopMs': ['Debug'],
+
+    // Opportunity cost (Phase 20)
+    'convOC':    ['Opp. Cost'],
+    'excessOC':  ['Opp. Cost'],
+    'convTax':   ['Opp. Cost'],
+    'excessTax': ['Opp. Cost'],
 };
 
 // Maps each column key to a visual group label for the group header row
@@ -2246,6 +2345,7 @@ const columnGroupDefs = {
     'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
     'Basis': 'Balances', 'totalWealth': 'Balances', 'Spendable': 'Balances',
     'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
+    'convOC': 'Opp. Cost', 'excessOC': 'Opp. Cost', 'convTax': 'Opp. Cost', 'excessTax': 'Opp. Cost',
 };
 
 // Get active categories based on checkbox state
@@ -2259,6 +2359,7 @@ function getActiveCategories() {
     if (document.getElementById('cat-roth')?.checked) categories.push('Roth Δ');
     if (document.getElementById('cat-brokerage')?.checked) categories.push('Brokerage Δ');
     if (document.getElementById('cat-cash')?.checked) categories.push('Cash Δ');
+    if (document.getElementById('cat-oppcost')?.checked) categories.push('Opp. Cost');
     return categories;
 }
 
@@ -2464,7 +2565,11 @@ function updateTable(log) {
         'SumTaxes': 'Running total of Federal, State, IRMAA, NIIT, and CapGains taxes.',
         'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Likely due to errors in the calculation or unexpected bracket changes - or running out of assets.',
         'totalIncome': 'Funds from all sources, taxable and tax-free.',
-        'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA'
+        'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA',
+        'convOC': 'Roth Conversion Opportunity Cost. Formula: (RothActual + TaxableActual) − (TradShadow + TaxableShadow − TradShadow × TaxFuture). TradShadow = what the IRA would hold if no conversions had occurred (grows at IRA rate). Positive = actual portfolio outpaces the no-conversion shadow after taxes. Break-even year shown in the summary stat bar.',
+        'excessOC': 'Excess Withdrawal Opportunity Cost. Same formula as Conv OC but applied to surplus IRA withdrawals routed to Cash rather than Roth. TaxableShadow is reduced by the after-tax excess cash (actual has more; shadow has less). Positive = having the extra cash outweighs the lost IRA growth.',
+        'convTax': 'Incremental federal + state tax attributable to this year\'s Roth conversion (true marginal method: re-runs tax calculation without the conversion and takes the difference). Does not include IRMAA.',
+        'excessTax': 'Incremental federal + state tax attributable to this year\'s excess IRA withdrawal routed to Cash (same method as Conv Tax).',
     };
 
     keys.forEach(key => {
@@ -2515,17 +2620,18 @@ function updateTable(log) {
         const incomeShortfall = (netIncome < spendGoal * 0.99) || (rowPortfolio < rowRequired);
         const deathOccurred = maritalStatus != row['status'];
 
-        // IRMAA tier row tint (subtle, overridden by pink if underfunded)
+        // IRMAA tier row tint — blue scale (taxation theme), overridden by pink if underfunded
         const irmaaTierColors = {
-            'Tier 1': '#fffde7', 'Tier 2': '#fff8e1', 'Tier 3': '#fff3e0',
-            'Tier 4': '#fbe9e7', 'Tier 5': '#ffebee', 'Tier 6 (TOP)': '#ffcdd2',
+            'Tier 1': ['#E8F4FF', '#000'], 'Tier 2': ['#BDD9FF', '#000'], 'Tier 3': ['#90BBFF', '#000'],
+            'Tier 4': ['#6090FF', '#000'], 'Tier 5': ['#3366FF', '#fff'], 'Tier 6 (TOP)': ['#0000FF', '#fff'],
         };
-        const tierBg = irmaaTierColors[row['IRMAATier']];
-        if (tierBg) tr.style.backgroundColor = tierBg;
+        const tierEntry = irmaaTierColors[row['IRMAATier']];
+        if (tierEntry) { tr.style.backgroundColor = tierEntry[0]; tr.style.color = tierEntry[1]; }
 
         // Pink takes priority over tier color
         if (incomeShortfall) {
             tr.style.backgroundColor = '#ffb6c180';  // Light pink
+            tr.style.color = '';  // reset to default dark text
         }
 
         // Apply cell-level yellow highlighting for death occurred
@@ -2539,7 +2645,7 @@ function updateTable(log) {
                 if (deathOccurred && deathHighlightCols.includes(key.toLowerCase())) {
                     td.style.backgroundColor = '#ffff99';  // Light yellow
                 }
-                if (key === 'BracketOverage' && (row['BracketOverage'] ?? 0) > 0) {
+                if ((key === 'BracketOverage' || key === 'netIncome') && (row['BracketOverage'] ?? 0) > 0) {
                     td.style.backgroundColor = '#ff8c0099';  // Orange — MAGI exceeded bracket ceiling
                 }
                 if (key === 'totalTax' || key === 'year') {
@@ -2701,6 +2807,8 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     }
     const changeEl = document.getElementById('stat-success');
     if (changeEl) changeEl.innerText = _lastChangedInputLabel ? '↺ ' + _lastChangedInputLabel : '';
+    const convBEEl = document.getElementById('stat-conv-be');
+    if (convBEEl) convBEEl.innerText = totals.convBEYear ?? '—';
 
     // Delta vs previous run
     if (_prevStatsTotals) {
@@ -2915,7 +3023,7 @@ function updateCharts(log) {
                 mkInc('Roth WD',         '#8e44adB0', r => r.RothWD),
                 mkInc('Gains+Div',       '#1abc9cB0', r => r.CapGains + r.cashDividends),
                 mkInc('Cash WD',         '#27ae60B0', r => r.CashWD ?? 0),
-                mkInc('Brokerage',       '#2980b9B0', r => basisReturn(r)),
+                mkInc('Brokerage',       '#0000CCB0', r => basisReturn(r)),
                 // Visual separator between spending and expense legend items
                 { label: '│', type: 'bar', data: log.map(() => 0), backgroundColor: 'transparent', borderWidth: 0, stack: 'income', order: 2 },
                 // Expenses stack on top of the Spendable Income line (unscaled absolute amounts)

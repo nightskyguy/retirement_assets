@@ -3170,37 +3170,87 @@ function toggleStrategyUI() {
 // URL SHARE / LOAD
 // ============================================================================
 
+const OPT_LONG_TO_SHORT = {
+    spendGoal:'sg', spendChange:'sc', strategy:'str', nYears:'ny',
+    propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os',
+    maxConversion:'mc', iraBaseGoal:'ibg',
+    birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
+    birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
+    IRA1:'i1', IRA2:'i2', Roth:'ro', Roth2:'ro2',
+    Brokerage:'bk', BrokerageBasis:'bb', dividendReinvest:'dr', Cash:'ca', CashReserve:'cr',
+    ss1:'ss1', ss1Age:'ss1a', ss2:'ss2', ss2Age:'ss2a',
+    pensionAnnual:'pa', pensionCola:'pc', survivorPct:'sur', dividendRate:'div',
+    STATEname:'s', ssFailYear:'sfy', ssFailPct:'sfp',
+    growth:'g', cashYield:'cy', inflation:'inf', cpi:'cpi', futureIRATaxRate:'fitr',
+    comp_IRA1_ratio:'c1r', comp_IRA1_intl:'c1x',
+    comp_IRA2_ratio:'c2r', comp_IRA2_intl:'c2x',
+    comp_Brokerage_ratio:'cbr', comp_Brokerage_intl:'cbx',
+    comp_Roth1_ratio:'cr1r', comp_Roth1_intl:'cr1x',
+    comp_Roth2_ratio:'cr2r', comp_Roth2_intl:'cr2x',
+    'show-current-dollars':'cd', optimizeSpend:'opt'
+};
+
+const OPT_SHORT_TO_LONG = Object.fromEntries(
+    Object.entries(OPT_LONG_TO_SHORT).map(([l, s]) => [s, l])
+);
+
 function buildShareURL() {
     const params = new URLSearchParams();
     document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
         if (!el.id) return;
+        const short = OPT_LONG_TO_SHORT[el.id] ?? el.id;
         if (el.type === 'checkbox') {
-            params.set(el.id, el.checked ? 'true' : 'false');
+            params.set(short, el.checked ? 'true' : 'false');
         } else {
-            params.set(el.id, el.dataset.numVal !== undefined ? el.dataset.numVal : el.value);
+            params.set(short, el.dataset.numVal !== undefined ? el.dataset.numVal : el.value);
         }
     });
     const base = location.href.split('?')[0].split('#')[0];
     return base + '?' + params.toString();
 }
 
-function copyShareURL() {
-    const url = buildShareURL();
-    navigator.clipboard.writeText(url).then(() => {
-        const confirm = document.getElementById('share-confirm');
-        if (confirm) {
-            confirm.style.display = 'inline';
-            setTimeout(() => { confirm.style.display = 'none'; }, 2500);
-        }
-    }).catch(() => {
-        // Fallback for file:// protocol where clipboard may be restricted
-        prompt('Copy this URL to bookmark or share your settings:', url);
-    });
+function toggleSharePanel() {
+    const panel = document.getElementById('share-panel');
+    const input = document.getElementById('share-url-input');
+    const isOpen = panel.style.display === 'block';
+    if (isOpen) { panel.style.display = 'none'; return; }
+    input.value = buildShareURL();
+    document.getElementById('share-status').textContent = '';
+    panel.style.display = 'block';
+    requestAnimationFrame(() => { input.select(); });
 }
 
+async function copyShareURL() {
+    const input  = document.getElementById('share-url-input');
+    const status = document.getElementById('share-status');
+    input.select();
+    try {
+        await navigator.clipboard.writeText(input.value);
+        status.textContent = '✓ Copied to clipboard';
+        return;
+    } catch {}
+    try {
+        document.execCommand('copy');
+        status.textContent = '✓ Copied to clipboard';
+    } catch {
+        status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C';
+    }
+}
+
+document.addEventListener('click', e => {
+    const panel = document.getElementById('share-panel');
+    if (panel && panel.style.display === 'block' &&
+        !panel.contains(e.target) &&
+        !e.target.closest('[onclick="toggleSharePanel()"]')) {
+        panel.style.display = 'none';
+    }
+});
+
 function loadFromURL() {
-    const params = new URLSearchParams(location.search);
-    if (!params.size) return;
+    const raw = new URLSearchParams(location.search);
+    if (!raw.size) return;
+    const params = new URLSearchParams();
+    raw.forEach((v, k) => params.set(OPT_SHORT_TO_LONG[k] ?? k, v));
     params.forEach((value, key) => {
         const el = document.getElementById(key);
         if (!el) return;

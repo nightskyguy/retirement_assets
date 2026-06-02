@@ -217,6 +217,16 @@
       line-height: 1.4;
     }
 
+    /* ── Share panel ────────────────────────────────────────────────── */
+    .share-panel { display:none; position:fixed; top:50px; right:1.5rem; z-index:800; background:#fff; border:1px solid #00796B; border-radius:8px; padding:.85rem 1rem; width:min(480px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.3); }
+    .share-panel label { font-size:11px; color:#555; display:block; margin-bottom:.4rem; font-family:"Courier New",monospace; }
+    .share-row { display:flex; gap:6px; }
+    .share-row input { flex:1; background:#f8f8f8; border:1px solid #ccc; border-radius:4px; color:#222; font-family:"Courier New",monospace; font-size:11px; padding:5px 8px; outline:none; }
+    .share-row input:focus { border-color:#00796B; }
+    .share-copy { background:rgba(0,121,107,.15); border:1px solid rgba(0,121,107,.4); border-radius:4px; color:#00796B; font-family:"Courier New",monospace; font-size:11px; padding:5px 12px; cursor:pointer; white-space:nowrap; }
+    .share-copy:hover { background:rgba(0,121,107,.25); }
+    .share-status { font-family:"Courier New",monospace; font-size:10px; color:#00796B; margin-top:.35rem; min-height:14px; }
+
     /* ── Print styles ────────────────────────────────────────────────── */
     @media print {
       body { padding: 0; background: #fff; font-size: 12px; }
@@ -438,7 +448,15 @@
       <div class="tab"        data-tab="text">Plain Text</div>
       <div class="tabs-spacer"></div>
       <button id="btn-print"     onclick="window.print()">🖨️ Print / PDF</button>
-      <button id="btn-copy-link" onclick="copyLink()">🔗 Copy Link</button>
+      <button id="btn-copy-link" onclick="toggleSharePanel()">&#8258; Share</button>
+      <div class="share-panel" id="share-panel">
+        <label>Copy this URL to restore your settings in any browser:</label>
+        <div class="share-row">
+          <input type="text" id="share-url-input" readonly onclick="this.select()">
+          <button class="share-copy" onclick="copyShareURL()">Copy</button>
+        </div>
+        <div class="share-status" id="share-status"></div>
+      </div>
     </div>
     <div class="tab-content active" id="tab-plan">
       <div class="placeholder" id="placeholder">
@@ -503,67 +521,86 @@
   function readBool(id) { return document.getElementById(id).checked; }
   function readInt(id)  { return parseInt(document.getElementById(id).value) || 0; }
 
-  // ── Copy shareable link ───────────────────────────────────────────────────
-  function copyLink() {
+  // ── Share panel ───────────────────────────────────────────────────────────
+  function buildShareURL() {
     const p  = getParams();
     const yr = new Date().getFullYear();
     const sp = new URLSearchParams();
+    const set = (short, v) => { if (v !== null && v !== undefined && v !== 0 && v !== '' && v !== false) sp.set(short, v); };
 
-    const set = (k, v) => { if (v !== null && v !== undefined && v !== 0 && v !== '' && v !== false) sp.set(k, v); };
+    if (p.taxYear !== yr)    sp.set('yr',  p.taxYear);
+    sp.set('s', p.state);
+    set('ft',   p.federalTax);
+    set('stt',  p.stateTax);
+    set('pft',  p.priorYearFedTax);
+    set('pst',  p.priorYearStateTax);
+    if (p.highIncomeFiler)   sp.set('hi', '1');
 
-    if (p.taxYear !== yr)         sp.set('taxYear', p.taxYear);
-    sp.set('state', p.state);
-    set('federalTax',        p.federalTax);
-    set('stateTax',          p.stateTax);
-    set('priorYearFedTax',   p.priorYearFedTax);
-    set('priorYearStateTax', p.priorYearStateTax);
-    if (p.highIncomeFiler)        sp.set('highIncomeFiler', '1');
+    set('i1r',  p.ira1Rmd);
+    set('i1v',  p.ira1Voluntary);
+    if (p.ira1RmdTaken)      sp.set('i1rt', '1');
+    if (p.ira1VolTaken)      sp.set('i1vt', '1');
+    set('i1c',  p.ira1RothConversion);
+    if (p.ira1ConvDone)      sp.set('i1cd', '1');
 
-    set('ira1Rmd',           p.ira1Rmd);
-    set('ira1Voluntary',     p.ira1Voluntary);
-    if (p.ira1RmdTaken)           sp.set('ira1RmdTaken', '1');
-    if (p.ira1VolTaken)           sp.set('ira1VolTaken', '1');
-    set('ira1RothConversion', p.ira1RothConversion);
-    if (p.ira1ConvDone)           sp.set('ira1ConvDone', '1');
+    set('i2r',  p.ira2Rmd);
+    set('i2v',  p.ira2Voluntary);
+    if (p.ira2RmdTaken)      sp.set('i2rt', '1');
+    if (p.ira2VolTaken)      sp.set('i2vt', '1');
+    set('i2c',  p.ira2RothConversion);
+    if (p.ira2ConvDone)      sp.set('i2cd', '1');
 
-    set('ira2Rmd',           p.ira2Rmd);
-    set('ira2Voluntary',     p.ira2Voluntary);
-    if (p.ira2RmdTaken)           sp.set('ira2RmdTaken', '1');
-    if (p.ira2VolTaken)           sp.set('ira2VolTaken', '1');
-    set('ira2RothConversion', p.ira2RothConversion);
-    if (p.ira2ConvDone)           sp.set('ira2ConvDone', '1');
+    set('ss',   p.ssIncome);
+    set('pen',  p.pensionIncome);
+    set('int',  p.interest);
+    set('qdiv', p.qualifiedDivs);
+    set('cg',   p.capitalGains);
 
-    set('ssIncome',          p.ssIncome);
-    set('pensionIncome',     p.pensionIncome);
-    set('interest',          p.interest);
-    set('qualifiedDivs',     p.qualifiedDivs);
-    set('capitalGains',      p.capitalGains);
+    if (p.portfolioRate   !== 0.07)  sp.set('pr',   +(p.portfolioRate   * 100).toFixed(2));
+    if (p.hysaGross       !== 0.038) sp.set('hysa', +(p.hysaGross       * 100).toFixed(2));
+    if (p.marginalOrdRate !== 0.30)  sp.set('mor',  +(p.marginalOrdRate  * 100).toFixed(1));
+    if (p.cgRateBlended   !== 0.20)  sp.set('cgr',  +(p.cgRateBlended   * 100).toFixed(1));
+    if (p.appreciationPct !== 0.40)  sp.set('ap',   +(p.appreciationPct * 100).toFixed(1));
 
-    if (p.portfolioRate   !== 0.07)  sp.set('portfolioRate',   +(p.portfolioRate   * 100).toFixed(2));
-    if (p.hysaGross       !== 0.038) sp.set('hysaGross',       +(p.hysaGross       * 100).toFixed(2));
-    if (p.marginalOrdRate !== 0.30)  sp.set('marginalOrdRate', +(p.marginalOrdRate  * 100).toFixed(1));
-    if (p.cgRateBlended   !== 0.20)  sp.set('cgRateBlended',   +(p.cgRateBlended   * 100).toFixed(1));
-    if (p.appreciationPct !== 0.40)  sp.set('appreciationPct', +(p.appreciationPct * 100).toFixed(1));
-
-    const url = `${location.origin}${location.pathname}?${sp.toString()}`;
-    const btn = document.getElementById('btn-copy-link');
-
-    navigator.clipboard.writeText(url).then(() => {
-      btn.textContent = '✓ Copied!';
-      btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = '🔗 Copy Link'; btn.classList.remove('copied'); }, 2500);
-    }).catch(() => {
-      // Fallback: select a temporary input
-      const inp = document.createElement('input');
-      inp.value = url;
-      document.body.appendChild(inp);
-      inp.select();
-      document.execCommand('copy');
-      document.body.removeChild(inp);
-      btn.textContent = '✓ Copied!';
-      setTimeout(() => { btn.textContent = '🔗 Copy Link'; }, 2500);
-    });
+    return `${location.origin}${location.pathname}?${sp.toString()}`;
   }
+
+  function toggleSharePanel() {
+    const panel = document.getElementById('share-panel');
+    const input = document.getElementById('share-url-input');
+    const isOpen = panel.style.display === 'block';
+    if (isOpen) { panel.style.display = 'none'; return; }
+    input.value = buildShareURL();
+    document.getElementById('share-status').textContent = '';
+    panel.style.display = 'block';
+    requestAnimationFrame(() => { input.select(); });
+  }
+
+  async function copyShareURL() {
+    const input  = document.getElementById('share-url-input');
+    const status = document.getElementById('share-status');
+    input.select();
+    try {
+      await navigator.clipboard.writeText(input.value);
+      status.textContent = '✓ Copied to clipboard';
+      return;
+    } catch {}
+    try {
+      document.execCommand('copy');
+      status.textContent = '✓ Copied to clipboard';
+    } catch {
+      status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C';
+    }
+  }
+
+  document.addEventListener('click', e => {
+    const panel = document.getElementById('share-panel');
+    if (panel && panel.style.display === 'block' &&
+        !panel.contains(e.target) &&
+        !e.target.closest('#btn-copy-link')) {
+      panel.style.display = 'none';
+    }
+  });
 
   function getParams() {
     return {
@@ -845,8 +882,22 @@
   //     &portfolioRate=7&hysaGross=3.8&marginalOrdRate=30
 
   function loadFromUrl() {
-    const sp = new URLSearchParams(window.location.search);
-    if (sp.toString() === '') return false;
+    const raw = new URLSearchParams(window.location.search);
+    if (raw.toString() === '') return false;
+    // Expand short-form aliases → long-form field IDs (backward compat: long keys still work)
+    const SHORT_TO_LONG = {
+      yr:'taxYear', s:'state', ft:'federalTax', stt:'stateTax',
+      pft:'priorYearFedTax', pst:'priorYearStateTax', hi:'highIncomeFiler',
+      i1r:'ira1Rmd', i1v:'ira1Voluntary', i1rt:'ira1RmdTaken', i1vt:'ira1VolTaken',
+      i1c:'ira1RothConversion', i1cd:'ira1ConvDone',
+      i2r:'ira2Rmd', i2v:'ira2Voluntary', i2rt:'ira2RmdTaken', i2vt:'ira2VolTaken',
+      i2c:'ira2RothConversion', i2cd:'ira2ConvDone',
+      ss:'ssIncome', pen:'pensionIncome', int:'interest', qdiv:'qualifiedDivs',
+      cg:'capitalGains', pr:'portfolioRate', hysa:'hysaGross',
+      mor:'marginalOrdRate', cgr:'cgRateBlended', ap:'appreciationPct'
+    };
+    const sp = new URLSearchParams();
+    raw.forEach((v, k) => sp.set(SHORT_TO_LONG[k] ?? k, v));
 
     const NUM_FIELDS = [
       'taxYear','federalTax','stateTax','priorYearFedTax','priorYearStateTax',

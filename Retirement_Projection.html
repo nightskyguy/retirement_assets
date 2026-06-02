@@ -105,9 +105,14 @@ var TAXData = {
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
   /* ── Share panel ── */
-  #shareUrl { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:var(--mono); font-size:11px; padding:6px 8px; outline:none; word-break:break-all; margin-bottom:.75rem; }
-  #shareUrl:focus { border-color:var(--teal); }
-  .share-actions { display:flex; justify-content:flex-end; gap:.5rem; }
+  .share-panel { display:none; position:fixed; top:56px; right:1.5rem; z-index:800; background:var(--surface); border:1px solid var(--teal); border-radius:8px; padding:.85rem 1rem; width:min(480px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.5); }
+  .share-panel label { font-family:var(--mono); font-size:10px; color:var(--muted); display:block; margin-bottom:.4rem; }
+  .share-row { display:flex; gap:6px; }
+  .share-row input { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--mono); font-size:11px; padding:5px 8px; outline:none; }
+  .share-row input:focus { border-color:var(--teal); }
+  .share-copy { background:rgba(25,201,157,.15); border:1px solid rgba(25,201,157,.4); border-radius:4px; color:var(--teal); font-family:var(--mono); font-size:11px; padding:5px 12px; cursor:pointer; white-space:nowrap; }
+  .share-copy:hover { background:rgba(25,201,157,.25); }
+  .share-status { font-family:var(--mono); font-size:10px; color:var(--teal); margin-top:.35rem; min-height:14px; }
 
   /* ── Layout ── */
   .shell { max-width:none; margin:0; display:grid; grid-template-columns:290px 1fr; gap:1.5rem; align-items:start; }
@@ -226,7 +231,15 @@ var TAXData = {
 <header>
   <h1>Retirement Projection v.9</h1>
   <p>SECURE 2.0 · IRS Uniform Lifetime Table · RMDs begin at age 75 · 2026 Tax / IRMAA Code</p>
-  <button class="help-btn" onclick="shareBookmark()">&#128279; Share</button>
+  <button class="help-btn share" onclick="toggleSharePanel()">&#8258; Share</button>
+  <div class="share-panel" id="share-panel">
+    <label>Copy this URL to restore your settings in any browser:</label>
+    <div class="share-row">
+      <input type="text" id="share-url-input" readonly onclick="this.select()">
+      <button class="share-copy" onclick="copyShareURL()">Copy</button>
+    </div>
+    <div class="share-status" id="share-status"></div>
+  </div>
   <button class="help-btn" onclick="toggleHelp()">? How to Use</button>
   <button class="help-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
 </header>
@@ -2113,32 +2126,50 @@ function applyUrlParams(){
   if(cvParam && CV[cvParam]) setChartView(cvParam);
 }
 
-async function shareBookmark(){
-  const qs = buildBookmarkUrl();
-  const noteEl = document.getElementById('shareNote');
-
-  if(location.protocol === 'data:' || location.protocol === 'blob:'){
-    document.getElementById('shareUrl').value = qs;
-    noteEl.style.display = 'block';
-    document.getElementById('shareOverlay').classList.add('open');
-    return;
-  }
-  noteEl.style.display = 'none';
-
-  const url = location.href.split('?')[0] + qs;
-  if(navigator.clipboard && window.isSecureContext){
-    try{
-      await navigator.clipboard.writeText(url);
-      showToast('Link copied to clipboard');
-      return;
-    } catch(e){}
-  }
-  document.getElementById('shareUrl').value = url;
-  document.getElementById('shareOverlay').classList.add('open');
+function toggleSharePanel() {
+  const panel = document.getElementById('share-panel');
+  const input = document.getElementById('share-url-input');
+  const isOpen = panel.style.display === 'block';
+  if (isOpen) { panel.style.display = 'none'; return; }
+  const qs  = buildBookmarkUrl();
+  const href = window.location.href;
+  input.value = (href.startsWith('data:') || href.startsWith('blob:'))
+    ? qs
+    : href.split('?')[0] + qs;
+  document.getElementById('share-status').textContent = '';
+  panel.style.display = 'block';
+  requestAnimationFrame(() => { input.select(); });
 }
+
+async function copyShareURL() {
+  const input  = document.getElementById('share-url-input');
+  const status = document.getElementById('share-status');
+  input.select();
+  try {
+    await navigator.clipboard.writeText(input.value);
+    status.textContent = '✓ Copied to clipboard';
+    return;
+  } catch {}
+  try {
+    document.execCommand('copy');
+    status.textContent = '✓ Copied to clipboard';
+  } catch {
+    status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C';
+  }
+}
+
+document.addEventListener('click', e => {
+  const panel = document.getElementById('share-panel');
+  if (panel && panel.style.display === 'block' &&
+      !panel.contains(e.target) &&
+      !e.target.closest('.help-btn.share')) {
+    panel.style.display = 'none';
+  }
+});
 
 function showToast(msg){
   const el = document.getElementById('toast');
+  if (!el) return;
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(el._t);
@@ -2146,14 +2177,6 @@ function showToast(msg){
 }
 
 function closeShare(){ document.getElementById('shareOverlay').classList.remove('open'); }
-
-function copyShareUrl(){
-  const el = document.getElementById('shareUrl');
-  el.select();
-  try{ document.execCommand('copy'); } catch(e){}
-  showToast('Link copied to clipboard');
-  closeShare();
-}
 
 /* ── UI sync helpers ── */
 function updateLtControls(){

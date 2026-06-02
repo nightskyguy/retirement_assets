@@ -3,7 +3,7 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-Phases 18, 19, 20 complete. Next candidates: Phase 21 (BETR — unblocked by 20), Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 8 (Variable Growth), Phase 9 (ACA Refinement), Phase 12 (Withdrawal Timing), Phase 22 (Guyton-Klinger).
+Phases 18, 19, 20, 21, 23 (core) complete. Next candidates: Phase 23b (greedy DP schedule + MC validation), Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 8 (Variable Growth), Phase 9 (ACA Refinement), Phase 12 (Withdrawal Timing), Phase 22 (Guyton-Klinger).
 Retirement_Projection fixes added: Phase 13 (responsive layout), Phase 14 (Simple mode), Phase 15 (Tax Planner linkage)
 
 ## Dependency Graph
@@ -566,10 +566,11 @@ If `r_taxable ≈ r_ira` (no taxable drag), BETR = t_now — trivially break-eve
 - [ ] Test: increasing n with drag → BETR decreases (longer horizon, more drag accumulates)
 - [ ] Update version + changelog
 
-- **Status:** pending
+- **Status:** complete — v11.e64
 - **Depends on:** Phase 20 ✓ (futureIRATaxRate input exists), Phase 1 ✓ (bracket/marginal rate correct)
 - **Blocks:** Phase 23 (BETR column data feeds Phase 23 optimizer table)
 - **Reference:** Kitces (2013) "Roth Conversion Analysis: The True Marginal Tax Rate Equivalency Principle"
+- **Formula correction:** plan had `1 − t_now×(...)` — wrong; correct formula is `t_now × (1+r_taxable)^n / (1+r_ira)^n`
 
 ---
 
@@ -740,9 +741,11 @@ RMD age per SECURE 2.0: born 1951–1959 → 73, born 1960+ → 75. If already p
 - [ ] Test: projected RMD stat updates when IRA balance changes; spouse line hidden if no spouse
 - [ ] Update version + changelog
 
-- **Status:** pending
+- **Status:** complete (core) — v11.e64. Greedy DP per-year schedule (Phase 23b) pending.
 - **Depends on:** Phase 21 ✓ (BETR data for avg column), Phase 20 ✓ (shadow tracking context), Phase 1 ✓ (bracket logic correct)
 - **Note:** Subsumes most of Phase 10's conversion dimension. Phase 10 remains but is deprioritized — its remaining unique value is spending-source segmentation (which accounts fund spending per segment), not conversion optimization.
+- **What's implemented:** extraConversionAmount in simulate(), optimizeConversionAmount() $25k sweep, Conv Optimizer toggle in optimizer (top-5 strategies), projected RMD stat, BETR avg column in optimizer table.
+- **What's deferred (Phase 23b):** Greedy DP per-year conversion schedule; MC Stage 2 validation of top-K conversion strategies.
 
 ---
 

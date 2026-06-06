@@ -271,14 +271,15 @@ function renderSurvivalTable(variations, numPaths) {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Sort: primary = survival rate desc, secondary = median final balance desc
+    // Sort: survival rate desc → final balance desc → total taxes asc
     const sorted = variations
         .map((v, i) => ({ ...v, _origIdx: i }))
         .sort((a, b) => {
             if (b.survivalRate !== a.survivalRate) return b.survivalRate - a.survivalRate;
             const aFinal = a.percentiles.p50[a.percentiles.p50.length - 1] ?? 0;
             const bFinal = b.percentiles.p50[b.percentiles.p50.length - 1] ?? 0;
-            return bFinal - aFinal;
+            if (bFinal !== aFinal) return bFinal - aFinal;
+            return (a.medianTax ?? Infinity) - (b.medianTax ?? Infinity);
         });
 
     sorted.forEach(v => {
@@ -293,8 +294,7 @@ function renderSurvivalTable(variations, numPaths) {
         tr.title = `${v.strategyFamily} ${v.paramLabel}${v.maxConversion ? ' ✓' : ''} — click to load`;
         tr.dataset.varIdx = v._origIdx;
 
-        const spendTxt  = v.spendGoal  != null ? '$' + fmt(v.spendGoal)  : '—';
-        const taxTxt    = v.medianTax  != null ? '$' + fmt(Math.round(v.medianTax)) : '—';
+        const taxTxt = v.medianTax != null ? '$' + fmt(Math.round(v.medianTax)) : '—';
         const tdR = 'style="padding:2px 4px;text-align:right;"';
         tr.innerHTML = `
             <td style="padding:2px 6px 2px 4px;text-align:center;background:#fff;border-right:2px solid #dee2e6;">
@@ -302,7 +302,6 @@ function renderSurvivalTable(variations, numPaths) {
             </td>
             <td ${tdR}>${v.strategyFamily}</td>
             <td ${tdR}>${escapeHtml(v.paramLabel)}</td>
-            <td ${tdR}>${spendTxt}</td>
             <td ${tdR}>${ruinTxt}</td>
             <td ${tdR}>$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
             <td ${tdR} style="padding:2px 4px;text-align:right;font-weight:bold;">${pct}%</td>
@@ -336,6 +335,18 @@ function renderSurvivalTable(variations, numPaths) {
     const _pcTbl = document.getElementById('mc-path-count-tbl');
     if (_pcBar) _pcBar.textContent = _pathTxt;
     if (_pcTbl) _pcTbl.textContent = _pathTxt;
+
+    // Populate table title: Spend Goal + simulation mode
+    const titleEl = document.getElementById('mc-table-title');
+    if (titleEl && _mcBase) {
+        const spendFmt = _mcBase.spendGoal != null
+            ? '$' + Math.round(_mcBase.spendGoal).toLocaleString()
+            : '—';
+        const modeLabel = (_mcResults?.assetRanges != null)
+            ? 'Historical (1928–2024)'
+            : 'Synthetic (GBM)';
+        titleEl.textContent = `Spend Goal: ${spendFmt}  ·  ${modeLabel}`;
+    }
 }
 
 function loadMCVariation(v) {

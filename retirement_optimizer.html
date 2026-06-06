@@ -374,17 +374,22 @@
         </div>
 
 		<div id="tab-mc" class="card hidden">
+			<!-- Mode selector — always visible; changing it triggers an immediate re-run. -->
+			<div id="mc-mode-panel" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+				<label style="font-size:0.9em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric GBM model using μ and σ (advanced, nerd-mode only).">Simulation Mode
+					<select id="mc-sim-mode" style="margin-left:6px;font-size:0.9em;" onchange="onMCModeChange()">
+						<option value="bootstrap" selected>Historical (1928–2024)</option>
+						<option value="gbm">Synthetic (parametric)</option>
+					</select>
+				</label>
+			</div>
+
 			<!-- Simulation Parameters panel — visible only when NERD_KNOBS is on.
 			     When hidden, clicking the tab auto-runs with default parameters. -->
 			<div id="mc-nerd-panel" style="display:none;margin-bottom:12px;padding:10px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;">
-				<strong style="font-size:0.9em;color:#555;">Simulation Parameters</strong>
+				<strong style="font-size:0.9em;color:#555;">Advanced Parameters</strong>
 				<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;align-items:center;">
-					<label style="font-size:0.85em;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1970–2024) — realistic distribution, historically correlated across asset classes. GBM: parametric model using μ and σ.">Mode
-						<select id="mc-sim-mode" style="margin-left:4px;" onchange="updateMCModeUI()">
-							<option value="bootstrap" selected>Historical</option>
-							<option value="gbm">Synthetic (parametric)</option>
-						</select>
-					</label>
+					<label style="font-size:0.85em;color:#888;">(Mode selector above)</label>
 					<label style="font-size:0.85em;" title="Number of simulated market scenarios. More paths = more stable results, slower run.">Paths
 						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
 					</label>

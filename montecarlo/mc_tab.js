@@ -45,6 +45,17 @@ function updateMCModeUI() {
     });
 }
 
+// Called by the always-visible mode selector onchange.
+// Syncs UI state, then re-runs immediately in normal mode.
+// In nerd mode the user controls runs manually.
+function onMCModeChange() {
+    updateMCModeUI();
+    _lastMCHash = null;   // force re-run regardless of other inputs
+    if (!_mcNerdMode() && !document.getElementById('tab-mc')?.classList.contains('hidden')) {
+        runMonteCarlo();
+    }
+}
+
 // Called by the Monte Carlo tab button.
 // In normal mode, runs immediately with default params (panel stays hidden).
 function mcTabActivated() {

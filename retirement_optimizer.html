@@ -115,6 +115,14 @@
 				  <span class="toggle-switch"></span>
 				</label>
 			</div>
+			<div class="input-group" style="margin-top:4px;">
+				<label class="toggle" title="Cyclic: alternates IRA draw years and brokerage harvest years. N = round(IRA ÷ Brokerage) IRA years then 1 brokerage LTCG harvest year. Forces DRIP on. Surplus reinvests into Brokerage. Optimizer and MC run both IRA-first (🔄) and brokerage-first (🔄B) orders. See changelog for caveats (ACA/IRMAA spikes, basis depletion).">
+				  <input type="checkbox" id="cyclicEnabled" onchange="onCyclicChange()">
+				  <span class="toggle-label">Cyclic</span>
+				  <span class="toggle-switch"></span>
+				</label>
+			</div>
+			<input type="hidden" id="cyclicOrder" value="ira-first">
 		</div>  <!-- strategy-container -->
 
 		<div class="row" style="margin-top:8px;">
@@ -434,13 +442,13 @@
 						<thead>
 							<tr>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;border-right:2px solid #dee2e6;"></th>
-								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;" title="Maximum Roth Conversion">Max</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;">Strategy</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;">Param</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;">Spend Goal</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;" title="Median year across failed paths when the portfolio could no longer cover required spending">Exhausted</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;">Survival</th>
+								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;" title="Median lifetime taxes paid across all Monte Carlo paths">Total Taxes</th>
 							</tr>
 						</thead>
 						<tbody id="mc-table-body"></tbody>

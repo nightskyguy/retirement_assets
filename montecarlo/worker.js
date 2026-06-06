@@ -83,6 +83,7 @@ self.onmessage = function ({ data: cfg }) {
         // paths[p * years + y] = portfolio balance (0 once ruined, kept at last value after death)
         const paths = new Float64Array(numPaths * years);
         const ruinYears = new Uint16Array(numPaths); // 0 = survived to end of plan
+        const taxPerPath = new Float64Array(numPaths); // lifetime taxes for each path
         let ruinCount = 0;
 
         for (let p = 0; p < numPaths; p++) {
@@ -132,6 +133,7 @@ self.onmessage = function ({ data: cfg }) {
                 continue;
             }
 
+            taxPerPath[p] = result.totals.tax ?? 0;
             const log = result.log;
             let ruined = false;
 
@@ -172,6 +174,10 @@ self.onmessage = function ({ data: cfg }) {
             ? failures[Math.floor(failures.length / 2)]
             : null;
 
+        // Median lifetime taxes across all paths.
+        const taxSorted = Array.from(taxPerPath).sort((a, b) => a - b);
+        const medianTax = taxSorted[Math.floor(taxSorted.length / 2)] ?? null;
+
         const percentiles = computePercentiles(paths, years, numPaths);
 
         varResults.push({
@@ -179,6 +185,8 @@ self.onmessage = function ({ data: cfg }) {
             strategyFamily: baseInputs._strategyFamily ?? '',
             paramLabel:     baseInputs._paramLabel     ?? '',
             maxConversion:  baseInputs.maxConversion   ?? false,
+            cyclicEnabled:  baseInputs.cyclicEnabled   ?? false,
+            cyclicOrder:    baseInputs.cyclicOrder     ?? 'ira-first',
             spendGoal:      baseInputs.spendGoal       ?? null,
             strategy:       baseInputs.strategy,
             propWithdraw:   baseInputs.propWithdraw,
@@ -187,6 +195,7 @@ self.onmessage = function ({ data: cfg }) {
             iraWithdrawPct: baseInputs.iraWithdrawPct,
             survivalRate:   (numPaths - ruinCount) / numPaths,
             medianRuinYear,
+            medianTax,
             percentiles: {
                 p5:  Array.from(percentiles.p5),
                 p25: Array.from(percentiles.p25),

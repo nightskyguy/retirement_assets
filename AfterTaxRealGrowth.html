@@ -504,8 +504,8 @@
     </div>
     <div class="control-row">
       <label title="Your portfolio's nominal (pre-tax) annual return — sets the reference line on the chart">Portfolio Return (nominal)</label>
-      <input type="range" id="port" min="0" max="15" step="0.25" value="3.8">
-      <span class="readout" id="port-out">3.80%</span>
+      <input type="range" id="port" min="0" max="15" step="0.25" value="4.5">
+      <span class="readout" id="port-out">4.50%</span>
     </div>
     <div class="control-row">
       <label title="State income tax rate added to each federal bracket. Set to 0 for no-income-tax states. California's top rate is 13.3%.">State Tax Rate (marginal)</label>
@@ -670,8 +670,8 @@
       document.getElementById('bs-roth').textContent = 'break-even: ' + rothBe.toFixed(2) + '% nominal';
     } else {
       rothCard.style.display = 'none';
-      bc0.classList.add('roth');
-      bc0dot.style.background = '#8e44ad';
+      bc0.classList.remove('roth');
+      bc0dot.style.background = '#4caf80';
     }
 
     // Build line datasets using combined rate

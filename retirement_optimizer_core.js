@@ -1940,13 +1940,16 @@ function buildVariations(base) {
         const baseCount = variations.length;
         for (let i = 0; i < baseCount; i++) {
             const v = variations[i];
-            for (const [prefix, order] of [['🔄 ', 'ira-first'], ['🔄B ', 'brokerage-first']]) {
+            for (const [plainPfx, htmlPfx, order] of [
+                ['\u{1F5D8} ', '<span style="color:#cc0000">\u{1F5D8}</span> ', 'ira-first'],
+                ['\u{1F504} ', '\u{1F504} ',                                   'brokerage-first'],
+            ]) {
                 variations.push({
                     ...v,
                     cyclicEnabled:   true,
                     cyclicOrder:     order,
-                    _label:          prefix + v._label,
-                    _strategyFamily: prefix + v._strategyFamily,
+                    _label:          plainPfx + v._label,
+                    _strategyFamily: htmlPfx  + v._strategyFamily,
                     _paramLabel:     v._paramLabel,
                     _paramSortVal:   v._paramSortVal,
                 });
@@ -2059,14 +2062,16 @@ function runOptimizer() {
         addResult('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
     }
 
-    // Phase 24: Cyclic variants — IRA-first (🔄) and brokerage-first (🔄B) for every baseline.
+    // Phase 24: Cyclic variants — IRA-first (🗘 red) and brokerage-first (🔄) for every baseline.
     {
+        const _IRA_PFX  = '<span style="color:#cc0000">\u{1F5D8}</span> ';
+        const _BRK_PFX  = '\u{1F504} ';
         const baselineCount = strategyOverridesList.length;
         for (let i = 0; i < baselineCount; i++) {
             const { strategyLabel, paramLabel, paramSortVal, overrides } = strategyOverridesList[i];
-            addResult('🔄 '  + strategyLabel, paramLabel, paramSortVal,
+            addResult(_IRA_PFX + strategyLabel, paramLabel, paramSortVal,
                 { ...overrides, cyclicEnabled: true, cyclicOrder: 'ira-first' });
-            addResult('🔄B ' + strategyLabel, paramLabel, paramSortVal,
+            addResult(_BRK_PFX + strategyLabel, paramLabel, paramSortVal,
                 { ...overrides, cyclicEnabled: true, cyclicOrder: 'brokerage-first' });
         }
     }
@@ -2156,7 +2161,7 @@ function runOptimizer() {
             const lastEntry = optResult.log[optResult.log.length - 1];
             results.push({
                 _id: results.length,
-                _strategyLabel: baseRow._strategyLabel + ' 🔁',
+                _strategyLabel: baseRow._strategyLabel + ' ⇌',
                 _paramLabel: baseRow._paramLabel,
                 _paramSortVal: baseRow._paramSortVal,
                 _maxConversion: baseRow._maxConversion,
@@ -2299,7 +2304,7 @@ function getOptimizerColumns() {
         },
         {
             key: 'betrAvg', label: 'Avg BETR',
-            title: 'Average Break-Even Tax Rate across conversion years. If your expected future marginal rate exceeds this, conversions were advantageous on average. Appears for Conv Optimizer rows (🔁) and standard rows with conversions.',
+            title: 'Average Break-Even Tax Rate across conversion years. If your expected future marginal rate exceeds this, conversions were advantageous on average. Appears for Conv Optimizer rows (⇌) and standard rows with conversions.',
             getValue: r => r.totals.betrAvg != null ? `${(r.totals.betrAvg * 100).toFixed(1)}%` : '—',
             getSortValue: r => r.totals.betrAvg ?? 999
         },

@@ -300,7 +300,7 @@ function renderSurvivalTable(variations, numPaths) {
             <td style="padding:2px 6px 2px 4px;text-align:center;background:#fff;border-right:2px solid #dee2e6;">
                 <input type="checkbox" class="mc-var-check" data-idx="${v._origIdx}">
             </td>
-            <td ${tdR}>${escapeHtml(v.strategyFamily)}</td>
+            <td ${tdR}>${v.strategyFamily}</td>
             <td ${tdR}>${escapeHtml(v.paramLabel)}</td>
             <td ${tdR}>${spendTxt}</td>
             <td ${tdR}>${ruinTxt}</td>

@@ -241,18 +241,18 @@ function renderMCMetrics(msg) {
             return `<span style="color:${v < 0 ? '#c0392b' : '#1a7a1a'}">${s}</span>`;
         };
         const row = (label, range) =>
-            `<tr><td ${tdL}>${label}</td>`
-            + `<td ${td}>${fmtV(range[0])}</td>`
-            + `<td ${td}><strong>${fmtV(range[1])}</strong></td>`
-            + `<td ${td}>${fmtV(range[2])}</td></tr>`;
+            `<div ${tdL}>${label}</div>`
+            + `<div ${td}>${fmtV(range[0])}</div>`
+            + `<div ${td}><strong>${fmtV(range[1])}</strong></div>`
+            + `<div ${td}>${fmtV(range[2])}</div>`;
         let tbl =
-            `<table style="display:inline-table;border-collapse:collapse;font-size:0.8em;vertical-align:middle;margin-left:4px;">`
-            + `<tr><th></th><th ${thS}>Min</th><th ${thS}>CAGR</th><th ${thS}>Max</th></tr>`
+            `<div style="display:inline-grid;grid-template-columns:max-content repeat(3,max-content);font-size:0.8em;vertical-align:middle;margin-left:4px;">`
+            + `<div></div><div ${thS}>Min</div><div ${thS}>CAGR</div><div ${thS}>Max</div>`
             + row('Equity',    ar.equity)
             + row('Bonds',     ar.bonds)
             + row('Intl',      ar.intl);
         if (iS) tbl += row('Inflation', [iS.min, iS.cagr, iS.max]);
-        tbl += `</table>`;
+        tbl += `</div>`;
         parts.push(`<span style="color:#888;font-size:0.8em;">Sampled (1928–2024)</span>${tbl}`);
     }
 
@@ -300,44 +300,52 @@ function renderSurvivalTable(variations, numPaths) {
                       : v.survivalRate >= 0.75 ? '#fff3cd'
                       : '#f8d7da';
 
-        const tr = document.createElement('tr');
-        tr.style.cursor = 'pointer';
-        tr.title = `${v.strategyFamily} ${v.paramLabel}${v.maxConversion ? ' ✓' : ''} — click to load`;
-        tr.dataset.varIdx = v._origIdx;
+        const row = document.createElement('div');
+        row.style.display = 'contents';
+        row.dataset.varIdx = v._origIdx;
 
-        const taxTxt = v.medianTax != null ? '$' + fmt(Math.round(v.medianTax)) : '—';
-        const tdR = 'style="padding:2px 4px;text-align:right;"';
-        tr.innerHTML = `
-            <td style="padding:2px 6px 2px 4px;text-align:center;background:#fff;border-right:2px solid #dee2e6;">
-                <input type="checkbox" class="mc-var-check" data-idx="${v._origIdx}">
-            </td>
-            <td ${tdR}>${v.strategyFamily}</td>
-            <td ${tdR}>${escapeHtml(v.paramLabel)}</td>
-            <td ${tdR}>${ruinTxt}</td>
-            <td ${tdR}>$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
-            <td ${tdR} style="padding:2px 4px;text-align:right;font-weight:bold;">${pct}%</td>
-            <td ${tdR}>${taxTxt}</td>
-        `;
-        // Apply row shading to data cells only (not the checkbox column)
-        Array.from(tr.querySelectorAll('td')).slice(1).forEach(td => td.style.background = color);
+        const taxTxt  = v.medianTax != null ? '$' + fmt(Math.round(v.medianTax)) : '—';
+        const cellCss = `padding:2px 8px;text-align:right;background:${color};cursor:pointer;`;
 
-        tr.querySelector('.mc-var-check').addEventListener('change', (e) => {
+        // Checkbox cell: fixed white bg, no hand cursor
+        const checkCell = document.createElement('div');
+        checkCell.style.cssText = 'padding:2px 6px 2px 4px;text-align:center;background:#fff;border-right:2px solid #dee2e6;';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'mc-var-check';
+        cb.dataset.idx = String(v._origIdx);
+        checkCell.appendChild(cb);
+        row.appendChild(checkCell);
+
+        // Data cells
+        [
+            v.strategyFamily,
+            escapeHtml(v.paramLabel),
+            ruinTxt,
+            '$' + fmt(v.percentiles.p50[v.percentiles.p50.length - 1]),
+            `<strong>${pct}%</strong>`,
+            taxTxt,
+        ].forEach(html => {
+            const cell = document.createElement('div');
+            cell.style.cssText = cellCss;
+            cell.innerHTML = html;
+            row.appendChild(cell);
+        });
+
+        cb.addEventListener('change', (e) => {
             e.stopPropagation();
-            const idx = parseInt(e.target.dataset.idx);
-            if (e.target.checked) {
-                _mcSelected.add(idx);
-            } else {
-                _mcSelected.delete(idx);
-            }
+            const idx = parseInt(cb.dataset.idx);
+            if (cb.checked) _mcSelected.add(idx);
+            else _mcSelected.delete(idx);
             renderMCChart(_mcResults);
         });
 
-        tr.addEventListener('click', (e) => {
+        row.addEventListener('click', (e) => {
             if (e.target.type === 'checkbox') return;
             loadMCVariation(v);
         });
 
-        tbody.appendChild(tr);
+        tbody.appendChild(row);
     });
 
     document.getElementById('mc-table-wrap').style.display = '';

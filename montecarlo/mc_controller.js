@@ -20,7 +20,7 @@ function runMCWorker(cfg, onProgress, onComplete) {
         return;
     }
 
-    _mcWorker = new Worker('montecarlo/worker.js');
+    _mcWorker = new Worker('montecarlo/worker.js?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now()));
 
     _mcWorker.onmessage = function (e) {
         const msg = e.data;
@@ -167,9 +167,10 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         if (vi % 5 === 0) await new Promise(r => setTimeout(r, 0));
 
         const baseInputs = variations[vi];
-        const paths     = new Float64Array(numPaths * years);
-        const ruinYears = new Uint16Array(numPaths);
-        let ruinCount   = 0;
+        const paths      = new Float64Array(numPaths * years);
+        const ruinYears  = new Uint16Array(numPaths);
+        const taxPerPath = new Float64Array(numPaths);
+        let ruinCount    = 0;
 
         for (let p = 0; p < numPaths; p++) {
             const returnSeq = new Float64Array(years);
@@ -216,6 +217,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
                 continue;
             }
 
+            taxPerPath[p] = result.totals.tax ?? 0;
             const log = result.log;
             let ruined = false;
 
@@ -247,11 +249,14 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
         const percentiles = computePercentiles(paths, years, numPaths);
 
+        const taxSorted = Array.from(taxPerPath).sort((a, b) => a - b);
         varResults.push({
             label:          baseInputs._label          ?? `Variation ${vi + 1}`,
             strategyFamily: baseInputs._strategyFamily ?? '',
             paramLabel:     baseInputs._paramLabel     ?? '',
             maxConversion:  baseInputs.maxConversion   ?? false,
+            cyclicEnabled:  baseInputs.cyclicEnabled   ?? false,
+            cyclicOrder:    baseInputs.cyclicOrder     ?? 'ira-first',
             spendGoal:      baseInputs.spendGoal       ?? null,
             strategy:       baseInputs.strategy,
             propWithdraw:   baseInputs.propWithdraw,
@@ -260,6 +265,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             iraWithdrawPct: baseInputs.iraWithdrawPct,
             survivalRate:   (numPaths - ruinCount) / numPaths,
             medianRuinYear: failures.length > 0 ? failures[Math.floor(failures.length / 2)] : null,
+            medianTax:      taxSorted[Math.floor(taxSorted.length / 2)] ?? null,
             percentiles: {
                 p5:  Array.from(percentiles.p5),
                 p25: Array.from(percentiles.p25),

@@ -3,7 +3,7 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-Phases 18, 19, 20, 21, 23 (core) complete. Next candidates: Phase 23b (greedy DP schedule + MC validation), Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 8 (Variable Growth), Phase 9 (ACA Refinement), Phase 12 (Withdrawal Timing), Phase 22 (Guyton-Klinger).
+Phases 18, 19, 20, 21, 23, 24 complete. Next candidates: Phase 23b (greedy DP schedule + MC validation), Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 8 (Variable Growth), Phase 9 (ACA Refinement), Phase 12 (Withdrawal Timing), Phase 22 (Guyton-Klinger).
 Retirement_Projection fixes added: Phase 13 (responsive layout), Phase 14 (Simple mode), Phase 15 (Tax Planner linkage)
 
 ## Dependency Graph

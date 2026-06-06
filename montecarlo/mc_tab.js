@@ -45,6 +45,17 @@ function updateMCModeUI() {
     });
 }
 
+// Called by the always-visible mode selector onchange.
+// Syncs UI state, then re-runs immediately in normal mode.
+// In nerd mode the user controls runs manually.
+function onMCModeChange() {
+    updateMCModeUI();
+    _lastMCHash = null;   // force re-run regardless of other inputs
+    if (!_mcNerdMode() && !document.getElementById('tab-mc')?.classList.contains('hidden')) {
+        runMonteCarlo();
+    }
+}
+
 // Called by the Monte Carlo tab button.
 // In normal mode, runs immediately with default params (panel stays hidden).
 function mcTabActivated() {
@@ -133,6 +144,8 @@ function findCurrentStrategyIdx(variations, base) {
     if (!base) return -1;
     return variations.findIndex(v => {
         if (v.strategy !== base.strategy) return false;
+        if (!!v.cyclicEnabled !== !!base.cyclicEnabled) return false;
+        if (v.cyclicEnabled && (v.cyclicOrder ?? 'ira-first') !== (base.cyclicOrder ?? 'ira-first')) return false;
         if (base.strategy === 'propwd')   return Math.abs((v.propWithdraw   ?? 0) - (base.propWithdraw   ?? 0)) < 0.001;
         if (base.strategy === 'fixed')    return v.nYears === base.nYears;
         if (base.strategy === 'bracket')  return Math.abs((v.stratRate      ?? 0) - (base.stratRate      ?? 0)) < 0.001;
@@ -146,32 +159,36 @@ function renderMCResults(msg) {
     renderMCMetrics(msg);
     renderSurvivalTable(msg.variations, msg.numPaths);
 
-    // Default chart: best variation per strategy family (highest survival, then highest median
-    // final balance as tiebreaker).  Exception: the family of the user's current strategy uses
-    // the exact current-settings variation instead of the best one.
+    // Default chart: best variation per base strategy family (highest survival, then highest median
+    // final balance as tiebreaker). When both Cyclic and non-Cyclic variants exist for a family,
+    // pick whichever is better. Exception: always include the exact current-settings variation.
     _mcSelected.clear();
     const currentIdx = findCurrentStrategyIdx(msg.variations, _mcBase);
 
-    // Build best-per-family map.
-    const byFamily = {};
-    msg.variations.forEach((v, i) => {
-        const f    = v.strategyFamily;
-        const best = byFamily[f] != null ? msg.variations[byFamily[f]] : null;
-        if (!best) { byFamily[f] = i; return; }
+    // Build best-per-BASE-family map. Cyclic variants use "🔄 Family" names; strip the prefix
+    // so both variants compete within the same slot.
+    const byBaseFamily = {};
+    const isBetter = (v, best) => {
         const vFinal    = v.percentiles.p50[v.percentiles.p50.length - 1] ?? 0;
         const bestFinal = best.percentiles.p50[best.percentiles.p50.length - 1] ?? 0;
-        if (v.survivalRate > best.survivalRate ||
-            (v.survivalRate === best.survivalRate && vFinal > bestFinal)) {
-            byFamily[f] = i;
+        return v.survivalRate > best.survivalRate ||
+               (v.survivalRate === best.survivalRate && vFinal > bestFinal);
+    };
+    msg.variations.forEach((v, i) => {
+        const baseFamily = v.strategyFamily.replace(/<[^>]+>/g, '').replace(/^[^A-Za-z]+/, '');
+        const bestIdx    = byBaseFamily[baseFamily];
+        if (bestIdx == null || isBetter(v, msg.variations[bestIdx])) {
+            byBaseFamily[baseFamily] = i;
         }
     });
 
-    // Override the current strategy's family with the exact current variation.
+    // Always include the exact current variation (may override the best-of-family slot).
     if (currentIdx >= 0) {
-        byFamily[msg.variations[currentIdx].strategyFamily] = currentIdx;
+        const baseFamily = msg.variations[currentIdx].strategyFamily.replace(/<[^>]+>/g, '').replace(/^[^A-Za-z]+/, '');
+        byBaseFamily[baseFamily] = currentIdx;
     }
 
-    Object.values(byFamily).forEach(i => _mcSelected.add(i));
+    Object.values(byBaseFamily).forEach(i => _mcSelected.add(i));
 
     renderMCChart(msg);
     if (_mcNerdMode()) renderInputFanCharts(msg.inputFan, msg.years);
@@ -265,14 +282,15 @@ function renderSurvivalTable(variations, numPaths) {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // Sort: primary = survival rate desc, secondary = median final balance desc
+    // Sort: survival rate desc → final balance desc → total taxes asc
     const sorted = variations
         .map((v, i) => ({ ...v, _origIdx: i }))
         .sort((a, b) => {
             if (b.survivalRate !== a.survivalRate) return b.survivalRate - a.survivalRate;
             const aFinal = a.percentiles.p50[a.percentiles.p50.length - 1] ?? 0;
             const bFinal = b.percentiles.p50[b.percentiles.p50.length - 1] ?? 0;
-            return bFinal - aFinal;
+            if (bFinal !== aFinal) return bFinal - aFinal;
+            return (a.medianTax ?? Infinity) - (b.medianTax ?? Infinity);
         });
 
     sorted.forEach(v => {
@@ -287,19 +305,18 @@ function renderSurvivalTable(variations, numPaths) {
         tr.title = `${v.strategyFamily} ${v.paramLabel}${v.maxConversion ? ' ✓' : ''} — click to load`;
         tr.dataset.varIdx = v._origIdx;
 
-        const spendTxt = v.spendGoal != null ? '$' + fmt(v.spendGoal) : '—';
+        const taxTxt = v.medianTax != null ? '$' + fmt(Math.round(v.medianTax)) : '—';
         const tdR = 'style="padding:2px 4px;text-align:right;"';
         tr.innerHTML = `
             <td style="padding:2px 6px 2px 4px;text-align:center;background:#fff;border-right:2px solid #dee2e6;">
                 <input type="checkbox" class="mc-var-check" data-idx="${v._origIdx}">
             </td>
-            <td ${tdR}>${v.maxConversion ? '✓' : '—'}</td>
-            <td ${tdR}>${escapeHtml(v.strategyFamily)}</td>
+            <td ${tdR}>${v.strategyFamily}</td>
             <td ${tdR}>${escapeHtml(v.paramLabel)}</td>
-            <td ${tdR}>${spendTxt}</td>
             <td ${tdR}>${ruinTxt}</td>
             <td ${tdR}>$${fmt(v.percentiles.p50[v.percentiles.p50.length - 1])}</td>
             <td ${tdR} style="padding:2px 4px;text-align:right;font-weight:bold;">${pct}%</td>
+            <td ${tdR}>${taxTxt}</td>
         `;
         // Apply row shading to data cells only (not the checkbox column)
         Array.from(tr.querySelectorAll('td')).slice(1).forEach(td => td.style.background = color);
@@ -329,6 +346,18 @@ function renderSurvivalTable(variations, numPaths) {
     const _pcTbl = document.getElementById('mc-path-count-tbl');
     if (_pcBar) _pcBar.textContent = _pathTxt;
     if (_pcTbl) _pcTbl.textContent = _pathTxt;
+
+    // Populate table title: Spend Goal + simulation mode
+    const titleEl = document.getElementById('mc-table-title');
+    if (titleEl && _mcBase) {
+        const spendFmt = _mcBase.spendGoal != null
+            ? '$' + Math.round(_mcBase.spendGoal).toLocaleString()
+            : '—';
+        const modeLabel = (_mcResults?.assetRanges != null)
+            ? 'Historical (1928–2024)'
+            : 'Synthetic (GBM)';
+        titleEl.textContent = `Spend Goal: ${spendFmt}  ·  ${modeLabel}`;
+    }
 }
 
 function loadMCVariation(v) {
@@ -339,6 +368,10 @@ function loadMCVariation(v) {
     if (v.strategy === 'bracket'   && v.stratRate      != null) document.getElementById('stratRate').value       = Math.round(v.stratRate * 100);
     if (v.strategy === 'fixedpct'  && v.iraWithdrawPct != null) document.getElementById('iraWithdrawPct').value  = Math.round(v.iraWithdrawPct * 100);
     document.getElementById('maxConversion').checked = !!v.maxConversion;
+    const cyclicEl = document.getElementById('cyclicEnabled');
+    if (cyclicEl) { cyclicEl.checked = !!v.cyclicEnabled; onCyclicChange(); }
+    const cyclicOrderEl = document.getElementById('cyclicOrder');
+    if (cyclicOrderEl) cyclicOrderEl.value = v.cyclicOrder ?? 'ira-first';
     if (v.spendGoal != null) DisplayHelpers.setDollarValue('spendGoal', Math.round(v.spendGoal));
     toggleStrategyUI();
     runSimulation();
@@ -488,10 +521,8 @@ function renderMCChart(msg) {
                             const v = _mcResults?.variations[selArray[Math.floor(ctx.datasetIndex / 5)]];
                             const p = ctx.dataIndex;
                             const val = v?.percentiles?.p50?.[p];
-                            // Build name without survival rate (shown in legend + table already).
-                            const name = v
-                                ? `${v.strategyFamily} ${v.paramLabel}${v.maxConversion ? ' ✓' : ''}`
-                                : ctx.dataset.label;
+                            // Use plain-text v.label (strategyFamily may contain HTML spans).
+                            const name = v ? v.label : ctx.dataset.label;
                             return `  ${name}  $${fmt(val)}`;
                         },
                     },

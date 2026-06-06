@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.e64</title>
+    <title>Retirement Optimizer 11.ec6</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -115,6 +115,14 @@
 				  <span class="toggle-switch"></span>
 				</label>
 			</div>
+			<div class="input-group" style="margin-top:4px;">
+				<label class="toggle" title="Cyclic: alternates IRA draw years and brokerage harvest years. N = round(IRA ÷ Brokerage) IRA years then 1 brokerage LTCG harvest year. Forces DRIP on. Surplus reinvests into Brokerage. Optimizer and MC run both IRA-first (🔄) and brokerage-first (🔄B) orders. See changelog for caveats (ACA/IRMAA spikes, basis depletion).">
+				  <input type="checkbox" id="cyclicEnabled" onchange="onCyclicChange()">
+				  <span class="toggle-label">Cyclic</span>
+				  <span class="toggle-switch"></span>
+				</label>
+			</div>
+			<input type="hidden" id="cyclicOrder" value="ira-first">
 		</div>  <!-- strategy-container -->
 
 		<div class="row" style="margin-top:8px;">
@@ -366,17 +374,22 @@
         </div>
 
 		<div id="tab-mc" class="card hidden">
+			<!-- Mode selector — always visible; changing it triggers an immediate re-run. -->
+			<div id="mc-mode-panel" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+				<label style="font-size:0.9em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric GBM model using μ and σ (advanced, nerd-mode only).">Simulation Mode
+					<select id="mc-sim-mode" style="margin-left:6px;font-size:0.9em;" onchange="onMCModeChange()">
+						<option value="bootstrap" selected>Historical (1928–2024)</option>
+						<option value="gbm">Synthetic (parametric)</option>
+					</select>
+				</label>
+			</div>
+
 			<!-- Simulation Parameters panel — visible only when NERD_KNOBS is on.
 			     When hidden, clicking the tab auto-runs with default parameters. -->
 			<div id="mc-nerd-panel" style="display:none;margin-bottom:12px;padding:10px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;">
-				<strong style="font-size:0.9em;color:#555;">Simulation Parameters</strong>
+				<strong style="font-size:0.9em;color:#555;">Advanced Parameters</strong>
 				<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;align-items:center;">
-					<label style="font-size:0.85em;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1970–2024) — realistic distribution, historically correlated across asset classes. GBM: parametric model using μ and σ.">Mode
-						<select id="mc-sim-mode" style="margin-left:4px;" onchange="updateMCModeUI()">
-							<option value="bootstrap" selected>Historical</option>
-							<option value="gbm">Synthetic (parametric)</option>
-						</select>
-					</label>
+					<label style="font-size:0.85em;color:#888;">(Mode selector above)</label>
 					<label style="font-size:0.85em;" title="Number of simulated market scenarios. More paths = more stable results, slower run.">Paths
 						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
 					</label>
@@ -420,8 +433,9 @@
 
 			<!-- Survival rate table -->
 			<div id="mc-table-wrap" style="display:none;margin-bottom:16px;">
+				<div id="mc-table-title" style="font-size:0.9em;font-weight:600;color:#333;margin-bottom:3px;"></div>
 				<div style="font-size:0.85em;color:#555;margin-bottom:4px;">
-					Check rows to add/remove from chart. Sorted by survival rate, then median final balance. <span id="mc-path-count-tbl"></span>
+					Check rows to add/remove from chart. Sorted: survival ↓, final balance ↓, taxes ↑. <span id="mc-path-count-tbl"></span>
 				</div>
 				<div style="font-size:0.8em;margin-bottom:6px;">
 					Row shading:
@@ -434,13 +448,12 @@
 						<thead>
 							<tr>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;border-right:2px solid #dee2e6;"></th>
-								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;" title="Maximum Roth Conversion">Max</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;">Strategy</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;">Param</th>
-								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;">Spend Goal</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;" title="Median year across failed paths when the portfolio could no longer cover required spending">Exhausted</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</th>
 								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;">Survival</th>
+								<th style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;text-align:right;" title="Median lifetime taxes paid across all Monte Carlo paths">Total Taxes</th>
 							</tr>
 						</thead>
 						<tbody id="mc-table-body"></tbody>
@@ -503,14 +516,23 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.e64</b> <strong>BETR (Break-Even Tax Rate):</strong> Annual Details now shows the break-even future tax rate for each year's Roth conversion. <em>Avg BETR</em> summary stat shows the average across all conversion years. <strong>Conversion Optimizer:</strong> new <em>Conv Optimizer</em> toggle in the Optimizer runs the top 5 strategies with additional IRA→Roth conversions to find how much converting improves your outcome; optimized rows (🔁) show tax savings vs not converting. <strong>Bug fix:</strong> eliminated shortfalls in cases invoving brokerage withdrawals.</li>
-				<li><b>11.e52</b> URL compression: all share URLs now use short parameter names (57% shorter). Share button opens a copyable popup panel on all tools matching Income Tax Planner style. Income Tax Planner gets an "Open in Tax Planner →" button that pre-fills Retirement Tax Planner with state, SS income, and capital gains. Backward compatible — existing long-key bookmarks still load.</li>
-				<li><b>11.e4f</b> User Experience polish throughout. Roth conversion &amp; opportunity cost tracking calculates when conversions or cash withdrawals "pay off". <B>Break Even</B> at the top says when that year is. New Opp. Cost category and columns added to Annual Details. Future IRA Tax % marginal rate when IRA is eventually distributed; auto defaults the last simulation year marginal rate. Choose your heirs total tax rate.</li>
-				<li><b>11.e4a</b> Fixed start age bug (table now starts at retirement year on URL load). Updated withdrawal strategy descriptions in How To. Added color legend to Annual Details table.</li>
+				<li><b>11.ec6</b> <strong>Cyclic Withdrawal:</strong> New <em>Cyclic</em> toggle in the strategy box enables alternating IRA draw years and brokerage LTCG harvest years. 
+					IRA-draw years and brokerage harvest years alternate. The ratio of IRA to brokerage cycles is based on the ratio of the account balances. E.g. if the brokerage is 1/3 the size of the IRA total, the cycle will be 1 year brokerage, 2 years IRA draws.
+					As the asset balances change, the ratio may also change.
+					In Brokerage harvest years spending is funded from brokerage gains at capital-gains rates (often 0–15%). Excess brokerage funds are reinvested (DRIP) if Cyclic is active so dividends stay inside brokerage and don't 
+					leak to Cash as ordinary income. Two orderings are supported: <em>IRA-first</em> (🗘, red) harvests after N IRA years; <em>Brokerage-first</em> (🔄) harvests at the start of each cycle
+					The Optimizer and Monte Carlo always run all three variants (baseline + IRA-first + Brokerage-first) and surface the best. The <em>subCycle</em> column in Annual Details shows I/B/⚠B per year. 
+					One benefit of cyclic is earlier reduction of brokerage assets that would otherwise grow increasing later capital gains.</li>
+				<li><b>11.e64</b> <strong>BETR (Break-Even Tax Rate):</strong> Annual Details now shows the break-even future tax rate for each year's Roth conversion. 
+					<em>Avg BETR</em> summary stat shows the average across all conversion years. "Conv Optimizer" determines whether conversions realize any tax savings and are indicated with (⇌) 
+					<strong>Bug fix:</strong> eliminated shortfalls in cases invoving brokerage withdrawals.</li>
 				</ul>
 				<details>
 					<summary style="cursor:pointer;color:#888;font-size:0.9em;">Older changes…</summary>
 					<ul>
+				<li><b>11.e52</b> URL compression: all share URLs now use short parameter names (57% shorter). Share button opens a copyable popup panel on all tools matching Income Tax Planner style. Income Tax Planner gets an "Open in Tax Planner →" button that pre-fills Retirement Tax Planner with state, SS income, and capital gains. Backward compatible — existing long-key bookmarks still load.</li>
+				<li><b>11.e4f</b> User Experience polish throughout. Roth conversion &amp; opportunity cost tracking calculates when conversions or cash withdrawals "pay off". <B>Break Even</B> at the top says when that year is. New Opp. Cost category and columns added to Annual Details. Future IRA Tax % marginal rate when IRA is eventually distributed; auto defaults the last simulation year marginal rate. Choose your heirs total tax rate.</li>
+				<li><b>11.e4a</b> Fixed start age bug (table now starts at retirement year on URL load). Updated withdrawal strategy descriptions in How To. Added color legend to Annual Details table.</li>
 					<li><b>11.e1a</b> New (nerd) feature: view input distributions in Monte Carlo.</li>
 					<li><b>11.df0</b> Monte Carlo uses historical inflation 1928&ndash;2024 and growth (based on S&P), that historical inflation also is used to escalate the spend-goal rather than using a fixed rate. Stats display CAGR (Compound Annual Growth Rate) instead of arithmetic median - e.g. the CAGR growth rate is the "true" rate where the median rate is the "middle" rate over the entire period. Example: -20% growth for 3 years, 10% growth for one year, then +20% growth for 3 years the CAGR is about -0.38%, but the median is 10%. CAGR gives you the real net growth.</li>
 					<li><b>11.dd9</b> Monte Carlo uses <em>Historical</em> data from real S&amp;P 500, bond, and international returns (1970–2024). Account Composition shows <em>Est.Rtn</em> advisory column (median before inflation); Monte Carlo shows per-asset-class return ranges (Eq/Bonds/Intl).</li>
@@ -569,7 +591,8 @@
 						<li><em>BIRC</em> (Brokerage → IRA → Roth → Cash): clears brokerage before tax-deferred; useful when brokerage gains are low and IRA deferral is still valuable.</li>
 					</ul>
 					</p>
-					<p><strong>Optimizer note:</strong> The Optimizer always runs with <em>Max Roth Conversion</em> on — surplus after spending is converted to Roth. Enable it in the strategy panel to match the optimizer's assumption in single-scenario mode.</p>
+					<p><strong>Cyclic modifier</strong> — a toggle that layers on top of any strategy. When enabled, the simulation alternates between IRA draw years and brokerage harvest years. The cycle length N is recomputed each year as round(IRA&nbsp;÷&nbsp;Brokerage), so the ratio self-corrects as balances evolve. In a harvest year, spending is funded from brokerage capital gains instead of IRA withdrawals, realizing gains at the preferential LTCG rate (often 0% for many retirees) rather than as ordinary income. Advantages: (1)&nbsp;steps up the cost basis each cycle, reducing future LTCG tax; (2)&nbsp;frees the full IRA bracket headroom for Roth conversions in harvest years; (3)&nbsp;lower MAGI in IRA years can keep IRMAA tiers lower. DRIP (dividend reinvestment) is automatically forced on so dividends reinvest into brokerage rather than leaking to Cash as ordinary income. Two orderings are available: <em>IRA-first</em> (🗘 red) runs N IRA years then harvests — better when the brokerage has high unrealized gains (delay harvest to let IRA deplete first); <em>Brokerage-first</em> (🔄) harvests immediately at the start of each cycle — better when brokerage basis is high (low gains) so the tax cost of harvesting is small. The Optimizer and Monte Carlo always evaluate all three variants. Caveats: harvest years raise MAGI, triggering IRMAA surcharges 2 years later and potentially causing ACA cliff loss; with a very high-gains brokerage the strategy can become less effective as effective LTCG rate rises over time.</p>
+				<p><strong>Optimizer note:</strong> The Optimizer always runs with <em>Max Roth Conversion</em> on — surplus after spending is converted to Roth. Enable it in the strategy panel to match the optimizer's assumption in single-scenario mode.</p>
 					</div>
 					</details>
 				</li>

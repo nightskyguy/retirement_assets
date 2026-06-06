@@ -569,11 +569,30 @@ function computeBETR(tNow, rIRA, rTaxable, n) {
     return tNow * Math.pow(1 + rTaxable, n) / Math.pow(1 + rIRA, n);
 }
 
+// Returns how many LTCG dollars can stack above ordinaryIncome while staying in
+// brackets with LTCG rate strictly below maxRate (e.g. 0.15 → only the 0% bracket).
+function getLTCGBracketRoom(ordinaryIncome, status, maxRate, cpiRate) {
+    const brackets = TAXData.FEDERAL.CAPITAL_GAINS[status]?.brackets ?? [];
+    let prevLimit = 0;
+    for (const { l, r } of brackets) {
+        if (r >= maxRate) break;
+        const limit = l * cpiRate;
+        if (ordinaryIncome < limit) return limit - Math.max(ordinaryIncome, prevLimit);
+        prevLimit = limit;
+    }
+    return 0;
+}
+
 let simulationCount = 0;
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
     if (!inputs.hasSpouse) {
         inputs = { ...inputs, birthyear2: 0, die2: 0, IRA2: 0, ss2: 0, Roth2: 0 };
+    }
+    // Cyclic mode forces dividend reinvestment (DRIP) to keep all brokerage proceeds
+    // in the LTCG regime and prevent ordinary-income creep from dividends flowing to Cash.
+    if (inputs.cyclicEnabled) {
+        inputs = { ...inputs, dividendReinvest: true };
     }
     let balance = {
         IRA1: inputs.IRA1, IRA2: inputs.IRA2, Roth1: inputs.Roth, Roth2: inputs.Roth2 || 0,
@@ -666,6 +685,10 @@ function simulate(inputs) {
      *       WithdrawalOrder = [RMD → Brokerage/Cash → IRA → Roth]
      *
      *************************************/
+
+    // Phase 24: Cyclic — tracks consecutive IRA draw years before a brokerage harvest year.
+    // brokerage-first: init to large value so year 0 immediately triggers a harvest.
+    let subCycleIRAYears = inputs.cyclicOrder === 'brokerage-first' ? Infinity : 0;
 
     for (let y = 0; y < maxYears; y++) {
         const loopStart = performance.now();
@@ -830,8 +853,49 @@ function simulate(inputs) {
             ? (balance.Brokerage - balance.BrokerageBasis) / balance.Brokerage
             : 0;
 
+        // Phase 24: Cyclic — determine if this is a brokerage harvest year.
+        // N = ratio of IRA to Brokerage balances (min 1). After N IRA years, one brokerage year.
+        let isBrokerageYear = false;
+        let subCycleLabel = null;
+        if (inputs.cyclicEnabled) {
+            if (curBalances.Brokerage > 0) {
+                const _cycN = Math.max(1, Math.round(curBalances.IRA / curBalances.Brokerage));
+                if (subCycleIRAYears >= _cycN) {
+                    isBrokerageYear = true;
+                    subCycleIRAYears = 0;
+                } else {
+                    subCycleIRAYears++;
+                }
+            } else {
+                subCycleIRAYears++;   // Brokerage depleted; keep counting IRA years
+            }
+            subCycleLabel = isBrokerageYear ? 'B' : 'I';
+        }
 
-        if (inputs.strategy === 'fixed') {
+        if (isBrokerageYear) {
+            // Brokerage harvest year: draw spending from Brokerage instead of IRA.
+            // For bracket strategy, cap at 0%-rate LTCG headroom; for all others, draw to meet spend target.
+            const _baseOrdinaryInc = taxableInc + fixedInc + taxableInterest + taxableDividends;
+            let _brokerageNetTarget;
+            if (isBracketStrategy) {
+                const _ltcgRoom = getLTCGBracketRoom(_baseOrdinaryInc, status, 0.15, cpiRate);
+                const _ltcgNetRoom = _ltcgRoom * (1 - capGainsPercentage * capitalGainsRate);
+                _brokerageNetTarget = Math.min(additionalSpendNeeded, _ltcgNetRoom);
+            } else {
+                _brokerageNetTarget = additionalSpendNeeded;
+            }
+            if (_brokerageNetTarget > 1 && curBalances.Brokerage > 0) {
+                // Depletion check: warn if Brokerage < 50% of what we need
+                const _grossNeeded = _brokerageNetTarget / Math.max(0.01, 1 - capGainsPercentage * capitalGainsRate);
+                if (curBalances.Brokerage < _grossNeeded * 0.5) {
+                    subCycleLabel = '⚠B';
+                }
+                withdrawals = calculateWithdrawals(curBalances, _brokerageNetTarget,
+                    { order: ['Brokerage'], weight: [1], taxrate: [capGainsPercentage * capitalGainsRate] });
+            } else {
+                withdrawals = {};
+            }
+        } else if (inputs.strategy === 'fixed') {
             // In this strategy, we confine withdrawals to the IRA for the first round. 
             // We don't care about the tax implications.
 
@@ -1160,9 +1224,16 @@ function simulate(inputs) {
 
         let totalConverted = surplus.Roth1 + surplus.Roth2;
 
-        // If there is STILL a surplus, put it in Cash.
+        // If there is STILL a surplus, reinvest into Brokerage (Cyclic) or put in Cash.
+        // Cyclic: stepping up brokerage basis on reinvestment keeps proceeds in the LTCG regime.
         surplus.Cash = surplus.Total;
-        balance.Cash += surplus.Cash
+        if (inputs.cyclicEnabled && surplus.Cash > 0) {
+            balance.Brokerage += surplus.Cash;
+            balance.BrokerageBasis += surplus.Cash;
+            surplus.Cash = 0;
+        } else {
+            balance.Cash += surplus.Cash;
+        }
         surplus.Total = 0;
 
         // Phase 23: extra conversion — additional IRA→Roth independent of spending strategy.
@@ -1416,6 +1487,8 @@ function simulate(inputs) {
             cashG: gains.Cash,
             rothG: (gains.Roth1 || 0) + (gains.Roth2 || 0),
             'RMD%': rmd1Pct,
+            // Phase 24: Cyclic sub-cycle annotation
+            subCycle: subCycleLabel,
             // Opportunity cost (Phase 20) + BETR signal (Phase 21) + extra conversion (Phase 23)
             convOC: convNetValue,
             excessOC: excessNetValue,
@@ -1584,6 +1657,8 @@ function getInputs() {
             return Math.max(computed, new Date().getFullYear());
         })(),
         dividendReinvest: !!valChecked('dividendReinvest'),
+        cyclicEnabled: !!valChecked('cyclicEnabled'),
+        cyclicOrder:   val('cyclicOrder') ?? 'ira-first',
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
         comp_IRA1_intl: +val('comp_IRA1_intl'),
@@ -1860,6 +1935,28 @@ function buildVariations(base) {
     for (const seq of ['CBIR', 'RIBC', 'BIRC'])
         push('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
 
+    // Phase 24: Cyclic variants for MC — IRA-first (🔄) and brokerage-first (🔄B).
+    {
+        const baseCount = variations.length;
+        for (let i = 0; i < baseCount; i++) {
+            const v = variations[i];
+            for (const [plainPfx, htmlPfx, order] of [
+                ['\u{1F5D8} ', '<span style="color:#cc0000">\u{1F5D8}</span> ', 'ira-first'],
+                ['\u{1F504} ', '\u{1F504} ',                                   'brokerage-first'],
+            ]) {
+                variations.push({
+                    ...v,
+                    cyclicEnabled:   true,
+                    cyclicOrder:     order,
+                    _label:          plainPfx + v._label,
+                    _strategyFamily: htmlPfx  + v._strategyFamily,
+                    _paramLabel:     v._paramLabel,
+                    _paramSortVal:   v._paramSortVal,
+                });
+            }
+        }
+    }
+
     return variations;
 }
 
@@ -1911,6 +2008,8 @@ function runOptimizer() {
             _stratACAMultiple: overrides.stratACAMultiple ?? 0,
             _propWithdraw: overrides.propWithdraw ?? null,
             _iraWithdrawPct: overrides.iraWithdrawPct ?? null,
+            _cyclicEnabled: !!(overrides.cyclicEnabled),
+            _cyclicOrder:   overrides.cyclicOrder ?? 'ira-first',
             _isSpendOptimized: false,
             _bracketOveragePct: bracketOveragePct,
             _isBracketInfeasible: isBracketInfeasible,
@@ -1961,6 +2060,20 @@ function runOptimizer() {
     // Ordered — strict account sequence
     for (const seq of ['CBIR', 'RIBC', 'BIRC']) {
         addResult('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
+    }
+
+    // Phase 24: Cyclic variants — IRA-first (🗘 red) and brokerage-first (🔄) for every baseline.
+    {
+        const _IRA_PFX  = '<span style="color:#cc0000">\u{1F5D8}</span> ';
+        const _BRK_PFX  = '\u{1F504} ';
+        const baselineCount = strategyOverridesList.length;
+        for (let i = 0; i < baselineCount; i++) {
+            const { strategyLabel, paramLabel, paramSortVal, overrides } = strategyOverridesList[i];
+            addResult(_IRA_PFX + strategyLabel, paramLabel, paramSortVal,
+                { ...overrides, cyclicEnabled: true, cyclicOrder: 'ira-first' });
+            addResult(_BRK_PFX + strategyLabel, paramLabel, paramSortVal,
+                { ...overrides, cyclicEnabled: true, cyclicOrder: 'brokerage-first' });
+        }
     }
 
     // Spend optimizer second pass — only runs when user enabled the toggle
@@ -2048,7 +2161,7 @@ function runOptimizer() {
             const lastEntry = optResult.log[optResult.log.length - 1];
             results.push({
                 _id: results.length,
-                _strategyLabel: baseRow._strategyLabel + ' 🔁',
+                _strategyLabel: baseRow._strategyLabel + ' ⇌',
                 _paramLabel: baseRow._paramLabel,
                 _paramSortVal: baseRow._paramSortVal,
                 _maxConversion: baseRow._maxConversion,
@@ -2191,7 +2304,7 @@ function getOptimizerColumns() {
         },
         {
             key: 'betrAvg', label: 'Avg BETR',
-            title: 'Average Break-Even Tax Rate across conversion years. If your expected future marginal rate exceeds this, conversions were advantageous on average. Appears for Conv Optimizer rows (🔁) and standard rows with conversions.',
+            title: 'Average Break-Even Tax Rate across conversion years. If your expected future marginal rate exceeds this, conversions were advantageous on average. Appears for Conv Optimizer rows (⇌) and standard rows with conversions.',
             getValue: r => r.totals.betrAvg != null ? `${(r.totals.betrAvg * 100).toFixed(1)}%` : '—',
             getSortValue: r => r.totals.betrAvg ?? 999
         },
@@ -2406,6 +2519,13 @@ function loadOptimizerResult(id) {
     }
 
     document.getElementById('maxConversion').checked = result._maxConversion;
+    const cyclicEl = document.getElementById('cyclicEnabled');
+    if (cyclicEl) {
+        cyclicEl.checked = !!(result._cyclicEnabled);
+        onCyclicChange();
+    }
+    const cyclicOrderEl = document.getElementById('cyclicOrder');
+    if (cyclicOrderEl) cyclicOrderEl.value = result._cyclicOrder ?? 'ira-first';
     // For spend-optimized rows, restore the optimized spend goal
     if (result._spendGoal != null) {
         DisplayHelpers.setDollarValue('spendGoal', Math.round(result._spendGoal));
@@ -2498,6 +2618,8 @@ const columnCategories = {
     'BETR%':     ['Opp. Cost'],
     'betrFlag':  ['Opp. Cost'],
     'extraConv': ['Opp. Cost'],
+    // Phase 24: Cyclic
+    'subCycle':  ['Summary', 'Brokerage Δ'],
 };
 
 // Maps each column key to a visual group label for the group header row
@@ -2522,6 +2644,7 @@ const columnGroupDefs = {
     'brokerageG': 'Balances', 'cashG': 'Balances', 'rothG': 'Balances', 'RMD%': 'Balances',
     'convOC': 'Opp. Cost', 'excessOC': 'Opp. Cost', 'convTax': 'Opp. Cost', 'excessTax': 'Opp. Cost',
     'BETR%': 'Opp. Cost', 'betrFlag': 'Opp. Cost', 'extraConv': 'Opp. Cost',
+    'subCycle': 'Withdrawals',
 };
 
 // Get active categories based on checkbox state
@@ -2749,6 +2872,7 @@ function updateTable(log) {
         'BETR%': 'Break-Even Tax Rate (Kitces formula): t_now × (1 + r_taxable)^n / (1 + r_ira)^n. The future marginal rate at which converting now is tax-neutral vs leaving in IRA. If your expected future rate (Future IRA Tax %) exceeds BETR → conversion advantageous (▲). When r_taxable < r_ira (taxable drag), BETR falls below current rate, making conversion even more compelling.',
         'betrFlag': '▲ = expected future rate exceeds BETR by >2pp → conversion beneficial. ▼ = expected future rate is below BETR → conversion costly. ≈ = within 2pp either way (marginal).',
         'extraConv': 'Gross IRA amount additionally withdrawn and converted to Roth by the Phase 23 conversion optimizer, independent of spending strategy. Taxes come from IRA gross; net Roth credit = extraConv − incremental tax.',
+        'subCycle': 'Cyclic sub-cycle marker. B = brokerage harvest year (spending drawn from Brokerage; IRA free for conversions). I = IRA draw year (normal IRA withdrawal). ⚠B = brokerage harvest year but balance was below 50% of target — fell back to partial IRA draw.',
     };
 
     keys.forEach(key => {
@@ -3382,7 +3506,9 @@ function setupAutoRecalc() {
         pensionAnnual: 'Pension', survivorPct: 'Survivor%', pensionCola: 'Pension COLA',
         inflation: 'Inflation', cpi: 'CPI/COLA', growth: 'Growth', cashYield: 'Cash Yield',
         dividendRate: 'Dividends', STATEname: 'State Tax', ssFailYear: 'SS Fail Yr', ssFailPct: 'SS Payout%',
-        birthmonth1: 'Your Birth Mo', birthmonth2: 'Spouse Birth Mo', dividendReinvest: 'Div Reinvest'
+        birthmonth1: 'Your Birth Mo', birthmonth2: 'Spouse Birth Mo', dividendReinvest: 'Div Reinvest',
+        cyclicEnabled: 'Cyclic',
+        cyclicOrder:   'Cyclic Order'
     };
     let timer = null;
     function scheduleRecalc(el) {
@@ -3406,6 +3532,19 @@ function setupAutoRecalc() {
     });
 }
 
+
+function onCyclicChange() {
+    const on = !!valChecked('cyclicEnabled');
+    const dripEl = document.getElementById('dividendReinvest');
+    if (dripEl) {
+        if (on) {
+            dripEl.checked = true;
+            dripEl.disabled = true;
+        } else {
+            dripEl.disabled = false;
+        }
+    }
+}
 
 function toggleSpouseUI() {
     const on = !!valChecked('hasSpouse');
@@ -4305,5 +4444,8 @@ function generateStratRateOptions() {
 // INITIALIZATION - Call on page load
 // ============================================================================
 
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { simulate, getLTCGBracketRoom };
+}
 
 

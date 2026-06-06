@@ -164,7 +164,7 @@ function renderMCResults(msg) {
                (v.survivalRate === best.survivalRate && vFinal > bestFinal);
     };
     msg.variations.forEach((v, i) => {
-        const baseFamily = v.strategyFamily.replace(/^🔄B?\s*/, '');
+        const baseFamily = v.strategyFamily.replace(/<[^>]+>/g, '').replace(/^[^A-Za-z]+/, '');
         const bestIdx    = byBaseFamily[baseFamily];
         if (bestIdx == null || isBetter(v, msg.variations[bestIdx])) {
             byBaseFamily[baseFamily] = i;
@@ -173,7 +173,7 @@ function renderMCResults(msg) {
 
     // Always include the exact current variation (may override the best-of-family slot).
     if (currentIdx >= 0) {
-        const baseFamily = msg.variations[currentIdx].strategyFamily.replace(/^🔄B?\s*/, '');
+        const baseFamily = msg.variations[currentIdx].strategyFamily.replace(/<[^>]+>/g, '').replace(/^[^A-Za-z]+/, '');
         byBaseFamily[baseFamily] = currentIdx;
     }
 
@@ -499,10 +499,8 @@ function renderMCChart(msg) {
                             const v = _mcResults?.variations[selArray[Math.floor(ctx.datasetIndex / 5)]];
                             const p = ctx.dataIndex;
                             const val = v?.percentiles?.p50?.[p];
-                            // Build name without survival rate (shown in legend + table already).
-                            const name = v
-                                ? `${v.strategyFamily} ${v.paramLabel}${v.maxConversion ? ' ✓' : ''}`
-                                : ctx.dataset.label;
+                            // Use plain-text v.label (strategyFamily may contain HTML spans).
+                            const name = v ? v.label : ctx.dataset.label;
                             return `  ${name}  $${fmt(val)}`;
                         },
                     },

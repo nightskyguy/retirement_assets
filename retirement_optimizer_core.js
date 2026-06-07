@@ -689,6 +689,11 @@ function simulate(inputs) {
     // Phase 24: Cyclic — tracks consecutive IRA draw years before a brokerage harvest year.
     // brokerage-first: init to large value so year 0 immediately triggers a harvest.
     let subCycleIRAYears = inputs.cyclicOrder === 'brokerage-first' ? Infinity : 0;
+    // Seed year-1 spend rate denominator with starting portfolio total.
+    // Uses raw sum (no tax discount) — closest to "assets in hand" before simulation starts.
+    let prevTotalWealth = balance.IRA1 + balance.IRA2
+        + balance.Roth1 + balance.Roth2
+        + balance.Brokerage + balance.Cash;
 
     for (let y = 0; y < maxYears; y++) {
         const loopStart = performance.now();
@@ -1226,6 +1231,7 @@ function simulate(inputs) {
 
         // If there is STILL a surplus, reinvest into Brokerage (Cyclic) or put in Cash.
         // Cyclic: stepping up brokerage basis on reinvestment keeps proceeds in the LTCG regime.
+        const _reinvestedSurplus = surplus.Total;
         surplus.Cash = surplus.Total;
         if (inputs.cyclicEnabled && surplus.Cash > 0) {
             balance.Brokerage += surplus.Cash;
@@ -1424,6 +1430,18 @@ function simulate(inputs) {
 
         inspectForErrors({ totalWealth: totalWealth })  // See if any numbers look fishy.
 
+        // Net asset draw: total withdrawn from all accounts minus amounts rebalanced (not spent).
+        // Excludes: Roth conversions (IRA→Roth reallocation), reinvested surplus income.
+        const _netAssetDraw = (netWithdrawals.IRA ?? 0) + totalRMD + extraConvGross
+            + (netWithdrawals.Brokerage ?? 0)
+            + (netWithdrawals.Cash ?? 0)
+            + (netWithdrawals.Roth1 ?? 0)
+            + (netWithdrawals.Roth2 ?? 0)
+            - totalConverted
+            - _reinvestedSurplus;
+        const _netSpendPct = (prevTotalWealth != null && prevTotalWealth > 0)
+            ? _netAssetDraw / prevTotalWealth : null;
+
         log.push({
             // Who
             year: currentYear,
@@ -1497,11 +1515,13 @@ function simulate(inputs) {
             'BETR%': yearBETR,
             betrFlag: yearBETRflag,
             extraConv: extraConvGross || null,
+            'netSpend%': _netSpendPct,
             // Internal
             inflationFactor: inflation,
             loopMs: performance.now() - loopStart
         });
         totals.totalTime += log[log.length - 1].loopMs;
+        prevTotalWealth = totalWealth;
         // Advance spend goal: apply user's spend-change preference and inflation.
         // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
         // keeps year-0 spendGoal equal to the user's input in today's dollars.
@@ -1523,6 +1543,12 @@ function simulate(inputs) {
     const _betrYears = log.filter(r => r['BETR%'] !== null && r['BETR%'] !== undefined);
     totals.betrAvg = _betrYears.length > 0
         ? _betrYears.reduce((s, r) => s + r['BETR%'], 0) / _betrYears.length
+        : null;
+
+    // Average net asset spend rate across all simulated years.
+    const _spendRateYears = log.filter(r => r['netSpend%'] != null);
+    totals.avgSpendRate = _spendRateYears.length > 0
+        ? _spendRateYears.reduce((s, r) => s + r['netSpend%'], 0) / _spendRateYears.length
         : null;
 
     return { log, totals, finalNW: log[log.length - 1].totalWealth };
@@ -2367,47 +2393,46 @@ function renderOptimizerTable(results) {
         colWinners.rmdtax = w5._id;
     }
 
-    // Header with sort arrows
-    const headerHtml = '<tr>' + columns.map(col => {
+    // Header — flat div cells for CSS grid
+    const _hCellStyle = 'background:#f8f9fa;padding:6px 8px;border-bottom:2px solid #dee2e6;white-space:nowrap;font-weight:bold;cursor:pointer;user-select:none;position:sticky;top:0;z-index:1;';
+    const headerHtml = columns.map(col => {
         const active = sortState.colKey === col.key;
         const arrow = active ? (sortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
         const tip = col.title ? ` title="${col.title.replace(/"/g, '&quot;')}"` : '';
-        return `<th style="cursor:pointer;user-select:none;"${tip} onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</th>`;
-    }).join('') + '</tr>';
+        return `<div style="${_hCellStyle}"${tip} onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</div>`;
+    }).join('');
 
-    // Rows — per-cell green for metric winners, full-row green if winner, blue tint if spend-optimized
+    // Rows — display:contents wrapper; each cell carries row styling + onclick
     const rowsHtml = display.map(r => {
         const isWinner = bestIds.has(r._id);
         const isInfeasible = r._isBracketInfeasible && !isWinner;
-        const rowStyle = isInfeasible
-            ? 'background-color:#e8e8e8;opacity:0.55;text-decoration:line-through;cursor:pointer;'
-            : isWinner
-                ? 'background-color:#90EE90;font-weight:bold;cursor:pointer;'
-                : r._isReverseOptimized
-                    ? 'background-color:#fde8d8;font-style:italic;cursor:pointer;'
-                    : r._isConvOptimized
-                        ? 'background-color:#e8f5e9;font-style:italic;cursor:pointer;'
-                    : r._isSpendOptimized
-                        ? 'background-color:#dbeafe;font-style:italic;cursor:pointer;'
-                        : 'cursor:pointer;';
         const rowTitle = isInfeasible
             ? 'Bracket target exceeded in >50% of years — income sources already push MAGI above this ceiling'
             : 'Click to load this strategy';
         const cells = columns.map(col => {
-            // Highlight the specific winning cell with a slightly deeper green
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
                          || (col.key === 'rate'   && r._id === colWinners.rate)
                          || (col.key === 'spend'  && r._id === colWinners.spend)
                          || (col.key === 'nw'     && r._id === colWinners.nw)
                          || (col.key === 'rmdtax' && r._id === colWinners.rmdtax);
-            const cellStyle = cellWin ? ' style="background-color:#4CAF5080;"' : '';
-            return `<td${cellStyle}>${col.getValue(r)}</td>`;
+            const bg = cellWin    ? '#4CAF5080'
+                     : isInfeasible ? '#e8e8e8'
+                     : isWinner   ? '#90EE90'
+                     : r._isReverseOptimized ? '#fde8d8'
+                     : r._isConvOptimized    ? '#e8f5e9'
+                     : r._isSpendOptimized   ? '#dbeafe' : '';
+            const extra = isInfeasible ? 'text-decoration:line-through;opacity:0.55;'
+                        : isWinner     ? 'font-weight:bold;'
+                        : (r._isReverseOptimized || r._isConvOptimized || r._isSpendOptimized) ? 'font-style:italic;' : '';
+            const bgCss = bg ? `background-color:${bg};` : '';
+            return `<div style="padding:4px 8px;cursor:pointer;${bgCss}${extra}" onclick="loadOptimizerResult(${r._id})" title="${rowTitle}">${col.getValue(r)}</div>`;
         }).join('');
-        return `<tr style="${rowStyle}" onclick="loadOptimizerResult(${r._id})" title="${rowTitle}">${cells}</tr>`;
+        return `<div style="display:contents;">${cells}</div>`;
     }).join('');
 
-    document.querySelector('#opt-table thead').innerHTML = headerHtml;
-    document.querySelector('#opt-table tbody').innerHTML = rowsHtml;
+    const optTableEl = document.getElementById('opt-table');
+    optTableEl.style.gridTemplateColumns = columns.map(() => 'max-content').join(' ');
+    optTableEl.innerHTML = headerHtml + rowsHtml;
 
     // Best summary table — unique winner rows labeled by what they won
     const bestEl = document.getElementById('opt-best');
@@ -2427,30 +2452,23 @@ function renderOptimizerTable(results) {
                 seen.add(w.id);
                 return true;
             });
+            const _bHdrStyle = 'background:#f8f9fa;padding:4px 8px;border-bottom:2px solid #dee2e6;font-weight:bold;white-space:nowrap;';
             const bestRows = uniqueWinners.map(w => {
                 const r = results.find(x => x._id === w.id);
                 if (!r) return '';
-                const cells = columns.map(col => {
+                const labelCell = `<div style="background:#4CAF50;color:#fff;font-size:0.78em;white-space:nowrap;padding:2px 6px;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} — click to load">${w.label}</div>`;
+                const dataCells = columns.slice(1).map(col => {
                     const cellWin = col.key === w.key;
-                    const cellStyle = cellWin ? ' style="background-color:#4CAF5080;"' : '';
-                    return `<td${cellStyle}>${col.getValue(r)}</td>`;
+                    const bg = cellWin ? '#4CAF5080' : '#90EE90';
+                    return `<div style="padding:4px 8px;background-color:${bg};font-weight:bold;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} — click to load">${col.getValue(r)}</div>`;
                 }).join('');
-                return `<tr style="background-color:#90EE90;font-weight:bold;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} — click to load">
-                    <td colspan="1" style="background:#4CAF50;color:#fff;font-size:0.78em;white-space:nowrap;padding:2px 6px;">${w.label}</td>
-                    ${columns.slice(1).map(col => {
-                        const cellWin = col.key === w.key;
-                        const cellStyle = cellWin ? ' style="background-color:#4CAF5080;"' : '';
-                        return `<td${cellStyle}>${col.getValue(r)}</td>`;
-                    }).join('')}
-                </tr>`;
+                return `<div style="display:contents;">${labelCell}${dataCells}</div>`;
             }).join('');
-            const bestHeader = '<tr>' + columns.map((col, i) =>
-                `<th>${i === 0 ? 'Best' : col.label}</th>`
-            ).join('') + '</tr>';
-            bestEl.innerHTML = `<table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
-                <thead>${bestHeader}</thead>
-                <tbody>${bestRows}</tbody>
-            </table>`;
+            const bestHeader = columns.map((col, i) =>
+                `<div style="${_bHdrStyle}">${i === 0 ? 'Best' : col.label}</div>`
+            ).join('');
+            const _bColsCss = columns.map(() => 'max-content').join(' ');
+            bestEl.innerHTML = `<div style="display:grid;grid-template-columns:${_bColsCss};width:fit-content;margin-bottom:16px;border:1px solid #dee2e6;">${bestHeader}${bestRows}</div>`;
             bestEl.style.display = 'block';
         } else {
             bestEl.style.display = 'none';
@@ -2606,6 +2624,7 @@ const columnCategories = {
     'CashWD': ['Cash Δ', 'Income'],
     'cashG': ['Cash Δ'],
     'surplusCash': ['Cash Δ', 'Income'],
+    'netSpend%': ['Summary', 'IRA Δ'],
 
     // Debug / performance — only visible under Show All (no checkbox maps to 'Debug')
     'loopMs': ['Debug'],
@@ -2645,6 +2664,7 @@ const columnGroupDefs = {
     'convOC': 'Opp. Cost', 'excessOC': 'Opp. Cost', 'convTax': 'Opp. Cost', 'excessTax': 'Opp. Cost',
     'BETR%': 'Opp. Cost', 'betrFlag': 'Opp. Cost', 'extraConv': 'Opp. Cost',
     'subCycle': 'Withdrawals',
+    'netSpend%': 'Withdrawals',
 };
 
 // Get active categories based on checkbox state
@@ -2873,6 +2893,7 @@ function updateTable(log) {
         'betrFlag': '▲ = expected future rate exceeds BETR by >2pp → conversion beneficial. ▼ = expected future rate is below BETR → conversion costly. ≈ = within 2pp either way (marginal).',
         'extraConv': 'Gross IRA amount additionally withdrawn and converted to Roth by the Phase 23 conversion optimizer, independent of spending strategy. Taxes come from IRA gross; net Roth credit = extraConv − incremental tax.',
         'subCycle': 'Cyclic sub-cycle marker. B = brokerage harvest year (spending drawn from Brokerage; IRA free for conversions). I = IRA draw year (normal IRA withdrawal). ⚠B = brokerage harvest year but balance was below 50% of target — fell back to partial IRA draw.',
+        'netSpend%': 'Net asset spend rate: fraction of prior year\'s total wealth consumed for spending. Excludes Roth conversions (IRA→Roth reallocation) and reinvested surplus income. The classic "4% rule" targets a ~4% spend rate.',
     };
 
     keys.forEach(key => {
@@ -2923,13 +2944,13 @@ function updateTable(log) {
         const incomeShortfall = (netIncome < spendGoal * 0.99) || (rowPortfolio < rowRequired);
         const deathOccurred = maritalStatus != row['status'];
 
-        // IRMAA tier row tint — blue scale (taxation theme), overridden by pink if underfunded
+        // IRMAA tier cell tint — blue scale (taxation theme), applied only to relevant columns
         const irmaaTierColors = {
             'Tier 1': ['#E8F4FF', '#000'], 'Tier 2': ['#BDD9FF', '#000'], 'Tier 3': ['#90BBFF', '#000'],
             'Tier 4': ['#6090FF', '#000'], 'Tier 5': ['#3366FF', '#fff'], 'Tier 6 (TOP)': ['#0000FF', '#fff'],
         };
         const tierEntry = irmaaTierColors[row['IRMAATier']];
-        if (tierEntry) { tr.style.backgroundColor = tierEntry[0]; tr.style.color = tierEntry[1]; }
+        const _irmaaCols = ['year', 'IRMAATier', 'totalIncome', 'IRMAA', 'totalTax'];
 
         // Pink takes priority over tier color
         if (incomeShortfall) {
@@ -2945,8 +2966,13 @@ function updateTable(log) {
                 const td = tr.insertCell();
                 const value = row[key];
 
+                if (tierEntry && !incomeShortfall && _irmaaCols.includes(key)) {
+                    td.style.backgroundColor = tierEntry[0];
+                    td.style.color = tierEntry[1];
+                }
                 if (deathOccurred && deathHighlightCols.includes(key.toLowerCase())) {
                     td.style.backgroundColor = '#ffff99';  // Light yellow
+                    td.style.color = '';
                 }
                 if ((key === 'BracketOverage' || key === 'netIncome') && (row['BracketOverage'] ?? 0) > 0) {
                     td.style.backgroundColor = '#ff8c0099';  // Orange — MAGI exceeded bracket ceiling
@@ -3123,6 +3149,12 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
         }
     }
 
+    const avgSpendEl = document.getElementById('stat-avg-spend-rate');
+    if (avgSpendEl) {
+        avgSpendEl.innerText = (totals.avgSpendRate != null)
+            ? (totals.avgSpendRate * 100).toFixed(1) + '%' : '—';
+    }
+
     // Phase 23: projected RMD stat (reads from DOM inputs directly)
     updateProjectedRMDStat();
 
@@ -3211,9 +3243,34 @@ function updateProjectedRMDStat() {
     const el1 = document.getElementById('stat-proj-rmd1');
     const el2 = document.getElementById('stat-proj-rmd2');
 
+    // When a simulation has run, use actual RMD values from the log (strategy-dependent).
+    if (lastSimulationLog?.length > 0) {
+        const row1 = lastSimulationLog.find(r => (r['RMD1-'] ?? 0) > 0);
+        const row2 = lastSimulationLog.find(r => (r['RMD2-'] ?? 0) > 0);
+        if (el1) {
+            if (row1) {
+                el1.textContent = `You RMD (${row1.year}): ~$${Math.round(row1['RMD1-']).toLocaleString()} (strategy)`;
+                el1.title = `First actual RMD in simulation year ${row1.year}`;
+                el1.style.display = '';
+            } else {
+                el1.style.display = 'none';
+            }
+        }
+        if (el2) {
+            if (row2) {
+                el2.textContent = `Spouse RMD (${row2.year}): ~$${Math.round(row2['RMD2-']).toLocaleString()} (strategy)`;
+                el2.title = `First actual RMD in simulation year ${row2.year}`;
+                el2.style.display = '';
+            } else {
+                el2.style.display = 'none';
+            }
+        }
+        return;
+    }
+
     if (el1) {
         if (rmd1) {
-            el1.innerText = fmtRMD(rmd1, 'You');
+            el1.innerText = fmtRMD(rmd1, 'You') + ' (projected)';
             el1.title = `IRA1 projected at age ${rmd1.rmdAge}: $${Math.round(rmd1.projIRA).toLocaleString()}`;
             el1.style.display = '';
         } else {
@@ -3222,7 +3279,7 @@ function updateProjectedRMDStat() {
     }
     if (el2) {
         if (rmd2) {
-            el2.innerText = fmtRMD(rmd2, 'Spouse');
+            el2.innerText = fmtRMD(rmd2, 'Spouse') + ' (projected)';
             el2.title = `IRA2 projected at age ${rmd2.rmdAge}: $${Math.round(rmd2.projIRA).toLocaleString()}`;
             el2.style.display = '';
         } else {

@@ -101,7 +101,7 @@
 			</div>
 
 			<div id="ui-ordered" class="input-group hidden">
-				<label><select id="orderedSeq">
+				<label style="display:block;"><select id="orderedSeq" style="width:100%;">
 					<option value="CBIR">Cash→Brok→IRA→Roth</option>
 					<option value="RIBC">Roth→IRA→Brok→Cash</option>
 					<option value="BIRC">Brok→IRA→Roth→Cash</option>
@@ -327,6 +327,7 @@
                 <div title="Total portfolio value (after-tax) remaining at the end of the final simulation year."><small>End Wealth</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="First year when the actual portfolio (Roth + Taxable) outpaces the no-conversion shadow after taxes. Uses Future IRA Tax % assumption. See Opp. Cost columns in Annual Details. '—' means never or no conversions."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;">—</strong></div>
                 <div title="Average Break-Even Tax Rate across all conversion years (Kitces formula). If your expected future rate exceeds this, conversions are advantageous on average. See BETR% column in Annual Details (Opp. Cost category). '—' means no conversions."><small>Avg BETR</small><br><strong id="stat-betr-avg" style="font-size:0.9em;">—</strong></div>
+                <div title="Average annual % of total wealth consumed for spending (net of Roth conversions and reinvested surplus). The classic 4% rule targets ~4%. See netSpend% column in Annual Details."><small>Avg Spend Rate</small><br><strong id="stat-avg-spend-rate" style="font-size:0.9em;">—</strong></div>
                 <div title="Projected first-year RMD for each person's IRA at their SECURE 2.0 RMD age (born 1951–1959 → age 73; born 1960+ → age 75). IRA balance projected at current growth rate. Shows why pre-RMD conversions matter." style="font-size:0.75em;color:#555;line-height:1.6;">
                     <div id="stat-proj-rmd1" style="white-space:nowrap;"></div>
                     <div id="stat-proj-rmd2" style="white-space:nowrap;"></div>
@@ -701,12 +702,9 @@
                 <span><span style="display:inline-block;width:14px;height:14px;background:#fde8d8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Reverse-optimized (▼) — all strategies failed; highest feasible spend shown</span>
                 <span><span style="display:inline-block;width:14px;height:14px;background:#e8e8e8;opacity:0.8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;text-decoration:line-through;"></span>Infeasible — existing income already exceeds this bracket ceiling</span>
             </div>
-            <table id="opt-table">
-                <thead>
-
-                </thead>
-                <tbody></tbody>
-            </table>
+            <div style="overflow-x:auto;width:fit-content;max-width:100%;">
+                <div id="opt-table" style="display:grid;width:fit-content;"></div>
+            </div>
             <div id="opt-note" style="margin-top:8px;font-size:0.8em;color:#666;display:none;"></div>
         </div>
     </div>

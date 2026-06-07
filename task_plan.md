@@ -772,6 +772,78 @@ RMD age per SECURE 2.0: born 1951–1959 → 73, born 1960+ → 75. If already p
 |-------|---------|------------|
 |       | 1       |            |
 
+### Phase 25: Simulation Sanity-Check Tests
+**Why:** Complex financial simulation accumulates subtle math errors that are invisible in normal use. A portfolio may show "correct-looking" numbers while quietly mis-compounding, double-counting, or mis-routing cash. Deterministic edge cases with known exact answers expose these bugs. The netSpend%, IRMAA tier, and BETR columns added in recent sessions make this more urgent — incorrect underlying data produces incorrect derived metrics.
+
+**Core test: zero-growth, zero-inflation portfolio depletion**
+
+With no growth and no inflation, a portfolio of $X drawing $S/year (all from one account type, no taxes) must deplete at exactly year `floor(X/S)`. Any deviation exposes a compounding or routing error.
+
+Specific cases to add to `retirement_optimizer_core.test.js`:
+
+| Test | Setup | Expected result |
+|------|-------|-----------------|
+| **Linear depletion** | growth=0, inflation=0, Roth-only portfolio $1M, spend $50k/yr, no SS | Depletes at year 20; years 1–19 fully funded; netSpend% = 5.0% each year |
+| **SS covers all spend** | SS=$60k, spend=$50k, zero portfolio | Portfolio unchanged across all years; netSpend%=0; no shortfall |
+| **Roth conversion identity** | extraConversionAmount=$X, growth=0, inflation=0 | `rothConv` log column sums to exactly X × years; IRA reduced by gross conv; Roth increased by net conv |
+| **RMD accuracy** | IRA=$1M at age 73, zero growth | First RMD = $1M ÷ 26.5 (Uniform Lifetime Table factor) ± 1 (rounding); `RMD1-` matches |
+| **netSpend% identity** | zero growth, zero inflation, single-account spend | netSpend% = spend / startingWealth each year (exact, no surplus, no conversion) |
+| **Surplus reinvestment** | income > spendGoal | surplusCash > 0; netSpend% reflects only actual consumption; total wealth increases |
+
+**Implementation:**
+- Tests go in `retirement_optimizer_core.test.js` (existing Jest/Vitest file)
+- Use `simulate(inputs)` directly; assert on `log[y]` fields and `totals.*`
+- Helper: `makeZeroBaseInputs()` — zeroed growth/inflation/taxes, single account
+
+**Status:** pending
+**Priority:** high — catches regressions before they reach users
+**Depends on:** nothing (uses existing simulate() interface)
+
+---
+
+### Phase 26: Retire the Optimizer Tab → MC-Driven Strategy Comparison
+**Why:** The Optimizer tab runs every strategy deterministically and ranks them. Deterministic wins are misleading — the "best" strategy in a single market path may be fragile under real market variance. Monte Carlo (Phase 2 bootstrap) already gives the honest answer: survival probability, median/p10 outcomes across hundreds of realistic return sequences. Maintaining a separate deterministic optimizer creates false confidence and doubles the UI surface.
+
+**What the optimizer does today:**
+- Sweeps 42+ strategy/param combos; ranks by tax, spend, wealth, RMD tax
+- Useful for: quick strategy discovery, bracket comparison
+- Limitation: single deterministic path; can crown a winner that fails badly in poor sequence-of-returns
+
+**What MC does today:**
+- One strategy at a time, 500+ paths, survival %, fan charts, p10 final wealth
+- Better question ("will I run out of money?") but no cross-strategy comparison
+
+**Proposed replacement: MC Strategy Sweep**
+- New MC sub-feature: "Compare strategies" checkbox (or separate mode)
+- Runs the top 5–6 candidate strategies through full MC (same 500 paths)
+- Comparison table: strategy | survival % | median final wealth | p10 wealth | median lifetime tax
+- This is the Phase 10 Stage 1+2 concept but without the multi-segment complexity — keep it simple first
+- Remove Optimizer tab entirely (or hide behind a `?nerdknob` URL flag for power users)
+
+**Migration path:**
+1. Add MC strategy comparison table (run selected strategies side-by-side in MC)
+2. Move bracket feedback / strategy selector to main input panel (already there partially)
+3. Gate existing optimizer behind `?optimizer=1` URL param — don't hard-delete yet
+4. After MC comparison ships and is validated, remove optimizer code
+
+**What to keep from optimizer:**
+- `getOptimizerColumns()` and `buildVariations()` can feed the MC strategy sweep
+- Conversion optimizer (`optimizeConversionAmount`) remains useful — hook into MC mode
+- Infeasibility detection (bracket strategies that can't work) — surface as inline warnings on strategy selector
+
+**Tasks:**
+- [ ] Design MC comparison table: which strategies to include, how to surface winner
+- [ ] Add "Compare in MC" mode to mc_tab.js that runs top-N strategies and aggregates results
+- [ ] Move bracket feedback to main strategy selector (already partially done via `bracket-feedback` div)
+- [ ] Gate optimizer tab behind URL param `?optimizer=1`
+- [ ] Update How to Use docs: remove optimizer section, explain MC comparison
+- [ ] Test: MC comparison table ranks strategies by survival % consistently with intuition
+
+**Status:** pending — pre-design
+**Note:** Deprioritize optimizer-only phases (Phase 5 Scenario Comparison, Phase 8 Sensitivity Grid) until this architectural question resolves. They may be superseded by MC comparison.
+
+---
+
 ## Notes
 - BootstrapPlan.md provides detailed implementation sketches for Phases 2, 7, 10
 - optimizer_directions.md priority list shows items already DONE (K+D, A, F, L, G)

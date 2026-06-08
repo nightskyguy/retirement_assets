@@ -484,6 +484,7 @@ var TAXData = {
 	AL: {
 		STATE: 'Alabama',
 		YEAR: 2026,
+		INFLATION_INDEXED: false,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 8500,
@@ -510,33 +511,33 @@ var TAXData = {
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.025,
 		MFJ: {
-			std: 30000,  // AZ follows federal standard deduction (2025)
+			std: 'FEDERAL',  // AZ uses federal standard deduction
 			brackets: [
 				{ l: Infinity, r: 0.025 }
 			]
 		},
 		SGL: {
-			std: 15000,
+			std: 'FEDERAL',
 			brackets: [
 				{ l: Infinity, r: 0.025 }
 			]
 		},
 	}, // ARIZONA
 
-	// COLORADO - flat 4.4% (rate cut eff. 2022; unchanged 2026; std = 2025 federal, engine inflates forward)
+	// COLORADO - flat 4.4% (rate cut eff. 2022; unchanged 2026; std = federal)
 	CO: {
 		STATE: 'Colorado',
 		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.044,
 		MFJ: {
-			std: 30000,  // CO uses federal standard deduction as CO deduction
+			std: 'FEDERAL',  // CO uses federal standard deduction
 			brackets: [
 				{ l: Infinity, r: 0.044 }
 			]
 		},
 		SGL: {
-			std: 15000,
+			std: 'FEDERAL',
 			brackets: [
 				{ l: Infinity, r: 0.044 }
 			]
@@ -589,7 +590,7 @@ var TAXData = {
 		YEAR: 2025,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
-			std: 30000,  // ME follows federal standard deduction (2025)
+			std: 'FEDERAL',  // ME uses federal standard deduction
 			brackets: [
 				{ l: 50620, r: 0.058 },
 				{ l: 119780, r: 0.0675 },
@@ -597,7 +598,7 @@ var TAXData = {
 			]
 		},
 		SGL: {
-			std: 15000,
+			std: 'FEDERAL',
 			brackets: [
 				{ l: 25310, r: 0.058 },
 				{ l: 59890, r: 0.0675 },
@@ -613,7 +614,7 @@ var TAXData = {
 		YEAR: 2025,
 		SSTaxation: 0.85,
 		MFJ: {
-			std: 30000,  // MN follows federal standard deduction (2025)
+			std: 'FEDERAL',  // MN uses federal standard deduction
 			brackets: [
 				{ l: 48490, r: 0.0535 },
 				{ l: 192860, r: 0.0680 },
@@ -622,7 +623,7 @@ var TAXData = {
 			]
 		},
 		SGL: {
-			std: 15000,
+			std: 'FEDERAL',
 			brackets: [
 				{ l: 33190, r: 0.0535 },
 				{ l: 109150, r: 0.0680 },
@@ -637,6 +638,7 @@ var TAXData = {
 	MT: {
 		STATE: 'Montana',
 		YEAR: 2026,
+		INFLATION_INDEXED: false,
 		SSTaxation: 0.85,
 		MFJ: {
 			std: 10160,  // MT: 20% of AGI, capped at $10,160 (2024); using cap as approximation
@@ -658,16 +660,17 @@ var TAXData = {
 	ND: {
 		STATE: 'North Dakota',
 		YEAR: 2026,
+		INFLATION_INDEXED: false,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
-			std: 29200,  // ND follows federal standard deduction (2024)
+			std: 'FEDERAL',  // ND uses federal standard deduction (which IS inflation-adjusted)
 			brackets: [
 				{ l: 74750, r: 0.011 },
 				{ l: Infinity, r: 0.0204 },
 			]
 		},
 		SGL: {
-			std: 14600,
+			std: 'FEDERAL',
 			brackets: [
 				{ l: 44725, r: 0.011 },
 				{ l: Infinity, r: 0.0204 },
@@ -676,9 +679,11 @@ var TAXData = {
 	}, // NORTH DAKOTA
 
 	// OHIO - HB 96 (signed July 2024): simplified to 3 tiers effective TY 2025; unchanged for 2026
+	// Bracket thresholds are statutory fixed values; Ohio does not CPI-index income brackets.
 	OH: {
 		STATE: 'Ohio',
 		YEAR: 2025,
+		INFLATION_INDEXED: false,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 4800,  // $2,400 personal exemption per taxpayer (2 for MFJ); unchanged
@@ -699,12 +704,14 @@ var TAXData = {
 	}, // OHIO
 
 	// SOUTH CAROLINA - Act 47 (2022) phase-down: 6.5%→6.4%→6.3%→6.2%→6.1% (triggers met each year)
+	// Bracket thresholds are statutory fixed values; not CPI-indexed.
 	SC: {
 		STATE: 'South Carolina',
 		YEAR: 2026,
+		INFLATION_INDEXED: false,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
-			std: 30000,  // SC follows federal standard deduction (2025/2026)
+			std: 'FEDERAL',  // SC uses federal standard deduction (which IS inflation-adjusted)
 			brackets: [
 				{ l: 3200, r: 0.00 },
 				{ l: 6410, r: 0.03 },
@@ -715,7 +722,7 @@ var TAXData = {
 			]
 		},
 		SGL: {
-			std: 15000,
+			std: 'FEDERAL',
 			brackets: [
 				{ l: 3200, r: 0.00 },
 				{ l: 6410, r: 0.03 },
@@ -902,7 +909,10 @@ function calculateTaxes(params = {}) {
         stateAGI = earnedIncome - hsaContrib + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains;
     }
 
-    const stateStdDeduction = stateData[status].std * inflation;
+    const rawStateStd = stateData[status].std;
+    const stateStdDeduction = rawStateStd === 'FEDERAL'
+        ? federalStdBase * inflation   // track federal base (no age bumps — those are federal-only)
+        : rawStateStd * inflation;
     const stateTaxableIncome = Math.max(0, stateAGI - stateStdDeduction);
     const stateResult = calculateProgressive(state, status, stateTaxableIncome, inflation);
     const stateTax = stateResult.total;

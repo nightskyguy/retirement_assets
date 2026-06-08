@@ -765,14 +765,31 @@ assertEqual(
   "error": "Invalid entity (NONEXISTENT) or status (SGL)"}, 
 		'calculateProgressive(NONEXISTENT,...) ok')
 
-	assertEqual(calculateProgressive('TEST','NONEXISTENT',72000), 
+	assertEqual(calculateProgressive('TEST','NONEXISTENT',72000),
 		{  "cumulative": 0,
   "total": 0,
   "marginal": 0,
   "limit": 0,
-  "error": "Invalid entity (TEST) or status (NONEXISTENT)"}, 
+  "error": "Invalid entity (TEST) or status (NONEXISTENT)"},
 		'calculateProgressive(TEST,NONEXISTENT,...) ok')
-		
+
+	// INFLATION_INDEXED: false — MT/ND/AL/OH/SC brackets must NOT inflate regardless of passed inflation value.
+	const mtBase     = calculateProgressive('MT', 'MFJ', 50000, 1.0);
+	const mtInflated = calculateProgressive('MT', 'MFJ', 50000, 1.1);
+	assertEqual(mtBase.total, mtInflated.total,
+		'MT (INFLATION_INDEXED:false) — bracket inflation ignored, tax same at inflation=1.1 vs 1.0')
+	assertEqual(mtBase.marginal, mtInflated.marginal,
+		'MT marginal rate unchanged with inflation=1.1')
+	const ndBase     = calculateProgressive('ND', 'SGL', 60000, 1.0);
+	const ndInflated = calculateProgressive('ND', 'SGL', 60000, 1.1);
+	assertEqual(ndBase.total, ndInflated.total,
+		'ND (INFLATION_INDEXED:false) — bracket inflation ignored')
+	// CA IS indexed — inflation=1.1 widens brackets → less tax at same income
+	const caBase     = calculateProgressive('CA', 'MFJ', 200000, 1.0);
+	const caInflated = calculateProgressive('CA', 'MFJ', 200000, 1.1);
+	assertEqual(caBase.total > caInflated.total, true,
+		'CA (indexed) — inflation=1.1 widens brackets, lowers tax vs inflation=1.0')
+
 	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30),0), 57830,
 		'calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30) (growth > inflation)')
 

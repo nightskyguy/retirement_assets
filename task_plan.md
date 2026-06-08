@@ -957,6 +957,36 @@ TCJA is permanent now, but modeling a return to pre-TCJA rates (25/28/33/35/39.6
 
 ---
 
+### Phase 31: State Tax Bracket Inflation Indexing Audit & Fix
+**Why:** Engine currently inflates ALL state brackets by the `inflation` multiplier each projection year. Some states have brackets set by statute (not CPI-indexed), so projecting higher nominal brackets for those states is incorrect — it understates future tax for residents of non-indexed states.
+
+**Research findings (from taxengine.js comments):**
+| State | Indexed? | Evidence |
+|-------|----------|----------|
+| CA | ✓ YES | "Thresholds inflation-adjusted by CA FTB (~2.971% CCPI)" |
+| ME | ✓ YES | "brackets inflation-adjusted annually by Maine Revenue Services" |
+| MN | ✓ YES | "brackets inflation-adjusted ~4%/yr by MN DOR" |
+| WI | ✓ YES | "brackets inflation-adjusted annually by WI DOR" |
+| NJ | ✓ YES | "Lower bracket thresholds indexed for inflation annually" |
+| MT | ✗ NO  | "brackets NOT inflation-indexed — unchanged through 2026" |
+| ND | ✗ NO  | "brackets NOT inflation-indexed — unchanged through 2026" |
+| AL | ✗ NO  | "brackets/rates unchanged since 2006" |
+| OH | ✗ NO  | Statutory fixed thresholds from HB 96 (2024); Ohio doesn't CPI-index brackets |
+| SC | ✗ NO  | Act 47 phase-down: fixed statutory thresholds, not CPI-adjusted |
+| Flat-rate states (AZ/CO/IN/KY/NC/PA/GA/IL/MA/MI) | N/A | No progressive brackets; flat rate × income |
+
+**Approach:** Add `INFLATION_INDEXED: false` property to state objects in TAXData for non-indexed states. Engine checks flag in two places: (1) `calculateProgressive()` uses `inflation=1` when entity has `INFLATION_INDEXED: false`; (2) std deduction in `taxengine.js:calculateTaxes()` also uses `1` not `inflation` for non-indexed states.
+
+**Implementation tasks:**
+- [x] Add `INFLATION_INDEXED: false` to MT, ND, AL, OH, SC objects in `taxengine.js`
+- [x] `retirement_optimizer_core.js:calculateProgressive`: check `TAXData[entity]?.INFLATION_INDEXED === false`; if so, use `effectiveInflation = 1`
+- [x] Tests: MT/ND tax same at inflation=1.1 as 1.0; CA inflation=1.1 lowers tax vs 1.0 (brackets widen)
+- Note: std deduction inflation (taxengine.js:905) left unchanged — ND/SC stds follow federal (should inflate); AL/OH/MT std fix is separate future work if desired
+- **Status:** complete
+- **Independent:** no phase dependencies
+
+---
+
 ### Phase 30: Verify GBM Statistical Mode Uses User Growth Rate
 **Why:** User reports GBM mode may not reflect their supplied growth rate. The GBM worker receives `mu` from the controller. Need to verify: (1) where `mu` is populated in `mc_controller.js` / `mc_tab.js`, (2) whether it defaults to the user's growth rate input or a hardcoded value, (3) whether there's a disconnect between the main inputs panel growth rate and the nerd panel μ.
 

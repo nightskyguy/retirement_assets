@@ -1,5 +1,17 @@
 # Progress Log
 
+## Session: 2026-06-08
+
+### Plan updated — 4 new phases added (user direction)
+- Added Phase 27: Withdrawal Rate Fix + Inflows/Outflows columns in Annual table
+- Added Phase 28: Bad Markets / SoRR Stress Mode (Bear-Start bootstrap + historical scenarios + CAPE preset)
+- Added Phase 29: Creeping Tax Rate (TCJA expiration cliff + annual rate escalation)
+- Added Phase 30: Verify GBM uses user growth rate (investigation first)
+- Added SoRR and tax policy research notes to findings.md
+- No code changes this session yet
+
+---
+
 ## Session: 2026-05-27
 
 ### Phase 0: Planning & Context

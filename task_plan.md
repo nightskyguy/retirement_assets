@@ -4,8 +4,9 @@ Goal: Implement remaining features from optimizer_directions.md priority list (i
 
 ## Current Phase
 **Complete:** 0, 0b, 1, 2, 6, 7, 18, 19, 20, 21, 23 + MC UX fixes (CSS grid tables, mode selector, CAGR stats).
-**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 8 (Variable Growth), Phase 12 (Withdrawal Timing), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K).
+**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 8 (Variable Growth), Phase 12 (Withdrawal Timing), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 27 (Withdrawal Rate Fix + Inflows/Outflows), Phase 28 (Bad Markets / SoRR Stress Mode), Phase 29 (Creeping Tax Rate).
 **Pending (blocked):** Phase 9 (ACA, needs Phase 1 ✓ — unblocked), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
+**Needs investigation:** Phase 30 (GBM uses user growth rate — verify if already wired or needs fix).
 **As of:** 2026-06-06 (session resume after PR #65/#67 merged to main).
 
 ## Dependency Graph
@@ -843,6 +844,133 @@ Specific cases to add to `retirement_optimizer_core.test.js`:
 
 **Status:** pending — pre-design
 **Note:** Deprioritize optimizer-only phases (Phase 5 Scenario Comparison, Phase 8 Sensitivity Grid) until this architectural question resolves. They may be superseded by MC comparison.
+
+---
+
+### Phase 27: Withdrawal Rate — Fix Label, Formula, and Add Inflows/Outflows Columns
+**Why:** "Average Spend Rate" is a misleading label. The metric should be called "Withdrawal Rate" and should equal (Outflows − Inflows) / starting assets. Currently `_netAssetDraw` excludes conversions and surplus reinvestment but does NOT subtract SS/pension inflows — so it overstates the portfolio draw in income-heavy years.
+
+**Current formula (core.js ~L1435):**
+```javascript
+_netAssetDraw = (IRA + RMD + extraConv + Brokerage + Cash + Roth1 + Roth2) − totalConverted − reinvestedSurplus
+_netSpendPct  = _netAssetDraw / prevTotalWealth
+```
+Missing: subtract SS income, pension, and any other income-side inflows (money that covered spending WITHOUT touching portfolio).
+
+**Correct formula:**
+```
+Outflows = gross portfolio withdrawals (IRA+RMD+Brokerage+Cash+Roth) that fund spending/taxes
+Inflows  = SS income + pension + any non-portfolio income applied to spending this year
+Withdrawal Rate = (Outflows − Inflows) / prevTotalWealth
+```
+Note: Roth conversion = IRA→Roth reallocation, neither outflow nor inflow. Already excluded. ✓
+
+**New Annual table columns (checkbox categories):**
+- `outflows` — gross portfolio withdrawals this year (IRA+RMD+Brokerage+Cash+Roth, before conversion netting)
+- `inflows` — SS + pension + other non-portfolio income applied to spending
+
+**Stats bar change:** rename `stat-avg-spend-rate` element label/tooltip to "Avg Withdrawal Rate".
+
+**Implementation tasks:**
+- [ ] Compute `_yearOutflows` and `_yearInflows` in simulate() year loop; subtract `_yearInflows` from `_netAssetDraw`
+- [ ] Add `outflows` and `inflows` to log entry; add to column category map (e.g. 'Summary')
+- [ ] Rename label in HTML: "Avg Withdrawal Rate" (not "Avg Spend Rate")
+- [ ] Update tooltip: "Net portfolio draw ÷ start-of-year wealth. Outflows = account withdrawals funding spending. Inflows = SS + pension. Conversions excluded."
+- [ ] Test: year with SS covering all spending → withdrawal rate ≈ 0 (or negative if income > spend)
+- [ ] Test: no SS, pure portfolio draw → withdrawal rate = withdrawals / wealth (same as before fix)
+- **Status:** pending
+- **Independent:** no phase dependencies
+
+---
+
+### Phase 28: Bad Markets / Sequence-of-Return Risk Stress Mode
+**Why:** Both MC modes (GBM and bootstrap) produce paths that on average show historical returns. SoRR risk means bad returns in the *first 5–10 years* of retirement are disproportionately damaging — but with 500 random paths, only ~16% will happen to start in a bad sequence. Most paths look fine. The distribution masks the tail risk that matters most for retirement decisions.
+
+**User observation:** "I am not seeing any Sequence of Return Risk in most of my analysis."
+
+**Root cause:** Bootstrap samples randomly from all 97 years. Even if some paths start with -30%, they're diluted by 84% of paths that don't. The *average* looks rosy because most paths are fine. The p10 outcome is visible in fan charts but not intuitively communicated as "what happens if you retire into a bear market."
+
+**Three complementary solutions (recommended: implement all three):**
+
+**A. Bear-Start Mode (most direct SoRR fix)**
+Force the first 3-year block of every path to sample from the worst historical tercile (roughly: first-3yr CAGR < −5%). Implementation: in `bootstrapMultiAssetBank()`, for blocks at position 0, restrict the draw pool to blocks where `equity[b] + equity[b+1] + equity[b+2] < threshold`. All subsequent blocks sample freely. This guarantees every path experiences a bad opening sequence — tests pure SoRR resilience. Toggle in nerd panel: "Bear Start" checkbox.
+
+**B. Historical Worst-Decade Scenarios (deterministic stress tests)**
+Run 3–4 deterministic paths using actual historical sequences as "stress test" overlays:
+- 1966 start: stagflation decade, 15yr of negative real returns
+- 1929 start: Great Depression (−43% yr 1, −35% yr 2, etc.)
+- 2000 start: double-crash (tech bust + GFC within 8 yrs)
+Show these as colored overlays on the fan chart (thin dashed lines) and a separate "Stress Test" row in MC summary table: "1966 scenario: depleted in year X."
+Implementation: add `HISTORICAL_SEQUENCES` constant with named arrays; run `simulate()` with those as forced return sequences.
+
+**C. CAPE-Adjusted Pessimistic Preset (most "current market" realistic)**
+Current CAPE-Shiller ratio (~35+) implies forward 10-yr real returns ~2–4% vs the historical ~7% assumed by default bootstrap. Add a "Pessimistic (CAPE-adjusted)" GBM preset button that sets: μ = 5% (vs ~10.7% historical nominal), σ = 17% (unchanged). Rationale: Jeremy Grantham, Research Affiliates, and the Fed model all suggest lower expected equity returns over the next decade given elevated valuations. This is the "realistic for current conditions" option.
+
+**Recommendation to user:** Bear-Start Mode for SoRR specifically; Historical Scenarios for visual stress testing; CAPE preset for "what if returns disappoint" sensitivity.
+
+**Implementation tasks:**
+- [ ] `prng.js`: add `bearStartBootstrap()` variant — same as `bootstrapMultiAssetBank()` but first block drawn from worst-tercile subset; expose `bearStart: bool` param
+- [ ] `worker.js`: pass `bearStart` param through; route to `bearStartBootstrap()` when set
+- [ ] `mc_controller.js`: accept `bearStart` in cfg; pass to worker
+- [ ] `mc_tab.js`: add "Bear Start" checkbox in nerd panel (only visible in bootstrap mode)
+- [ ] `historical_returns.js`: add `HISTORICAL_SEQUENCES` object with named arrays (1929, 1966, 2000 start year sequences, length = min(simulation years, available data))
+- [ ] `mc_controller.js` / `mc_tab.js`: stress test mode — run named sequences as deterministic paths; add to chart as overlays + stress test summary row
+- [ ] `mc_tab.js`: add "Pessimistic Preset" button that sets μ=5%, σ=17% in GBM nerd inputs
+- [ ] Test: Bear Start mode → p10 outcome materially worse than standard bootstrap
+- [ ] Test: 1966 stress scenario → depletion year roughly matches historical analysis (~15yr for 5% WR)
+- **Status:** pending
+- **Independent:** no hard phase dependencies (builds on Phase 2 bootstrap infrastructure ✓)
+- **Note:** Addresses user's specific concern about MC being "too rosy" and lack of visible SoRR.
+
+---
+
+### Phase 29: Creeping Tax Rate Model
+**Why:** US federal debt-to-GDP ~120%+. Tax rates are historically low (post-TCJA). Many analysts expect rates to increase after 2025 TCJA expiration and/or long-term fiscal pressure. Currently the tool assumes today's tax brackets persist forever — optimistic for a 30-year simulation.
+
+**Two modeling options:**
+
+**A. Rate Escalation (simpler, more direct)**
+Add input: "Annual tax rate increase: __% per year starting in year ___". Each year after the start year, multiply all marginal rates by `(1 + annualIncrease)^yearsElapsed`. E.g., 0.5%/yr → by year 20, marginal rates ~10% higher. Apply to income tax brackets. Optionally apply to capital gains rates (toggle).
+
+Example: 22% bracket → 24.2% in year 10 at 0.5%/yr. 32% → 35.2%.
+
+**B. TCJA Expiration Cliff (one-time step)**
+After 2025, TCJA provisions sunset → rates revert to pre-TCJA levels (e.g., 22% → 25%, 24% → 28%, 32% → 33%). Model as a one-time bracket schedule swap at a user-specified year (default: 2026). Two bracket tables: `BRACKETS_TCJA` (current) and `BRACKETS_POST_TCJA`; switch at `taxRateChangeYear`.
+
+**Recommended: implement both.** TCJA cliff is concrete and near-term; rate escalation is for longer-term sensitivity.
+
+**Interaction with IRMAA:** IRMAA thresholds are CPI-adjusted per law. If income tax rates rise but IRMAA thresholds hold, IRMAA becomes more prevalent. May not need special treatment — just note in tooltip.
+
+**Implementation tasks:**
+- [ ] Add inputs: `taxRateEscalation` (% per year, default 0), `taxEscalationStartYear` (default 0 = off), `tcjaExpirationYear` (default 0 = off, suggested 2026)
+- [ ] `calculateTaxes()`: apply rate multiplier `= (1 + escalation)^max(0, currentYear − startYear)` to all bracket rates before computing tax
+- [ ] TCJA cliff: if `tcjaExpirationYear > 0 && currentYear >= tcjaExpirationYear`, switch to `BRACKETS_POST_TCJA` tables
+- [ ] Add `BRACKETS_POST_TCJA` constant with pre-TCJA rates (25/28/33/35/39.6 + MFJ thresholds)
+- [ ] Annual Details: add `taxRateMultiplier` column (visible under Debug or new "Tax Policy" category); shows effective multiplier for that year
+- [ ] Stats bar: consider showing "Effective marginal rate at age 80" when escalation enabled
+- [ ] Test: escalation=0 → bit-identical to current output (regression)
+- [ ] Test: TCJA expiration year = 2026 → taxes jump in 2026 matching known bracket changes
+- [ ] Test: escalation=1%/yr over 20 yrs → 22% bracket becomes ~26.8% in year 20
+- **Status:** pending
+- **Independent:** no phase dependencies (modifies `calculateTaxes()` which is already isolated)
+- **Note:** The TCJA cliff (2026) is near-term and realistic. Default off to not scare users; add clear tooltip explaining assumption.
+
+---
+
+### Phase 30: Verify GBM Statistical Mode Uses User Growth Rate
+**Why:** User reports GBM mode may not reflect their supplied growth rate. The GBM worker receives `mu` from the controller. Need to verify: (1) where `mu` is populated in `mc_controller.js` / `mc_tab.js`, (2) whether it defaults to the user's growth rate input or a hardcoded value, (3) whether there's a disconnect between the main inputs panel growth rate and the nerd panel μ.
+
+**Expected behavior:** In GBM mode, μ should default to the user's growth rate input. The nerd panel should pre-populate μ from the user's growth rate whenever GBM mode is selected, so results are consistent with the deterministic simulation assumptions. User should be able to override μ in nerd panel, but it should start from their stated assumption.
+
+**Investigation tasks:**
+- [ ] Read `mc_controller.js`: find where `mu` is populated; trace to UI source
+- [ ] Read `mc_tab.js`: find the nerd panel μ input element; check if it's linked to main growth rate
+- [ ] Check `mc_controller.js` `runMC()` call: what value does `mu` receive when user hasn't changed nerd panel?
+- [ ] If gap found: auto-populate nerd panel μ from `inputs.growthRate` when GBM mode selected (not bootstrap mode)
+- [ ] If already wired: document that GBM μ = user growth rate, update tooltip to confirm
+- [ ] Test: set growth rate to 8% in main inputs; switch to GBM mode; verify μ = 8% (or 8% appears as default)
+- **Status:** pending — needs investigation before implementation scope is known
+- **Independent:** no phase dependencies
 
 ---
 

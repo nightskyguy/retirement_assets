@@ -86,14 +86,22 @@
 |-----------|-------|---------|------------|
 | | | | |
 
+## Session: 2026-06-06
+
+### Context restore — new worktree `hardcore-wozniak-4c1c7d`
+- Branch: `worktrees/hardcore-wozniak-4c1c7d` (clean, no uncommitted changes)
+- Last merged: PR #67 (MC tables → CSS grid), PR #65 (MC mode selector always visible + auto re-run)
+- Tests: 199 pass, 0 fail (last confirmed 2026-06-02)
+- No new code changes this session yet
+
 ## 5-Question Reboot Check
 | Question | Answer |
 |----------|--------|
-| Where am I? | Phase 20 complete (Roth OC), Phase 19 complete (URL compression), Phase 18 complete (fan charts) — at v11.e52 |
-| Where am I going? | Phase 21 (BETR, unblocked), Phase 22 (Guyton-Klinger), Phase 3/4/8/9/12 (all independent quickwins) |
+| Where am I? | Phases 0–2, 6–7, 18–21, 23 complete + MC UX fixes shipped (PRs #65, #67). At v11.ec6+ |
+| Where am I going? | Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 8 (Variable Growth), Phase 12 (Withdrawal Timing), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP schedule) |
 | What's the goal? | Implement remaining features from optimizer_directions.md priority list |
-| What have I learned? | Phases 1,2,6,7,18,19,20 done. Bootstrap MC live with per-asset-class returns + inflation. OC shadow tracking done. URL compression done with compat. |
-| What have I done? | Phases 0,0b,1,2,6,7,18,19,20 complete; plan expanded with Phases 21 and 22 |
+| What have I learned? | Bootstrap MC live; per-account asset allocation; inflation sequences; URL compression; Roth OC shadow tracking; BETR (Kitces formula); Conv Amount Optimizer ($25k sweep); Projected RMD stat; MC CSS grid tables |
+| What have I done? | All core Roth conversion work done (20→21→23). MC engine mature. URL sharing polished. Quickwins (3,4,8,12,22) still open. |
 
 ---
 *Update after completing each phase or encountering errors*

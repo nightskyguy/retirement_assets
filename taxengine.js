@@ -484,6 +484,7 @@ var TAXData = {
 	AL: {
 		STATE: 'Alabama',
 		YEAR: 2026,
+		INFLATION_INDEXED: false,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 8500,
@@ -637,6 +638,7 @@ var TAXData = {
 	MT: {
 		STATE: 'Montana',
 		YEAR: 2026,
+		INFLATION_INDEXED: false,
 		SSTaxation: 0.85,
 		MFJ: {
 			std: 10160,  // MT: 20% of AGI, capped at $10,160 (2024); using cap as approximation
@@ -658,6 +660,7 @@ var TAXData = {
 	ND: {
 		STATE: 'North Dakota',
 		YEAR: 2026,
+		INFLATION_INDEXED: false,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 29200,  // ND follows federal standard deduction (2024)
@@ -676,9 +679,11 @@ var TAXData = {
 	}, // NORTH DAKOTA
 
 	// OHIO - HB 96 (signed July 2024): simplified to 3 tiers effective TY 2025; unchanged for 2026
+	// Bracket thresholds are statutory fixed values; Ohio does not CPI-index income brackets.
 	OH: {
 		STATE: 'Ohio',
 		YEAR: 2025,
+		INFLATION_INDEXED: false,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 4800,  // $2,400 personal exemption per taxpayer (2 for MFJ); unchanged
@@ -699,9 +704,11 @@ var TAXData = {
 	}, // OHIO
 
 	// SOUTH CAROLINA - Act 47 (2022) phase-down: 6.5%→6.4%→6.3%→6.2%→6.1% (triggers met each year)
+	// Bracket thresholds are statutory fixed values; not CPI-indexed.
 	SC: {
 		STATE: 'South Carolina',
 		YEAR: 2026,
+		INFLATION_INDEXED: false,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 30000,  // SC follows federal standard deduction (2025/2026)

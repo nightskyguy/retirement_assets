@@ -1579,13 +1579,16 @@ function calculateProgressive(entity, status, amount, inflation = 1, ratecreep =
         return { cumulative: 0, total: 0, marginal: 0, limit: 0, error: `Invalid entity (${entity}) or status (${status})` };
     }
 
+    // States with INFLATION_INDEXED: false have statutory fixed bracket thresholds — never inflate them.
+    const effectiveInflation = TAXData[entity]?.INFLATION_INDEXED === false ? 1 : inflation;
+
     let prevLimit = 0;
     let cumulative = 0;
     let marginalRate = 0;
     let nominalRate = 0;
 
     for (let b of brks) {
-        let currentLimit = b.l * inflation;
+        let currentLimit = b.l * effectiveInflation;
 
         if (amount <= currentLimit) {
             cumulative += (amount - prevLimit) * b.r * ratecreep;

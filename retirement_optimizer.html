@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.ec7</title>
+    <title>Retirement Optimizer 11.ec8</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -513,6 +513,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.ec8</b> <strong>State Bracket Inflation Fix:</strong> MT, ND, AL, OH, and SC have statutory fixed income tax brackets that are not adjusted for inflation. The engine no longer inflates those bracket thresholds in projection years, correcting an error that understated future taxes for residents of those states. States whose brackets <em>are</em> indexed (CA, ME, MN, NJ, WI, etc.) are unaffected. <em>Known limitation: the standard deduction for AL, OH, and MT is also fixed by statute but still inflated by the engine; a future fix will address this.</em></li>
 				<li><b>11.ec7</b> <strong>State Tax Expansion:</strong> Added AL, AZ, CO, IN, KY, MA, ME, MN, MT, ND, OH, SC, WI to the state income tax dropdown.  All states adjusted to latest available information.</li>
 				<li><b>11.ec6</b> <strong>Cyclic Withdrawal:</strong> New <em>Cyclic</em> toggle in the strategy box enables alternating IRA draw years and brokerage LTCG harvest years. 
 					IRA-draw years and brokerage harvest years alternate. The ratio of IRA to brokerage cycles is based on the ratio of the account balances. E.g. if the brokerage is 1/3 the size of the IRA total, the cycle will be 1 year brokerage, 2 years IRA draws.

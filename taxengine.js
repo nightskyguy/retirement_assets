@@ -239,6 +239,28 @@ var TAXData = {
 		// Note: Exemptions phase out above $250K single / $500K MFJ federal AGI
 	}, // ILLINOIS
 
+	// MASSACHUSETTS -
+	MA: {
+		STATE: 'Massachusetts',
+		YEAR: 2026,  // Flat 5% rate; personal exemption $4,400/person
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		FLAT_RATE: 0.05,
+		MFJ: {
+			std: 8800,  // 2 × $4,400 personal exemption
+			exemption: 8800,
+			brackets: [
+				{ l: Infinity, r: 0.05 }
+			]
+		},
+		SGL: {
+			std: 4400,
+			exemption: 4400,
+			brackets: [
+				{ l: Infinity, r: 0.05 }
+			]
+		},
+	}, // MASSACHUSETTS
+
 	// MARYLAND - 2025/2026
 	MD: {
 		STATE: 'Maryland',

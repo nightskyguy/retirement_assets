@@ -112,6 +112,38 @@ When `r_taxable = r_ira`: BETR = t_now (trivial). Taxable drag (`r_taxable < r_i
 - **retirement_optimizer.html** — Main UI
 - **retirement_optimizer_core.js** — Core simulation engine
 
+## Phase 28: SoRR Research Notes
+
+**Why bootstrap looks rosy:** 500 random paths from 97 years → ~16% of paths happen to start with a bad first-3yr block. The median and even p10 outcome are dominated by the ~84% of paths that started normally. The *tail* is visible in the chart but not front-of-mind. SoRR is specifically about early-retirement bad sequences; equal probability sampling dilutes this.
+
+**Recommended SoRR mitigation (in priority order):**
+1. **Bear-Start Mode** — force first block to worst-tercile (hardest directly tests SoRR; every path suffers the bad start). Most direct answer to "I don't see SoRR."
+2. **Historical Scenarios** — 1966 (stagflation), 1929 (depression), 2000 (double crash). Deterministic, visually compelling, grounded.
+3. **CAPE-adjusted GBM preset** — μ=5% reflects current valuation-based expected returns. More relevant for "what if the next 10 yrs disappoint" than historical bootstrap.
+
+**SoRR magnitude (from literature):** Same 4% WR, 60/40 portfolio, 30yr retirement: 1966 starter runs out ~year 27. Average starter succeeds. Difference is purely sequencing. This is the story Bear-Start mode tells.
+
+**CAPE background:** Shiller CAPE ~35 (2024–2025). Historically, CAPE > 25 predicts median 10yr real annualized equity return ~2–4%. Bootstrap uses 1928–2024 data with CAGR ~10.7% nominal. Gap is ~6–7%. Using bootstrap without CAPE adjustment may overstate expected returns by 2–3%/yr over next decade.
+
+## Phase 29: Tax Policy Research Notes
+
+**TCJA Status (updated 2026-06-08):** TCJA was made permanent in 2025 — no automatic sunset. Pre-TCJA rates are NOT the expected near-term scenario. However, Congress can still change rates; fiscal pressure (debt-to-GDP ~120%+) makes future increases plausible. Phase 29 models this as an opt-in hypothetical stress test, not a default assumption. Earliest realistic legislated rate change: 2027+.
+
+**Pre-TCJA brackets (MFJ, 2017 levels, not inflation-adjusted):**
+| Rate | Pre-TCJA | Post-TCJA (current) |
+|------|----------|---------------------|
+| 10%  | $0–$18,650 | $0–$23,200 |
+| 15%→12% | $18,650–$75,900 | $23,200–$94,300 |
+| 25%→22% | $75,900–$153,100 | $94,300–$201,050 |
+| 28%→24% | $153,100–$233,350 | $201,050–$383,900 |
+| 33%→32% | $233,350–$416,700 | $383,900–$487,450 |
+| 35%  | same | same |
+| 39.6%→37% | $416,700+ | $751,600+ |
+
+Note: for implementation, use current inflation-adjusted thresholds but with pre-TCJA *rates* applied (the key change is the rate steps, not the threshold amounts).
+
+**Long-term fiscal pressure:** CBO projects debt-to-GDP reaching ~180% by 2054 under current law. Historical pattern: major revenue increases have come from rate changes (WWII, Korean War). A 0.5%/yr escalation over 20 years puts a 22% rate at ~24.4% — plausible but uncertain. Default escalation = 0 (off). Users who worry about this can toggle it on.
+
 ## Open Questions
 
 1. **Data years for bootstrap:** Use full history (1926–present) or post-1970 (more relevant)?

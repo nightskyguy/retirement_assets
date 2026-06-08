@@ -142,7 +142,7 @@ var TAXData = {
 	// CONNECTICUT - 2025/2026
 	CT: {
 		STATE: 'Connecticut',
-		YEAR: 2025,  // No changes announced for 2026
+		YEAR: 2026,  // No rate or bracket changes for 2026
 		SSTaxation: 0.25,  // Taxes SS benefits above 75k or 100k (MFJ) at 25%	
 		MFJ: {
 			std: 24000,  // CT uses personal exemptions instead, not standard deduction
@@ -238,6 +238,28 @@ var TAXData = {
 		},
 		// Note: Exemptions phase out above $250K single / $500K MFJ federal AGI
 	}, // ILLINOIS
+
+	// MASSACHUSETTS -
+	MA: {
+		STATE: 'Massachusetts',
+		YEAR: 2026,  // Flat 5% rate; personal exemption $4,400/person
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		FLAT_RATE: 0.05,
+		MFJ: {
+			std: 8800,  // 2 × $4,400 personal exemption
+			exemption: 8800,
+			brackets: [
+				{ l: Infinity, r: 0.05 }
+			]
+		},
+		SGL: {
+			std: 4400,
+			exemption: 4400,
+			brackets: [
+				{ l: Infinity, r: 0.05 }
+			]
+		},
+	}, // MASSACHUSETTS
 
 	// MARYLAND - 2025/2026
 	MD: {
@@ -370,21 +392,22 @@ var TAXData = {
 
 	PA: {
 		STATE: 'Pennsylvania',
-		YEAR: 2025,
-		FLAT_RATE: 0.0300,  // 3.07% flat rate for all filers
+		YEAR: 2026,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		FLAT_RATE: 0.0307,  // 3.07% flat rate (unchanged since 2004)
 		MFJ: {
-			std: 0,  // Pennsylvania has no standard deduction for state tax
+			std: 0,  // Pennsylvania has no standard deduction
 			brackets: [
-				{ l: Infinity, r: 0.0307 }  // Flat tax rate
+				{ l: Infinity, r: 0.0307 }
 			]
 		},
 		SGL: {
-			std: 0,  // Pennsylvania has no standard deduction for state tax
+			std: 0,
 			brackets: [
-				{ l: Infinity, r: 0.0307 }  // Flat tax rate
+				{ l: Infinity, r: 0.0307 }
 			]
 		}
-	}, // PENNSYLVANIA	
+	}, // PENNSYLVANIA
 
 	// VIRGINIA - HB1754 signed May 2025; effective TY2025+
 	VA: {
@@ -456,6 +479,279 @@ var TAXData = {
 			]
 		}
 	}, // NEBRASKA
+
+	// ALABAMA - brackets/rates unchanged since 2006; federal income tax deduction not modeled
+	AL: {
+		STATE: 'Alabama',
+		YEAR: 2026,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		MFJ: {
+			std: 8500,
+			brackets: [
+				{ l: 1000, r: 0.02 },
+				{ l: 6000, r: 0.04 },
+				{ l: Infinity, r: 0.05 },
+			]
+		},
+		SGL: {
+			std: 3000,
+			brackets: [
+				{ l: 500, r: 0.02 },
+				{ l: 3000, r: 0.04 },
+				{ l: Infinity, r: 0.05 },
+			]
+		},
+	}, // ALABAMA
+
+	// ARIZONA - flat 2.5% (Prop 208 struck down; rate locked via HB 2900, 2022; unchanged through 2026)
+	AZ: {
+		STATE: 'Arizona',
+		YEAR: 2026,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		FLAT_RATE: 0.025,
+		MFJ: {
+			std: 30000,  // AZ follows federal standard deduction (2025)
+			brackets: [
+				{ l: Infinity, r: 0.025 }
+			]
+		},
+		SGL: {
+			std: 15000,
+			brackets: [
+				{ l: Infinity, r: 0.025 }
+			]
+		},
+	}, // ARIZONA
+
+	// COLORADO - flat 4.4% (rate cut eff. 2022; unchanged 2026; std = 2025 federal, engine inflates forward)
+	CO: {
+		STATE: 'Colorado',
+		YEAR: 2026,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		FLAT_RATE: 0.044,
+		MFJ: {
+			std: 30000,  // CO uses federal standard deduction as CO deduction
+			brackets: [
+				{ l: Infinity, r: 0.044 }
+			]
+		},
+		SGL: {
+			std: 15000,
+			brackets: [
+				{ l: Infinity, r: 0.044 }
+			]
+		},
+	}, // COLORADO
+
+	// INDIANA - flat 3.05% (HEA 1002/1001 phase-down; 2026 rate confirmed 3.05%; county taxes not modeled)
+	IN: {
+		STATE: 'Indiana',
+		YEAR: 2026,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		FLAT_RATE: 0.0305,
+		MFJ: {
+			std: 2000,  // $1,000 personal exemption per taxpayer
+			brackets: [
+				{ l: Infinity, r: 0.0305 }
+			]
+		},
+		SGL: {
+			std: 1000,
+			brackets: [
+				{ l: Infinity, r: 0.0305 }
+			]
+		},
+	}, // INDIANA
+
+	// KENTUCKY - flat 4.0% (phased down from 5.0%; revenue trigger not met for 2026 reduction)
+	KY: {
+		STATE: 'Kentucky',
+		YEAR: 2026,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		FLAT_RATE: 0.04,
+		MFJ: {
+			std: 3270,  // KY standard deduction per return (same amount for all filing statuses, 2025)
+			brackets: [
+				{ l: Infinity, r: 0.04 }
+			]
+		},
+		SGL: {
+			std: 3270,
+			brackets: [
+				{ l: Infinity, r: 0.04 }
+			]
+		},
+	}, // KENTUCKY
+
+	// MAINE - 2025 (brackets inflation-adjusted annually by Maine Revenue Services)
+	ME: {
+		STATE: 'Maine',
+		YEAR: 2025,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		MFJ: {
+			std: 30000,  // ME follows federal standard deduction (2025)
+			brackets: [
+				{ l: 50620, r: 0.058 },
+				{ l: 119780, r: 0.0675 },
+				{ l: Infinity, r: 0.0715 },
+			]
+		},
+		SGL: {
+			std: 15000,
+			brackets: [
+				{ l: 25310, r: 0.058 },
+				{ l: 59890, r: 0.0675 },
+				{ l: Infinity, r: 0.0715 },
+			]
+		},
+	}, // MAINE
+
+	// MINNESOTA - 2025 (brackets inflation-adjusted ~4%/yr by MN DOR; rates unchanged)
+	// SSTaxation 0.85: MN includes SS in state income for filers above ~$105k MFJ — no subtraction available
+	MN: {
+		STATE: 'Minnesota',
+		YEAR: 2025,
+		SSTaxation: 0.85,
+		MFJ: {
+			std: 30000,  // MN follows federal standard deduction (2025)
+			brackets: [
+				{ l: 48490, r: 0.0535 },
+				{ l: 192860, r: 0.0680 },
+				{ l: 337100, r: 0.0785 },
+				{ l: Infinity, r: 0.0985 },
+			]
+		},
+		SGL: {
+			std: 15000,
+			brackets: [
+				{ l: 33190, r: 0.0535 },
+				{ l: 109150, r: 0.0680 },
+				{ l: 201860, r: 0.0785 },
+				{ l: Infinity, r: 0.0985 },
+			]
+		},
+	}, // MINNESOTA
+
+	// MONTANA - HB 192 two-bracket reform eff. 2024; brackets NOT inflation-indexed — unchanged through 2026
+	// SSTaxation 0.85: MT exempts SS for low income; at moderate-high income, 85% is taxable (matching federal)
+	MT: {
+		STATE: 'Montana',
+		YEAR: 2026,
+		SSTaxation: 0.85,
+		MFJ: {
+			std: 10160,  // MT: 20% of AGI, capped at $10,160 (2024); using cap as approximation
+			brackets: [
+				{ l: 41000, r: 0.047 },
+				{ l: Infinity, r: 0.059 },
+			]
+		},
+		SGL: {
+			std: 5080,  // cap at $5,080 (2024)
+			brackets: [
+				{ l: 20500, r: 0.047 },
+				{ l: Infinity, r: 0.059 },
+			]
+		},
+	}, // MONTANA
+
+	// NORTH DAKOTA - HB 1158 rate cuts eff. 2024; brackets NOT inflation-indexed — unchanged through 2026
+	ND: {
+		STATE: 'North Dakota',
+		YEAR: 2026,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		MFJ: {
+			std: 29200,  // ND follows federal standard deduction (2024)
+			brackets: [
+				{ l: 74750, r: 0.011 },
+				{ l: Infinity, r: 0.0204 },
+			]
+		},
+		SGL: {
+			std: 14600,
+			brackets: [
+				{ l: 44725, r: 0.011 },
+				{ l: Infinity, r: 0.0204 },
+			]
+		},
+	}, // NORTH DAKOTA
+
+	// OHIO - HB 96 (signed July 2024): simplified to 3 tiers effective TY 2025; unchanged for 2026
+	OH: {
+		STATE: 'Ohio',
+		YEAR: 2025,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		MFJ: {
+			std: 4800,  // $2,400 personal exemption per taxpayer (2 for MFJ); unchanged
+			brackets: [
+				{ l: 26050, r: 0.00 },
+				{ l: 100000, r: 0.0275 },
+				{ l: Infinity, r: 0.035 },
+			]
+		},
+		SGL: {
+			std: 2400,
+			brackets: [
+				{ l: 26050, r: 0.00 },
+				{ l: 100000, r: 0.0275 },
+				{ l: Infinity, r: 0.035 },
+			]
+		},
+	}, // OHIO
+
+	// SOUTH CAROLINA - Act 47 (2022) phase-down: 6.5%→6.4%→6.3%→6.2%→6.1% (triggers met each year)
+	SC: {
+		STATE: 'South Carolina',
+		YEAR: 2026,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		MFJ: {
+			std: 30000,  // SC follows federal standard deduction (2025/2026)
+			brackets: [
+				{ l: 3200, r: 0.00 },
+				{ l: 6410, r: 0.03 },
+				{ l: 9620, r: 0.04 },
+				{ l: 12820, r: 0.05 },
+				{ l: 16040, r: 0.06 },
+				{ l: Infinity, r: 0.061 },
+			]
+		},
+		SGL: {
+			std: 15000,
+			brackets: [
+				{ l: 3200, r: 0.00 },
+				{ l: 6410, r: 0.03 },
+				{ l: 9620, r: 0.04 },
+				{ l: 12820, r: 0.05 },
+				{ l: 16040, r: 0.06 },
+				{ l: Infinity, r: 0.061 },
+			]
+		},
+	}, // SOUTH CAROLINA
+
+	// WISCONSIN - 2025 (brackets inflation-adjusted annually by WI DOR; rates unchanged since 2024 reform)
+	// Std deduction phases out at higher income — using base amount
+	WI: {
+		STATE: 'Wisconsin',
+		YEAR: 2025,
+		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		MFJ: {
+			std: 25200,
+			brackets: [
+				{ l: 19660, r: 0.035 },
+				{ l: 39310, r: 0.044 },
+				{ l: 432830, r: 0.053 },
+				{ l: Infinity, r: 0.0765 },
+			]
+		},
+		SGL: {
+			std: 13610,
+			brackets: [
+				{ l: 14750, r: 0.035 },
+				{ l: 29490, r: 0.044 },
+				{ l: 324750, r: 0.053 },
+				{ l: Infinity, r: 0.0765 },
+			]
+		},
+	}, // WISCONSIN
 
 	TEST: {
 		// Data used for testing only.

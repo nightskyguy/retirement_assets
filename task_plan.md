@@ -925,35 +925,35 @@ Current CAPE-Shiller ratio (~35+) implies forward 10-yr real returns ~2–4% vs 
 ---
 
 ### Phase 29: Creeping Tax Rate Model
-**Why:** US federal debt-to-GDP ~120%+. Tax rates are historically low (post-TCJA). Many analysts expect rates to increase after 2025 TCJA expiration and/or long-term fiscal pressure. Currently the tool assumes today's tax brackets persist forever — optimistic for a 30-year simulation.
+**Why:** US federal debt-to-GDP ~120%+. Tax rates are historically low. TCJA was made permanent in 2025, so no imminent automatic sunset — but Congress can always change rates. Future rate increases remain plausible given fiscal trajectory. Tool assumes today's brackets persist forever — optimistic for a 30-year simulation.
 
 **Two modeling options:**
 
-**A. Rate Escalation (simpler, more direct)**
+**A. Rate Escalation (primary feature)**
 Add input: "Annual tax rate increase: __% per year starting in year ___". Each year after the start year, multiply all marginal rates by `(1 + annualIncrease)^yearsElapsed`. E.g., 0.5%/yr → by year 20, marginal rates ~10% higher. Apply to income tax brackets. Optionally apply to capital gains rates (toggle).
 
 Example: 22% bracket → 24.2% in year 10 at 0.5%/yr. 32% → 35.2%.
 
-**B. TCJA Expiration Cliff (one-time step)**
-After 2025, TCJA provisions sunset → rates revert to pre-TCJA levels (e.g., 22% → 25%, 24% → 28%, 32% → 33%). Model as a one-time bracket schedule swap at a user-specified year (default: 2026). Two bracket tables: `BRACKETS_TCJA` (current) and `BRACKETS_POST_TCJA`; switch at `taxRateChangeYear`.
+**B. Pre-TCJA Rate Schedule (stress test scenario)**
+TCJA is permanent now, but modeling a return to pre-TCJA rates (25/28/33/35/39.6%) is still a valid "what if Congress acts" stress test. Earliest realistic year: 2027+. Model as a one-time bracket schedule swap at a user-specified year (default: off, no suggested default since TCJA is now permanent). Two bracket tables: `BRACKETS_CURRENT` and `BRACKETS_PRE_TCJA`; switch at `taxRateChangeYear`.
 
-**Recommended: implement both.** TCJA cliff is concrete and near-term; rate escalation is for longer-term sensitivity.
+**Framing in UI:** Label option as "Pre-TCJA rates (what if rates rise?)" not "TCJA expiration" — TCJA was extended; this is a hypothetical stress test.
 
-**Interaction with IRMAA:** IRMAA thresholds are CPI-adjusted per law. If income tax rates rise but IRMAA thresholds hold, IRMAA becomes more prevalent. May not need special treatment — just note in tooltip.
+**Interaction with IRMAA:** IRMAA thresholds are CPI-adjusted per law. If income tax rates rise but IRMAA thresholds hold, IRMAA becomes more prevalent. May not need special treatment — note in tooltip.
 
 **Implementation tasks:**
-- [ ] Add inputs: `taxRateEscalation` (% per year, default 0), `taxEscalationStartYear` (default 0 = off), `tcjaExpirationYear` (default 0 = off, suggested 2026)
+- [ ] Add inputs: `taxRateEscalation` (% per year, default 0), `taxEscalationStartYear` (default 0 = off), `taxRateChangeYear` (default 0 = off)
 - [ ] `calculateTaxes()`: apply rate multiplier `= (1 + escalation)^max(0, currentYear − startYear)` to all bracket rates before computing tax
-- [ ] TCJA cliff: if `tcjaExpirationYear > 0 && currentYear >= tcjaExpirationYear`, switch to `BRACKETS_POST_TCJA` tables
-- [ ] Add `BRACKETS_POST_TCJA` constant with pre-TCJA rates (25/28/33/35/39.6 + MFJ thresholds)
-- [ ] Annual Details: add `taxRateMultiplier` column (visible under Debug or new "Tax Policy" category); shows effective multiplier for that year
-- [ ] Stats bar: consider showing "Effective marginal rate at age 80" when escalation enabled
+- [ ] Pre-TCJA cliff: if `taxRateChangeYear > 0 && currentYear >= taxRateChangeYear`, switch to `BRACKETS_PRE_TCJA` tables
+- [ ] Add `BRACKETS_PRE_TCJA` constant with pre-TCJA rates (25/28/33/35/39.6 + MFJ thresholds)
+- [ ] UI label: "Hypothetical rate increase year" (not "TCJA expiration"); tooltip explains TCJA is now permanent but future changes are possible
+- [ ] Annual Details: add `taxRateMultiplier` column (Debug or "Tax Policy" category)
 - [ ] Test: escalation=0 → bit-identical to current output (regression)
-- [ ] Test: TCJA expiration year = 2026 → taxes jump in 2026 matching known bracket changes
+- [ ] Test: pre-TCJA switch year set → taxes jump that year matching pre-TCJA bracket changes
 - [ ] Test: escalation=1%/yr over 20 yrs → 22% bracket becomes ~26.8% in year 20
 - **Status:** pending
 - **Independent:** no phase dependencies (modifies `calculateTaxes()` which is already isolated)
-- **Note:** The TCJA cliff (2026) is near-term and realistic. Default off to not scare users; add clear tooltip explaining assumption.
+- **Note:** TCJA made permanent 2025. Pre-TCJA scenario is a hypothetical stress test, not an expected event. Default all options off. User opts in explicitly.
 
 ---
 

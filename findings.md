@@ -127,7 +127,7 @@ When `r_taxable = r_ira`: BETR = t_now (trivial). Taxable drag (`r_taxable < r_i
 
 ## Phase 29: Tax Policy Research Notes
 
-**TCJA Sunset (confirmed):** TCJA provisions expire 2025-12-31. Without new legislation, 2026 brackets revert to pre-TCJA: 25/28/33/35/39.6% (MFJ thresholds also change). Congress may extend — unknown. Safest assumption: model both (with and without expiration).
+**TCJA Status (updated 2026-06-08):** TCJA was made permanent in 2025 — no automatic sunset. Pre-TCJA rates are NOT the expected near-term scenario. However, Congress can still change rates; fiscal pressure (debt-to-GDP ~120%+) makes future increases plausible. Phase 29 models this as an opt-in hypothetical stress test, not a default assumption. Earliest realistic legislated rate change: 2027+.
 
 **Pre-TCJA brackets (MFJ, 2017 levels, not inflation-adjusted):**
 | Rate | Pre-TCJA | Post-TCJA (current) |

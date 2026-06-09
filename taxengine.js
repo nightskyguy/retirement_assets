@@ -96,32 +96,45 @@ var TAXData = {
 
 
 	// ─────────────────────────────────────────────────────────────────────────
-	// STATE TAX SUMMARY (as of 2026)
+	// STATE TAX SUMMARY (as of 2026) — 36 of 51 jurisdictions included
 	//
-	// ZERO / FLAT-RATE STATES — 21 total
+	// NO INCOME TAX — 9 states (all in 'no' key):
+	//   AK, FL, NV, NH, SD, TN, TX, WA, WY
 	//
-	//   No income tax (0%) — 9 states, all grouped under key 'no':
-	//     AK, FL, NV, NH, SD, TN, TX, WA, WY
-	//
-	//   Flat rate — 12 states (single Infinity bracket):
+	// FLAT-RATE — 12 included  (15 total across all 51 jurisdictions)
+	//   Included (single Infinity bracket):
 	//     AZ  2.5%    CO  4.4%    GA  4.99%  ID  5.3% (with income threshold)
 	//     IL  4.95%   IN  3.05%   KY  4.0%   MA  5.0%
 	//     MI  4.25%   NC  3.99%   NE  4.55%  PA  3.07%
-	//
-	//   Flat rates with scheduled/possible reductions (FLAT_RATE is metadata only):
+	//   Scheduled/possible reductions (FLAT_RATE field is metadata; brackets govern):
 	//     GA — 4.99%(2026) → 4.89%(2027) → 4.79%(2028), targeting 3.99%
 	//     NE — LB754 phase-down continuing toward 3.99% target
 	//     IN — HEA 1002/1001 phase-down ongoing
 	//     KY — revenue-trigger reduction possible (not triggered for 2026)
+	//   Not yet coded (3 flat-rate states):
+	//     IA  3.9%  SF 2442 fully phased in 2026; statutory brackets
+	//     LA  3.0%  constitutional amendment, effective 2025
+	//     UT  4.65% cut from 4.85% in 2022; no further changes scheduled
 	//
-	// GRADUATED (PROGRESSIVE) STATES — 15 + DC:
-	//   AL, CA, CT, DC, MD, ME, MN, MT, ND, NY, OH, OR, SC, VA, WI
+	// GRADUATED — 15 states + DC included  (27 total across all 51 jurisdictions)
+	//   Included: AL, CA, CT, DC, MD, ME, MN, MT, ND, NY, OH, OR, SC, VA, WI
+	//   Not yet coded (12 graduated states):
+	//     AR  top 3.9%    2 brackets  statutory   SS partial  major 2024 reform
+	//     DE  top 6.6%    7 brackets  statutory   SS exempt   brackets ~20yrs unchanged
+	//     HI  top 11%    12 brackets  statutory   SS exempt   most brackets in US
+	//     KS  top 5.7%    3 brackets  statutory   SS exempt   rate cuts contested
+	//     MO  top 4.7%    5 brackets  statutory   SS partial  revenue-trigger phase-down
+	//     MS  top ~4.4%   1-2 brkts   statutory   SS exempt   transitioning to flat
+	//     NJ  top 10.75%  7 brackets  statutory   SS partial  surtax >$1M
+	//     NM  top 4.9%    4 brackets  statutory   SS partial
+	//     OK  top 4.75%   6 brackets  statutory   SS exempt   cut from 5%
+	//     RI  top 5.99%   3 brackets  CPI-INDEXED SS partial
+	//     VT  top 8.75%   4 brackets  CPI-INDEXED SS partial  exempt <~$65k AGI
+	//     WV  top ~4.82%  5 brackets  statutory   SS partial  active phase-down
 	//
-	// FIXED (NON-INFLATION-INDEXED) BRACKETS — 5 states:
+	// FIXED (NON-INFLATION-INDEXED) BRACKETS — 5 included states:
 	//   AL, MT, ND, OH, SC  (flagged INFLATION_INDEXED: false)
-	//
-	// NOT YET INCLUDED — 15 states:
-	//   AR, DE, HI, IA, KS, LA, MO, MS, NJ, NM, OK, RI, UT, VT, WV
+	//   Of the 12 missing graduated states, only RI and VT are CPI-indexed; rest are statutory.
 	// ─────────────────────────────────────────────────────────────────────────
 
 	// No-tax states grouped under key 'no' (2-char key → included in state dropdown).

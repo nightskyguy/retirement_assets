@@ -95,7 +95,36 @@ var TAXData = {
 	}, // IRMAA	
 
 
-	// For states with NO state tax. Not implemented yet... but it's close.
+	// ─────────────────────────────────────────────────────────────────────────
+	// STATE TAX SUMMARY (as of 2026)
+	//
+	// ZERO / FLAT-RATE STATES — 21 total
+	//
+	//   No income tax (0%) — 9 states, all grouped under key 'no':
+	//     AK, FL, NV, NH, SD, TN, TX, WA, WY
+	//
+	//   Flat rate — 12 states (single Infinity bracket):
+	//     AZ  2.5%    CO  4.4%    GA  4.99%  ID  5.3% (with income threshold)
+	//     IL  4.95%   IN  3.05%   KY  4.0%   MA  5.0%
+	//     MI  4.25%   NC  3.99%   NE  4.55%  PA  3.07%
+	//
+	//   Flat rates with scheduled/possible reductions (FLAT_RATE is metadata only):
+	//     GA — 4.99%(2026) → 4.89%(2027) → 4.79%(2028), targeting 3.99%
+	//     NE — LB754 phase-down continuing toward 3.99% target
+	//     IN — HEA 1002/1001 phase-down ongoing
+	//     KY — revenue-trigger reduction possible (not triggered for 2026)
+	//
+	// GRADUATED (PROGRESSIVE) STATES — 15 + DC:
+	//   AL, CA, CT, DC, MD, ME, MN, MT, ND, NY, OH, OR, SC, VA, WI
+	//
+	// FIXED (NON-INFLATION-INDEXED) BRACKETS — 5 states:
+	//   AL, MT, ND, OH, SC  (flagged INFLATION_INDEXED: false)
+	//
+	// NOT YET INCLUDED — 15 states:
+	//   AR, DE, HI, IA, KS, LA, MO, MS, NJ, NM, OK, RI, UT, VT, WV
+	// ─────────────────────────────────────────────────────────────────────────
+
+	// No-tax states grouped under key 'no' (2-char key → included in state dropdown).
     no: {
 		STATE: 'NONE: AK,FL,NV,NH,SD,TN,TX,WA,WY',  // Alaska, Florida, Nevada, New Hampshire, South Dakota, Tennessee, Texas, Washington, and Wyoming
 		YEAR: 2026,
@@ -177,7 +206,7 @@ var TAXData = {
 		STATE: 'Georgia',
 		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
-		FLAT_RATE: {2026: 0.0499, 2027: 0.0489, 2028: 0.0479 }, // Decreasing 0.125%/yr toward 3.99%
+		FLAT_RATE: {2026: 0.0499, 2027: 0.0489, 2028: 0.0479 }, // Decreasing 0.1%/yr (10bp) toward 3.99%
 		MFJ: {
 			std: 24000,  // Increases to $30,000 in 2027 per HB 463
 			exemption_dependent: 4000,  // $4,000 per dependent
@@ -192,7 +221,7 @@ var TAXData = {
 				{ l: Infinity, r: 0.0499 }
 			]
 		},
-		// Note: Rate decreases 0.125%/yr: 2027: 4.89%, etc., targeting 3.99%
+		// Note: Rate decreases 0.1%/yr (10bp): 2027: 4.89%, etc., targeting 3.99%
 	}, // GEORGIA
 
 	// IDAHO - flat 5.3% (HB 40, enacted March 2025, retroactive to Jan 1 2025); SS fully exempt
@@ -813,7 +842,7 @@ const RMD_TABLE = {
  * @param {number} params.taxExemptInterest - Muni bond interest (affects SS/IRMAA/CA).
  * @param {number} params.hsaContrib - HSA contributions (deductible Fed, taxable CA).
  * @param {number} params.inflation - CPI multiplier for tax brackets (e.g., 1.025).
- * @param {string} params.state - State abbreviation (e.g., 'CA', 'NONE').
+ * @param {string} params.state - State abbreviation (e.g., 'CA', 'no' for no-tax states).
  * @param {number} params.irmaaAnnualCost - Annual IRMAA cost (from 2-year lookback MAGI).
  * @param {boolean} params.obbaOn - Enable OBBBA provisions (senior deduction + SALT cap).
  * @param {boolean} params.saltHigh - Use $40k SALT cap (OBBBA); false = $10k (TCJA).

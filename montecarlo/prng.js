@@ -65,15 +65,20 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
     const bdBank   = new Float64Array(count * years);
     const itBank   = new Float64Array(count * years);
     const infBank  = new Float64Array(count * years);
-    const labels      = [];
-    const startYears  = [];
-    const decadeCAGRs = [];
+    const labels         = [];
+    const startYears     = [];
+    const decadeCAGRs    = [];
+    const decadeInflCAGRs = [];
 
     for (let p = 0; p < count; p++) {
         const { i: si, year, cagr } = worst[p];
         labels.push(String(year));
         startYears.push(year);
         decadeCAGRs.push(cagr);
+        // Compute first-decade inflation CAGR for the same starting window.
+        let infLogSum = 0;
+        for (let y = 0; y < sLen; y++) infLogSum += Math.log1p(infSrc[(si + y) % n]);
+        decadeInflCAGRs.push(Math.exp(infLogSum / sLen) - 1);
         for (let y = 0; y < years; y++) {
             const idx = (si + y) % n;
             eqBank [p * years + y] = eq[idx];
@@ -84,7 +89,7 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
     }
 
     return { equity: eqBank, bonds: bdBank, intl: itBank, inflation: infBank,
-             labels, startYears, decadeCAGRs };
+             labels, startYears, decadeCAGRs, decadeInflCAGRs };
 }
 
 // Multi-asset block bootstrap: synchronized draws from equity, bonds, intl, and inflation.

@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.ec8</title>
+    <title>Retirement Optimizer 11.ec9</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -517,7 +517,8 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.ec8</b> <strong>State Bracket Inflation Fix:</strong> MT, ND, AL, OH, and SC have statutory fixed income tax brackets (they were being incorrectly inflated which would understate future state taxation). Other states are unaffected. <em>Known limitation: the standard deduction for AL, OH, and MT is fixed by statute but is being adjusted - future fix to be provided.</em></li>
+				<li><b>11.ec9</b> <strong>MC Stress Mode:</strong> New "Stress (worst sequences)" simulation mode replays the N worst historical retirement-start sequences (default 10, scored by first-decade equity CAGR). Shows sequence-of-returns risk directly — each line is a real historical scenario. Legend click isolates one sequence or strategy; click again to restore all. Stress labels show <em>eq: X% inf: Y%</em> (nominal equity CAGR and average inflation over the starting decade).</li>
+			<li><b>11.ec8</b> <strong>State Bracket Inflation Fix:</strong> MT, ND, AL, OH, and SC have statutory fixed income tax brackets (they were being incorrectly inflated which would understate future state taxation). Other states are unaffected. <em>Known limitation: the standard deduction for AL, OH, and MT is fixed by statute but is being adjusted - future fix to be provided.</em></li>
 				<li><b>11.ec7</b> <strong>State Tax Expansion:</strong> Added AL, AZ, CO, IN, KY, MA, ME, MN, MT, ND, OH, SC, WI to the state income tax dropdown.  All states adjusted to latest available information.</li>
 				<li><b>11.ec6</b> <strong>Cyclic Withdrawal:</strong> New <em>Cyclic</em> toggle in the strategy box enables alternating IRA draw years and brokerage LTCG harvest years. 
 					IRA-draw years and brokerage harvest years alternate. The ratio of IRA to brokerage cycles is based on the ratio of the account balances. E.g. if the brokerage is 1/3 the size of the IRA total, the cycle will be 1 year brokerage, 2 years IRA draws.

@@ -5,6 +5,7 @@
 
 let _mcChart             = null;
 let _mcResults           = null;
+let _legendIsolatedKey   = null;  // tracks legend click-to-isolate state
 let _mcSelected          = new Set(); // indices of variations currently on chart
 let _mcStartYear         = 2026;      // cached from getInputs() at run time
 let _lastMCHash          = null;
@@ -206,8 +207,8 @@ function renderMCResults(msg) {
     const descEl = document.getElementById('mc-chart-desc');
     if (descEl) {
         descEl.textContent = msg.stressLabels
-            ? `Each line = one historical sequence starting in that year. Dark red = worst first decade; amber = least bad. Darker colors hit $0 first.`
-            : `Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0.`;
+            ? `Each line = one historical sequence. "eq" = nominal equity CAGR over first 10 years; "inf" = average inflation over same window. Click a legend item to isolate it; click again to restore all.`
+            : `Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0. Click a legend item to isolate it; click again to restore all.`;
     }
 
     renderMCChart(msg);
@@ -439,10 +440,52 @@ function colorFor(familyName, fallbackIdx) {
         ?? FALLBACK_PALETTE[fallbackIdx % FALLBACK_PALETTE.length];
 }
 
-// Red-to-amber gradient: rank 0 = worst (dark red), rank N-1 = least-worst (amber).
+// Stress color when only one variation selected: red-to-amber gradient showing severity.
+// rank 0 = worst (dark red), rank N-1 = least-worst (amber).
 function _stressColor(rank, total) {
     const t = total <= 1 ? 0 : rank / (total - 1);
     return `rgba(${180 + Math.round(t * 20)},${Math.round(t * 160)},0,0.9)`;
+}
+
+// Stress color when multiple variations selected: strategy family hue, rank controls opacity.
+function _stressColorMulti(familyName, rank, total, fallbackIdx) {
+    const solid = (FAMILY_COLORS[familyName] ?? FALLBACK_PALETTE[fallbackIdx % FALLBACK_PALETTE.length]).solid;
+    const m = solid.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+    if (!m) return solid;
+    const [r, g, b] = m.slice(1).map(x => parseInt(x, 16));
+    const opacity = total <= 1 ? 1.0 : 1.0 - (rank / (total - 1)) * 0.6;
+    return `rgba(${r},${g},${b},${opacity.toFixed(2)})`;
+}
+
+// Strip HTML tags from a strategy family name (may contain icon spans).
+function _stripHtml(s) { return String(s ?? '').replace(/<[^>]+>/g, '').trim(); }
+
+// Legend onClick: click once to isolate that item, click again to restore all.
+// For normal (percentile band) mode: "item" = one strategy = 5 consecutive datasets.
+// For stress mode: "item" = one scenario dataset.
+function _makeLegendClick(isStress) {
+    return function (e, legendItem, legend) {
+        const chart = legend.chart;
+        const clickedDs = legendItem.datasetIndex;
+        const total = chart.data.datasets.length;
+        const key = isStress ? `ds${clickedDs}` : `strat${Math.floor(clickedDs / 5)}`;
+
+        if (_legendIsolatedKey === key) {
+            // Already isolated this item — restore all
+            for (let i = 0; i < total; i++) chart.setDatasetVisibility(i, true);
+            _legendIsolatedKey = null;
+        } else {
+            // Isolate: hide everything except the clicked item's group
+            for (let i = 0; i < total; i++) {
+                const visible = isStress
+                    ? i === clickedDs
+                    : Math.floor(i / 5) === Math.floor(clickedDs / 5);
+                chart.setDatasetVisibility(i, visible);
+            }
+            _legendIsolatedKey = key;
+        }
+        chart.update();
+    };
 }
 
 function renderMCChart(msg) {
@@ -460,24 +503,37 @@ function renderMCChart(msg) {
     };
 
     const isStress = !!msg.stressLabels;
+    const selectedVarCount = _mcSelected.size;
+    _legendIsolatedKey = null;   // reset on each fresh render
     const datasets = [];
 
     if (isStress) {
         // Stress mode: one labeled line per historical scenario per selected variation.
+        // Single variation → red-amber severity gradient.
+        // Multiple variations → strategy family hue + rank-based opacity.
+        const multiStrat = selectedVarCount > 1;
+        let fallbackIdx = 0;
         Array.from(_mcSelected).forEach(selIdx => {
             const v = msg.variations[selIdx];
             if (!v?.stressPaths) return;
-            const nS = v.stressPaths.length;
+            const nS        = v.stressPaths.length;
+            const famName   = _stripHtml(v.strategyFamily);
+            const stratPfx  = multiStrat ? `[${famName}] ` : '';
+
             v.stressPaths.forEach((pathData, rank) => {
-                const startYear = msg.stressStartYears?.[rank] ?? rank;
-                const cagr      = msg.stressDecadeCAGRs?.[rank];
-                const cagrStr   = cagr != null
-                    ? ` (${cagr >= 0 ? '+' : ''}${(cagr * 100).toFixed(1)}%/10yr)`
-                    : '';
+                const startYear = msg.stressStartYears?.[rank]     ?? rank;
+                const eqCAGR    = msg.stressDecadeCAGRs?.[rank];
+                const infCAGR   = msg.stressInflationCAGRs?.[rank];
+                const s = (v, d) => (v >= 0 ? '+' : '') + (v * 100).toFixed(d) + '%';
+                const eqStr  = eqCAGR  != null ? `eq: ${s(eqCAGR,  1)}` : '';
+                const infStr = infCAGR != null ? ` inf: ${s(infCAGR, 1)}` : '';
+                const color  = multiStrat
+                    ? _stressColorMulti(famName, rank, nS, fallbackIdx)
+                    : _stressColor(rank, nS);
                 datasets.push({
-                    label:           `${startYear}${cagrStr}`,
+                    label:           `${stratPfx}${startYear} (${eqStr}${infStr})`,
                     data:            deflate(pathData),
-                    borderColor:     _stressColor(rank, nS),
+                    borderColor:     color,
                     backgroundColor: 'transparent',
                     borderWidth:     1.8,
                     pointRadius:     0,
@@ -485,6 +541,7 @@ function renderMCChart(msg) {
                     tension:         0.3,
                 });
             });
+            fallbackIdx++;
         });
     } else {
         // Normal mode: 5 datasets per selected variation (bands + median).
@@ -529,6 +586,7 @@ function renderMCChart(msg) {
     const legendLabels = isStress
         ? { filter: () => true, font: { size: 11 }, usePointStyle: true, pointStyle: 'line', boxWidth: 20 }
         : { filter: (item) => item.datasetIndex % 5 === 4, font: { size: 12 }, usePointStyle: true, pointStyle: 'line', boxWidth: 24 };
+    const legendClick = _makeLegendClick(isStress);
 
     const tooltipCfg = isStress
         ? {
@@ -560,7 +618,7 @@ function renderMCChart(msg) {
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: legendLabels },
+                legend: { labels: legendLabels, onClick: legendClick },
                 tooltip: tooltipCfg,
             },
             scales: {

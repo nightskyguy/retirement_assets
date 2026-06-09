@@ -340,8 +340,9 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         assetRanges,
         inflationStats,
         inputFan,
-        stressLabels:      simulationMode === 'stress' ? multiAssetBank.labels      : null,
-        stressStartYears:  simulationMode === 'stress' ? multiAssetBank.startYears  : null,
-        stressDecadeCAGRs: simulationMode === 'stress' ? multiAssetBank.decadeCAGRs : null,
+        stressLabels:         simulationMode === 'stress' ? multiAssetBank.labels         : null,
+        stressStartYears:     simulationMode === 'stress' ? multiAssetBank.startYears     : null,
+        stressDecadeCAGRs:    simulationMode === 'stress' ? multiAssetBank.decadeCAGRs    : null,
+        stressInflationCAGRs: simulationMode === 'stress' ? multiAssetBank.decadeInflCAGRs : null,
     });
 }

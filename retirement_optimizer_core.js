@@ -3694,14 +3694,16 @@ async function copyShareURL() {
     }
 }
 
-document.addEventListener('click', e => {
-    const panel = document.getElementById('share-panel');
-    if (panel && panel.style.display === 'block' &&
-        !panel.contains(e.target) &&
-        !e.target.closest('[onclick="toggleSharePanel()"]')) {
-        panel.style.display = 'none';
-    }
-});
+if (typeof document !== 'undefined') {
+    document.addEventListener('click', e => {
+        const panel = document.getElementById('share-panel');
+        if (panel && panel.style.display === 'block' &&
+            !panel.contains(e.target) &&
+            !e.target.closest('[onclick="toggleSharePanel()"]')) {
+            panel.style.display = 'none';
+        }
+    });
+}
 
 function loadFromURL() {
     const raw = new URLSearchParams(location.search);

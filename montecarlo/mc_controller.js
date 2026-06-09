@@ -92,7 +92,7 @@ let _mcCancelled = false;
 async function _runMCMainThread(cfg, onProgress, onComplete) {
     const t0 = performance.now();
     _mcCancelled = false;
-    const { numPaths, mu, sigma, seed, years, variations, simulationMode } = cfg;
+    let { numPaths, mu, sigma, seed, years, variations, simulationMode } = cfg;
     const rng = mulberry32(seed ?? 42);
 
     let scenarioBank, multiAssetBank, medianAnnualReturn, logDrift;
@@ -119,10 +119,6 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         }
         minAnnualReturn = eqMin;
         maxAnnualReturn = eqMax;
-        // Compute per-asset CAGR (geometric mean = exp(mean(log(1+r))) - 1) from sampled banks.
-        // CAGR is the right "center" statistic — matches what investors call "average annual return".
-        // Arithmetic median of annual returns is ~16% for S&P (right-skewed), which misleads users
-        // who expect CAGR (~10–11%). Single O(n) pass; avoids expensive sort.
         let eqLogSum = 0, bdLogSum = 0, itLogSum = 0, infLogSum = 0;
         const bankLen = scenarioBank.length;
         for (let i = 0; i < bankLen; i++) {
@@ -135,7 +131,6 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         const bdCAGR  = Math.exp(bdLogSum  / bankLen) - 1;
         const itCAGR  = Math.exp(itLogSum  / bankLen) - 1;
         const infCAGR = Math.exp(infLogSum / bankLen) - 1;
-        // Bootstrap mode: suppress top-level medianAnnualReturn (equity-only, confuses blended portfolios).
         medianAnnualReturn = null;
         assetRanges    = {
             equity: [eqMin, eqCAGR, eqMax],
@@ -143,6 +138,33 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             intl:   [itMin, itCAGR, itMax],
         };
         inflationStats = { min: infMin, cagr: infCAGR, max: infMax };
+    } else if (simulationMode === 'stress') {
+        const stressCount = cfg.stressCount ?? 10;
+        multiAssetBank = buildStressBank(stressCount, years);
+        numPaths = multiAssetBank.labels.length;
+        scenarioBank = multiAssetBank.equity;
+        let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity,
+            itMin = Infinity, itMax = -Infinity, infMin = Infinity, infMax = -Infinity;
+        let eqLogSum = 0, bdLogSum = 0, itLogSum = 0, infLogSum = 0;
+        const bankLen = scenarioBank.length;
+        for (let i = 0; i < bankLen; i++) {
+            const eq = scenarioBank[i], bd = multiAssetBank.bonds[i],
+                  it = multiAssetBank.intl[i],  inf = multiAssetBank.inflation[i];
+            if (eq  < eqMin)  eqMin  = eq;   if (eq  > eqMax)  eqMax  = eq;
+            if (bd  < bdMin)  bdMin  = bd;   if (bd  > bdMax)  bdMax  = bd;
+            if (it  < itMin)  itMin  = it;   if (it  > itMax)  itMax  = it;
+            if (inf < infMin) infMin = inf;  if (inf > infMax) infMax = inf;
+            eqLogSum += Math.log1p(eq); bdLogSum += Math.log1p(bd);
+            itLogSum += Math.log1p(it); infLogSum += Math.log1p(inf);
+        }
+        minAnnualReturn = eqMin; maxAnnualReturn = eqMax;
+        medianAnnualReturn = null;
+        assetRanges = {
+            equity: [eqMin, Math.exp(eqLogSum / bankLen) - 1, eqMax],
+            bonds:  [bdMin, Math.exp(bdLogSum / bankLen) - 1, bdMax],
+            intl:   [itMin, Math.exp(itLogSum / bankLen) - 1, itMax],
+        };
+        inflationStats = { min: infMin, cagr: Math.exp(infLogSum / bankLen) - 1, max: infMax };
     } else {
         logDrift = mu - 0.5 * sigma * sigma;
         medianAnnualReturn = Math.exp(logDrift) - 1;
@@ -176,11 +198,11 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             const returnSeq = new Float64Array(years);
             for (let y = 0; y < years; y++) {
                 const raw = scenarioBank[p * years + y];
-                returnSeq[y] = simulationMode === 'bootstrap' ? raw : Math.exp(raw) - 1;
+                returnSeq[y] = (simulationMode === 'bootstrap' || simulationMode === 'stress') ? raw : Math.exp(raw) - 1;
             }
 
             let returnSequencePerAccount = null;
-            if (simulationMode === 'bootstrap' && multiAssetBank) {
+            if ((simulationMode === 'bootstrap' || simulationMode === 'stress') && multiAssetBank) {
                 const accts = ['IRA1', 'IRA2', 'Brokerage', 'Roth1', 'Roth2'];
                 returnSequencePerAccount = {};
                 for (const acct of accts) {
@@ -201,7 +223,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             }
 
             let inflationSequence = null;
-            if (simulationMode === 'bootstrap' && multiAssetBank?.inflation) {
+            if ((simulationMode === 'bootstrap' || simulationMode === 'stress') && multiAssetBank?.inflation) {
                 inflationSequence = new Float64Array(years);
                 for (let y = 0; y < years; y++) {
                     inflationSequence[y] = multiAssetBank.inflation[p * years + y];
@@ -249,6 +271,14 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
         const percentiles = computePercentiles(paths, years, numPaths);
 
+        let stressPaths = null;
+        if (simulationMode === 'stress') {
+            stressPaths = [];
+            for (let p = 0; p < numPaths; p++) {
+                stressPaths.push(Array.from({ length: years }, (_, y) => paths[p * years + y]));
+            }
+        }
+
         const taxSorted = Array.from(taxPerPath).sort((a, b) => a - b);
         varResults.push({
             label:          baseInputs._label          ?? `Variation ${vi + 1}`,
@@ -273,6 +303,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
                 p75: Array.from(percentiles.p75),
                 p95: Array.from(percentiles.p95),
             },
+            stressPaths,
         });
 
         if ((vi + 1) % 5 === 0 || vi === variations.length - 1) {
@@ -282,7 +313,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
     // Build input fan — mirrors worker.js exactly.
     let equityBankForFan;
-    if (simulationMode === 'bootstrap') {
+    if (simulationMode === 'bootstrap' || simulationMode === 'stress') {
         equityBankForFan = multiAssetBank.equity;
     } else {
         equityBankForFan = new Float64Array(numPaths * years);
@@ -290,7 +321,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             equityBankForFan[i] = Math.exp(scenarioBank[i]) - 1;
         }
     }
-    const inflationBankForFan = (simulationMode === 'bootstrap' && multiAssetBank?.inflation)
+    const inflationBankForFan = (['bootstrap', 'stress'].includes(simulationMode) && multiAssetBank?.inflation)
         ? multiAssetBank.inflation : null;
     const inputFan = computeInputFan(equityBankForFan, inflationBankForFan, numPaths, years);
 
@@ -305,9 +336,12 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         medianAnnualReturn,
         minAnnualReturn,
         maxAnnualReturn,
-        inflationRate: cfg.inflationRate ?? null,
+        inflationRate:     cfg.inflationRate ?? null,
         assetRanges,
-        inflationStats,                            // { min, median, max } observed inflation (bootstrap only)
-        inputFan,                                  // { equity, inflation } per-year percentile bands
+        inflationStats,
+        inputFan,
+        stressLabels:      simulationMode === 'stress' ? multiAssetBank.labels      : null,
+        stressStartYears:  simulationMode === 'stress' ? multiAssetBank.startYears  : null,
+        stressDecadeCAGRs: simulationMode === 'stress' ? multiAssetBank.decadeCAGRs : null,
     });
 }

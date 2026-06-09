@@ -380,6 +380,7 @@
 				<label style="font-size:0.9em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric GBM model using μ and σ (advanced, nerd-mode only).">Simulation Mode
 					<select id="mc-sim-mode" style="margin-left:6px;font-size:0.9em;" onchange="onMCModeChange()">
 						<option value="bootstrap" selected>Historical (1928–2024)</option>
+						<option value="stress">Stress (worst sequences)</option>
 						<option value="gbm">Synthetic (parametric)</option>
 					</select>
 				</label>
@@ -403,6 +404,9 @@
 					</label>
 					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results.">Seed
 						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
+					</label>
+					<label style="font-size:0.85em;" title="Number of worst historical starting sequences to use in Stress mode. Scored by first 10-year equity CAGR.">Stress sequences
+						<input type="number" id="mc-stress-count" value="10" min="3" max="20" step="1" style="width:50px;margin-left:4px;">
 					</label>
 				</div>
 				<div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
@@ -460,7 +464,7 @@
 
 			<!-- Percentile band chart -->
 			<div id="mc-chart-wrap" style="display:none;">
-				<div style="font-size:0.8em;color:#888;margin-bottom:4px;">
+				<div id="mc-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;">
 					Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0.
 				</div>
 				<div style="position:relative;height:420px;">

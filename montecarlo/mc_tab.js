@@ -34,9 +34,9 @@ function _mcNerdMode() {
     return typeof NERD_KNOBS !== 'undefined' && NERD_KNOBS;
 }
 
-// Dim μ/σ inputs when bootstrap is selected (they're unused in that mode).
+// Dim μ/σ inputs when bootstrap or stress is selected (they're unused in those modes).
 function updateMCModeUI() {
-    const isBootstrap = (document.getElementById('mc-sim-mode')?.value === 'bootstrap');
+    const isBootstrap = ['bootstrap', 'stress'].includes(document.getElementById('mc-sim-mode')?.value);
     ['mc-mu', 'mc-sigma'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -76,12 +76,13 @@ function mcTabActivated() {
 function _buildMCHash() {
     const base = getInputs();
     return JSON.stringify({
-        inputs:   base,
-        numPaths: document.getElementById('mc-num-paths')?.value  ?? '500',
-        mu:       document.getElementById('mc-mu')?.value         ?? '7',
-        sigma:    document.getElementById('mc-sigma')?.value      ?? '12',
-        seed:     document.getElementById('mc-seed')?.value       ?? '42',
-        simMode:  document.getElementById('mc-sim-mode')?.value   ?? 'gbm',
+        inputs:      base,
+        numPaths:    document.getElementById('mc-num-paths')?.value     ?? '500',
+        mu:          document.getElementById('mc-mu')?.value            ?? '7',
+        sigma:       document.getElementById('mc-sigma')?.value         ?? '12',
+        seed:        document.getElementById('mc-seed')?.value          ?? '42',
+        simMode:     document.getElementById('mc-sim-mode')?.value      ?? 'gbm',
+        stressCount: document.getElementById('mc-stress-count')?.value  ?? '10',
     });
 }
 
@@ -92,11 +93,12 @@ function runMonteCarlo() {
 
     const base = getInputs();
 
-    const numPaths       = parseInt(document.getElementById('mc-num-paths')?.value  ?? '500');
-    const mu             = parseFloat(document.getElementById('mc-mu')?.value       ?? '7')  / 100;
-    const sigma          = parseFloat(document.getElementById('mc-sigma')?.value    ?? '12') / 100;
-    const seed           = parseInt(document.getElementById('mc-seed')?.value       ?? '42');
-    const simulationMode = document.getElementById('mc-sim-mode')?.value ?? 'gbm';
+    const numPaths       = parseInt(document.getElementById('mc-num-paths')?.value     ?? '500');
+    const mu             = parseFloat(document.getElementById('mc-mu')?.value         ?? '7')  / 100;
+    const sigma          = parseFloat(document.getElementById('mc-sigma')?.value      ?? '12') / 100;
+    const seed           = parseInt(document.getElementById('mc-seed')?.value         ?? '42');
+    const simulationMode = document.getElementById('mc-sim-mode')?.value              ?? 'gbm';
+    const stressCount    = parseInt(document.getElementById('mc-stress-count')?.value ?? '10');
 
     _mcStartYear = base.startYear ?? 2026;
     _mcBase = base;
@@ -115,7 +117,7 @@ function runMonteCarlo() {
     setMCRunning(true);
 
     runMCWorker(
-        { variations, numPaths, mu, sigma, seed, years, simulationMode, inflationRate: base.inflation },
+        { variations, numPaths, mu, sigma, seed, years, simulationMode, stressCount, inflationRate: base.inflation },
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);
@@ -188,7 +190,25 @@ function renderMCResults(msg) {
         byBaseFamily[baseFamily] = currentIdx;
     }
 
-    Object.values(byBaseFamily).forEach(i => _mcSelected.add(i));
+    if (msg.stressLabels) {
+        // Stress mode: one variation at a time — already N scenario lines per variation is enough.
+        _mcSelected.clear();
+        if (currentIdx >= 0) {
+            _mcSelected.add(currentIdx);
+        } else {
+            const first = Object.values(byBaseFamily)[0];
+            if (first != null) _mcSelected.add(first);
+        }
+    } else {
+        Object.values(byBaseFamily).forEach(i => _mcSelected.add(i));
+    }
+
+    const descEl = document.getElementById('mc-chart-desc');
+    if (descEl) {
+        descEl.textContent = msg.stressLabels
+            ? `Each line = one historical sequence starting in that year. Dark red = worst first decade; amber = least bad. Darker colors hit $0 first.`
+            : `Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0.`;
+    }
 
     renderMCChart(msg);
     if (_mcNerdMode()) renderInputFanCharts(msg.inputFan, msg.years);
@@ -253,7 +273,10 @@ function renderMCMetrics(msg) {
             + row('Intl',      ar.intl);
         if (iS) tbl += row('Inflation', [iS.min, iS.cagr, iS.max]);
         tbl += `</div>`;
-        parts.push(`<span style="color:#888;font-size:0.8em;">Sampled (1928–2024)</span>${tbl}`);
+        const srcLabel = msg.stressLabels
+            ? `Stress: ${msg.stressLabels.length} worst sequences (by first 10yr CAGR)`
+            : 'Sampled (1928–2024)';
+        parts.push(`<span style="color:#888;font-size:0.8em;">${srcLabel}</span>${tbl}`);
     }
 
     el.innerHTML = parts.join(' &nbsp;·&nbsp; ');
@@ -349,7 +372,9 @@ function renderSurvivalTable(variations, numPaths) {
     });
 
     document.getElementById('mc-table-wrap').style.display = '';
-    const _pathTxt = `${numPaths.toLocaleString()} paths`;
+    const _pathTxt = _mcResults?.stressLabels
+        ? `${numPaths} stress scenarios`
+        : `${numPaths.toLocaleString()} paths`;
     const _pcBar = document.getElementById('mc-path-count');
     const _pcTbl = document.getElementById('mc-path-count-tbl');
     if (_pcBar) _pcBar.textContent = _pathTxt;
@@ -361,7 +386,9 @@ function renderSurvivalTable(variations, numPaths) {
         const spendFmt = _mcBase.spendGoal != null
             ? '$' + Math.round(_mcBase.spendGoal).toLocaleString()
             : '—';
-        const modeLabel = (_mcResults?.assetRanges != null)
+        const modeLabel = _mcResults?.stressLabels
+            ? `Stress (${_mcResults.stressLabels.length} sequences)`
+            : _mcResults?.assetRanges != null
             ? 'Historical (1928–2024)'
             : 'Synthetic (GBM)';
         titleEl.textContent = `Spend Goal: ${spendFmt}  ·  ${modeLabel}`;
@@ -412,6 +439,12 @@ function colorFor(familyName, fallbackIdx) {
         ?? FALLBACK_PALETTE[fallbackIdx % FALLBACK_PALETTE.length];
 }
 
+// Red-to-amber gradient: rank 0 = worst (dark red), rank N-1 = least-worst (amber).
+function _stressColor(rank, total) {
+    const t = total <= 1 ? 0 : rank / (total - 1);
+    return `rgba(${180 + Math.round(t * 20)},${Math.round(t * 160)},0,0.9)`;
+}
+
 function renderMCChart(msg) {
     const canvas = document.getElementById('mc-chart');
     if (!canvas || !msg?.variations?.length) return;
@@ -419,8 +452,6 @@ function renderMCChart(msg) {
     const years  = msg.years;
     const labels = Array.from({ length: years }, (_, i) => _mcStartYear + i);
 
-    // Current-dollar deflation: divide each year's balance by cumulative inflation factor.
-    // Uses median sampled inflation (bootstrap) or fixed user rate (GBM) as the deflator.
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
     const inflRate = msg.inflationStats?.cagr ?? msg.inflationRate ?? 0;
     const deflate = (arr) => {
@@ -428,75 +459,97 @@ function renderMCChart(msg) {
         return arr.map((v, y) => v / Math.pow(1 + inflRate, y + 1));
     };
 
+    const isStress = !!msg.stressLabels;
     const datasets = [];
-    let fallbackIdx = 0;
 
-    // Build 5 datasets per selected variation (p5 anchor, p95 fill, p25 anchor, p75 fill, p50 median).
-    // Dataset order within each variation block:
-    //   base+0: p5   (anchor, hidden line)
-    //   base+1: p95  (fill: base+0  → outer band)
-    //   base+2: p25  (anchor, hidden line)
-    //   base+3: p75  (fill: base+2  → inner band)
-    //   base+4: p50  (visible median line)
-
-    Array.from(_mcSelected).forEach(idx => {
-        const v    = msg.variations[idx];
-        if (!v) return;
-        const c    = colorFor(v.strategyFamily, fallbackIdx++);
-        const base = datasets.length;
-
-        datasets.push({
-            label: `${v.label} p5`,
-            data:  deflate(v.percentiles.p5),
-            borderColor: 'transparent',
-            backgroundColor: 'transparent',
-            pointRadius: 0,
-            fill: false,
-            tension: 0.3,
+    if (isStress) {
+        // Stress mode: one labeled line per historical scenario per selected variation.
+        Array.from(_mcSelected).forEach(selIdx => {
+            const v = msg.variations[selIdx];
+            if (!v?.stressPaths) return;
+            const nS = v.stressPaths.length;
+            v.stressPaths.forEach((pathData, rank) => {
+                const startYear = msg.stressStartYears?.[rank] ?? rank;
+                const cagr      = msg.stressDecadeCAGRs?.[rank];
+                const cagrStr   = cagr != null
+                    ? ` (${cagr >= 0 ? '+' : ''}${(cagr * 100).toFixed(1)}%/10yr)`
+                    : '';
+                datasets.push({
+                    label:           `${startYear}${cagrStr}`,
+                    data:            deflate(pathData),
+                    borderColor:     _stressColor(rank, nS),
+                    backgroundColor: 'transparent',
+                    borderWidth:     1.8,
+                    pointRadius:     0,
+                    fill:            false,
+                    tension:         0.3,
+                });
+            });
         });
-        datasets.push({
-            label: `${v.label} p95`,
-            data:  deflate(v.percentiles.p95),
-            borderColor: 'transparent',
-            backgroundColor: c.band95,
-            pointRadius: 0,
-            fill: base,   // fill down to the p5 dataset
-            tension: 0.3,
+    } else {
+        // Normal mode: 5 datasets per selected variation (bands + median).
+        // Dataset order within each block:
+        //   base+0: p5   (anchor, hidden line)
+        //   base+1: p95  (fill to base+0 → outer band)
+        //   base+2: p25  (anchor, hidden line)
+        //   base+3: p75  (fill to base+2 → inner band)
+        //   base+4: p50  (visible median line)
+        let fallbackIdx = 0;
+        Array.from(_mcSelected).forEach(idx => {
+            const v    = msg.variations[idx];
+            if (!v) return;
+            const c    = colorFor(v.strategyFamily, fallbackIdx++);
+            const base = datasets.length;
+            datasets.push({ label: `${v.label} p5`,  data: deflate(v.percentiles.p5),
+                borderColor: 'transparent', backgroundColor: 'transparent',
+                pointRadius: 0, fill: false, tension: 0.3 });
+            datasets.push({ label: `${v.label} p95`, data: deflate(v.percentiles.p95),
+                borderColor: 'transparent', backgroundColor: c.band95,
+                pointRadius: 0, fill: base, tension: 0.3 });
+            datasets.push({ label: `${v.label} p25`, data: deflate(v.percentiles.p25),
+                borderColor: 'transparent', backgroundColor: 'transparent',
+                pointRadius: 0, fill: false, tension: 0.3 });
+            datasets.push({ label: `${v.label} p75`, data: deflate(v.percentiles.p75),
+                borderColor: 'transparent', backgroundColor: c.band75,
+                pointRadius: 0, fill: base + 2, tension: 0.3 });
+            datasets.push({
+                label: v.label + ` (${(v.survivalRate * 100).toFixed(0)}%)`,
+                data:  deflate(v.percentiles.p50),
+                borderColor: c.solid, backgroundColor: 'transparent',
+                borderWidth: 2.5, pointRadius: 0, fill: false, tension: 0.3,
+            });
         });
-        datasets.push({
-            label: `${v.label} p25`,
-            data:  deflate(v.percentiles.p25),
-            borderColor: 'transparent',
-            backgroundColor: 'transparent',
-            pointRadius: 0,
-            fill: false,
-            tension: 0.3,
-        });
-        datasets.push({
-            label: `${v.label} p75`,
-            data:  deflate(v.percentiles.p75),
-            borderColor: 'transparent',
-            backgroundColor: c.band75,
-            pointRadius: 0,
-            fill: base + 2,   // fill down to the p25 dataset
-            tension: 0.3,
-        });
-        datasets.push({
-            label: v.label + ` (${(v.survivalRate * 100).toFixed(0)}%)`,
-            data:  deflate(v.percentiles.p50),
-            borderColor: c.solid,
-            backgroundColor: 'transparent',
-            borderWidth: 2.5,
-            pointRadius: 0,
-            fill: false,
-            tension: 0.3,
-        });
-    });
+    }
 
     if (_mcChart) {
         _mcChart.destroy();
         _mcChart = null;
     }
+
+    const legendLabels = isStress
+        ? { filter: () => true, font: { size: 11 }, usePointStyle: true, pointStyle: 'line', boxWidth: 20 }
+        : { filter: (item) => item.datasetIndex % 5 === 4, font: { size: 12 }, usePointStyle: true, pointStyle: 'line', boxWidth: 24 };
+
+    const tooltipCfg = isStress
+        ? {
+            callbacks: {
+                title: items => `Year ${items[0]?.label ?? ''}`,
+                label: ctx => `  ${ctx.dataset.label}: $${fmt(ctx.parsed.y)}`,
+            },
+          }
+        : {
+            filter: (item) => item.datasetIndex % 5 === 4,
+            callbacks: {
+                title: (items) => `Year ${items[0]?.label ?? ''}`,
+                label: (ctx) => {
+                    const selArray = Array.from(_mcSelected);
+                    const v = _mcResults?.variations[selArray[Math.floor(ctx.datasetIndex / 5)]];
+                    const val = v?.percentiles?.p50?.[ctx.dataIndex];
+                    const name = v ? v.label : ctx.dataset.label;
+                    return `  ${name}  $${fmt(val)}`;
+                },
+            },
+          };
 
     _mcChart = new Chart(canvas, {
         type: 'line',
@@ -507,40 +560,11 @@ function renderMCChart(msg) {
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: {
-                    // Only show the p50 "median" entry per variation (every 5th dataset).
-                    labels: {
-                        filter: (item) => item.datasetIndex % 5 === 4,
-                        font: { size: 12 },
-                        usePointStyle: true,
-                        pointStyle: 'line',
-                        boxWidth: 24,
-                    },
-                },
-                tooltip: {
-                    filter: (item) => item.datasetIndex % 5 === 4,
-                    callbacks: {
-                        title: (items) => {
-                            const year = items[0]?.label ?? '';
-                            return `Year ${year}`;
-                        },
-                        label: (ctx) => {
-                            const selArray = Array.from(_mcSelected);
-                            const v = _mcResults?.variations[selArray[Math.floor(ctx.datasetIndex / 5)]];
-                            const p = ctx.dataIndex;
-                            const val = v?.percentiles?.p50?.[p];
-                            // Use plain-text v.label (strategyFamily may contain HTML spans).
-                            const name = v ? v.label : ctx.dataset.label;
-                            return `  ${name}  $${fmt(val)}`;
-                        },
-                    },
-                },
+                legend: { labels: legendLabels },
+                tooltip: tooltipCfg,
             },
             scales: {
-                x: {
-                    title: { display: true, text: 'Year' },
-                    ticks: { maxTicksLimit: 10 },
-                },
+                x: { title: { display: true, text: 'Year' }, ticks: { maxTicksLimit: 10 } },
                 y: {
                     title: { display: true, text: inCurrentDollars ? 'Portfolio Balance (Current $)' : 'Portfolio Balance' },
                     ticks: {

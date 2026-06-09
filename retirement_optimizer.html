@@ -88,6 +88,7 @@
 					<option value="24" selected>24% : 40300 MFJ / 201000 SGL</option>
 				</select></label>
 				<div id="bracket-feedback" style="font-size:0.85em;color:#555;margin-top:4px;"></div>
+				<div id="aca-age-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:4px;"></div>
 			</div>
 
 			<div id="ui-propwd" class="input-group hidden">
@@ -143,7 +144,7 @@
         <div class="compact-row" style="margin-top:6px;">
             <label title="The age at which you plan to retire (stop earning income and begin drawing assets). Enter your assets and spending goal in today's dollars — the simulation inflates brackets, SS COLA, and spending forward to this age. Defaults to your current age.">Retirement Start Age
             <input type="number" id="startAge" min="50" max="100" step="1" placeholder="current age"
-              oninput="document.getElementById('startAge-warn').style.display=(+this.value>0&&+this.value<60)?'block':'none'"></label>
+              oninput="document.getElementById('startAge-warn').style.display=(+this.value>0&&+this.value<60)?'block':'none'; updateACAWarning()"></label>
         </div>
         <div id="startAge-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;">
           &#9888; Early withdrawal penalties may apply when starting withdrawals before 59&#189; and those are NOT modeled.

@@ -61,14 +61,18 @@ function updateMCGrowthWarning() {
 }
 
 // Dim μ/σ inputs when bootstrap or stress is selected (they're unused in those modes).
+// Show bear-start knob only in Historical (bootstrap) mode.
 function updateMCModeUI() {
-    const isBootstrap = ['bootstrap', 'stress'].includes(document.getElementById('mc-sim-mode')?.value);
+    const mode = document.getElementById('mc-sim-mode')?.value;
+    const isBootstrap = ['bootstrap', 'stress'].includes(mode);
     ['mc-mu', 'mc-sigma'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.disabled = isBootstrap;
         el.closest('label').style.opacity = isBootstrap ? '0.4' : '';
     });
+    const bearWrap = document.getElementById('mc-bear-start-wrap');
+    if (bearWrap) bearWrap.style.display = mode === 'bootstrap' ? '' : 'none';
     // When switching to GBM, re-sync mu from Assumptions so the two stay aligned.
     if (!isBootstrap) syncMCMuFromGrowth();
 }
@@ -110,7 +114,8 @@ function _buildMCHash() {
         sigma:       document.getElementById('mc-sigma')?.value         ?? '12',
         seed:        document.getElementById('mc-seed')?.value          ?? '42',
         simMode:     document.getElementById('mc-sim-mode')?.value      ?? 'gbm',
-        stressCount: document.getElementById('mc-stress-count')?.value  ?? '10',
+        stressCount:  document.getElementById('mc-stress-count')?.value   ?? '10',
+        bearFraction: document.getElementById('mc-bear-fraction')?.value  ?? '25',
     });
 }
 
@@ -126,7 +131,8 @@ function runMonteCarlo() {
     const sigma          = parseFloat(document.getElementById('mc-sigma')?.value      ?? '12') / 100;
     const seed           = parseInt(document.getElementById('mc-seed')?.value         ?? '42');
     const simulationMode = document.getElementById('mc-sim-mode')?.value              ?? 'gbm';
-    const stressCount    = parseInt(document.getElementById('mc-stress-count')?.value ?? '10');
+    const stressCount    = parseInt(document.getElementById('mc-stress-count')?.value   ?? '10');
+    const bearFraction   = parseFloat(document.getElementById('mc-bear-fraction')?.value ?? '25');
 
     _mcStartYear = base.startYear ?? 2026;
     _mcBase = base;
@@ -145,7 +151,7 @@ function runMonteCarlo() {
     setMCRunning(true);
 
     runMCWorker(
-        { variations, numPaths, mu, sigma, seed, years, simulationMode, stressCount, inflationRate: base.inflation },
+        { variations, numPaths, mu, sigma, seed, years, simulationMode, stressCount, bearFraction, inflationRate: base.inflation },
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);

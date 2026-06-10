@@ -103,6 +103,8 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
     if (simulationMode === 'bootstrap') {
         multiAssetBank = bootstrapMultiAssetBank(rng, numPaths, years);
+        const bearFraction = (cfg.bearFraction ?? 25) / 100;
+        if (bearFraction > 0) applyBearStartOverlay(multiAssetBank, rng, numPaths, years, bearFraction, cfg.stressCount ?? 10);
         scenarioBank = multiAssetBank.equity;  // used for equity min/max/median reporting
         // Single scan: collect min/max for all asset classes and inflation simultaneously.
         let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity,

@@ -92,6 +92,28 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
              labels, startYears, decadeCAGRs, decadeInflCAGRs };
 }
 
+// Bear-start overlay: overwrites the first 10 years of the bottom bearFraction of bootstrap paths
+// with a randomly-sampled worst-decade historical sequence. Modifies bank in-place.
+// Called immediately after bootstrapMultiAssetBank, before stats scanning.
+function applyBearStartOverlay(bank, rng, numPaths, years, bearFraction, stressCount = 10) {
+    if (bearFraction <= 0) return;
+    const bearCount = Math.floor(numPaths * bearFraction);
+    if (bearCount === 0) return;
+    const bearYears  = 10;
+    const stressBank = buildStressBank(stressCount, bearYears);
+    for (let p = 0; p < bearCount; p++) {
+        const k = Math.floor(rng() * stressCount);
+        for (let y = 0; y < bearYears; y++) {
+            const dst = p * years + y;
+            const src = k * bearYears + y;
+            bank.equity[dst]    = stressBank.equity[src];
+            bank.bonds[dst]     = stressBank.bonds[src];
+            bank.intl[dst]      = stressBank.intl[src];
+            bank.inflation[dst] = stressBank.inflation[src];
+        }
+    }
+}
+
 // Multi-asset block bootstrap: synchronized draws from equity, bonds, intl, and inflation.
 // Sampling range: full equity/bonds/inflation history (1928–2024, 97 years).
 // For years before 1970, intl data does not exist — domestic equity return is used as a proxy

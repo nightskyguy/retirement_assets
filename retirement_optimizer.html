@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.ec9</title>
+    <title>Retirement Optimizer 11.eca</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -411,6 +411,9 @@
 					<label style="font-size:0.85em;" title="Number of worst historical starting sequences to use in Stress mode. Scored by first 10-year equity CAGR.">Stress sequences
 						<input type="number" id="mc-stress-count" value="10" min="3" max="20" step="1" style="width:50px;margin-left:4px;">
 					</label>
+					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical (bootstrap) paths that begin with a worst-decade historical sequence before continuing with random draws. 0 = pure bootstrap; 25% ≈ historical frequency of below-inflation first decades. Increases SoRR realism without discarding probabilistic paths. Only applies in Historical mode.">Bear-start %
+						<input type="number" id="mc-bear-fraction" value="25" min="0" max="50" step="5" style="width:50px;margin-left:4px;">
+					</label>
 				</div>
 				<div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
 					<button id="mc-run-btn" onclick="runMonteCarlo()" style="padding:6px 18px;font-size:0.95em;">Run Monte Carlo</button>
@@ -520,6 +523,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.eca</b> <strong>Bear-Start Overlay (Historical MC):</strong> In Historical (bootstrap) mode, the bottom N% of paths (default 25%) now begin with a randomly-sampled worst-decade historical sequence before continuing with random draws. Adds SoRR realism to probabilistic survival stats without discarding unbiased paths. N is a nerd-panel knob (0–50%, step 5); the bear-start label is only visible in Historical mode.</li>
 				<li><b>11.ec9</b> <strong>MC Stress Mode:</strong> New "Stress (worst sequences)" simulation mode replays the N worst historical retirement-start sequences (default 10, scored by first-decade equity CAGR). Shows sequence-of-returns risk directly — each line is a real historical scenario. Legend click isolates one sequence or strategy; click again to restore all. Stress labels show <em>eq: X% inf: Y%</em> (nominal equity CAGR and average inflation over the starting decade).</li>
 			<li><b>11.ec8</b> <strong>State Bracket Inflation Fix:</strong> MT, ND, AL, OH, and SC have statutory fixed income tax brackets (they were being incorrectly inflated which would understate future state taxation). Other states are unaffected. <em>Known limitation: the standard deduction for AL, OH, and MT is fixed by statute but is being adjusted - future fix to be provided.</em></li>
 				<li><b>11.ec7</b> <strong>State Tax Expansion:</strong> Added AL, AZ, CO, IN, KY, MA, ME, MN, MT, ND, OH, SC, WI to the state income tax dropdown.  All states adjusted to latest available information.</li>
@@ -832,10 +836,10 @@ runSimulation?.();
 </script>
 <script src="other_tools.js"></script>
 <script src="montecarlo/historical_returns.js"></script>
-<script src="montecarlo/prng.js?v=11ec9"></script>
-<script src="montecarlo/stats.js?v=11ec9"></script>
-<script src="montecarlo/mc_controller.js?v=11ec9"></script>
-<script src="montecarlo/mc_tab.js?v=11ec9"></script>
+<script src="montecarlo/prng.js?v=11eca"></script>
+<script src="montecarlo/stats.js?v=11eca"></script>
+<script src="montecarlo/mc_controller.js?v=11eca"></script>
+<script src="montecarlo/mc_tab.js?v=11eca"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

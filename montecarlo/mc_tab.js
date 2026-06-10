@@ -35,6 +35,31 @@ function _mcNerdMode() {
     return typeof NERD_KNOBS !== 'undefined' && NERD_KNOBS;
 }
 
+// Sync mc-mu from the Assumptions Growth % input (one-way: growth → mc-mu).
+// Called on page load, on growth oninput, and when mode switches to GBM.
+function syncMCMuFromGrowth() {
+    const muEl     = document.getElementById('mc-mu');
+    const growthEl = document.getElementById('growth');
+    if (!muEl || !growthEl) return;
+    muEl.value = growthEl.value;
+    updateMCGrowthWarning();
+}
+
+// Same high/low range warnings as the Assumptions section, shown near mc-mu.
+function updateMCGrowthWarning() {
+    const warnEl = document.getElementById('mc-mu-warn');
+    if (!warnEl) return;
+    const g = parseFloat(document.getElementById('mc-mu')?.value);
+    if (isNaN(g)) { warnEl.innerHTML = ''; return; }
+    if (g > 10) {
+        warnEl.innerHTML = `<span style="color:#b45309;">⚠ Optimistic — S&amp;P 500 long-run nominal CAGR ~10%; diversified portfolios typically 6–9%.</span>`;
+    } else if (g < 3) {
+        warnEl.innerHTML = `<span style="color:#b45309;">⚠ Pessimistic — below typical equity range (6–10%). Appropriate for mostly-bond allocations.</span>`;
+    } else {
+        warnEl.innerHTML = '';
+    }
+}
+
 // Dim μ/σ inputs when bootstrap or stress is selected (they're unused in those modes).
 function updateMCModeUI() {
     const isBootstrap = ['bootstrap', 'stress'].includes(document.getElementById('mc-sim-mode')?.value);
@@ -44,6 +69,8 @@ function updateMCModeUI() {
         el.disabled = isBootstrap;
         el.closest('label').style.opacity = isBootstrap ? '0.4' : '';
     });
+    // When switching to GBM, re-sync mu from Assumptions so the two stay aligned.
+    if (!isBootstrap) syncMCMuFromGrowth();
 }
 
 // Called by the always-visible mode selector onchange.

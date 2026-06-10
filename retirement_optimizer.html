@@ -299,7 +299,7 @@
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
         <div class="row">
-            <div><label title="Nominal (pre-inflation) annual return for IRA, Roth, and Brokerage accounts. Enter the total expected return including dividends — e.g. 5% price growth + 1.5% dividends = 6.5%. US historical CAGR: S&amp;P 500 ~10%, diversified 60/40 ~7–9%, conservative bond-heavy ~4–6%. Do NOT subtract inflation — the tool handles inflation separately via the Inflation input below. Real (after-inflation) growth is shown beneath this row.">Growth (6)%<input type="number" id="growth" value="6.0" oninput="updateGrowthDisplay()"></label></div>
+            <div><label title="Nominal (pre-inflation) annual return for IRA, Roth, and Brokerage accounts. Enter the total expected return including dividends — e.g. 5% price growth + 1.5% dividends = 6.5%. US historical CAGR: S&amp;P 500 ~10%, diversified 60/40 ~7–9%, conservative bond-heavy ~4–6%. Do NOT subtract inflation — the tool handles inflation separately via the Inflation input below. Real (after-inflation) growth is shown beneath this row.">Growth (6)%<input type="number" id="growth" value="6.0" oninput="updateGrowthDisplay(); syncMCMuFromGrowth()"></label></div>
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
         <div id="growth-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
@@ -397,10 +397,11 @@
 					<label style="font-size:0.85em;" title="Number of simulated market scenarios. More paths = more stable results, slower run.">Paths
 						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
 					</label>
-					<label style="font-size:0.85em;" title="Expected annual arithmetic return. Replaces the form's Growth % for all MC paths. Not used in Historical mode.">Expected Return μ %
-						<input type="number" id="mc-mu" value="7" min="0" max="20" step="0.5" style="width:55px;margin-left:4px;">
-						<span style="margin-left:4px;font-size:0.78em;color:#888;" title="The form's Growth % is ignored during MC — returns are driven solely by μ and σ.">replaces Growth %</span>
+					<label style="font-size:0.85em;" title="Expected annual nominal return for GBM paths. Defaults to (and stays in sync with) the Assumptions Growth % — override here to test a different MC growth assumption. Not used in Bootstrap or Stress modes.">GBM Return μ %
+						<input type="number" id="mc-mu" value="7" min="0" max="20" step="0.5" style="width:55px;margin-left:4px;" oninput="updateMCGrowthWarning()">
+						<span style="margin-left:4px;font-size:0.78em;color:#888;">synced from Growth %</span>
 					</label>
+					<div id="mc-mu-warn" style="font-size:0.82em;margin-top:2px;margin-left:2px;"></div>
 					<label style="font-size:0.85em;" title="Annual return volatility (standard deviation). Not used in Historical mode.">Volatility σ %
 						<input type="number" id="mc-sigma" value="12" min="1" max="40" step="0.5" style="width:55px;margin-left:4px;">
 					</label>
@@ -800,6 +801,7 @@ window.addEventListener('DOMContentLoaded', function () {
     initMCTab();
     updateProfileAgeDisplay();
     updateGrowthDisplay();
+    syncMCMuFromGrowth();
     updateCompAdvisory();
 });
 
@@ -830,10 +832,10 @@ runSimulation?.();
 </script>
 <script src="other_tools.js"></script>
 <script src="montecarlo/historical_returns.js"></script>
-<script src="montecarlo/prng.js"></script>
-<script src="montecarlo/stats.js"></script>
-<script src="montecarlo/mc_controller.js"></script>
-<script src="montecarlo/mc_tab.js"></script>
+<script src="montecarlo/prng.js?v=11ec9"></script>
+<script src="montecarlo/stats.js?v=11ec9"></script>
+<script src="montecarlo/mc_controller.js?v=11ec9"></script>
+<script src="montecarlo/mc_tab.js?v=11ec9"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

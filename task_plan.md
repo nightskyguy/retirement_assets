@@ -3,11 +3,12 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-**Complete:** 0, 0b, 1, 2, 6, 7, 18, 19, 20, 21, 23 + MC UX fixes (CSS grid tables, mode selector, CAGR stats).
-**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 8 (Variable Growth), Phase 12 (Withdrawal Timing), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 27 (Withdrawal Rate Fix + Inflows/Outflows), Phase 28 (Bad Markets / SoRR Stress Mode), Phase 29 (Creeping Tax Rate).
-**Pending (blocked):** Phase 9 (ACA, needs Phase 1 ✓ — unblocked), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
-**Needs investigation:** Phase 30 (GBM uses user growth rate — verify if already wired or needs fix).
-**As of:** 2026-06-06 (session resume after PR #65/#67 merged to main).
+**Complete:** 0, 0b, 1, 2, 6, 7, 18, 19, 20, 21, 23, 28, 30 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
+**Superseded/deprioritized:** Phase 8 (Variable Growth sensitivity grid — bootstrap + stress MC covers the use case; grid not needed).
+**Partial:** Phase 9 (ACA — Medicare age gate done; MAGI/subsidy calculation not yet implemented).
+**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 12 (Withdrawal Timing), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 27 (Withdrawal Rate Fix + Inflows/Outflows), Phase 29 (Creeping Tax Rate).
+**Pending (blocked):** Phase 9 remainder (ACA MAGI/subsidy), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
+**As of:** 2026-06-09 (PR #74: SoRR Stress mode + UX polish + ACA age gate + growth rate display + GBM sync).
 
 ## Dependency Graph
 ```
@@ -146,18 +147,18 @@ EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12,20,22 → 21 → 
 - [ ] Build Mode 1: Sensitivity grid (e.g., growth: 4%, 6%, 8%; inflation: 2%, 3%, 4%)
 - [ ] Show which strategy ranks best under each combo
 - [ ] Mode 2 (Monte Carlo integration) after Phase 2 complete
-- [ ] **TODO:** Add "Historical inflation" as an MC option — sample CPI annual changes (1928–2024) synchronized with the bootstrap return blocks so inflation correlates with market regimes (high inflation often aligns with poor real returns). Deflate each path's spend goal by sampled inflation rather than the fixed inflation rate.
-- **Status:** pending
+- **Status:** superseded/deprioritized — Bootstrap MC (correlated historical sequences) + Stress mode (worst-N sequences) + GBM now wired to Assumptions growth rate (Phase 30) cover the use case. Historical inflation already synced with bootstrap blocks (Phase 7). Sensitivity grid not specifically requested.
 
 ### Phase 9: ACA Limit Strategy Refinement
 **Why:** ACA subsidies only matter until age 65. At 65+ (both spouses), Medicare replaces ACA, so ACA limits become irrelevant. Should not offer/enforce ACA limits in strategy after age 65.
 
-- [ ] Add age-gating logic: if earliest spouse age >= 65, disable ACA limit strategies
-- [ ] Update UI to hide ACA limit option for retirees age 65+
-- [ ] Verify strategy comparison doesn't include ACA limits for 65+ scenarios
-- [ ] Test with mixed ages (one 65+, one younger) and both 65+
-- **Status:** pending
-- **Depends on:** Phase 1 (bracket fix, withdrawal logic works)
+- [x] Add age-gating logic: `updateACAWarning()` — disables ACA options + shows warning when both persons ≥65 at retirement start; advisory-only when one ≥65
+- [x] Update UI: `#aca-age-warn` div in `#ui-bracket`; triggered from birthyear/startAge inputs and hasSpouse toggle
+- [ ] Verify strategy comparison doesn't include ACA limits for 65+ scenarios (Optimizer not yet gated)
+- [ ] Test: mixed ages (one 65+, one younger) and both 65+ — UI verified in browser; Optimizer/MC not validated
+- [ ] Full Phase 9 remainder: ACA MAGI calculation, premium estimate, subsidy cliff warning in Annual Details
+- **Status:** partial — UI age gate done (2026-06-09); Optimizer/MC gating + MAGI/subsidy calculation pending
+- **Depends on:** Phase 1 (bracket fix, withdrawal logic works) ✓
 - **Blocks:** Phase 10 (multi-strategy needs clean ACA handling)
 
 ### Phase 10: Multi-Strategy Optimizer (Priority M)
@@ -913,14 +914,13 @@ Current CAPE-Shiller ratio (~35+) implies forward 10-yr real returns ~2–4% vs 
 - [ ] `worker.js`: pass `bearStart` param through; route to `bearStartBootstrap()` when set
 - [ ] `mc_controller.js`: accept `bearStart` in cfg; pass to worker
 - [ ] `mc_tab.js`: add "Bear Start" checkbox in nerd panel (only visible in bootstrap mode)
-- [ ] `historical_returns.js`: add `HISTORICAL_SEQUENCES` object with named arrays (1929, 1966, 2000 start year sequences, length = min(simulation years, available data))
-- [ ] `mc_controller.js` / `mc_tab.js`: stress test mode — run named sequences as deterministic paths; add to chart as overlays + stress test summary row
-- [ ] `mc_tab.js`: add "Pessimistic Preset" button that sets μ=5%, σ=17% in GBM nerd inputs
-- [ ] Test: Bear Start mode → p10 outcome materially worse than standard bootstrap
-- [ ] Test: 1966 stress scenario → depletion year roughly matches historical analysis (~15yr for 5% WR)
-- **Status:** pending
+- [x] Option B implemented as "Stress (worst sequences)" mode: `buildStressBank()` scores all historical start years by first-decade equity CAGR, takes worst N (default 10), runs deterministic spaghetti lines with per-scenario labels (eq/inf CAGR). Worst 10: 1929, 1999, 2000, 1930, 1928, 1931, 1965, 2001, 2002, 1969.
+- [x] Legend click isolation (click to isolate one line/group, click again to restore)
+- [x] Multi-strategy colors (family hue + rank-based opacity)
+- [ ] Option A (Bear-Start bootstrap): not implemented — deprioritized, Stress mode covers the user's stated need
+- [ ] Option C (CAPE-adjusted pessimistic preset): not implemented — deprioritized
+- **Status:** complete (Option B as implemented per user direction; A and C not requested)
 - **Independent:** no hard phase dependencies (builds on Phase 2 bootstrap infrastructure ✓)
-- **Note:** Addresses user's specific concern about MC being "too rosy" and lack of visible SoRR.
 
 ---
 
@@ -998,8 +998,12 @@ TCJA is permanent now, but modeling a return to pre-TCJA rates (25/28/33/35/39.6
 - [ ] Check `mc_controller.js` `runMC()` call: what value does `mu` receive when user hasn't changed nerd panel?
 - [ ] If gap found: auto-populate nerd panel μ from `inputs.growthRate` when GBM mode selected (not bootstrap mode)
 - [ ] If already wired: document that GBM μ = user growth rate, update tooltip to confirm
-- [ ] Test: set growth rate to 8% in main inputs; switch to GBM mode; verify μ = 8% (or 8% appears as default)
-- **Status:** pending — needs investigation before implementation scope is known
+- [x] Investigation: mc-mu was hardcoded at 7%, not reading from Assumptions growth
+- [x] Fix: `syncMCMuFromGrowth()` in mc_tab.js — syncs mc-mu from growth on page load, on growth oninput, and when switching to GBM mode
+- [x] `updateMCGrowthWarning()`: same >10%/<3% range warnings near mc-mu as in Assumptions section
+- [x] Label "Expected Return μ %" → "GBM Return μ %"; tooltip clarified; "replaces Growth %" → "synced from Growth %"
+- [x] Test: set growth to 8% → mc-mu auto-populates 8%; change growth to 11% → mc-mu = 11% + warning shown
+- **Status:** complete (2026-06-09)
 - **Independent:** no phase dependencies
 
 ---

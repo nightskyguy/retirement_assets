@@ -1,5 +1,18 @@
 # Progress Log
 
+## Session: 2026-06-10
+
+### Phase 12 (Withdrawal Timing) — complete
+
+- **retirement_optimizer_core.js:** `growthRates` definition moved to top of year loop. Per-year timing auto-selection: `_stratImpliesConversion` flag (year 0) + `log[y-1].rothConv > 1000` look-back (year 1+) → `yearTiming = 'early' | 'late'`. `applyGrowth(balance, growthRates, preMonths)` before withdrawal block; `applyGrowth(balance, growthRates, postMonths)` after. `preGains` merged into `gains` for display stats. `timing` field added to `log.push()` → `'Early(Conv)'` or `'Late(Spend)'`.
+- **Column groups:** `'timing'` added to `columnCheckboxMap` (`['Summary', 'Withdrawals']`) and `columnGroupDefs` (`'Withdrawals'`). Tooltip added to `updateTable()`.
+- **retirement_optimizer.html:** Version 11.ecb. Changelog entry for Phase 12.
+- **retirement_optimizer_core.test.js:** 5 new Phase 12 tests (bracket→Early, propwd→Late, extraConv propagation, IRA-depletion transition, format validation). 13 total tests pass.
+- Verified in browser: `Late(Spend)` for propwd, `Early(Conv)` for extraConversionAmount runs, correct transition after IRA depletes.
+- Timing column at TD index 66 in Annual Details.
+
+---
+
 ## Session: 2026-06-09
 
 ### Phase 28 (SoRR Stress Mode) + UX polish — complete (PR #74)

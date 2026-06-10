@@ -3,12 +3,12 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-**Complete:** 0, 0b, 1, 2, 6, 7, 18, 19, 20, 21, 23, 28, 30 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
+**Complete:** 0, 0b, 1, 2, 6, 7, 12, 18, 19, 20, 21, 23, 28, 30 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
 **Superseded/deprioritized:** Phase 8 (Variable Growth sensitivity grid — bootstrap + stress MC covers the use case; grid not needed).
 **Partial:** Phase 9 (ACA — Medicare age gate done; MAGI/subsidy calculation not yet implemented).
-**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 12 (Withdrawal Timing), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 27 (Withdrawal Rate Fix + Inflows/Outflows), Phase 29 (Creeping Tax Rate).
+**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 27 (Withdrawal Rate Fix + Inflows/Outflows), Phase 29 (Creeping Tax Rate).
 **Pending (blocked):** Phase 9 remainder (ACA MAGI/subsidy), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
-**As of:** 2026-06-09 (PR #74: SoRR Stress mode + UX polish + ACA age gate + growth rate display + GBM sync).
+**As of:** 2026-06-10 (Phase 12: per-year withdrawal timing auto-selection, Early/Late, Timing column in Annual Details, 13 tests).
 
 ## Dependency Graph
 ```

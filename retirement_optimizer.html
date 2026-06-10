@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.eca</title>
+    <title>Retirement Optimizer 11.ecb</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -523,6 +523,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.ecb</b> <strong>Withdrawal Timing (Phase 12):</strong> Each simulation year now auto-selects Early (January) or Late (December) withdrawal timing. Conversion years use Early — maximizing Roth compounding duration. Spending-only years use Late — the full portfolio compounds before the withdrawal exits, gaining D×r per year (~$3,500/yr on a $50k draw at 7%). No manual toggle; the algorithm tracks prior-year conversion activity. A new <em>Timing</em> column in Annual Details shows <em>Early(Conv)</em> or <em>Late(Spend)</em> for each year. MC paths apply the same logic per path automatically.</li>
 				<li><b>11.eca</b> <strong>Bear-Start Overlay (Historical Monte Carlo):</strong> In Historical mode, the bottom 25% of paths begin with a randomly-sampled worst-decade historical sequence before continuing with random draws. The likelihood of a "Bear start" market is 23%, so this adds realistic sequence of return risks (SORR).</li>
 				<li><b>11.ec9</b> <strong>Stress Mode:</strong> Monte Carlo "Stress (worst sequences)" worst historical retirement-start sequences based on equity CAGR. 
 					Shows sequence-of-returns risk directly — each line is a real historical scenario. Clicking on a legend hides all other plots. Will your retirement survive 1968? 2000? this will tell you.</li>

@@ -699,6 +699,40 @@ function simulate(inputs) {
         const loopStart = performance.now();
         fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, inputs.iraBaseGoal, inputs.nYears - y, inputs.growth)
 
+        // Phase 12: growthRates moved here (from below withdrawal block) to enable pre-withdrawal growth.
+        // Monte Carlo uses per-year return from injected sequence if provided; else constant rate.
+        // Cash keeps its own yield regardless (not market-correlated).
+        // IRA and Roth always reinvest dividends (tax-deferred / tax-free); effective return = appreciation + dividendRate.
+        // Brokerage dividends handled separately below (taxed first, then reinvested or sent to Cash).
+        // Bootstrap MC passes per-year sampled inflation; GBM and deterministic use the fixed rate.
+        const baseReturn    = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
+        const yearInflation = inputs.inflationSequence?.[y] ?? inputs.inflation;
+        const div = inputs.dividendRate ?? 0;
+        const psa = inputs.returnSequencePerAccount;
+        let growthRates = {
+            IRA:       (psa?.IRA1?.[y]      ?? baseReturn) + div,
+            IRA1:      (psa?.IRA1?.[y]      ?? baseReturn) + div,
+            IRA2:      (psa?.IRA2?.[y]      ?? baseReturn) + div,
+            Brokerage:  psa?.Brokerage?.[y] ?? baseReturn,
+            Cash:      inputs.cashYield,
+            Roth1:     (psa?.Roth1?.[y]     ?? baseReturn) + div,
+            Roth2:     (psa?.Roth2?.[y]     ?? baseReturn) + div,
+        }
+
+        // Withdrawal timing auto-selection (Phase 12): Early (Jan) for conversion years; Late (Dec) otherwise.
+        // Early: preMonths=1, postMonths=11. Late: preMonths=11, postMonths=1.
+        // Year 0: use strategy flag (bracket or explicit extraConv). Year 1+: prior year's actual conversion amount.
+        // Do NOT use maxConversion as a trigger — it is hardcoded true in the optimizer and does not guarantee a conversion fires.
+        const _stratImpliesConversion = inputs.strategy === 'bracket' || (inputs.extraConversionAmount ?? 0) > 0;
+        const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
+        const _useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
+        const yearTiming   = _useEarly ? 'early' : 'late';
+        const timingReason = _useEarly ? 'Conv'  : 'Spend';
+        const preMonths    = yearTiming === 'early' ? 1 : 11;
+        const postMonths   = 12 - preMonths;
+
+        // Pre-withdrawal growth: portfolio earns for preMonths before withdrawal exits.
+        const preGains = applyGrowth(balance, growthRates, preMonths);
 
         let withdrawals = { IRA: 0, IRA1: 0, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0 };
         let netWithdrawals = withdrawals;
@@ -1319,34 +1353,12 @@ function simulate(inputs) {
         // unrealized gains are carried at face value during the simulation; totalWealth (line ~1091)
         // discounts them by nominalTaxRate, but year-by-year spendable wealth does not reserve for
         // deferred tax on gains that are never liquidated.
-        // Monte Carlo: use per-year return from injected sequence if provided; else constant rate.
-        // Cash keeps its own yield regardless (not market-correlated).
-        // IRA and Roth always reinvest dividends into the source account (tax-deferred / tax-free),
-        // so their effective return = capital appreciation + dividendRate.
-        // Brokerage dividends are handled separately below (taxed first, then reinvested or sent to Cash).
-        const baseReturn    = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
-        // Bootstrap MC passes per-year sampled inflation; GBM and deterministic use the fixed rate.
-        const yearInflation = inputs.inflationSequence?.[y] ?? inputs.inflation;
-        const div = inputs.dividendRate ?? 0;
-        const psa = inputs.returnSequencePerAccount;
-        let growthRates = {
-            IRA:       (psa?.IRA1?.[y]      ?? baseReturn) + div,
-            IRA1:      (psa?.IRA1?.[y]      ?? baseReturn) + div,
-            IRA2:      (psa?.IRA2?.[y]      ?? baseReturn) + div,
-            Brokerage:  psa?.Brokerage?.[y] ?? baseReturn,
-            Cash:      inputs.cashYield,
-            Roth1:     (psa?.Roth1?.[y]     ?? baseReturn) + div,
-            Roth2:     (psa?.Roth2?.[y]     ?? baseReturn) + div,
-        }
 
-        // Grow Balances
-        // FUTURE FEATURE: allow growth-before-withdrawals mode (models late-year liquidation).
-        // Implementation: add inputs.growthTiming toggle ('early'|'late'), then conditionally
-        // call applyGrowth() before or after the withdrawal block. ~15 lines core + 1 UI toggle.
-        // Growth-first produces ~10-15% higher ending balances over 30 years at 7% growth.
-
-        let gains = applyGrowth(balance, growthRates)
-        inspectForErrors(growthRates, balance, gains)  // See if any numbers look fishy.
+        // Post-withdrawal growth (Phase 12): remaining postMonths after withdrawal exits portfolio.
+        let gains = applyGrowth(balance, growthRates, postMonths);
+        inspectForErrors(growthRates, balance, gains);
+        // Merge pre-growth gains so annual display stats (brokerageG / cashG / rothG) reflect full year.
+        for (const k in preGains) gains[k] = (gains[k] ?? 0) + (preGains[k] ?? 0);
 
         // Grow shadow deltas at same rates as actual accounts (post-growth weights are close enough).
         {
@@ -1516,6 +1528,8 @@ function simulate(inputs) {
             betrFlag: yearBETRflag,
             extraConv: extraConvGross || null,
             'netSpend%': _netSpendPct,
+            // Phase 12: per-year withdrawal timing
+            timing: (_useEarly ? 'Early' : 'Late') + '(' + timingReason + ')',
             // Internal
             inflationFactor: inflation,
             loopMs: performance.now() - loopStart
@@ -2643,6 +2657,8 @@ const columnCategories = {
     'extraConv': ['Opp. Cost'],
     // Phase 24: Cyclic
     'subCycle':  ['Summary', 'Brokerage Δ'],
+    // Phase 12: Withdrawal timing
+    'timing':    ['Summary', 'Withdrawals'],
 };
 
 // Maps each column key to a visual group label for the group header row
@@ -2669,6 +2685,7 @@ const columnGroupDefs = {
     'BETR%': 'Opp. Cost', 'betrFlag': 'Opp. Cost', 'extraConv': 'Opp. Cost',
     'subCycle': 'Withdrawals',
     'netSpend%': 'Withdrawals',
+    'timing': 'Withdrawals',
 };
 
 // Get active categories based on checkbox state
@@ -2898,6 +2915,7 @@ function updateTable(log) {
         'extraConv': 'Gross IRA amount additionally withdrawn and converted to Roth by the Phase 23 conversion optimizer, independent of spending strategy. Taxes come from IRA gross; net Roth credit = extraConv − incremental tax.',
         'subCycle': 'Cyclic sub-cycle marker. B = brokerage harvest year (spending drawn from Brokerage; IRA free for conversions). I = IRA draw year (normal IRA withdrawal). ⚠B = brokerage harvest year but balance was below 50% of target — fell back to partial IRA draw.',
         'netSpend%': 'Net asset spend rate: fraction of prior year\'s total wealth consumed for spending. Excludes Roth conversions (IRA→Roth reallocation) and reinvested surplus income. The classic "4% rule" targets a ~4% spend rate.',
+        'timing': 'Withdrawal timing auto-selected each year. Early(Conv) = conversion year (withdrawal in 1st quarter, ideally January — maximizes Roth compounding). Late(Spend) = spending-only year (withdrawal in last quarter, ideally December — full portfolio compounds before withdrawal exits, gaining D×r per year).',
     };
 
     keys.forEach(key => {

@@ -299,11 +299,12 @@
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
         <div class="row">
-            <div><label title="Your asset mix will dictate what growth rate to expect. In a brokerage, your basis doesn't grow at the rate the account does. Note that the dividend rate is additive. 4% growth and 2% dividends = 6% total.">Growth (6)%<input type="number" id="growth" value="6.0"></label></div>
+            <div><label title="Nominal (pre-inflation) annual return for IRA, Roth, and Brokerage accounts. Enter the total expected return including dividends — e.g. 5% price growth + 1.5% dividends = 6.5%. US historical CAGR: S&amp;P 500 ~10%, diversified 60/40 ~7–9%, conservative bond-heavy ~4–6%. Do NOT subtract inflation — the tool handles inflation separately via the Inflation input below. Real (after-inflation) growth is shown beneath this row.">Growth (6)%<input type="number" id="growth" value="6.0" oninput="updateGrowthDisplay()"></label></div>
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
+        <div id="growth-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
         <div class="row">
-            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
+            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay()"></label></div>
             <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
         <div class="row" style="margin-top:6px;">
@@ -579,7 +580,13 @@
 				<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year and month of each person and estimated life expectancy. The current age and RMD start age are shown below each person's birth fields and update live. Use the <i>Include Spouse</i> checkbox to model a single taxpayer — unchecking it hides all spouse fields and excludes the spouse from the simulation. <i>Retirement Start Age</i> is the age at which you stop earning income; the simulation inflates tax brackets, SS COLA, and spending forward to that year automatically.</li>
 				<li><strong>2. Assets at Retirement Age:</strong> Enter balances in today's dollars. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Total all after-tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. Enter Roth balances separately — <i>Your Roth IRA</i> and <i>Spouse Roth IRA</i> are tracked independently throughout the simulation.</li>
 				<li><strong>3. Income (annual):</strong> Input annual Social Security and pension amounts. Set the start ages to see the impact of delaying benefits. SS amounts are adjusted annually by the <i>CPI/COLA</i> rate. <i>Survivorship</i> is the percentage of the pension that continues after You pass away.</li>
-				<li><strong>4. Assumptions:</strong> <i>Dividend Rate</i> and <i>State Taxation</i> are the most-changed inputs — set these first. <i>Social Security Fail</i> models the projected trust fund shortfall year and reduced payout. <i>Growth</i> is the annual return for IRA/Roth/Brokerage (note: dividend rate is additive — 6% growth + 1.5% dividends = 7.5% total). <i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> and <i>CPI/COLA</i> drive bracket indexing and SS cost-of-living adjustments. The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios — informational only, does not affect the simulation.</li>
+				<li><strong>4. Assumptions:</strong> <i>Dividend Rate</i> and <i>State Taxation</i> are the most-changed inputs — set these first. <i>Social Security Fail</i> models the projected trust fund shortfall year and reduced payout.
+					<br><br>
+					<strong>Growth rate — nominal, not real.</strong> Enter the <em>nominal</em> (before-inflation) annual return for IRA, Roth, and Brokerage. The tool deducts inflation internally — do <em>not</em> pre-subtract inflation yourself. The real (purchasing-power) growth rate is approximately <code>nominal − inflation</code> (Fisher equation: <code>(1+g)/(1+i)−1</code> precisely). For reference: the S&amp;P 500 has returned roughly 10% nominal (≈7% real) since 1928; a diversified 60/40 portfolio averages 7–9% nominal; a conservative bond-heavy allocation 4–6%. Note that the dividend rate is <em>additive</em> — 5% growth + 1.5% dividends = 6.5% total. Asset balances and RMDs grow at the nominal rate, which is why nominal is the correct input even though real growth is what you feel in purchasing power.
+					<br><br>
+					<strong>Seeing real (inflation-adjusted) values.</strong> All dollar amounts in Annual Details are shown in <em>future nominal dollars</em> by default. Toggle <strong>Current $</strong> (top-right of the results area) to restate every balance and income figure in today's purchasing power — this is the clearest way to judge whether your plan preserves your standard of living over time.
+					<br><br>
+					<i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> drives spending-goal escalation; <i>CPI/COLA</i> drives bracket indexing and SS cost-of-living adjustments (they often differ). The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios — informational only in single-scenario mode, but used by Monte Carlo Bootstrap and Stress modes to apply per-account return sequences.</li>
 				<li><strong>Strategy:</strong> Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change — default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>).
 					<details style="margin-top:8px;">
 					<summary style="font-size:0.88em;color:#555;cursor:pointer;user-select:none;font-weight:600;">Detailed Strategy Discussion…</summary>
@@ -792,6 +799,7 @@ window.addEventListener('DOMContentLoaded', function () {
     setupAutoRecalc();
     initMCTab();
     updateProfileAgeDisplay();
+    updateGrowthDisplay();
     updateCompAdvisory();
 });
 

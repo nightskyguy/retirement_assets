@@ -4342,6 +4342,32 @@ function getDropdownStatus() {
 }
 
 /**
+ * Shows real (after-inflation) growth and flags unusually high/low nominal rates.
+ * Called from growth and inflation oninput handlers and on DOMContentLoaded.
+ */
+function updateGrowthDisplay() {
+    const el = document.getElementById('growth-info');
+    if (!el) return;
+    const growth    = parseFloat(document.getElementById('growth')?.value);
+    const inflation = parseFloat(document.getElementById('inflation')?.value);
+    if (isNaN(growth) || isNaN(inflation)) { el.innerHTML = ''; return; }
+
+    // Fisher equation: real = (1+g)/(1+i) - 1
+    const realPct = ((1 + growth / 100) / (1 + inflation / 100) - 1) * 100;
+    const sign = realPct >= 0 ? '+' : '';
+    let html = `Real growth: <strong>${sign}${realPct.toFixed(1)}%</strong>`
+             + ` <span style="color:#888;">(${growth}% nominal &minus; ${inflation}% inflation)</span>`;
+
+    if (growth > 10) {
+        html += `<br><span style="color:#b45309;">⚠ Optimistic — S&amp;P 500 long-run nominal CAGR is ~10%; diversified portfolios typically 6–9%.</span>`;
+    } else if (growth < 3) {
+        html += `<br><span style="color:#b45309;">⚠ Pessimistic — below typical equity range (6–10% nominal). Appropriate only for very conservative (mostly-bond) allocations.</span>`;
+    }
+
+    el.innerHTML = html;
+}
+
+/**
  * Update bracket constraint feedback display.
  * Shows current bracket limit and warns if desired spend exceeds feasible amount.
  */

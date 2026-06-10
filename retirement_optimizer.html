@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.ec8</title>
+    <title>Retirement Optimizer 11.eca</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -88,6 +88,7 @@
 					<option value="24" selected>24% : 40300 MFJ / 201000 SGL</option>
 				</select></label>
 				<div id="bracket-feedback" style="font-size:0.85em;color:#555;margin-top:4px;"></div>
+				<div id="aca-age-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:4px;"></div>
 			</div>
 
 			<div id="ui-propwd" class="input-group hidden">
@@ -143,7 +144,7 @@
         <div class="compact-row" style="margin-top:6px;">
             <label title="The age at which you plan to retire (stop earning income and begin drawing assets). Enter your assets and spending goal in today's dollars — the simulation inflates brackets, SS COLA, and spending forward to this age. Defaults to your current age.">Retirement Start Age
             <input type="number" id="startAge" min="50" max="100" step="1" placeholder="current age"
-              oninput="document.getElementById('startAge-warn').style.display=(+this.value>0&&+this.value<60)?'block':'none'"></label>
+              oninput="document.getElementById('startAge-warn').style.display=(+this.value>0&&+this.value<60)?'block':'none'; updateACAWarning()"></label>
         </div>
         <div id="startAge-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;">
           &#9888; Early withdrawal penalties may apply when starting withdrawals before 59&#189; and those are NOT modeled.
@@ -298,11 +299,12 @@
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
         <div class="row">
-            <div><label title="Your asset mix will dictate what growth rate to expect. In a brokerage, your basis doesn't grow at the rate the account does. Note that the dividend rate is additive. 4% growth and 2% dividends = 6% total.">Growth (6)%<input type="number" id="growth" value="6.0"></label></div>
+            <div><label title="Nominal (pre-inflation) annual return for IRA, Roth, and Brokerage accounts. Enter the total expected return including dividends — e.g. 5% price growth + 1.5% dividends = 6.5%. US historical CAGR: S&amp;P 500 ~10%, diversified 60/40 ~7–9%, conservative bond-heavy ~4–6%. Do NOT subtract inflation — the tool handles inflation separately via the Inflation input below. Real (after-inflation) growth is shown beneath this row.">Growth (6)%<input type="number" id="growth" value="6.0" oninput="updateGrowthDisplay(); syncMCMuFromGrowth()"></label></div>
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
+        <div id="growth-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
         <div class="row">
-            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
+            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay()"></label></div>
             <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
         <div class="row" style="margin-top:6px;">
@@ -380,6 +382,7 @@
 				<label style="font-size:0.9em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric GBM model using μ and σ (advanced, nerd-mode only).">Simulation Mode
 					<select id="mc-sim-mode" style="margin-left:6px;font-size:0.9em;" onchange="onMCModeChange()">
 						<option value="bootstrap" selected>Historical (1928–2024)</option>
+						<option value="stress">Stress (worst sequences)</option>
 						<option value="gbm">Synthetic (parametric)</option>
 					</select>
 				</label>
@@ -394,15 +397,22 @@
 					<label style="font-size:0.85em;" title="Number of simulated market scenarios. More paths = more stable results, slower run.">Paths
 						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
 					</label>
-					<label style="font-size:0.85em;" title="Expected annual arithmetic return. Replaces the form's Growth % for all MC paths. Not used in Historical mode.">Expected Return μ %
-						<input type="number" id="mc-mu" value="7" min="0" max="20" step="0.5" style="width:55px;margin-left:4px;">
-						<span style="margin-left:4px;font-size:0.78em;color:#888;" title="The form's Growth % is ignored during MC — returns are driven solely by μ and σ.">replaces Growth %</span>
+					<label style="font-size:0.85em;" title="Expected annual nominal return for GBM paths. Defaults to (and stays in sync with) the Assumptions Growth % — override here to test a different MC growth assumption. Not used in Bootstrap or Stress modes.">GBM Return μ %
+						<input type="number" id="mc-mu" value="7" min="0" max="20" step="0.5" style="width:55px;margin-left:4px;" oninput="updateMCGrowthWarning()">
+						<span style="margin-left:4px;font-size:0.78em;color:#888;">synced from Growth %</span>
 					</label>
+					<div id="mc-mu-warn" style="font-size:0.82em;margin-top:2px;margin-left:2px;"></div>
 					<label style="font-size:0.85em;" title="Annual return volatility (standard deviation). Not used in Historical mode.">Volatility σ %
 						<input type="number" id="mc-sigma" value="12" min="1" max="40" step="0.5" style="width:55px;margin-left:4px;">
 					</label>
 					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results.">Seed
 						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
+					</label>
+					<label style="font-size:0.85em;" title="Number of worst historical starting sequences to use in Stress mode. Scored by first 10-year equity CAGR.">Stress sequences
+						<input type="number" id="mc-stress-count" value="10" min="3" max="20" step="1" style="width:50px;margin-left:4px;">
+					</label>
+					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical (bootstrap) paths that begin with a worst-decade historical sequence before continuing with random draws. 0 = pure bootstrap; 25% ≈ historical frequency of below-inflation first decades. Increases SoRR realism without discarding probabilistic paths. Only applies in Historical mode.">Bear-start %
+						<input type="number" id="mc-bear-fraction" value="25" min="0" max="50" step="5" style="width:50px;margin-left:4px;">
 					</label>
 				</div>
 				<div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
@@ -460,7 +470,7 @@
 
 			<!-- Percentile band chart -->
 			<div id="mc-chart-wrap" style="display:none;">
-				<div style="font-size:0.8em;color:#888;margin-bottom:4px;">
+				<div id="mc-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;">
 					Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0.
 				</div>
 				<div style="position:relative;height:420px;">
@@ -513,7 +523,10 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.ec8</b> <strong>State Bracket Inflation Fix:</strong> MT, ND, AL, OH, and SC have statutory fixed income tax brackets (they were being incorrectly inflated which would understate future state taxation). Other states are unaffected. <em>Known limitation: the standard deduction for AL, OH, and MT is fixed by statute but is being adjusted - future fix to be provided.</em></li>
+				<li><b>11.eca</b> <strong>Bear-Start Overlay (Historical Monte Carlo):</strong> In Historical mode, the bottom 25% of paths begin with a randomly-sampled worst-decade historical sequence before continuing with random draws. The likelihood of a "Bear start" market is 23%, so this adds realistic sequence of return risks (SORR).</li>
+				<li><b>11.ec9</b> <strong>Stress Mode:</strong> Monte Carlo "Stress (worst sequences)" worst historical retirement-start sequences based on equity CAGR. 
+					Shows sequence-of-returns risk directly — each line is a real historical scenario. Clicking on a legend hides all other plots. Will your retirement survive 1968? 2000? this will tell you.</li>
+			<li><b>11.ec8</b> <strong>State Bracket Inflation Fix:</strong> MT, ND, AL, OH, and SC have statutory fixed income tax brackets (they were being incorrectly inflated which would understate future state taxation). Other states are unaffected. <em>Known limitation: the standard deduction for AL, OH, and MT is fixed by statute but is being adjusted - future fix to be provided.</em></li>
 				<li><b>11.ec7</b> <strong>State Tax Expansion:</strong> Added AL, AZ, CO, IN, KY, MA, ME, MN, MT, ND, OH, SC, WI to the state income tax dropdown.  All states adjusted to latest available information.</li>
 				<li><b>11.ec6</b> <strong>Cyclic Withdrawal:</strong> New <em>Cyclic</em> toggle in the strategy box enables alternating IRA draw years and brokerage LTCG harvest years. 
 					IRA-draw years and brokerage harvest years alternate. The ratio of IRA to brokerage cycles is based on the ratio of the account balances. E.g. if the brokerage is 1/3 the size of the IRA total, the cycle will be 1 year brokerage, 2 years IRA draws.
@@ -573,7 +586,13 @@
 				<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year and month of each person and estimated life expectancy. The current age and RMD start age are shown below each person's birth fields and update live. Use the <i>Include Spouse</i> checkbox to model a single taxpayer — unchecking it hides all spouse fields and excludes the spouse from the simulation. <i>Retirement Start Age</i> is the age at which you stop earning income; the simulation inflates tax brackets, SS COLA, and spending forward to that year automatically.</li>
 				<li><strong>2. Assets at Retirement Age:</strong> Enter balances in today's dollars. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Total all after-tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. Enter Roth balances separately — <i>Your Roth IRA</i> and <i>Spouse Roth IRA</i> are tracked independently throughout the simulation.</li>
 				<li><strong>3. Income (annual):</strong> Input annual Social Security and pension amounts. Set the start ages to see the impact of delaying benefits. SS amounts are adjusted annually by the <i>CPI/COLA</i> rate. <i>Survivorship</i> is the percentage of the pension that continues after You pass away.</li>
-				<li><strong>4. Assumptions:</strong> <i>Dividend Rate</i> and <i>State Taxation</i> are the most-changed inputs — set these first. <i>Social Security Fail</i> models the projected trust fund shortfall year and reduced payout. <i>Growth</i> is the annual return for IRA/Roth/Brokerage (note: dividend rate is additive — 6% growth + 1.5% dividends = 7.5% total). <i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> and <i>CPI/COLA</i> drive bracket indexing and SS cost-of-living adjustments. The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios — informational only, does not affect the simulation.</li>
+				<li><strong>4. Assumptions:</strong> <i>Dividend Rate</i> and <i>State Taxation</i> are the most-changed inputs — set these first. <i>Social Security Fail</i> models the projected trust fund shortfall year and reduced payout.
+					<br><br>
+					<strong>Growth rate — nominal, not real.</strong> Enter the <em>nominal</em> (before-inflation) annual return for IRA, Roth, and Brokerage. The tool deducts inflation internally — do <em>not</em> pre-subtract inflation yourself. The real (purchasing-power) growth rate is approximately <code>nominal − inflation</code> (Fisher equation: <code>(1+g)/(1+i)−1</code> precisely). For reference: the S&amp;P 500 has returned roughly 10% nominal (≈7% real) since 1928; a diversified 60/40 portfolio averages 7–9% nominal; a conservative bond-heavy allocation 4–6%. Note that the dividend rate is <em>additive</em> — 5% growth + 1.5% dividends = 6.5% total. Asset balances and RMDs grow at the nominal rate, which is why nominal is the correct input even though real growth is what you feel in purchasing power.
+					<br><br>
+					<strong>Seeing real (inflation-adjusted) values.</strong> All dollar amounts in Annual Details are shown in <em>future nominal dollars</em> by default. Toggle <strong>Current $</strong> (top-right of the results area) to restate every balance and income figure in today's purchasing power — this is the clearest way to judge whether your plan preserves your standard of living over time.
+					<br><br>
+					<i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> drives spending-goal escalation; <i>CPI/COLA</i> drives bracket indexing and SS cost-of-living adjustments (they often differ). The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios — informational only in single-scenario mode, but used by Monte Carlo Bootstrap and Stress modes to apply per-account return sequences.</li>
 				<li><strong>Strategy:</strong> Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change — default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>).
 					<details style="margin-top:8px;">
 					<summary style="font-size:0.88em;color:#555;cursor:pointer;user-select:none;font-weight:600;">Detailed Strategy Discussion…</summary>
@@ -786,6 +805,8 @@ window.addEventListener('DOMContentLoaded', function () {
     setupAutoRecalc();
     initMCTab();
     updateProfileAgeDisplay();
+    updateGrowthDisplay();
+    syncMCMuFromGrowth();
     updateCompAdvisory();
 });
 
@@ -816,10 +837,10 @@ runSimulation?.();
 </script>
 <script src="other_tools.js"></script>
 <script src="montecarlo/historical_returns.js"></script>
-<script src="montecarlo/prng.js"></script>
-<script src="montecarlo/stats.js"></script>
-<script src="montecarlo/mc_controller.js"></script>
-<script src="montecarlo/mc_tab.js"></script>
+<script src="montecarlo/prng.js?v=11eca"></script>
+<script src="montecarlo/stats.js?v=11eca"></script>
+<script src="montecarlo/mc_controller.js?v=11eca"></script>
+<script src="montecarlo/mc_tab.js?v=11eca"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

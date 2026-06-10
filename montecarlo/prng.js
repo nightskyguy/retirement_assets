@@ -36,6 +36,84 @@ function bootstrapScenarioBank(rng, numPaths, years, blockSize = 3) {
     return bank;
 }
 
+// Deterministic SoRR stress bank: the `count` worst historical retirement-start sequences,
+// scored by first `scoreYears` equity CAGR.  Sequences wrap at end of history for plans
+// longer than remaining history (e.g., a 40-yr plan starting 1998 continues from 1928).
+// Returns { equity, bonds, intl, inflation, labels, startYears, decadeCAGRs }
+// where numPaths == count (deterministic, no RNG needed).
+function buildStressBank(count = 10, years, scoreYears = 10) {
+    const eq      = HISTORICAL_RETURNS.equity;
+    const bd      = HISTORICAL_RETURNS.bonds;
+    const infSrc  = HISTORICAL_RETURNS.inflation;
+    const intlSrc = HISTORICAL_RETURNS.intl;
+    const n       = eq.length;   // 97
+    const intlOff = HISTORICAL_RETURNS.intlStartYear - HISTORICAL_RETURNS.equityStartYear;  // 42
+    const sLen    = Math.min(scoreYears, n);
+
+    // Score all starting indices that have at least sLen real years remaining.
+    const scored = [];
+    for (let i = 0; i <= n - sLen; i++) {
+        let logSum = 0;
+        for (let y = 0; y < sLen; y++) logSum += Math.log1p(eq[i + y]);
+        scored.push({ i, cagr: Math.exp(logSum / sLen) - 1,
+                      year: HISTORICAL_RETURNS.equityStartYear + i });
+    }
+    scored.sort((a, b) => a.cagr - b.cagr);   // ascending: worst first
+
+    const worst    = scored.slice(0, count);
+    const eqBank   = new Float64Array(count * years);
+    const bdBank   = new Float64Array(count * years);
+    const itBank   = new Float64Array(count * years);
+    const infBank  = new Float64Array(count * years);
+    const labels         = [];
+    const startYears     = [];
+    const decadeCAGRs    = [];
+    const decadeInflCAGRs = [];
+
+    for (let p = 0; p < count; p++) {
+        const { i: si, year, cagr } = worst[p];
+        labels.push(String(year));
+        startYears.push(year);
+        decadeCAGRs.push(cagr);
+        // Compute first-decade inflation CAGR for the same starting window.
+        let infLogSum = 0;
+        for (let y = 0; y < sLen; y++) infLogSum += Math.log1p(infSrc[(si + y) % n]);
+        decadeInflCAGRs.push(Math.exp(infLogSum / sLen) - 1);
+        for (let y = 0; y < years; y++) {
+            const idx = (si + y) % n;
+            eqBank [p * years + y] = eq[idx];
+            bdBank [p * years + y] = bd[idx];
+            infBank[p * years + y] = infSrc[idx];
+            itBank [p * years + y] = idx >= intlOff ? intlSrc[idx - intlOff] : eq[idx];
+        }
+    }
+
+    return { equity: eqBank, bonds: bdBank, intl: itBank, inflation: infBank,
+             labels, startYears, decadeCAGRs, decadeInflCAGRs };
+}
+
+// Bear-start overlay: overwrites the first 10 years of the bottom bearFraction of bootstrap paths
+// with a randomly-sampled worst-decade historical sequence. Modifies bank in-place.
+// Called immediately after bootstrapMultiAssetBank, before stats scanning.
+function applyBearStartOverlay(bank, rng, numPaths, years, bearFraction, stressCount = 10) {
+    if (bearFraction <= 0) return;
+    const bearCount = Math.floor(numPaths * bearFraction);
+    if (bearCount === 0) return;
+    const bearYears  = 10;
+    const stressBank = buildStressBank(stressCount, bearYears);
+    for (let p = 0; p < bearCount; p++) {
+        const k = Math.floor(rng() * stressCount);
+        for (let y = 0; y < bearYears; y++) {
+            const dst = p * years + y;
+            const src = k * bearYears + y;
+            bank.equity[dst]    = stressBank.equity[src];
+            bank.bonds[dst]     = stressBank.bonds[src];
+            bank.intl[dst]      = stressBank.intl[src];
+            bank.inflation[dst] = stressBank.inflation[src];
+        }
+    }
+}
+
 // Multi-asset block bootstrap: synchronized draws from equity, bonds, intl, and inflation.
 // Sampling range: full equity/bonds/inflation history (1928–2024, 97 years).
 // For years before 1970, intl data does not exist — domestic equity return is used as a proxy

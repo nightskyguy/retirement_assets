@@ -1724,6 +1724,7 @@ function updateProfileAgeDisplay() {
 
     const el2 = document.getElementById('age-display-2');
     if (el2) el2.textContent = ageInfo(+val('birthyear2'), +val('birthmonth2') || 12) ?? '';
+    updateACAWarning();
 }
 
 function updateIRAGoalHint() {
@@ -3694,14 +3695,16 @@ async function copyShareURL() {
     }
 }
 
-document.addEventListener('click', e => {
-    const panel = document.getElementById('share-panel');
-    if (panel && panel.style.display === 'block' &&
-        !panel.contains(e.target) &&
-        !e.target.closest('[onclick="toggleSharePanel()"]')) {
-        panel.style.display = 'none';
-    }
-});
+if (typeof document !== 'undefined') {
+    document.addEventListener('click', e => {
+        const panel = document.getElementById('share-panel');
+        if (panel && panel.style.display === 'block' &&
+            !panel.contains(e.target) &&
+            !e.target.closest('[onclick="toggleSharePanel()"]')) {
+            panel.style.display = 'none';
+        }
+    });
+}
 
 function loadFromURL() {
     const raw = new URLSearchParams(location.search);
@@ -4339,6 +4342,32 @@ function getDropdownStatus() {
 }
 
 /**
+ * Shows real (after-inflation) growth and flags unusually high/low nominal rates.
+ * Called from growth and inflation oninput handlers and on DOMContentLoaded.
+ */
+function updateGrowthDisplay() {
+    const el = document.getElementById('growth-info');
+    if (!el) return;
+    const growth    = parseFloat(document.getElementById('growth')?.value);
+    const inflation = parseFloat(document.getElementById('inflation')?.value);
+    if (isNaN(growth) || isNaN(inflation)) { el.innerHTML = ''; return; }
+
+    // Fisher equation: real = (1+g)/(1+i) - 1
+    const realPct = ((1 + growth / 100) / (1 + inflation / 100) - 1) * 100;
+    const sign = realPct >= 0 ? '+' : '';
+    let html = `Real growth: <strong>${sign}${realPct.toFixed(1)}%</strong>`
+             + ` <span style="color:#888;">(${growth}% nominal &minus; ${inflation}% inflation)</span>`;
+
+    if (growth > 10) {
+        html += `<br><span style="color:#b45309;">⚠ Optimistic — S&amp;P 500 long-run nominal CAGR is ~10%; diversified portfolios typically 6–9%.</span>`;
+    } else if (growth < 3) {
+        html += `<br><span style="color:#b45309;">⚠ Pessimistic — below typical equity range (6–10% nominal). Appropriate only for very conservative (mostly-bond) allocations.</span>`;
+    }
+
+    el.innerHTML = html;
+}
+
+/**
  * Update bracket constraint feedback display.
  * Shows current bracket limit and warns if desired spend exceeds feasible amount.
  */
@@ -4404,6 +4433,55 @@ function refreshStratRateOptions() {
         sel.value = saved;
     }
     updateBracketFeedback(); // Update feedback after options change
+    updateACAWarning();
+}
+
+/**
+ * Shows/hides the ACA Medicare warning based on retirement-start ages.
+ * - Both persons ≥65 at retirement start → disable ACA options + "grayed" note.
+ * - Exactly one person ≥65                → advisory warning, options still active.
+ * Called from updateProfileAgeDisplay(), refreshStratRateOptions(), and startAge oninput.
+ */
+function updateACAWarning() {
+    const sel     = document.getElementById('stratRate');
+    const warnEl  = document.getElementById('aca-age-warn');
+    if (!sel || !warnEl) return;
+
+    const by1       = +val('birthyear1') || 0;
+    const startAge  = +val('startAge')   || 0;
+    const hasSpouse = !!valChecked('hasSpouse');
+    const by2       = hasSpouse ? (+val('birthyear2') || 0) : 0;
+
+    if (!by1 || !startAge) { warnEl.style.display = 'none'; return; }
+
+    const startYear    = by1 + startAge;
+    const p1Medicare   = startAge >= 65;
+    const p2Medicare   = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
+    const bothMedicare = hasSpouse ? (p1Medicare && p2Medicare) : p1Medicare;
+    const oneMedicare  = hasSpouse && (p1Medicare !== p2Medicare);
+
+    // Disable / re-enable ACA <option>s
+    for (const opt of sel.options) {
+        if (!opt.value.startsWith('aca')) continue;
+        opt.disabled = bothMedicare;
+        opt.style.color = bothMedicare ? '#aaa' : '';
+    }
+    // If a now-disabled ACA option is selected, switch to first enabled option
+    if (bothMedicare && sel.value.startsWith('aca')) {
+        const first = [...sel.options].find(o => !o.disabled);
+        if (first) { sel.value = first.value; updateBracketFeedback(); }
+    }
+
+    if (bothMedicare) {
+        warnEl.textContent = '⚠ Both persons will be on Medicare at retirement start (age 65+) — ACA options are unavailable.';
+        warnEl.style.display = 'block';
+    } else if (oneMedicare) {
+        const who = p1Medicare ? 'You' : 'Spouse';
+        warnEl.textContent = `⚠ ${who} will already be on Medicare at retirement start — ACA income limits apply only to the other person.`;
+        warnEl.style.display = 'block';
+    } else {
+        warnEl.style.display = 'none';
+    }
 }
 
 /**

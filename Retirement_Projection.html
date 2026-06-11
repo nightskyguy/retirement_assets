@@ -229,7 +229,7 @@ var TAXData = {
 <body>
 
 <header>
-  <h1>Retirement Projection v.9</h1>
+  <h1>Retirement Projection 9.1</h1>
   <p>SECURE 2.0 · IRS Uniform Lifetime Table · RMDs begin at age 75 · 2026 Tax / IRMAA Code</p>
   <button class="help-btn share" onclick="toggleSharePanel()">&#8258; Share</button>
   <div class="share-panel" id="share-panel">
@@ -366,6 +366,11 @@ var TAXData = {
       <li>SS amounts are in today's dollars — no need to pre-inflate. The tool adjusts them before they begin.</li>
       <li>Try Today's $ mode to see whether your real purchasing power holds steady over time.</li>
     </ul>
+
+    <h3 class="teal">Change Log</h3>
+    <ul>
+      <li><strong>9.1:</strong> Added 14 more state tax brackets (28 states total, including 9 no-income-tax states). Dropdown and per-state notes now auto-populate from the tax engine.</li>
+    </ul>
   </div>
 </div>
 
@@ -501,7 +506,8 @@ var TAXData = {
         </div>
         <div class="ctrl">
           <div class="ctrl-header"><label>State income tax</label></div>
-          <select id="stateSelect" class="state-select" style="margin-top:6px" onchange="applyStateThresholds(); update()"></select>
+          <select id="stateSelect" class="state-select" style="margin-top:6px" onchange="applyStateThresholds(); updateStateNote(); update()"></select>
+          <div id="state-note" style="display:none;margin-top:5px;font-size:11px;color:var(--muted);font-style:italic;line-height:1.5;"></div>
         </div>
       </div>
     </details>
@@ -2220,10 +2226,21 @@ function toggleLegendGroup(id){
   if(hdr) hdr.textContent = hdr.textContent.replace(/[▼▶]/, body.classList.contains('collapsed') ? '▶' : '▼');
 }
 
+function updateStateNote() {
+  const key = document.getElementById('stateSelect')?.value;
+  const note = TAXData[key]?.NOTE;
+  const el = document.getElementById('state-note');
+  if (!el) return;
+  el.textContent = note || '';
+  el.style.display = note ? 'block' : 'none';
+}
+
 function initStateSelect(){
   const sel = document.getElementById('stateSelect');
   if(!sel || !window.TAXData) return;
-  const stateKeys = ['no','CA','CT','GA','IL','MD','MI','NY','NC','OR','PA','VA','DC','NE'];
+  const stateKeys = Object.keys(TAXData)
+    .filter(k => TAXData[k].STATE !== undefined)
+    .sort((a, b) => a === 'no' ? 1 : b === 'no' ? -1 : TAXData[a].STATE.localeCompare(TAXData[b].STATE));
   stateKeys.forEach(k => {
     if(!TAXData[k]) return;
     const opt = document.createElement('option');
@@ -2232,6 +2249,7 @@ function initStateSelect(){
     if(TAXData[k].Default) opt.selected = true;
     sel.appendChild(opt);
   });
+  updateStateNote();
 }
 
 function setBrokDivMode(drip){

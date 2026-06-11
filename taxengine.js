@@ -157,6 +157,7 @@ var TAXData = {
 		STATE: 'California',
 		YEAR: 2026,
 		Default: true,
+		NOTE: 'Excludes CA SDI and CA personal exemption credits.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		// Thresholds inflation-adjusted by CA FTB (~2.971% CCPI); 13.3% = 12.3% + 1% MHSA surtax on income >$1M.
 		// MFJ brackets >$1M: $1M triggers MHSA (+1%), nominal 12.3% bracket starts at $1,442,628 (= 2×SGL).
@@ -185,6 +186,7 @@ var TAXData = {
 	CT: {
 		STATE: 'Connecticut',
 		YEAR: 2026,  // No rate or bracket changes for 2026
+		NOTE: 'Uses personal exemptions ($24,000 MFJ / $15,000 Single) instead of a standard deduction. Exemptions phase out at higher incomes — phase-out not modeled.',
 		SSTaxation: 0.25,  // Taxes SS benefits above 75k or 100k (MFJ) at 25%	
 		MFJ: {
 			std: 24000,  // CT uses personal exemptions instead, not standard deduction
@@ -262,6 +264,7 @@ var TAXData = {
 	IL: {
 		STATE: 'Illinois',
 		YEAR: 2026,  // Flat tax, rate unchanged; personal exemption increased to $2,925/person
+		NOTE: 'Personal exemptions ($5,850 MFJ / $2,925 Single) phase out above $500k AGI (MFJ) or $250k AGI (Single) — phase-out not modeled.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.0495,  // 4.95% flat rate for all filers (unchanged)
 		MFJ: {
@@ -307,6 +310,7 @@ var TAXData = {
 	MD: {
 		STATE: 'Maryland',
 		YEAR: 2026,  // Brackets effective July 1, 2025 remain in effect; std deductions COLA-indexed (may be slightly higher)
+		NOTE: 'Maryland county/local income taxes (2.25%–3.3% depending on county) are levied on top of state tax and are not modeled.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		CAPITAL_GAINS: {
 			MFJ: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: Infinity, r: 0.02 }] },
@@ -455,6 +459,7 @@ var TAXData = {
 	VA: {
 		STATE: 'Virginia',
 		YEAR: 2026,
+		NOTE: 'Elevated standard deduction ($24,000 MFJ / $12,000 Single, per HB1754) sunsets after TY2026 unless extended by the legislature.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		// HB1754: std deduction raised to $12,000/$24,000 (TY2025-2026, indexed for inflation); sunset after 2026 unless extended.
 		// HB1754 also adds 7% top bracket on income > $600,000 beginning TY2026.
@@ -507,6 +512,7 @@ var TAXData = {
 	NE: {
 		STATE: 'Nebraska',
 		YEAR: 2026,
+		NOTE: 'Brackets are approximate based on the LB754 phase-down schedule; confirm with NE DOR for your specific year.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits (LB873, eff. 2024)
 		MFJ: {
 			std: 17200,  // Nebraska state standard deduction (approx. 2025 value; verify against NE DOR for 2026)
@@ -527,6 +533,7 @@ var TAXData = {
 		STATE: 'Alabama',
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
+		NOTE: 'Brackets unchanged since 2006 (not inflation-indexed). Alabama allows a deduction for federal income taxes paid — not modeled.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 8500,
@@ -590,6 +597,7 @@ var TAXData = {
 	IN: {
 		STATE: 'Indiana',
 		YEAR: 2026,
+		NOTE: 'Indiana county income taxes (typically 0.5%–2.9% depending on county) are levied in addition to the state rate and are not modeled.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.0305,
 		MFJ: {
@@ -630,6 +638,7 @@ var TAXData = {
 	ME: {
 		STATE: 'Maine',
 		YEAR: 2025,
+		NOTE: 'Brackets reflect 2025 values; 2026 figures were not yet available. Maine Revenue Services adjusts brackets annually for inflation.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 'FEDERAL',  // ME uses federal standard deduction
@@ -654,6 +663,7 @@ var TAXData = {
 	MN: {
 		STATE: 'Minnesota',
 		YEAR: 2025,
+		NOTE: 'Brackets reflect 2025 values. Minnesota taxes Social Security — 85% of SS is included in state taxable income at moderate-to-high incomes. Lower-income filers may qualify for a subtraction not modeled here.',
 		SSTaxation: 0.85,
 		MFJ: {
 			std: 'FEDERAL',  // MN uses federal standard deduction
@@ -681,6 +691,7 @@ var TAXData = {
 		STATE: 'Montana',
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
+		NOTE: 'Standard deduction is 20% of AGI (capped at $10,160 MFJ / $5,080 Single); the cap is used as an approximation and may overstate the deduction at lower incomes. Bracket thresholds are not inflation-indexed.',
 		SSTaxation: 0.85,
 		MFJ: {
 			std: 10160,  // MT: 20% of AGI, capped at $10,160 (2024); using cap as approximation
@@ -726,6 +737,7 @@ var TAXData = {
 		STATE: 'Ohio',
 		YEAR: 2025,
 		INFLATION_INDEXED: false,
+		NOTE: 'Brackets reflect 2025 values (HB 96 reform); 2026 figures were not yet available. Thresholds are not inflation-indexed.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 4800,  // $2,400 personal exemption per taxpayer (2 for MFJ); unchanged
@@ -781,6 +793,7 @@ var TAXData = {
 	WI: {
 		STATE: 'Wisconsin',
 		YEAR: 2025,
+		NOTE: 'Brackets reflect 2025 values. Standard deduction phases out at higher incomes — base amounts used; results may understate tax for high-income filers.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 25200,

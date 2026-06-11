@@ -252,6 +252,76 @@ test('Phase 12: Late timing yields higher terminal balance than forced-Early for
     assert(validTiming, 'Expected every timing value to be Early(Conv) or Late(Spend)');
 });
 
+// ── Phase 27: Withdrawal Rate + Inflows/Outflows ──────────────────────────────
+test('Phase 27: no income, pure portfolio draw → wdRate% = netOut / prevWealth', () => {
+    const result = simulate({ ...BASE });
+    // Year 0 has no prevTotalWealth → null. Check years 1+.
+    const rows = result.log.slice(1).filter(r => r['wdRate%'] != null);
+    assert(rows.length > 0, 'Expected wdRate% populated for years 1+');
+    let prevWealth = result.log[0].totalWealth;
+    for (let i = 1; i < result.log.length; i++) {
+        const r = result.log[i];
+        if (r['wdRate%'] != null && prevWealth > 0) {
+            const expected = (r.netOut - r.inflows) / prevWealth;
+            assert(Math.abs(r['wdRate%'] - expected) < 1e-9,
+                `Year ${r.year}: wdRate% ${r['wdRate%']} != (netOut-inflows)/prevWealth ${expected}`);
+            assert(r.inflows === 0, `Year ${r.year}: expected inflows=0 with no SS/pension, got ${r.inflows}`);
+        }
+        prevWealth = r.totalWealth;
+    }
+});
+
+test('Phase 27: SS covers all spending → wdRate% ≈ 0 or negative', () => {
+    // ss1Age 70, born 1952 → SS active from start (age 74 in 2026). SS $100k > spend $60k.
+    const result = simulate({ ...BASE, ss1: 100000, ss1Age: 70 });
+    const rows = result.log.slice(1).filter(r => r['wdRate%'] != null);
+    assert(rows.length > 0, 'Expected wdRate% populated');
+    const high = rows.filter(r => r['wdRate%'] > 0.01);
+    assert(high.length === 0,
+        `Expected wdRate% ≤ ~0 when SS ($100k) exceeds spend ($60k); found ${high.length} years above 1%: ${high.map(r => r.year + '=' + (r['wdRate%']*100).toFixed(1) + '%').join(', ')}`);
+});
+
+test('Phase 27: reconciliation — netOut = grossOut − rothConv − reinvestedSurplus', () => {
+    const result = simulate({ ...BASE, extraConversionAmount: 20000 });
+    for (const r of result.log) {
+        // reinvestedSurplus isn't logged directly; bound: netOut ≤ grossOut − rothConv
+        assert(r.netOut <= r.grossOut - r.rothConv + 1e-6,
+            `Year ${r.year}: netOut ${r.netOut} > grossOut ${r.grossOut} − rothConv ${r.rothConv}`);
+        assert(r.grossOut >= 0, `Year ${r.year}: grossOut negative: ${r.grossOut}`);
+    }
+    // At least one conversion year: grossOut − netOut ≥ conversion amount
+    const convRows = result.log.filter(r => (r.rothConv ?? 0) > 1000);
+    assert(convRows.length > 0, 'Expected conversion years with extraConversionAmount');
+    for (const r of convRows) {
+        assert(r.grossOut - r.netOut >= r.rothConv - 1e-6,
+            `Year ${r.year}: grossOut−netOut (${r.grossOut - r.netOut}) < rothConv (${r.rothConv})`);
+    }
+});
+
+test('Phase 27: pension counted as inflow → lowers wdRate% vs no pension', () => {
+    const noPension = simulate({ ...BASE });
+    const withPension = simulate({ ...BASE, pensionAnnual: 30000 });
+    assert(withPension.totals.avgWdRate != null && noPension.totals.avgWdRate != null,
+        'Expected avgWdRate computed for both runs');
+    assert(withPension.totals.avgWdRate < noPension.totals.avgWdRate,
+        `Expected pension to lower avg withdrawal rate: ${withPension.totals.avgWdRate} vs ${noPension.totals.avgWdRate}`);
+    const r1 = withPension.log[1];
+    assert(r1.inflows > 25000, `Expected year-1 inflows ≈ pension $30k, got ${r1.inflows}`);
+});
+
+test('Phase 27: regression — no SS/pension → avgWdRate matches old avgSpendRate semantics', () => {
+    // With zero inflows, wdRate% = netOut/prevWealth = old netSpend%.
+    const result = simulate({ ...BASE });
+    assert(result.totals.avgWdRate != null, 'Expected avgWdRate populated');
+    const rows = result.log.filter(r => r['wdRate%'] != null);
+    const manualAvg = rows.reduce((s, r) => s + r['wdRate%'], 0) / rows.length;
+    assert(Math.abs(result.totals.avgWdRate - manualAvg) < 1e-12,
+        `avgWdRate ${result.totals.avgWdRate} != manual average ${manualAvg}`);
+    // Spend $60k on ~$850k wealth, zero growth → rate roughly 6–9% and positive
+    assert(result.totals.avgWdRate > 0.04 && result.totals.avgWdRate < 0.15,
+        `Expected avg rate in plausible 4–15% range, got ${result.totals.avgWdRate}`);
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

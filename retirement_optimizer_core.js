@@ -1442,17 +1442,19 @@ function simulate(inputs) {
 
         inspectForErrors({ totalWealth: totalWealth })  // See if any numbers look fishy.
 
-        // Net asset draw: total withdrawn from all accounts minus amounts rebalanced (not spent).
-        // Excludes: Roth conversions (IRA→Roth reallocation), reinvested surplus income.
-        const _netAssetDraw = (netWithdrawals.IRA ?? 0) + totalRMD + extraConvGross
+        // Phase 27: Withdrawal rate = (net outflows − inflows) / start-of-year wealth.
+        // Gross outflows: all account withdrawals incl. conversion-funding draws.
+        const _grossOutflows = (netWithdrawals.IRA ?? 0) + totalRMD + extraConvGross
             + (netWithdrawals.Brokerage ?? 0)
             + (netWithdrawals.Cash ?? 0)
             + (netWithdrawals.Roth1 ?? 0)
-            + (netWithdrawals.Roth2 ?? 0)
-            - totalConverted
-            - _reinvestedSurplus;
-        const _netSpendPct = (prevTotalWealth != null && prevTotalWealth > 0)
-            ? _netAssetDraw / prevTotalWealth : null;
+            + (netWithdrawals.Roth2 ?? 0);
+        // Net outflows: excludes Roth conversions (IRA→Roth reallocation) and reinvested surplus.
+        const _netOutflows = _grossOutflows - totalConverted - _reinvestedSurplus;
+        // Inflows: non-portfolio income applied to spending (SS + pension).
+        const _yearInflows = fixedInc + pension;
+        const _wdRate = (prevTotalWealth != null && prevTotalWealth > 0)
+            ? (_netOutflows - _yearInflows) / prevTotalWealth : null;
 
         log.push({
             // Who
@@ -1527,7 +1529,11 @@ function simulate(inputs) {
             'BETR%': yearBETR,
             betrFlag: yearBETRflag,
             extraConv: extraConvGross || null,
-            'netSpend%': _netSpendPct,
+            // Phase 27: inflows/outflows + withdrawal rate
+            grossOut: _grossOutflows,
+            netOut: _netOutflows,
+            inflows: _yearInflows,
+            'wdRate%': _wdRate,
             // Phase 12: per-year withdrawal timing
             timing: (_useEarly ? 'Early' : 'Late') + '(' + timingReason + ')',
             // Internal
@@ -1559,10 +1565,10 @@ function simulate(inputs) {
         ? _betrYears.reduce((s, r) => s + r['BETR%'], 0) / _betrYears.length
         : null;
 
-    // Average net asset spend rate across all simulated years.
-    const _spendRateYears = log.filter(r => r['netSpend%'] != null);
-    totals.avgSpendRate = _spendRateYears.length > 0
-        ? _spendRateYears.reduce((s, r) => s + r['netSpend%'], 0) / _spendRateYears.length
+    // Phase 27: average withdrawal rate across all simulated years.
+    const _wdRateYears = log.filter(r => r['wdRate%'] != null);
+    totals.avgWdRate = _wdRateYears.length > 0
+        ? _wdRateYears.reduce((s, r) => s + r['wdRate%'], 0) / _wdRateYears.length
         : null;
 
     return { log, totals, finalNW: log[log.length - 1].totalWealth };
@@ -2642,7 +2648,11 @@ const columnCategories = {
     'CashWD': ['Cash Δ', 'Income'],
     'cashG': ['Cash Δ'],
     'surplusCash': ['Cash Δ', 'Income'],
-    'netSpend%': ['Summary', 'IRA Δ'],
+    // Phase 27: inflows/outflows + withdrawal rate
+    'grossOut': ['Summary', 'Withdrawals'],
+    'netOut':   ['Summary', 'Withdrawals'],
+    'inflows':  ['Summary', 'Withdrawals'],
+    'wdRate%':  ['Summary', 'IRA Δ'],
 
     // Debug / performance — only visible under Show All (no checkbox maps to 'Debug')
     'loopMs': ['Debug'],
@@ -2684,7 +2694,10 @@ const columnGroupDefs = {
     'convOC': 'Opp. Cost', 'excessOC': 'Opp. Cost', 'convTax': 'Opp. Cost', 'excessTax': 'Opp. Cost',
     'BETR%': 'Opp. Cost', 'betrFlag': 'Opp. Cost', 'extraConv': 'Opp. Cost',
     'subCycle': 'Withdrawals',
-    'netSpend%': 'Withdrawals',
+    'grossOut': 'Withdrawals',
+    'netOut': 'Withdrawals',
+    'inflows': 'Withdrawals',
+    'wdRate%': 'Withdrawals',
     'timing': 'Withdrawals',
 };
 
@@ -2914,7 +2927,10 @@ function updateTable(log) {
         'betrFlag': '▲ = expected future rate exceeds BETR by >2pp → conversion beneficial. ▼ = expected future rate is below BETR → conversion costly. ≈ = within 2pp either way (marginal).',
         'extraConv': 'Gross IRA amount additionally withdrawn and converted to Roth by the Phase 23 conversion optimizer, independent of spending strategy. Taxes come from IRA gross; net Roth credit = extraConv − incremental tax.',
         'subCycle': 'Cyclic sub-cycle marker. B = brokerage harvest year (spending drawn from Brokerage; IRA free for conversions). I = IRA draw year (normal IRA withdrawal). ⚠B = brokerage harvest year but balance was below 50% of target — fell back to partial IRA draw.',
-        'netSpend%': 'Net asset spend rate: fraction of prior year\'s total wealth consumed for spending. Excludes Roth conversions (IRA→Roth reallocation) and reinvested surplus income. The classic "4% rule" targets a ~4% spend rate.',
+        'grossOut': 'Gross outflows: all account withdrawals this year (IRA + RMD + Brokerage + Cash + Roth), including amounts converted to Roth.',
+        'netOut': 'Net outflows: portfolio draws funding spending/taxes. Gross outflows minus Roth conversions and reinvested surplus.',
+        'inflows': 'Non-portfolio income applied to spending: Social Security + pension.',
+        'wdRate%': 'Withdrawal rate: (net outflows − inflows) ÷ start-of-year total wealth. Conversions excluded. Negative = income exceeded spending. The classic "4% rule" targets ~4%.',
         'timing': 'Withdrawal timing auto-selected each year. Early(Conv) = conversion year (withdrawal in 1st quarter, ideally January — maximizes Roth compounding). Late(Spend) = spending-only year (withdrawal in last quarter, ideally December — full portfolio compounds before withdrawal exits, gaining D×r per year).',
     };
 
@@ -3173,8 +3189,8 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
 
     const avgSpendEl = document.getElementById('stat-avg-spend-rate');
     if (avgSpendEl) {
-        avgSpendEl.innerText = (totals.avgSpendRate != null)
-            ? (totals.avgSpendRate * 100).toFixed(1) + '%' : '—';
+        avgSpendEl.innerText = (totals.avgWdRate != null)
+            ? (totals.avgWdRate * 100).toFixed(1) + '%' : '—';
     }
 
     // Phase 23: projected RMD stat (reads from DOM inputs directly)

@@ -10,7 +10,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Income Tax Planner · 2026+ · v2.1</title>
+<title>Income Tax Planner · 2026+ · v2.2</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -143,7 +143,7 @@
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner<span class="ver">v2.1</span></h1>
+  <h1>Income Tax Planner<span class="ver">v2.2</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · 2026–2035 with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
@@ -178,21 +178,6 @@
     <div class="ctrl">
       <div class="ctrl-hdr"><label>State</label></div>
       <select id="sel-state" onchange="run()">
-        <option value="CA">California</option>
-        <option value="CT">Connecticut</option>
-        <option value="DC">Washington D.C.</option>
-        <option value="GA">Georgia</option>
-        <option value="ID">Idaho</option>
-        <option value="IL">Illinois</option>
-        <option value="MD">Maryland</option>
-        <option value="MI">Michigan</option>
-        <option value="NY">New York</option>
-        <option value="NC">North Carolina</option>
-        <option value="NE">Nebraska</option>
-        <option value="OR">Oregon</option>
-        <option value="PA">Pennsylvania</option>
-        <option value="VA">Virginia</option>
-        <option value="no">None (TX, FL, WA, NV…)</option>
       </select>
     </div>
 
@@ -1117,7 +1102,33 @@ function run() {
   updCgBasis();
 }
 
+function buildStateNotes() {
+  const section = document.getElementById('modal-state-notes-section');
+  const list = document.getElementById('state-notes-list');
+  const noted = Object.keys(TAXData)
+    .filter(k => TAXData[k].STATE !== undefined && TAXData[k].NOTE)
+    .sort((a, b) => a === 'no' ? 1 : b === 'no' ? -1 : TAXData[a].STATE.localeCompare(TAXData[b].STATE));
+  if (noted.length === 0) { section.style.display = 'none'; return; }
+  list.innerHTML = noted.map(k =>
+    `<li><strong>${TAXData[k].STATE}:</strong> ${TAXData[k].NOTE}</li>`
+  ).join('');
+}
+
+function populateStateDropdown() {
+  const sel = document.getElementById('sel-state');
+  const opts = Object.keys(TAXData)
+    .filter(k => TAXData[k].STATE !== undefined)
+    .map(k => ({
+      key: k,
+      label: k === 'no' ? 'None (no state income tax)' : (TAXData[k].STATE || k)
+    }))
+    .sort((a, b) => a.key === 'no' ? 1 : b.key === 'no' ? -1 : a.label.localeCompare(b.label));
+  sel.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+  sel.value = 'CA';
+}
+
 // Init
+populateStateDropdown();
 updYear(); updInf(); updMed(); updProp(); updCgBasis();
 document.getElementById('ss-val').textContent = '$0';
 document.getElementById('cg-sale-val').textContent = '$0';
@@ -1138,7 +1149,7 @@ DisplayHelpers.registerChartDismissal(document.getElementById('chart-main'));
 runTests();
 
 // ─── HOW TO USE MODAL ────────────────────────────────────────────────────────
-function openModal()  { document.getElementById('modal-bg').style.display='block'; }
+function openModal()  { buildStateNotes(); document.getElementById('modal-bg').style.display='block'; }
 function closeModal() { document.getElementById('modal-bg').style.display='none';  }
 document.addEventListener('keydown', e => { if (e.key==='Escape') closeModal(); });
 
@@ -1310,7 +1321,7 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner v2.1 — How to Use</h2>
+      <h2>Income Tax Planner v2.2 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
@@ -1373,15 +1384,27 @@ function loadFromURL() {
     </div>
 
     <div class="modal-section">
+      <h3>Change Log</h3>
+      <dl class="modal-kv">
+        <dt>v2.2</dt>
+        <dd>Added 13 states: AL, AZ, CO, IN, KY, MA, ME, MN, MT, ND, OH, SC, WI. State list now auto-populates from the tax engine — 36 states covered total (including 9 no-income-tax states: AK, FL, NV, NH, SD, TN, TX, WA, WY).</dd>
+      </dl>
+    </div>
+
+    <div class="modal-section">
       <h3>Simplifications</h3>
       <ul>
         <li><strong>IRMAA lookback:</strong> Medicare IRMAA uses your MAGI from <em>two years prior</em>. This tool applies it to <em>current-year</em> MAGI — convenient for planning but optimistic by about two years if you've recently had a high-income year.</li>
         <li><strong>OBBBA provisions</strong> (P.L. 119-21, signed July 4, 2025): the $6,000/person senior deduction applies through 2028 and phases out 6¢/$1 above $150k/$75k AGI. The $40,000 SALT cap (2025; +1%/yr through 2029) phases down 30¢/$1 above $500k MAGI and reverts to $10k in 2030. All parameters are sourced from <code>TAXData.OBBBA</code>.</li>
-        <li><strong>Nebraska brackets</strong> are approximate based on the LB754 phase-down schedule; confirm with NE DOR for your specific year.</li>
         <li><strong>SS provisional income thresholds</strong> ($32k/$44k MFJ, $25k/$34k Single) are intentionally <em>not</em> inflation-adjusted — that is current law, and the reason the SS torpedo worsens over time.</li>
         <li><strong>NIIT threshold</strong> ($250k MFJ / $200k Single) is also not inflation-indexed — another orphan in the tax code, unchanged since 2013.</li>
-        <li><strong>Excluded:</strong> AMT, self-employment tax, CA SDI, qualified dividends (modeled as CG), muni bond interest, CA personal exemption credits.</li>
+        <li><strong>Excluded:</strong> AMT, self-employment tax, qualified dividends (modeled as CG), muni bond interest.</li>
       </ul>
+    </div>
+
+    <div class="modal-section" id="modal-state-notes-section">
+      <h3>State-specific notes</h3>
+      <ul id="state-notes-list"></ul>
     </div>
   </div>
 </div>

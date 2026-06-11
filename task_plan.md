@@ -3,12 +3,12 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-**Complete:** 0, 0b, 1, 2, 6, 7, 12, 18, 19, 20, 21, 23, 28, 30 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
+**Complete:** 0, 0b, 1, 2, 6, 7, 12, 18, 19, 20, 21, 23, 27, 28, 30 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
 **Superseded/deprioritized:** Phase 8 (Variable Growth sensitivity grid — bootstrap + stress MC covers the use case; grid not needed).
 **Partial:** Phase 9 (ACA — Medicare age gate done; MAGI/subsidy calculation not yet implemented).
-**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 27 (Withdrawal Rate Fix + Inflows/Outflows), Phase 29 (Creeping Tax Rate).
+**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
 **Pending (blocked):** Phase 9 remainder (ACA MAGI/subsidy), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
-**As of:** 2026-06-10 (Phase 12: per-year withdrawal timing auto-selection, Early/Late, Timing column in Annual Details, 13 tests).
+**As of:** 2026-06-11 (Phase 27: withdrawal rate fix — inflows subtracted, grossOut/netOut/inflows/wdRate% columns, "Avg Withdrawal Rate" label, v11.ecc).
 
 ## Dependency Graph
 ```
@@ -873,13 +873,13 @@ Note: Roth conversion = IRA→Roth reallocation, neither outflow nor inflow. Alr
 **Stats bar change:** rename `stat-avg-spend-rate` element label/tooltip to "Avg Withdrawal Rate".
 
 **Implementation tasks:**
-- [ ] Compute `_yearOutflows` and `_yearInflows` in simulate() year loop; subtract `_yearInflows` from `_netAssetDraw`
-- [ ] Add `outflows` and `inflows` to log entry; add to column category map (e.g. 'Summary')
-- [ ] Rename label in HTML: "Avg Withdrawal Rate" (not "Avg Spend Rate")
-- [ ] Update tooltip: "Net portfolio draw ÷ start-of-year wealth. Outflows = account withdrawals funding spending. Inflows = SS + pension. Conversions excluded."
-- [ ] Test: year with SS covering all spending → withdrawal rate ≈ 0 (or negative if income > spend)
-- [ ] Test: no SS, pure portfolio draw → withdrawal rate = withdrawals / wealth (same as before fix)
-- **Status:** pending
+- [x] Compute `_grossOutflows`, `_netOutflows`, `_yearInflows` in simulate() year loop; `_wdRate = (netOut − inflows)/prevTotalWealth`
+- [x] Log fields `grossOut`, `netOut`, `inflows`, `wdRate%` (replaces `netSpend%`); column maps + groups + tooltips wired
+- [x] User decision: BOTH gross and net outflow columns (gross incl. conversion-funding draws; net reconciles with rate)
+- [x] `totals.avgWdRate` (replaces `avgSpendRate`); HTML label "Avg Withdrawal Rate" + new tooltip; element id unchanged
+- [x] Test: SS covers spending → wdRate ≤ 0 (verified negative at SS start in browser: −1.87%)
+- [x] Test: no SS → wdRate = netOut/prevWealth (regression); reconciliation netOut ≤ grossOut − rothConv; pension lowers rate; conversion year grossOut−netOut ≥ conv
+- **Status:** complete — v11.ecc (2026-06-11). Node suite 18/18; browser suite 207/207.
 - **Independent:** no phase dependencies
 
 ---

@@ -472,7 +472,7 @@
       <h3>Bracket Cards</h3>
       <dl>
         <dt>Real Return</dt>
-        <dd>Your actual purchasing-power change at the current portfolio return, in that bracket. <span style="color:var(--gain);font-weight:500">Green</span> = gaining; <span style="color:var(--loss);font-weight:500">red</span> = losing. Compare the after-tax and pre-tax accounts with what can be earned in a Roth.</dd>
+        <dd>Your actual purchasing-power change at the current growth rate, in that bracket. <span style="color:var(--gain);font-weight:500">Green</span> = gaining; <span style="color:var(--loss);font-weight:500">red</span> = losing. Compare the after-tax and pre-tax accounts with what can be earned in a Roth.</dd>
 
         <dt>Break-even</dt>
         <dd>The minimum nominal return needed at that tax rate and inflation level to neither gain nor lose purchasing power. Lines on the chart cross 0% real return exactly at this nominal rate.</dd>
@@ -481,7 +481,7 @@
       <h3>Chart</h3>
       <dl>
         <dt></dt>
-        <dd>Each colored line is one tax bracket's real after-tax return across all nominal growth rates. The dashed gray line at 0% is break-even. The vertical dashed line marks your current portfolio return. Lines below 0% represent a loss of purchasing power — the shaded area to the left of the vertical line and below 0% is where your money loses value in real terms.</dd>
+        <dd>Each colored line is one tax bracket's real after-tax return across all nominal growth rates. The dashed gray line at 0% is break-even. The vertical dashed line marks your current growth rate. Lines below 0% represent a loss of purchasing power — the shaded area to the left of the vertical line and below 0% is where your money loses value in real terms.</dd>
       </dl>
 
       <h3>Formula</h3>
@@ -503,16 +503,16 @@
       <span class="readout" id="inf-out">3.80%</span>
     </div>
     <div class="control-row">
-      <label title="Your portfolio's nominal (pre-tax) annual return — sets the reference line on the chart">Portfolio Return (nominal)</label>
+      <label title="Your nominal (pre-tax) annual growth rate — sets the reference line on the chart">Annual Interest/HYSA/Growth Rate (nominal)</label>
       <input type="range" id="port" min="0" max="15" step="0.25" value="4.5">
       <span class="readout" id="port-out">4.50%</span>
     </div>
     <div class="control-row">
-      <label title="State income tax rate added to each federal bracket. Set to 0 for no-income-tax states. California's top rate is 13.3%.">State Tax Rate (marginal)</label>
+      <label title="State and Local income tax rate added to each Federal bracket. Set to 0 for no-income-tax states. California's top rate is 13.3%.">State Tax Rate (marginal)</label>
       <input type="range" id="stax" min="0" max="13.3" step="0.1" value="0">
       <span class="readout" id="stax-out">0.00%</span>
     </div>
-    <p class="ctrl-note">Your state's marginal income tax rate, added to each federal bracket. Set 0 for no-income-tax states (TX, FL, WA, NV…).</p>
+    <p class="ctrl-note">Your state's marginal income tax rate, added to each Federal bracket. Set 0 for no-income-tax states (TX, FL, WA, NV…).</p>
   </div>
 
   <div class="bracket-grid">

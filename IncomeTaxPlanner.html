@@ -10,7 +10,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Income Tax Planner · 2026+ · v2.2</title>
+<title>Income Tax Planner · 2026+ · v2.3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -65,6 +65,8 @@
   .charts-col { display:flex; flex-direction:column; gap:1.1rem; }
   .assum { font-family:var(--mono); font-size:10px; color:var(--muted); line-height:1.8; }
   .assum strong { color:var(--text); } .assum .warn { color:var(--amber); } .assum div { margin-bottom:.2rem; }
+  .assum details summary { cursor:pointer; color:var(--teal); margin:.3rem 0; }
+  .assum details[open] summary { margin-bottom:.4rem; }
   .hdr-btn { background:var(--surf2); border:1px solid var(--border); border-radius:5px; color:var(--muted); font-family:var(--mono); font-size:11px; padding:5px 13px; cursor:pointer; transition:border-color .15s,color .15s; white-space:nowrap; }
   .hdr-btn:hover { border-color:var(--teal); color:var(--teal); }
   .hdr-btn.share { border-color:rgba(25,201,157,.35); color:var(--teal); }
@@ -109,8 +111,10 @@
   .info-row .ir-val { color:var(--text); white-space:nowrap; }
   .info-row .ir-pct { color:var(--muted); margin-left:.35rem; white-space:nowrap; }
   .info-divider { border-top:1px solid var(--border); margin:.3rem 0; }
-  .info-total .ir-val { color:var(--teal); font-weight:500; }
-  .info-total .ir-pct { color:var(--teal); }
+  .info-total .ir-val { color:var(--red); font-weight:500; }
+  .info-total .ir-pct { color:var(--red); }
+  .info-net .ir-val { color:var(--teal); font-weight:500; }
+  .info-net .ir-pct { color:var(--teal); }
   /* ── year bar (above chart) ── */
   .year-bar { display:flex; align-items:center; gap:.75rem; margin-bottom:.8rem; padding:.5rem .6rem; background:var(--surf2); border:1px solid var(--border); border-radius:6px; }
   .yb-label { font-family:var(--mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
@@ -143,7 +147,7 @@
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner<span class="ver">v2.2</span></h1>
+  <h1>Income Tax Planner<span class="ver">v2.3</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · 2026–2035 with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
@@ -393,6 +397,7 @@ function calcAt(ordInc) {
     fedDed:    r.federalStdDeduction,
     stDed:     r.stateStdDeduction,
     stMarg:    r.stateMarginalRate,
+    cgRate:    r.capitalGainsRate + (r.MAGI > TAXData.FEDERAL.NIIT[status] ? TAXData.FEDERAL.NIIT.rate : 0),
     cgGain
   };
 }
@@ -520,10 +525,10 @@ function sweep() {
   const pts = [];
   for (let i=0; i<n; i++) pts.push(calcAt(zoomMin + i*zoomStep));
 
-  // Numerical marginal rate: federal ordinary + CG
+  // Numerical marginal rate: federal ordinary tax only (CG rate shown separately)
   const marg = pts.map((p,i) => {
     if (i===0) return 0;
-    return ((p.fedTax + p.fedCGTax) - (pts[i-1].fedTax + pts[i-1].fedCGTax)) / zoomStep;
+    return (p.fedTax - pts[i-1].fedTax) / zoomStep;
   });
 
   sweepData = pts.map((p,i) => {
@@ -673,7 +678,7 @@ function fakeIRMAA() {
 }
 
 // ─── COMBINED CHART ───────────────────────────────────────────────────────────
-// Dataset slot indices: 0-4 rate lines, 5-9 dollar bars, 10 MAGI line, 11-15 fake IRMAA
+// Dataset slot indices: 0-5 rate lines, 6-10 dollar bars, 11 MAGI line, 12-16 fake IRMAA
 function renderChart(data) {
   const pct = v => parseFloat((v*100).toFixed(2));
 
@@ -683,6 +688,7 @@ function renderChart(data) {
   const totEff = data.map(d => pct(d.totEff));
   const fedMrg = data.map(d => pct(Math.max(0, d.fedMarg)));
   const stMrg  = data.map(d => pct(Math.max(0, d.stMarg)));
+  const cgRt   = data.map(d => pct(Math.max(0, d.cgRate)));
   const yRMax  = Math.ceil(Math.max(...fedMrg, ...stMrg, ...totEff, 40) / 5) * 5 + 5;
 
   // Dollar datasets
@@ -712,12 +718,13 @@ function renderChart(data) {
     ds[2].data = totEff;
     ds[3].data = fedMrg;
     ds[4].data = stMrg;
-    ds[5].data = fedOrd;
-    ds[6].data = fedCG;
-    ds[7].data = irmaaD;
-    ds[8].data = stOrd;
-    ds[9].data = stCG;
-    ds[10].data = magiD;
+    ds[5].data = cgRt;
+    ds[6].data = fedOrd;
+    ds[7].data = fedCG;
+    ds[8].data = irmaaD;
+    ds[9].data = stOrd;
+    ds[10].data = stCG;
+    ds[11].data = magiD;
     chartMain.options.scales.yR.max = yRMax;
     chartMain.options.scales.yD.max = yDMax;
     chartMain.options.scales.y2.max = y2Max;
@@ -736,19 +743,22 @@ function renderChart(data) {
       datasets: [
         // ─ RATE LINES ─
         { _rateDs:true, type:'line', label:'Federal Effective',
-          data:fedEff, borderColor:'#4f9cf9', backgroundColor:'transparent',
+          data:fedEff, borderColor:'#4f9cf9', backgroundColor:'#4f9cf9', fill:false,
           borderWidth:2, pointRadius:0, tension:0, yAxisID:'yR', hidden:inR },
         { _rateDs:true, type:'line', label:'State Effective',
-          data:stEff, borderColor:'#fb923c', backgroundColor:'transparent',
+          data:stEff, borderColor:'#fb923c', backgroundColor:'#fb923c', fill:false,
           borderWidth:2, pointRadius:0, tension:0, yAxisID:'yR', hidden:inR },
         { _rateDs:true, type:'line', label:'Total Effective',
-          data:totEff, borderColor:'#e8eaf2', backgroundColor:'transparent',
+          data:totEff, borderColor:'#e8eaf2', backgroundColor:'#e8eaf2', fill:false,
           borderWidth:2.5, pointRadius:0, tension:0, yAxisID:'yR', hidden:inR },
-        { _rateDs:true, type:'line', label:'Fed Marginal (Ord+CG)',
+        { _rateDs:true, type:'line', label:'Fed Marginal (Ordinary)',
           data:fedMrg, borderColor:'#a78bfa', backgroundColor:'transparent',
           borderWidth:1.8, pointRadius:0, tension:0, borderDash:[6,3], yAxisID:'yR', hidden:inR },
         { _rateDs:true, type:'line', label:'State Marginal',
           data:stMrg, borderColor:'#facc15', backgroundColor:'transparent',
+          borderWidth:1.8, pointRadius:0, tension:0, borderDash:[6,3], yAxisID:'yR', hidden:inR },
+        { _rateDs:true, type:'line', label:'Fed CG Rate (incl NIIT)',
+          data:cgRt, borderColor:'#93c5fd', backgroundColor:'transparent',
           borderWidth:1.8, pointRadius:0, tension:0, borderDash:[6,3], yAxisID:'yR', hidden:inR },
         // ─ DOLLAR BARS ─
         { _dollarDs:true, type:'bar', label:'Federal Ordinary Tax',
@@ -801,7 +811,7 @@ function renderChart(data) {
               if (!d) return [];
               return [
                 ` Eff ${(d.totEff*100).toFixed(1)}%   Fed ${(d.fedEff*100).toFixed(1)}%   St ${(d.stEff*100).toFixed(1)}%`,
-                ` Fed Marg ${(d.fedMarg*100).toFixed(1)}%   St Marg ${(d.stMarg*100).toFixed(1)}%   Tax $${Math.round(d.totalTax).toLocaleString()}`
+                ` Fed Ord Marg ${(d.fedMarg*100).toFixed(1)}%   CG Rate ${(d.cgRate*100).toFixed(1)}%   St Marg ${(d.stMarg*100).toFixed(1)}%   Tax $${Math.round(d.totalTax).toLocaleString()}`
               ];
             },
             label: () => undefined,
@@ -912,7 +922,8 @@ function updateInfoPanel(idx) {
         <div class="info-row"><span class="ir-lbl">Total Effective</span><span class="ir-val">${(d.totEff*100).toFixed(1)}%</span></div>
         <div class="info-row"><span class="ir-lbl">Federal Effective</span><span class="ir-val">${(d.fedEff*100).toFixed(1)}%</span></div>
         <div class="info-row"><span class="ir-lbl">State Effective</span><span class="ir-val">${(d.stEff*100).toFixed(1)}%</span></div>
-        <div class="info-row"><span class="ir-lbl">Fed Marginal (Ord+CG)</span><span class="ir-val">${(d.fedMarg*100).toFixed(1)}%</span></div>
+        <div class="info-row"><span class="ir-lbl">Fed Marginal (Ordinary)</span><span class="ir-val">${(d.fedMarg*100).toFixed(1)}%</span></div>
+        <div class="info-row"><span class="ir-lbl">Fed CG Rate (incl NIIT)</span><span class="ir-val">${(d.cgRate*100).toFixed(1)}%</span></div>
         <div class="info-divider"></div>
         <div class="info-row"><span class="ir-lbl">Federal deduction</span><span class="ir-val"><span style="font-size:10px;color:var(--muted)">${d.useItz ? 'itemized' : 'standard'}</span>&ensp;${$v(d.fedDed)}</span></div>
         <div class="info-row"><span class="ir-lbl">State deduction</span><span class="ir-val">${$v(d.stDed)}</span></div>
@@ -927,6 +938,7 @@ function updateInfoPanel(idx) {
         <div class="info-row"><span class="ir-lbl">State CG</span><span><span class="ir-val">${$v(d.stTaxCG)}</span><span class="ir-pct">${pp(d.stTaxCG,totalInc)}</span></span></div>
         <div class="info-divider"></div>
         <div class="info-row info-total"><span class="ir-lbl">Total Tax</span><span><span class="ir-val">${$v(d.totalTax)}</span><span class="ir-pct">${pp(d.totalTax,totalInc)}</span></span></div>
+        <div class="info-row info-net"><span class="ir-lbl">Net Income</span><span><span class="ir-val">${$v(totalInc - d.totalTax)}</span><span class="ir-pct">${pp(totalInc - d.totalTax,totalInc)}</span></span></div>
       </div>
     </div>`;
 }
@@ -1014,15 +1026,18 @@ function renderSummary(data) {
 function renderAssumptions() {
   const sn = document.getElementById('sel-state').selectedOptions[0].text;
   document.getElementById('assum-text').innerHTML = `
-    <div><strong>Federal brackets:</strong> 2026 IRS Rev. Proc. 2025-32. Future years inflated at configured rate from 2026 base.</div>
-    <div><strong>${sn} brackets:</strong> ${cfg.state==='no'?'No state income tax. CG not applicable.':'Most recent data, treated as 2026 base. States treat CG as ordinary income.'}</div>
-    <div><strong>Social Security:</strong> Provisional income = ordinary income + CG + ½ SS (real treatment). Thresholds $32k/$44k MFJ; $25k/$34k SGL — NOT inflation-adjusted per current law.</div>
-    <div><strong>Capital gains:</strong> Federal uses combined CG+NIIT brackets (stacked on top of ordinary taxable income). State taxes CG at ordinary income rates (marginal increase). CG adds to MAGI and SS provisional income.</div>
-    <div><strong>IRMAA:</strong> Step function applied to MAGI at each income level (2-year lookback "cheated" to current year). IRMAA costs grow at inflation + Medicare extra rate; expressed in 2026-base dollars. <span class="warn">IRMAA bracket values from TAXData — verify against CMS for exact 2026 amounts.</span></div>
-    <div><strong>OBBBA senior ded.:</strong> $${obbaSen.perSenior.toLocaleString()}/person ≥ 65. Phase-out at ${(obbaSen.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} AGI (P.L. 119-21; expires after ${obbaSen.sunsetYear}).</div>
-    <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing. OBBBA $${obbaSalt.capHigh.toLocaleString()} cap phases out ${(obbaSalt.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSalt.phaseoutThreshold.toLocaleString()} MAGI, flooring at $${obbaSalt.capLow.toLocaleString()} (fully phased out at $${(obbaSalt.phaseoutThreshold + Math.round((obbaSalt.capHigh - obbaSalt.capLow)/obbaSalt.phaseoutRate)).toLocaleString()} MAGI); sunsets after ${obbaSalt.sunsetYear}.</div>
     <div><strong>Top x-axis:</strong> Total income = ordinary income + Social Security + CG gain at each sweep point (fixed SS and CG amounts).</div>
-    <div><strong>Excluded:</strong> AMT, SE tax, CA SDI, muni interest, qualif. dividends, CA personal exemption credits. Effective rate denominator = ordinary + SS + CG gain.</div>
+    <div><strong>${sn} brackets:</strong> ${cfg.state==='no'?'No state income tax. CG not applicable.':'Most recent data, treated as 2026 base. States treat CG as ordinary income.'}</div>
+    <details>
+      <summary>More detail &amp; sources</summary>
+      <div><strong>Federal brackets:</strong> 2026 IRS Rev. Proc. 2025-32. Future years inflated at configured rate from 2026 base.</div>
+      <div><strong>Social Security:</strong> Provisional income = ordinary income + CG + ½ SS (real treatment). Thresholds $32k/$44k MFJ; $25k/$34k SGL — NOT inflation-adjusted per current law.</div>
+      <div><strong>Capital gains:</strong> Federal uses combined CG+NIIT brackets (stacked on top of ordinary taxable income). State taxes CG at ordinary income rates (marginal increase). CG adds to MAGI and SS provisional income.</div>
+      <div><strong>IRMAA:</strong> Step function applied to MAGI at each income level (2-year lookback "cheated" to current year). IRMAA costs grow at inflation + Medicare extra rate; expressed in 2026-base dollars. <span class="warn">IRMAA bracket values from TAXData — verify against CMS for exact 2026 amounts.</span></div>
+      <div><strong>OBBBA senior ded.:</strong> $${obbaSen.perSenior.toLocaleString()}/person ≥ 65. Phase-out at ${(obbaSen.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} AGI (P.L. 119-21; expires after ${obbaSen.sunsetYear}).</div>
+      <div><strong>SALT:</strong> max(std ded. + age bumps, min(total state taxes incl. CG + property tax, cap)). Age bumps forfeited when itemizing. OBBBA $${obbaSalt.capHigh.toLocaleString()} cap phases out ${(obbaSalt.phaseoutRate*100).toFixed(0)}¢/$1 above $${obbaSalt.phaseoutThreshold.toLocaleString()} MAGI, flooring at $${obbaSalt.capLow.toLocaleString()} (fully phased out at $${(obbaSalt.phaseoutThreshold + Math.round((obbaSalt.capHigh - obbaSalt.capLow)/obbaSalt.phaseoutRate)).toLocaleString()} MAGI); sunsets after ${obbaSalt.sunsetYear}.</div>
+      <div><strong>Excluded:</strong> AMT, SE tax, CA SDI, muni interest, qualif. dividends, CA personal exemption credits. Effective rate denominator = ordinary + SS + CG gain.</div>
+    </details>
   `;
 }
 
@@ -1321,12 +1336,22 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner v2.2 — How to Use</h2>
+      <h2>Income Tax Planner v2.3 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
     <div class="modal-section">
       <p class="modal-warn">&#9888; This tool is not guaranteed to be accurate. Use at your own risk.</p>
+    </div>
+
+    <div class="modal-section">
+      <h3>Change Log</h3>
+      <dl class="modal-kv">
+        <dt>v2.3</dt>
+        <dd>Added clear Net Income. Break out CG and Federal rate.</dd>
+        <dt>v2.2</dt>
+        <dd>Added 13 states: AL, AZ, CO, IN, KY, MA, ME, MN, MT, ND, OH, SC, WI. 36 states covered total (including 9 no-income-tax states).</dd>
+      </dl>
     </div>
 
     <div class="modal-section">
@@ -1381,14 +1406,6 @@ function loadFromURL() {
     <div class="modal-section">
       <h3>Share button</h3>
       <p>The <strong>Share</strong> button encodes all current settings into the URL and copies it to your clipboard. Paste it into any browser — or save it as a bookmark — to restore the exact same configuration. Works from a local file (<code>file://</code>) as well as a web server.</p>
-    </div>
-
-    <div class="modal-section">
-      <h3>Change Log</h3>
-      <dl class="modal-kv">
-        <dt>v2.2</dt>
-        <dd>Added 13 states: AL, AZ, CO, IN, KY, MA, ME, MN, MT, ND, OH, SC, WI. 36 states covered total (including 9 no-income-tax states).</dd>
-      </dl>
     </div>
 
     <div class="modal-section">

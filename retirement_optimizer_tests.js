@@ -966,6 +966,8 @@ assertEqual(
 		// From 32,800 to 98,900 = 66,100 @ 0% = 0
 		// From 98,900 to 242,800 = 143,900 @ 15% = 21,585
 		assertEqual(result.capitalGainsTax, 21585, 'Capital Gains Tax');
+		// Highest CG bracket reached is 15% (gain ends at 242,800, below the 20% threshold)
+		assertEqual(result.capitalGainsRate, 0.15, 'Capital Gains Rate');
 		// NIIT: MAGI 275k - threshold 250k = 25k; NII 215k; 3.8% × 25k = 950
 		assertEqual(result.niitTax, 950, 'NIIT');
 		assertEqual(result.federalTax, 25975, 'Total Federal Tax');
@@ -1044,6 +1046,8 @@ assertEqual(
 		// Capital gains start at position 287,800 (well past 0% and 15% brackets)
 		// All 450,000 falls in 20% bracket: 450,000 @ 20% = 90,000
 		assertEqual(result.capitalGainsTax, 90000, 'Capital Gains Tax');
+		// Entire gain sits in the top 20% CG bracket
+		assertEqual(result.capitalGainsRate, 0.20, 'Capital Gains Rate');
 		// NIIT: MAGI 770k - threshold 250k = 520k; NII = 470k; 3.8% × min(470k, 520k) = 17,860
 		assertEqual(result.niitTax, 17860, 'NIIT Tax');
 	} // testCase6_HighIncomeNIIT()

@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.ecc</title>
+    <title>Retirement Optimizer 11.fed</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -546,6 +546,15 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.fed</b> <strong>Charitable Giving (QCDs) &amp; UX Improvements:</strong>
+					<ul style="margin:4px 0 0 16px;">
+						<li><strong>Qualified Charitable Distributions (QCDs):</strong> New <em>Charitable Giving (QCD)</em> section in the sidebar. Enter an annual household QCD maximum — the simulation transfers that amount directly from the larger eligible IRA to charity each year (age 70½+ per person). QCDs satisfy the RMD requirement without adding to taxable income, reducing IRMAA exposure.
+						Two modes: <em>Always</em> donates the full amount every eligible year; <em>As Needed</em> applies only enough to drop two IRMAA tiers (or escape the surcharge entirely, whichever requires fewer dollars). The per-person limit is $111,000 for 2026 (CPI-indexed annually per SECURE 2.0). QCDs appear as a gray bar in the Income &amp; Expenses chart.</li>
+						<li><strong>Dollar display toggle:</strong> The <em>Future $ / Current $</em> toggle has moved to the left of the tab bar (always visible). <em>Future $</em> shows nominal amounts as they will actually appear; <em>Current $</em> restates everything in today's purchasing power for easy year-to-year comparison.</li>
+						<li><strong>Strategy panel switches:</strong> <em>Maximize Conversions</em> (formerly "Max Conversion"), <em>Cycle Brokerage</em> (formerly "Cyclic"), <em>Optimize Spend</em>, and <em>Optimize Conversions</em> (formerly "Conv Optimizer") are now all in the strategy sidebar with labels to the right of each switch. Toggle labels are positioned so that the green (on) position visually aligns with the label.</li>
+						<li><strong>Age display:</strong> The profile section now shows the projected first-year RMD amount alongside the RMD start age (e.g. <em>Age 65 | RMD starts 75 | ~$72,000/yr</em>), updating live as you change IRA balances or the growth rate.</li>
+					</ul>
+				</li>
 				<li><b>11.ecc</b> <strong>Withdrawal Rate:</strong> Corrected Portfolio Withdrawal percent calculations. Added netOutflow, grossOutflow and inFlow columns for summary information.</li>
 				<li><b>11.ecb</b> <strong>Withdrawal Timing:</strong> Each simulation year now auto-selects Early (January) or Late (December) withdrawal timing. Conversion years use Early — maximizing Roth compounding duration. Spending-only years use Late — the full portfolio compounds before the withdrawal exits, gaining D×r per year (~$3,500/yr on a $50k draw at 7%). No manual toggle; the algorithm tracks prior-year conversion activity. A new <em>Timing</em> column in Annual Details shows <em>Early(Conv)</em> or <em>Late(Spend)</em> for each year.</li>
 				<li><b>11.eca</b> <strong>Bear-Start Overlay (Historical Monte Carlo):</strong> In Historical mode, the bottom 25% of paths begin with a randomly-sampled worst-decade historical sequence before continuing with random draws. The likelihood of a "Bear start" market is 23%, so this adds realistic sequence of return risks (SORR).</li>
@@ -635,7 +644,18 @@
 					</ul>
 					</p>
 					<p><strong>Cyclic modifier</strong> — a toggle that layers on top of any strategy. When enabled, the simulation alternates between IRA draw years and brokerage harvest years. The cycle length N is recomputed each year as round(IRA&nbsp;÷&nbsp;Brokerage), so the ratio self-corrects as balances evolve. In a harvest year, spending is funded from brokerage capital gains instead of IRA withdrawals, realizing gains at the preferential LTCG rate (often 0% for many retirees) rather than as ordinary income. Advantages: (1)&nbsp;steps up the cost basis each cycle, reducing future LTCG tax; (2)&nbsp;frees the full IRA bracket headroom for Roth conversions in harvest years; (3)&nbsp;lower MAGI in IRA years can keep IRMAA tiers lower. DRIP (dividend reinvestment) is automatically forced on so dividends reinvest into brokerage rather than leaking to Cash as ordinary income. Two orderings are available: <em>IRA-first</em> (🗘 red) runs N IRA years then harvests — better when the brokerage has high unrealized gains (delay harvest to let IRA deplete first); <em>Brokerage-first</em> (🔄) harvests immediately at the start of each cycle — better when brokerage basis is high (low gains) so the tax cost of harvesting is small. The Optimizer and Monte Carlo always evaluate all three variants. Caveats: harvest years raise MAGI, triggering IRMAA surcharges 2 years later and potentially causing ACA cliff loss; with a very high-gains brokerage the strategy can become less effective as effective LTCG rate rises over time.</p>
-				<p><strong>Optimizer note:</strong> The Optimizer always runs with <em>Max Roth Conversion</em> on — surplus after spending is converted to Roth. Enable it in the strategy panel to match the optimizer's assumption in single-scenario mode.</p>
+				<p><strong>Strategy panel switches</strong> — four toggles in the strategy panel modify how the simulation or optimizer behaves:</p>
+					<ul style="margin:4px 0 8px 16px;">
+						<li><strong>Maximize Conversions</strong> — each year, any IRA withdrawal surplus beyond the spend goal is converted to Roth rather than left in Cash. On by default in the Optimizer (see note below); toggle it on in single-scenario mode to match.</li>
+						<li><strong>Cycle Brokerage</strong> — layers cyclic IRA/brokerage alternation on top of any strategy (see <em>Cyclic modifier</em> above).</li>
+						<li><strong>Optimize Spend</strong> — after the Optimizer finds successful strategies, it binary-searches each one for the highest sustainable spend goal that still ends with at least two years of funded wealth.</li>
+						<li><strong>Optimize Conversions</strong> — for the top five Optimizer strategies, sweeps additional fixed annual conversion amounts ($25k steps) to find the best extra Roth conversion on top of Maximize Conversions. Adds new rows to the Optimizer table. Slower (5–15 sec for large IRAs).</li>
+					</ul>
+				<p><strong>Charitable Giving (QCDs)</strong> — the sidebar section <em>Charitable Giving (QCD)</em> lets you enter a combined household annual QCD maximum. A Qualified Charitable Distribution is a direct transfer from a traditional IRA to a qualifying charity. It satisfies the RMD requirement for that year without adding to your taxable income, which can reduce or eliminate IRMAA Medicare surcharges.
+				Rules: age 70½+ per person (the simulation uses birth month for precision); the IRS limit is $111,000/person/year in 2026, CPI-indexed annually. QCDs are sourced first from the larger eligible IRA, then the smaller.
+				Two modes: <em>Always</em> (switch right, green) donates the full amount every eligible year regardless of tax situation — useful for regular charitable giving goals.
+				<em>As Needed</em> (switch left) applies only as much as needed to drop two IRMAA tiers from your projected MAGI, or to escape the surcharge entirely — whichever requires fewer dollars. Use this when your primary goal is IRMAA avoidance rather than a fixed giving commitment. In either mode your entered amount is the ceiling — the simulation never exceeds it.</p>
+				<p><strong>Optimizer note:</strong> The Optimizer always runs with <em>Maximize Conversions</em> on — surplus after spending is converted to Roth. Enable it in the strategy panel to match the optimizer's assumption in single-scenario mode.</p>
 					</div>
 					</details>
 				</li>

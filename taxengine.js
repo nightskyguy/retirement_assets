@@ -92,8 +92,14 @@ var TAXData = {
 				{ l: Infinity, r: 689.90 + 91.00, tier: "Tier 6 (TOP)" }
 			]
 		}
-	}, // IRMAA	
+	}, // IRMAA
 
+	QCD: {
+		YEAR: 2025,
+		AMOUNT: 108000,       // per person per year (SECURE 2.0, permanently CPI-indexed from 2024)
+		ANNUAL_INCREASE: 'cpi', // sentinel: use simulation's CPI assumption (same as bracket growth)
+		// REFERENCE: IRS Notice 2024-80; $105,000 for 2024, $108,000 for 2025
+	}, // QCD
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// STATE TAX SUMMARY (as of 2026) — 36 of 51 jurisdictions included
@@ -1124,4 +1130,31 @@ function getIRMAATier(magi, status, cpiRate) {
 		else break;
 	}
 	return tier;
+}
+
+// Returns the CPI-adjusted per-person annual QCD limit for the given simulation year.
+function getQCDLimit(simYear, cpiRate) {
+	const { YEAR, AMOUNT } = TAXData.QCD;
+	return AMOUNT * Math.pow(1 + cpiRate, simYear - YEAR);
+}
+
+// Returns true if a person is QCD-eligible (age 70½+) during simYear.
+// Uses birth month for precision: born Jan–Jun → turns 70.5 in (birthYear+70);
+// born Jul–Dec → turns 70.5 in (birthYear+71).
+function isQCDEligible(birthYear, birthMonth, simYear) {
+	const eligible70_5Year = birthYear + 70 + (birthMonth <= 6 ? 0 : 1);
+	return simYear >= eligible70_5Year;
+}
+
+// Returns the IRMAA tier floor (lower threshold) for the given MAGI.
+// Used by QCD "As Needed" mode to compute how much QCD drops below the current tier.
+function getIRMAATierFloor(magi, status, cpiRate) {
+	const brks = getRateBracket('IRMAA', status);
+	if (!brks) return 0;
+	let floor = 0;
+	for (const b of brks) {
+		if (b.l * cpiRate <= magi) floor = b.l * cpiRate;
+		else break;
+	}
+	return floor;
 }

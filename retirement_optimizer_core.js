@@ -59,6 +59,46 @@ function getRMDPercentage(currentYear, birthYear) {
     return 1 / (RMD_TABLE[age]);
 }
 
+// Computes QCDs for the simulation year. Returns { qcd1, qcd2, totalQCD }.
+// "Always" mode: donate up to qcdHHMax every eligible year.
+// "As Needed" mode: donate only the minimum needed to drop below the current IRMAA tier cliff.
+// Sourcing: larger eligible IRA first, then smaller if budget remains.
+function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, cpiRate) {
+    const elig1 = isQCDEligible(inputs.birthyear1, inputs.birthmonth1, simYear);
+    const elig2 = inputs.hasSpouse ? isQCDEligible(inputs.birthyear2, inputs.birthmonth2, simYear) : false;
+
+    if (!elig1 && !elig2) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
+    if ((inputs.qcdHHMax || 0) <= 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
+
+    let qcdBudget = inputs.qcdHHMax;
+
+    if (inputs.qcdMode === 'asneeded') {
+        const status = inputs.hasSpouse ? 'MFJ' : 'SGL';
+        const tierFloor = getIRMAATierFloor(provisionalMAGI, status, cpiRate);
+        // tierFloor === 0 means already below Tier 1 (no surcharge) — nothing to escape
+        if (tierFloor === 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
+        const needed = provisionalMAGI - tierFloor;
+        if (needed <= 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
+        qcdBudget = Math.min(inputs.qcdHHMax, needed);
+    }
+
+    if (qcdBudget <= 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
+
+    const avail1 = elig1 ? Math.min(balance.IRA1, qcdLimit) : 0;
+    const avail2 = elig2 ? Math.min(balance.IRA2, qcdLimit) : 0;
+
+    let qcd1 = 0, qcd2 = 0;
+    if (avail1 >= avail2) {
+        qcd1 = Math.min(qcdBudget, avail1);
+        qcd2 = Math.min(Math.max(0, qcdBudget - qcd1), avail2);
+    } else {
+        qcd2 = Math.min(qcdBudget, avail2);
+        qcd1 = Math.min(Math.max(0, qcdBudget - qcd2), avail1);
+    }
+
+    return { qcd1, qcd2, totalQCD: qcd1 + qcd2 };
+}
+
 function getRateBracket(entity, status) {
     let brks = TAXData?.[entity]?.[status]?.brackets;
 
@@ -816,7 +856,7 @@ function simulate(inputs) {
         let taxableDividends = balance.Brokerage * inputs.dividendRate
 
 
-        // 3. RMDs
+        // 3. RMDs and QCDs
         let rmd1Pct = getRMDPercentage(currentYear, birthyear1);
         let rmd2Pct = getRMDPercentage(currentYear, birthyear2);
         let rmd1 = alive1 ? balance.IRA1 * rmd1Pct || 0 : 0;
@@ -824,21 +864,27 @@ function simulate(inputs) {
         rmd1Pct = Math.max(rmd1Pct, rmd2Pct, 0);
         rmd1Pct = Math.max(rmd1Pct, rmd2Pct, 0);
 
-        // Immediately remove RMDs from the respective IRAs because they MUST be taken first.
-        // FUTURE FEATURE: QCDs (Qualified Charitable Distributions, age 70.5+, max ~$108k/person/yr)
-        // satisfy RMDs without adding to taxable income or MAGI. Implementation:
-        //   1. Add qcd1/qcd2 annual inputs to UI
-        //   2. rmdRemaining = max(0, rmd - qcd); IRA balance unchanged for qcd portion
-        //   3. taxableInc += rmdRemaining (not totalRMD) — reduces IRMAA exposure
-        //   4. Log 'QCD1','QCD2' columns for visibility
-        balance.IRA1 = Math.max(0, balance.IRA1 - rmd1);
-        balance.IRA2 = Math.max(0, balance.IRA2 - rmd2);
+        // QCDs: leave IRA tax-free to charity (age 70.5+). Satisfy RMDs without adding to taxable income/MAGI.
+        // Provisional MAGI estimate (IRA withdrawals unknown here; uses pension+RMD+SS+interest/divs).
+        const qcdLimit = getQCDLimit(currentYear, inputs.cpi);
+        const provisionalMAGI = taxableInc + rmd1 + rmd2 + 0.85 * (s1 + s2) + taxableInterest + taxableDividends;
+        const { qcd1, qcd2, totalQCD } = computeAnnualQCDs(inputs, balance, currentYear, qcdLimit, provisionalMAGI, cpiRate);
+
+        // QCDs leave the IRA first (charitable transfer, excluded from income)
+        balance.IRA1 = Math.max(0, balance.IRA1 - qcd1);
+        balance.IRA2 = Math.max(0, balance.IRA2 - qcd2);
+
+        // Remaining RMD (after QCD satisfies part/all) is taken as taxable IRA distribution
+        const remainingRmd1 = Math.max(0, rmd1 - qcd1);
+        const remainingRmd2 = Math.max(0, rmd2 - qcd2);
+        balance.IRA1 = Math.max(0, balance.IRA1 - remainingRmd1);
+        balance.IRA2 = Math.max(0, balance.IRA2 - remainingRmd2);
         let curIRA = Math.max(0, balance.IRA1 + balance.IRA2 - inputs.iraBaseGoal);
 
-
-
-        let totalRMD = rmd1 + rmd2;
-        taxableInc += totalRMD
+        let totalRMD = rmd1 + rmd2;                                    // required distributions (for stats)
+        const taxableRMD = remainingRmd1 + remainingRmd2;              // taxable portion (excludes QCDs)
+        const totalIRAForcedWithdrawals = qcd1 + remainingRmd1 + qcd2 + remainingRmd2; // actual IRA outflow
+        taxableInc += taxableRMD;                                       // only non-QCD RMDs are income
         let possibleIncome = taxableInc + taxableDividends + taxableInterest + fixedInc;
 
         // 4. Determine Target Spending amount based on Strategy
@@ -939,7 +985,7 @@ function simulate(inputs) {
             // We don't care about the tax implications.
 
             let remYears = Math.max(1, inputs.nYears - y);
-            let amortized = Math.max(0, fixedWithdrawal - totalRMD);
+            let amortized = Math.max(0, fixedWithdrawal - totalIRAForcedWithdrawals);
 
             // Withdraw the fixed amount left after RMDs, or whatever is left in IRAs after leaving room
             let IRAwd = Math.max(0, Math.min(curIRA, amortized))
@@ -1007,9 +1053,9 @@ function simulate(inputs) {
             // RMDs already taken count toward the target; any excess beyond RMDs is the
             // additional draw. Spending shortfall fills from Cash → Brokerage → Roth below.
             const pct = inputs.iraWithdrawPct ?? 0.05;
-            const originalIRA = balance.IRA1 + balance.IRA2 + totalRMD;
+            const originalIRA = balance.IRA1 + balance.IRA2 + totalIRAForcedWithdrawals;
             const targetTotal = originalIRA * pct;
-            const IRAwd = Math.max(0, Math.min(curIRA, targetTotal - totalRMD));
+            const IRAwd = Math.max(0, Math.min(curIRA, targetTotal - totalIRAForcedWithdrawals));
             withdrawals = { IRA: IRAwd, netAmount: IRAwd };
 
         } else if (inputs.strategy === 'propwd') {
@@ -1062,7 +1108,7 @@ function simulate(inputs) {
         let tax = calculateTaxes({
             filingStatus: status, ages: [age1, age2],
             totalSS: s1 + s2, irmaaAnnualCost: irmaa,
-            earnedIncome: pension + totalRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+            earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
             qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
             taxExemptInterest: 0, state: STATEname
         })
@@ -1142,7 +1188,7 @@ function simulate(inputs) {
         tax = calculateTaxes({
             filingStatus: status, ages: [age1, age2],
             totalSS: s1 + s2, irmaaAnnualCost: irmaa,
-            earnedIncome: pension + totalRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+            earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
             qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
             taxExemptInterest: 0, state: STATEname
         })
@@ -1159,7 +1205,7 @@ function simulate(inputs) {
         // This handles cases where the gap fill (brokerage cap gains) raised taxes above the initial estimate.
         // Compute gross income inline (totalIncome is still 0 here; it's assigned below at line 813).
         const incomeAfterGapFill = fixedInc + netWithdrawals.IRA + pension + taxableDividends +
-            taxableInterest + netWithdrawals.Roth + netWithdrawals.Cash + netWithdrawals.Brokerage + totalRMD;
+            taxableInterest + netWithdrawals.Roth + netWithdrawals.Cash + netWithdrawals.Brokerage + taxableRMD;
         const residualGap = targetSpend - (incomeAfterGapFill - totalTax);
         if (residualGap > 1) {
             const thirdPassStart = performance.now();
@@ -1188,7 +1234,7 @@ function simulate(inputs) {
             tax = calculateTaxes({
                 filingStatus: status, ages: [age1, age2],
                 totalSS: s1 + s2, irmaaAnnualCost: irmaa,
-                earnedIncome: pension + totalRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+                earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
                 qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
                 taxExemptInterest: 0, state: STATEname
             });
@@ -1202,7 +1248,7 @@ function simulate(inputs) {
 
         totalIncome = Math.max(1, fixedInc + netWithdrawals.IRA + pension + taxableDividends +
             taxableInterest + netWithdrawals.Roth + netWithdrawals.Cash +
-            netWithdrawals.Brokerage + totalRMD);
+            netWithdrawals.Brokerage + taxableRMD);
 
         inspectForErrors({ totalIncome: totalIncome });
 
@@ -1288,7 +1334,7 @@ function simulate(inputs) {
             const _gross = Math.min(_extraConvReq, _availIRA);
             if (_gross > 0) {
                 // Incremental tax on extra IRA withdrawal via marginal-method re-calc
-                const _baseEI = pension + totalRMD + taxableInterest + (netWithdrawals.IRA ?? 0);
+                const _baseEI = pension + taxableRMD + taxableInterest + (netWithdrawals.IRA ?? 0);
                 const _exTaxCalc = calculateTaxes({
                     filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
                     irmaaAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: cpiRate,
@@ -1316,7 +1362,7 @@ function simulate(inputs) {
         // (pre-tax) IRA over-withdrawal that would have stayed in the IRA in the shadow scenario.
         let incrementalConvTax = 0, grossConv = 0;
         if (totalConverted > 0) {
-            const baseEI = pension + totalRMD + taxableInterest;
+            const baseEI = pension + taxableRMD + taxableInterest;
             const convShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - totalConverted);
             const shadowConvCalc = calculateTaxes({
                 filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
@@ -1333,7 +1379,7 @@ function simulate(inputs) {
         let incrementalExcessTax = 0, grossExcess = 0;
         const excessCashOC = surplus.Cash;
         if (excessCashOC > 0 && (netWithdrawals.IRA ?? 0) > 0) {
-            const baseEI = pension + totalRMD + taxableInterest;
+            const baseEI = pension + taxableRMD + taxableInterest;
             const excessShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - excessCashOC);
             const shadowExcessCalc = calculateTaxes({
                 filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
@@ -1388,7 +1434,8 @@ function simulate(inputs) {
         totals.spendCurrentDollars += (targetSpend + surplus.Shortfall) / inflation;
         totals.rmd += totalRMD;
         // Estimate tax attributable to RMDs proportionally (RMD / totalIncome × totalTax)
-        totals.rmdTax += totalIncome > 0 ? (totalRMD / totalIncome) * totalTax : 0;
+        totals.rmdTax += totalIncome > 0 ? (taxableRMD / totalIncome) * totalTax : 0;
+        totals.qcd = (totals.qcd || 0) + totalQCD;
         balance.Roth1 += surplus.Roth1;
         balance.Roth2 += surplus.Roth2;
         totals.shortfall += surplus.Shortfall;
@@ -1444,7 +1491,7 @@ function simulate(inputs) {
 
         // Phase 27: Withdrawal rate = (net outflows − inflows) / start-of-year wealth.
         // Gross outflows: all account withdrawals incl. conversion-funding draws.
-        const _grossOutflows = (netWithdrawals.IRA ?? 0) + totalRMD + extraConvGross
+        const _grossOutflows = (netWithdrawals.IRA ?? 0) + totalIRAForcedWithdrawals + extraConvGross
             + (netWithdrawals.Brokerage ?? 0)
             + (netWithdrawals.Cash ?? 0)
             + (netWithdrawals.Roth1 ?? 0)
@@ -1471,6 +1518,8 @@ function simulate(inputs) {
             surplus: surplus.Total,
             shortfall: surplus.Shortfall,
             'RMDwd': totalRMD,
+            'QCD1': qcd1,
+            'QCD2': qcd2,
             'cashD+I': taxableDividends + taxableInterest,
             // Withdrawals
             'IRAwd': netWithdrawals.IRA,
@@ -1720,6 +1769,8 @@ function getInputs() {
         comp_Roth2_ratio: +val('comp_Roth2_ratio'),
         comp_Roth2_intl: +val('comp_Roth2_intl'),
         futureIRATaxRate: (() => { const v = val('futureIRATaxRate'); return (v && +v > 0) ? +v / 100.0 : undefined; })(),
+        qcdHHMax: +val('qcdHHMax') || 0,
+        qcdMode: valChecked('qcdAlways') ? 'always' : 'asneeded',
     };
 }
 
@@ -2632,6 +2683,8 @@ const columnCategories = {
     'RMD1-': ['IRA Δ'],
     'RMD2-': ['IRA Δ'],
     'RMDwd': ['IRA Δ', 'Income'],
+    'QCD1': ['IRA Δ'],
+    'QCD2': ['IRA Δ'],
     'rothConv': ['IRA Δ', 'Roth Δ'],  // Conversion comes from IRA
 
     // Roth Changes - balance, withdrawals, growth, conversions
@@ -2892,6 +2945,8 @@ function updateTable(log) {
         'age1': 'Age at end of year (Dec 31). Used for RMD eligibility. May differ from current age shown in Profile & Ages if birthday falls late in the year.',
         'age2': 'Spouse age at end of year (Dec 31). Used for RMD eligibility. May differ from current age shown in Profile & Ages if birthday falls late in the year.',
         'RMDwd': 'Total of all Required Minimum Distributions (RMDs)',
+        'QCD1': 'Qualified Charitable Distribution from Your IRA. Satisfies RMD requirement and is excluded from taxable income/MAGI (reduces IRMAA exposure). Age 70½+ only.',
+        'QCD2': 'Qualified Charitable Distribution from Spouse IRA. Satisfies Spouse RMD requirement and is excluded from taxable income/MAGI (reduces IRMAA exposure). Age 70½+ only.',
         'RMD%': 'The highest percentage RMD required for IRA1 or IRA2.',
         'Brokerage': 'Year end Brokerage balance',
         'Brokerage-': 'Withdrawals from Brokerage account (asset sales/cash withdrawal)',
@@ -3163,9 +3218,11 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     const rmdEl = document.getElementById('stat-rmd');
     const rmdPctEl = document.getElementById('stat-rmd-pct');
     if (rmdEl) rmdEl.innerText = '$' + Math.round(totals.rmd ?? 0).toLocaleString();
-    if (rmdPctEl) rmdPctEl.innerText = totals.tax > 0
-        ? `${((totals.rmdTax ?? 0) / totals.tax * 100).toFixed(0)}% of taxes`
-        : '';
+    if (rmdPctEl) {
+        const rmdPctStr = totals.tax > 0 ? `${((totals.rmdTax ?? 0) / totals.tax * 100).toFixed(0)}% of taxes` : '';
+        const qcdStr = (totals.qcd ?? 0) > 0 ? ` | QCD $${Math.round(totals.qcd).toLocaleString()}` : '';
+        rmdPctEl.innerText = rmdPctStr + qcdStr;
+    }
     const yearsEl = document.getElementById('stat-years');
     if (yearsEl) {
         yearsEl.innerText = totals.yearsfunded + '/' + totals.yearstested;
@@ -3679,7 +3736,9 @@ const OPT_LONG_TO_SHORT = {
     comp_Brokerage_ratio:'cbr', comp_Brokerage_intl:'cbx',
     comp_Roth1_ratio:'cr1r', comp_Roth1_intl:'cr1x',
     comp_Roth2_ratio:'cr2r', comp_Roth2_intl:'cr2x',
-    'show-current-dollars':'cd', optimizeSpend:'opt'
+    'show-current-dollars':'cd', optimizeSpend:'opt', includeConvOpt:'copt',
+    cyclicEnabled:'cyc',
+    qcdHHMax:'qm', qcdAlways:'qa'
 };
 
 const OPT_SHORT_TO_LONG = Object.fromEntries(

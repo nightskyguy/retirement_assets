@@ -123,6 +123,20 @@
 				  <span class="toggle-switch"></span>
 				</label>
 			</div>
+			<div class="input-group" style="margin-top:4px;">
+				<label class="toggle" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
+				  <input type="checkbox" id="optimizeSpend" onchange="document.getElementById('tab-opt').classList.contains('hidden') ? (_lastOptimizerHash = null) : runOptimizer()">
+				  <span class="toggle-label">Optimize Spend</span>
+				  <span class="toggle-switch"></span>
+				</label>
+			</div>
+			<div class="input-group" style="margin-top:4px;">
+				<label class="toggle" title="For each of the top 5 strategies, sweep extra IRA→Roth conversion amounts ($25k steps) to find the optimal additional fixed annual conversion (on top of Max Conversion). Adds new rows showing the conversion-optimized result. Slower — ~5–15 sec for large IRAs.">
+				  <input type="checkbox" id="includeConvOpt" onchange="document.getElementById('tab-opt').classList.contains('hidden') ? (_lastOptimizerHash = null) : runOptimizer()">
+				  <span class="toggle-label">Conv Optimizer</span>
+				  <span class="toggle-switch"></span>
+				</label>
+			</div>
 			<input type="hidden" id="cyclicOrder" value="ira-first">
 		</div>  <!-- strategy-container -->
 
@@ -284,6 +298,23 @@
         </div>
         </details>
 
+        <details class="section">
+        <summary>3b. Charitable Giving (QCD)</summary>
+        <div style="font-size:0.82em;color:#555;margin-bottom:6px;">
+            QCDs from IRAs satisfy the RMD requirement and are excluded from MAGI (reducing IRMAA/ACA exposure). Age 70½+ per person. IRS limit: $108,000/person/yr (2025, CPI-indexed).
+        </div>
+        <div class="row">
+            <div><label title="Combined household annual QCD goal or ceiling. Sourced from the larger eligible IRA first, then the smaller. Both spouses must be 70½+ for their IRA to contribute.">Annual QCD Max<input type="text" id="qcdHHMax" value="0" placeholder="0"></label></div>
+        </div>
+        <div class="input-group" style="margin-top:4px;">
+            <label class="toggle" title="Always: donate this amount every year when eligible, regardless of tax situation. As Needed: only apply QCDs when they would eliminate an IRMAA tier cliff (minimum needed, capped at your max).">
+                <input type="checkbox" id="qcdAlways" checked>
+                <span class="toggle-label">Always / As Needed</span>
+                <span class="toggle-switch"></span>
+            </label>
+        </div>
+        </details>
+
         <details class="section" open>
         <summary>4. Assumptions</summary>
         <div class="row">
@@ -319,7 +350,25 @@
 
     <div class="main">
         <div class="top-bar">
-            <div id="summary-stats" style="display:flex; gap:30px; overflow-x:auto; padding-bottom:4px;">
+            <div style="display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-bottom:6px;">
+                <div title="Generate a URL with all current settings for bookmarking or sharing" style="position:relative">
+                    <button onclick="toggleSharePanel()" style="font-size:0.8em;padding:4px 8px;">&#8258; Share</button>
+                    <div class="share-panel" id="share-panel">
+                        <label>Copy this URL to restore your settings in any browser:</label>
+                        <div class="share-row">
+                            <input type="text" id="share-url-input" readonly onclick="this.select()">
+                            <button class="share-copy" onclick="copyShareURL()">Copy</button>
+                        </div>
+                        <div class="share-status" id="share-status"></div>
+                    </div>
+                </div>
+                <label class="toggle" style="font-size:0.8em;" title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
+                    <input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()">
+                    <span class="toggle-label">Current $</span>
+                    <span class="toggle-switch"></span>
+                </label>
+            </div>
+            <div id="summary-stats" style="display:flex; gap:16px; overflow-x:auto; padding-bottom:4px;">
 				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;min-width:60px;"></div>
 				<div title="Years of life fully funded — portfolio covers spending goal without running out. Red when fewer than expected."><small>Funded Yrs</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Lifetime tax rate: total taxes paid ÷ total gross income. Lower is better."><small>Tax Rate</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
@@ -335,24 +384,6 @@
                     <div id="stat-proj-rmd2" style="white-space:nowrap;"></div>
                 </div>
 				<div id="popUpMessage" class="scenario-message"></div>
-				<div title="Generate a URL with all current settings for bookmarking or sharing" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-					<div style="position:relative">
-						<button onclick="toggleSharePanel()" style="font-size:0.8em;padding:4px 8px;">&#8258; Share</button>
-						<div class="share-panel" id="share-panel">
-							<label>Copy this URL to restore your settings in any browser:</label>
-							<div class="share-row">
-								<input type="text" id="share-url-input" readonly onclick="this.select()">
-								<button class="share-copy" onclick="copyShareURL()">Copy</button>
-							</div>
-							<div class="share-status" id="share-status"></div>
-						</div>
-					</div>
-					<label class="toggle" style="font-size:0.8em;" title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
-						<input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()">
-						<span class="toggle-label">Current $</span>
-						<span class="toggle-switch"></span>
-					</label>
-				</div>
             </div>
         </div>
 
@@ -360,16 +391,6 @@
             <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
             <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer 🎯</button>
-            <label class="toggle" style="margin-left:8px;font-size:0.85em;" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
-                <input type="checkbox" id="optimizeSpend" onchange="document.getElementById('tab-opt').classList.contains('hidden') ? (_lastOptimizerHash = null) : runOptimizer()">
-                <span class="toggle-label">Optimize Spend</span>
-                <span class="toggle-switch"></span>
-            </label>
-            <label class="toggle" style="margin-left:8px;font-size:0.85em;" title="For each of the top 5 strategies, sweep extra IRA→Roth conversion amounts ($25k steps) to find the optimal annual conversion. Adds new rows showing the conversion-optimized result. Slower — ~5–15 sec for large IRAs.">
-                <input type="checkbox" id="includeConvOpt" onchange="document.getElementById('tab-opt').classList.contains('hidden') ? (_lastOptimizerHash = null) : runOptimizer()">
-                <span class="toggle-label">Conv Optimizer</span>
-                <span class="toggle-switch"></span>
-            </label>
 		    <button id="btn-mc" class="tab-btn" onclick="{showTab('tab-mc'); mcTabActivated();}">Monte Carlo 🎲</button>
 		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
 		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}">Documentation <strong id="testsFailed">🟢</strong></button>

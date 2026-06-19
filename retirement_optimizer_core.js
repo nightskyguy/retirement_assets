@@ -1781,19 +1781,34 @@ function updateProfileAgeDisplay() {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
+    const growthRate = (+val('growth') / 100) || 0.06;
 
-    function ageInfo(birthYear, birthMonth) {
+    function ageInfo(birthYear, birthMonth, iraBalance) {
         if (!birthYear) return null;
         const age = currentYear - birthYear - (currentMonth <= birthMonth ? 1 : 0);
-        const rmdStart = birthYear >= 1960 ? 75 : 73;
-        return `Age ${age} | RMD starts ${rmdStart}`;
+        const rmdAge = birthYear >= 1960 ? 75 : 73;
+        let rmdStr = `RMD starts ${rmdAge}`;
+        if (iraBalance > 0) {
+            const yearsTo = rmdAge - age;
+            let firstRMD;
+            if (yearsTo <= 0) {
+                const factor = RMD_TABLE[Math.min(age, 120)] ?? 2.0;
+                firstRMD = iraBalance / factor;
+            } else {
+                const projIRA = iraBalance * Math.pow(1 + growthRate, yearsTo);
+                const factor = RMD_TABLE[rmdAge] ?? 26.5;
+                firstRMD = projIRA / factor;
+            }
+            rmdStr += ` | ~$${Math.round(firstRMD).toLocaleString()}/yr`;
+        }
+        return `Age ${age} | ${rmdStr}`;
     }
 
     const el1 = document.getElementById('age-display-1');
-    if (el1) el1.textContent = ageInfo(+val('birthyear1'), +val('birthmonth1') || 12) ?? '';
+    if (el1) el1.textContent = ageInfo(+val('birthyear1'), +val('birthmonth1') || 12, +val('IRA1') || 0) ?? '';
 
     const el2 = document.getElementById('age-display-2');
-    if (el2) el2.textContent = ageInfo(+val('birthyear2'), +val('birthmonth2') || 12) ?? '';
+    if (el2) el2.textContent = ageInfo(+val('birthyear2'), +val('birthmonth2') || 12, +val('IRA2') || 0) ?? '';
     updateACAWarning();
 }
 

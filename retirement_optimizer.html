@@ -112,29 +112,33 @@
 			<div class="input-group" style="margin-top:4px;">
 				<label class="toggle" title="If checked, uses available IRA withdrawal surplus to maximize Roth conversions each year">
 				  <input type="checkbox" id="maxConversion" name="maxConversion">
-				  <span class="toggle-label">Max Conversion</span>
+				  <span class="toggle-label"></span>
 				  <span class="toggle-switch"></span>
+				  <span>Maximize Conversions</span>
 				</label>
 			</div>
 			<div class="input-group" style="margin-top:4px;">
 				<label class="toggle" title="Cyclic: alternates IRA draw years and brokerage harvest years. N = round(IRA ÷ Brokerage) IRA years then 1 brokerage LTCG harvest year. Forces DRIP on. Surplus reinvests into Brokerage. Optimizer and MC run both IRA-first (🔄) and brokerage-first (🔄B) orders. See changelog for caveats (ACA/IRMAA spikes, basis depletion).">
 				  <input type="checkbox" id="cyclicEnabled" onchange="onCyclicChange()">
-				  <span class="toggle-label">Cyclic</span>
+				  <span class="toggle-label"></span>
 				  <span class="toggle-switch"></span>
+				  <span>Cycle Brokerage</span>
 				</label>
 			</div>
 			<div class="input-group" style="margin-top:4px;">
 				<label class="toggle" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
 				  <input type="checkbox" id="optimizeSpend" onchange="document.getElementById('tab-opt').classList.contains('hidden') ? (_lastOptimizerHash = null) : runOptimizer()">
-				  <span class="toggle-label">Optimize Spend</span>
+				  <span class="toggle-label"></span>
 				  <span class="toggle-switch"></span>
+				  <span>Optimize Spend</span>
 				</label>
 			</div>
 			<div class="input-group" style="margin-top:4px;">
-				<label class="toggle" title="For each of the top 5 strategies, sweep extra IRA→Roth conversion amounts ($25k steps) to find the optimal additional fixed annual conversion (on top of Max Conversion). Adds new rows showing the conversion-optimized result. Slower — ~5–15 sec for large IRAs.">
+				<label class="toggle" title="For each of the top 5 strategies, sweep extra IRA→Roth conversion amounts ($25k steps) to find the optimal additional fixed annual conversion (on top of Maximize Conversions). Adds new rows showing the conversion-optimized result. Slower — ~5–15 sec for large IRAs.">
 				  <input type="checkbox" id="includeConvOpt" onchange="document.getElementById('tab-opt').classList.contains('hidden') ? (_lastOptimizerHash = null) : runOptimizer()">
-				  <span class="toggle-label">Conv Optimizer</span>
+				  <span class="toggle-label"></span>
 				  <span class="toggle-switch"></span>
+				  <span>Optimize Conversions</span>
 				</label>
 			</div>
 			<input type="hidden" id="cyclicOrder" value="ira-first">
@@ -180,8 +184,8 @@
         <details class="section" open>
         <summary>2. Assets at Retirement Age</summary>
         <div class="row">
-            <div><label title="Your traditional IRA balance."><B>Your</B> IRA<input type="text" id="IRA1" value="1000000"></label></div>
-            <div class="spouse-field"><label title="Spouse's traditional IRA balance."><B><I>Spouse</I></B> IRA<input type="text" id="IRA2" value="400000"></label></div>
+            <div><label title="Your traditional IRA balance."><B>Your</B> IRA<input type="text" id="IRA1" value="1000000" oninput="updateProfileAgeDisplay()"></label></div>
+            <div class="spouse-field"><label title="Spouse's traditional IRA balance."><B><I>Spouse</I></B> IRA<input type="text" id="IRA2" value="400000" oninput="updateProfileAgeDisplay()"></label></div>
         </div>
         <div class="row">
             <div><label title="Your Roth IRA balance. Withdrawals are tax-free and not subject to RMDs."><B>Your</B> Roth IRA<input type="text" id="Roth" value="50000"></label></div>
@@ -331,7 +335,7 @@
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
         <div class="row">
-            <div><label title="Nominal (pre-inflation) annual return for IRA, Roth, and Brokerage accounts. Enter the total expected return including dividends — e.g. 5% price growth + 1.5% dividends = 6.5%. US historical CAGR: S&amp;P 500 ~10%, diversified 60/40 ~7–9%, conservative bond-heavy ~4–6%. Do NOT subtract inflation — the tool handles inflation separately via the Inflation input below. Real (after-inflation) growth is shown beneath this row.">Growth (6)%<input type="number" id="growth" value="6.0" oninput="updateGrowthDisplay(); syncMCMuFromGrowth()"></label></div>
+            <div><label title="Nominal (pre-inflation) annual return for IRA, Roth, and Brokerage accounts. Enter the total expected return including dividends — e.g. 5% price growth + 1.5% dividends = 6.5%. US historical CAGR: S&amp;P 500 ~10%, diversified 60/40 ~7–9%, conservative bond-heavy ~4–6%. Do NOT subtract inflation — the tool handles inflation separately via the Inflation input below. Real (after-inflation) growth is shown beneath this row.">Growth (6)%<input type="number" id="growth" value="6.0" oninput="updateGrowthDisplay(); syncMCMuFromGrowth(); updateProfileAgeDisplay()"></label></div>
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
         <div id="growth-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
@@ -375,10 +379,6 @@
                 <div title="First year when the actual portfolio (Roth + Taxable) outpaces the no-conversion shadow after taxes. Uses Future IRA Tax % assumption. See Opp. Cost columns in Annual Details. '—' means never or no conversions."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;">—</strong></div>
                 <div title="Average Break-Even Tax Rate across all conversion years (Kitces formula). If your expected future rate exceeds this, conversions are advantageous on average. See BETR% column in Annual Details (Opp. Cost category). '—' means no conversions."><small>Avg BETR</small><br><strong id="stat-betr-avg" style="font-size:0.9em;">—</strong></div>
                 <div title="Average of (net portfolio outflows − SS/pension inflows) ÷ start-of-year wealth. The classic 4% rule targets ~4%. Negative = income exceeded spending. See wdRate% column in Annual Details."><small>Avg Withdrawal Rate</small><br><strong id="stat-avg-spend-rate" style="font-size:0.9em;">—</strong></div>
-                <div title="Projected first-year RMD for each person's IRA at their SECURE 2.0 RMD age (born 1951–1959 → age 73; born 1960+ → age 75). IRA balance projected at current growth rate. Shows why pre-RMD conversions matter." style="font-size:0.75em;color:#555;line-height:1.6;">
-                    <div id="stat-proj-rmd1" style="white-space:nowrap;"></div>
-                    <div id="stat-proj-rmd2" style="white-space:nowrap;"></div>
-                </div>
 				<div id="popUpMessage" class="scenario-message"></div>
             </div>
         </div>

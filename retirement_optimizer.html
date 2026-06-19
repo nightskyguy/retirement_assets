@@ -363,11 +363,6 @@
                         <div class="share-status" id="share-status"></div>
                     </div>
                 </div>
-                <label class="toggle" style="font-size:0.8em;" title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
-                    <input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()">
-                    <span class="toggle-label">Current $</span>
-                    <span class="toggle-switch"></span>
-                </label>
             </div>
             <div id="summary-stats" style="display:flex; gap:16px; overflow-x:auto; padding-bottom:4px;">
 				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;min-width:60px;"></div>
@@ -389,6 +384,12 @@
         </div>
 
         <div class="tabs">
+            <label class="toggle" style="font-size:0.8em;align-self:center;margin-right:6px;" title="Show all dollar values in today's purchasing power (divided by cumulative inflation)">
+                <input type="checkbox" id="show-current-dollars" onchange="updateCurrentDollarsView()">
+                <span class="toggle-label">Future $</span>
+                <span class="toggle-switch"></span>
+                <span style="color:#666;font-size:0.9em;">Current $</span>
+            </label>
             <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
             <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer 🎯</button>

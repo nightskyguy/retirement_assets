@@ -4047,10 +4047,18 @@ function applyScenario(data) {
         if (el) el.value = `aca${data.stratACAMultiple}`;
     }
 
+    // qcdMode is stored as 'always'/'asneeded' string but the UI element is qcdAlways checkbox
+    if (data.qcdMode !== undefined) {
+        const el = document.getElementById('qcdAlways');
+        if (el) el.checked = (data.qcdMode === 'always');
+    }
+
     for (const [key, value] of Object.entries(data)) {
         // stratIRMAATier has no standalone form element; handled above via stratRate dropdown
         if (key === 'stratIRMAATier') continue;
         if (key === 'stratACAMultiple') continue;
+        // qcdMode maps to qcdAlways checkbox; handled above
+        if (key === 'qcdMode') continue;
         const element = document.getElementById(key);
         if (element) {
             // Handle percentage values (multiply by 100 for display)
@@ -4063,8 +4071,8 @@ function applyScenario(data) {
             } else if (key === 'stratRate') {
                 element.value = (value * 100).toFixed(3);
             } else {
-                if (['maxConversion'].includes(key)) {
-                    document.getElementById('maxConversion').checked = value
+                if (['maxConversion', 'pensionCola', 'dividendReinvest', 'cyclicEnabled'].includes(key)) {
+                    element.checked = !!value;
                 } else if (DOLLAR_INPUT_IDS.has(key)) {
                     DisplayHelpers.setDollarValue(key, value);
                 } else {

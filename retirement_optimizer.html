@@ -556,6 +556,10 @@
 						<li><strong>Age display:</strong> The profile section now shows the projected first-year RMD amount alongside the RMD start age (e.g. <em>Age 65 | RMD starts 75 | ~$72,000/yr</em>), updating live as you change IRA balances or the growth rate.</li>
 					</ul>
 				</li>
+				</ul>
+				<details>
+					<summary style="cursor:pointer;color:#888;font-size:0.9em;">Older changes…</summary>
+					<ul>
 				<li><b>11.ecc</b> <strong>Withdrawal Rate:</strong> Corrected Portfolio Withdrawal percent calculations. Added netOutflow, grossOutflow and inFlow columns for summary information.</li>
 				<li><b>11.ecb</b> <strong>Withdrawal Timing:</strong> Each simulation year now auto-selects Early (January) or Late (December) withdrawal timing. Conversion years use Early — maximizing Roth compounding duration. Spending-only years use Late — the full portfolio compounds before the withdrawal exits, gaining D×r per year (~$3,500/yr on a $50k draw at 7%). No manual toggle; the algorithm tracks prior-year conversion activity. A new <em>Timing</em> column in Annual Details shows <em>Early(Conv)</em> or <em>Late(Spend)</em> for each year.</li>
 				<li><b>11.eca</b> <strong>Bear-Start Overlay (Historical Monte Carlo):</strong> In Historical mode, the bottom 25% of paths begin with a randomly-sampled worst-decade historical sequence before continuing with random draws. The likelihood of a "Bear start" market is 23%, so this adds realistic sequence of return risks (SORR).</li>
@@ -570,10 +574,7 @@
 					leak to Cash as ordinary income. Two orderings are supported: <em>IRA-first</em> (🗘, red) harvests after N IRA years; <em>Brokerage-first</em> (🔄) harvests at the start of each cycle.
 					The Optimizer and Monte Carlo always run all three variants (baseline + IRA-first + Brokerage-first) and surface the best. The <em>subCycle</em> column in Annual Details shows I/B/⚠B per year.
 					One benefit of Cycle Brokerage is earlier reduction of brokerage assets that would otherwise grow increasing later capital gains.</li>
-				</ul>
-				<details>
-					<summary style="cursor:pointer;color:#888;font-size:0.9em;">Older changes…</summary>
-					<ul>
+			
 				<li><b>11.e64</b> <strong>BETR (Break-Even Tax Rate):</strong> Annual Details now shows the break-even future tax rate for each year's Roth conversion. 
 					<em>Avg BETR</em> summary stat shows the average across all conversion years. "Conv Optimizer" determines whether conversions realize any tax savings and are indicated with (⇌) 
 					<strong>Bug fix:</strong> eliminated shortfalls in cases invoving brokerage withdrawals.</li>

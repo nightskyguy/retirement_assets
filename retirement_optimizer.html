@@ -299,18 +299,19 @@
         </details>
 
         <details class="section">
-        <summary>3b. Charitable Giving (QCD)</summary>
+        <summary>Charitable Giving (QCD)</summary>
         <div style="font-size:0.82em;color:#555;margin-bottom:6px;">
-            QCDs from IRAs satisfy the RMD requirement and are excluded from MAGI (reducing IRMAA/ACA exposure). Age 70½+ per person. IRS limit: $108,000/person/yr (2025, CPI-indexed).
+            QCDs from IRAs satisfy the RMD requirement and are excluded from MAGI, reducing IRMAA exposure. IRS limit is CPI-indexed annually.
         </div>
         <div class="row">
-            <div><label title="Combined household annual QCD goal or ceiling. Sourced from the larger eligible IRA first, then the smaller. Both spouses must be 70½+ for their IRA to contribute.">Annual QCD Max<input type="text" id="qcdHHMax" value="0" placeholder="0"></label></div>
+            <div><label title="Combined household annual QCD goal or ceiling. Sourced from the larger eligible IRA first, then the smaller. To contribute, one spouse must be 70½ years old.">Annual QCD Max<input type="text" id="qcdHHMax" value="0" placeholder="0"></label></div>
         </div>
         <div class="input-group" style="margin-top:4px;">
             <label class="toggle" title="Always: donate this amount every year when eligible, regardless of tax situation. As Needed: only apply QCDs when they would eliminate an IRMAA tier cliff (minimum needed, capped at your max).">
                 <input type="checkbox" id="qcdAlways" checked>
-                <span class="toggle-label">Always / As Needed</span>
+                <span class="toggle-label">Always</span>
                 <span class="toggle-switch"></span>
+                <span style="color:#666;font-size:0.9em;">As Needed</span>
             </label>
         </div>
         </details>
@@ -850,7 +851,7 @@ runSimulation?.();
     var dollarIds = [
       'spendGoal', 'iraBaseGoal',
       'IRA1', 'IRA2', 'Roth', 'Roth2', 'Brokerage', 'BrokerageBasis', 'Cash', 'CashReserve',
-      'ss1', 'ss2', 'pensionAnnual'
+      'ss1', 'ss2', 'pensionAnnual', 'qcdHHMax'
     ];
     dollarIds.forEach(function (id) {
       var el = document.getElementById(id);

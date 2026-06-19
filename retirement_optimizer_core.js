@@ -63,9 +63,9 @@ function getRMDPercentage(currentYear, birthYear) {
 // "Always" mode: donate up to qcdHHMax every eligible year.
 // "As Needed" mode: donate only the minimum needed to drop below the current IRMAA tier cliff.
 // Sourcing: larger eligible IRA first, then smaller if budget remains.
-function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, cpiRate) {
-    const elig1 = isQCDEligible(inputs.birthyear1, inputs.birthmonth1, simYear);
-    const elig2 = inputs.hasSpouse ? isQCDEligible(inputs.birthyear2, inputs.birthmonth2, simYear) : false;
+function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, cpiRate, alive1, alive2, status) {
+    const elig1 = alive1 && isQCDEligible(inputs.birthyear1, inputs.birthmonth1, simYear);
+    const elig2 = alive2 && isQCDEligible(inputs.birthyear2, inputs.birthmonth2, simYear);
 
     if (!elig1 && !elig2) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
     if ((inputs.qcdHHMax || 0) <= 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
@@ -73,7 +73,6 @@ function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, 
     let qcdBudget = inputs.qcdHHMax;
 
     if (inputs.qcdMode === 'asneeded') {
-        const status = inputs.hasSpouse ? 'MFJ' : 'SGL';
         const tierFloor = getIRMAATierFloor(provisionalMAGI, status, cpiRate);
         // tierFloor === 0 means already below Tier 1 (no surcharge) — nothing to escape
         if (tierFloor === 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
@@ -868,7 +867,7 @@ function simulate(inputs) {
         // Provisional MAGI estimate (IRA withdrawals unknown here; uses pension+RMD+SS+interest/divs).
         const qcdLimit = getQCDLimit(currentYear, inputs.cpi);
         const provisionalMAGI = taxableInc + rmd1 + rmd2 + 0.85 * (s1 + s2) + taxableInterest + taxableDividends;
-        const { qcd1, qcd2, totalQCD } = computeAnnualQCDs(inputs, balance, currentYear, qcdLimit, provisionalMAGI, cpiRate);
+        const { qcd1, qcd2, totalQCD } = computeAnnualQCDs(inputs, balance, currentYear, qcdLimit, provisionalMAGI, cpiRate, alive1, alive2, status);
 
         // QCDs leave the IRA first (charitable transfer, excluded from income)
         balance.IRA1 = Math.max(0, balance.IRA1 - qcd1);
@@ -3565,6 +3564,7 @@ function updateCharts(log) {
                 mkAbs('State Tax',      '#FF2E2EC0', r => r.StateTax),
                 mkAbs('IRMAA',          '#FFB8B8C0', r => r.IRMAA),
                 mkAbs('Roth Conv',      '#8e44ad80', r => r.rothConv),
+                mkAbs('QCD',            '#99999980', r => (r.QCD1 ?? 0) + (r.QCD2 ?? 0)),
                 // Spendable Income line sits exactly at the income/tax seam.
                 // order:1 (lower than bars' order:2) ensures Chart.js draws this line
                 // AFTER the bars so it appears on top. Higher order = drawn first = behind.

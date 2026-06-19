@@ -95,10 +95,10 @@ var TAXData = {
 	}, // IRMAA
 
 	QCD: {
-		YEAR: 2025,
-		AMOUNT: 108000,       // per person per year (SECURE 2.0, permanently CPI-indexed from 2024)
+		YEAR: 2026,
+		AMOUNT: 111000,       // per person per year (SECURE 2.0, permanently CPI-indexed from 2024)
 		ANNUAL_INCREASE: 'cpi', // sentinel: use simulation's CPI assumption (same as bracket growth)
-		// REFERENCE: IRS Notice 2024-80; $105,000 for 2024, $108,000 for 2025
+		// REFERENCE: IRS Notice 2025-49; $105k 2024, $108k 2025, $111k 2026
 	}, // QCD
 
 	// ─────────────────────────────────────────────────────────────────────────
@@ -1146,15 +1146,27 @@ function isQCDEligible(birthYear, birthMonth, simYear) {
 	return simYear >= eligible70_5Year;
 }
 
-// Returns the IRMAA tier floor (lower threshold) for the given MAGI.
-// Used by QCD "As Needed" mode to compute how much QCD drops below the current tier.
-function getIRMAATierFloor(magi, status, cpiRate) {
+// For QCD "As Needed" mode: returns the target MAGI ceiling to reduce to in order to drop
+// tiersDown IRMAA tiers from current position (or escape all surcharges — whichever needs
+// fewer QCDs). Returns 0 if already at no-surcharge level (no QCDs needed).
+// The returned value is the TOP of the target tier so the minimum QCD achieves the drop.
+// Example MFJ: MAGI=$350k (Tier 3), tiersDown=2 → target=Tier 1 ceiling=$273,999
+//              MAGI=$230k (Tier 1), tiersDown=2 → target=no-surcharge ceiling=$217,999
+function getIRMAATierTargetMAGI(magi, status, cpiRate, tiersDown) {
 	const brks = getRateBracket('IRMAA', status);
 	if (!brks) return 0;
-	let floor = 0;
-	for (const b of brks) {
-		if (b.l * cpiRate <= magi) floor = b.l * cpiRate;
+	// Find current bracket index (highest i where b.l * cpiRate <= magi)
+	let currentIdx = -1;
+	for (let i = 0; i < brks.length; i++) {
+		if (brks[i].l * cpiRate <= magi) currentIdx = i;
 		else break;
 	}
-	return floor;
+	// At index 0 ("-none-" / no surcharge) or below: nothing to escape
+	if (currentIdx <= 0) return 0;
+	// Target bracket: drop tiersDown, clamped to index 0 (no-surcharge zone)
+	const targetIdx = Math.max(currentIdx - tiersDown, 0);
+	// Return the TOP of the target tier = just below the next tier's lower bound.
+	// For targetIdx=0 this is just below Tier 1's floor (no surcharge).
+	const nextFloor = (brks[targetIdx + 1]?.l ?? brks[targetIdx].l);
+	return nextFloor * cpiRate - 1;
 }

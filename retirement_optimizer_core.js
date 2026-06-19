@@ -73,10 +73,11 @@ function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, 
     let qcdBudget = inputs.qcdHHMax;
 
     if (inputs.qcdMode === 'asneeded') {
-        const tierFloor = getIRMAATierFloor(provisionalMAGI, status, cpiRate);
-        // tierFloor === 0 means already below Tier 1 (no surcharge) — nothing to escape
-        if (tierFloor === 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
-        const needed = provisionalMAGI - tierFloor;
+        // Target: drop 2 IRMAA tiers (or escape all surcharges), whichever needs fewer QCDs.
+        // Returns the MAGI ceiling of the target tier; 0 = already at no-surcharge level.
+        const tierTarget = getIRMAATierTargetMAGI(provisionalMAGI, status, cpiRate, 2);
+        if (tierTarget === 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
+        const needed = provisionalMAGI - tierTarget;
         if (needed <= 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
         qcdBudget = Math.min(inputs.qcdHHMax, needed);
     }

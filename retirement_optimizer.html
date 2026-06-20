@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1001</title>
+    <title>Retirement Optimizer 11.1002</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -373,7 +373,7 @@
 				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;min-width:60px;"></div>
 				<div title="Years of life fully funded — portfolio covers spending goal without running out. Red when fewer than expected."><small>Funded Yrs</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Lifetime tax rate: total taxes paid ÷ total gross income. Lower is better."><small>Tax Rate</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
-                <div title="Total federal + state taxes paid over the entire simulation."><small>All Taxes</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Total tax paid over the entire simulation: federal (incl. NIIT), state, and Medicare IRMAA surcharges."><small>All Taxes</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total Required Minimum Distributions taken. Sub-label shows RMDs' share of lifetime taxes."><small>All RMDs</small><br><strong id="stat-rmd">$0</strong><div id="stat-rmd-pct" style="font-size:0.75em;min-height:1em;color:#888;"></div></div>
                 <div title="Total after-tax spendable income produced across all years."><small>Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total portfolio value (after-tax) remaining at the end of the final simulation year."><small>End Wealth</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
@@ -547,6 +547,12 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1002</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong>
+					<ul style="margin:4px 0 0 16px;">
+						<li><strong>ΔTax / ΔNetWealth now switch units.</strong> Toggling <em>Future $ / Current $</em> previously updated the absolute columns (Lifetime Tax, Total Spendable, NetWealth) but left the Δ columns in future dollars — mismatched units side by side. The Δ columns now deflate too, each computed as the difference of the two present-value totals.</li>
+						<li><strong>Tooltip accuracy.</strong> The Lifetime Tax, ΔTax, and "All Taxes" tooltips now state the full composition: federal (ordinary + capital gains + NIIT) + state + Medicare IRMAA surcharges. (No calculation change — IRMAA and NIIT were always included; only the tooltips were incomplete.)</li>
+					</ul>
+				</li>
 				<li><b>11.1001</b> <strong>Baseline accounting for strategy comparison:</strong>
 					<ul style="margin:4px 0 0 16px;">
 						<li><strong>Honest baseline.</strong> The optimizer now also runs every strategy family with <em>no Roth conversions and no cyclic brokerage maneuvering</em>, no QCDs, and pins the strongest of those as a light-green <em>⚓ BASELINE</em> reference row at the top of the results. Every other strategy is measured against it — because "strategy A beats strategy B" only means something relative to the best you can do without conversion/brokerage tricks.</li>

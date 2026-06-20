@@ -2380,6 +2380,8 @@ function runOptimizer() {
     for (const r of results) {
         r._dNW  = baselineRow ? (r.afterTaxNW   - baselineRow.afterTaxNW)   : null;
         r._dTax = baselineRow ? (baselineRow.totals.tax - r.totals.tax)     : null;
+        r._dNWCurrent  = baselineRow ? (r.afterTaxNWCurrentDollars - baselineRow.afterTaxNWCurrentDollars)   : null;
+        r._dTaxCurrent = baselineRow ? (baselineRow.totals.taxCurrentDollars - r.totals.taxCurrentDollars)   : null;
     }
 
     // Update top-bar stats using the 0% propwd/no-maxConv row (first result, equivalent to baseline)
@@ -2470,7 +2472,7 @@ function getOptimizerColumns() {
         },
         {
             key: 'tax', label: 'Lifetime Tax',
-            title: 'Total federal + state tax paid over the whole plan. Toggle Future $/Current $ to switch between nominal and today\'s-dollar totals.',
+            title: 'Total tax paid over the whole plan: federal (ordinary + capital gains + NIIT), state, and Medicare IRMAA surcharges. Toggle Future $/Current $ to switch between nominal and today\'s-dollar totals.',
             getValue: r => Math.round(inC() ? r.totals.taxCurrentDollars : r.totals.tax).toLocaleString(),
             getSortValue: r => inC() ? r.totals.taxCurrentDollars : r.totals.tax
         },
@@ -2490,23 +2492,25 @@ function getOptimizerColumns() {
             key: 'dNW', label: 'ΔNetWealth',
             title: 'NetWealth minus the baseline (the strongest plan with no Roth conversions and no cyclic brokerage maneuvering). Positive (green) = this strategy ends wealthier after tax than that baseline; negative (red) = it ends behind it.',
             getValue: r => {
-                if (r._dNW == null) return '—';
-                const v = Math.round(r._dNW);
+                const d = inC() ? r._dNWCurrent : r._dNW;
+                if (d == null) return '—';
+                const v = Math.round(d);
                 const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
                 return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
             },
-            getSortValue: r => r._dNW ?? -Infinity
+            getSortValue: r => (inC() ? r._dNWCurrent : r._dNW) ?? -Infinity
         },
         {
             key: 'dTax', label: 'ΔTax',
-            title: 'Baseline lifetime tax minus this strategy\'s lifetime tax. Positive (green) = this strategy pays less total tax than the baseline; negative (red) = it pays more.',
+            title: 'Baseline lifetime tax minus this strategy\'s lifetime tax (each = federal incl. NIIT + state + IRMAA). Positive (green) = this strategy pays less total tax than the baseline; negative (red) = it pays more.',
             getValue: r => {
-                if (r._dTax == null) return '—';
-                const v = Math.round(r._dTax);
+                const d = inC() ? r._dTaxCurrent : r._dTax;
+                if (d == null) return '—';
+                const v = Math.round(d);
                 const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
                 return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
             },
-            getSortValue: r => r._dTax ?? -Infinity
+            getSortValue: r => (inC() ? r._dTaxCurrent : r._dTax) ?? -Infinity
         },
         {
             key: 'rate', label: 'Tax Rate',

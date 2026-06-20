@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1002</title>
+    <title>Retirement Optimizer 11.1018</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -547,7 +547,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.1002</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong>
+				<li><b>11.1018</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong>
 					<ul style="margin:4px 0 0 16px;">
 						<li><strong>ΔTax / ΔNetWealth now switch units.</strong> Toggling <em>Future $ / Current $</em> previously updated the absolute columns (Lifetime Tax, Total Spendable, NetWealth) but left the Δ columns in future dollars — mismatched units side by side. The Δ columns now deflate too, each computed as the difference of the two present-value totals.</li>
 						<li><strong>Tooltip accuracy.</strong> The Lifetime Tax, ΔTax, and "All Taxes" tooltips now state the full composition: federal (ordinary + capital gains + NIIT) + state + Medicare IRMAA surcharges. (No calculation change — IRMAA and NIIT were always included; only the tooltips were incomplete.)</li>

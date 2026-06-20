@@ -1445,6 +1445,9 @@ function simulate(inputs) {
         // TaxLiability = TradShadow × TaxFuture
         // Positive = conversions/excess withdrawals have paid off vs the no-action shadow.
         const _taxFuture = inputs.futureIRATaxRate ?? (marginalFedTaxRate + marginalStateTaxRate);
+        // Capture the year-0 resolved future-IRA rate so the optimizer can value every
+        // strategy's terminal IRA at one shared rate (comparable cross-strategy deltas).
+        if (y === 0) totals.futureIRARate = _taxFuture;
         const _roth = balance.Roth1 + balance.Roth2;
         const _taxable = balance.Brokerage + balance.Cash;
         const _ira = balance.IRA1 + balance.IRA2;
@@ -1473,7 +1476,12 @@ function simulate(inputs) {
             }
         }
 
-        let totalWealth = (balance.IRA1 + balance.IRA2 + Math.max(0, balance.Brokerage - balance.BrokerageBasis)) * (1 - nominalTaxRate) + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
+        // After-tax terminal valuation: IRA taxed at ordinary marginal (nominalTaxRate),
+        // brokerage gains above basis taxed at the capital-gains rate (not ordinary),
+        // Roth + Cash + returned basis at face.
+        let totalWealth = (balance.IRA1 + balance.IRA2) * (1 - nominalTaxRate)
+            + Math.max(0, balance.Brokerage - balance.BrokerageBasis) * (1 - capitalGainsRate)
+            + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
 
         // Fail when the portfolio can't cover its required draw (spend minus guaranteed income).
         // This is strategy-agnostic and fires at the point of first real impairment.
@@ -1619,6 +1627,19 @@ function simulate(inputs) {
     totals.avgWdRate = _wdRateYears.length > 0
         ? _wdRateYears.reduce((s, r) => s + r['wdRate%'], 0) / _wdRateYears.length
         : null;
+
+    // Baseline accounting: expose the terminal capital-gains rate + terminal balance
+    // breakdown so the optimizer's after-tax net-worth helper can value every strategy
+    // on a comparable footing (IRA at future rate, brokerage gains at cap-gains rate).
+    totals.capGainsRate = capitalGainsRate;
+    const _lastLog = log[log.length - 1];
+    totals.terminal = {
+        ira:       _lastLog.IRA1 + _lastLog.IRA2,
+        roth:      _lastLog.Roth1 + _lastLog.Roth2,
+        cash:      _lastLog.Cash,
+        brokerage: _lastLog.Brokerage,
+        basis:     _lastLog.Basis
+    };
 
     return { log, totals, finalNW: log[log.length - 1].totalWealth };
 }
@@ -2078,6 +2099,26 @@ function buildVariations(base) {
 
 let _lastOptimizerHash = null;
 
+/**
+ * After-tax terminal net worth for cross-strategy comparison.
+ * Values each asset on a comparable footing:
+ *   Roth + Cash + returned basis → at face (already after-tax)
+ *   Brokerage gains above basis  → discounted by the capital-gains rate
+ *   Traditional IRA              → discounted by the expected future liquidation rate
+ * Unlike the per-year `totalWealth` (which uses the current-year ordinary marginal for the
+ * IRA), this uses a single shared `futureIRARate` so deltas between strategies are fair.
+ * @param {{ira:number,roth:number,cash:number,brokerage:number,basis:number}} t terminal balances (totals.terminal)
+ * @param {number} futureIRARate expected future tax rate on IRA distributions (decimal)
+ * @param {number} capGainsRate terminal capital-gains rate (decimal)
+ * @returns {number} after-tax net worth
+ */
+function afterTaxNetWorth(t, futureIRARate, capGainsRate) {
+    if (!t) return 0;
+    return t.roth + t.cash + t.basis
+        + Math.max(0, t.brokerage - t.basis) * (1 - (capGainsRate ?? 0))
+        + t.ira * (1 - (futureIRARate ?? 0));
+}
+
 function runOptimizer() {
     const base = getInputs();
     const currentHash = JSON.stringify(base)
@@ -2102,7 +2143,7 @@ function runOptimizer() {
     // strategyOverrides stored separately so the spend optimizer can reuse them
     const strategyOverridesList = [];
 
-    function addResult(strategyLabel, paramLabel, paramSortVal, overrides) {
+    function addResult(strategyLabel, paramLabel, paramSortVal, overrides, noConv = false) {
         const inputs = Object.assign({}, base, overrides);
         const res = simulate(inputs);
         const lastEntry = res.log[res.log.length - 1];
@@ -2112,7 +2153,8 @@ function runOptimizer() {
         const isBracketInfeasible = overrides.strategy === 'bracket' && bracketOveragePct > 0.5;
         const row = {
             _id: results.length,
-            _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : '') + (isBracketInfeasible ? ' ⚠️' : ''),
+            _isNoConv: noConv,
+            _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : '') + (noConv ? ' (no conv)' : '') + (isBracketInfeasible ? ' ⚠️' : ''),
             _paramLabel: paramLabel,
             _paramSortVal: paramSortVal,
             _maxConversion: overrides.maxConversion,
@@ -2161,11 +2203,16 @@ function runOptimizer() {
         addResult('IRMAA Ceil', irmaaTierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, maxConversion: maxConv });
     }
 
-    // Fill bracket — ACA FPL cliffs
-    const acaMultiples = [200, 250, 300, 400];
-    const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL ⚠️' };
-    for (const pct of acaMultiples) {
-        addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'bracket', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, maxConversion: maxConv });
+    // Fill bracket — ACA FPL cliffs. Skipped entirely when both persons are 65+ at retirement
+    // start (on Medicare → ACA income limits are irrelevant).
+    const acaDisabled = bothOnMedicareAtStart(base.birthyear1, base.startAge, !!base.hasSpouse,
+        base.hasSpouse ? (base.birthyear2 || 0) : 0);
+    if (!acaDisabled) {
+        const acaMultiples = [200, 250, 300, 400];
+        const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL ⚠️' };
+        for (const pct of acaMultiples) {
+            addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'bracket', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, maxConversion: maxConv });
+        }
     }
 
     // IRA Draw — fixed % of IRA balance each year
@@ -2177,6 +2224,10 @@ function runOptimizer() {
     for (const seq of ['CBIR', 'RIBC', 'BIRC']) {
         addResult('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
     }
+
+    // Snapshot the non-cyclic strategy families before the cyclic pass appends to the list.
+    // Reused below to build the no-conversion baseline sweep over the same families.
+    const baseFamilies = strategyOverridesList.slice();
 
     // Phase 24: Cyclic variants — IRA-first (🗘 red) and brokerage-first (🔄) for every baseline.
     {
@@ -2300,6 +2351,37 @@ function runOptimizer() {
         }
     }
 
+    // Baseline accounting — no-conversion / no-cyclic sweep over the same families.
+    // These rows force conversions off (maxConversion=false, extraConversionAmount=0) and
+    // cyclic brokerage maneuvering off, so the best of them is the honest "do it without
+    // Roth or brokerage antics" reference every other strategy is measured against.
+    for (const fam of baseFamilies) {
+        addResult(fam.strategyLabel, fam.paramLabel, fam.paramSortVal,
+            { ...fam.overrides, maxConversion: false, cyclicEnabled: false, extraConversionAmount: 0, qcdHHMax: 0 }, true);
+    }
+
+    // After-tax net worth for every row, using one shared future-IRA rate so deltas are fair.
+    const sharedFutureIRARate = base.futureIRATaxRate ?? (results[0]?.totals.futureIRARate ?? 0);
+    for (const r of results) {
+        r.afterTaxNW = afterTaxNetWorth(r.totals.terminal, sharedFutureIRARate, r.totals.capGainsRate);
+        // Current-dollars variant: scale by the same deflation factor as raw final wealth.
+        const _defl = (r.finalNW && r.finalNW !== 0) ? (r.finalNWCurrentDollars / r.finalNW) : 1;
+        r.afterTaxNWCurrentDollars = r.afterTaxNW * _defl;
+    }
+
+    // Pick the baseline: best after-tax NW among successful no-conversion rows.
+    const noConvSuccesses = results.filter(r => r._isNoConv && r.totals.success);
+    const baselineRow = noConvSuccesses.length > 0
+        ? noConvSuccesses.reduce((a, b) => (b.afterTaxNW > a.afterTaxNW ? b : a))
+        : null;
+    window.optimizerBaseline = baselineRow;
+
+    // Signed deltas vs the baseline (positive = better than baseline).
+    for (const r of results) {
+        r._dNW  = baselineRow ? (r.afterTaxNW   - baselineRow.afterTaxNW)   : null;
+        r._dTax = baselineRow ? (baselineRow.totals.tax - r.totals.tax)     : null;
+    }
+
     // Update top-bar stats using the 0% propwd/no-maxConv row (first result, equivalent to baseline)
     const baseline = results[0];
     if (baseline) {
@@ -2308,7 +2390,7 @@ function runOptimizer() {
 
     window.optimizerResults = results;
     window.optimizerPerfStats = { totalMs: performance.now() - optimizerStart, runsCount: simulationCount };
-    window.optimizerSortState = { colKey: 'spend', direction: 'desc' };
+    window.optimizerSortState = { colKey: 'afterTaxNW', direction: 'desc' };
     renderOptimizerTable(results);
     renderSpendOptimizerBanner(results, base.spendGoal);
     showTab('tab-opt');
@@ -2361,60 +2443,92 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
 // Column definitions (shared between render and sort)
 function getOptimizerColumns() {
     const inC = () => document.getElementById('show-current-dollars')?.checked;
-    const nerdknob = new URLSearchParams(location.search).has('nerdknob');
     const cols = [
         {
             key: 'status', label: '✓',
+            title: 'Plan outcome. 🟢 = every year of the plan was fully funded. 🚨 = the portfolio ran out before the end (the plan failed). Failed plans always sort below successful ones.',
             getValue: r => r.totals.success ? '🟢' : '🚨',
             getSortValue: r => r.totals.success ? 1 : 0
         },
         {
             key: 'strategy', label: 'Strategy',
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Conv-Optimizer row. ✦ = spend-optimized. ⚠️ = bracket target unreachable. Click any row to load it.',
             getValue: r => r._strategyLabel,
             getSortValue: r => r._strategyLabel
         },
         {
             key: 'param', label: 'Param',
+            title: 'The strategy parameter: bracket/IRMAA/ACA ceiling, IRA draw %, amortization years, proportional boost %, or account order (CBIR/RIBC/BIRC).',
             getValue: r => r._paramLabel,
             getSortValue: r => r._paramSortVal
         },
         {
             key: 'spendGoal', label: 'Spend Goal',
+            title: 'Annual after-tax spending this strategy targets (today\'s dollars). Normally your input; spend-optimized (✦) rows show a higher sustainable figure found by search.',
             getValue: r => Math.round(r._spendGoal).toLocaleString(),
             getSortValue: r => r._spendGoal
         },
         {
             key: 'tax', label: 'Lifetime Tax',
+            title: 'Total federal + state tax paid over the whole plan. Toggle Future $/Current $ to switch between nominal and today\'s-dollar totals.',
             getValue: r => Math.round(inC() ? r.totals.taxCurrentDollars : r.totals.tax).toLocaleString(),
             getSortValue: r => inC() ? r.totals.taxCurrentDollars : r.totals.tax
         },
         {
             key: 'spend', label: 'Total Spendable',
+            title: 'Total after-tax money available to spend over the whole plan (gross income minus tax). Toggle Future $/Current $ for nominal vs today\'s dollars.',
             getValue: r => Math.round(inC() ? r.totals.spendCurrentDollars : r.totals.spend).toLocaleString(),
             getSortValue: r => inC() ? r.totals.spendCurrentDollars : r.totals.spend
         },
         {
-            key: 'nw', label: 'Final Wealth',
-            getValue: r => Math.round(inC() ? r.finalNWCurrentDollars : r.finalNW).toLocaleString(),
-            getSortValue: r => inC() ? r.finalNWCurrentDollars : r.finalNW
+            key: 'afterTaxNW', label: 'NetWealth',
+            title: 'After-tax terminal net worth: IRA × (1 − your expected future IRA rate), brokerage gains × (1 − cap-gains rate), Roth + Cash + basis at face. Uses ONE shared future-IRA rate across all rows so strategies compare on a level footing. This is the ranking metric. Toggle Future $/Current $ for nominal vs today\'s dollars.',
+            getValue: r => Math.round(inC() ? (r.afterTaxNWCurrentDollars ?? 0) : (r.afterTaxNW ?? 0)).toLocaleString(),
+            getSortValue: r => inC() ? (r.afterTaxNWCurrentDollars ?? 0) : (r.afterTaxNW ?? 0)
+        },
+        {
+            key: 'dNW', label: 'ΔNetWealth',
+            title: 'NetWealth minus the baseline (the strongest plan with no Roth conversions and no cyclic brokerage maneuvering). Positive (green) = this strategy ends wealthier after tax than that baseline; negative (red) = it ends behind it.',
+            getValue: r => {
+                if (r._dNW == null) return '—';
+                const v = Math.round(r._dNW);
+                const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
+                return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
+            },
+            getSortValue: r => r._dNW ?? -Infinity
+        },
+        {
+            key: 'dTax', label: 'ΔTax',
+            title: 'Baseline lifetime tax minus this strategy\'s lifetime tax. Positive (green) = this strategy pays less total tax than the baseline; negative (red) = it pays more.',
+            getValue: r => {
+                if (r._dTax == null) return '—';
+                const v = Math.round(r._dTax);
+                const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
+                return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
+            },
+            getSortValue: r => r._dTax ?? -Infinity
         },
         {
             key: 'rate', label: 'Tax Rate',
+            title: 'Lifetime tax as a percentage of lifetime gross income (total tax ÷ total income). A blended effective rate across the whole plan.',
             getValue: r => `${(r.totals.tax / r.totals.gross * 100).toFixed(1)}%`,
             getSortValue: r => r.totals.tax / r.totals.gross
         },
         {
             key: 'years', label: 'Yrs Funded',
+            title: 'Years fully funded out of years tested. Less than the full count means the plan fell short in some years (a failure).',
             getValue: r => `${r.totals.yearsfunded}/${r.totals.yearstested}`,
             getSortValue: r => r.totals.yearsfunded
         },
         {
             key: 'rmd', label: 'Total RMDs',
+            title: 'Total Required Minimum Distributions forced out of traditional IRAs over the plan. Lower means the strategy drew down or converted the IRA earlier, shrinking later forced withdrawals.',
             getValue: r => Math.round(r.totals.rmd).toLocaleString(),
             getSortValue: r => r.totals.rmd
         },
         {
             key: 'rmdtax', label: 'RMD Tax%',
+            title: 'Share of lifetime tax attributable to RMDs. High means forced IRA distributions are driving the tax bill — a signal that earlier conversions might help.',
             getValue: r => r.totals.tax > 0 ? `${(r.totals.rmdTax / r.totals.tax * 100).toFixed(0)}%` : '—',
             getSortValue: r => r.totals.rmdTax / (r.totals.tax || 1)
         },
@@ -2431,34 +2545,41 @@ function getOptimizerColumns() {
             getSortValue: r => r._convSavings ?? -Infinity
         }
     ];
-    if (nerdknob) {
-        cols.push({
-            key: 'simms', label: '⏱ms',
-            getValue: r => r.totals.totalTime != null ? r.totals.totalTime.toFixed(1) : '—',
-            getSortValue: r => r.totals.totalTime ?? 0
-        });
-    }
     return cols;
 }
 
 function renderOptimizerTable(results) {
     if (!results || results.length === 0) return;
     const columns = getOptimizerColumns();
-    // Default: sort by Spendable descending; Final Wealth descending as tiebreaker
-    const sortState = window.optimizerSortState ?? { colKey: 'spend', direction: 'desc' };
+    // Default: sort by After-Tax NW descending; Spendable descending as tiebreaker
+    const sortState = window.optimizerSortState ?? { colKey: 'afterTaxNW', direction: 'desc' };
 
-    // Sort a copy; preserve original _id for click handlers
-    let display = results.slice();
-    const nwCol = columns.find(c => c.key === 'nw');
+    // Sort a copy; preserve original _id for click handlers.
+    // Pull the baseline out of the body — it is rendered as a pinned reference row on top.
+    const baselineRow = window.optimizerBaseline ?? null;
+    // Infeasible (bracket-unreachable) rows are hidden by default — toggled via the legend.
+    const showInfeasible = !!window.optimizerShowInfeasible;
+    const infeasibleCount = results.filter(r => r._isBracketInfeasible).length;
+    let display = results.filter(r => !(baselineRow && r._id === baselineRow._id));
+    if (!showInfeasible) display = display.filter(r => !r._isBracketInfeasible);
+    const afterTaxCol = columns.find(c => c.key === 'afterTaxNW');
+    const spendCol = columns.find(c => c.key === 'spend');
     const col   = columns.find(c => c.key === sortState.colKey);
     if (col) {
         display.sort((a, b) => {
+            // Failed plans never outrank successful ones, whatever the sort column — a strategy
+            // that runs out of money can show inflated terminal wealth (it left needs unfunded).
+            const sa = a.totals.success ? 1 : 0, sb = b.totals.success ? 1 : 0;
+            if (sa !== sb) return sb - sa;
             const av = col.getSortValue(a), bv = col.getSortValue(b);
             const cmp = (typeof av === 'string') ? av.localeCompare(bv) : (av - bv);
             const primary = sortState.direction === 'asc' ? cmp : -cmp;
-            // Tiebreaker: when sorting by Spendable and values are equal, sort by Final Wealth desc
-            if (primary === 0 && sortState.colKey === 'spend' && nwCol) {
-                return nwCol.getSortValue(b) - nwCol.getSortValue(a);
+            // Tiebreakers: NetWealth → Spendable desc; Spendable → NetWealth desc
+            if (primary === 0 && sortState.colKey === 'afterTaxNW' && spendCol) {
+                return spendCol.getSortValue(b) - spendCol.getSortValue(a);
+            }
+            if (primary === 0 && sortState.colKey === 'spend' && afterTaxCol) {
+                return afterTaxCol.getSortValue(b) - afterTaxCol.getSortValue(a);
             }
             return primary;
         });
@@ -2473,14 +2594,14 @@ function renderOptimizerTable(results) {
         const w1 = pick(successes, r => r.totals.tax, false);
         const w2 = pick(successes, r => r.totals.tax / r.totals.gross, false);
         const w3 = pick(successes, r => r.totals.spend, true);
-        const w4 = pick(successes, r => r.finalNW, true);
         const w5 = pick(successes, r => r.totals.rmdTax / (r.totals.tax || 1), false);
-        [w1, w2, w3, w4, w5].forEach(w => bestIds.add(w._id));
-        colWinners.tax    = w1._id;
-        colWinners.rate   = w2._id;
-        colWinners.spend  = w3._id;
-        colWinners.nw     = w4._id;
-        colWinners.rmdtax = w5._id;
+        const w6 = pick(successes, r => r.afterTaxNW ?? -Infinity, true);
+        [w1, w2, w3, w5, w6].forEach(w => bestIds.add(w._id));
+        colWinners.tax        = w1._id;
+        colWinners.rate       = w2._id;
+        colWinners.spend      = w3._id;
+        colWinners.rmdtax     = w5._id;
+        colWinners.afterTaxNW = w6._id;
     }
 
     // Header — flat div cells for CSS grid
@@ -2503,7 +2624,7 @@ function renderOptimizerTable(results) {
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
                          || (col.key === 'rate'   && r._id === colWinners.rate)
                          || (col.key === 'spend'  && r._id === colWinners.spend)
-                         || (col.key === 'nw'     && r._id === colWinners.nw)
+                         || (col.key === 'afterTaxNW' && r._id === colWinners.afterTaxNW)
                          || (col.key === 'rmdtax' && r._id === colWinners.rmdtax);
             const bg = cellWin    ? '#4CAF5080'
                      : isInfeasible ? '#e8e8e8'
@@ -2520,20 +2641,49 @@ function renderOptimizerTable(results) {
         return `<div style="display:contents;">${cells}</div>`;
     }).join('');
 
+    // Pinned baseline reference row — best no-conversion / no-cyclic plan. Light-blue tint,
+    // sticky under the header; its Δ columns read 0 by definition.
+    let baselineRowHtml = '';
+    if (baselineRow) {
+        const _bCell = 'padding:4px 8px;cursor:pointer;background-color:#dbeafe;font-weight:bold;position:sticky;top:30px;z-index:1;';
+        const bTitle = 'BASELINE — the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s Δ columns are measured against this. Click to load it.';
+        baselineRowHtml = '<div style="display:contents;">' + columns.map(col => {
+            let v;
+            if (col.key === 'strategy')      v = '⚓ BASELINE — ' + baselineRow._strategyLabel;
+            else if (col.key === 'dNW' || col.key === 'dTax') v = '0';
+            else v = col.getValue(baselineRow);
+            return `<div style="${_bCell}" onclick="loadOptimizerResult(${baselineRow._id})" title="${bTitle}">${v}</div>`;
+        }).join('') + '</div>';
+    }
+
     const optTableEl = document.getElementById('opt-table');
     optTableEl.style.gridTemplateColumns = columns.map(() => 'max-content').join(' ');
-    optTableEl.innerHTML = headerHtml + rowsHtml;
+    optTableEl.innerHTML = headerHtml + baselineRowHtml + rowsHtml;
+
+    // Legend — make the "Infeasible" item a click toggle (rows hidden by default).
+    const legendInfeasEl = document.getElementById('opt-legend-infeasible');
+    if (legendInfeasEl) {
+        const swatch = '<span style="display:inline-block;width:14px;height:14px;background:#e8e8e8;opacity:0.8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;text-decoration:line-through;"></span>';
+        if (infeasibleCount > 0) {
+            const action = showInfeasible ? `click to hide ${infeasibleCount}` : `click to show ${infeasibleCount} hidden`;
+            const tip = `Infeasible = the strategy's bracket/IRMAA/ACA target is exceeded in more than half its years (existing income already pushes MAGI above the ceiling). Hidden by default — ${showInfeasible ? 'click to hide them again' : 'click to reveal them'}.`;
+            legendInfeasEl.innerHTML = `<span onclick="toggleInfeasibleRows()" title="${tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${swatch}Infeasible — ${action}</span>`;
+        } else {
+            legendInfeasEl.innerHTML = `${swatch}Infeasible — none in this run`;
+        }
+    }
 
     // Best summary table — unique winner rows labeled by what they won
     const bestEl = document.getElementById('opt-best');
     if (bestEl) {
         if (successes.length > 0) {
             const winnerDefs = [
+                { key: 'afterTaxNW', label: '💎 Most NetWealth',    id: colWinners.afterTaxNW },
                 { key: 'spend',  label: '🏆 Most Spendable',   id: colWinners.spend  },
-                { key: 'nw',     label: '💰 Most Wealth',       id: colWinners.nw     },
                 { key: 'tax',    label: '📉 Lowest Tax',        id: colWinners.tax    },
                 { key: 'rate',   label: '📊 Lowest Tax Rate',   id: colWinners.rate   },
                 { key: 'rmdtax', label: '📋 Lowest RMD Tax%',   id: colWinners.rmdtax },
+                ...(window.optimizerBaseline ? [{ key: 'afterTaxNW', label: '⚓ Best w/o Conv', id: window.optimizerBaseline._id }] : []),
             ];
             // Deduplicate: a row can win multiple metrics; show it once under its first/best label
             const seen = new Set();
@@ -2546,7 +2696,7 @@ function renderOptimizerTable(results) {
             const bestRows = uniqueWinners.map(w => {
                 const r = results.find(x => x._id === w.id);
                 if (!r) return '';
-                const labelCell = `<div style="background:#4CAF50;color:#fff;font-size:0.78em;white-space:nowrap;padding:2px 6px;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} — click to load">${w.label}</div>`;
+                const labelCell = `<div style="background:#A5D6A7;color:#14532d;font-weight:bold;font-size:0.78em;white-space:nowrap;padding:2px 6px;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} — click to load">${w.label}</div>`;
                 const dataCells = columns.slice(1).map(col => {
                     const cellWin = col.key === w.key;
                     const bg = cellWin ? '#4CAF5080' : '#90EE90';
@@ -2554,9 +2704,14 @@ function renderOptimizerTable(results) {
                 }).join('');
                 return `<div style="display:contents;">${labelCell}${dataCells}</div>`;
             }).join('');
-            const bestHeader = columns.map((col, i) =>
-                `<div style="${_bHdrStyle}">${i === 0 ? 'Best' : col.label}</div>`
-            ).join('');
+            const bestHeader = columns.map((col, i) => {
+                const lbl = i === 0 ? 'Best' : col.label;
+                const titleText = i === 0
+                    ? 'Each row is the strategy that wins one metric (the highlighted cell shows which). Click a row to load that strategy.'
+                    : (col.title || '');
+                const tip = titleText ? ` title="${titleText.replace(/"/g, '&quot;')}"` : '';
+                return `<div style="${_bHdrStyle}"${tip}>${lbl}</div>`;
+            }).join('');
             const _bColsCss = columns.map(() => 'max-content').join(' ');
             bestEl.innerHTML = `<div style="display:grid;grid-template-columns:${_bColsCss};width:fit-content;margin-bottom:16px;border:1px solid #dee2e6;">${bestHeader}${bestRows}</div>`;
             bestEl.style.display = 'block';
@@ -2571,26 +2726,30 @@ function renderOptimizerTable(results) {
         const spendVals = results.map(r => r.totals.spend);
         const allSame = spendVals.every(v => v === spendVals[0]);
         if (allSame && results.length > 1) {
-            noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable — this means every strategy fully funds your spending goal. Differentiate by Lifetime Tax, Final Wealth, or Yrs Funded.';
+            noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable — this means every strategy fully funds your spending goal. Differentiate by Lifetime Tax, NetWealth, or Yrs Funded.';
             noteEl.style.display = 'block';
         } else {
             noteEl.style.display = 'none';
         }
     }
 
-    // Nerdknob: show optimizer performance stats when URL contains ?nerdknob
+    // Optimizer performance: total time + number of strategy runs (always shown).
     const perfEl = document.getElementById('opt-perf');
     if (perfEl) {
-        const nerdknob = new URLSearchParams(location.search).has('nerdknob');
         const perf = window.optimizerPerfStats;
-        if (nerdknob && perf) {
-            const msPerRun = (perf.totalMs / perf.runsCount).toFixed(1);
-            perfEl.textContent = `⏱ ${perf.totalMs.toFixed(0)}ms total · ${msPerRun}ms/run · ${perf.runsCount} runs`;
+        if (perf) {
+            perfEl.textContent = `⏱ ${perf.totalMs.toFixed(0)}ms · ${perf.runsCount} runs`;
             perfEl.style.display = 'block';
         } else {
             perfEl.style.display = 'none';
         }
     }
+}
+
+// Toggle visibility of infeasible (bracket-unreachable) optimizer rows; re-render in place.
+function toggleInfeasibleRows() {
+    window.optimizerShowInfeasible = !window.optimizerShowInfeasible;
+    if (window.optimizerResults) renderOptimizerTable(window.optimizerResults);
 }
 
 function sortOptimizerBy(colKey) {
@@ -4559,6 +4718,16 @@ function refreshStratRateOptions() {
  * - Exactly one person ≥65                → advisory warning, options still active.
  * Called from updateProfileAgeDisplay(), refreshStratRateOptions(), and startAge oninput.
  */
+// True when both persons (or the sole person) are 65+ at retirement start — i.e. on Medicare,
+// so ACA income-limit strategies are irrelevant. Pure; shared by the UI warning + optimizer.
+function bothOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
+    if (!by1 || !startAge) return false;
+    const startYear  = by1 + startAge;
+    const p1Medicare = startAge >= 65;
+    const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
+    return hasSpouse ? (p1Medicare && p2Medicare) : p1Medicare;
+}
+
 function updateACAWarning() {
     const sel     = document.getElementById('stratRate');
     const warnEl  = document.getElementById('aca-age-warn');
@@ -4574,7 +4743,7 @@ function updateACAWarning() {
     const startYear    = by1 + startAge;
     const p1Medicare   = startAge >= 65;
     const p2Medicare   = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
-    const bothMedicare = hasSpouse ? (p1Medicare && p2Medicare) : p1Medicare;
+    const bothMedicare = bothOnMedicareAtStart(by1, startAge, hasSpouse, by2);
     const oneMedicare  = hasSpouse && (p1Medicare !== p2Medicare);
 
     // Disable / re-enable ACA <option>s

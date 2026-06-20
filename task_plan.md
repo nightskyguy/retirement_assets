@@ -3,12 +3,12 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-**Complete:** 0, 0b, 1, 2, 6, 7, 12, 18, 19, 20, 21, 23, 27, 28, 30 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
+**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 23, 27, 28, 30, 31 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
 **Superseded/deprioritized:** Phase 8 (Variable Growth sensitivity grid — bootstrap + stress MC covers the use case; grid not needed).
 **Partial:** Phase 9 (ACA — Medicare age gate done; MAGI/subsidy calculation not yet implemented).
-**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 4 (QCDs), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
+**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
 **Pending (blocked):** Phase 9 remainder (ACA MAGI/subsidy), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
-**As of:** 2026-06-11 (Phase 27: withdrawal rate fix — inflows subtracted, grossOut/netOut/inflows/wdRate% columns, "Avg Withdrawal Rate" label, v11.ecc).
+**As of:** 2026-06-19 (plan synced to git: Phase 4 QCDs shipped — commits 60fc49a/647c871/8f73707/d1fa30f, v11.fee; PR #79, #80 merged).
 
 ## Dependency Graph
 ```
@@ -100,11 +100,11 @@ EXECUTION ORDER: 0b → 1,2,3,4,6,8 (parallel) → 5,7,9,11,12,20,22 → 21 → 
 ### Phase 4: QCDs — Qualified Charitable Distributions (Priority I)
 **Why:** After age 70½, QCDs exclude from AGI, reduce IRMAA exposure and taxable income.
 
-- [ ] Add annual QCD amount input
-- [ ] Modify tax calculation: subtract QCD from IRA before computing AGI
-- [ ] Verify tax benefit is automatic (AGI reduction only)
-- [ ] Test with sample QCD amounts
-- **Status:** pending
+- [x] Add annual QCD amount input
+- [x] Modify tax calculation: subtract QCD from IRA before computing AGI
+- [x] Verify tax benefit is automatic (AGI reduction only)
+- [x] Test with sample QCD amounts
+- **Status:** complete — shipped v11.fee (commits 60fc49a..d1fa30f). As-Needed/Always toggle, 2026 limit $111k, chart bar, summary stat. PR merged.
 
 ### Phase 5: Scenario Comparison (Priority C)
 **Why:** Users want to compare 2–3 saved scenarios side by side (lifetime tax rate, total tax, funded years, final wealth).
@@ -1005,6 +1005,26 @@ TCJA is permanent now, but modeling a return to pre-TCJA rates (25/28/33/35/39.6
 - [x] Test: set growth to 8% → mc-mu auto-populates 8%; change growth to 11% → mc-mu = 11% + warning shown
 - **Status:** complete (2026-06-09)
 - **Independent:** no phase dependencies
+
+---
+
+### Phase 31: Baseline Accounting for Strategy Comparison
+**Why:** Strategy comparison lacked a sound reference. "Strategy A beats B" only means something
+relative to the best plan that uses NO Roth conversions and NO brokerage maneuvering. Also, the
+terminal-wealth metric overvalued IRA-heavy strategies (discounted IRA + brokerage gains both by
+the final-year ordinary marginal rate).
+
+- [x] Fix `totalWealth` (`simulate` `:1476`): brokerage gains × (1−capGainsRate), IRA × (1−nominalTaxRate)
+- [x] Expose `totals.terminal`, `totals.capGainsRate`, `totals.futureIRARate`
+- [x] `afterTaxNetWorth(terminal, futureIRARate, capGainsRate)` helper (IRA at shared future rate)
+- [x] No-conversion / no-cyclic sweep over same families; baseline = max-afterTaxNW successful no-conv row
+- [x] Per-row `afterTaxNW` + `_dNW`/`_dTax`; After-Tax NW + Δ NW + Δ Tax columns; winner `w6`; default sort afterTaxNW
+- [x] Pinned ⚓ BASELINE row + `#opt-best` entries
+- [x] Sort fix: failed plans always rank below successful ones
+- [x] Tests: 6 new node tests (24 total); in-page 209/209; browser-verified
+- **Status:** complete — v11.1000
+- **Decisions:** baseline = best no-conv/no-cyclic; show both raw + after-tax NW (rank by after-tax); pinned row + Δ columns
+- **Deferred:** staged-liquidation valuation (single-rate approximation used); state tax at terminal liquidation
 
 ---
 

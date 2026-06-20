@@ -322,6 +322,79 @@ test('Phase 27: regression — no SS/pension → avgWdRate matches old avgSpendR
         `Expected avg rate in plausible 4–15% range, got ${result.totals.avgWdRate}`);
 });
 
+// ── Baseline accounting (after-tax NW + totalWealth fix) ───────────────────────
+const afterTaxNetWorth = ctx.afterTaxNetWorth;
+
+test('afterTaxNetWorth: Roth/Cash/basis at face; brokerage gains × (1−capG); IRA × (1−futureRate)', () => {
+    if (!afterTaxNetWorth) throw new Error('afterTaxNetWorth not exported from core.js');
+    const t = { ira: 100000, roth: 50000, cash: 20000, brokerage: 80000, basis: 30000 };
+    // Roth+Cash+basis = 50k+20k+30k = 100k
+    // brokerage gain = 80k−30k = 50k → ×(1−0.15) = 42.5k
+    // IRA = 100k × (1−0.25) = 75k
+    // total = 100k + 42.5k + 75k = 217.5k
+    const v = afterTaxNetWorth(t, 0.25, 0.15);
+    assertNear(v, 217500, 'afterTaxNetWorth value', 1);
+});
+
+test('afterTaxNetWorth: zero gains and zero rates → plain sum of balances', () => {
+    const t = { ira: 100000, roth: 50000, cash: 20000, brokerage: 30000, basis: 30000 };
+    // no brokerage gain; rates 0 → 100k+50k+20k+30k = 200k
+    assertNear(afterTaxNetWorth(t, 0, 0), 200000, 'plain sum', 1);
+});
+
+test('simulate: exposes totals.terminal breakdown + totals.capGainsRate', () => {
+    const res = simulate({ ...BASE });
+    assert(res.totals.terminal != null, 'totals.terminal missing');
+    for (const k of ['ira', 'roth', 'cash', 'brokerage', 'basis']) {
+        assert(typeof res.totals.terminal[k] === 'number', `terminal.${k} not a number`);
+    }
+    assert(typeof res.totals.capGainsRate === 'number', 'totals.capGainsRate missing');
+    // terminal breakdown matches the last log row
+    const last = res.log[res.log.length - 1];
+    assertNear(res.totals.terminal.ira, last.IRA1 + last.IRA2, 'terminal.ira vs log', 1);
+    assertNear(res.totals.terminal.brokerage, last.Brokerage, 'terminal.brokerage vs log', 1);
+    assertNear(res.totals.terminal.basis, last.Basis, 'terminal.basis vs log', 1);
+});
+
+test('totalWealth fix: IRA discounted by ordinary rate, brokerage gains by cap-gains rate', () => {
+    // Scenario where terminal brokerage retains gains and ordinary ≠ cap-gains rate.
+    const inp = { ...BASE, IRA1: 100000, Brokerage: 500000, BrokerageBasis: 100000,
+                  Cash: 200000, spendGoal: 30000, die1: 78 };
+    const res = simulate(inp);
+    const last = res.log[res.log.length - 1];
+    const nominal = last['NominalRate%'];
+    const capG = res.totals.capGainsRate;
+    const brokGain = Math.max(0, last.Brokerage - last.Basis);
+    assert(brokGain > 1000, `Test needs terminal brokerage gains, got ${brokGain}`);
+    // Reconstruct finalNW with the CORRECT per-asset rates.
+    const expected = (last.IRA1 + last.IRA2) * (1 - nominal)
+        + brokGain * (1 - capG)
+        + last.Roth1 + last.Roth2 + last.Cash + last.Basis;
+    assertNear(res.finalNW, expected, 'finalNW uses correct per-asset rates', 1);
+    // And confirm it is NOT the old (wrong) all-ordinary formula when rates differ.
+    if (Math.abs(nominal - capG) > 0.001) {
+        const oldWrong = (last.IRA1 + last.IRA2 + brokGain) * (1 - nominal)
+            + last.Roth1 + last.Roth2 + last.Cash + last.Basis;
+        assert(Math.abs(res.finalNW - oldWrong) > 1,
+            'finalNW still matches the old all-ordinary formula — cap-gains rate not applied');
+    }
+});
+
+test('no-conversion run: zero Roth conversions over the whole plan', () => {
+    const res = simulate({ ...BASE, maxConversion: false, extraConversionAmount: 0 });
+    const totalConv = res.log.reduce((s, r) => s + (r.rothConv ?? 0), 0);
+    assertNear(totalConv, 0, 'sum of rothConv with conversions off', 1);
+});
+
+test('baseline metric: higher after-tax NW ranks a richer terminal portfolio higher', () => {
+    // Two terminal portfolios, same shared rates — helper must order them correctly.
+    const poor = { ira: 200000, roth: 0,     cash: 0, brokerage: 0, basis: 0 };
+    const rich = { ira: 0,      roth: 200000, cash: 0, brokerage: 0, basis: 0 };
+    // At a 25% future IRA rate, the all-Roth portfolio is worth more after tax.
+    assert(afterTaxNetWorth(rich, 0.25, 0.15) > afterTaxNetWorth(poor, 0.25, 0.15),
+        'all-Roth terminal should beat all-IRA terminal on after-tax NW');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

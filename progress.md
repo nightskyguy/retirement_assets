@@ -1,5 +1,75 @@
 # Progress Log
 
+## Session: 2026-06-19 (cont.)
+
+### Phase 31 (Baseline accounting for strategy comparison) — complete (v11.1000)
+
+User concern: strategy comparison lacked a sound reference. "Strategy A beats B" is
+meaningless without anchoring to the best plan that uses NO Roth conversions and NO brokerage
+maneuvering. Also found the terminal-wealth valuation was biased.
+
+- **retirement_optimizer_core.js:**
+  - `simulate()` `totalWealth` (`:1476`) fixed: IRA × (1−nominalTaxRate), brokerage gains
+    above basis × (1−**capitalGainsRate**) — previously both discounted at the ordinary rate.
+  - Exposed `totals.terminal` {ira,roth,cash,brokerage,basis}, `totals.capGainsRate`,
+    `totals.futureIRARate` (year-0 resolved).
+  - New `afterTaxNetWorth(terminal, futureIRARate, capGainsRate)` helper.
+  - `runOptimizer`: snapshot `baseFamilies`; after main+cyclic+spend+conv passes, a
+    no-conversion sweep (`maxConversion:false, cyclicEnabled:false, extraConversionAmount:0`,
+    tagged `(no conv)`). Baseline = max-afterTaxNW successful no-conv row → `window.optimizerBaseline`.
+    Per-row `afterTaxNW`/`afterTaxNWCurrentDollars`/`_dNW`/`_dTax`.
+  - `addResult` gained a `noConv` flag.
+  - Columns: **After-Tax NW** (ranking metric), **Δ NW vs Base**, **Δ Tax vs Base**
+    (signed, green/red). Winner `w6` = most after-tax NW. Default sort → afterTaxNW desc.
+  - **Pinned ⚓ BASELINE row** (blue tint, sticky) at top of `#opt-table`; `#opt-best` gains
+    "💎 Most After-Tax NW" + "⚓ Best w/o Conv".
+  - **Sort fix:** failed plans now always rank below successful ones (a plan that runs out of
+    money shows inflated terminal wealth). Found during browser verification.
+- **retirement_optimizer.html:** version 11.fed → **11.1000**; changelog entry; column tooltips.
+- **retirement_optimizer_core.test.js:** 6 new tests (afterTaxNetWorth math, terminal export,
+  totalWealth cap-gains fix, zero-conversion run, baseline ordering). 24 pass, 0 fail.
+- **Verified in browser** (python http.server :8766): in-page suite 209/209, no console errors;
+  optimizer renders pinned baseline + After-Tax NW + Δ columns; default scenario baseline =
+  "IRA Draw (no conv)" $1.26M, conversion strategies show signed deltas vs it.
+
+### Phase 31 UX refinements — complete (v11.1001)
+
+User feedback on the baseline-accounting UI:
+- Dropped raw **Final Wealth** column (redundant with after-tax); renamed **After-Tax NW → NetWealth**,
+  **Δ NW vs Base → ΔNetWorth**, **Δ Tax vs Base → ΔTax**. Removed the `nw`/finalNW winner ("Most Wealth")
+  and the `simms` (⏱ms) column; opt-best winner now "💎 Most NetWealth".
+- Added `title` tooltips to **every** optimizer column header.
+- Pinned baseline row recolored blue → **light green (#d4f7dd)** so the dark ⚓ anchor stands out;
+  added a baseline swatch to the Row-colors legend.
+- **Infeasible rows hidden by default**; the legend's "Infeasible" item is now a click toggle
+  (`toggleInfeasibleRows()`, `window.optimizerShowInfeasible`, `#opt-legend-infeasible`).
+- **opt-perf** (sim time + run count) no longer nerdknob-gated — always shown, restyled from a loud
+  yellow box to a subtle gray note ("⏱ Xms · N runs"); per-run ms dropped.
+- Browser-verified: in-page 209/209, node 24/24, no console errors. Headers/tooltips/baseline tint/
+  infeasible toggle (24 hidden → show/hide) all confirmed via DOM + screenshot.
+
+### Phase 31 corrections — complete (v11.1001)
+
+- **Baseline disables QCDs:** no-conversion sweep override now also sets `qcdHHMax: 0` — a true
+  do-nothing reference. Verified: base qcd 1.25M (maxConv row) vs 0 (baseline).
+- **ACA gating in optimizer:** new pure helper `bothOnMedicareAtStart(by1, startAge, hasSpouse, by2)`
+  (shared with `updateACAWarning`). `runOptimizer` skips the ACA Cliff sweep when both persons are
+  65+ at retirement start. Verified: 0 ACA rows (default both-65) vs 16 (startAge 60).
+- **Baseline row color reverted** light-green → light-blue (#dbeafe); legend swatch reverted too.
+- **opt-best "Best" column lightened:** label cells #4CAF50/white → #A5D6A7/#14532d (dark text) so the
+  ⚓ shows; the per-metric data cells keep their brighter green.
+- Verified: node 24/24, no console errors; both-65 baseline pinned blue, run count 176→160 (ACA gated).
+
+### Plan sync to git — new worktree `goofy-chaplygin-27e560`
+- Branch: `worktrees/goofy-chaplygin-27e560` (clean, no uncommitted changes)
+- Reconciled plan with git log: **Phase 4 (QCDs) complete** — was marked pending but shipped.
+  - Commits: 60fc49a (Phase 4 QCDs + summary bar fix, v12), 647c871/8f73707 (toggle polish), d1fa30f (2026 limit $111k, As-Needed tier fix), aba84f3/b6d8812 (docs, v11.fee).
+  - PRs #79, #80 merged since last session. Also #76/#77/#78 (taxengine dynamic state dropdowns, Portfolio rename, withdrawal-rate fix).
+- Current version: v11.fee.
+- task_plan.md updated: Phase 4 → complete; Current Phase block refreshed; "As of" → 2026-06-19.
+- Remaining unblocked: Phase 3 (Lumpy Spending), Phase 22 (Guyton-Klinger), Phase 29 (Creeping Tax), Phase 23b.
+- No code changes this session yet.
+
 ## Session: 2026-06-11
 
 ### Phase 27 (Withdrawal Rate Fix + Inflows/Outflows) — complete

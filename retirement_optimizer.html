@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.fed</title>
+    <title>Retirement Optimizer 11.1001</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -547,6 +547,15 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1001</b> <strong>Baseline accounting for strategy comparison:</strong>
+					<ul style="margin:4px 0 0 16px;">
+						<li><strong>Honest baseline.</strong> The optimizer now also runs every strategy family with <em>no Roth conversions and no cyclic brokerage maneuvering</em>, no QCDs, and pins the strongest of those as a light-green <em>⚓ BASELINE</em> reference row at the top of the results. Every other strategy is measured against it — because "strategy A beats strategy B" only means something relative to the best you can do without conversion/brokerage tricks.</li>
+						<li><strong>NetWealth column.</strong> The single ranking metric, valuing terminal wealth on a level footing: traditional IRA × (1 − your expected future IRA tax rate), brokerage gains × (1 − capital-gains rate), Roth + Cash + basis at face — using <em>one shared</em> future-IRA rate across all rows so comparisons are fair.</li>
+						<li><strong>ΔNetWorth / ΔTax.</strong> Two columns show (green/red) how much after-tax wealth each strategy gains over the baseline and how much less (or more) lifetime tax it pays.</li>
+						<li><strong>NetWealth tax fix.</strong> Terminal wealth now taxes brokerage gains at the capital-gains rate instead of the ordinary rate (it previously applied the last year's ordinary marginal rate to both the IRA and brokerage gains).</li>
+						<li><strong>Cleaner table.</strong> Infeasible (bracket-unreachable) rows are hidden by default — click the <em>Infeasible</em> legend to reveal or hide them. Failed plans always sort below successful ones. Every column header now has an explanatory tooltip. The simulation timing/run-count line always shows; per-row millisecond timing was removed.</li>
+					</ul>
+				</li>
 				<li><b>11.fed</b> <strong>Charitable Giving (QCDs) &amp; UX Improvements:</strong>
 					<ul style="margin:4px 0 0 16px;">
 						<li><strong>Qualified Charitable Distributions (QCDs):</strong> New <em>Charitable Giving (QCD)</em> section in the sidebar. Enter an annual household QCD maximum — the simulation transfers that amount directly from the larger eligible IRA to charity each year (age 70½+ per person). QCDs satisfy the RMD requirement without adding to taxable income, reducing IRMAA exposure.
@@ -760,15 +769,16 @@
         </div>
 
         <div id="tab-opt" class="card hidden table-wrap">
-            <div id="opt-perf" style="display:none;margin-bottom:8px;padding:10px 14px;background:#ffeb3b;border:1px solid #f9a825;border-radius:6px;font-size:1.2em;color:#333;font-family:monospace;"></div>
+            <div id="opt-perf" style="display:none;margin-bottom:8px;font-size:0.8em;color:#888;font-family:monospace;"></div>
             <div id="opt-spend-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
             <div id="opt-best" style="display:none;"></div>
             <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:0.8em;color:#444;padding:4px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
                 <span style="font-weight:600;color:#666;">Row colors:</span>
+                <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>⚓ Baseline — strongest plan with no conversions / no brokerage cycling (Δ columns measure against it)</span>
                 <span><span style="display:inline-block;width:14px;height:14px;background:#90EE90;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Best — wins at least one metric (cell highlight = the winning metric)</span>
                 <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Spend-optimized (✦) — binary search found a higher sustainable spend</span>
                 <span><span style="display:inline-block;width:14px;height:14px;background:#fde8d8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Reverse-optimized (▼) — all strategies failed; highest feasible spend shown</span>
-                <span><span style="display:inline-block;width:14px;height:14px;background:#e8e8e8;opacity:0.8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;text-decoration:line-through;"></span>Infeasible — existing income already exceeds this bracket ceiling</span>
+                <span id="opt-legend-infeasible"><span style="display:inline-block;width:14px;height:14px;background:#e8e8e8;opacity:0.8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;text-decoration:line-through;"></span>Infeasible — existing income already exceeds this bracket ceiling</span>
             </div>
             <div style="overflow-x:auto;width:fit-content;max-width:100%;">
                 <div id="opt-table" style="display:grid;width:fit-content;"></div>

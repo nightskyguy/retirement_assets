@@ -737,7 +737,27 @@ function simulate(inputs) {
 
     for (let y = 0; y < maxYears; y++) {
         const loopStart = performance.now();
-        fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, inputs.iraBaseGoal, inputs.nYears - y, inputs.growth)
+        // Phase 24 interaction fix: cyclic brokerage "harvest" years draw $0 from the IRA
+        // (the isBrokerageYear branch runs instead of the 'fixed' branch), so they consume a
+        // calendar year of the N-year drawdown window without reducing the IRA. Amortizing over
+        // remaining *calendar* years would then dump the deferred balance into the final year as
+        // one balloon draw/conversion. Instead, amortize over the expected remaining *draw* years
+        // (calendar years minus estimated brokerage years) so each IRA-draw year is sized to hit
+        // the target on schedule. The cycle does ~1 brokerage year per cycN IRA years, where
+        // cycN = round(IRA/Brokerage) (see line ~947), i.e. a 1/(cycN+1) fraction of years are skips.
+        // Yearly re-amortization self-corrects any estimation drift.
+        let amortYears = inputs.nYears - y;
+        if (inputs.cyclicEnabled && balance.Brokerage > 0 && amortYears > 1) {
+            const cycN = Math.max(1, Math.round((balance.IRA1 + balance.IRA2) / balance.Brokerage));
+            const expectedSkips = amortYears / (cycN + 1);
+            amortYears = Math.max(1, amortYears - expectedSkips);
+        }
+        // IRA Goal is entered in today's dollars (matches the today's-dollar "Suggested IRA Goal"
+        // hint and the inflation-indexed tax/IRMAA/ACA thresholds the goal is meant to manage).
+        // Inflate it to this year's nominal dollars with cpiRate = (1+cpi)^(gapYears+y), the same
+        // factor the bracket/IRMAA/ACA ceilings use, before comparing against nominal IRA balances.
+        const iraGoalNominal = inputs.iraBaseGoal * cpiRate;
+        fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, iraGoalNominal, amortYears, inputs.growth)
 
         // Phase 12: growthRates moved here (from below withdrawal block) to enable pre-withdrawal growth.
         // Monte Carlo uses per-year return from injected sequence if provided; else constant rate.
@@ -879,7 +899,7 @@ function simulate(inputs) {
         const remainingRmd2 = Math.max(0, rmd2 - qcd2);
         balance.IRA1 = Math.max(0, balance.IRA1 - remainingRmd1);
         balance.IRA2 = Math.max(0, balance.IRA2 - remainingRmd2);
-        let curIRA = Math.max(0, balance.IRA1 + balance.IRA2 - inputs.iraBaseGoal);
+        let curIRA = Math.max(0, balance.IRA1 + balance.IRA2 - iraGoalNominal);
 
         let totalRMD = rmd1 + rmd2;                                    // required distributions (for stats)
         const taxableRMD = remainingRmd1 + remainingRmd2;              // taxable portion (excludes QCDs)
@@ -987,8 +1007,19 @@ function simulate(inputs) {
             let remYears = Math.max(1, inputs.nYears - y);
             let amortized = Math.max(0, fixedWithdrawal - totalIRAForcedWithdrawals);
 
-            // Withdraw the fixed amount left after RMDs, or whatever is left in IRAs after leaving room
-            let IRAwd = Math.max(0, Math.min(curIRA, amortized))
+            // Withdraw the fixed amount left after RMDs, or whatever is left in IRAs after leaving room.
+            // Intra-year growth correction: iraGoalNominal is an END-OF-YEAR target, but the
+            // withdrawal happens mid-year and the retained balance still grows for postMonths
+            // afterward (applyGrowth is simple proportional: factor = 1 + rate*postMonths/12).
+            // Drawing down to exactly the goal would leave goal*(1+growth) at year end — a
+            // systematic ~one-year-of-growth overshoot. Instead draw down to goal/postGrowth so
+            // the retained balance lands on the goal at year end; the ×0.99 biases it ~1% under
+            // (preferred to overshooting). growthRates.IRA carries the actual per-year return,
+            // including the Monte Carlo sequence, so this is correct under variable growth too.
+            const postGrowthIRA = 1 + (growthRates.IRA ?? 0) * (postMonths / 12);
+            const reduceFloor = (iraGoalNominal / postGrowthIRA) * 0.99;
+            const curIRAreduce = Math.max(0, balance.IRA1 + balance.IRA2 - reduceFloor);
+            let IRAwd = Math.max(0, Math.min(curIRAreduce, amortized))
             withdrawals = { IRA: IRAwd, netAmount: IRAwd }
 
         } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit') {

@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1018</title>
+    <title>Retirement Optimizer 11.1019</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -146,7 +146,7 @@
 		</div>  <!-- strategy-container -->
 
 		<div class="row" style="margin-top:8px;">
-			<label title="IRA floor for all strategies. For 'Reduce IRA in N Years' this is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.">IRA Goal
+			<label title="IRA floor in today's dollars, inflation-adjusted (CPI) to each simulation year — so it tracks the inflation-indexed tax brackets, IRMAA tiers, and ACA cliffs it is meant to manage. For 'Reduce IRA in N Years' this is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.">IRA Goal (today's $)
 			<input type="text" id="iraBaseGoal" value="750000" width="50%"></label>
 			<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div>
 		</div>
@@ -547,6 +547,13 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1019</b> <strong>IRA Goal is now in today's dollars; cyclic-brokerage drawdown fixed:</strong>
+					<ul style="margin:4px 0 0 16px;">
+						<li><strong>IRA Goal = today's dollars.</strong> The IRA Goal is now entered in today's dollars and inflation-adjusted (CPI) to each simulation year, so it tracks the inflation-indexed tax brackets, IRMAA tiers, and ACA cliffs it exists to manage. This matches the "Suggested IRA Goal" hint, which was already a today's-dollar figure. (Previously the goal was treated as a flat nominal amount, which drifted in real terms over time.)</li>
+						<li><strong>Cyclic + Reduce IRA in N Years no longer balloons.</strong> When Cycle Brokerage ran inside a "Reduce IRA in N Years" plan, brokerage harvest years drew $0 from the IRA, deferring the whole reduction into one giant final-year Roth conversion. The amortization now spreads the draw over the expected IRA-draw years (excluding harvest years), keeping conversions smooth.</li>
+						<li><strong>End-of-year target accuracy.</strong> The reduce-strategy draw now accounts for the partial-year growth on the balance retained after a mid-year withdrawal, so the IRA lands on (a hair under) the goal at year end instead of overshooting by a year of growth. Uses each year's actual return, so it stays correct under Monte Carlo.</li>
+					</ul>
+				</li>
 				<li><b>11.1018</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong>
 					<ul style="margin:4px 0 0 16px;">
 						<li><strong>ΔTax / ΔNetWealth now switch units.</strong> Toggling <em>Future $ / Current $</em> previously updated the absolute columns (Lifetime Tax, Total Spendable, NetWealth) but left the Δ columns in future dollars — mismatched units side by side. The Δ columns now deflate too, each computed as the difference of the two present-value totals.</li>
@@ -634,13 +641,13 @@
 			</details>
 			<h3>How to Use</h3>
 			<div class="log-entry"><ul>
-				<li><strong>Withdrawal Strategy:</strong> The <em>Withdrawal Strategy</em> box (top of sidebar) controls how the simulation draws from your accounts each year. Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change — default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>). The <i>IRA Goal</i> field (just below the strategy box) sets a floor: most strategies draw from the IRA only until it reaches this balance, then shift to other sources. For <em>Reduce IRA in N Years</em> it is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.
+				<li><strong>Withdrawal Strategy:</strong> The <em>Withdrawal Strategy</em> box (top of sidebar) controls how the simulation draws from your accounts each year. Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change — default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>). The <i>IRA Goal</i> field (just below the strategy box) sets a floor <strong>in today's dollars</strong>, inflation-adjusted (CPI) to each year so it tracks the inflation-indexed brackets, IRMAA tiers, and ACA cliffs it is meant to manage: most strategies draw from the IRA only until it reaches this (inflating) balance, then shift to other sources. For <em>Reduce IRA in N Years</em> it is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.
 					<details style="margin-top:8px;">
 					<summary style="font-size:0.88em;color:#555;cursor:pointer;user-select:none;font-weight:600;">Detailed Strategy Discussion…</summary>
 					<div style="margin-top:6px;font-size:0.88em;line-height:1.5;">
 					<p><strong>Common to all strategies:</strong> QCDs (if configured) are applied first — they satisfy the RMD requirement dollar-for-dollar without adding to taxable income. Any remaining RMD obligation after QCDs is then taken as a taxable IRA withdrawal. Both happen before strategy logic runs.</p>
 					<p><strong>Proportional Withdraw +%</strong> — draws IRA, Brokerage, and Cash proportionally (relative to their balances) to cover the spend goal. An optional IRA-only boost adds <em>boost% × spend goal</em> on top of that; the after-tax surplus flows to Roth conversion. At 0% boost this is the pure proportional baseline. Gap fill if still short: Brokerage + Cash (60/40), then Roth as last resort.</p>
-					<p><strong>Reduce IRA in N Years</strong> — calculates the annual IRA draw needed to amortize the IRA down to the IRA Goal over the remaining simulation years (similar to a mortgage payment). RMDs count toward that target; the strategy draws any remaining amount beyond RMDs. Gap fill if the IRA draw alone doesn't cover spending: Cash → Brokerage → Roth.</p>
+					<p><strong>Reduce IRA in N Years</strong> — calculates the annual IRA draw needed to amortize the IRA down to the IRA Goal (today's dollars, inflation-adjusted to each year) over the remaining simulation years (similar to a mortgage payment). RMDs count toward that target; the strategy draws any remaining amount beyond RMDs. Gap fill if the IRA draw alone doesn't cover spending: Cash → Brokerage → Roth.</p>
 					<p><strong>Fill Federal Tax Bracket / IRMAA Tier / ACA Cliff</strong> — draws IRA up to a chosen ceiling (top of a federal bracket, an IRMAA tier threshold, or an ACA FPL multiple), then stops. Any spending beyond what that IRA draw covers is filled from non-taxable sources in order: Cash → Brokerage → Roth. This keeps the IRA draw from crossing the ceiling even when spending requires more. The bracket/tier ceiling also defines the room available for Roth conversions.</p>
 					<p><strong>IRA Draw %</strong> — withdraws a fixed percentage of the current IRA balance each year regardless of the spend goal (RMDs count toward the target). Gap fill if the after-tax IRA draw falls short of spending: Cash → Brokerage → Roth. Useful for a mechanical, balance-proportional drawdown pace.</p>
 					<p><strong>Ordered (CBIR / RIBC / BIRC)</strong> — draws from accounts in a strict sequence until the spend goal is met; unlike other strategies, all spending is handled in this ordered pass (nothing is pre-withdrawn).

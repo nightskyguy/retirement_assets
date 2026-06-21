@@ -105,8 +105,8 @@
   <div class="controls">
     <div class="control-card">
       <label for="yearSlider">Start year</label>
-      <input type="range" id="yearSlider" min="2000" max="2024" step="1" value="2000">
-      <span class="ctl-val" id="yearDisplay">2000</span>
+      <input type="range" id="yearSlider" step="1">
+      <span class="ctl-val" id="yearDisplay">—</span>
     </div>
     <div class="control-card">
       <label for="taxSlider">Marginal tax rate</label>
@@ -147,50 +147,36 @@
   </div>
 
   <div class="chart-wrapper">
-    <canvas id="mainChart" role="img" aria-label="Line chart of cumulative real value of $10,000 in a HYSA from selected start year to 2025, comparing Roth (0% tax), custom marginal rate, uninvested cash, and $10,000 baseline.">Cumulative real purchasing power of $10,000 invested in a top-tier HYSA, adjusted for inflation and taxes, from the selected start year through 2025.</canvas>
+    <canvas id="mainChart" role="img" aria-label="Line chart of cumulative real value of $10,000 in a HYSA from selected start year, comparing Roth (0% tax), custom marginal rate, uninvested cash, and $10,000 baseline.">Cumulative real purchasing power of $10,000 invested in a top-tier HYSA, adjusted for inflation and taxes.</canvas>
   </div>
 
   <p class="source-note">
     <strong>Methodology:</strong> Each year, interest = HYSA rate &times; balance. After-tax interest = interest &times; (1 &minus; tax rate). Inflation adjustment = balance &times; CPI rate. Net annual change = after-tax interest &minus; inflation erosion. Cumulative balance starts at $10,000 and compounds year over year. "Uninvested cash" shows $10,000 eroded by inflation alone with no interest earned. "Roth" assumes 0% tax on interest (approximating tax-free growth).<br>
-    <strong>HYSA rates:</strong> Estimated 80th-pct competitive rates from FDIC data, Fed funds rate history, Bankrate/LegalClarity benchmarks. Verify at fred.stlouisfed.org.<br>
-    <strong>Inflation:</strong> BLS CPI-U annual averages. Sources: U.S. Bureau of Labor Statistics, Federal Reserve Economic Data (FRED).
+    <strong>HYSA rates:</strong> Top competitive rates estimated from <a href="https://fred.stlouisfed.org/series/MMNRNNS" rel="nofollow" target="_blank">FRED</a>, FDIC data, and Fed funds rate history.<br>
+    <strong>Inflation:</strong> <a href="https://www.bls.gov/cpi/" rel="nofollow" target="_blank">BLS CPI-U</a> annual averages.<br>
+    <strong>Note:</strong> HYSA rates vary throughout the year; figures shown are annual averages of top offers. Inflation (CPI-U) also varies monthly; figures are calendar-year averages. <span id="vintage-note"></span>
   </p>
 </div>
 
+<script src="hysa_data.js"></script>
 <script>
-const RAW = [
-  { yr: 2000, rate: 0.060, cpi: 0.034 },
-  { yr: 2001, rate: 0.042, cpi: 0.028 },
-  { yr: 2002, rate: 0.018, cpi: 0.016 },
-  { yr: 2003, rate: 0.010, cpi: 0.023 },
-  { yr: 2004, rate: 0.015, cpi: 0.027 },
-  { yr: 2005, rate: 0.033, cpi: 0.034 },
-  { yr: 2006, rate: 0.052, cpi: 0.032 },
-  { yr: 2007, rate: 0.049, cpi: 0.028 },
-  { yr: 2008, rate: 0.030, cpi: 0.038 },
-  { yr: 2009, rate: 0.013, cpi: -0.004 },
-  { yr: 2010, rate: 0.012, cpi: 0.016 },
-  { yr: 2011, rate: 0.011, cpi: 0.032 },
-  { yr: 2012, rate: 0.010, cpi: 0.021 },
-  { yr: 2013, rate: 0.010, cpi: 0.015 },
-  { yr: 2014, rate: 0.010, cpi: 0.016 },
-  { yr: 2015, rate: 0.011, cpi: 0.001 },
-  { yr: 2016, rate: 0.011, cpi: 0.021 },
-  { yr: 2017, rate: 0.013, cpi: 0.021 },
-  { yr: 2018, rate: 0.022, cpi: 0.024 },
-  { yr: 2019, rate: 0.024, cpi: 0.023 },
-  { yr: 2020, rate: 0.009, cpi: 0.012 },
-  { yr: 2021, rate: 0.005, cpi: 0.070 },
-  { yr: 2022, rate: 0.030, cpi: 0.080 },
-  { yr: 2023, rate: 0.051, cpi: 0.041 },
-  { yr: 2024, rate: 0.050, cpi: 0.029 },
-  { yr: 2025, rate: 0.043, cpi: 0.026 },
-];
+const FIRST_YR = RAW[0].yr;
+const LAST_YR  = RAW[RAW.length - 1].yr;
+
+const yearSliderEl = document.getElementById('yearSlider');
+yearSliderEl.min   = FIRST_YR;
+yearSliderEl.max   = LAST_YR - 1;
+yearSliderEl.value = FIRST_YR;
+document.getElementById('yearDisplay').textContent = FIRST_YR;
+document.getElementById('vintage-note').textContent =
+  RAW[RAW.length - 1].yr + ' figures estimated from data through ' + RAW_VINTAGE + '.';
 
 function compute(startYr, taxPct) {
   const t = taxPct / 100;
   const slice = RAW.filter(d => d.yr >= startYr);
-  const labels = [startYr];
+  // First point: anchor at (startYr - 1) representing the $10,000 starting value
+  // before any data year is applied. Displayed as "Initial" via tick callback.
+  const labels = [startYr - 1];
   const rothVals = [10000];
   const taxVals  = [10000];
   const cashVals = [10000];
@@ -202,7 +188,7 @@ function compute(startYr, taxPct) {
     rothBal = rothBal + (d.rate * rothBal) - (d.cpi * rothBal);
     taxBal  = taxBal  + (d.rate * taxBal * (1 - t)) - (d.cpi * taxBal);
     cashBal = cashBal - (d.cpi * cashBal);
-    labels.push(d.yr + 1);
+    labels.push(d.yr);
     rothVals.push(+rothBal.toFixed(2));
     taxVals.push(+taxBal.toFixed(2));
     cashVals.push(+cashBal.toFixed(2));
@@ -241,7 +227,7 @@ function updateStats(data, taxPct) {
   document.getElementById('cash-net').textContent = fmtDiff(kf - 10000);
 }
 
-let startYr = 2000, taxPct = 30;
+let startYr = FIRST_YR, taxPct = 30;
 let data = compute(startYr, taxPct);
 
 const chart = new Chart(document.getElementById('mainChart'), {
@@ -306,20 +292,22 @@ const chart = new Chart(document.getElementById('mainChart'), {
         callbacks: {
           label: ctx => ctx.dataset.label + ': $' + Math.round(ctx.parsed.y).toLocaleString(),
           footer: items => {
-            // Point labeled Y shows the year-end balance after applying year (Y-1)'s
-            // rate/cpi; index 0 (start year) is the untouched $10,000 baseline.
-            const d = RAW.find(r => r.yr === +items[0].label - 1);
+            const d = RAW.find(r => r.yr === +items[0].label);
             return d ? ['Interest rate: ' + (d.rate * 100).toFixed(2) + '%',
-                        'Inflation (CPI): ' + (d.cpi * 100).toFixed(2) + '%'] : '';
+                        'Inflation (CPI): ' + (d.cpi * 100).toFixed(2) + '%'] : [];
           }
         }
       }
     },
     scales: {
       x: {
-        ticks: { font: { size: 11 }, maxRotation: 45, autoSkip: false },
+        ticks: {
+          font: { size: 11 },
+          maxRotation: 45,
+          autoSkip: false,
+          callback: function(val, i) { return i === 0 ? 'Initial' : this.getLabelForValue(val); },
+        },
         grid: { display: false },
-        title: { display: true, text: 'Year-end balance', font: { size: 11 }, color: '#888780' }
       },
       y: {
         ticks: {

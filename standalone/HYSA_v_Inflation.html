@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HYSA vs Inflation — Real After-Tax Returns 2000–2024</title>
+<title>HYSA vs Inflation — Real After-Tax Returns</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -91,7 +91,7 @@
 <body>
 <div class="container">
   <h1>HYSA Real After-Tax Returns vs. Inflation</h1>
-  <p class="subtitle">$10,000 at top 80th-percentile competitive savings rates &mdash; 2000&ndash;2024</p>
+  <p class="subtitle" id="page-subtitle">$10,000 at top 80th-percentile competitive savings rates</p>
   <button class="other-tools-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
 
   <!-- Slider -->
@@ -101,7 +101,7 @@
     <span class="slider-val" id="sliderDisplay">30%</span>
   </div>
 
-  <!-- Stats: 3 columns (Roth / Custom / 30% fixed for reference) -->
+  <!-- Stats: 3 columns (Roth / Custom / Inflation reference) -->
   <div class="stats-grid">
     <!-- Roth -->
     <div class="stat-card" style="border-left-color: #ef9f27;">
@@ -136,7 +136,7 @@
       </div>
       <div class="stat-pair" style="margin-top:6px;">
         <div class="stat-inner"><p class="lbl">Best year (least)</p><p class="val" id="inf-best">—</p></div>
-        <div class="stat-inner"><p class="lbl">Period</p><p class="val neutral">2000–2024</p></div>
+        <div class="stat-inner"><p class="lbl">Period</p><p class="val neutral" id="inf-period">—</p></div>
       </div>
     </div>
   </div>
@@ -150,48 +150,30 @@
   </div>
 
   <div class="chart-wrapper">
-    <canvas id="mainChart" role="img" aria-label="Bar and line chart of HYSA after-tax real returns vs inflation, 2000–2024, with lines for Roth and custom marginal tax rate.">Annual HYSA after-tax interest versus inflation erosion on $10,000, with net real return lines for Roth (0% tax) and a user-selected marginal rate.</canvas>
+    <canvas id="mainChart" role="img" aria-label="Bar and line chart of HYSA after-tax real returns vs inflation with lines for Roth and custom marginal tax rate.">Annual HYSA after-tax interest versus inflation erosion on $10,000, with net real return lines for Roth (0% tax) and a user-selected marginal rate.</canvas>
   </div>
 
   <p class="source-note">
-    <strong>Methodology:</strong> Top 80th-pct competitive HYSA rate &times; $10,000 &times; (1 &minus; tax rate) &minus; (CPI-U &times; $10,000) = net real gain/loss. "Roth" assumes 0% tax on interest (approximating a Roth IRA savings account).<br>
-    <strong>HYSA rates:</strong> Estimated from FDIC national rate data, Fed funds rate history, Bankrate/LegalClarity benchmarks (verify: FRED series MMNRNNS).<br>
-    <strong>Inflation:</strong> BLS CPI-U annual average. Sources: U.S. Bureau of Labor Statistics, Federal Reserve Economic Data (FRED).<br>
-    <strong>Note:</strong> Year-by-year HYSA rates are informed estimates. Verify at fred.stlouisfed.org.
+    <strong>Methodology:</strong> Top competitive HYSA rate &times; $10,000 &times; (1 &minus; tax rate) &minus; (CPI-U &times; $10,000) = net real gain/loss. "Roth" assumes 0% tax on interest (approximating a Roth IRA savings account).<br>
+    <strong>HYSA rates:</strong> Top competitive rates estimated from <a href="https://fred.stlouisfed.org/series/MMNRNNS" rel="nofollow" target="_blank">FRED</a>, FDIC data, and Fed funds rate history.<br>
+    <strong>Inflation:</strong> <a href="https://www.bls.gov/cpi/" rel="nofollow" target="_blank">BLS CPI-U</a> annual averages.<br>
+    <strong>Note:</strong> HYSA rates vary throughout the year; figures shown are annual averages of top offers. Inflation (CPI-U) also varies monthly; figures are calendar-year averages. <span id="vintage-note"></span>
   </p>
 </div>
 
+<script src="hysa_data.js"></script>
 <script>
-const RAW = [
-  { yr: 2000, rate: 0.060, cpi: 0.034 },
-  { yr: 2001, rate: 0.042, cpi: 0.028 },
-  { yr: 2002, rate: 0.018, cpi: 0.016 },
-  { yr: 2003, rate: 0.010, cpi: 0.023 },
-  { yr: 2004, rate: 0.015, cpi: 0.027 },
-  { yr: 2005, rate: 0.033, cpi: 0.034 },
-  { yr: 2006, rate: 0.052, cpi: 0.032 },
-  { yr: 2007, rate: 0.049, cpi: 0.028 },
-  { yr: 2008, rate: 0.030, cpi: 0.038 },
-  { yr: 2009, rate: 0.013, cpi: -0.004 },
-  { yr: 2010, rate: 0.012, cpi: 0.016 },
-  { yr: 2011, rate: 0.011, cpi: 0.032 },
-  { yr: 2012, rate: 0.010, cpi: 0.021 },
-  { yr: 2013, rate: 0.010, cpi: 0.015 },
-  { yr: 2014, rate: 0.010, cpi: 0.016 },
-  { yr: 2015, rate: 0.011, cpi: 0.001 },
-  { yr: 2016, rate: 0.011, cpi: 0.021 },
-  { yr: 2017, rate: 0.013, cpi: 0.021 },
-  { yr: 2018, rate: 0.022, cpi: 0.024 },
-  { yr: 2019, rate: 0.024, cpi: 0.023 },
-  { yr: 2020, rate: 0.009, cpi: 0.012 },
-  { yr: 2021, rate: 0.005, cpi: 0.070 },
-  { yr: 2022, rate: 0.030, cpi: 0.080 },
-  { yr: 2023, rate: 0.051, cpi: 0.041 },
-  { yr: 2024, rate: 0.050, cpi: 0.029 },
-];
+const years = RAW.map(r => r.yr);
+const rangeLabel = RAW[0].yr + '–' + RAW[RAW.length - 1].yr;
+
+document.title = 'HYSA vs Inflation — Real After-Tax Returns ' + rangeLabel;
+document.getElementById('page-subtitle').textContent =
+  '$10,000 at top competitive savings rates — ' + rangeLabel;
+document.getElementById('inf-period').textContent = rangeLabel;
+document.getElementById('vintage-note').textContent =
+  RAW[RAW.length - 1].yr + ' figures estimated from data through ' + RAW_VINTAGE + '.';
 
 const P = 10000;
-const years = RAW.map(r => r.yr);
 
 function compute(taxPct) {
   const t = taxPct / 100;
@@ -218,14 +200,17 @@ function fmt(v, sign=true) {
 function cls(v) { return v > 0 ? 'positive' : v < 0 ? 'negative' : 'neutral'; }
 
 function updateStats(rows, taxPct) {
+  const n = rows.length;
+  const half = n / 2;
+
   // Roth
   const rothNets = rows.map(r => r.netRoth);
   const rothPos  = rothNets.filter(v => v > 0).length;
-  const rothAvg  = rothNets.reduce((a,b)=>a+b,0)/rothNets.length;
+  const rothAvg  = rothNets.reduce((a,b)=>a+b,0)/n;
   const rothBest = Math.max(...rothNets);
   const rothWorst= Math.min(...rothNets);
-  document.getElementById('roth-pos').textContent  = rothPos + ' / 25';
-  document.getElementById('roth-pos').className    = 'val ' + cls(rothPos - 12.5);
+  document.getElementById('roth-pos').textContent  = rothPos + ' / ' + n;
+  document.getElementById('roth-pos').className    = 'val ' + cls(rothPos - half);
   document.getElementById('roth-avg').textContent  = fmt(rothAvg);
   document.getElementById('roth-avg').className    = 'val ' + cls(rothAvg);
   document.getElementById('roth-best').textContent = fmt(rothBest);
@@ -234,12 +219,12 @@ function updateStats(rows, taxPct) {
   // Custom
   const custNets = rows.map(r => r.netTax);
   const custPos  = custNets.filter(v => v > 0).length;
-  const custAvg  = custNets.reduce((a,b)=>a+b,0)/custNets.length;
+  const custAvg  = custNets.reduce((a,b)=>a+b,0)/n;
   const custBest = Math.max(...custNets);
   const custWorst= Math.min(...custNets);
   document.getElementById('custom-card-title').textContent = taxPct + '% rate (purple dashed)';
-  document.getElementById('cust-pos').textContent  = custPos + ' / 25';
-  document.getElementById('cust-pos').className    = 'val ' + cls(custPos - 12.5);
+  document.getElementById('cust-pos').textContent  = custPos + ' / ' + n;
+  document.getElementById('cust-pos').className    = 'val ' + cls(custPos - half);
   document.getElementById('cust-avg').textContent  = fmt(custAvg);
   document.getElementById('cust-avg').className    = 'val ' + cls(custAvg);
   document.getElementById('cust-best').textContent = fmt(custBest);
@@ -247,7 +232,7 @@ function updateStats(rows, taxPct) {
 
   // Inflation
   const infs = rows.map(r => r.inf);
-  const infAvg  = infs.reduce((a,b)=>a+b,0)/infs.length;
+  const infAvg  = infs.reduce((a,b)=>a+b,0)/n;
   const infWorst= Math.max(...infs);
   const infBest = Math.min(...infs);
   document.getElementById('inf-avg').textContent   = fmt(infAvg, false);
@@ -318,7 +303,7 @@ const chart = new Chart(document.getElementById('mainChart'), {
           footer: items => {
             const d = RAW.find(r => r.yr === +items[0].label);
             return d ? ['Interest rate: ' + (d.rate * 100).toFixed(2) + '%',
-                        'Inflation (CPI): ' + (d.cpi * 100).toFixed(2) + '%'] : '';
+                        'Inflation (CPI): ' + (d.cpi * 100).toFixed(2) + '%'] : [];
           }
         }
       }
@@ -346,7 +331,6 @@ document.getElementById('taxSlider').addEventListener('input', function() {
   const taxPct = parseInt(this.value);
   document.getElementById('sliderDisplay').textContent = taxPct + '%';
   const rows = compute(taxPct);
-  // update bar (after-tax) and custom net line
   chart.data.datasets[0].data = rows.map(r => +r.atTax.toFixed(2));
   chart.data.datasets[3].data = rows.map(r => +r.netTax.toFixed(2));
   chart.data.datasets[3].pointBackgroundColor = rows.map(r => r.netTax >= 0 ? '#7f77dd' : '#e24b4a');

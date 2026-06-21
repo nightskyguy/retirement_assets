@@ -41,12 +41,12 @@
     {
       name: 'HYSA Real Value',
       file: 'standalone/HYSA_Real_Growth.html',
-      desc: 'Cumulative real (after-tax, after-inflation) value of $10,000 in a high-yield savings account, 2000–2024 — shows how "safe" cash quietly loses purchasing power.'
+      desc: 'Cumulative real (after-tax, after-inflation) value of $10,000 in a high-yield savings account, 2000–2026 — shows how "safe" cash quietly loses purchasing power.'
     },
     {
       name: 'HYSA vs Inflation',
       file: 'standalone/HYSA_v_Inflation.html',
-      desc: 'Year-by-year real after-tax HYSA returns vs. inflation (2000–2024): positive years, average, best and worst.'
+      desc: 'Year-by-year real after-tax HYSA returns vs. inflation (2000–2026): positive years, average, best and worst.'
     },
   ];
 

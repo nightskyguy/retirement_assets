@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HYSA Real Cumulative Growth</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f5f4f0;
+    color: #1a1a18;
+    padding: 2rem;
+    min-height: 100vh;
+  }
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 12px;
+    border: 0.5px solid rgba(0,0,0,0.12);
+    padding: 2rem 2.5rem;
+  }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #6b6b67; margin-bottom: 1.5rem; }
+  .other-tools-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-bottom: 1.25rem; padding: 6px 14px;
+    background: #378add; color: #fff; border: none; border-radius: 5px;
+    font-family: inherit; font-size: 12px; font-weight: 500;
+    letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .other-tools-btn:hover { opacity: 0.85; }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+  .control-card {
+    background: #f5f4f0;
+    border-radius: 8px;
+    padding: 0.875rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .control-card label { font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .control-card input[type=range] { flex: 1; }
+  .control-card input[type=range]#taxSlider { accent-color: #7f77dd; }
+  .control-card input[type=range]#yearSlider { accent-color: #378add; }
+  .ctl-val { font-size: 20px; font-weight: 500; min-width: 52px; text-align: right; }
+  #taxDisplay { color: #7f77dd; }
+  #yearDisplay { color: #378add; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 1.25rem;
+  }
+  .stat-card {
+    background: #f5f4f0;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid transparent;
+  }
+  .stat-card .card-title { font-size: 11px; font-weight: 500; color: #6b6b67; margin-bottom: 8px; }
+  .stat-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .lbl { font-size: 10px; color: #888780; margin-bottom: 1px; }
+  .val { font-size: 16px; font-weight: 500; }
+  .positive { color: #0f6e56; }
+  .negative { color: #a32d2d; }
+  .neutral  { color: #1a1a18; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 8px; font-size: 12px; color: #6b6b67; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .lg-ln { width: 18px; height: 3px; display: inline-block; flex-shrink: 0; }
+
+  .chart-wrapper { position: relative; width: 100%; height: 380px; margin-bottom: 12px; }
+
+  .source-note {
+    font-size: 11px; color: #888780; line-height: 1.5;
+    border-top: 0.5px solid rgba(0,0,0,0.1); padding-top: 10px; margin-top: 4px;
+  }
+
+  @media (max-width: 620px) {
+    body { padding: 1rem; }
+    .container { padding: 1.25rem; }
+    .controls { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    h1 { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>HYSA Cumulative Real Value of $10,000</h1>
+  <p class="subtitle">Net purchasing power after inflation and taxes — starting balance $10,000</p>
+  <button class="other-tools-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
+
+  <div class="controls">
+    <div class="control-card">
+      <label for="yearSlider">Start year</label>
+      <input type="range" id="yearSlider" min="2000" max="2024" step="1" value="2000">
+      <span class="ctl-val" id="yearDisplay">2000</span>
+    </div>
+    <div class="control-card">
+      <label for="taxSlider">Marginal tax rate</label>
+      <input type="range" id="taxSlider" min="1" max="50" step="1" value="30">
+      <span class="ctl-val" id="taxDisplay">30%</span>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card" style="border-left-color: #ef9f27;">
+      <p class="card-title">Roth / 0% tax (gold)</p>
+      <div class="stat-pair">
+        <div><p class="lbl">Final balance</p><p class="val" id="roth-final">—</p></div>
+        <div><p class="lbl">Net gain/loss</p><p class="val" id="roth-net">—</p></div>
+      </div>
+    </div>
+    <div class="stat-card" style="border-left-color: #7f77dd;">
+      <p class="card-title" id="cust-title">30% tax (purple)</p>
+      <div class="stat-pair">
+        <div><p class="lbl">Final balance</p><p class="val" id="cust-final">—</p></div>
+        <div><p class="lbl">Net gain/loss</p><p class="val" id="cust-net">—</p></div>
+      </div>
+    </div>
+    <div class="stat-card" style="border-left-color: #e24b4a;">
+      <p class="card-title">Uninvested cash (red)</p>
+      <div class="stat-pair">
+        <div><p class="lbl">Real value</p><p class="val" id="cash-final">—</p></div>
+        <div><p class="lbl">Purchasing loss</p><p class="val negative" id="cash-net">—</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><span class="lg-ln" style="background:#ef9f27;"></span>Roth / 0% tax</span>
+    <span><span class="lg-ln" style="background:#7f77dd; border-top: 2px dashed #7f77dd; height:0; border-radius:0;"></span>Custom tax rate</span>
+    <span><span class="lg-ln" style="background:#e24b4a;"></span>Uninvested cash (inflation only)</span>
+    <span><span class="lg-ln" style="background:#d3d1c7;"></span>$10,000 baseline</span>
+  </div>
+
+  <div class="chart-wrapper">
+    <canvas id="mainChart" role="img" aria-label="Line chart of cumulative real value of $10,000 in a HYSA from selected start year to 2025, comparing Roth (0% tax), custom marginal rate, uninvested cash, and $10,000 baseline.">Cumulative real purchasing power of $10,000 invested in a top-tier HYSA, adjusted for inflation and taxes, from the selected start year through 2025.</canvas>
+  </div>
+
+  <p class="source-note">
+    <strong>Methodology:</strong> Each year, interest = HYSA rate &times; balance. After-tax interest = interest &times; (1 &minus; tax rate). Inflation adjustment = balance &times; CPI rate. Net annual change = after-tax interest &minus; inflation erosion. Cumulative balance starts at $10,000 and compounds year over year. "Uninvested cash" shows $10,000 eroded by inflation alone with no interest earned. "Roth" assumes 0% tax on interest (approximating tax-free growth).<br>
+    <strong>HYSA rates:</strong> Estimated 80th-pct competitive rates from FDIC data, Fed funds rate history, Bankrate/LegalClarity benchmarks. Verify at fred.stlouisfed.org.<br>
+    <strong>Inflation:</strong> BLS CPI-U annual averages. Sources: U.S. Bureau of Labor Statistics, Federal Reserve Economic Data (FRED).
+  </p>
+</div>
+
+<script>
+const RAW = [
+  { yr: 2000, rate: 0.060, cpi: 0.034 },
+  { yr: 2001, rate: 0.042, cpi: 0.028 },
+  { yr: 2002, rate: 0.018, cpi: 0.016 },
+  { yr: 2003, rate: 0.010, cpi: 0.023 },
+  { yr: 2004, rate: 0.015, cpi: 0.027 },
+  { yr: 2005, rate: 0.033, cpi: 0.034 },
+  { yr: 2006, rate: 0.052, cpi: 0.032 },
+  { yr: 2007, rate: 0.049, cpi: 0.028 },
+  { yr: 2008, rate: 0.030, cpi: 0.038 },
+  { yr: 2009, rate: 0.013, cpi: -0.004 },
+  { yr: 2010, rate: 0.012, cpi: 0.016 },
+  { yr: 2011, rate: 0.011, cpi: 0.032 },
+  { yr: 2012, rate: 0.010, cpi: 0.021 },
+  { yr: 2013, rate: 0.010, cpi: 0.015 },
+  { yr: 2014, rate: 0.010, cpi: 0.016 },
+  { yr: 2015, rate: 0.011, cpi: 0.001 },
+  { yr: 2016, rate: 0.011, cpi: 0.021 },
+  { yr: 2017, rate: 0.013, cpi: 0.021 },
+  { yr: 2018, rate: 0.022, cpi: 0.024 },
+  { yr: 2019, rate: 0.024, cpi: 0.023 },
+  { yr: 2020, rate: 0.009, cpi: 0.012 },
+  { yr: 2021, rate: 0.005, cpi: 0.070 },
+  { yr: 2022, rate: 0.030, cpi: 0.080 },
+  { yr: 2023, rate: 0.051, cpi: 0.041 },
+  { yr: 2024, rate: 0.050, cpi: 0.029 },
+  { yr: 2025, rate: 0.043, cpi: 0.026 },
+];
+
+function compute(startYr, taxPct) {
+  const t = taxPct / 100;
+  const slice = RAW.filter(d => d.yr >= startYr);
+  const labels = [startYr];
+  const rothVals = [10000];
+  const taxVals  = [10000];
+  const cashVals = [10000];
+  const baseVals = [10000];
+
+  let rothBal = 10000, taxBal = 10000, cashBal = 10000;
+
+  slice.forEach(d => {
+    rothBal = rothBal + (d.rate * rothBal) - (d.cpi * rothBal);
+    taxBal  = taxBal  + (d.rate * taxBal * (1 - t)) - (d.cpi * taxBal);
+    cashBal = cashBal - (d.cpi * cashBal);
+    labels.push(d.yr + 1);
+    rothVals.push(+rothBal.toFixed(2));
+    taxVals.push(+taxBal.toFixed(2));
+    cashVals.push(+cashBal.toFixed(2));
+    baseVals.push(10000);
+  });
+
+  return { labels, rothVals, taxVals, cashVals, baseVals };
+}
+
+function fmt(v) {
+  return '$' + Math.round(v).toLocaleString();
+}
+function fmtDiff(v) {
+  return (v >= 0 ? '+' : '') + '$' + Math.round(v).toLocaleString();
+}
+function cls(v) { return 'val ' + (v > 10000 ? 'positive' : v < 10000 ? 'negative' : 'neutral'); }
+
+function updateStats(data, taxPct) {
+  const rf = data.rothVals[data.rothVals.length - 1];
+  const cf = data.taxVals[data.taxVals.length - 1];
+  const kf = data.cashVals[data.cashVals.length - 1];
+
+  document.getElementById('roth-final').textContent = fmt(rf);
+  document.getElementById('roth-final').className = cls(rf);
+  document.getElementById('roth-net').textContent = fmtDiff(rf - 10000);
+  document.getElementById('roth-net').className = cls(rf);
+
+  document.getElementById('cust-title').textContent = taxPct + '% tax (purple)';
+  document.getElementById('cust-final').textContent = fmt(cf);
+  document.getElementById('cust-final').className = cls(cf);
+  document.getElementById('cust-net').textContent = fmtDiff(cf - 10000);
+  document.getElementById('cust-net').className = cls(cf);
+
+  document.getElementById('cash-final').textContent = fmt(kf);
+  document.getElementById('cash-final').className = cls(kf);
+  document.getElementById('cash-net').textContent = fmtDiff(kf - 10000);
+}
+
+let startYr = 2000, taxPct = 30;
+let data = compute(startYr, taxPct);
+
+const chart = new Chart(document.getElementById('mainChart'), {
+  type: 'line',
+  data: {
+    labels: data.labels,
+    datasets: [
+      {
+        label: 'Roth / 0% tax',
+        data: data.rothVals,
+        borderColor: '#ef9f27',
+        backgroundColor: 'rgba(239,159,39,0.08)',
+        borderWidth: 2.5,
+        pointRadius: 3,
+        fill: false,
+        tension: 0.3,
+        order: 1,
+      },
+      {
+        label: 'Custom tax rate',
+        data: data.taxVals,
+        borderColor: '#7f77dd',
+        backgroundColor: 'transparent',
+        borderWidth: 2.5,
+        borderDash: [6, 3],
+        pointRadius: 3,
+        fill: false,
+        tension: 0.3,
+        order: 2,
+      },
+      {
+        label: 'Uninvested cash',
+        data: data.cashVals,
+        borderColor: '#e24b4a',
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        pointRadius: 2,
+        fill: false,
+        tension: 0.3,
+        order: 3,
+      },
+      {
+        label: '$10,000 baseline',
+        data: data.baseVals,
+        borderColor: 'rgba(180,178,169,0.7)',
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderDash: [3, 3],
+        pointRadius: 0,
+        fill: false,
+        tension: 0,
+        order: 4,
+      },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => ctx.dataset.label + ': $' + Math.round(ctx.parsed.y).toLocaleString(),
+          footer: items => {
+            // Point labeled Y shows the year-end balance after applying year (Y-1)'s
+            // rate/cpi; index 0 (start year) is the untouched $10,000 baseline.
+            const d = RAW.find(r => r.yr === +items[0].label - 1);
+            return d ? ['Interest rate: ' + (d.rate * 100).toFixed(2) + '%',
+                        'Inflation (CPI): ' + (d.cpi * 100).toFixed(2) + '%'] : '';
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { font: { size: 11 }, maxRotation: 45, autoSkip: false },
+        grid: { display: false },
+        title: { display: true, text: 'Year-end balance', font: { size: 11 }, color: '#888780' }
+      },
+      y: {
+        ticks: {
+          callback: v => { const k = v / 1000; return '$' + (Number.isInteger(k) ? k : k.toFixed(1)) + 'k'; },
+          font: { size: 11 }
+        },
+        grid: { color: 'rgba(0,0,0,0.06)' }
+      }
+    }
+  }
+});
+
+updateStats(data, taxPct);
+
+function refresh() {
+  const d = compute(startYr, taxPct);
+  chart.data.labels = d.labels;
+  chart.data.datasets[0].data = d.rothVals;
+  chart.data.datasets[1].data = d.taxVals;
+  chart.data.datasets[2].data = d.cashVals;
+  chart.data.datasets[3].data = d.baseVals;
+  chart.update();
+  updateStats(d, taxPct);
+}
+
+document.getElementById('yearSlider').addEventListener('input', function() {
+  startYr = parseInt(this.value);
+  document.getElementById('yearDisplay').textContent = startYr;
+  refresh();
+});
+
+document.getElementById('taxSlider').addEventListener('input', function() {
+  taxPct = parseInt(this.value);
+  document.getElementById('taxDisplay').textContent = taxPct + '%';
+  refresh();
+});
+</script>
+<script src="../other_tools.js"></script>
+</body>
+</html>

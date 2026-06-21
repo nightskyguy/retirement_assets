@@ -38,9 +38,24 @@
       file: 'RetirementTaxPlanner.html',
       desc: 'Model IRA draws, Roth conversions, SS income, pension, dividends, and capital gains — with federal + state tax detail.'
     },
+    {
+      name: 'HYSA Real Value',
+      file: 'standalone/HYSA_Real_Growth.html',
+      desc: 'Cumulative real (after-tax, after-inflation) value of $10,000 in a high-yield savings account, 2000–2024 — shows how "safe" cash quietly loses purchasing power.'
+    },
+    {
+      name: 'HYSA vs Inflation',
+      file: 'standalone/HYSA_v_Inflation.html',
+      desc: 'Year-by-year real after-tax HYSA returns vs. inflation (2000–2024): positive years, average, best and worst.'
+    },
   ];
 
   const currentFile = window.location.pathname.split('/').pop() || '';
+  // Tool paths in TOOLS are repo-root-relative; pages may live in a subfolder
+  // (e.g. standalone/). Prefix links so they resolve from any page depth,
+  // without site-absolute paths (preserves file:// local use).
+  const inStandalone = /\/standalone\//i.test(window.location.pathname);
+  const rootPrefix = inStandalone ? '../' : '';
 
   function injectStyles() {
     const style = document.createElement('style');
@@ -138,12 +153,12 @@
   function buildToolList() {
     const frag = document.createDocumentFragment();
     TOOLS.forEach(function (tool) {
-      const isCurrent = tool.file.toLowerCase() === currentFile.toLowerCase();
+      const isCurrent = tool.file.split('/').pop().toLowerCase() === currentFile.toLowerCase();
       const a = document.createElement('a');
       a.className = 'ot-tool-link'
         + (tool.deprecated ? ' ot-deprecated' : '')
         + (isCurrent ? ' ot-current' : '');
-      a.href = isCurrent ? '#' : tool.file;
+      a.href = isCurrent ? '#' : (rootPrefix + tool.file);
       if (!isCurrent) {
         a.target = '_blank';
         a.rel = 'noopener noreferrer';

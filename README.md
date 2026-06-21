@@ -19,7 +19,7 @@ You can DIRECTLY invoke these tools:
 + **[Retirement Projection](https://tools.netcitizen.us/Retirement_Projection.html)**  What will my retirement assets do? It's very VISUAL but not as rich as Retirement Optimizer.
 + **[IRMAA and Medicare Future costs](https://tools.netcitizen.us/FutureCost.html)** Will IRMAA kill me?
 + **[After Tax REAL Growth](https://tools.netcitizen.us/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
-+ **[HYSA Real Value](https://tools.netcitizen.us/standalone/HYSA_Real_Growth.html)** Does my "safe" high-yield savings account actually grow after taxes and inflation? (2000–2024)
++ **[HYSA Real Value](https://tools.netcitizen.us/standalone/HYSA_Real_Growth.html)** Does my "safe" high-yield savings account actually grow after taxes and inflation?
 + **[HYSA vs Inflation](https://tools.netcitizen.us/standalone/HYSA_v_Inflation.html)** Year by year, did my savings beat inflation after tax — and how often?
 
 
@@ -62,10 +62,10 @@ Sweeps ordinary income from $0 to $1.1M in $10k steps and plots your true all-in
 Uses 2026 IRS Rev. Proc. 2025-32 federal brackets inflated forward by your chosen CPI rate; IRMAA premiums grow at that rate plus a configurable Medicare-specific increment. Designed to answer four questions: *How sensitive is my tax burden to a $10k income change? Where are my sweet spots and danger zones (SS torpedo, IRMAA cliffs, NIIT)? What is my real all-in effective rate? What withholding should I target?* The Share button encodes all settings into a compact URL that works from a local file or a web server — save it as a bookmark or paste it into a discussion to let someone else replicate your exact scenario.
 
 **[HYSA Real Value](standalone/HYSA_Real_Growth.html) — Cumulative Real Value of a High-Yield Savings Account**
-Starting from $10,000, this tool compounds a high-yield savings balance year over year (2000–2024) and plots the *real* value after both tax and inflation. Three lines: Roth / 0%-tax, a custom tax bracket (slider), and uninvested cash eroded by inflation alone. A year-count slider lets you shorten the window. It makes visible that even a competitive HYSA can lose real purchasing power once taxes and CPI are netted out. Rates are 80th-percentile competitive HYSA estimates (FDIC national rate data, Fed funds rate history, Bankrate benchmarks); inflation is BLS CPI-U.
+Starting from $10,000, this tool compounds a high-yield savings balance year over year and plots the *real* value after both tax and inflation. Three lines: Roth / 0%-tax, a custom tax bracket (slider), and uninvested cash eroded by inflation alone. A year-count slider lets you shorten the window. It makes visible that even a competitive HYSA can lose real purchasing power once taxes and CPI are netted out. Rates are 80th-percentile competitive HYSA estimates (FDIC national rate data, Fed funds rate history, Bankrate benchmarks); inflation is BLS CPI-U.
 
 **[HYSA vs Inflation](standalone/HYSA_v_Inflation.html) — Year-by-Year Real After-Tax Returns vs. Inflation**
-The year-by-year companion to the tool above: real after-tax HYSA return — a Roth / 0% line and a custom-rate slider line — plotted against inflation bars for 2000–2024, with summary stats for positive years, average net per year, and the best and worst year. Same data sources (FDIC / Fed funds / Bankrate estimates for HYSA rates, BLS CPI-U for inflation).
+The year-by-year companion to the tool above: real after-tax HYSA return — a Roth / 0% line and a custom-rate slider line — plotted against inflation bars with summary stats for positive years, average net per year, and the best and worst year. Same data sources (FDIC / Fed funds / Bankrate estimates for HYSA rates, BLS CPI-U for inflation).
 
 
 ## The Retirement Optimizer

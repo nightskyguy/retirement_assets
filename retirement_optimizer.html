@@ -552,6 +552,7 @@
 						<li><strong>IRA Goal = today's dollars.</strong> The IRA Goal is now entered in today's dollars and inflation-adjusted (CPI) to each simulation year, so it tracks the inflation-indexed tax brackets, IRMAA tiers, and ACA cliffs it exists to manage. This matches the "Suggested IRA Goal" hint, which was already a today's-dollar figure. (Previously the goal was treated as a flat nominal amount, which drifted in real terms over time.)</li>
 						<li><strong>Cyclic + Reduce IRA in N Years no longer balloons.</strong> When Cycle Brokerage ran inside a "Reduce IRA in N Years" plan, brokerage harvest years drew $0 from the IRA, deferring the whole reduction into one giant final-year Roth conversion. The amortization now spreads the draw over the expected IRA-draw years (excluding harvest years), keeping conversions smooth.</li>
 						<li><strong>End-of-year target accuracy.</strong> The reduce-strategy draw now accounts for the partial-year growth on the balance retained after a mid-year withdrawal, so the IRA lands on (a hair under) the goal at year end instead of overshooting by a year of growth. Uses each year's actual return, so it stays correct under Monte Carlo.</li>
+						<li><strong>Clearer subCycle labels.</strong> The Annual Details <em>subCycle</em> column now shows <em>IRA</em> / <em>Brok</em> / <em>⚠Brok</em> instead of the cryptic I / B / ⚠B.</li>
 					</ul>
 				</li>
 				<li><b>11.1018</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong>
@@ -594,7 +595,7 @@
 					As the asset balances change, the ratio may also change.
 					In Brokerage harvest years spending is funded from brokerage gains at capital-gains rates (often 0–15%). Excess brokerage funds are reinvested (DRIP) so dividends stay inside brokerage and don't
 					leak to Cash as ordinary income. Two orderings are supported: <em>IRA-first</em> (🗘, red) harvests after N IRA years; <em>Brokerage-first</em> (🔄) harvests at the start of each cycle.
-					The Optimizer and Monte Carlo always run all three variants (baseline + IRA-first + Brokerage-first) and surface the best. The <em>subCycle</em> column in Annual Details shows I/B/⚠B per year.
+					The Optimizer and Monte Carlo always run all three variants (baseline + IRA-first + Brokerage-first) and surface the best. The <em>subCycle</em> column in Annual Details shows IRA/Brok/⚠Brok per year.
 					One benefit of Cycle Brokerage is earlier reduction of brokerage assets that would otherwise grow increasing later capital gains.</li>
 			
 				<li><b>11.e64</b> <strong>BETR (Break-Even Tax Rate):</strong> Annual Details now shows the break-even future tax rate for each year's Roth conversion. 

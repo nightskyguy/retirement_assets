@@ -974,7 +974,7 @@ function simulate(inputs) {
             } else {
                 subCycleIRAYears++;   // Brokerage depleted; keep counting IRA years
             }
-            subCycleLabel = isBrokerageYear ? 'B' : 'I';
+            subCycleLabel = isBrokerageYear ? 'Brok' : 'IRA';
         }
 
         if (isBrokerageYear) {
@@ -993,7 +993,7 @@ function simulate(inputs) {
                 // Depletion check: warn if Brokerage < 50% of what we need
                 const _grossNeeded = _brokerageNetTarget / Math.max(0.01, 1 - capGainsPercentage * capitalGainsRate);
                 if (curBalances.Brokerage < _grossNeeded * 0.5) {
-                    subCycleLabel = '⚠B';
+                    subCycleLabel = '⚠Brok';
                 }
                 withdrawals = calculateWithdrawals(curBalances, _brokerageNetTarget,
                     { order: ['Brokerage'], weight: [1], taxrate: [capGainsPercentage * capitalGainsRate] });
@@ -3190,7 +3190,7 @@ function updateTable(log) {
         'BETR%': 'Break-Even Tax Rate (Kitces formula): t_now × (1 + r_taxable)^n / (1 + r_ira)^n. The future marginal rate at which converting now is tax-neutral vs leaving in IRA. If your expected future rate (Future IRA Tax %) exceeds BETR → conversion advantageous (▲). When r_taxable < r_ira (taxable drag), BETR falls below current rate, making conversion even more compelling.',
         'betrFlag': '▲ = expected future rate exceeds BETR by >2pp → conversion beneficial. ▼ = expected future rate is below BETR → conversion costly. ≈ = within 2pp either way (marginal).',
         'extraConv': 'Gross IRA amount additionally withdrawn and converted to Roth by the Phase 23 conversion optimizer, independent of spending strategy. Taxes come from IRA gross; net Roth credit = extraConv − incremental tax.',
-        'subCycle': 'Cyclic sub-cycle marker. B = brokerage harvest year (spending drawn from Brokerage; IRA free for conversions). I = IRA draw year (normal IRA withdrawal). ⚠B = brokerage harvest year but balance was below 50% of target — fell back to partial IRA draw.',
+        'subCycle': 'Cyclic sub-cycle marker. Brok = brokerage harvest year (spending drawn from Brokerage; IRA free for conversions). IRA = IRA draw year (normal IRA withdrawal). ⚠Brok = brokerage harvest year but balance was below 50% of target — fell back to partial IRA draw.',
         'grossOut': 'Gross outflows: all account withdrawals this year (IRA + RMD + Brokerage + Cash + Roth), including amounts converted to Roth.',
         'netOut': 'Net outflows: portfolio draws funding spending/taxes. Gross outflows minus Roth conversions and reinvested surplus.',
         'inflows': 'Non-portfolio income applied to spending: Social Security + pension.',

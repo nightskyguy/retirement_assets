@@ -19,6 +19,8 @@ You can DIRECTLY invoke these tools:
 + **[Retirement Projection](https://tools.netcitizen.us/Retirement_Projection.html)**  What will my retirement assets do? It's very VISUAL but not as rich as Retirement Optimizer.
 + **[IRMAA and Medicare Future costs](https://tools.netcitizen.us/FutureCost.html)** Will IRMAA kill me?
 + **[After Tax REAL Growth](https://tools.netcitizen.us/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
++ **[HYSA Real Value](https://tools.netcitizen.us/standalone/HYSA_Real_Growth.html)** Does my "safe" high-yield savings account actually grow after taxes and inflation? (2000–2024)
++ **[HYSA vs Inflation](https://tools.netcitizen.us/standalone/HYSA_v_Inflation.html)** Year by year, did my savings beat inflation after tax — and how often?
 
 
 A California resident built these with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, and Javascript. See **Standalone Tools** and **Key Features** below for a summary of what the tools can do - and be sure to look at *What the Tool IGNOREs* (and *Known Bugs*, below) so you understand the limitations of the *Retirement Optimizer*.
@@ -58,6 +60,12 @@ Visualize how inflation and taxation combine to erode nominal investment returns
 Sweeps ordinary income from $0 to $1.1M in $10k steps and plots your true all-in effective tax rate — federal, state, and IRMAA combined — with a marginal rate curve that makes the Social Security torpedo, IRMAA tier crossings, and NIIT threshold immediately visible. Configure filing status, state (14 options currently), taxpayer ages, fixed Social Security income, capital gains proceeds and basis, a target year 2026–2035 with configurable CPI, and OBBBA provisions (senior deduction, elevated SALT cap). Two linked charts update instantly on any control change, and hovering either chart activates the corresponding tooltip on the other at the same income level.
 
 Uses 2026 IRS Rev. Proc. 2025-32 federal brackets inflated forward by your chosen CPI rate; IRMAA premiums grow at that rate plus a configurable Medicare-specific increment. Designed to answer four questions: *How sensitive is my tax burden to a $10k income change? Where are my sweet spots and danger zones (SS torpedo, IRMAA cliffs, NIIT)? What is my real all-in effective rate? What withholding should I target?* The Share button encodes all settings into a compact URL that works from a local file or a web server — save it as a bookmark or paste it into a discussion to let someone else replicate your exact scenario.
+
+**[HYSA Real Value](standalone/HYSA_Real_Growth.html) — Cumulative Real Value of a High-Yield Savings Account**
+Starting from $10,000, this tool compounds a high-yield savings balance year over year (2000–2024) and plots the *real* value after both tax and inflation. Three lines: Roth / 0%-tax, a custom tax bracket (slider), and uninvested cash eroded by inflation alone. A year-count slider lets you shorten the window. It makes visible that even a competitive HYSA can lose real purchasing power once taxes and CPI are netted out. Rates are 80th-percentile competitive HYSA estimates (FDIC national rate data, Fed funds rate history, Bankrate benchmarks); inflation is BLS CPI-U.
+
+**[HYSA vs Inflation](standalone/HYSA_v_Inflation.html) — Year-by-Year Real After-Tax Returns vs. Inflation**
+The year-by-year companion to the tool above: real after-tax HYSA return — a Roth / 0% line and a custom-rate slider line — plotted against inflation bars for 2000–2024, with summary stats for positive years, average net per year, and the best and worst year. Same data sources (FDIC / Fed funds / Bankrate estimates for HYSA rates, BLS CPI-U for inflation).
 
 
 ## The Retirement Optimizer

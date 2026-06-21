@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HYSA vs Inflation — Real After-Tax Returns 2000–2024</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f5f4f0;
+    color: #1a1a18;
+    padding: 2rem;
+    min-height: 100vh;
+  }
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 12px;
+    border: 0.5px solid rgba(0,0,0,0.12);
+    padding: 2rem 2.5rem;
+  }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #6b6b67; margin-bottom: 1.5rem; }
+  .other-tools-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-bottom: 1.25rem; padding: 6px 14px;
+    background: #7f77dd; color: #fff; border: none; border-radius: 5px;
+    font-family: inherit; font-size: 12px; font-weight: 500;
+    letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .other-tools-btn:hover { opacity: 0.85; }
+
+  /* slider row */
+  .slider-row {
+    display: flex; align-items: center; gap: 14px;
+    background: #f5f4f0; border-radius: 8px; padding: 0.875rem 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .slider-row label { font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .slider-row input[type=range] { flex: 1; accent-color: #7f77dd; }
+  .slider-val {
+    font-size: 20px; font-weight: 500; color: #7f77dd;
+    min-width: 48px; text-align: right;
+  }
+
+  /* stat grid — 3 columns × 2 rows */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 1.25rem;
+  }
+  .stat-card {
+    background: #f5f4f0; border-radius: 8px; padding: 0.75rem 1rem;
+    border-left: 3px solid transparent;
+  }
+  .stat-card .card-title { font-size: 11px; font-weight: 500; color: #6b6b67; margin-bottom: 8px; }
+  .stat-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .stat-inner .lbl { font-size: 10px; color: #888780; margin-bottom: 1px; }
+  .stat-inner .val { font-size: 16px; font-weight: 500; }
+  .positive { color: #0f6e56; }
+  .negative { color: #a32d2d; }
+  .neutral  { color: #1a1a18; }
+
+  /* legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 8px; font-size: 12px; color: #6b6b67; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .lg-sq { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+  .lg-ln { width: 18px; height: 3px; border-radius: 0; display: inline-block; flex-shrink: 0; }
+  .lg-ln-dash { width: 18px; height: 0; border-top: 2.5px dashed; display: inline-block; flex-shrink: 0; }
+
+  .chart-wrapper { position: relative; width: 100%; height: 380px; margin-bottom: 12px; }
+
+  .source-note {
+    font-size: 11px; color: #888780; line-height: 1.5;
+    border-top: 0.5px solid rgba(0,0,0,0.1); padding-top: 10px; margin-top: 4px;
+  }
+
+  @media (max-width: 620px) {
+    body { padding: 1rem; }
+    .container { padding: 1.25rem; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    h1 { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>HYSA Real After-Tax Returns vs. Inflation</h1>
+  <p class="subtitle">$10,000 at top 80th-percentile competitive savings rates &mdash; 2000&ndash;2024</p>
+  <button class="other-tools-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
+
+  <!-- Slider -->
+  <div class="slider-row">
+    <label for="taxSlider">Marginal tax rate</label>
+    <input type="range" id="taxSlider" min="1" max="50" step="1" value="30">
+    <span class="slider-val" id="sliderDisplay">30%</span>
+  </div>
+
+  <!-- Stats: 3 columns (Roth / Custom / 30% fixed for reference) -->
+  <div class="stats-grid">
+    <!-- Roth -->
+    <div class="stat-card" style="border-left-color: #ef9f27;">
+      <p class="card-title">Roth / 0% tax (gold line)</p>
+      <div class="stat-pair">
+        <div class="stat-inner"><p class="lbl">Positive years</p><p class="val" id="roth-pos">—</p></div>
+        <div class="stat-inner"><p class="lbl">Avg net / yr</p><p class="val" id="roth-avg">—</p></div>
+      </div>
+      <div class="stat-pair" style="margin-top:6px;">
+        <div class="stat-inner"><p class="lbl">Best year</p><p class="val positive" id="roth-best">—</p></div>
+        <div class="stat-inner"><p class="lbl">Worst year</p><p class="val negative" id="roth-worst">—</p></div>
+      </div>
+    </div>
+    <!-- Custom bracket -->
+    <div class="stat-card" style="border-left-color: #7f77dd;">
+      <p class="card-title" id="custom-card-title">Custom rate (purple line)</p>
+      <div class="stat-pair">
+        <div class="stat-inner"><p class="lbl">Positive years</p><p class="val" id="cust-pos">—</p></div>
+        <div class="stat-inner"><p class="lbl">Avg net / yr</p><p class="val" id="cust-avg">—</p></div>
+      </div>
+      <div class="stat-pair" style="margin-top:6px;">
+        <div class="stat-inner"><p class="lbl">Best year</p><p class="val positive" id="cust-best">—</p></div>
+        <div class="stat-inner"><p class="lbl">Worst year</p><p class="val negative" id="cust-worst">—</p></div>
+      </div>
+    </div>
+    <!-- Inflation bar reference -->
+    <div class="stat-card" style="border-left-color: #e24b4a;">
+      <p class="card-title">Inflation (red bars)</p>
+      <div class="stat-pair">
+        <div class="stat-inner"><p class="lbl">Avg erosion / yr</p><p class="val negative" id="inf-avg">—</p></div>
+        <div class="stat-inner"><p class="lbl">Worst year</p><p class="val negative" id="inf-worst">—</p></div>
+      </div>
+      <div class="stat-pair" style="margin-top:6px;">
+        <div class="stat-inner"><p class="lbl">Best year (least)</p><p class="val" id="inf-best">—</p></div>
+        <div class="stat-inner"><p class="lbl">Period</p><p class="val neutral">2000–2024</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span><span class="lg-sq" style="background:rgba(55,138,221,0.60);"></span>After-tax interest (custom rate)</span>
+    <span><span class="lg-sq" style="background:rgba(226,75,74,0.60);"></span>Inflation erosion</span>
+    <span><span class="lg-ln" style="background:#ef9f27;"></span>Net real — Roth (0%)</span>
+    <span><span class="lg-ln-dash" style="border-color:#7f77dd;"></span>Net real — custom rate</span>
+  </div>
+
+  <div class="chart-wrapper">
+    <canvas id="mainChart" role="img" aria-label="Bar and line chart of HYSA after-tax real returns vs inflation, 2000–2024, with lines for Roth and custom marginal tax rate.">Annual HYSA after-tax interest versus inflation erosion on $10,000, with net real return lines for Roth (0% tax) and a user-selected marginal rate.</canvas>
+  </div>
+
+  <p class="source-note">
+    <strong>Methodology:</strong> Top 80th-pct competitive HYSA rate &times; $10,000 &times; (1 &minus; tax rate) &minus; (CPI-U &times; $10,000) = net real gain/loss. "Roth" assumes 0% tax on interest (approximating a Roth IRA savings account).<br>
+    <strong>HYSA rates:</strong> Estimated from FDIC national rate data, Fed funds rate history, Bankrate/LegalClarity benchmarks (verify: FRED series MMNRNNS).<br>
+    <strong>Inflation:</strong> BLS CPI-U annual average. Sources: U.S. Bureau of Labor Statistics, Federal Reserve Economic Data (FRED).<br>
+    <strong>Note:</strong> Year-by-year HYSA rates are informed estimates. Verify at fred.stlouisfed.org.
+  </p>
+</div>
+
+<script>
+const RAW = [
+  { yr: 2000, rate: 0.060, cpi: 0.034 },
+  { yr: 2001, rate: 0.042, cpi: 0.028 },
+  { yr: 2002, rate: 0.018, cpi: 0.016 },
+  { yr: 2003, rate: 0.010, cpi: 0.023 },
+  { yr: 2004, rate: 0.015, cpi: 0.027 },
+  { yr: 2005, rate: 0.033, cpi: 0.034 },
+  { yr: 2006, rate: 0.052, cpi: 0.032 },
+  { yr: 2007, rate: 0.049, cpi: 0.028 },
+  { yr: 2008, rate: 0.030, cpi: 0.038 },
+  { yr: 2009, rate: 0.013, cpi: -0.004 },
+  { yr: 2010, rate: 0.012, cpi: 0.016 },
+  { yr: 2011, rate: 0.011, cpi: 0.032 },
+  { yr: 2012, rate: 0.010, cpi: 0.021 },
+  { yr: 2013, rate: 0.010, cpi: 0.015 },
+  { yr: 2014, rate: 0.010, cpi: 0.016 },
+  { yr: 2015, rate: 0.011, cpi: 0.001 },
+  { yr: 2016, rate: 0.011, cpi: 0.021 },
+  { yr: 2017, rate: 0.013, cpi: 0.021 },
+  { yr: 2018, rate: 0.022, cpi: 0.024 },
+  { yr: 2019, rate: 0.024, cpi: 0.023 },
+  { yr: 2020, rate: 0.009, cpi: 0.012 },
+  { yr: 2021, rate: 0.005, cpi: 0.070 },
+  { yr: 2022, rate: 0.030, cpi: 0.080 },
+  { yr: 2023, rate: 0.051, cpi: 0.041 },
+  { yr: 2024, rate: 0.050, cpi: 0.029 },
+];
+
+const P = 10000;
+const years = RAW.map(r => r.yr);
+
+function compute(taxPct) {
+  const t = taxPct / 100;
+  return RAW.map(d => {
+    const interest  = d.rate * P;
+    const atTax     = interest * (1 - t);
+    const atRoth    = interest;
+    const inf       = d.cpi * P;
+    return {
+      yr: d.yr,
+      atTax,
+      atRoth,
+      inf,
+      netTax:  atTax  - inf,
+      netRoth: atRoth - inf,
+    };
+  });
+}
+
+function fmt(v, sign=true) {
+  const s = sign ? (v >= 0 ? '+' : '-') : (v < 0 ? '-' : '');
+  return s + '$' + Math.abs(v).toFixed(0);
+}
+function cls(v) { return v > 0 ? 'positive' : v < 0 ? 'negative' : 'neutral'; }
+
+function updateStats(rows, taxPct) {
+  // Roth
+  const rothNets = rows.map(r => r.netRoth);
+  const rothPos  = rothNets.filter(v => v > 0).length;
+  const rothAvg  = rothNets.reduce((a,b)=>a+b,0)/rothNets.length;
+  const rothBest = Math.max(...rothNets);
+  const rothWorst= Math.min(...rothNets);
+  document.getElementById('roth-pos').textContent  = rothPos + ' / 25';
+  document.getElementById('roth-pos').className    = 'val ' + cls(rothPos - 12.5);
+  document.getElementById('roth-avg').textContent  = fmt(rothAvg);
+  document.getElementById('roth-avg').className    = 'val ' + cls(rothAvg);
+  document.getElementById('roth-best').textContent = fmt(rothBest);
+  document.getElementById('roth-worst').textContent= fmt(rothWorst);
+
+  // Custom
+  const custNets = rows.map(r => r.netTax);
+  const custPos  = custNets.filter(v => v > 0).length;
+  const custAvg  = custNets.reduce((a,b)=>a+b,0)/custNets.length;
+  const custBest = Math.max(...custNets);
+  const custWorst= Math.min(...custNets);
+  document.getElementById('custom-card-title').textContent = taxPct + '% rate (purple dashed)';
+  document.getElementById('cust-pos').textContent  = custPos + ' / 25';
+  document.getElementById('cust-pos').className    = 'val ' + cls(custPos - 12.5);
+  document.getElementById('cust-avg').textContent  = fmt(custAvg);
+  document.getElementById('cust-avg').className    = 'val ' + cls(custAvg);
+  document.getElementById('cust-best').textContent = fmt(custBest);
+  document.getElementById('cust-worst').textContent= fmt(custWorst);
+
+  // Inflation
+  const infs = rows.map(r => r.inf);
+  const infAvg  = infs.reduce((a,b)=>a+b,0)/infs.length;
+  const infWorst= Math.max(...infs);
+  const infBest = Math.min(...infs);
+  document.getElementById('inf-avg').textContent   = fmt(infAvg, false);
+  document.getElementById('inf-worst').textContent = fmt(infWorst, false);
+  document.getElementById('inf-best').textContent  = fmt(infBest, false);
+}
+
+// Build chart
+const rows0 = compute(30);
+const chart = new Chart(document.getElementById('mainChart'), {
+  data: {
+    labels: years,
+    datasets: [
+      {
+        type: 'bar',
+        label: 'After-tax interest',
+        data: rows0.map(r => +r.atTax.toFixed(2)),
+        backgroundColor: 'rgba(55,138,221,0.55)',
+        borderWidth: 0,
+        order: 3,
+      },
+      {
+        type: 'bar',
+        label: 'Inflation erosion',
+        data: rows0.map(r => +(-r.inf).toFixed(2)),
+        backgroundColor: 'rgba(226,75,74,0.60)',
+        borderWidth: 0,
+        order: 3,
+      },
+      {
+        type: 'line',
+        label: 'Net real — Roth (0%)',
+        data: rows0.map(r => +r.netRoth.toFixed(2)),
+        borderColor: '#ef9f27',
+        backgroundColor: 'transparent',
+        borderWidth: 2.5,
+        pointRadius: 3,
+        pointBackgroundColor: rows0.map(r => r.netRoth >= 0 ? '#ef9f27' : '#e24b4a'),
+        tension: 0.3,
+        order: 1,
+      },
+      {
+        type: 'line',
+        label: 'Net real — custom rate',
+        data: rows0.map(r => +r.netTax.toFixed(2)),
+        borderColor: '#7f77dd',
+        backgroundColor: 'transparent',
+        borderWidth: 2.5,
+        borderDash: [6, 3],
+        pointRadius: 3,
+        pointBackgroundColor: rows0.map(r => r.netTax >= 0 ? '#7f77dd' : '#e24b4a'),
+        tension: 0.3,
+        order: 1,
+      },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => {
+            const v = ctx.parsed.y;
+            return ctx.dataset.label + ': ' + (v >= 0 ? '+' : '-') + '$' + Math.abs(v).toFixed(0);
+          },
+          footer: items => {
+            const d = RAW.find(r => r.yr === +items[0].label);
+            return d ? ['Interest rate: ' + (d.rate * 100).toFixed(2) + '%',
+                        'Inflation (CPI): ' + (d.cpi * 100).toFixed(2) + '%'] : '';
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { font: { size: 10 }, maxRotation: 45, autoSkip: false },
+        grid: { display: false }
+      },
+      y: {
+        ticks: {
+          callback: v => (v >= 0 ? '' : '-') + '$' + Math.abs(v),
+          font: { size: 11 }
+        },
+        grid: { color: 'rgba(0,0,0,0.06)' }
+      }
+    }
+  }
+});
+
+updateStats(rows0, 30);
+
+// Slider interaction
+document.getElementById('taxSlider').addEventListener('input', function() {
+  const taxPct = parseInt(this.value);
+  document.getElementById('sliderDisplay').textContent = taxPct + '%';
+  const rows = compute(taxPct);
+  // update bar (after-tax) and custom net line
+  chart.data.datasets[0].data = rows.map(r => +r.atTax.toFixed(2));
+  chart.data.datasets[3].data = rows.map(r => +r.netTax.toFixed(2));
+  chart.data.datasets[3].pointBackgroundColor = rows.map(r => r.netTax >= 0 ? '#7f77dd' : '#e24b4a');
+  chart.update('none');
+  updateStats(rows, taxPct);
+});
+</script>
+<script src="../other_tools.js"></script>
+</body>
+</html>

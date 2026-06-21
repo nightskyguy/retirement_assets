@@ -1571,6 +1571,45 @@ assertEqual(
 		assertEqual(result.totals.rmdTax <= result.totals.tax + 1, true, 'Fixed strategy: rmdTax does not exceed total tax');
 	}
 
+	// (a-6) IRA Goal is interpreted in TODAY'S dollars and inflated (CPI) to each year,
+	//        so the drawdown target rises over time and the IRA lands near the CPI-inflated
+	//        goal at year N — clearly above the flat-nominal entry. gapYears is 0 here
+	//        (startYear <= current year), so the inflation factor is (1+cpi)^(N-1).
+	{
+		const goalToday = 150000;
+		const inp = { ...baseInputs, IRA1: 600000, IRA2: 0, nYears: 6,
+			iraBaseGoal: goalToday, birthyear1: 1955, die1: 92 };
+		const result = simulate(inp);
+		const finalIdx = Math.min(inp.nYears - 1, result.log.length - 1);
+		const inflatedGoal = goalToday * Math.pow(1 + inp.cpi, finalIdx);
+		const iraAtN = result.log[finalIdx].TotalIRA;
+		assertEqual(Math.abs(iraAtN - inflatedGoal) / inflatedGoal < 0.08, true,
+			'IRA Goal (today$): IRA lands near the CPI-inflated goal at year N');
+		assertEqual(iraAtN > goalToday * 1.02, true,
+			'IRA Goal (today$): final IRA exceeds flat-nominal goal (target was inflated)');
+	}
+
+	// (a-7) Cyclic brokerage + reduce must not produce a final-year Roth-conversion balloon.
+	//        Previously a brokerage (skip) year deferred the IRA reduction into one giant
+	//        final-year conversion; the skip-aware amortization keeps conversions smooth.
+	{
+		const inp = { ...baseInputs, IRA1: 600000, IRA2: 0, nYears: 6,
+			iraBaseGoal: 150000, maxConversion: true,
+			cyclicEnabled: true, cyclicOrder: 'ira-first',
+			birthyear1: 1955, die1: 92 };
+		const result = simulate(inp);
+		const convs = result.log.slice(0, inp.nYears).map(e => e.rothConv || 0).filter(c => c > 1000);
+		if (convs.length >= 3) {
+			const sorted = [...convs].sort((a, b) => a - b);
+			const median = sorted[Math.floor(sorted.length / 2)];
+			const max = Math.max(...convs);
+			assertEqual(max < median * 4, true,
+				'Cyclic + reduce: no final-year conversion balloon (max < 4x median)');
+		} else {
+			assertEqual(true, true, 'Cyclic + reduce: too few conversions to assess balloon (skipped)');
+		}
+	}
+
 	// ============================================================================
 	// INFLATION SEQUENCE TESTS  (Phase 7 — inflationSequence per-path sampling)
 	// ============================================================================

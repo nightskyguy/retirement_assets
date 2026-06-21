@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1001</title>
+    <title>Retirement Optimizer 11.1019</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -146,7 +146,7 @@
 		</div>  <!-- strategy-container -->
 
 		<div class="row" style="margin-top:8px;">
-			<label title="IRA floor for all strategies. For 'Reduce IRA in N Years' this is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.">IRA Goal
+			<label title="IRA floor in today's dollars, inflation-adjusted (CPI) to each simulation year — so it tracks the inflation-indexed tax brackets, IRMAA tiers, and ACA cliffs it is meant to manage. For 'Reduce IRA in N Years' this is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.">IRA Goal (today's $)
 			<input type="text" id="iraBaseGoal" value="750000" width="50%"></label>
 			<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div>
 		</div>
@@ -373,7 +373,7 @@
 				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;min-width:60px;"></div>
 				<div title="Years of life fully funded — portfolio covers spending goal without running out. Red when fewer than expected."><small>Funded Yrs</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Lifetime tax rate: total taxes paid ÷ total gross income. Lower is better."><small>Tax Rate</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
-                <div title="Total federal + state taxes paid over the entire simulation."><small>All Taxes</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
+                <div title="Total tax paid over the entire simulation: federal (incl. NIIT), state, and Medicare IRMAA surcharges."><small>All Taxes</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total Required Minimum Distributions taken. Sub-label shows RMDs' share of lifetime taxes."><small>All RMDs</small><br><strong id="stat-rmd">$0</strong><div id="stat-rmd-pct" style="font-size:0.75em;min-height:1em;color:#888;"></div></div>
                 <div title="Total after-tax spendable income produced across all years."><small>Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total portfolio value (after-tax) remaining at the end of the final simulation year."><small>End Wealth</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
@@ -547,13 +547,12 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.1001</b> <strong>Baseline accounting for strategy comparison:</strong>
+				<li><b>11.1019</b> <strong>cyclic-brokerage drawdown fixed:</strong></li>
+				<li><b>11.1018</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong></li>
+				<li><b>11.1001</b> <strong>Best "Baseline" is used for strategy comparison:</strong>
 					<ul style="margin:4px 0 0 16px;">
 						<li><strong>Honest baseline.</strong> The optimizer now also runs every strategy family with <em>no Roth conversions and no cyclic brokerage maneuvering</em>, no QCDs, and pins the strongest of those as a light-green <em>⚓ BASELINE</em> reference row at the top of the results. Every other strategy is measured against it — because "strategy A beats strategy B" only means something relative to the best you can do without conversion/brokerage tricks.</li>
-						<li><strong>NetWealth column.</strong> The single ranking metric, valuing terminal wealth on a level footing: traditional IRA × (1 − your expected future IRA tax rate), brokerage gains × (1 − capital-gains rate), Roth + Cash + basis at face — using <em>one shared</em> future-IRA rate across all rows so comparisons are fair.</li>
-						<li><strong>ΔNetWorth / ΔTax.</strong> Two columns show (green/red) how much after-tax wealth each strategy gains over the baseline and how much less (or more) lifetime tax it pays.</li>
-						<li><strong>NetWealth tax fix.</strong> Terminal wealth now taxes brokerage gains at the capital-gains rate instead of the ordinary rate (it previously applied the last year's ordinary marginal rate to both the IRA and brokerage gains).</li>
-						<li><strong>Cleaner table.</strong> Infeasible (bracket-unreachable) rows are hidden by default — click the <em>Infeasible</em> legend to reveal or hide them. Failed plans always sort below successful ones. Every column header now has an explanatory tooltip. The simulation timing/run-count line always shows; per-row millisecond timing was removed.</li>
+						<li><strong>Cleaner table.</strong> Infeasible (bracket-unreachable) rows are hidden by default — click the <em>Infeasible</em> legend to reveal or hide them. Failed plans always sort below successful ones. Every column header now has an explanatory tooltip.</li>
 					</ul>
 				</li>
 				<li><b>11.fed</b> <strong>Charitable Giving (QCDs) &amp; UX Improvements:</strong>
@@ -562,7 +561,6 @@
 						Two modes: <em>Always</em> donates the full amount every eligible year; <em>As Needed</em> applies only enough to drop two IRMAA tiers (or escape the surcharge entirely, whichever requires fewer dollars). The per-person limit is $111,000 for 2026 (CPI-indexed annually per SECURE 2.0). QCDs appear as a gray bar in the Income &amp; Expenses chart.</li>
 						<li><strong>Dollar display toggle:</strong> The <em>Future $ / Current $</em> toggle has moved to the left of the tab bar (always visible). <em>Future $</em> shows nominal amounts as they will actually appear; <em>Current $</em> restates everything in today's purchasing power for easy year-to-year comparison.</li>
 						<li><strong>Strategy panel switches:</strong> <em>Maximize Conversions</em> (formerly "Max Conversion"), <em>Cycle Brokerage</em> (formerly "Cyclic"), <em>Optimize Spend</em>, and <em>Optimize Conversions</em> (formerly "Conv Optimizer") are now all in the strategy sidebar with labels to the right of each switch. Toggle labels are positioned so that the green (on) position visually aligns with the label.</li>
-						<li><strong>Age display:</strong> The profile section now shows the projected first-year RMD amount alongside the RMD start age (e.g. <em>Age 65 | RMD starts 75 | ~$72,000/yr</em>), updating live as you change IRA balances or the growth rate.</li>
 					</ul>
 				</li>
 				</ul>
@@ -581,7 +579,7 @@
 					As the asset balances change, the ratio may also change.
 					In Brokerage harvest years spending is funded from brokerage gains at capital-gains rates (often 0–15%). Excess brokerage funds are reinvested (DRIP) so dividends stay inside brokerage and don't
 					leak to Cash as ordinary income. Two orderings are supported: <em>IRA-first</em> (🗘, red) harvests after N IRA years; <em>Brokerage-first</em> (🔄) harvests at the start of each cycle.
-					The Optimizer and Monte Carlo always run all three variants (baseline + IRA-first + Brokerage-first) and surface the best. The <em>subCycle</em> column in Annual Details shows I/B/⚠B per year.
+					The Optimizer and Monte Carlo always run all three variants (baseline + IRA-first + Brokerage-first) and surface the best. The <em>subCycle</em> column in Annual Details shows IRA/Brok/⚠Brok per year.
 					One benefit of Cycle Brokerage is earlier reduction of brokerage assets that would otherwise grow increasing later capital gains.</li>
 			
 				<li><b>11.e64</b> <strong>BETR (Break-Even Tax Rate):</strong> Annual Details now shows the break-even future tax rate for each year's Roth conversion. 
@@ -628,13 +626,13 @@
 			</details>
 			<h3>How to Use</h3>
 			<div class="log-entry"><ul>
-				<li><strong>Withdrawal Strategy:</strong> The <em>Withdrawal Strategy</em> box (top of sidebar) controls how the simulation draws from your accounts each year. Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change — default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>). The <i>IRA Goal</i> field (just below the strategy box) sets a floor: most strategies draw from the IRA only until it reaches this balance, then shift to other sources. For <em>Reduce IRA in N Years</em> it is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.
+				<li><strong>Withdrawal Strategy:</strong> The <em>Withdrawal Strategy</em> box (top of sidebar) controls how the simulation draws from your accounts each year. Set the <i>After-Tax Spend</i> goal (annual after-tax income needed) and <i>Spend Delta</i> (yearly change — default −1% per <A HREF="https://retirementresearcher.com/retirement-spending-smile">historical data</A>). The <i>IRA Goal</i> field (just below the strategy box) sets a floor <strong>in today's dollars</strong>, inflation-adjusted (CPI) to each year so it tracks the inflation-indexed brackets, IRMAA tiers, and ACA cliffs it is meant to manage: most strategies draw from the IRA only until it reaches this (inflating) balance, then shift to other sources. For <em>Reduce IRA in N Years</em> it is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.
 					<details style="margin-top:8px;">
 					<summary style="font-size:0.88em;color:#555;cursor:pointer;user-select:none;font-weight:600;">Detailed Strategy Discussion…</summary>
 					<div style="margin-top:6px;font-size:0.88em;line-height:1.5;">
 					<p><strong>Common to all strategies:</strong> QCDs (if configured) are applied first — they satisfy the RMD requirement dollar-for-dollar without adding to taxable income. Any remaining RMD obligation after QCDs is then taken as a taxable IRA withdrawal. Both happen before strategy logic runs.</p>
 					<p><strong>Proportional Withdraw +%</strong> — draws IRA, Brokerage, and Cash proportionally (relative to their balances) to cover the spend goal. An optional IRA-only boost adds <em>boost% × spend goal</em> on top of that; the after-tax surplus flows to Roth conversion. At 0% boost this is the pure proportional baseline. Gap fill if still short: Brokerage + Cash (60/40), then Roth as last resort.</p>
-					<p><strong>Reduce IRA in N Years</strong> — calculates the annual IRA draw needed to amortize the IRA down to the IRA Goal over the remaining simulation years (similar to a mortgage payment). RMDs count toward that target; the strategy draws any remaining amount beyond RMDs. Gap fill if the IRA draw alone doesn't cover spending: Cash → Brokerage → Roth.</p>
+					<p><strong>Reduce IRA in N Years</strong> — calculates the annual IRA draw needed to amortize the IRA down to the IRA Goal (today's dollars, inflation-adjusted to each year) over the remaining simulation years (similar to a mortgage payment). RMDs count toward that target; the strategy draws any remaining amount beyond RMDs. Gap fill if the IRA draw alone doesn't cover spending: Cash → Brokerage → Roth.</p>
 					<p><strong>Fill Federal Tax Bracket / IRMAA Tier / ACA Cliff</strong> — draws IRA up to a chosen ceiling (top of a federal bracket, an IRMAA tier threshold, or an ACA FPL multiple), then stops. Any spending beyond what that IRA draw covers is filled from non-taxable sources in order: Cash → Brokerage → Roth. This keeps the IRA draw from crossing the ceiling even when spending requires more. The bracket/tier ceiling also defines the room available for Roth conversions.</p>
 					<p><strong>IRA Draw %</strong> — withdraws a fixed percentage of the current IRA balance each year regardless of the spend goal (RMDs count toward the target). Gap fill if the after-tax IRA draw falls short of spending: Cash → Brokerage → Roth. Useful for a mechanical, balance-proportional drawdown pace.</p>
 					<p><strong>Ordered (CBIR / RIBC / BIRC)</strong> — draws from accounts in a strict sequence until the spend goal is met; unlike other strategies, all spending is handled in this ordered pass (nothing is pre-withdrawn).

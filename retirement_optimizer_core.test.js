@@ -124,12 +124,12 @@ test('cyclicEnabled: subCycle column present in log rows', () => {
     assert('subCycle' in firstRow, `subCycle field missing from log row; keys: ${Object.keys(firstRow).join(',')}`);
 });
 
-test('cyclicEnabled: year 0 is IRA year (I), not brokerage year', () => {
+test('cyclicEnabled: year 0 is IRA year (IRA), not brokerage year', () => {
     // IRA=600k, Brok=200k → N=3. First 3 years are IRA years; year 4 is brokerage.
     const result = simulate({ ...BASE, cyclicEnabled: true });
     const y0 = result.log[0];
-    assert(y0.subCycle === 'I',
-        `Expected year 0 to be IRA year (I), got subCycle="${y0.subCycle}"`);
+    assert(y0.subCycle === 'IRA',
+        `Expected year 0 to be IRA year (IRA), got subCycle="${y0.subCycle}"`);
     // IRA should be drawn in IRA years (withdrawal > 0)
     assert((y0['IRAwd'] ?? 0) > 0,
         `Expected IRA withdrawal in IRA year, got ${y0['IRAwd']}`);
@@ -139,7 +139,7 @@ test('cyclicEnabled: brokerage year (year N) draws from Brokerage, not IRA (beyo
     // N = round(600000/200000) = 3. Year 0,1,2 = IRA; year 3 = brokerage harvest.
     const result = simulate({ ...BASE, cyclicEnabled: true });
     // Find first B row
-    const bRow = result.log.find(r => r.subCycle === 'B' || r.subCycle === '⚠B');
+    const bRow = result.log.find(r => r.subCycle === 'Brok' || r.subCycle === '⚠Brok');
     assert(bRow !== undefined, 'No brokerage harvest year found in log');
     // In brokerage year, Brokerage withdrawal > 0
     assert((bRow['Brokerage-'] ?? 0) > 0,
@@ -158,7 +158,7 @@ test('cyclicEnabled: DRIP forced — dividends flow to Brokerage not Cash (posit
     const result = simulate(divInputs);
     // With DRIP forced, dividends reinvest into Brokerage (brokerageG) not Cash (cashG).
     // Find an IRA year and confirm dividends accumulate in brokerageG, not cashG.
-    const iRow = result.log.find(r => r.subCycle === 'I');
+    const iRow = result.log.find(r => r.subCycle === 'IRA');
     assert(iRow !== undefined, 'No IRA year row found');
     // brokerageG should be non-zero (dividends reinvested into brokerage)
     assert((iRow.brokerageG ?? 0) > 0,
@@ -180,7 +180,7 @@ test('cyclicEnabled: surplus reinvested into Brokerage (not Cash) in IRA years',
     };
     const result = simulate(surplusInputs);
     // In IRA years, surplus should go to Brokerage, so surplusCash should be 0
-    const iRows = result.log.filter(r => r.subCycle === 'I');
+    const iRows = result.log.filter(r => r.subCycle === 'IRA');
     assert(iRows.length > 0, 'No IRA year rows found');
     // At least some IRA years should have surplusCash=0 (reinvested into brokerage)
     const zeroSurplusCash = iRows.filter(r => (r.surplusCash ?? 0) === 0);

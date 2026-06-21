@@ -547,27 +547,12 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.1019</b> <strong>IRA Goal is now in today's dollars; cyclic-brokerage drawdown fixed:</strong>
-					<ul style="margin:4px 0 0 16px;">
-						<li><strong>IRA Goal = today's dollars.</strong> The IRA Goal is now entered in today's dollars and inflation-adjusted (CPI) to each simulation year, so it tracks the inflation-indexed tax brackets, IRMAA tiers, and ACA cliffs it exists to manage. This matches the "Suggested IRA Goal" hint, which was already a today's-dollar figure. (Previously the goal was treated as a flat nominal amount, which drifted in real terms over time.)</li>
-						<li><strong>Cyclic + Reduce IRA in N Years no longer balloons.</strong> When Cycle Brokerage ran inside a "Reduce IRA in N Years" plan, brokerage harvest years drew $0 from the IRA, deferring the whole reduction into one giant final-year Roth conversion. The amortization now spreads the draw over the expected IRA-draw years (excluding harvest years), keeping conversions smooth.</li>
-						<li><strong>End-of-year target accuracy.</strong> The reduce-strategy draw now accounts for the partial-year growth on the balance retained after a mid-year withdrawal, so the IRA lands on (a hair under) the goal at year end instead of overshooting by a year of growth. Uses each year's actual return, so it stays correct under Monte Carlo.</li>
-						<li><strong>Clearer subCycle labels.</strong> The Annual Details <em>subCycle</em> column now shows <em>IRA</em> / <em>Brok</em> / <em>⚠Brok</em> instead of the cryptic I / B / ⚠B.</li>
-					</ul>
-				</li>
-				<li><b>11.1018</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong>
-					<ul style="margin:4px 0 0 16px;">
-						<li><strong>ΔTax / ΔNetWealth now switch units.</strong> Toggling <em>Future $ / Current $</em> previously updated the absolute columns (Lifetime Tax, Total Spendable, NetWealth) but left the Δ columns in future dollars — mismatched units side by side. The Δ columns now deflate too, each computed as the difference of the two present-value totals.</li>
-						<li><strong>Tooltip accuracy.</strong> The Lifetime Tax, ΔTax, and "All Taxes" tooltips now state the full composition: federal (ordinary + capital gains + NIIT) + state + Medicare IRMAA surcharges. (No calculation change — IRMAA and NIIT were always included; only the tooltips were incomplete.)</li>
-					</ul>
-				</li>
-				<li><b>11.1001</b> <strong>Baseline accounting for strategy comparison:</strong>
+				<li><b>11.1019</b> <strong>cyclic-brokerage drawdown fixed:</strong></li>
+				<li><b>11.1018</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong></li>
+				<li><b>11.1001</b> <strong>Best "Baseline" is used for strategy comparison:</strong>
 					<ul style="margin:4px 0 0 16px;">
 						<li><strong>Honest baseline.</strong> The optimizer now also runs every strategy family with <em>no Roth conversions and no cyclic brokerage maneuvering</em>, no QCDs, and pins the strongest of those as a light-green <em>⚓ BASELINE</em> reference row at the top of the results. Every other strategy is measured against it — because "strategy A beats strategy B" only means something relative to the best you can do without conversion/brokerage tricks.</li>
-						<li><strong>NetWealth column.</strong> The single ranking metric, valuing terminal wealth on a level footing: traditional IRA × (1 − your expected future IRA tax rate), brokerage gains × (1 − capital-gains rate), Roth + Cash + basis at face — using <em>one shared</em> future-IRA rate across all rows so comparisons are fair.</li>
-						<li><strong>ΔNetWorth / ΔTax.</strong> Two columns show (green/red) how much after-tax wealth each strategy gains over the baseline and how much less (or more) lifetime tax it pays.</li>
-						<li><strong>NetWealth tax fix.</strong> Terminal wealth now taxes brokerage gains at the capital-gains rate instead of the ordinary rate (it previously applied the last year's ordinary marginal rate to both the IRA and brokerage gains).</li>
-						<li><strong>Cleaner table.</strong> Infeasible (bracket-unreachable) rows are hidden by default — click the <em>Infeasible</em> legend to reveal or hide them. Failed plans always sort below successful ones. Every column header now has an explanatory tooltip. The simulation timing/run-count line always shows; per-row millisecond timing was removed.</li>
+						<li><strong>Cleaner table.</strong> Infeasible (bracket-unreachable) rows are hidden by default — click the <em>Infeasible</em> legend to reveal or hide them. Failed plans always sort below successful ones. Every column header now has an explanatory tooltip.</li>
 					</ul>
 				</li>
 				<li><b>11.fed</b> <strong>Charitable Giving (QCDs) &amp; UX Improvements:</strong>
@@ -576,7 +561,6 @@
 						Two modes: <em>Always</em> donates the full amount every eligible year; <em>As Needed</em> applies only enough to drop two IRMAA tiers (or escape the surcharge entirely, whichever requires fewer dollars). The per-person limit is $111,000 for 2026 (CPI-indexed annually per SECURE 2.0). QCDs appear as a gray bar in the Income &amp; Expenses chart.</li>
 						<li><strong>Dollar display toggle:</strong> The <em>Future $ / Current $</em> toggle has moved to the left of the tab bar (always visible). <em>Future $</em> shows nominal amounts as they will actually appear; <em>Current $</em> restates everything in today's purchasing power for easy year-to-year comparison.</li>
 						<li><strong>Strategy panel switches:</strong> <em>Maximize Conversions</em> (formerly "Max Conversion"), <em>Cycle Brokerage</em> (formerly "Cyclic"), <em>Optimize Spend</em>, and <em>Optimize Conversions</em> (formerly "Conv Optimizer") are now all in the strategy sidebar with labels to the right of each switch. Toggle labels are positioned so that the green (on) position visually aligns with the label.</li>
-						<li><strong>Age display:</strong> The profile section now shows the projected first-year RMD amount alongside the RMD start age (e.g. <em>Age 65 | RMD starts 75 | ~$72,000/yr</em>), updating live as you change IRA balances or the growth rate.</li>
 					</ul>
 				</li>
 				</ul>

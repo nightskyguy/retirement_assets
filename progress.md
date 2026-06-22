@@ -1,5 +1,31 @@
 # Progress Log
 
+## Session: 2026-06-22 (cont.) — Phase 32: Share-URL compression + default-omission (v11.1048)
+
+New goal (user): reduce share-URL length. Measured: number/bool compression alone ≈13%;
+default-omission ≈71–100% (scales with how customized the shared scenario is). Shipped both.
+
+- **retirement_optimizer_core.js:**
+  - `compactNum(numStr)` — shortest of {raw, k, m, b, scientific} that round-trips via
+    parseShorthand (self-validating, no DisplayHelpers dep → node-testable as `ctx.compactNum`).
+  - `OPT_DEFAULTS` + `captureDefaults()` — pristine snapshot of all `.sidebar input/select`,
+    dollars normalized via `DisplayHelpers.parseShorthand`. Single source of truth for omission.
+  - `buildShareURL()` — omits any field equal to its captured default; compresses dollar fields
+    (numVal) via compactNum; booleans `true`/`false` → `1`/`0`.
+  - `loadFromURL()` — checkbox accepts `'1'||'true'` (new + legacy). Dollar/absent-key decode
+    unchanged (attachNumericDollarInput→parseShorthand handles `k`/`m`/`b`/`1e5`; absent⇒default).
+- **retirement_optimizer.html:** `captureDefaults?.()` added before `loadFromURL?.()` (fields
+  still at markup defaults). Version 11.1042 → **11.1048** + changelog entry.
+- **retirement_optimizer_core.test.js:** load displayhelpers.js into vm ctx; 4 compactNum
+  round-trip/length/spot/edge tests. **33 pass, 0 fail** (was 29).
+- **Browser-verified** (http.server :8766): default scenario share query = **0 chars** (all 61
+  params omitted, 61 defaults captured); 8-field customization → `?sg=120k&str=gk&sa=62&hs=0&i1=1.5m&ro=3e5&bk=650k&g=5`
+  (52 chars), reloads to exact values; legacy raw URL (`i1=1000000&hs=true&dr=false`) loads
+  identically. In-page suite **212 pass, 0 fail**, no console errors (4 errors are intentional
+  bad-input test fixtures).
+- **Caveat (documented):** omitted fields adopt the loader's current default — a future markup
+  default change would silently shift old shared URLs for that field. Keep defaults stable.
+
 ## Session: 2026-06-22
 
 ### Phase 22 (Guyton-Klinger Guardrails) — complete (v11.1042, commit 4a7fec5)

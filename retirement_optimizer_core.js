@@ -4017,15 +4017,60 @@ const OPT_SHORT_TO_LONG = Object.fromEntries(
     Object.entries(OPT_LONG_TO_SHORT).map(([l, s]) => [s, l])
 );
 
+// Compress a numeric string to its shortest equivalent that DisplayHelpers.parseShorthand
+// decodes back exactly (k/m/b suffix or scientific). Self-contained — no DisplayHelpers
+// dependency — so it is unit-testable in the node vm context. Returns the raw string when
+// no shorter form round-trips (e.g. non-round numbers) or for 0 / non-finite input.
+function compactNum(numStr) {
+    const n = Number(numStr);
+    if (!isFinite(n) || n === 0) return String(numStr);
+    let best = String(n);
+    const tryc = (c) => {
+        const s = String(c).toLowerCase(); let m = 1, b = s; const last = s.slice(-1);
+        if (last === 'b') { m = 1e9; b = s.slice(0, -1); }
+        else if (last === 'm') { m = 1e6; b = s.slice(0, -1); }
+        else if (last === 'k') { m = 1e3; b = s.slice(0, -1); }
+        if (parseFloat(b) * m === n && c.length < best.length) best = c;
+    };
+    tryc(String(n / 1e3) + 'k'); tryc(String(n / 1e6) + 'm');
+    tryc(String(n / 1e9) + 'b'); tryc(n.toExponential().replace('e+', 'e'));
+    return best;
+}
+
+// Pristine default snapshot — captured once at init BEFORE loadFromURL mutates any field.
+// Single source of truth for default-omission: buildShareURL omits a param when its current
+// value equals this snapshot, and loadFromURL leaves absent params at their (default) markup
+// value, so the two stay symmetric.
+const OPT_DEFAULTS = {};
+function captureDefaults() {
+    document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
+        if (!el.id) return;
+        if (el.type === 'checkbox') {
+            OPT_DEFAULTS[el.id] = { c: el.checked };
+        } else {
+            // Normalize dollars numerically so the comparison is robust to formatting.
+            const num = DisplayHelpers.parseShorthand(el.value);   // null for non-numeric (selects/strings)
+            OPT_DEFAULTS[el.id] = { v: el.value, n: num };
+        }
+    });
+}
+
 function buildShareURL() {
     const params = new URLSearchParams();
     document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
         if (!el.id) return;
+        const def = OPT_DEFAULTS[el.id];
         const short = OPT_LONG_TO_SHORT[el.id] ?? el.id;
         if (el.type === 'checkbox') {
-            params.set(short, el.checked ? 'true' : 'false');
+            if (def && el.checked === def.c) return;                 // omit default
+            params.set(short, el.checked ? '1' : '0');
+        } else if (el.dataset.numVal !== undefined) {               // dollar field
+            const cur = Number(el.dataset.numVal);
+            if (def && def.n !== null && cur === def.n) return;     // omit default
+            params.set(short, compactNum(el.dataset.numVal));
         } else {
-            params.set(short, el.dataset.numVal !== undefined ? el.dataset.numVal : el.value);
+            if (def && el.value === def.v) return;                  // omit default
+            params.set(short, el.value);
         }
     });
     const base = location.href.split('?')[0].split('#')[0];
@@ -4080,7 +4125,7 @@ function loadFromURL() {
         const el = document.getElementById(key);
         if (!el) return;
         if (el.type === 'checkbox') {
-            el.checked = value === 'true';
+            el.checked = (value === '1' || value === 'true');   // new '1'/'0' + legacy 'true'/'false'
         } else {
             el.value = value;
         }

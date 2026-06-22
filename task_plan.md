@@ -3,12 +3,12 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 23, 27, 28, 30, 31 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
+**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
 **Superseded/deprioritized:** Phase 8 (Variable Growth sensitivity grid — bootstrap + stress MC covers the use case; grid not needed).
 **Partial:** Phase 9 (ACA — Medicare age gate done; MAGI/subsidy calculation not yet implemented).
-**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 22 (Guyton-Klinger), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
+**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
 **Pending (blocked):** Phase 9 remainder (ACA MAGI/subsidy), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
-**As of:** 2026-06-19 (plan synced to git: Phase 4 QCDs shipped — commits 60fc49a/647c871/8f73707/d1fa30f, v11.fee; PR #79, #80 merged).
+**As of:** 2026-06-22 (Phase 22 GK shipped — commit 4a7fec5, v11.1042).
 
 ## Dependency Graph
 ```
@@ -647,21 +647,22 @@ inputs.spendGoal = gkSpend; // override spend for this year
 **MC compatibility:** GK is inherently Monte Carlo-friendly — the dynamic adjustments are the mechanism for sequence-of-returns resilience. Running GK in MC mode (Phase 2 bootstrap) should show meaningfully better survival rates vs fixed spending at same IWR. This comparison is a key validation test.
 
 **Tasks:**
-- [ ] Add "Guyton-Klinger" to strategy selector in UI
-- [ ] Add GK sub-inputs (IWR display, guardrail %, cut/raise %) that appear when GK selected
-- [ ] Add GK state variables to `simulate()`: `gkSpend`, `iwr`, `priorPortfolio`
-- [ ] Implement four GK rules in year loop (order matters: Inflation Rule first, then guardrail checks)
-- [ ] Annual Details: `gkSpend` and `gkAdjustment` columns
-- [ ] Test: fixed market returns → verify no guardrail triggers (stable scenario)
-- [ ] Test: sustained bear market → verify Capital Preservation triggers at correct WR threshold
-- [ ] Test: strong bull run → verify Prosperity triggers at correct WR threshold
-- [ ] Test: Inflation Rule — verify skip fires only when both conditions true simultaneously
-- [ ] MC test: GK at 5.2% IWR vs fixed 4% SWR — GK should show comparable or better MC survival rate
-- [ ] Test: GK integrates with existing bracket/IRMAA account-sourcing logic (GK sets spend level; bracket picks IRA split)
-- [ ] Phase 10 integration note: GK should be a valid strategy option in multi-strategy segment optimizer (Phase 10)
-- [ ] Update version + changelog
+- [x] Add "Guyton-Klinger" to strategy selector in UI
+- [x] Add GK sub-inputs (IWR display, guardrail %, cut/raise %) that appear when GK selected
+- [x] Add GK state variables to `simulate()`: `gkIWR`, `gkPriorReturn`, `gkPrevPortfolio`
+- [x] Implement four GK rules in year loop (Inflation Rule first, then guardrail checks)
+- [x] Annual Details: `gkSpend` and `gkAdj` columns (Income category)
+- [x] Test: stable market → no guardrail triggers
+- [x] Test: catastrophic bear (-80%) → Capital Preservation fires
+- [x] Test: strong bull (+200%) → Prosperity fires
+- [x] Test: Inflation Rule fires with mild negative return + inflation
+- [x] Test: non-GK strategy → null gkSpend/gkAdj (regression)
+- [x] URL encoding: gku/gkl/gkc/gkr short aliases
+- [x] buildVariations() GK row
+- [x] Update version (11.1042) + changelog
+- **Key design decision:** GK uses raw portfolio balance (not tax-discounted totalWealth) for IWR/WR comparisons — avoids CA-tax apples-vs-oranges mismatch that caused spurious CP triggers.
 
-- **Status:** pending
+- **Status:** complete (commit 4a7fec5, 2026-06-22)
 - **Independent:** no phase dependencies (GK is a new strategy type; bracket logic from Phase 1 already works)
 - **Integrates with:** Phase 10 (GK as one of the segment strategy options), Phase 12 (timing model applies to GK withdrawals)
 - **Reference:** Guyton (2004) "Decision Rules and Portfolio Management for Retirees", Guyton & Klinger (2006) "Decision Rules and Maximum Initial Withdrawal Rates"

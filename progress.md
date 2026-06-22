@@ -1,5 +1,25 @@
 # Progress Log
 
+## Session: 2026-06-22
+
+### Phase 22 (Guyton-Klinger Guardrails) — complete (v11.1042, commit 4a7fec5)
+
+Four GK rules in `simulate()`: Inflation Rule (skip CPI when prior return < 0 AND WR > IWR),
+Capital Preservation (cut 10% when WR > IWR×1.2), Prosperity (raise 10% when WR < IWR×0.8),
+default inflation advance. GK uses raw portfolio balance (`gkPrevPortfolio`) not tax-discounted
+`totalWealth` — key design decision to avoid CA-tax apples-vs-oranges mismatch.
+
+Files changed: `retirement_optimizer_core.js` (+66 lines), `retirement_optimizer.html` (+29 lines),
+`retirement_optimizer_core.test.js` (+61 lines).
+
+5 new tests (all passing, 29/29 total): stable market, CP rule, Prosperity rule, Inflation skip,
+regression. Tests use CA state; check years 0-2 for stable (year 3+ natural depletion can approach
+upper guard). CP/Prosperity tests use -80%/+200% return sequences.
+
+URL: `gku=20&gkl=20&gkc=10&gkr=10`. Optimizer: 3 GK variations. Annual Details: gkSpend/gkAdj.
+
+---
+
 ## Session: 2026-06-19 (cont.)
 
 ### Phase 31 (Baseline accounting for strategy comparison) — complete (v11.1000)

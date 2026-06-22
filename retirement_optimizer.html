@@ -569,12 +569,11 @@
 				<ul>
 				<li><b>11.1042</b> <strong>Guyton-Klinger Guardrails withdrawal strategy:</strong>
 					<ul style="margin:4px 0 0 16px;">
-						<li><strong>Dynamic spending rules.</strong> The <em>Guyton-Klinger</em> strategy adjusts annual spending based on portfolio withdrawal rate vs initial IWR: skip inflation when prior year return was negative and WR &gt; IWR; cut spending 10% when WR exceeds the upper guardrail; raise spending 10% when WR falls below the lower guardrail. Supports higher initial withdrawal rates (~5–5.5%) by absorbing sequence-of-returns risk through spending flexibility.</li>
+						<li><strong>Dynamic spending rules.</strong> The <em>Guyton-Klinger</em> strategy adjusts annual spending based on portfolio withdrawal rate. It skips inflation adjustments when the prior year return was negative, and cuts spending 10% when the withdrawal rate exceeds the upper guardrail; raises spending 10% when withdrawal rate falls below the lower guardrail. Supports higher initial withdrawal rates (~5–5.5%) by absorbing sequence-of-returns risk through spending flexibility.</li>
 						<li><strong>Four configurable parameters:</strong> Upper/lower guardrail (default ±20% of IWR) and cut/raise percent (default 10%). Annual Details Income category shows <em>gkSpend</em> and <em>gkAdj</em> columns.</li>
-						<li><strong>Optimizer integration:</strong> GK appears as a single row using current guardrail settings.</li>
 					</ul>
 				</li>
-				<li><b>11.1019</b> <strong>cyclic-brokerage drawdown fixed:</strong></li>
+				<li><b>11.1019</b> <strong>Cyclic-brokerage drawdown fixed:</strong></li>
 				<li><b>11.1018</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong></li>
 				<li><b>11.1001</b> <strong>Best "Baseline" is used for strategy comparison:</strong>
 					<ul style="margin:4px 0 0 16px;">

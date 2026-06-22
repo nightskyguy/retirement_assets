@@ -26,6 +26,34 @@ default-omission ≈71–100% (scales with how customized the shared scenario is
 - **Caveat (documented):** omitted fields adopt the loader's current default — a future markup
   default change would silently shift old shared URLs for that field. Keep defaults stable.
 
+---
+
+## Session: 2026-06-22 (cont.) — Phase R (structural refactoring)
+
+### Worktree `jolly-swirles-091689` (base af7841a / PR #85)
+Critical look at program structure → refactoring roadmap (`.claude/plans/elegant-hopping-squirrel.md`).
+Four smells targeted: `simulate()` god function (1095 lines), `window.*` pollution, no module system,
+mixed concerns in core.js (sim math + 114 DOM calls).
+
+### R1a — decompose simulate() (commit 7366f1f)
+- Extracted 4 functions to module level: `resolveOrderedSeq(seq, rates)`, `runOrderedWithdrawal(...)`,
+  `computeYearGrowthRates(inputs, y)`, `buildSimYearLogRecord(p)` (88-line log snapshot).
+- `simulate()` shrank **1095 → 987 lines**.
+- Gotcha: `resolveOrderedSeq`/`runOrderedWithdrawal` were nested closures reading 6 tax-rate vars
+  implicitly → now passed via explicit `rates` object. `baseReturn` still needed in loop scope for GK
+  `gkPriorReturn` — caught by 4 failing GK tests, re-added.
+
+### R2 — OptimizerState (commit 293077f)
+- 6 `window.optimizer*` globals → single module-level `OptimizerState` const. Pure rename, zero
+  behavior change. All refs internal to core.js (verified — no external callers).
+
+### Compatibility vs merged PR #86 (share-URL compress)
+- #86 touched core.js ~4017–4125 (`compactNum`/`buildShareURL`/`loadFromURL`); my edits ~20, 626–1751,
+  2007–2889. Disjoint. Clean auto-merge (exit 0). Tests on merged tree: **33/33** (my 29 + #86's 4).
+
+### Tests: 33 pass, 0 fail post-rebase (29 mine + 4 from #86; behavior preserved). No version bump (no user-facing change).
+### Pending (Phase R): R1-remainder (tax/gap-fill + surplus extraction), R3 (DOM→displayhelpers), R4 (ES modules).
+
 ## Session: 2026-06-22
 
 ### Phase 22 (Guyton-Klinger Guardrails) — complete (v11.1042, commit 4a7fec5)

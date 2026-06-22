@@ -2309,6 +2309,9 @@ function runOptimizer() {
         addResult('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
     }
 
+    // Guyton-Klinger
+    addResult('Guyton-Klinger', 'guardrails', 0, { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, maxConversion: maxConv });
+
     // Snapshot the non-cyclic strategy families before the cyclic pass appends to the list.
     // Reused below to build the no-conversion baseline sweep over the same families.
     const baseFamilies = strategyOverridesList.slice();

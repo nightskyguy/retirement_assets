@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1019</title>
+    <title>Retirement Optimizer 11.1042</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -75,6 +75,7 @@
 					<option value="bracket">🪣Fill Fed/IRMAA Bracket</option>
 					<option value="fixedpct">📉IRA Draw</option>
 					<option value="ordered">➡️Ordered</option>
+					<option value="gk">🔒Guyton-Klinger Guardrails</option>
 				</select></label>
 			</div>
 
@@ -108,6 +109,15 @@
 					<option value="RIBC">Roth→IRA→Brok→Cash</option>
 					<option value="BIRC">Brok→IRA→Roth→Cash</option>
 				</select></label>
+			</div>
+
+			<div id="ui-gk" class="input-group hidden">
+				<div class="compact-row">
+					<label title="Guardrail width: if current WR exceeds IWR×(1+guard%) cut spending; if below IWR×(1−guard%) raise spending.">Guard ±%
+					<input type="number" id="gkGuard" value="20" min="5" max="40" step="5"></label>
+					<label title="Percent to cut or raise spending when a guardrail triggers.">Adj %
+					<input type="number" id="gkAdjPct" value="10" min="5" max="20" step="5"></label>
+				</div>
 			</div>
 
 			<div class="input-group" style="margin-top:4px;">
@@ -547,7 +557,13 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.1019</b> <strong>cyclic-brokerage drawdown fixed:</strong></li>
+				<li><b>11.1042</b> <strong>Guyton-Klinger Guardrails withdrawal strategy:</strong>
+					<ul style="margin:4px 0 0 16px;">
+						<li><strong>Dynamic spending rules.</strong> The <em>Guyton-Klinger</em> strategy adjusts annual spending based on portfolio withdrawal rate. It skips inflation adjustments when the prior year return was negative, and cuts spending 10% when the withdrawal rate exceeds the upper guardrail; raises spending 10% when withdrawal rate falls below the lower guardrail. Supports higher initial withdrawal rates (~5–5.5%) by absorbing sequence-of-returns risk through spending flexibility.</li>
+						<li><strong>Four configurable parameters:</strong> Upper/lower guardrail (default ±20% of IWR) and cut/raise percent (default 10%). Annual Details Income category shows <em>gkSpend</em> and <em>gkAdj</em> columns.</li>
+					</ul>
+				</li>
+				<li><b>11.1019</b> <strong>Cyclic-brokerage drawdown fixed:</strong></li>
 				<li><b>11.1018</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong></li>
 				<li><b>11.1001</b> <strong>Best "Baseline" is used for strategy comparison:</strong>
 					<ul style="margin:4px 0 0 16px;">

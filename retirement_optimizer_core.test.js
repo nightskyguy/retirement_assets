@@ -395,6 +395,66 @@ test('baseline metric: higher after-tax NW ranks a richer terminal portfolio hig
         'all-Roth terminal should beat all-IRA terminal on after-tax NW');
 });
 
+// ── Phase 22: Guyton-Klinger tests ───────────────────────────────────────────
+// GK uses raw portfolio balance (not tax-discounted totalWealth) for IWR and WR
+// checks, so both sides of the comparison are on equal footing.
+
+const GK_BASE = {
+    ...BASE,
+    strategy: 'gk',
+    IRA1: 1000000, IRA2: 0, Roth: 0, Roth2: 0,
+    Brokerage: 0, BrokerageBasis: 0, Cash: 0,
+    spendGoal: 50000, spendChange: 0,
+    inflation: 0.00, growth: 0.00,
+    gkGuard: 0.20, gkAdjPct: 0.10,
+};
+
+test('GK stable market: no guardrail triggers in early years with zero growth/inflation', () => {
+    // IWR = 50k/1M = 5%. Upper guard = 6%. Gross withdrawal ≈ $57k/yr (incl. CA taxes).
+    // Raw portfolio depletes ~$57k/yr; WR at years 1-2 stays well below 6%. Check years 0–2.
+    const res = simulate({ ...GK_BASE });
+    for (let y = 0; y < 3; y++) {
+        assert(res.log[y].gkAdj === '—', `year ${y} should have no adjustment, got: ${res.log[y].gkAdj}`);
+    }
+    assert(res.log[0].gkSpend != null, 'gkSpend should be non-null for GK strategy');
+});
+
+test('GK capital preservation: catastrophic bear market triggers CP cut', () => {
+    // IWR = 50k/1M = 5%. After -80% return, raw portfolio ≈ $200k.
+    // Year 1 WR = 50k/200k = 25% >> IWR*1.2 = 6%. CP should fire.
+    const returns = Array.from({length: 30}, (_, i) => i === 0 ? -0.80 : 0.00);
+    const res = simulate({ ...GK_BASE, returnSequence: returns });
+    assert(res.log[1].gkAdj.includes('cap'), `year 1 gkAdj should contain 'cap', got: ${res.log[1].gkAdj}`);
+    assert(res.log[1].gkSpend < 50000, `year 1 spend should be cut below 50k, got: ${res.log[1].gkSpend}`);
+});
+
+test('GK prosperity rule: strong bull market triggers prosperity raise', () => {
+    // IWR = 50k/1M = 5%. After +200% return, raw portfolio ≈ $3M.
+    // Year 1 WR = 50k/3M = 1.7% << IWR*(1-0.2) = 4%. Prosperity fires.
+    const returns = Array.from({length: 30}, (_, i) => i === 0 ? 2.00 : 0.00);
+    const res = simulate({ ...GK_BASE, returnSequence: returns });
+    assert(res.log[1].gkAdj.includes('pros'), `year 1 gkAdj should contain 'pros', got: ${res.log[1].gkAdj}`);
+    assert(res.log[1].gkSpend > 50000, `year 1 spend should be raised above 50k, got: ${res.log[1].gkSpend}`);
+});
+
+test('GK inflation skip: mild negative return + WR > IWR skips CPI adjustment', () => {
+    // IWR = 50k/1M = 5%. After -5% return, raw portfolio ≈ $893k.
+    // Year 1 WR = 50k/893k = 5.60% → above IWR (Inflation Rule fires), below 6% (CP does NOT fire).
+    // With 3% inflation: gkAdj = 'no-CPI'; spendGoal stays near 50k not 51.5k.
+    const returns = Array.from({length: 30}, (_, i) => i === 0 ? -0.05 : 0.00);
+    const res = simulate({ ...GK_BASE, returnSequence: returns, inflation: 0.03 });
+    assert(res.log[1].gkAdj.includes('no-CPI'), `year 1 gkAdj should contain 'no-CPI', got: ${res.log[1].gkAdj}`);
+    assertNear(res.log[1].gkSpend, 50000, 'gkSpend should not be inflated when Inflation Rule fires', 500);
+});
+
+test('GK regression: non-GK strategy has null gkSpend/gkAdj', () => {
+    const res = simulate({ ...GK_BASE, strategy: 'propwd', propWithdraw: 0 });
+    for (let y = 0; y < 3; y++) {
+        assert(res.log[y].gkSpend === null, `year ${y} gkSpend should be null for non-GK strategy`);
+        assert(res.log[y].gkAdj === null, `year ${y} gkAdj should be null for non-GK strategy`);
+    }
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

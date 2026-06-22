@@ -735,6 +735,13 @@ function simulate(inputs) {
         + balance.Roth1 + balance.Roth2
         + balance.Brokerage + balance.Cash;
 
+    // Phase 22: Guyton-Klinger state
+    let gkIWR = null;
+    let gkPriorReturn = 0;
+    let gkAdjLabel = '';
+    // GK uses raw portfolio (not tax-discounted totalWealth) so IWR and WR checks are apples-to-apples.
+    let gkPrevPortfolio = prevTotalWealth;
+
     for (let y = 0; y < maxYears; y++) {
         const loopStart = performance.now();
         // Phase 24 interaction fix: cyclic brokerage "harvest" years draw $0 from the IRA
@@ -936,7 +943,37 @@ function simulate(inputs) {
             return result;
         }
 
-        let targetSpend = (isBracketStrategy || isOrderedStrategy) ? spendGoal : Math.min(spendGoal, goalLimit);
+        // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
+        if (inputs.strategy === 'gk') {
+            if (y === 0) {
+                gkIWR = spendGoal / gkPrevPortfolio;
+                gkAdjLabel = '';
+            } else {
+                const _guard  = inputs.gkGuard  ?? 0.20;
+                const _adjP   = inputs.gkAdjPct ?? 0.10;
+                const labels  = [];
+                // Inflation Rule: skip CPI if prior return negative AND already over IWR
+                if (gkPriorReturn < 0 && spendGoal / gkPrevPortfolio > gkIWR) {
+                    labels.push('no-CPI');
+                } else {
+                    spendGoal *= (1 + yearInflation);
+                }
+                // Guardrail checks on (possibly inflation-adjusted) spend
+                const _cwr = spendGoal / gkPrevPortfolio;
+                if (_cwr > gkIWR * (1 + _guard)) {
+                    spendGoal *= (1 - _adjP);
+                    labels.push(`−${(_adjP * 100).toFixed(0)}%cap`);
+                } else if (_cwr < gkIWR * (1 - _guard)) {
+                    spendGoal *= (1 + _adjP);
+                    labels.push(`+${(_adjP * 100).toFixed(0)}%pros`);
+                }
+                gkAdjLabel = labels.join(' ') || '';
+            }
+        }
+
+        // GK bypasses goalLimit (bracket ceiling) — spend is dynamically set by GK rules
+        const isGKStrategy = inputs.strategy === 'gk';
+        let targetSpend = (isBracketStrategy || isOrderedStrategy || isGKStrategy) ? spendGoal : Math.min(spendGoal, goalLimit);
         let additionalSpendNeeded = Math.max(0, targetSpend + irmaa - possibleIncome);
 
         // INCOMPLETE: marginalFedTaxRate and marginalStateTaxRate are set to the rates AT the
@@ -1624,16 +1661,26 @@ function simulate(inputs) {
             'wdRate%': _wdRate,
             // Phase 12: per-year withdrawal timing
             timing: (_useEarly ? 'Early' : 'Late') + '(' + timingReason + ')',
+            // Phase 22: Guyton-Klinger
+            gkSpend: inputs.strategy === 'gk' ? spendGoal : null,
+            gkAdj:   inputs.strategy === 'gk' ? (gkAdjLabel || '—') : null,
             // Internal
             inflationFactor: inflation,
             loopMs: performance.now() - loopStart
         });
         totals.totalTime += log[log.length - 1].loopMs;
         prevTotalWealth = totalWealth;
+        gkPrevPortfolio = portfolioBalance;  // raw sum; keep GK checks apples-to-apples
         // Advance spend goal: apply user's spend-change preference and inflation.
         // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
         // keeps year-0 spendGoal equal to the user's input in today's dollars.
-        spendGoal = spendGoal * spendDelta * (1 + yearInflation);
+        // Phase 22: GK handles inflation at start of next year via its own rules; only apply spendDelta here.
+        if (inputs.strategy === 'gk') {
+            gkPriorReturn = baseReturn;
+            spendGoal = spendGoal * spendDelta;
+        } else {
+            spendGoal = spendGoal * spendDelta * (1 + yearInflation);
+        }
 
         currentYear += 1;
 
@@ -1823,6 +1870,8 @@ function getInputs() {
         futureIRATaxRate: (() => { const v = val('futureIRATaxRate'); return (v && +v > 0) ? +v / 100.0 : undefined; })(),
         qcdHHMax: +val('qcdHHMax') || 0,
         qcdMode: valChecked('qcdAlways') ? 'always' : 'asneeded',
+        gkGuard:  +val('gkGuard')  / 100 || 0.20,
+        gkAdjPct: +val('gkAdjPct') / 100 || 0.10,
     };
 }
 
@@ -2103,6 +2152,10 @@ function buildVariations(base) {
     for (const seq of ['CBIR', 'RIBC', 'BIRC'])
         push('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
 
+    // Phase 22: Guyton-Klinger — single entry using user's guardrail settings
+    push('Guyton-Klinger', 'guardrails', 0,
+        { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, maxConversion: maxConv });
+
     // Phase 24: Cyclic variants for MC — IRA-first (🔄) and brokerage-first (🔄B).
     {
         const baseCount = variations.length;
@@ -2255,6 +2308,9 @@ function runOptimizer() {
     for (const seq of ['CBIR', 'RIBC', 'BIRC']) {
         addResult('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
     }
+
+    // Guyton-Klinger
+    addResult('Guyton-Klinger', 'guardrails', 0, { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, maxConversion: maxConv });
 
     // Snapshot the non-cyclic strategy families before the cyclic pass appends to the list.
     // Reused below to build the no-conversion baseline sweep over the same families.
@@ -2931,6 +2987,9 @@ const columnCategories = {
     'subCycle':  ['Summary', 'Brokerage Δ'],
     // Phase 12: Withdrawal timing
     'timing':    ['Summary', 'Withdrawals'],
+    // Phase 22: Guyton-Klinger
+    'gkSpend':   ['Summary', 'Income'],
+    'gkAdj':     ['Summary', 'Income'],
 };
 
 // Maps each column key to a visual group label for the group header row
@@ -2961,6 +3020,7 @@ const columnGroupDefs = {
     'inflows': 'Withdrawals',
     'wdRate%': 'Withdrawals',
     'timing': 'Withdrawals',
+    'gkSpend': 'Income', 'gkAdj': 'Income',
 };
 
 // Get active categories based on checkbox state
@@ -3921,6 +3981,7 @@ function toggleStrategyUI() {
     document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
+    document.getElementById('ui-gk').classList.toggle('hidden', m !== 'gk' || !NERD_KNOBS);
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 
@@ -3948,7 +4009,8 @@ const OPT_LONG_TO_SHORT = {
     comp_Roth2_ratio:'cr2r', comp_Roth2_intl:'cr2x',
     'show-current-dollars':'cd', optimizeSpend:'opt', includeConvOpt:'copt',
     cyclicEnabled:'cyc',
-    qcdHHMax:'qm', qcdAlways:'qa'
+    qcdHHMax:'qm', qcdAlways:'qa',
+    gkGuard:'gkg', gkAdjPct:'gka',
 };
 
 const OPT_SHORT_TO_LONG = Object.fromEntries(

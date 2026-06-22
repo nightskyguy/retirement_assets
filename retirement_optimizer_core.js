@@ -4708,7 +4708,11 @@ function importScenario() {
                     const scenarios = getSavedScenarios();
                     scenarios[name] = scenario;
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
-                    showMessage(`Scenario "${name}" imported successfully!`, 'success');
+                    // Apply immediately so Import also loads into the form (not just stages to
+                    // localStorage). scenario.data is the field map; fall back to scenario for
+                    // legacy flat exports without a .data wrapper.
+                    applyScenario(scenario.data ?? scenario);
+                    showMessage(`Scenario "${name}" imported and loaded!`, 'success');
                 } else {
                     showMessage('Import cancelled.', 'warning');
                 }

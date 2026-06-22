@@ -19,6 +19,16 @@ const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase s
 // NERD_KNOBS: shows advanced controls (Monte Carlo params, etc.). Enabled via ?nerdknob URL param.
 const NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
 
+// Optimizer UI state — replaces window.optimizer* globals.
+const OptimizerState = {
+    results: null,
+    baseline: null,
+    sortState: { colKey: 'afterTaxNW', direction: 'desc' },
+    showInfeasible: false,
+    perfStats: null,
+    noSolutionFloor: null,
+};
+
 
 
 /** TAX CONSTANTS **/
@@ -2004,7 +2014,7 @@ function updateCurrentDollarsView() {
         updateCharts(lastSimulationLog);
         updateStats(lastTotals, lastFinalNW, lastFinalNWCurrentDollars);
     }
-    if (window.optimizerResults) renderOptimizerTable(window.optimizerResults);
+    if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
     // Re-render MC chart so current-dollar deflation is applied (or removed).
     if (typeof _mcResults !== 'undefined' && _mcResults) {
         if (typeof renderMCChart === 'function') renderMCChart(_mcResults);
@@ -2237,8 +2247,8 @@ function runOptimizer() {
     const currentHash = JSON.stringify(base)
         + ';optimizeSpend=' + (document.getElementById('optimizeSpend')?.checked ?? false)
         + ';convOpt=' + (document.getElementById('includeConvOpt')?.checked ?? false);
-    if (currentHash === _lastOptimizerHash && window.optimizerResults) {
-        renderOptimizerTable(window.optimizerResults);
+    if (currentHash === _lastOptimizerHash && OptimizerState.results) {
+        renderOptimizerTable(OptimizerState.results);
         showTab('tab-opt');
         return;
     }
@@ -2360,7 +2370,7 @@ function runOptimizer() {
     }
 
     // Spend optimizer second pass — only runs when user enabled the toggle
-    window.optimizerNoSolutionFloor = null;
+    OptimizerState.noSolutionFloor = null;
     if (document.getElementById('optimizeSpend')?.checked) {
         const anySuccess = results.some(r => r.totals.success);
 
@@ -2418,7 +2428,7 @@ function runOptimizer() {
                 });
             } else {
                 // Reverse search also failed — report the lowest spend level that was tried
-                window.optimizerNoSolutionFloor = Math.max(500, base.spendGoal * 0.02);
+                OptimizerState.noSolutionFloor = Math.max(500, base.spendGoal * 0.02);
             }
         }
     }
@@ -2490,7 +2500,7 @@ function runOptimizer() {
     const baselineRow = noConvSuccesses.length > 0
         ? noConvSuccesses.reduce((a, b) => (b.afterTaxNW > a.afterTaxNW ? b : a))
         : null;
-    window.optimizerBaseline = baselineRow;
+    OptimizerState.baseline = baselineRow;
 
     // Signed deltas vs the baseline (positive = better than baseline).
     for (const r of results) {
@@ -2506,9 +2516,9 @@ function runOptimizer() {
         updateStats(baseline.totals, baseline.finalNW, baseline.finalNWCurrentDollars);
     }
 
-    window.optimizerResults = results;
-    window.optimizerPerfStats = { totalMs: performance.now() - optimizerStart, runsCount: simulationCount };
-    window.optimizerSortState = { colKey: 'afterTaxNW', direction: 'desc' };
+    OptimizerState.results = results;
+    OptimizerState.perfStats = { totalMs: performance.now() - optimizerStart, runsCount: simulationCount };
+    OptimizerState.sortState = { colKey: 'afterTaxNW', direction: 'desc' };
     renderOptimizerTable(results);
     renderSpendOptimizerBanner(results, base.spendGoal);
     showTab('tab-opt');
@@ -2519,8 +2529,8 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
     if (!el) return;
 
     // No-solution case: reverse search ran but even the floor (10% of baseline) failed
-    if (window.optimizerNoSolutionFloor != null) {
-        const floor = Math.round(window.optimizerNoSolutionFloor).toLocaleString();
+    if (OptimizerState.noSolutionFloor != null) {
+        const floor = Math.round(OptimizerState.noSolutionFloor).toLocaleString();
         el.style.background = '#f8d7da';
         el.style.borderColor = '#f5c6cb';
         el.style.color = '#721c24';
@@ -2672,13 +2682,13 @@ function renderOptimizerTable(results) {
     if (!results || results.length === 0) return;
     const columns = getOptimizerColumns();
     // Default: sort by After-Tax NW descending; Spendable descending as tiebreaker
-    const sortState = window.optimizerSortState ?? { colKey: 'afterTaxNW', direction: 'desc' };
+    const sortState = OptimizerState.sortState ?? { colKey: 'afterTaxNW', direction: 'desc' };
 
     // Sort a copy; preserve original _id for click handlers.
     // Pull the baseline out of the body — it is rendered as a pinned reference row on top.
-    const baselineRow = window.optimizerBaseline ?? null;
+    const baselineRow = OptimizerState.baseline ?? null;
     // Infeasible (bracket-unreachable) rows are hidden by default — toggled via the legend.
-    const showInfeasible = !!window.optimizerShowInfeasible;
+    const showInfeasible = !!OptimizerState.showInfeasible;
     const infeasibleCount = results.filter(r => r._isBracketInfeasible).length;
     let display = results.filter(r => !(baselineRow && r._id === baselineRow._id));
     if (!showInfeasible) display = display.filter(r => !r._isBracketInfeasible);
@@ -2803,7 +2813,7 @@ function renderOptimizerTable(results) {
                 { key: 'tax',    label: '📉 Lowest Tax',        id: colWinners.tax    },
                 { key: 'rate',   label: '📊 Lowest Tax Rate',   id: colWinners.rate   },
                 { key: 'rmdtax', label: '📋 Lowest RMD Tax%',   id: colWinners.rmdtax },
-                ...(window.optimizerBaseline ? [{ key: 'afterTaxNW', label: '⚓ Best w/o Conv', id: window.optimizerBaseline._id }] : []),
+                ...(OptimizerState.baseline ? [{ key: 'afterTaxNW', label: '⚓ Best w/o Conv', id: OptimizerState.baseline._id }] : []),
             ];
             // Deduplicate: a row can win multiple metrics; show it once under its first/best label
             const seen = new Set();
@@ -2856,7 +2866,7 @@ function renderOptimizerTable(results) {
     // Optimizer performance: total time + number of strategy runs (always shown).
     const perfEl = document.getElementById('opt-perf');
     if (perfEl) {
-        const perf = window.optimizerPerfStats;
+        const perf = OptimizerState.perfStats;
         if (perf) {
             perfEl.textContent = `⏱ ${perf.totalMs.toFixed(0)}ms · ${perf.runsCount} runs`;
             perfEl.style.display = 'block';
@@ -2868,25 +2878,25 @@ function renderOptimizerTable(results) {
 
 // Toggle visibility of infeasible (bracket-unreachable) optimizer rows; re-render in place.
 function toggleInfeasibleRows() {
-    window.optimizerShowInfeasible = !window.optimizerShowInfeasible;
-    if (window.optimizerResults) renderOptimizerTable(window.optimizerResults);
+    OptimizerState.showInfeasible = !OptimizerState.showInfeasible;
+    if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
 }
 
 function sortOptimizerBy(colKey) {
-    const s = window.optimizerSortState ?? { colKey: null, direction: 'asc' };
+    const s = OptimizerState.sortState ?? { colKey: null, direction: 'asc' };
     if (s.colKey === colKey) {
         s.direction = s.direction === 'asc' ? 'desc' : 'asc';
     } else {
         s.colKey = colKey;
         s.direction = 'asc';
     }
-    window.optimizerSortState = s;
-    if (window.optimizerResults) renderOptimizerTable(window.optimizerResults);
+    OptimizerState.sortState = s;
+    if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
 }
 
 // Restore inputs from an optimizer row and re-run simulation
 function loadOptimizerResult(id) {
-    const result = (window.optimizerResults ?? []).find(r => r._id === id);
+    const result = (OptimizerState.results ?? []).find(r => r._id === id);
     if (!result) return;
 
     document.getElementById('strategy').value = result._strategy;

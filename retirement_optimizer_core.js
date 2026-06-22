@@ -949,10 +949,8 @@ function simulate(inputs) {
                 gkIWR = spendGoal / gkPrevPortfolio;
                 gkAdjLabel = '';
             } else {
-                const _upperG = inputs.gkUpperGuard ?? 0.20;
-                const _lowerG = inputs.gkLowerGuard ?? 0.20;
-                const _cutP   = inputs.gkCutPct    ?? 0.10;
-                const _raiseP = inputs.gkRaisePct  ?? 0.10;
+                const _guard  = inputs.gkGuard  ?? 0.20;
+                const _adjP   = inputs.gkAdjPct ?? 0.10;
                 const labels  = [];
                 // Inflation Rule: skip CPI if prior return negative AND already over IWR
                 if (gkPriorReturn < 0 && spendGoal / gkPrevPortfolio > gkIWR) {
@@ -962,12 +960,12 @@ function simulate(inputs) {
                 }
                 // Guardrail checks on (possibly inflation-adjusted) spend
                 const _cwr = spendGoal / gkPrevPortfolio;
-                if (_cwr > gkIWR * (1 + _upperG)) {
-                    spendGoal *= (1 - _cutP);
-                    labels.push(`−10%cap`);
-                } else if (_cwr < gkIWR * (1 - _lowerG)) {
-                    spendGoal *= (1 + _raiseP);
-                    labels.push(`+10%pros`);
+                if (_cwr > gkIWR * (1 + _guard)) {
+                    spendGoal *= (1 - _adjP);
+                    labels.push(`−${(_adjP * 100).toFixed(0)}%cap`);
+                } else if (_cwr < gkIWR * (1 - _guard)) {
+                    spendGoal *= (1 + _adjP);
+                    labels.push(`+${(_adjP * 100).toFixed(0)}%pros`);
                 }
                 gkAdjLabel = labels.join(' ') || '';
             }
@@ -1872,10 +1870,8 @@ function getInputs() {
         futureIRATaxRate: (() => { const v = val('futureIRATaxRate'); return (v && +v > 0) ? +v / 100.0 : undefined; })(),
         qcdHHMax: +val('qcdHHMax') || 0,
         qcdMode: valChecked('qcdAlways') ? 'always' : 'asneeded',
-        gkUpperGuard: +val('gkUpperGuard') / 100 || 0.20,
-        gkLowerGuard: +val('gkLowerGuard') / 100 || 0.20,
-        gkCutPct:     +val('gkCutPct')     / 100 || 0.10,
-        gkRaisePct:   +val('gkRaisePct')   / 100 || 0.10,
+        gkGuard:  +val('gkGuard')  / 100 || 0.20,
+        gkAdjPct: +val('gkAdjPct') / 100 || 0.10,
     };
 }
 
@@ -2158,8 +2154,7 @@ function buildVariations(base) {
 
     // Phase 22: Guyton-Klinger — single entry using user's guardrail settings
     push('Guyton-Klinger', 'guardrails', 0,
-        { strategy: 'gk', gkUpperGuard: base.gkUpperGuard, gkLowerGuard: base.gkLowerGuard,
-          gkCutPct: base.gkCutPct, gkRaisePct: base.gkRaisePct, maxConversion: maxConv });
+        { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, maxConversion: maxConv });
 
     // Phase 24: Cyclic variants for MC — IRA-first (🔄) and brokerage-first (🔄B).
     {
@@ -3983,7 +3978,7 @@ function toggleStrategyUI() {
     document.getElementById('ui-propwd').classList.toggle('hidden', m !== 'propwd');
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
-    document.getElementById('ui-gk').classList.toggle('hidden', m !== 'gk');
+    document.getElementById('ui-gk').classList.toggle('hidden', m !== 'gk' || !NERD_KNOBS);
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 
@@ -4012,7 +4007,7 @@ const OPT_LONG_TO_SHORT = {
     'show-current-dollars':'cd', optimizeSpend:'opt', includeConvOpt:'copt',
     cyclicEnabled:'cyc',
     qcdHHMax:'qm', qcdAlways:'qa',
-    gkUpperGuard:'gku', gkLowerGuard:'gkl', gkCutPct:'gkc', gkRaisePct:'gkr',
+    gkGuard:'gkg', gkAdjPct:'gka',
 };
 
 const OPT_SHORT_TO_LONG = Object.fromEntries(

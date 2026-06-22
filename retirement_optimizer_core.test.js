@@ -406,8 +406,7 @@ const GK_BASE = {
     Brokerage: 0, BrokerageBasis: 0, Cash: 0,
     spendGoal: 50000, spendChange: 0,
     inflation: 0.00, growth: 0.00,
-    gkUpperGuard: 0.20, gkLowerGuard: 0.20,
-    gkCutPct: 0.10, gkRaisePct: 0.10,
+    gkGuard: 0.20, gkAdjPct: 0.10,
 };
 
 test('GK stable market: no guardrail triggers in early years with zero growth/inflation', () => {

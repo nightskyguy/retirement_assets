@@ -112,21 +112,11 @@
 			</div>
 
 			<div id="ui-gk" class="input-group hidden">
-				<div style="font-size:0.82em;color:#555;margin-bottom:4px;">
-					IWR: <span id="gk-iwr-display">—</span>%
-					&nbsp;·&nbsp; Cut/Raise on ±<span id="gk-guard-display">20</span>%
-				</div>
 				<div class="compact-row">
-					<label title="Upper guardrail: if current WR exceeds IWR×(1+this%), cut spending by Cut%.">Upper Guard %
-					<input type="number" id="gkUpperGuard" value="20" min="5" max="40" step="5"></label>
-					<label title="Lower guardrail: if current WR falls below IWR×(1−this%), raise spending by Raise%.">Lower Guard %
-					<input type="number" id="gkLowerGuard" value="20" min="5" max="40" step="5"></label>
-				</div>
-				<div class="compact-row">
-					<label title="Spending cut % when Capital Preservation Rule triggers.">Cut %
-					<input type="number" id="gkCutPct" value="10" min="5" max="20" step="5"></label>
-					<label title="Spending raise % when Prosperity Rule triggers.">Raise %
-					<input type="number" id="gkRaisePct" value="10" min="5" max="20" step="5"></label>
+					<label title="Guardrail width: if current WR exceeds IWR×(1+guard%) cut spending; if below IWR×(1−guard%) raise spending.">Guard ±%
+					<input type="number" id="gkGuard" value="20" min="5" max="40" step="5"></label>
+					<label title="Percent to cut or raise spending when a guardrail triggers.">Adj %
+					<input type="number" id="gkAdjPct" value="10" min="5" max="20" step="5"></label>
 				</div>
 			</div>
 

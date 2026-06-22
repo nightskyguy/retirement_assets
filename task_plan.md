@@ -3,12 +3,28 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
+**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31, 32 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
 **Superseded/deprioritized:** Phase 8 (Variable Growth sensitivity grid — bootstrap + stress MC covers the use case; grid not needed).
 **Partial:** Phase 9 (ACA — Medicare age gate done; MAGI/subsidy calculation not yet implemented).
 **Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
 **Pending (blocked):** Phase 9 remainder (ACA MAGI/subsidy), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
-**As of:** 2026-06-22 (Phase 22 GK shipped — commit 4a7fec5, v11.1042).
+**As of:** 2026-06-22 (Phase 32 share-URL compression + default-omission shipped — v11.1048).
+
+### Phase 32: Share-URL Compression + Default-Omission
+**Why:** Share URL too long. Compress numeric values (1000000→1m, 100000→1e5) + booleans
+(true/false→1/0) and omit any param left at its default. Measured: compression alone ≈13%;
+default-omission ≈71–100% (scales with customization); they compose.
+- [x] `compactNum()` self-validating shortest-form (k/m/b/scientific, no DisplayHelpers dep)
+- [x] `OPT_DEFAULTS` + `captureDefaults()` pristine snapshot before loadFromURL
+- [x] `buildShareURL()` omits defaults + compresses; booleans 1/0
+- [x] `loadFromURL()` checkbox accepts 1/0 + legacy true/false; dollar/absent-key decode unchanged
+- [x] `captureDefaults()` wired before `loadFromURL()` in html init
+- [x] 4 node round-trip tests (33 pass); browser-verified (212 in-page pass, exact round-trip,
+      legacy URLs load, default scenario → empty query)
+- [x] Version 11.1048 + changelog
+- **Status:** complete (v11.1048, 2026-06-22)
+- **Caveat:** omitted fields adopt loader's current default — keep markup defaults stable to
+  avoid silent drift of old shared URLs. Optional later: `v=` stamp; extend to RTP/ITP.
 
 ## Dependency Graph
 ```

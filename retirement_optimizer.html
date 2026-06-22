@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1042</title>
+    <title>Retirement Optimizer 11.1048</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -557,6 +557,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1048</b> <strong>Shorter share URLs:</strong> The Share link now omits any input left at its default and compresses dollar amounts (e.g. <code>1000000</code> → <code>1m</code>, <code>100000</code> → <code>1e5</code>) and on/off toggles (<code>true</code>/<code>false</code> → <code>1</code>/<code>0</code>). A typical customized share is 70–90% shorter; existing (older, longer) share links still load unchanged.</li>
 				<li><b>11.1042</b> <strong>Guyton-Klinger Guardrails withdrawal strategy:</strong>
 					<ul style="margin:4px 0 0 16px;">
 						<li><strong>Dynamic spending rules.</strong> The <em>Guyton-Klinger</em> strategy adjusts annual spending based on portfolio withdrawal rate. It skips inflation adjustments when the prior year return was negative, and cuts spending 10% when the withdrawal rate exceeds the upper guardrail; raises spending 10% when withdrawal rate falls below the lower guardrail. Supports higher initial withdrawal rates (~5–5.5%) by absorbing sequence-of-returns risk through spending flexibility.</li>
@@ -871,6 +872,7 @@ window.addEventListener('DOMContentLoaded', function () {
         startAgeEl.value = now.getFullYear() - by1 - (birthdayPassedThisYear ? 0 : 1);
     }
     setupChartSync();
+    captureDefaults?.();   // Snapshot pristine defaults BEFORE loadFromURL mutates fields (for share-URL default-omission)
     loadFromURL?.();   // Preset inputs from URL params if present (must run after dropdowns are built)
     toggleStrategyUI();
     setupAutoRecalc();

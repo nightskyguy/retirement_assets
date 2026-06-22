@@ -38,9 +38,14 @@ vm.createContext(ctx);
 const dir = __dirname;
 vm.runInContext(fs.readFileSync(path.join(dir, 'taxengine.js'), 'utf8'), ctx);
 vm.runInContext(fs.readFileSync(path.join(dir, 'retirement_optimizer_core.js'), 'utf8'), ctx);
+// displayhelpers.js is an IIFE that sets window.DisplayHelpers — load it so the share-URL
+// round-trip tests can exercise the REAL parseShorthand decoder against compactNum.
+vm.runInContext(fs.readFileSync(path.join(dir, 'displayhelpers.js'), 'utf8'), ctx);
 
 const simulate = ctx.simulate;
 const getLTCGBracketRoom = ctx.getLTCGBracketRoom;
+const compactNum = ctx.compactNum;
+const parseShorthand = ctx.window.DisplayHelpers.parseShorthand;
 
 // ── Test harness ──────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
@@ -453,6 +458,39 @@ test('GK regression: non-GK strategy has null gkSpend/gkAdj', () => {
         assert(res.log[y].gkSpend === null, `year ${y} gkSpend should be null for non-GK strategy`);
         assert(res.log[y].gkAdj === null, `year ${y} gkAdj should be null for non-GK strategy`);
     }
+});
+
+// ── Share-URL value compression (compactNum) ────────────────────────────────────
+// compactNum shrinks dollar values; DisplayHelpers.parseShorthand decodes them on load.
+// The round-trip MUST be lossless, and the compact form never longer than the raw form.
+const COMPACT_CASES = [1000, 2500, 85000, 100000, 111000, 750000, 1000000, 1500000, 1234567];
+
+test('compactNum: round-trips losslessly through parseShorthand', () => {
+    for (const n of COMPACT_CASES) {
+        const c = compactNum(String(n));
+        assert(parseShorthand(c) === n, `compactNum(${n})="${c}" decoded to ${parseShorthand(c)}, expected ${n}`);
+    }
+});
+
+test('compactNum: never longer than the raw value', () => {
+    for (const n of COMPACT_CASES) {
+        const c = compactNum(String(n));
+        assert(c.length <= String(n).length, `compactNum(${n})="${c}" is longer than raw "${n}"`);
+    }
+});
+
+test('compactNum: expected compact forms', () => {
+    assert(compactNum('1000000') === '1m', `expected 1m, got ${compactNum('1000000')}`);
+    assert(compactNum('1500000') === '1.5m', `expected 1.5m, got ${compactNum('1500000')}`);
+    assert(compactNum('100000') === '1e5', `expected 1e5, got ${compactNum('100000')}`);
+    assert(compactNum('85000') === '85k', `expected 85k, got ${compactNum('85000')}`);
+    assert(compactNum('1234567') === '1234567', `non-round number should stay raw, got ${compactNum('1234567')}`);
+});
+
+test('compactNum: 0 and non-finite pass through unchanged', () => {
+    assert(compactNum('0') === '0', `expected 0, got ${compactNum('0')}`);
+    assert(compactNum('') === '', `empty string should pass through, got "${compactNum('')}"`);
+    assert(parseShorthand(compactNum('0')) === 0, 'compact 0 should still decode to 0');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

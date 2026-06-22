@@ -624,6 +624,142 @@ function getLTCGBracketRoom(ordinaryIncome, status, maxRate, cpiRate) {
 }
 
 let simulationCount = 0;
+
+// ---- simulate() helper functions ----
+
+function resolveOrderedSeq(seq, rates) {
+    const { capGainsPercentage, capitalGainsRate, nominalStateTaxAtLimit, nominalTaxRate, marginalFedTaxRate, marginalStateTaxRate } = rates;
+    const taxB = capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit);
+    const taxI = Math.max(nominalTaxRate, marginalFedTaxRate + marginalStateTaxRate);
+    const map = {
+        CBIR: [['Cash', 0], ['Brokerage', taxB], ['IRA', taxI], ['Roth', 0]],
+        RIBC: [['Roth', 0], ['IRA', taxI], ['Brokerage', taxB], ['Cash', 0]],
+        BIRC: [['Brokerage', taxB], ['IRA', taxI], ['Roth', 0], ['Cash', 0]],
+    };
+    return map[seq] ?? map['CBIR'];
+}
+
+function runOrderedWithdrawal(balances, need, seq, accumulate, applyFn) {
+    let result = accumulate;
+    let rem = need;
+    for (const [acct, taxrate] of seq) {
+        if (rem <= 1 || (balances[acct] ?? 0) <= 0) continue;
+        const w = calculateWithdrawals(balances, rem, { order: [acct], weight: [1], taxrate: [taxrate] });
+        result = accumulateWithdrawals([result, w]);
+        applyFn(balances, w);
+        rem = w.shortfall ?? 0;
+        if (rem <= 1) break;
+    }
+    return result;
+}
+
+function computeYearGrowthRates(inputs, y) {
+    const baseReturn = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
+    const div = inputs.dividendRate ?? 0;
+    const psa = inputs.returnSequencePerAccount;
+    return {
+        IRA:       (psa?.IRA1?.[y]      ?? baseReturn) + div,
+        IRA1:      (psa?.IRA1?.[y]      ?? baseReturn) + div,
+        IRA2:      (psa?.IRA2?.[y]      ?? baseReturn) + div,
+        Brokerage:  psa?.Brokerage?.[y] ?? baseReturn,
+        Cash:      inputs.cashYield,
+        Roth1:     (psa?.Roth1?.[y]     ?? baseReturn) + div,
+        Roth2:     (psa?.Roth2?.[y]     ?? baseReturn) + div,
+    };
+}
+
+function buildSimYearLogRecord(p) {
+    return {
+        // Who
+        year: p.currentYear,
+        age1: p.alive1 ? p.age1 : '—',
+        age2: p.alive2 ? p.age2 : '—',
+        status: p.status,
+        // Income
+        SSincome: p.fixedInc,
+        pension: p.pension,
+        spendGoal: p.targetSpend,
+        netIncome: p.netIncome,
+        totalIncome: p.totalIncome,
+        surplus: p.surplus.Total,
+        shortfall: p.surplus.Shortfall,
+        'RMDwd': p.totalRMD,
+        'QCD1': p.qcd1,
+        'QCD2': p.qcd2,
+        'cashD+I': p.taxableDividends + p.taxableInterest,
+        // Withdrawals
+        'IRAwd': p.netWithdrawals.IRA,
+        'IRA1-': p.netWithdrawals.IRA1,
+        'IRA2-': p.netWithdrawals.IRA2,
+        'RMD1-': p.rmd1,
+        'RMD2-': p.rmd2,
+        'Brokerage-': p.netWithdrawals.Brokerage,
+        'RothWD': (p.netWithdrawals.Roth1 ?? 0) + (p.netWithdrawals.Roth2 ?? 0),
+        'CashWD': p.netWithdrawals.Cash,
+        'rothConv': p.totalConverted,
+        'surplusCash': p.surplus.Cash,
+        'cashDividends': p.taxableDividends,
+        'cashInterest': p.taxableInterest,
+        // Taxes
+        'FedRate%': p.tax.fedRate,
+        'StateRate%': p.tax.stRate,
+        IRMAATier: getIRMAATier(p.balance.magiHistory[p.balance.magiHistory.length - 2], p.status, p.cpiRate),
+        IRMAA: p.irmaa,
+        totalTax: p.totalTax,
+        FedTax: p.tax.federalTax,
+        StateTax: p.tax.state,
+        'CapGains': p.capitalGains,
+        MAGI: p.tax.MAGI,
+        'NominalRate%': p.nominalTaxRate,
+        'FedCap': p.tax.fedLimit,
+        'StateCap': p.tax.stLimit,
+        'SumTaxes': p.cumulativeTaxes,
+        'BracketTarget': p.bracketTarget,
+        'BracketOverage': p.bracketOverage,
+        // Balances
+        IRA1: p.balance.IRA1,
+        IRA2: p.balance.IRA2,
+        TotalIRA: p.balance.IRA1 + p.balance.IRA2,
+        Cash: p.balance.Cash,
+        Roth: p.balance.Roth1 + p.balance.Roth2,
+        Roth1: p.balance.Roth1,
+        Roth2: p.balance.Roth2,
+        Brokerage: p.balance.Brokerage,
+        Basis: p.balance.BrokerageBasis,
+        totalWealth: p.totalWealth,
+        portfolioBalance: p.portfolioBalance,
+        guaranteedIncome: p.guaranteedIncome,
+        Spendable: p.totalsSpend,
+        brokerageG: p.gains.Brokerage,
+        cashG: p.gains.Cash,
+        rothG: (p.gains.Roth1 || 0) + (p.gains.Roth2 || 0),
+        'RMD%': p.rmd1Pct,
+        // Phase 24: Cyclic sub-cycle annotation
+        subCycle: p.subCycleLabel,
+        // Opportunity cost (Phase 20) + BETR signal (Phase 21) + extra conversion (Phase 23)
+        convOC: p.convNetValue,
+        excessOC: p.excessNetValue,
+        convTax: p.incrementalConvTax,
+        excessTax: p.incrementalExcessTax,
+        'BETR%': p.yearBETR,
+        betrFlag: p.yearBETRflag,
+        extraConv: p.extraConvGross || null,
+        // Phase 27: inflows/outflows + withdrawal rate
+        grossOut: p.grossOutflows,
+        netOut: p.netOutflows,
+        inflows: p.yearInflows,
+        'wdRate%': p.wdRate,
+        // Phase 12: per-year withdrawal timing
+        timing: (p.useEarly ? 'Early' : 'Late') + '(' + p.timingReason + ')',
+        // Phase 22: Guyton-Klinger
+        gkSpend: p.strategy === 'gk' ? p.spendGoal : null,
+        gkAdj:   p.strategy === 'gk' ? (p.gkAdjLabel || '—') : null,
+        // Internal
+        inflationFactor: p.inflation,
+        loopMs: p.loopMs
+    };
+}
+
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
     if (!inputs.hasSpouse) {
@@ -774,17 +910,7 @@ function simulate(inputs) {
         // Bootstrap MC passes per-year sampled inflation; GBM and deterministic use the fixed rate.
         const baseReturn    = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
         const yearInflation = inputs.inflationSequence?.[y] ?? inputs.inflation;
-        const div = inputs.dividendRate ?? 0;
-        const psa = inputs.returnSequencePerAccount;
-        let growthRates = {
-            IRA:       (psa?.IRA1?.[y]      ?? baseReturn) + div,
-            IRA1:      (psa?.IRA1?.[y]      ?? baseReturn) + div,
-            IRA2:      (psa?.IRA2?.[y]      ?? baseReturn) + div,
-            Brokerage:  psa?.Brokerage?.[y] ?? baseReturn,
-            Cash:      inputs.cashYield,
-            Roth1:     (psa?.Roth1?.[y]     ?? baseReturn) + div,
-            Roth2:     (psa?.Roth2?.[y]     ?? baseReturn) + div,
-        }
+        let growthRates = computeYearGrowthRates(inputs, y);
 
         // Withdrawal timing auto-selection (Phase 12): Early (Jan) for conversion years; Late (Dec) otherwise.
         // Early: preMonths=1, postMonths=11. Late: preMonths=11, postMonths=1.
@@ -917,31 +1043,6 @@ function simulate(inputs) {
         // 4. Determine Target Spending amount based on Strategy
         const isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'fixedpct';
         const isOrderedStrategy = inputs.strategy === 'ordered';
-
-        function resolveOrderedSeq(seq) {
-            const taxB = capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit);
-            const taxI = Math.max(nominalTaxRate, marginalFedTaxRate + marginalStateTaxRate);
-            const map = {
-                CBIR: [['Cash', 0], ['Brokerage', taxB], ['IRA', taxI], ['Roth', 0]],
-                RIBC: [['Roth', 0], ['IRA', taxI], ['Brokerage', taxB], ['Cash', 0]],
-                BIRC: [['Brokerage', taxB], ['IRA', taxI], ['Roth', 0], ['Cash', 0]],
-            };
-            return map[seq] ?? map['CBIR'];
-        }
-
-        function runOrderedWithdrawal(balances, need, seq, accumulate, applyFn) {
-            let result = accumulate;
-            let rem = need;
-            for (const [acct, taxrate] of seq) {
-                if (rem <= 1 || (balances[acct] ?? 0) <= 0) continue;
-                const w = calculateWithdrawals(balances, rem, { order: [acct], weight: [1], taxrate: [taxrate] });
-                result = accumulateWithdrawals([result, w]);
-                applyFn(balances, w);
-                rem = w.shortfall ?? 0;
-                if (rem <= 1) break;
-            }
-            return result;
-        }
 
         // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
         if (inputs.strategy === 'gk') {
@@ -1227,7 +1328,7 @@ function simulate(inputs) {
                     }
                 }
             } else if (isOrderedStrategy) {
-                const seq = resolveOrderedSeq(inputs.orderedSeq);
+                const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage, capitalGainsRate, nominalStateTaxAtLimit, nominalTaxRate, marginalFedTaxRate, marginalStateTaxRate });
                 netWithdrawals = runOrderedWithdrawal(curBalances, gap, seq, netWithdrawals, applyWithdrawals);
 
             } else {
@@ -1278,7 +1379,7 @@ function simulate(inputs) {
         if (residualGap > 1) {
             const thirdPassStart = performance.now();
             if (isOrderedStrategy) {
-                const seq = resolveOrderedSeq(inputs.orderedSeq);
+                const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage, capitalGainsRate, nominalStateTaxAtLimit, nominalTaxRate, marginalFedTaxRate, marginalStateTaxRate });
                 netWithdrawals = runOrderedWithdrawal(curBalances, residualGap, seq, netWithdrawals, applyWithdrawals);
             } else {
                 // Always use Cash-only in the 3rd pass — adding more Brokerage here creates a
@@ -1579,95 +1680,23 @@ function simulate(inputs) {
         const _wdRate = (prevTotalWealth != null && prevTotalWealth > 0)
             ? (_netOutflows - _yearInflows) / prevTotalWealth : null;
 
-        log.push({
-            // Who
-            year: currentYear,
-            age1: alive1 ? age1 : '—',
-            age2: alive2 ? age2 : '—',
-            status: status,
-            // Income
-            SSincome: fixedInc,
-            pension: pension,
-            spendGoal: targetSpend,
-            netIncome: netIncome,
-            totalIncome: totalIncome,
-            surplus: surplus.Total,
-            shortfall: surplus.Shortfall,
-            'RMDwd': totalRMD,
-            'QCD1': qcd1,
-            'QCD2': qcd2,
-            'cashD+I': taxableDividends + taxableInterest,
-            // Withdrawals
-            'IRAwd': netWithdrawals.IRA,
-            'IRA1-': netWithdrawals.IRA1,
-            'IRA2-': netWithdrawals.IRA2,
-            'RMD1-': rmd1,
-            'RMD2-': rmd2,
-            'Brokerage-': netWithdrawals.Brokerage,
-            'RothWD': (netWithdrawals.Roth1 ?? 0) + (netWithdrawals.Roth2 ?? 0),
-            'CashWD': netWithdrawals.Cash,
-            'rothConv': totalConverted,
-            'surplusCash': surplus.Cash,
-            'cashDividends': taxableDividends,
-            'cashInterest': taxableInterest,
-            // Taxes
-            'FedRate%': tax.fedRate,
-            'StateRate%': tax.stRate,
-            IRMAATier: getIRMAATier(balance.magiHistory[balance.magiHistory.length - 2], status, cpiRate),
-            IRMAA: irmaa,
-            totalTax: totalTax,
-            FedTax: tax.federalTax,
-            StateTax: tax.state,
-            'CapGains': capitalGains,
-            MAGI: tax.MAGI,
-            'NominalRate%': nominalTaxRate,
-            'FedCap': tax.fedLimit,
-            'StateCap': tax.stLimit,
-            'SumTaxes': cumulativeTaxes,
-            'BracketTarget': bracketTarget,
-            'BracketOverage': bracketOverage,
-            // Balances
-            IRA1: balance.IRA1,
-            IRA2: balance.IRA2,
-            TotalIRA: balance.IRA1 + balance.IRA2,
-            Cash: balance.Cash,
-            Roth: balance.Roth1 + balance.Roth2,
-            Roth1: balance.Roth1,
-            Roth2: balance.Roth2,
-            Brokerage: balance.Brokerage,
-            Basis: balance.BrokerageBasis,
-            totalWealth: totalWealth,
-            portfolioBalance: portfolioBalance,
-            guaranteedIncome: guaranteedIncome,
-            Spendable: totals.spend,
-            brokerageG: gains.Brokerage,
-            cashG: gains.Cash,
-            rothG: (gains.Roth1 || 0) + (gains.Roth2 || 0),
-            'RMD%': rmd1Pct,
-            // Phase 24: Cyclic sub-cycle annotation
-            subCycle: subCycleLabel,
-            // Opportunity cost (Phase 20) + BETR signal (Phase 21) + extra conversion (Phase 23)
-            convOC: convNetValue,
-            excessOC: excessNetValue,
-            convTax: incrementalConvTax,
-            excessTax: incrementalExcessTax,
-            'BETR%': yearBETR,
-            betrFlag: yearBETRflag,
-            extraConv: extraConvGross || null,
-            // Phase 27: inflows/outflows + withdrawal rate
-            grossOut: _grossOutflows,
-            netOut: _netOutflows,
-            inflows: _yearInflows,
-            'wdRate%': _wdRate,
-            // Phase 12: per-year withdrawal timing
-            timing: (_useEarly ? 'Early' : 'Late') + '(' + timingReason + ')',
-            // Phase 22: Guyton-Klinger
-            gkSpend: inputs.strategy === 'gk' ? spendGoal : null,
-            gkAdj:   inputs.strategy === 'gk' ? (gkAdjLabel || '—') : null,
-            // Internal
-            inflationFactor: inflation,
-            loopMs: performance.now() - loopStart
-        });
+        const loopMs = performance.now() - loopStart;
+        log.push(buildSimYearLogRecord({
+            currentYear, alive1, alive2, age1, age2, status,
+            fixedInc, pension, targetSpend, netIncome, totalIncome,
+            surplus, totalRMD, qcd1, qcd2, taxableDividends, taxableInterest,
+            netWithdrawals, rmd1, rmd2, totalConverted, tax, irmaa, cpiRate,
+            totalTax, capitalGains, cumulativeTaxes, bracketTarget, bracketOverage,
+            balance, nominalTaxRate, totalWealth, portfolioBalance, guaranteedIncome,
+            totalsSpend: totals.spend,
+            gains, rmd1Pct, subCycleLabel, convNetValue, excessNetValue,
+            incrementalConvTax, incrementalExcessTax, yearBETR, yearBETRflag,
+            extraConvGross,
+            grossOutflows: _grossOutflows, netOutflows: _netOutflows,
+            yearInflows: _yearInflows, wdRate: _wdRate,
+            useEarly: _useEarly, timingReason,
+            strategy: inputs.strategy, spendGoal, gkAdjLabel, inflation, loopMs
+        }));
         totals.totalTime += log[log.length - 1].loopMs;
         prevTotalWealth = totalWealth;
         gkPrevPortfolio = portfolioBalance;  // raw sum; keep GK checks apples-to-apples

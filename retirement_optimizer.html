@@ -442,7 +442,7 @@
 					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results.">Seed
 						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
 					</label>
-					<label style="font-size:0.85em;" title="Number of worst historical starting sequences to use in Stress mode. Scored by first 10-year equity CAGR (inflation-adjusted in Phase 33). Worst 10: 1929, 1999, 2000, 1930, 1928, 1931, 1965, 2001, 2002, 1969.">Stress sequences
+					<label style="font-size:0.85em;" title="Number of worst historical starting sequences to use in Stress mode. Scored by first 10-year equity CAGR. Worst 10: 1929, 1999, 2000, 1930, 1928, 1931, 1965, 2001, 2002, 1969.">Stress sequences
 						<input type="number" id="mc-stress-count" value="10" min="3" max="20" step="1" style="width:50px;margin-left:4px;">
 					</label>
 					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical (bootstrap) paths that begin with a worst-decade historical sequence before continuing with random draws. 0 = pure bootstrap; 25% ≈ historical frequency of below-inflation first decades. Increases SoRR realism without discarding probabilistic paths. Only applies in Historical mode.">Bear-start %

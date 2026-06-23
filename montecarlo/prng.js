@@ -151,7 +151,7 @@ function bootstrapMultiAssetBank(rng, numPaths, years, blockSize = 3) {
                 const idx = start + b;
                 eqBank [p * years + y + b] = eqSrc[idx];
                 bdBank [p * years + y + b] = HISTORICAL_RETURNS.bonds[idx];
-                infBank[p * years + y + b] = HISTORICAL_RETURNS.inflation[idx];
+                infBank[p * years + y + b] = Math.max(-0.01, HISTORICAL_RETURNS.inflation[idx]);
                 // intl available only from 1970; use equity as proxy for earlier years.
                 itBank [p * years + y + b] = idx >= intlOff
                     ? intlSrc[idx - intlOff]

@@ -1,5 +1,21 @@
 # Progress Log
 
+## Session: 2026-06-23 — Phase 33: Inflation-Aware Stress Test Scoring
+
+Stress mode was scoring worst decades by 10-year equity CAGR alone, missing the compounding effect of inflation. A decade with flat equity (+0% CAGR) but 7% inflation is retiree-devastating (real −7%), yet ranked better than it should. Fisher equation fixes this.
+
+- **montecarlo/prng.js `buildStressBank()`:**
+  - Changed scoring from nominal equity CAGR → real CAGR via Fisher equation: `rcagr = (1 + eqCagr) / (1 + Math.max(-0.005, infCagr)) − 1`
+  - Deflation floor (−0.5%) excludes only 1930s extremes; preserves modern modest deflation (2009 etc)
+  - Labels now 3-part format: `"1970 (eq: +6.0% inf: +7.0% real: -1.0%)"` instead of just year
+  - Added `decadeRealCAGRs[]` to return object (mirrors existing `decadeInflCAGRs`)
+  - `applyBearStartOverlay()` automatically uses new real-CAGR-based worst-sequence selection
+- **Tests:** 33 pass, 0 fail (no regressions)
+- **Verified:** Real CAGR scoring orders decades correctly; 1970s-era inflation peaks now rank higher in worst list
+- **Status:** ready for browser verification; no changelog/version bump yet pending full testing
+
+---
+
 ## Session: 2026-06-22 (cont.) — Phase 32: Share-URL compression + default-omission (v11.1048)
 
 New goal (user): reduce share-URL length. Measured: number/bool compression alone ≈13%;

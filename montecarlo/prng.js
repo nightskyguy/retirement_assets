@@ -51,14 +51,22 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
     const sLen    = Math.min(scoreYears, n);
 
     // Score all starting indices that have at least sLen real years remaining.
+    // Score by real CAGR (Fisher equation) to account for inflation erosion.
     const scored = [];
     for (let i = 0; i <= n - sLen; i++) {
-        let logSum = 0;
-        for (let y = 0; y < sLen; y++) logSum += Math.log1p(eq[i + y]);
-        scored.push({ i, cagr: Math.exp(logSum / sLen) - 1,
+        let eqLogSum = 0, infLogSum = 0;
+        for (let y = 0; y < sLen; y++) {
+            eqLogSum  += Math.log1p(eq[i + y]);
+            infLogSum += Math.log1p(infSrc[i + y]);
+        }
+        const eqCagr = Math.exp(eqLogSum / sLen) - 1;
+        const infCagr = Math.exp(infLogSum / sLen) - 1;
+        const infFloor = Math.max(-0.005, infCagr);  // deflation floor: -0.5%
+        const realCagr = (1 + eqCagr) / (1 + infFloor) - 1;  // Fisher equation
+        scored.push({ i, eqCagr, infCagr: infFloor, realCagr,
                       year: HISTORICAL_RETURNS.equityStartYear + i });
     }
-    scored.sort((a, b) => a.cagr - b.cagr);   // ascending: worst first
+    scored.sort((a, b) => a.realCagr - b.realCagr);   // ascending: worst real returns first
 
     const worst    = scored.slice(0, count);
     const eqBank   = new Float64Array(count * years);
@@ -69,16 +77,19 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
     const startYears     = [];
     const decadeCAGRs    = [];
     const decadeInflCAGRs = [];
+    const decadeRealCAGRs = [];
 
     for (let p = 0; p < count; p++) {
-        const { i: si, year, cagr } = worst[p];
-        labels.push(String(year));
+        const { i: si, year, eqCagr, infCagr, realCagr } = worst[p];
+        // Label format: "1970 (eq: +6.0% inf: +7.0% real: -1.0%)"
+        const eqFmt = (eqCagr * 100).toFixed(1);
+        const infFmt = (infCagr * 100).toFixed(1);
+        const realFmt = (realCagr * 100).toFixed(1);
+        labels.push(`${year} (eq: ${eqCagr >= 0 ? '+' : ''}${eqFmt}% inf: ${infCagr >= 0 ? '+' : ''}${infFmt}% real: ${realCagr >= 0 ? '+' : ''}${realFmt}%)`);
         startYears.push(year);
-        decadeCAGRs.push(cagr);
-        // Compute first-decade inflation CAGR for the same starting window.
-        let infLogSum = 0;
-        for (let y = 0; y < sLen; y++) infLogSum += Math.log1p(infSrc[(si + y) % n]);
-        decadeInflCAGRs.push(Math.exp(infLogSum / sLen) - 1);
+        decadeCAGRs.push(eqCagr);
+        decadeInflCAGRs.push(infCagr);
+        decadeRealCAGRs.push(realCagr);
         for (let y = 0; y < years; y++) {
             const idx = (si + y) % n;
             eqBank [p * years + y] = eq[idx];
@@ -89,7 +100,7 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
     }
 
     return { equity: eqBank, bonds: bdBank, intl: itBank, inflation: infBank,
-             labels, startYears, decadeCAGRs, decadeInflCAGRs };
+             labels, startYears, decadeCAGRs, decadeInflCAGRs, decadeRealCAGRs };
 }
 
 // Bear-start overlay: overwrites the first 10 years of the bottom bearFraction of bootstrap paths

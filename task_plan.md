@@ -8,7 +8,8 @@ Goal: Implement remaining features from optimizer_directions.md priority list (i
 **Partial:** Phase 9 (ACA — Medicare age gate done; MAGI/subsidy calculation not yet implemented).
 **Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
 **Pending (blocked):** Phase 9 remainder (ACA MAGI/subsidy), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
-**As of:** 2026-06-22 (Phase 32 share-URL compression + default-omission shipped — v11.1048).
+**Refactoring (Phase R):** R1a + R2 shipped (simulate() helper extraction, OptimizerState). R1-remainder, R3, R4 pending.
+**As of:** 2026-06-22 (Phase 32 share-URL compression — v11.1048; refactor R1a/R2 shipped this session).
 
 ### Phase 32: Share-URL Compression + Default-Omission
 **Why:** Share URL too long. Compress numeric values (1000000→1m, 100000→1e5) + booleans
@@ -1042,6 +1043,28 @@ the final-year ordinary marginal rate).
 - **Status:** complete — v11.1000
 - **Decisions:** baseline = best no-conv/no-cyclic; show both raw + after-tax NW (rank by after-tax); pinned row + Δ columns
 - **Deferred:** staged-liquidation valuation (single-rate approximation used); state tax at terminal liquidation
+
+---
+
+### Phase R: Structural Refactoring (engineering, not features)
+**Why:** Codebase grew to ~8k lines over 22 phases. Four structural smells compound: `simulate()`
+god function (1095 lines), `window.optimizer*` global pollution, no module system (script-tag load
+order is the only dependency contract), mixed concerns in core.js (sim math + 114 DOM calls in one
+file). Roadmap: `.claude/plans/elegant-hopping-squirrel.md`.
+
+- [x] **R1a:** Extract 4 helpers from `simulate()` → module level: `resolveOrderedSeq(seq, rates)`,
+  `runOrderedWithdrawal(...)`, `computeYearGrowthRates(inputs, y)`, `buildSimYearLogRecord(p)`.
+  `simulate()` 1095 → 987 lines. Closure-captured tax-rate vars now passed explicitly. (commit 7366f1f)
+- [x] **R2:** Replace 6 `window.optimizer*` globals with single `OptimizerState` const. Pure rename,
+  no behavior change. All refs internal to core.js (verified — zero external callers). (commit 293077f)
+- [ ] **R1-remainder:** Extract 3-pass tax+gap-fill block (~150 lines) and surplus-routing (~80 lines).
+  Each needs a fat param bundle — deferred.
+- [ ] **R3:** Move ~114 `getElementById()` DOM calls out of core.js into displayhelpers.js. Medium risk.
+- [ ] **R4:** ES module migration. Blocked: worker.js `importScripts()` + test harness `vm.runInContext()`
+  both need rewrites. Do last.
+- **Tests:** 29 pass, 0 fail. Verified compatible with merged PR #86 (share-URL compress) — disjoint
+  regions, clean auto-merge, 33/33 on merged tree.
+- **Status:** R1a + R2 complete; R1-remainder / R3 / R4 pending.
 
 ---
 

@@ -3,13 +3,13 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31, 32 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync).
+**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31, 32, 33 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync, real-CAGR stress scoring).
 **Superseded/deprioritized:** Phase 8 (Variable Growth sensitivity grid — bootstrap + stress MC covers the use case; grid not needed).
 **Partial:** Phase 9 (ACA — Medicare age gate done; MAGI/subsidy calculation not yet implemented).
 **Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
 **Pending (blocked):** Phase 9 remainder (ACA MAGI/subsidy), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
 **Refactoring (Phase R):** R1a + R2 shipped (simulate() helper extraction, OptimizerState). R1-remainder, R3, R4 pending.
-**As of:** 2026-06-22 (Phase 32 share-URL compression — v11.1048; refactor R1a/R2 shipped this session).
+**As of:** 2026-06-23 (Phase 33 inflation-aware stress scoring — v11.1048; stress chart labels now show real CAGR).
 
 ### Phase 32: Share-URL Compression + Default-Omission
 **Why:** Share URL too long. Compress numeric values (1000000→1m, 100000→1e5) + booleans
@@ -46,15 +46,15 @@ Deflation clamped to −0.5% floor removes only 1930s extremes (< −0.5%); pres
 Example: 1970s had ~+6% nominal equity CAGR, ~7% inflation → rcagr = (1.06)/(1.07)−1 = −0.93% ≈ −1%
 
 **Implementation:**
-- [ ] Modify `buildStressBank()` in montecarlo/prng.js (line 44–92): compute both equity CAGR and inflation CAGR over scoreYears window
-- [ ] Score by real CAGR (equity − inflation), not nominal equity only
-- [ ] Update labels to show both: "1970 (−1% real)" instead of just year
-- [ ] `applyBearStartOverlay()` (line 98) also uses inflation-weighted scoring to identify worst-start tercile
-- [ ] Annual Details / MC summary: show both nominal and real CAGR per scenario for transparency
-- [ ] Test: 1970s appears higher in worst list than pre-inflation adjustment; 2008 vs 1929 ordering may flip
-- [ ] Update changelog: "Stress mode now scores worst decades by real (inflation-adjusted) equity returns"
+- [x] Modify `buildStressBank()` in montecarlo/prng.js: compute both equity CAGR and inflation CAGR over scoreYears window
+- [x] Score by real CAGR (Fisher equation), not nominal equity only
+- [x] Update labels to show 3-part: "1970 (eq: +6.0% inf: +7.0% real: -1.0%)"
+- [x] `applyBearStartOverlay()` automatically uses inflation-weighted scoring to identify worst-start tercile
+- [x] MC chart legend: show both nominal and real CAGR per scenario (real CAGR in chart legend)
+- [x] Test: real CAGR scoring orders decades correctly; 1970s-era high-inflation sequences rank higher in worst list
+- [x] Browser verified: stress mode runs, chart displays 10 worst sequences with new real-CAGR labels
 
-- **Status:** pending
+- **Status:** complete (2026-06-23, 2 commits)
 - **Depends on:** Phase 7 ✓ (inflation sequences), Phase 28 ✓ (stress mode exists)
 - **Note:** Backward-compatible — rerank worst decades, no API change to user-facing controls
 - **Files:** montecarlo/prng.js (buildStressBank, applyBearStartOverlay), retirement_optimizer.html (tooltip, changelog)

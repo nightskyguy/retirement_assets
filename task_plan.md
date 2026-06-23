@@ -26,6 +26,38 @@ default-omission ≈71–100% (scales with customization); they compose.
 - **Caveat:** omitted fields adopt loader's current default — keep markup defaults stable to
   avoid silent drift of old shared URLs. Optional later: `v=` stamp; extend to RTP/ITP.
 
+### Phase 33: Inflation-Aware Stress Test Scoring
+**Why:** Current Stress mode scores worst decades by first 10-year equity CAGR only. Ignores inflation persistence — a decade with flat equity returns (0% CAGR) but 7% inflation is far worse for retirees (real returns −7%) than equity CAGR alone captures. Worst-case retirement sequence = bad market + high inflation together. Bear-start overlay also uses equity-only scoring. Both should account for combined nominal+inflation erosion.
+
+**Current findings:**
+- `buildStressBank()` in montecarlo/prng.js (line 44) scores all 1928–2024 start years by `Math.log1p(eq[i+y])` sum over scoreYears (default 10)
+- Sorts ascending (worst CAGR first); takes bottom N (default 10)
+- **Current worst 10 years (by nominal equity 10-yr CAGR):** 1929, 1999, 2000, 1930, 1928, 1931, 1965, 2001, 2002, 1969
+- Labels show start year only: "1929", "1999", etc.
+- `applyBearStartOverlay()` uses same `buildStressBank()` to sample worst tercile for first 10 years of bootstrap paths
+
+**Scoring formula — Real Combined Annual Growth Rate (RCAGR):**
+- Current: `score = equityCAGR[decade]` (0-10yr nominal return only)
+- **New:** `rcagr = (1 + equityCAGR) / (1 + Math.max(-0.005, inflationCAGR)) − 1` (Fisher equation with −0.5% deflation floor)
+  
+Deflation clamped to −0.5% floor removes only 1930s extremes (< −0.5%); preserves modern modest deflation (2009, etc.).
+
+Example: 1970s had ~+6% nominal equity CAGR, ~7% inflation → rcagr = (1.06)/(1.07)−1 = −0.93% ≈ −1%
+
+**Implementation:**
+- [ ] Modify `buildStressBank()` in montecarlo/prng.js (line 44–92): compute both equity CAGR and inflation CAGR over scoreYears window
+- [ ] Score by real CAGR (equity − inflation), not nominal equity only
+- [ ] Update labels to show both: "1970 (−1% real)" instead of just year
+- [ ] `applyBearStartOverlay()` (line 98) also uses inflation-weighted scoring to identify worst-start tercile
+- [ ] Annual Details / MC summary: show both nominal and real CAGR per scenario for transparency
+- [ ] Test: 1970s appears higher in worst list than pre-inflation adjustment; 2008 vs 1929 ordering may flip
+- [ ] Update changelog: "Stress mode now scores worst decades by real (inflation-adjusted) equity returns"
+
+- **Status:** pending
+- **Depends on:** Phase 7 ✓ (inflation sequences), Phase 28 ✓ (stress mode exists)
+- **Note:** Backward-compatible — rerank worst decades, no API change to user-facing controls
+- **Files:** montecarlo/prng.js (buildStressBank, applyBearStartOverlay), retirement_optimizer.html (tooltip, changelog)
+
 ## Dependency Graph
 ```
 0b (Cleanup)

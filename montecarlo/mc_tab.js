@@ -557,14 +557,16 @@ function renderMCChart(msg) {
                 const startYear = msg.stressStartYears?.[rank]     ?? rank;
                 const eqCAGR    = msg.stressDecadeCAGRs?.[rank];
                 const infCAGR   = msg.stressInflationCAGRs?.[rank];
+                const realCAGR  = msg.stressRealCAGRs?.[rank];
                 const s = (v, d) => (v >= 0 ? '+' : '') + (v * 100).toFixed(d) + '%';
                 const eqStr  = eqCAGR  != null ? `eq: ${s(eqCAGR,  1)}` : '';
                 const infStr = infCAGR != null ? ` inf: ${s(infCAGR, 1)}` : '';
+                const realStr = realCAGR != null ? ` real: ${s(realCAGR, 1)}` : '';
                 const color  = multiStrat
                     ? _stressColorMulti(famName, rank, nS, fallbackIdx)
                     : _stressColor(rank, nS);
                 datasets.push({
-                    label:           `${stratPfx}${startYear} (${eqStr}${infStr})`,
+                    label:           `${stratPfx}${startYear} (${eqStr}${infStr}${realStr})`,
                     data:            deflate(pathData),
                     borderColor:     color,
                     backgroundColor: 'transparent',

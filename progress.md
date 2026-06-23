@@ -1,6 +1,6 @@
 # Progress Log
 
-## Session: 2026-06-23 — Phase 33: Inflation-Aware Stress Test Scoring
+## Session: 2026-06-23 — Phase 33: Inflation-Aware Stress Test Scoring (complete, v11.1048+)
 
 Stress mode was scoring worst decades by 10-year equity CAGR alone, missing the compounding effect of inflation. A decade with flat equity (+0% CAGR) but 7% inflation is retiree-devastating (real −7%), yet ranked better than it should. Fisher equation fixes this.
 
@@ -10,9 +10,17 @@ Stress mode was scoring worst decades by 10-year equity CAGR alone, missing the 
   - Labels now 3-part format: `"1970 (eq: +6.0% inf: +7.0% real: -1.0%)"` instead of just year
   - Added `decadeRealCAGRs[]` to return object (mirrors existing `decadeInflCAGRs`)
   - `applyBearStartOverlay()` automatically uses new real-CAGR-based worst-sequence selection
+- **montecarlo/{worker,mc_controller}.js:**
+  - Added `stressRealCAGRs` to message payload alongside existing equity/inflation CAGRs
+- **montecarlo/mc_tab.js `_renderStressChart()`:**
+  - Chart legend now shows 4-part label: `"1970 (eq: +6.0% inf: +7.0% real: -1.0%)"`
+  - Constructed from stressStartYears + stressDecadeCAGRs + stressInflationCAGRs + stressRealCAGRs
 - **Tests:** 33 pass, 0 fail (no regressions)
-- **Verified:** Real CAGR scoring orders decades correctly; 1970s-era inflation peaks now rank higher in worst list
-- **Status:** ready for browser verification; no changelog/version bump yet pending full testing
+- **Verified:** 
+  - Real CAGR scoring orders decades correctly (Fisher equation)
+  - 1970s-era high-inflation sequences rank higher in worst list (real purchasing-power loss captured)
+  - Browser test: MC stress mode runs, chart displays 10 worst sequences with new labels
+- **Status:** complete (ready for production)
 
 ---
 

@@ -283,5 +283,6 @@ self.onmessage = function ({ data: cfg }) {
         stressStartYears:     simulationMode === 'stress' ? multiAssetBank.startYears     : null,
         stressDecadeCAGRs:    simulationMode === 'stress' ? multiAssetBank.decadeCAGRs    : null,
         stressInflationCAGRs: simulationMode === 'stress' ? multiAssetBank.decadeInflCAGRs : null,
+        stressRealCAGRs:      simulationMode === 'stress' ? multiAssetBank.decadeRealCAGRs : null,
     });
 };

@@ -346,5 +346,6 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         stressStartYears:     simulationMode === 'stress' ? multiAssetBank.startYears     : null,
         stressDecadeCAGRs:    simulationMode === 'stress' ? multiAssetBank.decadeCAGRs    : null,
         stressInflationCAGRs: simulationMode === 'stress' ? multiAssetBank.decadeInflCAGRs : null,
+        stressRealCAGRs:      simulationMode === 'stress' ? multiAssetBank.decadeRealCAGRs : null,
     });
 }

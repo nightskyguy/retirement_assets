@@ -164,8 +164,8 @@
   <div class="controls">
     <div class="ctrl-card">
       <label for="startYr">Start year</label>
-      <input type="range" id="startYr" min="1928" max="2024" step="1" value="1928">
-      <span class="ctl-val" id="startYrVal">1928</span>
+      <input type="range" id="startYr" min="1928" max="2024" step="1" value="2015">
+      <span class="ctl-val" id="startYrVal">2015</span>
     </div>
     <div class="scale-card">
       <label>Y-axis</label>
@@ -291,16 +291,18 @@ document.getElementById('rr-vintage').textContent =
   'Data through ' + DATA_END + ' (updated ' + RR_VINTAGE + ').';
 
 // --- State ---
-let startYr = 1928, eqPct = 60, bdPct = 30;
+let startYr = 2015, eqPct = 60, bdPct = 30;
 let nominalOn = false, isolatedAsset = -1;
 let annualData = [];
 
 // Load from URL before chart init
 (function loadFromURL() {
   const p = new URLSearchParams(window.location.search);
-  if (p.has('yr')) startYr = Math.max(DATA_START, Math.min(DATA_END - 1, +p.get('yr') || DATA_START));
+  if (p.has('yr')) startYr = Math.max(DATA_START, Math.min(DATA_END - 1, +p.get('yr') || 2015));
   if (p.has('eq')) eqPct = Math.max(0, Math.min(100, +p.get('eq') || 60));
   if (p.has('bd')) bdPct = Math.max(0, Math.min(100 - eqPct, +p.get('bd') || 30));
+  if (p.get('nom') === '1') nominalOn = true;
+  if (p.has('iso')) { const v = +p.get('iso'); if (v >= 0 && v <= 3) isolatedAsset = v; }
 })();
 
 // --- Helpers ---
@@ -436,17 +438,17 @@ const chart = new Chart(document.getElementById('mainChart'), {
   data: {
     labels: s0.labels,
     datasets: [
-      // Real lines (indices 0-4)
-      { label: 'US Equity',              data: s0.eqVals,      borderColor: C_EQ,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 2 },
-      { label: 'US Bonds',               data: s0.bdVals,      borderColor: C_BD,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 3 },
-      { label: 'Cash (T-bills)',          data: s0.caVals,      borderColor: C_CA,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 4 },
-      { label: 'Custom Mix',             data: s0.mixVals,     borderColor: C_MIX, backgroundColor: 'transparent', borderWidth: 4,   pointRadius: 0, tension: 0.2, order: 1 },
-      { label: 'Uninvested (0%)',        data: s0.inflVals,    borderColor: C_INF, backgroundColor: 'transparent', borderWidth: 1.8, pointRadius: 0, tension: 0.2, order: 5, borderDash: [6, 4] },
+      // Real lines (indices 0-4) — hidden pre-computed from URL state so log scale is correct on first render
+      { label: 'US Equity',              data: s0.eqVals,      borderColor: C_EQ,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 2, hidden: isolatedAsset !== -1 && isolatedAsset !== 0 },
+      { label: 'US Bonds',               data: s0.bdVals,      borderColor: C_BD,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 3, hidden: isolatedAsset !== -1 && isolatedAsset !== 1 },
+      { label: 'Cash (T-bills)',          data: s0.caVals,      borderColor: C_CA,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 4, hidden: isolatedAsset !== -1 && isolatedAsset !== 2 },
+      { label: 'Custom Mix',             data: s0.mixVals,     borderColor: C_MIX, backgroundColor: 'transparent', borderWidth: 4,   pointRadius: 0, tension: 0.2, order: 1, hidden: isolatedAsset !== -1 && isolatedAsset !== 3 },
+      { label: 'Uninvested (0%)',        data: s0.inflVals,    borderColor: C_INF, backgroundColor: 'transparent', borderWidth: 1.8, pointRadius: 0, tension: 0.2, order: 5, borderDash: [6, 4], hidden: isolatedAsset !== -1 },
       // Nominal (market) lines (indices 5-8) — hidden until toggled on
-      { label: 'US Equity (nominal)',     data: s0.eqNomVals,  borderColor: C_EQ_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 6,  hidden: true, borderDash: [3, 2] },
-      { label: 'US Bonds (nominal)',      data: s0.bdNomVals,  borderColor: C_BD_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 7,  hidden: true, borderDash: [3, 2] },
-      { label: 'Cash / T-bills (nom.)',   data: s0.caNomVals,  borderColor: C_CA_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 8,  hidden: true, borderDash: [3, 2] },
-      { label: 'Custom Mix (nominal)',    data: s0.mixNomVals, borderColor: C_MIX_NOM, backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 9,  hidden: true, borderDash: [3, 2] },
+      { label: 'US Equity (nominal)',     data: s0.eqNomVals,  borderColor: C_EQ_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 6,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 0), borderDash: [3, 2] },
+      { label: 'US Bonds (nominal)',      data: s0.bdNomVals,  borderColor: C_BD_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 7,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 1), borderDash: [3, 2] },
+      { label: 'Cash / T-bills (nom.)',   data: s0.caNomVals,  borderColor: C_CA_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 8,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 2), borderDash: [3, 2] },
+      { label: 'Custom Mix (nominal)',    data: s0.mixNomVals, borderColor: C_MIX_NOM, backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 9,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 3), borderDash: [3, 2] },
     ]
   },
   options: {
@@ -519,7 +521,9 @@ const chart = new Chart(document.getElementById('mainChart'), {
           callback: v => {
             if (v < 1000) return '$' + Math.round(v);
             const k = v / 1000;
-            return '$' + (k >= 100 ? Math.round(k) : k.toFixed(0)) + 'k';
+            if (k >= 100) return '$' + Math.round(k) + 'k';
+            const s = k.toFixed(1);
+            return '$' + (s.endsWith('.0') ? s.slice(0, -2) : s) + 'k';
           },
           font: { size: 11 },
         },
@@ -529,8 +533,17 @@ const chart = new Chart(document.getElementById('mainChart'), {
   }
 });
 
-// Apply scale from URL (after chart is created)
-if (new URLSearchParams(window.location.search).get('sc') === 'lin') setScale('linear');
+// Apply URL state that requires the chart to exist
+(function applyURLState() {
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('sc') === 'lin') setScale('linear');
+  if (nominalOn) {
+    // nominalOn already set by loadFromURL; sync UI without re-toggling state
+    document.getElementById('btn-nominal').classList.add('active');
+    document.body.classList.add('nominal-on');
+  }
+  applyVisibility();
+})();
 
 // --- Scale toggle ---
 function setScale(type) {
@@ -636,10 +649,12 @@ function syncAllocDisplay() {
 // --- Share URL ---
 function buildShareURL() {
   const params = new URLSearchParams();
-  if (startYr !== DATA_START) params.set('yr', startYr);
+  if (startYr !== 2015) params.set('yr', startYr);
   if (eqPct !== 60) params.set('eq', eqPct);
   if (bdPct !== 30) params.set('bd', bdPct);
   if (chart.options.scales.y.type !== 'logarithmic') params.set('sc', 'lin');
+  if (nominalOn) params.set('nom', '1');
+  if (isolatedAsset !== -1) params.set('iso', isolatedAsset);
   const base = window.location.origin + window.location.pathname;
   const q = params.toString();
   return q ? base + '?' + q : base;

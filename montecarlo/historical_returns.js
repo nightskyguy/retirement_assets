@@ -1,11 +1,11 @@
 // Historical annual return and inflation data for Monte Carlo bootstrap simulation.
 // Sources: Damodaran (S&P 500 proxy, US 10-yr Treasury), MSCI (EAFE),
-//          BLS CPI-U (December-over-December, 1928–2024).
+//          BLS CPI-U (December-over-December, 1928–2025).
 // All values are decimal fractions: 0.10 = 10%, -0.37 = -37%.
 // Loadable via <script src="..."> (browser) or importScripts() (web worker).
 
 const HISTORICAL_RETURNS = {
-    // S&P 500 proxy (large-cap US equity), 1928–2024.  97 observations.
+    // S&P 500 proxy (large-cap US equity), 1928–2025.  98 observations.
     equity: [
         // 1928–1934
          0.4381, -0.0830, -0.2512, -0.4384, -0.0864,  0.4998, -0.0119,
@@ -33,11 +33,11 @@ const HISTORICAL_RETURNS = {
          0.0491,  0.1579,  0.0549, -0.3700,  0.2646,  0.1506,  0.0211,
         // 2012–2018
          0.1599,  0.3239,  0.1369,  0.0138,  0.1196,  0.2183, -0.0438,
-        // 2019–2024
-         0.3149,  0.1840,  0.2871, -0.1811,  0.2629,  0.2331,
+        // 2019–2025
+         0.3149,  0.1840,  0.2871, -0.1811,  0.2629,  0.2331,  0.1778,
     ],
 
-    // US 10-year Treasury bond total return, 1928–2024.  97 observations.
+    // US 10-year Treasury bond total return, 1928–2025.  98 observations.
     bonds: [
         // 1928–1934
          0.0084,  0.0604,  0.0664, -0.0256,  0.1684, -0.0008,  0.1002,
@@ -65,8 +65,8 @@ const HISTORICAL_RETURNS = {
          0.0287,  0.0196,  0.1021,  0.2587, -0.1112,  0.0846,  0.1604,
         // 2012–2018
          0.0297, -0.0910,  0.1075,  0.0128,  0.0069,  0.0232, -0.0002,
-        // 2019–2024
-         0.0964,  0.1133, -0.0442, -0.1783,  0.0405,  0.0080,
+        // 2019–2025
+         0.0964,  0.1133, -0.0442, -0.1783,  0.0405,  0.0080,  0.0780,
     ],
 
     // MSCI EAFE (international developed equity), 1970–2024.  55 observations.
@@ -89,7 +89,7 @@ const HISTORICAL_RETURNS = {
          0.2200,  0.0780,  0.1130, -0.1450,  0.1820,  0.0470,
     ],
 
-    // US CPI-U annual inflation (December-over-December), 1928–2024.  97 observations.
+    // US CPI-U annual inflation (December-over-December), 1928–2025.  98 observations.
     // Great Depression deflation, WWII price controls, post-war surge, Volcker disinflation,
     // and 2021–2022 post-COVID spike are all captured.
     inflation: [
@@ -119,8 +119,8 @@ const HISTORICAL_RETURNS = {
          0.0340,  0.0320,  0.0290,  0.0380, -0.0040,  0.0160,  0.0320,
         // 2012–2018
          0.0210,  0.0150,  0.0160,  0.0010,  0.0210,  0.0210,  0.0240,
-        // 2019–2024
-         0.0230,  0.0140,  0.0700,  0.0650,  0.0340,  0.0290,
+        // 2019–2025
+         0.0230,  0.0140,  0.0700,  0.0650,  0.0340,  0.0290,  0.0270,
     ],
 
     equityStartYear:    1928,

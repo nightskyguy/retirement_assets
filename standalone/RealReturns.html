@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Historical Real Returns — Stocks, Bonds &amp; Cash (1928–2025)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f5f4f0;
+    color: #1a1a18;
+    padding: 2rem;
+    min-height: 100vh;
+  }
+  .container {
+    max-width: 1060px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 12px;
+    border: 0.5px solid rgba(0,0,0,0.12);
+    padding: 2rem 2.5rem;
+  }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #6b6b67; margin-bottom: 1.25rem; }
+
+  .other-tools-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px;
+    background: #378add; color: #fff; border: none; border-radius: 5px;
+    font-family: inherit; font-size: 12px; font-weight: 500;
+    letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .other-tools-btn:hover { opacity: 0.85; }
+
+  /* Controls */
+  .controls {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 1.25rem; align-items: stretch;
+  }
+  .ctrl-card {
+    background: #f5f4f0; border-radius: 8px; padding: 0.75rem 1rem;
+    display: flex; align-items: center; gap: 12px; flex: 1; min-width: 220px;
+  }
+  .ctrl-card label { font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .ctrl-card input[type=range] { flex: 1; accent-color: #378add; }
+  .ctl-val { font-size: 18px; font-weight: 500; color: #378add; min-width: 44px; text-align: right; }
+  .scale-card {
+    background: #f5f4f0; border-radius: 8px; padding: 0.75rem 1rem;
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  }
+  .scale-card label { font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .toggle-btns { display: flex; border-radius: 5px; overflow: hidden; border: 1px solid rgba(0,0,0,0.15); }
+  .toggle-btns button {
+    padding: 5px 14px; font-family: inherit; font-size: 12px; font-weight: 500;
+    border: none; cursor: pointer; background: #fff; color: #6b6b67;
+    transition: background 0.15s, color 0.15s;
+  }
+  .toggle-btns button.active { background: #378add; color: #fff; }
+  #btn-nominal.active { background: #4841a9; }
+
+  /* Stats */
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 10px; margin-bottom: 1.25rem;
+  }
+  .stat-card {
+    background: #f5f4f0; border-radius: 8px; padding: 0.875rem 1rem;
+    border-left: 3px solid transparent;
+  }
+  .card-title {
+    font-size: 10px; font-weight: 600; color: #6b6b67;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+  }
+  .cagr-big { font-size: 22px; font-weight: 600; margin-bottom: 8px; line-height: 1; }
+  .stat-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+  .stat-lbl { font-size: 10px; color: #888780; }
+  .stat-val { font-size: 12px; font-weight: 600; }
+  .positive { color: #0f6e56; }
+  .negative { color: #a32d2d; }
+  .neutral  { color: #1a1a18; }
+
+  /* Allocation */
+  .alloc-panel {
+    background: #f5f4f0; border-radius: 8px; padding: 0.875rem 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .alloc-title {
+    font-size: 10px; font-weight: 600; color: #6b6b67;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;
+  }
+  .alloc-rows { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+  .alloc-row { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 180px; }
+  .alloc-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .alloc-row label { font-size: 12px; font-weight: 500; white-space: nowrap; min-width: 44px; }
+  .alloc-row input[type=range] { flex: 1; }
+  .alloc-pct { font-size: 14px; font-weight: 600; min-width: 34px; text-align: right; }
+  .alloc-derived { font-size: 14px; font-weight: 600; min-width: 34px; text-align: right; color: #888780; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 4px; font-size: 12px; color: #6b6b67; }
+  .lg-item {
+    display: flex; align-items: center; gap: 5px;
+    cursor: pointer; user-select: none;
+    padding: 3px 5px; border-radius: 4px;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .lg-item:hover { background: rgba(0,0,0,0.04); color: #1a1a18; }
+  .lg-item.lg-static { cursor: default; }
+  .lg-item.lg-static:hover { background: transparent; }
+  .lg-item.lg-dimmed { opacity: 0.3; }
+  .lg-item.lg-isolated { color: #1a1a18; font-weight: 600; }
+  .lg-ln { width: 18px; height: 3px; display: inline-block; border-radius: 2px; flex-shrink: 0; }
+  .lg-ln-wide { width: 22px; height: 3px; display: inline-block; border-radius: 2px; flex-shrink: 0; }
+  .lg-ln-dash { width: 20px; height: 0; border-top: 2.5px dashed; display: inline-block; flex-shrink: 0; }
+  /* Nominal (dark) swatches — hidden until nominal is on */
+  .lg-nom { display: none; }
+  body.nominal-on .lg-nom { display: inline-block; }
+  .legend-hint { font-size: 10px; color: #aaa9a5; margin-bottom: 8px; }
+
+  .chart-wrapper { position: relative; width: 100%; height: 420px; margin-bottom: 12px; }
+
+  .source-note {
+    font-size: 11px; color: #888780; line-height: 1.55;
+    border-top: 0.5px solid rgba(0,0,0,0.1); padding-top: 10px; margin-top: 4px;
+  }
+  .source-note a { color: #378add; }
+
+  @media (max-width: 800px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 620px) {
+    body { padding: 1rem; }
+    .container { padding: 1.25rem; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .controls { flex-direction: column; }
+    .alloc-rows { flex-direction: column; }
+    h1 { font-size: 17px; }
+  }
+  @media (max-width: 400px) {
+    .stats-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Historical Real Returns</h1>
+  <p class="subtitle">Inflation-adjusted cumulative growth of $10,000 &mdash; Stocks, Bonds &amp; Cash (US, 1928&ndash;2025)</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.25rem;position:relative;">
+    <button class="other-tools-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
+    <button class="other-tools-btn" style="background:#2a9d5c" onclick="toggleSharePanel()">&#8258; Share</button>
+    <div id="share-panel" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:800;background:#fff;border:1px solid #2a9d5c;border-radius:8px;padding:.85rem 1rem;width:min(520px,calc(100vw - 3rem));box-shadow:0 8px 32px rgba(0,0,0,.2);">
+      <div style="font-size:11px;color:#555;margin-bottom:.4rem;font-family:monospace;">Share this view</div>
+      <div style="display:flex;gap:6px;">
+        <input id="share-url-input" type="text" readonly onclick="this.select()" style="flex:1;background:#f8f9fa;border:1px solid #ccc;border-radius:4px;color:#222;font-family:monospace;font-size:11px;padding:5px 8px;outline:none;">
+        <button onclick="copyShareURL()" style="background:rgba(42,157,92,.15);border:1px solid rgba(42,157,92,.4);border-radius:4px;color:#1a6e3a;font-family:monospace;font-size:11px;padding:5px 12px;cursor:pointer;white-space:nowrap;">Copy</button>
+      </div>
+      <div id="share-status" style="font-family:monospace;font-size:10px;color:#1a6e3a;margin-top:.35rem;min-height:14px;"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl-card">
+      <label for="startYr">Start year</label>
+      <input type="range" id="startYr" min="1928" max="2024" step="1" value="1928">
+      <span class="ctl-val" id="startYrVal">1928</span>
+    </div>
+    <div class="scale-card">
+      <label>Y-axis</label>
+      <div class="toggle-btns">
+        <button id="btn-log" class="active" onclick="setScale('log')">Log</button>
+        <button id="btn-lin" onclick="setScale('linear')">Linear</button>
+      </div>
+    </div>
+    <div class="scale-card">
+      <label>Overlay</label>
+      <div class="toggle-btns">
+        <button id="btn-nominal" onclick="toggleNominal()">Market Returns</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-grid" id="statsGrid">
+    <!-- filled by JS -->
+  </div>
+
+  <div class="alloc-panel">
+    <div class="alloc-title">Custom Mix Allocation</div>
+    <div class="alloc-rows">
+      <div class="alloc-row">
+        <span class="alloc-dot" style="background:#378add"></span>
+        <label for="eqPct">Equity</label>
+        <input type="range" id="eqPct" min="0" max="100" step="5" value="60" style="accent-color:#378add">
+        <span class="alloc-pct" id="eqVal" style="color:#378add">60%</span>
+      </div>
+      <div class="alloc-row">
+        <span class="alloc-dot" style="background:#2a9d5c"></span>
+        <label for="bdPct">Bonds</label>
+        <input type="range" id="bdPct" min="0" max="40" step="5" value="30" style="accent-color:#2a9d5c">
+        <span class="alloc-pct" id="bdVal" style="color:#2a9d5c">30%</span>
+      </div>
+      <div class="alloc-row">
+        <span class="alloc-dot" style="background:#ef9f27"></span>
+        <label>Cash</label>
+        <span class="alloc-derived" id="caVal">10%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="lg-item" data-asset="0" onclick="legendClick(0)" title="Click to isolate US Equity">
+      <span class="lg-ln" style="background:#378add"></span>
+      <span class="lg-ln lg-nom" style="background:#1d5491"></span>
+      US Equity
+    </span>
+    <span class="lg-item" data-asset="1" onclick="legendClick(1)" title="Click to isolate US Bonds">
+      <span class="lg-ln" style="background:#2a9d5c"></span>
+      <span class="lg-ln lg-nom" style="background:#186838"></span>
+      US Bonds
+    </span>
+    <span class="lg-item" data-asset="2" onclick="legendClick(2)" title="Click to isolate Cash / T-bills">
+      <span class="lg-ln" style="background:#ef9f27"></span>
+      <span class="lg-ln lg-nom" style="background:#9e6408"></span>
+      Cash / T-bills
+    </span>
+    <span class="lg-item" data-asset="3" onclick="legendClick(3)" title="Click to isolate Custom Mix">
+      <span class="lg-ln-wide" style="background:#7f77dd"></span>
+      <span class="lg-ln-wide lg-nom" style="background:#4841a9"></span>
+      Custom Mix
+    </span>
+    <span class="lg-item lg-static">
+      <span class="lg-ln-dash" style="border-color:#e24b4a"></span>
+      Uninvested (0% return)
+    </span>
+  </div>
+  <p class="legend-hint" id="legend-hint">Click any asset to isolate &mdash; shows real + nominal side by side (when overlay is on)</p>
+
+  <div class="chart-wrapper">
+    <canvas id="mainChart" role="img"
+      aria-label="Line chart of cumulative inflation-adjusted value of $10,000 in US stocks, bonds, T-bills, and a custom allocation from the selected start year through 2025.">
+    </canvas>
+  </div>
+
+  <p class="source-note">
+    <strong>Methodology:</strong> Real return per year = (1 + nominal return) / (1 + CPI inflation) &minus; 1 (Fisher equation). Balances compound from $10,000. All returns are pre-tax (gross of income and capital gains taxes). <em>Uninvested</em> shows the real purchasing power of $10,000 held in physical cash earning 0% &mdash; eroded entirely by inflation each year. <em>Market Returns</em> overlay shows nominal (pre-inflation) compound growth for comparison.<br>
+    <strong>Equity:</strong> S&amp;P 500 total return proxy, 1928&ndash;2025.
+    <strong>Bonds:</strong> US 10-year Treasury total return, 1928&ndash;2025.
+    <strong>Cash:</strong> 3-month US Treasury bill annual return, 1928&ndash;2025.
+    <strong>Inflation:</strong> BLS CPI-U (December-over-December), 1928&ndash;2025.<br>
+    Sources: <a href="https://pages.stern.nyu.edu/~adamodar/" rel="nofollow" target="_blank">Damodaran Online</a>,
+    <a href="https://www.bls.gov/cpi/" rel="nofollow" target="_blank">BLS CPI-U</a>.
+    <span id="rr-vintage"></span>
+  </p>
+</div>
+
+<script src="../montecarlo/historical_returns.js"></script>
+<script src="real_returns_data.js"></script>
+<script>
+// --- Global Chart.js defaults ---
+Chart.defaults.color = '#4a4a47';
+Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(28,28,26,0.93)';
+Chart.defaults.plugins.tooltip.titleColor = '#fff';
+Chart.defaults.plugins.tooltip.bodyColor = '#ccc';
+Chart.defaults.plugins.tooltip.borderColor = 'rgba(255,255,255,0.08)';
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.callbacks.labelColor = ctx => ({
+  borderColor: ctx.dataset.borderColor || 'transparent',
+  backgroundColor: ctx.dataset.borderColor || 'transparent',
+});
+
+// --- Data refs ---
+const EQ  = HISTORICAL_RETURNS.equity;
+const BD  = HISTORICAL_RETURNS.bonds;
+const INF = HISTORICAL_RETURNS.inflation;
+const CA  = RR_TBILLS;
+const DATA_START = 1928;
+const DATA_END   = 2025;
+
+// --- Colors ---
+const C_EQ  = '#378add', C_EQ_NOM  = '#1d5491';
+const C_BD  = '#2a9d5c', C_BD_NOM  = '#186838';
+const C_CA  = '#ef9f27', C_CA_NOM  = '#9e6408';
+const C_MIX = '#7f77dd', C_MIX_NOM = '#4841a9';
+const C_INF = '#e24b4a';
+
+document.getElementById('rr-vintage').textContent =
+  'Data through ' + DATA_END + ' (updated ' + RR_VINTAGE + ').';
+
+// --- State ---
+let startYr = 1928, eqPct = 60, bdPct = 30;
+let nominalOn = false, isolatedAsset = -1;
+let annualData = [];
+
+// Load from URL before chart init
+(function loadFromURL() {
+  const p = new URLSearchParams(window.location.search);
+  if (p.has('yr')) startYr = Math.max(DATA_START, Math.min(DATA_END - 1, +p.get('yr') || DATA_START));
+  if (p.has('eq')) eqPct = Math.max(0, Math.min(100, +p.get('eq') || 60));
+  if (p.has('bd')) bdPct = Math.max(0, Math.min(100 - eqPct, +p.get('bd') || 30));
+})();
+
+// --- Helpers ---
+function realRet(nom, inf) { return (1 + nom) / (1 + inf) - 1; }
+function pctFmt(v, dec) { return (v >= 0 ? '+' : '') + (v * 100).toFixed(dec ?? 1) + '%'; }
+function dollarFmt(v) { return '$' + Math.round(v).toLocaleString(); }
+function cagrCalc(finalVal, n) { return Math.pow(finalVal / 10000, 1 / n) - 1; }
+
+// --- Compute series ---
+function computeSeries() {
+  const idx0  = startYr - DATA_START;
+  const n     = DATA_END - startYr + 1;
+  const caPct = 100 - eqPct - bdPct;
+
+  const labels      = [startYr - 1];
+  const eqVals      = [10000], bdVals    = [10000], caVals    = [10000];
+  const mixVals     = [10000], inflVals  = [10000];
+  const eqNomVals   = [10000], bdNomVals = [10000], caNomVals = [10000], mixNomVals = [10000];
+
+  annualData = [];
+
+  let eqB = 10000, bdB = 10000, caB = 10000, mixB = 10000, inflB = 10000;
+  let eqNomB = 10000, bdNomB = 10000, caNomB = 10000, mixNomB = 10000;
+
+  for (let i = 0; i < n; i++) {
+    const yr    = startYr + i;
+    const eq    = EQ[idx0 + i];
+    const bd    = BD[idx0 + i];
+    const ca    = CA[idx0 + i];
+    const inf   = INF[idx0 + i];
+    const rEq   = realRet(eq, inf);
+    const rBd   = realRet(bd, inf);
+    const rCa   = realRet(ca, inf);
+    const rMix  = (eqPct * rEq + bdPct * rBd + caPct * rCa) / 100;
+    const mixNom = (eqPct * eq  + bdPct * bd  + caPct * ca)  / 100;
+    const rInfl = 1 / (1 + inf) - 1;
+
+    eqB   *= 1 + rEq;  bdB  *= 1 + rBd;  caB  *= 1 + rCa;
+    mixB  *= 1 + rMix; inflB *= 1 + rInfl;
+    eqNomB *= 1 + eq;  bdNomB *= 1 + bd;  caNomB *= 1 + ca;  mixNomB *= 1 + mixNom;
+
+    labels.push(yr);
+    eqVals.push(+eqB.toFixed(2));      bdVals.push(+bdB.toFixed(2));
+    caVals.push(+caB.toFixed(2));      mixVals.push(+mixB.toFixed(2));
+    inflVals.push(+inflB.toFixed(2));
+    eqNomVals.push(+eqNomB.toFixed(2)); bdNomVals.push(+bdNomB.toFixed(2));
+    caNomVals.push(+caNomB.toFixed(2)); mixNomVals.push(+mixNomB.toFixed(2));
+    annualData.push({ yr, eq, bd, ca, inf, rEq, rBd, rCa, rMix, mixNom });
+  }
+
+  return { labels, eqVals, bdVals, caVals, mixVals, inflVals,
+           eqNomVals, bdNomVals, caNomVals, mixNomVals, n };
+}
+
+// --- Stat cards ---
+function renderStats(series) {
+  const { eqVals, bdVals, caVals, mixVals, n } = series;
+
+  function card(vals, color, name, rets) {
+    const final = vals[vals.length - 1];
+    const cg    = cagrCalc(final, n);
+    let best  = { ret: -Infinity, yr: 0 };
+    let worst = { ret:  Infinity, yr: 0 };
+    rets.forEach((r, i) => {
+      if (r > best.ret)  { best.ret  = r; best.yr  = annualData[i].yr; }
+      if (r < worst.ret) { worst.ret = r; worst.yr = annualData[i].yr; }
+    });
+    const pos = rets.filter(r => r > 0).length;
+    return `
+      <div class="stat-card" style="border-left-color:${color}">
+        <p class="card-title">${name}</p>
+        <p class="cagr-big ${cg >= 0 ? 'positive' : 'negative'}">${pctFmt(cg)}/yr</p>
+        <div class="stat-row">
+          <span class="stat-lbl">Final $10k value</span>
+          <span class="stat-val">${dollarFmt(final)}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-lbl">Best year (real)</span>
+          <span class="stat-val positive">${pctFmt(best.ret)} (${best.yr})</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-lbl">Worst year (real)</span>
+          <span class="stat-val negative">${pctFmt(worst.ret)} (${worst.yr})</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-lbl">Positive years</span>
+          <span class="stat-val neutral">${pos} / ${n}</span>
+        </div>
+      </div>`;
+  }
+
+  document.getElementById('statsGrid').innerHTML = [
+    card(eqVals,  C_EQ,  'US Equity',          annualData.map(d => d.rEq)),
+    card(bdVals,  C_BD,  'US Bonds',            annualData.map(d => d.rBd)),
+    card(caVals,  C_CA,  'Cash (T-bills)',       annualData.map(d => d.rCa)),
+    card(mixVals, C_MIX, `Mix ${eqPct}/${bdPct}/${100-eqPct-bdPct}`, annualData.map(d => d.rMix)),
+  ].join('');
+}
+
+// --- Sync sliders/display to loaded state ---
+document.getElementById('startYr').value = startYr;
+document.getElementById('startYrVal').textContent = startYr;
+document.getElementById('eqPct').value = eqPct;
+document.getElementById('bdPct').value = bdPct;
+document.getElementById('bdPct').max = 100 - eqPct;
+syncAllocDisplay();
+
+// --- Init chart ---
+const s0 = computeSeries();
+renderStats(s0);
+
+const breakevenPlugin = {
+  id: 'breakeven',
+  afterDraw(ch) {
+    const { ctx, chartArea: { left, right, top, bottom }, scales: { y } } = ch;
+    const yPx = y.getPixelForValue(10000);
+    if (yPx < top || yPx > bottom) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(left, yPx);
+    ctx.lineTo(right, yPx);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(120,118,110,0.55)';
+    ctx.setLineDash([]);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+const chart = new Chart(document.getElementById('mainChart'), {
+  type: 'line',
+  plugins: [breakevenPlugin],
+  data: {
+    labels: s0.labels,
+    datasets: [
+      // Real lines (indices 0-4)
+      { label: 'US Equity',              data: s0.eqVals,      borderColor: C_EQ,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 2 },
+      { label: 'US Bonds',               data: s0.bdVals,      borderColor: C_BD,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 3 },
+      { label: 'Cash (T-bills)',          data: s0.caVals,      borderColor: C_CA,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 4 },
+      { label: 'Custom Mix',             data: s0.mixVals,     borderColor: C_MIX, backgroundColor: 'transparent', borderWidth: 4,   pointRadius: 0, tension: 0.2, order: 1 },
+      { label: 'Uninvested (0%)',        data: s0.inflVals,    borderColor: C_INF, backgroundColor: 'transparent', borderWidth: 1.8, pointRadius: 0, tension: 0.2, order: 5, borderDash: [6, 4] },
+      // Nominal (market) lines (indices 5-8) — hidden until toggled on
+      { label: 'US Equity (nominal)',     data: s0.eqNomVals,  borderColor: C_EQ_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 6,  hidden: true, borderDash: [3, 2] },
+      { label: 'US Bonds (nominal)',      data: s0.bdNomVals,  borderColor: C_BD_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 7,  hidden: true, borderDash: [3, 2] },
+      { label: 'Cash / T-bills (nom.)',   data: s0.caNomVals,  borderColor: C_CA_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 8,  hidden: true, borderDash: [3, 2] },
+      { label: 'Custom Mix (nominal)',    data: s0.mixNomVals, borderColor: C_MIX_NOM, backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 9,  hidden: true, borderDash: [3, 2] },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        mode: 'index',
+        intersect: false,
+        filter: item => !item.dataset.hidden,
+        callbacks: {
+          title: items => {
+            const yr = +items[0].label;
+            return yr === startYr - 1 ? 'Starting balance' : String(yr);
+          },
+          label: ctx => {
+            const yr = +ctx.label;
+            if (yr === startYr - 1) return '  ' + ctx.dataset.label + ': $10,000';
+            const i = ctx.dataIndex - 1;
+            const d = annualData[i];
+            const isNom = ctx.datasetIndex >= 5;
+            const retMap = isNom ? {
+              'US Equity (nominal)':    d?.eq,
+              'US Bonds (nominal)':     d?.bd,
+              'Cash / T-bills (nom.)':  d?.ca,
+              'Custom Mix (nominal)':   d?.mixNom,
+            } : {
+              'US Equity':       d?.rEq,
+              'US Bonds':        d?.rBd,
+              'Cash (T-bills)':  d?.rCa,
+              'Custom Mix':      d?.rMix,
+              'Uninvested (0%)': d ? 1 / (1 + d.inf) - 1 : null,
+            };
+            const r = retMap[ctx.dataset.label];
+            const tag = r != null ? '  (' + pctFmt(r) + (isNom ? ' nom)' : ' real)') : '';
+            return '  ' + ctx.dataset.label + ': ' + dollarFmt(ctx.parsed.y) + tag;
+          },
+          footer: items => {
+            const yr = +items[0].label;
+            if (yr === startYr - 1) return [];
+            const d = annualData[items[0].dataIndex - 1];
+            if (!d) return [];
+            return [
+              'Equity nominal: '  + pctFmt(d.eq),
+              'Bonds nominal: '   + pctFmt(d.bd),
+              'T-bills nominal: ' + pctFmt(d.ca),
+              'CPI inflation: '   + pctFmt(d.inf),
+            ];
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          font: { size: 10 },
+          maxRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: 16,
+          callback: function(val, i) {
+            return i === 0 ? 'Start' : this.getLabelForValue(val);
+          }
+        },
+        grid: { display: false },
+      },
+      y: {
+        type: 'logarithmic',
+        ticks: {
+          callback: v => {
+            if (v < 1000) return '$' + Math.round(v);
+            const k = v / 1000;
+            return '$' + (k >= 100 ? Math.round(k) : k.toFixed(0)) + 'k';
+          },
+          font: { size: 11 },
+        },
+        grid: { color: 'rgba(0,0,0,0.06)' },
+      }
+    }
+  }
+});
+
+// Apply scale from URL (after chart is created)
+if (new URLSearchParams(window.location.search).get('sc') === 'lin') setScale('linear');
+
+// --- Scale toggle ---
+function setScale(type) {
+  const useLog = type === 'log';
+  document.getElementById('btn-log').classList.toggle('active', useLog);
+  document.getElementById('btn-lin').classList.toggle('active', !useLog);
+  chart.options.scales.y.type = useLog ? 'logarithmic' : 'linear';
+  chart.update();
+}
+
+// --- Nominal overlay toggle ---
+function toggleNominal() {
+  nominalOn = !nominalOn;
+  document.getElementById('btn-nominal').classList.toggle('active', nominalOn);
+  document.body.classList.toggle('nominal-on', nominalOn);
+  applyVisibility();
+}
+
+// --- Legend isolation ---
+function legendClick(idx) {
+  isolatedAsset = (isolatedAsset === idx) ? -1 : idx;
+  applyVisibility();
+}
+
+function applyVisibility() {
+  chart.data.datasets.forEach((ds, i) => {
+    let vis;
+    if (i < 4) {
+      // real asset lines
+      vis = isolatedAsset === -1 || i === isolatedAsset;
+    } else if (i === 4) {
+      // uninvested — hide when anything isolated
+      vis = isolatedAsset === -1;
+    } else {
+      // nominal lines (i - 5 = asset index)
+      const ai = i - 5;
+      vis = nominalOn && (isolatedAsset === -1 || ai === isolatedAsset);
+    }
+    chart.setDatasetVisibility(i, vis);
+  });
+  updateLegendActiveState();
+  chart.update('none');
+}
+
+function updateLegendActiveState() {
+  document.querySelectorAll('.lg-item[data-asset]').forEach(el => {
+    const idx = +el.dataset.asset;
+    el.classList.toggle('lg-isolated', isolatedAsset === idx);
+    el.classList.toggle('lg-dimmed',   isolatedAsset !== -1 && isolatedAsset !== idx);
+  });
+}
+
+// --- Refresh ---
+function refresh() {
+  const s = computeSeries();
+  chart.data.labels = s.labels;
+  chart.data.datasets[0].data = s.eqVals;
+  chart.data.datasets[1].data = s.bdVals;
+  chart.data.datasets[2].data = s.caVals;
+  chart.data.datasets[3].data = s.mixVals;
+  chart.data.datasets[4].data = s.inflVals;
+  chart.data.datasets[5].data = s.eqNomVals;
+  chart.data.datasets[6].data = s.bdNomVals;
+  chart.data.datasets[7].data = s.caNomVals;
+  chart.data.datasets[8].data = s.mixNomVals;
+  chart.update();
+  renderStats(s);
+}
+
+// --- Start year slider ---
+document.getElementById('startYr').addEventListener('input', function() {
+  startYr = +this.value;
+  document.getElementById('startYrVal').textContent = startYr;
+  refresh();
+});
+
+// --- Allocation sliders ---
+const eqSlider = document.getElementById('eqPct');
+const bdSlider = document.getElementById('bdPct');
+
+eqSlider.addEventListener('input', function() {
+  eqPct = +this.value;
+  const maxBd = 100 - eqPct;
+  if (bdPct > maxBd) { bdPct = maxBd; bdSlider.value = bdPct; }
+  bdSlider.max = maxBd;
+  syncAllocDisplay();
+  refresh();
+});
+
+bdSlider.addEventListener('input', function() {
+  bdPct = +this.value;
+  syncAllocDisplay();
+  refresh();
+});
+
+function syncAllocDisplay() {
+  const caPct = 100 - eqPct - bdPct;
+  document.getElementById('eqVal').textContent = eqPct + '%';
+  document.getElementById('bdVal').textContent = bdPct + '%';
+  document.getElementById('caVal').textContent = caPct + '%';
+}
+
+// --- Share URL ---
+function buildShareURL() {
+  const params = new URLSearchParams();
+  if (startYr !== DATA_START) params.set('yr', startYr);
+  if (eqPct !== 60) params.set('eq', eqPct);
+  if (bdPct !== 30) params.set('bd', bdPct);
+  if (chart.options.scales.y.type !== 'logarithmic') params.set('sc', 'lin');
+  const base = window.location.origin + window.location.pathname;
+  const q = params.toString();
+  return q ? base + '?' + q : base;
+}
+
+function toggleSharePanel() {
+  const panel = document.getElementById('share-panel');
+  const isOpen = panel.style.display === 'block';
+  if (isOpen) { panel.style.display = 'none'; return; }
+  document.getElementById('share-url-input').value = buildShareURL();
+  document.getElementById('share-status').textContent = '';
+  panel.style.display = 'block';
+  requestAnimationFrame(() => { document.getElementById('share-url-input').select(); });
+}
+
+async function copyShareURL() {
+  const input  = document.getElementById('share-url-input');
+  const status = document.getElementById('share-status');
+  input.select();
+  try {
+    await navigator.clipboard.writeText(input.value);
+    status.textContent = '✓ Copied to clipboard';
+    return;
+  } catch {}
+  try { document.execCommand('copy'); status.textContent = '✓ Copied to clipboard'; }
+  catch { status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C'; }
+}
+
+document.addEventListener('click', e => {
+  const panel = document.getElementById('share-panel');
+  if (panel && panel.style.display === 'block' &&
+      !panel.contains(e.target) &&
+      !e.target.closest('[onclick="toggleSharePanel()"]')) {
+    panel.style.display = 'none';
+  }
+});
+</script>
+<script src="../other_tools.js"></script>
+</body>
+</html>

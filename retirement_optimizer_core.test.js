@@ -493,6 +493,50 @@ test('compactNum: 0 and non-finite pass through unchanged', () => {
     assert(parseShorthand(compactNum('0')) === 0, 'compact 0 should still decode to 0');
 });
 
+// ── Stress mode: real CAGR scoring (Fisher equation) ─────────────────────────
+// buildStressBank() ranks worst decades by real CAGR, not nominal equity CAGR.
+// These tests verify the math inline without loading prng.js or HISTORICAL_RETURNS.
+
+function _realCagr(eqCagr, infCagr) {
+    const infFloor = Math.max(-0.005, infCagr);
+    return (1 + eqCagr) / (1 + infFloor) - 1;
+}
+
+test('stress scoring: Fisher equation gives correct real CAGR', () => {
+    // 1970s archetype: flat equity +6%, high inflation +7% → real ≈ -0.935%
+    const real = _realCagr(0.06, 0.07);
+    const expected = (1.06 / 1.07) - 1;   // ≈ -0.009346
+    assert(Math.abs(real - expected) < 1e-10, `Fisher identity failed: got ${real}`);
+    assert(real < 0, 'positive nominal equity + higher inflation should give negative real CAGR');
+});
+
+test('stress scoring: deflation clamped to -0.5% floor', () => {
+    // 1930s severe deflation (-3%) must be clamped; only -0.5% deflation counted
+    const withClamp    = _realCagr(0.05, -0.03);          // floor at -0.005 applied
+    const expectedClamp = (1.05 / (1 + (-0.005))) - 1;    // (1.05/0.995)-1 ≈ +5.53%
+    const unclamped     = (1.05 / (1 + (-0.03)))  - 1;    // (1.05/0.97)-1 ≈ +8.25%
+    assert(Math.abs(withClamp - expectedClamp) < 1e-10, 'deflation floor should use exactly -0.5%');
+    assert(withClamp < unclamped, 'clamping deflation reduces the computed real CAGR boost');
+});
+
+test('stress scoring: stagflation decade ranks worse than mild equity bear', () => {
+    // Scenario A: stagflation — equity +2%, inflation +8% → real ≈ -5.6%
+    const stagflation = _realCagr(0.02, 0.08);
+    // Scenario B: mild bear — equity -3%, near-zero inflation +0.5% → real ≈ -3.5%
+    const mildBear = _realCagr(-0.03, 0.005);
+    assert(stagflation < mildBear,
+        `stagflation (${(stagflation*100).toFixed(2)}%) should rank worse than mild bear with low inflation (${(mildBear*100).toFixed(2)}%)`);
+});
+
+test('stress scoring: 1999 ranks worse than 1929 by real CAGR', () => {
+    // 1999 actual: eq≈-1.4%, inf≈+2.9% → real ≈ -4.2%  (equity loss + inflation drag)
+    // 1929 actual: eq≈-1.7%, inf≈-0.5% (at floor)   → real ≈ -1.2%  (equity crash + deflation floor)
+    const real1999 = _realCagr(-0.014, 0.029);
+    const real1929 = _realCagr(-0.017, -0.005);  // inf is already at the floor
+    assert(real1999 < real1929,
+        `1999 (${(real1999*100).toFixed(2)}%) should rank worse than 1929 (${(real1929*100).toFixed(2)}%) under real CAGR scoring`);
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

@@ -240,7 +240,7 @@ function renderMCResults(msg) {
     const descEl = document.getElementById('mc-chart-desc');
     if (descEl) {
         descEl.textContent = msg.stressLabels
-            ? `Each line = one historical sequence. "eq" = nominal equity CAGR over first 10 years; "inf" = average inflation over same window. Click a legend item to isolate it; click again to restore all.`
+            ? `Each line = one historical sequence. "eq" = nominal equity CAGR over first 10 years; "inf" = inflation CAGR over same window; "real" = inflation-adjusted real CAGR (Fisher). Click a legend item to isolate it; click again to restore all.`
             : `Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0. Click a legend item to isolate it; click again to restore all.`;
     }
 
@@ -308,7 +308,7 @@ function renderMCMetrics(msg) {
         if (iS) tbl += row('Inflation', [iS.min, iS.cagr, iS.max]);
         tbl += `</div>`;
         const srcLabel = msg.stressLabels
-            ? `Stress: ${msg.stressLabels.length} worst sequences (by first 10yr CAGR)`
+            ? `Stress: ${msg.stressLabels.length} worst sequences (by 10yr real CAGR, inflation-adjusted)`
             : 'Sampled (1928–2024)';
         parts.push(`<span style="color:#888;font-size:0.8em;">${srcLabel}</span>${tbl}`);
     }
@@ -554,17 +554,12 @@ function renderMCChart(msg) {
             const stratPfx  = multiStrat ? `[${famName}] ` : '';
 
             v.stressPaths.forEach((pathData, rank) => {
-                const startYear = msg.stressStartYears?.[rank]     ?? rank;
-                const eqCAGR    = msg.stressDecadeCAGRs?.[rank];
-                const infCAGR   = msg.stressInflationCAGRs?.[rank];
-                const s = (v, d) => (v >= 0 ? '+' : '') + (v * 100).toFixed(d) + '%';
-                const eqStr  = eqCAGR  != null ? `eq: ${s(eqCAGR,  1)}` : '';
-                const infStr = infCAGR != null ? ` inf: ${s(infCAGR, 1)}` : '';
+                const seriesLabel = msg.stressLabels?.[rank] ?? String(rank);
                 const color  = multiStrat
                     ? _stressColorMulti(famName, rank, nS, fallbackIdx)
                     : _stressColor(rank, nS);
                 datasets.push({
-                    label:           `${stratPfx}${startYear} (${eqStr}${infStr})`,
+                    label:           `${stratPfx}${seriesLabel}`,
                     data:            deflate(pathData),
                     borderColor:     color,
                     backgroundColor: 'transparent',

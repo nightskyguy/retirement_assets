@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1048</title>
+    <title>Retirement Optimizer 11.1060</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -442,7 +442,7 @@
 					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results.">Seed
 						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
 					</label>
-					<label style="font-size:0.85em;" title="Number of worst historical starting sequences to use in Stress mode. Scored by first 10-year equity CAGR. Worst 10: 1929, 1999, 2000, 1930, 1928, 1931, 1965, 2001, 2002, 1969.">Stress sequences
+					<label style="font-size:0.85em;" title="Number of worst historical starting sequences to use in Stress mode. Scored by first-decade real (inflation-adjusted) CAGR via Fisher equation. Worst 10: 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970, 1929.">Stress sequences
 						<input type="number" id="mc-stress-count" value="10" min="3" max="20" step="1" style="width:50px;margin-left:4px;">
 					</label>
 					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical (bootstrap) paths that begin with a worst-decade historical sequence before continuing with random draws. 0 = pure bootstrap; 25% ≈ historical frequency of below-inflation first decades. Increases SoRR realism without discarding probabilistic paths. Only applies in Historical mode.">Bear-start %
@@ -557,21 +557,27 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.1048</b> <strong>Shorter share URLs:</strong> (up to 70% shorter); older/longer URLs should still load unchanged.</li>
+				<li><b>11.1060</b> <strong>Stress mode now ranks worst decades by real inflation-adjusted Compound Annual Growth Rate (Real CAGR):</strong> real CAGR = (1 + equity) / (1 + inflation) − 1. High-inflation decades like the 1960s–70s stagflation, and the Lost Decade (1999-2010)  correctly rank as worse for retirees than a pure equity crash with near-zero inflation. Depression-era crashes also had high <i>deflation</i> which is now clamped to a minimum of -1% (rather than -9%).</li>
 				<li><b>11.1042</b> <strong>Guyton-Klinger Guardrails withdrawal strategy:</strong>
 					<ul style="margin:4px 0 0 16px;">
 						<li><strong>Dynamic spending rules.</strong> The <em>Guyton-Klinger</em> strategy adjusts annual spending based on portfolio withdrawal rate. It skips inflation adjustments when the prior year return was negative, and cuts spending 10% when the withdrawal rate exceeds the upper guardrail; raises spending 10% when withdrawal rate falls below the lower guardrail. Supports higher initial withdrawal rates (~5–5.5%) by absorbing sequence-of-returns risk through spending flexibility.</li>
 						<li><strong>Four configurable parameters:</strong> Upper/lower guardrail (default ±20% of IWR) and cut/raise percent (default 10%). Annual Details Income category shows <em>gkSpend</em> and <em>gkAdj</em> columns.</li>
 					</ul>
 				</li>
-				<li><b>11.1019</b> <strong>Cyclic-brokerage drawdown fixed:</strong></li>
-				<li><b>11.1018</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong></li>
 				<li><b>11.1001</b> <strong>Best "Baseline" is used for strategy comparison:</strong>
 					<ul style="margin:4px 0 0 16px;">
-						<li><strong>Honest baseline.</strong> The optimizer now also runs every strategy family with <em>no Roth conversions and no cyclic brokerage maneuvering</em>, no QCDs, and pins the strongest of those as a light-green <em>⚓ BASELINE</em> reference row at the top of the results. Every other strategy is measured against it — because "strategy A beats strategy B" only means something relative to the best you can do without conversion/brokerage tricks.</li>
-						<li><strong>Cleaner table.</strong> Infeasible (bracket-unreachable) rows are hidden by default — click the <em>Infeasible</em> legend to reveal or hide them. Failed plans always sort below successful ones. Every column header now has an explanatory tooltip.</li>
+						<li><strong>Honest baseline.</strong> The optimizer now also runs every strategy family with <em>no Roth conversions and no cyclic brokerage maneuvering</em>, no QCDs, and pins the strongest of those as a <em>⚓ BASELINE</em> reference row at the top of the results. Every other strategy is measured against it — because "strategy A beats strategy B" only means something relative to the best you can do without conversion/brokerage tricks.</li>
 					</ul>
 				</li>
+				</ul>
+				<details>
+					<summary style="cursor:pointer;color:#888;font-size:0.9em;">Older changes…</summary>
+					<ul>
+						<li><b>11.1048</b> <strong>Shorter share URLs:</strong> (up to 70% shorter); older/longer URLs should still load unchanged.</li>
+						<li><b>11.1019</b> <strong>Cyclic-brokerage drawdown fixed:</strong></li>
+				<li><b>11.1018</b> <strong>Δ columns honor Future/Current $; tax tooltips clarified:</strong></li>
+
+						<li><strong>Cleaner table.</strong> Infeasible (bracket-unreachable) rows are hidden by default — click the <em>Infeasible</em> legend to reveal or hide them. Failed plans always sort below successful ones. Every column header now has an explanatory tooltip.</li>
 				<li><b>11.fed</b> <strong>Charitable Giving (QCDs) &amp; UX Improvements:</strong>
 					<ul style="margin:4px 0 0 16px;">
 						<li><strong>Qualified Charitable Distributions (QCDs):</strong> New <em>Charitable Giving (QCD)</em> section in the sidebar. Enter an annual household QCD maximum — the simulation transfers that amount directly from the larger eligible IRA to charity each year (age 70½+ per person). QCDs satisfy the RMD requirement without adding to taxable income, reducing IRMAA exposure.
@@ -580,14 +586,10 @@
 						<li><strong>Strategy panel switches:</strong> <em>Maximize Conversions</em> (formerly "Max Conversion"), <em>Cycle Brokerage</em> (formerly "Cyclic"), <em>Optimize Spend</em>, and <em>Optimize Conversions</em> (formerly "Conv Optimizer") are now all in the strategy sidebar with labels to the right of each switch. Toggle labels are positioned so that the green (on) position visually aligns with the label.</li>
 					</ul>
 				</li>
-				</ul>
-				<details>
-					<summary style="cursor:pointer;color:#888;font-size:0.9em;">Older changes…</summary>
-					<ul>
-				<li><b>11.ecc</b> <strong>Withdrawal Rate:</strong> Corrected Portfolio Withdrawal percent calculations. Added netOutflow, grossOutflow and inFlow columns for summary information.</li>
+						<li><b>11.ecc</b> <strong>Withdrawal Rate:</strong> Corrected Portfolio Withdrawal percent calculations. Added netOutflow, grossOutflow and inFlow columns for summary information.</li>
 				<li><b>11.ecb</b> <strong>Withdrawal Timing:</strong> Each simulation year now auto-selects Early (January) or Late (December) withdrawal timing. Conversion years use Early — maximizing Roth compounding duration. Spending-only years use Late — the full portfolio compounds before the withdrawal exits, gaining D×r per year (~$3,500/yr on a $50k draw at 7%). No manual toggle; the algorithm tracks prior-year conversion activity. A new <em>Timing</em> column in Annual Details shows <em>Early(Conv)</em> or <em>Late(Spend)</em> for each year.</li>
 				<li><b>11.eca</b> <strong>Bear-Start Overlay (Historical Monte Carlo):</strong> In Historical mode, the bottom 25% of paths begin with a randomly-sampled worst-decade historical sequence before continuing with random draws. The likelihood of a "Bear start" market is 23%, so this adds realistic sequence of return risks (SORR).</li>
-				<li><b>11.ec9</b> <strong>Stress Mode:</strong> Monte Carlo "Stress (worst sequences)" runs 10 worst historical retirement-start sequences (1929, 1999, 2000, 1930, 1928, 1931, 1965, 2001, 2002, 1969) scored by first-decade equity CAGR. Currently nominal-only; inflation-adjusted scoring is in the future. Shows sequence-of-returns risk directly — each line is a real historical scenario. Clicking on a legend hides all other plots. Will your retirement withdrawal strategy survive the crash of 1929? The tech bubble of 2000? This will tell you.</li>
+				<li><b>11.ec9</b> <strong>Stress Mode:</strong> Monte Carlo "Stress (worst sequences)" runs the worst historical retirement-start sequences scored by first-decade real (inflation-adjusted) CAGR. Shows sequence-of-returns risk directly — each line is a real historical scenario. Chart labels show nominal equity CAGR, inflation CAGR, and real CAGR for each scenario. Clicking on a legend hides all other plots. Will your retirement withdrawal strategy survive the stagflation of the 1960s–70s? The tech bubble of 2000? This will tell you.</li>
 			<li><b>11.ec8</b> <strong>State Bracket Inflation Fix:</strong> MT, ND, AL, OH, and SC have statutory fixed income tax brackets (they were being incorrectly inflated which would understate future state taxation). Other states are unaffected. <em>Known limitation: the standard deduction for AL, OH, and MT is fixed by statute but is being adjusted - future fix to be provided.</em></li>
 				<li><b>11.ec7</b> <strong>State Tax Expansion:</strong> Added AL, AZ, CO, IN, KY, MA, ME, MN, MT, ND, OH, SC, WI to the state income tax dropdown.  All states adjusted to latest available information.</li>
 				<li><b>11.ec6</b> <strong>Cycle Brokerage:</strong> New <em>Cycle Brokerage</em> toggle in the strategy box enables alternating IRA draw years and brokerage LTCG harvest years.

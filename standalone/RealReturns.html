@@ -438,17 +438,17 @@ const chart = new Chart(document.getElementById('mainChart'), {
   data: {
     labels: s0.labels,
     datasets: [
-      // Real lines (indices 0-4)
-      { label: 'US Equity',              data: s0.eqVals,      borderColor: C_EQ,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 2 },
-      { label: 'US Bonds',               data: s0.bdVals,      borderColor: C_BD,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 3 },
-      { label: 'Cash (T-bills)',          data: s0.caVals,      borderColor: C_CA,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 4 },
-      { label: 'Custom Mix',             data: s0.mixVals,     borderColor: C_MIX, backgroundColor: 'transparent', borderWidth: 4,   pointRadius: 0, tension: 0.2, order: 1 },
-      { label: 'Uninvested (0%)',        data: s0.inflVals,    borderColor: C_INF, backgroundColor: 'transparent', borderWidth: 1.8, pointRadius: 0, tension: 0.2, order: 5, borderDash: [6, 4] },
+      // Real lines (indices 0-4) — hidden pre-computed from URL state so log scale is correct on first render
+      { label: 'US Equity',              data: s0.eqVals,      borderColor: C_EQ,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 2, hidden: isolatedAsset !== -1 && isolatedAsset !== 0 },
+      { label: 'US Bonds',               data: s0.bdVals,      borderColor: C_BD,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 3, hidden: isolatedAsset !== -1 && isolatedAsset !== 1 },
+      { label: 'Cash (T-bills)',          data: s0.caVals,      borderColor: C_CA,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 4, hidden: isolatedAsset !== -1 && isolatedAsset !== 2 },
+      { label: 'Custom Mix',             data: s0.mixVals,     borderColor: C_MIX, backgroundColor: 'transparent', borderWidth: 4,   pointRadius: 0, tension: 0.2, order: 1, hidden: isolatedAsset !== -1 && isolatedAsset !== 3 },
+      { label: 'Uninvested (0%)',        data: s0.inflVals,    borderColor: C_INF, backgroundColor: 'transparent', borderWidth: 1.8, pointRadius: 0, tension: 0.2, order: 5, borderDash: [6, 4], hidden: isolatedAsset !== -1 },
       // Nominal (market) lines (indices 5-8) — hidden until toggled on
-      { label: 'US Equity (nominal)',     data: s0.eqNomVals,  borderColor: C_EQ_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 6,  hidden: true, borderDash: [3, 2] },
-      { label: 'US Bonds (nominal)',      data: s0.bdNomVals,  borderColor: C_BD_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 7,  hidden: true, borderDash: [3, 2] },
-      { label: 'Cash / T-bills (nom.)',   data: s0.caNomVals,  borderColor: C_CA_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 8,  hidden: true, borderDash: [3, 2] },
-      { label: 'Custom Mix (nominal)',    data: s0.mixNomVals, borderColor: C_MIX_NOM, backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 9,  hidden: true, borderDash: [3, 2] },
+      { label: 'US Equity (nominal)',     data: s0.eqNomVals,  borderColor: C_EQ_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 6,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 0), borderDash: [3, 2] },
+      { label: 'US Bonds (nominal)',      data: s0.bdNomVals,  borderColor: C_BD_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 7,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 1), borderDash: [3, 2] },
+      { label: 'Cash / T-bills (nom.)',   data: s0.caNomVals,  borderColor: C_CA_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 8,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 2), borderDash: [3, 2] },
+      { label: 'Custom Mix (nominal)',    data: s0.mixNomVals, borderColor: C_MIX_NOM, backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 9,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 3), borderDash: [3, 2] },
     ]
   },
   options: {

@@ -39,14 +39,14 @@
       desc: 'Model IRA draws, Roth conversions, SS income, pension, dividends, and capital gains — with federal + state tax detail.'
     },
     {
-      name: 'HYSA Real Value',
-      file: 'standalone/HYSA_Real_Growth.html',
-      desc: 'Cumulative real (after-tax, after-inflation) value of $10,000 in a high-yield savings account, 2000–2026 — shows how "safe" cash quietly loses purchasing power.'
+      name: 'HYSA Real Returns',
+      file: 'standalone/HYSA.html',
+      desc: 'High-yield savings: annual after-tax interest vs. inflation bars + cumulative real growth of $10,000 — adjust tax rate and start year to see how "safe" cash quietly loses purchasing power.'
     },
     {
-      name: 'HYSA vs Inflation',
-      file: 'standalone/HYSA_v_Inflation.html',
-      desc: 'Year-by-year real after-tax HYSA returns vs. inflation (2000–2026): positive years, average, best and worst.'
+      name: 'Historical Real Returns',
+      file: 'standalone/RealReturns.html',
+      desc: 'Inflation-adjusted cumulative growth of $10,000 in US stocks, bonds, and T-bills — 98 years of real returns (1928–2025) with customizable allocation mix and shareable URLs.'
     },
   ];
 

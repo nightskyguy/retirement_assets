@@ -164,8 +164,8 @@
   <div class="controls">
     <div class="ctrl-card">
       <label for="startYr">Start year</label>
-      <input type="range" id="startYr" min="1928" max="2024" step="1" value="1928">
-      <span class="ctl-val" id="startYrVal">1928</span>
+      <input type="range" id="startYr" min="1928" max="2024" step="1" value="2015">
+      <span class="ctl-val" id="startYrVal">2015</span>
     </div>
     <div class="scale-card">
       <label>Y-axis</label>
@@ -291,14 +291,14 @@ document.getElementById('rr-vintage').textContent =
   'Data through ' + DATA_END + ' (updated ' + RR_VINTAGE + ').';
 
 // --- State ---
-let startYr = 1928, eqPct = 60, bdPct = 30;
+let startYr = 2015, eqPct = 60, bdPct = 30;
 let nominalOn = false, isolatedAsset = -1;
 let annualData = [];
 
 // Load from URL before chart init
 (function loadFromURL() {
   const p = new URLSearchParams(window.location.search);
-  if (p.has('yr')) startYr = Math.max(DATA_START, Math.min(DATA_END - 1, +p.get('yr') || DATA_START));
+  if (p.has('yr')) startYr = Math.max(DATA_START, Math.min(DATA_END - 1, +p.get('yr') || 2015));
   if (p.has('eq')) eqPct = Math.max(0, Math.min(100, +p.get('eq') || 60));
   if (p.has('bd')) bdPct = Math.max(0, Math.min(100 - eqPct, +p.get('bd') || 30));
   if (p.get('nom') === '1') nominalOn = true;
@@ -649,7 +649,7 @@ function syncAllocDisplay() {
 // --- Share URL ---
 function buildShareURL() {
   const params = new URLSearchParams();
-  if (startYr !== DATA_START) params.set('yr', startYr);
+  if (startYr !== 2015) params.set('yr', startYr);
   if (eqPct !== 60) params.set('eq', eqPct);
   if (bdPct !== 30) params.set('bd', bdPct);
   if (chart.options.scales.y.type !== 'logarithmic') params.set('sc', 'lin');

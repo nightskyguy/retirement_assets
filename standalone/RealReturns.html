@@ -301,6 +301,8 @@ let annualData = [];
   if (p.has('yr')) startYr = Math.max(DATA_START, Math.min(DATA_END - 1, +p.get('yr') || DATA_START));
   if (p.has('eq')) eqPct = Math.max(0, Math.min(100, +p.get('eq') || 60));
   if (p.has('bd')) bdPct = Math.max(0, Math.min(100 - eqPct, +p.get('bd') || 30));
+  if (p.get('nom') === '1') nominalOn = true;
+  if (p.has('iso')) { const v = +p.get('iso'); if (v >= 0 && v <= 3) isolatedAsset = v; }
 })();
 
 // --- Helpers ---
@@ -519,7 +521,9 @@ const chart = new Chart(document.getElementById('mainChart'), {
           callback: v => {
             if (v < 1000) return '$' + Math.round(v);
             const k = v / 1000;
-            return '$' + (k >= 100 ? Math.round(k) : k.toFixed(0)) + 'k';
+            if (k >= 100) return '$' + Math.round(k) + 'k';
+            const s = k.toFixed(1);
+            return '$' + (s.endsWith('.0') ? s.slice(0, -2) : s) + 'k';
           },
           font: { size: 11 },
         },
@@ -529,8 +533,17 @@ const chart = new Chart(document.getElementById('mainChart'), {
   }
 });
 
-// Apply scale from URL (after chart is created)
-if (new URLSearchParams(window.location.search).get('sc') === 'lin') setScale('linear');
+// Apply URL state that requires the chart to exist
+(function applyURLState() {
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('sc') === 'lin') setScale('linear');
+  if (nominalOn) {
+    // nominalOn already set by loadFromURL; sync UI without re-toggling state
+    document.getElementById('btn-nominal').classList.add('active');
+    document.body.classList.add('nominal-on');
+  }
+  applyVisibility();
+})();
 
 // --- Scale toggle ---
 function setScale(type) {
@@ -640,6 +653,8 @@ function buildShareURL() {
   if (eqPct !== 60) params.set('eq', eqPct);
   if (bdPct !== 30) params.set('bd', bdPct);
   if (chart.options.scales.y.type !== 'logarithmic') params.set('sc', 'lin');
+  if (nominalOn) params.set('nom', '1');
+  if (isolatedAsset !== -1) params.set('iso', isolatedAsset);
   const base = window.location.origin + window.location.pathname;
   const q = params.toString();
   return q ? base + '?' + q : base;

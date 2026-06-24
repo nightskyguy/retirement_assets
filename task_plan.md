@@ -1100,6 +1100,48 @@ file). Roadmap: `.claude/plans/elegant-hopping-squirrel.md`.
 
 ---
 
+---
+
+### Phase 34: RealReturns — Additional Assets (International + TIPS)
+**Why:** User wants to track BND, TIPS, and international equity alongside existing Equity/Bonds/Cash/Mix.
+
+**Analysis (2026-06-24):**
+- **International (MSCI EAFE):** `HISTORICAL_RETURNS.intl` already in codebase (1970–2024, 55 obs). Not wired into RealReturns.html. Needs 2025 data point added. Limits full chart start to 1970 when intl is visible — either hard-cap the start-year slider when intl is shown, or plot N/A (null) for pre-1970. Easiest add.
+- **TIPS:** US TIPS introduced January 1997; only ~28 years of market data. Not in codebase — would need FRED/Bloomberg Barclays US TIPS index data sourced and added to `real_returns_data.js`. Very short history limits usefulness for long-range comparison. Lower priority.
+- **BND (total bond market):** Current "Bonds" = 10-yr Treasury, not same as BND (blended maturities). Bloomberg US Aggregate Bond Index available ~1976+. Not in codebase — would need external data. Different duration/risk profile than 10-yr Treasury. Adding would require new data file + Damodaran/Bloomberg sourcing. Medium complexity.
+- **Custom Mix slider** already supports any equity/bond/cash blend — users can approximate BND-like profiles by adjusting bond weight.
+
+**Recommended scope:**
+- [ ] Add `HISTORICAL_RETURNS.intl` (MSCI EAFE) to RealReturns as 5th selectable asset: "Intl Equity". Wire into `computeSeries()`, stat cards, legend, custom mix allocation, URL (`iso=4`). Add 2025 intl data point to historical_returns.js.
+- [ ] Cap start-year slider at 1970 when intl dataset is visible (or render null/gap for pre-1970).
+- [ ] TIPS: defer — requires external data sourcing, only 28yr history, marginal value.
+- [ ] BND/Agg: defer — requires Bloomberg Agg data sourcing from 1976; consider if user wants this vs current 10-yr Treasury.
+- **Status:** pending
+
+---
+
+### Phase 35: RealReturns — Annual Real Returns Mode
+**Why:** Current chart shows cumulative $10k growth only. User wants year-by-year real returns view (like HYSA.html "Annual Returns" tab) to see which individual years were good/bad for each asset.
+
+**Analysis (2026-06-24):**
+- `annualData[]` already stores `{rEq, rBd, rCa, rMix}` per year — data is ready.
+- HYSA uses separate tabs (Annual / Cumulative) with separate Chart instances. RealReturns could use simpler approach: a Mode toggle button (Cumulative | Annual) that reconfigures the existing chart.
+- In Annual mode: switch dataset `type` to `'bar'`, data becomes real-return % per year (not cumulative $). Each bar colored by asset color (green-ish for positive, red for negative, or just use asset color throughout). Y-axis becomes % (not $k log scale).
+- `buildShareURL` would add `md=ann` param (default = cumulative, omitted).
+- Stat cards remain unchanged (they show full-period stats, relevant in both modes).
+- Legend isolation still works — hide other assets' bars.
+- Nominal overlay in Annual mode: overlay bar would show nominal return alongside real bar for that asset (grouped bars or separate line).
+
+**Implementation sketch:**
+- Add `viewMode = 'cumulative'` state variable; `loadFromURL` reads `md`; `buildShareURL` emits `md=ann` if non-default.
+- Add "Mode" toggle button group (Cumulative | Annual) alongside Log/Linear in controls area.
+- `switchMode(mode)` function: rebuilds chart datasets and y-axis config (% linear scale for annual, $k log/linear for cumulative). Calls `chart.update()`.
+- In Annual mode dataset: `data = annualData.map(d => +(d.rEq * 100).toFixed(2))`, type `'bar'`, `backgroundColor` array per bar (positive = asset color at 0.7 opacity, negative = red at 0.7).
+- Scale: `y.type = 'linear'`, `ticks.callback = v => v + '%'`, add `y.suggestedMin = -50`, `y.suggestedMax = 50`.
+- **Status:** pending
+
+---
+
 ## Notes
 - BootstrapPlan.md provides detailed implementation sketches for Phases 2, 7, 10
 - optimizer_directions.md priority list shows items already DONE (K+D, A, F, L, G)

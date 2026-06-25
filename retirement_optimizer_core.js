@@ -4166,7 +4166,13 @@ function loadFromURL() {
         if (el.type === 'checkbox') {
             el.checked = (value === '1' || value === 'true');   // new '1'/'0' + legacy 'true'/'false'
         } else {
-            el.value = value;
+            const decoded = DisplayHelpers.parseShorthand(value);
+            if (decoded !== null && (el.type === 'text' || el.type === '')) {
+                el.dataset.numVal = String(decoded);
+                el.value = DisplayHelpers.formatDollar(decoded);
+            } else {
+                el.value = value;
+            }
         }
     });
     toggleStrategyUI();

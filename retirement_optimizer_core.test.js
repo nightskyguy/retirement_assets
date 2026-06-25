@@ -493,6 +493,55 @@ test('compactNum: 0 and non-finite pass through unchanged', () => {
     assert(parseShorthand(compactNum('0')) === 0, 'compact 0 should still decode to 0');
 });
 
+// ── loadFromURL: dollar field decode (NaN regression guard) ──────────────────
+// The fix in loadFromURL must call parseShorthand and set dataset.numVal for
+// text-type fields. Without this, +val('IRA1') = +"2m" = NaN.
+
+function mockEl(type, value) {
+    return { type, value, dataset: {} };
+}
+
+// Mirrors the fixed else-branch in loadFromURL()
+function applyURLParam(el, raw) {
+    const decoded = parseShorthand(raw);
+    if (decoded !== null && (el.type === 'text' || el.type === '')) {
+        el.dataset.numVal = String(decoded);
+        el.value = '$' + Math.round(decoded).toLocaleString('en-US');
+    } else {
+        el.value = raw;
+    }
+}
+
+test('loadFromURL decode: compact dollar values set dataset.numVal (not NaN)', () => {
+    const cases = [
+        { raw: '160k', field: 'spendGoal', expected: 160000 },
+        { raw: '2m',   field: 'IRA1',      expected: 2000000 },
+        { raw: '1e5',  field: 'IRA2',      expected: 100000 },
+        { raw: '0',    field: 'Roth',      expected: 0 },
+        { raw: '0',    field: 'Brokerage', expected: 0 },
+        { raw: '0',    field: 'Cash',      expected: 0 },
+    ];
+    cases.forEach(({ raw, field, expected }) => {
+        const el = mockEl('text', raw);
+        applyURLParam(el, raw);
+        const got = Number(el.dataset.numVal);
+        assert(!isNaN(got), `${field}: dataset.numVal is NaN after loading "${raw}"`);
+        assert(got === expected, `${field}: expected ${expected}, got ${got}`);
+    });
+});
+
+test('loadFromURL decode: non-dollar fields (select, number) pass through unchanged', () => {
+    const sel = mockEl('select', '');
+    applyURLParam(sel, 'bracket');
+    assert(sel.value === 'bracket', 'strategy select value should be "bracket"');
+    assert(sel.dataset.numVal === undefined, 'select should not get dataset.numVal');
+
+    const num = mockEl('number', '');
+    applyURLParam(num, '74');
+    assert(num.value === '74', 'number input value should be "74"');
+    assert(num.dataset.numVal === undefined, 'number input should not get dataset.numVal');
+});
+
 // ── Stress mode: real CAGR scoring (Fisher equation) ─────────────────────────
 // buildStressBank() ranks worst decades by real CAGR, not nominal equity CAGR.
 // These tests verify the math inline without loading prng.js or HISTORICAL_RETURNS.

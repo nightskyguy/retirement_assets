@@ -873,6 +873,18 @@ window.addEventListener('DOMContentLoaded', function () {
         startAgeEl.value = now.getFullYear() - by1 - (birthdayPassedThisYear ? 0 : 1);
     }
     setupChartSync();
+    // Attach dollar-input behaviour before captureDefaults/loadFromURL so that
+    // (a) defaults are snapshotted in formatted state and (b) loadFromURL's
+    // parseShorthand decode lands on already-attached elements, keeping
+    // dataset.numVal consistent regardless of init order.
+    [
+        'spendGoal', 'iraBaseGoal',
+        'IRA1', 'IRA2', 'Roth', 'Roth2', 'Brokerage', 'BrokerageBasis', 'Cash', 'CashReserve',
+        'ss1', 'ss2', 'pensionAnnual', 'qcdHHMax'
+    ].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0 });
+    });
     captureDefaults?.();   // Snapshot pristine defaults BEFORE loadFromURL mutates fields (for share-URL default-omission)
     loadFromURL?.();   // Preset inputs from URL params if present (must run after dropdowns are built)
     toggleStrategyUI();
@@ -897,17 +909,7 @@ runSimulation?.();
   DisplayHelpers.registerChartDismissal(document.getElementById('chartIncomeSources'));
   DisplayHelpers.registerChartDismissal(document.getElementById('mc-chart'));
 
-  window.addEventListener('DOMContentLoaded', function () {
-    var dollarIds = [
-      'spendGoal', 'iraBaseGoal',
-      'IRA1', 'IRA2', 'Roth', 'Roth2', 'Brokerage', 'BrokerageBasis', 'Cash', 'CashReserve',
-      'ss1', 'ss2', 'pensionAnnual', 'qcdHHMax'
-    ];
-    dollarIds.forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0 });
-    });
-  });
+  // Dollar input attachment moved to main DOMContentLoaded handler (before captureDefaults).
 </script>
 <script src="other_tools.js"></script>
 <script src="montecarlo/historical_returns.js"></script>

@@ -726,6 +726,7 @@ function buildSimYearLogRecord(p) {
         'SumTaxes': p.cumulativeTaxes,
         'BracketTarget': p.bracketTarget,
         'BracketOverage': p.bracketOverage,
+        'ForcedIRA': p.forcedIRA,
         // Balances
         IRA1: p.balance.IRA1,
         IRA2: p.balance.IRA2,
@@ -796,7 +797,7 @@ function simulate(inputs) {
     let birthmonth2 = inputs.birthmonth2 ?? 12;
 
     let maxYears = Math.max(inputs.birthyear1 + inputs.die1, inputs.birthyear2 + inputs.die2) - currentYear + 1;
-    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0, taxCurrentDollars: 0, spendCurrentDollars: 0, rmd: 0, rmdTax: 0, thirdPassCount: 0, thirdPassTime: 0, totalTime: 0 };
+    let totals = { tax: 0, gross: 0, spend: 0, yearsfunded: 0, success: true, yearstested: 0, failedInYear: [], shortfall: 0, taxCurrentDollars: 0, spendCurrentDollars: 0, rmd: 0, rmdTax: 0, thirdPassCount: 0, thirdPassTime: 0, totalTime: 0, acaBreachYears: 0, forcedIRATotal: 0 };
 
     // Pre-compound rates for any gap between today and the simulation start year.
     // This ensures brackets, SS COLA, and IRMAA are in the correct future-dollar terms
@@ -926,7 +927,7 @@ function simulate(inputs) {
         // Early: preMonths=1, postMonths=11. Late: preMonths=11, postMonths=1.
         // Year 0: use strategy flag (bracket or explicit extraConv). Year 1+: prior year's actual conversion amount.
         // Do NOT use maxConversion as a trigger — it is hardcoded true in the optimizer and does not guarantee a conversion fires.
-        const _stratImpliesConversion = inputs.strategy === 'bracket' || (inputs.extraConversionAmount ?? 0) > 0;
+        const _stratImpliesConversion = inputs.strategy === 'bracket' || inputs.strategy === 'aca' || (inputs.extraConversionAmount ?? 0) > 0;
         const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
         const _useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
         const yearTiming   = _useEarly ? 'early' : 'late';
@@ -966,13 +967,17 @@ function simulate(inputs) {
         let totalIncome = 0;
         let netIncome = 0;
         let capitalGains = 0;
-        let bracketTarget = 0;  // ceiling being targeted by bracket/minlimit strategies
+        let bracketTarget = 0;  // ceiling being targeted by bracket/minlimit/aca strategies
         let bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy)
+        let forcedIRA = 0;      // soft-cap break: IRA drawn ABOVE the ceiling to fund mandatory spending
+        let acaBreach = false;  // strict ACA cap could not fund spending → plan untenable this year
 
-        // INCOMPLETE: if spendGoal > bracketTarget and non-taxable accounts (Cash/Roth) can't
-        // cover the gap, the simulation proceeds anyway, silently overspending the bracket.
-        // The isBracketInfeasible flag (~line 1503) partially handles this; a fuller fix would
-        // display the per-year overage in the Annual Details table and/or warn at plan load.
+        // Soft caps (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when spending can't be met
+        // within the ceiling and Cash/Brokerage/Roth are exhausted, the 3rd-pass fallback draws
+        // extra IRA above the ceiling to fund spending (recorded in `forcedIRA`; the bracket
+        // overage is recomputed afterward). Strict cap (ACA): never breaches the FPL ceiling —
+        // any unmet spending stays a shortfall and is flagged via `acaBreach`. The
+        // isBracketInfeasible flag (~line 1503) summarizes overage across years.
 
         // 1. Inherit IRA
         if (!alive1 && balance.IRA1 > 0) { balance.IRA2 += balance.IRA1; balance.IRA1 = 0; }
@@ -1051,7 +1056,11 @@ function simulate(inputs) {
         let possibleIncome = taxableInc + taxableDividends + taxableInterest + fixedInc;
 
         // 4. Determine Target Spending amount based on Strategy
-        const isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'fixedpct';
+        // ACA is a STRICT-cap strategy: it shares the bracket strategy's ceiling math and
+        // Cash→Brokerage→Roth gap-fill, but is excluded from the soft-cap forced-IRA fallback
+        // (breaching an ACA FPL cap forfeits the premium subsidy — a cliff, not a tax bump).
+        const isACAStrategy = inputs.strategy === 'aca';
+        const isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'fixedpct' || isACAStrategy;
         const isOrderedStrategy = inputs.strategy === 'ordered';
 
         // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
@@ -1170,7 +1179,7 @@ function simulate(inputs) {
             let IRAwd = Math.max(0, Math.min(curIRAreduce, amortized))
             withdrawals = { IRA: IRAwd, netAmount: IRAwd }
 
-        } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit') {
+        } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
             let limit;
 
             if ((inputs.stratIRMAATier ?? -1) >= 0) {
@@ -1401,13 +1410,19 @@ function simulate(inputs) {
                     { order: ['Cash'], weight: [1], taxrate: [0] });
                 netWithdrawals = accumulateWithdrawals([netWithdrawals, thirdWd]);
                 applyWithdrawals(curBalances, thirdWd);
+                let _remShort = thirdWd.shortfall ?? 0;
                 // Roth fallback if Cash ran out (still no cap gains)
-                if ((thirdWd.shortfall ?? 0) > 1 && curBalances.Roth > 0) {
-                    const rothWd3 = calculateWithdrawals(curBalances, thirdWd.shortfall,
+                if (_remShort > 1 && curBalances.Roth > 0) {
+                    const rothWd3 = calculateWithdrawals(curBalances, _remShort,
                         { order: ['Roth'], weight: [1], taxrate: [0] });
                     netWithdrawals = accumulateWithdrawals([netWithdrawals, rothWd3]);
                     applyWithdrawals(curBalances, rothWd3);
+                    _remShort = rothWd3.shortfall ?? 0;
                 }
+                // Strict ACA: Cash+Roth couldn't cover and the FPL cap forbids drawing more IRA
+                // (breaching it forfeits the subsidy) → leave the shortfall and flag it untenable.
+                // Soft caps fund the residual from IRA in the convergence loop below.
+                if (_remShort > 1 && isACAStrategy) acaBreach = true;
             }
             capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
             tax = calculateTaxes({
@@ -1421,6 +1436,44 @@ function simulate(inputs) {
             totals.thirdPassCount += 1;
             totals.thirdPassTime += performance.now() - thirdPassStart;
         }
+
+        // Soft-cap break (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when Cash/Brokerage/
+        // Roth are exhausted but the IRA still has funds, draw extra IRA ABOVE the ceiling to
+        // fund MANDATORY spending. Bounded convergence: forcing IRA raises taxes (SS phase-in,
+        // IRMAA), which can re-open a small residual — a few iterations fully fund spending while
+        // the IRA lasts. Excluded: strict ACA (subsidy cliff), ordered (own sequence), and
+        // fixed/propwd/baseline/gk (already draw IRA for spending — left unchanged).
+        if (isBracketStrategy && !isACAStrategy) {
+            for (let _i = 0; _i < 4; _i++) {
+                const _inc = fixedInc + netWithdrawals.IRA + pension + taxableDividends +
+                    taxableInterest + netWithdrawals.Roth + netWithdrawals.Cash + netWithdrawals.Brokerage + taxableRMD;
+                const _res = targetSpend - (_inc - totalTax);
+                if (_res <= 1 || (curBalances.IRA ?? 0) <= 0) break;
+                const iraTop = calculateWithdrawals(curBalances, _res,
+                    { order: ['IRA'], weight: [1], taxrate: [marginalFedTaxRate + marginalStateTaxRate] });
+                netWithdrawals = accumulateWithdrawals([netWithdrawals, iraTop]);
+                applyWithdrawals(curBalances, iraTop);
+                forcedIRA += (iraTop.IRA ?? 0);
+                capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
+                tax = calculateTaxes({
+                    filingStatus: status, ages: [age1, age2], totalSS: s1 + s2, irmaaAnnualCost: irmaa,
+                    earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+                    qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
+                    taxExemptInterest: 0, state: STATEname
+                });
+                totalTax = tax.totalTax + irmaa;
+                marginalFedTaxRate = tax.fedRate;
+                marginalStateTaxRate = tax.stRate;
+            }
+        }
+
+        // Recompute overage after any 3rd-pass forced IRA draw (soft caps may now exceed the
+        // ceiling). For the strict ACA strategy, a MAGI above the FPL cap — whether from a
+        // forced draw (blocked) or unavoidable income (RMDs/SS) — flags the plan untenable.
+        bracketOverage = bracketTarget > 0 ? Math.max(0, tax.MAGI - bracketTarget) : 0;
+        if (isACAStrategy && bracketOverage > 1) acaBreach = true;
+        if (acaBreach) totals.acaBreachYears += 1;
+        totals.forcedIRATotal += forcedIRA;
 
         cumulativeTaxes += totalTax;
 
@@ -1696,7 +1749,7 @@ function simulate(inputs) {
             fixedInc, pension, targetSpend, netIncome, totalIncome,
             surplus, totalRMD, qcd1, qcd2, taxableDividends, taxableInterest,
             netWithdrawals, rmd1, rmd2, totalConverted, tax, irmaa, cpiRate,
-            totalTax, capitalGains, cumulativeTaxes, bracketTarget, bracketOverage,
+            totalTax, capitalGains, cumulativeTaxes, bracketTarget, bracketOverage, forcedIRA, acaBreach,
             balance, nominalTaxRate, totalWealth, portfolioBalance, guaranteedIncome,
             totalsSpend: totals.spend,
             gains, rmd1Pct, subCycleLabel, convNetValue, excessNetValue,
@@ -1833,21 +1886,29 @@ function getInputs() {
         showMessage('BrokerageBasis (' + BrokerageBasis + ') was greater than the Brokerage balance. BrokerageBasis in input is being ignored. Using ' + Brokerage + ' instead.', 'warning');
         BrokerageBasis = Brokerage;
     }
+    const _strat = (() => {
+        const raw = val('stratRate') ?? '';
+        if (raw.startsWith('irmaa')) {
+            return { stratRate: 0, stratIRMAATier: +raw.replace('irmaa', ''), stratACAMultiple: 0 };
+        }
+        if (raw.startsWith('aca')) {
+            return { stratRate: 0, stratIRMAATier: -1, stratACAMultiple: +raw.replace('aca', '') };
+        }
+        return { stratRate: +raw / 100.0, stratIRMAATier: -1, stratACAMultiple: 0 };
+    })();
+    // ACA is a STRICT-cap strategy internally. The UI keeps ACA as a "Fill Bracket" sub-option
+    // (stratRate=aca<N>), so derive strategy='aca' whenever an ACA multiple is selected. This
+    // also makes legacy scenarios/URLs (strategy=bracket + aca<N>) load with strict semantics.
+    let _strategy = val('strategy');
+    if (_strat.stratACAMultiple > 0 && (_strategy === 'bracket' || _strategy === 'minlimit')) {
+        _strategy = 'aca';
+    }
     return {
         STATEname: val('STATEname'),
-        strategy: val('strategy'),
+        strategy: _strategy,
         orderedSeq: val('orderedSeq') || 'CBIR',
         nYears: +val('nYears'),
-        ...(() => {
-            const raw = val('stratRate') ?? '';
-            if (raw.startsWith('irmaa')) {
-                return { stratRate: 0, stratIRMAATier: +raw.replace('irmaa', ''), stratACAMultiple: 0 };
-            }
-            if (raw.startsWith('aca')) {
-                return { stratRate: 0, stratIRMAATier: -1, stratACAMultiple: +raw.replace('aca', '') };
-            }
-            return { stratRate: +raw / 100.0, stratIRMAATier: -1, stratACAMultiple: 0 };
-        })(),
+        ..._strat,
         hasSpouse: !!valChecked('hasSpouse'),
         birthyear1: +val('birthyear1'),
         birthmonth1: +val('birthmonth1') || 12,
@@ -2191,8 +2252,10 @@ function buildVariations(base) {
     for (const seq of ['CBIR', 'RIBC', 'BIRC'])
         push('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
 
-    // Phase 22: Guyton-Klinger — single entry using user's guardrail settings
-    push('Guyton-Klinger', 'guardrails', 0,
+    // Phase 22: Guyton-Klinger — single entry using user's guardrail settings.
+    // Label shows the actual guard/adjust knobs, e.g. "Grd:20 Adj:10".
+    const gkLabel = `Grd:${Math.round((base.gkGuard ?? 0.20) * 100)} Adj:${Math.round((base.gkAdjPct ?? 0.10) * 100)}`;
+    push('Guyton-Klinger', gkLabel, 0,
         { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, maxConversion: maxConv });
 
     // Phase 24: Cyclic variants for MC — IRA-first (🔄) and brokerage-first (🔄B).
@@ -2274,10 +2337,14 @@ function runOptimizer() {
         const ovYears = res.log.filter(e => (e['BracketOverage'] ?? 0) > 0).length;
         const bracketOveragePct = totalYears > 0 ? ovYears / totalYears : 0;
         const isBracketInfeasible = overrides.strategy === 'bracket' && bracketOveragePct > 0.5;
+        // ACA is strict: any year its FPL cap can't fund spending makes the plan untenable
+        // (the subsidy is forfeited rather than the cap being broken).
+        const acaBreachYears = res.totals?.acaBreachYears ?? 0;
+        const isACAUntenable = overrides.strategy === 'aca' && acaBreachYears > 0;
         const row = {
             _id: results.length,
             _isNoConv: noConv,
-            _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : '') + (noConv ? ' (no conv)' : '') + (isBracketInfeasible ? ' ⚠️' : ''),
+            _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : '') + (noConv ? ' (no conv)' : '') + ((isBracketInfeasible || isACAUntenable) ? ' ⚠️' : ''),
             _paramLabel: paramLabel,
             _paramSortVal: paramSortVal,
             _maxConversion: overrides.maxConversion,
@@ -2294,6 +2361,8 @@ function runOptimizer() {
             _isSpendOptimized: false,
             _bracketOveragePct: bracketOveragePct,
             _isBracketInfeasible: isBracketInfeasible,
+            _isACAUntenable: isACAUntenable,
+            _acaBreachYears: acaBreachYears,
             totals: res.totals,
             finalNW: res.finalNW,
             finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
@@ -2334,7 +2403,7 @@ function runOptimizer() {
         const acaMultiples = [200, 250, 300, 400];
         const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL ⚠️' };
         for (const pct of acaMultiples) {
-            addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'bracket', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, maxConversion: maxConv });
+            addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'aca', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, maxConversion: maxConv });
         }
     }
 
@@ -2348,8 +2417,9 @@ function runOptimizer() {
         addResult('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
     }
 
-    // Guyton-Klinger
-    addResult('Guyton-Klinger', 'guardrails', 0, { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, maxConversion: maxConv });
+    // Guyton-Klinger — label shows the actual guard/adjust knobs, e.g. "Grd:20 Adj:10".
+    const gkOptLabel = `Grd:${Math.round((base.gkGuard ?? 0.20) * 100)} Adj:${Math.round((base.gkAdjPct ?? 0.10) * 100)}`;
+    addResult('Guyton-Klinger', gkOptLabel, 0, { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, maxConversion: maxConv });
 
     // Snapshot the non-cyclic strategy families before the cyclic pass appends to the list.
     // Reused below to build the no-conversion baseline sweep over the same families.
@@ -2689,9 +2759,9 @@ function renderOptimizerTable(results) {
     const baselineRow = OptimizerState.baseline ?? null;
     // Infeasible (bracket-unreachable) rows are hidden by default — toggled via the legend.
     const showInfeasible = !!OptimizerState.showInfeasible;
-    const infeasibleCount = results.filter(r => r._isBracketInfeasible).length;
+    const infeasibleCount = results.filter(r => r._isBracketInfeasible || r._isACAUntenable).length;
     let display = results.filter(r => !(baselineRow && r._id === baselineRow._id));
-    if (!showInfeasible) display = display.filter(r => !r._isBracketInfeasible);
+    if (!showInfeasible) display = display.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
     const afterTaxCol = columns.find(c => c.key === 'afterTaxNW');
     const spendCol = columns.find(c => c.key === 'spend');
     const col   = columns.find(c => c.key === sortState.colKey);
@@ -2746,9 +2816,11 @@ function renderOptimizerTable(results) {
     // Rows — display:contents wrapper; each cell carries row styling + onclick
     const rowsHtml = display.map(r => {
         const isWinner = bestIds.has(r._id);
-        const isInfeasible = r._isBracketInfeasible && !isWinner;
+        const isInfeasible = (r._isBracketInfeasible || r._isACAUntenable) && !isWinner;
         const rowTitle = isInfeasible
-            ? 'Bracket target exceeded in >50% of years — income sources already push MAGI above this ceiling'
+            ? (r._isACAUntenable
+                ? `ACA subsidy cliff: spending cannot be met within the FPL cap in ${r._acaBreachYears} year(s) — plan untenable at this spend (strict ACA never breaches the cap)`
+                : 'Bracket target exceeded in >50% of years — income sources already push MAGI above this ceiling')
             : 'Click to load this strategy';
         const cells = columns.map(col => {
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
@@ -2899,14 +2971,17 @@ function loadOptimizerResult(id) {
     const result = (OptimizerState.results ?? []).find(r => r._id === id);
     if (!result) return;
 
-    document.getElementById('strategy').value = result._strategy;
+    // ACA is a strict strategy internally, but the UI keeps it as a "Fill Bracket" sub-option
+    // (stratRate=aca<N>) — map it back to the bracket dropdown + ACA stratRate.
+    const _isACA = result._strategy === 'aca' || (result._stratACAMultiple ?? 0) > 0;
+    document.getElementById('strategy').value = _isACA ? 'bracket' : result._strategy;
 
     if (result._strategy === 'fixed' && result._nYears != null) {
         document.getElementById('nYears').value = result._nYears;
+    } else if (_isACA) {
+        document.getElementById('stratRate').value = `aca${result._stratACAMultiple}`;
     } else if (result._strategy === 'bracket' && (result._stratIRMAATier ?? -1) >= 0) {
         document.getElementById('stratRate').value = `irmaa${result._stratIRMAATier}`;
-    } else if (result._strategy === 'bracket' && (result._stratACAMultiple ?? 0) > 0) {
-        document.getElementById('stratRate').value = `aca${result._stratACAMultiple}`;
     } else if (result._strategy === 'bracket' && result._stratRate != null) {
         document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
     } else if (result._strategy === 'propwd' && result._propWithdraw != null) {
@@ -2978,6 +3053,7 @@ const columnCategories = {
     'StateCap': ['Taxation'],
     'BracketTarget': ['Taxation'],
     'BracketOverage': ['Taxation'],
+    'ForcedIRA': ['Taxation', 'IRA Δ'],
 
     // IRA Changes - withdrawals, RMDs, and conversions
     'IRA1-': ['IRA Δ'],
@@ -3045,7 +3121,7 @@ const columnGroupDefs = {
     'IRMAA': 'Taxes', 'totalTax': 'Taxes', 'FedTax': 'Taxes', 'StateTax': 'Taxes',
     'CapGains': 'Taxes', 'MAGI': 'Taxes', 'NominalRate%': 'Taxes',
     'FedCap': 'Taxes', 'StateCap': 'Taxes', 'SumTaxes': 'Taxes',
-    'BracketTarget': 'Taxes', 'BracketOverage': 'Taxes',
+    'BracketTarget': 'Taxes', 'BracketOverage': 'Taxes', 'ForcedIRA': 'Withdrawals',
     'IRA1': 'Balances', 'IRA2': 'Balances', 'TotalIRA': 'Balances',
     'Roth1': 'Balances', 'Roth2': 'Balances',
     'Cash': 'Balances', 'Roth': 'Balances', 'Brokerage': 'Balances',
@@ -3268,6 +3344,7 @@ function updateTable(log) {
         'StateCap': 'Upper boundary of the current state tax bracket.',
         'BracketTarget': 'MAGI ceiling targeted by the bracket/IRMAA strategy this year (0 for other strategies).',
         'BracketOverage': 'Amount MAGI exceeded the bracket target. Non-zero means spending needs pushed above the ceiling.',
+        'ForcedIRA': 'Extra IRA withdrawn ABOVE the bracket/IRMAA ceiling to fund mandatory spending after Cash/Brokerage/Roth were exhausted (soft-cap break). The strict ACA strategy never does this — it leaves a shortfall instead.',
         'spendGoal': 'This amount increases by inflation less Spend Delta%.',
         'Roth': 'Combined Roth balance at year end.',
         'Roth1': "Person 1's Roth balance at year end.",
@@ -4393,6 +4470,13 @@ function applyScenario(data) {
         if (el) el.value = `aca${data.stratACAMultiple}`;
     }
 
+    // 'aca' is an internal strict strategy; the dropdown represents it as 'bracket' + ACA
+    // stratRate (set above). Map it back so the (option-less) strategy dropdown stays valid.
+    if (data.strategy === 'aca') {
+        const el = document.getElementById('strategy');
+        if (el) el.value = 'bracket';
+    }
+
     // qcdMode is stored as 'always'/'asneeded' string but the UI element is qcdAlways checkbox
     if (data.qcdMode !== undefined) {
         const el = document.getElementById('qcdAlways');
@@ -4403,6 +4487,8 @@ function applyScenario(data) {
         // stratIRMAATier has no standalone form element; handled above via stratRate dropdown
         if (key === 'stratIRMAATier') continue;
         if (key === 'stratACAMultiple') continue;
+        // strategy='aca' has no dropdown option; mapped to 'bracket' above
+        if (key === 'strategy' && value === 'aca') continue;
         // qcdMode maps to qcdAlways checkbox; handled above
         if (key === 'qcdMode') continue;
         const element = document.getElementById(key);

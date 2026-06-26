@@ -2,7 +2,10 @@
 // Receives a config message, runs all variations against a shared scenario bank (CRN),
 // posts progress updates, then posts the final results.
 
-importScripts('../taxengine.js', '../retirement_optimizer_core.js', 'prng.js', 'stats.js', 'historical_returns.js');
+// Propagate the worker's own cache-bust token (?v=… from new Worker(...)) to its imported
+// scripts so prng.js / core.js etc. never serve a stale cached copy when the worker refreshes.
+const _v = self.location.search || '';
+importScripts('../taxengine.js' + _v, '../retirement_optimizer_core.js' + _v, 'prng.js' + _v, 'stats.js' + _v, 'historical_returns.js' + _v);
 
 self.onmessage = function ({ data: cfg }) {
     const t0 = performance.now();

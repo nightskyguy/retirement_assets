@@ -3,7 +3,14 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31, 32, 33 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync, real-CAGR stress scoring).
+**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31, 32, 33, 36 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync, real-CAGR stress scoring).
+
+**Phase 36 (Soft/Strict withdrawal caps — large-shortfall fix, v11.1090, 2026-06-25):** soft caps
+(Federal bracket / IRMAA / fixedpct) now draw IRA above the ceiling to fund mandatory spending
+(new `forcedIRA`/`BracketOverage` columns); strict ACA pulled into its own internal `strategy='aca'`
+that never breaches the FPL cap (flags untenable via `acaBreach`/⚠️). Fixes the $2M-IRA-stranded
+shortfall after a spouse's death halves the bracket. Survivor-SS step-up confirmed already correct.
+node 45/45, in-page 212/212.
 **Superseded/deprioritized:** Phase 8 (Variable Growth sensitivity grid — bootstrap + stress MC covers the use case; grid not needed).
 **Partial:** Phase 9 (ACA — Medicare age gate done; MAGI/subsidy calculation not yet implemented).
 **Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).

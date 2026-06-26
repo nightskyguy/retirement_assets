@@ -1,5 +1,43 @@
 # Progress Log
 
+## Session: 2026-06-25 (cont.) — GK Optimize-Spend stability floor + MC Total Spendable (complete, v11.1097)
+
+**Problem:** With Optimize Spend + Guyton-Klinger, optimizer reported an unnaturally high initial
+spend (~$210k) sustainable only ~2 yrs before GK guardrails slash it. Root cause: GK mutates
+`spendGoal` dynamically, and both gates the search relies on (`optimizeSpend().passes()` core.js:2131,
+`totals.success` core.js:1723) measure the portfolio against that **already-cut** value → moving
+goalpost → GK trivially passes at any initial → binary search runs to +50% ceiling.
+
+**Fix A (GK stability floor):** Extended `passes()` (core.js ~2131) with a GK-only check
+(`overrides.strategy==='gk'`): worst REAL delivered spend across horizon (`spendGoal/inflationFactor`)
+must stay ≥ initial real × (1 − gkGuard). Rejects runaway initials. Non-GK untouched.
+
+**Fix B (MC Total Spendable col):** Threaded `spendPerPath = totals.spendCurrentDollars` (real) →
+`medianSpend` through worker.js + mc_controller.js (mirrors taxPerPath/medianTax); added 8th column
+`Total Spendable` to MC table (mc_tab.js renderSurvivalTable + html grid template/header).
+
+**Verify:** node 47/47 (+2 new GK optimize tests). In-page 212/212 🟢. Browser MC: 8 cols, Total
+Spendable renders current-$ values. Browser optimizer w/ Optimize Spend: GK rows stay at baseline
+$140k, **no $210k ceiling row** — runaway gone. Files: core.js, montecarlo/{worker,mc_controller,
+mc_tab}.js, retirement_optimizer.html, core.test.js.
+
+**Baseline ranking rework (v11.1098, same session):** baseline-pick (core.js ~2588) was `max(afterTaxNW)`
+among no-conv successes → let GK win by hoarding (under-spend → bigger estate). Reworked to a blended
+real-$ score `_baselineScore = afterTaxNWCurrentDollars + 1.10*spendCurrentDollars`
+(SPENDABLE_WEIGHT const = 1.10; spendable favored +10%). Tried subtracting taxCurrentDollars then
+removed it (both terms already after-tax → double-count; user pulled it). Browser: baseline flipped
+GK→**IRA Draw** (4040k vs GK 4039k) — the +10% spend weight tips it since GK spends 140k less.
+Deltas (_dNW/_dTax) unchanged. node 47/47, in-page 212/212.
+
+**Reduce-N hypothesis checked + Score column (v11.1099):** User suspected aggressive low-N Reduce
+underspends → demoted by new score. **Not confirmed** — Reduce-N spend is FLAT $3,111k for all N
+(2→25); only terminal NW varies (N=2 → $342k, N=25 → $615k; low N pays drawdown/conv tax earlier).
+So low-N ranks low on NW, not spend; +10% spend weight is neutral across Reduce-N. Baseline change
+only re-pins ⚓, doesn't reorder the strategy table (still sorts by afterTaxNW). Added nerd-only
+**Score** column to optimizer table (getOptimizerColumns, spliced after afterTaxNW when NERD_KNOBS;
+grid auto-sizes via `columns.map(()=>'max-content')` — no manual count). Browser: nerd on → Score
+present (IRA Draw 4,040,316); nerd off → absent. in-page 212/212.
+
 ## Session: 2026-06-25 (cont.) — GK label + Intl-CAGR NaN fix (complete, v11.1091)
 
 Two small fixes after Phase 36:

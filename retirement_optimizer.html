@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1091</title>
+    <title>Retirement Optimizer 11.1099</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -489,7 +489,7 @@
 					<span style="background:#f8d7da;padding:1px 8px;border-radius:3px;">below 75%</span>
 				</div>
 				<div style="max-height:280px;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;border:1px solid #dee2e6;border-radius:4px;width:fit-content;max-width:100%;">
-					<div style="display:grid;grid-template-columns:max-content max-content max-content max-content max-content max-content max-content;font-size:0.85em;width:fit-content;">
+					<div style="display:grid;grid-template-columns:max-content max-content max-content max-content max-content max-content max-content max-content;font-size:0.85em;width:fit-content;">
 						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;border-right:2px solid #dee2e6;border-bottom:1px solid #dee2e6;"></div>
 						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;">Strategy</div>
 						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;">Param</div>
@@ -497,6 +497,7 @@
 						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;color:#1a7a1a;border-bottom:1px solid #dee2e6;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</div>
 						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;">Survival</div>
 						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;color:#1a7a1a;border-bottom:1px solid #dee2e6;" title="Median lifetime taxes paid across all Monte Carlo paths">Total Taxes</div>
+						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;color:#1a7a1a;border-bottom:1px solid #dee2e6;" title="Median lifetime after-tax money actually spent across all Monte Carlo paths, in today's dollars (real). Strategies that cut spending — e.g. Guyton-Klinger — show a lower figure here.">Total Spendable</div>
 						<div id="mc-table-body" style="display:contents;"></div>
 					</div>
 				</div>
@@ -557,6 +558,9 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1099</b> <strong>Nerd-mode:</strong> the Optimizer Strategy table now shows a <em>Score</em> column (after NetWealth) when nerd knobs are on (<code>?nerdknob</code>) — the raw baseline-ranking score (after-tax NetWealth + 1.1 × Total Spendable, today&rsquo;s dollars), so you can see exactly why a strategy is or isn&rsquo;t the pinned ⚓ baseline. Hidden in normal mode.</li>
+				<li><b>11.1098</b> <strong>Baseline strategy is now ranked by total economic value, not terminal wealth alone.</strong> The pinned ⚓ baseline is the best no-conversion strategy by a blended score: <em>after-tax terminal net worth + 1.1 × lifetime spendable</em> (both in today&rsquo;s dollars), instead of after-tax net worth only. Ranking on net worth alone let a spend-cutting strategy like Guyton-Klinger &ldquo;win&rdquo; by hoarding — under-spending inflates the leftover estate while delivering less actual spending. The new score weights money <em>spent</em> 10% above money <em>bequeathed</em>, so a strategy can no longer top the baseline simply by spending less. (Both terms are already after-tax, so lifetime tax is not double-counted.)</li>
+				<li><b>11.1097</b> <strong>Guyton-Klinger Optimize Spend no longer reports an unsustainable spend.</strong> Because GK cuts spending dynamically via its guardrails, the old survival-only search ran to the +50% ceiling and reported an initial spend GK could hold for only a year or two before slashing it. Optimize Spend now applies a <em>stability floor</em> for GK: it accepts a higher initial spend only if the guardrails never cut <em>real</em> delivered spending below one guard band of the initial. The Monte Carlo table also gains a <strong>Total Spendable</strong> column (median lifetime after-tax spend, in today&rsquo;s dollars) so strategies that cut spending — like GK — are directly comparable.</li>
 				<li><b>11.1091</b> >Fixed a <code>NaN</code> in a Monte Carlo.</li>
 				   <strong>Fixed a shortfall</strong> even with a sizeable IRA balance. Fill will exceed the threshold if needed to meet spend goal.
 					However, the <em>ACA Cliff</em> ceiling is now its own <em>strict</em> strategy: it never breaches the cap. If spending can&rsquo;t be met under the target the plan is flagged untenable (⚠️ in the Optimizer) rather than silently overspending.</li>

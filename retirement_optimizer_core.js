@@ -2131,7 +2131,27 @@ function optimizeSpend(baseInputs, overrides) {
     function passes(res) {
         const last = res.log[res.log.length - 1];
         const required = Math.max(0, last.spendGoal - (last.guaranteedIncome ?? 0));
-        return (last.portfolioBalance ?? 0) >= required;
+        if ((last.portfolioBalance ?? 0) < required) return false;
+
+        // Guyton-Klinger self-adjusts spendGoal downward via its guardrails, so the terminal
+        // portfolio check above is trivially satisfied at almost any initial spend (the target
+        // moves to whatever survives). Add a stability floor: the worst REAL delivered spend
+        // across the horizon must stay within one guard band of the initial real spend. This
+        // rejects runaway initial spends that GK can only hold for a year or two before slashing.
+        if (overrides && overrides.strategy === 'gk') {
+            const log = res.log;
+            const initialReal = log[0].spendGoal / (log[0].inflationFactor || 1);
+            if (initialReal > 0) {
+                let minReal = Infinity;
+                for (const rec of log) {
+                    const real = rec.spendGoal / (rec.inflationFactor || 1);
+                    if (real < minReal) minReal = real;
+                }
+                const guardBand = overrides.gkGuard ?? baseInputs.gkGuard ?? 0.20;
+                if (minReal < initialReal * (1 - guardBand)) return false;
+            }
+        }
+        return true;
     }
 
     const baseSpend = baseInputs.spendGoal;
@@ -2565,10 +2585,22 @@ function runOptimizer() {
         r.afterTaxNWCurrentDollars = r.afterTaxNW * _defl;
     }
 
-    // Pick the baseline: best after-tax NW among successful no-conversion rows.
+    // Baseline score = after-tax terminal wealth (bequest) + lifetime money actually spent
+    // (spendable weighted +10%, since a dollar enjoyed in retirement outranks a dollar bequeathed).
+    // Both in current (real) dollars so the stock (NW) and the spend flow share one basis. Ranking
+    // on this — instead of NW alone — stops a spend-cutting strategy (e.g. GK) from "winning" by
+    // hoarding: under-spending lifts terminal NW but loses weighted spendable. (Tax is already
+    // netted out — afterTaxNW and spendable are both after-tax — so it is not subtracted again.)
+    const SPENDABLE_WEIGHT = 1.10;
+    for (const r of results) {
+        r._baselineScore = (r.afterTaxNWCurrentDollars ?? 0)
+            + SPENDABLE_WEIGHT * (r.totals.spendCurrentDollars ?? 0);
+    }
+
+    // Pick the baseline: best score (weighted spendable + NW − tax) among successful no-conv rows.
     const noConvSuccesses = results.filter(r => r._isNoConv && r.totals.success);
     const baselineRow = noConvSuccesses.length > 0
-        ? noConvSuccesses.reduce((a, b) => (b.afterTaxNW > a.afterTaxNW ? b : a))
+        ? noConvSuccesses.reduce((a, b) => (b._baselineScore > a._baselineScore ? b : a))
         : null;
     OptimizerState.baseline = baselineRow;
 
@@ -2745,6 +2777,18 @@ function getOptimizerColumns() {
             getSortValue: r => r._convSavings ?? -Infinity
         }
     ];
+    // Nerd-only: expose the raw baseline-ranking score so the pinned ⚓ pick can be inspected.
+    // Score = after-tax NetWealth + 1.1 × Total Spendable (today's dollars, real). Inserted right
+    // after NetWealth since it is derived from NetWealth + Spendable.
+    if (NERD_KNOBS) {
+        const i = cols.findIndex(c => c.key === 'afterTaxNW');
+        cols.splice(i + 1, 0, {
+            key: 'score', label: 'Score',
+            title: 'Baseline-ranking score = after-tax NetWealth + 1.1 × Total Spendable (today\'s dollars). The pinned ⚓ baseline is the no-conversion strategy with the highest score; spending is weighted 10% above bequest. Always in current dollars. Nerd-mode column.',
+            getValue: r => Math.round(r._baselineScore ?? 0).toLocaleString(),
+            getSortValue: r => r._baselineScore ?? -Infinity
+        });
+    }
     return cols;
 }
 

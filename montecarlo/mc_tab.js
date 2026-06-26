@@ -361,7 +361,8 @@ function renderSurvivalTable(variations, numPaths) {
         row.style.display = 'contents';
         row.dataset.varIdx = v._origIdx;
 
-        const taxTxt  = v.medianTax != null ? '$' + fmt(Math.round(v.medianTax)) : '—';
+        const taxTxt   = v.medianTax != null ? '$' + fmt(Math.round(v.medianTax)) : '—';
+        const spendTxt = v.medianSpend != null ? '$' + fmt(Math.round(v.medianSpend)) : '—';
         const cellCss = `padding:2px 8px;text-align:right;background:${color};cursor:pointer;`;
 
         // Checkbox cell: fixed white bg, no hand cursor
@@ -382,6 +383,7 @@ function renderSurvivalTable(variations, numPaths) {
             '$' + fmt(v.percentiles.p50[v.percentiles.p50.length - 1]),
             `<strong>${pct}%</strong>`,
             taxTxt,
+            spendTxt,
         ].forEach(html => {
             const cell = document.createElement('div');
             cell.style.cssText = cellCss;

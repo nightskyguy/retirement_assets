@@ -95,7 +95,7 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
             eqBank [p * years + y] = eq[idx];
             bdBank [p * years + y] = bd[idx];
             infBank[p * years + y] = infSrc[idx];
-            itBank [p * years + y] = idx >= intlOff ? intlSrc[idx - intlOff] : eq[idx];
+            itBank [p * years + y] = (idx >= intlOff && idx - intlOff < intlSrc.length) ? intlSrc[idx - intlOff] : eq[idx];
         }
     }
 
@@ -152,9 +152,13 @@ function bootstrapMultiAssetBank(rng, numPaths, years, blockSize = 3) {
                 eqBank [p * years + y + b] = eqSrc[idx];
                 bdBank [p * years + y + b] = HISTORICAL_RETURNS.bonds[idx];
                 infBank[p * years + y + b] = Math.max(-0.01, HISTORICAL_RETURNS.inflation[idx]);
-                // intl available only from 1970; use equity as proxy for earlier years.
-                itBank [p * years + y + b] = idx >= intlOff
-                    ? intlSrc[idx - intlOff]
+                // intl available only from 1970 through the last intl data year; use equity as a
+                // proxy for years outside that window (pre-1970 AND any recent year not yet in the
+                // intl series — e.g. equity/inflation extended to 2025 before intl). Guarding the
+                // upper bound prevents an out-of-range undefined → NaN in the intl CAGR.
+                const _itIdx = idx - intlOff;
+                itBank [p * years + y + b] = (idx >= intlOff && _itIdx < intlSrc.length)
+                    ? intlSrc[_itIdx]
                     : eqSrc[idx];
             }
             y += len;

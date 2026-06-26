@@ -1,5 +1,59 @@
 # Progress Log
 
+## Session: 2026-06-25 (cont.) — GK label + Intl-CAGR NaN fix (complete, v11.1091)
+
+Two small fixes after Phase 36:
+- **GK label:** MC + Optimizer showed the Guyton-Klinger row param as generic `"guardrails"`. Now
+  shows the actual knobs, e.g. `Grd:15 Adj:15`, built from `base.gkGuard`/`gkAdjPct` at both
+  `push()` (MC variations, core.js ~:2256) and `addResult()` (optimizer ~:2419).
+- **Intl CAGR = NaN% (MC bootstrap):** root cause = data-length mismatch. `HISTORICAL_RETURNS`
+  equity/bonds/inflation were extended to **2025 (98 entries)** but `intl` still ends **2024 (55)**.
+  A sampled block hitting idx 97 (year 2025) computed `intlSrc[55]` → `undefined` → `log1p(NaN)`.
+  Strategy (`str=gk`) was incidental — bug is in `montecarlo/prng.js`, mode-independent. Fix: extend
+  the existing pre-1970 equity-proxy to ALSO cover recent years with no intl data yet — guard
+  `idx - intlOff < intlSrc.length` in both `bootstrapMultiAssetBank` and `buildStressBank`. No
+  fabricated data. (Real 2025 MSCI EAFE point belongs to Phase 34.)
+- **Cache-busting (so the fix reaches returning users):** `montecarlo/worker.js` now appends its own
+  `?v=…` token (`self.location.search`) to every `importScripts` so prng.js/core.js refresh with the
+  worker; HTML MC `<script>` tags bumped `?v=11eca`→`?v=111091` for the main-thread fallback path.
+- **Files:** retirement_optimizer_core.js (2 GK labels), montecarlo/prng.js (2 intl-proxy guards),
+  montecarlo/worker.js (importScripts cache-bust), retirement_optimizer.html (v11.1091 + changelog +
+  script `?v=` bump).
+- **Verified:** node **45/45**. Browser (http.server :8773, URL `?str=gk&gkg=15&gka=15`): bootstrap MC
+  via worker → **Intl CAGR +8.3%, zero NaN**, completed 30s, no console errors; MC + Optimizer GK rows
+  show **"Grd:15 Adj:15"**. Main-thread `bootstrapMultiAssetBank` also NaN-free (8.48%).
+
+## Session: 2026-06-25 — Phase 36: Soft vs Strict Withdrawal Caps / large-shortfall fix (complete, v11.1090)
+
+User repro: `?sg=160k&str=bracket&sr=22&d1=74&by2=1959&i1=2m&i2=1e5&ro=0&ro2=0` showed a shortfall
+starting 2039 growing to ~$75k/yr by 2043 despite a $2M+ IRA. Root cause: `bracket`/`fixedpct`
+capped IRA at the bracket ceiling and only gap-filled Cash→Brokerage→Roth — no IRA fallback — so
+after person 1's death halved the bracket (MFJ→single, `:953`), the abundant IRA was stranded.
+Survivor-SS step-up + filing switch were already correct (not an SS bug).
+
+**Decision (user):** soft caps for tax-based ceilings, strict for ACA.
+- **Soft (`bracket` Federal, `minlimit`/IRMAA, `fixedpct`):** new bounded convergence loop in
+  `simulate()` (after the 3rd pass) draws extra IRA ABOVE the ceiling to fund mandatory spending
+  when Cash/Brokerage/Roth are exhausted. Recorded in new `forcedIRA` (+`totals.forcedIRATotal`)
+  and the recomputed `BracketOverage`. `fixed`/`propwd`/`baseline`/`gk` left unchanged.
+- **Strict ACA → its own internal strategy id `aca`:** `getInputs()` derives `strategy='aca'` when
+  `stratACAMultiple>0` (UI keeps ACA as a stratRate sub-option; legacy URLs/scenarios still load).
+  ACA never breaks the FPL cap (subsidy cliff); leftover spending stays a shortfall, flagged via
+  `acaBreach`/`totals.acaBreachYears`. Optimizer ACA rows now `strategy:'aca'`, marked untenable
+  (`_isACAUntenable`, ⚠️) and hidden-by-default like infeasible bracket rows. `loadOptimizerResult`
+  + `applyScenario` map `aca`→`bracket`+stratRate for the (option-less) strategy dropdown.
+
+**Files:** retirement_optimizer_core.js (flags, convergence loop, getInputs derivation, log field
+`ForcedIRA`, column/group/tooltip maps, optimizer flag+filter+row mapping); retirement_optimizer.html
+(How-to split soft/strict, shortfall-row note, changelog, v11.1060→11.1090); README.md (ACA strict
+rewrite, wishlist item resolved, Recent-Fixes entry); retirement_optimizer_core.test.js (+6 tests).
+
+**Verified:** node **45 pass / 0 fail**; browser (http.server :8773) in-page **212 pass / 0 fail**,
+no console errors. Repro: 2039-2045 shortfall→0 (forced IRA funds, overage flags); remaining
+late-life shortfall is genuine full depletion (IRA=Cash=Brokerage=0 by ~2052 at age 93-98),
+correctly `success=false`. ACA 400% FPL: forcedIRA=0, breachYears>0, untenable. Optimizer (startAge
+60) shows "ACA Cliff … ⚠️" rows.
+
 ## Session: 2026-06-23 — Phase 33: Inflation-Aware Stress Test Scoring (complete, v11.1048+)
 
 Stress mode was scoring worst decades by 10-year equity CAGR alone, missing the compounding effect of inflation. A decade with flat equity (+0% CAGR) but 7% inflation is retiree-devastating (real −7%), yet ranked better than it should. Fisher equation fixes this.

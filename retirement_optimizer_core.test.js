@@ -586,6 +586,70 @@ test('stress scoring: 1999 ranks worse than 1929 by real CAGR', () => {
         `1999 (${(real1999*100).toFixed(2)}%) should rank worse than 1929 (${(real1929*100).toFixed(2)}%) under real CAGR scoring`);
 });
 
+// ── Soft vs strict withdrawal caps (shortfall fix) ─────────────────────────────
+// Repro: bracket 22%, single after early death, abundant IRA, no Roth, modest buffers.
+// Person 1 dies at 74 → MFJ→single halves the 22% ceiling; old code stranded a growing
+// shortfall despite a $2M IRA. Soft caps now draw IRA above the ceiling to fund spending.
+const CAP_BASE = {
+    STATEname: 'CA', strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0,
+    nYears: 30, birthyear1: 1960, birthmonth1: 12, die1: 74,
+    birthyear2: 1959, birthmonth2: 12, die2: 90, hasSpouse: true,
+    IRA1: 2000000, IRA2: 100000, Roth: 0, Roth2: 0,
+    Brokerage: 100000, BrokerageBasis: 50000, Cash: 50000, CashReserve: 0,
+    ss1: 48000, ss1Age: 67, ss2: 24000, ss2Age: 67,
+    pensionAnnual: 0, survivorPct: 75, pensionCola: false,
+    spendGoal: 160000, spendChange: -0.01, iraBaseGoal: 0,
+    inflation: 0.025, cpi: 0.025, growth: 0.05, cashYield: 0.02, dividendRate: 0.0,
+    ssFailYear: 2099, ssFailPct: 1.0, maxConversion: false, propWithdraw: 0, iraWithdrawPct: 0.05,
+    startYear: 2026, dividendReinvest: false,
+};
+const _sumAbsShortfall = log => log.reduce((s, e) => s + Math.abs(e.shortfall || 0), 0);
+const _sumForcedIRA   = log => log.reduce((s, e) => s + (e.ForcedIRA || 0), 0);
+
+test('soft cap (federal bracket): forced IRA funds spending — no lingering shortfall', () => {
+    const r = simulate({ ...CAP_BASE });
+    assert(_sumForcedIRA(r.log) > 100000, `expected substantial forced IRA, got ${Math.round(_sumForcedIRA(r.log))}`);
+    assert(_sumAbsShortfall(r.log) < 100, `expected ~0 total shortfall, got ${Math.round(_sumAbsShortfall(r.log))}`);
+    assert(r.totals.success, 'plan should succeed once IRA funds the spend');
+    const ov = r.log.reduce((s, e) => s + (e.BracketOverage || 0), 0);
+    assert(ov > 0, 'soft-cap break should register a non-zero bracket overage (the flag)');
+});
+
+test('soft cap: forced IRA never exceeds available IRA (no over-draw past depletion)', () => {
+    const r = simulate({ ...CAP_BASE });
+    // Final IRA balance must stay non-negative — the loop is bounded by curBalances.IRA.
+    const last = r.log[r.log.length - 1];
+    assert((last.TotalIRA ?? 0) >= -1, `IRA went negative: ${last.TotalIRA}`);
+});
+
+test('soft cap (fixedpct): capped % with spend over cap still funds spending from IRA', () => {
+    const r = simulate({ ...CAP_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.02 });
+    assert(_sumForcedIRA(r.log) > 0, 'fixedpct should force IRA when 2% draw + buffers underfund spend');
+    assert(_sumAbsShortfall(r.log) < 100, `expected ~0 total shortfall, got ${Math.round(_sumAbsShortfall(r.log))}`);
+});
+
+test('strict ACA: cap is never breached — shortfall persists and is flagged untenable', () => {
+    const r = simulate({ ...CAP_BASE, strategy: 'aca', stratRate: 0, stratACAMultiple: 400 });
+    assert(_sumForcedIRA(r.log) === 0, `ACA must not force IRA above the FPL cap, got ${Math.round(_sumForcedIRA(r.log))}`);
+    assert(_sumAbsShortfall(r.log) > 1000, 'ACA at 400% FPL with $160k spend should leave a real shortfall');
+    assert((r.totals.acaBreachYears ?? 0) > 0, 'expected acaBreachYears > 0 (untenable flag)');
+});
+
+test('regression: ample buffers cover the gap → no forced IRA break', () => {
+    // Big Cash so the bracket gap-fill is satisfied without ever breaking the ceiling.
+    // (BracketOverage may still be non-zero from unavoidable income — cash interest/RMDs —
+    // but the strategy never has to FORCE IRA above the cap to fund spending.)
+    const r = simulate({ ...CAP_BASE, Cash: 3000000, spendGoal: 120000 });
+    assert(_sumForcedIRA(r.log) === 0, `no forced IRA expected, got ${Math.round(_sumForcedIRA(r.log))}`);
+});
+
+test('true ruin: all accounts incl. IRA exhausted → shortfall still reported', () => {
+    // Tiny portfolio, large spend → genuine depletion; the IRA fallback must not mask it.
+    const r = simulate({ ...CAP_BASE, IRA1: 80000, IRA2: 0, Brokerage: 0, Cash: 0, spendGoal: 150000 });
+    assert(_sumAbsShortfall(r.log) > 1000, 'genuine ruin must still surface a shortfall');
+    assert(!r.totals.success, 'an underfunded plan must not report success');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

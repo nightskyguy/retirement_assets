@@ -719,6 +719,11 @@ function buildSimYearLogRecord(p) {
         FedTax: p.tax.federalTax,
         StateTax: p.tax.state,
         'CapGains': p.capitalGains,
+        // Chart-only helpers (leading '-' → excluded from the Annual Details table). capGainsTax
+        // is the LTCG/qualified-div tax embedded in FedTax (split out for the Taxation chart);
+        // cpiFactor is the cumulative CPI multiplier used to inflate bracket/IRMAA thresholds.
+        '-capGainsTax': p.tax.capitalGainsTax,
+        '-cpiFactor': p.cpiRate,
         MAGI: p.tax.MAGI,
         'NominalRate%': p.nominalTaxRate,
         'FedCap': p.tax.fedLimit,
@@ -744,6 +749,8 @@ function buildSimYearLogRecord(p) {
         brokerageG: p.gains.Brokerage,
         cashG: p.gains.Cash,
         rothG: (p.gains.Roth1 || 0) + (p.gains.Roth2 || 0),
+        // Chart-only (leading '-' → no table column): IRA investment earnings for the asset-flow view.
+        '-iraG': (p.gains.IRA1 || 0) + (p.gains.IRA2 || 0),
         'RMD%': p.rmd1Pct,
         // Phase 24: Cyclic sub-cycle annotation
         subCycle: p.subCycleLabel,
@@ -3299,6 +3306,7 @@ function updateColumnVisibility() {
     });
 
     rebuildGroupRow(table);
+    syncTopScroll();
 }
 
 // Rebuild the group header row based on currently visible columns
@@ -3557,7 +3565,39 @@ function updateTable(log) {
         oldTable.replaceWith(table);
     }
 
+    syncTopScroll();
     return table;
+}
+
+// #2 — keep the mirror scrollbar above the Annual Details table sized and toggled correctly.
+// Sets the spacer width to the table's scrollWidth and hides the strip when nothing overflows.
+function syncTopScroll() {
+    const table  = document.getElementById('main-table');
+    const top    = document.getElementById('tbl-top-scroll');
+    const inner  = document.getElementById('tbl-top-scroll-inner');
+    const bottom = document.getElementById('tbl-scroll');
+    if (!table || !top || !inner || !bottom) return;
+    const w = table.scrollWidth;
+    inner.style.width = w + 'px';
+    top.style.display = w > bottom.clientWidth + 1 ? '' : 'none';
+}
+
+// Wire bidirectional scroll sync between the mirror strip and the table scroller. Called once.
+let _topScrollWired = false;
+function setupTopScrollSync() {
+    if (_topScrollWired) return;
+    const top    = document.getElementById('tbl-top-scroll');
+    const bottom = document.getElementById('tbl-scroll');
+    if (!top || !bottom) return;
+    let syncing = false;
+    top.addEventListener('scroll', () => {
+        if (syncing) return; syncing = true; bottom.scrollLeft = top.scrollLeft; syncing = false;
+    });
+    bottom.addEventListener('scroll', () => {
+        if (syncing) return; syncing = true; top.scrollLeft = bottom.scrollLeft; syncing = false;
+    });
+    window.addEventListener('resize', syncTopScroll);
+    _topScrollWired = true;
 }
 
 
@@ -3839,6 +3879,140 @@ const crosshairPlugin = {
     }
 };
 
+// #7 — milestone overlay. Draws labeled vertical lines at significant plan events. Shared by both
+// charts; reads module-level `showMilestones` (toggle) and `_chartMilestones` (computed per run).
+// On by default.
+let showMilestones = true;
+let _chartMilestones = [];
+// #8 Taxation view — overlay federal-bracket / IRMAA-tier threshold lines that MAGI actually crosses.
+// On by default.
+let showTaxThresholds = true;
+
+const milestonePlugin = {
+    id: 'milestones',
+    afterDatasetsDraw(chart) {
+        if (!showMilestones || !_chartMilestones.length) return;
+        const xScale = chart.scales.x;
+        if (!xScale) return;
+        const { top, bottom, left, right } = chart.chartArea;
+        const mid = (left + right) / 2;
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.font = '600 10px sans-serif';
+        _chartMilestones.forEach((m, i) => {
+            const px = xScale.getPixelForValue(m.x);
+            if (px == null || isNaN(px)) return;
+            ctx.beginPath();
+            ctx.moveTo(px, top);
+            ctx.lineTo(px, bottom);
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = m.color;
+            ctx.setLineDash([5, 3]);
+            ctx.stroke();
+            // Label hugs the line, flipping side near the right edge; staggered to limit overlap.
+            ctx.setLineDash([]);
+            ctx.fillStyle = m.color;
+            const onRight = px > mid;
+            ctx.textAlign = onRight ? 'right' : 'left';
+            ctx.fillText(m.label, px + (onRight ? -3 : 3), top + 10 + (i % 3) * 12);
+        });
+        ctx.restore();
+    }
+};
+
+// Compute milestone markers from the simulation log: first spouse death (filing status flips),
+// first underfunded year (delivered income below spend goal), and IRMAA surcharge onset.
+function computeMilestones(log) {
+    const ms = [];
+    let prevStatus = null, deathDone = false, underDone = false, irmaaDone = false;
+    for (let i = 0; i < log.length; i++) {
+        const r = log[i];
+        const status = r.status;
+        if (!deathDone && prevStatus && status && status !== prevStatus) {
+            ms.push({ x: i, label: 'First death', color: '#7b1fa2' });
+            deathDone = true;
+        }
+        if (status) prevStatus = status;
+        if (!underDone) {
+            const sg = r.spendGoal ?? r.SpendGoal;
+            const ni = r.netIncome ?? r.NetIncome;
+            if (sg > 0 && ni != null && ni < sg * 0.99) {
+                ms.push({ x: i, label: 'Underfunded', color: '#c0392b' });
+                underDone = true;
+            }
+        }
+        if (!irmaaDone && (r.IRMAA ?? 0) > 0) {
+            ms.push({ x: i, label: 'IRMAA starts', color: '#2980b9' });
+            irmaaDone = true;
+        }
+    }
+    _chartMilestones = ms;
+}
+
+// Toggle handler for the "Show milestones" checkbox; redraws both charts in place.
+function toggleMilestones(cb) {
+    showMilestones = !!cb.checked;
+    assetChart?.update('none');
+    incomeChart?.update('none');
+}
+
+// #8 Taxation view — build federal-bracket and IRMAA-tier threshold series for the years MAGI
+// actually CROSSES the boundary (a boundary always above or always below MAGI is omitted, so the
+// always-exceeded low brackets and never-reached high brackets don't clutter the chart). Each
+// boundary inflates per year by the cumulative CPI factor and uses that year's filing status.
+function computeTaxThresholdSeries(log, adj) {
+    if (!log.length) return [];
+    const magi = log.map(r => r.MAGI ?? 0);
+    // A boundary series is "crossed" iff MAGI sits below it in some year and at/above it in another.
+    const crosses = series => {
+        let below = false, atOrAbove = false;
+        for (let i = 0; i < series.length; i++) {
+            const v = series[i];
+            if (v == null || !isFinite(v)) continue;
+            if (magi[i] >= v) atOrAbove = true; else below = true;
+        }
+        return below && atOrAbove;
+    };
+    // Inflated per-year boundary value for table[status].brackets[idx].l (null if non-finite).
+    const boundary = (table, idx) => log.map(r => {
+        const brks = table?.[r.status]?.brackets;
+        const l = brks?.[idx]?.l;
+        return (l == null || !isFinite(l)) ? null : l * (r['-cpiFactor'] ?? 1);
+    });
+    const out = [];
+
+    // Federal: each bracket lower bound is where a new marginal rate begins. Label with that rate.
+    const fb = TAXData?.FEDERAL, fedShades = ['#f5cba7', '#f0b27a', '#eb984e', '#e67e22', '#ca6f1e', '#a04000'];
+    if (fb?.MFJ) {
+        for (let j = 0; j < fb.MFJ.brackets.length; j++) {
+            const raw = boundary(fb, j);
+            if (!crosses(raw)) continue;
+            const rate = Math.round((fb.MFJ.brackets[j].r ?? 0) * 100);
+            out.push({ label: `${rate}% bracket`, color: fedShades[j % fedShades.length],
+                       data: raw.map((v, k) => v == null ? null : v * adj(log[k])) });
+        }
+    }
+
+    // IRMAA: each tier's MAGI entry threshold (skip the no-surcharge floor at index 0).
+    const ib = TAXData?.IRMAA, irmaaShades = ['#aed6f1', '#7fb3d5', '#5499c7', '#2e86c1', '#2471a3', '#1a5276'];
+    if (ib?.MFJ) {
+        for (let t = 1; t < ib.MFJ.brackets.length; t++) {
+            const raw = boundary(ib, t);
+            if (!crosses(raw)) continue;
+            const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
+            out.push({ label: `IRMAA ${tier}`, color: irmaaShades[(t - 1) % irmaaShades.length],
+                       data: raw.map((v, k) => v == null ? null : v * adj(log[k])), dash: [3, 3] });
+        }
+    }
+    return out;
+}
+
+// Toggle handler for the Taxation view's "Show thresholds" checkbox; rebuilds the chart.
+function toggleTaxThresholds(cb) {
+    showTaxThresholds = !!cb.checked;
+    if (lastSimulationLog) updateCharts(lastSimulationLog);
+}
+
 function syncChart(source, target, event) {
     const pts = source.getElementsAtEventForMode(event, 'index', { intersect: false }, false);
     if (pts.length === 0) return;
@@ -3856,7 +4030,7 @@ function clearChartHighlight(chart) {
 }
 
 function setupChartSync() {
-    if (typeof Chart !== 'undefined') Chart.register(crosshairPlugin);
+    if (typeof Chart !== 'undefined') Chart.register(crosshairPlugin, milestonePlugin);
     const aCanvas = document.getElementById('chartAssets');
     const iCanvas = document.getElementById('chartIncomeSources');
     if (!aCanvas || !iCanvas) return;
@@ -3878,9 +4052,123 @@ function setChartPersonView(v) {
     if (lastSimulationLog) updateCharts(lastSimulationLog);
 }
 
+// #8 — which view the lower (Income & Expenses) chart shows.
+let incomeChartView = 'combined';
+
+function setIncomeChartView(v) {
+    incomeChartView = v;
+    ['combined', 'tax', 'net', 'flows', 'assetflows'].forEach(k => {
+        const btn = document.getElementById(`chartView_${k}`);
+        if (btn) btn.classList.toggle('active', k === v);
+    });
+    // "Show thresholds" applies only to the Taxation view.
+    const thr = document.getElementById('chk-thresholds-wrap');
+    if (thr) thr.style.display = v === 'tax' ? 'inline-flex' : 'none';
+    if (lastSimulationLog) updateCharts(lastSimulationLog);
+}
+
+// #8 — build the lower chart for the non-default views. `combined` stays inline in updateCharts.
+// Receives the closures it needs (adj, sharedTooltip, mkLine, visibleSum) so it shares the exact
+// dollar-adjustment and tooltip styling of the main charts.
+function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) {
+    const labels = log.map(r => r.year);
+    const legendLabels = { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 };
+    const dollarTicks = { callback: v => Math.round(v).toLocaleString() };
+
+    if (incomeChartView === 'net') {
+        // Income vs Net (spendable) income vs the spend goal.
+        incomeChart = new Chart(ctxI, {
+            type: 'line',
+            data: { labels, datasets: [
+                mkLine('Total Income',    '#2980b9', r => (r.totalIncome ?? 0) * adj(r)),
+                mkLine('Net (Spendable)', '#27ae60', r => (visibleSum(r) - r.totalTax) * adj(r)),
+                { ...mkLine('Spend Goal', '#e67e22', r => (r.spendGoal ?? 0) * adj(r)), borderDash: [6, 4], pointRadius: 0 },
+            ]},
+            options: { ...sharedTooltip,
+                scales: { y: { ticks: dollarTicks } },
+                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels } } }
+        });
+    } else if (incomeChartView === 'tax') {
+        // Taxation: stacked tax components are the headline number → LEFT (primary) axis.
+        // MAGI and (optionally) the federal-bracket / IRMAA thresholds it crosses → RIGHT axis.
+        // order: bars high (drawn first = behind), lines low (drawn last = on top) so the MAGI and
+        // threshold lines are never hidden behind the stacked tax bars.
+        const mkTax = (label, color, fn) => ({ label, type: 'bar', backgroundColor: color, stack: 'tax',
+            yAxisID: 'y', order: 3, data: log.map(r => Math.max(0, fn(r)) * adj(r)) });
+        const datasets = [
+            mkTax('Federal',   '#c0392b', r => (r.FedTax ?? 0) - (r['-capGainsTax'] ?? 0)),
+            mkTax('Cap Gains', '#e74c3c', r => r['-capGainsTax'] ?? 0),
+            mkTax('State',     '#f39c12', r => r.StateTax ?? 0),
+            mkTax('IRMAA',     '#8e44ad', r => r.IRMAA ?? 0),
+            { ...mkLine('MAGI', '#111827', r => (r.MAGI ?? 0) * adj(r)), type: 'line', yAxisID: 'y1', pointRadius: 0, borderWidth: 2.5, order: 1 },
+        ];
+        if (showTaxThresholds) {
+            for (const s of computeTaxThresholdSeries(log, adj)) {
+                datasets.push({ label: s.label, data: s.data, type: 'line', yAxisID: 'y1', order: 0,
+                    borderColor: s.color, backgroundColor: s.color, pointRadius: 0, borderWidth: 1.5,
+                    borderDash: s.dash || [6, 4], fill: false, spanGaps: true });
+            }
+        }
+        incomeChart = new Chart(ctxI, {
+            type: 'bar',
+            data: { labels, datasets },
+            options: { ...sharedTooltip,
+                scales: {
+                    x:  { stacked: true },
+                    y:  { position: 'left',  stacked: true,  title: { display: true, text: 'Tax ($)' },    ticks: dollarTicks },
+                    y1: { position: 'right', stacked: false, min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: 'Income ($)' }, ticks: dollarTicks },
+                },
+                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels } } }
+        });
+    } else if (incomeChartView === 'flows') {
+        // Inflows (up) vs outflows (down): where spending money comes from and where it goes.
+        const mkUp = (label, color, fn) => ({ label, type: 'bar', backgroundColor: color, stack: 'flow',
+            data: log.map(r =>  Math.max(0, fn(r)) * adj(r)) });
+        const mkDn = (label, color, fn) => ({ label, type: 'bar', backgroundColor: color, stack: 'flow',
+            data: log.map(r => -Math.max(0, fn(r)) * adj(r)) });
+        incomeChart = new Chart(ctxI, {
+            type: 'bar',
+            data: { labels, datasets: [
+                mkUp('Guaranteed (SS+Pension)', '#3498dbB0', r => r.inflows  ?? 0),
+                mkUp('Portfolio Draw',          '#e67e22B0', r => r.netOut   ?? 0),
+                mkDn('Taxes',                   '#A30000C0', r => r.totalTax ?? 0),
+                mkDn('Spending',                '#27ae60B0', r => r.netIncome ?? 0),
+            ]},
+            options: { ...sharedTooltip,
+                scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
+                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels } } }
+        });
+    } else if (incomeChartView === 'assetflows') {
+        // Asset-level cash flow: investment EARNINGS (up, stacked by account) vs WITHDRAWALS that
+        // leave the portfolio to fund spending/taxes (down). Roth conversions are excluded (IRA→Roth
+        // is internal). The "Net change" line = earnings − withdrawals shows whether the portfolio
+        // grew (above 0) or was drawn down (below 0) that year.
+        const earn = r => (r['-iraG'] ?? 0) + (r.rothG ?? 0) + (r.brokerageG ?? 0) + (r.cashG ?? 0);
+        const mkE = (label, color, fn) => ({ label, type: 'bar', backgroundColor: color, stack: 'flow',
+            order: 2, data: log.map(r => (fn(r) ?? 0) * adj(r)) });
+        incomeChart = new Chart(ctxI, {
+            type: 'bar',
+            data: { labels, datasets: [
+                mkE('IRA earnings',       '#e67e22B0', r => r['-iraG']),
+                mkE('Roth earnings',      '#8e44adB0', r => r.rothG),
+                mkE('Brokerage earnings', '#2980b9B0', r => r.brokerageG),
+                mkE('Cash earnings',      '#27ae60B0', r => r.cashG),
+                { label: 'Withdrawals', type: 'bar', backgroundColor: '#c0392bC0', stack: 'flow', order: 2,
+                  data: log.map(r => -Math.max(0, r.netOut ?? 0) * adj(r)) },
+                { ...mkLine('Net change', '#111827', r => (earn(r) - Math.max(0, r.netOut ?? 0)) * adj(r)),
+                  type: 'line', order: 0, pointRadius: 0, borderWidth: 2 },
+            ]},
+            options: { ...sharedTooltip,
+                scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
+                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels } } }
+        });
+    }
+}
+
 function updateCharts(log) {
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
     const adj = r => inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1;
+    computeMilestones(log);   // #7 — markers drawn by milestonePlugin when the toggle is on
 
     const sharedTooltip = {
         interaction: { mode: 'index', intersect: false },
@@ -3971,6 +4259,11 @@ function updateCharts(log) {
         label, type: 'bar', backgroundColor: color, stack: 'income', order: 2,
         data: log.map(r => rawFn(r) * adj(r))
     });
+
+    if (incomeChartView !== 'combined') {
+        buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum);
+        return;
+    }
 
     incomeChart = new Chart(ctxI, {
         type: 'bar',  // required for Chart.js 4.x mixed bar+line; per-dataset type overrides apply
@@ -4071,6 +4364,9 @@ function showTab(id) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     const activeBtn = document.querySelector(`.tab-btn[onclick*="${id}"]`);
     if (activeBtn) activeBtn.classList.add('active');
+
+    // Annual Details table width can only be measured while its tab is visible (#2).
+    if (id === 'tab-tbl') syncTopScroll();
 }
 
 

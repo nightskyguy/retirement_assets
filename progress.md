@@ -1,5 +1,65 @@
 # Progress Log
 
+## Session: 2026-06-26 — Phase 38 UX/Charts batch (complete, v11.10a2, UNCOMMITTED, worktree epic-lalande-01685c)
+
+User punch-list of 10 UX/logic items; scope chosen interactively (AskUserQuestion). Implemented 6,
+deferred 4 (with design decisions captured). Plan: `~/.claude/plans/i-notice-a-few-dazzling-shamir.md`.
+
+**Shipped (#1,2,3,4,7,8):**
+- **#1 MC deflation floor** — `INFLATION_FLOOR=-0.01` const in `montecarlo/prng.js`; applied in
+  `buildStressBank` (line ~97, was raw `infSrc[idx]` → leaked 1932's −9.9% into Stress mode AND the
+  bootstrap bear-start overlay which copies the stress bank) and reused in `bootstrapMultiAssetBank`
+  (already had the clamp). Verified all 3 bank builders now floor at −0.01.
+- **#2 Mirror top scrollbar (Annual Details)** — table wrapped in `#tbl-scroll`; sticky `#tbl-top-scroll`
+  strip with `#tbl-top-scroll-inner` spacer above it; `syncTopScroll()` sizes the spacer to
+  `table.scrollWidth` + hides strip when nothing overflows; `setupTopScrollSync()` wires bidirectional
+  scrollLeft sync; called from updateTable / updateColumnVisibility / showTab('tab-tbl') + init.
+  GOTCHA found in browser: strip needs explicit CSS `height:16px` or browser suppresses its scrollbar
+  and `scrollWidth` collapses to clientWidth.
+- **#3** top Share bar `flex-end`→`flex-start`. **#4** Avg BETR wrapper `#stat-betr-wrap` hidden at init
+  unless `NERD_KNOBS` (`?nerdknob`).
+- **#7 Milestone overlay** — custom `milestonePlugin` (registered beside `crosshairPlugin`); draws
+  dashed vertical + label for first death (status flip), first underfunded (delivered income < spend
+  goal), IRMAA onset (IRMAA>0); `computeMilestones(log)`; checkbox `#chk-milestones`/`toggleMilestones`;
+  DEFAULT ON (`showMilestones=true`).
+- **#8 Income chart → 5 selectable views** (`setIncomeChartView` + `buildAltIncomeChart`): combined
+  (existing inline), net (Income/Net/Spend-Goal lines), flows (household: SS+pension+draw up vs
+  taxes+spend down), **tax**, **assetflows**.
+  - *tax*: stacked components on LEFT primary axis (Federal=FedTax−capGainsTax, Cap Gains, State, IRMAA);
+    MAGI + crossed thresholds on RIGHT axis. `computeTaxThresholdSeries(log,adj)` plots ONLY
+    federal-bracket / IRMAA-tier boundaries MAGI CROSSES (below some year, ≥ another), inflated per year
+    by cumulative CPI (`-cpiFactor`), per-year filing status, labeled `"22% bracket"` / `"IRMAA Tier 1"`.
+    DEFAULT ON; `#chk-thresholds`/`toggleTaxThresholds` (shown only in tax view). Lines `order:0/1` over
+    bars `order:3` so they're not hidden.
+  - *assetflows* ("Earnings vs W/D"): per-account investment earnings stacked up (IRA via new `-iraG` =
+    gains.IRA1+IRA2; Roth/Brokerage/Cash from existing *G fields), `netOut` withdrawals down, black
+    "Net change" line = earnings − netOut. Roth conversions excluded (internal).
+  - New chart-only log fields `-capGainsTax`(=p.tax.capitalGainsTax), `-cpiFactor`(=cpiRate cumulative),
+    `-iraG`; leading-`-` so BOTH table header+body filters skip them → no stray Annual column (verified).
+  - GOTCHA: in a `type:'bar'` chart, type-less `mkLine` datasets render as bars — needed explicit
+    `type:'line'`.
+  - Removed redundant lower-chart `<h4>Income and Expenses</h4>` (duplicated the first-tab label).
+
+**Data references (Taxation thresholds):** `TAXData.FEDERAL[status].brackets[{l,r}]`,
+`TAXData.IRMAA[status].brackets[{l,tier}]`; year value = `base.l * cpiFactor`; status ∈ {MFJ,SGL};
+`p.tax.capitalGainsTax` separate from `federalTax` (ord+CG+NIIT); `applyGrowth` returns per-account
+gains incl. IRA1/IRA2.
+
+**Deferred (design decisions captured in plan + task_plan.md):** #6 keep checkbox column model for now;
+#9 Cash Reserve = portion of Cash, breakable last-resort floor, refill from surplus; #10 Suggest Spend
+Goal = guaranteed income + 5% assets; #5 first-run onboarding stepper.
+
+**Verify:** node 47/47 + taxPaymentPlanner 12/12; in-page 212/212 🟢. Browser: all 5 views render,
+threshold crossing filter correct (default MAGI 172–239k → only 22% bracket + IRMAA Tier 1 plot),
+milestones+thresholds default on, lines over bars, no stray columns, no console errors. Files:
+`montecarlo/prng.js`, `retirement_optimizer.html`, `retirement_optimizer_core.js`,
+`retirementopt_styles_responsive.css`. NOT committed.
+**Preview gotcha:** screenshot subsystem wedged mid-session (page stayed responsive to eval); recovered
+after preview_stop/preview_start. Launch port bumped 8767→8771 in `.claude/launch.json` (untracked).
+
+**NEXT:** commit + open PR for Phase 38; then deferred #9 (Cash Reserve) / #10 (Suggest Spend Goal) /
+#5 (onboarding); #6 redesign later.
+
 ## Session: 2026-06-25 (cont.) — GK Optimize-Spend stability floor + MC Total Spendable (complete, v11.1097)
 
 **Problem:** With Optimize Spend + Guyton-Klinger, optimizer reported an unnaturally high initial

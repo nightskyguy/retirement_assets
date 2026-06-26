@@ -1,3 +1,8 @@
+// Deflation floor for simulated inflation. Historical worst (1932 ≈ −9.9%) is an outlier that
+// distorts results; every path-building routine clamps inflation to this minimum so the reported
+// min inflation never drops below −1%.
+const INFLATION_FLOOR = -0.01;
+
 // mulberry32: fast, seeded 32-bit PRNG. Returns a closure generating uniform [0, 1).
 function mulberry32(seed) {
     return function () {
@@ -94,7 +99,7 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
             const idx = (si + y) % n;
             eqBank [p * years + y] = eq[idx];
             bdBank [p * years + y] = bd[idx];
-            infBank[p * years + y] = infSrc[idx];
+            infBank[p * years + y] = Math.max(INFLATION_FLOOR, infSrc[idx]);
             itBank [p * years + y] = (idx >= intlOff && idx - intlOff < intlSrc.length) ? intlSrc[idx - intlOff] : eq[idx];
         }
     }
@@ -151,7 +156,7 @@ function bootstrapMultiAssetBank(rng, numPaths, years, blockSize = 3) {
                 const idx = start + b;
                 eqBank [p * years + y + b] = eqSrc[idx];
                 bdBank [p * years + y + b] = HISTORICAL_RETURNS.bonds[idx];
-                infBank[p * years + y + b] = Math.max(-0.01, HISTORICAL_RETURNS.inflation[idx]);
+                infBank[p * years + y + b] = Math.max(INFLATION_FLOOR, HISTORICAL_RETURNS.inflation[idx]);
                 // intl available only from 1970 through the last intl data year; use equity as a
                 // proxy for years outside that window (pre-1970 AND any recent year not yet in the
                 // intl series — e.g. equity/inflation extended to 2025 before intl). Guarding the

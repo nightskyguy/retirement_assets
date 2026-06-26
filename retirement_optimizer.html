@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1099</title>
+    <title>Retirement Optimizer 11.10a2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -366,7 +366,7 @@
 
     <div class="main">
         <div class="top-bar">
-            <div style="display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-bottom:6px;">
+            <div style="display:flex; justify-content:flex-start; align-items:center; gap:12px; margin-bottom:6px;">
                 <div title="Generate a URL with all current settings for bookmarking or sharing" style="position:relative">
                     <button onclick="toggleSharePanel()" style="font-size:0.8em;padding:4px 8px;">&#8258; Share</button>
                     <div class="share-panel" id="share-panel">
@@ -388,7 +388,7 @@
                 <div title="Total after-tax spendable income produced across all years."><small>Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total portfolio value (after-tax) remaining at the end of the final simulation year."><small>End Wealth</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="First year when the actual portfolio (Roth + Taxable) outpaces the no-conversion shadow after taxes. Uses Future IRA Tax % assumption. See Opp. Cost columns in Annual Details. '—' means never or no conversions."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;">—</strong></div>
-                <div title="Average Break-Even Tax Rate across all conversion years (Kitces formula). If your expected future rate exceeds this, conversions are advantageous on average. See BETR% column in Annual Details (Opp. Cost category). '—' means no conversions."><small>Avg BETR</small><br><strong id="stat-betr-avg" style="font-size:0.9em;">—</strong></div>
+                <div id="stat-betr-wrap" title="Average Break-Even Tax Rate across all conversion years (Kitces formula). If your expected future rate exceeds this, conversions are advantageous on average. See BETR% column in Annual Details (Opp. Cost category). '—' means no conversions."><small>Avg BETR</small><br><strong id="stat-betr-avg" style="font-size:0.9em;">—</strong></div>
                 <div title="Average of (net portfolio outflows − SS/pension inflows) ÷ start-of-year wealth. The classic 4% rule targets ~4%. Negative = income exceeded spending. See wdRate% column in Annual Details."><small>Avg Withdrawal Rate</small><br><strong id="stat-avg-spend-rate" style="font-size:0.9em;">—</strong></div>
 				<div id="popUpMessage" class="scenario-message"></div>
             </div>
@@ -558,6 +558,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.10a2</b> Added additional charts for clarity: Taxation, Income vs Net Income, Inflows vs Outflows, Earnings vs W/D.</li>
 				<li><b>11.1099</b> <strong>Baseline strategy is now ranked by total economic value, not terminal wealth alone.</strong> The pinned ⚓ baseline is the best no-conversion strategy. <strong>Guyton-Klinger Optimize Spend no longer reports an unsustainable spend.</strong> Optimize Spend now applies a <em>stability floor</em> and accepts a higher initial spend only if the guardrails never cut <em>real</em> delivered spending below one guard band of the initial.</li>
 				<li><b>11.1091</b> >Fixed a <code>NaN</code> in a Monte Carlo.</li>
 				   <strong>Fixed a shortfall</strong>. Fill strategies will exceed the threshold when needed to meet the spend goal.
@@ -718,7 +719,7 @@
 			</div>
 		</div> <!-- id=tab-docs -->
 
-		<div id="tab-tbl" class="card table-wrap">
+		<div id="tab-tbl" class="card">
 			<div class="column-controls">
 				<label class="all-columns">
 					<input type="checkbox" id="show-all" onchange="updateColumnVisibility()"> Show All
@@ -766,13 +767,18 @@
 					<span><span style="display:inline-block;width:14px;height:14px;background:#ff8c0099;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>BracketOverage / Net Income — MAGI exceeded the bracket/IRMAA ceiling this year</span>
 				</div>
 			</div>
-			<table id="main-table">
-				<thead>
-					<tr id="groupRow"></tr>
-					<tr id="headerRow"></tr>
-				</thead>
-				<tbody id="tableBody"></tbody>
-			</table>
+			<!-- Mirror of the table's horizontal scrollbar, pinned above the table so the user
+			     need not scroll to the very bottom of a tall table to scroll right (#2). -->
+			<div id="tbl-top-scroll" class="tbl-top-scroll"><div id="tbl-top-scroll-inner"></div></div>
+			<div id="tbl-scroll" class="tbl-scroll">
+				<table id="main-table">
+					<thead>
+						<tr id="groupRow"></tr>
+						<tr id="headerRow"></tr>
+					</thead>
+					<tbody id="tableBody"></tbody>
+				</table>
+			</div>
 		</div>
 
         <div id="tab-chart" class="card hidden">
@@ -783,10 +789,24 @@
                 <button id="chartPerson_mine"   class="tog"        onclick="setChartPersonView('mine')">Mine</button>
                 <button id="chartPerson_spouse" class="tog"        onclick="setChartPersonView('spouse')">Spouse</button>
               </span>
+              <label style="margin-left:auto;font-size:0.8em;color:#555;display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Overlay vertical markers for key plan events: first spouse death, first underfunded year, and IRMAA surcharge onset. Applies to both charts.">
+                <input type="checkbox" id="chk-milestones" onchange="toggleMilestones(this)" checked> Show milestones
+              </label>
             </div>
             <canvas id="chartAssets" style="max-height:403px;"></canvas>
             <hr>
-            <h4 style="margin:8px 0 2px 8px;color:#555;font-size:0.95em;">Income and Expenses</h4>
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:8px 0 2px 8px;">
+              <span style="display:inline-flex;gap:3px;">
+                <button id="chartView_combined" class="tog active" onclick="setIncomeChartView('combined')" title="Income sources, taxes, and spendable income in one stacked view.">Income &amp; Expenses</button>
+                <button id="chartView_tax"      class="tog"        onclick="setIncomeChartView('tax')"      title="MAGI vs the federal bracket ceiling, with total tax for context.">Taxation</button>
+                <button id="chartView_net"      class="tog"        onclick="setIncomeChartView('net')"      title="Total income vs net (spendable) income vs the spend goal.">Income vs Net</button>
+                <button id="chartView_flows"    class="tog"        onclick="setIncomeChartView('flows')"    title="Household cash flow: inflows (guaranteed income + portfolio draws) vs outflows (taxes + spending).">Inflows vs Outflows</button>
+                <button id="chartView_assetflows" class="tog"      onclick="setIncomeChartView('assetflows')" title="Portfolio cash flow: investment earnings (by account) vs withdrawals leaving the portfolio. Net-change line shows whether the portfolio grew or shrank.">Earnings vs W/D</button>
+              </span>
+              <label id="chk-thresholds-wrap" style="display:none;font-size:0.8em;color:#555;align-items:center;gap:4px;cursor:pointer;" title="Overlay the federal tax-bracket and IRMAA-tier income thresholds that MAGI crosses, each labeled with its rate/tier. Only thresholds actually crossed are shown.">
+                <input type="checkbox" id="chk-thresholds" onchange="toggleTaxThresholds(this)" checked> Show thresholds
+              </label>
+            </div>
             <canvas id="chartIncomeSources" style="max-height:403px;"></canvas>
         </div>
 
@@ -895,7 +915,13 @@ window.addEventListener('DOMContentLoaded', function () {
     loadFromURL?.();   // Preset inputs from URL params if present (must run after dropdowns are built)
     toggleStrategyUI();
     setupAutoRecalc();
+    setupTopScrollSync();   // #2 — mirror horizontal scrollbar above the Annual Details table
     initMCTab();
+    // Avg BETR is an advanced (Kitces) metric — show only in nerd mode (?nerdknob).
+    if (typeof NERD_KNOBS !== 'undefined' && !NERD_KNOBS) {
+        const betrWrap = document.getElementById('stat-betr-wrap');
+        if (betrWrap) betrWrap.style.display = 'none';
+    }
     updateProfileAgeDisplay();
     updateGrowthDisplay();
     syncMCMuFromGrowth();

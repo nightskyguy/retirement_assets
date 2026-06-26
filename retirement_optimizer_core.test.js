@@ -43,6 +43,7 @@ vm.runInContext(fs.readFileSync(path.join(dir, 'retirement_optimizer_core.js'), 
 vm.runInContext(fs.readFileSync(path.join(dir, 'displayhelpers.js'), 'utf8'), ctx);
 
 const simulate = ctx.simulate;
+const optimizeSpend = ctx.optimizeSpend;
 const getLTCGBracketRoom = ctx.getLTCGBracketRoom;
 const compactNum = ctx.compactNum;
 const parseShorthand = ctx.window.DisplayHelpers.parseShorthand;
@@ -458,6 +459,54 @@ test('GK regression: non-GK strategy has null gkSpend/gkAdj', () => {
         assert(res.log[y].gkSpend === null, `year ${y} gkSpend should be null for non-GK strategy`);
         assert(res.log[y].gkAdj === null, `year ${y} gkAdj should be null for non-GK strategy`);
     }
+});
+
+// ── GK Optimize-Spend stability floor ───────────────────────────────────────────
+// GK self-adjusts spendGoal downward via its guardrails, so a pure terminal-survival
+// search runs straight to the +50% ceiling and reports a spend GK can only hold for a
+// year or two. optimizeSpend() adds a GK-only stability floor: the worst REAL delivered
+// spend across the horizon must stay within one guard band (gkGuard) of the initial.
+// Scenario tuned so baseline is stable but the elevated ceiling spend trips the floor.
+const GK_OPT_BASE = {
+    STATEname: 'CA', strategy: 'gk',
+    birthyear1: 1952, birthmonth1: 1, die1: 97,
+    birthyear2: 0, birthmonth2: 12, die2: 0,
+    IRA1: 1500000, IRA2: 0, Roth: 0, Roth2: 0,
+    Brokerage: 300000, BrokerageBasis: 150000, Cash: 50000,
+    ss1: 0, ss1Age: 70, ss2: 0, ss2Age: 70,
+    pensionAnnual: 0, survivorPct: 0, pensionCola: false,
+    spendGoal: 55000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0.02, cpi: 0.02, growth: 0.05, cashYield: 0, dividendRate: 0,
+    ssFailYear: 2099, ssFailPct: 1.0,
+    maxConversion: false, propWithdraw: 0, iraWithdrawPct: 0.05,
+    startInYear: 2026, dividendReinvest: false, startYear: 2026,
+    hasSpouse: false, nYears: 30, gkGuard: 0.20, gkAdjPct: 0.10,
+};
+
+test('GK optimize-spend: stability floor caps optimized spend below the +50% ceiling', () => {
+    const ceiling = GK_OPT_BASE.spendGoal * 1.5;
+    const opt = optimizeSpend({ ...GK_OPT_BASE }, { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 });
+    assert(opt, 'GK optimizeSpend should find a stable optimized spend (not null)');
+    assert(!opt.hitCeiling, 'floor should prevent hitting the +50% ceiling');
+    assert(opt.optimizedSpend < ceiling * 0.90,
+        `optimizedSpend ${Math.round(opt.optimizedSpend)} should be materially below ceiling ${ceiling}`);
+
+    // Worst real delivered spend must stay within one guard band of the initial real spend.
+    const log = opt.result.log;
+    const initReal = log[0].spendGoal / (log[0].inflationFactor || 1);
+    let minReal = Infinity;
+    for (const r of log) minReal = Math.min(minReal, r.spendGoal / (r.inflationFactor || 1));
+    assert(minReal >= initReal * (1 - 0.20) - 1,
+        `min real spend ${Math.round(minReal)} fell below guard-band floor ${Math.round(initReal * 0.80)}`);
+});
+
+test('GK optimize-spend: floor is GK-specific — propwd reaches a higher spend on same inputs', () => {
+    const gk = optimizeSpend({ ...GK_OPT_BASE }, { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 });
+    const pw = optimizeSpend({ ...GK_OPT_BASE, strategy: 'propwd', propWithdraw: 0 },
+                             { strategy: 'propwd', propWithdraw: 0 });
+    assert(gk && pw, 'both strategies should return a result');
+    assert(pw.optimizedSpend > gk.optimizedSpend,
+        `propwd ${Math.round(pw.optimizedSpend)} should exceed floor-capped GK ${Math.round(gk.optimizedSpend)}`);
 });
 
 // ── Share-URL value compression (compactNum) ────────────────────────────────────

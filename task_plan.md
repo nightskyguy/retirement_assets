@@ -3,7 +3,20 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31, 32, 33, 36 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync, real-CAGR stress scoring).
+**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31, 32, 33, 36, 37 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync, real-CAGR stress scoring).
+
+**Phase 37 (GK Optimize-Spend fix + spendable-aware baseline, v11.1097–1099, 2026-06-26):**
+Three GK/baseline fixes. (a) **GK Optimize-Spend stability floor** — GK mutates `spendGoal` via
+guardrails so the survival-only search ran to the +50% ceiling (reported ~$210k holdable only ~2yr).
+`optimizeSpend().passes()` now adds a GK-only floor: worst REAL delivered spend
+(`spendGoal/inflationFactor`) must stay ≥ initial real × (1 − gkGuard). (b) **MC Total Spendable
+column** — median `totals.spendCurrentDollars` (real) threaded via `spendPerPath`/`medianSpend`
+(worker.js + mc_controller.js), rendered as 8th MC col. (c) **Baseline ranking reworked** — was
+`max(afterTaxNW)` among no-conv successes (let GK win by hoarding), now
+`_baselineScore = afterTaxNWCurrentDollars + 1.10*spendCurrentDollars` (real $; SPENDABLE_WEIGHT=1.10
+favors spend over bequest). Baseline flips GK→IRA Draw in default scenario. (d) Nerd-only **Score**
+column in optimizer table (`?nerdknob`). Confirmed Reduce-N does NOT underspend (flat $3,111k all N;
+only NW varies). node 47/47, in-page 212/212.
 
 **Phase 36 (Soft/Strict withdrawal caps — large-shortfall fix, v11.1090, 2026-06-25):** soft caps
 (Federal bracket / IRMAA / fixedpct) now draw IRA above the ceiling to fund mandatory spending
@@ -16,7 +29,7 @@ node 45/45, in-page 212/212.
 **Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
 **Pending (blocked):** Phase 9 remainder (ACA MAGI/subsidy), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
 **Refactoring (Phase R):** R1a + R2 shipped (simulate() helper extraction, OptimizerState). R1-remainder, R3, R4 pending.
-**As of:** 2026-06-23 (Phase 33 inflation-aware stress scoring — v11.1048; stress chart labels now show real CAGR).
+**As of:** 2026-06-26 (Phase 37 GK Optimize-Spend floor + spendable-aware baseline + MC Total Spendable — v11.1099).
 
 ### Phase 32: Share-URL Compression + Default-Omission
 **Why:** Share URL too long. Compress numeric values (1000000→1m, 100000→1e5) + booleans

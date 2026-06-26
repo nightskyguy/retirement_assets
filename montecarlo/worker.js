@@ -117,6 +117,7 @@ self.onmessage = function ({ data: cfg }) {
         const paths = new Float64Array(numPaths * years);
         const ruinYears = new Uint16Array(numPaths); // 0 = survived to end of plan
         const taxPerPath = new Float64Array(numPaths); // lifetime taxes for each path
+        const spendPerPath = new Float64Array(numPaths); // lifetime real (current-$) delivered spend
         let ruinCount = 0;
 
         for (let p = 0; p < numPaths; p++) {
@@ -167,6 +168,7 @@ self.onmessage = function ({ data: cfg }) {
             }
 
             taxPerPath[p] = result.totals.tax ?? 0;
+            spendPerPath[p] = result.totals.spendCurrentDollars ?? 0;
             const log = result.log;
             let ruined = false;
 
@@ -211,6 +213,10 @@ self.onmessage = function ({ data: cfg }) {
         const taxSorted = Array.from(taxPerPath).sort((a, b) => a - b);
         const medianTax = taxSorted[Math.floor(taxSorted.length / 2)] ?? null;
 
+        // Median lifetime real (current-$) delivered spend across all paths.
+        const spendSorted = Array.from(spendPerPath).sort((a, b) => a - b);
+        const medianSpend = spendSorted[Math.floor(spendSorted.length / 2)] ?? null;
+
         const percentiles = computePercentiles(paths, years, numPaths);
 
         // In stress mode, capture individual path traces for per-scenario chart rendering.
@@ -238,6 +244,7 @@ self.onmessage = function ({ data: cfg }) {
             survivalRate:   (numPaths - ruinCount) / numPaths,
             medianRuinYear,
             medianTax,
+            medianSpend,
             percentiles: {
                 p5:  Array.from(percentiles.p5),
                 p25: Array.from(percentiles.p25),

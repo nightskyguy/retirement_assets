@@ -194,6 +194,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         const paths      = new Float64Array(numPaths * years);
         const ruinYears  = new Uint16Array(numPaths);
         const taxPerPath = new Float64Array(numPaths);
+        const spendPerPath = new Float64Array(numPaths);
         let ruinCount    = 0;
 
         for (let p = 0; p < numPaths; p++) {
@@ -242,6 +243,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             }
 
             taxPerPath[p] = result.totals.tax ?? 0;
+            spendPerPath[p] = result.totals.spendCurrentDollars ?? 0;
             const log = result.log;
             let ruined = false;
 
@@ -282,6 +284,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         }
 
         const taxSorted = Array.from(taxPerPath).sort((a, b) => a - b);
+        const spendSorted = Array.from(spendPerPath).sort((a, b) => a - b);
         varResults.push({
             label:          baseInputs._label          ?? `Variation ${vi + 1}`,
             strategyFamily: baseInputs._strategyFamily ?? '',
@@ -298,6 +301,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             survivalRate:   (numPaths - ruinCount) / numPaths,
             medianRuinYear: failures.length > 0 ? failures[Math.floor(failures.length / 2)] : null,
             medianTax:      taxSorted[Math.floor(taxSorted.length / 2)] ?? null,
+            medianSpend:    spendSorted[Math.floor(spendSorted.length / 2)] ?? null,
             percentiles: {
                 p5:  Array.from(percentiles.p5),
                 p25: Array.from(percentiles.p25),

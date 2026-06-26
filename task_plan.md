@@ -3,7 +3,39 @@
 Goal: Implement remaining features from optimizer_directions.md priority list (items B through R), focused on core functionality gaps and Monte Carlo improvements.
 
 ## Current Phase
-**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31, 32, 33, 36, 37 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync, real-CAGR stress scoring).
+**Complete:** 0, 0b, 1, 2, 4, 6, 7, 12, 18, 19, 20, 21, 22, 23, 27, 28, 30, 31, 32, 33, 36, 37, 38 + MC UX fixes (CSS grid tables, mode selector, CAGR stats, SoRR Stress mode, legend isolation, GBM growth sync, real-CAGR stress scoring).
+
+**Phase 38 (UX/Charts batch — user punch-list, v11.10a2, 2026-06-26, UNCOMMITTED in worktree
+`epic-lalande-01685c`):** 6 of a 10-item punch-list (scope chosen via AskUserQuestion).
+DONE: (1) **MC deflation floor** — `INFLATION_FLOOR=-0.01` const in `montecarlo/prng.js`, applied in
+`buildStressBank` (was raw → leaked 1932's −9.9% into Stress + bear-start overlay) and reused in
+`bootstrapMultiAssetBank`. (2) **Annual Details mirror top scrollbar** — table wrapped in `#tbl-scroll`
+with a sticky `#tbl-top-scroll` strip above; `syncTopScroll()`/`setupTopScrollSync()` (called from
+updateTable/updateColumnVisibility/showTab + init). NOTE: strip needs an explicit CSS `height` (16px)
+or the browser suppresses its scrollbar and scrollWidth collapses. (3) top Share bar left-aligned.
+(4) Avg BETR hidden unless `?nerdknob` (`#stat-betr-wrap`). (7) **Chart milestone overlay** — custom
+`milestonePlugin`; dashed verticals for first death / first underfunded / IRMAA onset on both charts;
+DEFAULT ON. (8) **Income chart split into 5 selectable views** (`setIncomeChartView` +
+`buildAltIncomeChart`): combined, **tax**, net, flows (household cash flow), **assetflows** (Earnings
+vs W/D — per-account earnings up via new `-iraG` log field vs `netOut` withdrawals down, black net-change
+line). Taxation view: stacked components (Federal=FedTax−capGainsTax, CapGains, State, IRMAA) on LEFT
+primary axis; MAGI + crossed federal-bracket / IRMAA-tier thresholds on RIGHT axis, each labeled with
+rate/tier, ONLY boundaries MAGI crosses (`computeTaxThresholdSeries` crossing test), DEFAULT ON,
+toggleable via `#chk-thresholds`; lines `order:0/1` over bars `order:3`. New chart-only log fields
+`-capGainsTax`,`-cpiFactor`,`-iraG` (leading `-` → skipped by both table filters, no stray column).
+Removed redundant lower-chart "Income and Expenses" h4 (dup of tab label). node 47/47 + 12/12, in-page
+212/212, browser-verified all 5 views + thresholds + milestones, no console errors.
+DEFERRED (design notes in plan `~/.claude/plans/i-notice-a-few-dazzling-shamir.md`):
+- **#6** Annual-table view presets — KEEP current checkbox method for now (user) pending a more
+  navigable design.
+- **#9** Cash Reserve enforcement — `CashReserve` captured (core.js:1923) but never drawn. Decided:
+  reserve is a PORTION of the Cash balance (not additional); breakable hard floor (last-resort use);
+  refill from surplus years. Effective drawable Cash = `max(0, Cash − CashReserve)` until last resort.
+- **#10** Suggest After-Tax Spend Goal — button by Spend Goal: avg guaranteed income (SS+pension) +
+  5.0% × total current assets; user-editable result.
+- **#5** Onboarding — first-run dismissible "Start here" stepper over the 4 sidebar sections; persist
+  "seen" in localStorage.
+NEXT: commit + PR for Phase 38; then tackle deferred #9/#10/#5 (and #6 redesign).
 
 **Phase 37 (GK Optimize-Spend fix + spendable-aware baseline, v11.1097–1099, 2026-06-26):**
 Three GK/baseline fixes. (a) **GK Optimize-Spend stability floor** — GK mutates `spendGoal` via
@@ -26,10 +58,11 @@ shortfall after a spouse's death halves the bracket. Survivor-SS step-up confirm
 node 45/45, in-page 212/212.
 **Superseded/deprioritized:** Phase 8 (Variable Growth sensitivity grid — bootstrap + stress MC covers the use case; grid not needed).
 **Partial:** Phase 9 (ACA — Medicare age gate done; MAGI/subsidy calculation not yet implemented).
-**Pending (unblocked):** Phase 3 (Lumpy Spending), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
+**Pending (unblocked):** Phase 38 deferred UX items — #9 Cash Reserve enforcement, #10 Suggest Spend Goal, #5 Onboarding, #6 Annual-table view presets (notes above); Phase 3 (Lumpy Spending), Phase 23b (Greedy DP per-year schedule + MC Stage 2 top-K), Phase 29 (Creeping Tax Rate).
 **Pending (blocked):** Phase 9 remainder (ACA MAGI/subsidy), Phase 5 (Scenario Comparison), Phase 10 (Multi-Strategy), Phase 11 (Regime-Switching), Phase 17 (FF equity data).
 **Refactoring (Phase R):** R1a + R2 shipped (simulate() helper extraction, OptimizerState). R1-remainder, R3, R4 pending.
-**As of:** 2026-06-26 (Phase 37 GK Optimize-Spend floor + spendable-aware baseline + MC Total Spendable — v11.1099).
+**Known TODOs (unverified — check code first):** Roth1/Roth2 columns may be missing from Annual Details; IRMAA surcharge may not render as an Annual-table column (column-registration class of bug).
+**As of:** 2026-06-26 (Phase 38 UX/Charts batch — MC −1% floor, mirror top scrollbar, 5 chart views incl. Taxation+thresholds & Earnings-vs-W/D, milestones — v11.10a2, UNCOMMITTED).
 
 ### Phase 32: Share-URL Compression + Default-Omission
 **Why:** Share URL too long. Compress numeric values (1000000→1m, 100000→1e5) + booleans

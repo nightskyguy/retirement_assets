@@ -4009,7 +4009,7 @@ function computeTaxThresholdSeries(log, adj) {
         for (const [jStr] of Object.entries(nextFedCounts)) {
             const j = +jStr;
             const rate = Math.round((fb.MFJ.brackets[j].r ?? 0) * 100);
-            out.push({ label: `${rate}% Limit (next)`, color: fedShades[j % fedShades.length],
+            out.push({ label: `${rate}% Limit`, color: fedShades[j % fedShades.length],
                        data: rawFed[j].map((v, k) => v == null ? null : v * adj(log[k])),
                        dash: [5, 4], group: 'fed', isNext: true });
         }
@@ -4043,7 +4043,7 @@ function computeTaxThresholdSeries(log, adj) {
         for (const [tStr] of Object.entries(nextIRCounts)) {
             const t = +tStr;
             const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
-            out.push({ label: `IRMAA ${tier} (next)`, color: irmaaShades[(t - 1) % irmaaShades.length],
+            out.push({ label: `IRMAA ${tier}`, color: irmaaShades[(t - 1) % irmaaShades.length],
                        data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])),
                        dash: [5, 4], group: 'irmaa', isNext: true });
         }
@@ -4154,34 +4154,18 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                     _thGroup: s.group, _thNext: s.isNext });
             }
         }
-        // Tooltip filter: for threshold lines show the CURRENT (highest breached) and the NEXT (lowest
-        // unbreached) boundary in each group, so the user sees both the line just crossed and the one
-        // coming up. Other breached/unbreached lines are hidden. Tax bars + MAGI (no _thGroup) always show.
-        const taxThresholdFilter = (item) => {
-            const ds = item.dataset;
-            if (!ds._thGroup) return true;
-            const i = item.dataIndex;
-            const magiDs = item.chart.data.datasets.find(d => d.label === 'MAGI');
-            const magi = magiDs?.data[i];
-            const v = ds.data[i];
-            if (magi == null || v == null) return false;
-            let maxBreached = -Infinity, minUnbreached = Infinity;
-            for (const d of item.chart.data.datasets) {
-                if (d._thGroup === ds._thGroup) {
-                    const dv = d.data[i];
-                    if (dv == null) continue;
-                    if (dv <= magi) maxBreached   = Math.max(maxBreached, dv);
-                    else            minUnbreached = Math.min(minUnbreached, dv);
-                }
-            }
-            return v === maxBreached || v === minUnbreached;
-        };
-        // Annotate threshold rows so the tooltip clarifies these are boundary lines, not amounts.
-        const taxLabelCb = (ctx) => {
-            const base = ctx.dataset.label + ': ' + Math.round(ctx.parsed.y).toLocaleString();
-            if (ctx.dataset._thGroup === 'fed')   return base + '  (bracket upper limit)';
-            if (ctx.dataset._thGroup === 'irmaa') return base + '  (tier threshold)';
-            return base;
+        // Threshold lines stay on the chart for visual context, but are dropped from the tooltip.
+        // Instead the tooltip answers "what rate am I paying now?" via an afterBody footer with the
+        // federal + state marginal rate and the highest IRMAA tier crossed (all already in the log row).
+        const taxThresholdFilter = (item) => !item.dataset._thGroup;   // bars + MAGI only
+        const taxRateFooter = (items) => {
+            const r = log[items[0]?.dataIndex];
+            if (!r) return [];
+            const out = [`Fed marginal: ${Math.round((r['FedRate%'] || 0) * 100)}%`];
+            if ((r['StateRate%'] || 0) > 0) out.push(`State marginal: ${((r['StateRate%']) * 100).toFixed(1)}%`);
+            const tier = r.IRMAATier;
+            out.push(`IRMAA: ${(tier && tier !== '-none-' && tier !== '-') ? tier : 'none'}`);
+            return out;
         };
         incomeChart = new Chart(ctxI, {
             type: 'bar',
@@ -4194,7 +4178,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                 },
                 plugins: { ...sharedTooltip.plugins,
                     tooltip: { ...sharedTooltip.plugins.tooltip, filter: taxThresholdFilter,
-                        callbacks: { ...sharedTooltip.plugins.tooltip.callbacks, label: taxLabelCb } },
+                        callbacks: { ...sharedTooltip.plugins.tooltip.callbacks, afterBody: taxRateFooter } },
                     legend: { labels: legendLabels } } }
         });
     } else if (incomeChartView === 'flows') {

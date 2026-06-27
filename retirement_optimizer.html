@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1010c0</title>
+    <title>Retirement Optimizer 11.1010c1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -558,6 +558,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1010c1</b> Taxation chart tooltip now reports your <strong>federal &amp; state marginal tax rate and highest IRMAA tier</strong> for the year, instead of listing bracket dollar thresholds. The dashed bracket/IRMAA lines stay on the chart for visual context; the confusing "(next)" labels were removed.</li>
 				<li><b>11.1010c0</b> <strong>Charts are now the default view</strong> (was Annual Details). Taxation tooltip shows both the current and next federal bracket / IRMAA tier; threshold lines relabeled "X% Limit" (with "upper limit" note in the tooltip) and drawn thicker for readability.</li>
 				<li><b>11.1010bf</b> Taxation chart tooltip now shows only the <em>current</em> federal bracket and IRMAA tier breached (not every lower one). Fill Bracket / IRMAA dropdown selections now display the corresponding federal bracket (e.g. "IRMAA Tier 4 → 35% federal bracket"); the unlimited 37% bracket is listed for reference. Inflows vs Outflows chart now breaks out Roth Conversions as a distinct outflow (Spending no longer balloons in conversion years). Suggest-spend ⓘ icon kept on one line.</li>
 				<li><b>11.1010be</b> High-NW improvements: IRA Draw optimizer now tests up to 20% (was 10%). Optimize Spend ceiling raised to 2.5× input (was 1.5×). Taxation chart shows the next-higher bracket/IRMAA threshold above current MAGI. Real Growth display now includes dividend yield. Growth % label clarified to "price appreciation only — enter dividends separately." Suggest Spend ⓘ icon: click to fill with SS+pension+5%×assets (after-tax estimate), click again to restore. Changelog starts collapsed. Tooltip jargon expanded (Guard/IRA Draw/Birth Year/QCD/IRMAA/LTCG/DRIP).</li>

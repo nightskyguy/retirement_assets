@@ -3991,7 +3991,7 @@ function computeTaxThresholdSeries(log, adj) {
             if (!crosses(rawFed[j])) continue;
             crossedFed.add(j);
             const rate = Math.round((fb.MFJ.brackets[j].r ?? 0) * 100);
-            out.push({ label: `${rate}% bracket`, color: fedShades[j % fedShades.length],
+            out.push({ label: `${rate}% Limit`, color: fedShades[j % fedShades.length],
                        data: rawFed[j].map((v, k) => v == null ? null : v * adj(log[k])),
                        group: 'fed' });
         }
@@ -4009,9 +4009,9 @@ function computeTaxThresholdSeries(log, adj) {
         for (const [jStr] of Object.entries(nextFedCounts)) {
             const j = +jStr;
             const rate = Math.round((fb.MFJ.brackets[j].r ?? 0) * 100);
-            out.push({ label: `${rate}% bracket (next)`, color: fedShades[j % fedShades.length] + '70',
+            out.push({ label: `${rate}% Limit (next)`, color: fedShades[j % fedShades.length],
                        data: rawFed[j].map((v, k) => v == null ? null : v * adj(log[k])),
-                       dash: [4, 6], group: 'fed', isNext: true });
+                       dash: [5, 4], group: 'fed', isNext: true });
         }
     }
 
@@ -4043,9 +4043,9 @@ function computeTaxThresholdSeries(log, adj) {
         for (const [tStr] of Object.entries(nextIRCounts)) {
             const t = +tStr;
             const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
-            out.push({ label: `IRMAA ${tier} (next)`, color: irmaaShades[(t - 1) % irmaaShades.length] + '70',
+            out.push({ label: `IRMAA ${tier} (next)`, color: irmaaShades[(t - 1) % irmaaShades.length],
                        data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])),
-                       dash: [2, 4], group: 'irmaa', isNext: true });
+                       dash: [5, 4], group: 'irmaa', isNext: true });
         }
     }
     return out;
@@ -4149,14 +4149,14 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
         if (showTaxThresholds) {
             for (const s of computeTaxThresholdSeries(log, adj)) {
                 datasets.push({ label: s.label, data: s.data, type: 'line', yAxisID: 'y1', order: 0,
-                    borderColor: s.color, backgroundColor: s.color, pointRadius: 0, borderWidth: 1.5,
+                    borderColor: s.color, backgroundColor: s.color, pointRadius: 0, borderWidth: 2.5,
                     borderDash: s.dash || [6, 4], fill: false, spanGaps: true,
                     _thGroup: s.group, _thNext: s.isNext });
             }
         }
-        // Tooltip filter: for threshold lines show ONLY the current (highest breached) federal bracket
-        // and IRMAA tier — hide the lower breached ones and the unbreached "(next)" lines. Tax bars and
-        // the MAGI line (no _thGroup) always show.
+        // Tooltip filter: for threshold lines show the CURRENT (highest breached) and the NEXT (lowest
+        // unbreached) boundary in each group, so the user sees both the line just crossed and the one
+        // coming up. Other breached/unbreached lines are hidden. Tax bars + MAGI (no _thGroup) always show.
         const taxThresholdFilter = (item) => {
             const ds = item.dataset;
             if (!ds._thGroup) return true;
@@ -4164,15 +4164,24 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             const magiDs = item.chart.data.datasets.find(d => d.label === 'MAGI');
             const magi = magiDs?.data[i];
             const v = ds.data[i];
-            if (magi == null || v == null || v > magi) return false;   // unbreached (incl. "next")
-            let maxBreached = -Infinity;
+            if (magi == null || v == null) return false;
+            let maxBreached = -Infinity, minUnbreached = Infinity;
             for (const d of item.chart.data.datasets) {
                 if (d._thGroup === ds._thGroup) {
                     const dv = d.data[i];
-                    if (dv != null && dv <= magi && dv > maxBreached) maxBreached = dv;
+                    if (dv == null) continue;
+                    if (dv <= magi) maxBreached   = Math.max(maxBreached, dv);
+                    else            minUnbreached = Math.min(minUnbreached, dv);
                 }
             }
-            return v === maxBreached;
+            return v === maxBreached || v === minUnbreached;
+        };
+        // Annotate threshold rows so the tooltip clarifies these are boundary lines, not amounts.
+        const taxLabelCb = (ctx) => {
+            const base = ctx.dataset.label + ': ' + Math.round(ctx.parsed.y).toLocaleString();
+            if (ctx.dataset._thGroup === 'fed')   return base + '  (bracket upper limit)';
+            if (ctx.dataset._thGroup === 'irmaa') return base + '  (tier threshold)';
+            return base;
         };
         incomeChart = new Chart(ctxI, {
             type: 'bar',
@@ -4184,7 +4193,8 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                     y1: { position: 'right', stacked: false, min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: 'Income ($)' }, ticks: dollarTicks },
                 },
                 plugins: { ...sharedTooltip.plugins,
-                    tooltip: { ...sharedTooltip.plugins.tooltip, filter: taxThresholdFilter },
+                    tooltip: { ...sharedTooltip.plugins.tooltip, filter: taxThresholdFilter,
+                        callbacks: { ...sharedTooltip.plugins.tooltip.callbacks, label: taxLabelCb } },
                     legend: { labels: legendLabels } } }
         });
     } else if (incomeChartView === 'flows') {

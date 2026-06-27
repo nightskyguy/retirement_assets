@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1010bf</title>
+    <title>Retirement Optimizer 11.1010c0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -401,8 +401,8 @@
                 <span class="toggle-switch"></span>
                 <span style="color:#666;font-size:0.9em;">Current $</span>
             </label>
-            <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
-            <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
+            <button id="btn-tbl" class="tab-btn" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
+            <button id="btn-cht" class="tab-btn active" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer 🎯</button>
 		    <button id="btn-mc" class="tab-btn" onclick="{showTab('tab-mc'); mcTabActivated();}">Monte Carlo 🎲</button>
 		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
@@ -558,6 +558,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1010c0</b> <strong>Charts are now the default view</strong> (was Annual Details). Taxation tooltip shows both the current and next federal bracket / IRMAA tier; threshold lines relabeled "X% Limit" (with "upper limit" note in the tooltip) and drawn thicker for readability.</li>
 				<li><b>11.1010bf</b> Taxation chart tooltip now shows only the <em>current</em> federal bracket and IRMAA tier breached (not every lower one). Fill Bracket / IRMAA dropdown selections now display the corresponding federal bracket (e.g. "IRMAA Tier 4 → 35% federal bracket"); the unlimited 37% bracket is listed for reference. Inflows vs Outflows chart now breaks out Roth Conversions as a distinct outflow (Spending no longer balloons in conversion years). Suggest-spend ⓘ icon kept on one line.</li>
 				<li><b>11.1010be</b> High-NW improvements: IRA Draw optimizer now tests up to 20% (was 10%). Optimize Spend ceiling raised to 2.5× input (was 1.5×). Taxation chart shows the next-higher bracket/IRMAA threshold above current MAGI. Real Growth display now includes dividend yield. Growth % label clarified to "price appreciation only — enter dividends separately." Suggest Spend ⓘ icon: click to fill with SS+pension+5%×assets (after-tax estimate), click again to restore. Changelog starts collapsed. Tooltip jargon expanded (Guard/IRA Draw/Birth Year/QCD/IRMAA/LTCG/DRIP).</li>
 				<li><b>11.10a2</b> Added additional charts for clarity: Taxation, Income vs Net Income, Inflows vs Outflows, Earnings vs W/D.</li>
@@ -721,7 +722,7 @@
 			</div>
 		</div> <!-- id=tab-docs -->
 
-		<div id="tab-tbl" class="card">
+		<div id="tab-tbl" class="card hidden">
 			<div class="column-controls">
 				<label class="all-columns">
 					<input type="checkbox" id="show-all" onchange="updateColumnVisibility()"> Show All
@@ -783,7 +784,7 @@
 			</div>
 		</div>
 
-        <div id="tab-chart" class="card hidden">
+        <div id="tab-chart" class="card">
             <div style="display:flex;align-items:center;gap:10px;margin:8px 0 2px 8px;">
               <h4 style="margin:0;color:#555;font-size:0.95em;">Balances</h4>
               <span style="display:inline-flex;gap:3px;">

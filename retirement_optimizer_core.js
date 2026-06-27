@@ -11,7 +11,7 @@ const STORAGE_KEY = 'SLCRetireOptimizeScenario';
 const OLD_STORAGE_KEY = 'retirementScenarios';
 
 // Spend optimizer constants
-const SPEND_SEARCH_CEILING   = 0.50;  // Binary search upper bound: 50% above baseline spend
+const SPEND_SEARCH_CEILING   = 1.50;  // Binary search upper bound: 150% above baseline spend (2.5× input)
 const SPEND_SEARCH_TOLERANCE = 0.005; // Stop binary search when bounds are within 0.5%
 const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase spending" banner
 
@@ -2435,7 +2435,7 @@ function runOptimizer() {
     }
 
     // IRA Draw — fixed % of IRA balance each year
-    for (const pct of [5, 6, 7, 8, 10]) {
+    for (const pct of [5, 6, 7, 8, 10, 12, 15, 20]) {
         addResult('IRA Draw', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
     }
 
@@ -3984,24 +3984,66 @@ function computeTaxThresholdSeries(log, adj) {
     // Federal: each bracket lower bound is where a new marginal rate begins. Label with that rate.
     const fb = TAXData?.FEDERAL, fedShades = ['#f5cba7', '#f0b27a', '#eb984e', '#e67e22', '#ca6f1e', '#a04000'];
     if (fb?.MFJ) {
-        for (let j = 0; j < fb.MFJ.brackets.length; j++) {
-            const raw = boundary(fb, j);
-            if (!crosses(raw)) continue;
+        const nFed = fb.MFJ.brackets.length;
+        const rawFed = Array.from({ length: nFed }, (_, j) => boundary(fb, j));
+        const crossedFed = new Set();
+        for (let j = 0; j < nFed; j++) {
+            if (!crosses(rawFed[j])) continue;
+            crossedFed.add(j);
             const rate = Math.round((fb.MFJ.brackets[j].r ?? 0) * 100);
             out.push({ label: `${rate}% bracket`, color: fedShades[j % fedShades.length],
-                       data: raw.map((v, k) => v == null ? null : v * adj(log[k])) });
+                       data: rawFed[j].map((v, k) => v == null ? null : v * adj(log[k])) });
+        }
+        // Next bracket above current MAGI — not already crossed.
+        const nextFedCounts = {};
+        for (let y = 0; y < magi.length; y++) {
+            for (let j = 0; j < nFed; j++) {
+                const v = rawFed[j][y];
+                if (v != null && magi[y] < v) {
+                    if (!crossedFed.has(j)) nextFedCounts[j] = (nextFedCounts[j] || 0) + 1;
+                    break;
+                }
+            }
+        }
+        for (const [jStr] of Object.entries(nextFedCounts)) {
+            const j = +jStr;
+            const rate = Math.round((fb.MFJ.brackets[j].r ?? 0) * 100);
+            out.push({ label: `${rate}% bracket (next)`, color: fedShades[j % fedShades.length] + '70',
+                       data: rawFed[j].map((v, k) => v == null ? null : v * adj(log[k])),
+                       dash: [4, 6] });
         }
     }
 
     // IRMAA: each tier's MAGI entry threshold (skip the no-surcharge floor at index 0).
     const ib = TAXData?.IRMAA, irmaaShades = ['#aed6f1', '#7fb3d5', '#5499c7', '#2e86c1', '#2471a3', '#1a5276'];
     if (ib?.MFJ) {
-        for (let t = 1; t < ib.MFJ.brackets.length; t++) {
-            const raw = boundary(ib, t);
-            if (!crosses(raw)) continue;
+        const nIR = ib.MFJ.brackets.length;
+        const rawIR = Array.from({ length: nIR }, (_, t) => boundary(ib, t));
+        const crossedIR = new Set();
+        for (let t = 1; t < nIR; t++) {
+            if (!crosses(rawIR[t])) continue;
+            crossedIR.add(t);
             const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
             out.push({ label: `IRMAA ${tier}`, color: irmaaShades[(t - 1) % irmaaShades.length],
-                       data: raw.map((v, k) => v == null ? null : v * adj(log[k])), dash: [3, 3] });
+                       data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])), dash: [3, 3] });
+        }
+        // Next IRMAA tier above current MAGI — not already crossed.
+        const nextIRCounts = {};
+        for (let y = 0; y < magi.length; y++) {
+            for (let t = 1; t < nIR; t++) {
+                const v = rawIR[t][y];
+                if (v != null && magi[y] < v) {
+                    if (!crossedIR.has(t)) nextIRCounts[t] = (nextIRCounts[t] || 0) + 1;
+                    break;
+                }
+            }
+        }
+        for (const [tStr] of Object.entries(nextIRCounts)) {
+            const t = +tStr;
+            const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
+            out.push({ label: `IRMAA ${tier} (next)`, color: irmaaShades[(t - 1) % irmaaShades.length] + '70',
+                       data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])),
+                       dash: [2, 4] });
         }
     }
     return out;
@@ -5245,11 +5287,13 @@ function updateGrowthDisplay() {
     const inflation = parseFloat(document.getElementById('inflation')?.value);
     if (isNaN(growth) || isNaN(inflation)) { el.innerHTML = ''; return; }
 
-    // Fisher equation: real = (1+g)/(1+i) - 1
-    const realPct = ((1 + growth / 100) / (1 + inflation / 100) - 1) * 100;
+    // Fisher equation: real = (1+g)/(1+d)/(1+i) - 1, including dividend yield
+    const div = parseFloat(document.getElementById('dividendRate')?.value) || 0;
+    const realPct = ((1 + growth / 100) * (1 + div / 100) / (1 + inflation / 100) - 1) * 100;
     const sign = realPct >= 0 ? '+' : '';
+    const totalNominal = growth + div;
     let html = `Real growth: <strong>${sign}${realPct.toFixed(1)}%</strong>`
-             + ` <span style="color:#888;">(${growth}% nominal &minus; ${inflation}% inflation)</span>`;
+             + ` <span style="color:#888;">(${totalNominal.toFixed(1)}% nominal [${growth}% price + ${div}% div] &minus; ${inflation}% inflation)</span>`;
 
     if (growth > 10) {
         html += `<br><span style="color:#b45309;">⚠ Optimistic — S&amp;P 500 long-run nominal CAGR is ~10%; diversified portfolios typically 6–9%.</span>`;
@@ -5310,6 +5354,61 @@ function updateBracketFeedback() {
             >⚠ Over bracket by ~$${shortfall.toLocaleString()} / year — click to adjust</span>`;
         feedbackEl.style.color = '#d4811f';
     }
+    updateSuggestSpendTooltip();
+}
+
+// Prior spendGoal value before user clicked the suggest icon (null = not in suggest mode).
+let _priorSpendGoal = null;
+
+function computeSuggestedSpend() {
+    const inp = getInputs();
+    const totalAssets = (inp.IRA1||0) + (inp.IRA2||0) + (inp.Roth||0) + (inp.Roth2||0) + (inp.Brokerage||0) + (inp.Cash||0);
+    const portfolioWd  = 0.05 * totalAssets;
+    const gross        = (inp.ss1||0) + (inp.ss2||0) + (inp.pensionAnnual||0) + portfolioWd;
+
+    const status    = inp.hasSpouse ? 'MFJ' : 'SGL';
+    const retireAge = inp.startAge || (new Date().getFullYear() - (inp.birthyear1||1960));
+    const spAge     = inp.hasSpouse ? (retireAge + (inp.birthyear1||1960) - (inp.birthyear2||1960)) : 0;
+    const ages      = inp.hasSpouse ? [retireAge, spAge] : [retireAge];
+
+    const taxes = calculateTaxes({
+        filingStatus: status,
+        totalSS:      (inp.ss1||0) + (inp.ss2||0),
+        earnedIncome: (inp.pensionAnnual||0) + portfolioWd,
+        state:        inp.STATEname || 'CA',
+        ages,
+        inflation:    1.0,
+    });
+
+    const afterTax = Math.max(0, gross - (taxes.totalTax || 0));
+    return { gross, afterTax };
+}
+
+function updateSuggestSpendTooltip() {
+    const icon = document.getElementById('suggest-spend-icon');
+    if (!icon) return;
+    const { afterTax } = computeSuggestedSpend();
+    icon.style.display = afterTax > 0 ? '' : 'none';
+    if (_priorSpendGoal !== null) {
+        icon.title = `Restore: $${Math.round(_priorSpendGoal).toLocaleString()}`;
+    } else {
+        icon.title = `Suggested goal: $${Math.round(afterTax).toLocaleString()}`;
+    }
+}
+
+function applySuggestSpend() {
+    if (_priorSpendGoal !== null) {
+        DisplayHelpers.setDollarValue('spendGoal', Math.round(_priorSpendGoal));
+        _priorSpendGoal = null;
+    } else {
+        const el = document.getElementById('spendGoal');
+        const raw = parseFloat((el?.dataset?.numVal) || (el?.value || '').replace(/[^\d.-]/g, '') || '0');
+        _priorSpendGoal = raw;
+        const { afterTax } = computeSuggestedSpend();
+        DisplayHelpers.setDollarValue('spendGoal', Math.round(afterTax));
+    }
+    updateSuggestSpendTooltip();
+    updateBracketFeedback();
 }
 
 /**

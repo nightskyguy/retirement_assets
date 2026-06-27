@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1010be</title>
+    <title>Retirement Optimizer 11.1010bf</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -60,7 +60,7 @@
 		<div id="strategy-container">
 			<div style="font-size:0.85em;font-weight:700;color:#e65100;margin-bottom:6px;letter-spacing:0.02em;">Withdrawal Strategy</div>
 		    <div class="row"><div  id="spending">
-				<div><label>After-Tax Spend<span id="suggest-spend-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:5px;display:none;" onclick="applySuggestSpend()">ⓘ</span>&nbsp;
+				<div><label><span style="white-space:nowrap;">After-Tax Spend<span id="suggest-spend-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestSpend()">ⓘ</span></span>
 				<input type="text" id="spendGoal" value="140000" oninput="_priorSpendGoal=null; updateBracketFeedback()"></label></div>
 				<div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. -2% means you spend 2% less each year. 0 means no change.">Spend Delta %&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0"></label></div>
@@ -558,6 +558,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1010bf</b> Taxation chart tooltip now shows only the <em>current</em> federal bracket and IRMAA tier breached (not every lower one). Fill Bracket / IRMAA dropdown selections now display the corresponding federal bracket (e.g. "IRMAA Tier 4 → 35% federal bracket"); the unlimited 37% bracket is listed for reference. Inflows vs Outflows chart now breaks out Roth Conversions as a distinct outflow (Spending no longer balloons in conversion years). Suggest-spend ⓘ icon kept on one line.</li>
 				<li><b>11.1010be</b> High-NW improvements: IRA Draw optimizer now tests up to 20% (was 10%). Optimize Spend ceiling raised to 2.5× input (was 1.5×). Taxation chart shows the next-higher bracket/IRMAA threshold above current MAGI. Real Growth display now includes dividend yield. Growth % label clarified to "price appreciation only — enter dividends separately." Suggest Spend ⓘ icon: click to fill with SS+pension+5%×assets (after-tax estimate), click again to restore. Changelog starts collapsed. Tooltip jargon expanded (Guard/IRA Draw/Birth Year/QCD/IRMAA/LTCG/DRIP).</li>
 				<li><b>11.10a2</b> Added additional charts for clarity: Taxation, Income vs Net Income, Inflows vs Outflows, Earnings vs W/D.</li>
 				<li><b>11.1099</b> <strong>Baseline strategy is now ranked by total economic value, not terminal wealth alone.</strong> The pinned ⚓ baseline is the best no-conversion strategy. <strong>Guyton-Klinger Optimize Spend no longer reports an unsustainable spend.</strong> Optimize Spend now applies a <em>stability floor</em> and accepts a higher initial spend only if the guardrails never cut <em>real</em> delivered spending below one guard band of the initial.</li>

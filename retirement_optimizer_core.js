@@ -3992,7 +3992,8 @@ function computeTaxThresholdSeries(log, adj) {
             crossedFed.add(j);
             const rate = Math.round((fb.MFJ.brackets[j].r ?? 0) * 100);
             out.push({ label: `${rate}% bracket`, color: fedShades[j % fedShades.length],
-                       data: rawFed[j].map((v, k) => v == null ? null : v * adj(log[k])) });
+                       data: rawFed[j].map((v, k) => v == null ? null : v * adj(log[k])),
+                       group: 'fed' });
         }
         // Next bracket above current MAGI — not already crossed.
         const nextFedCounts = {};
@@ -4010,7 +4011,7 @@ function computeTaxThresholdSeries(log, adj) {
             const rate = Math.round((fb.MFJ.brackets[j].r ?? 0) * 100);
             out.push({ label: `${rate}% bracket (next)`, color: fedShades[j % fedShades.length] + '70',
                        data: rawFed[j].map((v, k) => v == null ? null : v * adj(log[k])),
-                       dash: [4, 6] });
+                       dash: [4, 6], group: 'fed', isNext: true });
         }
     }
 
@@ -4025,7 +4026,8 @@ function computeTaxThresholdSeries(log, adj) {
             crossedIR.add(t);
             const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
             out.push({ label: `IRMAA ${tier}`, color: irmaaShades[(t - 1) % irmaaShades.length],
-                       data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])), dash: [3, 3] });
+                       data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])), dash: [3, 3],
+                       group: 'irmaa' });
         }
         // Next IRMAA tier above current MAGI — not already crossed.
         const nextIRCounts = {};
@@ -4043,7 +4045,7 @@ function computeTaxThresholdSeries(log, adj) {
             const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
             out.push({ label: `IRMAA ${tier} (next)`, color: irmaaShades[(t - 1) % irmaaShades.length] + '70',
                        data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])),
-                       dash: [2, 4] });
+                       dash: [2, 4], group: 'irmaa', isNext: true });
         }
     }
     return out;
@@ -4148,9 +4150,30 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             for (const s of computeTaxThresholdSeries(log, adj)) {
                 datasets.push({ label: s.label, data: s.data, type: 'line', yAxisID: 'y1', order: 0,
                     borderColor: s.color, backgroundColor: s.color, pointRadius: 0, borderWidth: 1.5,
-                    borderDash: s.dash || [6, 4], fill: false, spanGaps: true });
+                    borderDash: s.dash || [6, 4], fill: false, spanGaps: true,
+                    _thGroup: s.group, _thNext: s.isNext });
             }
         }
+        // Tooltip filter: for threshold lines show ONLY the current (highest breached) federal bracket
+        // and IRMAA tier — hide the lower breached ones and the unbreached "(next)" lines. Tax bars and
+        // the MAGI line (no _thGroup) always show.
+        const taxThresholdFilter = (item) => {
+            const ds = item.dataset;
+            if (!ds._thGroup) return true;
+            const i = item.dataIndex;
+            const magiDs = item.chart.data.datasets.find(d => d.label === 'MAGI');
+            const magi = magiDs?.data[i];
+            const v = ds.data[i];
+            if (magi == null || v == null || v > magi) return false;   // unbreached (incl. "next")
+            let maxBreached = -Infinity;
+            for (const d of item.chart.data.datasets) {
+                if (d._thGroup === ds._thGroup) {
+                    const dv = d.data[i];
+                    if (dv != null && dv <= magi && dv > maxBreached) maxBreached = dv;
+                }
+            }
+            return v === maxBreached;
+        };
         incomeChart = new Chart(ctxI, {
             type: 'bar',
             data: { labels, datasets },
@@ -4160,7 +4183,9 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                     y:  { position: 'left',  stacked: true,  title: { display: true, text: 'Tax ($)' },    ticks: dollarTicks },
                     y1: { position: 'right', stacked: false, min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: 'Income ($)' }, ticks: dollarTicks },
                 },
-                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels } } }
+                plugins: { ...sharedTooltip.plugins,
+                    tooltip: { ...sharedTooltip.plugins.tooltip, filter: taxThresholdFilter },
+                    legend: { labels: legendLabels } } }
         });
     } else if (incomeChartView === 'flows') {
         // Inflows (up) vs outflows (down): where spending money comes from and where it goes.
@@ -4171,10 +4196,16 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
         incomeChart = new Chart(ctxI, {
             type: 'bar',
             data: { labels, datasets: [
+                // Portfolio Draw includes the gross IRA→Roth conversion so the up/down sides balance:
+                // the converted dollars are drawn from the IRA (up) and land in Roth (down).
+                // Spending is the amount actually CONSUMED (inflows + portfolio draw − taxes); using
+                // netIncome here would balloon in conversion years because totalIncome includes the
+                // converted amount, double-counting it against the separate Conversions bar.
                 mkUp('Guaranteed (SS+Pension)', '#3498dbB0', r => r.inflows  ?? 0),
-                mkUp('Portfolio Draw',          '#e67e22B0', r => r.netOut   ?? 0),
+                mkUp('Portfolio Draw',          '#e67e22B0', r => (r.netOut ?? 0) + (r.rothConv ?? 0)),
                 mkDn('Taxes',                   '#A30000C0', r => r.totalTax ?? 0),
-                mkDn('Spending',                '#27ae60B0', r => r.netIncome ?? 0),
+                mkDn('Spending',                '#27ae60B0', r => (r.inflows ?? 0) + (r.netOut ?? 0) - (r.totalTax ?? 0)),
+                mkDn('Conversions → Roth',      '#8e44adB0', r => r.rothConv ?? 0),
             ]},
             options: { ...sharedTooltip,
                 scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
@@ -5337,13 +5368,18 @@ function updateBracketFeedback() {
         return;
     }
 
+    // Federal bracket containing the selected ceiling — useful when the strategy is an IRMAA/ACA
+    // tier (whose label shows no federal rate). bracketLimit is already CPI-adjusted current-$.
+    const fedRate = federalBracketRateAt(bracketLimit);
+    const fedNote = fedRate != null ? ` <span style="color:#888;">(${fedRate}% federal bracket)</span>` : '';
+
     // Estimate max feasible spend (simplified: bracket limit is approx max MAGI)
     // In reality this depends on tax rates and account composition, but this gives a rough indicator
     const estimatedMaxSpend = Math.round(bracketLimit * 0.95); // Slight buffer for estimation error
 
     if (spendGoal <= estimatedMaxSpend) {
         // Within bracket
-        feedbackEl.innerHTML = `✓ Bracket allows ~$${estimatedMaxSpend.toLocaleString()} / year`;
+        feedbackEl.innerHTML = `✓ Bracket allows ~$${estimatedMaxSpend.toLocaleString()} / year${fedNote}`;
         feedbackEl.style.color = '#4a7c4e';
     } else {
         // Over bracket — clicking adjusts spendGoal down to the bracket max
@@ -5351,10 +5387,24 @@ function updateBracketFeedback() {
         feedbackEl.innerHTML = `<span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;"
             title="Click to set After-Tax Spend to bracket maximum"
             onclick="DisplayHelpers.setDollarValue('spendGoal',${estimatedMaxSpend});runSimulation();"
-            >⚠ Over bracket by ~$${shortfall.toLocaleString()} / year — click to adjust</span>`;
+            >⚠ Over bracket by ~$${shortfall.toLocaleString()} / year — click to adjust</span>${fedNote}`;
         feedbackEl.style.color = '#d4811f';
     }
     updateSuggestSpendTooltip();
+}
+
+// Federal marginal-rate % for a given CPI-adjusted (current-year $) income, or null. Mirrors the
+// CPI compounding in generateStratRateOptions so the boundary lines up with the dropdown limits.
+function federalBracketRateAt(income) {
+    if (!isFinite(income) || income <= 0) return null;
+    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const cpiAdj = Math.pow(1 + cpi, Math.max(0, new Date().getFullYear() - TAX_DATA_BASE_YEAR));
+    const status = getDropdownStatus();
+    const brks = (status === 'MFJ' ? TAXData.FEDERAL.MFJ : TAXData.FEDERAL.SGL).brackets;
+    for (const b of brks) {
+        if (income <= b.l * cpiAdj) return Math.round(b.r * 100);
+    }
+    return Math.round(brks[brks.length - 1].r * 100);
 }
 
 // Prior spendGoal value before user clicked the suggest icon (null = not in suggest mode).
@@ -5510,12 +5560,13 @@ function generateStratRateOptions() {
     const fedBrks = isMFJ
         ? TAXData.FEDERAL.MFJ.brackets
         : TAXData.FEDERAL.SGL.brackets;
-    for (let i = 0; i < fedBrks.length - 1; i++) {
+    for (let i = 0; i < fedBrks.length; i++) {
         const ratePct = Math.round(fedBrks[i].r * 100);
-        const limit   = Math.round(fedBrks[i].l * cpiAdj);
+        const isTop   = !isFinite(fedBrks[i].l);   // 37% bracket — unbounded, shown for reference
+        const limit   = isTop ? Infinity : Math.round(fedBrks[i].l * cpiAdj);
         options.push({
             value: String(ratePct),
-            label: `${ratePct}% Fed  ·  $${limit.toLocaleString()}`,
+            label: isTop ? `${ratePct}% Fed  ·  no limit` : `${ratePct}% Fed  ·  $${limit.toLocaleString()}`,
             limit,
             defaultSelected: false
         });

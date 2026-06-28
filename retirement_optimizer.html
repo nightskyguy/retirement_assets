@@ -60,10 +60,10 @@
 		<div id="strategy-container">
 			<div style="font-size:0.85em;font-weight:700;color:#e65100;margin-bottom:6px;letter-spacing:0.02em;">Withdrawal Strategy</div>
 		    <div class="row"><div  id="spending">
-				<div><label><span style="white-space:nowrap;">After-Tax Spend<span id="suggest-spend-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestSpend()">ⓘ</span></span>
-				<input type="text" id="spendGoal" value="140000" style="width:110px;font-size:14px;" oninput="_priorSpendGoal=null; updateBracketFeedback()"></label></div>
+				<div><label title="Annual after-tax spending you want the plan to fund, in today's dollars. This is what you actually get to spend after federal/state taxes and IRMAA — the simulation grosses it up and withdraws enough (plus inflation each year) to deliver it. Click the ⓘ for a suggested amount based on your guaranteed income and assets."><span style="white-space:nowrap;">After-Tax Spend<span id="suggest-spend-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestSpend()">ⓘ</span></span>
+				<input type="text" id="spendGoal" value="140000" title="Annual after-tax spending the plan must deliver, in today's dollars (inflation-adjusted each year)." style="width:110px;font-size:14px;" oninput="_priorSpendGoal=null; updateBracketFeedback()"></label></div>
 				<div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. -2% means you spend 2% less each year. 0 means no change.">Spend Delta %&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0"></label></div>
+				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0" style="width:70px;font-size:14px;"></label></div>
 				</div><!-- spending -->
 			</div>	<!-- class=row -->
 		

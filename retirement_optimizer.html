@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1010cf</title>
+    <title>Retirement Optimizer 11.1010d0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -558,6 +558,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1010d0</b> Inflows vs Outflows tooltip now hides any row that is $0 for the year (e.g. no Brokerage or Roth draw), reducing clutter.</li>
 				<li><b>11.1010cf</b> Taxation chart polish: IRMAA tooltip now shows the tier <em>and</em> its dollar surcharge ("IRMAA Tier 4: 16,000"); Cap Gains row shows the effective rate and underlying gains; IRMAA bar recolored pink to match the Income &amp; Expenses chart. Inflows vs Outflows chart now splits the portfolio draw by source account (IRA orange, Brokerage blue, Cash green, Roth purple).</li>
 				<li><b>11.1010c1</b> Taxation chart tooltip now reports your <strong>federal &amp; state marginal tax rate and highest IRMAA tier</strong> for the year, instead of listing bracket dollar thresholds. The dashed bracket/IRMAA lines stay on the chart for visual context; the confusing "(next)" labels were removed.</li>
 				<li><b>11.1010c0</b> <strong>Charts are now the default view</strong> (was Annual Details). Taxation tooltip shows both the current and next federal bracket / IRMAA tier; threshold lines relabeled "X% Limit" (with "upper limit" note in the tooltip) and drawn thicker for readability.</li>

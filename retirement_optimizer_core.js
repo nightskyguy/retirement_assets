@@ -4227,7 +4227,10 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             ]},
             options: { ...sharedTooltip,
                 scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
-                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels } } }
+                plugins: { ...sharedTooltip.plugins,
+                    // Hide rows that round to $0 (e.g. no Brokerage draw this year) — declutters the tip.
+                    tooltip: { ...sharedTooltip.plugins.tooltip, filter: (item) => Math.round(item.parsed.y) !== 0 },
+                    legend: { labels: legendLabels } } }
         });
     } else if (incomeChartView === 'assetflows') {
         // Asset-level cash flow: investment EARNINGS (up, stacked by account) vs WITHDRAWALS that

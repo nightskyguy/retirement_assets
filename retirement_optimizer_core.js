@@ -4143,7 +4143,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             mkTax('Federal',   '#c0392b', r => (r.FedTax ?? 0) - (r['-capGainsTax'] ?? 0)),
             mkTax('Cap Gains', '#e74c3c', r => r['-capGainsTax'] ?? 0),
             mkTax('State',     '#f39c12', r => r.StateTax ?? 0),
-            mkTax('IRMAA',     '#8e44ad', r => r.IRMAA ?? 0),
+            mkTax('IRMAA',     '#FFB8B8C0', r => r.IRMAA ?? 0),   // match the pink used on Income & Expenses
             { ...mkLine('MAGI', '#111827', r => (r.MAGI ?? 0) * adj(r)), type: 'line', yAxisID: 'y1', pointRadius: 0, borderWidth: 2.5, order: 1 },
         ];
         if (showTaxThresholds) {
@@ -4158,13 +4158,28 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
         // Instead the tooltip answers "what rate am I paying now?" via an afterBody footer with the
         // federal + state marginal rate and the highest IRMAA tier crossed (all already in the log row).
         const taxThresholdFilter = (item) => !item.dataset._thGroup;   // bars + MAGI only
+        // Enrich two of the bar rows: IRMAA row shows its tier ("IRMAA Tier 4: 16,000"); the Cap Gains
+        // row shows the effective cap-gains rate and the underlying gains ("Cap Gains: 81,835 (~21% on 392,932)").
+        const taxLabelCb = (ctx) => {
+            const r = log[ctx.dataIndex];
+            const val = Math.round(ctx.parsed.y).toLocaleString();
+            const lbl = ctx.dataset.label;
+            if (lbl === 'IRMAA' && ctx.parsed.y > 0) {
+                const tier = r?.IRMAATier;
+                if (tier && tier !== '-none-' && tier !== '-') return `IRMAA ${tier}: ${val}`;
+            }
+            if (lbl === 'Cap Gains' && ctx.parsed.y > 0 && (r?.CapGains || 0) > 0) {
+                const rate = Math.round((r['-capGainsTax'] || 0) / r.CapGains * 100);
+                return `Cap Gains: ${val} (~${rate}% on ${Math.round(r.CapGains * adj(r)).toLocaleString()})`;
+            }
+            return lbl + ': ' + val;
+        };
+        // Footer reports the marginal rate on ORDINARY income (cap gains shown separately above).
         const taxRateFooter = (items) => {
             const r = log[items[0]?.dataIndex];
             if (!r) return [];
-            const out = [`Fed marginal: ${Math.round((r['FedRate%'] || 0) * 100)}%`];
+            const out = [`Fed ordinary marginal: ${Math.round((r['FedRate%'] || 0) * 100)}%`];
             if ((r['StateRate%'] || 0) > 0) out.push(`State marginal: ${((r['StateRate%']) * 100).toFixed(1)}%`);
-            const tier = r.IRMAATier;
-            out.push(`IRMAA: ${(tier && tier !== '-none-' && tier !== '-') ? tier : 'none'}`);
             return out;
         };
         incomeChart = new Chart(ctxI, {
@@ -4178,7 +4193,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                 },
                 plugins: { ...sharedTooltip.plugins,
                     tooltip: { ...sharedTooltip.plugins.tooltip, filter: taxThresholdFilter,
-                        callbacks: { ...sharedTooltip.plugins.tooltip.callbacks, afterBody: taxRateFooter } },
+                        callbacks: { ...sharedTooltip.plugins.tooltip.callbacks, label: taxLabelCb, afterBody: taxRateFooter } },
                     legend: { labels: legendLabels } } }
         });
     } else if (incomeChartView === 'flows') {
@@ -4187,18 +4202,27 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             data: log.map(r =>  Math.max(0, fn(r)) * adj(r)) });
         const mkDn = (label, color, fn) => ({ label, type: 'bar', backgroundColor: color, stack: 'flow',
             data: log.map(r => -Math.max(0, fn(r)) * adj(r)) });
+        // Portfolio Draw (= netOut + conversion gross) split by source account, using the asset-chart
+        // colors. Per-account gross withdrawals are scaled so their sum equals the portfolio total,
+        // which keeps the up/down sides balanced (reinvested surplus is netted out pro-rata).
+        const _grossDraw = r => Math.max(0, r.IRAwd ?? 0) + Math.max(0, r['Brokerage-'] ?? 0)
+            + Math.max(0, r.CashWD ?? 0) + Math.max(0, r.RothWD ?? 0);
+        const _acctScale = r => { const g = _grossDraw(r); return g > 0 ? ((r.netOut ?? 0) + (r.rothConv ?? 0)) / g : 0; };
         incomeChart = new Chart(ctxI, {
             type: 'bar',
             data: { labels, datasets: [
-                // Portfolio Draw includes the gross IRA→Roth conversion so the up/down sides balance:
-                // the converted dollars are drawn from the IRA (up) and land in Roth (down).
+                // IRA draw includes the gross IRA→Roth conversion (the converted dollars are drawn from
+                // the IRA up, and land in Roth on the down side via "Conversions → Roth").
                 // Spending is the amount actually CONSUMED (inflows + portfolio draw − taxes); using
                 // netIncome here would balloon in conversion years because totalIncome includes the
                 // converted amount, double-counting it against the separate Conversions bar.
                 mkUp('Guaranteed (SS+Pension)', '#3498dbB0', r => r.inflows  ?? 0),
-                mkUp('Portfolio Draw',          '#e67e22B0', r => (r.netOut ?? 0) + (r.rothConv ?? 0)),
+                mkUp('IRA draw',                '#e67e22B0', r => (r.IRAwd ?? 0)      * _acctScale(r)),
+                mkUp('Brokerage draw',          '#2980b9B0', r => (r['Brokerage-'] ?? 0) * _acctScale(r)),
+                mkUp('Cash draw',               '#27ae60B0', r => (r.CashWD ?? 0)     * _acctScale(r)),
+                mkUp('Roth draw',               '#8e44adB0', r => (r.RothWD ?? 0)     * _acctScale(r)),
                 mkDn('Taxes',                   '#A30000C0', r => r.totalTax ?? 0),
-                mkDn('Spending',                '#27ae60B0', r => (r.inflows ?? 0) + (r.netOut ?? 0) - (r.totalTax ?? 0)),
+                mkDn('Spending',                '#1abc9cB0', r => (r.inflows ?? 0) + (r.netOut ?? 0) - (r.totalTax ?? 0)),
                 mkDn('Conversions → Roth',      '#8e44adB0', r => r.rothConv ?? 0),
             ]},
             options: { ...sharedTooltip,

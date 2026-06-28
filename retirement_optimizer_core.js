@@ -2021,31 +2021,50 @@ function updateProfileAgeDisplay() {
     updateACAWarning();
 }
 
-function updateIRAGoalHint() {
-    const hint = document.getElementById('ira-goal-hint');
-    if (!hint) return;
+// IRA Goal suggestion — IRA balance today whose RMDs ≈ the spend goal at age 84.
+// Mirrors the After-Tax Spend ⓘ pattern (computeSuggestedSpend / applySuggestSpend).
+let _priorIraGoal = null;
+
+function computeSuggestedIraGoal() {
     try {
-        const birthyear1 = +val('birthyear1');
-        const currentYear = new Date().getFullYear();
-        const age1 = currentYear - birthyear1;
+        const age1 = new Date().getFullYear() - (+val('birthyear1'));
         const growth = +val('growth') / 100;
         const spendGoal = +val('spendGoal');
         const targetAge = 84;
         const yearsUntil = targetAge - age1;
-        if (yearsUntil <= 0 || spendGoal <= 0 || !RMD_TABLE[targetAge]) { hint.textContent = ''; return; }
-        // Target IRA at age 84: balance where RMD equals spend goal
-        const rmdPctAtTarget = 1 / RMD_TABLE[targetAge];
-        const targetAtAge = spendGoal / rmdPctAtTarget;
-        // Discount back to today at growth rate
-        const targetNow = targetAtAge / Math.pow(1 + growth, yearsUntil);
-        const rounded = Math.round(targetNow);
-        hint.textContent = `Suggested IRA Goal: $${rounded.toLocaleString()}`;
-        hint.title = `IRA balance today that would produce RMDs ≤ your spend goal at age ${targetAge} (IRS table: ${(rmdPctAtTarget * 100).toFixed(2)}% RMD rate, ${yearsUntil} yrs at ${(growth * 100).toFixed(1)}% growth). Click to apply.`;
-        hint.style.cursor = 'pointer';
-        hint.onclick = () => { DisplayHelpers.setDollarValue('iraBaseGoal', rounded); runSimulation(); };
-    } catch(e) {
-        hint.textContent = '';
+        if (yearsUntil <= 0 || spendGoal <= 0 || !RMD_TABLE[targetAge]) return null;
+        const rmdPctAtTarget = 1 / RMD_TABLE[targetAge];   // RMD fraction at target age
+        const targetAtAge = spendGoal / rmdPctAtTarget;    // balance whose RMD = spend goal
+        const targetNow = targetAtAge / Math.pow(1 + growth, yearsUntil);  // discount to today
+        return { value: Math.round(targetNow), targetAge, rmdPctAtTarget, yearsUntil, growth };
+    } catch (e) { return null; }
+}
+
+// Keep the existing name — runSimulation() already calls this. Now drives the ⓘ icon, not a hint div.
+function updateIRAGoalHint() {
+    const icon = document.getElementById('suggest-ira-icon');
+    if (!icon) return;
+    const sug = computeSuggestedIraGoal();
+    if (!sug) { icon.style.display = 'none'; return; }
+    icon.style.display = '';
+    icon.title = _priorIraGoal !== null
+        ? `Restore: $${Math.round(_priorIraGoal).toLocaleString()}`
+        : `Suggested IRA Goal: $${sug.value.toLocaleString()} — IRA balance today whose RMDs ≈ your spend goal at age ${sug.targetAge} (${(sug.rmdPctAtTarget * 100).toFixed(2)}% RMD, ${sug.yearsUntil} yrs at ${(sug.growth * 100).toFixed(1)}% growth). Click to apply.`;
+}
+
+function applySuggestIraGoal() {
+    if (_priorIraGoal !== null) {
+        DisplayHelpers.setDollarValue('iraBaseGoal', Math.round(_priorIraGoal));
+        _priorIraGoal = null;
+    } else {
+        const sug = computeSuggestedIraGoal();
+        if (!sug) return;
+        const el = document.getElementById('iraBaseGoal');
+        _priorIraGoal = parseFloat((el?.dataset?.numVal) || (el?.value || '').replace(/[^\d.-]/g, '') || '0');
+        DisplayHelpers.setDollarValue('iraBaseGoal', sug.value);
     }
+    updateIRAGoalHint();
+    runSimulation();
 }
 
 function runSimulation() {

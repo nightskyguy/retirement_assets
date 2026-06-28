@@ -61,7 +61,7 @@
 			<div style="font-size:0.85em;font-weight:700;color:#e65100;margin-bottom:6px;letter-spacing:0.02em;">Withdrawal Strategy</div>
 		    <div class="row"><div  id="spending">
 				<div><label><span style="white-space:nowrap;">After-Tax Spend<span id="suggest-spend-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestSpend()">ⓘ</span></span>
-				<input type="text" id="spendGoal" value="140000" oninput="_priorSpendGoal=null; updateBracketFeedback()"></label></div>
+				<input type="text" id="spendGoal" value="140000" style="width:110px;font-size:14px;" oninput="_priorSpendGoal=null; updateBracketFeedback()"></label></div>
 				<div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. -2% means you spend 2% less each year. 0 means no change.">Spend Delta %&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0"></label></div>
 				</div><!-- spending -->
@@ -156,9 +156,8 @@
 		</div>  <!-- strategy-container -->
 
 		<div class="row" style="margin-top:8px;">
-			<label title="Minimum IRA balance to preserve, in today's dollars (inflation-adjusted each year). For 'Reduce IRA in N Years': the drawdown target. For all other strategies: a floor the optimizer will not draw below.">IRA Goal (today's $)
-			<input type="text" id="iraBaseGoal" value="750000" width="50%"></label>
-			<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div>
+			<label title="Minimum IRA balance to preserve, in today's dollars (inflation-adjusted each year). For 'Reduce IRA in N Years': the drawdown target. For all other strategies: a floor the optimizer will not draw below."><span style="white-space:nowrap;">IRA Goal (today's $)<span id="suggest-ira-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestIraGoal()">ⓘ</span></span>
+			<input type="text" id="iraBaseGoal" value="750000" style="width:110px;font-size:14px;"></label>
 		</div>
 
 		
@@ -928,6 +927,7 @@ window.addEventListener('DOMContentLoaded', function () {
     syncMCMuFromGrowth();
     updateCompAdvisory();
     updateSuggestSpendTooltip();
+    updateIRAGoalHint();
 });
 
 // Auto-run tests when page loads (comment out if you don't want auto-run)

@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.10a2</title>
+    <title>Retirement Optimizer 11.10cf</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -60,10 +60,10 @@
 		<div id="strategy-container">
 			<div style="font-size:0.85em;font-weight:700;color:#e65100;margin-bottom:6px;letter-spacing:0.02em;">Withdrawal Strategy</div>
 		    <div class="row"><div  id="spending">
-				<div><label>After-Tax Spend &nbsp;
-				<input type="text" id="spendGoal" value="140000" oninput="updateBracketFeedback()"></label></div>
+				<div><label title="Annual after-tax spending you want the plan to fund, in today's dollars. This is what you actually get to spend after federal/state taxes and IRMAA — the simulation grosses it up and withdraws enough (plus inflation each year) to deliver it. Click the ⓘ for a suggested amount based on your guaranteed income and assets."><span style="white-space:nowrap;">After-Tax Spend<span id="suggest-spend-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestSpend()">ⓘ</span></span>
+				<input type="text" id="spendGoal" value="140000" title="Annual after-tax spending the plan must deliver, in today's dollars (inflation-adjusted each year)." style="width:110px;font-size:14px;" oninput="_priorSpendGoal=null; updateBracketFeedback()"></label></div>
 				<div><label title="Most retirees follow a spending smile where each year they spend less than the prior year. -2% means you spend 2% less each year. 0 means no change.">Spend Delta %&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0"></label></div>
+				<input type="number" id="spendChange" value="-1" step="0.1" min="-25" max="25" placeholder="0.0" style="width:70px;font-size:14px;"></label></div>
 				</div><!-- spending -->
 			</div>	<!-- class=row -->
 		
@@ -99,7 +99,7 @@
 			</div>
 
 			<div id="ui-fixedpct" class="input-group hidden">
-				<label title="Withdraw this % of the total IRA balance each year. RMDs count toward this amount. Any spending shortfall draws from Cash → Brokerage → Roth.">IRA Withdraw %
+				<label title="Draw this percentage of your total IRA balance each year (e.g. 5% = 5% of the current balance, regardless of market). Required Minimum Distributions (RMDs) count toward this amount. Any spending shortfall draws from Cash → Brokerage → Roth.">IRA Withdraw %
 				<input type="number" id="iraWithdrawPct" value="5" min="0.5" max="20" step="0.5"></label>
 			</div>
 
@@ -113,9 +113,9 @@
 
 			<div id="ui-gk" class="input-group hidden">
 				<div class="compact-row">
-					<label title="Guardrail width: if current WR exceeds IWR×(1+guard%) cut spending; if below IWR×(1−guard%) raise spending.">Guard ±%
+					<label title="Safety band width: if your withdrawal rate rises above the upper guard, spending is cut by Adj %. If it drops below the lower guard, spending rises. Typical: 10–20%.">Guard ±%
 					<input type="number" id="gkGuard" value="20" min="5" max="40" step="5"></label>
-					<label title="Percent to cut or raise spending when a guardrail triggers.">Adj %
+					<label title="Percent to cut or raise spending when a guardrail triggers. Applied symmetrically: same amount up or down.">Adj %
 					<input type="number" id="gkAdjPct" value="10" min="5" max="20" step="5"></label>
 				</div>
 			</div>
@@ -129,7 +129,7 @@
 				</label>
 			</div>
 			<div class="input-group" style="margin-top:4px;">
-				<label class="toggle" title="Cycle Brokerage: alternates IRA draw years and brokerage harvest years. N = round(IRA ÷ Brokerage) IRA years then 1 brokerage LTCG harvest year. Forces DRIP on. Surplus reinvests into Brokerage. Optimizer and MC run both IRA-first (🔄) and brokerage-first (🔄B) orders. See changelog for caveats (ACA/IRMAA spikes, basis depletion).">
+				<label class="toggle" title="Cycle Brokerage: alternates IRA draw years with brokerage harvest years. Spends N IRA years then 1 brokerage Long-Term Capital Gains (LTCG) harvest year. Enables Dividend Reinvestment (DRIP). Surplus reinvests into Brokerage. Optimizer and Monte Carlo (MC) run IRA-first and brokerage-first orders. See changelog for caveats (ACA/IRMAA income spikes, basis depletion).">
 				  <input type="checkbox" id="cyclicEnabled" onchange="onCyclicChange()">
 				  <span class="toggle-label"></span>
 				  <span class="toggle-switch"></span>
@@ -156,22 +156,21 @@
 		</div>  <!-- strategy-container -->
 
 		<div class="row" style="margin-top:8px;">
-			<label title="IRA floor in today's dollars, inflation-adjusted (CPI) to each simulation year — so it tracks the inflation-indexed tax brackets, IRMAA tiers, and ACA cliffs it is meant to manage. For 'Reduce IRA in N Years' this is the amortization target; for all other strategies it is the minimum balance the optimizer will not draw below.">IRA Goal (today's $)
-			<input type="text" id="iraBaseGoal" value="750000" width="50%"></label>
-			<div id="ira-goal-hint" style="font-size:0.8em;color:#888;margin-top:2px;"></div>
+			<label title="Minimum IRA balance to preserve, in today's dollars (inflation-adjusted each year). For 'Reduce IRA in N Years': the drawdown target. For all other strategies: a floor the optimizer will not draw below."><span style="white-space:nowrap;">IRA Goal (today's $)<span id="suggest-ira-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestIraGoal()">ⓘ</span></span>
+			<input type="text" id="iraBaseGoal" value="750000" style="width:110px;font-size:14px;"></label>
 		</div>
 
 		
         <details class="section" open>
         <summary>1. Profile &amp; Ages</summary>
         <div class="compact-row">
-            <label title="Your year of birth (e.g. 1960). Used to calculate your current age and RMD schedule.">Birth Year<input type="number" id="birthyear1" value="1960" oninput="updateProfileAgeDisplay()"></label>
+            <label title="Your year of birth (e.g. 1960). Used to calculate your current age and Required Minimum Distribution (RMD) schedule.">Birth Year<input type="number" id="birthyear1" value="1960" oninput="updateProfileAgeDisplay()"></label>
             <label title="Your birth month. Combined with birth year to determine the exact year you reach key ages (RMD start, SS claiming, etc.).">Mo.<select id="birthmonth1" onchange="updateProfileAgeDisplay()"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
             <label class="compact-age" title="The age you expect to live to. The simulation runs until this age. Use a conservative (older) estimate to stress-test your plan.">Life Exp.<input type="number" id="die1" value="88"></label>
         </div>
         <div class="compact-row" style="font-size:0.82em;color:#555;margin-top:0;padding-top:0;" id="age-display-1"></div>
         <div class="compact-row" style="margin-top:6px;">
-            <label title="The age at which you plan to retire (stop earning income and begin drawing assets). Enter your assets and spending goal in today's dollars — the simulation inflates brackets, SS COLA, and spending forward to this age. Defaults to your current age.">Retirement Start Age
+            <label title="The age at which you plan to retire and start drawing assets. Enter all balances and your spend goal in today's dollars — the simulation inflates tax brackets, Social Security Cost-of-Living Adjustments (COLA), and spending forward from this age. Defaults to your current age.">Retirement Start Age
             <input type="number" id="startAge" min="50" max="100" step="1" placeholder="current age"
               oninput="document.getElementById('startAge-warn').style.display=(+this.value>0&&+this.value<60)?'block':'none'; updateACAWarning()"></label>
         </div>
@@ -185,7 +184,7 @@
             </label>
         </div>
         <div class="compact-row spouse-field">
-            <label title="Spouse's year of birth. Used to calculate their age, RMD schedule, and when survivor filing status applies."><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952" oninput="updateProfileAgeDisplay()"></label>
+            <label title="Spouse's year of birth. Used to calculate their age, Required Minimum Distribution (RMD) schedule, and when survivor filing status applies."><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952" oninput="updateProfileAgeDisplay()"></label>
             <label title="Spouse's birth month. Used with birth year to determine exact ages for RMDs and Social Security."><i>Mo.</i><select id="birthmonth2" onchange="updateProfileAgeDisplay()"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
             <label class="compact-age" title="The age your spouse is expected to live to. After this age the simulation switches to Single filing status and survivor Social Security rules apply."><i>Sp. Life</i><input type="number" id="die2" value="98"></label>
         </div>
@@ -319,10 +318,10 @@
             QCDs from IRAs satisfy the RMD requirement and are excluded from MAGI, reducing IRMAA exposure. IRS limit is CPI-indexed annually.
         </div>
         <div class="row">
-            <div><label title="Combined household annual QCD goal or ceiling. Sourced from the larger eligible IRA first, then the smaller. To contribute, one spouse must be 70½ years old.">Annual QCD Max<input type="text" id="qcdHHMax" value="0" placeholder="0"></label></div>
+            <div><label title="Qualified Charitable Distribution (QCD): direct IRA-to-charity transfers that count toward your Required Minimum Distribution (RMD) and are excluded from taxable income. Enter your combined household annual QCD ceiling. Sourced from the larger eligible IRA first. One spouse must be 70½ or older.">Annual QCD Max<input type="text" id="qcdHHMax" value="0" placeholder="0"></label></div>
         </div>
         <div class="input-group" style="margin-top:4px;">
-            <label class="toggle" title="Always: donate this amount every year when eligible, regardless of tax situation. As Needed: only apply QCDs when they would eliminate an IRMAA tier cliff (minimum needed, capped at your max).">
+            <label class="toggle" title="Always: donate this QCD amount every eligible year regardless of tax situation. As Needed: only apply QCDs when they would reduce your Medicare income surcharge (IRMAA — Income-Related Monthly Adjustment Amount) by dropping below a tier threshold. Minimum needed, capped at your max.">
                 <input type="checkbox" id="qcdAlways">
                 <span class="toggle-label">As Needed</span>
                 <span class="toggle-switch"></span>
@@ -334,7 +333,7 @@
         <details class="section" open>
         <summary>4. Assumptions</summary>
         <div class="row">
-			<div><label title="This is the rate that your asset mix emits dividends. Brokerage dividends accrue to the Cash account. Others to their own account.">Dividend Rate %<BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00"></label></div>
+			<div><label title="The percentage of your portfolio paid out as dividends each year. Brokerage dividends accrue to Cash (or reinvest if DRIP is on). IRA/Roth dividends stay in their accounts. Included in the Real Growth display below the Growth field.">Dividend Rate %<BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay(); updateSuggestSpendTooltip()"></label></div>
 			<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation<BR>
             <select id="STATEname">
                 <option   value="CA" selected>California</option>
@@ -346,7 +345,7 @@
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
         <div class="row">
-            <div><label title="Nominal (pre-inflation) annual return for IRA, Roth, and Brokerage accounts. Enter the total expected return including dividends — e.g. 5% price growth + 1.5% dividends = 6.5%. US historical CAGR: S&amp;P 500 ~10%, diversified 60/40 ~7–9%, conservative bond-heavy ~4–6%. Do NOT subtract inflation — the tool handles inflation separately via the Inflation input below. Real (after-inflation) growth is shown beneath this row.">Growth (6)%<input type="number" id="growth" value="6.0" oninput="updateGrowthDisplay(); syncMCMuFromGrowth(); updateProfileAgeDisplay()"></label></div>
+            <div><label title="Price appreciation only — do NOT include dividends here. Enter dividends separately in Dividend Rate % below. E.g. 5% price growth + 1.5% dividends = 6.5% total. US historical CAGR: S&amp;P 500 ~10%, diversified 60/40 ~7–9%, conservative bond-heavy ~4–6%. Do NOT subtract inflation — the tool handles that separately. Real (after-inflation) growth including dividends is shown beneath this row.">Growth (6)%<input type="number" id="growth" value="6.0" oninput="updateGrowthDisplay(); syncMCMuFromGrowth(); updateProfileAgeDisplay()"></label></div>
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
         <div id="growth-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
@@ -401,8 +400,8 @@
                 <span class="toggle-switch"></span>
                 <span style="color:#666;font-size:0.9em;">Current $</span>
             </label>
-            <button id="btn-tbl" class="tab-btn active" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
-            <button id="btn-cht" class="tab-btn" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
+            <button id="btn-tbl" class="tab-btn" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
+            <button id="btn-cht" class="tab-btn active" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
             <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer 🎯</button>
 		    <button id="btn-mc" class="tab-btn" onclick="{showTab('tab-mc'); mcTabActivated();}">Monte Carlo 🎲</button>
 		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
@@ -554,10 +553,11 @@
 		</div>
 
 		<div id="tab-docs" class="card hidden">
-			<details style="margin-bottom:12px;" open>
+			<details style="margin-bottom:12px;">
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.10cf</b> Numerous user experience improvements: IRA Draw strategies now tested to 20%, After-Tax-Spend searches higher spend rates and a suggested value is offered. Other changes include tooltip clarity improvements, chart improvements, and showing Charts first by default.</li>
 				<li><b>11.10a2</b> Added additional charts for clarity: Taxation, Income vs Net Income, Inflows vs Outflows, Earnings vs W/D.</li>
 				<li><b>11.1099</b> <strong>Baseline strategy is now ranked by total economic value, not terminal wealth alone.</strong> The pinned ⚓ baseline is the best no-conversion strategy. <strong>Guyton-Klinger Optimize Spend no longer reports an unsustainable spend.</strong> Optimize Spend now applies a <em>stability floor</em> and accepts a higher initial spend only if the guardrails never cut <em>real</em> delivered spending below one guard band of the initial.</li>
 				<li><b>11.1091</b> >Fixed a <code>NaN</code> in a Monte Carlo.</li>
@@ -719,7 +719,7 @@
 			</div>
 		</div> <!-- id=tab-docs -->
 
-		<div id="tab-tbl" class="card">
+		<div id="tab-tbl" class="card hidden">
 			<div class="column-controls">
 				<label class="all-columns">
 					<input type="checkbox" id="show-all" onchange="updateColumnVisibility()"> Show All
@@ -781,7 +781,7 @@
 			</div>
 		</div>
 
-        <div id="tab-chart" class="card hidden">
+        <div id="tab-chart" class="card">
             <div style="display:flex;align-items:center;gap:10px;margin:8px 0 2px 8px;">
               <h4 style="margin:0;color:#555;font-size:0.95em;">Balances</h4>
               <span style="display:inline-flex;gap:3px;">
@@ -798,7 +798,7 @@
             <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:8px 0 2px 8px;">
               <span style="display:inline-flex;gap:3px;">
                 <button id="chartView_combined" class="tog active" onclick="setIncomeChartView('combined')" title="Income sources, taxes, and spendable income in one stacked view.">Income &amp; Expenses</button>
-                <button id="chartView_tax"      class="tog"        onclick="setIncomeChartView('tax')"      title="MAGI vs the federal bracket ceiling, with total tax for context.">Taxation</button>
+                <button id="chartView_tax"      class="tog"        onclick="setIncomeChartView('tax')"      title="Stacked tax by type (Federal, Capital Gains, State, IRMAA) vs Modified Adjusted Gross Income (MAGI) and bracket thresholds on the right axis.">Taxation</button>
                 <button id="chartView_net"      class="tog"        onclick="setIncomeChartView('net')"      title="Total income vs net (spendable) income vs the spend goal.">Income vs Net</button>
                 <button id="chartView_flows"    class="tog"        onclick="setIncomeChartView('flows')"    title="Household cash flow: inflows (guaranteed income + portfolio draws) vs outflows (taxes + spending).">Inflows vs Outflows</button>
                 <button id="chartView_assetflows" class="tog"      onclick="setIncomeChartView('assetflows')" title="Portfolio cash flow: investment earnings (by account) vs withdrawals leaving the portfolio. Net-change line shows whether the portfolio grew or shrank.">Earnings vs W/D</button>
@@ -926,6 +926,8 @@ window.addEventListener('DOMContentLoaded', function () {
     updateGrowthDisplay();
     syncMCMuFromGrowth();
     updateCompAdvisory();
+    updateSuggestSpendTooltip();
+    updateIRAGoalHint();
 });
 
 // Auto-run tests when page loads (comment out if you don't want auto-run)

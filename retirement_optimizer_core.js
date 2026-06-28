@@ -11,7 +11,7 @@ const STORAGE_KEY = 'SLCRetireOptimizeScenario';
 const OLD_STORAGE_KEY = 'retirementScenarios';
 
 // Spend optimizer constants
-const SPEND_SEARCH_CEILING   = 0.50;  // Binary search upper bound: 50% above baseline spend
+const SPEND_SEARCH_CEILING   = 1.50;  // Binary search upper bound: 150% above baseline spend (2.5× input)
 const SPEND_SEARCH_TOLERANCE = 0.005; // Stop binary search when bounds are within 0.5%
 const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase spending" banner
 
@@ -2021,31 +2021,50 @@ function updateProfileAgeDisplay() {
     updateACAWarning();
 }
 
-function updateIRAGoalHint() {
-    const hint = document.getElementById('ira-goal-hint');
-    if (!hint) return;
+// IRA Goal suggestion — IRA balance today whose RMDs ≈ the spend goal at age 84.
+// Mirrors the After-Tax Spend ⓘ pattern (computeSuggestedSpend / applySuggestSpend).
+let _priorIraGoal = null;
+
+function computeSuggestedIraGoal() {
     try {
-        const birthyear1 = +val('birthyear1');
-        const currentYear = new Date().getFullYear();
-        const age1 = currentYear - birthyear1;
+        const age1 = new Date().getFullYear() - (+val('birthyear1'));
         const growth = +val('growth') / 100;
         const spendGoal = +val('spendGoal');
         const targetAge = 84;
         const yearsUntil = targetAge - age1;
-        if (yearsUntil <= 0 || spendGoal <= 0 || !RMD_TABLE[targetAge]) { hint.textContent = ''; return; }
-        // Target IRA at age 84: balance where RMD equals spend goal
-        const rmdPctAtTarget = 1 / RMD_TABLE[targetAge];
-        const targetAtAge = spendGoal / rmdPctAtTarget;
-        // Discount back to today at growth rate
-        const targetNow = targetAtAge / Math.pow(1 + growth, yearsUntil);
-        const rounded = Math.round(targetNow);
-        hint.textContent = `Suggested IRA Goal: $${rounded.toLocaleString()}`;
-        hint.title = `IRA balance today that would produce RMDs ≤ your spend goal at age ${targetAge} (IRS table: ${(rmdPctAtTarget * 100).toFixed(2)}% RMD rate, ${yearsUntil} yrs at ${(growth * 100).toFixed(1)}% growth). Click to apply.`;
-        hint.style.cursor = 'pointer';
-        hint.onclick = () => { DisplayHelpers.setDollarValue('iraBaseGoal', rounded); runSimulation(); };
-    } catch(e) {
-        hint.textContent = '';
+        if (yearsUntil <= 0 || spendGoal <= 0 || !RMD_TABLE[targetAge]) return null;
+        const rmdPctAtTarget = 1 / RMD_TABLE[targetAge];   // RMD fraction at target age
+        const targetAtAge = spendGoal / rmdPctAtTarget;    // balance whose RMD = spend goal
+        const targetNow = targetAtAge / Math.pow(1 + growth, yearsUntil);  // discount to today
+        return { value: Math.round(targetNow), targetAge, rmdPctAtTarget, yearsUntil, growth };
+    } catch (e) { return null; }
+}
+
+// Keep the existing name — runSimulation() already calls this. Now drives the ⓘ icon, not a hint div.
+function updateIRAGoalHint() {
+    const icon = document.getElementById('suggest-ira-icon');
+    if (!icon) return;
+    const sug = computeSuggestedIraGoal();
+    if (!sug) { icon.style.display = 'none'; return; }
+    icon.style.display = '';
+    icon.title = _priorIraGoal !== null
+        ? `Restore: $${Math.round(_priorIraGoal).toLocaleString()}`
+        : `Suggested IRA Goal: $${sug.value.toLocaleString()} — IRA balance today whose RMDs ≈ your spend goal at age ${sug.targetAge} (${(sug.rmdPctAtTarget * 100).toFixed(2)}% RMD, ${sug.yearsUntil} yrs at ${(sug.growth * 100).toFixed(1)}% growth). Click to apply.`;
+}
+
+function applySuggestIraGoal() {
+    if (_priorIraGoal !== null) {
+        DisplayHelpers.setDollarValue('iraBaseGoal', Math.round(_priorIraGoal));
+        _priorIraGoal = null;
+    } else {
+        const sug = computeSuggestedIraGoal();
+        if (!sug) return;
+        const el = document.getElementById('iraBaseGoal');
+        _priorIraGoal = parseFloat((el?.dataset?.numVal) || (el?.value || '').replace(/[^\d.-]/g, '') || '0');
+        DisplayHelpers.setDollarValue('iraBaseGoal', sug.value);
     }
+    updateIRAGoalHint();
+    runSimulation();
 }
 
 function runSimulation() {
@@ -2435,7 +2454,7 @@ function runOptimizer() {
     }
 
     // IRA Draw — fixed % of IRA balance each year
-    for (const pct of [5, 6, 7, 8, 10]) {
+    for (const pct of [5, 6, 7, 8, 10, 12, 15, 20]) {
         addResult('IRA Draw', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
     }
 
@@ -3984,24 +4003,68 @@ function computeTaxThresholdSeries(log, adj) {
     // Federal: each bracket lower bound is where a new marginal rate begins. Label with that rate.
     const fb = TAXData?.FEDERAL, fedShades = ['#f5cba7', '#f0b27a', '#eb984e', '#e67e22', '#ca6f1e', '#a04000'];
     if (fb?.MFJ) {
-        for (let j = 0; j < fb.MFJ.brackets.length; j++) {
-            const raw = boundary(fb, j);
-            if (!crosses(raw)) continue;
+        const nFed = fb.MFJ.brackets.length;
+        const rawFed = Array.from({ length: nFed }, (_, j) => boundary(fb, j));
+        const crossedFed = new Set();
+        for (let j = 0; j < nFed; j++) {
+            if (!crosses(rawFed[j])) continue;
+            crossedFed.add(j);
             const rate = Math.round((fb.MFJ.brackets[j].r ?? 0) * 100);
-            out.push({ label: `${rate}% bracket`, color: fedShades[j % fedShades.length],
-                       data: raw.map((v, k) => v == null ? null : v * adj(log[k])) });
+            out.push({ label: `${rate}% Limit`, color: fedShades[j % fedShades.length],
+                       data: rawFed[j].map((v, k) => v == null ? null : v * adj(log[k])),
+                       group: 'fed' });
+        }
+        // Next bracket above current MAGI — not already crossed.
+        const nextFedCounts = {};
+        for (let y = 0; y < magi.length; y++) {
+            for (let j = 0; j < nFed; j++) {
+                const v = rawFed[j][y];
+                if (v != null && magi[y] < v) {
+                    if (!crossedFed.has(j)) nextFedCounts[j] = (nextFedCounts[j] || 0) + 1;
+                    break;
+                }
+            }
+        }
+        for (const [jStr] of Object.entries(nextFedCounts)) {
+            const j = +jStr;
+            const rate = Math.round((fb.MFJ.brackets[j].r ?? 0) * 100);
+            out.push({ label: `${rate}% Limit`, color: fedShades[j % fedShades.length],
+                       data: rawFed[j].map((v, k) => v == null ? null : v * adj(log[k])),
+                       dash: [5, 4], group: 'fed', isNext: true });
         }
     }
 
     // IRMAA: each tier's MAGI entry threshold (skip the no-surcharge floor at index 0).
     const ib = TAXData?.IRMAA, irmaaShades = ['#aed6f1', '#7fb3d5', '#5499c7', '#2e86c1', '#2471a3', '#1a5276'];
     if (ib?.MFJ) {
-        for (let t = 1; t < ib.MFJ.brackets.length; t++) {
-            const raw = boundary(ib, t);
-            if (!crosses(raw)) continue;
+        const nIR = ib.MFJ.brackets.length;
+        const rawIR = Array.from({ length: nIR }, (_, t) => boundary(ib, t));
+        const crossedIR = new Set();
+        for (let t = 1; t < nIR; t++) {
+            if (!crosses(rawIR[t])) continue;
+            crossedIR.add(t);
             const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
             out.push({ label: `IRMAA ${tier}`, color: irmaaShades[(t - 1) % irmaaShades.length],
-                       data: raw.map((v, k) => v == null ? null : v * adj(log[k])), dash: [3, 3] });
+                       data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])), dash: [3, 3],
+                       group: 'irmaa' });
+        }
+        // Next IRMAA tier above current MAGI — not already crossed.
+        const nextIRCounts = {};
+        for (let y = 0; y < magi.length; y++) {
+            for (let t = 1; t < nIR; t++) {
+                const v = rawIR[t][y];
+                if (v != null && magi[y] < v) {
+                    if (!crossedIR.has(t)) nextIRCounts[t] = (nextIRCounts[t] || 0) + 1;
+                    break;
+                }
+            }
+        }
+        for (const [tStr] of Object.entries(nextIRCounts)) {
+            const t = +tStr;
+            const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
+            out.push({ label: `IRMAA ${tier}`, color: irmaaShades[(t - 1) % irmaaShades.length],
+                       data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])),
+                       dash: [5, 4], group: 'irmaa', isNext: true });
         }
     }
     return out;
@@ -4099,16 +4162,45 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             mkTax('Federal',   '#c0392b', r => (r.FedTax ?? 0) - (r['-capGainsTax'] ?? 0)),
             mkTax('Cap Gains', '#e74c3c', r => r['-capGainsTax'] ?? 0),
             mkTax('State',     '#f39c12', r => r.StateTax ?? 0),
-            mkTax('IRMAA',     '#8e44ad', r => r.IRMAA ?? 0),
+            mkTax('IRMAA',     '#FFB8B8C0', r => r.IRMAA ?? 0),   // match the pink used on Income & Expenses
             { ...mkLine('MAGI', '#111827', r => (r.MAGI ?? 0) * adj(r)), type: 'line', yAxisID: 'y1', pointRadius: 0, borderWidth: 2.5, order: 1 },
         ];
         if (showTaxThresholds) {
             for (const s of computeTaxThresholdSeries(log, adj)) {
                 datasets.push({ label: s.label, data: s.data, type: 'line', yAxisID: 'y1', order: 0,
-                    borderColor: s.color, backgroundColor: s.color, pointRadius: 0, borderWidth: 1.5,
-                    borderDash: s.dash || [6, 4], fill: false, spanGaps: true });
+                    borderColor: s.color, backgroundColor: s.color, pointRadius: 0, borderWidth: 2.5,
+                    borderDash: s.dash || [6, 4], fill: false, spanGaps: true,
+                    _thGroup: s.group, _thNext: s.isNext });
             }
         }
+        // Threshold lines stay on the chart for visual context, but are dropped from the tooltip.
+        // Instead the tooltip answers "what rate am I paying now?" via an afterBody footer with the
+        // federal + state marginal rate and the highest IRMAA tier crossed (all already in the log row).
+        const taxThresholdFilter = (item) => !item.dataset._thGroup;   // bars + MAGI only
+        // Enrich two of the bar rows: IRMAA row shows its tier ("IRMAA Tier 4: 16,000"); the Cap Gains
+        // row shows the effective cap-gains rate and the underlying gains ("Cap Gains: 81,835 (~21% on 392,932)").
+        const taxLabelCb = (ctx) => {
+            const r = log[ctx.dataIndex];
+            const val = Math.round(ctx.parsed.y).toLocaleString();
+            const lbl = ctx.dataset.label;
+            if (lbl === 'IRMAA' && ctx.parsed.y > 0) {
+                const tier = r?.IRMAATier;
+                if (tier && tier !== '-none-' && tier !== '-') return `IRMAA ${tier}: ${val}`;
+            }
+            if (lbl === 'Cap Gains' && ctx.parsed.y > 0 && (r?.CapGains || 0) > 0) {
+                const rate = Math.round((r['-capGainsTax'] || 0) / r.CapGains * 100);
+                return `Cap Gains: ${val} (~${rate}% on ${Math.round(r.CapGains * adj(r)).toLocaleString()})`;
+            }
+            return lbl + ': ' + val;
+        };
+        // Footer reports the marginal rate on ORDINARY income (cap gains shown separately above).
+        const taxRateFooter = (items) => {
+            const r = log[items[0]?.dataIndex];
+            if (!r) return [];
+            const out = [`Fed ordinary marginal: ${Math.round((r['FedRate%'] || 0) * 100)}%`];
+            if ((r['StateRate%'] || 0) > 0) out.push(`State marginal: ${((r['StateRate%']) * 100).toFixed(1)}%`);
+            return out;
+        };
         incomeChart = new Chart(ctxI, {
             type: 'bar',
             data: { labels, datasets },
@@ -4118,7 +4210,10 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                     y:  { position: 'left',  stacked: true,  title: { display: true, text: 'Tax ($)' },    ticks: dollarTicks },
                     y1: { position: 'right', stacked: false, min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: 'Income ($)' }, ticks: dollarTicks },
                 },
-                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels } } }
+                plugins: { ...sharedTooltip.plugins,
+                    tooltip: { ...sharedTooltip.plugins.tooltip, filter: taxThresholdFilter,
+                        callbacks: { ...sharedTooltip.plugins.tooltip.callbacks, label: taxLabelCb, afterBody: taxRateFooter } },
+                    legend: { labels: legendLabels } } }
         });
     } else if (incomeChartView === 'flows') {
         // Inflows (up) vs outflows (down): where spending money comes from and where it goes.
@@ -4126,17 +4221,35 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             data: log.map(r =>  Math.max(0, fn(r)) * adj(r)) });
         const mkDn = (label, color, fn) => ({ label, type: 'bar', backgroundColor: color, stack: 'flow',
             data: log.map(r => -Math.max(0, fn(r)) * adj(r)) });
+        // Portfolio Draw (= netOut + conversion gross) split by source account, using the asset-chart
+        // colors. Per-account gross withdrawals are scaled so their sum equals the portfolio total,
+        // which keeps the up/down sides balanced (reinvested surplus is netted out pro-rata).
+        const _grossDraw = r => Math.max(0, r.IRAwd ?? 0) + Math.max(0, r['Brokerage-'] ?? 0)
+            + Math.max(0, r.CashWD ?? 0) + Math.max(0, r.RothWD ?? 0);
+        const _acctScale = r => { const g = _grossDraw(r); return g > 0 ? ((r.netOut ?? 0) + (r.rothConv ?? 0)) / g : 0; };
         incomeChart = new Chart(ctxI, {
             type: 'bar',
             data: { labels, datasets: [
+                // IRA draw includes the gross IRA→Roth conversion (the converted dollars are drawn from
+                // the IRA up, and land in Roth on the down side via "Conversions → Roth").
+                // Spending is the amount actually CONSUMED (inflows + portfolio draw − taxes); using
+                // netIncome here would balloon in conversion years because totalIncome includes the
+                // converted amount, double-counting it against the separate Conversions bar.
                 mkUp('Guaranteed (SS+Pension)', '#3498dbB0', r => r.inflows  ?? 0),
-                mkUp('Portfolio Draw',          '#e67e22B0', r => r.netOut   ?? 0),
+                mkUp('IRA draw',                '#e67e22B0', r => (r.IRAwd ?? 0)      * _acctScale(r)),
+                mkUp('Brokerage draw',          '#2980b9B0', r => (r['Brokerage-'] ?? 0) * _acctScale(r)),
+                mkUp('Cash draw',               '#27ae60B0', r => (r.CashWD ?? 0)     * _acctScale(r)),
+                mkUp('Roth draw',               '#8e44adB0', r => (r.RothWD ?? 0)     * _acctScale(r)),
                 mkDn('Taxes',                   '#A30000C0', r => r.totalTax ?? 0),
-                mkDn('Spending',                '#27ae60B0', r => r.netIncome ?? 0),
+                mkDn('Spending',                '#1abc9cB0', r => (r.inflows ?? 0) + (r.netOut ?? 0) - (r.totalTax ?? 0)),
+                mkDn('Conversions → Roth',      '#8e44adB0', r => r.rothConv ?? 0),
             ]},
             options: { ...sharedTooltip,
                 scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
-                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels } } }
+                plugins: { ...sharedTooltip.plugins,
+                    // Hide rows that round to $0 (e.g. no Brokerage draw this year) — declutters the tip.
+                    tooltip: { ...sharedTooltip.plugins.tooltip, filter: (item) => Math.round(item.parsed.y) !== 0 },
+                    legend: { labels: legendLabels } } }
         });
     } else if (incomeChartView === 'assetflows') {
         // Asset-level cash flow: investment EARNINGS (up, stacked by account) vs WITHDRAWALS that
@@ -5245,11 +5358,13 @@ function updateGrowthDisplay() {
     const inflation = parseFloat(document.getElementById('inflation')?.value);
     if (isNaN(growth) || isNaN(inflation)) { el.innerHTML = ''; return; }
 
-    // Fisher equation: real = (1+g)/(1+i) - 1
-    const realPct = ((1 + growth / 100) / (1 + inflation / 100) - 1) * 100;
+    // Fisher equation: real = (1+g)/(1+d)/(1+i) - 1, including dividend yield
+    const div = parseFloat(document.getElementById('dividendRate')?.value) || 0;
+    const realPct = ((1 + growth / 100) * (1 + div / 100) / (1 + inflation / 100) - 1) * 100;
     const sign = realPct >= 0 ? '+' : '';
+    const totalNominal = growth + div;
     let html = `Real growth: <strong>${sign}${realPct.toFixed(1)}%</strong>`
-             + ` <span style="color:#888;">(${growth}% nominal &minus; ${inflation}% inflation)</span>`;
+             + ` <span style="color:#888;">(${totalNominal.toFixed(1)}% nominal [${growth}% price + ${div}% div] &minus; ${inflation}% inflation)</span>`;
 
     if (growth > 10) {
         html += `<br><span style="color:#b45309;">⚠ Optimistic — S&amp;P 500 long-run nominal CAGR is ~10%; diversified portfolios typically 6–9%.</span>`;
@@ -5293,13 +5408,18 @@ function updateBracketFeedback() {
         return;
     }
 
+    // Federal bracket containing the selected ceiling — useful when the strategy is an IRMAA/ACA
+    // tier (whose label shows no federal rate). bracketLimit is already CPI-adjusted current-$.
+    const fedRate = federalBracketRateAt(bracketLimit);
+    const fedNote = fedRate != null ? ` <span style="color:#888;">(${fedRate}% federal bracket)</span>` : '';
+
     // Estimate max feasible spend (simplified: bracket limit is approx max MAGI)
     // In reality this depends on tax rates and account composition, but this gives a rough indicator
     const estimatedMaxSpend = Math.round(bracketLimit * 0.95); // Slight buffer for estimation error
 
     if (spendGoal <= estimatedMaxSpend) {
         // Within bracket
-        feedbackEl.innerHTML = `✓ Bracket allows ~$${estimatedMaxSpend.toLocaleString()} / year`;
+        feedbackEl.innerHTML = `✓ Bracket allows ~$${estimatedMaxSpend.toLocaleString()} / year${fedNote}`;
         feedbackEl.style.color = '#4a7c4e';
     } else {
         // Over bracket — clicking adjusts spendGoal down to the bracket max
@@ -5307,9 +5427,78 @@ function updateBracketFeedback() {
         feedbackEl.innerHTML = `<span style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;"
             title="Click to set After-Tax Spend to bracket maximum"
             onclick="DisplayHelpers.setDollarValue('spendGoal',${estimatedMaxSpend});runSimulation();"
-            >⚠ Over bracket by ~$${shortfall.toLocaleString()} / year — click to adjust</span>`;
+            >⚠ Over bracket by ~$${shortfall.toLocaleString()} / year — click to adjust</span>${fedNote}`;
         feedbackEl.style.color = '#d4811f';
     }
+    updateSuggestSpendTooltip();
+}
+
+// Federal marginal-rate % for a given CPI-adjusted (current-year $) income, or null. Mirrors the
+// CPI compounding in generateStratRateOptions so the boundary lines up with the dropdown limits.
+function federalBracketRateAt(income) {
+    if (!isFinite(income) || income <= 0) return null;
+    const cpi = (+document.getElementById('cpi')?.value || 2.8) / 100;
+    const cpiAdj = Math.pow(1 + cpi, Math.max(0, new Date().getFullYear() - TAX_DATA_BASE_YEAR));
+    const status = getDropdownStatus();
+    const brks = (status === 'MFJ' ? TAXData.FEDERAL.MFJ : TAXData.FEDERAL.SGL).brackets;
+    for (const b of brks) {
+        if (income <= b.l * cpiAdj) return Math.round(b.r * 100);
+    }
+    return Math.round(brks[brks.length - 1].r * 100);
+}
+
+// Prior spendGoal value before user clicked the suggest icon (null = not in suggest mode).
+let _priorSpendGoal = null;
+
+function computeSuggestedSpend() {
+    const inp = getInputs();
+    const totalAssets = (inp.IRA1||0) + (inp.IRA2||0) + (inp.Roth||0) + (inp.Roth2||0) + (inp.Brokerage||0) + (inp.Cash||0);
+    const portfolioWd  = 0.05 * totalAssets;
+    const gross        = (inp.ss1||0) + (inp.ss2||0) + (inp.pensionAnnual||0) + portfolioWd;
+
+    const status    = inp.hasSpouse ? 'MFJ' : 'SGL';
+    const retireAge = inp.startAge || (new Date().getFullYear() - (inp.birthyear1||1960));
+    const spAge     = inp.hasSpouse ? (retireAge + (inp.birthyear1||1960) - (inp.birthyear2||1960)) : 0;
+    const ages      = inp.hasSpouse ? [retireAge, spAge] : [retireAge];
+
+    const taxes = calculateTaxes({
+        filingStatus: status,
+        totalSS:      (inp.ss1||0) + (inp.ss2||0),
+        earnedIncome: (inp.pensionAnnual||0) + portfolioWd,
+        state:        inp.STATEname || 'CA',
+        ages,
+        inflation:    1.0,
+    });
+
+    const afterTax = Math.max(0, gross - (taxes.totalTax || 0));
+    return { gross, afterTax };
+}
+
+function updateSuggestSpendTooltip() {
+    const icon = document.getElementById('suggest-spend-icon');
+    if (!icon) return;
+    const { afterTax } = computeSuggestedSpend();
+    icon.style.display = afterTax > 0 ? '' : 'none';
+    if (_priorSpendGoal !== null) {
+        icon.title = `Restore: $${Math.round(_priorSpendGoal).toLocaleString()}`;
+    } else {
+        icon.title = `Suggested goal: $${Math.round(afterTax).toLocaleString()}`;
+    }
+}
+
+function applySuggestSpend() {
+    if (_priorSpendGoal !== null) {
+        DisplayHelpers.setDollarValue('spendGoal', Math.round(_priorSpendGoal));
+        _priorSpendGoal = null;
+    } else {
+        const el = document.getElementById('spendGoal');
+        const raw = parseFloat((el?.dataset?.numVal) || (el?.value || '').replace(/[^\d.-]/g, '') || '0');
+        _priorSpendGoal = raw;
+        const { afterTax } = computeSuggestedSpend();
+        DisplayHelpers.setDollarValue('spendGoal', Math.round(afterTax));
+    }
+    updateSuggestSpendTooltip();
+    updateBracketFeedback();
 }
 
 /**
@@ -5411,12 +5600,13 @@ function generateStratRateOptions() {
     const fedBrks = isMFJ
         ? TAXData.FEDERAL.MFJ.brackets
         : TAXData.FEDERAL.SGL.brackets;
-    for (let i = 0; i < fedBrks.length - 1; i++) {
+    for (let i = 0; i < fedBrks.length; i++) {
         const ratePct = Math.round(fedBrks[i].r * 100);
-        const limit   = Math.round(fedBrks[i].l * cpiAdj);
+        const isTop   = !isFinite(fedBrks[i].l);   // 37% bracket — unbounded, shown for reference
+        const limit   = isTop ? Infinity : Math.round(fedBrks[i].l * cpiAdj);
         options.push({
             value: String(ratePct),
-            label: `${ratePct}% Fed  ·  $${limit.toLocaleString()}`,
+            label: isTop ? `${ratePct}% Fed  ·  no limit` : `${ratePct}% Fed  ·  $${limit.toLocaleString()}`,
             limit,
             defaultSelected: false
         });

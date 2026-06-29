@@ -1,5 +1,10 @@
 # Progress Log
 
+## Session: 2026-06-29 — Plan cleanup (worktree priceless-turing-9a5ad3)
+Archived all completed phases into `task_completed.md`. Rewrote `task_plan.md` with only remaining work, renumbered P1–P18. Verified Phase 12 (withdrawal timing) complete via grep (`growthTiming` → v11.ecb auto early/late). Current: v11.10cf, branch main, clean worktree.
+
+---
+
 ## Session: 2026-06-26 — Phase 38 UX/Charts batch (complete, v11.10a2, UNCOMMITTED, worktree epic-lalande-01685c)
 
 User punch-list of 10 UX/logic items; scope chosen interactively (AskUserQuestion). Implemented 6,

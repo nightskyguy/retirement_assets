@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.10cf</title>
+    <title>Retirement Optimizer 11.10ee</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -58,7 +58,7 @@
 <div class="container">
 	<div class="sidebar">
 		<div id="strategy-container">
-			<div style="font-size:0.85em;font-weight:700;color:#e65100;margin-bottom:6px;letter-spacing:0.02em;">Withdrawal Strategy</div>
+			<div style="font-size:0.85em;font-weight:700;color:#e65100;margin-bottom:6px;letter-spacing:0.02em;">5. Withdrawal Strategy</div>
 		    <div class="row"><div  id="spending">
 				<div><label title="Annual after-tax spending you want the plan to fund, in today's dollars. This is what you actually get to spend after federal/state taxes and IRMAA — the simulation grosses it up and withdraws enough (plus inflation each year) to deliver it. Click the ⓘ for a suggested amount based on your guaranteed income and assets."><span style="white-space:nowrap;">After-Tax Spend<span id="suggest-spend-icon" title="" style="cursor:pointer;font-size:1.05em;margin-left:4px;display:none;" onclick="applySuggestSpend()">ⓘ</span></span>
 				<input type="text" id="spendGoal" value="140000" title="Annual after-tax spending the plan must deliver, in today's dollars (inflation-adjusted each year)." style="width:110px;font-size:14px;" oninput="_priorSpendGoal=null; updateBracketFeedback()"></label></div>
@@ -69,7 +69,7 @@
 		
 		
 			<div class="input-group">
-				<label><select id="strategy" onchange="toggleStrategyUI()">
+				<label title="How each year's withdrawals are sourced and how aggressively the traditional IRA is drawn down / converted to Roth. This is the main lever the Optimizer sweeps — pick it last, after your assets, income, and assumptions are set."><select id="strategy" onchange="toggleStrategyUI()">
 					<option value="propwd">📊Proportional Withdraw +%</option>
 					<option value="fixed">💸Reduce IRA in &#120393; Years</option>
 					<option value="bracket">🪣Fill Fed/IRMAA Bracket</option>
@@ -104,7 +104,7 @@
 			</div>
 
 			<div id="ui-ordered" class="input-group hidden">
-				<label style="display:block;"><select id="orderedSeq" style="width:100%;">
+				<label style="display:block;" title="Account draw order for the Ordered strategy — accounts are emptied left to right to fund each year's spending (RMDs are always taken first regardless of order)."><select id="orderedSeq" style="width:100%;">
 					<option value="CBIR">Cash→Brok→IRA→Roth</option>
 					<option value="RIBC">Roth→IRA→Brok→Cash</option>
 					<option value="BIRC">Brok→IRA→Roth→Cash</option>
@@ -289,31 +289,31 @@
         </details>
 
         <details class="section" open>
-        <summary>3. Income (annual)</summary>
+        <summary>3. Annual Income &amp; QCDs</summary>
         <div class="row">
-            <div><label>Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
-            <div><label>Start Age<input type="number" id="ss1Age" value="70"
+            <div><label title="Your gross annual Social Security benefit in today's dollars, at the start age below. Grows with the CPI/COLA rate each year.">Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
+            <div><label title="Age you start claiming Social Security. Benefits before this age are $0. Eligibility usually begins at 62; benefits stop increasing after 70.">Start Age<input type="number" id="ss1Age" value="70"
               oninput="(function(v,el){el.style.display=v>0&&v<62?'block':v>70?'block':'none';el.textContent=v<62?'⚠ SS eligibility usually begins at 62.':'⚠ SS benefits do not increase after 70.';})(+this.value,document.getElementById('ss1Age-warn'))"></label></div>
         </div>
         <div id="ss1Age-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;"></div>
         <div class="row spouse-field">
-            <div><label><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
+            <div><label title="Your spouse's gross annual Social Security benefit in today's dollars, at their start age. Grows with the CPI/COLA rate each year."><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
             <!-- TODO: Change default Spouse SS Start Age from 70 to 62. -->
-            <div><label><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"
+            <div><label title="Age your spouse starts claiming Social Security. Benefits before this age are $0. Eligibility usually begins at 62; benefits stop increasing after 70."><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"
               oninput="(function(v,el){el.style.display=v>0&&v<62?'block':v>70?'block':'none';el.textContent=v<62?'⚠ SS eligibility usually begins at 62.':'⚠ SS benefits do not increase after 70.';})(+this.value,document.getElementById('ss2Age-warn'))"></label></div>
         </div>
         <div id="ss2Age-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;"></div>
         <div class="row">
-            <div><label><B>Your</B> Pension<input type="text" id="pensionAnnual" value="15000"></label></div>
-            <div class="spouse-field"><label>Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
+            <div><label title="Your annual pension income in today's dollars. Begins at the Start Age (or at retirement if left 0). Toggle COLA below if it is inflation-adjusted."><B>Your</B> Pension<input type="text" id="pensionAnnual" value="15000"></label></div>
+            <div><label title="Age you start collecting the pension. Leave 0 to begin at retirement. Set higher to model a deferred pension (e.g. retire at 60, pension starts at 65).">Start Age<input type="number" id="pensionStartAge" value="0" min="0" max="120" placeholder="ret."></label></div>
+        </div>
+        <div class="row">
+            <div class="spouse-field"><label title="Percentage of the pension that continues to the surviving spouse after the pension-holder dies.">Survivorship %<input type="number" id="survivorPct" value="75"></label></div>
         </div>
         <div class="row">
             <div><label title="Most pensions have no inflation adjustment. Enable only if your pension includes a cost-of-living adjustment (COLA)."><input type="checkbox" id="pensionCola"> Pension has COLA (inflation-adjusted)</label></div>
         </div>
-        </details>
-
-        <details class="section">
-        <summary>Charitable Giving (QCD)</summary>
+        <div style="font-weight:700;font-size:0.85em;color:#e65100;margin:10px 0 4px;letter-spacing:0.02em;">Charitable Giving (QCD)</div>
         <div style="font-size:0.82em;color:#555;margin-bottom:6px;">
             QCDs from IRAs satisfy the RMD requirement and are excluded from MAGI, reducing IRMAA exposure. IRS limit is CPI-indexed annually.
         </div>
@@ -350,11 +350,11 @@
         </div>
         <div id="growth-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
         <div class="row">
-            <div><label><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay()"></label></div>
-            <div><label><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
+            <div><label title="General price inflation. Drives spending-goal escalation: your After-Tax Spend goal grows by this rate each year so it stays constant in today's dollars. Often differs slightly from CPI/COLA."><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay()"></label></div>
+            <div><label title="Cost-of-living index. Drives federal &amp; IRMAA bracket indexing and Social Security COLA adjustments. Often differs from general inflation, so it is entered separately."><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
         <div class="row" style="margin-top:6px;">
-            <div><label title="Expected marginal tax rate when the traditional IRA shadow is eventually distributed. Used for Roth conversion break-even (Opp. Cost). Leave blank to use the current year's computed marginal rate automatically.">Future IRA Tax %
+            <div><label title="The all-in marginal tax rate of whoever inherits your traditional IRA (their federal + state bracket on the inherited withdrawals). Drives Roth-conversion break-even (Opp. Cost) and after-tax legacy. Enter 0% if the IRA will be donated to charity. Leave blank to use the current year's computed marginal rate automatically.">Marginal Heirs Tax Rate %
                 <input type="number" id="futureIRATaxRate" min="0" max="60" step="1" placeholder="auto" style="width:54px;">
                 <span id="future-ira-tax-auto" style="font-size:0.8em;color:#888;margin-left:4px;"></span>
             </label></div>
@@ -400,12 +400,12 @@
                 <span class="toggle-switch"></span>
                 <span style="color:#666;font-size:0.9em;">Current $</span>
             </label>
-            <button id="btn-tbl" class="tab-btn" onclick="{runSimulation(); showTab('tab-tbl')}">Annual Details ⊞</button>
-            <button id="btn-cht" class="tab-btn active" onclick="{runSimulation(); showTab('tab-chart')}">Charts 📊</button>
-            <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}">Optimizer 🎯</button>
-		    <button id="btn-mc" class="tab-btn" onclick="{showTab('tab-mc'); mcTabActivated();}">Monte Carlo 🎲</button>
-		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}">Import/Export 📂</button>
-		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}">Documentation <strong id="testsFailed">🟢</strong></button>
+            <button id="btn-tbl" class="tab-btn" onclick="{runSimulation(); showTab('tab-tbl')}" title="Year-by-year detail: balances, income, taxes, RMDs, and Roth conversions for every year of the plan.">Annual Details ⊞</button>
+            <button id="btn-cht" class="tab-btn active" onclick="{runSimulation(); showTab('tab-chart')}" title="Visualize the plan: account balances over time plus income / expense breakdowns (switch views with the buttons above each chart).">Charts 📊</button>
+            <button id="btn-opt" class="tab-btn" onclick="{runOptimizer(); showTab('tab-opt')}" title="Sweeps every withdrawal & conversion strategy and ranks them by net wealth, total spendable, and lifetime tax.">Optimizer 🎯</button>
+		    <button id="btn-mc" class="tab-btn" onclick="{showTab('tab-mc'); mcTabActivated();}" title="Runs the plan against hundreds of random or historical return sequences and reports survival / success rates.">Monte Carlo 🎲</button>
+		    <button id="btn-fileio" class="tab-btn" onclick="{showTab('tab-fileio')}" title="Save, load, or delete named scenarios, and share a plan via a compressed URL.">Import/Export 📂</button>
+		    <button id="btn-docs" class="tab-btn" onclick="{showTab('tab-docs')}" title="How-to guide, strategy explanations, modeling assumptions, and the changelog.">Documentation <strong id="testsFailed">🟢</strong></button>
 
         </div>
 
@@ -557,7 +557,14 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.10cf</b> Numerous user experience improvements: IRA Draw strategies now tested to 20%, After-Tax-Spend searches higher spend rates and a suggested value is offered. Other changes include tooltip clarity improvements, chart improvements, and showing Charts first by default.</li>
+				<li><b>11.10ee</b> <strong>Pension start age, optimizer symbol legend, and a Guyton-Klinger fix:</strong>
+						<ul style="margin:4px 0 0 16px;">
+							<li><strong>Pension start age.</strong> Model a pension that begins after you retire (e.g. retire at 60 while the pension starts at 65). Leave the start age at 0 to begin at retirement.</li>
+							<li><strong>Optimizer symbol legend.</strong> A new legend explains the symbols shown on strategy names (✓ ✦ ▼ 🗘 🔄 ⇌ ⚠️ 🟢 🚨 ⚓).</li>
+							<li><strong>Guyton-Klinger sustainable-spend fix.</strong> When no strategy can fund your spend goal, the suggested fallback spend no longer reports a Guyton-Klinger value that only &ldquo;works&rdquo; by cutting spending every year — and the suggested strategy is now clickable to load.</li>
+						</ul>
+					</li>
+					<li><b>11.10cf</b> Numerous user experience improvements: IRA Draw strategies now tested to 20%, After-Tax-Spend searches higher spend rates and a suggested value is offered. Other changes include tooltip clarity improvements, chart improvements, and showing Charts first by default.</li>
 				<li><b>11.10a2</b> Added additional charts for clarity: Taxation, Income vs Net Income, Inflows vs Outflows, Earnings vs W/D.</li>
 				<li><b>11.1099</b> <strong>Baseline strategy is now ranked by total economic value, not terminal wealth alone.</strong> The pinned ⚓ baseline is the best no-conversion strategy. <strong>Guyton-Klinger Optimize Spend no longer reports an unsustainable spend.</strong> Optimize Spend now applies a <em>stability floor</em> and accepts a higher initial spend only if the guardrails never cut <em>real</em> delivered spending below one guard band of the initial.</li>
 				<li><b>11.1091</b> >Fixed a <code>NaN</code> in a Monte Carlo.</li>
@@ -675,7 +682,7 @@
 						<li><strong>Optimize Spend</strong> — after the Optimizer finds successful strategies, it binary-searches each one for the highest sustainable spend goal that still ends with at least two years of funded wealth.</li>
 						<li><strong>Optimize Conversions</strong> — for the top five Optimizer strategies, sweeps additional fixed annual conversion amounts ($25k steps) to find the best extra Roth conversion on top of Maximize Conversions. Adds new rows to the Optimizer table. Slower (5–15 sec for large IRAs).</li>
 					</ul>
-				<p><strong>Charitable Giving (QCDs)</strong> — the sidebar section <em>Charitable Giving (QCD)</em> (between Income and Assumptions) lets you enter a combined household annual QCD maximum. A Qualified Charitable Distribution is a direct transfer from a traditional IRA to a qualifying charity. It satisfies the RMD requirement for that year without adding to your taxable income, which can reduce or eliminate IRMAA Medicare surcharges.
+				<p><strong>Charitable Giving (QCDs)</strong> — the <em>Charitable Giving (QCD)</em> block at the bottom of the <em>Annual Income &amp; QCDs</em> section lets you enter a combined household annual QCD maximum. A Qualified Charitable Distribution is a direct transfer from a traditional IRA to a qualifying charity. It satisfies the RMD requirement for that year without adding to your taxable income, which can reduce or eliminate IRMAA Medicare surcharges.
 				Rules: age 70½+ per person (the simulation uses birth month for precision); the IRS limit is $111,000/person/year in 2026, CPI-indexed annually. QCDs are sourced first from the larger eligible IRA, then the smaller.
 				Two modes: <em>Always</em> (switch right, green) donates the full amount every eligible year regardless of tax situation — useful for regular charitable giving goals.
 				<em>As Needed</em> (switch left) applies only as much as needed to drop two IRMAA tiers from your projected MAGI, or to escape the surcharge entirely — whichever requires fewer dollars. Use this when your primary goal is IRMAA avoidance rather than a fixed giving commitment. In either mode your entered amount is the ceiling — the simulation never exceeds it.</p>
@@ -685,7 +692,7 @@
 				</li>
 				<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year and month of each person and estimated life expectancy. The current age, RMD start age, and projected first-year RMD amount are shown below each person's birth fields and update live. Use the <i>Include Spouse</i> checkbox to model a single taxpayer — unchecking it hides all spouse fields and excludes the spouse from the simulation. <i>Retirement Start Age</i> is the age at which you stop earning income; the simulation inflates tax brackets, SS COLA, and spending forward to that year automatically.</li>
 				<li><strong>2. Assets at Retirement Age:</strong> Enter balances in today's dollars. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Total all after-tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. The <i>Reinvest Brokerage Dividends</i> checkbox keeps dividends inside the brokerage account (growing both balance and basis); when unchecked, dividends flow to Cash. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. Enter Roth balances separately — <i>Your Roth IRA</i> and <i>Spouse Roth IRA</i> are tracked independently throughout the simulation. The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios — informational only in single-scenario mode, but used by Monte Carlo Bootstrap and Stress modes to apply per-account return sequences.</li>
-				<li><strong>3. Income (annual):</strong> Input annual Social Security and pension amounts. Set the start ages to see the impact of delaying benefits. SS amounts are adjusted annually by the <i>CPI/COLA</i> rate. <i>Survivorship</i> is the percentage of the pension that continues after You pass away. Enable <i>Pension has COLA</i> only if your pension includes a cost-of-living adjustment — most pensions are fixed-dollar.</li>
+				<li><strong>3. Annual Income &amp; QCDs:</strong> Input annual Social Security and pension amounts. Set the start ages to see the impact of delaying benefits — the <i>Pension Start Age</i> lets you model a deferred pension that begins after retirement (leave 0 to start at retirement). SS amounts are adjusted annually by the <i>CPI/COLA</i> rate. <i>Survivorship</i> is the percentage of the pension that continues after You pass away. Enable <i>Pension has COLA</i> only if your pension includes a cost-of-living adjustment — most pensions are fixed-dollar. The <i>Charitable Giving (QCD)</i> block at the bottom of this section handles Qualified Charitable Distributions.</li>
 				<li><strong>4. Assumptions:</strong> <i>Dividend Rate</i> and <i>State Taxation</i> are the most-changed inputs — set these first. <i>Social Security Fail</i> models the projected trust fund shortfall year and reduced payout.
 					<br><br>
 					<strong>Growth rate — nominal, not real.</strong> Enter the <em>nominal</em> (before-inflation) annual return for IRA, Roth, and Brokerage. The tool deducts inflation internally — do <em>not</em> pre-subtract inflation yourself. The real (purchasing-power) growth rate is approximately <code>nominal − inflation</code> (Fisher equation: <code>(1+g)/(1+i)−1</code> precisely). For reference: the S&amp;P 500 has returned roughly 10% nominal (≈7% real) since 1928; a diversified 60/40 portfolio averages 7–9% nominal; a conservative bond-heavy allocation 4–6%. Note that the dividend rate is <em>additive</em> — 5% growth + 1.5% dividends = 6.5% total. Asset balances and RMDs grow at the nominal rate, which is why nominal is the correct input even though real growth is what you feel in purchasing power.
@@ -716,6 +723,11 @@
 					</thead>
 					<tbody id="ins_tableBody"></tbody>
 				</table>
+			</div>
+		<!-- Hidden runtime nerd-knob toggle (item 13). Unlabeled; flips NERD_KNOBS at runtime
+			     as if ?nerdknob were on the URL. Deliberately faint. NOT persisted to the URL. -->
+			<div style="margin-top:28px;text-align:right;">
+				<input type="checkbox" id="secret-nerdknob" onchange="setNerdKnob(this.checked)" title="Do not click this. Quantum Instability may result causing the universe to suddenly disappear into a black hole." style="cursor:pointer;">
 			</div>
 		</div> <!-- id=tab-docs -->
 
@@ -814,13 +826,43 @@
             <div id="opt-perf" style="display:none;margin-bottom:8px;font-size:0.8em;color:#888;font-family:monospace;"></div>
             <div id="opt-spend-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
             <div id="opt-best" style="display:none;"></div>
+            <!-- Optimizer objective selector — nerd-mode only (item 9). Shown/hidden by applyNerdKnobVisibility(). -->
+            <div id="opt-objective-wrap" style="display:none;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:0.85em;color:#444;margin-bottom:6px;">
+                <label style="font-weight:600;">Optimize for:
+                    <select id="opt-objective" onchange="setOptObjective(this.value)" style="font-size:0.95em;">
+                        <option value="balanced" selected>Balanced (default)</option>
+                        <option value="legacy">Maximum Legacy</option>
+                        <option value="spend">Maximum Spend</option>
+                        <option value="mintax">Minimal Taxes</option>
+                        <option value="roth">Maximum Roth</option>
+                        <option value="conveffect">Roth Conversion Effectiveness</option>
+                    </select>
+                </label>
+                <span style="color:#888;">re-ranks rows &amp; moves the ⚓ baseline; "Balanced" restores the default</span>
+            </div>
             <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:0.8em;color:#444;padding:4px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
                 <span style="font-weight:600;color:#666;">Row colors:</span>
                 <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>⚓ Baseline — strongest plan with no conversions / no brokerage cycling (Δ columns measure against it)</span>
                 <span><span style="display:inline-block;width:14px;height:14px;background:#90EE90;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Best — wins at least one metric (cell highlight = the winning metric)</span>
-                <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Spend-optimized (✦) — binary search found a higher sustainable spend</span>
+                <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Optimize Spend (✦) — binary search found a higher sustainable spend</span>
                 <span><span style="display:inline-block;width:14px;height:14px;background:#fde8d8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Reverse-optimized (▼) — all strategies failed; highest feasible spend shown</span>
                 <span id="opt-legend-infeasible"><span style="display:inline-block;width:14px;height:14px;background:#e8e8e8;opacity:0.8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;text-decoration:line-through;"></span>Infeasible — existing income already exceeds this bracket ceiling</span>
+                <span id="opt-legend-failed"><span style="display:inline-block;width:14px;height:14px;background:#fde0e0;opacity:0.9;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>🚨 Failed — hidden by default</span>
+            </div>
+            <!-- Symbol legend (item 8) — explains the marks on strategy names / status column. -->
+            <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:0.78em;color:#444;padding:2px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px;">
+                <span style="font-weight:600;color:#666;">Symbols:</span>
+                <span title="Maximize Conversions was enabled — surplus after spending is converted to Roth.">✓ Max Conversions on</span>
+                <span title="Optimize Spend: a binary search found a higher sustainable After-Tax Spend than your input.">✦ Optimize Spend</span>
+                <span title="Optimize Spend hit its search ceiling — the true sustainable spend may be even higher.">✦+ / + hit search ceiling</span>
+                <span title="Reverse-optimized: every strategy failed at your spend, so the highest feasible spend is shown instead.">▼ Reverse-optimized</span>
+                <span title="Cyclic brokerage maneuvering, IRA drawn first."><span style="color:#cc0000;">🗘</span> Cyclic, IRA-first</span>
+                <span title="Cyclic brokerage maneuvering, brokerage drawn first.">🔄 Cyclic, brokerage-first</span>
+                <span title="Optimize Conversions row: swept extra fixed annual Roth conversions ($25k steps) on top of Max Conversions.">⇌ Optimize Conversions</span>
+                <span title="The strategy's bracket / IRMAA / ACA target is unreachable (infeasible).">⚠️ Target unreachable</span>
+                <span title="Plan success — every year of the plan was fully funded.">🟢 Success</span>
+                <span title="Plan failure — the portfolio ran out of money before the end of the plan.">🚨 Failure</span>
+                <span title="The pinned baseline reference row — the strongest no-conversion plan.">⚓ Baseline</span>
             </div>
             <div style="overflow-x:auto;width:fit-content;max-width:100%;">
                 <div id="opt-table" style="display:grid;width:fit-content;"></div>
@@ -917,11 +959,10 @@ window.addEventListener('DOMContentLoaded', function () {
     setupAutoRecalc();
     setupTopScrollSync();   // #2 — mirror horizontal scrollbar above the Annual Details table
     initMCTab();
-    // Avg BETR is an advanced (Kitces) metric — show only in nerd mode (?nerdknob).
-    if (typeof NERD_KNOBS !== 'undefined' && !NERD_KNOBS) {
-        const betrWrap = document.getElementById('stat-betr-wrap');
-        if (betrWrap) betrWrap.style.display = 'none';
-    }
+    // Apply all NERD_KNOBS-gated UI at once (Avg BETR stat, optimizer objective selector, MC nerd
+    // panels, GK params, ACA dropdown options). NERD_KNOBS may be set by ?nerdknob at load, or
+    // flipped later at runtime by the hidden Documentation-page checkbox (item 13).
+    applyNerdKnobVisibility();
     updateProfileAgeDisplay();
     updateGrowthDisplay();
     syncMCMuFromGrowth();

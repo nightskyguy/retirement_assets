@@ -16,8 +16,11 @@ const SPEND_SEARCH_TOLERANCE = 0.005; // Stop binary search when bounds are with
 const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase spending" banner
 
 // Feature flags
-// NERD_KNOBS: shows advanced controls (Monte Carlo params, etc.). Enabled via ?nerdknob URL param.
-const NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
+// NERD_KNOBS: shows advanced controls (Monte Carlo params, optimizer objective/score, ACA, etc.).
+// Enabled via ?nerdknob URL param, OR flipped at runtime by the hidden Documentation-page checkbox
+// (see setNerdKnob / applyNerdKnobVisibility). Therefore a `let`, not a `const` — it can change
+// after load. The runtime flip is NOT persisted to the URL.
+let NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
 
 // Optimizer UI state — replaces window.optimizer* globals.
 const OptimizerState = {
@@ -25,9 +28,93 @@ const OptimizerState = {
     baseline: null,
     sortState: { colKey: 'afterTaxNW', direction: 'desc' },
     showInfeasible: false,
+    showFailed: false,
+    objective: 'balanced',
     perfStats: null,
     noSolutionFloor: null,
 };
+
+// Optimizer "what do you want to maximize?" objectives (nerd-mode only, item 9).
+// Each maps to a per-row metric + direction. 'balanced' is the default weighted Score and keeps
+// the historical baseline-pick behavior; the others re-rank candidates AND re-pick the ⚓ baseline
+// under that single metric. metric(r) returns a comparable number; higher `dir` wins when desc.
+const OPT_OBJECTIVES = {
+    balanced:  { label: 'Balanced (default)',          metric: r => r._baselineScore ?? -Infinity,                 dir: 'desc' },
+    legacy:    { label: 'Maximum Legacy',              metric: r => r.afterTaxNWCurrentDollars ?? -Infinity,       dir: 'desc' },
+    spend:     { label: 'Maximum Spend',               metric: r => r.totals?.spendCurrentDollars ?? -Infinity,    dir: 'desc' },
+    mintax:    { label: 'Minimal Taxes',               metric: r => r.totals?.taxCurrentDollars ?? Infinity,       dir: 'asc'  },
+    roth:      { label: 'Maximum Roth',                metric: r => r.totals?.terminal?.roth ?? -Infinity,         dir: 'desc' },
+    conveffect:{ label: 'Roth Conversion Effectiveness', metric: r => r._convSavings ?? -Infinity,                 dir: 'desc' },
+};
+
+// Returns rows ranked best→worst under an objective. Successful rows always outrank failed ones
+// (a depleted plan can show inflated terminal wealth), matching the table sort tiebreak.
+function rankRowsByObjective(rows, objKey) {
+    const obj = OPT_OBJECTIVES[objKey] || OPT_OBJECTIVES.balanced;
+    const sign = obj.dir === 'asc' ? 1 : -1;
+    return [...rows].sort((a, b) => {
+        const sa = a.totals?.success ? 1 : 0, sb = b.totals?.success ? 1 : 0;
+        if (sa !== sb) return sb - sa;
+        return sign * (obj.metric(a) - obj.metric(b));
+    });
+}
+
+// Flip the nerd-knob at runtime and re-apply every gated UI surface. Called by the hidden
+// Documentation-page checkbox. Not persisted to the URL.
+function setNerdKnob(on) {
+    NERD_KNOBS = !!on;
+    applyNerdKnobVisibility();
+}
+
+// Re-runs all NERD_KNOBS-gated UI so toggling at runtime matches a fresh ?nerdknob load.
+function applyNerdKnobVisibility() {
+    // Avg BETR summary stat (Kitces metric)
+    const betrWrap = document.getElementById('stat-betr-wrap');
+    if (betrWrap) betrWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // Optimizer objective selector
+    const objWrap = document.getElementById('opt-objective-wrap');
+    if (objWrap) objWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // Monte Carlo nerd panels (initMCTab reads _mcNerdMode() → NERD_KNOBS)
+    if (typeof initMCTab === 'function') initMCTab();
+    // Strategy panel (GK params gated) + bracket dropdown (ACA options gated, item 12)
+    if (typeof toggleStrategyUI === 'function') toggleStrategyUI();
+    if (typeof refreshStratRateOptions === 'function') refreshStratRateOptions();
+    // Re-render optimizer table if a run exists (adds/removes Score, Rank, objective re-rank)
+    if (OptimizerState.results && typeof renderOptimizerTable === 'function') {
+        renderOptimizerTable(OptimizerState.results);
+    }
+    // Keep the hidden checkbox in sync (e.g. when ?nerdknob set it true at load)
+    const cb = document.getElementById('secret-nerdknob');
+    if (cb) cb.checked = NERD_KNOBS;
+}
+
+// Optimizer objective setter — wired to the nerd-mode <select id="opt-objective">.
+function setOptObjective(key) {
+    OptimizerState.objective = OPT_OBJECTIVES[key] ? key : 'balanced';
+    if (OptimizerState.results) {
+        recomputeBaselineForObjective();
+        renderOptimizerTable(OptimizerState.results);
+    }
+}
+
+// Picks the ⚓ baseline (best no-conversion / no-cyclic successful row) under the active objective,
+// then recomputes every row's Δ columns against it. 'balanced' reproduces the historical pick
+// (highest weighted Score). Called by runOptimizer and whenever the objective changes.
+function recomputeBaselineForObjective() {
+    const results = OptimizerState.results;
+    if (!results) return;
+    const noConvSuccesses = results.filter(r => r._isNoConv && r.totals.success);
+    OptimizerState.baseline = noConvSuccesses.length > 0
+        ? rankRowsByObjective(noConvSuccesses, OptimizerState.objective)[0]
+        : null;
+    const baselineRow = OptimizerState.baseline;
+    for (const r of results) {
+        r._dNW  = baselineRow ? (r.afterTaxNW   - baselineRow.afterTaxNW)   : null;
+        r._dTax = baselineRow ? (baselineRow.totals.tax - r.totals.tax)     : null;
+        r._dNWCurrent  = baselineRow ? (r.afterTaxNWCurrentDollars - baselineRow.afterTaxNWCurrentDollars) : null;
+        r._dTaxCurrent = baselineRow ? (baselineRow.totals.taxCurrentDollars - r.totals.taxCurrentDollars) : null;
+    }
+}
 
 
 
@@ -997,7 +1084,9 @@ function simulate(inputs) {
         let potentialS2 = (age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate * ssReduction : 0;
         let s1 = alive1 ? potentialS1 : 0;
         let s2 = alive2 ? potentialS2 : 0;
-        let pension = inputs.pensionAnnual * (inputs.pensionCola ? inflation : 1);
+        let pension = (age1 >= (inputs.pensionStartAge || 0))
+            ? inputs.pensionAnnual * (inputs.pensionCola ? inflation : 1)
+            : 0;
 
         // One is deceased (if both decease, it won't get here)
         if (!alive1 || !alive2) {
@@ -1936,6 +2025,7 @@ function getInputs() {
         ss2: +val('ss2'),
         ss2Age: +val('ss2Age'),
         pensionAnnual: +val('pensionAnnual'),
+        pensionStartAge: +val('pensionStartAge') || 0,
         survivorPct: +val('survivorPct'),
         pensionCola: !!valChecked('pensionCola'),
         spendGoal: +val('spendGoal'),
@@ -2117,7 +2207,9 @@ function optimizeSpendDown(baseInputs, strategyOverridesList) {
         let best = null;
         for (const entry of strategyOverridesList) {
             const res = simulate(Object.assign({}, baseInputs, entry.overrides, { spendGoal }));
-            if (res.totals.success) {
+            // GK self-cuts so totals.success is trivially true — require the GK stability floor too,
+            // or the "highest sustainable spend" would be one GK only holds via continuous cuts.
+            if (res.totals.success && gkSpendStable(res, entry.overrides, baseInputs)) {
                 if (!best || res.totals.spend > best.result.totals.spend) {
                     best = { result: res, ...entry };
                 }
@@ -2149,6 +2241,28 @@ function optimizeSpendDown(baseInputs, strategyOverridesList) {
     return { optimizedSpend: lo, ...bestEntry };
 }
 
+// Guyton-Klinger self-adjusts spendGoal downward via its guardrails, so a terminal-balance /
+// totals.success check is trivially satisfied at almost any initial spend (the target just moves
+// to whatever survives). This stability floor rejects runaway initial spends that GK can only hold
+// for a year or two before slashing: the worst REAL delivered spend across the horizon must stay
+// within one guard band of the initial real spend. Returns true for non-GK strategies. Shared by
+// BOTH the forward spend search (optimizeSpend) and the reverse no-solution search (optimizeSpendDown)
+// so neither recommends an artificially high GK spend held only via continuous annual cuts.
+function gkSpendStable(res, overrides, baseInputs) {
+    if (!overrides || overrides.strategy !== 'gk') return true;
+    const log = res.log;
+    if (!log || !log.length) return true;
+    const initialReal = log[0].spendGoal / (log[0].inflationFactor || 1);
+    if (initialReal <= 0) return true;
+    let minReal = Infinity;
+    for (const rec of log) {
+        const real = rec.spendGoal / (rec.inflationFactor || 1);
+        if (real < minReal) minReal = real;
+    }
+    const guardBand = overrides.gkGuard ?? baseInputs.gkGuard ?? 0.20;
+    return minReal >= initialReal * (1 - guardBand);
+}
+
 // Returns the highest-spend simulation result where the portfolio can still fund
 // its required draw (spendGoal minus guaranteed income) in the final year.
 // baseInputs: full inputs object at baseline spendGoal
@@ -2158,25 +2272,8 @@ function optimizeSpend(baseInputs, overrides) {
         const last = res.log[res.log.length - 1];
         const required = Math.max(0, last.spendGoal - (last.guaranteedIncome ?? 0));
         if ((last.portfolioBalance ?? 0) < required) return false;
-
-        // Guyton-Klinger self-adjusts spendGoal downward via its guardrails, so the terminal
-        // portfolio check above is trivially satisfied at almost any initial spend (the target
-        // moves to whatever survives). Add a stability floor: the worst REAL delivered spend
-        // across the horizon must stay within one guard band of the initial real spend. This
-        // rejects runaway initial spends that GK can only hold for a year or two before slashing.
-        if (overrides && overrides.strategy === 'gk') {
-            const log = res.log;
-            const initialReal = log[0].spendGoal / (log[0].inflationFactor || 1);
-            if (initialReal > 0) {
-                let minReal = Infinity;
-                for (const rec of log) {
-                    const real = rec.spendGoal / (rec.inflationFactor || 1);
-                    if (real < minReal) minReal = real;
-                }
-                const guardBand = overrides.gkGuard ?? baseInputs.gkGuard ?? 0.20;
-                if (minReal < initialReal * (1 - guardBand)) return false;
-            }
-        }
+        // GK stability floor (see gkSpendStable) — rejects spends GK only holds by slashing.
+        if (!gkSpendStable(res, overrides, baseInputs)) return false;
         return true;
     }
 
@@ -2441,11 +2538,12 @@ function runOptimizer() {
         addResult('IRMAA Ceil', irmaaTierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, maxConversion: maxConv });
     }
 
-    // Fill bracket — ACA FPL cliffs. Skipped entirely when both persons are 65+ at retirement
-    // start (on Medicare → ACA income limits are irrelevant).
+    // Fill bracket — ACA FPL cliffs. Nerd-mode only (item 12): the ACA cliff model is rough, so it
+    // is excluded from the optimizer sweep unless ?nerdknob is on. Also skipped when both persons
+    // are 65+ at retirement start (on Medicare → ACA income limits are irrelevant).
     const acaDisabled = bothOnMedicareAtStart(base.birthyear1, base.startAge, !!base.hasSpouse,
         base.hasSpouse ? (base.birthyear2 || 0) : 0);
-    if (!acaDisabled) {
+    if (NERD_KNOBS && !acaDisabled) {
         const acaMultiples = [200, 250, 300, 400];
         const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL ⚠️' };
         for (const pct of acaMultiples) {
@@ -2623,20 +2721,11 @@ function runOptimizer() {
             + SPENDABLE_WEIGHT * (r.totals.spendCurrentDollars ?? 0);
     }
 
-    // Pick the baseline: best score (weighted spendable + NW − tax) among successful no-conv rows.
-    const noConvSuccesses = results.filter(r => r._isNoConv && r.totals.success);
-    const baselineRow = noConvSuccesses.length > 0
-        ? noConvSuccesses.reduce((a, b) => (b._baselineScore > a._baselineScore ? b : a))
-        : null;
-    OptimizerState.baseline = baselineRow;
-
-    // Signed deltas vs the baseline (positive = better than baseline).
-    for (const r of results) {
-        r._dNW  = baselineRow ? (r.afterTaxNW   - baselineRow.afterTaxNW)   : null;
-        r._dTax = baselineRow ? (baselineRow.totals.tax - r.totals.tax)     : null;
-        r._dNWCurrent  = baselineRow ? (r.afterTaxNWCurrentDollars - baselineRow.afterTaxNWCurrentDollars)   : null;
-        r._dTaxCurrent = baselineRow ? (baselineRow.totals.taxCurrentDollars - r.totals.taxCurrentDollars)   : null;
-    }
+    // Pick the ⚓ baseline (best no-conv successful row) under the active objective, and compute
+    // every row's Δ columns against it. 'balanced' (default) reproduces the historical weighted-score
+    // pick; a nerd-mode objective (item 9) re-picks the baseline under that single metric.
+    OptimizerState.results = results;
+    recomputeBaselineForObjective();
 
     // Update top-bar stats using the 0% propwd/no-maxConv row (first result, equivalent to baseline)
     const baseline = results[0];
@@ -2644,7 +2733,6 @@ function runOptimizer() {
         updateStats(baseline.totals, baseline.finalNW, baseline.finalNWCurrentDollars);
     }
 
-    OptimizerState.results = results;
     OptimizerState.perfStats = { totalMs: performance.now() - optimizerStart, runsCount: simulationCount };
     OptimizerState.sortState = { colKey: 'afterTaxNW', direction: 'desc' };
     renderOptimizerTable(results);
@@ -2670,11 +2758,13 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
     const reverseRow = results.find(r => r._isReverseOptimized);
     if (reverseRow) {
         const amt = Math.round(reverseRow._spendGoal).toLocaleString();
-        const label = reverseRow._strategyLabel;
+        // innerHTML (not textContent) so the strategy label's markup (e.g. the red 🗘 cyclic span,
+        // ✦/▼ glyphs) renders; the label is app-generated, not user input. Make it clickable to load.
+        const label = `<span style="cursor:pointer;text-decoration:underline;" title="Click to load this strategy" onclick="loadOptimizerResult(${reverseRow._id})">${reverseRow._strategyLabel}</span>`;
         el.style.background = '#f8d7da';
         el.style.borderColor = '#f5c6cb';
         el.style.color = '#721c24';
-        el.textContent = `⚠️ No strategy can fund your current spend goal. The highest sustainable spending found is $${amt}/yr, with all years fully funded. (Strategy: ${label})`;
+        el.innerHTML = `⚠️ No strategy can fund your current spend goal. The highest sustainable spending found is $${amt}/yr, with all years fully funded. (Strategy: ${label})`;
         el.style.display = 'block';
         return;
     }
@@ -2685,11 +2775,12 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
     const best = optimized[0];
     if (best && (best._spendGoal / baseSpendGoal - 1) >= SPEND_SEARCH_MIN_DELTA) {
         const amt = Math.round(best._spendGoal).toLocaleString();
-        const label = best._strategyLabel;
+        // innerHTML + clickable (see reverse branch above).
+        const label = `<span style="cursor:pointer;text-decoration:underline;" title="Click to load this strategy" onclick="loadOptimizerResult(${best._id})">${best._strategyLabel}</span>`;
         el.style.background = '#fff3cd';
         el.style.borderColor = '#ffc107';
         el.style.color = '#856404';
-        el.textContent = `💡 It appears you can increase your spending to $${amt}/yr with all years fully funded. (Strategy: ${label})`;
+        el.innerHTML = `💡 It appears you can increase your spending to $${amt}/yr with all years fully funded. (Strategy: ${label})`;
         el.style.display = 'block';
     } else {
         el.style.display = 'none';
@@ -2708,7 +2799,7 @@ function getOptimizerColumns() {
         },
         {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Conv-Optimizer row. ✦ = spend-optimized. ⚠️ = bracket target unreachable. Click any row to load it.',
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = bracket target unreachable. Click any row to load it.',
             getValue: r => r._strategyLabel,
             getSortValue: r => r._strategyLabel
         },
@@ -2720,7 +2811,7 @@ function getOptimizerColumns() {
         },
         {
             key: 'spendGoal', label: 'Spend Goal',
-            title: 'Annual after-tax spending this strategy targets (today\'s dollars). Normally your input; spend-optimized (✦) rows show a higher sustainable figure found by search.',
+            title: 'Annual after-tax spending this strategy targets (today\'s dollars). Normally your input; Optimize Spend (✦) rows show a higher sustainable figure found by search.',
             getValue: r => Math.round(r._spendGoal).toLocaleString(),
             getSortValue: r => r._spendGoal
         },
@@ -2792,13 +2883,13 @@ function getOptimizerColumns() {
         },
         {
             key: 'betrAvg', label: 'Avg BETR',
-            title: 'Average Break-Even Tax Rate across conversion years. If your expected future marginal rate exceeds this, conversions were advantageous on average. Appears for Conv Optimizer rows (⇌) and standard rows with conversions.',
+            title: 'Average Break-Even Tax Rate across conversion years. If your expected future marginal rate exceeds this, conversions were advantageous on average. Appears for Optimize Conversions rows (⇌) and standard rows with conversions.',
             getValue: r => r.totals.betrAvg != null ? `${(r.totals.betrAvg * 100).toFixed(1)}%` : '—',
             getSortValue: r => r.totals.betrAvg ?? 999
         },
         {
             key: 'convSavings', label: 'Conv Savings',
-            title: 'Lifetime tax savings from the additional IRA→Roth conversions run by Conv Optimizer, vs the same strategy with no extra conversions. Positive = converting more reduces your total lifetime tax bill.',
+            title: 'Lifetime tax savings from the additional IRA→Roth conversions run by Optimize Conversions, vs the same strategy with no extra conversions. Positive = converting more reduces your total lifetime tax bill.',
             getValue: r => r._convSavings != null ? '$' + Math.round(r._convSavings).toLocaleString() : '—',
             getSortValue: r => r._convSavings ?? -Infinity
         }
@@ -2808,12 +2899,25 @@ function getOptimizerColumns() {
     // after NetWealth since it is derived from NetWealth + Spendable.
     if (NERD_KNOBS) {
         const i = cols.findIndex(c => c.key === 'afterTaxNW');
-        cols.splice(i + 1, 0, {
-            key: 'score', label: 'Score',
-            title: 'Baseline-ranking score = after-tax NetWealth + 1.1 × Total Spendable (today\'s dollars). The pinned ⚓ baseline is the no-conversion strategy with the highest score; spending is weighted 10% above bequest. Always in current dollars. Nerd-mode column.',
-            getValue: r => Math.round(r._baselineScore ?? 0).toLocaleString(),
-            getSortValue: r => r._baselineScore ?? -Infinity
-        });
+        const objKey   = OptimizerState.objective || 'balanced';
+        const objLabel = (OPT_OBJECTIVES[objKey] || OPT_OBJECTIVES.balanced).label;
+        // Keep the raw weighted Score column (item 10), and add a Rank column that numbers rows
+        // 1 (best) … N by the currently-selected objective (item 9). Rank is looked up from the
+        // per-render map on OptimizerState; failed rows get '—'.
+        cols.splice(i + 1, 0,
+            {
+                key: 'score', label: 'Score',
+                title: 'Baseline-ranking score = after-tax NetWealth + 1.1 × Total Spendable (today\'s dollars). The pinned ⚓ baseline is the no-conversion strategy with the highest score; spending is weighted 10% above bequest. Always in current dollars. Nerd-mode column.',
+                getValue: r => Math.round(r._baselineScore ?? 0).toLocaleString(),
+                getSortValue: r => r._baselineScore ?? -Infinity
+            },
+            {
+                key: 'rank', label: 'Rank',
+                title: `Rank under the selected objective — "${objLabel}". 1 = best, N = worst among successful plans (failed plans show —). Change the objective with the "Optimize for" selector above. Nerd-mode column.`,
+                getValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : '—',
+                getSortValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : Infinity
+            }
+        );
     }
     return cols;
 }
@@ -2824,14 +2928,24 @@ function renderOptimizerTable(results) {
     // Default: sort by After-Tax NW descending; Spendable descending as tiebreaker
     const sortState = OptimizerState.sortState ?? { colKey: 'afterTaxNW', direction: 'desc' };
 
+    // Rank map (item 10): number successful rows 1 (best) … N under the active objective. Looked up
+    // by the nerd-mode Rank column; failed rows are left unranked ('—').
+    const _ranked = rankRowsByObjective(results.filter(r => r.totals.success), OptimizerState.objective);
+    OptimizerState._rankMap = {};
+    _ranked.forEach((r, idx) => { OptimizerState._rankMap[r._id] = idx + 1; });
+
     // Sort a copy; preserve original _id for click handlers.
     // Pull the baseline out of the body — it is rendered as a pinned reference row on top.
     const baselineRow = OptimizerState.baseline ?? null;
     // Infeasible (bracket-unreachable) rows are hidden by default — toggled via the legend.
     const showInfeasible = !!OptimizerState.showInfeasible;
+    const showFailed = !!OptimizerState.showFailed;
     const infeasibleCount = results.filter(r => r._isBracketInfeasible || r._isACAUntenable).length;
+    // Failed = the portfolio ran out of money (success===false). Hidden by default (item 11).
+    const failedCount = results.filter(r => !r.totals.success).length;
     let display = results.filter(r => !(baselineRow && r._id === baselineRow._id));
     if (!showInfeasible) display = display.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
+    if (!showFailed) display = display.filter(r => r.totals.success);
     const afterTaxCol = columns.find(c => c.key === 'afterTaxNW');
     const spendCol = columns.find(c => c.key === 'spend');
     const col   = columns.find(c => c.key === sortState.colKey);
@@ -2886,8 +3000,11 @@ function renderOptimizerTable(results) {
     // Rows — display:contents wrapper; each cell carries row styling + onclick
     const rowsHtml = display.map(r => {
         const isWinner = bestIds.has(r._id);
+        const isFailed = !r.totals.success;
         const isInfeasible = (r._isBracketInfeasible || r._isACAUntenable) && !isWinner;
-        const rowTitle = isInfeasible
+        const rowTitle = isFailed
+            ? 'Failed — the portfolio ran out of money before the end of the plan (a real shortfall)'
+            : isInfeasible
             ? (r._isACAUntenable
                 ? `ACA subsidy cliff: spending cannot be met within the FPL cap in ${r._acaBreachYears} year(s) — plan untenable at this spend (strict ACA never breaches the cap)`
                 : 'Bracket target exceeded in >50% of years — income sources already push MAGI above this ceiling')
@@ -2899,12 +3016,14 @@ function renderOptimizerTable(results) {
                          || (col.key === 'afterTaxNW' && r._id === colWinners.afterTaxNW)
                          || (col.key === 'rmdtax' && r._id === colWinners.rmdtax);
             const bg = cellWin    ? '#4CAF5080'
+                     : isFailed   ? '#fde0e0'
                      : isInfeasible ? '#e8e8e8'
                      : isWinner   ? '#90EE90'
                      : r._isReverseOptimized ? '#fde8d8'
                      : r._isConvOptimized    ? '#e8f5e9'
                      : r._isSpendOptimized   ? '#dbeafe' : '';
-            const extra = isInfeasible ? 'text-decoration:line-through;opacity:0.55;'
+            const extra = isFailed ? 'opacity:0.75;'
+                        : isInfeasible ? 'text-decoration:line-through;opacity:0.55;'
                         : isWinner     ? 'font-weight:bold;'
                         : (r._isReverseOptimized || r._isConvOptimized || r._isSpendOptimized) ? 'font-style:italic;' : '';
             const bgCss = bg ? `background-color:${bg};` : '';
@@ -2942,6 +3061,20 @@ function renderOptimizerTable(results) {
             legendInfeasEl.innerHTML = `<span onclick="toggleInfeasibleRows()" title="${tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${swatch}Infeasible — ${action}</span>`;
         } else {
             legendInfeasEl.innerHTML = `${swatch}Infeasible — none in this run`;
+        }
+    }
+
+    // Legend — "Failed" item (rows where the portfolio ran out of money). Hidden by default,
+    // click toggles (item 11). Mirrors the Infeasible legend toggle.
+    const legendFailedEl = document.getElementById('opt-legend-failed');
+    if (legendFailedEl) {
+        const swatch = '<span style="display:inline-block;width:14px;height:14px;background:#fde0e0;opacity:0.9;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>';
+        if (failedCount > 0) {
+            const action = showFailed ? `click to hide ${failedCount}` : `click to show ${failedCount} hidden`;
+            const tip = `Failed = the portfolio ran out of money before the end of the plan (a real shortfall, 🚨). Hidden by default — ${showFailed ? 'click to hide them again' : 'click to reveal them'}.`;
+            legendFailedEl.innerHTML = `<span onclick="toggleFailedRows()" title="${tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${swatch}🚨 Failed — ${action}</span>`;
+        } else {
+            legendFailedEl.innerHTML = `${swatch}🚨 Failed — none in this run`;
         }
     }
 
@@ -3021,6 +3154,11 @@ function renderOptimizerTable(results) {
 // Toggle visibility of infeasible (bracket-unreachable) optimizer rows; re-render in place.
 function toggleInfeasibleRows() {
     OptimizerState.showInfeasible = !OptimizerState.showInfeasible;
+    if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
+}
+
+function toggleFailedRows() {
+    OptimizerState.showFailed = !OptimizerState.showFailed;
     if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
 }
 
@@ -3939,30 +4077,54 @@ const milestonePlugin = {
     }
 };
 
-// Compute milestone markers from the simulation log: first spouse death (filing status flips),
-// first underfunded year (delivered income below spend goal), and IRMAA surcharge onset.
+// Compute milestone markers from the simulation log:
+//  1. First death — labelled "Your Passing" / "Spouse Passing" (filing status flips; the deceased's
+//     age becomes '—').
+//  2. Every Guyton-Klinger guardrail spending CUT (gkAdj contains a "cap" adjustment).
+//  3. Every year the IRMAA tier INCREASES over the prior year (e.g. Tier 1→Tier 2), labelled with
+//     the new tier ("IRMAA Tier 2"). Same-or-lower tiers are not marked.
+//  4. Every year net income falls short of the spend goal by more than 10%.
+//  5. Roth conversion break-even — the first year the converting plan overtakes the no-conversion
+//     shadow (totals.convBEYear).
 function computeMilestones(log) {
     const ms = [];
-    let prevStatus = null, deathDone = false, underDone = false, irmaaDone = false;
+    // Numeric IRMAA tier from the string field ("-none-"/"-"→0, "Tier 3 (TOP)"→3).
+    const tierNum = t => { const m = String(t ?? '').match(/(\d+)/); return m ? +m[1] : 0; };
+    const beYear = (typeof lastTotals !== 'undefined' && lastTotals) ? lastTotals.convBEYear : null;
+    let prevStatus = null, deathDone = false, prevTier = 0, beDone = false;
     for (let i = 0; i < log.length; i++) {
         const r = log[i];
         const status = r.status;
+        // 1. Death — first filing-status flip; name who passed (their age shows '—').
         if (!deathDone && prevStatus && status && status !== prevStatus) {
-            ms.push({ x: i, label: 'First death', color: '#7b1fa2' });
+            const youGone = (r.age1 == null || r.age1 === '—');
+            ms.push({ x: i, label: youGone ? 'Your Passing' : 'Spouse Passing', color: '#7b1fa2' });
             deathDone = true;
         }
         if (status) prevStatus = status;
-        if (!underDone) {
-            const sg = r.spendGoal ?? r.SpendGoal;
-            const ni = r.netIncome ?? r.NetIncome;
-            if (sg > 0 && ni != null && ni < sg * 0.99) {
-                ms.push({ x: i, label: 'Underfunded', color: '#c0392b' });
-                underDone = true;
-            }
+        // 4. Net income shortfall > 10% of the spend goal — every such year. (Computed first so a
+        // shortfall year suppresses the GK-cut marker below — a shortfall is the more important note.)
+        const sg = r.spendGoal ?? r.SpendGoal;
+        const ni = r.netIncome ?? r.NetIncome;
+        const isShort = (sg > 0 && ni != null && ni < sg * 0.90);
+        // 2. GK guardrail cut — gkAdj like "−10%cap" (may be combined with "no-CPI"). Skipped when
+        // the same year is already flagged as a shortfall.
+        if (!isShort && String(r.gkAdj ?? '').includes('cap')) {
+            ms.push({ x: i, label: 'GK cut', color: '#d35400' });
         }
-        if (!irmaaDone && (r.IRMAA ?? 0) > 0) {
-            ms.push({ x: i, label: 'IRMAA starts', color: '#2980b9' });
-            irmaaDone = true;
+        // 3. IRMAA tier increase over the prior year.
+        const tier = tierNum(r.IRMAATier);
+        if (tier > prevTier && tier > 0) {
+            ms.push({ x: i, label: 'IRMAA ' + String(r.IRMAATier), color: '#2980b9' });
+        }
+        prevTier = tier;
+        if (isShort) {
+            ms.push({ x: i, label: 'Shortfall', color: '#c0392b' });
+        }
+        // 5. Roth conversion break-even year.
+        if (!beDone && beYear != null && r.year === beYear) {
+            ms.push({ x: i, label: 'Roth Break Even', color: '#16a085' });
+            beDone = true;
         }
     }
     _chartMilestones = ms;
@@ -4237,7 +4399,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                 // converted amount, double-counting it against the separate Conversions bar.
                 mkUp('Guaranteed (SS+Pension)', '#3498dbB0', r => r.inflows  ?? 0),
                 mkUp('IRA draw',                '#e67e22B0', r => (r.IRAwd ?? 0)      * _acctScale(r)),
-                mkUp('Brokerage draw',          '#2980b9B0', r => (r['Brokerage-'] ?? 0) * _acctScale(r)),
+                mkUp('Brokerage draw',          '#4F4FDC', r => (r['Brokerage-'] ?? 0) * _acctScale(r)),
                 mkUp('Cash draw',               '#27ae60B0', r => (r.CashWD ?? 0)     * _acctScale(r)),
                 mkUp('Roth draw',               '#8e44adB0', r => (r.RothWD ?? 0)     * _acctScale(r)),
                 mkDn('Taxes',                   '#A30000C0', r => r.totalTax ?? 0),
@@ -4264,7 +4426,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             data: { labels, datasets: [
                 mkE('IRA earnings',       '#e67e22B0', r => r['-iraG']),
                 mkE('Roth earnings',      '#8e44adB0', r => r.rothG),
-                mkE('Brokerage earnings', '#2980b9B0', r => r.brokerageG),
+                mkE('Brokerage earnings', '#4F4FDC', r => r.brokerageG),
                 mkE('Cash earnings',      '#27ae60B0', r => r.cashG),
                 { label: 'Withdrawals', type: 'bar', backgroundColor: '#c0392bC0', stack: 'flow', order: 2,
                   data: log.map(r => -Math.max(0, r.netOut ?? 0) * adj(r)) },
@@ -4325,7 +4487,7 @@ function updateCharts(log) {
             datasets: [
                 mkLine(iraLabel,      '#e67e22', iraData),
                 mkLine(rothLabel,     '#8e44ad', rothData),
-                mkLine('Brokerage',   '#2980b9', r => r.Brokerage   * adj(r)),
+                mkLine('Brokerage',   '#4F4FDC', r => r.Brokerage   * adj(r)),
                 mkLine('Cash',        '#27ae60', r => r.Cash        * adj(r)),
                 mkLine('TotalWealth', '#555555', r => r.totalWealth * adj(r))
             ]
@@ -4392,7 +4554,7 @@ function updateCharts(log) {
                 mkInc('Roth WD',         '#8e44adB0', r => r.RothWD),
                 mkInc('Gains+Div',       '#1abc9cB0', r => r.CapGains + r.cashDividends),
                 mkInc('Cash WD',         '#27ae60B0', r => r.CashWD ?? 0),
-                mkInc('Brokerage',       '#0000CCB0', r => basisReturn(r)),
+                mkInc('Brokerage',       '#4F4FDC', r => basisReturn(r)),
                 // Visual separator between spending and expense legend items
                 { label: '│', type: 'bar', data: log.map(() => 0), backgroundColor: 'transparent', borderWidth: 0, stack: 'income', order: 2 },
                 // Expenses stack on top of the Spendable Income line (unscaled absolute amounts)
@@ -4494,7 +4656,7 @@ function setupAutoRecalc() {
         Brokerage: 'Brokerage', BrokerageBasis: 'Brok Basis',
         Roth: 'Roth', Cash: 'Cash',
         ss1: 'My SS', ss1Age: 'SS Age', ss2: 'Spouse SS', ss2Age: 'Spouse SS Age',
-        pensionAnnual: 'Pension', survivorPct: 'Survivor%', pensionCola: 'Pension COLA',
+        pensionAnnual: 'Pension', pensionStartAge: 'Pension Age', survivorPct: 'Survivor%', pensionCola: 'Pension COLA',
         inflation: 'Inflation', cpi: 'CPI/COLA', growth: 'Growth', cashYield: 'Cash Yield',
         dividendRate: 'Dividends', STATEname: 'State Tax', ssFailYear: 'SS Fail Yr', ssFailPct: 'SS Payout%',
         birthmonth1: 'Your Birth Mo', birthmonth2: 'Spouse Birth Mo', dividendReinvest: 'Div Reinvest',
@@ -4568,7 +4730,7 @@ const OPT_LONG_TO_SHORT = {
     IRA1:'i1', IRA2:'i2', Roth:'ro', Roth2:'ro2',
     Brokerage:'bk', BrokerageBasis:'bb', dividendReinvest:'dr', Cash:'ca', CashReserve:'cr',
     ss1:'ss1', ss1Age:'ss1a', ss2:'ss2', ss2Age:'ss2a',
-    pensionAnnual:'pa', pensionCola:'pc', survivorPct:'sur', dividendRate:'div',
+    pensionAnnual:'pa', pensionStartAge:'psa', pensionCola:'pc', survivorPct:'sur', dividendRate:'div',
     STATEname:'s', ssFailYear:'sfy', ssFailPct:'sfp',
     growth:'g', cashYield:'cy', inflation:'inf', cpi:'cpi', futureIRATaxRate:'fitr',
     comp_IRA1_ratio:'c1r', comp_IRA1_intl:'c1x',
@@ -4946,10 +5108,13 @@ function applyScenario(data) {
         if (key === 'qcdMode') continue;
         const element = document.getElementById(key);
         if (element) {
-            // Handle percentage values (multiply by 100 for display)
+            // Handle percentage values (multiply by 100 for display). getInputs() stores these as
+            // decimals (e.g. gkGuard 20% → 0.20), so they MUST be scaled back ×100 on load or the
+            // field shows 0.2 and the next getInputs() re-divides to 0.002 (GK then reads guard=0).
             if (['spendChange', 'inflation', 'cpi', 'growth',
                 'cashYield', 'dividendRate', 'ssFailPct',
-                'propWithdraw', 'iraWithdrawPct'].includes(key)) {
+                'propWithdraw', 'iraWithdrawPct',
+                'gkGuard', 'gkAdjPct', 'futureIRATaxRate'].includes(key)) {
                 element.value = (value * 100).toFixed(3);
             } else if (key === 'stratRate' && ((data.stratIRMAATier ?? -1) >= 0 || (data.stratACAMultiple ?? 0) > 0)) {
                 // Already set the dropdown above (IRMAA or ACA); skip numeric override
@@ -4979,6 +5144,18 @@ function applyScenario(data) {
 
     // Sync MC mode UI (grays out μ/σ when bootstrap mode is restored from scenario)
     if (typeof updateMCModeUI === 'function') updateMCModeUI();
+
+    // Refresh derived/display fields that normally update via oninput handlers. Setting .value
+    // programmatically does NOT fire those handlers, so the "Real Growth" line, age/RMD readouts,
+    // bracket dropdown, and other hints would otherwise show stale values after a scenario load.
+    if (typeof updateGrowthDisplay === 'function') updateGrowthDisplay();      // Real Growth under Growth field (uses growth, inflation, dividendRate)
+    if (typeof syncMCMuFromGrowth === 'function') syncMCMuFromGrowth();        // MC μ tracks Growth
+    if (typeof updateProfileAgeDisplay === 'function') updateProfileAgeDisplay(); // ages / RMD start / projected RMD
+    if (typeof refreshStratRateOptions === 'function') refreshStratRateOptions(); // bracket/IRMAA labels (CPI + filing status)
+    if (typeof updateBracketFeedback === 'function') updateBracketFeedback();
+    if (typeof updateSuggestSpendTooltip === 'function') updateSuggestSpendTooltip();
+    if (typeof updateIRAGoalHint === 'function') updateIRAGoalHint();
+    if (typeof updateCompAdvisory === 'function') updateCompAdvisory();
 
     // Trigger any recalculations your app needs
     if (typeof runSimulation === 'function') {
@@ -5539,6 +5716,9 @@ function updateACAWarning() {
     const warnEl  = document.getElementById('aca-age-warn');
     if (!sel || !warnEl) return;
 
+    // No ACA options present (nerd mode off, item 12) → nothing to warn about.
+    if (![...sel.options].some(o => o.value.startsWith('aca'))) { warnEl.style.display = 'none'; return; }
+
     const by1       = +val('birthyear1') || 0;
     const startAge  = +val('startAge')   || 0;
     const hasSpouse = !!valChecked('hasSpouse');
@@ -5635,16 +5815,18 @@ function generateStratRateOptions() {
     }
 
     // ── ACA FPL cliffs ────────────────────────────────────────────────────────
+    // Nerd-mode only (item 12): the ACA cliff model is rough, so these options are hidden from the
+    // bracket dropdown unless ?nerdknob is on (or the hidden runtime toggle is enabled).
     // FPL base (2025): 2-person $20,440; 1-person $15,060. CPI-approx for future years.
     const FPL_BASE_YEAR = 2025;
     const fplBase = isMFJ ? 20440 : 15060;
     const fplCpiAdj = Math.pow(1 + cpi, Math.max(0, currentYear - FPL_BASE_YEAR + 1));
-    const acaEntries = [
+    const acaEntries = NERD_KNOBS ? [
         { pct: 200, label: 'ACA 200% FPL' },
         { pct: 250, label: 'ACA 250% FPL' },
         { pct: 300, label: 'ACA 300% FPL' },
         { pct: 400, label: 'ACA 400% FPL ⚠️' },
-    ];
+    ] : [];
     for (const { pct, label } of acaEntries) {
         const limit = Math.round(fplBase * pct / 100 * fplCpiAdj);
         options.push({ value: `aca${pct}`, label: `${label}  ·  $${limit.toLocaleString()}`, limit });

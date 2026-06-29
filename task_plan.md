@@ -12,7 +12,7 @@ Goal: Complete open features from the original priority list plus deferred items
 |---|-------|-------------|--------|-----------|
 | — | **P1** | Suggest Spend Goal (38#10) | **complete** | — |
 | 1 | **P2** | Cash Reserve enforcement (38#9) | pending | — |
-| 2 | **PA** | Pension Start Age | pending | — |
+| 2 | **PA** | Pension Start Age | **complete** | — |
 | 3 | **PB** | Lumpy Spending (no URL encoding) | pending | — |
 | 4 | **PC** | Auto-Persist + Restore Offer | pending | — |
 | 5 | **P4** | Creeping Tax Rate Model | pending | — |

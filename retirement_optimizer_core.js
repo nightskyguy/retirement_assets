@@ -1393,6 +1393,7 @@ function simulate(inputs) {
             filingStatus: status, ages: [age1, age2],
             totalSS: s1 + s2, irmaaAnnualCost: irmaa,
             earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+            pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
             qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
             taxExemptInterest: 0, state: STATEname
         })
@@ -1473,6 +1474,7 @@ function simulate(inputs) {
             filingStatus: status, ages: [age1, age2],
             totalSS: s1 + s2, irmaaAnnualCost: irmaa,
             earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+            pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
             qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
             taxExemptInterest: 0, state: STATEname
         })
@@ -1554,6 +1556,7 @@ function simulate(inputs) {
                 tax = calculateTaxes({
                     filingStatus: status, ages: [age1, age2], totalSS: s1 + s2, irmaaAnnualCost: irmaa,
                     earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+                    pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
                     qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
                     taxExemptInterest: 0, state: STATEname
                 });
@@ -1666,6 +1669,7 @@ function simulate(inputs) {
                 const _exTaxCalc = calculateTaxes({
                     filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
                     irmaaAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: cpiRate,
+                    pensionIncome: pension, iraIncome: taxableRMD + (netWithdrawals.IRA ?? 0) + _gross,
                     qualifiedDiv: taxableDividends, capGains: capitalGains,
                     hsaContrib: 0, taxExemptInterest: 0, state: STATEname
                 });
@@ -1695,6 +1699,7 @@ function simulate(inputs) {
             const shadowConvCalc = calculateTaxes({
                 filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
                 irmaaAnnualCost: 0, earnedIncome: convShadowEI, inflation: cpiRate,
+                pensionIncome: pension, iraIncome: taxableRMD + Math.max(0, (netWithdrawals.IRA ?? 0) - totalConverted),
                 qualifiedDiv: taxableDividends, capGains: capitalGains,
                 hsaContrib: 0, taxExemptInterest: 0, state: STATEname
             });
@@ -1712,6 +1717,7 @@ function simulate(inputs) {
             const shadowExcessCalc = calculateTaxes({
                 filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
                 irmaaAnnualCost: 0, earnedIncome: excessShadowEI, inflation: cpiRate,
+                pensionIncome: pension, iraIncome: taxableRMD + Math.max(0, (netWithdrawals.IRA ?? 0) - excessCashOC),
                 qualifiedDiv: taxableDividends, capGains: capitalGains,
                 hsaContrib: 0, taxExemptInterest: 0, state: STATEname
             });
@@ -5642,6 +5648,7 @@ function computeSuggestedSpend() {
         filingStatus: status,
         totalSS:      (inp.ss1||0) + (inp.ss2||0),
         earnedIncome: (inp.pensionAnnual||0) + portfolioWd,
+        pensionIncome:(inp.pensionAnnual||0), iraIncome: portfolioWd,
         state:        inp.STATEname || 'CA',
         ages,
         inflation:    1.0,

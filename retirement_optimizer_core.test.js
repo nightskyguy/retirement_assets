@@ -44,6 +44,7 @@ vm.runInContext(fs.readFileSync(path.join(dir, 'displayhelpers.js'), 'utf8'), ct
 
 const simulate = ctx.simulate;
 const optimizeSpend = ctx.optimizeSpend;
+const calculateTaxes = ctx.calculateTaxes;
 const getLTCGBracketRoom = ctx.getLTCGBracketRoom;
 const compactNum = ctx.compactNum;
 const parseShorthand = ctx.window.DisplayHelpers.parseShorthand;
@@ -697,6 +698,41 @@ test('true ruin: all accounts incl. IRA exhausted → shortfall still reported',
     const r = simulate({ ...CAP_BASE, IRA1: 80000, IRA2: 0, Brokerage: 0, Cash: 0, spendGoal: 150000 });
     assert(_sumAbsShortfall(r.log) > 1000, 'genuine ruin must still surface a shortfall');
     assert(!r.totals.success, 'an underfunded plan must not report success');
+});
+
+// ── State retirement-income exclusion (IL/PA full exemption) ────────────────────
+test('IL exempts IRA/pension distributions from state tax', () => {
+    const common = { filingStatus: 'MFJ', ages: [70, 70], state: 'IL',
+                     earnedIncome: 40000 + 80000, qualifiedDiv: 0, capGains: 0 };
+    const noExcl = calculateTaxes({ ...common });                                  // no split → all taxed
+    const withExcl = calculateTaxes({ ...common, pensionIncome: 40000, iraIncome: 80000 });
+    assert(noExcl.stateTax > 0, 'baseline IL state tax should be > 0 when retirement income is taxed');
+    assertNear(withExcl.stateTax, 0, 'IL state tax should be ~0 once retirement income is fully excluded', 1);
+});
+
+test('PA exempts IRA/pension distributions from state tax', () => {
+    const common = { filingStatus: 'MFJ', ages: [70, 70], state: 'PA',
+                     earnedIncome: 90000, qualifiedDiv: 0, capGains: 0 };
+    const noExcl = calculateTaxes({ ...common });
+    const withExcl = calculateTaxes({ ...common, iraIncome: 90000 });
+    assert(noExcl.stateTax > 0, 'baseline PA state tax should be > 0');
+    assertNear(withExcl.stateTax, 0, 'PA state tax should be ~0 once retirement income is excluded', 1);
+});
+
+test('IL still taxes non-retirement income (interest/dividends not exempt)', () => {
+    // $80k IRA (exempt) + $30k ordinary dividends (NOT exempt) → state tax on the $30k only.
+    const r = calculateTaxes({ filingStatus: 'MFJ', ages: [70, 70], state: 'IL',
+                               earnedIncome: 80000 + 30000, ordDivInterest: 30000,
+                               iraIncome: 80000 });
+    assert(r.stateTax > 0, 'IL should still tax the non-retirement (dividend/interest) portion');
+});
+
+test('regression: exclusion params are inert for a non-exclusion state (CA)', () => {
+    const common = { filingStatus: 'MFJ', ages: [70, 70], state: 'CA',
+                     earnedIncome: 120000, qualifiedDiv: 0, capGains: 0 };
+    const base = calculateTaxes({ ...common });
+    const withParams = calculateTaxes({ ...common, pensionIncome: 40000, iraIncome: 80000 });
+    assertNear(withParams.stateTax, base.stateTax, 'CA state tax must be identical with/without the new params', 0.01);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

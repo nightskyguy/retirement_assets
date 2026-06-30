@@ -141,7 +141,7 @@
 </style>
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="displayhelpers.js"></script>
-<script src="taxengine.js"></script>
+<script src="taxengine.js?v=111104"></script>
 <script src="retirement_optimizer_core.js"></script>
 <script src="retirement_optimizer_tests.js?v=2"></script>
 </head>
@@ -201,6 +201,17 @@
       <div class="range-ends"><span>$0</span><span>$80k</span></div>
       <input type="text" id="num-ss" value="0" autocomplete="off"
              style="margin-top:5px" oninput="numToSlider('num-ss','sl-ss','ss-val'); run()">
+    </div>
+
+    <div class="ctrl">
+      <div class="ctrl-hdr"><label>Retirement Income (IRA/401k/pension)</label><span class="val" id="retinc-val">$0</span></div>
+      <input type="text" id="num-retinc" value="0" autocomplete="off"
+             placeholder="Portion of ordinary income from retirement plans" oninput="updRetInc(); run()">
+      <label style="display:flex;align-items:center;gap:.4rem;margin-top:6px;font-size:.85em;cursor:pointer">
+        <input type="checkbox" id="chk-retinc-swept" onchange="run()">
+        Swept income is all retirement distributions
+      </label>
+      <div class="ctrl-note">Used only by states that exempt retirement income (e.g. IL, PA). When checked, the entire ordinary-income axis is treated as retirement distributions.</div>
     </div>
 
     <div class="ctrl">
@@ -344,6 +355,7 @@ const TIER_CFG = [
 const cfg = {
   status:'MFJ', state:'CA', ages:[65,65],
   ssIncome:0, propTax:0,
+  retirementIncome:0, retirementSwept:false,
   cgSale:0, cgBasisPct:60,
   year:2026, inflation:2.5, medicareExtra:2.5,
   obbaOn:true, saltHigh:true
@@ -365,10 +377,14 @@ function calcAt(ordInc) {
   // Suppress senior deduction after its sunset (2029+); SALT elevated cap continues through 2029
   const effectiveObbaOn = obbaOn && year <= obbaSen.sunsetYear;
 
+  // Retirement-income portion of the swept ordinary income (for state exclusion states like IL/PA).
+  const retInc = cfg.retirementSwept ? ordInc : Math.min(cfg.retirementIncome, ordInc);
+
   const r = calculateTaxes({
     filingStatus:    status,
     ages:            ages,
     earnedIncome:    ordInc,
+    iraIncome:       retInc,
     totalSS:         ssIncome,
     capGains:        cgGain,
     inflation:       inf,
@@ -1054,6 +1070,7 @@ function numToSlider(nid, sid, vid) {
   document.getElementById(vid).textContent = DisplayHelpers.formatDollar(v);
 }
 function updProp()   { document.getElementById('prop-val').textContent = DisplayHelpers.formatDollar(DisplayHelpers.parseShorthand(document.getElementById('num-prop').value) || 0); }
+function updRetInc() { document.getElementById('retinc-val').textContent = DisplayHelpers.formatDollar(DisplayHelpers.parseShorthand(document.getElementById('num-retinc').value) || 0); }
 function updYear()   { document.getElementById('year-display').textContent = document.getElementById('sl-year').value; }
 function updInf()    { document.getElementById('inf-val').textContent  = document.getElementById('sl-inf').value+'%'; }
 function updMed()    { document.getElementById('med-val').textContent  = '+'+document.getElementById('sl-med').value+'%'; }
@@ -1096,6 +1113,8 @@ function readCfg() {
   cfg.ages[0]     = +document.getElementById('age1').value  || 40;
   cfg.ages[1]     = +document.getElementById('age2').value  || 40;
   cfg.ssIncome    = DisplayHelpers.parseShorthand(document.getElementById('num-ss').value)     || 0;
+  cfg.retirementIncome = DisplayHelpers.parseShorthand(document.getElementById('num-retinc').value) || 0;
+  cfg.retirementSwept  = document.getElementById('chk-retinc-swept').checked;
   cfg.propTax     = DisplayHelpers.parseShorthand(document.getElementById('num-prop').value)   || 0;
   cfg.cgSale      = DisplayHelpers.parseShorthand(document.getElementById('num-cg-sale').value)|| 0;
   cfg.cgBasisPct  = +document.getElementById('sl-cg-basis').value;
@@ -1124,8 +1143,13 @@ function buildStateNotes() {
     .filter(k => TAXData[k].STATE !== undefined && TAXData[k].NOTE)
     .sort((a, b) => a === 'no' ? 1 : b === 'no' ? -1 : TAXData[a].STATE.localeCompare(TAXData[b].STATE));
   if (noted.length === 0) { section.style.display = 'none'; return; }
-  list.innerHTML = noted.map(k =>
-    `<li><strong>${TAXData[k].STATE}:</strong> ${TAXData[k].NOTE}</li>`
+  const curYear = new Date().getFullYear();
+  list.innerHTML = noted.map(k => {
+    const dataYear = TAXData[k].YEAR || (TAXData.FEDERAL && TAXData.FEDERAL.YEAR) || 0;
+    const stale = (dataYear && curYear > dataYear) ? ` (${curYear}: ${dataYear} rules applied until updated)` : '';
+    const yr = dataYear ? `📅 ${dataYear}${stale} — ` : '';
+    return `<li><strong>${TAXData[k].STATE}:</strong> ${yr}${TAXData[k].NOTE}</li>`;
+  }
   ).join('');
 }
 
@@ -1155,7 +1179,7 @@ if (_initPi !== null) updateInfoPanel(_initPi);
 initInfoPanel();
 
 // Attach numeric formatting to dollar inputs (after init so URL-loaded values are formatted)
-['num-ss', 'num-prop', 'num-cg-sale'].forEach(id => {
+['num-ss', 'num-retinc', 'num-prop', 'num-cg-sale'].forEach(id => {
   const el = document.getElementById(id);
   if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0 });
 });
@@ -1185,6 +1209,8 @@ function buildShareParams() {
     ob: cfg.obbaOn  ? 1 : 0,
     sh: cfg.saltHigh ? 1 : 0
   };
+  if (cfg.retirementIncome) p.ri = cfg.retirementIncome;
+  if (cfg.retirementSwept)  p.rw = 1;
   if (pinnedIncome !== null) p.pi = pinnedIncome;
   if (!isFullZoom()) { p.zl = zoomMin; p.zh = zoomMax; p.zs = zoomStep; }
   if (!autoZoomOn) p.az = 0;
@@ -1280,6 +1306,13 @@ function loadFromURL() {
     document.getElementById('sl-ss').value  = Math.min(v, 80000);
     document.getElementById('ss-val').textContent = '$'+v.toLocaleString();
   }
+
+  if (p.has('ri')) {
+    const v = +p.get('ri');
+    document.getElementById('num-retinc').value = v;
+    document.getElementById('retinc-val').textContent = '$'+v.toLocaleString();
+  }
+  if (p.has('rw')) document.getElementById('chk-retinc-swept').checked = p.get('rw') === '1';
   if (p.has('pt')) {
     const v = +p.get('pt');
     document.getElementById('num-prop').value = v;

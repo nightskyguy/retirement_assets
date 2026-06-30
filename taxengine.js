@@ -163,7 +163,7 @@ var TAXData = {
 		STATE: 'California',
 		YEAR: 2026,
 		Default: true,
-		NOTE: 'Excludes CA SDI and CA personal exemption credits.',
+		NOTE: 'Excludes CA SDI and CA personal exemption credits. Because those credits are not applied, the California tax shown here is slightly over-calculated — your actual California tax would be a bit lower.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		// Thresholds inflation-adjusted by CA FTB (~2.971% CCPI); 13.3% = 12.3% + 1% MHSA surtax on income >$1M.
 		// MFJ brackets >$1M: $1M triggers MHSA (+1%), nominal 12.3% bracket starts at $1,442,628 (= 2×SGL).
@@ -192,7 +192,7 @@ var TAXData = {
 	CT: {
 		STATE: 'Connecticut',
 		YEAR: 2026,  // No rate or bracket changes for 2026
-		NOTE: 'Uses personal exemptions ($24,000 MFJ / $15,000 Single) instead of a standard deduction. Exemptions phase out at higher incomes — phase-out not modeled.',
+		NOTE: 'Retirement income: Connecticut fully exempts pension and annuity income below ~$75,000 (Single)/$100,000 (MFJ) federal AGI; this model taxes pension income fully, so tax may be overstated. Uses personal exemptions ($24,000 MFJ / $15,000 Single) instead of a standard deduction. Exemptions phase out at higher incomes — phase-out not modeled.',
 		SSTaxation: 0.25,  // Taxes SS benefits above 75k or 100k (MFJ) at 25%	
 		MFJ: {
 			std: 24000,  // CT uses personal exemptions instead, not standard deduction
@@ -226,6 +226,7 @@ var TAXData = {
 	GA: {
 		STATE: 'Georgia',
 		YEAR: 2026,
+		NOTE: 'Retirement income: Georgia exempts up to $65,000 of retirement income per person age 65+ ($35,000 for ages 62–64), covering IRA, pension, interest, dividends and capital gains. This model does NOT apply that exclusion, so Georgia tax is overstated for eligible retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: {2026: 0.0499, 2027: 0.0489, 2028: 0.0479 }, // Decreasing 0.1%/yr (10bp) toward 3.99%
 		MFJ: {
@@ -270,8 +271,11 @@ var TAXData = {
 	IL: {
 		STATE: 'Illinois',
 		YEAR: 2026,  // Flat tax, rate unchanged; personal exemption increased to $2,925/person
-		NOTE: 'Personal exemptions ($5,850 MFJ / $2,925 Single) phase out above $500k AGI (MFJ) or $250k AGI (Single) — phase-out not modeled.',
+		NOTE: 'Retirement-account distributions (IRA/401k/pension) are exempt from Illinois tax; interest, dividends, and capital gains remain taxable. Personal exemptions ($5,850 MFJ / $2,925 Single) phase out above $500k AGI (MFJ) or $250k AGI (Single) — phase-out not modeled.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		// IL Schedule M subtracts federally-taxed retirement income (qualified plans, IRA distributions,
+		// govt/RR/military pensions). Assumes retirees are past plan-qualification age.
+		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'] },
 		FLAT_RATE: 0.0495,  // 4.95% flat rate for all filers (unchanged)
 		MFJ: {
 			std: 5850,  // Illinois personal exemption: 2 × $2,925 per person
@@ -316,7 +320,7 @@ var TAXData = {
 	MD: {
 		STATE: 'Maryland',
 		YEAR: 2026,  // Brackets effective July 1, 2025 remain in effect; std deductions COLA-indexed (may be slightly higher)
-		NOTE: 'Maryland county/local income taxes (2.25%–3.3% depending on county) are levied on top of state tax and are not modeled.',
+		NOTE: 'Retirement income: Maryland excludes up to ~$39,500 of qualified pension/401k income for filers 65+ or disabled (traditional IRAs do not qualify); this model does not apply that exclusion, so tax is overstated for eligible retirees. Maryland county/local income taxes (2.25%–3.3% depending on county) are levied on top of state tax and are not modeled.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		CAPITAL_GAINS: {
 			MFJ: { brackets: [ {l: 350000 - 1, r: 0.0}, {l: Infinity, r: 0.02 }] },
@@ -361,6 +365,7 @@ var TAXData = {
 	MI: {
 		STATE: 'Michigan',
 		YEAR: 2026,
+		NOTE: 'Retirement income: Michigan is phasing retirement-income exemptions back in (2023 law); by 2026 a large share of pension and IRA income is deductible depending on birth-year cohort. This model taxes it fully, so Michigan tax is overstated for retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.0425,  // 4.25% — general fund did not exceed inflation so no rate reduction triggered
 		MFJ: {
@@ -381,6 +386,7 @@ var TAXData = {
 	NY: {
 		STATE: 'New York',
 		YEAR: 2026,
+		NOTE: 'Retirement income: New York fully exempts government and military pensions and excludes up to $20,000 per person of private pension and IRA income (age 59½+). This model taxes all of it, so New York tax is overstated for retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		// FY2026 budget (signed May 2025): first 5 brackets each cut 0.1%; top brackets unchanged.
 		// A further 0.1% cut phases in for 2027 (total 0.2% reduction fully phased in by 2027).
@@ -445,7 +451,10 @@ var TAXData = {
 	PA: {
 		STATE: 'Pennsylvania',
 		YEAR: 2026,
+		NOTE: 'Retirement-account distributions (IRA/401k/pension) after age 59½/retirement are exempt from Pennsylvania tax; interest, dividends, and capital gains remain taxable. Assumes retirees are 59½+.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
+		// PA does not tax distributions from eligible employer plans or IRAs after 59½/retirement.
+		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'] },
 		FLAT_RATE: 0.0307,  // 3.07% flat rate (unchanged since 2004)
 		MFJ: {
 			std: 0,  // Pennsylvania has no standard deduction
@@ -465,7 +474,7 @@ var TAXData = {
 	VA: {
 		STATE: 'Virginia',
 		YEAR: 2026,
-		NOTE: 'Elevated standard deduction ($24,000 MFJ / $12,000 Single, per HB1754) sunsets after TY2026 unless extended by the legislature.',
+		NOTE: 'Retirement income: Virginia offers a $12,000 age deduction for filers 65+ (phased out at higher income); this model does not apply it, so tax may be overstated for older retirees. Elevated standard deduction ($24,000 MFJ / $12,000 Single, per HB1754) sunsets after TY2026 unless extended by the legislature.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		// HB1754: std deduction raised to $12,000/$24,000 (TY2025-2026, indexed for inflation); sunset after 2026 unless extended.
 		// HB1754 also adds 7% top bracket on income > $600,000 beginning TY2026.
@@ -539,7 +548,7 @@ var TAXData = {
 		STATE: 'Alabama',
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
-		NOTE: 'Brackets unchanged since 2006 (not inflation-indexed). Alabama allows a deduction for federal income taxes paid — not modeled.',
+		NOTE: 'Retirement income: Alabama exempts traditional defined-benefit pension income but taxes IRA/401k withdrawals; this model taxes all of it, so tax may be overstated for pension recipients. Brackets unchanged since 2006 (not inflation-indexed). Alabama allows a deduction for federal income taxes paid — not modeled.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 8500,
@@ -583,6 +592,7 @@ var TAXData = {
 	CO: {
 		STATE: 'Colorado',
 		YEAR: 2026,
+		NOTE: 'Retirement income: Colorado lets filers 65+ deduct all federally-taxed Social Security plus up to $24,000 of pension/annuity and IRA income ($20,000 for ages 55–64). This model does NOT apply that subtraction, so Colorado tax is overstated for retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.044,
 		MFJ: {
@@ -624,6 +634,7 @@ var TAXData = {
 	KY: {
 		STATE: 'Kentucky',
 		YEAR: 2026,
+		NOTE: 'Retirement income: Kentucky exempts up to $31,110 of retirement income per person (pension and IRA/401k). This model taxes all of it, so Kentucky tax is overstated for retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.04,
 		MFJ: {
@@ -643,49 +654,49 @@ var TAXData = {
 	// MAINE - 2025 (brackets inflation-adjusted annually by Maine Revenue Services)
 	ME: {
 		STATE: 'Maine',
-		YEAR: 2025,
-		NOTE: 'Brackets reflect 2025 values; 2026 figures were not yet available. Maine Revenue Services adjusts brackets annually for inflation.',
+		YEAR: 2026,
+		NOTE: 'Retirement income: Maine deducts up to ~$30,000 of pension income (reduced by Social Security received); this model does not apply that deduction, so tax is overstated for pension recipients. Brackets reflect 2026 values (inflation-adjusted by Maine Revenue Services); rates unchanged.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 'FEDERAL',  // ME uses federal standard deduction
 			brackets: [
-				{ l: 50620, r: 0.058 },
-				{ l: 119780, r: 0.0675 },
+				{ l: 54850, r: 0.058 },
+				{ l: 129750, r: 0.0675 },
 				{ l: Infinity, r: 0.0715 },
 			]
 		},
 		SGL: {
 			std: 'FEDERAL',
 			brackets: [
-				{ l: 25310, r: 0.058 },
-				{ l: 59890, r: 0.0675 },
+				{ l: 27400, r: 0.058 },
+				{ l: 64850, r: 0.0675 },
 				{ l: Infinity, r: 0.0715 },
 			]
 		},
 	}, // MAINE
 
-	// MINNESOTA - 2025 (brackets inflation-adjusted ~4%/yr by MN DOR; rates unchanged)
+	// MINNESOTA - 2026 (brackets inflation-adjusted +2.369% from 2025 by MN DOR; rates unchanged)
 	// SSTaxation 0.85: MN includes SS in state income for filers above ~$105k MFJ — no subtraction available
 	MN: {
 		STATE: 'Minnesota',
-		YEAR: 2025,
-		NOTE: 'Brackets reflect 2025 values. Minnesota taxes Social Security — 85% of SS is included in state taxable income at moderate-to-high incomes. Lower-income filers may qualify for a subtraction not modeled here.',
+		YEAR: 2026,
+		NOTE: 'Brackets reflect 2026 values (inflation-adjusted +2.369% from 2025; rates unchanged). Minnesota taxes Social Security — 85% of SS is included in state taxable income at moderate-to-high incomes. Lower-income filers may qualify for a subtraction not modeled here.',
 		SSTaxation: 0.85,
 		MFJ: {
 			std: 'FEDERAL',  // MN uses federal standard deduction
 			brackets: [
-				{ l: 48490, r: 0.0535 },
-				{ l: 192860, r: 0.0680 },
-				{ l: 337100, r: 0.0785 },
+				{ l: 46330, r: 0.0535 },
+				{ l: 184040, r: 0.0680 },
+				{ l: 321450, r: 0.0785 },
 				{ l: Infinity, r: 0.0985 },
 			]
 		},
 		SGL: {
 			std: 'FEDERAL',
 			brackets: [
-				{ l: 33190, r: 0.0535 },
-				{ l: 109150, r: 0.0680 },
-				{ l: 201860, r: 0.0785 },
+				{ l: 31690, r: 0.0535 },
+				{ l: 104090, r: 0.0680 },
+				{ l: 193240, r: 0.0785 },
 				{ l: Infinity, r: 0.0985 },
 			]
 		},
@@ -697,7 +708,7 @@ var TAXData = {
 		STATE: 'Montana',
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
-		NOTE: 'Standard deduction is 20% of AGI (capped at $10,160 MFJ / $5,080 Single); the cap is used as an approximation and may overstate the deduction at lower incomes. Bracket thresholds are not inflation-indexed.',
+		NOTE: 'Retirement income: Montana allows a small income-tested retirement subtraction (being phased out); this model does not apply it. Standard deduction is 20% of AGI (capped at $10,160 MFJ / $5,080 Single); the cap is used as an approximation and may overstate the deduction at lower incomes. Bracket thresholds are not inflation-indexed.',
 		SSTaxation: 0.85,
 		MFJ: {
 			std: 10160,  // MT: 20% of AGI, capped at $10,160 (2024); using cap as approximation
@@ -737,28 +748,27 @@ var TAXData = {
 		},
 	}, // NORTH DAKOTA
 
-	// OHIO - HB 96 (signed July 2024): simplified to 3 tiers effective TY 2025; unchanged for 2026
+	// OHIO - HB 96 (FY2026-27 budget): flat 2.75% on non-business income above $26,050 effective TY 2026
+	// (the prior 3.5% top bracket is repealed; the final phase-down of the 2-bracket HB 33 schedule).
 	// Bracket thresholds are statutory fixed values; Ohio does not CPI-index income brackets.
 	OH: {
 		STATE: 'Ohio',
-		YEAR: 2025,
+		YEAR: 2026,
 		INFLATION_INDEXED: false,
-		NOTE: 'Brackets reflect 2025 values (HB 96 reform); 2026 figures were not yet available. Thresholds are not inflation-indexed.',
+		NOTE: 'Retirement income: Ohio provides a small retirement-income credit rather than an exclusion; this model omits that minor credit. 2026: HB 96 moved Ohio to a flat 2.75% rate on non-business income above $26,050 (the prior 3.5% top bracket is repealed). Thresholds are not inflation-indexed.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 4800,  // $2,400 personal exemption per taxpayer (2 for MFJ); unchanged
 			brackets: [
 				{ l: 26050, r: 0.00 },
-				{ l: 100000, r: 0.0275 },
-				{ l: Infinity, r: 0.035 },
+				{ l: Infinity, r: 0.0275 },
 			]
 		},
 		SGL: {
 			std: 2400,
 			brackets: [
 				{ l: 26050, r: 0.00 },
-				{ l: 100000, r: 0.0275 },
-				{ l: Infinity, r: 0.035 },
+				{ l: Infinity, r: 0.0275 },
 			]
 		},
 	}, // OHIO
@@ -799,7 +809,7 @@ var TAXData = {
 	WI: {
 		STATE: 'Wisconsin',
 		YEAR: 2025,
-		NOTE: 'Brackets reflect 2025 values. Standard deduction phases out at higher incomes — base amounts used; results may understate tax for high-income filers.',
+		NOTE: 'Retirement income: Wisconsin exempts up to $5,000 of retirement income for filers 65+ under income limits; this model does not apply it. Brackets reflect 2025 values. Standard deduction phases out at higher incomes — base amounts used; results may understate tax for high-income filers.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
 			std: 25200,
@@ -897,7 +907,9 @@ function calculateTaxes(params = {}) {
         state = 'CA',
         obbaOn = false,
         saltHigh = false,
-        propTax = 0
+        propTax = 0,
+        pensionIncome = 0,   // employer/govt pension + annuity portion of earnedIncome
+        iraIncome     = 0    // IRA/401k/RMD distribution portion of earnedIncome
     } = params;
 
     const status = filingStatus ?? "MFJ";
@@ -962,12 +974,22 @@ function calculateTaxes(params = {}) {
     const stateData = TAXData[state];
     const stateTaxableSS = totalSS * (stateData.SSTaxation || 0);
 
+    // State retirement-income exclusion (e.g. IL, PA fully exempt IRA/401k/pension distributions).
+    // Default 0 when the state has no RETIREMENT_EXCLUSION or callers omit the split → no change.
+    const retExcl = stateData.RETIREMENT_EXCLUSION;
+    let stateRetExcl = 0;
+    if (retExcl && retExcl.mode === 'full') {
+        const t = retExcl.types || ['pension', 'ira'];
+        stateRetExcl = (t.includes('pension') ? pensionIncome : 0) +
+                       (t.includes('ira')     ? iraIncome     : 0);
+    }
+
     let stateAGI;
     if (state === 'CA') {
         // CA does not allow HSA deduction
-        stateAGI = earnedIncome + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains;
+        stateAGI = earnedIncome + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains - stateRetExcl;
     } else {
-        stateAGI = earnedIncome - hsaContrib + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains;
+        stateAGI = earnedIncome - hsaContrib + stateTaxableSS + ordDivInterest + qualifiedDiv + capGains - stateRetExcl;
     }
 
     const rawStateStd = stateData[status].std;

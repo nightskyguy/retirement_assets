@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.10ee</title>
+    <title>Retirement Optimizer 11.1102</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -51,7 +51,7 @@
 	<script src="retirement_optimizer_core.js"></script>	
 	<script src="retirement_optimizer_tests.js"></script>	
 	<script src="retirement_optimizer_text.js"></script>	
-	<script src="taxengine.js"></script>	
+	<script src="taxengine.js?v=111104"></script>
 </head>
 <body>
 
@@ -333,27 +333,28 @@
         <details class="section" open>
         <summary>4. Assumptions</summary>
         <div class="row">
-			<div><label title="The percentage of your portfolio paid out as dividends each year. Brokerage dividends accrue to Cash (or reinvest if DRIP is on). IRA/Roth dividends stay in their accounts. Included in the Real Growth display below the Growth field.">Dividend Rate %<BR><input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay(); updateSuggestSpendTooltip()"></label></div>
-			<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation<BR>
-            <select id="STATEname">
+						<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation
+            <select id="STATEname" onchange="updateStateNote()">
                 <option   value="CA" selected>California</option>
             </select></label>
 			</div>
 		</div>
+        <div id="state-note" style="margin-top:-2px;margin-bottom:8px;font-size:0.82em;color:#555;line-height:1.35;"></div>
         <div class="row">
 			<div><label title="Social security is on track to exhaust the trust fund in 2033. You can change what year this occurs in.">Social Security Fail <input type="number" id="ssFailYear" value="2033"></label></div>
             <div><label title="If you think social security will not fall to a 77.3% payout in 2033, set this number to 100">SS Net Payout%<input type="number" id="ssFailPct" value="77.3"></label></div>
         </div>
         <div class="row">
             <div><label title="Price appreciation only — do NOT include dividends here. Enter dividends separately in Dividend Rate % below. E.g. 5% price growth + 1.5% dividends = 6.5% total. US historical CAGR: S&amp;P 500 ~10%, diversified 60/40 ~7–9%, conservative bond-heavy ~4–6%. Do NOT subtract inflation — the tool handles that separately. Real (after-inflation) growth including dividends is shown beneath this row.">Growth (6)%<input type="number" id="growth" value="6.0" oninput="updateGrowthDisplay(); syncMCMuFromGrowth(); updateProfileAgeDisplay()"></label></div>
-            <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
+            <div><label title="The percentage of your portfolio paid out as dividends each year. Brokerage dividends accrue to Cash (or reinvest if DRIP is on). IRA/Roth dividends stay in their accounts. Included in the Real Growth display below.">Dividend Rate %<input type="number" id="dividendRate" value="0.5" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay(); updateSuggestSpendTooltip()"></label></div>
         </div>
         <div id="growth-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
         <div class="row">
             <div><label title="General price inflation. Drives spending-goal escalation: your After-Tax Spend goal grows by this rate each year so it stays constant in today's dollars. Often differs slightly from CPI/COLA."><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay()"></label></div>
             <div><label title="Cost-of-living index. Drives federal &amp; IRMAA bracket indexing and Social Security COLA adjustments. Often differs from general inflation, so it is entered separately."><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
-        <div class="row" style="margin-top:6px;">
+        <div class="row">
+            <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
             <div><label title="The all-in marginal tax rate of whoever inherits your traditional IRA (their federal + state bracket on the inherited withdrawals). Drives Roth-conversion break-even (Opp. Cost) and after-tax legacy. Enter 0% if the IRA will be donated to charity. Leave blank to use the current year's computed marginal rate automatically.">Marginal Heirs Tax Rate %
                 <input type="number" id="futureIRATaxRate" min="0" max="60" step="1" placeholder="auto" style="width:54px;">
                 <span id="future-ira-tax-auto" style="font-size:0.8em;color:#888;margin-left:4px;"></span>
@@ -557,6 +558,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1102</b> <strong>State retirement-income exemptions (Illinois &amp; Pennsylvania):</strong> IRA/401k/pension distributions are no longer taxed by states that exempt them. Illinois and Pennsylvania now correctly exempt these withdrawals (interest, dividends, and capital gains remain state-taxed). Other states are unchanged.</li>
 				<li><b>11.10ee</b> <strong>Pension start age, optimizer symbol legend, and a Guyton-Klinger fix:</strong>
 						<ul style="margin:4px 0 0 16px;">
 							<li><strong>Pension start age.</strong> Model a pension that begins after you retire (e.g. retire at 60 while the pension starts at 65). Leave the start age at 0 to begin at retirement.</li>
@@ -927,9 +929,26 @@ document.addEventListener('DOMContentLoaded', function() {
     // document.getElementById('drawer-background').innerHTML = drawerContent.background;
 });
 
+// Show the selected state's tax-data year (+ staleness) and any caveat note below the State picker.
+function updateStateNote() {
+    const sel = document.getElementById('STATEname');
+    const el  = document.getElementById('state-note');
+    if (!sel || !el || typeof TAXData === 'undefined') return;
+    const sd = TAXData[sel.value] || {};
+    const dataYear = sd.YEAR || (TAXData.FEDERAL && TAXData.FEDERAL.YEAR) || 0;
+    const curYear  = new Date().getFullYear();
+    const stale = (dataYear && curYear > dataYear)
+        ? ` — ${curYear} figures not yet published; ${dataYear} rules applied until updated`
+        : '';
+    const yearLine = dataYear ? `📅 Tax data: ${dataYear} rules${stale}.` : '';
+    const note = sd.NOTE ? ` ${sd.NOTE}` : '';
+    el.innerHTML = (yearLine + note).trim();
+}
+
 window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('stratRate').innerHTML = generateStratRateOptions();
     document.getElementById('STATEname').innerHTML = generateStateOptions();
+    updateStateNote();
     // Default Start Age to the user's current real-world age (birth-month aware).
     // If their birthday hasn't passed yet this calendar year, subtract 1.
     const startAgeEl = document.getElementById('startAge');

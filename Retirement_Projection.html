@@ -69,7 +69,7 @@ var TAXData = {
   }
 };
 </script>
-<script src="taxengine.js"></script>
+<script src="taxengine.js?v=111104"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -1309,6 +1309,10 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
       try {
         taxResult = calculateTaxes({
           earnedIncome:    actualWd + spouseRmd + fixedIncome,
+          // IRA/RMD distributions qualify for state retirement-income exclusions (IL, PA).
+          // fixedIncome is a mixed bucket (pension + interest/dividends/cap gains) that can't be
+          // split here, so its pension portion stays taxed — see the state-tax approximation note.
+          iraIncome:       actualWd + spouseRmd,
           totalSS:         ss1Contrib + ss2Contrib,
           ordDivInterest:  cashInterest,
           qualifiedDiv:    dividends,
@@ -2228,11 +2232,18 @@ function toggleLegendGroup(id){
 
 function updateStateNote() {
   const key = document.getElementById('stateSelect')?.value;
-  const note = TAXData[key]?.NOTE;
+  const sd = TAXData[key] || {};
   const el = document.getElementById('state-note');
   if (!el) return;
-  el.textContent = note || '';
-  el.style.display = note ? 'block' : 'none';
+  const dataYear = sd.YEAR || (TAXData.FEDERAL && TAXData.FEDERAL.YEAR) || 0;
+  const curYear = new Date().getFullYear();
+  const stale = (dataYear && curYear > dataYear)
+    ? ` — ${curYear} figures not yet published; ${dataYear} rules applied until updated` : '';
+  const yearLine = dataYear ? `📅 Tax data: ${dataYear} rules${stale}.` : '';
+  const note = sd.NOTE ? ` ${sd.NOTE}` : '';
+  const html = (yearLine + note).trim();
+  el.innerHTML = html;
+  el.style.display = html ? 'block' : 'none';
 }
 
 function initStateSelect(){

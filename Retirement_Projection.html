@@ -69,7 +69,7 @@ var TAXData = {
   }
 };
 </script>
-<script src="taxengine.js?v=111104"></script>
+<script src="taxengine.js?v=1119"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -1194,7 +1194,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
                   cgMode, cgAmt, cgFreq, cgStartAge, cgInflate,
                   cashStart, cashRatePct,
                   myRmdStart, spouseStartAge, spouseRmdStart, spouseIRAStart, rothStart,
-                  selectedState, isSingle, retireAge){
+                  selectedState, isSingle, retireAge, birthYearIn, spouseBirthYearIn){
   let bal       = start;
   let brokBal   = brokStart;
   let brokBasis = brokStart * (brokBasisPct / 100);
@@ -1321,6 +1321,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
           state:           selectedState,
           filingStatus:    filingStatus,
           ages:            isSingle ? [age] : [age, spouseCurrentAge],
+          birthyears:      isSingle ? [birthYearIn] : [birthYearIn, spouseBirthYearIn],
           irmaaAnnualCost: irmaaAnnualCost,
         });
       } catch(e){ taxResult = null; }
@@ -1732,7 +1733,7 @@ function update(){
                           cashStartVal, cashRateVal,
                           myRmdStartAge, spouseStartAge, spouseRmdStartAge,
                           spouseIRAStartVal, rothStartVal,
-                          selectedState, isSingle, retireAge);
+                          selectedState, isSingle, retireAge, birthYear, spouseBirthYear);
   const labels = rows.map(r => `Age ${r.age}`);
 
   chart.data.labels           = labels;
@@ -2240,8 +2241,9 @@ function updateStateNote() {
   const stale = (dataYear && curYear > dataYear)
     ? ` — ${curYear} figures not yet published; ${dataYear} rules applied until updated` : '';
   const yearLine = dataYear ? `📅 Tax data: ${dataYear} rules${stale}.` : '';
-  const note = sd.NOTE ? ` ${sd.NOTE}` : '';
-  const html = (yearLine + note).trim();
+  const html = sd.NOTE
+    ? `<details open><summary style="cursor:pointer">${yearLine}</summary>${sd.NOTE}</details>`
+    : yearLine;
   el.innerHTML = html;
   el.style.display = html ? 'block' : 'none';
 }

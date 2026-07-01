@@ -1405,6 +1405,119 @@ assertEqual(
 	} // testCase18_StateTaxSplit()
 
 	// ============================================================================
+	// TEST CASE 19: IL / PA full retirement exclusion regression (unchanged by the
+	// generalized RETIREMENT_EXCLUSION evaluator — mode:'full' behavior is untouched)
+	// ============================================================================
+	function testCase19_ILPARetirementExclusionRegression() {
+		console.log('\n=== Test Case 19: IL/PA Full Retirement Exclusion (regression) ===');
+
+		const il = calculateTaxes({
+			filingStatus: 'MFJ', ages: [70, 68],
+			earnedIncome: 50000, pensionIncome: 30000, iraIncome: 20000,
+			totalSS: 0, ordDivInterest: 5000, qualifiedDiv: 0, capGains: 0,
+			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'IL'
+		});
+		// stateAGI = 50000 + 5000 - stateRetExcl(50000, all pension+ira) = 5000; std 5850 -> taxable 0
+		assertEqual(il.stateAGI, 5000, 'IL stateAGI excludes all pension+IRA income');
+		assertEqual(il.stateTaxableIncome, 0, 'IL state taxable income (below std deduction)');
+		assertEqual(il.stateTax, 0, 'IL state tax');
+
+		const pa = calculateTaxes({
+			filingStatus: 'MFJ', ages: [70, 68],
+			earnedIncome: 50000, pensionIncome: 30000, iraIncome: 20000,
+			totalSS: 0, ordDivInterest: 5000, qualifiedDiv: 0, capGains: 0,
+			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'PA'
+		});
+		// stateAGI = 5000 (same); PA std=0 -> taxable=5000; flat 3.07%
+		assertEqual(pa.stateAGI, 5000, 'PA stateAGI excludes all pension+IRA income');
+		assertEqual(pa.stateTaxableIncome, 5000, 'PA state taxable income (no std deduction)');
+		assertEqual(pa.stateTax, 153.5, 'PA state tax (5000 * 3.07%)');
+	} // testCase19_ILPARetirementExclusionRegression()
+
+	// ============================================================================
+	// TEST CASE 20: GA cap mode — per-person age-tiered cap (ageGateTiers)
+	// ============================================================================
+	function testCase20_GAAgeTieredCap() {
+		console.log('\n=== Test Case 20: Georgia Age-Tiered Retirement Cap ===');
+
+		// Only one filer (age 65) qualifies for the $65,000 tier; the other (age 40) qualifies
+		// for none, so the household cap is $65,000, not $130,000 or unlimited.
+		const result = calculateTaxes({
+			filingStatus: 'MFJ', ages: [65, 40],
+			earnedIncome: 70000, pensionIncome: 70000, iraIncome: 0,
+			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
+			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'GA'
+		});
+		// stateRetExcl = min(70000, 65000 [one qualifying filer] + 0 [other filer]) = 65000
+		// stateAGI = 70000 - 65000 = 5000
+		assertEqual(result.stateAGI, 5000, 'GA stateAGI reflects one $65k qualifying-filer cap, not full exclusion');
+	} // testCase20_GAAgeTieredCap()
+
+	// ============================================================================
+	// TEST CASE 21: CT phaseout mode — graduated % exclusion by federal AGI
+	// ============================================================================
+	function testCase21_CTPhaseoutMode() {
+		console.log('\n=== Test Case 21: Connecticut Retirement Income Phaseout ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'MFJ', ages: [65, 63],
+			earnedIncome: 50000, pensionIncome: 50000, iraIncome: 0,
+			totalSS: 0, ordDivInterest: 55000, qualifiedDiv: 0, capGains: 0,
+			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'CT'
+		});
+		// federalAGI = 50000 + 55000 = 105000 -> CT MFJ tier at $105,000 = 85% excluded
+		assertEqual(result.AGI, 105000, 'CT test setup: federal AGI lands exactly on the 85% tier');
+		// stateRetExcl = 50000 * 0.85 = 42500; stateAGI = 50000+55000-42500 = 62500
+		assertEqual(result.stateAGI, 62500, 'CT stateAGI reflects 85% (not 100%) retirement-income exclusion');
+		assertEqual(result.stateTaxableIncome, 38500, 'CT state taxable income (62500 - 24000 std)');
+	} // testCase21_CTPhaseoutMode()
+
+	// ============================================================================
+	// TEST CASE 22: OH credit mode — post-tax dollar credit, tiered + MAGI-gated
+	// ============================================================================
+	function testCase22_OHRetirementCredit() {
+		console.log('\n=== Test Case 22: Ohio Retirement Income Credit ===');
+
+		const underGate = calculateTaxes({
+			filingStatus: 'SGL', ages: [70],
+			earnedIncome: 60000, pensionIncome: 6000, iraIncome: 0,
+			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
+			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'OH'
+		});
+		// stateTaxableIncome = 60000-2400=57600; stateTax pre-credit = (57600-26050)*0.0275 = 867.625
+		// $6,000 of retirement income received -> $130 credit tier -> stateTax = 867.625-130 = 737.625
+		assertEqual(underGate.stateTax, 737.625, 'OH state tax reduced by $130 retirement-income credit');
+
+		const overGate = calculateTaxes({
+			filingStatus: 'SGL', ages: [70],
+			earnedIncome: 150000, pensionIncome: 6000, iraIncome: 0,
+			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
+			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'OH'
+		});
+		// MAGI (150000) >= $100,000 gate -> credit is zero, stateTax unreduced
+		const preCreditTax = ((150000 - 2400) - 26050) * 0.0275;
+		assertEqual(overGate.stateTax, preCreditTax, 'OH credit is zero once MAGI >= $100,000 gate');
+	} // testCase22_OHRetirementCredit()
+
+	// ============================================================================
+	// TEST CASE 23: AL array-of-rules — disjoint types, pension full-exempt + IRA capped
+	// ============================================================================
+	function testCase23_ALArrayOfRules() {
+		console.log('\n=== Test Case 23: Alabama Array-of-Rules (pension full + IRA cap) ===');
+
+		const result = calculateTaxes({
+			filingStatus: 'SGL', ages: [70],
+			earnedIncome: 30000, pensionIncome: 20000, iraIncome: 10000,
+			totalSS: 0, ordDivInterest: 0, qualifiedDiv: 0, capGains: 0,
+			taxExemptInterest: 0, hsaContrib: 0, inflation: 1.0, state: 'AL'
+		});
+		// stateRetExcl = 20000 (pension, full) + min(10000,6000) (IRA, capped at 65+) = 26000
+		// stateAGI = 30000 - 26000 = 4000; std 3000 -> taxable 1000
+		assertEqual(result.stateAGI, 4000, 'AL stateAGI: pension fully excluded, IRA capped at $6,000');
+		assertEqual(result.stateTax, 30, 'AL state tax on the remaining $1,000 taxable (2%*500 + 4%*500)');
+	} // testCase23_ALArrayOfRules()
+
+	// ============================================================================
 	// ACCOUNT GROWTH TESTS  (b, c, d)
 	// ============================================================================
 	console.log('\n=== Account Growth Tests ===');
@@ -1943,6 +2056,11 @@ assertEqual(
 		testCase16_SALTPhaseoutFull();
 		testCase17_CTStateSSTaxation();
 		testCase18_StateTaxSplit();
+		testCase19_ILPARetirementExclusionRegression();
+		testCase20_GAAgeTieredCap();
+		testCase21_CTPhaseoutMode();
+		testCase22_OHRetirementCredit();
+		testCase23_ALArrayOfRules();
 
 		console.log('\n╔════════════════════════════════════════════════════╗');
 		console.log('║     TEST SUITE COMPLETE                            ║');

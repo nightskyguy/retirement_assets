@@ -1390,7 +1390,7 @@ function simulate(inputs) {
 
 
         let tax = calculateTaxes({
-            filingStatus: status, ages: [age1, age2],
+            filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
             totalSS: s1 + s2, irmaaAnnualCost: irmaa,
             earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
             pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
@@ -1471,7 +1471,7 @@ function simulate(inputs) {
 
 
         tax = calculateTaxes({
-            filingStatus: status, ages: [age1, age2],
+            filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
             totalSS: s1 + s2, irmaaAnnualCost: irmaa,
             earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
             pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
@@ -1524,7 +1524,7 @@ function simulate(inputs) {
             }
             capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
             tax = calculateTaxes({
-                filingStatus: status, ages: [age1, age2],
+                filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
                 totalSS: s1 + s2, irmaaAnnualCost: irmaa,
                 earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
                 qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
@@ -1554,7 +1554,7 @@ function simulate(inputs) {
                 forcedIRA += (iraTop.IRA ?? 0);
                 capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
                 tax = calculateTaxes({
-                    filingStatus: status, ages: [age1, age2], totalSS: s1 + s2, irmaaAnnualCost: irmaa,
+                    filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2, irmaaAnnualCost: irmaa,
                     earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
                     pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
                     qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
@@ -1667,7 +1667,7 @@ function simulate(inputs) {
                 // Incremental tax on extra IRA withdrawal via marginal-method re-calc
                 const _baseEI = pension + taxableRMD + taxableInterest + (netWithdrawals.IRA ?? 0);
                 const _exTaxCalc = calculateTaxes({
-                    filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
+                    filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2,
                     irmaaAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: cpiRate,
                     pensionIncome: pension, iraIncome: taxableRMD + (netWithdrawals.IRA ?? 0) + _gross,
                     qualifiedDiv: taxableDividends, capGains: capitalGains,
@@ -1697,7 +1697,7 @@ function simulate(inputs) {
             const baseEI = pension + taxableRMD + taxableInterest;
             const convShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - totalConverted);
             const shadowConvCalc = calculateTaxes({
-                filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
+                filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2,
                 irmaaAnnualCost: 0, earnedIncome: convShadowEI, inflation: cpiRate,
                 pensionIncome: pension, iraIncome: taxableRMD + Math.max(0, (netWithdrawals.IRA ?? 0) - totalConverted),
                 qualifiedDiv: taxableDividends, capGains: capitalGains,
@@ -1715,7 +1715,7 @@ function simulate(inputs) {
             const baseEI = pension + taxableRMD + taxableInterest;
             const excessShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - excessCashOC);
             const shadowExcessCalc = calculateTaxes({
-                filingStatus: status, ages: [age1, age2], totalSS: s1 + s2,
+                filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2,
                 irmaaAnnualCost: 0, earnedIncome: excessShadowEI, inflation: cpiRate,
                 pensionIncome: pension, iraIncome: taxableRMD + Math.max(0, (netWithdrawals.IRA ?? 0) - excessCashOC),
                 qualifiedDiv: taxableDividends, capGains: capitalGains,
@@ -5643,6 +5643,7 @@ function computeSuggestedSpend() {
     const retireAge = inp.startAge || (new Date().getFullYear() - (inp.birthyear1||1960));
     const spAge     = inp.hasSpouse ? (retireAge + (inp.birthyear1||1960) - (inp.birthyear2||1960)) : 0;
     const ages      = inp.hasSpouse ? [retireAge, spAge] : [retireAge];
+    const birthyears = inp.hasSpouse ? [inp.birthyear1||0, inp.birthyear2||0] : [inp.birthyear1||0];
 
     const taxes = calculateTaxes({
         filingStatus: status,
@@ -5651,6 +5652,7 @@ function computeSuggestedSpend() {
         pensionIncome:(inp.pensionAnnual||0), iraIncome: portfolioWd,
         state:        inp.STATEname || 'CA',
         ages,
+        birthyears,
         inflation:    1.0,
     });
 

@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1102</title>
+    <title>Retirement Optimizer 11.1119</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -51,7 +51,7 @@
 	<script src="retirement_optimizer_core.js"></script>	
 	<script src="retirement_optimizer_tests.js"></script>	
 	<script src="retirement_optimizer_text.js"></script>	
-	<script src="taxengine.js?v=111104"></script>
+	<script src="taxengine.js?v=1119"></script>
 </head>
 <body>
 
@@ -558,6 +558,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1119</b> <strong>State retirement-income taxes are now much more accurate.</strong> 16 states (Alabama, Colorado, Connecticut, Georgia, Illinois, Iowa, Kentucky, Maine, Maryland, Michigan, Mississippi, New York, Ohio, Pennsylvania, Virginia, Wisconsin) now apply their real pension/IRA exemptions, caps, and credits instead of taxing all retirement income as ordinary income. Several states have limitations; limitations are listed below the state once it's selected. See, e.g., CA, MA, NC, SC, NE, AZ, and MT.</li>
 				<li><b>11.1102</b> <strong>State retirement-income exemptions (Illinois &amp; Pennsylvania):</strong> IRA/401k/pension distributions are no longer taxed by states that exempt them. Illinois and Pennsylvania now correctly exempt these withdrawals (interest, dividends, and capital gains remain state-taxed). Other states are unchanged.</li>
 				<li><b>11.10ee</b> <strong>Pension start age, optimizer symbol legend, and a Guyton-Klinger fix:</strong>
 						<ul style="margin:4px 0 0 16px;">
@@ -941,8 +942,11 @@ function updateStateNote() {
         ? ` — ${curYear} figures not yet published; ${dataYear} rules applied until updated`
         : '';
     const yearLine = dataYear ? `📅 Tax data: ${dataYear} rules${stale}.` : '';
-    const note = sd.NOTE ? ` ${sd.NOTE}` : '';
-    el.innerHTML = (yearLine + note).trim();
+    if (sd.NOTE) {
+        el.innerHTML = `<details open><summary style="cursor:pointer">${yearLine}</summary>${sd.NOTE}</details>`;
+    } else {
+        el.innerHTML = yearLine;
+    }
 }
 
 window.addEventListener('DOMContentLoaded', function () {

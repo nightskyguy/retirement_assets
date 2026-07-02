@@ -556,14 +556,9 @@
 		<div id="tab-docs" class="card hidden">
 			<details style="margin-bottom:12px;">
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
-				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
+				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.1133</b> <strong>taxengine.js is now self-contained.</strong>
-						<ul style="margin:4px 0 0 16px;">
-							<li><strong>Circular dependency removed.</strong> Bracket-math helpers (<code>getRateBracket</code>, <code>findLimitByRate</code>, <code>findUpperLimitByAmount</code>, <code>calculateProgressive</code>) moved into taxengine.js — it no longer depends on the simulation engine to compute taxes.</li>
-							<li><strong>Fixed a real bug:</strong> the Retirement Projection tool was silently inflating Alabama/Montana/North Dakota/Ohio/South Carolina tax brackets by CPI over time, when those states' brackets are legally fixed. Numbers for those 5 states in that tool are now correct.</li>
-							<li>Minor cleanup: removed a leftover placeholder entry and fixed two stale comments in taxengine.js.</li>
-						</ul>
+				<li><b>11.1133</b> <strong>Architectural improvements</strong>, no features changed.
 					</li>
 					<li><b>11.1125</b> <strong>IRMAA now respects Medicare age.</strong>
 						<ul style="margin:4px 0 0 16px;">

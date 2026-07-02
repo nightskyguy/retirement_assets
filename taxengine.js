@@ -70,6 +70,7 @@ var TAXData = {
 		LOOKBACK: -2,  // Based on 2024 tax return
 		ANNUAL_INCREASE: 0.056,	// based on analysis of 
 		standardPartB: 202.90,
+		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary
 		partBDeductible: 283,
 		
 		// NOTE these are MONTHLY values, it is NOT progressive, and these are the actual tax, not rates.
@@ -1352,10 +1353,15 @@ function calculateTaxes(params = {}) {
 
 ///////////////////////////
 
-function calcIRMAA(magi, status, cpiRate, medicareRate = (1 + TAXData.IRMAA.ANNUAL_INCREASE)) {
+// onMedicareCount: number of living persons aged 65+ (i.e. actually enrolled in Medicare).
+// null (default) keeps the legacy household-total behavior. The bracket `r` values are
+// household totals (MFJ tables are 2x the per-person surcharge), so per-person = r / persons.
+function calcIRMAA(magi, status, cpiRate, medicareRate = (1 + TAXData.IRMAA.ANNUAL_INCREASE), onMedicareCount = null) {
 
 	let irmaalimit = findUpperLimitByAmount( 'IRMAA', status, magi, cpiRate)
-	return irmaalimit.rate * medicareRate * 12
+	if (onMedicareCount === null) return irmaalimit.rate * medicareRate * 12
+	const persons = status === 'MFJ' ? 2 : 1;
+	return irmaalimit.rate / persons * Math.min(onMedicareCount, persons) * medicareRate * 12
 }
 
 function getIRMAATier(magi, status, cpiRate) {

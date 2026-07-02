@@ -1,6 +1,12 @@
 # Progress Log
 
-## Session: 2026-07-01 (cont. 4) — MC milestone filter + Simulation Mode label size (UNCOMMITTED, NO changelog/version per user)
+## Session: 2026-07-02 — Context restore, new worktree `cranky-mcclintock-9fa806`
+- Branch `worktrees/cranky-mcclintock-9fa806`, clean, matches main post-PR#103.
+- PR #103 merged (f46fb67): 97cb319 MC milestone-filter fix + Sim Mode label size — was UNCOMMITTED per the entry below, now confirmed shipped as part of that PR.
+- Version confirmed v11.1125 in retirement_optimizer.html title. session-catchup.py found no unsynced context. No code changes yet this session.
+- task_plan.md "As of" line refreshed (was stale at 2026-06-29/priceless-turing-9a5ad3).
+
+## Session: 2026-07-01 (cont. 4) — MC milestone filter + Simulation Mode label size (now COMMITTED via PR #103)
 1. `milestonePlugin` now filters by canvas id: `chartAssets`/`chartIncomeSources` = all milestones; `mc-chart` = death markers only (label contains 'Passing') — MC fan mixes strategies so IRMAA/GK/shortfall/Roth-BE markers don't apply; all other canvases (mc-input fans) = none. Plugin was globally registered so it previously drew stale single-run milestones on every chart.
 2. MC "Simulation Mode" label 0.9em→1.1em (12.6→15.4px), select 0.9→0.95em (retirement_optimizer.html ~416).
 Verified: main charts keep all milestones, mc-chart update clean w/ plugin active, badge 🟢, no console errors.

@@ -2,7 +2,7 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-06-29 (v11.10cf, branch main, worktree priceless-turing-9a5ad3)
+**As of:** 2026-07-02 (v11.1125, branch main, worktree cranky-mcclintock-9fa806)
 
 ---
 

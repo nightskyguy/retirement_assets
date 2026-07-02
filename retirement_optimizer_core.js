@@ -4085,6 +4085,15 @@ const milestonePlugin = {
     id: 'milestones',
     afterDatasetsDraw(chart) {
         if (!showMilestones || !_chartMilestones.length) return;
+        // Milestones come from the last single-strategy run. The main charts show all of them;
+        // the Monte Carlo fan aggregates many strategies/paths, so only deterministic death
+        // markers apply there (IRMAA/GK/shortfall/break-even differ per path). All other
+        // charts (MC input fans, etc.) get none.
+        const canvasId = chart.canvas?.id || '';
+        let milestones = _chartMilestones;
+        if (canvasId === 'mc-chart') milestones = milestones.filter(m => m.label.includes('Passing'));
+        else if (canvasId !== 'chartAssets' && canvasId !== 'chartIncomeSources') return;
+        if (!milestones.length) return;
         const xScale = chart.scales.x;
         if (!xScale) return;
         const { top, bottom, left, right } = chart.chartArea;
@@ -4092,7 +4101,7 @@ const milestonePlugin = {
         const ctx = chart.ctx;
         ctx.save();
         ctx.font = '600 10px sans-serif';
-        _chartMilestones.forEach((m, i) => {
+        milestones.forEach((m, i) => {
             const px = xScale.getPixelForValue(m.x);
             if (px == null || isNaN(px)) return;
             ctx.beginPath();

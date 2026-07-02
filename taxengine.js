@@ -110,7 +110,7 @@ var TAXData = {
 	// bundled entry):
 	//   AK, FL, NV, NH, SD, TN, TX, WA, WY
 	//
-	// FLAT-RATE — 14 included  (15 total across all 51 jurisdictions)
+	// FLAT-RATE — 13 included  (15 total across all 51 jurisdictions)
 	//   Included (single Infinity bracket):
 	//     AZ  2.5%    CO  4.4%    GA  4.99%  IA  3.8%  ID  5.3% (with income threshold)
 	//     IL  4.95%   IN  3.05%   KY  4.0%   MA  5.0%
@@ -929,9 +929,8 @@ var TAXData = {
 		SSTaxation: 0.50,  // Taxes SS at 50%
 		MFJ: { std: 100, brackets: [{l: 1000, r: 0.1, nr: 0.1},  {l: 2000, r: 0.2, nr: 0.15}, {l: 40000, r: 0.8, nr: 0.4} ]	},
 		SGL: { std: 100/2, brackets: [{l: 1000/2, r: 0.1, nr: 0.1},  {l: 2000/2, r: 0.2, nr: 0.15}, {l: 40000/2, r: 0.8, nr: 0.45} ]}
-	},
-	XYZZY: { }
-	
+	}
+
 }; // TAXdata
 
 // No-income-tax states, each as its own dropdown entry (Object.keys(TAXData).length===2 drives
@@ -984,6 +983,128 @@ const RMD_TABLE = {
 };
 
 // ============================================================================
+// Bracket utilities
+// Relocated from retirement_optimizer_core.js so taxengine.js is self-contained (was a
+// circular file dependency: taxengine.js called these, core.js called calculateTaxes()/
+// calcIRMAA()/etc. back). No other file should redefine these — retirement_optimizer_core.js
+// and every HTML consumer now get them from here.
+// ============================================================================
+
+function getRateBracket(entity, status) {
+    let brks = TAXData?.[entity]?.[status]?.brackets;
+
+    if (!brks) {
+        console.error(`Invalid tax data: entity="${entity}", status="${status}"`);
+        return null
+    };
+
+    return brks
+}
+
+/**
+ * Find the income limit for a specified marginal tax rate within tax brackets.
+ * Returns the highest bracket limit where the rate is less than or equal to the target rate.
+ * Uses TAXdata structure to retrieve bracket information.
+ *
+ * @param {string} entity - Tax entity identifier (e.g., 'federal', 'CA', 'IRMAA', 'SS')
+ * @param {string} status - Filing status (e.g., 'single', 'joint', 'mfs', 'hoh')
+ * @param {number} tgtrate - Target marginal tax rate to find limit for
+ * @param {number} [inflation=1] - Inflation multiplier for bracket limits (default: 1)
+ * @returns {Object} Bracket limit results
+ * @returns {number} return.limit - Income limit at or below the target rate (0 if no match)
+ * @returns {number} return.rate - Actual rate of the bracket found
+ * @note Does not validate input parameters for reasonableness
+ */
+function findLimitByRate(entity, status, tgtrate, inflation = 1) {
+    let brks = getRateBracket(entity, status)
+
+    let limit = 0;
+    let rate = 0;
+
+    for (let b of brks) {
+        if (b.r <= tgtrate) {
+            limit = b.l * inflation;
+            rate = b.r;
+        } else break;
+    }
+    return { limit, rate: rate }
+}
+
+// We want to find the limit of the next bracket HIGHER than the amount given (that is the upper limit).
+// For example if the limits are 10, 100, 1000 and the amount is 150 - we want the 1000 (less 1).
+// If amount is 99, we want 100.
+function findUpperLimitByAmount(entity, status, amount, inflation = 1) {
+    let limit = 0;
+    let rate = 0;
+    let nominalRate = 0.0;
+    let brks = getRateBracket(entity, status)
+
+    for (let b of brks) {
+        if (b.l * inflation <= amount) {
+            rate = b.r;
+            nominalRate = b.nr ?? 0;
+        } else {
+            limit = b.l * inflation - 1;
+            break;
+        }
+    }
+    return { limit, rate: rate, nominalRate: nominalRate }
+}
+
+/**
+ * Calculate progressive tax on a given amount using tax brackets from TAXdata structure.
+ * Iterates through brackets, applying rates to income ranges, with optional inflation
+ * and rate creep adjustments for future year projections.
+ *
+ * @param {string} entity - Tax entity identifier (e.g., 'federal', 'CA', 'IRMAA', 'SS')
+ * @param {string} status - Filing status (e.g., 'single', 'joint', 'mfs', 'hoh')
+ * @param {number} amount - Taxable amount to calculate tax on
+ * @param {number} [inflation=1] - Inflation multiplier for bracket limits (default: 1)
+ * @param {number} [ratecreep=1] - Rate adjustment multiplier (default: 1)
+ * @returns {Object} Tax calculation results
+ * @returns {number} return.cumulative - Total tax owed
+ * @returns {number} return.total - Total tax owed (same as cumulative)
+ * @returns {number} return.marginal - Marginal tax rate at this income level
+ * @returns {number} return.limit - Upper limit of the bracket reached
+ * @returns {number} return.nominalRate - Nominal rate if specified in bracket data
+ * @returns {string} [return.error] - Error message if entity/status invalid
+ */
+function calculateProgressive(entity, status, amount, inflation = 1, ratecreep = 1) {
+
+    let brks = getRateBracket(entity, status)
+    if (!brks) {
+        return { cumulative: 0, total: 0, marginal: 0, limit: 0, error: `Invalid entity (${entity}) or status (${status})` };
+    }
+
+    // States with INFLATION_INDEXED: false have statutory fixed bracket thresholds — never inflate them.
+    const effectiveInflation = TAXData[entity]?.INFLATION_INDEXED === false ? 1 : inflation;
+
+    let prevLimit = 0;
+    let cumulative = 0;
+    let marginalRate = 0;
+    let nominalRate = 0;
+
+    for (let b of brks) {
+        let currentLimit = b.l * effectiveInflation;
+
+        if (amount <= currentLimit) {
+            cumulative += (amount - prevLimit) * b.r * ratecreep;
+            marginalRate = b.r * ratecreep;
+            nominalRate = b.nr ?? 0;
+            prevLimit = currentLimit;
+            break;
+        } else {
+            cumulative += (currentLimit - prevLimit) * b.r * ratecreep;
+            marginalRate = b.r * ratecreep;
+            nominalRate = b.nr ?? 0;
+            prevLimit = currentLimit;
+        }
+    }
+
+    return { cumulative, total: cumulative, marginal: marginalRate, limit: prevLimit, nominalRate: nominalRate }
+}
+
+// ============================================================================
 // State retirement-income exclusion evaluator
 // Data-driven: every dollar figure, age threshold, phase-out step, and rate lives in
 // each state's RETIREMENT_EXCLUSION entry (see IL/PA for `full`, and AL/GA/NY/CO/KY/MD/
@@ -992,7 +1113,8 @@ const RMD_TABLE = {
 // ============================================================================
 
 // Counts filers whose age qualifies (>= minAge), reusing the same shape as the federal
-// `nSeniors` count above (taxengine.js ~924-925), generalized to an arbitrary threshold.
+// `nSeniors` count in calculateTaxes() below (taxengine.js ~1135-1136), generalized to an
+// arbitrary threshold.
 function countQualifyingFilers(ages, status, minAge) {
     if (minAge == null) return (status === 'MFJ' && ages.length > 1) ? 2 : 1;
     return (ages[0] >= minAge ? 1 : 0) +
@@ -1132,8 +1254,7 @@ function calculateTaxes(params = {}) {
     const federalAgeThreshold = TAXData.FEDERAL[status].age;
     const federalAgeBump = TAXData.FEDERAL[status].stdbump;
 
-    const nSeniors = (ages[0] >= federalAgeThreshold ? 1 : 0) +
-                     (status === 'MFJ' && ages.length > 1 && ages[1] >= federalAgeThreshold ? 1 : 0);
+    const nSeniors = countQualifyingFilers(ages, status, federalAgeThreshold);
 
     let federalStdDeduction = (federalStdBase + federalAgeBump * nSeniors) * inflation;
 

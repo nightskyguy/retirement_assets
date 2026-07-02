@@ -800,8 +800,9 @@ function buildSimYearLogRecord(p) {
         // Taxes
         'FedRate%': p.tax.fedRate,
         'StateRate%': p.tax.stRate,
-        IRMAATier: getIRMAATier(p.balance.magiHistory[p.balance.magiHistory.length - 2], p.status, p.cpiRate),
+        IRMAATier: p.irmaaTier,
         IRMAA: p.irmaa,
+        Medicare: p.medicareBase,
         totalTax: p.totalTax,
         FedTax: p.tax.federalTax,
         StateTax: p.tax.state,
@@ -1046,8 +1047,20 @@ function simulate(inputs) {
         totals.yearstested += 1;
 
         let status = (alive1 && alive2) ? 'MFJ' : 'SGL';
-        // IRMAA is already known since it is based on income from 2 years ago.
-        let irmaa = calcIRMAA(balance.magiHistory[balance.magiHistory.length - 2], status, cpiRate, medicareRate);
+        // IRMAA is already known since it is based on income from 2 years ago (MAGI lookback),
+        // compared against thresholds inflated to THIS payment year (matches SSA indexing).
+        // Only spouses actually on Medicare (living, 65+) pay the surcharge — a 61-year-old
+        // household pays nothing no matter how large the conversion income.
+        const onMedicare = (alive1 && age1 >= 65 ? 1 : 0) + (alive2 && age2 >= 65 ? 1 : 0);
+        const magiLookback = balance.magiHistory[balance.magiHistory.length - 2];
+        let irmaa = calcIRMAA(magiLookback, status, cpiRate, medicareRate, onMedicare);
+        // Tier for display/milestones — same lookback MAGI and same age gate as the charge
+        // (the log row used to recompute this AFTER the year's MAGI push, showing the tier a
+        // year early).
+        const irmaaTier = onMedicare > 0 ? getIRMAATier(magiLookback, status, cpiRate) : '-none-';
+        // Base Medicare Part B + Part D premiums (informational — tracked, not deducted from
+        // spendable; assumed to live inside the spend goal). Grows at the Medicare rate, not CPI.
+        const medicareBase = onMedicare * (TAXData.IRMAA.standardPartB + TAXData.IRMAA.standardPartD) * 12 * medicareRate;
 
         // Calculate the bracket limits based on: stated limit.
         // let tgtBracketLimit = findLimitByRate('FEDERAL',status,inputs.stratRate)
@@ -1284,6 +1297,15 @@ function simulate(inputs) {
                 // IRMAA thresholds grow at CPI (see taxengine.js comment).
                 const irmaaBrks = getRateBracket('IRMAA', status);
                 limit = irmaaBrks[inputs.stratIRMAATier + 1].l * cpiRate - 1;
+                // Before any living spouse reaches 63 (65 + LOOKBACK), this year's income cannot
+                // affect a Medicare premium — the IRMAA ceiling is a pointless cap. Convert up to
+                // the top of the federal bracket CONTAINING the ceiling instead (still bounded;
+                // never uncapped, which would drain the whole IRA in one year).
+                const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
+                const irmaaRelevant = maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK;
+                if (!irmaaRelevant) {
+                    limit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate).limit;
+                }
                 // Approximate tax rates at this limit for downstream calcs
                 const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
                 marginalFedTaxRate = fedAtLimit.rate;
@@ -1320,7 +1342,12 @@ function simulate(inputs) {
                 limit = Math.min(stateLimit, limit);
 
                 if (inputs.strategy === 'minlimit') {
-                    limit = Math.min(limit, irmaLimit);
+                    // Same age gate as the IRMAA-ceiling mode: the IRMAA limit only binds once a
+                    // living spouse is within the 2-year MAGI lookback of Medicare age (63+).
+                    const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
+                    if (maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK) {
+                        limit = Math.min(limit, irmaLimit);
+                    }
                 }
             }
 
@@ -1762,6 +1789,7 @@ function simulate(inputs) {
         }
         balance.magiHistory.push(tax.MAGI);
         totals.tax += totalTax;
+        totals.medicare = (totals.medicare || 0) + medicareBase;
         totals.gross += totalIncome;
         totals.spend += (targetSpend + surplus.Shortfall);
         totals.taxCurrentDollars += totalTax / inflation;
@@ -1850,7 +1878,7 @@ function simulate(inputs) {
             currentYear, alive1, alive2, age1, age2, status,
             fixedInc, pension, targetSpend, netIncome, totalIncome,
             surplus, totalRMD, qcd1, qcd2, taxableDividends, taxableInterest,
-            netWithdrawals, rmd1, rmd2, totalConverted, tax, irmaa, cpiRate,
+            netWithdrawals, rmd1, rmd2, totalConverted, tax, irmaa, irmaaTier, medicareBase, cpiRate,
             totalTax, capitalGains, cumulativeTaxes, bracketTarget, bracketOverage, forcedIRA, acaBreach,
             balance, nominalTaxRate, totalWealth, portfolioBalance, guaranteedIncome,
             totalsSpend: totals.spend,
@@ -3256,6 +3284,7 @@ const columnCategories = {
     // Taxation
     'MAGI': ['Taxation'],
     'IRMAA': ['Taxation'],
+    'Medicare': ['Taxation'],
     'IRMAATier': ['Taxation', 'Summary'],
     'FedTax': ['Taxation'],
     'StateTax': ['Taxation'],
@@ -3332,7 +3361,7 @@ const columnGroupDefs = {
     'Brokerage-': 'Withdrawals', 'RothWD': 'Withdrawals',
     'CashWD': 'Withdrawals', 'rothConv': 'Withdrawals', 'surplusCash': 'Withdrawals',
     'FedRate%': 'Taxes', 'StateRate%': 'Taxes', 'IRMAATier': 'Taxes',
-    'IRMAA': 'Taxes', 'totalTax': 'Taxes', 'FedTax': 'Taxes', 'StateTax': 'Taxes',
+    'IRMAA': 'Taxes', 'Medicare': 'Taxes', 'totalTax': 'Taxes', 'FedTax': 'Taxes', 'StateTax': 'Taxes',
     'CapGains': 'Taxes', 'MAGI': 'Taxes', 'NominalRate%': 'Taxes',
     'FedCap': 'Taxes', 'StateCap': 'Taxes', 'SumTaxes': 'Taxes',
     'BracketTarget': 'Taxes', 'BracketOverage': 'Taxes', 'ForcedIRA': 'Withdrawals',
@@ -3553,8 +3582,9 @@ function updateTable(log) {
         'IRA1-': 'Withdrawals from IRA1',
         'IRA2-': 'Withdrawals from IRA2',
         'CapGains': 'Amount of gains from withdrawing brokerage assets.',
-        'IRMAA': 'Annual IRMAA surcharge based on MAGI from 2 years prior.',
-        'IRMAATier': 'IRMAA tier (e.g. Tier 1–6) derived from MAGI 2 years ago.',
+        'IRMAA': 'Annual IRMAA surcharge based on MAGI from 2 years prior. Charged only for spouses 65+ (Medicare age).',
+        'IRMAATier': 'IRMAA tier (e.g. Tier 1–6) derived from MAGI 2 years ago. Shows -none- until a spouse reaches 65 (Medicare age).',
+        'Medicare': 'Base cost for Medicare Parts B + D for spouses 65+ (grows ~5.6%/yr). Illustration only — not deducted from spendable income; assumed inside the spend goal. Excludes IRMAA (separate column).',
         'FedCap': 'Upper boundary of the current federal tax bracket.',
         'StateCap': 'Upper boundary of the current state tax bracket.',
         'BracketTarget': 'MAGI ceiling targeted by the bracket/IRMAA strategy this year (0 for other strategies).',
@@ -4083,6 +4113,19 @@ const milestonePlugin = {
     }
 };
 
+// Chart series colors — single source of truth for anything IRMAA/Medicare colored
+// (cost bars on both charts and the IRMAA milestone marker). Bars append 'C0' alpha
+// (~75%) to match the other stacked cost series.
+const IRMAA_COLOR    = '#E75480';
+const MEDICARE_COLOR = '#008080';
+
+// Legend hover hint for the Medicare series (browser-native tooltip via canvas title).
+const MEDICARE_LEGEND_TIP = 'Base Cost for Medicare B+D - not deducted from spendable. Illustration only.';
+const medicareLegendHover = {
+    onHover: (e, item, legend) => { legend.chart.canvas.title = item.text === 'Medicare' ? MEDICARE_LEGEND_TIP : ''; },
+    onLeave: (e, item, legend) => { legend.chart.canvas.title = ''; },
+};
+
 // Compute milestone markers from the simulation log:
 //  1. First death — labelled "Your Passing" / "Spouse Passing" (filing status flips; the deceased's
 //     age becomes '—').
@@ -4121,7 +4164,7 @@ function computeMilestones(log) {
         // 3. IRMAA tier increase over the prior year.
         const tier = tierNum(r.IRMAATier);
         if (tier > prevTier && tier > 0) {
-            ms.push({ x: i, label: 'IRMAA ' + String(r.IRMAATier), color: '#2980b9' });
+            ms.push({ x: i, label: 'IRMAA ' + String(r.IRMAATier), color: IRMAA_COLOR });
         }
         prevTier = tier;
         if (isShort) {
@@ -4330,7 +4373,9 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             mkTax('Federal',   '#c0392b', r => (r.FedTax ?? 0) - (r['-capGainsTax'] ?? 0)),
             mkTax('Cap Gains', '#e74c3c', r => r['-capGainsTax'] ?? 0),
             mkTax('State',     '#f39c12', r => r.StateTax ?? 0),
-            mkTax('IRMAA',     '#FFB8B8C0', r => r.IRMAA ?? 0),   // match the pink used on Income & Expenses
+            mkTax('IRMAA',     IRMAA_COLOR + 'C0', r => r.IRMAA ?? 0),
+            // Base Part B+D premiums (informational cost — not part of totalTax).
+            mkTax('Medicare',  MEDICARE_COLOR + 'C0', r => r.Medicare ?? 0),
             { ...mkLine('MAGI', '#111827', r => (r.MAGI ?? 0) * adj(r)), type: 'line', yAxisID: 'y1', pointRadius: 0, borderWidth: 2.5, order: 1 },
         ];
         if (showTaxThresholds) {
@@ -4381,7 +4426,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                 plugins: { ...sharedTooltip.plugins,
                     tooltip: { ...sharedTooltip.plugins.tooltip, filter: taxThresholdFilter,
                         callbacks: { ...sharedTooltip.plugins.tooltip.callbacks, label: taxLabelCb, afterBody: taxRateFooter } },
-                    legend: { labels: legendLabels } } }
+                    legend: { labels: legendLabels, ...medicareLegendHover } } }
         });
     } else if (incomeChartView === 'flows') {
         // Inflows (up) vs outflows (down): where spending money comes from and where it goes.
@@ -4566,7 +4611,9 @@ function updateCharts(log) {
                 // Expenses stack on top of the Spendable Income line (unscaled absolute amounts)
                 mkAbs('Fed Tax',        '#A30000C0', r => r.FedTax),
                 mkAbs('State Tax',      '#FF2E2EC0', r => r.StateTax),
-                mkAbs('IRMAA',          '#FFB8B8C0', r => r.IRMAA),
+                mkAbs('IRMAA',          IRMAA_COLOR + 'C0', r => r.IRMAA),
+                // Base Part B+D premiums (informational — not deducted from Net Income).
+                mkAbs('Medicare',       MEDICARE_COLOR + 'C0', r => r.Medicare ?? 0),
                 mkAbs('Roth Conv',      '#8e44ad80', r => r.rothConv),
                 mkAbs('QCD',            '#99999980', r => (r.QCD1 ?? 0) + (r.QCD2 ?? 0)),
                 // Spendable Income line sits exactly at the income/tax seam.
@@ -4622,6 +4669,7 @@ function updateCharts(log) {
                         if (item.text === '│') return;
                         Chart.defaults.plugins.legend.onClick(e, item, legend);
                     },
+                    ...medicareLegendHover,
                     labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }
                 }
             }

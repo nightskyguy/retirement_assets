@@ -749,6 +749,26 @@ assertEqual(
 	assertEqual(calcIRMAA(218000, 'MFJ', 2, 1), 0,
 				'😭calcIRMAA  2 * (284.10 + 14.50) for 218000 MFJ income at 2');
 
+	// Per-person Medicare gate (onMedicareCount param). MFJ bracket rates are household
+	// (2x per-person) totals; count scales them to who is actually 65+.
+	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 1), 12 * (284.10 + 14.50),
+				'😭calcIRMAA MFJ one spouse on Medicare = half the household surcharge');
+
+	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 0), 0,
+				'😭calcIRMAA MFJ neither spouse 65+ = no surcharge');
+
+	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 2), 12 * 2 * (284.10 + 14.50),
+				'😭calcIRMAA MFJ both on Medicare = full household surcharge');
+
+	assertEqual(calcIRMAA(274000, 'MFJ', 1, 1, 3), 12 * 2 * (284.10 + 14.50),
+				'😭calcIRMAA MFJ count clamps at 2 persons');
+
+	assertEqual(calcIRMAA(109001, 'SGL', 1, 1, 1), 12 * 202.9,
+				'😭calcIRMAA SGL on Medicare = full single surcharge');
+
+	assertEqual(calcIRMAA(109001, 'SGL', 1, 1, 0), 0,
+				'😭calcIRMAA SGL under 65 = no surcharge');
+
 	assertEqual(calculateProgressive('TEST','MFJ',72000), 
 		{"cumulative": 30700, "total": 30700, "marginal": 0.8, "limit": 40000, "nominalRate": 0.4}, 
 		'calculateProgressive(TEST, MFJ, 72000) ok')	
@@ -1958,6 +1978,54 @@ assertEqual(
 		const ira0Delta = base.log[0].TotalIRA - extra.log[0].TotalIRA;
 		assertEqual(ira1Delta < ira0Delta + 5000, true,
 			'extraConversionAmount array: year 1 IRA delta not growing (no extra conv after year 0)');
+	}
+
+	// ============================================================================
+	// IRMAA MEDICARE AGE GATE — surcharge/tier/base-premium only for spouses 65+
+	// ============================================================================
+	console.log('\n=== IRMAA Medicare Age Gate Tests ===');
+
+	// Couple aged 60/58 at start (2026, pinned), huge conversions every year → MAGI far above
+	// every IRMAA threshold. Before the age gate, IRMAA was charged from year 1 at age 61.
+	{
+		const gateInputs = {
+			...baseInputs,
+			startInYear: 2026, hasSpouse: true,
+			birthyear1: 1966, birthmonth1: 1, die1: 95,
+			birthyear2: 1968, birthmonth2: 1, die2: 95,
+			IRA1: 10000000, IRA2: 0, nYears: 10,
+			maxConversion: true,
+			spendGoal: 80000,
+		};
+		const r = simulate(gateInputs);
+		const pre65 = r.log.filter(row => row.age1 !== '—' && row.age1 < 65);
+		assertEqual(pre65.every(row => row.IRMAA === 0), true,
+			'IRMAA gate: no surcharge in any year before age 65');
+		assertEqual(pre65.every(row => row.IRMAATier === '-none-'), true,
+			'IRMAA gate: tier shows -none- in every year before age 65');
+		assertEqual(pre65.every(row => row.Medicare === 0), true,
+			'IRMAA gate: no base Part B+D premium before age 65');
+
+		// Age 65 (year 5): only person 1 on Medicare (spouse is 63). Lookback MAGI (age-63
+		// conversions) is far above the top threshold → surcharge > 0, at half household rate.
+		const row65 = r.log.find(row => row.age1 === 65);
+		const row67 = r.log.find(row => row.age1 === 67);
+		assertEqual(row65.IRMAA > 0, true,
+			'IRMAA gate: surcharge present at 65 (one spouse on Medicare)');
+		assertEqual(row67.IRMAA > 0, true,
+			'IRMAA gate: surcharge present at 67 (both spouses on Medicare)');
+		// Base premium is deterministic: persons65+ × ($202.90 Part B + $38.99 Part D)/mo × 12 × 1.056^simYear.
+		assertEqual(Math.round(row65.Medicare),
+			Math.round(1 * (202.90 + 38.99) * 12 * Math.pow(1.056, 5)),
+			'Medicare base: one person at 65 = (202.90 + 38.99) × 12 × 1.056^5');
+		assertEqual(Math.round(row67.Medicare),
+			Math.round(2 * (202.90 + 38.99) * 12 * Math.pow(1.056, 7)),
+			'Medicare base: two persons at 67 = 2 × (202.90 + 38.99) × 12 × 1.056^7');
+		// Same lookback MAGI tier at 65 vs 66 would double the surcharge when the second
+		// spouse enrolls; at minimum the both-on-Medicare year must exceed the single year
+		// after backing out Medicare-rate growth.
+		assertEqual(row67.IRMAA / Math.pow(1.056, 2) > row65.IRMAA * 1.5, true,
+			'IRMAA gate: both-spouse surcharge ≈ 2× single-spouse (after 5.6%/yr growth backout)');
 	}
 
 	// ============================================================================

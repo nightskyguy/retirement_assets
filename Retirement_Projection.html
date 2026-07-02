@@ -69,7 +69,7 @@ var TAXData = {
   }
 };
 </script>
-<script src="taxengine.js?v=1125"></script>
+<script src="taxengine.js?v=1133"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -1141,34 +1141,7 @@ function addThreshold(){
   renderThreshEditor(); update();
 }
 
-/* ── Tax helpers (mirror of retirement_optimizer_core.js; loaded if core.js is absent) ── */
-if(typeof getRateBracket === 'undefined'){
-  window.getRateBracket = function(entity, status){
-    return TAXData?.[entity]?.[status]?.brackets ?? null;
-  };
-}
-if(typeof calculateProgressive === 'undefined'){
-  window.calculateProgressive = function(entity, status, amount, inflation=1, ratecreep=1){
-    const brks = getRateBracket(entity, status);
-    if(!brks) return { cumulative:0, total:0, marginal:0, limit:0, nominalRate:0 };
-    let prevLimit=0, cumulative=0, marginalRate=0, nominalRate=0;
-    for(const b of brks){
-      const currentLimit = b.l * inflation;
-      if(amount <= currentLimit){
-        cumulative += (amount - prevLimit) * b.r * ratecreep;
-        marginalRate = b.r * ratecreep;
-        nominalRate  = b.nr ?? 0;
-        break;
-      } else {
-        cumulative += (currentLimit - prevLimit) * b.r * ratecreep;
-        marginalRate = b.r * ratecreep;
-        nominalRate  = b.nr ?? 0;
-        prevLimit    = currentLimit;
-      }
-    }
-    return { cumulative, total:cumulative, marginal:marginalRate, limit:prevLimit, nominalRate };
-  };
-}
+/* ── getRateBracket / calculateProgressive now come from taxengine.js (self-contained). ── */
 
 /* ── Inline IRMAA lookup (no dependency on retirement_optimizer_core.js) ── */
 function computeIrmaaInline(magi, status, inflMult) {

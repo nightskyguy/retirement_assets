@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1125</title>
+    <title>Retirement Optimizer 11.1133</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -51,7 +51,7 @@
 	<script src="retirement_optimizer_core.js"></script>	
 	<script src="retirement_optimizer_tests.js"></script>	
 	<script src="retirement_optimizer_text.js"></script>	
-	<script src="taxengine.js?v=1125"></script>
+	<script src="taxengine.js?v=1133"></script>
 </head>
 <body>
 
@@ -556,9 +556,11 @@
 		<div id="tab-docs" class="card hidden">
 			<details style="margin-bottom:12px;">
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
-				<p>For full details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
+				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.1125</b> <strong>IRMAA now respects Medicare age.</strong>
+				<li><b>11.1133</b> <strong>Architectural improvements</strong>, no features changed.
+					</li>
+					<li><b>11.1125</b> <strong>IRMAA now respects Medicare age.</strong>
 						<ul style="margin:4px 0 0 16px;">
 							<li><strong>Age-65 gate, per spouse.</strong> The IRMAA surcharge is charged only for spouses who are 65+ (actually on Medicare) — a couple aged 61/59 no longer pays IRMAA no matter how large a Roth conversion is. With one spouse 65+ and one younger, only the older spouse's half is charged.</li>
 							<li><strong>Tier display fix.</strong> The IRMAA Tier column (and chart milestone) previously appeared one year before the surcharge was actually charged; both now use the same 2-year MAGI lookback as the dollar amount, and show <em>-none-</em> before age 65.</li>

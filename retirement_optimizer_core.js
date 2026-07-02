@@ -196,17 +196,6 @@ function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, 
     return { qcd1, qcd2, totalQCD: qcd1 + qcd2 };
 }
 
-function getRateBracket(entity, status) {
-    let brks = TAXData?.[entity]?.[status]?.brackets;
-
-    if (!brks) {
-        console.error(`Invalid tax data: entity="${entity}", status="${status}"`);
-        return null
-    };
-
-    return brks
-}
-
 // Calculate the withdrawal rate to reduce an account from currentIRA to targetIRA
 // If the currentIRA is > targetIRA, withdraw enough to prevent targetIRA from being exceeded by growth.
 function calculateAmortizedWithdrawal(currentIRA, targetIRA, years, growthRate) {
@@ -239,57 +228,6 @@ function calculateAmortizedWithdrawal(currentIRA, targetIRA, years, growthRate) 
  */
 function calculateMaxIRAWithdrawalForBracket(bracketTarget, baseIncome) {
     return Math.max(0, bracketTarget - baseIncome);
-}
-
-/**
- * Find the income limit for a specified marginal tax rate within tax brackets.
- * Returns the highest bracket limit where the rate is less than or equal to the target rate.
- * Uses TAXdata structure to retrieve bracket information.
- * 
- * @param {string} entity - Tax entity identifier (e.g., 'federal', 'CA', 'IRMAA', 'SS')
- * @param {string} status - Filing status (e.g., 'single', 'joint', 'mfs', 'hoh')
- * @param {number} tgtrate - Target marginal tax rate to find limit for
- * @param {number} [inflation=1] - Inflation multiplier for bracket limits (default: 1)
- * @returns {Object} Bracket limit results
- * @returns {number} return.limit - Income limit at or below the target rate (0 if no match)
- * @returns {number} return.rate - Actual rate of the bracket found
- * @note Does not validate input parameters for reasonableness
- */
-function findLimitByRate(entity, status, tgtrate, inflation = 1) {
-    let brks = getRateBracket(entity, status)
-
-    let limit = 0;
-    let rate = 0;
-
-    for (let b of brks) {
-        if (b.r <= tgtrate) {
-            limit = b.l * inflation;
-            rate = b.r;
-        } else break;
-    }
-    return { limit, rate: rate }
-}
-
-
-// We want to find the limit of the next bracket HIGHER than the amount given (that is the upper limit).
-// For example if the limits are 10, 100, 1000 and the amount is 150 - we want the 1000 (less 1).
-// If amount is 99, we want 100.
-function findUpperLimitByAmount(entity, status, amount, inflation = 1) {
-    let limit = 0;
-    let rate = 0;
-    let nominalRate = 0.0;
-    let brks = getRateBracket(entity, status)
-
-    for (let b of brks) {
-        if (b.l * inflation <= amount) {
-            rate = b.r;
-            nominalRate = b.nr ?? 0;
-        } else {
-            limit = b.l * inflation - 1;
-            break;
-        }
-    }
-    return { limit, rate: rate, nominalRate: nominalRate }
 }
 
 ///
@@ -1942,59 +1880,6 @@ function simulate(inputs) {
     };
 
     return { log, totals, finalNW: log[log.length - 1].totalWealth };
-}
-
-/**
- * Calculate progressive tax on a given amount using tax brackets from TAXdata structure.
- * Iterates through brackets, applying rates to income ranges, with optional inflation
- * and rate creep adjustments for future year projections.
- * 
- * @param {string} entity - Tax entity identifier (e.g., 'federal', 'CA', 'IRMAA', 'SS')
- * @param {string} status - Filing status (e.g., 'single', 'joint', 'mfs', 'hoh')
- * @param {number} amount - Taxable amount to calculate tax on
- * @param {number} [inflation=1] - Inflation multiplier for bracket limits (default: 1)
- * @param {number} [ratecreep=1] - Rate adjustment multiplier (default: 1)
- * @returns {Object} Tax calculation results
- * @returns {number} return.cumulative - Total tax owed
- * @returns {number} return.total - Total tax owed (same as cumulative)
- * @returns {number} return.marginal - Marginal tax rate at this income level
- * @returns {number} return.limit - Upper limit of the bracket reached
- * @returns {number} return.nominalRate - Nominal rate if specified in bracket data
- * @returns {string} [return.error] - Error message if entity/status invalid
- */
-function calculateProgressive(entity, status, amount, inflation = 1, ratecreep = 1) {
-
-    let brks = getRateBracket(entity, status)
-    if (!brks) {
-        return { cumulative: 0, total: 0, marginal: 0, limit: 0, error: `Invalid entity (${entity}) or status (${status})` };
-    }
-
-    // States with INFLATION_INDEXED: false have statutory fixed bracket thresholds — never inflate them.
-    const effectiveInflation = TAXData[entity]?.INFLATION_INDEXED === false ? 1 : inflation;
-
-    let prevLimit = 0;
-    let cumulative = 0;
-    let marginalRate = 0;
-    let nominalRate = 0;
-
-    for (let b of brks) {
-        let currentLimit = b.l * effectiveInflation;
-
-        if (amount <= currentLimit) {
-            cumulative += (amount - prevLimit) * b.r * ratecreep;
-            marginalRate = b.r * ratecreep;
-            nominalRate = b.nr ?? 0;
-            prevLimit = currentLimit;
-            break;
-        } else {
-            cumulative += (currentLimit - prevLimit) * b.r * ratecreep;
-            marginalRate = b.r * ratecreep;
-            nominalRate = b.nr ?? 0;
-            prevLimit = currentLimit;
-        }
-    }
-
-    return { cumulative, total: cumulative, marginal: marginalRate, limit: prevLimit, nominalRate: nominalRate }
 }
 
 ///////////////////////////

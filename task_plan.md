@@ -31,6 +31,7 @@ Goal: Complete open features from the original priority list plus deferred items
 | 18 | **P16** | Responsive Layout (all tools) | pending | — |
 | 19 | **P17** | Retirement_Projection — Simple Mode | pending | — |
 | 20 | **P18** | Retirement_Projection → RetirementTaxPlanner link | pending | — |
+| 21 | **P19** | taxengine.js Architectural Cleanup | pending | — |
 
 ---
 
@@ -495,6 +496,20 @@ Tests go in `retirement_optimizer_core.test.js`. Helper: `makeZeroBaseInputs()` 
 - [ ] Test: clicking year opens RetirementTaxPlanner with correct pre-filled values
 - **Status:** pending
 - **Depends on:** understanding RetirementTaxPlanner.html's existing URL param schema
+
+---
+
+## Phase P19: taxengine.js Architectural Cleanup
+**Why:** A full review of taxengine.js (2026-07-02, see `~/.claude/plans/review-taxengine-js-for-1-groovy-balloon.md`) found the circular core.js↔taxengine.js dependency — **fixed same session**: `getRateBracket`, `findLimitByRate`, `findUpperLimitByAmount`, `calculateProgressive` moved from core.js into taxengine.js (new "Bracket utilities" section right after `RMD_TABLE`), so taxengine.js no longer depends on core.js while core.js still depends on taxengine.js (one-directional now). Also fixed as part of that pass: dead `Retirement_Projection.html` polyfill removed (it now transparently uses the real taxengine.js functions), 5 low-risk comment/dead-code fixes in taxengine.js, and a live CPI-inflation-drift bug in `Retirement_Projection.html` (AL/MT/ND/OH/SC brackets were incorrectly inflating). node 51/51 + browser 240/240 verified after each change. The items below are the findings from that review NOT yet addressed.
+
+- [ ] **Bracket-walk consolidation:** taxengine.js has 3 hand-rolled bracket-walk loops (capital gains split in `calculateTaxes()`; IRMAA tier lookup in `getIRMAATier()`; IRMAA target-tier lookup in `getIRMAATierTargetMAGI()`) doing the same "iterate brackets, compare against inflated threshold" pattern — and now that the relocated `getRateBracket`/`findLimitByRate`/`findUpperLimitByAmount`/`calculateProgressive` live in the same file, there are 6 near-duplicate bracket-walk variants in one place. Extract one shared `findBracketIndex(brackets, amount, multiplier)` helper.
+- [ ] **Return-object alias cleanup:** `calculateTaxes()` returns several fields under two names with no differentiation — `stateTax`/`state`, `irmaaMagi`/`MAGI`, `federalMarginalRate`/`fedRate`, `stateMarginalRate`/`stRate`. Needs a consumer audit (which callers use which name) before consolidating — don't remove a name a consumer still reads.
+- [ ] **Unify `computeIrmaaInline()` with `calcIRMAA()`:** `Retirement_Projection.html`'s `computeIrmaaInline()` is a from-scratch reimplementation of `calcIRMAA()`, not a fallback — it's the only IRMAA path that file ever uses. It lacks the `onMedicareCount` per-spouse Medicare-age-gating parameter added to `calcIRMAA()` in the v11.1124 IRMAA work, so that tool's IRMAA display silently doesn't reflect that feature. Needs a decision: thread the birth-year/age data `computeIrmaaInline`'s caller already has (`project()` already takes `birthYearIn`/`spouseBirthYearIn`) into a direct `calcIRMAA()` call and delete `computeIrmaaInline()` entirely.
+- [ ] **`irmaa_and_rmds.html` duplicate bracket math:** reads `TAXData.SOCIALSECURITY`/`TAXData.IRMAA`/`RMD_TABLE` directly and re-implements its own bracket-walk instead of calling `calcIRMAA()`/`getIRMAATier()`/the relocated bracket utilities. Lower risk than the Retirement_Projection.html case (simpler logic, no `INFLATION_INDEXED` interaction) but same pattern — worth revisiting once the bracket-walk consolidation above exists to call into.
+- [ ] **Script load-order normalization (cosmetic, optional):** `taxengine.js` is now the base layer with zero dependencies and `core.js` depends on it — the "correct" load order is taxengine.js first. `IncomeTaxPlanner.html` and the test/worker harnesses already do this; `retirement_optimizer.html` loads `core.js` before `taxengine.js` (works fine due to hoisting, confirmed safe, but backwards from the dependency direction). Low priority — reorder only if touching that file's `<script>` block for another reason.
+- [ ] **State coverage (13 of 51 jurisdictions uncoded):** LA/UT (flat, easy). 11 graduated states (AR/DE/HI/KS/MO/NJ/NM/OK/RI/VT/WV) — MO/WV need year-keyed rate tables (active phase-downs, same pattern as GA/NE/KY); AR/DE/MO/NJ/NM/RI/VT/WV need per-state partial-SS-taxation thresholds; NJ needs a >$1M surtax bracket; VT needs a low-income exemption rule. RI/VT CPI-indexing is actually free (already the default). See the review plan file for the full per-state breakdown.
+- **Status:** pending (circular-dependency fix and 5 low-risk items already shipped this session, uncommitted)
+- **Independent:** no phase dependencies for the remaining items
 
 ---
 

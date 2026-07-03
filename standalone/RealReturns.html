@@ -45,7 +45,7 @@
     display: flex; align-items: center; gap: 12px; flex: 1; min-width: 220px;
   }
   .ctrl-card label { font-size: 13px; font-weight: 500; white-space: nowrap; }
-  .ctrl-card input[type=range] { flex: 1; accent-color: #378add; }
+  .ctrl-card input[type=range] { flex: 1; min-width: 0; accent-color: #378add; }
   .ctl-val { font-size: 18px; font-weight: 500; color: #378add; min-width: 44px; text-align: right; }
   .scale-card {
     background: #f5f4f0; border-radius: 8px; padding: 0.75rem 1rem;
@@ -75,12 +75,27 @@
     text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
   }
   .cagr-big { font-size: 22px; font-weight: 600; margin-bottom: 8px; line-height: 1; }
+  .cagr-market { font-size: 13px; font-weight: 500; margin-left: 4px; cursor: default; }
   .stat-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
   .stat-lbl { font-size: 10px; color: #888780; }
   .stat-val { font-size: 12px; font-weight: 600; }
   .positive { color: #0f6e56; }
   .negative { color: #a32d2d; }
   .neutral  { color: #1a1a18; }
+
+  /* Inflation summary (horizontal, distinct from stat-card grid) */
+  .infl-panel {
+    background: #f5f4f0; border-radius: 8px; padding: 0.875rem 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .infl-title {
+    font-size: 10px; font-weight: 600; color: #6b6b67;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;
+  }
+  .infl-row { display: flex; flex-wrap: wrap; gap: 20px; }
+  .infl-item { display: flex; flex-direction: column; gap: 2px; }
+  .infl-lbl { font-size: 10px; color: #888780; white-space: nowrap; }
+  .infl-val { font-size: 15px; font-weight: 600; white-space: nowrap; }
 
   /* Allocation */
   .alloc-panel {
@@ -164,8 +179,13 @@
   <div class="controls">
     <div class="ctrl-card">
       <label for="startYr">Start year</label>
-      <input type="range" id="startYr" min="1928" max="2024" step="1" value="2015">
-      <span class="ctl-val" id="startYrVal">2015</span>
+      <input type="range" id="startYr" min="1928" max="2024" step="1" value="2016">
+      <span class="ctl-val" id="startYrVal">2016</span>
+    </div>
+    <div class="ctrl-card">
+      <label for="numYrs">Length (yrs)</label>
+      <input type="range" id="numYrs" min="1" max="98" step="1" value="10">
+      <span class="ctl-val" id="numYrsVal">10</span>
     </div>
     <div class="scale-card">
       <label>Y-axis</label>
@@ -181,8 +201,13 @@
       </div>
     </div>
   </div>
+  <p class="legend-hint" id="periodLabel">Period: 2016&ndash;2025 (10 yrs)</p>
 
   <div class="stats-grid" id="statsGrid">
+    <!-- filled by JS -->
+  </div>
+
+  <div class="infl-panel" id="inflPanel">
     <!-- filled by JS -->
   </div>
 
@@ -291,14 +316,18 @@ document.getElementById('rr-vintage').textContent =
   'Data through ' + DATA_END + ' (updated ' + RR_VINTAGE + ').';
 
 // --- State ---
-let startYr = 2015, eqPct = 60, bdPct = 30;
+let startYr = 2016, numYears = DATA_END - 2016 + 1, eqPct = 60, bdPct = 30;
 let nominalOn = false, isolatedAsset = -1;
 let annualData = [];
 
 // Load from URL before chart init
 (function loadFromURL() {
   const p = new URLSearchParams(window.location.search);
-  if (p.has('yr')) startYr = Math.max(DATA_START, Math.min(DATA_END - 1, +p.get('yr') || 2015));
+  if (p.has('yr')) startYr = Math.max(DATA_START, Math.min(DATA_END - 1, +p.get('yr') || 2016));
+  numYears = p.has('ny')
+    ? Math.max(1, Math.min(DATA_END - DATA_START + 1, +p.get('ny') || (DATA_END - startYr + 1)))
+    : DATA_END - startYr + 1;
+  numYears = Math.min(numYears, DATA_END - startYr + 1); // guard against stale/hand-edited yr+ny combos
   if (p.has('eq')) eqPct = Math.max(0, Math.min(100, +p.get('eq') || 60));
   if (p.has('bd')) bdPct = Math.max(0, Math.min(100 - eqPct, +p.get('bd') || 30));
   if (p.get('nom') === '1') nominalOn = true;
@@ -314,17 +343,18 @@ function cagrCalc(finalVal, n) { return Math.pow(finalVal / 10000, 1 / n) - 1; }
 // --- Compute series ---
 function computeSeries() {
   const idx0  = startYr - DATA_START;
-  const n     = DATA_END - startYr + 1;
+  const n     = numYears;
   const caPct = 100 - eqPct - bdPct;
 
   const labels      = [startYr - 1];
   const eqVals      = [10000], bdVals    = [10000], caVals    = [10000];
   const mixVals     = [10000], inflVals  = [10000];
   const eqNomVals   = [10000], bdNomVals = [10000], caNomVals = [10000], mixNomVals = [10000];
+  const cpiVals     = [10000]; // cumulative CPI cost-of-goods index (1+inf compounding) — NOT the inverse of inflVals (purchasing-power decay, 1/(1+inf)-1); the two diverge over multi-year compounding
 
   annualData = [];
 
-  let eqB = 10000, bdB = 10000, caB = 10000, mixB = 10000, inflB = 10000;
+  let eqB = 10000, bdB = 10000, caB = 10000, mixB = 10000, inflB = 10000, cpiB = 10000;
   let eqNomB = 10000, bdNomB = 10000, caNomB = 10000, mixNomB = 10000;
 
   for (let i = 0; i < n; i++) {
@@ -341,29 +371,30 @@ function computeSeries() {
     const rInfl = 1 / (1 + inf) - 1;
 
     eqB   *= 1 + rEq;  bdB  *= 1 + rBd;  caB  *= 1 + rCa;
-    mixB  *= 1 + rMix; inflB *= 1 + rInfl;
+    mixB  *= 1 + rMix; inflB *= 1 + rInfl; cpiB *= 1 + inf;
     eqNomB *= 1 + eq;  bdNomB *= 1 + bd;  caNomB *= 1 + ca;  mixNomB *= 1 + mixNom;
 
     labels.push(yr);
     eqVals.push(+eqB.toFixed(2));      bdVals.push(+bdB.toFixed(2));
     caVals.push(+caB.toFixed(2));      mixVals.push(+mixB.toFixed(2));
-    inflVals.push(+inflB.toFixed(2));
+    inflVals.push(+inflB.toFixed(2));  cpiVals.push(+cpiB.toFixed(2));
     eqNomVals.push(+eqNomB.toFixed(2)); bdNomVals.push(+bdNomB.toFixed(2));
     caNomVals.push(+caNomB.toFixed(2)); mixNomVals.push(+mixNomB.toFixed(2));
     annualData.push({ yr, eq, bd, ca, inf, rEq, rBd, rCa, rMix, mixNom });
   }
 
-  return { labels, eqVals, bdVals, caVals, mixVals, inflVals,
+  return { labels, eqVals, bdVals, caVals, mixVals, inflVals, cpiVals,
            eqNomVals, bdNomVals, caNomVals, mixNomVals, n };
 }
 
 // --- Stat cards ---
 function renderStats(series) {
-  const { eqVals, bdVals, caVals, mixVals, n } = series;
+  const { eqVals, bdVals, caVals, mixVals, eqNomVals, bdNomVals, caNomVals, mixNomVals, n } = series;
 
-  function card(vals, color, name, rets) {
+  function card(vals, color, name, rets, nomVals) {
     const final = vals[vals.length - 1];
     const cg    = cagrCalc(final, n);
+    const nomCg = cagrCalc(nomVals[nomVals.length - 1], n);
     let best  = { ret: -Infinity, yr: 0 };
     let worst = { ret:  Infinity, yr: 0 };
     rets.forEach((r, i) => {
@@ -374,7 +405,10 @@ function renderStats(series) {
     return `
       <div class="stat-card" style="border-left-color:${color}">
         <p class="card-title">${name}</p>
-        <p class="cagr-big ${cg >= 0 ? 'positive' : 'negative'}">${pctFmt(cg)}/yr</p>
+        <p class="cagr-big">
+          <span class="${cg >= 0 ? 'positive' : 'negative'}" title="Real (inflation-adjusted) compound annual growth rate for ${name} over the selected period">${pctFmt(cg)}/yr</span>
+          <span class="cagr-market ${nomCg >= 0 ? 'positive' : 'negative'}" title="Market (nominal) compound annual growth rate for ${name} — before adjusting for inflation">(${pctFmt(nomCg)}/yr)</span>
+        </p>
         <div class="stat-row">
           <span class="stat-lbl">Final $10k value</span>
           <span class="stat-val">${dollarFmt(final)}</span>
@@ -395,24 +429,67 @@ function renderStats(series) {
   }
 
   document.getElementById('statsGrid').innerHTML = [
-    card(eqVals,  C_EQ,  'US Equity',          annualData.map(d => d.rEq)),
-    card(bdVals,  C_BD,  'US Bonds',            annualData.map(d => d.rBd)),
-    card(caVals,  C_CA,  'Cash (T-bills)',       annualData.map(d => d.rCa)),
-    card(mixVals, C_MIX, `Mix ${eqPct}/${bdPct}/${100-eqPct-bdPct}`, annualData.map(d => d.rMix)),
+    card(eqVals,  C_EQ,  'US Equity',          annualData.map(d => d.rEq), eqNomVals),
+    card(bdVals,  C_BD,  'US Bonds',            annualData.map(d => d.rBd), bdNomVals),
+    card(caVals,  C_CA,  'Cash (T-bills)',       annualData.map(d => d.rCa), caNomVals),
+    card(mixVals, C_MIX, `Mix ${eqPct}/${bdPct}/${100-eqPct-bdPct}`, annualData.map(d => d.rMix), mixNomVals),
   ].join('');
+}
+
+// --- Inflation summary (horizontal panel, not a stat-card — inflation is a backdrop stat, not a competing asset) ---
+// Coloring is inverted vs. the cards above: inflation rising is bad (red), flat/deflation is good (green).
+// No leading '+' on positive values, since a '+' reads as a gain here, not a loss.
+function pctFmtInfl(v, dec) { return (v * 100).toFixed(dec ?? 1) + '%'; }
+function inflClass(v) { return v <= 0 ? 'positive' : 'negative'; }
+
+function renderInflationSummary(series) {
+  const { cpiVals, n } = series;
+  const final = cpiVals[cpiVals.length - 1];
+  const cg = cagrCalc(final, n);
+  let hi = { r: -Infinity, yr: 0 }, lo = { r: Infinity, yr: 0 };
+  annualData.forEach(d => {
+    if (d.inf > hi.r) { hi.r = d.inf; hi.yr = d.yr; }
+    if (d.inf < lo.r) { lo.r = d.inf; lo.yr = d.yr; }
+  });
+  document.getElementById('inflPanel').innerHTML = `
+    <p class="infl-title">CPI Inflation</p>
+    <div class="infl-row">
+      <div class="infl-item">
+        <span class="infl-lbl">CAGR (period)</span>
+        <span class="infl-val ${inflClass(cg)}">${pctFmtInfl(cg)}/yr</span>
+      </div>
+      <div class="infl-item">
+        <span class="infl-lbl">Highest year</span>
+        <span class="infl-val ${inflClass(hi.r)}">${pctFmtInfl(hi.r)} (${hi.yr})</span>
+      </div>
+      <div class="infl-item">
+        <span class="infl-lbl">Lowest year</span>
+        <span class="infl-val ${inflClass(lo.r)}">${pctFmtInfl(lo.r)} (${lo.yr})</span>
+      </div>
+      <div class="infl-item">
+        <span class="infl-lbl">Cost of $10k of start-of-period goods, by period end</span>
+        <span class="infl-val neutral">${dollarFmt(final)}</span>
+      </div>
+    </div>`;
 }
 
 // --- Sync sliders/display to loaded state ---
 document.getElementById('startYr').value = startYr;
 document.getElementById('startYrVal').textContent = startYr;
+document.getElementById('startYr').max = DATA_END - numYears + 1;
+document.getElementById('numYrs').value = numYears;
+document.getElementById('numYrsVal').textContent = numYears;
+document.getElementById('numYrs').max = DATA_END - startYr + 1;
 document.getElementById('eqPct').value = eqPct;
 document.getElementById('bdPct').value = bdPct;
 document.getElementById('bdPct').max = 100 - eqPct;
 syncAllocDisplay();
+updatePeriodDisplay();
 
 // --- Init chart ---
 const s0 = computeSeries();
 renderStats(s0);
+renderInflationSummary(s0);
 
 const breakevenPlugin = {
   id: 'breakeven',
@@ -611,14 +688,48 @@ function refresh() {
   chart.data.datasets[8].data = s.mixNomVals;
   chart.update();
   renderStats(s);
+  renderInflationSummary(s);
 }
 
-// --- Start year slider ---
-document.getElementById('startYr').addEventListener('input', function() {
+// --- Start year / period length sliders ---
+const startYrSlider = document.getElementById('startYr');
+const numYrsSlider   = document.getElementById('numYrs');
+
+startYrSlider.addEventListener('input', function() {
   startYr = +this.value;
   document.getElementById('startYrVal').textContent = startYr;
+  const maxYears = DATA_END - startYr + 1;
+  if (numYears > maxYears) {
+    numYears = maxYears;
+    numYrsSlider.value = numYears;
+    document.getElementById('numYrsVal').textContent = numYears;
+  }
+  numYrsSlider.max = maxYears;
+  updatePeriodDisplay();
   refresh();
 });
+
+numYrsSlider.addEventListener('input', function() {
+  numYears = +this.value;
+  document.getElementById('numYrsVal').textContent = numYears;
+  const maxStart = DATA_END - numYears + 1;
+  if (startYr > maxStart) {
+    startYr = maxStart;
+    startYrSlider.value = startYr;
+    document.getElementById('startYrVal').textContent = startYr;
+  }
+  startYrSlider.max = maxStart;
+  updatePeriodDisplay();
+  refresh();
+});
+
+function updatePeriodDisplay() {
+  const endYr = startYr + numYears - 1;
+  document.getElementById('periodLabel').textContent =
+    `Period: ${startYr}–${endYr} (${numYears} yr${numYears === 1 ? '' : 's'})`;
+  document.getElementById('mainChart').setAttribute('aria-label',
+    `Line chart of cumulative inflation-adjusted value of $10,000 in US stocks, bonds, T-bills, and a custom allocation from ${startYr} through ${endYr}.`);
+}
 
 // --- Allocation sliders ---
 const eqSlider = document.getElementById('eqPct');
@@ -649,7 +760,8 @@ function syncAllocDisplay() {
 // --- Share URL ---
 function buildShareURL() {
   const params = new URLSearchParams();
-  if (startYr !== 2015) params.set('yr', startYr);
+  if (startYr !== 2016) params.set('yr', startYr);
+  if (numYears !== DATA_END - startYr + 1) params.set('ny', numYears);
   if (eqPct !== 60) params.set('eq', eqPct);
   if (bdPct !== 30) params.set('bd', bdPct);
   if (chart.options.scales.y.type !== 'logarithmic') params.set('sc', 'lin');

@@ -1,5 +1,11 @@
 # Progress Log
 
+## Session: 2026-07-04 — Context restore, new worktree `silly-hellman-b5d326`
+- Branch `worktrees/silly-hellman-b5d326`, clean, matches main post-PR#107.
+- Since last plan update (PR#104): PR#105 (324447f taxengine circular-dep fix, now committed — P19 status line updated), PR#106 (d930139 RealReturns sweepable period + inflation/CAGR context — side feature, not on P-list), PR#107 (16c75d9 HYSA share/URL-state UX + moved root tools into `standalone/` + 3a3188a/6d09da8 planning-layout fixes — also side features, not on P-list).
+- `.planning/` layout now scoped at `.planning/retirement-optimizer/` per 3a3188a (hooks expect this; flat layout from 16c75d9 was invisible to hooks).
+- task_plan.md "As of" line + P19 status refreshed. No code changes yet this session.
+
 ## Session: 2026-07-02 — Context restore, new worktree `cranky-mcclintock-9fa806`
 - Branch `worktrees/cranky-mcclintock-9fa806`, clean, matches main post-PR#103.
 - PR #103 merged (f46fb67): 97cb319 MC milestone-filter fix + Sim Mode label size — was UNCOMMITTED per the entry below, now confirmed shipped as part of that PR.

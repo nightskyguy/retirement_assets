@@ -14,11 +14,11 @@ You can DIRECTLY invoke these tools:
 
 + **[Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html)**  A full tool, with optimizers!  This is the original, and most featured tool.
 
-+ **[Income Tax Planner](https://tools.netcitizen.us/IncomeTaxPlanner.html)** What does taxation look like at different ordinary income levels (includes many states)
++ **[Income Tax Planner](https://tools.netcitizen.us/standalone/IncomeTaxPlanner.html)** What does taxation look like at different ordinary income levels (includes many states)
 + **[Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html)** Compares 3 ways to pay taxes in retirement - provides reminders. Retirement Optimizer calls it.
 + **[Retirement Projection](https://tools.netcitizen.us/Retirement_Projection.html)**  What will my retirement assets do? It's very VISUAL but not as rich as Retirement Optimizer.
-+ **[IRMAA and Medicare Future costs](https://tools.netcitizen.us/FutureCost.html)** Will IRMAA kill me?
-+ **[After Tax REAL Growth](https://tools.netcitizen.us/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
++ **[IRMAA and Medicare Future costs](https://tools.netcitizen.us/standalone/FutureCost.html)** Will IRMAA kill me?
++ **[After Tax REAL Growth](https://tools.netcitizen.us/standalone/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
 + **[HYSA Real Returns](https://tools.netcitizen.us/standalone/HYSA.html)** Does my "safe" high-yield savings account actually grow after taxes and inflation? Annual and cumulative views in one tool.
 + **[Historical Real Returns](https://tools.netcitizen.us/standalone/RealReturns.html)** How did stocks, bonds, and T-bills really perform after inflation? 98 years of data (1928–2025) with a custom allocation mix.
 
@@ -45,18 +45,18 @@ In real life, yes you are very likely to put your Bonds, TIPS, and Money Market 
 There is no provision for adding lumpy withdrawals, but there is a way to apply a "spending smile" curve to withdrawals. 
 
 
-**[FutureCost.html](FutureCost.html) — Present Value of Growing Payments**
+**[FutureCost.html](standalone/FutureCost.html) — Present Value of Growing Payments**
 Answers the question: how much money must be set aside today — and left to grow — to fund a stream of payments that increase faster than inflation? The primary use case is Medicare IRMAA surcharges: because IRMAA penalties are paid from pre-tax IRA/401k withdrawals, the tool tracks federal and state marginal tax rates separately and grosses up every payment to reflect the actual account draw required. Sliders control the annual penalty, planning horizon, CPI inflation, extra growth above inflation (Medicare premiums have historically risen 2–4% above CPI), portfolio return rate, and income (MAGI). Four result metrics — funds to allocate now, year-1 pre-tax draw, final-year pre-tax draw, and total real cost in today's dollars — plus a year-by-year chart of the payment as a percentage of income make the central point viscerally clear: those "small potatoes" grow in real purchasing-power terms every single year.
 
-**[IRMAA and RMDs](https://tools.netcitizen.us/irmaa_and_rmds.html) - What balances get me in trouble with IRMAA**
+**[IRMAA and RMDs](https://tools.netcitizen.us/standalone/irmaa_and_rmds.html) - What balances get me in trouble with IRMAA**
 Given entered fixed income, calculate what size IRA balance will cause RMDs that hit IRMAA tiers at various ages.  The tool uses current rates and does not attempt to adjust for inflation.  For example a married couple with a $16,607,550 balance at age **73** together with $130,000 income (pensions/social security/etc) will hit the highest IRMAA Tier 5 due to $626,700 forced RMD. Yeah, that is clearly not most of us. But at age **80** a $2,882,540 IRA balance together with that same income will hit **Tier 2** $5.2K annual charge because that balance at that age forces a $142,000 RMD.  A balance of $1,286,740 for a single 80 year old lands in **Tier 4** with a $5.7k annual charge.  At 75 that same single person would be in Tier 4 with a 1.5M IRA balance.  The Retirement Optimizer will suggest a target (combined) IRA balance that minimizes IRMAA jeopardy.
 
-**[AfterTaxRealGrowth.html](AfterTaxRealGrowth.html) — After-Tax Real Growth Rate**
+**[AfterTaxRealGrowth.html](standalone/AfterTaxRealGrowth.html) — After-Tax Real Growth Rate**
 Did you know that your 2.5% interest bearing savings account LOSES money even if inflation is LESS than 2.5%?  I suspected that, but this tool will show you the real answer - and surprise, it matters what your tax bracket is!
 
 Visualize how inflation and taxation combine to erode nominal investment returns. Set an inflation rate and your portfolio's nominal return, and the tool plots the real after-tax return across six federal tax brackets (0%, 12%, 22%, 24%, 32%, 37%), with the 24% bracket highlighted as the typical IRMAA Tier 1 landing zone. A dashed break-even line at 0% real return makes immediately visible that a 2.50% nominal return at 2.50% inflation and 25% tax is not a wash — it is a net loss of purchasing power (~0.61%/year). Each bracket card shows your real return at the current portfolio return alongside the minimum nominal return needed to merely preserve purchasing power at that bracket and inflation rate. Useful for stress-testing conservative accounts (CDs, money markets, bond funds) where the real return is easily negative without realizing it.
 
-**[IncomeTaxPlanner.html](IncomeTaxPlanner.html) — Federal + State Tax Sweep with IRMAA & Capital Gains**
+**[IncomeTaxPlanner.html](standalone/IncomeTaxPlanner.html) — Federal + State Tax Sweep with IRMAA & Capital Gains**
 Sweeps ordinary income from $0 to $1.1M in $10k steps and plots your true all-in effective tax rate — federal, state, and IRMAA combined — with a marginal rate curve that makes the Social Security torpedo, IRMAA tier crossings, and NIIT threshold immediately visible. Configure filing status, state (14 options currently), taxpayer ages, fixed Social Security income, capital gains proceeds and basis, a target year 2026–2035 with configurable CPI, and OBBBA provisions (senior deduction, elevated SALT cap). Two linked charts update instantly on any control change, and hovering either chart activates the corresponding tooltip on the other at the same income level.
 
 Uses 2026 IRS Rev. Proc. 2025-32 federal brackets inflated forward by your chosen CPI rate; IRMAA premiums grow at that rate plus a configurable Medicare-specific increment. Designed to answer four questions: *How sensitive is my tax burden to a $10k income change? Where are my sweet spots and danger zones (SS torpedo, IRMAA cliffs, NIIT)? What is my real all-in effective rate? What withholding should I target?* The Share button encodes all settings into a compact URL that works from a local file or a web server — save it as a bookmark or paste it into a discussion to let someone else replicate your exact scenario.

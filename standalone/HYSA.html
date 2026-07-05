@@ -27,7 +27,7 @@
 
   .other-tools-btn {
     display: inline-flex; align-items: center; gap: 6px;
-    margin-bottom: 1.25rem; padding: 6px 14px;
+    padding: 6px 14px;
     background: #7f77dd; color: #fff; border: none; border-radius: 5px;
     font-family: inherit; font-size: 12px; font-weight: 500;
     letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
@@ -118,7 +118,18 @@
 <div class="container">
   <h1>HYSA Real Returns</h1>
   <p class="subtitle" id="page-subtitle">High-yield savings account — after-tax real performance, 2000–2026</p>
-  <button class="other-tools-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.25rem;position:relative;">
+    <button class="other-tools-btn" onclick="showOtherTools()">&#9783; Other Tools</button>
+    <button class="other-tools-btn" style="background:#2a9d5c" onclick="toggleSharePanel()">&#8258; Share</button>
+    <div id="share-panel" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:800;background:#fff;border:1px solid #2a9d5c;border-radius:8px;padding:.85rem 1rem;width:min(520px,calc(100vw - 3rem));box-shadow:0 8px 32px rgba(0,0,0,.2);">
+      <div style="font-size:11px;color:#555;margin-bottom:.4rem;font-family:monospace;">Share this view</div>
+      <div style="display:flex;gap:6px;">
+        <input id="share-url-input" type="text" readonly onclick="this.select()" style="flex:1;background:#f8f9fa;border:1px solid #ccc;border-radius:4px;color:#222;font-family:monospace;font-size:11px;padding:5px 8px;outline:none;">
+        <button onclick="copyShareURL()" style="background:rgba(42,157,92,.15);border:1px solid rgba(42,157,92,.4);border-radius:4px;color:#1a6e3a;font-family:monospace;font-size:11px;padding:5px 12px;cursor:pointer;white-space:nowrap;">Copy</button>
+      </div>
+      <div id="share-status" style="font-family:monospace;font-size:10px;color:#1a6e3a;margin-top:.35rem;min-height:14px;"></div>
+    </div>
+  </div>
 
   <!-- Tabs -->
   <div class="tabs">
@@ -262,10 +273,23 @@ document.getElementById('vintage-note').textContent =
 
 const P = 10000;
 let taxPct = 30, startYr = FIRST_YR;
+let initialTab = 'annual';
+
+// Load shared state from URL before charts are built
+(function loadFromURL() {
+  const p = new URLSearchParams(window.location.search);
+  if (p.has('tax')) taxPct = Math.max(1, Math.min(50, +p.get('tax') || 30));
+  if (p.has('yr'))  startYr = Math.max(FIRST_YR, Math.min(LAST_YR - 1, +p.get('yr') || FIRST_YR));
+  if (p.get('tab') === 'cumul') initialTab = 'cumul';
+})();
 
 // ── Helpers ──
 function fmt(v) { return '$' + Math.round(v).toLocaleString(); }
 function fmtDiff(v) { return (v >= 0 ? '+' : '') + '$' + Math.round(v).toLocaleString(); }
+function fmtDiffPct(v) {
+  const pct = v / 10000 * 100;
+  return (v >= 0 ? '+' : '-') + '$' + Math.abs(v).toFixed(0) + ' (' + (pct >= 0 ? '+' : '-') + Math.abs(pct).toFixed(1) + '%)';
+}
 function fmtNet(v, sign) {
   const s = sign ? (v >= 0 ? '+' : '-') : (v < 0 ? '-' : '');
   return s + '$' + Math.abs(v).toFixed(0);
@@ -423,15 +447,16 @@ function updateCumulStats(d, t) {
   document.getElementById('c-cust-title').textContent   = t + '% tax (purple)';
   document.getElementById('c-roth-final').textContent   = fmt(rf);
   document.getElementById('c-roth-final').className     = clsDollar(rf, 10000);
-  document.getElementById('c-roth-net').textContent     = fmtDiff(rf - 10000);
+  document.getElementById('c-roth-net').textContent     = fmtDiffPct(rf - 10000);
   document.getElementById('c-roth-net').className       = clsDollar(rf, 10000);
   document.getElementById('c-cust-final').textContent   = fmt(cf);
   document.getElementById('c-cust-final').className     = clsDollar(cf, 10000);
-  document.getElementById('c-cust-net').textContent     = fmtDiff(cf - 10000);
+  document.getElementById('c-cust-net').textContent     = fmtDiffPct(cf - 10000);
   document.getElementById('c-cust-net').className       = clsDollar(cf, 10000);
   document.getElementById('c-cash-final').textContent   = fmt(kf);
   document.getElementById('c-cash-final').className     = clsDollar(kf, 10000);
-  document.getElementById('c-cash-net').textContent     = fmtDiff(kf - 10000);
+  document.getElementById('c-cash-net').textContent     = fmtDiffPct(kf - 10000);
+  document.getElementById('c-cash-net').className       = clsDollar(kf, 10000);
 }
 
 // ── Cumulative chart ──
@@ -527,12 +552,16 @@ const cumulChart = new Chart(document.getElementById('cumulChart'), {
 });
 updateCumulStats(cumul0, taxPct);
 
+// ── Tax slider init (reflect any restored value) ──
+document.getElementById('taxSlider').value = taxPct;
+document.getElementById('taxDisplay').textContent = taxPct + '%';
+
 // ── Year slider init ──
 const yearSliderEl = document.getElementById('yearSlider');
 yearSliderEl.min   = FIRST_YR;
 yearSliderEl.max   = LAST_YR - 1;
-yearSliderEl.value = FIRST_YR;
-document.getElementById('yearDisplay').textContent = FIRST_YR;
+yearSliderEl.value = startYr;
+document.getElementById('yearDisplay').textContent = startYr;
 
 // ── Tab switch ──
 function switchTab(tab) {
@@ -544,6 +573,7 @@ function switchTab(tab) {
   if (tab === 'annual') annualChart.resize();
   else cumulChart.resize();
 }
+if (initialTab === 'cumul') switchTab('cumul');
 
 // ── Tax slider (shared) ──
 document.getElementById('taxSlider').addEventListener('input', function() {
@@ -577,6 +607,49 @@ document.getElementById('yearSlider').addEventListener('input', function() {
   cumulChart.data.datasets[3].data = d.baseVals;
   cumulChart.update();
   updateCumulStats(d, taxPct);
+});
+
+// --- Share URL ---
+function buildShareURL() {
+  const params = new URLSearchParams();
+  if (taxPct !== 30) params.set('tax', taxPct);
+  if (startYr !== FIRST_YR) params.set('yr', startYr);
+  if (document.getElementById('tab-cumul').classList.contains('active')) params.set('tab', 'cumul');
+  const base = window.location.origin + window.location.pathname;
+  const q = params.toString();
+  return q ? base + '?' + q : base;
+}
+
+function toggleSharePanel() {
+  const panel = document.getElementById('share-panel');
+  const isOpen = panel.style.display === 'block';
+  if (isOpen) { panel.style.display = 'none'; return; }
+  document.getElementById('share-url-input').value = buildShareURL();
+  document.getElementById('share-status').textContent = '';
+  panel.style.display = 'block';
+  requestAnimationFrame(() => { document.getElementById('share-url-input').select(); });
+}
+
+async function copyShareURL() {
+  const input  = document.getElementById('share-url-input');
+  const status = document.getElementById('share-status');
+  input.select();
+  try {
+    await navigator.clipboard.writeText(input.value);
+    status.textContent = '✓ Copied to clipboard';
+    return;
+  } catch {}
+  try { document.execCommand('copy'); status.textContent = '✓ Copied to clipboard'; }
+  catch { status.textContent = 'Select the URL above and press Ctrl+C / Cmd+C'; }
+}
+
+document.addEventListener('click', e => {
+  const panel = document.getElementById('share-panel');
+  if (panel && panel.style.display === 'block' &&
+      !panel.contains(e.target) &&
+      !e.target.closest('[onclick="toggleSharePanel()"]')) {
+    panel.style.display = 'none';
+  }
 });
 </script>
 <script src="../other_tools.js"></script>

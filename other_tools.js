@@ -15,22 +15,22 @@
     },
     {
       name: 'Income Tax Planner',
-      file: 'IncomeTaxPlanner.html',
+      file: 'standalone/IncomeTaxPlanner.html',
       desc: 'Tax sweep calculator across ordinary income levels — federal + many states, capital gains, IRMAA.'
     },
     {
       name: 'IRMAA & RMDs',
-      file: 'irmaa_and_rmds.html',
+      file: 'standalone/irmaa_and_rmds.html',
       desc: 'Find what IRA balance forces RMDs into IRMAA Medicare surcharge tiers at various ages.'
     },
     {
       name: 'Future Cost (NPV)',
-      file: 'FutureCost.html',
+      file: 'standalone/FutureCost.html',
       desc: 'Net present value of growing future payments — ideal for modeling escalating IRMAA costs.'
     },
     {
       name: 'After-Tax Real Growth',
-      file: 'AfterTaxRealGrowth.html',
+      file: 'standalone/AfterTaxRealGrowth.html',
       desc: 'Calculate the real (inflation-adjusted, after-tax) growth rate needed to stay ahead of inflation.'
     },
     {

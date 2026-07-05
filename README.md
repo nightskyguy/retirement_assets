@@ -14,13 +14,13 @@ You can DIRECTLY invoke these tools:
 
 + **[Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html)**  A full tool, with optimizers!  This is the original, and most featured tool.
 
++ **[Historical Real Returns](https://tools.netcitizen.us/standalone/RealReturns.html)** How did stocks, bonds, and T-bills really perform after inflation? 98 years of data (1928–2025) with a custom allocation mix.
 + **[Income Tax Planner](https://tools.netcitizen.us/standalone/IncomeTaxPlanner.html)** What does taxation look like at different ordinary income levels (includes many states)
 + **[Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html)** Compares 3 ways to pay taxes in retirement - provides reminders. Retirement Optimizer calls it.
 + **[Retirement Projection](https://tools.netcitizen.us/Retirement_Projection.html)**  What will my retirement assets do? It's very VISUAL but not as rich as Retirement Optimizer.
 + **[IRMAA and Medicare Future costs](https://tools.netcitizen.us/standalone/FutureCost.html)** Will IRMAA kill me?
 + **[After Tax REAL Growth](https://tools.netcitizen.us/standalone/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
 + **[HYSA Real Returns](https://tools.netcitizen.us/standalone/HYSA.html)** Does my "safe" high-yield savings account actually grow after taxes and inflation? Annual and cumulative views in one tool.
-+ **[Historical Real Returns](https://tools.netcitizen.us/standalone/RealReturns.html)** How did stocks, bonds, and T-bills really perform after inflation? 98 years of data (1928–2025) with a custom allocation mix.
 
 
 A California resident built these with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, and Javascript. See **Standalone Tools** and **Key Features** below for a summary of what the tools can do - and be sure to look at *What the Tool IGNOREs* (and *Known Bugs*, below) so you understand the limitations of the *Retirement Optimizer*.
@@ -190,29 +190,79 @@ There are two reasons that these permanent *ignorances* apply
 
 ---
 
-#### What about Other tools
-One of the lovely things about engineers is they like to build things. I've found many other free (or almost free) resources that both inspired me and made realize that there is more than one way to solve problems.  
+### What about Other tools
+
+One of the lovely things about engineers is they like to build things. I've found many other free (or almost free) resources that both inspired me and made realize that there is more than one way to solve problems.  Of course  I've also paid for and used yet more tools which I will briefly address.
+
+#### Free Tools
 
 The sources I found around the interweb.
 
++ [NestWise](https://www.nestwise.me/) - lots and lots of features. No login required. Includes things like budgeting, extensive Monte Carlo analysis, and even one of my favorite features which allows you to compare different withdrawal  strategies to find one that best suits you. What I'd like to see is a tool to vary starting spend to optimize that number (to be fair, it's there but buried in the Scenario Compare as "Reverse Solver" - and there is "Probability Calculator" that allows you to sweep withdrawal rates, but takes a LONG time to run). And a bit more details in the strategy comparison - I'm less interested in the terminal balance than I am things like how much RMDs drive my taxation - there is a "Scenario Comparison".  I've examined the source code for this tool and collaborated with the developer. No back-doors, or exploitable flaws were found as of March, 2026. It incorporates a variety of withdrawal strategies (Guyton Klinger Guardrails, Constant Dollar, and many more).
 
-+ [GoogleSheet](https://docs.google.com/spreadsheets/d/1orZQ9g1KvGVrCShibutjyreaeqbmRFVAZ9aSY_57-DQ/edit?gid=1250894970#gid=1250894970) by Charles Eglington found on [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nu9lawc/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1). It's got lots of options. I want some things that aren't in it like a "Life Expectancy" for each person, properly calculate deductions, deduce filing status, etc.  In addition, I'd like it to "self optimize" by varying the amounts of IRA/401K withdrawals (and the number of years for withdrawals).  Ideally it would properly, or more properly calculate California Tax, and have a way to forecast based on inflation. But it's still a helpful tool.
+I haven't determined whether inflation is being used in the Monte Carlo or Historical (Cycles) modes, but it appears to be and it's probably the clearest historical comparison tool I've seen anywhere.  You can run your plan against the dot com bust, the Global Financial Crisis of 2008, the Great Depression, the lost Decade (1999-2009), and Stagflation. 
+
+It's currently the best of breed. The user interface is more approachable than typical tools - but also more nerdy. One flaw is the frequent, long recalculation times - but that can be tweaked to only recalculate on demand. You can use it without logging in. It saves your progress in your browser. It has Debt Payoff, Budgeting (rather rare for a free tool) that allows you to import transactions.  The tool is lingo heavy (meaning it uses financial terms).  
 
 + Another [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nulys5i/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button) contribution by _Working-Schedule5000
 _ is what made me realize that writing a tool in JavaScript results in the most readability and tweakability of the code. Spreadsheets can become hard to follow.  To use download and save, then run in your browser: https://drive.google.com/file/d/1ZJNCg-HNXHZmzWv9zW1anaFpLNTOTf10/view
 
 + [Visual Federal Tax Tool](https://engaging-data.com/tax-brackets/) - this tool shows how your federal taxes are calculated.  As of 2026-01-17, it doesn't handle taxability of Social Security income, and as best I can tell, doesn't handle the OBBB (One Big Beautiful Bill) provisions for seniors.
 
-Operational Tools (All Free, though one is only free to try)
++ [Retirement Figures](http://retirementfigures.com/) seems pretty robust and is currently free.  I have no access to the source to look for problems.
 
-+ [NestWise](https://www.nestwise.me/) - lots and lots of features. No login required. Includes things like budgeting, extensive Monte Carlo analysis, and even one of my favorite features which allows you to automatically iterate over different withdrawal rates (using different strategies) to find one that best suits you.  I've examined the source code for this tool and collaborated with the developer. No back-doors, or exploitable flaws were found as of March, 2026.
+
++ [GoogleSheet](https://docs.google.com/spreadsheets/d/1orZQ9g1KvGVrCShibutjyreaeqbmRFVAZ9aSY_57-DQ/edit?gid=1250894970#gid=1250894970) by Charles Eglington found on [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nu9lawc/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1). It's got lots of options. I want some things that aren't in it like a "Life Expectancy" for each person, properly calculate deductions, deduce filing status, etc.  In addition, I'd like it to "self optimize" by varying the amounts of IRA/401K withdrawals (and the number of years for withdrawals).  Ideally it would properly, or more properly calculate California Tax, and have a way to forecast based on inflation. But it's still a helpful tool.
+
+
+#### Paid Tools
+##### Boldin
++ [Boldin](https://www.boldin.com) - formerly known as *New Retirement*. I had a year subscription. It was usable, but there was much I didn't like about it. The main issue with the tool is they try to do "everything" from pre-retirement planning through retirement. My number one pet peeve is that everything you wish to do that requires a future date shows month-by-month choices. It matters for some things, like exactly what month you retire or start social security. But it's tedious. One thing they have fixed is that it used to show "65y3m" meaning age 65, third month. Depending on your birthday, that could be any actual month.  Now they show "65y3m Jan 2038" - for example. You can type either "65" or "2038" to get the list of 12 months and just pick one, but if that future income is say, an inheritance well, it's just bizarre to be specifying the year, and month.  Well, at least they don't ask me what month I plan to die in. Maybe my spouse knows that plan.
+
+You must specify an account withdrawal order (or use the default). The default picks taxable accounts first, followed by tax deferred and tax free. But if you're going to do Roth conversions, or trying to deplete your overblown IRA - that order makes no sense. Ordering within taxable types makes sense... but I want the tool to be smart enough to know that the last 10k dollars I plan to spend can come from wherever is the most tax efficient at that time.  Pull from my cash, or my Roth instead of launching me off an IRMAA cliff, please.
+
+Boldin offers synchronization. The majority of redditors worry about providing linkages. My thought was: why wouldn't you want to automatically get your account balances, and portfolio information...
+BUT Boldin only cares about balances. So the pain of "sometimes working/sometimes broken/sometimes need to be deleted and recreated" links is really a nuisance - not a value add. They have announced plans to actually monitor your portfolio, but unless they are going to do so in a way that enhances the guidance that they can provide for asset allocation or choosing growth rates... I doubt it will be worth it.  Speaking of growth rates... 
+
+Another gotcha, is that every user, must select the "growth rate" for **each** account. This is a very tricky problem and picking wrong will give a much rosier or much more dismal picture. It may also severely skew the logic for Roth Conversions. If you have a brokerage account (or IRA) that contains 60% equity (and 20% of that International), 10% Bonds, and 30% cash/money market, the growth rate you pick needs to roughly match a reasonable reality that converges those 4 numbers. What many people end up doing is to split every account into separate components (Brok1-Equity, Brok1-Intl-eq, Brok1-TIPS, Brok1-Cash, Brok1-TaxFreeBonds) in order to assign reasonable different rates to each. Doing the split makes rate management easier, but it makes updating balances much more tedious - and it makes linkage to accounts useless.  
+
+Navigability of the tool has improved. Things are more where I expect them than when I first subscribed. As I noted, however, there could be many more easy cross links between sections - for example Taxes and IRMAA are separate sections. And if the AI could provide a link to get you straight to the section it's telling you to visit, THAT would make it more usable. When I asked AI how to set a "glide path" it told me to change the "Growth Curve". It told me where to find it. But it wasn't there. I balked and the AI said: "Oh, that's the INTERNAL name, it's actually called "Model a Rate Change in the Future" (a switch). It's not a curve, it's a single change. So much for actually creating a glide path!
+
+In my opinion, however the worst part of the tool is the Monte Carlo analysis. Monte Carlo is not a SPECIFIC type of analysis. [Boldin has chosen NOT to model variable inflation](https://help.boldin.com/en/articles/5805671-boldin-s-monte-carlo-simulation). They offer Historical "simulation" (Market Risk Explorer) but it's not on the Monte Carlo page, and the Monte Carlo output doesn't inspire. Monte Carlo shows possible net worth outcomes (and the percentage of outcomes that end with >0 money). But that's not very reassuring. And the Monte Carlo "chance of success" shown on the overview page is a dead end - it's not clickable. They don't provide information about what range of market volatility was used, what range of inflation was used. Their document (and the AI) both specify that they do NOT vary inflation at all - it comes from the "Rate Assumptions"
+
+Social security explorer is inaccessible if one of the couple has already started collecting social security. That seems odd, because maybe I want to know if 67 or 69 or 70 is a better start age.
+
+Oddly, the Roth Conversion Explorer has no AI component. And it feels very disjoint from the main components. For example, if you use the Roth Conversion Explorer but haven't ALREADY created a new scenario, you must: quit and back out, duplicate a scenario and then redo the Roth Explorer questions. Or apply the changes to whatever the "current scenario" is. This would be a perfect opportunity to create a new scenario. Another head scratcher: you can specify that "surplus" (e.g. income in excess of spending needs) can be placed in a taxable account. But why can't I put the excess that comes from an IRA into a Roth (e.g. a conversion). That is, I don't expect to ever see years with a surplus AND a Roth conversion in the summaries, but I do.  Seems it's missing an easy win. And what about this: every withdrawal for spending is FIRST a Roth conversion. Taking that approach you gain tremendous benefits:
+
++ until you spend the funds, you get tax free growth.
++ unspent funds will have automatically been converted. 
++ spent funds may have accrued some interest before they were spent that will continue compounding (tax free)
++ If you have surplus cash in the brokerage or a taxable account, you can use it to pay the tax bill and get a larger amount converted to tax-free status.
+
+_**The tax consequences of an IRA withdrawal and a Roth conversion are identical**_.
+
+The Scenario Manager is another prickly point. You can name scenarios, provide a "note" about what each one is, but you can't e.g. see or compare the notes of multiple scenarios at once, nor can you readily tell how they are different. Did you want to try multiple Roth conversion strategies? You better have named them precisely and kept notes, because the Scenario Manager cannot tell you how the scenarios are different. AI can help, but it won't, for example, tell you what choices you made in the Roth Explorer.  Moreover, the explorer seems to always target drawing each spouse's IRA to Zero. This does not make sense to me.  There is value in keeping an IRA. Both due to the ability to do QCDs, leave some to charity, and - once the balance is sufficiently low - to withdraw funds at miniscule taxation.  If you happen to be in a scenario and notice that the growth rate is wrong. You really only have one choice: delete all scenarios, make the change to the Baseline and recreate all the scenarios. Unless you *happen* to know the rates or inspect the rates used in every scenario - in that case you could update all the ones that had the wrong growth rate. But then you have to also take into account any money flow monkey business you may have done to model some of the things that Boldin doesn't natively model.
+
+One other shortcoming: Boldin likes to present things in future dollars. This is a mistake that gives a false impression. Right now one million dollars sounds like a nice nest egg (and it is). But 30 years from now at 3% annual inflation, that 1M is worth $412k. In much the same way if you notice your High Yield Savings account balance has climbed from 10k to 11k you would be remiss to not consider what inflation (and taxation) do to diminish the **value** of that account!
+
+Final comment: at $144/year it's a great deal compared to a ruinous retirement. You may spend a week putting a plan together. But you will have no use for the tool for the rest of the year. If it did real portfolio tracking, or budget tracking, or tax planning (e.g. how to pay your taxes in retirement) it WOULD make the tool more useful on a monthly basis. But ultimately, what Boldin provides is a complex calculator that responds to your tweaking. That is, it takes a complex problem, and makes you the decider. It will help you think about organizing, timing and accounts, but it won't suggest to you how to do it BETTER.  It won't help you pick a "more ideal portfolio allocation", tell you that your chosen growth rates are unrealistic. It doesn't appear to optimize your annual withdrawals, or provide insights on the best time to do conversions (early in the year - by default it schedules them for December!)
+
+##### MaxiFi
+
+I've not had this subscription for very long, so I'll withhold my comments until I've kicked the tires more aggressively.  I will offer for now, that it's less "polished" than Boldin (I run into reference errors pretty often). So far the main quirk I noticed:
+
+It wants to know ONLY the IRA balances at the end of last year. I understand this, but I do NOT. Why it wants prior year end of year balances is no doubt so it can compute RMDs for IRAs and 401K accounts. But if my accounts soared or took a beating, the current value is what I care about. 
+
+More later.
+
+
+##### Others.
 
 + [RetirementIQ](https://retirementiq.app/) Free for 7 days, $50/year. I've not dabbled much with this, partly because I prefer open source that I can inspect for possible flaws, back-doors, etc.  Directly invoke it here: [retirementiq.app](https://retirementiq.app/app/)
 
-+ [Retirement Figures](http://retirementfigures.com/) seems pretty robust and is currently free.  I have no access to the source to look for problems.
-
 + [Retirement Scenarios](https://retirementscenarios.com) free to kick the tires, but $79 to fully unlock. The UI is good, but the reliance on sliders and a few quirks make it less than ideal for use with a phone/small screen device. I found no gotchas after doing a security audit of the code (as of May 22, 2026). The author recently fixed a problem that made the tool unusable unless your retirement age is greater than your current age. There is, unfortunately, nothing in the tool that helps you calculate "ideal" Roth conversions - but all the directional guidance is good. Like many tools these days, but unlike all the others, this tool integrates AI. You can ask the AI questions about your plan and/or about the tool. If you want to use the tool on multiple devices, you need to "login" using the email address you use to make a purchase.
- 
+
+
 
 ---
 

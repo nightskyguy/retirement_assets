@@ -2,7 +2,7 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-02 (v11.1125, branch main, worktree cranky-mcclintock-9fa806)
+**As of:** 2026-07-04 (branch main, worktree silly-hellman-b5d326, post-PR#107)
 
 ---
 
@@ -508,7 +508,7 @@ Tests go in `retirement_optimizer_core.test.js`. Helper: `makeZeroBaseInputs()` 
 - [ ] **`irmaa_and_rmds.html` duplicate bracket math:** reads `TAXData.SOCIALSECURITY`/`TAXData.IRMAA`/`RMD_TABLE` directly and re-implements its own bracket-walk instead of calling `calcIRMAA()`/`getIRMAATier()`/the relocated bracket utilities. Lower risk than the Retirement_Projection.html case (simpler logic, no `INFLATION_INDEXED` interaction) but same pattern — worth revisiting once the bracket-walk consolidation above exists to call into.
 - [ ] **Script load-order normalization (cosmetic, optional):** `taxengine.js` is now the base layer with zero dependencies and `core.js` depends on it — the "correct" load order is taxengine.js first. `IncomeTaxPlanner.html` and the test/worker harnesses already do this; `retirement_optimizer.html` loads `core.js` before `taxengine.js` (works fine due to hoisting, confirmed safe, but backwards from the dependency direction). Low priority — reorder only if touching that file's `<script>` block for another reason.
 - [ ] **State coverage (13 of 51 jurisdictions uncoded):** LA/UT (flat, easy). 11 graduated states (AR/DE/HI/KS/MO/NJ/NM/OK/RI/VT/WV) — MO/WV need year-keyed rate tables (active phase-downs, same pattern as GA/NE/KY); AR/DE/MO/NJ/NM/RI/VT/WV need per-state partial-SS-taxation thresholds; NJ needs a >$1M surtax bracket; VT needs a low-income exemption rule. RI/VT CPI-indexing is actually free (already the default). See the review plan file for the full per-state breakdown.
-- **Status:** pending (circular-dependency fix and 5 low-risk items already shipped this session, uncommitted)
+- **Status:** pending (circular-dependency fix + 5 low-risk items shipped, committed 324447f, merged PR #105)
 - **Independent:** no phase dependencies for the remaining items
 
 ---

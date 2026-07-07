@@ -4249,6 +4249,10 @@ function setIncomeChartView(v) {
     // "Show thresholds" applies only to the Taxation view.
     const thr = document.getElementById('chk-thresholds-wrap');
     if (thr) thr.style.display = v === 'tax' ? 'inline-flex' : 'none';
+    // After-tax note applies only to the combined (Income & Expenses) view — it's the
+    // only view where income-source bars are scaled down by the year's effective tax rate.
+    const aftertaxNote = document.getElementById('income-aftertax-note');
+    if (aftertaxNote) aftertaxNote.style.display = v === 'combined' ? '' : 'none';
     if (lastSimulationLog) updateCharts(lastSimulationLog);
 }
 

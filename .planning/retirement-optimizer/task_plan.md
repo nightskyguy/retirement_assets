@@ -2,7 +2,7 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-04 (branch main, worktree silly-hellman-b5d326, post-PR#107)
+**As of:** 2026-07-07 (branch main, worktree mystifying-babbage-559d99, post-PR#108)
 
 ---
 
@@ -32,6 +32,10 @@ Goal: Complete open features from the original priority list plus deferred items
 | 19 | **P17** | Retirement_Projection — Simple Mode | pending | — |
 | 20 | **P18** | Retirement_Projection → RetirementTaxPlanner link | pending | — |
 | 21 | **P19** | taxengine.js Architectural Cleanup | pending | — |
+| 22 | **P20** | README Table of Contents | **complete** | — |
+| 23 | **P21** | Annual Spending-by-Account View | pending | — |
+| 24 | **P22** | Export Annual Details to CSV | pending | — |
+| 25 | **P23** | MC Arithmetic-Mean Returns + AR(1) Variable Inflation | pending | — |
 
 ---
 
@@ -513,6 +517,220 @@ Tests go in `retirement_optimizer_core.test.js`. Helper: `makeZeroBaseInputs()` 
 
 ---
 
+## Phase P20: README Table of Contents
+**Why:** README.md is 356 lines / ~9,779 words with no H1 and no navigation — headings jump inconsistently from `##` straight to `####` (e.g. README.md:71 `## The Retirement Optimizer` then README.md:88 `#### Features in the Works`). A first-time visitor has to scroll past ~190 lines of prose before reaching "What about Other Tools." There is no `docs/` folder anywhere in the repo today.
+
+**Design decision:** Add an inline Table of Contents with anchor links at the top of README.md — do **not** split content into `docs/*.md`. This is a public GitHub landing page; splitting content out risks losing discoverability for the tax-education and tool-comparison content that currently reads as part of the main page, for a project with no existing `docs/` precedent. A ToC is zero-risk (pure addition, no content moves) and directly fixes the "hard to scan" problem.
+
+**Code pattern:** GitHub auto-generates anchor slugs from heading text, so the ToC just needs matching links — no HTML anchor tags required:
+```markdown
+## Table of Contents
+- [Who Are These Tools For? What Can They Do?](#who-are-these-tools-for--what-can-they-do)
+- [Standalone Calculator Tools](#standalone-calculator-tools)
+- [The Retirement Optimizer](#the-retirement-optimizer)
+  - [Why This Tool?](#why-this-tool)
+  - [Key Features](#key-features)
+  - [What the Tool IGNORES](#what-the-tool-ignores-no-plans-to-implement)
+  - [Limitations and Restrictions](#limitations-and-restrictions)
+- [What about Other Tools](#what-about-other-tools)
+- [Ramblings and Observations](#ramblings-and-observations)
+```
+
+- [ ] Add a short H1 title above the existing `> [!WARNING & DISCLAIMER]` block at README.md:1 (currently the file has no H1 at all)
+- [ ] Insert a `## Table of Contents` section directly after the intro/"Who Are These Tools For" paragraphs (README.md:1-28) and before README.md:30 `## Standalone Calculator Tools`, linking the 5 top-level sections at README.md:5, 30, 71, 193, 269
+- [ ] Add nested sub-links for "The Retirement Optimizer" (README.md:71-190), pointing at its subsections: Features in the Works (88), Recent Fixes (99), Why This Tool? (116), Key Features (134), What the Tool IGNORES (155), Limitations and Restrictions (177)
+- [ ] Normalize heading levels inside "The Retirement Optimizer" so nesting is consistent (currently jumps `##` → `####` skipping `###`) — promote README.md:88,99,116,134,155,177 to nest correctly under the `##` parent; same check for "What about Other Tools" (README.md:193-266) and "Ramblings and Observations" (README.md:269-357)
+- [ ] Do not create a `docs/` folder or move any content — all changes are additive within README.md
+- **Test:** Open the rendered README on GitHub and click through every ToC link, confirming each lands on the correct section; confirm heading-level changes didn't alter rendered text, only nesting/size
+- **Status:** complete — H1 added, ToC inserted at README.md:32-46, all headings normalized to consistent ## → ### → #### nesting (verified via grep of all heading lines).
+- **Independent:** no phase dependencies
+
+---
+
+## Phase P21: Annual Spending-by-Account View
+**Why:** Users want to see, per year, how much spending came from each account (IRA1/IRA2, Brokerage, Roth, Cash, SS, pension) without wading through the full Annual Details table's ~50 columns across 9 categories. Every field needed already exists in each log row (`buildSimYearLogRecord`, retirement_optimizer_core.js:706-805): `IRAwd`, `IRA1-`, `IRA2-`, `RMD1-`, `RMD2-`, `RMDwd`, `QCD1`/`QCD2`, `Brokerage-`, `RothWD`, `CashWD`, `rothConv`, `surplusCash`, `SSincome`, `pension`. `RetirementTaxPlanner.html` is a single-year quarterly-tax tool, not a multi-year table — not a fit for extension.
+
+**Design decision:** Add this as a new category within the **existing** checkbox/category-filter system (`columnCategories` map, core.js:3139-3236 + `getActiveCategories()`/`isColumnVisible()`, core.js:3270-3303), rather than building a new UI paradigm. The existing categories don't isolate cleanly — e.g. checking "IRA Δ" also pulls in `IRA1`/`IRA2`/`TotalIRA` *balance* columns because those keys are tagged `['Balances', 'IRA Δ']` (core.js:3160-3162). A true account-spend-only view needs its own category tag. This phase is independent of and can ship before Phase P8 (button-preset redesign of the whole checkbox UI) — when/if P8 lands, "Account Spend" becomes one more preset group for free since it's just another category on the same underlying map.
+
+**Code pattern:**
+```javascript
+// core.js:3139 columnCategories — add 'Account Spend' alongside existing tags
+'year': ['Summary', 'Taxation', 'Balances', 'Income', 'Account Spend'],
+'age1': ['Summary', 'Account Spend'],
+'age2': ['Summary', 'Account Spend'],
+'SSincome': ['Summary', 'Income', 'Account Spend'],
+'pension': ['Summary', 'Income', 'Account Spend'],
+'IRA1-': ['IRA Δ', 'Account Spend'],
+'IRA2-': ['IRA Δ', 'Account Spend'],
+'RMDwd': ['IRA Δ', 'Income', 'Account Spend'],
+'QCD1': ['IRA Δ', 'Account Spend'],
+'QCD2': ['IRA Δ', 'Account Spend'],
+'RothWD': ['Roth Δ', 'Income', 'Account Spend'],
+'Brokerage-': ['Brokerage Δ', 'Income', 'Account Spend'],
+'CashWD': ['Cash Δ', 'Income', 'Account Spend'],
+'rothConv': ['IRA Δ', 'Roth Δ', 'Account Spend'],
+'surplusCash': ['Cash Δ', 'Income', 'Account Spend'],
+```
+
+- [ ] Add `'Account Spend'` to the category arrays above in `columnCategories` (core.js:3139-3236) — every other array on those lines keeps its existing tags, this just appends one more
+- [ ] Add a `cat-acctspend` checkbox to the `.column-controls` div (retirement_optimizer.html:748-783), labeled "Spend by Account", `onchange="updateColumnVisibility()"`, matching the style of the existing `cat-*` checkboxes at 756-782
+- [ ] `getActiveCategories()` (core.js:3270-3282): add `if (document.getElementById('cat-acctspend')?.checked) categories.push('Account Spend');`
+- [ ] Add a one-click "Spend by Account" preset button that unchecks all other `cat-*` boxes, checks only `cat-acctspend`, and calls `updateColumnVisibility()` — avoids making users manually toggle 8 checkboxes to get an isolated view
+- **Test:** Run a simulation, check only `cat-acctspend` (uncheck default `cat-summary`), confirm the table shows exactly `year, age1, age2, SSincome, pension, IRA1-, IRA2-, RMDwd, QCD1, QCD2, RothWD, Brokerage-, CashWD, rothConv, surplusCash` and no balance/growth columns (`Roth1`, `Brokerage`, `Cash`, `rothG`, `brokerageG`, `cashG` must stay hidden)
+- **Status:** pending
+- **Independent:** no phase dependencies; complements but does not block/depend on Phase P8
+
+---
+
+## Phase P22: Export Annual Details to CSV
+**Why:** No CSV/XLSX export exists anywhere in the app today. The only export precedent, `exportScenario()`/`exportAllScenarios()` (core.js:5324-5433), exports saved-scenario *input* params as JSON — not the simulation log table. Users want to get the Annual Details table (including P21's new Account Spend columns) into Excel/Sheets for their own analysis.
+
+**Design decision:** CSV-only for v1, using the existing zero-dependency Blob+`<a download>` idiom already established by `exportScenario()` — no SheetJS/xlsx library added. XLSX is an explicit future stretch item, not blocking, since it would be the first external client-side dependency in the app. Build the export from `lastSimulationLog` (raw numbers, populated at core.js:2082) rather than scraping the rendered DOM, but filter columns through the *same* `isColumnVisible()` + `analyzeColumnContent()` logic `updateTable()` already uses (core.js:3306-3335, 3507-3533, 3572-3573) — export matches what's on screen.
+
+**Code pattern:**
+```javascript
+// core.js, near exportScenario()/exportAllScenarios() (5324-5433)
+function exportAnnualDetailsCSV() {
+    const log = lastSimulationLog;
+    if (!log || log.length === 0) {
+        showMessage('No data to export. Run a simulation first.', 'warning');
+        return;
+    }
+    const columnContentStatus = analyzeColumnContent(log);            // core.js:3306
+    const showEmpty = document.getElementById('show-empty-columns')?.checked ?? false;
+
+    // Mirrors updateTable()'s header filter exactly (core.js:3507-3508, 3572-3573)
+    const keys = Object.keys(log[0]).filter(k => !k.startsWith('-') && k !== 'inflationFactor');
+    const visibleKeys = keys.filter(k => {
+        const displayKey = k.endsWith('!') ? k.slice(0, -1) : k;
+        return isColumnVisible(displayKey) && (columnContentStatus[k] || showEmpty);
+    });
+
+    const esc = v => {
+        const s = String(v ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = visibleKeys.map(k => esc(k.endsWith('!') ? k.slice(0, -1) : k)).join(',');
+    const rows = log.map(row => visibleKeys.map(k => esc(row[k])).join(','));
+    const csv = [header, ...rows].join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `annual-details-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showMessage('Annual Details exported as CSV.', 'success');
+}
+```
+
+- [ ] Add `exportAnnualDetailsCSV()` to core.js near `exportScenario()`/`exportAllScenarios()` (5324-5433), using the pattern above
+- [ ] Add an "Export CSV" button to the `.column-controls` div (retirement_optimizer.html:748-783), `onclick="exportAnnualDetailsCSV()"`
+- [ ] Apply the same `row.inflationFactor` division the on-screen table currently uses for its nominal/real ("current dollars") toggle (`inCurrentDollars`, core.js:3609, 4390), so the CSV matches what the user is looking at
+- [ ] CSV field escaping per RFC 4180 (quote fields containing comma/quote/newline, double internal quotes) — as shown above
+- [ ] Date-stamped filename `annual-details-YYYY-MM-DD.csv`, consistent with `exportAllScenarios()`'s naming (core.js:5425)
+- [ ] Note: Phase P21's new `'Account Spend'` category columns flow through automatically since this reads `isColumnVisible()` live — no special-casing needed regardless of ship order
+- [ ] XLSX: explicitly out of scope for this phase; flag as a future stretch item requiring a SheetJS-class dependency — revisit only on user request
+- **Test:** Run a simulation, toggle a couple of category checkboxes and the Show-Zero checkbox, click Export CSV, confirm the downloaded file's columns exactly match the currently-visible table columns and open cleanly in Excel/Sheets
+- **Test:** With no simulation run yet (`lastSimulationLog` unset/empty), clicking Export CSV shows the warning message and does not throw
+- **Status:** pending
+- **Independent:** no phase dependencies; benefits from (but does not require) shipping after P21
+
+---
+
+## Phase P23: MC Arithmetic-Mean Returns + AR(1) Variable Inflation (GBM mode)
+**Why:** GBM mode currently draws returns in log-space with an Itô correction (`logDrift = mu - 0.5*sigma*sigma; shock = logDrift + sigma*boxMuller(rng); annualReturn = Math.exp(shock) - 1`), duplicated in 3 places: `montecarlo/worker.js:95-109` (canonical), `montecarlo/mc_controller.js:170-182` (`_runMCMainThread`, file:// fallback), and `montecarlo/mc_controller.js:66-84` (`calibrateMCMs`, timing probe). Separately, GBM-mode inflation is a flat constant — `inflationSequence` stays `null` for GBM (worker.js:152-158 only builds it for bootstrap/stress), and core.js:956 falls back to the fixed rate: `inputs.inflationSequence?.[y] ?? inputs.inflation`. UI documents this today at retirement_optimizer.html:456 ("Synthetic: ... inflation is fixed"). User wants GBM to use an arithmetic mean instead of log-mean, and GBM inflation to follow a mean-reverting AR(1) model instead of being flat.
+
+**Decisions confirmed with user:**
+1. **Arithmetic mean = plain normal walk**, not a re-derived lognormal correction: `annualReturn = Math.max(RETURN_FLOOR, mu + sigma*boxMuller(rng))`, dropping log-space/Itô correction entirely. This technically leaves GBM for a normal-return walk, matching the user's literal framing. Clamped at `RETURN_FLOOR = -0.85` (new const in prng.js, alongside `INFLATION_FLOOR`) per user instruction, closing the theoretical <-100% tail risk of an unclamped normal draw.
+2. **AR(1) variable inflation is default-on for all GBM users** (not nerd-knob gated) — only the persistence/shock-stddev tuning knobs are nerd-gated, mirroring how `mc-mu`/`mc-sigma` already default-drive GBM without requiring the nerd panel.
+
+**Code pattern — new consts + helper (montecarlo/prng.js, after `boxMuller()` at line 23):**
+```javascript
+const RETURN_FLOOR = -0.85; // clamp for arithmetic-normal GBM draws (alongside INFLATION_FLOOR)
+
+// AR(1) mean-reverting inflation draw for GBM mode: reverts toward `target` at rate
+// `persistence` (0 = no memory, near 1 = highly persistent), plus a random shock.
+function computeNextInflation(prev, target, persistence, shockStdDev, rng) {
+    const shock = shockStdDev * boxMuller(rng);
+    const next = target + persistence * (prev - target) + shock;
+    return Math.max(INFLATION_FLOOR, next);
+}
+```
+
+**Code pattern — GBM branch, worker.js:95-109 (mc_controller.js:170-182 mirrors this exactly):**
+```javascript
+} else {
+    // GBM (default): arithmetic-normal return walk (Phase P23), clamped at RETURN_FLOOR.
+    // scenarioBank now stores the FINAL return directly (not a log-space shock).
+    const inflationTarget      = cfg.inflationRate ?? 0.03;
+    const inflationPersistence = cfg.inflationPersistence ?? 0.65;
+    const inflationShockSd     = cfg.inflationShockSd ?? 0.012;
+    medianAnnualReturn = mu;   // symmetric normal pre-clamp: mean === median, no exp() needed
+    scenarioBank = new Float64Array(numPaths * years);
+    gbmInflationBank = new Float64Array(numPaths * years);
+    for (let p = 0; p < numPaths; p++) {
+        let prevInflation = inflationTarget;
+        for (let y = 0; y < years; y++) {
+            const r = Math.max(RETURN_FLOOR, mu + sigma * boxMuller(rng));
+            scenarioBank[p * years + y] = r;
+            if (r < minAnnualReturn) minAnnualReturn = r;
+            if (r > maxAnnualReturn) maxAnnualReturn = r;
+            prevInflation = computeNextInflation(prevInflation, inflationTarget, inflationPersistence, inflationShockSd, rng);
+            gbmInflationBank[p * years + y] = prevInflation;
+        }
+    }
+}
+```
+
+**Code pattern — downstream conversion + inflation wiring, worker.js:123-158 (mc_controller.js:200-238 mirrors):**
+```javascript
+// worker.js:127 — scenarioBank now stores GBM's final value directly, not log-space; skip exp()
+returnSeq[y] = (simulationMode === 'bootstrap' || simulationMode === 'gbm') ? raw : Math.exp(raw) - 1;
+
+// worker.js:152-158 — add a GBM branch alongside the existing bootstrap/stress one
+let inflationSequence = null;
+if ((simulationMode === 'bootstrap' || simulationMode === 'stress') && multiAssetBank?.inflation) {
+    inflationSequence = new Float64Array(years);
+    for (let y = 0; y < years; y++) inflationSequence[y] = multiAssetBank.inflation[p * years + y];
+} else if (gbmInflationBank) {
+    inflationSequence = new Float64Array(years);
+    for (let y = 0; y < years; y++) inflationSequence[y] = gbmInflationBank[p * years + y];
+}
+```
+
+**Code pattern — `calibrateMCMs` (mc_controller.js:66-84), drops the Itô correction (no inflation change needed — this function only probes timing):**
+```javascript
+function calibrateMCMs(cfg) {
+    const { mu, sigma, seed, years, variations } = cfg;
+    const rng = mulberry32(seed ?? 42);
+    const returnSeq = new Float64Array(years);
+    for (let y = 0; y < years; y++) {
+        returnSeq[y] = Math.max(RETURN_FLOOR, mu + sigma * boxMuller(rng));   // was: Math.exp(logDrift + sigma*boxMuller(rng)) - 1
+    }
+    ...
+```
+
+- [ ] Add `RETURN_FLOOR` const + `computeNextInflation(prev, target, persistence, shockStdDev, rng)` to montecarlo/prng.js, next to `boxMuller()` (line 23)
+- [ ] Update GBM branch in worker.js:95-109 per pattern above; add `gbmInflationBank` to the top-of-function `let` declarations (worker.js:16, alongside `scenarioBank, multiAssetBank, medianAnnualReturn, logDrift` — drop now-unused `logDrift` from this GBM path)
+- [ ] Mirror the identical change in `_runMCMainThread`'s GBM branch, mc_controller.js:170-182, and its `let` declarations at mc_controller.js:98
+- [ ] Update worker.js:127 and mc_controller.js:204 (`returnSeq[y] = ...`) to skip `Math.exp()` for `simulationMode === 'gbm'` as shown above (scenarioBank now stores final clamped values for GBM, same as bootstrap)
+- [ ] Add the GBM `inflationSequence` branch to worker.js:152-158 and mc_controller.js:228-238 (`else if (gbmInflationBank)` pattern above)
+- [ ] Update `calibrateMCMs` (mc_controller.js:66-84) to drop `logDrift`/Itô correction and apply `RETURN_FLOOR` per pattern above
+- [ ] Add two new nerd-knob inputs to `#mc-nerd-panel` (retirement_optimizer.html:427-457), near `mc-sigma` (439-441): `mc-inflation-persistence` (number, default `0.65`, min `0`, max `0.95`, step `0.05`, unitless AR(1) coefficient — not a `%` field) and `mc-inflation-shock-sd` (number, default `1.2`, min `0`, max `10`, step `0.1`, treated as `/100` like `mc-sigma`), each with a `title=` tooltip following the existing convention
+- [ ] Wire both new knobs into `_buildMCHash()` (mc_tab.js:108-120, so cache invalidates on change) and into the cfg object built in `runMonteCarlo()` (mc_tab.js:124-154, passed to `runMCWorker(...)` as `inflationPersistence`/`inflationShockSd`)
+- [ ] Update stale UI copy that will become incorrect: retirement_optimizer.html:456 ("Synthetic: ... inflation is fixed") and mc_tab.js:282 ("Inflation ... (fixed)") — both need to describe the new AR(1) behavior; also mc_tab.js:276 label "(geometric)" → "(arithmetic)" since `medianAnnualReturn` now equals `mu` directly
+- [ ] Optional/stretch: compute `inflationStats` (min/CAGR/max, same shape as bootstrap's, worker.js:66) from `gbmInflationBank` so the existing Input Distribution chart (mc_tab.js:792-810, `_inputInflationChart`) can render GBM's realized inflation spread instead of just the flat target — not required for correctness, only for parity with bootstrap's richer display
+- [ ] Note (footnote only, not in scope): the GBM formula is duplicated across 3 sites (worker.js, mc_controller.js×2); a shared helper would reduce future duplication-drift risk but is a larger refactor — do not restructure as part of this phase
+- [ ] Add node unit tests in retirement_optimizer_core.test.js (or a new small test file) for `computeNextInflation()`: reversion behavior (large deviation from target decays toward target over repeated calls with shock=0), floor enforcement (`INFLATION_FLOOR`), a statistical check that many draws of `mu + sigma*boxMuller(rng)` have sample mean/stddev close to `mu`/`sigma`, and a `RETURN_FLOOR` clamp test — load montecarlo/prng.js into the existing vm test context alongside taxengine.js/core.js (retirement_optimizer_core.test.js:38-40)
+- **Test:** In the browser, enable nerd knobs, run GBM-mode MC, confirm `msg.medianAnnualReturn` ≈ `mu` and the per-path `inflationSequence` passed into `simulate()` actually varies year-to-year (not constant) — spot-check via `console.log` in a manual run or a new browser-test-suite case in retirement_optimizer_tests.js
+- **Test:** Confirm bootstrap/stress mode output is byte-identical before/after this change (their code paths are untouched)
+- **Status:** pending
+- **Independent:** no phase dependencies
+
+---
+
 ## Dependency Graph (remaining)
 
 ```
@@ -534,6 +752,10 @@ P15 (Refactoring) — independent
 P16 (Responsive) — independent
 P17 (Simple Mode) — independent
 P18 (RP→RTP Link) — independent
+P20 (README ToC) — independent
+P21 (Account Spend View) — independent; complements P8
+P22 (CSV Export) — independent; benefits from P21 (not required)
+P23 (MC Arithmetic Mean + AR1 Inflation) — independent
 ```
 
 ---

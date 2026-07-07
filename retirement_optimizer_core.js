@@ -3138,9 +3138,9 @@ function loadOptimizerResult(id) {
 // Column category mappings - each column can be in multiple categories
 const columnCategories = {
     // Summary - high-level overview
-    'year': ['Summary', 'Taxation', 'Balances', 'Income', 'Account Spend'],
-    'age1': ['Summary', 'Account Spend'],
-    'age2': ['Summary', 'Account Spend'],
+    'year': ['Summary', 'Taxation', 'Balances', 'Income', 'Account Spend', 'IRA Δ', 'Roth Δ', 'Brokerage Δ', 'Cash Δ', 'Opp. Cost'],
+    'age1': ['Summary'],
+    'age2': ['Summary'],
     'status': ['Summary', 'Taxation'],
     'spendGoal': ['Summary', 'Income'],
     'netIncome': ['Summary', 'Income'],
@@ -3151,8 +3151,8 @@ const columnCategories = {
     'shortfall': ['Summary', 'Income'],
 
     // Income Sources (could be its own category if you want)
-    'SSincome': ['Summary', 'Income', 'Account Spend'],
-    'pension': ['Summary', 'Income', 'Account Spend'],
+    'SSincome': ['Summary', 'Income'],
+    'pension': ['Summary', 'Income'],
     'totalIncome': ['Summary', 'Income'],
     'cashD+I': ['Cash Δ', 'Income'],
 
@@ -3188,9 +3188,9 @@ const columnCategories = {
     'IRA2-': ['IRA Δ', 'Account Spend'],
     'IRAwd': ['IRA Δ', 'Income'],
     'RMD%': ['IRA Δ'],
-    'RMD1-': ['IRA Δ'],
-    'RMD2-': ['IRA Δ'],
-    'RMDwd': ['IRA Δ', 'Income', 'Account Spend'],
+    'RMD1-': ['IRA Δ', 'Account Spend'],
+    'RMD2-': ['IRA Δ', 'Account Spend'],
+    'RMDwd': ['IRA Δ', 'Income'],
     'QCD1': ['IRA Δ', 'Account Spend'],
     'QCD2': ['IRA Δ', 'Account Spend'],
     'rothConv': ['IRA Δ', 'Roth Δ', 'Account Spend'],  // Conversion comes from IRA
@@ -3212,7 +3212,7 @@ const columnCategories = {
     // Phase 27: inflows/outflows + withdrawal rate
     'grossOut': ['Summary', 'Withdrawals'],
     'netOut':   ['Summary', 'Withdrawals'],
-    'inflows':  ['Summary', 'Withdrawals'],
+    'inflows':  ['Summary', 'Withdrawals', 'Account Spend'],
     'wdRate%':  ['Summary', 'IRA Δ'],
 
     // Debug / performance — only visible under Show All (no checkbox maps to 'Debug')
@@ -3498,6 +3498,7 @@ function updateTable(log) {
         'RothG': 'Growth in the Roth (added to Roth account)',
         'RothConv': 'Amount moved from IRA to Roth (converted)',
         'CashWD': 'Tax free withdrawals from Cash',
+        'surplusCash': 'Cash left over after spending and taxes were covered — routed back into the Cash account (or on to Roth conversion if Max Conversion is enabled).',
         'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
         'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',
         'totalTax': 'Federal, State, IRMAA, NIIT, and CapGains taxes — in total.',

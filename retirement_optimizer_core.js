@@ -3138,9 +3138,9 @@ function loadOptimizerResult(id) {
 // Column category mappings - each column can be in multiple categories
 const columnCategories = {
     // Summary - high-level overview
-    'year': ['Summary', 'Taxation', 'Balances', 'Income'],
-    'age1': ['Summary'],
-    'age2': ['Summary'],
+    'year': ['Summary', 'Taxation', 'Balances', 'Income', 'Account Spend'],
+    'age1': ['Summary', 'Account Spend'],
+    'age2': ['Summary', 'Account Spend'],
     'status': ['Summary', 'Taxation'],
     'spendGoal': ['Summary', 'Income'],
     'netIncome': ['Summary', 'Income'],
@@ -3151,8 +3151,8 @@ const columnCategories = {
     'shortfall': ['Summary', 'Income'],
 
     // Income Sources (could be its own category if you want)
-    'SSincome': ['Summary', 'Income'],
-    'pension': ['Summary', 'Income'],
+    'SSincome': ['Summary', 'Income', 'Account Spend'],
+    'pension': ['Summary', 'Income', 'Account Spend'],
     'totalIncome': ['Summary', 'Income'],
     'cashD+I': ['Cash Δ', 'Income'],
 
@@ -3184,31 +3184,31 @@ const columnCategories = {
     'ForcedIRA': ['Taxation', 'IRA Δ'],
 
     // IRA Changes - withdrawals, RMDs, and conversions
-    'IRA1-': ['IRA Δ'],
-    'IRA2-': ['IRA Δ'],
+    'IRA1-': ['IRA Δ', 'Account Spend'],
+    'IRA2-': ['IRA Δ', 'Account Spend'],
     'IRAwd': ['IRA Δ', 'Income'],
     'RMD%': ['IRA Δ'],
     'RMD1-': ['IRA Δ'],
     'RMD2-': ['IRA Δ'],
-    'RMDwd': ['IRA Δ', 'Income'],
-    'QCD1': ['IRA Δ'],
-    'QCD2': ['IRA Δ'],
-    'rothConv': ['IRA Δ', 'Roth Δ'],  // Conversion comes from IRA
+    'RMDwd': ['IRA Δ', 'Income', 'Account Spend'],
+    'QCD1': ['IRA Δ', 'Account Spend'],
+    'QCD2': ['IRA Δ', 'Account Spend'],
+    'rothConv': ['IRA Δ', 'Roth Δ', 'Account Spend'],  // Conversion comes from IRA
 
     // Roth Changes - balance, withdrawals, growth, conversions
     'Roth1': ['Balances', 'Roth Δ'],
     'Roth2': ['Balances', 'Roth Δ'],
-    'RothWD': ['Roth Δ', 'Income'],
+    'RothWD': ['Roth Δ', 'Income', 'Account Spend'],
     'rothG': ['Roth Δ'],
 
     // Brokerage Changes - balance, withdrawals, gains, growth
-    'Brokerage-': ['Brokerage Δ', 'Income'],
+    'Brokerage-': ['Brokerage Δ', 'Income', 'Account Spend'],
     'brokerageG': ['Brokerage Δ'],
 
     // Cash Changes - balance, withdrawals, growth
-    'CashWD': ['Cash Δ', 'Income'],
+    'CashWD': ['Cash Δ', 'Income', 'Account Spend'],
     'cashG': ['Cash Δ'],
-    'surplusCash': ['Cash Δ', 'Income'],
+    'surplusCash': ['Cash Δ', 'Income', 'Account Spend'],
     // Phase 27: inflows/outflows + withdrawal rate
     'grossOut': ['Summary', 'Withdrawals'],
     'netOut':   ['Summary', 'Withdrawals'],
@@ -3278,6 +3278,7 @@ function getActiveCategories() {
     if (document.getElementById('cat-brokerage')?.checked) categories.push('Brokerage Δ');
     if (document.getElementById('cat-cash')?.checked) categories.push('Cash Δ');
     if (document.getElementById('cat-oppcost')?.checked) categories.push('Opp. Cost');
+    if (document.getElementById('cat-acctspend')?.checked) categories.push('Account Spend');
     return categories;
 }
 
@@ -3384,6 +3385,21 @@ function updateColumnVisibility() {
 
     rebuildGroupRow(table);
     syncTopScroll();
+}
+
+// Phase P21: isolate the "Spend by Account" category (unchecks all other cat-* boxes)
+function showAccountSpendOnly() {
+    const catIds = ['cat-summary', 'cat-income', 'cat-balances', 'cat-taxation',
+        'cat-ira', 'cat-roth', 'cat-brokerage', 'cat-cash', 'cat-oppcost'];
+    catIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.checked = false;
+    });
+    const showAll = document.getElementById('show-all');
+    if (showAll) showAll.checked = false;
+    const acctSpend = document.getElementById('cat-acctspend');
+    if (acctSpend) acctSpend.checked = true;
+    updateColumnVisibility();
 }
 
 // Rebuild the group header row based on currently visible columns

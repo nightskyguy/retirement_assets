@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.11ab</title>
+    <title>Retirement Optimizer 11.11ad</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -558,7 +558,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.11ab</b> <strong>Annual Details: new "Spend by Account" view.</strong> A new checkbox / one-click button isolates just the per-account spend columns (SS, pension, IRA/Roth/Brokerage/Cash withdrawals, RMDs, QCDs, Roth conversions, surplus) so you don't have to wade through the full table.
+				<li><b>11.11ad</b> Added Spending to Annual Details to focus on spending.
 					</li>
 					<li><b>11.1133</b> <strong>Architectural improvements</strong>, no features changed.
 					</li>
@@ -783,9 +783,9 @@
 					<input type="checkbox" id="cat-oppcost" onchange="updateColumnVisibility()"> Opp. Cost
 				</label>
 				<label>
-					<input type="checkbox" id="cat-acctspend" onchange="updateColumnVisibility()"> Spend by Account
+					<input type="checkbox" id="cat-spending" onchange="updateColumnVisibility()"> Spending
 				</label>
-				<button type="button" class="tog" onclick="showAccountSpendOnly()" title="Show only per-account spend/withdrawal columns">Spend by Account only</button>
+				<button type="button" class="tog" onclick="showSpendingOnly()" title="Show only per-account spend/withdrawal columns">Spending only</button>
 			</div><!-- class="column-controls" -->
 			<div style="font-size:0.8em;color:#444;padding:4px 6px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
 				<div style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin-bottom:4px;">

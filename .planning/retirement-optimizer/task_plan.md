@@ -554,27 +554,27 @@ Tests go in `retirement_optimizer_core.test.js`. Helper: `makeZeroBaseInputs()` 
 
 **Code pattern:**
 ```javascript
-// core.js:3139 columnCategories — add 'Account Spend' alongside existing tags
-'year': ['Summary', 'Taxation', 'Balances', 'Income', 'Account Spend'],
-'age1': ['Summary', 'Account Spend'],
-'age2': ['Summary', 'Account Spend'],
-'SSincome': ['Summary', 'Income', 'Account Spend'],
-'pension': ['Summary', 'Income', 'Account Spend'],
-'IRA1-': ['IRA Δ', 'Account Spend'],
-'IRA2-': ['IRA Δ', 'Account Spend'],
-'RMDwd': ['IRA Δ', 'Income', 'Account Spend'],
-'QCD1': ['IRA Δ', 'Account Spend'],
-'QCD2': ['IRA Δ', 'Account Spend'],
-'RothWD': ['Roth Δ', 'Income', 'Account Spend'],
-'Brokerage-': ['Brokerage Δ', 'Income', 'Account Spend'],
-'CashWD': ['Cash Δ', 'Income', 'Account Spend'],
-'rothConv': ['IRA Δ', 'Roth Δ', 'Account Spend'],
-'surplusCash': ['Cash Δ', 'Income', 'Account Spend'],
+// core.js:3139 columnCategories — add 'Spending' alongside existing tags
+'year': ['Summary', 'Taxation', 'Balances', 'Income', 'Spending'],
+'age1': ['Summary', 'Spending'],
+'age2': ['Summary', 'Spending'],
+'SSincome': ['Summary', 'Income', 'Spending'],
+'pension': ['Summary', 'Income', 'Spending'],
+'IRA1-': ['IRA Δ', 'Spending'],
+'IRA2-': ['IRA Δ', 'Spending'],
+'RMDwd': ['IRA Δ', 'Income', 'Spending'],
+'QCD1': ['IRA Δ', 'Spending'],
+'QCD2': ['IRA Δ', 'Spending'],
+'RothWD': ['Roth Δ', 'Income', 'Spending'],
+'Brokerage-': ['Brokerage Δ', 'Income', 'Spending'],
+'CashWD': ['Cash Δ', 'Income', 'Spending'],
+'rothConv': ['IRA Δ', 'Roth Δ', 'Spending'],
+'surplusCash': ['Cash Δ', 'Income', 'Spending'],
 ```
 
-- [ ] Add `'Account Spend'` to the category arrays above in `columnCategories` (core.js:3139-3236) — every other array on those lines keeps its existing tags, this just appends one more
+- [ ] Add `'Spending'` to the category arrays above in `columnCategories` (core.js:3139-3236) — every other array on those lines keeps its existing tags, this just appends one more
 - [ ] Add a `cat-acctspend` checkbox to the `.column-controls` div (retirement_optimizer.html:748-783), labeled "Spend by Account", `onchange="updateColumnVisibility()"`, matching the style of the existing `cat-*` checkboxes at 756-782
-- [ ] `getActiveCategories()` (core.js:3270-3282): add `if (document.getElementById('cat-acctspend')?.checked) categories.push('Account Spend');`
+- [ ] `getActiveCategories()` (core.js:3270-3282): add `if (document.getElementById('cat-acctspend')?.checked) categories.push('Spending');`
 - [ ] Add a one-click "Spend by Account" preset button that unchecks all other `cat-*` boxes, checks only `cat-acctspend`, and calls `updateColumnVisibility()` — avoids making users manually toggle 8 checkboxes to get an isolated view
 - **Test:** Run a simulation, check only `cat-acctspend` (uncheck default `cat-summary`), confirm the table shows exactly `year, age1, age2, SSincome, pension, IRA1-, IRA2-, RMDwd, QCD1, QCD2, RothWD, Brokerage-, CashWD, rothConv, surplusCash` and no balance/growth columns (`Roth1`, `Brokerage`, `Cash`, `rothG`, `brokerageG`, `cashG` must stay hidden)
 - **Status:** complete — `columnCategories` tagged (core.js:3139-3236), `cat-acctspend` checkbox + `getActiveCategories()` wired (core.js:3280), `showAccountSpendOnly()` preset button added (core.js after `updateColumnVisibility()`; button in retirement_optimizer.html:749-786). Browser-verified: isolated view shows exactly the 15 expected fields (11 with content by default, all 15 with Show Zero checked), no balance/growth columns leak in, no console errors.
@@ -631,7 +631,7 @@ function exportAnnualDetailsCSV() {
 - [ ] Apply the same `row.inflationFactor` division the on-screen table currently uses for its nominal/real ("current dollars") toggle (`inCurrentDollars`, core.js:3609, 4390), so the CSV matches what the user is looking at
 - [ ] CSV field escaping per RFC 4180 (quote fields containing comma/quote/newline, double internal quotes) — as shown above
 - [ ] Date-stamped filename `annual-details-YYYY-MM-DD.csv`, consistent with `exportAllScenarios()`'s naming (core.js:5425)
-- [ ] Note: Phase P21's new `'Account Spend'` category columns flow through automatically since this reads `isColumnVisible()` live — no special-casing needed regardless of ship order
+- [ ] Note: Phase P21's new `'Spending'` category columns flow through automatically since this reads `isColumnVisible()` live — no special-casing needed regardless of ship order
 - [ ] XLSX: explicitly out of scope for this phase; flag as a future stretch item requiring a SheetJS-class dependency — revisit only on user request
 - **Test:** Run a simulation, toggle a couple of category checkboxes and the Show-Zero checkbox, click Export CSV, confirm the downloaded file's columns exactly match the currently-visible table columns and open cleanly in Excel/Sheets
 - **Test:** With no simulation run yet (`lastSimulationLog` unset/empty), clicking Export CSV shows the warning message and does not throw

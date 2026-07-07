@@ -1,3 +1,5 @@
+# Retirement Planning Tools
+
 > [!WARNING & DISCLAIMER]
 > **There is no SUPPORT for these tools** and no guarantee of accuracy, or appropriateness of use. No warranty of suitability for any purpose. There is also *no charge*. **USE AT YOUR OWN RISK**
 
@@ -26,6 +28,22 @@ You can DIRECTLY invoke these tools:
 A California resident built these with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, and Javascript. See **Standalone Tools** and **Key Features** below for a summary of what the tools can do - and be sure to look at *What the Tool IGNOREs* (and *Known Bugs*, below) so you understand the limitations of the *Retirement Optimizer*.
 
 Here are less ambitious, standalone tools. Each should have a "How to Use" set if instructions, many have a way to generate a URL (called share) to capture your settings so you can either run again without reentering, or share with friends (or Redditors) for advice.
+
+## Table of Contents
+
+- [Who Are These Tools For? What Can They Do?](#who-are-these-tools-for--what-can-they-do)
+- [Standalone Calculator Tools](#standalone-calculator-tools)
+- [The Retirement Optimizer](#the-retirement-optimizer)
+  - [Features in the Works (and Known Bugs)](#features-in-the-works-and-known-bugs)
+  - [Why This Tool?](#why-this-tool)
+  - [Key Features](#key-features)
+  - [What the Tool IGNORES](#what-the-tool-ignores-no-plans-to-implement)
+  - [Limitations and Restrictions](#limitations-and-restrictions)
+- [What about Other Tools](#what-about-other-tools)
+  - [Free Tools](#free-tools)
+  - [Paid Tools](#paid-tools)
+- [Ramblings and Observations](#ramblings-and-observations)
+  - [Some of the Things I Learned About Taxation](#some-of-the-things-i-learned-about-taxation)
 
 ## Standalone Calculator Tools
 
@@ -85,7 +103,7 @@ My primary motivations for this tool are:
 > [!WARNING]
 > While I've renewed development of this tool and conquered some daunting bugs, it's still a work in progress.
 
-#### Features in the Works (and Known Bugs):
+### Features in the Works (and Known Bugs):
 
 + Add a "tax creep" to see what harm a creeping tax rate might do.  I notice some states (e.g. Georgia) are reducing their tax rates, while others are adding more brackets and increasing rates.
 + Better organize the Annual Details tables. There are just too many columns to easily navigate.
@@ -96,7 +114,7 @@ My primary motivations for this tool are:
 + More state taxation options are *usually* easy. You can [open an "Issue" in Github](https://github.com/nightskyguy/retirement_assets/issues/new/choose) to request that I add your state.
 + **State standard deduction accuracy:** States that use the Federal standard deduction (AZ, CO, ME, MN, ND, SC) now reference it directly so the deduction updates automatically when the Federal value changes. States with *fixed* standard deductions that are **not** indexed to inflation (AL, MT, OH) are incorrectly inflated by the engine each year — this overstates the deduction and slightly understates future taxes for those state residents. A future fix will properly handle those (and any future similar) states.
 
-##### Recent Fixes / Improvements
+#### Recent Fixes / Improvements
 + State tax rates have been updated to 2026 (e.g. NC tax was reduced).
 + More properly handles Social Security Survivor benefits.  (See #Limitations and Restrictions)
 + Optimizer now can optimize Spending, not just find the best withdrawal strategy.
@@ -113,7 +131,7 @@ My primary motivations for this tool are:
 + Save/Import/Export of settings **DONE**. The Load/Save/Delete/Manage Scenarios UI is not well undocumented. 
 + Autoload any saved "default" scenario (so you can pick up where you left off).  A message pops up telling you this happened.
 
-#### Why This Tool?
+### Why This Tool?
 Because the author is in retirement and has an unhealthy IRA balance to manage - it became obvious that no tool he could find offered the flexibility and *ease of use* he desired.  He and his wife are of different ages (so have different IRAs, RMD timings, Social Security amounts, etc.)  Some really powerful tools did not offer California tax calculations (California is a high tax state), or did not provide for life expectancy, and more.  Some of the questions the author sought to answer by modeling are these:
 
 - Which strategy does the best job of reducing total taxation?
@@ -131,7 +149,7 @@ in Medicare - but that is one of the many pitfalls of having too much forced inc
 Having a large tax deferred IRA balance (about 750K or larger at the start of drawing from your IRA) can have many consequences, the worst being taking forced income (RMDs) at higher tax rates and incurring those IRMAA penalties just described.  
 In this tool, we show each: IRMAA, state and Federal taxes to show the big picture: net taxes/net spendable income, year by year spend and "Final Wealth".
 
-#### Key Features:
+### Key Features:
 
 + Sophisticated Federal Tax and State tax calculations.  Includes *Capital Gains*, *NIIT*, a variety of states, and accurate social security taxation calculations.
 + A complete model until death of a single person or married couple with RMDs calculated, separation of 5 different accounts (IRA1, IRA2, Brokerage, Cash, Roth)
@@ -152,7 +170,7 @@ In this tool, we show each: IRMAA, state and Federal taxes to show the big pictu
 + By default dividends from the Brokerage and interest on cash are accumulated into the Cash account. The "Reinvest Brokerage Dividends" changes this behavior and dividends are reinvested (meaning your cost basis grows over time).
 
 
-#### What the Tool IGNORES (No Plans to Implement)
+### What the Tool IGNORES (No Plans to Implement)
 
 + **Roth and IRA Modeling Limitations:** This tool assumes all Traditional IRA balances consist entirely of pre-tax contributions, and that all Roth IRA withdrawals are tax-free. If your Roth account is less than 5 years old, or if you made Roth conversions within the past 5 years while under age 59½, actual withdrawals may incur income tax or a 10% early withdrawal penalty not reflected in these projections.
 + The various short term benefits to seniors under the OBBBA (e.g. extra deductions and phaseouts) are in the engine, and should properly phase out. However the author's experience is that those benefits are not very useful if trying to deal with a heavy weight IRA balance so haven't been fully tested.
@@ -174,7 +192,7 @@ There are two reasons that these permanent *ignorances* apply
 0. More inputs and knobs and conditions make the tool far less simple. If you've got those situations, you can do some modeling here, but maybe a better tool will be MaxiFi, EMoney, Empower, Projection Labs, Pralana, Boldin, or similar.
 
 
-#### Limitations and Restrictions
+### Limitations and Restrictions
 
 0. The tool models things a year-at-a-time. This is not strictly accurate, because, for example, **when** you make withdrawals or conversions materially affects the results. Waiting until the end of the year to make your withdrawals has a different result than making a withdrawal at the beginning of the year.  The order of calculations is:  RMD withdrawals, QCD withdrawals, calculation of spending/conversion withdrawals (and removal of those funds from the needed accounts) THEN taxes, interest and dividends on the remainder are calculated. Surplus funds after minimum spending levels are eligible for deposit into a Roth.  In real life, you must do Roth conversions as a separate operation, but this tool can help forecast what that conversion would be. The [Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html) linked from the Annual Table shows the trade offs about WHEN to withdraw or convert. Internally, the tool checks two alternatives: early withdrawals (when conversions are being done) and late withdrawals - if no conversions. Early conversions push pre-tax money into tax free money - so the earlier the conversion occurs, the more growth you gain.
 0. It tracks two Roth balances (one per person). Withdrawals are split proportionally between them; conversions are routed per-person.
@@ -190,11 +208,11 @@ There are two reasons that these permanent *ignorances* apply
 
 ---
 
-### What about Other tools
+## What about Other tools
 
 One of the lovely things about engineers is they like to build things. I've found many other free (or almost free) resources that both inspired me and made realize that there is more than one way to solve problems.  Of course  I've also paid for and used yet more tools which I will briefly address.
 
-#### Free Tools
+### Free Tools
 
 The sources I found around the interweb.
 
@@ -215,8 +233,8 @@ _ is what made me realize that writing a tool in JavaScript results in the most 
 + [GoogleSheet](https://docs.google.com/spreadsheets/d/1orZQ9g1KvGVrCShibutjyreaeqbmRFVAZ9aSY_57-DQ/edit?gid=1250894970#gid=1250894970) by Charles Eglington found on [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nu9lawc/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1). It's got lots of options. I want some things that aren't in it like a "Life Expectancy" for each person, properly calculate deductions, deduce filing status, etc.  In addition, I'd like it to "self optimize" by varying the amounts of IRA/401K withdrawals (and the number of years for withdrawals).  Ideally it would properly, or more properly calculate California Tax, and have a way to forecast based on inflation. But it's still a helpful tool.
 
 
-#### Paid Tools
-##### Boldin
+### Paid Tools
+#### Boldin
 + [Boldin](https://www.boldin.com) - formerly known as *New Retirement*. I had a year subscription. It was usable, but there was much I didn't like about it. The main issue with the tool is they try to do "everything" from pre-retirement planning through retirement. My number one pet peeve is that everything you wish to do that requires a future date shows month-by-month choices. It matters for some things, like exactly what month you retire or start social security. But it's tedious. One thing they have fixed is that it used to show "65y3m" meaning age 65, third month. Depending on your birthday, that could be any actual month.  Now they show "65y3m Jan 2038" - for example. You can type either "65" or "2038" to get the list of 12 months and just pick one, but if that future income is say, an inheritance well, it's just bizarre to be specifying the year, and month.  Well, at least they don't ask me what month I plan to die in. Maybe my spouse knows that plan.
 
 You must specify an account withdrawal order (or use the default). The default picks taxable accounts first, followed by tax deferred and tax free. But if you're going to do Roth conversions, or trying to deplete your overblown IRA - that order makes no sense. Ordering within taxable types makes sense... but I want the tool to be smart enough to know that the last 10k dollars I plan to spend can come from wherever is the most tax efficient at that time.  Pull from my cash, or my Roth instead of launching me off an IRMAA cliff, please.
@@ -247,7 +265,7 @@ One other shortcoming: Boldin likes to present things in future dollars. This is
 
 Final comment: at $144/year it's a great deal compared to a ruinous retirement. You may spend a week putting a plan together. But you will have no use for the tool for the rest of the year. If it did real portfolio tracking, or budget tracking, or tax planning (e.g. how to pay your taxes in retirement) it WOULD make the tool more useful on a monthly basis. But ultimately, what Boldin provides is a complex calculator that responds to your tweaking. That is, it takes a complex problem, and makes you the decider. It will help you think about organizing, timing and accounts, but it won't suggest to you how to do it BETTER.  It won't help you pick a "more ideal portfolio allocation", tell you that your chosen growth rates are unrealistic. It doesn't appear to optimize your annual withdrawals, or provide insights on the best time to do conversions (early in the year - by default it schedules them for December!)
 
-##### MaxiFi
+#### MaxiFi
 
 I've not had this subscription for very long, so I'll withhold my comments until I've kicked the tires more aggressively.  I will offer for now, that it's less "polished" than Boldin (I run into reference errors pretty often). So far the main quirk I noticed:
 
@@ -256,7 +274,7 @@ It wants to know ONLY the IRA balances at the end of last year. I understand thi
 More later.
 
 
-##### Others.
+#### Others.
 
 + [RetirementIQ](https://retirementiq.app/) Free for 7 days, $50/year. I've not dabbled much with this, partly because I prefer open source that I can inspect for possible flaws, back-doors, etc.  Directly invoke it here: [retirementiq.app](https://retirementiq.app/app/)
 

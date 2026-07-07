@@ -3138,7 +3138,7 @@ function loadOptimizerResult(id) {
 // Column category mappings - each column can be in multiple categories
 const columnCategories = {
     // Summary - high-level overview
-    'year': ['Summary', 'Taxation', 'Balances', 'Income'],
+    'year': ['Summary', 'Taxation', 'Balances', 'Income', 'Spending', 'IRA Δ', 'Roth Δ', 'Brokerage Δ', 'Cash Δ', 'Opp. Cost'],
     'age1': ['Summary'],
     'age2': ['Summary'],
     'status': ['Summary', 'Taxation'],
@@ -3184,35 +3184,35 @@ const columnCategories = {
     'ForcedIRA': ['Taxation', 'IRA Δ'],
 
     // IRA Changes - withdrawals, RMDs, and conversions
-    'IRA1-': ['IRA Δ'],
-    'IRA2-': ['IRA Δ'],
+    'IRA1-': ['IRA Δ', 'Spending'],
+    'IRA2-': ['IRA Δ', 'Spending'],
     'IRAwd': ['IRA Δ', 'Income'],
     'RMD%': ['IRA Δ'],
-    'RMD1-': ['IRA Δ'],
-    'RMD2-': ['IRA Δ'],
+    'RMD1-': ['IRA Δ', 'Spending'],
+    'RMD2-': ['IRA Δ', 'Spending'],
     'RMDwd': ['IRA Δ', 'Income'],
-    'QCD1': ['IRA Δ'],
-    'QCD2': ['IRA Δ'],
-    'rothConv': ['IRA Δ', 'Roth Δ'],  // Conversion comes from IRA
+    'QCD1': ['IRA Δ', 'Spending'],
+    'QCD2': ['IRA Δ', 'Spending'],
+    'rothConv': ['IRA Δ', 'Roth Δ', 'Spending'],  // Conversion comes from IRA
 
     // Roth Changes - balance, withdrawals, growth, conversions
     'Roth1': ['Balances', 'Roth Δ'],
     'Roth2': ['Balances', 'Roth Δ'],
-    'RothWD': ['Roth Δ', 'Income'],
+    'RothWD': ['Roth Δ', 'Income', 'Spending'],
     'rothG': ['Roth Δ'],
 
     // Brokerage Changes - balance, withdrawals, gains, growth
-    'Brokerage-': ['Brokerage Δ', 'Income'],
+    'Brokerage-': ['Brokerage Δ', 'Income', 'Spending'],
     'brokerageG': ['Brokerage Δ'],
 
     // Cash Changes - balance, withdrawals, growth
-    'CashWD': ['Cash Δ', 'Income'],
+    'CashWD': ['Cash Δ', 'Income', 'Spending'],
     'cashG': ['Cash Δ'],
-    'surplusCash': ['Cash Δ', 'Income'],
+    'surplusCash': ['Cash Δ', 'Income', 'Spending'],
     // Phase 27: inflows/outflows + withdrawal rate
     'grossOut': ['Summary', 'Withdrawals'],
     'netOut':   ['Summary', 'Withdrawals'],
-    'inflows':  ['Summary', 'Withdrawals'],
+    'inflows':  ['Summary', 'Withdrawals', 'Spending'],
     'wdRate%':  ['Summary', 'IRA Δ'],
 
     // Debug / performance — only visible under Show All (no checkbox maps to 'Debug')
@@ -3278,6 +3278,7 @@ function getActiveCategories() {
     if (document.getElementById('cat-brokerage')?.checked) categories.push('Brokerage Δ');
     if (document.getElementById('cat-cash')?.checked) categories.push('Cash Δ');
     if (document.getElementById('cat-oppcost')?.checked) categories.push('Opp. Cost');
+    if (document.getElementById('cat-spending')?.checked) categories.push('Spending');
     return categories;
 }
 
@@ -3386,6 +3387,21 @@ function updateColumnVisibility() {
     syncTopScroll();
 }
 
+// Phase P21: isolate the "Spending" category (unchecks all other cat-* boxes)
+function showSpendingOnly() {
+    const catIds = ['cat-summary', 'cat-income', 'cat-balances', 'cat-taxation',
+        'cat-ira', 'cat-roth', 'cat-brokerage', 'cat-cash', 'cat-oppcost'];
+    catIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.checked = false;
+    });
+    const showAll = document.getElementById('show-all');
+    if (showAll) showAll.checked = false;
+    const spending = document.getElementById('cat-spending');
+    if (spending) spending.checked = true;
+    updateColumnVisibility();
+}
+
 // Rebuild the group header row based on currently visible columns
 function rebuildGroupRow(table) {
     const thead = table.tHead;
@@ -3482,6 +3498,7 @@ function updateTable(log) {
         'RothG': 'Growth in the Roth (added to Roth account)',
         'RothConv': 'Amount moved from IRA to Roth (converted)',
         'CashWD': 'Tax free withdrawals from Cash',
+        'surplusCash': 'Cash left over after spending and taxes were covered — routed back into the Cash account (or on to Roth conversion if Max Conversion is enabled).',
         'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
         'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',
         'totalTax': 'Federal, State, IRMAA, NIIT, and CapGains taxes — in total.',
@@ -4232,6 +4249,10 @@ function setIncomeChartView(v) {
     // "Show thresholds" applies only to the Taxation view.
     const thr = document.getElementById('chk-thresholds-wrap');
     if (thr) thr.style.display = v === 'tax' ? 'inline-flex' : 'none';
+    // After-tax note applies only to the combined (Income & Expenses) view — it's the
+    // only view where income-source bars are scaled down by the year's effective tax rate.
+    const aftertaxNote = document.getElementById('income-aftertax-note');
+    if (aftertaxNote) aftertaxNote.style.display = v === 'combined' ? '' : 'none';
     if (lastSimulationLog) updateCharts(lastSimulationLog);
 }
 

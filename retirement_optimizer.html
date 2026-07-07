@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1133</title>
+    <title>Retirement Optimizer 11.11ae</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -558,7 +558,11 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.1133</b> <strong>Architectural improvements</strong>, no features changed.
+				<li><b>11.11ae</b> Income &amp; Expenses chart: added a note that shown incomes are after-tax (pre-tax figures are in Annual Details).
+					</li>
+					<li><b>11.11ad</b> Added Spending to Annual Details to focus on spending.
+					</li>
+					<li><b>11.1133</b> <strong>Architectural improvements</strong>, no features changed.
 					</li>
 					<li><b>11.1125</b> <strong>IRMAA now respects Medicare age.</strong>
 						<ul style="margin:4px 0 0 16px;">
@@ -780,6 +784,10 @@
 				<label>
 					<input type="checkbox" id="cat-oppcost" onchange="updateColumnVisibility()"> Opp. Cost
 				</label>
+				<label>
+					<input type="checkbox" id="cat-spending" onchange="updateColumnVisibility()"> Spending
+				</label>
+				<button type="button" class="tog" onclick="showSpendingOnly()" title="Show only per-account spend/withdrawal columns">Spending only</button>
 			</div><!-- class="column-controls" -->
 			<div style="font-size:0.8em;color:#444;padding:4px 6px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
 				<div style="display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin-bottom:4px;">
@@ -833,6 +841,7 @@
                 <input type="checkbox" id="chk-thresholds" onchange="toggleTaxThresholds(this)" checked> Show thresholds
               </label>
             </div>
+            <div id="income-aftertax-note" style="font-size:0.78em;color:#777;margin:2px 0 4px 8px;">Incomes shown are After Taxes - See Annual Details for pre-tax amounts.</div>
             <canvas id="chartIncomeSources" style="max-height:403px;"></canvas>
         </div>
 

@@ -796,7 +796,7 @@ var TAXData = {
             <span id="lgTaxableWrap"   class="leg-toggle" title="Click to hide"         onclick="toggleFixedDs(11,'lgTaxableWrap')"><span class="leg-dash" style="border-color:#fb923c"></span>Taxable Income</span>
             <span id="lgFedTaxWrap"    class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(12,'lgFedTaxWrap')"><span class="leg-sq" style="background:#f87171"></span>Federal Tax</span>
             <span id="lgStateTaxWrap"  class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(13,'lgStateTaxWrap')"><span class="leg-sq" style="background:#34d399"></span>State Tax</span>
-            <span id="lgIrmaaTaxWrap"  class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(14,'lgIrmaaTaxWrap')"><span class="leg-sq" style="background:#c084fc"></span>IRMAA</span>
+            <span id="lgIRMAATaxWrap"  class="leg-toggle" style="opacity:0.35" title="Hidden — click to show" onclick="toggleFixedDs(14,'lgIRMAATaxWrap')"><span class="leg-sq" style="background:#c084fc"></span>IRMAA</span>
           </div>
         </div>
         <div class="leg-group">
@@ -815,8 +815,8 @@ var TAXData = {
           <div class="leg-group-body" id="grpFedThr"></div>
         </div>
         <div class="leg-group">
-          <span class="leg-group-hdr" onclick="toggleLegendGroup('grpIrmaa')">▼ IRMAA</span>
-          <div class="leg-group-body" id="grpIrmaa"></div>
+          <span class="leg-group-hdr" onclick="toggleLegendGroup('grpIRMAA')">▼ IRMAA</span>
+          <div class="leg-group-body" id="grpIRMAA"></div>
         </div>
         <div class="leg-group">
           <span class="leg-group-hdr" onclick="toggleLegendGroup('grpStateThr')">▼ State Thresh</span>
@@ -847,7 +847,7 @@ var TAXData = {
                 <button id="optTax_all"   class="tog active" onclick="setTaxView('all')"  >All</button>
                 <button id="optTax_fed"   class="tog"        onclick="setTaxView('fed')"  >Fed</button>
                 <button id="optTax_state" class="tog"        onclick="setTaxView('state')">State</button>
-                <button id="optTax_irmaa" class="tog"        onclick="setTaxView('irmaa')">IRMAA</button>
+                <button id="optTax_IRMAA" class="tog"        onclick="setTaxView('IRMAA')">IRMAA</button>
               </span>
             </th>
             <th rowspan="2" title="IRA withdrawal redirected to Roth (above-RMD excess over lifestyle target)">Roth Conv</th>
@@ -905,7 +905,7 @@ function rmdFactor(age, rmdAge){
    Bracket floor[i] = ceiling of bracket[i-1] (first bracket floor = 0).
    IRMAA floor = raw MAGI threshold (compared to totalIncome ≈ MAGI).
    Negative t.amount flags "not inflation-indexed" (NIIT).
-   type:'bracket' → fill chain | type:'irmaa' → cliff, no fill
+   type:'bracket' → fill chain | type:'IRMAA' → cliff, no fill
 */
 const BRACKET_COLORS   = ['#fef08a','#fbbf24','#f97316','#ea580c','#c2410c','#9a3412','#7c2d12'];
 const BRACKET_VISIBLE  = [false, true, true, false, false, false, false];
@@ -927,13 +927,13 @@ function buildDefaults(status) {  // status: 'MFJ' or 'SGL'
     type:    'bracket'
   }));
 
-  const irmaaTiers = irm.map((b, i) => ({
+  const IRMAATiers = irm.map((b, i) => ({
     id:      'i' + (i + 1),
     label:   'IRMAA ' + b.tier,
     amount:  b.l,
     color:   IRMAA_COLORS[i]  || '#5b21b6',
     visible: IRMAA_VISIBLE[i] ?? false,
-    type:    'irmaa'
+    type:    'IRMAA'
   }));
 
   const niit = {
@@ -942,7 +942,7 @@ function buildDefaults(status) {  // status: 'MFJ' or 'SGL'
     color:   '#818cf8', visible: true, type: 'bracket'
   };
 
-  return [...brackets, ...irmaaTiers, niit]
+  return [...brackets, ...IRMAATiers, niit]
     .sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
 }
 
@@ -1000,7 +1000,7 @@ let lastSpouseIRAStart = 0;
 let lastRothStart      = 0;
 
 // Tax column view toggle
-let taxView = 'all';           // 'all' | 'fed' | 'state' | 'irmaa'
+let taxView = 'all';           // 'all' | 'fed' | 'state' | 'IRMAA'
 
 // Brokerage / cash UI state
 let brokDrip  = false;   // dividend destination: false = Cash, true = DRIP
@@ -1143,21 +1143,6 @@ function addThreshold(){
 
 /* ── getRateBracket / calculateProgressive now come from taxengine.js (self-contained). ── */
 
-/* ── Inline IRMAA lookup (no dependency on retirement_optimizer_core.js) ── */
-function computeIrmaaInline(magi, status, inflMult) {
-  const irmaaStatus = status === 'SGL' ? 'SGL' : 'MFJ';
-  const brackets = window.TAXData?.IRMAA?.[irmaaStatus]?.brackets;
-  if(!brackets || magi <= 0) return 0;
-  const annualIncrease = TAXData.IRMAA?.ANNUAL_INCREASE ?? 0;
-  const yearsElapsed   = inflMult > 1 ? Math.log(inflMult) / Math.log(1.025) : 0;
-  const medicareGrowth = Math.pow(1 + annualIncrease, yearsElapsed);
-  let monthlyRate = 0;
-  for(const b of brackets){
-    if(magi >= b.l * inflMult) monthlyRate = b.r;
-  }
-  return monthlyRate * medicareGrowth * 12;
-}
-
 /* ── Projection engine ── */
 function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, years, startAge,
                   ss1, ss1StartAge, ss2, ss2StartAge, fixedIncome, contrib, contribEndAge, contribInflate,
@@ -1275,7 +1260,11 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
 
     // ── Tax calculation ──
     const prevPrevMagi = magiHistory.length >= 2 ? magiHistory[magiHistory.length - 2].magi : 0;
-    const irmaaAnnualCost = computeIrmaaInline(prevPrevMagi, filingStatus, inflMult);
+    // Per-spouse Medicare-age gate (mirrors retirement_optimizer_core.js's onMedicare calc) —
+    // calcIRMAA() halves the household surcharge when only one spouse has turned 65.
+    const onMedicareCount = (age >= 65 ? 1 : 0) + (!isSingle && spouseCurrentAge >= 65 ? 1 : 0);
+    const medicareGrowth  = Math.pow(1 + (TAXData.IRMAA?.ANNUAL_INCREASE ?? 0), y - 1);
+    const IRMAAAnnualCost = calcIRMAA(prevPrevMagi, filingStatus, inflMult, medicareGrowth, onMedicareCount);
 
     let taxResult = null;
     if(selectedState && typeof calculateTaxes === 'function'){
@@ -1295,7 +1284,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
           filingStatus:    filingStatus,
           ages:            isSingle ? [age] : [age, spouseCurrentAge],
           birthyears:      isSingle ? [birthYearIn] : [birthYearIn, spouseBirthYearIn],
-          irmaaAnnualCost: irmaaAnnualCost,
+          IRMAAAnnualCost,
         });
       } catch(e){ taxResult = null; }
     }
@@ -1342,7 +1331,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
       depleted,
       rmdActive: rmd > 0 && rmd > targetWd,
       withdrawing,
-      taxResult, totalTax, federalTax, stateTax, irmaaAmt: irmaaAnnualCost,
+      taxResult, totalTax, federalTax, stateTax, IRMAAAmt: IRMAAAnnualCost,
       fedTaxableIncome, stateTaxableIncome, fedMarginal, stMarginal,
       rothConversion, conversionTax, cashUsedForTax,
     });
@@ -1408,7 +1397,7 @@ const chart = new Chart(chartCtx, {
             if(totalIncome <= 0) return [];
             const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
             let bracket = null, stateBracket = null;
-            const irmaaHit = [];
+            const IRMAAHit = [];
             for(const t of sorted){
               const threshold = threshAmt(t, r, useReal);
               const isNiit    = t.id === 'niit';
@@ -1416,13 +1405,13 @@ const chart = new Chart(chartCtx, {
               if(compare >= threshold){
                 if(t.type === 'bracket' && !isNiit) bracket = t.label;
                 else if(t.type === 'state') stateBracket = t.label;
-                else irmaaHit.push(t.label);  // irmaa tiers + NIIT
+                else IRMAAHit.push(t.label);  // IRMAA tiers + NIIT
               }
             }
             const lines = ['', ` Total income: ${fmt(totalIncome)}`, ` Taxable income: ${fmt(taxableInc)}`];
             if(bracket) lines.push(` In: ${bracket}`);
             if(stateBracket) lines.push(` State: ${stateBracket}`);
-            irmaaHit.forEach(name => lines.push(` ⚠ ${name}`));
+            IRMAAHit.forEach(name => lines.push(` ⚠ ${name}`));
             return lines;
           }
         }
@@ -1450,15 +1439,15 @@ const LEG_WRAP = [
   'lgNomWrap','lgRealWrap','lgRmdWrap','lgBaseWdWrap','lgActualWrap',
   'lgContribWrap','lgLifestyleWrap','lgBrokWrap','lgCashWrap',
   'lgSpouseIRAWrap','lgRothWrap','lgTaxableWrap',
-  'lgFedTaxWrap','lgStateTaxWrap','lgIrmaaTaxWrap','lgRothContribWrap'
+  'lgFedTaxWrap','lgStateTaxWrap','lgIRMAATaxWrap','lgRothContribWrap'
 ];
 
 const CV_GROUPS = {
   balances: ['grpBal'],
-  taxation: ['grpIncome','grpFedThr','grpIrmaa','grpStateThr'],
+  taxation: ['grpIncome','grpFedThr','grpIRMAA','grpStateThr'],
   income:   ['grpIncome']
 };
-const ALL_GROUPS = ['grpBal','grpIncome','grpFedThr','grpIrmaa','grpStateThr'];
+const ALL_GROUPS = ['grpBal','grpIncome','grpFedThr','grpIRMAA','grpStateThr'];
 
 function setChartView(mode) {
   chartView = mode;
@@ -1497,22 +1486,22 @@ function setChartView(mode) {
 function bracketForRow(r){
   if(r.totalIncome <= 0) return '—';
   const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
-  let bracketLabel = null, highestIrmaa = null, highestUnindexed = null;
+  let bracketLabel = null, highestIRMAA = null, highestUnindexed = null;
   const taxable = r.fedTaxableIncome || 0;
   for(const t of sorted){
     const threshold = threshAmt(t, r, false);
     const compare   = t.type === 'bracket' ? taxable : (t.type === 'state' ? (r.stateTaxableIncome || 0) : r.totalIncome);
     if(compare >= threshold){
       if(t.type === 'bracket') bracketLabel = t.label;
-      else if(t.type === 'irmaa'){
-        if(t.amount >= 0) highestIrmaa      = t.label;
+      else if(t.type === 'IRMAA'){
+        if(t.amount >= 0) highestIRMAA      = t.label;
         else              highestUnindexed  = t.label;
       }
     }
   }
   const parts = [];
   if(bracketLabel)      parts.push(bracketLabel.replace(' bracket',''));
-  if(highestIrmaa)      parts.push(highestIrmaa.replace('IRMAA Tier ','T'));
+  if(highestIRMAA)      parts.push(highestIRMAA.replace('IRMAA Tier ','T'));
   if(highestUnindexed)  parts.push(highestUnindexed);
   return parts.length ? parts.join(' ') : '—';
 }
@@ -1552,7 +1541,7 @@ function buildTable(rows){
     let taxAmt = 0;
     if(taxView === 'fed')   taxAmt = r.federalTax || 0;
     else if(taxView === 'state') taxAmt = r.stateTax || 0;
-    else if(taxView === 'irmaa') taxAmt = r.irmaaAmt || 0;
+    else if(taxView === 'IRMAA') taxAmt = r.IRMAAAmt || 0;
     else taxAmt = r.totalTax || 0;
     const convAmt = r.rothConversion || 0;
     const taxPct  = taxableInc > 0 && taxAmt > 0 ? (taxAmt / taxableInc * 100).toFixed(1) + '%' : '—';
@@ -1580,11 +1569,11 @@ function buildTable(rows){
 /* ── Legend rebuild ── */
 function rebuildLegend(){
   const fedBody   = document.getElementById('grpFedThr');
-  const irmaaBody = document.getElementById('grpIrmaa');
+  const IRMAABody = document.getElementById('grpIRMAA');
   const stateBody = document.getElementById('grpStateThr');
-  if(!fedBody || !irmaaBody || !stateBody) return;
+  if(!fedBody || !IRMAABody || !stateBody) return;
   fedBody.innerHTML = '';
-  irmaaBody.innerHTML = '';
+  IRMAABody.innerHTML = '';
   stateBody.innerHTML = '';
 
   const sorted = [...thresholds].sort((a,b) => Math.abs(a.amount) - Math.abs(b.amount));
@@ -1599,7 +1588,7 @@ function rebuildLegend(){
     lineEl.style.cssText = `display:inline-block;width:16px;height:0;border-top:2px dashed ${t.color};flex-shrink:0`;
     span.append(lineEl, document.createTextNode(' ' + t.label));
 
-    if(t.type === 'irmaa') irmaaBody.appendChild(span);
+    if(t.type === 'IRMAA') IRMAABody.appendChild(span);
     else if(t.type === 'state') stateBody.appendChild(span);
     else fedBody.appendChild(span);
   });
@@ -1772,7 +1761,7 @@ function update(){
   // Tax dollar lines
   chart.data.datasets[12].data = rows.map(r => Math.round(useReal ? (r.federalTax || 0) / r.inflMult : (r.federalTax || 0)) || null);
   chart.data.datasets[13].data = rows.map(r => Math.round(useReal ? (r.stateTax   || 0) / r.inflMult : (r.stateTax   || 0)) || null);
-  chart.data.datasets[14].data = rows.map(r => Math.round(useReal ? (r.irmaaAmt   || 0) / r.inflMult : (r.irmaaAmt   || 0)) || null);
+  chart.data.datasets[14].data = rows.map(r => Math.round(useReal ? (r.IRMAAAmt   || 0) / r.inflMult : (r.IRMAAAmt   || 0)) || null);
 
   /* ── Threshold datasets ── */
   while(chart.data.datasets.length > FIXED_DS) chart.data.datasets.pop();
@@ -1781,8 +1770,8 @@ function update(){
     .filter(t => t.type === 'bracket')
     .sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
 
-  const sortedIrmaa = [...thresholds]
-    .filter(t => t.type === 'irmaa')
+  const sortedIRMAA = [...thresholds]
+    .filter(t => t.type === 'IRMAA')
     .sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
 
   const bracketBaseIdx = FIXED_DS;
@@ -1812,7 +1801,7 @@ function update(){
     });
   });
 
-  sortedIrmaa.forEach((t) => {
+  sortedIRMAA.forEach((t) => {
     if(!t.visible) return;
     const data = rows.map(r => {
       const v = threshAmt(t, r, useReal);
@@ -2190,7 +2179,7 @@ function setIraView(v){
 
 function setTaxView(v){
   taxView = v;
-  ['all','fed','state','irmaa'].forEach(x =>
+  ['all','fed','state','IRMAA'].forEach(x =>
     document.getElementById('optTax_'+x)?.classList.toggle('active', x === v)
   );
   buildTable(lastRows);

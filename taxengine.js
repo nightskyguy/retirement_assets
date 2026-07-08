@@ -1001,6 +1001,17 @@ function getRateBracket(entity, status) {
     return brks
 }
 
+// Returns the highest index i such that brackets[i].l * multiplier <= amount, or -1 if none match.
+// Shared boundary-lookup primitive for findUpperLimitByAmount/getIRMAATier/getIRMAATierTargetMAGI.
+function findBracketIndex(brackets, amount, multiplier = 1) {
+    let idx = -1;
+    for (let i = 0; i < brackets.length; i++) {
+        if (brackets[i].l * multiplier <= amount) idx = i;
+        else break;
+    }
+    return idx;
+}
+
 /**
  * Find the income limit for a specified marginal tax rate within tax brackets.
  * Returns the highest bracket limit where the rate is less than or equal to the target rate.
@@ -1034,20 +1045,15 @@ function findLimitByRate(entity, status, tgtrate, inflation = 1) {
 // For example if the limits are 10, 100, 1000 and the amount is 150 - we want the 1000 (less 1).
 // If amount is 99, we want 100.
 function findUpperLimitByAmount(entity, status, amount, inflation = 1) {
-    let limit = 0;
-    let rate = 0;
-    let nominalRate = 0.0;
     let brks = getRateBracket(entity, status)
+    const idx = findBracketIndex(brks, amount, inflation);
 
-    for (let b of brks) {
-        if (b.l * inflation <= amount) {
-            rate = b.r;
-            nominalRate = b.nr ?? 0;
-        } else {
-            limit = b.l * inflation - 1;
-            break;
-        }
-    }
+    if (idx === -1) return { limit: 0, rate: 0, nominalRate: 0 };
+
+    const rate = brks[idx].r;
+    const nominalRate = brks[idx].nr ?? 0;
+    const nextB = brks[idx + 1];
+    const limit = nextB ? nextB.l * inflation - 1 : 0;   // matches last-bracket edge case: no upper limit
     return { limit, rate: rate, nominalRate: nominalRate }
 }
 
@@ -1069,26 +1075,30 @@ function findUpperLimitByAmount(entity, status, amount, inflation = 1) {
  * @returns {number} return.nominalRate - Nominal rate if specified in bracket data
  * @returns {string} [return.error] - Error message if entity/status invalid
  */
-function calculateProgressive(entity, status, amount, inflation = 1, ratecreep = 1) {
+// startPosition (default 0) lets a caller stack `amount` on top of income already taxed
+// elsewhere (e.g. preferential income stacked on top of ordinary income for cap gains) —
+// brackets fully below startPosition are skipped, and the walk proceeds from there.
+function calculateProgressive(entity, status, amount, inflation = 1, ratecreep = 1, startPosition = 0) {
 
-    let brks = getRateBracket(entity, status)
+    let brks = Array.isArray(entity) ? entity : getRateBracket(entity, status)
     if (!brks) {
         return { cumulative: 0, total: 0, marginal: 0, limit: 0, error: `Invalid entity (${entity}) or status (${status})` };
     }
 
     // States with INFLATION_INDEXED: false have statutory fixed bracket thresholds — never inflate them.
-    const effectiveInflation = TAXData[entity]?.INFLATION_INDEXED === false ? 1 : inflation;
+    const effectiveInflation = (!Array.isArray(entity) && TAXData[entity]?.INFLATION_INDEXED === false) ? 1 : inflation;
 
-    let prevLimit = 0;
+    let prevLimit = startPosition;
     let cumulative = 0;
     let marginalRate = 0;
     let nominalRate = 0;
 
     for (let b of brks) {
         let currentLimit = b.l * effectiveInflation;
+        if (currentLimit <= startPosition) continue;   // bracket entirely below the starting position
 
-        if (amount <= currentLimit) {
-            cumulative += (amount - prevLimit) * b.r * ratecreep;
+        if (startPosition + amount <= currentLimit) {
+            cumulative += (startPosition + amount - prevLimit) * b.r * ratecreep;
             marginalRate = b.r * ratecreep;
             nominalRate = b.nr ?? 0;
             prevLimit = currentLimit;
@@ -1200,6 +1210,26 @@ function evaluateRetirementCredit(retExcl, { pensionIncome, iraIncome, magi }) {
     return 0;
 }
 
+// Pure 3-tier SS taxability formula (statutory since 1984, brackets NOT inflation-indexed).
+// Assumes exactly 3 brackets per TAXData.SOCIALSECURITY[status].brackets shape.
+function calculateTaxableSocialSecurity(status, provisionalIncome, totalSS) {
+    const ssBrackets = getRateBracket('SOCIALSECURITY', status);
+    if (!ssBrackets) return 0;
+    if (provisionalIncome <= ssBrackets[0].l) return 0;
+    if (provisionalIncome <= ssBrackets[2].l) {
+        const threshold1 = ssBrackets[1].l;
+        const tier1Rate = ssBrackets[1].r;
+        return Math.min(tier1Rate * totalSS, tier1Rate * (provisionalIncome - threshold1));
+    }
+    const threshold1 = ssBrackets[1].l;
+    const threshold2 = ssBrackets[2].l;
+    const tier1Rate = ssBrackets[1].r;
+    const tier2Rate = ssBrackets[2].r;
+    const tier1Amount = tier1Rate * (threshold2 - threshold1);
+    const tier2Amount = tier2Rate * (provisionalIncome - threshold2);
+    return Math.min(tier2Rate * totalSS, tier1Amount + tier2Amount);
+}
+
 /**
  * Calculates Federal, State, Capital Gains, NIIT, and IRMAA taxes.
  *
@@ -1217,7 +1247,7 @@ function evaluateRetirementCredit(retExcl, { pensionIncome, iraIncome, magi }) {
  * @param {number} params.hsaContrib - HSA contributions (deductible Fed, taxable CA).
  * @param {number} params.inflation - CPI multiplier for tax brackets (e.g., 1.025).
  * @param {string} params.state - State abbreviation (e.g., 'CA', 'no' for no-tax states).
- * @param {number} params.irmaaAnnualCost - Annual IRMAA cost (from 2-year lookback MAGI).
+ * @param {number} params.IRMAAAnnualCost - Annual IRMAA cost (from 2-year lookback MAGI).
  * @param {boolean} params.obbaOn - Enable OBBBA provisions (senior deduction + SALT cap).
  * @param {boolean} params.saltHigh - Use $40k SALT cap (OBBBA); false = $10k (TCJA).
  * @param {number}  params.propTax - Property + local taxes paid (for SALT itemizing).
@@ -1225,7 +1255,7 @@ function evaluateRetirementCredit(retExcl, { pensionIncome, iraIncome, magi }) {
  */
 function calculateTaxes(params = {}) {
     const {
-        irmaaAnnualCost = 0,
+        IRMAAAnnualCost = 0,
         filingStatus = 'MFJ',
         ages = [],
         birthyears = [],
@@ -1275,23 +1305,7 @@ function calculateTaxes(params = {}) {
     const provisionalIncome = (earnedIncome - hsaContrib + ordDivInterest +
                                qualifiedDiv + capGains + taxExemptInterest +
                                provisionalIncomeRate * totalSS);
-    let taxableSS = 0;
-
-    if (provisionalIncome <= ssBrackets[0].l) {
-        taxableSS = 0;
-    } else if (provisionalIncome <= ssBrackets[2].l) {
-        const threshold1 = ssBrackets[1].l;
-        const tier1Rate = ssBrackets[1].r;
-        taxableSS = Math.min(tier1Rate * totalSS, tier1Rate * (provisionalIncome - threshold1));
-    } else {
-        const threshold1 = ssBrackets[1].l;
-        const threshold2 = ssBrackets[2].l;
-        const tier1Rate = ssBrackets[1].r;
-        const tier2Rate = ssBrackets[2].r;
-        const tier1Amount = tier1Rate * (threshold2 - threshold1);
-        const tier2Amount = tier2Rate * (provisionalIncome - threshold2);
-        taxableSS = Math.min(tier2Rate * totalSS, tier1Amount + tier2Amount);
-    }
+    const taxableSS = calculateTaxableSocialSecurity(status, provisionalIncome, totalSS);
 
     // ========================================================================
     // STEP 3: Federal AGI (pre-deduction)
@@ -1378,24 +1392,9 @@ function calculateTaxes(params = {}) {
     // STEP 8: Capital Gains Tax (0 / 15 / 20% — NIIT calculated separately)
     // ========================================================================
     const capGainsBrackets = TAXData.FEDERAL.CAPITAL_GAINS[status].brackets;
-    let federalCapGainsTax = 0;
-    let remainingPreferential = taxablePreferentialIncome;
-    let currentPosition = taxableOrdinaryIncome;
-    let capitalGainsRate = 0;
-
-    for (let i = 0; i < capGainsBrackets.length; i++) {
-        const bracket = capGainsBrackets[i];
-        const bracketLimit = bracket.l * inflation;
-        const rate = bracket.r;
-        if (currentPosition >= bracketLimit) continue;
-        capitalGainsRate = rate;
-        const roomInBracket = bracketLimit - currentPosition;
-        const amountInBracket = Math.min(remainingPreferential, roomInBracket);
-        federalCapGainsTax += amountInBracket * rate;
-        remainingPreferential -= amountInBracket;
-        currentPosition += amountInBracket;
-        if (remainingPreferential <= 0) break;
-    }
+    const capGainsResult = calculateProgressive(capGainsBrackets, status, taxablePreferentialIncome, inflation, 1, taxableOrdinaryIncome);
+    const federalCapGainsTax = capGainsResult.total;
+    const capitalGainsRate   = capGainsResult.marginal;
 
     // ========================================================================
     // STEP 9: NIIT (3.8% surtax — thresholds NOT inflation-indexed)
@@ -1412,43 +1411,39 @@ function calculateTaxes(params = {}) {
     // ========================================================================
     // STEP 10: Totals and return
     // ========================================================================
-    const irmaaMagi = federalAGI + taxExemptInterest;
+    const IRMAAMagi = federalAGI + taxExemptInterest;
 
     // State retirement-income CREDIT (e.g. Ohio) — a dollar reduction of final state tax
     // liability, not an AGI exclusion, so it's applied here after stateTax is finalized.
-    const stateRetCredit = evaluateRetirementCredit(retExcl, { pensionIncome, iraIncome, magi: irmaaMagi });
+    const stateRetCredit = evaluateRetirementCredit(retExcl, { pensionIncome, iraIncome, magi: IRMAAMagi });
     const stateTaxFinal = Math.max(0, stateTax - stateRetCredit);
 
     const totalTax = federalTax + stateTaxFinal;
     const federalNominalRate = federalOrdinaryResult.nominalRate || 0;
     const stateNominalRate = stateResult.nominalRate || 0;
-    const irmaaRate = federalAGI > 0 ? irmaaAnnualCost / federalAGI : 0;
-    const nominalRate = federalNominalRate + stateNominalRate + irmaaRate;
+    const IRMAARate = federalAGI > 0 ? IRMAAAnnualCost / federalAGI : 0;
+    const nominalRate = federalNominalRate + stateNominalRate + IRMAARate;
 
     return {
         nominalRate,
         federalNominalRate,
         stateNominalRate,
-        irmaaRate,
-        irmaaAnnualCost,
+        IRMAARate,
+        IRMAAAnnualCost,
         totalTax,
         federalTax,
         stateTax: stateTaxFinal,
-        state: stateTaxFinal,
         stateOrdinaryTax,
         stateCapGainsTax,
         capitalGainsRate,
         capitalGainsTax: federalCapGainsTax,
         niitTax,
         AGI: federalAGI,
-        irmaaMagi,
-        MAGI: irmaaMagi,
+        MAGI: IRMAAMagi,
 
         federalOrdinaryTax,
         federalMarginalRate,
-        fedRate: federalMarginalRate,
         stateMarginalRate,
-        stRate: stateMarginalRate,
         fedLimit: federalOrdinaryResult.limit,
         stLimit: stateResult.limit,
 
@@ -1457,7 +1452,6 @@ function calculateTaxes(params = {}) {
         federalTaxableIncome,
         stateTaxableIncome,
         stateAGI,
-        stagi: stateAGI,
 
         federalStdDeduction: federalDeduction,
         stateStdDeduction,
@@ -1479,21 +1473,17 @@ function calculateTaxes(params = {}) {
 // household totals (MFJ tables are 2x the per-person surcharge), so per-person = r / persons.
 function calcIRMAA(magi, status, cpiRate, medicareRate = (1 + TAXData.IRMAA.ANNUAL_INCREASE), onMedicareCount = null) {
 
-	let irmaalimit = findUpperLimitByAmount( 'IRMAA', status, magi, cpiRate)
-	if (onMedicareCount === null) return irmaalimit.rate * medicareRate * 12
+	let IRMAALimit = findUpperLimitByAmount( 'IRMAA', status, magi, cpiRate)
+	if (onMedicareCount === null) return IRMAALimit.rate * medicareRate * 12
 	const persons = status === 'MFJ' ? 2 : 1;
-	return irmaalimit.rate / persons * Math.min(onMedicareCount, persons) * medicareRate * 12
+	return IRMAALimit.rate / persons * Math.min(onMedicareCount, persons) * medicareRate * 12
 }
 
 function getIRMAATier(magi, status, cpiRate) {
 	const brks = getRateBracket('IRMAA', status);
 	if (!brks) return '-';
-	let tier = brks[0].tier ?? '-';
-	for (const b of brks) {
-		if (b.l * cpiRate <= magi) tier = b.tier ?? '-';
-		else break;
-	}
-	return tier;
+	const idx = findBracketIndex(brks, magi, cpiRate);
+	return idx === -1 ? (brks[0].tier ?? '-') : (brks[idx].tier ?? '-');
 }
 
 // Returns the CPI-adjusted per-person annual QCD limit for the given simulation year.
@@ -1519,12 +1509,7 @@ function isQCDEligible(birthYear, birthMonth, simYear) {
 function getIRMAATierTargetMAGI(magi, status, cpiRate, tiersDown) {
 	const brks = getRateBracket('IRMAA', status);
 	if (!brks) return 0;
-	// Find current bracket index (highest i where b.l * cpiRate <= magi)
-	let currentIdx = -1;
-	for (let i = 0; i < brks.length; i++) {
-		if (brks[i].l * cpiRate <= magi) currentIdx = i;
-		else break;
-	}
+	const currentIdx = findBracketIndex(brks, magi, cpiRate);
 	// At index 0 ("-none-" / no surcharge) or below: nothing to escape
 	if (currentIdx <= 0) return 0;
 	// Target bracket: drop tiersDown, clamped to index 0 (no-surcharge zone)

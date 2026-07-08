@@ -12,6 +12,7 @@ Goal: Complete open features from the original priority list plus deferred items
 |---|-------|-------------|--------|-----------|
 | — | **PF** | UX Polish Batch (9 items, IRMAA fix + MC restructure) | **complete*** | — |
 | — | **PF2** | Item 6 round 2 — bar-chart legend hover/click (planned, not implemented) | pending | — |
+| — | **PF3** | MC Stress pass should run current strategy only, not all variations (TBD) | pending | — |
 | — | **P1** | Suggest Spend Goal (38#10) | **complete** | — |
 | 1 | **P2** | Cash Reserve enforcement (38#9) | pending | — |
 | 2 | **PA** | Pension Start Age | **complete** | — |
@@ -79,6 +80,18 @@ Goal: Complete open features from the original priority list plus deferred items
 - `combined` view's existing `'│'` separator-skip guard in its onClick must run BEFORE the bar/line branch (that dataset is `type:'bar'` but a zero-width spacer, shouldn't be isolatable).
 - **Status:** pending — plan written and reviewed with user (2 design questions resolved: click-same-item-to-restore; hover fully suppressed while isolated), implementation not started this session. User said "will continue later."
 - **Files (planned):** `retirement_optimizer_core.js` (bulk of the work), `montecarlo/mc_tab.js` (1-line `update('none')`→`update()` fix only).
+
+---
+
+## Phase PF3: MC Stress pass should run current strategy only, not all variations (TBD)
+**Why:** User feedback — today the Stress pass (folded into Historical per Item 7 above) runs the SAME `variations` array as the main bootstrap pass, i.e. it sweeps every strategy variation (all `buildVariations(base)` entries) against the worst-decade historical sequences. User wants Stress to run against ONLY the current withdrawal strategy/options (whatever the user currently has configured in the sidebar), not the full multi-strategy sweep.
+
+**Current implementation (as of Item 7):** `worker.js`/`mc_controller.js`'s `runPass('stress', ...)` calls the exact same `for (vi of variations)` loop body as bootstrap, over the full `variations` array passed into the worker message (built by `buildVariations(base)` in `runMonteCarlo()`, `mc_tab.js:139`). The stress chart (`renderStressChart()`) then only PLOTS whichever variations are in `_mcSelected` (checkbox-driven), but the worker still COMPUTES stress paths for every variation regardless of selection — wasted work, and conceptually mismatched with "test my current plan against history."
+
+**Likely direction (not yet fully designed):** restrict the stress pass's `variations` array to a single-element array containing just the current-strategy variation — reuse `findCurrentStrategyIdx(variations, base)` (already exists in `mc_tab.js:179`, used to seed default chart selection) to identify which variation matches the user's current sidebar settings, and pass only `[variations[currentIdx]]` (or the matching base-strategy object) into the stress `runPass()` call instead of the full array. Needs a decision on the fallback when `findCurrentStrategyIdx` returns -1 (current settings don't match any pre-built variation) — likely just run stress against `base` itself (the raw current inputs) rather than skipping stress entirely.
+
+**Status:** pending — TBD, not researched/designed in detail yet. Needs a proper explore-then-plan pass before implementation (touches the same worker.js/mc_controller.js/mc_tab.js files as Item 7 and PF2 — sequence after or alongside PF2 to avoid re-touching the same functions twice).
+- **Files (likely):** `montecarlo/worker.js`, `montecarlo/mc_controller.js` (stress pass variations input), `montecarlo/mc_tab.js` (`runMonteCarlo()` — building/passing the restricted variations array; `renderStressChart()`/`renderMCStressMetrics()` — may simplify now that only one variation is ever present).
 
 ---
 

@@ -74,6 +74,9 @@ function applyNerdKnobVisibility() {
     // Optimizer objective selector
     const objWrap = document.getElementById('opt-objective-wrap');
     if (objWrap) objWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // Cycle Brokerage LTCG bracket target (0%/15%)
+    const cycleLTCGWrap = document.getElementById('cycleLTCGTarget-wrap');
+    if (cycleLTCGWrap) cycleLTCGWrap.style.display = NERD_KNOBS ? '' : 'none';
     // Monte Carlo nerd panels (initMCTab reads _mcNerdMode() → NERD_KNOBS)
     if (typeof initMCTab === 'function') initMCTab();
     // Strategy panel (GK params gated) + bracket dropdown (ACA options gated, item 12)
@@ -648,14 +651,83 @@ function computeBETR(tNow, rIRA, rTaxable, n) {
 // brackets with LTCG rate strictly below maxRate (e.g. 0.15 → only the 0% bracket).
 function getLTCGBracketRoom(ordinaryIncome, status, maxRate, cpiRate) {
     const brackets = TAXData.FEDERAL.CAPITAL_GAINS[status]?.brackets ?? [];
-    let prevLimit = 0;
+    // Room spans ALL brackets whose rate is strictly below maxRate, combined into one continuous
+    // span from $0 up to the last such bracket's ceiling (not just the single bracket ordinaryIncome
+    // currently sits in) — e.g. maxRate=0.20 combines the 0% AND 15% brackets into one span.
+    let ceiling = 0;
     for (const { l, r } of brackets) {
         if (r >= maxRate) break;
-        const limit = l * cpiRate;
-        if (ordinaryIncome < limit) return limit - Math.max(ordinaryIncome, prevLimit);
-        prevLimit = limit;
+        ceiling = l * cpiRate;
     }
-    return 0;
+    return Math.max(0, ceiling - ordinaryIncome);
+}
+
+// Returns the LTCG rate (0, 0.15, or 0.20) of the bracket that (ordinaryIncome + totalGains)
+// falls into — used by Cycle Brokerage to know which bracket a spend-forced harvest lands in.
+function getLTCGBracketTopRate(ordinaryIncome, totalGains, status, cpiRate) {
+    const brackets = TAXData.FEDERAL.CAPITAL_GAINS[status]?.brackets ?? [];
+    const totalIncome = ordinaryIncome + totalGains;
+    for (const { l, r } of brackets) {
+        if (!isFinite(l) || totalIncome <= l * cpiRate) return r;
+    }
+    return brackets.length ? brackets[brackets.length - 1].r : 0;
+}
+
+// MAGI ceiling for bracket/minlimit/aca strategies — shared by the normal per-year withdrawal
+// sizing branch and Cycle Brokerage's LTCG top-off logic (Item 4), so a brokerage harvest year
+// still respects whatever IRMAA-tier/ACA-cliff/bracket ceiling the active strategy targets.
+function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit) {
+    let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
+
+    if ((inputs.stratIRMAATier ?? -1) >= 0) {
+        // IRMAA tier ceiling mode: fill MAGI up to the top of the chosen IRMAA tier.
+        const IRMAABrks = getRateBracket('IRMAA', status);
+        limit = IRMAABrks[inputs.stratIRMAATier + 1].l * cpiRate - 1;
+        const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
+        const IRMAARelevant = maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK;
+        if (!IRMAARelevant) {
+            limit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate).limit;
+        }
+        const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
+        marginalFedTaxRate = fedAtLimit.rate;
+        nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation).cumulative / (limit || 1);
+        const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
+        marginalStateTaxRate = stAtLimit.rate;
+        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
+    } else if ((inputs.stratACAMultiple ?? 0) > 0) {
+        // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
+        const FPL_2025 = status === 'MFJ' ? 20440 : 15060;
+        limit = Math.round(FPL_2025 * inputs.stratACAMultiple / 100 * cpiRate * (1 + inputs.cpi)) - 1;
+        const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
+        marginalFedTaxRate = fedAtLimit.rate;
+        nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation).cumulative / (limit || 1);
+        const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
+        marginalStateTaxRate = stAtLimit.rate;
+        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
+    } else {
+        // Federal bracket ceiling mode (original logic)
+        let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
+        limit = fedLimit.limit;
+        let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation);
+        nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit;
+        marginalFedTaxRate = fedLimit.rate;
+
+        let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
+        marginalStateTaxRate = stLimit.rate;
+        stateLimit = stLimit.limit;
+        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / limit;
+
+        limit = Math.min(stateLimit, limit);
+
+        if (inputs.strategy === 'minlimit') {
+            const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
+            if (maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK) {
+                limit = Math.min(limit, IRMAALimit);
+            }
+        }
+    }
+
+    return { limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit };
 }
 
 let simulationCount = 0;
@@ -995,7 +1067,7 @@ function simulate(inputs) {
         // Tier for display/milestones — same lookback MAGI and same age gate as the charge
         // (the log row used to recompute this AFTER the year's MAGI push, showing the tier a
         // year early).
-        const IRMAATier = onMedicare > 0 ? getIRMAATier(magiLookback, status, cpiRate) : '-none-';
+        let IRMAATier = onMedicare > 0 ? getIRMAATier(magiLookback, status, cpiRate) : '-none-';
         // Base Medicare Part B + Part D premiums (informational — tracked, not deducted from
         // spendable; assumed to live inside the spend goal). Grows at CPI + Inflation (user inputs),
         // not CPI alone.
@@ -1013,6 +1085,8 @@ function simulate(inputs) {
         let totalIncome = 0;
         let netIncome = 0;
         let capitalGains = 0;
+        let limit;              // MAGI ceiling for bracket/minlimit/aca strategies (see computeBracketCeiling)
+        let stateLimit;
         let bracketTarget = 0;  // ceiling being targeted by bracket/minlimit/aca strategies
         let bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy)
         let forcedIRA = 0;      // soft-cap break: IRA drawn ABOVE the ceiling to fund mandatory spending
@@ -1183,16 +1257,40 @@ function simulate(inputs) {
         }
 
         if (isBrokerageYear) {
-            // Brokerage harvest year: draw spending from Brokerage instead of IRA.
-            // For bracket strategy, cap at 0%-rate LTCG headroom; for all others, draw to meet spend target.
+            // Brokerage harvest year: draw from Brokerage instead of IRA. Always max out the
+            // nerd-knob-selected LTCG bracket (0% or 15% top) rather than only drawing to meet
+            // spend — this realizes gains + steps up basis even when spend doesn't need it.
+            // If spend needs force realization beyond the target, top off whichever LTCG bracket
+            // the forced amount actually lands in (capture the room in the bracket you're already
+            // paying for) — but never past the active bracket/minlimit/aca strategy's own MAGI
+            // ceiling (`limit`), if one is in effect this year.
             const _baseOrdinaryInc = taxableInc + fixedInc + taxableInterest + taxableDividends;
+            const _cycleTargetRate = inputs.cycleLTCGTarget ?? 0.15;   // nerd knob: 0.15=target 0% bracket (default), 0.20=target 15% bracket
+            const _targetRoom = getLTCGBracketRoom(_baseOrdinaryInc, status, _cycleTargetRate, cpiRate);
+            const _targetNetRoom = _targetRoom * (1 - capGainsPercentage * capitalGainsRate);
             let _brokerageNetTarget;
-            if (isBracketStrategy) {
-                const _ltcgRoom = getLTCGBracketRoom(_baseOrdinaryInc, status, 0.15, cpiRate);
-                const _ltcgNetRoom = _ltcgRoom * (1 - capGainsPercentage * capitalGainsRate);
-                _brokerageNetTarget = Math.min(additionalSpendNeeded, _ltcgNetRoom);
+            if (additionalSpendNeeded <= _targetNetRoom) {
+                // Spend fits inside the target bracket — max it out anyway.
+                _brokerageNetTarget = _targetNetRoom;
             } else {
-                _brokerageNetTarget = additionalSpendNeeded;
+                // Spend forces gains beyond the target bracket. Find which LTCG bracket the
+                // forced realization lands in and top off to that bracket's own ceiling.
+                const _spendGrossNeeded = additionalSpendNeeded / Math.max(0.01, 1 - capGainsPercentage * capitalGainsRate);
+                const _landedRate = getLTCGBracketTopRate(_baseOrdinaryInc, _spendGrossNeeded, status, cpiRate);
+                const _ltcgRates = (TAXData.FEDERAL.CAPITAL_GAINS[status]?.brackets ?? []).map(b => b.r);
+                const _nextRate = _ltcgRates.find(r => r > _landedRate);
+                let _room = (_nextRate !== undefined)
+                    ? getLTCGBracketRoom(_baseOrdinaryInc, status, _nextRate, cpiRate)
+                    : _spendGrossNeeded;   // already in the top LTCG bracket — no higher ceiling to top off to
+                if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
+                    // Don't let the LTCG top-off push total realized income past the active
+                    // strategy's own ceiling (IRMAA tier / ACA cliff / bracket ceiling). This
+                    // branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
+                    // year, so compute it fresh here rather than reading a stale/undefined `limit`.
+                    const _ceil = computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit).limit;
+                    _room = Math.min(_room, Math.max(0, _ceil - _baseOrdinaryInc));
+                }
+                _brokerageNetTarget = Math.max(additionalSpendNeeded, _room * (1 - capGainsPercentage * capitalGainsRate));
             }
             if (_brokerageNetTarget > 1 && curBalances.Brokerage > 0) {
                 // Depletion check: warn if Brokerage < 50% of what we need
@@ -1228,67 +1326,8 @@ function simulate(inputs) {
             withdrawals = { IRA: IRAwd, netAmount: IRAwd }
 
         } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
-            let limit;
-
-            if ((inputs.stratIRMAATier ?? -1) >= 0) {
-                // IRMAA tier ceiling mode: fill MAGI up to the top of the chosen IRMAA tier.
-                // Tier 0 = stay below Tier 1 threshold; Tier N = stay below Tier N+1 threshold.
-                // IRMAA thresholds grow at CPI (see taxengine.js comment).
-                const IRMAABrks = getRateBracket('IRMAA', status);
-                limit = IRMAABrks[inputs.stratIRMAATier + 1].l * cpiRate - 1;
-                // Before any living spouse reaches 63 (65 + LOOKBACK), this year's income cannot
-                // affect a Medicare premium — the IRMAA ceiling is a pointless cap. Convert up to
-                // the top of the federal bracket CONTAINING the ceiling instead (still bounded;
-                // never uncapped, which would drain the whole IRA in one year).
-                const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
-                const IRMAARelevant = maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK;
-                if (!IRMAARelevant) {
-                    limit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate).limit;
-                }
-                // Approximate tax rates at this limit for downstream calcs
-                const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
-                marginalFedTaxRate = fedAtLimit.rate;
-                nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation).cumulative / (limit || 1);
-                const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
-                marginalStateTaxRate = stAtLimit.rate;
-                nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
-            } else if ((inputs.stratACAMultiple ?? 0) > 0) {
-                // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
-                // FPL base values (2025): 2-person household $20,440; 1-person $15,060.
-                // FPL is approximated as CPI-adjusted from 2025 (HHS updates annually).
-                const FPL_2025 = status === 'MFJ' ? 20440 : 15060;
-                // cpiRate at this point = (1+cpi)^y (year 0 = 2026). FPL adj from 2025 = (1+cpi)^(1+y).
-                limit = Math.round(FPL_2025 * inputs.stratACAMultiple / 100 * cpiRate * (1 + inputs.cpi)) - 1;
-                const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
-                marginalFedTaxRate = fedAtLimit.rate;
-                nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation).cumulative / (limit || 1);
-                const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
-                marginalStateTaxRate = stAtLimit.rate;
-                nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
-            } else {
-                // Federal bracket ceiling mode (original logic)
-                let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
-                limit = fedLimit.limit;
-                let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation);
-                nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit;
-                marginalFedTaxRate = fedLimit.rate;
-
-                let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
-                marginalStateTaxRate = stLimit.rate;
-                stateLimit = stLimit.limit;
-                nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / limit;
-
-                limit = Math.min(stateLimit, limit);
-
-                if (inputs.strategy === 'minlimit') {
-                    // Same age gate as the IRMAA-ceiling mode: the IRMAA limit only binds once a
-                    // living spouse is within the 2-year MAGI lookback of Medicare age (63+).
-                    const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
-                    if (maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK) {
-                        limit = Math.min(limit, IRMAALimit);
-                    }
-                }
-            }
+            ({ limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit } =
+                computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit));
 
             bracketTarget = limit;
 
@@ -1375,6 +1414,15 @@ function simulate(inputs) {
         if (magiHistoryLength < 1) {
             balance.magiHistory.push(tax.MAGI);
             balance.magiHistory.push(tax.MAGI);
+            // Year 0 read undefined MAGI at the lookback above (no history existed yet), forcing
+            // IRMAA to $0/'-none-' regardless of actual income. Retroactively correct THIS year's
+            // charge now that tax.MAGI is known — steady-state assumption per the comment above,
+            // still "computed once at charge time" (doesn't reintroduce the prior tier-lag bug).
+            IRMAA = calcIRMAA(tax.MAGI, status, cpiRate, medicareRate, onMedicare);
+            IRMAATier = onMedicare > 0 ? getIRMAATier(tax.MAGI, status, cpiRate) : '-none-';
+            tax.IRMAAAnnualCost = IRMAA;
+            tax.IRMAARate = tax.MAGI > 0 ? IRMAA / tax.MAGI : 0;
+            tax.nominalRate = tax.federalNominalRate + tax.stateNominalRate + tax.IRMAARate;
         }
 
         let totalTax = tax.totalTax + IRMAA;
@@ -1973,6 +2021,7 @@ function getInputs() {
         dividendReinvest: !!valChecked('dividendReinvest'),
         cyclicEnabled: !!valChecked('cyclicEnabled'),
         cyclicOrder:   val('cyclicOrder') ?? 'ira-first',
+        cycleLTCGTarget: +(val('cycleLTCGTarget') ?? 0.15),
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
         comp_IRA1_intl: +val('comp_IRA1_intl'),
@@ -4038,6 +4087,53 @@ const medicareLegendHover = {
     onLeave: (e, item, legend) => { legend.chart.canvas.title = ''; },
 };
 
+// Combine multiple {onHover,onLeave} legend-hover handler objects so several independent
+// behaviors (e.g. the Medicare tooltip hint + dataset dimming below) all fire on the same
+// event, instead of one silently overwriting the other via object spread key collision.
+function composeLegendHover(...handlers) {
+    return {
+        onHover: (e, item, legend) => handlers.forEach(h => h.onHover?.(e, item, legend)),
+        onLeave: (e, item, legend) => handlers.forEach(h => h.onLeave?.(e, item, legend)),
+    };
+}
+
+// Generic legend-hover highlight: dims every dataset except the hovered legend item's group,
+// restoring on leave. `groupSize` lets one legend entry map to several consecutive datasets
+// (e.g. the MC percentile-band chart uses 5 datasets — p5/p95/p25/p75/median — per strategy).
+function datasetHoverHighlight(groupSize = 1) {
+    const dim = (color) => {
+        if (!color || color === 'transparent') return color;
+        let m = String(color).match(/^rgba?\((\d+),(\d+),(\d+)/);
+        if (!m) {
+            const h = String(color).match(/^#([0-9a-f]{6})/i);
+            if (h) { const n = parseInt(h[1], 16); m = [null, (n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+        }
+        return m ? `rgba(${m[1]},${m[2]},${m[3]},0.15)` : color;
+    };
+    return {
+        onHover: (e, legendItem, legend) => {
+            const chart = legend.chart, groupIdx = Math.floor(legendItem.datasetIndex / groupSize);
+            chart.data.datasets.forEach((ds, i) => {
+                // Bar datasets often have no borderColor at all (legitimately undefined) — use a
+                // dedicated marker to track "cached", not `_origBorder !== undefined`, or those
+                // datasets would never be recognized as cached and onLeave would skip restoring them.
+                if (!ds._hoverHighlightCached) { ds._hoverHighlightCached = true; ds._origBorder = ds.borderColor; ds._origBg = ds.backgroundColor; }
+                const inGroup = Math.floor(i / groupSize) === groupIdx;
+                ds.borderColor = inGroup ? ds._origBorder : dim(ds._origBorder);
+                ds.backgroundColor = inGroup ? ds._origBg : dim(ds._origBg);
+            });
+            chart.update('none');
+        },
+        onLeave: (e, legendItem, legend) => {
+            const chart = legend.chart;
+            chart.data.datasets.forEach(ds => {
+                if (ds._hoverHighlightCached) { ds.borderColor = ds._origBorder; ds.backgroundColor = ds._origBg; }
+            });
+            chart.update('none');
+        },
+    };
+}
+
 // Compute milestone markers from the simulation log:
 //  1. First death — labelled "Your Passing" / "Spouse Passing" (filing status flips; the deceased's
 //     age becomes '—').
@@ -4276,7 +4372,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             ]},
             options: { ...sharedTooltip,
                 scales: { y: { ticks: dollarTicks } },
-                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels } } }
+                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels, ...datasetHoverHighlight() } } }
         });
     } else if (incomeChartView === 'tax') {
         // Taxation: stacked tax components are the headline number → LEFT (primary) axis.
@@ -4342,7 +4438,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                 plugins: { ...sharedTooltip.plugins,
                     tooltip: { ...sharedTooltip.plugins.tooltip, filter: taxThresholdFilter,
                         callbacks: { ...sharedTooltip.plugins.tooltip.callbacks, label: taxLabelCb, afterBody: taxRateFooter } },
-                    legend: { labels: legendLabels, ...medicareLegendHover } } }
+                    legend: { labels: legendLabels, ...composeLegendHover(medicareLegendHover, datasetHoverHighlight()) } } }
         });
     } else if (incomeChartView === 'flows') {
         // Inflows (up) vs outflows (down): where spending money comes from and where it goes.
@@ -4378,7 +4474,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                 plugins: { ...sharedTooltip.plugins,
                     // Hide rows that round to $0 (e.g. no Brokerage draw this year) — declutters the tip.
                     tooltip: { ...sharedTooltip.plugins.tooltip, filter: (item) => Math.round(item.parsed.y) !== 0 },
-                    legend: { labels: legendLabels } } }
+                    legend: { labels: legendLabels, ...datasetHoverHighlight() } } }
         });
     } else if (incomeChartView === 'assetflows') {
         // Asset-level cash flow: investment EARNINGS (up, stacked by account) vs WITHDRAWALS that
@@ -4402,7 +4498,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             ]},
             options: { ...sharedTooltip,
                 scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
-                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels } } }
+                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels, ...datasetHoverHighlight() } } }
         });
     }
 }
@@ -4463,7 +4559,7 @@ function updateCharts(log) {
             ...sharedTooltip,
             plugins: {
                 ...sharedTooltip.plugins,
-                legend: { labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 } }
+                legend: { labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }, ...datasetHoverHighlight() }
             }
         }
     });
@@ -4571,11 +4667,12 @@ function updateCharts(log) {
                             const parts = [];
                             if (cwd > 0.5) parts.push(`Cash ${Math.round(cwd).toLocaleString()}`);
                             if (br  > 0.5) parts.push(`Brokerage ${Math.round(br).toLocaleString()}`);
-                            const untaxedStr = parts.length > 0 ? `  |  Untaxed: ${parts.join(' + ')}` : '';
-                            return [
+                            const lines = [
                                 `${r.year}  |  You: ${a1}  Spouse: ${a2}  |  Tax: ${taxPct}`,
-                                `Total Income: ${totalFmt}${untaxedStr}`
+                                `Total Income: ${totalFmt}`
                             ];
+                            if (parts.length > 0) lines.push(`Untaxed: ${parts.join(' + ')}`);
+                            return lines;
                         }
                     },
                     filter: item => item.dataset.label !== '│' && Math.abs(Math.round(item.parsed.y)) > 0
@@ -4585,7 +4682,7 @@ function updateCharts(log) {
                         if (item.text === '│') return;
                         Chart.defaults.plugins.legend.onClick(e, item, legend);
                     },
-                    ...medicareLegendHover,
+                    ...composeLegendHover(medicareLegendHover, datasetHoverHighlight()),
                     labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }
                 }
             }

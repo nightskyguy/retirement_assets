@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.11ae</title>
+    <title>Retirement Optimizer 11.11c1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -49,7 +49,7 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1133"></script>
-	<script src="retirement_optimizer_core.js"></script>
+	<script src="retirement_optimizer_core.js?v=1111c1"></script>
 	<script src="retirement_optimizer_tests.js"></script>
 	<script src="retirement_optimizer_text.js"></script>
 </head>
@@ -135,6 +135,13 @@
 				  <span class="toggle-switch"></span>
 				  <span>Cycle Brokerage</span>
 				</label>
+				<span id="cycleLTCGTarget-wrap" style="display:none;margin-left:8px;font-size:0.85em;" title="Cycle Brokerage harvest years always max out this LTCG bracket. If spending needs force gains beyond it, the harvest tops off whichever bracket it lands in instead of stopping at the exact dollar needed — capped by any active bracket/IRMAA-tier/ACA-cliff ceiling.">
+				  Target:
+				  <select id="cycleLTCGTarget" style="font-size:0.95em;">
+					<option value="0.15" selected>0% bracket</option>
+					<option value="0.20">15% bracket</option>
+				  </select>
+				</span>
 			</div>
 			<div class="input-group" style="margin-top:4px;">
 				<label class="toggle" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
@@ -413,10 +420,9 @@
 		<div id="tab-mc" class="card hidden">
 			<!-- Mode selector — always visible; changing it triggers an immediate re-run. -->
 			<div id="mc-mode-panel" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric GBM model using μ and σ (advanced, nerd-mode only).">Simulation Mode
+				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric model using μ and σ (advanced, nerd-mode only).">Simulation Mode
 					<select id="mc-sim-mode" style="margin-left:6px;font-size:0.95em;" onchange="onMCModeChange()">
 						<option value="bootstrap" selected>Historical (1928–2024)</option>
-						<option value="stress">Stress (worst sequences)</option>
 						<option value="gbm">Synthetic (parametric)</option>
 					</select>
 				</label>
@@ -431,7 +437,7 @@
 					<label style="font-size:0.85em;" title="Number of simulated market scenarios. More paths = more stable results, slower run.">Paths
 						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
 					</label>
-					<label style="font-size:0.85em;" title="Expected annual nominal return for GBM paths. Defaults to (and stays in sync with) the Assumptions Growth % — override here to test a different MC growth assumption. Not used in Bootstrap or Stress modes.">GBM Return μ %
+					<label style="font-size:0.85em;" title="Expected annual nominal return for Synthetic paths. Defaults to (and stays in sync with) the Assumptions Growth % — override here to test a different MC growth assumption. Not used in Historical mode.">Synthetic Return μ %
 						<input type="number" id="mc-mu" value="7" min="0" max="20" step="0.5" style="width:55px;margin-left:4px;" oninput="updateMCGrowthWarning()">
 						<span style="margin-left:4px;font-size:0.78em;color:#888;">synced from Growth %</span>
 					</label>
@@ -442,10 +448,10 @@
 					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results.">Seed
 						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
 					</label>
-					<label style="font-size:0.85em;" title="Number of worst historical starting sequences to use in Stress mode. Scored by first-decade real (inflation-adjusted) CAGR via Fisher equation. Worst 10: 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970, 1929.">Stress sequences
+					<label style="font-size:0.85em;" title="Number of worst historical starting sequences shown in the Stress-Test chart, auto-computed alongside Historical mode. Scored by first-decade real (inflation-adjusted) CAGR via Fisher equation. Worst 10: 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970, 1929.">Stress sequences
 						<input type="number" id="mc-stress-count" value="10" min="3" max="20" step="1" style="width:50px;margin-left:4px;">
 					</label>
-					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical (bootstrap) paths that begin with a worst-decade historical sequence before continuing with random draws. 0 = pure bootstrap; 25% ≈ historical frequency of below-inflation first decades. Increases SoRR realism without discarding probabilistic paths. Only applies in Historical mode.">Bear-start %
+					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical paths that begin with a worst-decade historical sequence before continuing with random draws. 0 = no overlay; 25% ≈ historical frequency of below-inflation first decades. Increases SoRR realism without discarding probabilistic paths. Only applies in Historical mode.">Bear-start %
 						<input type="number" id="mc-bear-fraction" value="25" min="0" max="50" step="5" style="width:50px;margin-left:4px;">
 					</label>
 				</div>
@@ -462,8 +468,8 @@
 				<span id="mc-run-est" style="font-size:1em;color:#555;"></span>
 				<span id="mc-path-count" style="font-size:0.8em;color:#888;margin-left:4px;"></span>
 			</div>
-			<!-- Post-run metrics bar -->
-			<div id="mc-metrics" style="display:none;margin-bottom:10px;font-size:0.82em;color:#444;padding:5px 2px;border-bottom:1px solid #e9ecef;"></div>
+			<!-- Post-run metrics bar (main pass). Stress-pass metrics live next to the stress chart below. -->
+			<div id="mc-main-metrics" style="display:none;margin-bottom:10px;font-size:0.82em;color:#444;padding:5px 2px;border-bottom:1px solid #e9ecef;"></div>
 
 			<!-- Progress bar -->
 			<div id="mc-progress-wrap" style="display:none;margin-bottom:10px;">
@@ -491,13 +497,7 @@
 				<div style="max-height:280px;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;border:1px solid #dee2e6;border-radius:4px;width:fit-content;max-width:100%;">
 					<div style="display:grid;grid-template-columns:max-content max-content max-content max-content max-content max-content max-content max-content;font-size:0.85em;width:fit-content;">
 						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;border-right:2px solid #dee2e6;border-bottom:1px solid #dee2e6;"></div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;">Strategy</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;">Param</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;" title="Median year across failed paths when the portfolio could no longer cover required spending">Exhausted</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;color:#1a7a1a;border-bottom:1px solid #dee2e6;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;">Survival</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;color:#1a7a1a;border-bottom:1px solid #dee2e6;" title="Median lifetime taxes paid across all Monte Carlo paths">Total Taxes</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;color:#1a7a1a;border-bottom:1px solid #dee2e6;" title="Median lifetime after-tax money actually spent across all Monte Carlo paths, in today's dollars (real). Strategies that cut spending — e.g. Guyton-Klinger — show a lower figure here.">Total Spendable</div>
+						<div id="mc-table-header" style="display:contents;"></div>
 						<div id="mc-table-body" style="display:contents;"></div>
 					</div>
 				</div>
@@ -512,6 +512,16 @@
 					<canvas id="mc-chart"></canvas>
 				</div>
 			</div>
+
+			<!-- Stress-test chart — auto-computed alongside Historical mode; hidden in Synthetic mode -->
+			<div id="mc-stress-chart-wrap" style="display:none;margin-top:16px;">
+				<div id="mc-stress-metrics" style="margin-bottom:8px;font-size:0.82em;color:#444;"></div>
+				<div id="mc-stress-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;"></div>
+				<div style="position:relative;height:420px;">
+					<canvas id="mc-stress-chart"></canvas>
+				</div>
+			</div>
+
 			<div id="mc-input-dist" style="display:none;margin-top:14px;">
 				<details>
 					<summary style="font-size:0.88em;color:#555;cursor:pointer;user-select:none;font-weight:600;">Input Distributions</summary>
@@ -558,7 +568,9 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.11ae</b> Income &amp; Expenses chart: added a note that shown incomes are after-tax (pre-tax figures are in Annual Details).
+				<li><b>11.11c1</b> UX polish batch: fixed IRMAA incorrectly showing "-none-" in the plan's first year; Monte Carlo now folds Stress into Historical mode (auto-computed, shown as its own chart below the main one, own Min/CAGR/Max stats, Input Distribution charts labeled by calendar year); Monte Carlo strategy table columns are now sortable (click a header); Cycle Brokerage now maxes out a nerd-selectable 0%/15% capital-gains bracket instead of only drawing what's needed, topping off the bracket it lands in when spending forces more (never past an active IRMAA/ACA/bracket ceiling); chart legends now dim other series on hover to highlight the one you're looking at (and correctly un-dim again on bar charts, where a caching bug previously left them stuck dim); terminology standardized to "Historical"/"Synthetic" (was "Bootstrap"/"GBM"); after-tax income note is bolder and mentions the Inflows vs Outflows view; the "Untaxed" tooltip line no longer runs together with Total Income.
+					</li>
+					<li><b>11.11ae</b> Income &amp; Expenses chart: added a note that shown incomes are after-tax (pre-tax figures are in Annual Details).
 					</li>
 					<li><b>11.11ad</b> Added Spending to Annual Details to focus on spending.
 					</li>
@@ -841,7 +853,7 @@
                 <input type="checkbox" id="chk-thresholds" onchange="toggleTaxThresholds(this)" checked> Show thresholds
               </label>
             </div>
-            <div id="income-aftertax-note" style="font-size:0.78em;color:#777;margin:2px 0 4px 8px;">Incomes shown are After Taxes - See Annual Details for pre-tax amounts.</div>
+            <div id="income-aftertax-note" style="font-size:0.78em;font-weight:600;color:#777;margin:2px 0 4px 8px;">Incomes shown are After Taxes - See Annual Details for pre-tax amounts, or the Inflows vs Outflows view for gross (pre-tax) totals.</div>
             <canvas id="chartIncomeSources" style="max-height:403px;"></canvas>
         </div>
 
@@ -1033,8 +1045,8 @@ runSimulation?.();
 <script src="montecarlo/historical_returns.js"></script>
 <script src="montecarlo/prng.js?v=111091"></script>
 <script src="montecarlo/stats.js?v=111091"></script>
-<script src="montecarlo/mc_controller.js?v=111091"></script>
-<script src="montecarlo/mc_tab.js?v=111091"></script>
+<script src="montecarlo/mc_controller.js?v=1111c1"></script>
+<script src="montecarlo/mc_tab.js?v=1111c1"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

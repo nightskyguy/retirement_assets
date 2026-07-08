@@ -2,7 +2,7 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-07 (branch main, worktree mystifying-babbage-559d99, post-PR#108)
+**As of:** 2026-07-08 (branch worktrees/mystifying-babbage-559d99, v11.11c1)
 
 ---
 
@@ -10,6 +10,8 @@ Goal: Complete open features from the original priority list plus deferred items
 
 | # | Phase | Description | Status | Blocked by |
 |---|-------|-------------|--------|-----------|
+| — | **PF** | UX Polish Batch (9 items, IRMAA fix + MC restructure) | **complete*** | — |
+| — | **PF2** | Item 6 round 2 — bar-chart legend hover/click (planned, not implemented) | pending | — |
 | — | **P1** | Suggest Spend Goal (38#10) | **complete** | — |
 | 1 | **P2** | Cash Reserve enforcement (38#9) | pending | — |
 | 2 | **PA** | Pension Start Age | **complete** | — |
@@ -36,6 +38,47 @@ Goal: Complete open features from the original priority list plus deferred items
 | 23 | **P21** | Annual Spending-by-Account View | **complete** | — |
 | 24 | **P22** | Export Annual Details to CSV | pending | — |
 | 25 | **P23** | MC Arithmetic-Mean Returns + AR(1) Variable Inflation | pending | — |
+
+---
+
+## Phase PF: UX Polish Batch (v11.11c1)
+**Status note (\*):** all 9 original items complete and shipped, but Item 6 (legend hover) had a real bug found post-ship by the user — see Phase PF2 below for the round-2 fix (planned, not yet implemented).
+
+**Why:** User punch-list of 9 items — terminology cleanup, a real IRMAA bug, chart/tooltip polish, a brokerage-harvest sizing change, and an MC tab restructure. Planned via 3 parallel Explore agents + 1 Plan agent (see `~/.claude/plans/add-the-following-to-swift-backus.md`), implemented in a single session.
+
+- **Item 1 — Terminology:** "Bootstrap"→"Historical", "GBM"→"Synthetic" in all user-facing tooltips/labels (retirement_optimizer.html, mc_tab.js). Internal `simulationMode` values/comments untouched.
+- **Item 2 — IRMAA year-0 bug (real fix):** `magiHistory` was seeded *after* year 0's lookback read, forcing IRMAA to `$0`/`-none-` in year 0 regardless of income. Fixed by retroactively computing year-0's IRMAA/tier once `tax.MAGI` is known, in the same seed block (core.js). New node test added.
+- **Item 3:** After-tax income-chart note is now bold and mentions the Inflows vs Outflows view.
+- **Item 4 — Cycle Brokerage:** new nerd-knob `#cycleLTCGTarget` (0%/15% target bracket). Always maxes out the target bracket (not just spend-need); when spend forces more, tops off whichever LTCG bracket it lands in, capped by the active bracket/minlimit/aca strategy's own ceiling. Required fixing a latent bug in `getLTCGBracketRoom()` (only returned room in the *first* bracket income fell into, not the combined span across multiple sub-maxRate brackets) and extracting `computeBracketCeiling()` out of the strategy-ceiling branch so Cycle years can reuse it.
+- **Item 5:** "Untaxed: ..." tooltip line now its own array entry (own line), not string-concatenated onto Total Income.
+- **Item 6:** New `datasetHoverHighlight()`/`composeLegendHover()` helpers — hovering a chart legend item dims all other series to ~15% opacity. Applied to all 8 chart configs (6 in core.js, 2 in mc_tab.js).
+- **Item 7 (highest risk) — MC Stress folded into Historical:** worker.js/mc_controller.js restructured so selecting Historical auto-runs both the bootstrap pass AND a stress pass (shared `runPass(mode, progressOffset, progressWeight)` inner function in both files, weighted progress bar). Stress dropdown option removed. New `#mc-stress-chart-wrap` renders a second chart below the main one via new `renderStressChart()`; `renderMCChart()` trimmed to percentile-bands-only. Separate `_legendIsolatedKeyStress` so the two charts' legend-click-to-isolate don't interfere.
+- **Item 7b:** Input Distribution fan charts now label the x-axis with actual calendar years (matching the main chart), not "Yr 1"/"Yr 2".
+- **Item 8:** `#mc-metrics` split into `renderMCMainMetrics()` (next to the main chart) and `renderMCStressMetrics()` (next to the new stress chart), sharing a `buildAssetRangeTable()` helper.
+- **Item 9:** MC strategy table columns are now click-to-sort (mirrors the Optimizer table's `sortOptimizerBy` pattern) — new `mcSortState`, `getMCColumns()`, `sortMCTableBy()` in mc_tab.js; static header `<div>`s replaced with a dynamic `#mc-table-header`.
+- **Status:** complete. node 54/54 (52 baseline + 2 new IRMAA/Cycle-Brokerage tests), browser 240/240. Browser-verified live: IRMAA Tier 2/4 now shows in year 0 for high-income scenarios; legend hover dims non-hovered series; MC Historical mode renders both charts with distinct Min/CAGR/Max stats and calendar-year labels; MC Synthetic mode hides the stress chart; MC table sorts correctly on click with arrow indicator and preserved checkbox→row mapping.
+- **Files:** retirement_optimizer.html, retirement_optimizer_core.js, retirement_optimizer_core.test.js, montecarlo/worker.js, montecarlo/mc_controller.js, montecarlo/mc_tab.js.
+- **Independent:** no phase dependencies.
+
+**Item 6 follow-up #1 (shipped same session):** first bug found — permanent staining. `datasetHoverHighlight()`'s restore guard used `_origBorder !== undefined` to mean "cached" — but bar datasets never set `borderColor` at all, so their real original value legitimately IS `undefined`, making the guard indistinguishable from "never cached." `onLeave` silently skipped restoring bar datasets forever after the first hover. Fixed with an explicit `_hoverHighlightCached` boolean marker. Also found `retirement_optimizer.html`'s `<script src="retirement_optimizer_core.js">` had **no cache-busting `?v=` token** at all (every other script did) — added `?v=1111c1`, which is what let this exact fix go unverified for a round (browser kept serving stale cached core.js).
+
+---
+
+## Phase PF2: Item 6 round 2 — bar-chart hover still broken + click-to-isolate (PLANNED, NOT IMPLEMENTED)
+**Why:** After follow-up #1 shipped, user reported the fix above didn't fully work: legend swatch color changes on hover, but **the bars themselves never visually dim** — confirmed via live testing that `dataset.backgroundColor` correctly updates in JS but the canvas never redraws for bars until some unrelated redraw (e.g. toggling a dataset off/on) happens to force one.
+
+**Root cause (confirmed via [chartjs/Chart.js#11507](https://github.com/chartjs/Chart.js/issues/11507)):** `chart.update('none')` is a known-buggy Chart.js mode — it skips animation *and* skips re-resolving/redrawing certain per-element visual properties (bars here, points in the linked issue), even though the dataset's color property updates correctly in the data model. Fix: drop `'none'` mode, call plain `chart.update()` (colors aren't animation-tweened by Chart.js by default, so this should redraw instantly with no visible flash).
+
+**Also requested (behavior change, not a bug):** for the 4 mixed bar+line charts (Taxation, Inflows vs Outflows, Earnings vs W/D, combined Income & Expenses view), legend click on a **bar** item should switch from today's default (toggle hide/show) to **click-to-isolate** — dim every other item, keep the clicked one full-color, sticky until the SAME item is clicked again (confirmed convention, matches the existing MC chart's `_makeLegendClick`). **Line** items keep the current toggle-hide/show click behavior (user finds it useful). While a bar item is click-isolated, hover-dim is fully suppressed (confirmed: simpler than hover-preview-then-revert).
+
+**Design (full detail in `~/.claude/plans/add-the-following-to-swift-backus.md`, "Follow-up: Item 6 round 2" section):**
+- Fix `chart.update('none')` → `chart.update()` in `datasetHoverHighlight()` (2 call sites, core.js).
+- Extract `dim()` (currently private inside `datasetHoverHighlight()`) to a shared module-scope `dimColor()` helper.
+- New `makeChartLegendInteraction(groupSize)` factory (core.js) — combines hover-dim + click-isolate in one closure sharing `isolatedKey` state per chart instance; `onClick` checks `dataset.type !== 'bar'` and delegates to `Chart.defaults.plugins.legend.onClick` for line items.
+- Rewire only the 4 mixed bar+line chart configs (`'tax'`, `'flows'`, `'assetflows'`, `'combined'` — core.js ~4382/4430/4488/4607) to use `makeChartLegendInteraction()` instead of plain `datasetHoverHighlight()`; compose with `medicareLegendHover` at the 2 sites that need it (`'tax'`, `'combined'`). Assets chart, `'net'` view, and all MC charts (mc_tab.js) are **out of scope** — pure-line or already isolate-on-click, unaffected except for the same `update('none')`→`update()` fix in mc_tab.js's copy of `datasetHoverHighlight()`.
+- `combined` view's existing `'│'` separator-skip guard in its onClick must run BEFORE the bar/line branch (that dataset is `type:'bar'` but a zero-width spacer, shouldn't be isolatable).
+- **Status:** pending — plan written and reviewed with user (2 design questions resolved: click-same-item-to-restore; hover fully suppressed while isolated), implementation not started this session. User said "will continue later."
+- **Files (planned):** `retirement_optimizer_core.js` (bulk of the work), `montecarlo/mc_tab.js` (1-line `update('none')`→`update()` fix only).
 
 ---
 

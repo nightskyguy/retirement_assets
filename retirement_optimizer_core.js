@@ -77,6 +77,9 @@ function applyNerdKnobVisibility() {
     // Cycle Brokerage LTCG bracket target (0%/15%)
     const cycleLTCGWrap = document.getElementById('cycleLTCGTarget-wrap');
     if (cycleLTCGWrap) cycleLTCGWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // Docs: ACA Cliff strategy discussion paragraph (nerd-only strategy)
+    const docAcaCliff = document.getElementById('doc-aca-cliff');
+    if (docAcaCliff) docAcaCliff.style.display = NERD_KNOBS ? '' : 'none';
     // Monte Carlo nerd panels (initMCTab reads _mcNerdMode() → NERD_KNOBS)
     if (typeof initMCTab === 'function') initMCTab();
     // Strategy panel (GK params gated) + bracket dropdown (ACA options gated, item 12)

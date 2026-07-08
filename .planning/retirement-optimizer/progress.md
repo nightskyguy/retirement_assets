@@ -1,5 +1,11 @@
 # Progress Log
 
+## Session: 2026-07-08 (cont. 5) — PF4: changelog consolidation + docs polish (v11.11c8)
+
+Follow-up requests after PF/PF2/PF3: (1) avoid em-dash in user-facing writing going forward (saved as a feedback memory), (2) consolidate the two most recent changelog entries (11.11c1 + 11.11c7) into a single 11.11c8 entry using user-provided wording verbatim, (3) gate the ACA Cliff strategy-discussion doc paragraph behind the nerd-knob (it's a nerd-only strategy), (4) rewrite the Break Even stat tooltip to plain language + point to Documentation, (5) add a new Docs-tab paragraph explaining the Break Even shadow-portfolio mechanism, positioned above "1. Profile & Ages" but outside the "Detailed Strategy Discussion" fold per instruction.
+
+Hit the core.js cache-bust gotcha (documented in memory now) a second time mid-session: bumped `?v=` after the ACA-gating JS edit, browser served fresh code fine once actually reloaded. Verified via direct DOM/JS inspection: `#doc-aca-cliff` starts `display:none`, toggles to `''` on `setNerdKnob(true)` and back to `'none'` on `setNerdKnob(false)`; new Break Even doc `<li>` found immediately before the "1. Profile & Ages" `<li>` in DOM order; changelog list's first 3 entries are `11.11c8`/`11.11ae`/`11.11ad` (confirms the 11.11c1 entry is gone, not duplicated). node 54/54, browser 240/240, no console errors. Committed + pushed to PR #111.
+
 ## Session: 2026-07-08 (cont. 4) — PF2: bar-chart legend hover finally fixed + click-to-isolate
 
 Planned in Plan Mode (approved), then user gave one correction after approval: restore trigger is **double-click**, not "click the same item again" — implemented per the correction, not the original plan text.

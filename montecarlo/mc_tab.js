@@ -144,6 +144,13 @@ function runMonteCarlo() {
         base.birthyear2 + base.die2
     ) - (base.startYear ?? 2026) + 1;
 
+    // Stress (folded into Historical) runs against ONLY the current withdrawal strategy/options,
+    // not the full multi-strategy sweep — cheaper, and matches what renderStressChart() plots.
+    const currentIdx = findCurrentStrategyIdx(variations, base);
+    const stressVariations = currentIdx >= 0
+        ? [variations[currentIdx]]
+        : [{ ...base, _label: 'Current Plan', _strategyFamily: '', _paramLabel: '' }];
+
     // Calibrate timing on first run so the estimate shown during the run is meaningful.
     if (estimateMCMs(numPaths, variations.length) == null) {
         calibrateMCMs({ variations, mu, sigma, seed, years });
@@ -153,7 +160,7 @@ function runMonteCarlo() {
     setMCRunning(true);
 
     runMCWorker(
-        { variations, numPaths, mu, sigma, seed, years, simulationMode, stressCount, bearFraction, inflationRate: base.inflation },
+        { variations, stressVariations, numPaths, mu, sigma, seed, years, simulationMode, stressCount, bearFraction, inflationRate: base.inflation },
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);
@@ -707,29 +714,20 @@ function renderStressChart(stress) {
     };
 
     _legendIsolatedKeyStress = null;   // reset on each fresh render
-    const selectedVarCount = _mcSelected.size;
     const datasets = [];
 
-    // One labeled line per historical scenario per selected variation.
-    // Single variation → red-amber severity gradient. Multiple → strategy family hue + rank opacity.
-    const multiStrat = selectedVarCount > 1;
-    let fallbackIdx = 0;
-    Array.from(_mcSelected).forEach(selIdx => {
-        const v = stress.variations[selIdx];
-        if (!v?.stressPaths) return;
-        const nS       = v.stressPaths.length;
-        const famName  = _stripHtml(v.strategyFamily);
-        const stratPfx = multiStrat ? `[${famName}] ` : '';
-
+    // Stress always runs against exactly one variation now (the current withdrawal
+    // strategy/options — see runMonteCarlo()'s stressVariations) — one labeled line per
+    // historical scenario, red-amber severity gradient (no multi-strategy hue needed).
+    const v = stress.variations[0];
+    if (v?.stressPaths) {
+        const nS = v.stressPaths.length;
         v.stressPaths.forEach((pathData, rank) => {
             const seriesLabel = stress.labels?.[rank] ?? String(rank);
-            const color = multiStrat
-                ? _stressColorMulti(famName, rank, nS, fallbackIdx)
-                : _stressColor(rank, nS);
             datasets.push({
-                label:           `${stratPfx}${seriesLabel}`,
+                label:           seriesLabel,
                 data:            deflate(pathData),
-                borderColor:     color,
+                borderColor:     _stressColor(rank, nS),
                 backgroundColor: 'transparent',
                 borderWidth:     1.8,
                 pointRadius:     0,
@@ -737,8 +735,7 @@ function renderStressChart(stress) {
                 tension:         0.3,
             });
         });
-        fallbackIdx++;
-    });
+    }
 
     if (_mcStressChart) {
         _mcStressChart.destroy();
@@ -782,7 +779,7 @@ function renderStressChart(stress) {
 
     const descEl = document.getElementById('mc-stress-chart-desc');
     if (descEl) {
-        descEl.textContent = `Each line = one historical worst-decade starting sequence. "eq" = nominal equity CAGR over first 10 years; "inf" = inflation CAGR over same window; "real" = inflation-adjusted real CAGR (Fisher). Click a legend item to isolate it; click again to restore all.`;
+        descEl.textContent = `For your current plan — each line = one historical worst-decade starting sequence. "eq" = nominal equity CAGR over first 10 years; "inf" = inflation CAGR over same window; "real" = inflation-adjusted real CAGR (Fisher). Click a legend item to isolate it; click again to restore all.`;
     }
 
     renderMCStressMetrics(stress);

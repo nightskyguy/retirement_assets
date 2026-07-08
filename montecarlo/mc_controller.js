@@ -98,7 +98,8 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
     // Mirrors worker.js's runPass exactly (see that file for the fold-Stress-into-Historical
     // rationale). progressOffset/progressWeight let two passes share one progress bar.
-    async function runPass(mode, progressOffset, progressWeight) {
+    async function runPass(mode, progressOffset, progressWeight, runVariations) {
+        const varsToUse = runVariations || variations;
         let numPaths = cfg.numPaths;
         let scenarioBank, multiAssetBank, medianAnnualReturn, logDrift;
         let minAnnualReturn =  Infinity;
@@ -189,13 +190,13 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
         const varResults = [];
 
-        for (let vi = 0; vi < variations.length; vi++) {
+        for (let vi = 0; vi < varsToUse.length; vi++) {
             if (_mcCancelled) return null;
 
             // Yield to the UI every 5 variations so the progress bar can update.
             if (vi % 5 === 0) await new Promise(r => setTimeout(r, 0));
 
-            const baseInputs = variations[vi];
+            const baseInputs = varsToUse[vi];
             const paths      = new Float64Array(numPaths * years);
             const ruinYears  = new Uint16Array(numPaths);
             const taxPerPath = new Float64Array(numPaths);
@@ -317,8 +318,8 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
                 stressPaths,
             });
 
-            if ((vi + 1) % 5 === 0 || vi === variations.length - 1) {
-                onProgress?.(progressOffset + (vi + 1) / variations.length * progressWeight);
+            if ((vi + 1) % 5 === 0 || vi === varsToUse.length - 1) {
+                onProgress?.(progressOffset + (vi + 1) / varsToUse.length * progressWeight);
             }
         }
 
@@ -353,7 +354,10 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
     const main = await runPass(simulationMode === 'bootstrap' ? 'bootstrap' : 'gbm', 0, mainWeight);
     if (main === null) return; // cancelled mid-pass
-    const stress = willRunStress ? await runPass('stress', mainWeight, 1 - mainWeight) : null;
+    // Stress runs against ONLY the current withdrawal strategy (mc_tab.js's runMonteCarlo()
+    // builds this), not the full variations sweep — falls back to the full array if missing.
+    const stressVars = cfg.stressVariations?.length ? cfg.stressVariations : variations;
+    const stress = willRunStress ? await runPass('stress', mainWeight, 1 - mainWeight, stressVars) : null;
     if (willRunStress && stress === null) return; // cancelled mid-pass
 
     const totalMs = performance.now() - t0;

@@ -1,5 +1,13 @@
 # Progress Log
 
+## Session: 2026-07-08 (cont. 3) — PF3: MC Stress pass now runs current strategy only
+
+Implemented and shipped Phase PF3 (planned in Plan Mode, approved, then implemented same session). Stress pass (folded into Historical per Item 7) was sweeping the FULL `variations` array (100+ strategies in typical scenarios) even though only checkbox-selected ones ever got plotted — wasted compute. Now runs against exactly 1 variation: whichever matches the user's current sidebar settings (`findCurrentStrategyIdx`), with a wrapped-`base` fallback if no exact match exists.
+
+Changes: `runPass()` in both `worker.js` and `mc_controller.js` gained a 4th `runVariations` param (falls back to the full array if `cfg.stressVariations` is missing, so a stale-cached deploy degrades gracefully rather than erroring); `mc_tab.js`'s `runMonteCarlo()` builds the single-variation `stressVariations` array; `renderStressChart()` simplified — dropped the now-meaningless `_mcSelected`/multi-strategy-hue logic, just plots `stress.variations[0]` directly (no more `[Family]` legend prefix).
+
+**Verify:** Browser — `_mcResults.stress.variations.length === 1` confirmed (main sweep was 108 variations in the test run, so this is a real compute reduction, not just a display change). Switched sidebar strategy `propwd`→`fixed`, re-ran, confirmed `stress.variations[0].strategy` updated to `'fixed'` — not stale. No console errors either run. node 54/54, browser in-page suite 240/240. Committed + pushed to PR #111 (same branch as Phase PF).
+
 ## Session: 2026-07-08 (cont. 2) — Session wrap-up: PR opened, Item 6 round 2 deferred
 
 **Shipped this session (committed + PR opened):** Phase PF (9-item UX batch) + the round-1 Item 6 fix (permanent-staining bug + missing core.js cache-bust). node 54/54, browser 240/240.

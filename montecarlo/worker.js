@@ -17,7 +17,8 @@ self.onmessage = function ({ data: cfg }) {
     // Historical mode auto-runs BOTH 'bootstrap' and 'stress' passes (folds the former standalone
     // Stress dropdown option into Historical); Synthetic mode runs only 'gbm'. progressOffset/
     // progressWeight let two passes share one progress bar without the second pass restarting it.
-    function runPass(mode, progressOffset, progressWeight) {
+    function runPass(mode, progressOffset, progressWeight, runVariations) {
+        const varsToUse = runVariations || variations;
         let numPaths = cfg.numPaths;
         let scenarioBank, multiAssetBank, medianAnnualReturn, logDrift;
         let minAnnualReturn =  Infinity;
@@ -117,8 +118,8 @@ self.onmessage = function ({ data: cfg }) {
 
         const varResults = [];
 
-        for (let vi = 0; vi < variations.length; vi++) {
-            const baseInputs = variations[vi];
+        for (let vi = 0; vi < varsToUse.length; vi++) {
+            const baseInputs = varsToUse[vi];
 
             // paths[p * years + y] = portfolio balance (0 once ruined, kept at last value after death)
             const paths = new Float64Array(numPaths * years);
@@ -263,8 +264,8 @@ self.onmessage = function ({ data: cfg }) {
             });
 
             // Post a progress update every 5 variations and on the last one.
-            if ((vi + 1) % 5 === 0 || vi === variations.length - 1) {
-                postMessage({ type: 'progress', pct: progressOffset + (vi + 1) / variations.length * progressWeight });
+            if ((vi + 1) % 5 === 0 || vi === varsToUse.length - 1) {
+                postMessage({ type: 'progress', pct: progressOffset + (vi + 1) / varsToUse.length * progressWeight });
             }
         }
 
@@ -302,7 +303,11 @@ self.onmessage = function ({ data: cfg }) {
     const mainWeight = willRunStress ? cfg.numPaths / totalWork : 1;
 
     const main = runPass(simulationMode === 'bootstrap' ? 'bootstrap' : 'gbm', 0, mainWeight);
-    const stress = willRunStress ? runPass('stress', mainWeight, 1 - mainWeight) : null;
+    // Stress runs against ONLY the current withdrawal strategy (mc_tab.js's runMonteCarlo()
+    // builds this), not the full variations sweep — cfg.stressVariations falls back to the full
+    // array if missing (e.g. a stale cached page mid-deploy), degrading to the old full-sweep behavior.
+    const stressVars = cfg.stressVariations?.length ? cfg.stressVariations : variations;
+    const stress = willRunStress ? runPass('stress', mainWeight, 1 - mainWeight, stressVars) : null;
 
     postMessage({
         type: 'results',

@@ -234,8 +234,8 @@
 
         <div id="results"></div>
         <div class="info-box">
-            <strong id="irmaaThresholdsHeading">IRMAA Thresholds:</strong><br>
-            <span id="irmaaThresholdsBody"></span>
+            <strong id="IRMAAThresholdsHeading">IRMAA Thresholds:</strong><br>
+            <span id="IRMAAThresholdsBody"></span>
 
 			<STRONG>IMPORTANT NOTE</STRONG> The consumer price index increases at a rate of about 2.8% per year annually for the last 20 years, while the IRMAA tax increases at a rate of about 5.6% per year (it's tied to Medicare costs). This means that in the future the brackets will be adjusted, however the TAX will also be adjusted by about twice as much.  Example: <i>Tier 1 at 106k and 1K</i> annual additional tax will become <b>109K with an 11K tax</b>.
         </div>
@@ -247,39 +247,23 @@
         // above) — no local hardcoded copies, so this tool stays in sync with the rest of the site.
 
         function calculateTaxableSS(socialSecurity, otherIncome) {
-            // Calculate taxable portion of Social Security (same provisional-income formula as
-            // taxengine.js calculateTaxes() STEP 2, reading brackets from TAXData.SOCIALSECURITY).
+            // Provisional income + tier math now shared with taxengine.js calculateTaxes() STEP 2
+            // via calculateTaxableSocialSecurity(), instead of a separate hand-rolled copy.
             const provisionalIncome = otherIncome + (0.5 * socialSecurity);
             const filingStatus = document.getElementById('maritalStatus').value;
-            const brackets = TAXData.SOCIALSECURITY[filingStatus].brackets; // [{l,r},{l:tier1,r},{l:tier2,r}]
-            const tier1 = brackets[1].l, tier1Rate = brackets[1].r;
-            const tier2 = brackets[2].l, tier2Rate = brackets[2].r;
-
-            let taxableSS = 0;
-
-            if (provisionalIncome <= tier1) {
-                taxableSS = 0;
-            } else if (provisionalIncome <= tier2) {
-                taxableSS = Math.min(tier1Rate * socialSecurity, tier1Rate * (provisionalIncome - tier1));
-            } else {
-                const tier2Amount = tier1Rate * (tier2 - tier1);
-                const tier3Amount = tier2Rate * (provisionalIncome - tier2);
-                taxableSS = Math.min(tier2Rate * socialSecurity, tier2Amount + tier3Amount);
-            }
-
-            return taxableSS;
+            return calculateTaxableSocialSecurity(filingStatus, provisionalIncome, socialSecurity);
         }
 
-        function solveForMaxRMD(socialSecurity, otherIncome, irmaaTreshold) {
+        function solveForMaxRMD(socialSecurity, otherIncome, IRMAATreshold) {
             // Iterative solver since taxable SS depends on RMD amount
             // Start with an estimate
-            let rmdEstimate = irmaaTreshold - otherIncome - (0.85 * socialSecurity);
-            
+            let rmdEstimate = IRMAATreshold - otherIncome - (0.85 * socialSecurity);
+
             // Iterate to find exact solution
             for (let i = 0; i < 10; i++) {
                 const taxableSS = calculateTaxableSS(socialSecurity, otherIncome + rmdEstimate);
                 const magi = otherIncome + rmdEstimate + taxableSS;
-                const difference = irmaaTreshold - magi;
+                const difference = IRMAATreshold - magi;
                 
                 if (Math.abs(difference) < 1) break;
                 
@@ -330,7 +314,7 @@
             // TAXData.IRMAA[status].brackets[0] is the "-none-" no-surcharge tier; the rest are the
             // real surcharge tiers, in ascending order, with `l` = MAGI threshold and `r` = the
             // already-correct total annual $ surcharge for this filing status.
-            const irmaaTiers = TAXData.IRMAA[maritalStatus].brackets.slice(1);
+            const IRMAATiers = TAXData.IRMAA[maritalStatus].brackets.slice(1);
 
             // Build results table
             let html = '<h2>Results</h2>';
@@ -349,21 +333,24 @@
                 html += '<tr><th>IRMAA Tier</th><th>Maximum IRA Balance</th><th>RMD Amount</th><th>Estimated MAGI</th><th>Annual IRMAA Surcharge</th></tr>';
 
                 // Calculate for each tier
-                irmaaTiers.forEach((bracket) => {
+                IRMAATiers.forEach((bracket) => {
                     const threshold = bracket.l;
                     const maxRMD = solveForMaxRMD(socialSecurity, otherIncome, threshold);
                     const maxIRABalance = maxRMD * divisor;
                     const rmdAmount = maxIRABalance / divisor;
                     const taxableSS = calculateTaxableSS(socialSecurity, otherIncome + rmdAmount);
                     const estimatedMAGI = otherIncome + rmdAmount + taxableSS;
-                    const irmaaCharge = bracket.r;
+                    // cpiRate=1, medicareRate=1: this tool shows today's nominal rates only, no
+                    // future-year growth — must pass both explicitly or calcIRMAA()'s default
+                    // medicareRate would apply one year of ANNUAL_INCREASE growth.
+                    const IRMAACharge = calcIRMAA(threshold, maritalStatus, 1, 1);
 
                     html += '<tr>';
                     html += `<td>${bracket.tier}</td>`;
                     html += `<td class="currency">$${maxIRABalance.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>`;
                     html += `<td class="currency">$${rmdAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>`;
                     html += `<td class="currency">$${estimatedMAGI.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>`;
-                    html += `<td class="currency">$${irmaaCharge.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
+                    html += `<td class="currency">$${IRMAACharge.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>`;
                     html += '</tr>';
                 });
 
@@ -374,9 +361,9 @@
         }
 
         // Populate the static IRMAA-thresholds info box directly from TAXData.IRMAA (never goes stale).
-        function renderIrmaaThresholdsInfo() {
+        function renderIRMAAThresholdsInfo() {
             const year = TAXData.IRMAA.YEAR;
-            document.getElementById('irmaaThresholdsHeading').textContent = `IRMAA Thresholds as of ${year} brackets:`;
+            document.getElementById('IRMAAThresholdsHeading').textContent = `IRMAA Thresholds as of ${year} brackets:`;
             const mfjTiers = TAXData.IRMAA.MFJ.brackets.slice(1);
             const sglTiers = TAXData.IRMAA.SGL.brackets.slice(1);
             const lines = mfjTiers.map((mfj, i) => {
@@ -385,11 +372,11 @@
                 const sglThreshold = sgl.l === Infinity ? '∞' : `$${sgl.l.toLocaleString()}`;
                 return `<strong>${mfj.tier}:</strong> MFJ ${mfjThreshold} | Single ${sglThreshold} → Surcharge: $${mfj.r.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}/year (household)`;
             });
-            document.getElementById('irmaaThresholdsBody').innerHTML = lines.join('<br>');
+            document.getElementById('IRMAAThresholdsBody').innerHTML = lines.join('<br>');
         }
 
         // Calculate on page load with default values
-        window.onload = function() { renderIrmaaThresholdsInfo(); calculate(); };
+        window.onload = function() { renderIRMAAThresholdsInfo(); calculate(); };
     </script>
 <script src="../displayhelpers.js"></script>
 <script>

@@ -392,17 +392,17 @@ function calcAt(ordInc) {
     obbaOn:          effectiveObbaOn,
     saltHigh:        effectiveSaltHigh,
     propTax:         propTax,
-    irmaaAnnualCost: 0   // computed below from MAGI
+    IRMAAAnnualCost: 0   // computed below from MAGI
   });
 
   // IRMAA: step-function on MAGI, costs grow at inflation + medicareExtra
-  const irmaa = calcIRMAA(r.MAGI, status, inf, medGrowth);
+  const IRMAA = calcIRMAA(r.MAGI, status, inf, medGrowth);
 
   return {
     ordInc,
     fedTax:    r.federalOrdinaryTax,
     fedCGTax:  r.capitalGainsTax,
-    irmaa,
+    IRMAA,
     stTaxOrd:  r.stateOrdinaryTax,
     stTaxCG:   r.stateCapGainsTax,
     ssTax:     r.taxableSS,
@@ -549,10 +549,10 @@ function sweep() {
 
   sweepData = pts.map((p,i) => {
     const denom = Math.max(p.ordInc + cfg.ssIncome + p.cgGain, 1);
-    const totalTax = p.fedTax + p.fedCGTax + p.irmaa + p.stTaxOrd + p.stTaxCG;
+    const totalTax = p.fedTax + p.fedCGTax + p.IRMAA + p.stTaxOrd + p.stTaxCG;
     return {
       ...p, totalTax,
-      fedEff:  (p.fedTax + p.fedCGTax + p.irmaa) / denom,
+      fedEff:  (p.fedTax + p.fedCGTax + p.IRMAA) / denom,
       stEff:   (p.stTaxOrd + p.stTaxCG) / denom,
       totEff:  totalTax / denom,
       fedMarg: marg[i]
@@ -710,7 +710,7 @@ function renderChart(data) {
   // Dollar datasets
   const fedOrd = data.map(d => Math.round(d.fedTax));
   const fedCG  = data.map(d => Math.round(d.fedCGTax));
-  const irmaaD = data.map(d => Math.round(d.irmaa));
+  const IRMAAD = data.map(d => Math.round(d.IRMAA));
   const stOrd  = data.map(d => Math.round(d.stTaxOrd));
   const stCG   = data.map(d => Math.round(d.stTaxCG));
   const magiD  = data.map(d => Math.round(d.magi));
@@ -737,7 +737,7 @@ function renderChart(data) {
     ds[5].data = cgRt;
     ds[6].data = fedOrd;
     ds[7].data = fedCG;
-    ds[8].data = irmaaD;
+    ds[8].data = IRMAAD;
     ds[9].data = stOrd;
     ds[10].data = stCG;
     ds[11].data = magiD;
@@ -784,7 +784,7 @@ function renderChart(data) {
           data:fedCG, backgroundColor:'rgba(147,197,253,0.80)', borderWidth:0,
           stack:'tx', yAxisID:'yD', hidden:inD },
         { _dollarDs:true, type:'bar', label:'IRMAA',
-          data:irmaaD, backgroundColor:'rgba(245,166,35,0.85)', borderWidth:0,
+          data:IRMAAD, backgroundColor:'rgba(245,166,35,0.85)', borderWidth:0,
           stack:'tx', yAxisID:'yD', hidden:inD },
         { _dollarDs:true, type:'bar', label:'State Ordinary Tax',
           data:stOrd, backgroundColor:'rgba(251,146,60,0.75)', borderWidth:0,
@@ -949,7 +949,7 @@ function updateInfoPanel(idx) {
         <div class="info-col-title">Tax Dollars&ensp;<span style="font-size:9px;color:var(--muted)">(% of total income)</span></div>
         <div class="info-row"><span class="ir-lbl">Federal Ordinary</span><span><span class="ir-val">${$v(d.fedTax)}</span><span class="ir-pct">${pp(d.fedTax,totalInc)}</span></span></div>
         <div class="info-row"><span class="ir-lbl">Federal CG Tax</span><span><span class="ir-val">${$v(d.fedCGTax)}</span><span class="ir-pct">${pp(d.fedCGTax,totalInc)}<span style="color:var(--teal);margin-left:.3rem">${cgEffRate}</span></span></span></div>
-        <div class="info-row"><span class="ir-lbl">IRMAA</span><span><span class="ir-val">${$v(d.irmaa)}</span><span class="ir-pct">${pp(d.irmaa,totalInc)}</span></span></div>
+        <div class="info-row"><span class="ir-lbl">IRMAA</span><span><span class="ir-val">${$v(d.IRMAA)}</span><span class="ir-pct">${pp(d.IRMAA,totalInc)}</span></span></div>
         <div class="info-row"><span class="ir-lbl">State Ordinary</span><span><span class="ir-val">${$v(d.stTaxOrd)}</span><span class="ir-pct">${pp(d.stTaxOrd,totalInc)}</span></span></div>
         <div class="info-row"><span class="ir-lbl">State CG</span><span><span class="ir-val">${$v(d.stTaxCG)}</span><span class="ir-pct">${pp(d.stTaxCG,totalInc)}</span></span></div>
         <div class="info-divider"></div>

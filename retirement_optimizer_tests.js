@@ -1027,7 +1027,7 @@ assertEqual(
 		assertEqual(result.AGI, 141550, 'Federal AGI');
 		
 		// IRMAA MAGI = AGI + tax-exempt interest = 141550 + 5000 = 146,550
-		assertEqual(result.irmaaMagi, 146550, 'IRMAA MAGI');
+		assertEqual(result.MAGI, 146550, 'IRMAA MAGI');
 		
 		// Federal std deduction = 32200 + 1650 + 1650 = 35,500
 		assertEqual(result.federalStdDeduction, 35500, 'Federal Std Deduction');
@@ -2014,18 +2014,19 @@ assertEqual(
 			'IRMAA gate: surcharge present at 65 (one spouse on Medicare)');
 		assertEqual(row67.IRMAA > 0, true,
 			'IRMAA gate: surcharge present at 67 (both spouses on Medicare)');
-		// Base premium is deterministic: persons65+ × ($202.90 Part B + $38.99 Part D)/mo × 12 × 1.056^simYear.
+		// Base premium is deterministic: persons65+ × ($202.90 Part B + $38.99 Part D)/mo × 12 × (1+cpi+inflation)^simYear.
+		const medicareGrowthRate = 1 + baseInputs.cpi + baseInputs.inflation;
 		assertEqual(Math.round(row65.Medicare),
-			Math.round(1 * (202.90 + 38.99) * 12 * Math.pow(1.056, 5)),
-			'Medicare base: one person at 65 = (202.90 + 38.99) × 12 × 1.056^5');
+			Math.round(1 * (202.90 + 38.99) * 12 * Math.pow(medicareGrowthRate, 5)),
+			'Medicare base: one person at 65 = (202.90 + 38.99) × 12 × (1+cpi+inflation)^5');
 		assertEqual(Math.round(row67.Medicare),
-			Math.round(2 * (202.90 + 38.99) * 12 * Math.pow(1.056, 7)),
-			'Medicare base: two persons at 67 = 2 × (202.90 + 38.99) × 12 × 1.056^7');
+			Math.round(2 * (202.90 + 38.99) * 12 * Math.pow(medicareGrowthRate, 7)),
+			'Medicare base: two persons at 67 = 2 × (202.90 + 38.99) × 12 × (1+cpi+inflation)^7');
 		// Same lookback MAGI tier at 65 vs 66 would double the surcharge when the second
 		// spouse enrolls; at minimum the both-on-Medicare year must exceed the single year
 		// after backing out Medicare-rate growth.
-		assertEqual(row67.IRMAA / Math.pow(1.056, 2) > row65.IRMAA * 1.5, true,
-			'IRMAA gate: both-spouse surcharge ≈ 2× single-spouse (after 5.6%/yr growth backout)');
+		assertEqual(row67.IRMAA / Math.pow(medicareGrowthRate, 2) > row65.IRMAA * 1.5, true,
+			'IRMAA gate: both-spouse surcharge ≈ 2× single-spouse (after CPI+Inflation/yr growth backout)');
 	}
 
 	// ============================================================================

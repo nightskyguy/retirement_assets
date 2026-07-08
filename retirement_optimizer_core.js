@@ -736,14 +736,14 @@ function buildSimYearLogRecord(p) {
         'cashDividends': p.taxableDividends,
         'cashInterest': p.taxableInterest,
         // Taxes
-        'FedRate%': p.tax.fedRate,
-        'StateRate%': p.tax.stRate,
-        IRMAATier: p.irmaaTier,
-        IRMAA: p.irmaa,
+        'FedRate%': p.tax.federalMarginalRate,
+        'StateRate%': p.tax.stateMarginalRate,
+        IRMAATier: p.IRMAATier,
+        IRMAA: p.IRMAA,
         Medicare: p.medicareBase,
         totalTax: p.totalTax,
         FedTax: p.tax.federalTax,
-        StateTax: p.tax.state,
+        StateTax: p.tax.stateTax,
         'CapGains': p.capitalGains,
         // Chart-only helpers (leading '-' → excluded from the Annual Details table). capGainsTax
         // is the LTCG/qualified-div tax embedded in FedTax (split out for the Taxation chart);
@@ -838,7 +838,7 @@ function simulate(inputs) {
     const gapYears = Math.max(0, currentYear - new Date().getFullYear());
     let cpiRate      = Math.pow(1 + inputs.cpi,      gapYears);
     let inflation    = Math.pow(1 + inputs.inflation, gapYears);
-    let medicareRate = Math.pow(1 + TAXData.IRMAA.ANNUAL_INCREASE, gapYears);
+    let medicareRate = Math.pow(1 + inputs.cpi + inputs.inflation, gapYears);
     let fixedWithdrawal = 0;
     let currentTaxableGuess = 0;
     let spendDelta = 1 + inputs.spendChange;
@@ -991,13 +991,14 @@ function simulate(inputs) {
         // household pays nothing no matter how large the conversion income.
         const onMedicare = (alive1 && age1 >= 65 ? 1 : 0) + (alive2 && age2 >= 65 ? 1 : 0);
         const magiLookback = balance.magiHistory[balance.magiHistory.length - 2];
-        let irmaa = calcIRMAA(magiLookback, status, cpiRate, medicareRate, onMedicare);
+        let IRMAA = calcIRMAA(magiLookback, status, cpiRate, medicareRate, onMedicare);
         // Tier for display/milestones — same lookback MAGI and same age gate as the charge
         // (the log row used to recompute this AFTER the year's MAGI push, showing the tier a
         // year early).
-        const irmaaTier = onMedicare > 0 ? getIRMAATier(magiLookback, status, cpiRate) : '-none-';
+        const IRMAATier = onMedicare > 0 ? getIRMAATier(magiLookback, status, cpiRate) : '-none-';
         // Base Medicare Part B + Part D premiums (informational — tracked, not deducted from
-        // spendable; assumed to live inside the spend goal). Grows at the Medicare rate, not CPI.
+        // spendable; assumed to live inside the spend goal). Grows at CPI + Inflation (user inputs),
+        // not CPI alone.
         const medicareBase = onMedicare * (TAXData.IRMAA.standardPartB + TAXData.IRMAA.standardPartD) * 12 * medicareRate;
 
         // Calculate the bracket limits based on: stated limit.
@@ -1007,8 +1008,8 @@ function simulate(inputs) {
         let goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', status, spendGoal, cpiRate)
         let goalStateBracketLimit = findUpperLimitByAmount(STATEname, status, spendGoal, cpiRate)
         let goalLimit = Math.min(goalFedBracketLimit.limit, goalStateBracketLimit.limit)
-        let irmaaBracket = findUpperLimitByAmount('IRMAA', status, goalLimit, cpiRate)
-        let irmaLimit = Math.min(goalLimit, irmaaBracket.limit);
+        let IRMAABracket = findUpperLimitByAmount('IRMAA', status, goalLimit, cpiRate)
+        let IRMAALimit = Math.min(goalLimit, IRMAABracket.limit);
         let totalIncome = 0;
         let netIncome = 0;
         let capitalGains = 0;
@@ -1141,7 +1142,7 @@ function simulate(inputs) {
         // GK bypasses goalLimit (bracket ceiling) — spend is dynamically set by GK rules
         const isGKStrategy = inputs.strategy === 'gk';
         let targetSpend = (isBracketStrategy || isOrderedStrategy || isGKStrategy) ? spendGoal : Math.min(spendGoal, goalLimit);
-        let additionalSpendNeeded = Math.max(0, targetSpend + irmaa - possibleIncome);
+        let additionalSpendNeeded = Math.max(0, targetSpend + IRMAA - possibleIncome);
 
         // INCOMPLETE: marginalFedTaxRate and marginalStateTaxRate are set to the rates AT the
         // spendGoal bracket, not refined to the next lower IRMAA/state limit. To fix: after
@@ -1233,15 +1234,15 @@ function simulate(inputs) {
                 // IRMAA tier ceiling mode: fill MAGI up to the top of the chosen IRMAA tier.
                 // Tier 0 = stay below Tier 1 threshold; Tier N = stay below Tier N+1 threshold.
                 // IRMAA thresholds grow at CPI (see taxengine.js comment).
-                const irmaaBrks = getRateBracket('IRMAA', status);
-                limit = irmaaBrks[inputs.stratIRMAATier + 1].l * cpiRate - 1;
+                const IRMAABrks = getRateBracket('IRMAA', status);
+                limit = IRMAABrks[inputs.stratIRMAATier + 1].l * cpiRate - 1;
                 // Before any living spouse reaches 63 (65 + LOOKBACK), this year's income cannot
                 // affect a Medicare premium — the IRMAA ceiling is a pointless cap. Convert up to
                 // the top of the federal bracket CONTAINING the ceiling instead (still bounded;
                 // never uncapped, which would drain the whole IRA in one year).
                 const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
-                const irmaaRelevant = maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK;
-                if (!irmaaRelevant) {
+                const IRMAARelevant = maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK;
+                if (!IRMAARelevant) {
                     limit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate).limit;
                 }
                 // Approximate tax rates at this limit for downstream calcs
@@ -1284,7 +1285,7 @@ function simulate(inputs) {
                     // living spouse is within the 2-year MAGI lookback of Medicare age (63+).
                     const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
                     if (maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK) {
-                        limit = Math.min(limit, irmaLimit);
+                        limit = Math.min(limit, IRMAALimit);
                     }
                 }
             }
@@ -1356,7 +1357,7 @@ function simulate(inputs) {
 
         let tax = calculateTaxes({
             filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
-            totalSS: s1 + s2, irmaaAnnualCost: irmaa,
+            totalSS: s1 + s2, IRMAAAnnualCost: IRMAA,
             earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
             pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
             qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
@@ -1364,8 +1365,8 @@ function simulate(inputs) {
         })
         inspectForErrors(tax)  // See if any numbers look fishy.
 
-        marginalFedTaxRate = tax.fedRate;
-        marginalStateTaxRate = tax.stRate;
+        marginalFedTaxRate = tax.federalMarginalRate;
+        marginalStateTaxRate = tax.stateMarginalRate;
         capitalGainsRate = tax.capitalGainsRate;
 
         //!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
@@ -1376,7 +1377,7 @@ function simulate(inputs) {
             balance.magiHistory.push(tax.MAGI);
         }
 
-        let totalTax = tax.totalTax + irmaa;
+        let totalTax = tax.totalTax + IRMAA;
 
         // 6. Cash Flow Gap
         // taxableInc includes pension, RMDs
@@ -1437,7 +1438,7 @@ function simulate(inputs) {
 
         tax = calculateTaxes({
             filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
-            totalSS: s1 + s2, irmaaAnnualCost: irmaa,
+            totalSS: s1 + s2, IRMAAAnnualCost: IRMAA,
             earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
             pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
             qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
@@ -1446,11 +1447,11 @@ function simulate(inputs) {
         inspectForErrors(tax)  // See if any numbers look fishy.
 
         // Now we have the "real tax"
-        totalTax = tax.totalTax + irmaa;
+        totalTax = tax.totalTax + IRMAA;
         bracketOverage = bracketTarget > 0 ? Math.max(0, tax.MAGI - bracketTarget) : 0;
         // Update marginal rates so the third pass grosses up correctly at actual bracket.
-        marginalFedTaxRate = tax.fedRate;
-        marginalStateTaxRate = tax.stRate;
+        marginalFedTaxRate = tax.federalMarginalRate;
+        marginalStateTaxRate = tax.stateMarginalRate;
 
         // Third pass: if second-pass taxes created a residual shortfall, withdraw more and recalc once.
         // This handles cases where the gap fill (brokerage cap gains) raised taxes above the initial estimate.
@@ -1490,12 +1491,12 @@ function simulate(inputs) {
             capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
             tax = calculateTaxes({
                 filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
-                totalSS: s1 + s2, irmaaAnnualCost: irmaa,
+                totalSS: s1 + s2, IRMAAAnnualCost: IRMAA,
                 earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
                 qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
                 taxExemptInterest: 0, state: STATEname
             });
-            totalTax = tax.totalTax + irmaa;
+            totalTax = tax.totalTax + IRMAA;
             totals.thirdPassCount += 1;
             totals.thirdPassTime += performance.now() - thirdPassStart;
         }
@@ -1519,15 +1520,15 @@ function simulate(inputs) {
                 forcedIRA += (iraTop.IRA ?? 0);
                 capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
                 tax = calculateTaxes({
-                    filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2, irmaaAnnualCost: irmaa,
+                    filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2, IRMAAAnnualCost: IRMAA,
                     earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
                     pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
                     qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
                     taxExemptInterest: 0, state: STATEname
                 });
-                totalTax = tax.totalTax + irmaa;
-                marginalFedTaxRate = tax.fedRate;
-                marginalStateTaxRate = tax.stRate;
+                totalTax = tax.totalTax + IRMAA;
+                marginalFedTaxRate = tax.federalMarginalRate;
+                marginalStateTaxRate = tax.stateMarginalRate;
             }
         }
 
@@ -1633,12 +1634,12 @@ function simulate(inputs) {
                 const _baseEI = pension + taxableRMD + taxableInterest + (netWithdrawals.IRA ?? 0);
                 const _exTaxCalc = calculateTaxes({
                     filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2,
-                    irmaaAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: cpiRate,
+                    IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: cpiRate,
                     pensionIncome: pension, iraIncome: taxableRMD + (netWithdrawals.IRA ?? 0) + _gross,
                     qualifiedDiv: taxableDividends, capGains: capitalGains,
                     hsaContrib: 0, taxExemptInterest: 0, state: STATEname
                 });
-                incrementalExtraConvTax = Math.max(0, _exTaxCalc.totalTax - (totalTax - irmaa));
+                incrementalExtraConvTax = Math.max(0, _exTaxCalc.totalTax - (totalTax - IRMAA));
                 extraConvGross = _gross;
                 const _net = _gross - incrementalExtraConvTax;
                 const _ec1 = _gross * ira1_ratio;
@@ -1663,12 +1664,12 @@ function simulate(inputs) {
             const convShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - totalConverted);
             const shadowConvCalc = calculateTaxes({
                 filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2,
-                irmaaAnnualCost: 0, earnedIncome: convShadowEI, inflation: cpiRate,
+                IRMAAAnnualCost: 0, earnedIncome: convShadowEI, inflation: cpiRate,
                 pensionIncome: pension, iraIncome: taxableRMD + Math.max(0, (netWithdrawals.IRA ?? 0) - totalConverted),
                 qualifiedDiv: taxableDividends, capGains: capitalGains,
                 hsaContrib: 0, taxExemptInterest: 0, state: STATEname
             });
-            incrementalConvTax = Math.max(0, (totalTax - irmaa) - shadowConvCalc.totalTax);
+            incrementalConvTax = Math.max(0, (totalTax - IRMAA) - shadowConvCalc.totalTax);
             grossConv = totalConverted + incrementalConvTax;
             convShadowDeltaIRA += grossConv;
             // convShadowDeltaTaxable += 0 — taxes came from IRA gross; taxable accounts unaffected
@@ -1681,12 +1682,12 @@ function simulate(inputs) {
             const excessShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - excessCashOC);
             const shadowExcessCalc = calculateTaxes({
                 filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2,
-                irmaaAnnualCost: 0, earnedIncome: excessShadowEI, inflation: cpiRate,
+                IRMAAAnnualCost: 0, earnedIncome: excessShadowEI, inflation: cpiRate,
                 pensionIncome: pension, iraIncome: taxableRMD + Math.max(0, (netWithdrawals.IRA ?? 0) - excessCashOC),
                 qualifiedDiv: taxableDividends, capGains: capitalGains,
                 hsaContrib: 0, taxExemptInterest: 0, state: STATEname
             });
-            incrementalExcessTax = Math.max(0, (totalTax - irmaa) - shadowExcessCalc.totalTax);
+            incrementalExcessTax = Math.max(0, (totalTax - IRMAA) - shadowExcessCalc.totalTax);
             grossExcess = excessCashOC + incrementalExcessTax;
             excessShadowDeltaIRA   += grossExcess;
             excessShadowDeltaTaxable -= excessCashOC; // actual taxable has more cash; shadow has less
@@ -1768,7 +1769,7 @@ function simulate(inputs) {
             const _rTax = Math.max(0, (inputs.growth ?? _rIRA) - _drag);
             const _rmdAge1 = (inputs.birthyear1 ?? 1960) >= 1960 ? 75 : 73;
             const _yearsToRMD = Math.max(1, _rmdAge1 - age1);
-            yearBETR = computeBETR(tax.fedRate + (tax.stRate ?? 0), _rIRA, _rTax, _yearsToRMD);
+            yearBETR = computeBETR(tax.federalMarginalRate + (tax.stateMarginalRate ?? 0), _rIRA, _rTax, _yearsToRMD);
             if (yearBETR !== null) {
                 const _futureRate = _taxFuture; // already resolved above
                 yearBETRflag = _futureRate > yearBETR + 0.02 ? '▲'
@@ -1816,7 +1817,7 @@ function simulate(inputs) {
             currentYear, alive1, alive2, age1, age2, status,
             fixedInc, pension, targetSpend, netIncome, totalIncome,
             surplus, totalRMD, qcd1, qcd2, taxableDividends, taxableInterest,
-            netWithdrawals, rmd1, rmd2, totalConverted, tax, irmaa, irmaaTier, medicareBase, cpiRate,
+            netWithdrawals, rmd1, rmd2, totalConverted, tax, IRMAA, IRMAATier, medicareBase, cpiRate,
             totalTax, capitalGains, cumulativeTaxes, bracketTarget, bracketOverage, forcedIRA, acaBreach,
             balance, nominalTaxRate, totalWealth, portfolioBalance, guaranteedIncome,
             totalsSpend: totals.spend,
@@ -1847,7 +1848,7 @@ function simulate(inputs) {
         // Adjust inflation rates for subsequent rounds.
         cpiRate *= (1 + inputs.cpi);
         inflation *= (1 + yearInflation);
-        medicareRate *= (1 + TAXData.IRMAA.ANNUAL_INCREASE)
+        medicareRate *= (1 + inputs.cpi + inputs.inflation)
     } // end for (let y = 0; y < maxYears; y++)
 
     // Phase 20: find break-even years (first year NetValue goes non-negative).
@@ -1903,8 +1904,8 @@ function getInputs() {
     }
     const _strat = (() => {
         const raw = val('stratRate') ?? '';
-        if (raw.startsWith('irmaa')) {
-            return { stratRate: 0, stratIRMAATier: +raw.replace('irmaa', ''), stratACAMultiple: 0 };
+        if (/^irmaa/i.test(raw)) {
+            return { stratRate: 0, stratIRMAATier: +raw.replace(/irmaa/i, ''), stratACAMultiple: 0 };
         }
         if (raw.startsWith('aca')) {
             return { stratRate: 0, stratIRMAATier: -1, stratACAMultiple: +raw.replace('aca', '') };
@@ -2452,9 +2453,9 @@ function runOptimizer() {
     }
 
     // Fill bracket — IRMAA tier ceilings (tiers 0=Below IRMAA through 4=Tier 4 ceiling)
-    const irmaaTierLabels = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
+    const IRMAATierLabels = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
     for (let tier = 0; tier <= 4; tier++) {
-        addResult('IRMAA Ceil', irmaaTierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, maxConversion: maxConv });
+        addResult('IRMAA Ceil', IRMAATierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, maxConversion: maxConv });
     }
 
     // Fill bracket — ACA FPL cliffs. Nerd-mode only (item 12): the ACA cliff model is rough, so it
@@ -3108,7 +3109,7 @@ function loadOptimizerResult(id) {
     } else if (_isACA) {
         document.getElementById('stratRate').value = `aca${result._stratACAMultiple}`;
     } else if (result._strategy === 'bracket' && (result._stratIRMAATier ?? -1) >= 0) {
-        document.getElementById('stratRate').value = `irmaa${result._stratIRMAATier}`;
+        document.getElementById('stratRate').value = `IRMAA${result._stratIRMAATier}`;
     } else if (result._strategy === 'bracket' && result._stratRate != null) {
         document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
     } else if (result._strategy === 'propwd' && result._propWithdraw != null) {
@@ -3570,12 +3571,12 @@ function updateTable(log) {
         const deathOccurred = maritalStatus != row['status'];
 
         // IRMAA tier cell tint — blue scale (taxation theme), applied only to relevant columns
-        const irmaaTierColors = {
+        const IRMAATierColors = {
             'Tier 1': ['#E8F4FF', '#000'], 'Tier 2': ['#BDD9FF', '#000'], 'Tier 3': ['#90BBFF', '#000'],
             'Tier 4': ['#6090FF', '#000'], 'Tier 5': ['#3366FF', '#fff'], 'Tier 6 (TOP)': ['#0000FF', '#fff'],
         };
-        const tierEntry = irmaaTierColors[row['IRMAATier']];
-        const _irmaaCols = ['year', 'IRMAATier', 'totalIncome', 'IRMAA', 'totalTax'];
+        const tierEntry = IRMAATierColors[row['IRMAATier']];
+        const _IRMAACols = ['year', 'IRMAATier', 'totalIncome', 'IRMAA', 'totalTax'];
 
         // Pink takes priority over tier color
         if (incomeShortfall) {
@@ -3591,7 +3592,7 @@ function updateTable(log) {
                 const td = tr.insertCell();
                 const value = row[key];
 
-                if (tierEntry && !incomeShortfall && _irmaaCols.includes(key)) {
+                if (tierEntry && !incomeShortfall && _IRMAACols.includes(key)) {
                     td.style.backgroundColor = tierEntry[0];
                     td.style.color = tierEntry[1];
                 }
@@ -4157,7 +4158,7 @@ function computeTaxThresholdSeries(log, adj) {
     }
 
     // IRMAA: each tier's MAGI entry threshold (skip the no-surcharge floor at index 0).
-    const ib = TAXData?.IRMAA, irmaaShades = ['#aed6f1', '#7fb3d5', '#5499c7', '#2e86c1', '#2471a3', '#1a5276'];
+    const ib = TAXData?.IRMAA, IRMAAShades = ['#aed6f1', '#7fb3d5', '#5499c7', '#2e86c1', '#2471a3', '#1a5276'];
     if (ib?.MFJ) {
         const nIR = ib.MFJ.brackets.length;
         const rawIR = Array.from({ length: nIR }, (_, t) => boundary(ib, t));
@@ -4166,9 +4167,9 @@ function computeTaxThresholdSeries(log, adj) {
             if (!crosses(rawIR[t])) continue;
             crossedIR.add(t);
             const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
-            out.push({ label: `IRMAA ${tier}`, color: irmaaShades[(t - 1) % irmaaShades.length],
+            out.push({ label: `IRMAA ${tier}`, color: IRMAAShades[(t - 1) % IRMAAShades.length],
                        data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])), dash: [3, 3],
-                       group: 'irmaa' });
+                       group: 'IRMAA' });
         }
         // Next IRMAA tier above current MAGI — not already crossed.
         const nextIRCounts = {};
@@ -4184,9 +4185,9 @@ function computeTaxThresholdSeries(log, adj) {
         for (const [tStr] of Object.entries(nextIRCounts)) {
             const t = +tStr;
             const tier = (ib.MFJ.brackets[t].tier || `Tier ${t}`).replace(/\s*\(TOP\)/, '');
-            out.push({ label: `IRMAA ${tier}`, color: irmaaShades[(t - 1) % irmaaShades.length],
+            out.push({ label: `IRMAA ${tier}`, color: IRMAAShades[(t - 1) % IRMAAShades.length],
                        data: rawIR[t].map((v, k) => v == null ? null : v * adj(log[k])),
-                       dash: [5, 4], group: 'irmaa', isNext: true });
+                       dash: [5, 4], group: 'IRMAA', isNext: true });
         }
     }
     return out;
@@ -4833,6 +4834,14 @@ function loadFromURL() {
                 el.value = DisplayHelpers.formatDollar(decoded);
             } else {
                 el.value = value;
+                if (el.tagName === 'SELECT' && el.selectedIndex === -1) {
+                    // Legacy case-mismatch (e.g. old shared links using 'irmaa2' before the
+                    // IRMAA-casing cleanup renamed dropdown values to 'IRMAA2') — a native
+                    // <select> silently deselects on a case-sensitive miss, so fall back to a
+                    // case-insensitive option match to keep old URLs working.
+                    const match = Array.from(el.options).find(o => o.value.toLowerCase() === value.toLowerCase());
+                    if (match) el.value = match.value;
+                }
             }
         }
     });
@@ -5048,7 +5057,7 @@ function applyScenario(data) {
     // Handle IRMAA / ACA stratRate values that don't map to a plain numeric key
     if ((data.stratIRMAATier ?? -1) >= 0) {
         const el = document.getElementById('stratRate');
-        if (el) el.value = `irmaa${data.stratIRMAATier}`;
+        if (el) el.value = `IRMAA${data.stratIRMAATier}`;
     } else if ((data.stratACAMultiple ?? 0) > 0) {
         const el = document.getElementById('stratRate');
         if (el) el.value = `aca${data.stratACAMultiple}`;
@@ -5766,10 +5775,10 @@ function generateStratRateOptions() {
 
     // ── IRMAA tier ceilings (tiers 0-4) ───────────────────────────────────────
     // Ceiling = start of NEXT tier - 1. IRMAA thresholds also grow at CPI.
-    const irmaaBrks = isMFJ
+    const IRMAABrks = isMFJ
         ? TAXData.IRMAA.MFJ.brackets
         : TAXData.IRMAA.SGL.brackets;
-    const irmaaLabels = [
+    const IRMAALabels = [
         'Below IRMAA',
         'IRMAA Tier 1',
         'IRMAA Tier 2',
@@ -5777,10 +5786,10 @@ function generateStratRateOptions() {
         'IRMAA Tier 4'
     ];
     for (let i = 0; i < 5; i++) {
-        const limit = Math.round((irmaaBrks[i + 1].l - 1) * cpiAdj);
+        const limit = Math.round((IRMAABrks[i + 1].l - 1) * cpiAdj);
         options.push({
-            value: `irmaa${i}`,
-            label: `${irmaaLabels[i]}  ·  $${limit.toLocaleString()}`,
+            value: `IRMAA${i}`,
+            label: `${IRMAALabels[i]}  ·  $${limit.toLocaleString()}`,
             limit,
             defaultSelected: i === 0
         });

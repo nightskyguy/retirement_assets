@@ -48,10 +48,10 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="retirement_optimizer_core.js"></script>	
-	<script src="retirement_optimizer_tests.js"></script>	
-	<script src="retirement_optimizer_text.js"></script>	
 	<script src="taxengine.js?v=1133"></script>
+	<script src="retirement_optimizer_core.js"></script>
+	<script src="retirement_optimizer_tests.js"></script>
+	<script src="retirement_optimizer_text.js"></script>
 </head>
 <body>
 
@@ -350,8 +350,8 @@
         </div>
         <div id="growth-info" style="margin-top:-4px;margin-bottom:6px;font-size:0.82em;color:#555;"></div>
         <div class="row">
-            <div><label title="General price inflation. Drives spending-goal escalation: your After-Tax Spend goal grows by this rate each year so it stays constant in today's dollars. Often differs slightly from CPI/COLA."><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay()"></label></div>
-            <div><label title="Cost-of-living index. Drives federal &amp; IRMAA bracket indexing and Social Security COLA adjustments. Often differs from general inflation, so it is entered separately."><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
+            <div><label title="General price inflation. Drives spending-goal escalation: your After-Tax Spend goal grows by this rate each year so it stays constant in today's dollars. Often differs slightly from CPI/COLA. This amount is added to CPI to determine Medicare/IRMAA growth."><A HREF="https://www.investopedia.com/inflation-rate-by-year-7253832" target="_blank">Inflation</A> (3?)%<input type="number" id="inflation" value="3.0" step="0.01" min="0" placeholder="0.00" oninput="updateGrowthDisplay()"></label></div>
+            <div><label title="Cost-of-living index. Drives federal &amp; IRMAA bracket indexing and Social Security COLA adjustments. Often differs from general inflation, so it is entered separately. Medicare/IRMAA dollar amounts grow at CPI + Inflation combined, not CPI alone."><A HREF="https://www.bls.gov/regions/mid-atlantic/data/consumerpriceindexhistorical_us_table.htm" target="_blank">CPI</A>/<A HREF="https://www.fool.com/retirement/social-security/cola-history/" target="_blank">COLA</A> (2.8?)%<input type="number" id="cpi" value="2.8" step="0.01" min="0" placeholder="0.00"></label></div>
         </div>
         <div class="row">
             <div><label title="What does your HYSA and/or Mutual fund produce annually?">Cash Interest (2.5)%?<input type="number" id="cashYield" value="3.0" step="0.01" min="0" placeholder="0.00"></label></div>
@@ -717,7 +717,7 @@
 					<br><br>
 					<strong>Seeing real (inflation-adjusted) values.</strong> All dollar amounts in Annual Details are shown in <em>future nominal dollars</em> by default. Use the <strong>Future $ / Current $</strong> toggle in the tab bar (left of Annual Details / Charts / Optimizer / Monte Carlo) to restate every balance and income figure in today's purchasing power — this is the clearest way to judge whether your plan preserves your standard of living over time.
 					<br><br>
-					<i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> drives spending-goal escalation; <i>CPI/COLA</i> drives bracket indexing and SS cost-of-living adjustments (they often differ).</li>
+					<i>Cash Interest</i> is for HYSA and money-market holdings. <i>Inflation</i> drives spending-goal escalation; <i>CPI/COLA</i> drives bracket indexing and SS cost-of-living adjustments (they often differ). Medicare/IRMAA dollar amounts grow at <i>CPI + Inflation</i> combined.</li>
 				<li><strong>After Changes...</strong> Changes to any input — balances, rates, ages, strategy switches, or any other value — trigger an immediate recalculation. On the <i>Annual Details</i> table, rows are highlighted yellow when filing status changes to Single; pink/red means the portfolio cannot cover the required draw (a real shortfall — for the strict <i>ACA Cliff</i> strategy this means the plan is untenable at that spend). For the soft <i>Fill Bracket / IRMAA</i> strategies, the <code>ForcedIRA</code> and <code>BracketOverage</code> columns show where spending was funded by drawing IRA above the ceiling. The <i>Balances</i> chart has a <i>Both / Mine / Spouse</i> toggle. The <i>Optimizer</i> sweeps all strategy variations and highlights the best result per column. The <i>Monte Carlo</i> tab runs all variations against stochastic return sequences and reports survival rates. Both tabs skip a full rebuild if inputs are unchanged. Use <i>Import/Export</i> to save, load, or delete named scenarios.</li>
 			</ul></div>
 

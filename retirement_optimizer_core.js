@@ -4097,19 +4097,25 @@ function composeLegendHover(...handlers) {
     };
 }
 
+// Shared color-dimming helper — fades a hex/rgba color to 15% opacity for the "not hovered /
+// not isolated" state. Used by both datasetHoverHighlight() and makeChartLegendInteraction().
+function dimColor(color) {
+    if (!color || color === 'transparent') return color;
+    let m = String(color).match(/^rgba?\((\d+),(\d+),(\d+)/);
+    if (!m) {
+        const h = String(color).match(/^#([0-9a-f]{6})/i);
+        if (h) { const n = parseInt(h[1], 16); m = [null, (n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+    }
+    return m ? `rgba(${m[1]},${m[2]},${m[3]},0.15)` : color;
+}
+
 // Generic legend-hover highlight: dims every dataset except the hovered legend item's group,
 // restoring on leave. `groupSize` lets one legend entry map to several consecutive datasets
 // (e.g. the MC percentile-band chart uses 5 datasets — p5/p95/p25/p75/median — per strategy).
+// NOTE: chart.update() (not 'none') — 'none' mode is a known Chart.js bug (chartjs/Chart.js#11507)
+// that skips redrawing bar/point fill colors even though the dataset's color property updates
+// correctly in the data model.
 function datasetHoverHighlight(groupSize = 1) {
-    const dim = (color) => {
-        if (!color || color === 'transparent') return color;
-        let m = String(color).match(/^rgba?\((\d+),(\d+),(\d+)/);
-        if (!m) {
-            const h = String(color).match(/^#([0-9a-f]{6})/i);
-            if (h) { const n = parseInt(h[1], 16); m = [null, (n >> 16) & 255, (n >> 8) & 255, n & 255]; }
-        }
-        return m ? `rgba(${m[1]},${m[2]},${m[3]},0.15)` : color;
-    };
     return {
         onHover: (e, legendItem, legend) => {
             const chart = legend.chart, groupIdx = Math.floor(legendItem.datasetIndex / groupSize);
@@ -4119,17 +4125,75 @@ function datasetHoverHighlight(groupSize = 1) {
                 // datasets would never be recognized as cached and onLeave would skip restoring them.
                 if (!ds._hoverHighlightCached) { ds._hoverHighlightCached = true; ds._origBorder = ds.borderColor; ds._origBg = ds.backgroundColor; }
                 const inGroup = Math.floor(i / groupSize) === groupIdx;
-                ds.borderColor = inGroup ? ds._origBorder : dim(ds._origBorder);
-                ds.backgroundColor = inGroup ? ds._origBg : dim(ds._origBg);
+                ds.borderColor = inGroup ? ds._origBorder : dimColor(ds._origBorder);
+                ds.backgroundColor = inGroup ? ds._origBg : dimColor(ds._origBg);
             });
-            chart.update('none');
+            chart.update();
         },
         onLeave: (e, legendItem, legend) => {
             const chart = legend.chart;
             chart.data.datasets.forEach(ds => {
                 if (ds._hoverHighlightCached) { ds.borderColor = ds._origBorder; ds.backgroundColor = ds._origBg; }
             });
-            chart.update('none');
+            chart.update();
+        },
+    };
+}
+
+// Combined hover-dim + click-isolate controller for mixed bar+line charts (Taxation, Inflows vs
+// Outflows, Earnings vs W/D, combined Income & Expenses view). Bar legend items: click isolates
+// (dims every other dataset, keeps the clicked bar full-color) — sticky until a DOUBLE-CLICK on
+// any bar legend item restores everyone. Hover-dim is suppressed while a bar isolation is active
+// (avoids two competing dim states). Line legend items are untouched — hover-dim still applies
+// normally, and click keeps Chart.js's default toggle-hide/show (unlike bars, a single click on a
+// line item DOES remove/restore that series, same as always).
+function makeChartLegendInteraction(groupSize = 1) {
+    let isolatedKey = null;
+    const cache = (ds) => { if (!ds._hoverHighlightCached) { ds._hoverHighlightCached = true; ds._origBorder = ds.borderColor; ds._origBg = ds.backgroundColor; } };
+    const restoreAll = (chart) => chart.data.datasets.forEach(ds => { if (ds._hoverHighlightCached) { ds.borderColor = ds._origBorder; ds.backgroundColor = ds._origBg; } });
+    return {
+        onHover: (e, legendItem, legend) => {
+            if (isolatedKey !== null) return; // a bar isolation is active — hover-dim suppressed
+            const chart = legend.chart, groupIdx = Math.floor(legendItem.datasetIndex / groupSize);
+            chart.data.datasets.forEach((ds, i) => {
+                cache(ds);
+                const inGroup = Math.floor(i / groupSize) === groupIdx;
+                ds.borderColor = inGroup ? ds._origBorder : dimColor(ds._origBorder);
+                ds.backgroundColor = inGroup ? ds._origBg : dimColor(ds._origBg);
+            });
+            chart.update();
+        },
+        onLeave: (e, legendItem, legend) => {
+            if (isolatedKey !== null) return; // stay on the isolated state
+            restoreAll(legend.chart);
+            legend.chart.update();
+        },
+        onClick: (e, legendItem, legend) => {
+            const chart = legend.chart;
+            const ds = chart.data.datasets[legendItem.datasetIndex];
+            if (ds.type !== 'bar') {
+                // Line item: native toggle-hide/show, unaffected by any bar isolation state.
+                Chart.defaults.plugins.legend.onClick(e, legendItem, legend);
+                return;
+            }
+            // MouseEvent.detail === 2 on the SECOND click of a genuine double-click (browser/OS
+            // native double-click detection — resets to 1 if clicks are too far apart in time or
+            // position, so accidentally clicking two different legend entries quickly won't trigger this).
+            if (e.native?.detail === 2) {
+                restoreAll(chart);
+                isolatedKey = null;
+                chart.update();
+                return;
+            }
+            const key = `ds${legendItem.datasetIndex}`;
+            chart.data.datasets.forEach((d, i) => {
+                cache(d);
+                const keep = i === legendItem.datasetIndex;
+                d.backgroundColor = keep ? d._origBg : dimColor(d._origBg);
+                d.borderColor = keep ? d._origBorder : dimColor(d._origBorder);
+            });
+            isolatedKey = key;
+            chart.update();
         },
     };
 }
@@ -4438,7 +4502,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                 plugins: { ...sharedTooltip.plugins,
                     tooltip: { ...sharedTooltip.plugins.tooltip, filter: taxThresholdFilter,
                         callbacks: { ...sharedTooltip.plugins.tooltip.callbacks, label: taxLabelCb, afterBody: taxRateFooter } },
-                    legend: { labels: legendLabels, ...composeLegendHover(medicareLegendHover, datasetHoverHighlight()) } } }
+                    legend: (() => { const li = makeChartLegendInteraction(); return { labels: legendLabels, ...composeLegendHover(medicareLegendHover, li), onClick: li.onClick }; })() } }
         });
     } else if (incomeChartView === 'flows') {
         // Inflows (up) vs outflows (down): where spending money comes from and where it goes.
@@ -4474,7 +4538,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                 plugins: { ...sharedTooltip.plugins,
                     // Hide rows that round to $0 (e.g. no Brokerage draw this year) — declutters the tip.
                     tooltip: { ...sharedTooltip.plugins.tooltip, filter: (item) => Math.round(item.parsed.y) !== 0 },
-                    legend: { labels: legendLabels, ...datasetHoverHighlight() } } }
+                    legend: (() => { const li = makeChartLegendInteraction(); return { labels: legendLabels, onHover: li.onHover, onLeave: li.onLeave, onClick: li.onClick }; })() } }
         });
     } else if (incomeChartView === 'assetflows') {
         // Asset-level cash flow: investment EARNINGS (up, stacked by account) vs WITHDRAWALS that
@@ -4498,7 +4562,7 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             ]},
             options: { ...sharedTooltip,
                 scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
-                plugins: { ...sharedTooltip.plugins, legend: { labels: legendLabels, ...datasetHoverHighlight() } } }
+                plugins: { ...sharedTooltip.plugins, legend: (() => { const li = makeChartLegendInteraction(); return { labels: legendLabels, onHover: li.onHover, onLeave: li.onLeave, onClick: li.onClick }; })() } }
         });
     }
 }
@@ -4677,14 +4741,17 @@ function updateCharts(log) {
                     },
                     filter: item => item.dataset.label !== '│' && Math.abs(Math.round(item.parsed.y)) > 0
                 },
-                legend: {
-                    onClick: (e, item, legend) => {
-                        if (item.text === '│') return;
-                        Chart.defaults.plugins.legend.onClick(e, item, legend);
-                    },
-                    ...composeLegendHover(medicareLegendHover, datasetHoverHighlight()),
-                    labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }
-                }
+                legend: (() => {
+                    const li = makeChartLegendInteraction();
+                    return {
+                        onClick: (e, item, legend) => {
+                            if (item.text === '│') return;   // zero-width separator dataset — not isolatable
+                            li.onClick(e, item, legend);
+                        },
+                        ...composeLegendHover(medicareLegendHover, li),
+                        labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 16 }
+                    };
+                })()
             }
         }
     });

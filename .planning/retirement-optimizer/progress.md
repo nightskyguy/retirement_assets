@@ -1,5 +1,19 @@
 # Progress Log
 
+## Session: 2026-07-08 (cont. 4) — PF2: bar-chart legend hover finally fixed + click-to-isolate
+
+Planned in Plan Mode (approved), then user gave one correction after approval: restore trigger is **double-click**, not "click the same item again" — implemented per the correction, not the original plan text.
+
+**Root cause of the "still broken" hover bug:** `chart.update('none')` is a documented Chart.js bug ([#11507](https://github.com/chartjs/Chart.js/issues/11507)) — skips redrawing bar fill colors even though `dataset.backgroundColor` updates correctly in the data model. Every prior "fix" this session only ever touched the caching logic around it, never the actual `'none'` mode call, so the visual bug survived two rounds. Switched to plain `chart.update()`.
+
+**New behavior:** bar legend click now isolates (dim others, keep clicked full-color) instead of removing; double-click (`MouseEvent.detail === 2` — native browser double-click detection, no manual timestamp/distance tracking needed) restores all. Lines are untouched — hover-dim and click-to-remove both work exactly as before, per explicit user confirmation ("lines... can be kept").
+
+Implementation: `dimColor()` extracted to module scope; new `makeChartLegendInteraction()` factory shares one `isolatedKey` closure across hover/leave/click (critical — an earlier draft used two separate factory calls for hover vs click and would have had disconnected state); rewired only the 4 mixed bar+line chart configs (tax/flows/assetflows/combined).
+
+**Verification hit a real gotcha:** after implementing, the FIRST browser test showed the OLD default Chart.js click behavior still active — `core.js`'s `?v=1111c1` cache-bust token (added earlier this session) hadn't been bumped after these new edits, so the browser was serving a stale cached copy missing `makeChartLegendInteraction` entirely (confirmed via `typeof makeChartLegendInteraction === 'undefined'` in the live page vs `fetch(..., {cache:'no-store'})` showing the fresh source). Bumped to `?v=1111c7`. **Lesson for future sessions:** every core.js edit now needs its cache-bust token bumped before browser verification, not just once per session.
+
+**Verify (all via direct handler invocation with fake MouseEvent-shaped args, since Chart.js legend items are canvas-drawn, not real DOM elements to click):** single click on a bar → isolates correctly; hover a different item while isolated → correctly suppressed (no change); double-click → full restore to original colors; line item (MAGI) click → still toggles hide/show exactly as before; `'│'` combined-view separator click → correctly a no-op; Medicare hover tooltip still composes correctly on tax/combined views. Also visually confirmed via screenshot that bars now actually dim on canvas (not just legend swatches) — the core bug. node 54/54, browser 240/240. Committed + pushed to PR #111.
+
 ## Session: 2026-07-08 (cont. 3) — PF3: MC Stress pass now runs current strategy only
 
 Implemented and shipped Phase PF3 (planned in Plan Mode, approved, then implemented same session). Stress pass (folded into Historical per Item 7) was sweeping the FULL `variations` array (100+ strategies in typical scenarios) even though only checkbox-selected ones ever got plotted — wasted compute. Now runs against exactly 1 variation: whichever matches the user's current sidebar settings (`findCurrentStrategyIdx`), with a wrapped-`base` fallback if no exact match exists.

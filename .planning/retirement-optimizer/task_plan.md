@@ -11,7 +11,7 @@ Goal: Complete open features from the original priority list plus deferred items
 | # | Phase | Description | Status | Blocked by |
 |---|-------|-------------|--------|-----------|
 | — | **PF** | UX Polish Batch (9 items, IRMAA fix + MC restructure) | **complete*** | — |
-| — | **PF2** | Item 6 round 2 — bar-chart legend hover/click (planned, not implemented) | pending | — |
+| — | **PF2** | Item 6 round 2 — bar-chart legend hover/click | **complete** | — |
 | — | **PF3** | MC Stress pass should run current strategy only, not all variations | **complete** | — |
 | — | **P1** | Suggest Spend Goal (38#10) | **complete** | — |
 | 1 | **P2** | Cash Reserve enforcement (38#9) | pending | — |
@@ -43,7 +43,7 @@ Goal: Complete open features from the original priority list plus deferred items
 ---
 
 ## Phase PF: UX Polish Batch (v11.11c1)
-**Status note (\*):** all 9 original items complete and shipped, but Item 6 (legend hover) had a real bug found post-ship by the user — see Phase PF2 below for the round-2 fix (planned, not yet implemented).
+**Status note (\*):** all 9 original items complete and shipped; Item 6 (legend hover) needed two follow-up fixes — see Phase PF2 below, now complete.
 
 **Why:** User punch-list of 9 items — terminology cleanup, a real IRMAA bug, chart/tooltip polish, a brokerage-harvest sizing change, and an MC tab restructure. Planned via 3 parallel Explore agents + 1 Plan agent (see `~/.claude/plans/add-the-following-to-swift-backus.md`), implemented in a single session.
 
@@ -65,21 +65,20 @@ Goal: Complete open features from the original priority list plus deferred items
 
 ---
 
-## Phase PF2: Item 6 round 2 — bar-chart hover still broken + click-to-isolate (PLANNED, NOT IMPLEMENTED)
-**Why:** After follow-up #1 shipped, user reported the fix above didn't fully work: legend swatch color changes on hover, but **the bars themselves never visually dim** — confirmed via live testing that `dataset.backgroundColor` correctly updates in JS but the canvas never redraws for bars until some unrelated redraw (e.g. toggling a dataset off/on) happens to force one.
+## Phase PF2: Item 6 round 2 — bar-chart hover still broken + click-to-isolate
+**Why:** After follow-up #1 shipped, user reported the fix still didn't work: legend swatch color changed on hover, but **the bars themselves never visually dimmed** — confirmed via live testing that `dataset.backgroundColor` correctly updated in JS but the canvas never redrew for bars until some unrelated redraw forced one.
 
-**Root cause (confirmed via [chartjs/Chart.js#11507](https://github.com/chartjs/Chart.js/issues/11507)):** `chart.update('none')` is a known-buggy Chart.js mode — it skips animation *and* skips re-resolving/redrawing certain per-element visual properties (bars here, points in the linked issue), even though the dataset's color property updates correctly in the data model. Fix: drop `'none'` mode, call plain `chart.update()` (colors aren't animation-tweened by Chart.js by default, so this should redraw instantly with no visible flash).
+**Root cause (confirmed via [chartjs/Chart.js#11507](https://github.com/chartjs/Chart.js/issues/11507)):** `chart.update('none')` is a known-buggy Chart.js mode — skips re-resolving/redrawing bar fill colors even though the data model updates correctly. Fixed by dropping `'none'` mode, calling plain `chart.update()`.
 
-**Also requested (behavior change, not a bug):** for the 4 mixed bar+line charts (Taxation, Inflows vs Outflows, Earnings vs W/D, combined Income & Expenses view), legend click on a **bar** item should switch from today's default (toggle hide/show) to **click-to-isolate** — dim every other item, keep the clicked one full-color, sticky until the SAME item is clicked again (confirmed convention, matches the existing MC chart's `_makeLegendClick`). **Line** items keep the current toggle-hide/show click behavior (user finds it useful). While a bar item is click-isolated, hover-dim is fully suppressed (confirmed: simpler than hover-preview-then-revert).
+**Behavior change (user-clarified, superseding the earlier "click-same-item-to-restore" design):** for the 4 mixed bar+line charts (Taxation, Inflows vs Outflows, Earnings vs W/D, combined Income & Expenses view), clicking a **bar** legend item isolates it (dims every other dataset, keeps the clicked bar full-color) instead of removing it — sticky until a **double-click** (any bar item) restores everyone. **Lines are completely unchanged**: hover-dim still applies normally to them, and a single click still removes/restores that line series exactly as before (this was explicitly reconfirmed — no line behavior was touched). While a bar is isolated, hover-dim is suppressed.
 
-**Design (full detail in `~/.claude/plans/add-the-following-to-swift-backus.md`, "Follow-up: Item 6 round 2" section):**
-- Fix `chart.update('none')` → `chart.update()` in `datasetHoverHighlight()` (2 call sites, core.js).
-- Extract `dim()` (currently private inside `datasetHoverHighlight()`) to a shared module-scope `dimColor()` helper.
-- New `makeChartLegendInteraction(groupSize)` factory (core.js) — combines hover-dim + click-isolate in one closure sharing `isolatedKey` state per chart instance; `onClick` checks `dataset.type !== 'bar'` and delegates to `Chart.defaults.plugins.legend.onClick` for line items.
-- Rewire only the 4 mixed bar+line chart configs (`'tax'`, `'flows'`, `'assetflows'`, `'combined'` — core.js ~4382/4430/4488/4607) to use `makeChartLegendInteraction()` instead of plain `datasetHoverHighlight()`; compose with `medicareLegendHover` at the 2 sites that need it (`'tax'`, `'combined'`). Assets chart, `'net'` view, and all MC charts (mc_tab.js) are **out of scope** — pure-line or already isolate-on-click, unaffected except for the same `update('none')`→`update()` fix in mc_tab.js's copy of `datasetHoverHighlight()`.
-- `combined` view's existing `'│'` separator-skip guard in its onClick must run BEFORE the bar/line branch (that dataset is `type:'bar'` but a zero-width spacer, shouldn't be isolatable).
-- **Status:** pending — plan written and reviewed with user (2 design questions resolved: click-same-item-to-restore; hover fully suppressed while isolated), implementation not started this session. User said "will continue later."
-- **Files (planned):** `retirement_optimizer_core.js` (bulk of the work), `montecarlo/mc_tab.js` (1-line `update('none')`→`update()` fix only).
+**Implementation:**
+- `dimColor()` extracted to module scope (was private inside `datasetHoverHighlight()`); that function now also uses `chart.update()` instead of `'none'`.
+- New `makeChartLegendInteraction(groupSize)` factory (core.js, next to `datasetHoverHighlight()`) — single closure sharing `isolatedKey` across `onHover`/`onLeave`/`onClick`. `onClick` checks `dataset.type !== 'bar'` → delegates to `Chart.defaults.plugins.legend.onClick` for lines (untouched default toggle-hide); for bars, checks `e.native?.detail === 2` (native browser double-click detection — resets to 1 if clicks land on different legend positions, so no accidental cross-item false-positives) to restore-all, else isolates the clicked bar.
+- Rewired the 4 mixed bar+line chart configs (`'tax'`, `'flows'`, `'assetflows'`, `'combined'`) to use `makeChartLegendInteraction()` via a single shared `li` instance per chart (`legend: (() => { const li = makeChartLegendInteraction(); return {...}; })()`) so hover/leave/click all read the same `isolatedKey`. Composed with `medicareLegendHover` at `'tax'`/`'combined'`. `combined` view's existing `'│'` separator-skip guard runs before delegating to `li.onClick`. Assets chart, `'net'` view, MC charts untouched (still plain `datasetHoverHighlight()`, unaffected by the click-isolate change).
+- **Gotcha hit during verification:** `retirement_optimizer.html`'s `core.js` cache-bust token (`?v=1111c1`, added during the PF2-round-1 fix) wasn't bumped after these new edits — browser kept serving a stale cached copy with no `makeChartLegendInteraction` at all, so the first verification pass showed the OLD default Chart.js `onClick` still active. Bumped to `?v=1111c7` (title also bumped to v11.11c7) — this cache-bust discipline needs to happen on every edit to core.js now that it has one, not just once.
+- **Status:** complete. Browser-verified via direct handler invocation (fake `MouseEvent`-shaped args): single click isolates (only clicked bar full-color, rest dimmed); hover on a different item while isolated → no change (suppressed); double-click (`detail:2`) → full restore; line item (MAGI) click still toggles visibility on/off exactly as before; `'│'` separator click → no-op; Medicare hover-tooltip compose still fires on `'tax'`/`'combined'`. node 54/54, browser 240/240.
+- **Files:** `retirement_optimizer_core.js`, `retirement_optimizer.html` (cache-bust + changelog).
 
 ---
 

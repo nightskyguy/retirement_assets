@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.11c1</title>
+    <title>Retirement Optimizer 11.11c7</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -49,7 +49,7 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1133"></script>
-	<script src="retirement_optimizer_core.js?v=1111c1"></script>
+	<script src="retirement_optimizer_core.js?v=1111c7"></script>
 	<script src="retirement_optimizer_tests.js"></script>
 	<script src="retirement_optimizer_text.js"></script>
 </head>
@@ -568,7 +568,9 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.11c1</b> UX polish batch: fixed IRMAA incorrectly showing "-none-" in the plan's first year; Monte Carlo now folds Stress into Historical mode (auto-computed, shown as its own chart below the main one, own Min/CAGR/Max stats, Input Distribution charts labeled by calendar year); Monte Carlo strategy table columns are now sortable (click a header); Cycle Brokerage now maxes out a nerd-selectable 0%/15% capital-gains bracket instead of only drawing what's needed, topping off the bracket it lands in when spending forces more (never past an active IRMAA/ACA/bracket ceiling); chart legends now dim other series on hover to highlight the one you're looking at (and correctly un-dim again on bar charts, where a caching bug previously left them stuck dim); terminology standardized to "Historical"/"Synthetic" (was "Bootstrap"/"GBM"); after-tax income note is bolder and mentions the Inflows vs Outflows view; the "Untaxed" tooltip line no longer runs together with Total Income.
+				<li><b>11.11c7</b> Monte Carlo Stress pass now runs against only your current withdrawal strategy, not every strategy the Optimizer sweeps (much faster, and matches what the chart actually shows). Bar-chart legends (Taxation, Inflows vs Outflows, Earnings vs W/D, Income &amp; Expenses): hovering now actually dims the bars on the chart itself, not just the legend swatch (the previous fix only fixed the swatch); clicking a bar legend now isolates that series (dims the rest) instead of removing it, and double-clicking restores everyone — line legends are unchanged (click still removes/restores as before).
+					</li>
+					<li><b>11.11c1</b> UX polish batch: fixed IRMAA incorrectly showing "-none-" in the plan's first year; Monte Carlo now folds Stress into Historical mode (auto-computed, shown as its own chart below the main one, own Min/CAGR/Max stats, Input Distribution charts labeled by calendar year); Monte Carlo strategy table columns are now sortable (click a header); Cycle Brokerage now maxes out a nerd-selectable 0%/15% capital-gains bracket instead of only drawing what's needed, topping off the bracket it lands in when spending forces more (never past an active IRMAA/ACA/bracket ceiling); chart legends now dim other series on hover to highlight the one you're looking at (and correctly un-dim again on bar charts, where a caching bug previously left them stuck dim); terminology standardized to "Historical"/"Synthetic" (was "Bootstrap"/"GBM"); after-tax income note is bolder and mentions the Inflows vs Outflows view; the "Untaxed" tooltip line no longer runs together with Total Income.
 					</li>
 					<li><b>11.11ae</b> Income &amp; Expenses chart: added a note that shown incomes are after-tax (pre-tax figures are in Annual Details).
 					</li>

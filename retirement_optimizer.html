@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.11ae</title>
+    <title>Retirement Optimizer 11.11c8</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -49,7 +49,7 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1133"></script>
-	<script src="retirement_optimizer_core.js"></script>
+	<script src="retirement_optimizer_core.js?v=1111c8"></script>
 	<script src="retirement_optimizer_tests.js"></script>
 	<script src="retirement_optimizer_text.js"></script>
 </head>
@@ -135,6 +135,13 @@
 				  <span class="toggle-switch"></span>
 				  <span>Cycle Brokerage</span>
 				</label>
+				<span id="cycleLTCGTarget-wrap" style="display:none;margin-left:8px;font-size:0.85em;" title="Cycle Brokerage harvest years always max out this LTCG bracket. If spending needs force gains beyond it, the harvest tops off whichever bracket it lands in instead of stopping at the exact dollar needed — capped by any active bracket/IRMAA-tier/ACA-cliff ceiling.">
+				  Target:
+				  <select id="cycleLTCGTarget" style="font-size:0.95em;">
+					<option value="0.15" selected>0% bracket</option>
+					<option value="0.20">15% bracket</option>
+				  </select>
+				</span>
 			</div>
 			<div class="input-group" style="margin-top:4px;">
 				<label class="toggle" title="Binary-search each successful strategy for the highest spend goal that still ends with 2 full years of wealth">
@@ -387,7 +394,7 @@
                 <div title="Total Required Minimum Distributions taken. Sub-label shows RMDs' share of lifetime taxes."><small>All RMDs</small><br><strong id="stat-rmd">$0</strong><div id="stat-rmd-pct" style="font-size:0.75em;min-height:1em;color:#888;"></div></div>
                 <div title="Total after-tax spendable income produced across all years."><small>Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total portfolio value (after-tax) remaining at the end of the final simulation year."><small>End Wealth</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
-                <div title="First year when the actual portfolio (Roth + Taxable) outpaces the no-conversion shadow after taxes. Uses Future IRA Tax % assumption. See Opp. Cost columns in Annual Details. '—' means never or no conversions."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;">—</strong></div>
+                <div title="First year when the total portfolio value surpasses what the portfolio value would have been if there were no conversion(s) or &quot;--&quot; if that doesn&rsquo;t happen. See Documentation for details."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;">—</strong></div>
                 <div id="stat-betr-wrap" title="Average Break-Even Tax Rate across all conversion years (Kitces formula). If your expected future rate exceeds this, conversions are advantageous on average. See BETR% column in Annual Details (Opp. Cost category). '—' means no conversions."><small>Avg BETR</small><br><strong id="stat-betr-avg" style="font-size:0.9em;">—</strong></div>
                 <div title="Average of (net portfolio outflows − SS/pension inflows) ÷ start-of-year wealth. The classic 4% rule targets ~4%. Negative = income exceeded spending. See wdRate% column in Annual Details."><small>Avg Withdrawal Rate</small><br><strong id="stat-avg-spend-rate" style="font-size:0.9em;">—</strong></div>
 				<div id="popUpMessage" class="scenario-message"></div>
@@ -413,10 +420,9 @@
 		<div id="tab-mc" class="card hidden">
 			<!-- Mode selector — always visible; changing it triggers an immediate re-run. -->
 			<div id="mc-mode-panel" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric GBM model using μ and σ (advanced, nerd-mode only).">Simulation Mode
+				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric model using μ and σ (advanced, nerd-mode only).">Simulation Mode
 					<select id="mc-sim-mode" style="margin-left:6px;font-size:0.95em;" onchange="onMCModeChange()">
 						<option value="bootstrap" selected>Historical (1928–2024)</option>
-						<option value="stress">Stress (worst sequences)</option>
 						<option value="gbm">Synthetic (parametric)</option>
 					</select>
 				</label>
@@ -431,7 +437,7 @@
 					<label style="font-size:0.85em;" title="Number of simulated market scenarios. More paths = more stable results, slower run.">Paths
 						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
 					</label>
-					<label style="font-size:0.85em;" title="Expected annual nominal return for GBM paths. Defaults to (and stays in sync with) the Assumptions Growth % — override here to test a different MC growth assumption. Not used in Bootstrap or Stress modes.">GBM Return μ %
+					<label style="font-size:0.85em;" title="Expected annual nominal return for Synthetic paths. Defaults to (and stays in sync with) the Assumptions Growth % — override here to test a different MC growth assumption. Not used in Historical mode.">Synthetic Return μ %
 						<input type="number" id="mc-mu" value="7" min="0" max="20" step="0.5" style="width:55px;margin-left:4px;" oninput="updateMCGrowthWarning()">
 						<span style="margin-left:4px;font-size:0.78em;color:#888;">synced from Growth %</span>
 					</label>
@@ -442,10 +448,10 @@
 					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results.">Seed
 						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
 					</label>
-					<label style="font-size:0.85em;" title="Number of worst historical starting sequences to use in Stress mode. Scored by first-decade real (inflation-adjusted) CAGR via Fisher equation. Worst 10: 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970, 1929.">Stress sequences
+					<label style="font-size:0.85em;" title="Number of worst historical starting sequences shown in the Stress-Test chart, auto-computed alongside Historical mode. Scored by first-decade real (inflation-adjusted) CAGR via Fisher equation. Worst 10: 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970, 1929.">Stress sequences
 						<input type="number" id="mc-stress-count" value="10" min="3" max="20" step="1" style="width:50px;margin-left:4px;">
 					</label>
-					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical (bootstrap) paths that begin with a worst-decade historical sequence before continuing with random draws. 0 = pure bootstrap; 25% ≈ historical frequency of below-inflation first decades. Increases SoRR realism without discarding probabilistic paths. Only applies in Historical mode.">Bear-start %
+					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical paths that begin with a worst-decade historical sequence before continuing with random draws. 0 = no overlay; 25% ≈ historical frequency of below-inflation first decades. Increases SoRR realism without discarding probabilistic paths. Only applies in Historical mode.">Bear-start %
 						<input type="number" id="mc-bear-fraction" value="25" min="0" max="50" step="5" style="width:50px;margin-left:4px;">
 					</label>
 				</div>
@@ -462,8 +468,8 @@
 				<span id="mc-run-est" style="font-size:1em;color:#555;"></span>
 				<span id="mc-path-count" style="font-size:0.8em;color:#888;margin-left:4px;"></span>
 			</div>
-			<!-- Post-run metrics bar -->
-			<div id="mc-metrics" style="display:none;margin-bottom:10px;font-size:0.82em;color:#444;padding:5px 2px;border-bottom:1px solid #e9ecef;"></div>
+			<!-- Post-run metrics bar (main pass). Stress-pass metrics live next to the stress chart below. -->
+			<div id="mc-main-metrics" style="display:none;margin-bottom:10px;font-size:0.82em;color:#444;padding:5px 2px;border-bottom:1px solid #e9ecef;"></div>
 
 			<!-- Progress bar -->
 			<div id="mc-progress-wrap" style="display:none;margin-bottom:10px;">
@@ -491,13 +497,7 @@
 				<div style="max-height:280px;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;border:1px solid #dee2e6;border-radius:4px;width:fit-content;max-width:100%;">
 					<div style="display:grid;grid-template-columns:max-content max-content max-content max-content max-content max-content max-content max-content;font-size:0.85em;width:fit-content;">
 						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;border-right:2px solid #dee2e6;border-bottom:1px solid #dee2e6;"></div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;">Strategy</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;">Param</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;" title="Median year across failed paths when the portfolio could no longer cover required spending">Exhausted</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;color:#1a7a1a;border-bottom:1px solid #dee2e6;" title="Median portfolio balance in the final plan year across all surviving paths">Final Balance</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;">Survival</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;color:#1a7a1a;border-bottom:1px solid #dee2e6;" title="Median lifetime taxes paid across all Monte Carlo paths">Total Taxes</div>
-						<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;white-space:nowrap;font-weight:600;color:#1a7a1a;border-bottom:1px solid #dee2e6;" title="Median lifetime after-tax money actually spent across all Monte Carlo paths, in today's dollars (real). Strategies that cut spending — e.g. Guyton-Klinger — show a lower figure here.">Total Spendable</div>
+						<div id="mc-table-header" style="display:contents;"></div>
 						<div id="mc-table-body" style="display:contents;"></div>
 					</div>
 				</div>
@@ -512,6 +512,16 @@
 					<canvas id="mc-chart"></canvas>
 				</div>
 			</div>
+
+			<!-- Stress-test chart — auto-computed alongside Historical mode; hidden in Synthetic mode -->
+			<div id="mc-stress-chart-wrap" style="display:none;margin-top:16px;">
+				<div id="mc-stress-metrics" style="margin-bottom:8px;font-size:0.82em;color:#444;"></div>
+				<div id="mc-stress-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;"></div>
+				<div style="position:relative;height:420px;">
+					<canvas id="mc-stress-chart"></canvas>
+				</div>
+			</div>
+
 			<div id="mc-input-dist" style="display:none;margin-top:14px;">
 				<details>
 					<summary style="font-size:0.88em;color:#555;cursor:pointer;user-select:none;font-weight:600;">Input Distributions</summary>
@@ -558,7 +568,12 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.11ae</b> Income &amp; Expenses chart: added a note that shown incomes are after-tax (pre-tax figures are in Annual Details).
+				<li><b>11.11c8</b> Improved bar charts. Hover over or click legends to isolate that value. Double click to restore. Line legends are unchanged. IRMAA is now presumed to occur in years 1 and 2 (matching the future value) - a bug caused it to only show up on year 2.
+					<br><br>Stress is now performed automatically when Historical Monte Carlo is selected and applies to the current strategy. Line charts now also have the "isolate" behavior in addition to the "click to dismiss, click to reshow."
+					<br><br>Cycle Brokerage will now fill up the 0% or 15% tax bracket (whichever falls below any current limits). Previously it was only pulling enough to meet spending.
+					<br><br>Other minor UI improvements also made.
+					</li>
+					<li><b>11.11ae</b> Income &amp; Expenses chart: added a note that shown incomes are after-tax (pre-tax figures are in Annual Details).
 					</li>
 					<li><b>11.11ad</b> Added Spending to Annual Details to focus on spending.
 					</li>
@@ -683,7 +698,7 @@
 					<p><strong>Proportional Withdraw +%</strong> — draws IRA, Brokerage, and Cash proportionally (relative to their balances) to cover the spend goal. An optional IRA-only boost adds <em>boost% × spend goal</em> on top of that; the after-tax surplus flows to Roth conversion. At 0% boost this is the pure proportional baseline. Gap fill if still short: Brokerage + Cash (60/40), then Roth as last resort.</p>
 					<p><strong>Reduce IRA in N Years</strong> — calculates the annual IRA draw needed to amortize the IRA down to the IRA Goal (today's dollars, inflation-adjusted to each year) over the remaining simulation years (similar to a mortgage payment). RMDs count toward that target; the strategy draws any remaining amount beyond RMDs. Gap fill if the IRA draw alone doesn't cover spending: Cash → Brokerage → Roth.</p>
 					<p><strong>Fill Federal Tax Bracket / IRMAA Tier</strong> (soft ceiling) — draws IRA up to a chosen ceiling (top of a federal bracket or an IRMAA tier threshold), then fills any remaining spending from non-taxable sources in order: Cash → Brokerage → Roth. The ceiling is <em>soft</em>: if spending still can&rsquo;t be met after those are exhausted and the IRA has funds, the simulation draws extra IRA <em>above</em> the ceiling to fund mandatory spending — because spending is a hard requirement and the alternative (an unfunded shortfall while a large IRA sits idle) is worse. The amount drawn above the ceiling appears in the <code>ForcedIRA</code> column with that year&rsquo;s <code>BracketOverage</code>; the consequence is extra tax (or, for IRMAA, a Medicare surcharge). The ceiling also defines the room available for Roth conversions.</p>
-					<p><strong>ACA Cliff</strong> (strict ceiling) — draws IRA only up to a chosen multiple of the Federal Poverty Level, then fills spending from Cash → Brokerage → Roth. Unlike the bracket/IRMAA ceilings, the ACA cap is <em>strict</em>: it is <em>never</em> breached, because exceeding it forfeits the entire ACA premium subsidy (a cliff, not a gradual cost). If spending can&rsquo;t be met within the cap, the plan is genuinely untenable at that spend level — the shortfall is shown (red rows) and the strategy is flagged ⚠️ in the Optimizer, rather than silently overspending the cap. Note that on a large pre-tax IRA, required minimum distributions alone can push income above a low FPL multiple, making ACA targeting infeasible regardless of withdrawals.</p>
+					<p id="doc-aca-cliff" style="display:none;"><strong>ACA Cliff</strong> (strict ceiling) — draws IRA only up to a chosen multiple of the Federal Poverty Level, then fills spending from Cash → Brokerage → Roth. Unlike the bracket/IRMAA ceilings, the ACA cap is <em>strict</em>: it is <em>never</em> breached, because exceeding it forfeits the entire ACA premium subsidy (a cliff, not a gradual cost). If spending can&rsquo;t be met within the cap, the plan is genuinely untenable at that spend level — the shortfall is shown (red rows) and the strategy is flagged ⚠️ in the Optimizer, rather than silently overspending the cap. Note that on a large pre-tax IRA, required minimum distributions alone can push income above a low FPL multiple, making ACA targeting infeasible regardless of withdrawals.</p>
 					<p><strong>IRA Draw %</strong> — withdraws a fixed percentage of the current IRA balance each year regardless of the spend goal (RMDs count toward the target). Gap fill if the after-tax IRA draw falls short of spending: Cash → Brokerage → Roth. Useful for a mechanical, balance-proportional drawdown pace.</p>
 					<p><strong>Ordered (CBIR / RIBC / BIRC)</strong> — draws from accounts in a strict sequence until the spend goal is met; unlike other strategies, all spending is handled in this ordered pass (nothing is pre-withdrawn).
 					<ul style="margin:4px 0 0 16px;">
@@ -707,6 +722,10 @@
 				<p><strong>Optimizer note:</strong> The Optimizer always runs with <em>Maximize Conversions</em> on — surplus after spending is converted to Roth. Enable it in the strategy panel to match the optimizer's assumption in single-scenario mode.</p>
 					</div>
 					</details>
+				</li>
+				<li><strong>What is &ldquo;Break Even&rdquo;?</strong> The simulation tracks a &ldquo;shadow&rdquo; of the portfolio where no Roth Conversion(s) have been done, and no taxes paid on the conversion(s). Each year it compares the total portfolio value against the shadow portfolio value. The first year that the actual portfolio value exceeds the shadow portfolio value is marked as <strong></strong>Break Even</strong>.
+				<p style="margin:6px 0 0;">Total Portfolio <strong>value</strong> is determined reducing any taxable assets by the current tax rate and adding any non-taxable (Roth) assets. The net figure is shown as <i>Total Wealth</i> on the main chart. The tax applied is either the most recent taxation, or the Marginal Heirs Tax (see 4. Assumptions). Often when one spouse passes away, you will see a Break Even year; that is because the surviving spouse&rsquo;s tax rate invariably goes up when filing Single, aka &ldquo;the widow penalty&rdquo;.</p>
+				<p style="margin:6px 0 0;">The numbers used are found in <i>Annual Details</i> &rarr; <i>Opp. Cost</i>.</p>
 				</li>
 				<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year and month of each person and estimated life expectancy. The current age, RMD start age, and projected first-year RMD amount are shown below each person's birth fields and update live. Use the <i>Include Spouse</i> checkbox to model a single taxpayer — unchecking it hides all spouse fields and excludes the spouse from the simulation. <i>Retirement Start Age</i> is the age at which you stop earning income; the simulation inflates tax brackets, SS COLA, and spending forward to that year automatically.</li>
 				<li><strong>2. Assets at Retirement Age:</strong> Enter balances in today's dollars. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Total all after-tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. The <i>Reinvest Brokerage Dividends</i> checkbox keeps dividends inside the brokerage account (growing both balance and basis); when unchecked, dividends flow to Cash. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. Enter Roth balances separately — <i>Your Roth IRA</i> and <i>Spouse Roth IRA</i> are tracked independently throughout the simulation. The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios — informational only in single-scenario mode, but used by Monte Carlo Bootstrap and Stress modes to apply per-account return sequences.</li>
@@ -841,7 +860,7 @@
                 <input type="checkbox" id="chk-thresholds" onchange="toggleTaxThresholds(this)" checked> Show thresholds
               </label>
             </div>
-            <div id="income-aftertax-note" style="font-size:0.78em;color:#777;margin:2px 0 4px 8px;">Incomes shown are After Taxes - See Annual Details for pre-tax amounts.</div>
+            <div id="income-aftertax-note" style="font-size:0.78em;font-weight:600;color:#777;margin:2px 0 4px 8px;">Incomes shown are After Taxes - See Annual Details for pre-tax amounts, or the Inflows vs Outflows view for gross (pre-tax) totals.</div>
             <canvas id="chartIncomeSources" style="max-height:403px;"></canvas>
         </div>
 
@@ -875,7 +894,7 @@
             <!-- Symbol legend (item 8) — explains the marks on strategy names / status column. -->
             <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:0.78em;color:#444;padding:2px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px;">
                 <span style="font-weight:600;color:#666;">Symbols:</span>
-                <span title="Maximize Conversions was enabled — surplus after spending is converted to Roth.">✓ Max Conversions on</span>
+                <span title="Maximize Conversions enabled — surplus after spending is converted to Roth.">✓ Max Conversions on</span>
                 <span title="Optimize Spend: a binary search found a higher sustainable After-Tax Spend than your input.">✦ Optimize Spend</span>
                 <span title="Optimize Spend hit its search ceiling — the true sustainable spend may be even higher.">✦+ / + hit search ceiling</span>
                 <span title="Reverse-optimized: every strategy failed at your spend, so the highest feasible spend is shown instead.">▼ Reverse-optimized</span>
@@ -1033,8 +1052,8 @@ runSimulation?.();
 <script src="montecarlo/historical_returns.js"></script>
 <script src="montecarlo/prng.js?v=111091"></script>
 <script src="montecarlo/stats.js?v=111091"></script>
-<script src="montecarlo/mc_controller.js?v=111091"></script>
-<script src="montecarlo/mc_tab.js?v=111091"></script>
+<script src="montecarlo/mc_controller.js?v=1111c1"></script>
+<script src="montecarlo/mc_tab.js?v=1111c1"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

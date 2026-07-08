@@ -114,6 +114,20 @@ test('getLTCGBracketRoom: returns 0 when ordinary income exceeds 0% ceiling', ()
         `Expected 0 room when ordinary income ($150k) exceeds 0% ceiling (~$98.9k), got ${room}`);
 });
 
+test('IRMAA: charges from year 0, not year 1 (fixed magiHistory seeding bug)', () => {
+    // birthyear1=1952 → already 74 in startYear 2026, so onMedicare=1 from year 0.
+    // Large spendGoal forces a large IRA withdrawal, pushing MAGI (~$150k single) comfortably
+    // above the lowest IRMAA tier threshold (~$109k single, 2026) in year 0 itself.
+    const result = simulate({ ...BASE, spendGoal: 400000, IRA1: 3000000 });
+    assert(result.log[0].IRMAATier !== '-none-',
+        `Year 0 should show a real IRMAA tier (bug forced it to '-none-'), got '${result.log[0].IRMAATier}'`);
+    assert(result.log[0].IRMAA > 0,
+        `Year 0 IRMAA surcharge should be > 0, got ${result.log[0].IRMAA}`);
+    // Steady-state assumption: year 1 reads the same seeded MAGI, so tier should match or be close.
+    assert(result.log[1].IRMAATier !== '-none-',
+        `Year 1 should also show a real IRMAA tier, got '${result.log[1].IRMAATier}'`);
+});
+
 test('cyclicEnabled=false: output identical to base run (regression)', () => {
     const base = simulate({ ...BASE });
     const withFalse = simulate({ ...BASE, cyclicEnabled: false });
@@ -151,6 +165,27 @@ test('cyclicEnabled: brokerage year (year N) draws from Brokerage, not IRA (beyo
     // In brokerage year, Brokerage withdrawal > 0
     assert((bRow['Brokerage-'] ?? 0) > 0,
         `Expected Brokerage drawn in harvest year, got ${bRow['Brokerage-']}`);
+});
+
+test('cyclicEnabled: brokerage year maxes out target LTCG bracket even when spend need is small', () => {
+    // SGL 0% LTCG ceiling ~$49,450 (2026). Low spendGoal (already covered by other income this
+    // early) means pure need-driven sizing would draw ~$0, but Cycle Brokerage should harvest
+    // toward the full 0% bracket regardless of spend need.
+    const result = simulate({ ...BASE, cyclicEnabled: true, spendGoal: 15000 });
+    const bRow = result.log.find(r => r.subCycle === 'Brok' || r.subCycle === '⚠Brok');
+    assert(bRow !== undefined, 'No brokerage harvest year found in log');
+    assert((bRow['Brokerage-'] ?? 0) > 20000,
+        `Expected a large gross Brokerage draw (bracket maxed out, not need-driven), got ${bRow['Brokerage-']}`);
+});
+
+test('cyclicEnabled: cycleLTCGTarget=0.20 (target 15% bracket) harvests more than default 0.15 target', () => {
+    const lowTarget  = simulate({ ...BASE, cyclicEnabled: true, spendGoal: 15000, cycleLTCGTarget: 0.15 });
+    const highTarget = simulate({ ...BASE, cyclicEnabled: true, spendGoal: 15000, cycleLTCGTarget: 0.20 });
+    const lowRow  = lowTarget.log.find(r => r.subCycle === 'Brok' || r.subCycle === '⚠Brok');
+    const highRow = highTarget.log.find(r => r.subCycle === 'Brok' || r.subCycle === '⚠Brok');
+    assert(lowRow !== undefined && highRow !== undefined, 'Expected a brokerage year in both runs');
+    assert(highRow.CapGains > lowRow.CapGains,
+        `Expected 0.20 target to harvest more gains than 0.15 target, got ${highRow.CapGains} vs ${lowRow.CapGains}`);
 });
 
 test('cyclicEnabled: DRIP forced — dividends flow to Brokerage not Cash (positive dividend rate)', () => {

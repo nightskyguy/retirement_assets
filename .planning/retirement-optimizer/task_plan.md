@@ -2,7 +2,24 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-08 (branch worktrees/mystifying-babbage-559d99, v11.11c8, PR #111)
+**As of:** 2026-07-09 (branch worktrees/retirement-optimizer-review-c4e406, v11.11dc)
+
+---
+
+## Phase PF5: Break Even rework (dual-sim counterfactual) + small-screen UX (v11.11dc)
+**Why:** Review found the Break Even / Opp. Cost shadow-delta formula reported break-even with zero conversions (baseline portfolio mixed into the comparison) and missed break-even for clearly profitable conversions; it also never charged the no-conversion world its larger RMD taxes/IRMAA. User requested a financially responsible model: two complete plans, each paying its own taxes when due.
+
+- **Engine (`retirement_optimizer_core.js`):** convOC/excessOC now = after-tax wealth of the actual run minus a full counterfactual re-simulation. `_cfSuppressConversions`/`_cfSuppressExcess` flags make the counterfactual refund discretionary IRA over-withdrawals back into the IRA via `_cfRefundIRA()` (fixed-point tax recompute); extraConversionAmount zeroed (also for the early-timing trigger at ~line 1038); RMD-driven surplus still flows out (can't legally stay). Break Even gated on conversions actually occurring. Counterfactual runs only when `computeOC` set (runSimulation only — optimizer/MC unaffected; optimizer rankings never used convOC). Valuation = row totalWealth, or Marginal Heirs Tax override on both runs' IRAs when provided. Shadow-delta code deleted; per-year convTax/excessTax attribution kept; BETR untouched.
+- **Docs/UI:** Break Even stat tooltip, convOC/excessOC column tooltips, Docs-tab "What is Break Even?" rewritten (fixed broken `<strong>` markup); changelog entry 11.11dc; cache-busts to `?v=1111dc`.
+- **Small-screen batch (partial P16):** tap-to-show tooltip popover on touch devices (`setupSmallScreenUX()`, `?touchtips` test hook); stat bar → 3-col grid <768px (inline style moved to CSS); tab bar single scrollable row <768px; sidebar sections default-folded on phones + floating ⇅ inputs/results jump button (≤1024px); sticky Year column on `#main-table`; `.has-tooltip` popover now wraps.
+- **Tests:** 6 new node tests (no-conversion → null BE; profitable conversions → BE year + finalNW identity; counterfactual pays larger RMDs/taxes; recursion guard; excess gating; computeOC-unset skip). node 60/60, browser suite green.
+- **Empirical proof cases:** Roth-heavy no-conversion (was BE year 0 → now "—"); IRA-heavy no-conversion (was BE 2045 → now "—"); $50k/yr conversions gaining +$314k (was never → now BE 2041).
+- **Files:** `retirement_optimizer_core.js`, `retirement_optimizer.html`, `retirementopt_styles_responsive.css`, `retirement_optimizer_core.test.js`.
+
+## Architecture review findings (2026-07-09) — for P15
+- core.js is 6,012 lines / 133 functions mixing engine + DOM (139 getElementById); split into pure engine + UI file (drops test stubs, lets Retirement_Projection reuse the engine).
+- `simulate()` is ~1,050 lines; decompose per-year phases (income → withdrawals → conversions → growth → logging).
+- Retirement_Projection.html: 2,477 lines / 53 inline functions duplicating chart/table patterns (overlaps P18).
 
 ---
 
@@ -25,6 +42,7 @@ Goal: Complete open features from the original priority list plus deferred items
 | — | **PF** | UX Polish Batch (9 items, IRMAA fix + MC restructure) | **complete*** | — |
 | — | **PF2** | Item 6 round 2 — bar-chart legend hover/click | **complete** | — |
 | — | **PF3** | MC Stress pass should run current strategy only, not all variations | **complete** | — |
+| — | **PF5** | Break Even dual-sim counterfactual + small-screen UX batch | **complete** | — |
 | — | **P1** | Suggest Spend Goal (38#10) | **complete** | — |
 | 1 | **P2** | Cash Reserve enforcement (38#9) | pending | — |
 | 2 | **PA** | Pension Start Age | **complete** | — |
@@ -43,7 +61,7 @@ Goal: Complete open features from the original priority list plus deferred items
 | 15 | **P13** | Multi-Strategy Segment Optimizer | pending | P9 |
 | 16 | **P14** | Regime-Switching MC | pending | — |
 | 17 | **P15** | Refactoring Remainder (R1b, R3, R4) | pending | — |
-| 18 | **P16** | Responsive Layout (all tools) | pending | — |
+| 18 | **P16** | Responsive Layout (all tools) | partial (PF5 covered optimizer phone UX) | — |
 | 19 | **P17** | Retirement_Projection — Simple Mode | pending | — |
 | 20 | **P18** | Retirement_Projection → RetirementTaxPlanner link | pending | — |
 | 21 | **P19** | taxengine.js Architectural Cleanup | pending | — |

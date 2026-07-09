@@ -770,6 +770,91 @@ test('regression: exclusion params are inert for a non-exclusion state (CA)', ()
     assertNear(withParams.stateTax, base.stateTax, 'CA state tax must be identical with/without the new params', 0.01);
 });
 
+// ── Break Even / Opp. Cost — dual-simulation counterfactual ──────────────────
+// convOC[y] = after-tax wealth of the actual run minus a full counterfactual run with
+// conversions suppressed (dollars stay in the IRA, no conversion tax, bigger RMDs later).
+// Break Even (totals.convBEYear) = first year with conversions done and convOC >= 0.
+
+const OC_BASE = {
+    ...BASE,
+    birthyear1: 1960, die1: 90,           // RMDs at 75 — leaves pre-RMD conversion years
+    IRA1: 1000000, Brokerage: 200000, BrokerageBasis: 200000, Cash: 50000,
+    Roth: 0,
+    ss1: 30000, ss1Age: 67,
+    spendGoal: 60000, growth: 0.05,
+    computeOC: true,
+};
+
+test('OC: no conversions → convBEYear null and convOC ≈ 0 every year', () => {
+    const roth = simulate({ ...OC_BASE, IRA1: 100000, Roth: 500000 }); // Roth-heavy
+    const ira = simulate({ ...OC_BASE });                              // IRA-heavy
+    for (const r of [roth, ira]) {
+        assert(r.log.reduce((s, x) => s + (x.rothConv ?? 0), 0) < 1, 'scenario must have no conversions');
+        assert(r.totals.convBEYear === null, `convBEYear must be null with no conversions, got ${r.totals.convBEYear}`);
+        assert(r.log.every(x => Math.abs(x.convOC ?? 0) < 1), 'convOC must be ~0/null with no conversions');
+    }
+});
+
+test('OC: profitable conversions → convBEYear reported; final convOC = finalNW gain', () => {
+    const conv = simulate({ ...OC_BASE, extraConversionAmount: 50000 });
+    const totalConv = conv.log.reduce((s, r) => s + (r.rothConv ?? 0), 0);
+    assert(totalConv > 100000, `expected substantial conversions, got ${totalConv}`);
+    // Independent no-conversion run — must match the internal counterfactual exactly.
+    const noConv = simulate({ ...OC_BASE });
+    const gain = conv.finalNW - noConv.finalNW;
+    assert(gain > 0, `conversions should be profitable in this scenario, gain=${gain}`);
+    assert(conv.totals.convBEYear !== null, 'profitable conversions must report a Break Even year');
+    const lastOC = conv.log[conv.log.length - 1].convOC;
+    assertNear(lastOC, gain, 'final convOC must equal the after-tax finalNW gain', 1);
+    // Early years: conversion taxes paid up front → convOC starts negative.
+    assert(conv.log[0].convOC < 0, `year-0 convOC should be negative (tax paid early), got ${conv.log[0].convOC}`);
+});
+
+test('OC: counterfactual pays the RMD counter-effect (bigger IRA → bigger RMDs, more tax)', () => {
+    const inputs = { ...OC_BASE, IRA1: 1500000, Brokerage: 400000, BrokerageBasis: 300000,
+                     strategy: 'bracket', stratRate: 0.22, maxConversion: true };
+    const actual = simulate(inputs);
+    const cf = simulate({ ...inputs, _cfRun: true, _cfSuppressConversions: true,
+                          extraConversionAmount: 0, computeOC: false });
+    assert(cf.log.reduce((s, r) => s + (r.rothConv ?? 0), 0) < 1, 'counterfactual must not convert');
+    assert(cf.totals.rmd > actual.totals.rmd + 1000,
+        `counterfactual RMDs (${Math.round(cf.totals.rmd)}) must exceed actual (${Math.round(actual.totals.rmd)})`);
+    assert(cf.totals.tax > actual.totals.tax,
+        `counterfactual lifetime tax (${Math.round(cf.totals.tax)}) must exceed actual (${Math.round(actual.totals.tax)}) — RMD taxes priced`);
+    // Identity: last convOC equals the finalNW difference (same valuation both sides).
+    const lastOC = actual.log[actual.log.length - 1].convOC;
+    assertNear(lastOC, actual.finalNW - cf.finalNW, 'convOC identity vs counterfactual finalNW', 1);
+    // Refund really shrank the counterfactual's year-0 IRA draw (over-withdrawal not taken).
+    assert(cf.log[0].IRAwd < actual.log[0].IRAwd - 1000,
+        `CF year-0 IRA draw (${Math.round(cf.log[0].IRAwd)}) must be below actual (${Math.round(actual.log[0].IRAwd)})`);
+});
+
+test('OC: counterfactual recursion guard — _cfRun never spawns another counterfactual', () => {
+    // If recursion were possible this would loop forever / stack overflow; also check flags stay honored.
+    const cf = simulate({ ...OC_BASE, _cfRun: true,
+                          _cfSuppressConversions: true, extraConversionAmount: 0 });
+    assert(cf.totals.convBEYear === null, 'a counterfactual run must not compute its own Break Even');
+    assert(cf.log.every(r => r.convOC == null), 'a counterfactual run must not annotate convOC');
+});
+
+test('OC: excess withdrawals → excessBEYear gated on excess actually occurring', () => {
+    // propwd over-withdraws to Cash (no maxConversion) → excess path.
+    const excess = simulate({ ...OC_BASE, strategy: 'propwd', propWithdraw: 0.5 });
+    const hadExcess = excess.log.some(r => (r.surplusCash ?? 0) > 1 && (r.IRAwd ?? 0) > 1);
+    assert(hadExcess, 'scenario should produce excess IRA→Cash withdrawals');
+    assert(excess.log.some(r => r.excessOC != null), 'excessOC must be annotated when excess occurred');
+    // And a no-excess scenario reports null.
+    const clean = simulate({ ...OC_BASE });
+    assert(clean.totals.excessBEYear === null || clean.log.some(r => (r.surplusCash ?? 0) > 1),
+        'excessBEYear must be null when no excess-to-cash occurred');
+});
+
+test('OC: optimizer/MC path (computeOC unset) skips counterfactual, convOC null', () => {
+    const r = simulate({ ...OC_BASE, computeOC: undefined, extraConversionAmount: 50000 });
+    assert(r.totals.convBEYear === null, 'without computeOC, convBEYear must stay null');
+    assert(r.log.every(x => x.convOC == null), 'without computeOC, convOC must stay null');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

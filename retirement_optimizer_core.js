@@ -824,6 +824,7 @@ function buildSimYearLogRecord(p) {
         // is the LTCG/qualified-div tax embedded in FedTax (split out for the Taxation chart);
         // cpiFactor is the cumulative CPI multiplier used to inflate bracket/IRMAA thresholds.
         '-capGainsTax': p.tax.capitalGainsTax,
+        '-capGainsRate': p.tax.capitalGainsRate,
         '-cpiFactor': p.cpiRate,
         MAGI: p.tax.MAGI,
         'NominalRate%': p.nominalTaxRate,
@@ -924,13 +925,12 @@ function simulate(inputs) {
     let capitalGainsRate = 0.15; // A guess.
     let tax = {};
 
-    // Phase 20: opportunity cost shadow tracking.
-    // convShadowDeltaIRA: cumulative gross conversion amounts that would have stayed in IRA (grown each year).
-    // convShadowDeltaTaxable: cumulative conv taxes not paid from taxable (0 in current model; taxes come from IRA gross).
-    // excessShadowDeltaIRA: cumulative gross excess-to-cash amounts that would have stayed in IRA.
-    // excessShadowDeltaTaxable: negative — actual taxable has more cash from excess withdrawal; shadow has less.
-    let convShadowDeltaIRA = 0, convShadowDeltaTaxable = 0;
-    let excessShadowDeltaIRA = 0, excessShadowDeltaTaxable = 0;
+    // Phase 20 (reworked): opportunity cost is now measured with a full counterfactual
+    // simulation (see the end of simulate()) instead of per-dollar shadow deltas. During a
+    // counterfactual run (_cfRun), discretionary IRA over-withdrawals that existed only to
+    // fund conversions (_cfSuppressConversions) or excess-to-cash banking (_cfSuppressExcess)
+    // are refunded back into the IRA with a fixed-point tax recomputation, so the larger IRA
+    // then produces its own bigger RMDs, bracket stacking, and IRMAA in later years.
 
 
 
@@ -1632,12 +1632,60 @@ function simulate(inputs) {
         // near bracket boundaries by several thousand dollars per year.
         surplus.Roth1 = 0;
         surplus.Roth2 = 0;
-        if (inputs.maxConversion) {
+
+        // Counterfactual-only helper (Opp. Cost / Break Even): undo up to `netTarget` after-tax
+        // dollars of discretionary IRA over-withdrawal by putting the gross amount back into the
+        // IRA(s) and re-running the tax engine. Fixed point on gross G: removing G lowers taxes
+        // by dT, so the net surplus removed is G − dT; iterate G = netTarget + dT until stable.
+        // RMDs are never refunded (netWithdrawals.IRA excludes them); amounts already earmarked
+        // for conversion (surplus.Roth1/2) are excluded from the refundable cap.
+        const _cfRefundIRA = (netTarget) => {
+            const _cap = Math.max(0, (netWithdrawals.IRA1 ?? 0) + (netWithdrawals.IRA2 ?? 0)
+                - (surplus.Roth1 ?? 0) - (surplus.Roth2 ?? 0));
+            if (netTarget <= 1 || _cap <= 1) return;
+            let G = Math.min(netTarget, _cap);
+            let t2 = tax, dT = 0;
+            for (let _i = 0; _i < 3; _i++) {
+                t2 = calculateTaxes({
+                    filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
+                    totalSS: s1 + s2, IRMAAAnnualCost: IRMAA,
+                    earnedIncome: pension + taxableRMD + Math.max(0, netWithdrawals.IRA - G) + taxableInterest, inflation: cpiRate,
+                    pensionIncome: pension, iraIncome: taxableRMD + Math.max(0, netWithdrawals.IRA - G),
+                    qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
+                    taxExemptInterest: 0, state: STATEname
+                });
+                dT = Math.max(0, (totalTax - IRMAA) - t2.totalTax);
+                const Gnext = Math.min(netTarget + dT, _cap);
+                if (Math.abs(Gnext - G) < 1) { G = Gnext; break; }
+                G = Gnext;
+            }
+            const _iraDraw = (netWithdrawals.IRA1 ?? 0) + (netWithdrawals.IRA2 ?? 0);
+            const _r = _iraDraw > 0 ? (netWithdrawals.IRA1 ?? 0) / _iraDraw : 0.5;
+            netWithdrawals.IRA1 -= G * _r;
+            netWithdrawals.IRA2 -= G * (1 - _r);
+            netWithdrawals.IRA -= G;
+            tax = t2;
+            const _newTotalTax = t2.totalTax + IRMAA;
+            cumulativeTaxes -= (totalTax - _newTotalTax);
+            const _netRemoved = G - (totalTax - _newTotalTax);
+            totalTax = _newTotalTax;
+            totalIncome = Math.max(1, totalIncome - G);
+            netIncome -= _netRemoved;
+            nominalTaxRate = tax.nominalRate;
+            marginalFedTaxRate = tax.federalMarginalRate;
+            marginalStateTaxRate = tax.stateMarginalRate;
+            surplus.Total = Math.max(0, surplus.Total - _netRemoved);
+        };
+
+        if (inputs.maxConversion && !inputs._cfSuppressConversions) {
             const conv1 = Math.min(surplus.Total * ira1_ratio,       netWithdrawals.IRA1 || 0);
             const conv2 = Math.min(surplus.Total * (1 - ira1_ratio), netWithdrawals.IRA2 || 0);
             surplus.Roth1 = conv1;
             surplus.Roth2 = conv2;
             surplus.Total -= (conv1 + conv2);
+        } else if (inputs.maxConversion && inputs._cfSuppressConversions) {
+            // Counterfactual: the surplus that would have converted stays in the IRA instead.
+            _cfRefundIRA(surplus.Total);
         }
 
         // If there is still a surplus, replace any excess Cash withdrawal.
@@ -1657,6 +1705,10 @@ function simulate(inputs) {
 
         let totalConverted = surplus.Roth1 + surplus.Roth2;
 
+        // Counterfactual: the surplus that would have been banked to Cash/Brokerage stays in
+        // the IRA instead (RMD-driven surplus cannot be refunded and still flows out below).
+        if (inputs._cfSuppressExcess && surplus.Total > 1) _cfRefundIRA(surplus.Total);
+
         // If there is STILL a surplus, reinvest into Brokerage (Cyclic) or put in Cash.
         // Cyclic: stepping up brokerage basis on reinvestment keeps proceeds in the LTCG regime.
         const _reinvestedSurplus = surplus.Total;
@@ -1673,9 +1725,10 @@ function simulate(inputs) {
         // Phase 23: extra conversion — additional IRA→Roth independent of spending strategy.
         // extraConversionAmount[y] (or scalar $) = gross IRA to additionally withdraw and convert.
         // Taxes come from IRA gross (same convention as maxConversion surplus). Net Roth = gross - tax.
-        const _extraConvReq = Array.isArray(inputs.extraConversionAmount)
-            ? (inputs.extraConversionAmount[y] ?? 0)
-            : (inputs.extraConversionAmount ?? 0);
+        const _extraConvReq = inputs._cfSuppressConversions ? 0
+            : Array.isArray(inputs.extraConversionAmount)
+                ? (inputs.extraConversionAmount[y] ?? 0)
+                : (inputs.extraConversionAmount ?? 0);
         let extraConvGross = 0, incrementalExtraConvTax = 0;
         if (_extraConvReq > 0) {
             const _availIRA = balance.IRA1 + balance.IRA2;
@@ -1705,11 +1758,11 @@ function simulate(inputs) {
             }
         }
 
-        // Phase 20: opportunity cost shadow tracking.
-        // For each action (Roth conversion, excess withdrawal to Cash), compute the incremental tax
-        // attributable to that action by re-running calculateTaxes() without it, then derive the gross
-        // (pre-tax) IRA over-withdrawal that would have stayed in the IRA in the shadow scenario.
-        let incrementalConvTax = 0, grossConv = 0;
+        // Phase 20 (reworked): per-year incremental tax attribution for the convTax / excessTax
+        // columns only. For each action (Roth conversion, excess withdrawal to Cash), compute the
+        // incremental tax attributable to that action by re-running calculateTaxes() without it.
+        // The Opp. Cost / Break Even values themselves come from the counterfactual run below.
+        let incrementalConvTax = 0;
         if (totalConverted > 0) {
             const baseEI = pension + taxableRMD + taxableInterest;
             const convShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - totalConverted);
@@ -1721,12 +1774,9 @@ function simulate(inputs) {
                 hsaContrib: 0, taxExemptInterest: 0, state: STATEname
             });
             incrementalConvTax = Math.max(0, (totalTax - IRMAA) - shadowConvCalc.totalTax);
-            grossConv = totalConverted + incrementalConvTax;
-            convShadowDeltaIRA += grossConv;
-            // convShadowDeltaTaxable += 0 — taxes came from IRA gross; taxable accounts unaffected
         }
 
-        let incrementalExcessTax = 0, grossExcess = 0;
+        let incrementalExcessTax = 0;
         const excessCashOC = surplus.Cash;
         if (excessCashOC > 0 && (netWithdrawals.IRA ?? 0) > 0) {
             const baseEI = pension + taxableRMD + taxableInterest;
@@ -1739,9 +1789,6 @@ function simulate(inputs) {
                 hsaContrib: 0, taxExemptInterest: 0, state: STATEname
             });
             incrementalExcessTax = Math.max(0, (totalTax - IRMAA) - shadowExcessCalc.totalTax);
-            grossExcess = excessCashOC + incrementalExcessTax;
-            excessShadowDeltaIRA   += grossExcess;
-            excessShadowDeltaTaxable -= excessCashOC; // actual taxable has more cash; shadow has less
         }
 
         // Brokerage tax treatment is correct: dividends are taxed as qualifiedDiv in calculateTaxes()
@@ -1756,17 +1803,6 @@ function simulate(inputs) {
         inspectForErrors(growthRates, balance, gains);
         // Merge pre-growth gains so annual display stats (brokerageG / cashG / rothG) reflect full year.
         for (const k in preGains) gains[k] = (gains[k] ?? 0) + (preGains[k] ?? 0);
-
-        // Grow shadow deltas at same rates as actual accounts (post-growth weights are close enough).
-        {
-            const _bt = balance.Brokerage + balance.Cash;
-            const _bw = _bt > 0 ? balance.Brokerage / _bt : 0.5;
-            const _taxableRate = _bw * (growthRates.Brokerage ?? 0) + (1 - _bw) * (inputs.cashYield ?? 0);
-            convShadowDeltaIRA     *= (1 + growthRates.IRA);
-            convShadowDeltaTaxable *= (1 + _taxableRate);
-            excessShadowDeltaIRA   *= (1 + growthRates.IRA);
-            excessShadowDeltaTaxable *= (1 + _taxableRate);
-        }
 
         // Accrue dividends — reinvest into brokerage (basis steps up) or flow to cash
         if (inputs.dividendReinvest) {
@@ -1792,23 +1828,12 @@ function simulate(inputs) {
         balance.Roth2 += surplus.Roth2;
         totals.shortfall += surplus.Shortfall;
 
-        // Phase 20: compute opportunity cost NetValue.
-        // NetValue = (RothActual + TaxableActual) - (TradShadow + TaxableShadow - TaxLiability)
-        // TaxLiability = TradShadow × TaxFuture
-        // Positive = conversions/excess withdrawals have paid off vs the no-action shadow.
+        // Opp. Cost NetValue (convOC/excessOC) is annotated after the loop by comparing this
+        // run's after-tax wealth against the counterfactual run's, year by year.
         const _taxFuture = inputs.futureIRATaxRate ?? (marginalFedTaxRate + marginalStateTaxRate);
         // Capture the year-0 resolved future-IRA rate so the optimizer can value every
         // strategy's terminal IRA at one shared rate (comparable cross-strategy deltas).
         if (y === 0) totals.futureIRARate = _taxFuture;
-        const _roth = balance.Roth1 + balance.Roth2;
-        const _taxable = balance.Brokerage + balance.Cash;
-        const _ira = balance.IRA1 + balance.IRA2;
-        const convTradShadow    = _ira + convShadowDeltaIRA;
-        const convTaxableShadow = _taxable + convShadowDeltaTaxable;
-        const convNetValue  = (_roth + _taxable) - (convTradShadow + convTaxableShadow - convTradShadow * _taxFuture);
-        const excessTradShadow    = _ira + excessShadowDeltaIRA;
-        const excessTaxableShadow = _taxable + excessShadowDeltaTaxable;
-        const excessNetValue = (_roth + _taxable) - (excessTradShadow + excessTaxableShadow - excessTradShadow * _taxFuture);
 
         // Phase 21: BETR per-year signal.
         // Computed when there was any conversion this year (standard or extra). BETR answers: "what future
@@ -1872,7 +1897,7 @@ function simulate(inputs) {
             totalTax, capitalGains, cumulativeTaxes, bracketTarget, bracketOverage, forcedIRA, acaBreach,
             balance, nominalTaxRate, totalWealth, portfolioBalance, guaranteedIncome,
             totalsSpend: totals.spend,
-            gains, rmd1Pct, subCycleLabel, convNetValue, excessNetValue,
+            gains, rmd1Pct, subCycleLabel, convNetValue: null, excessNetValue: null,
             incrementalConvTax, incrementalExcessTax, yearBETR, yearBETRflag,
             extraConvGross,
             grossOutflows: _grossOutflows, netOutflows: _netOutflows,
@@ -1902,9 +1927,43 @@ function simulate(inputs) {
         medicareRate *= (1 + inputs.cpi + inputs.inflation)
     } // end for (let y = 0; y < maxYears; y++)
 
-    // Phase 20: find break-even years (first year NetValue goes non-negative).
-    totals.convBEYear   = log.find(r => r.convOC  >= 0)?.year ?? null;
-    totals.excessBEYear = log.find(r => r.excessOC >= 0)?.year ?? null;
+    // Phase 20 (reworked): Opp. Cost via full counterfactual simulation.
+    // convOC[y] = this run's after-tax wealth minus the same plan re-simulated with conversions
+    // suppressed (converted dollars stay in the IRA, no conversion tax, bigger RMDs later, each
+    // taxed at that year's actual bracket/IRMAA conditions). excessOC[y] = same idea for excess
+    // IRA withdrawals banked to Cash. Break Even = first year the difference goes non-negative,
+    // reported only when the action actually occurred by that year.
+    // Valuation: row totalWealth (IRA at the run's own nominal rate, brokerage gains at the
+    // cap-gains rate, Roth/Cash/basis at face) unless the user supplied futureIRATaxRate
+    // (Marginal Heirs Tax Rate) — then both runs' IRAs are discounted at that shared rate.
+    totals.convBEYear = null;
+    totals.excessBEYear = null;
+    if (inputs.computeOC && !inputs._cfRun) {
+        const _atw = (r) => inputs.futureIRATaxRate == null ? r.totalWealth
+            : (r.IRA1 + r.IRA2) * (1 - inputs.futureIRATaxRate)
+              + Math.max(0, r.Brokerage - r.Basis) * (1 - (r['-capGainsRate'] ?? 0.15))
+              + r.Roth + r.Cash + r.Basis;
+        const _annotate = (cfLog, key) => {
+            const n = Math.min(log.length, cfLog.length);
+            for (let i = 0; i < n; i++) log[i][key] = _atw(log[i]) - _atw(cfLog[i]);
+        };
+        if (log.some(r => (r.rothConv ?? 0) > 1)) {
+            // extraConversionAmount: 0 (not just the suppress flag) so conversion-driven
+            // early-withdrawal timing (line ~1038) doesn't leak into the no-conversion plan.
+            const cfConv = simulate({ ...inputs, _cfRun: true, _cfSuppressConversions: true, extraConversionAmount: 0, computeOC: false });
+            _annotate(cfConv.log, 'convOC');
+            let _cumConv = 0;
+            totals.convBEYear = log.find(r =>
+                (_cumConv += (r.rothConv ?? 0)) > 1 && (r.convOC ?? -1) >= 0)?.year ?? null;
+        }
+        if (log.some(r => (r.surplusCash ?? 0) > 1 && (r.IRAwd ?? 0) > 1)) {
+            const cfExcess = simulate({ ...inputs, _cfRun: true, _cfSuppressExcess: true, computeOC: false });
+            _annotate(cfExcess.log, 'excessOC');
+            let _cumExcess = 0;
+            totals.excessBEYear = log.find(r =>
+                (_cumExcess += Math.min(r.surplusCash ?? 0, r.IRAwd ?? 0)) > 1 && (r.excessOC ?? -1) >= 0)?.year ?? null;
+        }
+    }
 
     // Phase 21: average BETR across all years with conversions.
     const _betrYears = log.filter(r => r['BETR%'] !== null && r['BETR%'] !== undefined);
@@ -2131,7 +2190,8 @@ function applySuggestIraGoal() {
 
 function runSimulation() {
     refreshStratRateOptions();   // keep bracket dropdown labels in sync with CPI + filing status
-    let res = simulate(getInputs());
+    // computeOC: single-scenario runs also produce the Opp. Cost counterfactual (Break Even).
+    let res = simulate({ ...getInputs(), computeOC: true });
     lastSimulationLog = res.log;
     lastTotals = res.totals;
     lastFinalNW = res.finalNW;
@@ -3559,8 +3619,8 @@ function updateTable(log) {
         'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Likely due to errors in the calculation or unexpected bracket changes - or running out of assets.',
         'totalIncome': 'Funds from all sources, taxable and tax-free.',
         'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA',
-        'convOC': 'Roth Conversion Opportunity Cost. Formula: (RothActual + TaxableActual) − (TradShadow + TaxableShadow − TradShadow × TaxFuture). TradShadow = what the IRA would hold if no conversions had occurred (grows at IRA rate). Positive = actual portfolio outpaces the no-conversion shadow after taxes. Break-even year shown in the summary stat bar.',
-        'excessOC': 'Excess Withdrawal Opportunity Cost. Same formula as Conv OC but applied to surplus IRA withdrawals routed to Cash rather than Roth. TaxableShadow is reduced by the after-tax excess cash (actual has more; shadow has less). Positive = having the extra cash outweighs the lost IRA growth.',
+        'convOC': 'Roth Conversion Opportunity Cost: this plan\'s after-tax total wealth minus the same plan re-simulated with no conversions (the dollars stay in the IRA, no conversion tax is paid, and the bigger IRA pays its own larger RMD taxes and IRMAA later). Positive = the conversions have paid off by this year. The first non-negative year is the Break Even stat.',
+        'excessOC': 'Excess Withdrawal Opportunity Cost: same comparison as Conv OC but for surplus IRA withdrawals banked to Cash. The no-action plan keeps those dollars in the IRA. Positive = having the extra cash out early beat leaving it in the IRA.',
         'convTax': 'Incremental federal + state tax attributable to this year\'s Roth conversion (true marginal method: re-runs tax calculation without the conversion and takes the difference). Does not include IRMAA.',
         'excessTax': 'Incremental federal + state tax attributable to this year\'s excess IRA withdrawal routed to Cash (same method as Conv Tax).',
         'BETR%': 'Break-Even Tax Rate (Kitces formula): t_now × (1 + r_taxable)^n / (1 + r_ira)^n. The future marginal rate at which converting now is tax-neutral vs leaving in IRA. If your expected future rate (Future IRA Tax %) exceeds BETR → conversion advantageous (▲). When r_taxable < r_ira (taxable drag), BETR falls below current rate, making conversion even more compelling.',
@@ -4781,6 +4841,66 @@ function showTab(id) {
     if (id === 'tab-tbl') syncTopScroll();
 }
 
+
+// ── Small-screen UX helpers ─────────────────────────────────────────────────
+// The app's contextual help lives in title= attributes, which touch devices cannot hover.
+// On hover-less devices a tap on any titled (non-interactive) element shows a dismissible
+// popover instead; the title is moved to data-tip on first tap so no native tooltip doubles up.
+// Also: on phones, fold the sidebar input sections so results are one short scroll away, and
+// add a floating jump button that hops between inputs and results.
+// Test hook: add ?touchtips to the URL to force the tap-tooltip behavior on a mouse device.
+function setupSmallScreenUX() {
+    const touch = (window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse)').matches)
+        || location.search.includes('touchtips');
+    if (touch) {
+        const pop = document.createElement('div');
+        pop.id = 'touch-tooltip';
+        document.body.appendChild(pop);
+        let anchor = null;
+        const hide = () => { pop.style.display = 'none'; anchor = null; };
+        document.addEventListener('click', (e) => {
+            // Interactive elements keep their normal behavior (typing, tab switch, toggle).
+            if (e.target.closest && e.target.closest('button, a, select, input, textarea')) { hide(); return; }
+            const el = e.target.closest ? e.target.closest('[title], [data-tip]') : null;
+            if (!el) { hide(); return; }
+            if (el.getAttribute('title')) { el.dataset.tip = el.getAttribute('title'); el.removeAttribute('title'); }
+            const tip = el.dataset.tip;
+            if (!tip || el === anchor) { hide(); return; }
+            anchor = el;
+            pop.textContent = tip;
+            pop.style.display = 'block';
+            pop.style.left = '0px'; pop.style.top = '0px';   // reset before measuring
+            const margin = 8;
+            const r = el.getBoundingClientRect();
+            const w = Math.min(pop.offsetWidth, window.innerWidth - 2 * margin);
+            const left = Math.min(Math.max(margin, r.left), window.innerWidth - w - margin);
+            let top = r.bottom + 6;
+            if (top + pop.offsetHeight > window.innerHeight - margin) {
+                top = Math.max(margin, r.top - pop.offsetHeight - 6);
+            }
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+        });
+        window.addEventListener('scroll', hide, { passive: true });
+    }
+    // innerWidth can read 0 in hidden/prerendered contexts — don't fold the desktop sidebar then.
+    if (window.innerWidth > 0 && window.innerWidth < 768) {
+        document.querySelectorAll('.sidebar details.section[open]').forEach(d => d.removeAttribute('open'));
+    }
+    // Floating jump button — display is CSS-gated to small screens.
+    const jump = document.createElement('button');
+    jump.id = 'mobile-jump';
+    jump.type = 'button';
+    jump.setAttribute('aria-label', 'Jump between inputs and results');
+    jump.textContent = '⇅';
+    jump.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const main = document.querySelector('.main');
+        const atInputs = window.scrollY + 10 < (main?.offsetTop ?? 0);
+        (atInputs ? main : document.querySelector('.sidebar'))?.scrollIntoView({ behavior: 'smooth' });
+    });
+    document.body.appendChild(jump);
+}
 
 function setupAutoRecalc() {
     const LABELS = {

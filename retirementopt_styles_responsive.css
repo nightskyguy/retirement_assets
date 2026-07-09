@@ -637,13 +637,112 @@ th[title] {
     color: white;
     padding: 5px 10px;
     border-radius: 4px;
-    white-space: nowrap;
+    white-space: normal;
+    width: max-content;
+    max-width: min(280px, 80vw);
     z-index: 1000;
 }
 
 table th.empty-column {
     background-color: #f0f0f0;
     font-style: italic;
+}
+
+/* ── Summary stat bar: one scrolling row on desktop, 3-column grid on phones ── */
+#summary-stats {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+@media (max-width: 767px) {
+    #summary-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px 12px;
+        overflow-x: visible;
+    }
+    #summary-stats > #stat-success,
+    #summary-stats > #popUpMessage {
+        grid-column: 1 / -1;
+        min-width: 0;
+    }
+}
+
+/* ── Phone tab bar: single horizontally-scrollable row instead of 3-4 wrapped rows ── */
+@media (max-width: 767px) {
+    .tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 6px;
+        padding-bottom: 2px;
+    }
+    .tab-btn {
+        flex: 0 0 auto;
+        min-width: auto;
+        padding: 10px;
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+    .tabs > label.toggle {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+}
+
+/* ── Annual Details: keep the Year column visible while scrolling horizontally ── */
+#main-table th:first-child,
+#main-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: #fff;
+}
+#main-table thead th:first-child {
+    z-index: 7;   /* above the sticky header row (th z-index:5) and the year cells */
+}
+#main-table tr.single-year td:first-child {
+    background: #fff9e6;
+}
+
+/* ── Tap-tooltip popover (touch devices; see setupSmallScreenUX) ── */
+#touch-tooltip {
+    display: none;
+    position: fixed;
+    z-index: 3000;
+    background: #333;
+    color: #fff;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    line-height: 1.35;
+    max-width: min(320px, 90vw);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* ── Floating Inputs/Results jump button (small screens only) ── */
+#mobile-jump {
+    display: none;
+}
+@media (max-width: 1024px) {
+    #mobile-jump {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        z-index: 1500;
+        width: 48px;
+        height: 48px;
+        min-height: 48px;
+        border-radius: 50%;
+        padding: 0;
+        font-size: 1.3rem;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+        opacity: 0.9;
+    }
 }
 
 /* ========================================

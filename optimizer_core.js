@@ -891,6 +891,20 @@ function simulate(inputs) {
     // GK uses raw portfolio (not tax-discounted totalWealth) so IWR and WR checks are apples-to-apples.
     let gkPrevPortfolio = prevTotalWealth;
 
+    // Sim-level state shared across years (and with the phase functions being split out of
+    // this loop). Fields listed after `totals` are reassigned as the simulation advances, so
+    // they must live here rather than as locals; inputs/balance/log/totals are never
+    // reassigned (only mutated) and stay usable as bare locals inside simulate() itself.
+    const sim = {
+        inputs, balance, log, totals,
+        birthyear1, birthmonth1, birthyear2, birthmonth2,
+        currentYear, cpiRate, inflation, medicareRate,
+        fixedWithdrawal, spendGoal, cumulativeTaxes,
+        nominalTaxRate, capitalGainsRate,
+        subCycleIRAYears, prevTotalWealth,
+        gkIWR, gkPriorReturn, gkAdjLabel, gkPrevPortfolio,
+    };
+
     for (let y = 0; y < maxYears; y++) {
         const loopStart = performance.now();
         // Phase 24 interaction fix: cyclic brokerage "harvest" years draw $0 from the IRA
@@ -912,8 +926,8 @@ function simulate(inputs) {
         // hint and the inflation-indexed tax/IRMAA/ACA thresholds the goal is meant to manage).
         // Inflate it to this year's nominal dollars with cpiRate = (1+cpi)^(gapYears+y), the same
         // factor the bracket/IRMAA/ACA ceilings use, before comparing against nominal IRA balances.
-        const iraGoalNominal = inputs.iraBaseGoal * cpiRate;
-        fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, iraGoalNominal, amortYears, inputs.growth)
+        const iraGoalNominal = inputs.iraBaseGoal * sim.cpiRate;
+        sim.fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, iraGoalNominal, amortYears, inputs.growth)
 
         // Phase 12: growthRates moved here (from below withdrawal block) to enable pre-withdrawal growth.
         // Monte Carlo uses per-year return from injected sequence if provided; else constant rate.
@@ -945,8 +959,8 @@ function simulate(inputs) {
 
         // Age at December 31 of the simulation year — the IRS convention for RMD eligibility.
         // Everyone has had their birthday by Dec 31, so no birth-month adjustment is needed.
-        let age1 = currentYear - birthyear1;
-        let age2 = currentYear - birthyear2;
+        let age1 = sim.currentYear - birthyear1;
+        let age2 = sim.currentYear - birthyear2;
         let alive1 = age1 <= inputs.die1;
         let alive2 = age2 <= inputs.die2;
         if (!alive1 && !alive2) break;
@@ -960,24 +974,24 @@ function simulate(inputs) {
         // household pays nothing no matter how large the conversion income.
         const onMedicare = (alive1 && age1 >= 65 ? 1 : 0) + (alive2 && age2 >= 65 ? 1 : 0);
         const magiLookback = balance.magiHistory[balance.magiHistory.length - 2];
-        let IRMAA = calcIRMAA(magiLookback, status, cpiRate, medicareRate, onMedicare);
+        let IRMAA = calcIRMAA(magiLookback, status, sim.cpiRate, sim.medicareRate, onMedicare);
         // Tier for display/milestones — same lookback MAGI and same age gate as the charge
         // (the log row used to recompute this AFTER the year's MAGI push, showing the tier a
         // year early).
-        let IRMAATier = onMedicare > 0 ? getIRMAATier(magiLookback, status, cpiRate) : '-none-';
+        let IRMAATier = onMedicare > 0 ? getIRMAATier(magiLookback, status, sim.cpiRate) : '-none-';
         // Base Medicare Part B + Part D premiums (informational — tracked, not deducted from
         // spendable; assumed to live inside the spend goal). Grows at CPI + Inflation (user inputs),
         // not CPI alone.
-        const medicareBase = onMedicare * (TAXData.IRMAA.standardPartB + TAXData.IRMAA.standardPartD) * 12 * medicareRate;
+        const medicareBase = onMedicare * (TAXData.IRMAA.standardPartB + TAXData.IRMAA.standardPartD) * 12 * sim.medicareRate;
 
         // Calculate the bracket limits based on: stated limit.
         // let tgtBracketLimit = findLimitByRate('FEDERAL',status,inputs.stratRate)
 
         // Find federal & state rates and limits by spending goal:
-        let goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', status, spendGoal, cpiRate)
-        let goalStateBracketLimit = findUpperLimitByAmount(STATEname, status, spendGoal, cpiRate)
+        let goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', status, sim.spendGoal, sim.cpiRate)
+        let goalStateBracketLimit = findUpperLimitByAmount(STATEname, status, sim.spendGoal, sim.cpiRate)
         let goalLimit = Math.min(goalFedBracketLimit.limit, goalStateBracketLimit.limit)
-        let IRMAABracket = findUpperLimitByAmount('IRMAA', status, goalLimit, cpiRate)
+        let IRMAABracket = findUpperLimitByAmount('IRMAA', status, goalLimit, sim.cpiRate)
         let IRMAALimit = Math.min(goalLimit, IRMAABracket.limit);
         let totalIncome = 0;
         let netIncome = 0;
@@ -1002,13 +1016,13 @@ function simulate(inputs) {
 
 
         // 2. Base Income
-        let ssReduction = (inputs.ssFailYear > 2000 && currentYear >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
-        let potentialS1 = (age1 >= inputs.ss1Age) ? inputs.ss1 * cpiRate * ssReduction : 0;
-        let potentialS2 = (age2 >= inputs.ss2Age) ? inputs.ss2 * cpiRate * ssReduction : 0;
+        let ssReduction = (inputs.ssFailYear > 2000 && sim.currentYear >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
+        let potentialS1 = (age1 >= inputs.ss1Age) ? inputs.ss1 * sim.cpiRate * ssReduction : 0;
+        let potentialS2 = (age2 >= inputs.ss2Age) ? inputs.ss2 * sim.cpiRate * ssReduction : 0;
         let s1 = alive1 ? potentialS1 : 0;
         let s2 = alive2 ? potentialS2 : 0;
         let pension = (age1 >= (inputs.pensionStartAge || 0))
-            ? inputs.pensionAnnual * (inputs.pensionCola ? inflation : 1)
+            ? inputs.pensionAnnual * (inputs.pensionCola ? sim.inflation : 1)
             : 0;
 
         // One is deceased (if both decease, it won't get here)
@@ -1031,7 +1045,7 @@ function simulate(inputs) {
             const survivorAge      = alive1 ? age1 : age2;
             const survivorStartAge = alive1 ? inputs.ss1Age : inputs.ss2Age;
             s1 = survivorAge >= survivorStartAge
-                ? rawSurvivorMonthly * 12 * cpiRate * ssReduction
+                ? rawSurvivorMonthly * 12 * sim.cpiRate * ssReduction
                 : 0;
             s2 = 0;
         }
@@ -1044,8 +1058,8 @@ function simulate(inputs) {
 
 
         // 3. RMDs and QCDs
-        let rmd1Pct = getRMDPercentage(currentYear, birthyear1);
-        let rmd2Pct = getRMDPercentage(currentYear, birthyear2);
+        let rmd1Pct = getRMDPercentage(sim.currentYear, birthyear1);
+        let rmd2Pct = getRMDPercentage(sim.currentYear, birthyear2);
         let rmd1 = alive1 ? balance.IRA1 * rmd1Pct || 0 : 0;
         let rmd2 = alive2 ? balance.IRA2 * rmd2Pct || 0 : 0;
         rmd1Pct = Math.max(rmd1Pct, rmd2Pct, 0);
@@ -1053,9 +1067,9 @@ function simulate(inputs) {
 
         // QCDs: leave IRA tax-free to charity (age 70.5+). Satisfy RMDs without adding to taxable income/MAGI.
         // Provisional MAGI estimate (IRA withdrawals unknown here; uses pension+RMD+SS+interest/divs).
-        const qcdLimit = getQCDLimit(currentYear, inputs.cpi);
+        const qcdLimit = getQCDLimit(sim.currentYear, inputs.cpi);
         const provisionalMAGI = taxableInc + rmd1 + rmd2 + 0.85 * (s1 + s2) + taxableInterest + taxableDividends;
-        const { qcd1, qcd2, totalQCD } = computeAnnualQCDs(inputs, balance, currentYear, qcdLimit, provisionalMAGI, cpiRate, alive1, alive2, status);
+        const { qcd1, qcd2, totalQCD } = computeAnnualQCDs(inputs, balance, sim.currentYear, qcdLimit, provisionalMAGI, sim.cpiRate, alive1, alive2, status);
 
         // QCDs leave the IRA first (charitable transfer, excluded from income)
         balance.IRA1 = Math.max(0, balance.IRA1 - qcd1);
@@ -1085,34 +1099,34 @@ function simulate(inputs) {
         // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
         if (inputs.strategy === 'gk') {
             if (y === 0) {
-                gkIWR = spendGoal / gkPrevPortfolio;
-                gkAdjLabel = '';
+                sim.gkIWR = sim.spendGoal / sim.gkPrevPortfolio;
+                sim.gkAdjLabel = '';
             } else {
                 const _guard  = inputs.gkGuard  ?? 0.20;
                 const _adjP   = inputs.gkAdjPct ?? 0.10;
                 const labels  = [];
                 // Inflation Rule: skip CPI if prior return negative AND already over IWR
-                if (gkPriorReturn < 0 && spendGoal / gkPrevPortfolio > gkIWR) {
+                if (sim.gkPriorReturn < 0 && sim.spendGoal / sim.gkPrevPortfolio > sim.gkIWR) {
                     labels.push('no-CPI');
                 } else {
-                    spendGoal *= (1 + yearInflation);
+                    sim.spendGoal *= (1 + yearInflation);
                 }
                 // Guardrail checks on (possibly inflation-adjusted) spend
-                const _cwr = spendGoal / gkPrevPortfolio;
-                if (_cwr > gkIWR * (1 + _guard)) {
-                    spendGoal *= (1 - _adjP);
+                const _cwr = sim.spendGoal / sim.gkPrevPortfolio;
+                if (_cwr > sim.gkIWR * (1 + _guard)) {
+                    sim.spendGoal *= (1 - _adjP);
                     labels.push(`−${(_adjP * 100).toFixed(0)}%cap`);
-                } else if (_cwr < gkIWR * (1 - _guard)) {
-                    spendGoal *= (1 + _adjP);
+                } else if (_cwr < sim.gkIWR * (1 - _guard)) {
+                    sim.spendGoal *= (1 + _adjP);
                     labels.push(`+${(_adjP * 100).toFixed(0)}%pros`);
                 }
-                gkAdjLabel = labels.join(' ') || '';
+                sim.gkAdjLabel = labels.join(' ') || '';
             }
         }
 
         // GK bypasses goalLimit (bracket ceiling) — spend is dynamically set by GK rules
         const isGKStrategy = inputs.strategy === 'gk';
-        let targetSpend = (isBracketStrategy || isOrderedStrategy || isGKStrategy) ? spendGoal : Math.min(spendGoal, goalLimit);
+        let targetSpend = (isBracketStrategy || isOrderedStrategy || isGKStrategy) ? sim.spendGoal : Math.min(sim.spendGoal, goalLimit);
         let additionalSpendNeeded = Math.max(0, targetSpend + IRMAA - possibleIncome);
 
         // INCOMPLETE: marginalFedTaxRate and marginalStateTaxRate are set to the rates AT the
@@ -1141,14 +1155,14 @@ function simulate(inputs) {
         if (inputs.cyclicEnabled) {
             if (curBalances.Brokerage > 0) {
                 const _cycN = Math.max(1, Math.round(curBalances.IRA / curBalances.Brokerage));
-                if (subCycleIRAYears >= _cycN) {
+                if (sim.subCycleIRAYears >= _cycN) {
                     isBrokerageYear = true;
-                    subCycleIRAYears = 0;
+                    sim.subCycleIRAYears = 0;
                 } else {
-                    subCycleIRAYears++;
+                    sim.subCycleIRAYears++;
                 }
             } else {
-                subCycleIRAYears++;   // Brokerage depleted; keep counting IRA years
+                sim.subCycleIRAYears++;   // Brokerage depleted; keep counting IRA years
             }
             subCycleLabel = isBrokerageYear ? 'Brok' : 'IRA';
         }
@@ -1163,8 +1177,8 @@ function simulate(inputs) {
             // ceiling (`limit`), if one is in effect this year.
             const _baseOrdinaryInc = taxableInc + fixedInc + taxableInterest + taxableDividends;
             const _cycleTargetRate = inputs.cycleLTCGTarget ?? 0.15;   // nerd knob: 0.15=target 0% bracket (default), 0.20=target 15% bracket
-            const _targetRoom = getLTCGBracketRoom(_baseOrdinaryInc, status, _cycleTargetRate, cpiRate);
-            const _targetNetRoom = _targetRoom * (1 - capGainsPercentage * capitalGainsRate);
+            const _targetRoom = getLTCGBracketRoom(_baseOrdinaryInc, status, _cycleTargetRate, sim.cpiRate);
+            const _targetNetRoom = _targetRoom * (1 - capGainsPercentage * sim.capitalGainsRate);
             let _brokerageNetTarget;
             if (additionalSpendNeeded <= _targetNetRoom) {
                 // Spend fits inside the target bracket — max it out anyway.
@@ -1172,31 +1186,31 @@ function simulate(inputs) {
             } else {
                 // Spend forces gains beyond the target bracket. Find which LTCG bracket the
                 // forced realization lands in and top off to that bracket's own ceiling.
-                const _spendGrossNeeded = additionalSpendNeeded / Math.max(0.01, 1 - capGainsPercentage * capitalGainsRate);
-                const _landedRate = getLTCGBracketTopRate(_baseOrdinaryInc, _spendGrossNeeded, status, cpiRate);
+                const _spendGrossNeeded = additionalSpendNeeded / Math.max(0.01, 1 - capGainsPercentage * sim.capitalGainsRate);
+                const _landedRate = getLTCGBracketTopRate(_baseOrdinaryInc, _spendGrossNeeded, status, sim.cpiRate);
                 const _ltcgRates = (TAXData.FEDERAL.CAPITAL_GAINS[status]?.brackets ?? []).map(b => b.r);
                 const _nextRate = _ltcgRates.find(r => r > _landedRate);
                 let _room = (_nextRate !== undefined)
-                    ? getLTCGBracketRoom(_baseOrdinaryInc, status, _nextRate, cpiRate)
+                    ? getLTCGBracketRoom(_baseOrdinaryInc, status, _nextRate, sim.cpiRate)
                     : _spendGrossNeeded;   // already in the top LTCG bracket — no higher ceiling to top off to
                 if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
                     // Don't let the LTCG top-off push total realized income past the active
                     // strategy's own ceiling (IRMAA tier / ACA cliff / bracket ceiling). This
                     // branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
                     // year, so compute it fresh here rather than reading a stale/undefined `limit`.
-                    const _ceil = computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit).limit;
+                    const _ceil = computeBracketCeiling(inputs, status, sim.cpiRate, sim.inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit).limit;
                     _room = Math.min(_room, Math.max(0, _ceil - _baseOrdinaryInc));
                 }
-                _brokerageNetTarget = Math.max(additionalSpendNeeded, _room * (1 - capGainsPercentage * capitalGainsRate));
+                _brokerageNetTarget = Math.max(additionalSpendNeeded, _room * (1 - capGainsPercentage * sim.capitalGainsRate));
             }
             if (_brokerageNetTarget > 1 && curBalances.Brokerage > 0) {
                 // Depletion check: warn if Brokerage < 50% of what we need
-                const _grossNeeded = _brokerageNetTarget / Math.max(0.01, 1 - capGainsPercentage * capitalGainsRate);
+                const _grossNeeded = _brokerageNetTarget / Math.max(0.01, 1 - capGainsPercentage * sim.capitalGainsRate);
                 if (curBalances.Brokerage < _grossNeeded * 0.5) {
                     subCycleLabel = '⚠Brok';
                 }
                 withdrawals = calculateWithdrawals(curBalances, _brokerageNetTarget,
-                    { order: ['Brokerage'], weight: [1], taxrate: [capGainsPercentage * capitalGainsRate] });
+                    { order: ['Brokerage'], weight: [1], taxrate: [capGainsPercentage * sim.capitalGainsRate] });
             } else {
                 withdrawals = {};
             }
@@ -1205,7 +1219,7 @@ function simulate(inputs) {
             // We don't care about the tax implications.
 
             let remYears = Math.max(1, inputs.nYears - y);
-            let amortized = Math.max(0, fixedWithdrawal - totalIRAForcedWithdrawals);
+            let amortized = Math.max(0, sim.fixedWithdrawal - totalIRAForcedWithdrawals);
 
             // Withdraw the fixed amount left after RMDs, or whatever is left in IRAs after leaving room.
             // Intra-year growth correction: iraGoalNominal is an END-OF-YEAR target, but the
@@ -1224,7 +1238,7 @@ function simulate(inputs) {
 
         } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
             ({ limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit } =
-                computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit));
+                computeBracketCeiling(inputs, status, sim.cpiRate, sim.inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit));
 
             bracketTarget = limit;
 
@@ -1249,12 +1263,12 @@ function simulate(inputs) {
             // then add an IRA-only boost of propWithdraw × spendGoal strictly from IRA.
             // The after-tax surplus from the boost flows to Roth/Cash via step 7.
             withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash'];
-            withdrawStrategy.taxrate = [nominalTaxRate, capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0, 0];
+            withdrawStrategy.taxrate = [sim.nominalTaxRate, capGainsPercentage * (sim.capitalGainsRate + nominalStateTaxAtLimit), 0, 0];
             withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy);
             const pct = inputs.propWithdraw ?? 0;
             if (pct > 0) {
                 const remainingIRA = Math.max(0, curBalances.IRA - (withdrawals.IRA || 0));
-                const boost = Math.min(spendGoal * pct, remainingIRA);
+                const boost = Math.min(sim.spendGoal * pct, remainingIRA);
                 withdrawals.IRA = (withdrawals.IRA || 0) + boost;
             }
 
@@ -1269,7 +1283,7 @@ function simulate(inputs) {
             /*********************/
             // Withdraw enough proportionately to get to spendGoal - including taxes.
             withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash']
-            withdrawStrategy.taxrate = [nominalTaxRate, capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0, 0]
+            withdrawStrategy.taxrate = [sim.nominalTaxRate, capGainsPercentage * (sim.capitalGainsRate + nominalStateTaxAtLimit), 0, 0]
             withdrawals = calculateWithdrawals(curBalances, additionalSpendNeeded, withdrawStrategy)
 
         }
@@ -1288,13 +1302,13 @@ function simulate(inputs) {
         // a bracket crossing, a third pass would be needed for accuracy. Current two-pass
         // approach is an accepted approximation.
 
-        inspectForErrors({ fixedInc: fixedInc, totalRMD: totalRMD, taxableInterest: taxableInterest, capitalGains: capitalGains, taxableDividends: taxableDividends, age1: age1, age2: age2, cpiRate: cpiRate })
+        inspectForErrors({ fixedInc: fixedInc, totalRMD: totalRMD, taxableInterest: taxableInterest, capitalGains: capitalGains, taxableDividends: taxableDividends, age1: age1, age2: age2, cpiRate: sim.cpiRate })
 
 
         let tax = calculateTaxes({
             filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
             totalSS: s1 + s2, IRMAAAnnualCost: IRMAA,
-            earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+            earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: sim.cpiRate,
             pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
             qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
             taxExemptInterest: 0, state: STATEname
@@ -1303,7 +1317,7 @@ function simulate(inputs) {
 
         marginalFedTaxRate = tax.federalMarginalRate;
         marginalStateTaxRate = tax.stateMarginalRate;
-        capitalGainsRate = tax.capitalGainsRate;
+        sim.capitalGainsRate = tax.capitalGainsRate;
 
         //!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
 
@@ -1315,8 +1329,8 @@ function simulate(inputs) {
             // IRMAA to $0/'-none-' regardless of actual income. Retroactively correct THIS year's
             // charge now that tax.MAGI is known — steady-state assumption per the comment above,
             // still "computed once at charge time" (doesn't reintroduce the prior tier-lag bug).
-            IRMAA = calcIRMAA(tax.MAGI, status, cpiRate, medicareRate, onMedicare);
-            IRMAATier = onMedicare > 0 ? getIRMAATier(tax.MAGI, status, cpiRate) : '-none-';
+            IRMAA = calcIRMAA(tax.MAGI, status, sim.cpiRate, sim.medicareRate, onMedicare);
+            IRMAATier = onMedicare > 0 ? getIRMAATier(tax.MAGI, status, sim.cpiRate) : '-none-';
             tax.IRMAAAnnualCost = IRMAA;
             tax.IRMAARate = tax.MAGI > 0 ? IRMAA / tax.MAGI : 0;
             tax.nominalRate = tax.federalNominalRate + tax.stateNominalRate + tax.IRMAARate;
@@ -1344,7 +1358,7 @@ function simulate(inputs) {
 
                 if ((cashWd.shortfall ?? 0) > 1) {
                     const brokerWd = calculateWithdrawals(curBalances, cashWd.shortfall,
-                        { order: ['Brokerage'], weight: [1], taxrate: [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit)] });
+                        { order: ['Brokerage'], weight: [1], taxrate: [capGainsPercentage * (sim.capitalGainsRate + nominalStateTaxAtLimit)] });
                     netWithdrawals = accumulateWithdrawals([netWithdrawals, brokerWd]);
                     applyWithdrawals(curBalances, brokerWd);
 
@@ -1355,14 +1369,14 @@ function simulate(inputs) {
                     }
                 }
             } else if (isOrderedStrategy) {
-                const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage, capitalGainsRate, nominalStateTaxAtLimit, nominalTaxRate, marginalFedTaxRate, marginalStateTaxRate });
+                const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage: capGainsPercentage, capitalGainsRate: sim.capitalGainsRate, nominalStateTaxAtLimit: nominalStateTaxAtLimit, nominalTaxRate: sim.nominalTaxRate, marginalFedTaxRate: marginalFedTaxRate, marginalStateTaxRate: marginalStateTaxRate });
                 netWithdrawals = runOrderedWithdrawal(curBalances, gap, seq, netWithdrawals, applyWithdrawals);
 
             } else {
                 // Default: Brokerage + Cash proportional, then Roth fallback.
                 withdrawStrategy.order = ['Brokerage', 'Cash'];
                 withdrawStrategy.weight = [40, 60];
-                withdrawStrategy.taxrate = [capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit), 0];
+                withdrawStrategy.taxrate = [capGainsPercentage * (sim.capitalGainsRate + nominalStateTaxAtLimit), 0];
                 withdrawals = calculateWithdrawals(curBalances, gap, withdrawStrategy);
                 netWithdrawals = accumulateWithdrawals([netWithdrawals, withdrawals]);
                 applyWithdrawals(curBalances, withdrawals);
@@ -1384,7 +1398,7 @@ function simulate(inputs) {
         tax = calculateTaxes({
             filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
             totalSS: s1 + s2, IRMAAAnnualCost: IRMAA,
-            earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+            earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: sim.cpiRate,
             pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
             qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
             taxExemptInterest: 0, state: STATEname
@@ -1407,7 +1421,7 @@ function simulate(inputs) {
         if (residualGap > 1) {
             const thirdPassStart = performance.now();
             if (isOrderedStrategy) {
-                const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage, capitalGainsRate, nominalStateTaxAtLimit, nominalTaxRate, marginalFedTaxRate, marginalStateTaxRate });
+                const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage: capGainsPercentage, capitalGainsRate: sim.capitalGainsRate, nominalStateTaxAtLimit: nominalStateTaxAtLimit, nominalTaxRate: sim.nominalTaxRate, marginalFedTaxRate: marginalFedTaxRate, marginalStateTaxRate: marginalStateTaxRate });
                 netWithdrawals = runOrderedWithdrawal(curBalances, residualGap, seq, netWithdrawals, applyWithdrawals);
             } else {
                 // Always use Cash-only in the 3rd pass — adding more Brokerage here creates a
@@ -1437,7 +1451,7 @@ function simulate(inputs) {
             tax = calculateTaxes({
                 filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
                 totalSS: s1 + s2, IRMAAAnnualCost: IRMAA,
-                earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+                earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: sim.cpiRate,
                 qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
                 taxExemptInterest: 0, state: STATEname
             });
@@ -1466,7 +1480,7 @@ function simulate(inputs) {
                 capitalGains = Math.max(0, (netWithdrawals.Brokerage ?? 0) - (netWithdrawals.BrokerageBasis ?? 0));
                 tax = calculateTaxes({
                     filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2, IRMAAAnnualCost: IRMAA,
-                    earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: cpiRate,
+                    earnedIncome: pension + taxableRMD + netWithdrawals.IRA + taxableInterest, inflation: sim.cpiRate,
                     pensionIncome: pension, iraIncome: taxableRMD + netWithdrawals.IRA,
                     qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
                     taxExemptInterest: 0, state: STATEname
@@ -1485,7 +1499,7 @@ function simulate(inputs) {
         if (acaBreach) totals.acaBreachYears += 1;
         totals.forcedIRATotal += forcedIRA;
 
-        cumulativeTaxes += totalTax;
+        sim.cumulativeTaxes += totalTax;
 
 
         totalIncome = Math.max(1, fixedInc + netWithdrawals.IRA + pension + taxableDividends +
@@ -1494,14 +1508,14 @@ function simulate(inputs) {
 
         inspectForErrors({ totalIncome: totalIncome });
 
-        nominalTaxRate = tax.nominalRate;
+        sim.nominalTaxRate = tax.nominalRate;
 
         // 7. Updates
 
         netIncome = totalIncome - totalTax;
         let surplus = {
-            Total: Math.max(0, netIncome - spendGoal), Roth: 0, Cash: 0, Brokerage: 0,
-            Shortfall: Math.min(0, netIncome - spendGoal)
+            Total: Math.max(0, netIncome - sim.spendGoal), Roth: 0, Cash: 0, Brokerage: 0,
+            Shortfall: Math.min(0, netIncome - sim.spendGoal)
         };
 
         //!!! Remove withdrawals proportionately. RMDs have already been withdrawn.
@@ -1543,7 +1557,7 @@ function simulate(inputs) {
                 t2 = calculateTaxes({
                     filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2],
                     totalSS: s1 + s2, IRMAAAnnualCost: IRMAA,
-                    earnedIncome: pension + taxableRMD + Math.max(0, netWithdrawals.IRA - G) + taxableInterest, inflation: cpiRate,
+                    earnedIncome: pension + taxableRMD + Math.max(0, netWithdrawals.IRA - G) + taxableInterest, inflation: sim.cpiRate,
                     pensionIncome: pension, iraIncome: taxableRMD + Math.max(0, netWithdrawals.IRA - G),
                     qualifiedDiv: taxableDividends, capGains: capitalGains, hsaContrib: 0,
                     taxExemptInterest: 0, state: STATEname
@@ -1560,12 +1574,12 @@ function simulate(inputs) {
             netWithdrawals.IRA -= G;
             tax = t2;
             const _newTotalTax = t2.totalTax + IRMAA;
-            cumulativeTaxes -= (totalTax - _newTotalTax);
+            sim.cumulativeTaxes -= (totalTax - _newTotalTax);
             const _netRemoved = G - (totalTax - _newTotalTax);
             totalTax = _newTotalTax;
             totalIncome = Math.max(1, totalIncome - G);
             netIncome -= _netRemoved;
-            nominalTaxRate = tax.nominalRate;
+            sim.nominalTaxRate = tax.nominalRate;
             marginalFedTaxRate = tax.federalMarginalRate;
             marginalStateTaxRate = tax.stateMarginalRate;
             surplus.Total = Math.max(0, surplus.Total - _netRemoved);
@@ -1632,7 +1646,7 @@ function simulate(inputs) {
                 const _baseEI = pension + taxableRMD + taxableInterest + (netWithdrawals.IRA ?? 0);
                 const _exTaxCalc = calculateTaxes({
                     filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2,
-                    IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: cpiRate,
+                    IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: sim.cpiRate,
                     pensionIncome: pension, iraIncome: taxableRMD + (netWithdrawals.IRA ?? 0) + _gross,
                     qualifiedDiv: taxableDividends, capGains: capitalGains,
                     hsaContrib: 0, taxExemptInterest: 0, state: STATEname
@@ -1648,7 +1662,7 @@ function simulate(inputs) {
                 surplus.Roth2 = (surplus.Roth2 || 0) + _net * (1 - ira1_ratio);
                 totalConverted += _net;
                 totalTax += incrementalExtraConvTax;
-                cumulativeTaxes += incrementalExtraConvTax;
+                sim.cumulativeTaxes += incrementalExtraConvTax;
             }
         }
 
@@ -1662,7 +1676,7 @@ function simulate(inputs) {
             const convShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - totalConverted);
             const shadowConvCalc = calculateTaxes({
                 filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2,
-                IRMAAAnnualCost: 0, earnedIncome: convShadowEI, inflation: cpiRate,
+                IRMAAAnnualCost: 0, earnedIncome: convShadowEI, inflation: sim.cpiRate,
                 pensionIncome: pension, iraIncome: taxableRMD + Math.max(0, (netWithdrawals.IRA ?? 0) - totalConverted),
                 qualifiedDiv: taxableDividends, capGains: capitalGains,
                 hsaContrib: 0, taxExemptInterest: 0, state: STATEname
@@ -1677,7 +1691,7 @@ function simulate(inputs) {
             const excessShadowEI = baseEI + Math.max(0, (netWithdrawals.IRA ?? 0) - excessCashOC);
             const shadowExcessCalc = calculateTaxes({
                 filingStatus: status, ages: [age1, age2], birthyears: [birthyear1, birthyear2], totalSS: s1 + s2,
-                IRMAAAnnualCost: 0, earnedIncome: excessShadowEI, inflation: cpiRate,
+                IRMAAAnnualCost: 0, earnedIncome: excessShadowEI, inflation: sim.cpiRate,
                 pensionIncome: pension, iraIncome: taxableRMD + Math.max(0, (netWithdrawals.IRA ?? 0) - excessCashOC),
                 qualifiedDiv: taxableDividends, capGains: capitalGains,
                 hsaContrib: 0, taxExemptInterest: 0, state: STATEname
@@ -1712,8 +1726,8 @@ function simulate(inputs) {
         totals.medicare = (totals.medicare || 0) + medicareBase;
         totals.gross += totalIncome;
         totals.spend += (targetSpend + surplus.Shortfall);
-        totals.taxCurrentDollars += totalTax / inflation;
-        totals.spendCurrentDollars += (targetSpend + surplus.Shortfall) / inflation;
+        totals.taxCurrentDollars += totalTax / sim.inflation;
+        totals.spendCurrentDollars += (targetSpend + surplus.Shortfall) / sim.inflation;
         totals.rmd += totalRMD;
         // Estimate tax attributable to RMDs proportionally (RMD / totalIncome × totalTax)
         totals.rmdTax += totalIncome > 0 ? (taxableRMD / totalIncome) * totalTax : 0;
@@ -1750,18 +1764,18 @@ function simulate(inputs) {
         // After-tax terminal valuation: IRA taxed at ordinary marginal (nominalTaxRate),
         // brokerage gains above basis taxed at the capital-gains rate (not ordinary),
         // Roth + Cash + returned basis at face.
-        let totalWealth = (balance.IRA1 + balance.IRA2) * (1 - nominalTaxRate)
-            + Math.max(0, balance.Brokerage - balance.BrokerageBasis) * (1 - capitalGainsRate)
+        let totalWealth = (balance.IRA1 + balance.IRA2) * (1 - sim.nominalTaxRate)
+            + Math.max(0, balance.Brokerage - balance.BrokerageBasis) * (1 - sim.capitalGainsRate)
             + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
 
         // Fail when the portfolio can't cover its required draw (spend minus guaranteed income).
         // This is strategy-agnostic and fires at the point of first real impairment.
         const guaranteedIncome = s1 + s2 + pension;
         const portfolioBalance = balance.IRA1 + balance.IRA2 + balance.Roth1 + balance.Roth2 + balance.Brokerage + balance.Cash;
-        const requiredPortfolioDraw = Math.max(0, spendGoal - guaranteedIncome);
+        const requiredPortfolioDraw = Math.max(0, sim.spendGoal - guaranteedIncome);
         if (netIncome < targetSpend * 0.99 || portfolioBalance < requiredPortfolioDraw) {
             totals.success = false;
-            totals.failedInYear.push(currentYear)
+            totals.failedInYear.push(sim.currentYear)
         } else {
             totals.yearsfunded += 1
         }
@@ -1779,46 +1793,46 @@ function simulate(inputs) {
         const _netOutflows = _grossOutflows - totalConverted - _reinvestedSurplus;
         // Inflows: non-portfolio income applied to spending (SS + pension).
         const _yearInflows = fixedInc + pension;
-        const _wdRate = (prevTotalWealth != null && prevTotalWealth > 0)
-            ? (_netOutflows - _yearInflows) / prevTotalWealth : null;
+        const _wdRate = (sim.prevTotalWealth != null && sim.prevTotalWealth > 0)
+            ? (_netOutflows - _yearInflows) / sim.prevTotalWealth : null;
 
         const loopMs = performance.now() - loopStart;
         log.push(buildSimYearLogRecord({
-            currentYear, alive1, alive2, age1, age2, status,
-            fixedInc, pension, targetSpend, netIncome, totalIncome,
-            surplus, totalRMD, qcd1, qcd2, taxableDividends, taxableInterest,
-            netWithdrawals, rmd1, rmd2, totalConverted, tax, IRMAA, IRMAATier, medicareBase, cpiRate,
-            totalTax, capitalGains, cumulativeTaxes, bracketTarget, bracketOverage, forcedIRA, acaBreach,
-            balance, nominalTaxRate, totalWealth, portfolioBalance, guaranteedIncome,
+            currentYear: sim.currentYear, alive1: alive1, alive2: alive2, age1: age1, age2: age2, status: status,
+            fixedInc: fixedInc, pension: pension, targetSpend: targetSpend, netIncome: netIncome, totalIncome: totalIncome,
+            surplus: surplus, totalRMD: totalRMD, qcd1: qcd1, qcd2: qcd2, taxableDividends: taxableDividends, taxableInterest: taxableInterest,
+            netWithdrawals: netWithdrawals, rmd1: rmd1, rmd2: rmd2, totalConverted: totalConverted, tax: tax, IRMAA: IRMAA, IRMAATier: IRMAATier, medicareBase: medicareBase, cpiRate: sim.cpiRate,
+            totalTax: totalTax, capitalGains: capitalGains, cumulativeTaxes: sim.cumulativeTaxes, bracketTarget: bracketTarget, bracketOverage: bracketOverage, forcedIRA: forcedIRA, acaBreach: acaBreach,
+            balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: totalWealth, portfolioBalance: portfolioBalance, guaranteedIncome: guaranteedIncome,
             totalsSpend: totals.spend,
-            gains, rmd1Pct, subCycleLabel, convNetValue: null, excessNetValue: null,
-            incrementalConvTax, incrementalExcessTax, yearBETR, yearBETRflag,
-            extraConvGross,
+            gains: gains, rmd1Pct: rmd1Pct, subCycleLabel: subCycleLabel, convNetValue: null, excessNetValue: null,
+            incrementalConvTax: incrementalConvTax, incrementalExcessTax: incrementalExcessTax, yearBETR: yearBETR, yearBETRflag: yearBETRflag,
+            extraConvGross: extraConvGross,
             grossOutflows: _grossOutflows, netOutflows: _netOutflows,
             yearInflows: _yearInflows, wdRate: _wdRate,
-            useEarly: _useEarly, timingReason,
-            strategy: inputs.strategy, spendGoal, gkAdjLabel, inflation, loopMs
+            useEarly: _useEarly, timingReason: timingReason,
+            strategy: inputs.strategy, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, inflation: sim.inflation, loopMs: loopMs
         }));
         totals.totalTime += log[log.length - 1].loopMs;
-        prevTotalWealth = totalWealth;
-        gkPrevPortfolio = portfolioBalance;  // raw sum; keep GK checks apples-to-apples
+        sim.prevTotalWealth = totalWealth;
+        sim.gkPrevPortfolio = portfolioBalance;  // raw sum; keep GK checks apples-to-apples
         // Advance spend goal: apply user's spend-change preference and inflation.
         // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
         // keeps year-0 spendGoal equal to the user's input in today's dollars.
         // Phase 22: GK handles inflation at start of next year via its own rules; only apply spendDelta here.
         if (inputs.strategy === 'gk') {
-            gkPriorReturn = baseReturn;
-            spendGoal = spendGoal * spendDelta;
+            sim.gkPriorReturn = baseReturn;
+            sim.spendGoal = sim.spendGoal * spendDelta;
         } else {
-            spendGoal = spendGoal * spendDelta * (1 + yearInflation);
+            sim.spendGoal = sim.spendGoal * spendDelta * (1 + yearInflation);
         }
 
-        currentYear += 1;
+        sim.currentYear += 1;
 
         // Adjust inflation rates for subsequent rounds.
-        cpiRate *= (1 + inputs.cpi);
-        inflation *= (1 + yearInflation);
-        medicareRate *= (1 + inputs.cpi + inputs.inflation)
+        sim.cpiRate *= (1 + inputs.cpi);
+        sim.inflation *= (1 + yearInflation);
+        sim.medicareRate *= (1 + inputs.cpi + inputs.inflation)
     } // end for (let y = 0; y < maxYears; y++)
 
     // Phase 20 (reworked): Opp. Cost via full counterfactual simulation.
@@ -1874,7 +1888,7 @@ function simulate(inputs) {
     // Baseline accounting: expose the terminal capital-gains rate + terminal balance
     // breakdown so the optimizer's after-tax net-worth helper can value every strategy
     // on a comparable footing (IRA at future rate, brokerage gains at cap-gains rate).
-    totals.capGainsRate = capitalGainsRate;
+    totals.capGainsRate = sim.capitalGainsRate;
     const _lastLog = log[log.length - 1];
     totals.terminal = {
         ira:       _lastLog.IRA1 + _lastLog.IRA2,

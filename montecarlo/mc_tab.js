@@ -1,5 +1,5 @@
 // Monte Carlo tab — UI controller.
-// Depends on: retirement_optimizer_core.js (getInputs, buildVariations),
+// Depends on: optimizer_core.js (getInputs, buildVariations),
 //             montecarlo/mc_controller.js (runMCWorker, cancelMCWorker),
 //             Chart.js (global Chart)
 
@@ -341,7 +341,7 @@ function updateMCTimeEstimate() {
 
 let mcSortState = { colKey: 'survival', direction: 'desc' };
 
-// Column defs mirror the Optimizer table's click-to-sort pattern (retirement_optimizer_core.js
+// Column defs mirror the Optimizer table's click-to-sort pattern (optimizer_core.js
 // getOptimizerColumns/sortOptimizerBy). Checkbox column is excluded — not sortable.
 function getMCColumns() {
     return [

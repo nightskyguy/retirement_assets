@@ -1,7 +1,7 @@
 'use strict';
 /**
- * retirement_optimizer_core.test.js
- * Run with: node retirement_optimizer_core.test.js
+ * optimizer_core.test.js
+ * Run with: node optimizer_core.test.js
  *
  * Phase 24: Cyclic Withdrawal Modifier tests
  *
@@ -37,7 +37,7 @@ vm.createContext(ctx);
 
 const dir = __dirname;
 vm.runInContext(fs.readFileSync(path.join(dir, 'taxengine.js'), 'utf8'), ctx);
-vm.runInContext(fs.readFileSync(path.join(dir, 'retirement_optimizer_core.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(path.join(dir, 'optimizer_core.js'), 'utf8'), ctx);
 // displayhelpers.js is an IIFE that sets window.DisplayHelpers — load it so the share-URL
 // round-trip tests can exercise the REAL parseShorthand decoder against compactNum.
 vm.runInContext(fs.readFileSync(path.join(dir, 'displayhelpers.js'), 'utf8'), ctx);

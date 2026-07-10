@@ -1260,7 +1260,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
 
     // ── Tax calculation ──
     const prevPrevMagi = magiHistory.length >= 2 ? magiHistory[magiHistory.length - 2].magi : 0;
-    // Per-spouse Medicare-age gate (mirrors retirement_optimizer_core.js's onMedicare calc) —
+    // Per-spouse Medicare-age gate (mirrors optimizer_core.js's onMedicare calc) —
     // calcIRMAA() halves the household surcharge when only one spouse has turned 65.
     const onMedicareCount = (age >= 65 ? 1 : 0) + (!isSingle && spouseCurrentAge >= 65 ? 1 : 0);
     const medicareGrowth  = Math.pow(1 + (TAXData.IRMAA?.ANNUAL_INCREASE ?? 0), y - 1);

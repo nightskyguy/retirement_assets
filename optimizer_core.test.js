@@ -15,39 +15,31 @@
  *   7. cyclicEnabled=false → identical output to non-cyclic run (regression)
  */
 
-const vm = require('vm');
-const fs = require('fs');
-const path = require('path');
+// Load the source files via require() using their dual-mode export guards.
+// Stubs must exist BEFORE the requires: displayhelpers.js touches window/document
+// at load time, and performance.now() is stubbed so timing fields stay
+// deterministic (0), matching the old vm-based harness.
+globalThis.performance = { now: () => 0 };
+globalThis.window = {};                         // stub for displayhelpers.js (window.DisplayHelpers)
+globalThis.document = { getElementById: () => null, addEventListener: () => {} };
 
-// Load taxengine.js and the engine (optimizer_core.js) into a shared vm context.
-// performance.now() is available in Node 16+ and stubbed here so tests aren't
-// sensitive to wall-clock values.
-// The engine itself needs NO DOM/location stubs (that is the point of the
-// engine/UI split); window and document remain only for displayhelpers.js.
-const ctx = Object.assign(Object.create(null), {
-    performance: { now: () => 0 },
-    console,
-    Math, Date, Object, Array, Number, String, Boolean,
-    isNaN, isFinite, Infinity, NaN, undefined, JSON,
-    setTimeout, clearTimeout,
-    window: {},                         // stub for displayhelpers.js (window.DisplayHelpers)
-    document: { getElementById: () => null, addEventListener: () => {} },  // stub for displayhelpers.js
-});
-vm.createContext(ctx);
+// optimizer_core.js resolves calculateTaxes etc. as bare globals (the
+// classic-script contract shared with the browser and the MC worker), so the
+// taxengine exports are mirrored onto globalThis before the engine loads.
+const taxengine = require('./taxengine.js');
+Object.assign(globalThis, taxengine);
 
-const dir = __dirname;
-vm.runInContext(fs.readFileSync(path.join(dir, 'taxengine.js'), 'utf8'), ctx);
-vm.runInContext(fs.readFileSync(path.join(dir, 'optimizer_core.js'), 'utf8'), ctx);
+const core = require('./optimizer_core.js');
 // displayhelpers.js is an IIFE that sets window.DisplayHelpers — load it so the share-URL
 // round-trip tests can exercise the REAL parseShorthand decoder against compactNum.
-vm.runInContext(fs.readFileSync(path.join(dir, 'displayhelpers.js'), 'utf8'), ctx);
+require('./displayhelpers.js');
 
-const simulate = ctx.simulate;
-const optimizeSpend = ctx.optimizeSpend;
-const calculateTaxes = ctx.calculateTaxes;
-const getLTCGBracketRoom = ctx.getLTCGBracketRoom;
-const compactNum = ctx.compactNum;
-const parseShorthand = ctx.window.DisplayHelpers.parseShorthand;
+const simulate = core.simulate;
+const optimizeSpend = core.optimizeSpend;
+const calculateTaxes = taxengine.calculateTaxes;
+const getLTCGBracketRoom = core.getLTCGBracketRoom;
+const compactNum = core.compactNum;
+const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 
 // ── Test harness ──────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
@@ -365,7 +357,7 @@ test('Phase 27: regression — no SS/pension → avgWdRate matches old avgSpendR
 });
 
 // ── Baseline accounting (after-tax NW + totalWealth fix) ───────────────────────
-const afterTaxNetWorth = ctx.afterTaxNetWorth;
+const afterTaxNetWorth = core.afterTaxNetWorth;
 
 test('afterTaxNetWorth: Roth/Cash/basis at face; brokerage gains × (1−capG); IRA × (1−futureRate)', () => {
     if (!afterTaxNetWorth) throw new Error('afterTaxNetWorth not exported from core.js');

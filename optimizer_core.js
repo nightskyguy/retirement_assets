@@ -779,6 +779,84 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// Cash-flow gap fill (strategy-dependent supplemental withdrawals) and second tax pass.
+function fillSpendingGap(sim, yr) {
+    const { inputs, birthyear1, birthyear2 } = sim;
+    // 6. Cash Flow Gap
+    // taxableInc includes pension, RMDs
+    yr.possibleIncome = yr.taxableInc + yr.taxableDividends + yr.taxableInterest + yr.fixedInc + yr.netWithdrawals.IRA +
+        yr.capitalGains + (yr.netWithdrawals.BrokerageBasis ?? 0);
+
+    let netSpendable = yr.possibleIncome - yr.totalTax
+    let gap = yr.targetSpend - netSpendable;
+
+    inspectForErrors({ netSpendable: netSpendable, gap: gap, totalTax: yr.totalTax });
+
+    if (gap > 1.00) {
+        if (yr.isBracketStrategy) {
+            // Bracket/IRMAA strategies: supplement spending from Cash first, then Brokerage, then Roth.
+            // This keeps supplemental draws out of taxable income as much as possible.
+            const cashWd = calculateWithdrawals(yr.curBalances, gap, { order: ['Cash'], weight: [1], taxrate: [0] });
+            yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, cashWd]);
+            applyWithdrawals(yr.curBalances, cashWd);
+
+            if ((cashWd.shortfall ?? 0) > 1) {
+                const brokerWd = calculateWithdrawals(yr.curBalances, cashWd.shortfall,
+                    { order: ['Brokerage'], weight: [1], taxrate: [yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit)] });
+                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, brokerWd]);
+                applyWithdrawals(yr.curBalances, brokerWd);
+
+                if ((brokerWd.shortfall ?? 0) > 1 && yr.curBalances.Roth > 0) {
+                    const rothWithdrawals = calculateWithdrawals(yr.curBalances, brokerWd.shortfall, { order: ['Roth'], weight: [1], taxrate: [0] });
+                    yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothWithdrawals]);
+                    applyWithdrawals(yr.curBalances, rothWithdrawals);
+                }
+            }
+        } else if (yr.isOrderedStrategy) {
+            const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage: yr.capGainsPercentage, capitalGainsRate: sim.capitalGainsRate, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, nominalTaxRate: sim.nominalTaxRate, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate });
+            yr.netWithdrawals = runOrderedWithdrawal(yr.curBalances, gap, seq, yr.netWithdrawals, applyWithdrawals);
+
+        } else {
+            // Default: Brokerage + Cash proportional, then Roth fallback.
+            yr.withdrawStrategy.order = ['Brokerage', 'Cash'];
+            yr.withdrawStrategy.weight = [40, 60];
+            yr.withdrawStrategy.taxrate = [yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0];
+            yr.withdrawals = calculateWithdrawals(yr.curBalances, gap, yr.withdrawStrategy);
+            yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, yr.withdrawals]);
+            applyWithdrawals(yr.curBalances, yr.withdrawals);
+
+            if ((yr.withdrawals.shortfall ?? 0) > 1 && yr.curBalances.Roth > 0) {
+                const rothWd = { order: ['Roth'], taxrate: [0], weight: null };
+                const rothWithdrawals = calculateWithdrawals(yr.curBalances, yr.withdrawals.shortfall, rothWd);
+                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothWithdrawals]);
+                applyWithdrawals(yr.curBalances, rothWithdrawals);
+            }
+        }
+    }
+
+    // Recheck tax calculations due to possible additional withdrawals - and we now
+    // have a more accurate income picture.
+    yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
+
+
+    yr.tax = calculateTaxes({
+        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
+        totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
+        earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
+        pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
+        qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
+        taxExemptInterest: 0, state: STATEname
+    })
+    inspectForErrors(yr.tax)  // See if any numbers look fishy.
+
+    // Now we have the "real tax"
+    yr.totalTax = yr.tax.totalTax + yr.IRMAA;
+    yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.tax.MAGI - yr.bracketTarget) : 0;
+    // Update marginal rates so the third pass grosses up correctly at actual bracket.
+    yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
+    yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
+}
+
 // Third tax pass for residual shortfall, soft-cap forced-IRA convergence, and the year's income/overage finalization.
 function resolveResidualAndForcedIRA(sim, yr) {
     const { inputs, totals, birthyear1, birthyear2 } = sim;
@@ -1809,79 +1887,7 @@ function simulate(inputs) {
 
         yr.totalTax = yr.tax.totalTax + yr.IRMAA;
 
-        // 6. Cash Flow Gap
-        // taxableInc includes pension, RMDs
-        yr.possibleIncome = yr.taxableInc + yr.taxableDividends + yr.taxableInterest + yr.fixedInc + yr.netWithdrawals.IRA +
-            yr.capitalGains + (yr.netWithdrawals.BrokerageBasis ?? 0);
-
-        let netSpendable = yr.possibleIncome - yr.totalTax
-        let gap = yr.targetSpend - netSpendable;
-
-        inspectForErrors({ netSpendable: netSpendable, gap: gap, totalTax: yr.totalTax });
-
-        if (gap > 1.00) {
-            if (yr.isBracketStrategy) {
-                // Bracket/IRMAA strategies: supplement spending from Cash first, then Brokerage, then Roth.
-                // This keeps supplemental draws out of taxable income as much as possible.
-                const cashWd = calculateWithdrawals(yr.curBalances, gap, { order: ['Cash'], weight: [1], taxrate: [0] });
-                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, cashWd]);
-                applyWithdrawals(yr.curBalances, cashWd);
-
-                if ((cashWd.shortfall ?? 0) > 1) {
-                    const brokerWd = calculateWithdrawals(yr.curBalances, cashWd.shortfall,
-                        { order: ['Brokerage'], weight: [1], taxrate: [yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit)] });
-                    yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, brokerWd]);
-                    applyWithdrawals(yr.curBalances, brokerWd);
-
-                    if ((brokerWd.shortfall ?? 0) > 1 && yr.curBalances.Roth > 0) {
-                        const rothWithdrawals = calculateWithdrawals(yr.curBalances, brokerWd.shortfall, { order: ['Roth'], weight: [1], taxrate: [0] });
-                        yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothWithdrawals]);
-                        applyWithdrawals(yr.curBalances, rothWithdrawals);
-                    }
-                }
-            } else if (yr.isOrderedStrategy) {
-                const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage: yr.capGainsPercentage, capitalGainsRate: sim.capitalGainsRate, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, nominalTaxRate: sim.nominalTaxRate, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate });
-                yr.netWithdrawals = runOrderedWithdrawal(yr.curBalances, gap, seq, yr.netWithdrawals, applyWithdrawals);
-
-            } else {
-                // Default: Brokerage + Cash proportional, then Roth fallback.
-                yr.withdrawStrategy.order = ['Brokerage', 'Cash'];
-                yr.withdrawStrategy.weight = [40, 60];
-                yr.withdrawStrategy.taxrate = [yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0];
-                yr.withdrawals = calculateWithdrawals(yr.curBalances, gap, yr.withdrawStrategy);
-                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, yr.withdrawals]);
-                applyWithdrawals(yr.curBalances, yr.withdrawals);
-
-                if ((yr.withdrawals.shortfall ?? 0) > 1 && yr.curBalances.Roth > 0) {
-                    const rothWd = { order: ['Roth'], taxrate: [0], weight: null };
-                    const rothWithdrawals = calculateWithdrawals(yr.curBalances, yr.withdrawals.shortfall, rothWd);
-                    yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothWithdrawals]);
-                    applyWithdrawals(yr.curBalances, rothWithdrawals);
-                }
-            }
-        }
-
-        // Recheck tax calculations due to possible additional withdrawals - and we now
-        // have a more accurate income picture.
-        yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
-
-
-        yr.tax = calculateTaxes({
-            filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-            totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-            earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
-            pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
-            qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-            taxExemptInterest: 0, state: STATEname
-        })
-        inspectForErrors(yr.tax)  // See if any numbers look fishy.
-
-        // Now we have the "real tax"
-        yr.totalTax = yr.tax.totalTax + yr.IRMAA;
-        yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.tax.MAGI - yr.bracketTarget) : 0;
-        // Update marginal rates so the third pass grosses up correctly at actual bracket.
-        yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
-        yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
+        fillSpendingGap(sim, yr);
 
         resolveResidualAndForcedIRA(sim, yr);
 

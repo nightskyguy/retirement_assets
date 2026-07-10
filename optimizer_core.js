@@ -779,6 +779,88 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// Route the year's surplus: refund unneeded Roth draws, convert IRA-sourced surplus to
+// Roth (maxConversion), replace excess Cash draws, apply withdrawals to balances, and
+// reinvest whatever remains (Brokerage under Cyclic, otherwise Cash).
+function routeSurplusAndConvert(sim, yr) {
+    const { inputs, balance } = sim;
+    // 7. Updates
+
+    yr.netIncome = yr.totalIncome - yr.totalTax;
+    yr.surplus = {
+        Total: Math.max(0, yr.netIncome - sim.spendGoal), Roth: 0, Cash: 0, Brokerage: 0,
+        Shortfall: Math.min(0, yr.netIncome - sim.spendGoal)
+    };
+
+    //!!! Remove withdrawals proportionately. RMDs have already been withdrawn.
+    yr.ira1_ratio = (balance.IRA1 / (balance.IRA1 + balance.IRA2 || 1))
+    yr.netWithdrawals.IRA1 = Math.max(0, yr.netWithdrawals.IRA * yr.ira1_ratio);
+    yr.netWithdrawals.IRA2 = Math.max(0, yr.netWithdrawals.IRA * (1 - yr.ira1_ratio));
+
+
+    // If we took money from Roth unnecessarily, refund it back.
+    let rothRefund = Math.min(yr.surplus.Total, yr.netWithdrawals.Roth);
+    yr.netWithdrawals.Roth -= rothRefund;
+    yr.surplus.Total -= rothRefund;
+
+    // With MaxConversion: route the IRA-sourced surplus to Roth instead of Cash.
+    // Roth1 receives conversions funded by IRA1 withdrawals; Roth2 by IRA2 withdrawals.
+    // Each conversion is capped by the respective IRA withdrawal so we never convert
+    // more from an account than was actually withdrawn from it.
+    // TAX GAP: nominalTaxRate here is the effective rate on spending income, not the
+    // marginal rate on the surplus being converted. The correct approach is a third
+    // tax-recalculation pass: recalculate calculateTaxes() with (spendingIncome + surplus)
+    // and apply only the incremental tax to the conversion. This could affect conversions
+    // near bracket boundaries by several thousand dollars per year.
+    yr.surplus.Roth1 = 0;
+    yr.surplus.Roth2 = 0;
+
+    if (inputs.maxConversion && !inputs._cfSuppressConversions) {
+        const conv1 = Math.min(yr.surplus.Total * yr.ira1_ratio,       yr.netWithdrawals.IRA1 || 0);
+        const conv2 = Math.min(yr.surplus.Total * (1 - yr.ira1_ratio), yr.netWithdrawals.IRA2 || 0);
+        yr.surplus.Roth1 = conv1;
+        yr.surplus.Roth2 = conv2;
+        yr.surplus.Total -= (conv1 + conv2);
+    } else if (inputs.maxConversion && inputs._cfSuppressConversions) {
+        // Counterfactual: the surplus that would have converted stays in the IRA instead.
+        cfRefundIRA(sim, yr, yr.surplus.Total);
+    }
+
+    // If there is still a surplus, replace any excess Cash withdrawal.
+    yr.surplus.Cash = Math.min(yr.surplus.Total, yr.netWithdrawals.Cash);
+    yr.netWithdrawals.Cash -= yr.surplus.Cash;
+    yr.surplus.Total -= yr.surplus.Cash;
+
+    // Split the Roth withdrawal proportionally between Roth1 and Roth2 before applying.
+    const rothWdTotal = balance.Roth1 + balance.Roth2;
+    const roth1Share = rothWdTotal > 0 ? balance.Roth1 / rothWdTotal : 0.5;
+    yr.netWithdrawals.Roth1 = (yr.netWithdrawals.Roth || 0) * roth1Share;
+    yr.netWithdrawals.Roth2 = (yr.netWithdrawals.Roth || 0) * (1 - roth1Share);
+    delete yr.netWithdrawals.Roth;
+
+    // Decrement the proposed withdrawals from the balance(s).
+    applyWithdrawals(balance, yr.netWithdrawals)
+
+    yr.totalConverted = yr.surplus.Roth1 + yr.surplus.Roth2;
+
+    // Counterfactual: the surplus that would have been banked to Cash/Brokerage stays in
+    // the IRA instead (RMD-driven surplus cannot be refunded and still flows out below).
+    if (inputs._cfSuppressExcess && yr.surplus.Total > 1) cfRefundIRA(sim, yr, yr.surplus.Total);
+
+    // If there is STILL a surplus, reinvest into Brokerage (Cyclic) or put in Cash.
+    // Cyclic: stepping up brokerage basis on reinvestment keeps proceeds in the LTCG regime.
+    yr._reinvestedSurplus = yr.surplus.Total;
+    yr.surplus.Cash = yr.surplus.Total;
+    if (inputs.cyclicEnabled && yr.surplus.Cash > 0) {
+        balance.Brokerage += yr.surplus.Cash;
+        balance.BrokerageBasis += yr.surplus.Cash;
+        yr.surplus.Cash = 0;
+    } else {
+        balance.Cash += yr.surplus.Cash;
+    }
+    yr.surplus.Total = 0;
+}
+
 // Counterfactual-only helper (Opp. Cost / Break Even): undo up to `netTarget` after-tax
 // dollars of discretionary IRA over-withdrawal by putting the gross amount back into the
 // IRA(s) and re-running the tax engine. Fixed point on gross G: removing G lowers taxes
@@ -1797,82 +1879,7 @@ function simulate(inputs) {
 
         sim.nominalTaxRate = yr.tax.nominalRate;
 
-        // 7. Updates
-
-        yr.netIncome = yr.totalIncome - yr.totalTax;
-        yr.surplus = {
-            Total: Math.max(0, yr.netIncome - sim.spendGoal), Roth: 0, Cash: 0, Brokerage: 0,
-            Shortfall: Math.min(0, yr.netIncome - sim.spendGoal)
-        };
-
-        //!!! Remove withdrawals proportionately. RMDs have already been withdrawn.
-        yr.ira1_ratio = (balance.IRA1 / (balance.IRA1 + balance.IRA2 || 1))
-        yr.netWithdrawals.IRA1 = Math.max(0, yr.netWithdrawals.IRA * yr.ira1_ratio);
-        yr.netWithdrawals.IRA2 = Math.max(0, yr.netWithdrawals.IRA * (1 - yr.ira1_ratio));
-
-
-        // If we took money from Roth unnecessarily, refund it back.
-        let rothRefund = Math.min(yr.surplus.Total, yr.netWithdrawals.Roth);
-        yr.netWithdrawals.Roth -= rothRefund;
-        yr.surplus.Total -= rothRefund;
-
-        // With MaxConversion: route the IRA-sourced surplus to Roth instead of Cash.
-        // Roth1 receives conversions funded by IRA1 withdrawals; Roth2 by IRA2 withdrawals.
-        // Each conversion is capped by the respective IRA withdrawal so we never convert
-        // more from an account than was actually withdrawn from it.
-        // TAX GAP: nominalTaxRate here is the effective rate on spending income, not the
-        // marginal rate on the surplus being converted. The correct approach is a third
-        // tax-recalculation pass: recalculate calculateTaxes() with (spendingIncome + surplus)
-        // and apply only the incremental tax to the conversion. This could affect conversions
-        // near bracket boundaries by several thousand dollars per year.
-        yr.surplus.Roth1 = 0;
-        yr.surplus.Roth2 = 0;
-
-        if (inputs.maxConversion && !inputs._cfSuppressConversions) {
-            const conv1 = Math.min(yr.surplus.Total * yr.ira1_ratio,       yr.netWithdrawals.IRA1 || 0);
-            const conv2 = Math.min(yr.surplus.Total * (1 - yr.ira1_ratio), yr.netWithdrawals.IRA2 || 0);
-            yr.surplus.Roth1 = conv1;
-            yr.surplus.Roth2 = conv2;
-            yr.surplus.Total -= (conv1 + conv2);
-        } else if (inputs.maxConversion && inputs._cfSuppressConversions) {
-            // Counterfactual: the surplus that would have converted stays in the IRA instead.
-            cfRefundIRA(sim, yr, yr.surplus.Total);
-        }
-
-        // If there is still a surplus, replace any excess Cash withdrawal.
-        yr.surplus.Cash = Math.min(yr.surplus.Total, yr.netWithdrawals.Cash);
-        yr.netWithdrawals.Cash -= yr.surplus.Cash;
-        yr.surplus.Total -= yr.surplus.Cash;
-
-        // Split the Roth withdrawal proportionally between Roth1 and Roth2 before applying.
-        const rothWdTotal = balance.Roth1 + balance.Roth2;
-        const roth1Share = rothWdTotal > 0 ? balance.Roth1 / rothWdTotal : 0.5;
-        yr.netWithdrawals.Roth1 = (yr.netWithdrawals.Roth || 0) * roth1Share;
-        yr.netWithdrawals.Roth2 = (yr.netWithdrawals.Roth || 0) * (1 - roth1Share);
-        delete yr.netWithdrawals.Roth;
-
-        // Decrement the proposed withdrawals from the balance(s).
-        applyWithdrawals(balance, yr.netWithdrawals)
-
-        yr.totalConverted = yr.surplus.Roth1 + yr.surplus.Roth2;
-
-        // Counterfactual: the surplus that would have been banked to Cash/Brokerage stays in
-        // the IRA instead (RMD-driven surplus cannot be refunded and still flows out below).
-        if (inputs._cfSuppressExcess && yr.surplus.Total > 1) cfRefundIRA(sim, yr, yr.surplus.Total);
-
-        // If there is STILL a surplus, reinvest into Brokerage (Cyclic) or put in Cash.
-        // Cyclic: stepping up brokerage basis on reinvestment keeps proceeds in the LTCG regime.
-        yr._reinvestedSurplus = yr.surplus.Total;
-        yr.surplus.Cash = yr.surplus.Total;
-        if (inputs.cyclicEnabled && yr.surplus.Cash > 0) {
-            balance.Brokerage += yr.surplus.Cash;
-            balance.BrokerageBasis += yr.surplus.Cash;
-            yr.surplus.Cash = 0;
-        } else {
-            balance.Cash += yr.surplus.Cash;
-        }
-        yr.surplus.Total = 0;
-
+        routeSurplusAndConvert(sim, yr);
         applyExtraConversion(sim, yr);
         attributeIncrementalTaxes(sim, yr);
         growAndSettle(sim, yr);

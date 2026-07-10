@@ -1519,3 +1519,13 @@ function getIRMAATierTargetMAGI(magi, status, cpiRate, tiersDown) {
 	const nextFloor = (brks[targetIdx + 1]?.l ?? brks[targetIdx].l);
 	return nextFloor * cpiRate - 1;
 }
+
+// Dual-mode export: inert in browser/worker (classic script); lets Node tests require() this file.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        TAXData, RMD_TABLE, getRateBracket,
+        findLimitByRate, findUpperLimitByAmount, calculateProgressive,
+        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
+        getQCDLimit, isQCDEligible
+    };
+}

@@ -160,4 +160,9 @@
     initTouchTooltips: initTouchTooltips
   };
 
+  // Dual-mode export: inert in browser (classic script); lets Node tests require() this file.
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = window.DisplayHelpers;
+  }
+
 })();

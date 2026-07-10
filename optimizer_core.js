@@ -779,6 +779,51 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// Counterfactual-only helper (Opp. Cost / Break Even): undo up to `netTarget` after-tax
+// dollars of discretionary IRA over-withdrawal by putting the gross amount back into the
+// IRA(s) and re-running the tax engine. Fixed point on gross G: removing G lowers taxes
+// by dT, so the net surplus removed is G − dT; iterate G = netTarget + dT until stable.
+// RMDs are never refunded (netWithdrawals.IRA excludes them); amounts already earmarked
+// for conversion (surplus.Roth1/2) are excluded from the refundable cap.
+function cfRefundIRA(sim, yr, netTarget) {
+    const { birthyear1, birthyear2 } = sim;
+    const _cap = Math.max(0, (yr.netWithdrawals.IRA1 ?? 0) + (yr.netWithdrawals.IRA2 ?? 0)
+        - (yr.surplus.Roth1 ?? 0) - (yr.surplus.Roth2 ?? 0));
+    if (netTarget <= 1 || _cap <= 1) return;
+    let G = Math.min(netTarget, _cap);
+    let t2 = yr.tax, dT = 0;
+    for (let _i = 0; _i < 3; _i++) {
+        t2 = calculateTaxes({
+            filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
+            totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
+            earnedIncome: yr.pension + yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G) + yr.taxableInterest, inflation: sim.cpiRate,
+            pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G),
+            qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
+            taxExemptInterest: 0, state: STATEname
+        });
+        dT = Math.max(0, (yr.totalTax - yr.IRMAA) - t2.totalTax);
+        const Gnext = Math.min(netTarget + dT, _cap);
+        if (Math.abs(Gnext - G) < 1) { G = Gnext; break; }
+        G = Gnext;
+    }
+    const _iraDraw = (yr.netWithdrawals.IRA1 ?? 0) + (yr.netWithdrawals.IRA2 ?? 0);
+    const _r = _iraDraw > 0 ? (yr.netWithdrawals.IRA1 ?? 0) / _iraDraw : 0.5;
+    yr.netWithdrawals.IRA1 -= G * _r;
+    yr.netWithdrawals.IRA2 -= G * (1 - _r);
+    yr.netWithdrawals.IRA -= G;
+    yr.tax = t2;
+    const _newTotalTax = t2.totalTax + yr.IRMAA;
+    sim.cumulativeTaxes -= (yr.totalTax - _newTotalTax);
+    const _netRemoved = G - (yr.totalTax - _newTotalTax);
+    yr.totalTax = _newTotalTax;
+    yr.totalIncome = Math.max(1, yr.totalIncome - G);
+    yr.netIncome -= _netRemoved;
+    sim.nominalTaxRate = yr.tax.nominalRate;
+    yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
+    yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
+    yr.surplus.Total = Math.max(0, yr.surplus.Total - _netRemoved);
+}
+
 // Phase 23: extra conversion — additional IRA→Roth independent of spending strategy.
 // extraConversionAmount[y] (or scalar $) = gross IRA to additionally withdraw and convert.
 // Taxes come from IRA gross (same convention as maxConversion surplus). Net Roth = gross - tax.
@@ -1783,50 +1828,6 @@ function simulate(inputs) {
         yr.surplus.Roth1 = 0;
         yr.surplus.Roth2 = 0;
 
-        // Counterfactual-only helper (Opp. Cost / Break Even): undo up to `netTarget` after-tax
-        // dollars of discretionary IRA over-withdrawal by putting the gross amount back into the
-        // IRA(s) and re-running the tax engine. Fixed point on gross G: removing G lowers taxes
-        // by dT, so the net surplus removed is G − dT; iterate G = netTarget + dT until stable.
-        // RMDs are never refunded (netWithdrawals.IRA excludes them); amounts already earmarked
-        // for conversion (surplus.Roth1/2) are excluded from the refundable cap.
-        const _cfRefundIRA = (netTarget) => {
-            const _cap = Math.max(0, (yr.netWithdrawals.IRA1 ?? 0) + (yr.netWithdrawals.IRA2 ?? 0)
-                - (yr.surplus.Roth1 ?? 0) - (yr.surplus.Roth2 ?? 0));
-            if (netTarget <= 1 || _cap <= 1) return;
-            let G = Math.min(netTarget, _cap);
-            let t2 = yr.tax, dT = 0;
-            for (let _i = 0; _i < 3; _i++) {
-                t2 = calculateTaxes({
-                    filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-                    totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-                    earnedIncome: yr.pension + yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G) + yr.taxableInterest, inflation: sim.cpiRate,
-                    pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G),
-                    qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-                    taxExemptInterest: 0, state: STATEname
-                });
-                dT = Math.max(0, (yr.totalTax - yr.IRMAA) - t2.totalTax);
-                const Gnext = Math.min(netTarget + dT, _cap);
-                if (Math.abs(Gnext - G) < 1) { G = Gnext; break; }
-                G = Gnext;
-            }
-            const _iraDraw = (yr.netWithdrawals.IRA1 ?? 0) + (yr.netWithdrawals.IRA2 ?? 0);
-            const _r = _iraDraw > 0 ? (yr.netWithdrawals.IRA1 ?? 0) / _iraDraw : 0.5;
-            yr.netWithdrawals.IRA1 -= G * _r;
-            yr.netWithdrawals.IRA2 -= G * (1 - _r);
-            yr.netWithdrawals.IRA -= G;
-            yr.tax = t2;
-            const _newTotalTax = t2.totalTax + yr.IRMAA;
-            sim.cumulativeTaxes -= (yr.totalTax - _newTotalTax);
-            const _netRemoved = G - (yr.totalTax - _newTotalTax);
-            yr.totalTax = _newTotalTax;
-            yr.totalIncome = Math.max(1, yr.totalIncome - G);
-            yr.netIncome -= _netRemoved;
-            sim.nominalTaxRate = yr.tax.nominalRate;
-            yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
-            yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
-            yr.surplus.Total = Math.max(0, yr.surplus.Total - _netRemoved);
-        };
-
         if (inputs.maxConversion && !inputs._cfSuppressConversions) {
             const conv1 = Math.min(yr.surplus.Total * yr.ira1_ratio,       yr.netWithdrawals.IRA1 || 0);
             const conv2 = Math.min(yr.surplus.Total * (1 - yr.ira1_ratio), yr.netWithdrawals.IRA2 || 0);
@@ -1835,7 +1836,7 @@ function simulate(inputs) {
             yr.surplus.Total -= (conv1 + conv2);
         } else if (inputs.maxConversion && inputs._cfSuppressConversions) {
             // Counterfactual: the surplus that would have converted stays in the IRA instead.
-            _cfRefundIRA(yr.surplus.Total);
+            cfRefundIRA(sim, yr, yr.surplus.Total);
         }
 
         // If there is still a surplus, replace any excess Cash withdrawal.
@@ -1857,7 +1858,7 @@ function simulate(inputs) {
 
         // Counterfactual: the surplus that would have been banked to Cash/Brokerage stays in
         // the IRA instead (RMD-driven surplus cannot be refunded and still flows out below).
-        if (inputs._cfSuppressExcess && yr.surplus.Total > 1) _cfRefundIRA(yr.surplus.Total);
+        if (inputs._cfSuppressExcess && yr.surplus.Total > 1) cfRefundIRA(sim, yr, yr.surplus.Total);
 
         // If there is STILL a surplus, reinvest into Brokerage (Cyclic) or put in Cash.
         // Cyclic: stepping up brokerage basis on reinvestment keeps proceeds in the LTCG regime.

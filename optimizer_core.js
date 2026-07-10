@@ -779,6 +779,83 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// Phase 23: extra conversion — additional IRA→Roth independent of spending strategy.
+// extraConversionAmount[y] (or scalar $) = gross IRA to additionally withdraw and convert.
+// Taxes come from IRA gross (same convention as maxConversion surplus). Net Roth = gross - tax.
+function applyExtraConversion(sim, yr) {
+    const { inputs, balance, birthyear1, birthyear2 } = sim;
+    const y = yr.y;
+    const _extraConvReq = inputs._cfSuppressConversions ? 0
+        : Array.isArray(inputs.extraConversionAmount)
+            ? (inputs.extraConversionAmount[y] ?? 0)
+            : (inputs.extraConversionAmount ?? 0);
+    yr.extraConvGross = 0;
+    let incrementalExtraConvTax = 0;
+    if (_extraConvReq > 0) {
+        const _availIRA = balance.IRA1 + balance.IRA2;
+        const _gross = Math.min(_extraConvReq, _availIRA);
+        if (_gross > 0) {
+            // Incremental tax on extra IRA withdrawal via marginal-method re-calc
+            const _baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest + (yr.netWithdrawals.IRA ?? 0);
+            const _exTaxCalc = calculateTaxes({
+                filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
+                IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: sim.cpiRate,
+                pensionIncome: yr.pension, iraIncome: yr.taxableRMD + (yr.netWithdrawals.IRA ?? 0) + _gross,
+                qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
+                hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+            });
+            incrementalExtraConvTax = Math.max(0, _exTaxCalc.totalTax - (yr.totalTax - yr.IRMAA));
+            yr.extraConvGross = _gross;
+            const _net = _gross - incrementalExtraConvTax;
+            const _ec1 = _gross * yr.ira1_ratio;
+            const _ec2 = _gross * (1 - yr.ira1_ratio);
+            balance.IRA1 -= _ec1;
+            balance.IRA2 -= _ec2;
+            yr.surplus.Roth1 = (yr.surplus.Roth1 || 0) + _net * yr.ira1_ratio;
+            yr.surplus.Roth2 = (yr.surplus.Roth2 || 0) + _net * (1 - yr.ira1_ratio);
+            yr.totalConverted += _net;
+            yr.totalTax += incrementalExtraConvTax;
+            sim.cumulativeTaxes += incrementalExtraConvTax;
+        }
+    }
+}
+
+// Phase 20 (reworked): per-year incremental tax attribution for the convTax / excessTax
+// columns only. For each action (Roth conversion, excess withdrawal to Cash), compute the
+// incremental tax attributable to that action by re-running calculateTaxes() without it.
+// The Opp. Cost / Break Even values themselves come from the counterfactual run after the loop.
+function attributeIncrementalTaxes(sim, yr) {
+    const { birthyear1, birthyear2 } = sim;
+    yr.incrementalConvTax = 0;
+    if (yr.totalConverted > 0) {
+        const baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest;
+        const convShadowEI = baseEI + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - yr.totalConverted);
+        const shadowConvCalc = calculateTaxes({
+            filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
+            IRMAAAnnualCost: 0, earnedIncome: convShadowEI, inflation: sim.cpiRate,
+            pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - yr.totalConverted),
+            qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
+            hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+        });
+        yr.incrementalConvTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowConvCalc.totalTax);
+    }
+
+    yr.incrementalExcessTax = 0;
+    const excessCashOC = yr.surplus.Cash;
+    if (excessCashOC > 0 && (yr.netWithdrawals.IRA ?? 0) > 0) {
+        const baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest;
+        const excessShadowEI = baseEI + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - excessCashOC);
+        const shadowExcessCalc = calculateTaxes({
+            filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
+            IRMAAAnnualCost: 0, earnedIncome: excessShadowEI, inflation: sim.cpiRate,
+            pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - excessCashOC),
+            qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
+            hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+        });
+        yr.incrementalExcessTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowExcessCalc.totalTax);
+    }
+}
+
 // Apply post-withdrawal growth, dividends, and the year's totals accumulation.
 function growAndSettle(sim, yr) {
     const { inputs, balance, totals } = sim;
@@ -1795,76 +1872,8 @@ function simulate(inputs) {
         }
         yr.surplus.Total = 0;
 
-        // Phase 23: extra conversion — additional IRA→Roth independent of spending strategy.
-        // extraConversionAmount[y] (or scalar $) = gross IRA to additionally withdraw and convert.
-        // Taxes come from IRA gross (same convention as maxConversion surplus). Net Roth = gross - tax.
-        const _extraConvReq = inputs._cfSuppressConversions ? 0
-            : Array.isArray(inputs.extraConversionAmount)
-                ? (inputs.extraConversionAmount[y] ?? 0)
-                : (inputs.extraConversionAmount ?? 0);
-        yr.extraConvGross = 0;
-        let incrementalExtraConvTax = 0;
-        if (_extraConvReq > 0) {
-            const _availIRA = balance.IRA1 + balance.IRA2;
-            const _gross = Math.min(_extraConvReq, _availIRA);
-            if (_gross > 0) {
-                // Incremental tax on extra IRA withdrawal via marginal-method re-calc
-                const _baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest + (yr.netWithdrawals.IRA ?? 0);
-                const _exTaxCalc = calculateTaxes({
-                    filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
-                    IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: sim.cpiRate,
-                    pensionIncome: yr.pension, iraIncome: yr.taxableRMD + (yr.netWithdrawals.IRA ?? 0) + _gross,
-                    qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-                    hsaContrib: 0, taxExemptInterest: 0, state: STATEname
-                });
-                incrementalExtraConvTax = Math.max(0, _exTaxCalc.totalTax - (yr.totalTax - yr.IRMAA));
-                yr.extraConvGross = _gross;
-                const _net = _gross - incrementalExtraConvTax;
-                const _ec1 = _gross * yr.ira1_ratio;
-                const _ec2 = _gross * (1 - yr.ira1_ratio);
-                balance.IRA1 -= _ec1;
-                balance.IRA2 -= _ec2;
-                yr.surplus.Roth1 = (yr.surplus.Roth1 || 0) + _net * yr.ira1_ratio;
-                yr.surplus.Roth2 = (yr.surplus.Roth2 || 0) + _net * (1 - yr.ira1_ratio);
-                yr.totalConverted += _net;
-                yr.totalTax += incrementalExtraConvTax;
-                sim.cumulativeTaxes += incrementalExtraConvTax;
-            }
-        }
-
-        // Phase 20 (reworked): per-year incremental tax attribution for the convTax / excessTax
-        // columns only. For each action (Roth conversion, excess withdrawal to Cash), compute the
-        // incremental tax attributable to that action by re-running calculateTaxes() without it.
-        // The Opp. Cost / Break Even values themselves come from the counterfactual run below.
-        yr.incrementalConvTax = 0;
-        if (yr.totalConverted > 0) {
-            const baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest;
-            const convShadowEI = baseEI + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - yr.totalConverted);
-            const shadowConvCalc = calculateTaxes({
-                filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
-                IRMAAAnnualCost: 0, earnedIncome: convShadowEI, inflation: sim.cpiRate,
-                pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - yr.totalConverted),
-                qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-                hsaContrib: 0, taxExemptInterest: 0, state: STATEname
-            });
-            yr.incrementalConvTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowConvCalc.totalTax);
-        }
-
-        yr.incrementalExcessTax = 0;
-        const excessCashOC = yr.surplus.Cash;
-        if (excessCashOC > 0 && (yr.netWithdrawals.IRA ?? 0) > 0) {
-            const baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest;
-            const excessShadowEI = baseEI + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - excessCashOC);
-            const shadowExcessCalc = calculateTaxes({
-                filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
-                IRMAAAnnualCost: 0, earnedIncome: excessShadowEI, inflation: sim.cpiRate,
-                pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - excessCashOC),
-                qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-                hsaContrib: 0, taxExemptInterest: 0, state: STATEname
-            });
-            yr.incrementalExcessTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowExcessCalc.totalTax);
-        }
-
+        applyExtraConversion(sim, yr);
+        attributeIncrementalTaxes(sim, yr);
         growAndSettle(sim, yr);
         evaluateYearOutcome(sim, yr);
         logYear(sim, yr);

@@ -1,7 +1,7 @@
 'use strict';
 /**
- * retirement_optimizer_core.test.js
- * Run with: node retirement_optimizer_core.test.js
+ * optimizer_core.test.js
+ * Run with: node optimizer_core.test.js
  *
  * Phase 24: Cyclic Withdrawal Modifier tests
  *
@@ -19,25 +19,25 @@ const vm = require('vm');
 const fs = require('fs');
 const path = require('path');
 
-// Load taxengine.js and core.js into a shared vm context.
+// Load taxengine.js and the engine (optimizer_core.js) into a shared vm context.
 // performance.now() is available in Node 16+ and stubbed here so tests aren't
 // sensitive to wall-clock values.
+// The engine itself needs NO DOM/location stubs (that is the point of the
+// engine/UI split); window and document remain only for displayhelpers.js.
 const ctx = Object.assign(Object.create(null), {
     performance: { now: () => 0 },
     console,
     Math, Date, Object, Array, Number, String, Boolean,
     isNaN, isFinite, Infinity, NaN, undefined, JSON,
     setTimeout, clearTimeout,
-    URLSearchParams,                    // needed by top-level NERD_KNOBS constant
-    location: { search: '' },           // stub — no query params in test env
-    window: {},                         // stub for window.optimizerResults etc.
-    document: { getElementById: () => null, addEventListener: () => {} },  // stub
+    window: {},                         // stub for displayhelpers.js (window.DisplayHelpers)
+    document: { getElementById: () => null, addEventListener: () => {} },  // stub for displayhelpers.js
 });
 vm.createContext(ctx);
 
 const dir = __dirname;
 vm.runInContext(fs.readFileSync(path.join(dir, 'taxengine.js'), 'utf8'), ctx);
-vm.runInContext(fs.readFileSync(path.join(dir, 'retirement_optimizer_core.js'), 'utf8'), ctx);
+vm.runInContext(fs.readFileSync(path.join(dir, 'optimizer_core.js'), 'utf8'), ctx);
 // displayhelpers.js is an IIFE that sets window.DisplayHelpers — load it so the share-URL
 // round-trip tests can exercise the REAL parseShorthand decoder against compactNum.
 vm.runInContext(fs.readFileSync(path.join(dir, 'displayhelpers.js'), 'utf8'), ctx);

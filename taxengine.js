@@ -934,7 +934,7 @@ var TAXData = {
 }; // TAXdata
 
 // No-income-tax states, each as its own dropdown entry (Object.keys(TAXData).length===2 drives
-// the dropdown — see retirement_optimizer_core.js). Shared shape via spread, not by reference,
+// the dropdown — see generateStateOptions() in optimizer_ui.js). Shared shape via spread, not by reference,
 // so any future per-state divergence (e.g. NH's now-repealed interest/dividends tax) is safe.
 const NO_TAX_SHELL = {
     YEAR: 2026,
@@ -984,9 +984,9 @@ const RMD_TABLE = {
 
 // ============================================================================
 // Bracket utilities
-// Relocated from retirement_optimizer_core.js so taxengine.js is self-contained (was a
+// Relocated from optimizer_core.js so taxengine.js is self-contained (was a
 // circular file dependency: taxengine.js called these, core.js called calculateTaxes()/
-// calcIRMAA()/etc. back). No other file should redefine these — retirement_optimizer_core.js
+// calcIRMAA()/etc. back). No other file should redefine these — optimizer_core.js
 // and every HTML consumer now get them from here.
 // ============================================================================
 

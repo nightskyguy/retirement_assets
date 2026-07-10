@@ -142,8 +142,8 @@
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
 <script src="../taxengine.js?v=1133"></script>
-<script src="../retirement_optimizer_core.js"></script>
-<script src="../retirement_optimizer_tests.js?v=2"></script>
+<script src="../optimizer_core.js?v=1111f3"></script>
+<script src="../optimizer_tests.js?v=1111f3"></script>
 </head>
 <body>
 <header>
@@ -328,7 +328,8 @@
 // Loaded from external scripts:
 //   taxengine.js  → TAXData, calculateProgressive, getRateBracket, findUpperLimitByAmount,
 //                   calculateTaxes(), calcIRMAA() — self-contained, no dependency on core.js
-//   retirement_optimizer_core.js → loaded for shared UI helpers only, not tax math
+//   optimizer_core.js → simulation engine, loaded so runTests() (optimizer_tests.js) can
+//                       exercise it here; this page's share/UI helpers are defined inline below
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const FULL_MAX  = 1_100_000;

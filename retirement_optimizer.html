@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.11dc</title>
+    <title>Retirement Optimizer 11.11f3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -35,7 +35,7 @@
         };
     </script>
 	<script src="displayhelpers.js"></script>
-	<link rel="stylesheet" href="retirementopt_styles_responsive.css?v=1111dc">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1111f3">
 	<style>
     .toggle { display: flex !important; }
     .share-panel { display:none; position:fixed; top:60px; right:1.5rem; z-index:800; background:#fff; border:1px solid #27ae60; border-radius:8px; padding:.85rem 1rem; width:min(520px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.2); }
@@ -49,9 +49,10 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1133"></script>
-	<script src="retirement_optimizer_core.js?v=1111dc"></script>
-	<script src="retirement_optimizer_tests.js"></script>
-	<script src="retirement_optimizer_text.js"></script>
+	<script src="optimizer_core.js?v=1111f3"></script>
+	<script src="optimizer_ui.js?v=1111f3"></script>
+	<script src="optimizer_tests.js?v=1111f3"></script>
+	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
 
@@ -386,7 +387,7 @@
                     </div>
                 </div>
             </div>
-            <div id="summary-stats"><!-- layout in retirementopt_styles_responsive.css: flex row on desktop, 3-col grid on phones -->
+            <div id="summary-stats"><!-- layout in optimizer_styles_responsive.css: flex row on desktop, 3-col grid on phones -->
 				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;min-width:60px;"></div>
 				<div title="Years of life fully funded — portfolio covers spending goal without running out. Red when fewer than expected."><small>Funded Yrs</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Lifetime tax rate: total taxes paid ÷ total gross income. Lower is better."><small>Tax Rate</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
@@ -568,6 +569,8 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.11f3</b> Internal cleanup: source files renamed to a shorter, consistent scheme (optimizer_core.js, optimizer_ui.js, optimizer_tests.js, optimizer_text.js, optimizer_styles_responsive.css). The simulation engine and the page UI now live in separate files. No behavior changes. If the page looks broken after this update, do a hard refresh (Ctrl+Shift+R) to clear the old cached files.
+					</li>
 				<li><b>11.11dc</b> <strong>Break Even and Opp. Cost are now measured with a true no-conversion re-simulation.</strong> The tool re-runs your whole plan with the Roth conversions removed and compares after-tax wealth year by year. The no-conversion plan keeps the money in the IRA and pays its own larger RMD taxes and IRMAA surcharges later, so the benefit of avoiding those is now fully counted. The old approximation could report a Break Even year when there were no conversions at all, and could fail to report one for conversions that clearly paid off. Break Even now appears only when conversions actually happen. The same rework applies to the excess-withdrawal opportunity cost (excessOC). See "What is Break Even?" below.
 					</li>
 				<li><b>11.11c8</b> Improved bar charts. Hover over or click legends to isolate that value. Double click to restore. Line legends are unchanged. IRMAA is now presumed to occur in years 1 and 2 (matching the future value) - a bug caused it to only show up on year 2.

@@ -934,7 +934,7 @@ var TAXData = {
 }; // TAXdata
 
 // No-income-tax states, each as its own dropdown entry (Object.keys(TAXData).length===2 drives
-// the dropdown — see optimizer_core.js). Shared shape via spread, not by reference,
+// the dropdown — see generateStateOptions() in optimizer_ui.js). Shared shape via spread, not by reference,
 // so any future per-state divergence (e.g. NH's now-repealed interest/dividends tax) is safe.
 const NO_TAX_SHELL = {
     YEAR: 2026,

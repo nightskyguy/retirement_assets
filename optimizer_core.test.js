@@ -19,19 +19,19 @@ const vm = require('vm');
 const fs = require('fs');
 const path = require('path');
 
-// Load taxengine.js and core.js into a shared vm context.
+// Load taxengine.js and the engine (optimizer_core.js) into a shared vm context.
 // performance.now() is available in Node 16+ and stubbed here so tests aren't
 // sensitive to wall-clock values.
+// The engine itself needs NO DOM/location stubs (that is the point of the
+// engine/UI split); window and document remain only for displayhelpers.js.
 const ctx = Object.assign(Object.create(null), {
     performance: { now: () => 0 },
     console,
     Math, Date, Object, Array, Number, String, Boolean,
     isNaN, isFinite, Infinity, NaN, undefined, JSON,
     setTimeout, clearTimeout,
-    URLSearchParams,                    // needed by top-level NERD_KNOBS constant
-    location: { search: '' },           // stub — no query params in test env
-    window: {},                         // stub for window.optimizerResults etc.
-    document: { getElementById: () => null, addEventListener: () => {} },  // stub
+    window: {},                         // stub for displayhelpers.js (window.DisplayHelpers)
+    document: { getElementById: () => null, addEventListener: () => {} },  // stub for displayhelpers.js
 });
 vm.createContext(ctx);
 

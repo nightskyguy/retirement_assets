@@ -774,6 +774,58 @@ function buildSimYearLogRecord(p) {
     };
 }
 
+/** SIMULATION PHASES **/
+// Each function is one phase of a simulated year. `sim` carries loop-spanning state
+// (see its construction in simulate()); `yr` is the per-year context created fresh
+// each iteration. Phases communicate by mutating those two objects.
+
+// Log the finished year and accumulate loop timing.
+function logYear(sim, yr) {
+    const { inputs, balance, log, totals } = sim;
+    const loopMs = performance.now() - yr.loopStart;
+    log.push(buildSimYearLogRecord({
+        currentYear: sim.currentYear, alive1: yr.alive1, alive2: yr.alive2, age1: yr.age1, age2: yr.age2, status: yr.status,
+        fixedInc: yr.fixedInc, pension: yr.pension, targetSpend: yr.targetSpend, netIncome: yr.netIncome, totalIncome: yr.totalIncome,
+        surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
+        netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
+        totalTax: yr.totalTax, capitalGains: yr.capitalGains, cumulativeTaxes: sim.cumulativeTaxes, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
+        balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
+        totalsSpend: totals.spend,
+        gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
+        incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
+        extraConvGross: yr.extraConvGross,
+        grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
+        yearInflows: yr._yearInflows, wdRate: yr._wdRate,
+        useEarly: yr._useEarly, timingReason: yr.timingReason,
+        strategy: inputs.strategy, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, inflation: sim.inflation, loopMs: loopMs
+    }));
+    totals.totalTime += log[log.length - 1].loopMs;
+}
+
+// Carry wealth snapshots into next year, advance the spend goal, and compound rates.
+function endYear(sim, yr) {
+    const { inputs } = sim;
+    sim.prevTotalWealth = yr.totalWealth;
+    sim.gkPrevPortfolio = yr.portfolioBalance;  // raw sum; keep GK checks apples-to-apples
+    // Advance spend goal: apply user's spend-change preference and inflation.
+    // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
+    // keeps year-0 spendGoal equal to the user's input in today's dollars.
+    // Phase 22: GK handles inflation at start of next year via its own rules; only apply spendDelta here.
+    if (inputs.strategy === 'gk') {
+        sim.gkPriorReturn = yr.baseReturn;
+        sim.spendGoal = sim.spendGoal * sim.spendDelta;
+    } else {
+        sim.spendGoal = sim.spendGoal * sim.spendDelta * (1 + yr.yearInflation);
+    }
+
+    sim.currentYear += 1;
+
+    // Adjust inflation rates for subsequent rounds.
+    sim.cpiRate *= (1 + inputs.cpi);
+    sim.inflation *= (1 + yr.yearInflation);
+    sim.medicareRate *= (1 + inputs.cpi + inputs.inflation)
+}
+
 /** SIMULATION ENGINE **/
 function simulate(inputs) {
     if (!inputs.hasSpouse) {
@@ -899,7 +951,7 @@ function simulate(inputs) {
         inputs, balance, log, totals,
         birthyear1, birthmonth1, birthyear2, birthmonth2,
         currentYear, cpiRate, inflation, medicareRate,
-        fixedWithdrawal, spendGoal, cumulativeTaxes,
+        fixedWithdrawal, spendDelta, spendGoal, cumulativeTaxes,
         nominalTaxRate, capitalGainsRate,
         subCycleIRAYears, prevTotalWealth,
         gkIWR, gkPriorReturn, gkAdjLabel, gkPrevPortfolio,
@@ -1804,43 +1856,8 @@ function simulate(inputs) {
         yr._wdRate = (sim.prevTotalWealth != null && sim.prevTotalWealth > 0)
             ? (yr._netOutflows - yr._yearInflows) / sim.prevTotalWealth : null;
 
-        const loopMs = performance.now() - yr.loopStart;
-        log.push(buildSimYearLogRecord({
-            currentYear: sim.currentYear, alive1: yr.alive1, alive2: yr.alive2, age1: yr.age1, age2: yr.age2, status: yr.status,
-            fixedInc: yr.fixedInc, pension: yr.pension, targetSpend: yr.targetSpend, netIncome: yr.netIncome, totalIncome: yr.totalIncome,
-            surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
-            netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
-            totalTax: yr.totalTax, capitalGains: yr.capitalGains, cumulativeTaxes: sim.cumulativeTaxes, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
-            balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
-            totalsSpend: totals.spend,
-            gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
-            incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
-            extraConvGross: yr.extraConvGross,
-            grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
-            yearInflows: yr._yearInflows, wdRate: yr._wdRate,
-            useEarly: yr._useEarly, timingReason: yr.timingReason,
-            strategy: inputs.strategy, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, inflation: sim.inflation, loopMs: loopMs
-        }));
-        totals.totalTime += log[log.length - 1].loopMs;
-        sim.prevTotalWealth = yr.totalWealth;
-        sim.gkPrevPortfolio = yr.portfolioBalance;  // raw sum; keep GK checks apples-to-apples
-        // Advance spend goal: apply user's spend-change preference and inflation.
-        // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
-        // keeps year-0 spendGoal equal to the user's input in today's dollars.
-        // Phase 22: GK handles inflation at start of next year via its own rules; only apply spendDelta here.
-        if (inputs.strategy === 'gk') {
-            sim.gkPriorReturn = yr.baseReturn;
-            sim.spendGoal = sim.spendGoal * spendDelta;
-        } else {
-            sim.spendGoal = sim.spendGoal * spendDelta * (1 + yr.yearInflation);
-        }
-
-        sim.currentYear += 1;
-
-        // Adjust inflation rates for subsequent rounds.
-        sim.cpiRate *= (1 + inputs.cpi);
-        sim.inflation *= (1 + yr.yearInflation);
-        sim.medicareRate *= (1 + inputs.cpi + inputs.inflation)
+        logYear(sim, yr);
+        endYear(sim, yr);
     } // end for (let y = 0; y < maxYears; y++)
 
     // Phase 20 (reworked): Opp. Cost via full counterfactual simulation.

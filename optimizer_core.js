@@ -779,6 +779,108 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// Third tax pass for residual shortfall, soft-cap forced-IRA convergence, and the year's income/overage finalization.
+function resolveResidualAndForcedIRA(sim, yr) {
+    const { inputs, totals, birthyear1, birthyear2 } = sim;
+    // Third pass: if second-pass taxes created a residual shortfall, withdraw more and recalc once.
+    // This handles cases where the gap fill (brokerage cap gains) raised taxes above the initial estimate.
+    // Compute gross income inline (totalIncome is still 0 here; it's assigned below at line 813).
+    const incomeAfterGapFill = yr.fixedInc + yr.netWithdrawals.IRA + yr.pension + yr.taxableDividends +
+        yr.taxableInterest + yr.netWithdrawals.Roth + yr.netWithdrawals.Cash + yr.netWithdrawals.Brokerage + yr.taxableRMD;
+    const residualGap = yr.targetSpend - (incomeAfterGapFill - yr.totalTax);
+    if (residualGap > 1) {
+        const thirdPassStart = performance.now();
+        if (yr.isOrderedStrategy) {
+            const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage: yr.capGainsPercentage, capitalGainsRate: sim.capitalGainsRate, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, nominalTaxRate: sim.nominalTaxRate, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate });
+            yr.netWithdrawals = runOrderedWithdrawal(yr.curBalances, residualGap, seq, yr.netWithdrawals, applyWithdrawals);
+        } else {
+            // Always use Cash-only in the 3rd pass — adding more Brokerage here creates a
+            // cap-gains spiral: more gains → higher SS taxation → bigger residual → repeat.
+            // The 2nd-pass gap-fill already grossed up Brokerage; the 3rd pass handles the
+            // leftover tax from SS phaseout and NIIT cliffs that the gross-up couldn't predict.
+            // Cash (and Roth as fallback) carry no new cap gains, so they break the cycle.
+            const thirdWd = calculateWithdrawals(yr.curBalances, residualGap,
+                { order: ['Cash'], weight: [1], taxrate: [0] });
+            yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, thirdWd]);
+            applyWithdrawals(yr.curBalances, thirdWd);
+            let _remShort = thirdWd.shortfall ?? 0;
+            // Roth fallback if Cash ran out (still no cap gains)
+            if (_remShort > 1 && yr.curBalances.Roth > 0) {
+                const rothWd3 = calculateWithdrawals(yr.curBalances, _remShort,
+                    { order: ['Roth'], weight: [1], taxrate: [0] });
+                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothWd3]);
+                applyWithdrawals(yr.curBalances, rothWd3);
+                _remShort = rothWd3.shortfall ?? 0;
+            }
+            // Strict ACA: Cash+Roth couldn't cover and the FPL cap forbids drawing more IRA
+            // (breaching it forfeits the subsidy) → leave the shortfall and flag it untenable.
+            // Soft caps fund the residual from IRA in the convergence loop below.
+            if (_remShort > 1 && yr.isACAStrategy) yr.acaBreach = true;
+        }
+        yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
+        yr.tax = calculateTaxes({
+            filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
+            totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
+            earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
+            qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
+            taxExemptInterest: 0, state: STATEname
+        });
+        yr.totalTax = yr.tax.totalTax + yr.IRMAA;
+        totals.thirdPassCount += 1;
+        totals.thirdPassTime += performance.now() - thirdPassStart;
+    }
+
+    // Soft-cap break (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when Cash/Brokerage/
+    // Roth are exhausted but the IRA still has funds, draw extra IRA ABOVE the ceiling to
+    // fund MANDATORY spending. Bounded convergence: forcing IRA raises taxes (SS phase-in,
+    // IRMAA), which can re-open a small residual — a few iterations fully fund spending while
+    // the IRA lasts. Excluded: strict ACA (subsidy cliff), ordered (own sequence), and
+    // fixed/propwd/baseline/gk (already draw IRA for spending — left unchanged).
+    if (yr.isBracketStrategy && !yr.isACAStrategy) {
+        for (let _i = 0; _i < 4; _i++) {
+            const _inc = yr.fixedInc + yr.netWithdrawals.IRA + yr.pension + yr.taxableDividends +
+                yr.taxableInterest + yr.netWithdrawals.Roth + yr.netWithdrawals.Cash + yr.netWithdrawals.Brokerage + yr.taxableRMD;
+            const _res = yr.targetSpend - (_inc - yr.totalTax);
+            if (_res <= 1 || (yr.curBalances.IRA ?? 0) <= 0) break;
+            const iraTop = calculateWithdrawals(yr.curBalances, _res,
+                { order: ['IRA'], weight: [1], taxrate: [yr.marginalFedTaxRate + yr.marginalStateTaxRate] });
+            yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, iraTop]);
+            applyWithdrawals(yr.curBalances, iraTop);
+            yr.forcedIRA += (iraTop.IRA ?? 0);
+            yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
+            yr.tax = calculateTaxes({
+                filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
+                earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
+                pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
+                qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
+                taxExemptInterest: 0, state: STATEname
+            });
+            yr.totalTax = yr.tax.totalTax + yr.IRMAA;
+            yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
+            yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
+        }
+    }
+
+    // Recompute overage after any 3rd-pass forced IRA draw (soft caps may now exceed the
+    // ceiling). For the strict ACA strategy, a MAGI above the FPL cap — whether from a
+    // forced draw (blocked) or unavoidable income (RMDs/SS) — flags the plan untenable.
+    yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.tax.MAGI - yr.bracketTarget) : 0;
+    if (yr.isACAStrategy && yr.bracketOverage > 1) yr.acaBreach = true;
+    if (yr.acaBreach) totals.acaBreachYears += 1;
+    totals.forcedIRATotal += yr.forcedIRA;
+
+    sim.cumulativeTaxes += yr.totalTax;
+
+
+    yr.totalIncome = Math.max(1, yr.fixedInc + yr.netWithdrawals.IRA + yr.pension + yr.taxableDividends +
+        yr.taxableInterest + yr.netWithdrawals.Roth + yr.netWithdrawals.Cash +
+        yr.netWithdrawals.Brokerage + yr.taxableRMD);
+
+    inspectForErrors({ totalIncome: yr.totalIncome });
+
+    sim.nominalTaxRate = yr.tax.nominalRate;
+}
+
 // Route the year's surplus: refund unneeded Roth draws, convert IRA-sourced surplus to
 // Roth (maxConversion), replace excess Cash draws, apply withdrawals to balances, and
 // reinvest whatever remains (Brokerage under Cyclic, otherwise Cash).
@@ -1781,103 +1883,7 @@ function simulate(inputs) {
         yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
         yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
 
-        // Third pass: if second-pass taxes created a residual shortfall, withdraw more and recalc once.
-        // This handles cases where the gap fill (brokerage cap gains) raised taxes above the initial estimate.
-        // Compute gross income inline (totalIncome is still 0 here; it's assigned below at line 813).
-        const incomeAfterGapFill = yr.fixedInc + yr.netWithdrawals.IRA + yr.pension + yr.taxableDividends +
-            yr.taxableInterest + yr.netWithdrawals.Roth + yr.netWithdrawals.Cash + yr.netWithdrawals.Brokerage + yr.taxableRMD;
-        const residualGap = yr.targetSpend - (incomeAfterGapFill - yr.totalTax);
-        if (residualGap > 1) {
-            const thirdPassStart = performance.now();
-            if (yr.isOrderedStrategy) {
-                const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage: yr.capGainsPercentage, capitalGainsRate: sim.capitalGainsRate, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, nominalTaxRate: sim.nominalTaxRate, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate });
-                yr.netWithdrawals = runOrderedWithdrawal(yr.curBalances, residualGap, seq, yr.netWithdrawals, applyWithdrawals);
-            } else {
-                // Always use Cash-only in the 3rd pass — adding more Brokerage here creates a
-                // cap-gains spiral: more gains → higher SS taxation → bigger residual → repeat.
-                // The 2nd-pass gap-fill already grossed up Brokerage; the 3rd pass handles the
-                // leftover tax from SS phaseout and NIIT cliffs that the gross-up couldn't predict.
-                // Cash (and Roth as fallback) carry no new cap gains, so they break the cycle.
-                const thirdWd = calculateWithdrawals(yr.curBalances, residualGap,
-                    { order: ['Cash'], weight: [1], taxrate: [0] });
-                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, thirdWd]);
-                applyWithdrawals(yr.curBalances, thirdWd);
-                let _remShort = thirdWd.shortfall ?? 0;
-                // Roth fallback if Cash ran out (still no cap gains)
-                if (_remShort > 1 && yr.curBalances.Roth > 0) {
-                    const rothWd3 = calculateWithdrawals(yr.curBalances, _remShort,
-                        { order: ['Roth'], weight: [1], taxrate: [0] });
-                    yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothWd3]);
-                    applyWithdrawals(yr.curBalances, rothWd3);
-                    _remShort = rothWd3.shortfall ?? 0;
-                }
-                // Strict ACA: Cash+Roth couldn't cover and the FPL cap forbids drawing more IRA
-                // (breaching it forfeits the subsidy) → leave the shortfall and flag it untenable.
-                // Soft caps fund the residual from IRA in the convergence loop below.
-                if (_remShort > 1 && yr.isACAStrategy) yr.acaBreach = true;
-            }
-            yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
-            yr.tax = calculateTaxes({
-                filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-                totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-                earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
-                qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-                taxExemptInterest: 0, state: STATEname
-            });
-            yr.totalTax = yr.tax.totalTax + yr.IRMAA;
-            totals.thirdPassCount += 1;
-            totals.thirdPassTime += performance.now() - thirdPassStart;
-        }
-
-        // Soft-cap break (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when Cash/Brokerage/
-        // Roth are exhausted but the IRA still has funds, draw extra IRA ABOVE the ceiling to
-        // fund MANDATORY spending. Bounded convergence: forcing IRA raises taxes (SS phase-in,
-        // IRMAA), which can re-open a small residual — a few iterations fully fund spending while
-        // the IRA lasts. Excluded: strict ACA (subsidy cliff), ordered (own sequence), and
-        // fixed/propwd/baseline/gk (already draw IRA for spending — left unchanged).
-        if (yr.isBracketStrategy && !yr.isACAStrategy) {
-            for (let _i = 0; _i < 4; _i++) {
-                const _inc = yr.fixedInc + yr.netWithdrawals.IRA + yr.pension + yr.taxableDividends +
-                    yr.taxableInterest + yr.netWithdrawals.Roth + yr.netWithdrawals.Cash + yr.netWithdrawals.Brokerage + yr.taxableRMD;
-                const _res = yr.targetSpend - (_inc - yr.totalTax);
-                if (_res <= 1 || (yr.curBalances.IRA ?? 0) <= 0) break;
-                const iraTop = calculateWithdrawals(yr.curBalances, _res,
-                    { order: ['IRA'], weight: [1], taxrate: [yr.marginalFedTaxRate + yr.marginalStateTaxRate] });
-                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, iraTop]);
-                applyWithdrawals(yr.curBalances, iraTop);
-                yr.forcedIRA += (iraTop.IRA ?? 0);
-                yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
-                yr.tax = calculateTaxes({
-                    filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-                    earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
-                    pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
-                    qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-                    taxExemptInterest: 0, state: STATEname
-                });
-                yr.totalTax = yr.tax.totalTax + yr.IRMAA;
-                yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
-                yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
-            }
-        }
-
-        // Recompute overage after any 3rd-pass forced IRA draw (soft caps may now exceed the
-        // ceiling). For the strict ACA strategy, a MAGI above the FPL cap — whether from a
-        // forced draw (blocked) or unavoidable income (RMDs/SS) — flags the plan untenable.
-        yr.bracketOverage = yr.bracketTarget > 0 ? Math.max(0, yr.tax.MAGI - yr.bracketTarget) : 0;
-        if (yr.isACAStrategy && yr.bracketOverage > 1) yr.acaBreach = true;
-        if (yr.acaBreach) totals.acaBreachYears += 1;
-        totals.forcedIRATotal += yr.forcedIRA;
-
-        sim.cumulativeTaxes += yr.totalTax;
-
-
-        yr.totalIncome = Math.max(1, yr.fixedInc + yr.netWithdrawals.IRA + yr.pension + yr.taxableDividends +
-            yr.taxableInterest + yr.netWithdrawals.Roth + yr.netWithdrawals.Cash +
-            yr.netWithdrawals.Brokerage + yr.taxableRMD);
-
-        inspectForErrors({ totalIncome: yr.totalIncome });
-
-        sim.nominalTaxRate = yr.tax.nominalRate;
+        resolveResidualAndForcedIRA(sim, yr);
 
         routeSurplusAndConvert(sim, yr);
         applyExtraConversion(sim, yr);

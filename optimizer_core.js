@@ -779,6 +779,113 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// Apply post-withdrawal growth, dividends, and the year's totals accumulation.
+function growAndSettle(sim, yr) {
+    const { inputs, balance, totals } = sim;
+    // Brokerage tax treatment is correct: dividends are taxed as qualifiedDiv in calculateTaxes()
+    // (line ~864), liquidations are taxed as capGains above BrokerageBasis, and the growth
+    // applied here is unrealized appreciation — not taxable until sold. The one valuation nuance:
+    // unrealized gains are carried at face value during the simulation; totalWealth (line ~1091)
+    // discounts them by nominalTaxRate, but year-by-year spendable wealth does not reserve for
+    // deferred tax on gains that are never liquidated.
+
+    // Post-withdrawal growth (Phase 12): remaining postMonths after withdrawal exits portfolio.
+    yr.gains = applyGrowth(balance, yr.growthRates, yr.postMonths);
+    inspectForErrors(yr.growthRates, balance, yr.gains);
+    // Merge pre-growth gains so annual display stats (brokerageG / cashG / rothG) reflect full year.
+    for (const k in yr.preGains) yr.gains[k] = (yr.gains[k] ?? 0) + (yr.preGains[k] ?? 0);
+
+    // Accrue dividends — reinvest into brokerage (basis steps up) or flow to cash
+    if (inputs.dividendReinvest) {
+        yr.gains.Brokerage = (yr.gains.Brokerage || 0) + yr.taxableDividends;
+        balance.Brokerage += yr.taxableDividends;
+        balance.BrokerageBasis += yr.taxableDividends;
+    } else {
+        yr.gains.Cash += yr.taxableDividends;
+        balance.Cash += yr.taxableDividends;
+    }
+    balance.magiHistory.push(yr.tax.MAGI);
+    totals.tax += yr.totalTax;
+    totals.medicare = (totals.medicare || 0) + yr.medicareBase;
+    totals.gross += yr.totalIncome;
+    totals.spend += (yr.targetSpend + yr.surplus.Shortfall);
+    totals.taxCurrentDollars += yr.totalTax / sim.inflation;
+    totals.spendCurrentDollars += (yr.targetSpend + yr.surplus.Shortfall) / sim.inflation;
+    totals.rmd += yr.totalRMD;
+    // Estimate tax attributable to RMDs proportionally (RMD / totalIncome × totalTax)
+    totals.rmdTax += yr.totalIncome > 0 ? (yr.taxableRMD / yr.totalIncome) * yr.totalTax : 0;
+    totals.qcd = (totals.qcd || 0) + yr.totalQCD;
+    balance.Roth1 += yr.surplus.Roth1;
+    balance.Roth2 += yr.surplus.Roth2;
+    totals.shortfall += yr.surplus.Shortfall;
+}
+
+// BETR signal, after-tax terminal valuation, solvency fail-check, withdrawal rate.
+function evaluateYearOutcome(sim, yr) {
+    const { inputs, balance, totals } = sim;
+    const y = yr.y;
+    // Opp. Cost NetValue (convOC/excessOC) is annotated after the loop by comparing this
+    // run's after-tax wealth against the counterfactual run's, year by year.
+    const _taxFuture = inputs.futureIRATaxRate ?? (yr.marginalFedTaxRate + yr.marginalStateTaxRate);
+    // Capture the year-0 resolved future-IRA rate so the optimizer can value every
+    // strategy's terminal IRA at one shared rate (comparable cross-strategy deltas).
+    if (y === 0) totals.futureIRARate = _taxFuture;
+
+    // Phase 21: BETR per-year signal.
+    // Computed when there was any conversion this year (standard or extra). BETR answers: "what future
+    // marginal rate makes this conversion break-even?" Comparison to futureIRATaxRate gives ▲/▼ flag.
+    yr.yearBETR = null;
+    yr.yearBETRflag = null;
+    if (yr.totalConverted > 0) {
+        const _rIRA = yr.growthRates.IRA1 ?? inputs.growth ?? 0.06;
+        const _drag = (inputs.dividendRate ?? 0) * (yr.tax.capitalGainsRate ?? 0.15);
+        const _rTax = Math.max(0, (inputs.growth ?? _rIRA) - _drag);
+        const _rmdAge1 = (inputs.birthyear1 ?? 1960) >= 1960 ? 75 : 73;
+        const _yearsToRMD = Math.max(1, _rmdAge1 - yr.age1);
+        yr.yearBETR = computeBETR(yr.tax.federalMarginalRate + (yr.tax.stateMarginalRate ?? 0), _rIRA, _rTax, _yearsToRMD);
+        if (yr.yearBETR !== null) {
+            const _futureRate = _taxFuture; // already resolved above
+            yr.yearBETRflag = _futureRate > yr.yearBETR + 0.02 ? '▲'
+                         : _futureRate < yr.yearBETR - 0.02 ? '▼' : '≈';
+        }
+    }
+
+    // After-tax terminal valuation: IRA taxed at ordinary marginal (nominalTaxRate),
+    // brokerage gains above basis taxed at the capital-gains rate (not ordinary),
+    // Roth + Cash + returned basis at face.
+    yr.totalWealth = (balance.IRA1 + balance.IRA2) * (1 - sim.nominalTaxRate)
+        + Math.max(0, balance.Brokerage - balance.BrokerageBasis) * (1 - sim.capitalGainsRate)
+        + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
+
+    // Fail when the portfolio can't cover its required draw (spend minus guaranteed income).
+    // This is strategy-agnostic and fires at the point of first real impairment.
+    yr.guaranteedIncome = yr.s1 + yr.s2 + yr.pension;
+    yr.portfolioBalance = balance.IRA1 + balance.IRA2 + balance.Roth1 + balance.Roth2 + balance.Brokerage + balance.Cash;
+    const requiredPortfolioDraw = Math.max(0, sim.spendGoal - yr.guaranteedIncome);
+    if (yr.netIncome < yr.targetSpend * 0.99 || yr.portfolioBalance < requiredPortfolioDraw) {
+        totals.success = false;
+        totals.failedInYear.push(sim.currentYear)
+    } else {
+        totals.yearsfunded += 1
+    }
+
+    inspectForErrors({ totalWealth: yr.totalWealth })  // See if any numbers look fishy.
+
+    // Phase 27: Withdrawal rate = (net outflows − inflows) / start-of-year wealth.
+    // Gross outflows: all account withdrawals incl. conversion-funding draws.
+    yr._grossOutflows = (yr.netWithdrawals.IRA ?? 0) + yr.totalIRAForcedWithdrawals + yr.extraConvGross
+        + (yr.netWithdrawals.Brokerage ?? 0)
+        + (yr.netWithdrawals.Cash ?? 0)
+        + (yr.netWithdrawals.Roth1 ?? 0)
+        + (yr.netWithdrawals.Roth2 ?? 0);
+    // Net outflows: excludes Roth conversions (IRA→Roth reallocation) and reinvested surplus.
+    yr._netOutflows = yr._grossOutflows - yr.totalConverted - yr._reinvestedSurplus;
+    // Inflows: non-portfolio income applied to spending (SS + pension).
+    yr._yearInflows = yr.fixedInc + yr.pension;
+    yr._wdRate = (sim.prevTotalWealth != null && sim.prevTotalWealth > 0)
+        ? (yr._netOutflows - yr._yearInflows) / sim.prevTotalWealth : null;
+}
+
 // Log the finished year and accumulate loop timing.
 function logYear(sim, yr) {
     const { inputs, balance, log, totals } = sim;
@@ -1758,104 +1865,8 @@ function simulate(inputs) {
             yr.incrementalExcessTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowExcessCalc.totalTax);
         }
 
-        // Brokerage tax treatment is correct: dividends are taxed as qualifiedDiv in calculateTaxes()
-        // (line ~864), liquidations are taxed as capGains above BrokerageBasis, and the growth
-        // applied here is unrealized appreciation — not taxable until sold. The one valuation nuance:
-        // unrealized gains are carried at face value during the simulation; totalWealth (line ~1091)
-        // discounts them by nominalTaxRate, but year-by-year spendable wealth does not reserve for
-        // deferred tax on gains that are never liquidated.
-
-        // Post-withdrawal growth (Phase 12): remaining postMonths after withdrawal exits portfolio.
-        yr.gains = applyGrowth(balance, yr.growthRates, yr.postMonths);
-        inspectForErrors(yr.growthRates, balance, yr.gains);
-        // Merge pre-growth gains so annual display stats (brokerageG / cashG / rothG) reflect full year.
-        for (const k in yr.preGains) yr.gains[k] = (yr.gains[k] ?? 0) + (yr.preGains[k] ?? 0);
-
-        // Accrue dividends — reinvest into brokerage (basis steps up) or flow to cash
-        if (inputs.dividendReinvest) {
-            yr.gains.Brokerage = (yr.gains.Brokerage || 0) + yr.taxableDividends;
-            balance.Brokerage += yr.taxableDividends;
-            balance.BrokerageBasis += yr.taxableDividends;
-        } else {
-            yr.gains.Cash += yr.taxableDividends;
-            balance.Cash += yr.taxableDividends;
-        }
-        balance.magiHistory.push(yr.tax.MAGI);
-        totals.tax += yr.totalTax;
-        totals.medicare = (totals.medicare || 0) + yr.medicareBase;
-        totals.gross += yr.totalIncome;
-        totals.spend += (yr.targetSpend + yr.surplus.Shortfall);
-        totals.taxCurrentDollars += yr.totalTax / sim.inflation;
-        totals.spendCurrentDollars += (yr.targetSpend + yr.surplus.Shortfall) / sim.inflation;
-        totals.rmd += yr.totalRMD;
-        // Estimate tax attributable to RMDs proportionally (RMD / totalIncome × totalTax)
-        totals.rmdTax += yr.totalIncome > 0 ? (yr.taxableRMD / yr.totalIncome) * yr.totalTax : 0;
-        totals.qcd = (totals.qcd || 0) + yr.totalQCD;
-        balance.Roth1 += yr.surplus.Roth1;
-        balance.Roth2 += yr.surplus.Roth2;
-        totals.shortfall += yr.surplus.Shortfall;
-
-        // Opp. Cost NetValue (convOC/excessOC) is annotated after the loop by comparing this
-        // run's after-tax wealth against the counterfactual run's, year by year.
-        const _taxFuture = inputs.futureIRATaxRate ?? (yr.marginalFedTaxRate + yr.marginalStateTaxRate);
-        // Capture the year-0 resolved future-IRA rate so the optimizer can value every
-        // strategy's terminal IRA at one shared rate (comparable cross-strategy deltas).
-        if (y === 0) totals.futureIRARate = _taxFuture;
-
-        // Phase 21: BETR per-year signal.
-        // Computed when there was any conversion this year (standard or extra). BETR answers: "what future
-        // marginal rate makes this conversion break-even?" Comparison to futureIRATaxRate gives ▲/▼ flag.
-        yr.yearBETR = null;
-        yr.yearBETRflag = null;
-        if (yr.totalConverted > 0) {
-            const _rIRA = yr.growthRates.IRA1 ?? inputs.growth ?? 0.06;
-            const _drag = (inputs.dividendRate ?? 0) * (yr.tax.capitalGainsRate ?? 0.15);
-            const _rTax = Math.max(0, (inputs.growth ?? _rIRA) - _drag);
-            const _rmdAge1 = (inputs.birthyear1 ?? 1960) >= 1960 ? 75 : 73;
-            const _yearsToRMD = Math.max(1, _rmdAge1 - yr.age1);
-            yr.yearBETR = computeBETR(yr.tax.federalMarginalRate + (yr.tax.stateMarginalRate ?? 0), _rIRA, _rTax, _yearsToRMD);
-            if (yr.yearBETR !== null) {
-                const _futureRate = _taxFuture; // already resolved above
-                yr.yearBETRflag = _futureRate > yr.yearBETR + 0.02 ? '▲'
-                             : _futureRate < yr.yearBETR - 0.02 ? '▼' : '≈';
-            }
-        }
-
-        // After-tax terminal valuation: IRA taxed at ordinary marginal (nominalTaxRate),
-        // brokerage gains above basis taxed at the capital-gains rate (not ordinary),
-        // Roth + Cash + returned basis at face.
-        yr.totalWealth = (balance.IRA1 + balance.IRA2) * (1 - sim.nominalTaxRate)
-            + Math.max(0, balance.Brokerage - balance.BrokerageBasis) * (1 - sim.capitalGainsRate)
-            + balance.Roth1 + balance.Roth2 + balance.Cash + balance.BrokerageBasis
-
-        // Fail when the portfolio can't cover its required draw (spend minus guaranteed income).
-        // This is strategy-agnostic and fires at the point of first real impairment.
-        yr.guaranteedIncome = yr.s1 + yr.s2 + yr.pension;
-        yr.portfolioBalance = balance.IRA1 + balance.IRA2 + balance.Roth1 + balance.Roth2 + balance.Brokerage + balance.Cash;
-        const requiredPortfolioDraw = Math.max(0, sim.spendGoal - yr.guaranteedIncome);
-        if (yr.netIncome < yr.targetSpend * 0.99 || yr.portfolioBalance < requiredPortfolioDraw) {
-            totals.success = false;
-            totals.failedInYear.push(sim.currentYear)
-        } else {
-            totals.yearsfunded += 1
-        }
-
-        inspectForErrors({ totalWealth: yr.totalWealth })  // See if any numbers look fishy.
-
-        // Phase 27: Withdrawal rate = (net outflows − inflows) / start-of-year wealth.
-        // Gross outflows: all account withdrawals incl. conversion-funding draws.
-        yr._grossOutflows = (yr.netWithdrawals.IRA ?? 0) + yr.totalIRAForcedWithdrawals + yr.extraConvGross
-            + (yr.netWithdrawals.Brokerage ?? 0)
-            + (yr.netWithdrawals.Cash ?? 0)
-            + (yr.netWithdrawals.Roth1 ?? 0)
-            + (yr.netWithdrawals.Roth2 ?? 0);
-        // Net outflows: excludes Roth conversions (IRA→Roth reallocation) and reinvested surplus.
-        yr._netOutflows = yr._grossOutflows - yr.totalConverted - yr._reinvestedSurplus;
-        // Inflows: non-portfolio income applied to spending (SS + pension).
-        yr._yearInflows = yr.fixedInc + yr.pension;
-        yr._wdRate = (sim.prevTotalWealth != null && sim.prevTotalWealth > 0)
-            ? (yr._netOutflows - yr._yearInflows) / sim.prevTotalWealth : null;
-
+        growAndSettle(sim, yr);
+        evaluateYearOutcome(sim, yr);
         logYear(sim, yr);
         endYear(sim, yr);
     } // end for (let y = 0; y < maxYears; y++)

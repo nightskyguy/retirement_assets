@@ -741,3 +741,7 @@ User feedback on the baseline-accounting UI:
 
 ---
 *Update after completing each phase or encountering errors*
+
+## Session: 2026-07-10 (worktree mystifying-babbage-559d99)
+- Audited P19 against code: commit d52ffac (2026-07-07) completed 5 of 6 remaining items (findBracketIndex dedup, return-alias unification, computeIrmaaInline deleted, irmaa_and_rmds.html reuse + 12x surcharge fix, load order). Only state coverage (13 states) still open. task_plan.md updated.
+- Assessed P15: all three items (R1b/R3/R4) still open. simulate() regrew to ~1,110 lines (core.js:884-1994); core.js 6,132 lines / 139 getElementById; displayhelpers.js a 163-line stub; worker.js still importScripts. Recommended order R3 -> R1b -> R4. task_plan.md P15 section updated with fresh counts. Next session: start P15 work.

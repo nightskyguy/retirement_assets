@@ -64,7 +64,7 @@ Goal: Complete open features from the original priority list plus deferred items
 | 18 | **P16** | Responsive Layout (all tools) | partial (PF5 covered optimizer phone UX) | — |
 | 19 | **P17** | Retirement_Projection — Simple Mode | pending | — |
 | 20 | **P18** | Retirement_Projection → RetirementTaxPlanner link | pending | — |
-| 21 | **P19** | taxengine.js Architectural Cleanup | pending | — |
+| 21 | **P19** | taxengine.js Architectural Cleanup | mostly complete (d52ffac 2026-07-07); only state coverage (13 states) remains | — |
 | 22 | **P20** | README Table of Contents | **complete** | — |
 | 23 | **P21** | Annual Spending-by-Account View | **complete** | — |
 | 24 | **P22** | Export Annual Details to CSV | pending | — |
@@ -533,9 +533,17 @@ Tests go in `retirement_optimizer_core.test.js`. Helper: `makeZeroBaseInputs()` 
 ## Phase P15: Structural Refactoring Remainder (was Phase R)
 **Why:** `simulate()` still too large. `getElementById()` DOM calls in core.js violate separation of concerns. ES module migration blocked by `importScripts()`.
 
-- [ ] **R1b:** Extract 3-pass tax+gap-fill block (~150 lines) and surplus-routing (~80 lines) from `simulate()`
-- [ ] **R3:** Move ~114 `getElementById()` DOM calls from `core.js` to `displayhelpers.js`
-- [ ] **R4:** ES module migration — rewrite `worker.js` `importScripts()` + test harness `vm.runInContext()` (do last)
+**Assessment 2026-07-10 (verified against code):** all three items still open; nothing landed since R1a/R2 (PR #87). Counts refreshed:
+- core.js now 6,132 lines, 139 `getElementById` calls (plan previously said ~114).
+- `simulate()` back up to ~1,110 lines (core.js:884-1994). R1a had cut it to 987; PF5 counterfactual work (`_cfRefundIRA`, suppress flags) and later features regrew it past pre-R1a size.
+- `displayhelpers.js` exists but is a 163-line stub (1 getElementById) — R3 barely started.
+- `montecarlo/worker.js:8` still `importScripts()`; node test harness still `vm.runInContext()` — R4 untouched.
+
+**Recommended order:** R3 first (engine/UI split makes pure engine testable per-phase and defines R4's module boundaries), then R1b, then R4. Effort: R1b medium, R3 large, R4 medium-large (breakage risk: worker + node harness).
+
+- [ ] **R3:** Split core.js into pure engine + UI file — move 139 `getElementById()` DOM calls to `displayhelpers.js` (or new UI file). Drops test stubs; lets Retirement_Projection reuse the engine. (See arch review findings 2026-07-09 above.)
+- [ ] **R1b:** Decompose `simulate()` (~1,110 lines): extract 3-pass tax+gap-fill block (~150 lines) and surplus-routing (~80 lines); consider per-year phase decomposition (income → withdrawals → conversions → growth → logging).
+- [ ] **R4:** ES module migration — rewrite `worker.js` `importScripts()` + test harness `vm.runInContext()` (do last, after R3 defines module boundaries)
 - **Status:** pending (R1a + R2 already complete, see `task_completed.md`)
 
 ---
@@ -592,13 +600,13 @@ Tests go in `retirement_optimizer_core.test.js`. Helper: `makeZeroBaseInputs()` 
 ## Phase P19: taxengine.js Architectural Cleanup
 **Why:** A full review of taxengine.js (2026-07-02, see `~/.claude/plans/review-taxengine-js-for-1-groovy-balloon.md`) found the circular core.js↔taxengine.js dependency — **fixed same session**: `getRateBracket`, `findLimitByRate`, `findUpperLimitByAmount`, `calculateProgressive` moved from core.js into taxengine.js (new "Bracket utilities" section right after `RMD_TABLE`), so taxengine.js no longer depends on core.js while core.js still depends on taxengine.js (one-directional now). Also fixed as part of that pass: dead `Retirement_Projection.html` polyfill removed (it now transparently uses the real taxengine.js functions), 5 low-risk comment/dead-code fixes in taxengine.js, and a live CPI-inflation-drift bug in `Retirement_Projection.html` (AL/MT/ND/OH/SC brackets were incorrectly inflating). node 51/51 + browser 240/240 verified after each change. The items below are the findings from that review NOT yet addressed.
 
-- [ ] **Bracket-walk consolidation:** taxengine.js has 3 hand-rolled bracket-walk loops (capital gains split in `calculateTaxes()`; IRMAA tier lookup in `getIRMAATier()`; IRMAA target-tier lookup in `getIRMAATierTargetMAGI()`) doing the same "iterate brackets, compare against inflated threshold" pattern — and now that the relocated `getRateBracket`/`findLimitByRate`/`findUpperLimitByAmount`/`calculateProgressive` live in the same file, there are 6 near-duplicate bracket-walk variants in one place. Extract one shared `findBracketIndex(brackets, amount, multiplier)` helper.
-- [ ] **Return-object alias cleanup:** `calculateTaxes()` returns several fields under two names with no differentiation — `stateTax`/`state`, `irmaaMagi`/`MAGI`, `federalMarginalRate`/`fedRate`, `stateMarginalRate`/`stRate`. Needs a consumer audit (which callers use which name) before consolidating — don't remove a name a consumer still reads.
-- [ ] **Unify `computeIrmaaInline()` with `calcIRMAA()`:** `Retirement_Projection.html`'s `computeIrmaaInline()` is a from-scratch reimplementation of `calcIRMAA()`, not a fallback — it's the only IRMAA path that file ever uses. It lacks the `onMedicareCount` per-spouse Medicare-age-gating parameter added to `calcIRMAA()` in the v11.1124 IRMAA work, so that tool's IRMAA display silently doesn't reflect that feature. Needs a decision: thread the birth-year/age data `computeIrmaaInline`'s caller already has (`project()` already takes `birthYearIn`/`spouseBirthYearIn`) into a direct `calcIRMAA()` call and delete `computeIrmaaInline()` entirely.
-- [ ] **`irmaa_and_rmds.html` duplicate bracket math:** reads `TAXData.SOCIALSECURITY`/`TAXData.IRMAA`/`RMD_TABLE` directly and re-implements its own bracket-walk instead of calling `calcIRMAA()`/`getIRMAATier()`/the relocated bracket utilities. Lower risk than the Retirement_Projection.html case (simpler logic, no `INFLATION_INDEXED` interaction) but same pattern — worth revisiting once the bracket-walk consolidation above exists to call into.
-- [ ] **Script load-order normalization (cosmetic, optional):** `taxengine.js` is now the base layer with zero dependencies and `core.js` depends on it — the "correct" load order is taxengine.js first. `IncomeTaxPlanner.html` and the test/worker harnesses already do this; `retirement_optimizer.html` loads `core.js` before `taxengine.js` (works fine due to hoisting, confirmed safe, but backwards from the dependency direction). Low priority — reorder only if touching that file's `<script>` block for another reason.
+- [x] **Bracket-walk consolidation:** DONE (d52ffac, 2026-07-07). `findBracketIndex()` helper added; `calculateProgressive()` gained a `startPosition` param so the capital-gains split reuses it (verified byte-identical output).
+- [x] **Return-object alias cleanup:** DONE (d52ffac). `calculateTaxes()` duplicate names (`state`/`stateTax`, `fedRate`/`federalMarginalRate`, `stRate`/`stateMarginalRate`, `irmaaMagi`/`MAGI`, `stagi`/`stateAGI`) unified onto one canonical name each; all consumers updated. Bonus: repo-wide IRMAA identifier casing normalized with backward-compatible `?stratRate=irmaa2` URL parsing.
+- [x] **Unify `computeIrmaaInline()` with `calcIRMAA()`:** DONE (d52ffac). `computeIrmaaInline()` deleted; Retirement_Projection.html now calls `calcIRMAA()` directly with `onMedicareCount` (fixes missing per-spouse Medicare-age gate).
+- [x] **`irmaa_and_rmds.html` duplicate bracket math:** DONE (d52ffac). Now reuses new `calculateTaxableSocialSecurity()` extracted into taxengine.js; also fixed its "Annual IRMAA Surcharge" column (was showing monthly value, understated 12x).
+- [x] **Script load-order normalization:** DONE (d52ffac). taxengine.js now loads before core.js in retirement_optimizer.html.
 - [ ] **State coverage (13 of 51 jurisdictions uncoded):** LA/UT (flat, easy). 11 graduated states (AR/DE/HI/KS/MO/NJ/NM/OK/RI/VT/WV) — MO/WV need year-keyed rate tables (active phase-downs, same pattern as GA/NE/KY); AR/DE/MO/NJ/NM/RI/VT/WV need per-state partial-SS-taxation thresholds; NJ needs a >$1M surtax bracket; VT needs a low-income exemption rule. RI/VT CPI-indexing is actually free (already the default). See the review plan file for the full per-state breakdown.
-- **Status:** pending (circular-dependency fix + 5 low-risk items shipped, committed 324447f, merged PR #105)
+- **Status:** mostly complete. Round 1 (circular-dependency fix + 5 low-risk items): 324447f, PR #105. Round 2 (bracket-walk dedup, alias unification, IRMAA fixes, load order, plus Medicare growth now uses user CPI inputs instead of hardcoded 5.6%): d52ffac, 2026-07-07, node 51/51 + browser 240/240. Only state coverage (13 states) remains — verified 2026-07-10 (taxengine.js header still "38 of 51 jurisdictions included").
 - **Independent:** no phase dependencies for the remaining items
 
 ---

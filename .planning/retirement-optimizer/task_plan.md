@@ -533,18 +533,11 @@ Tests go in `retirement_optimizer_core.test.js`. Helper: `makeZeroBaseInputs()` 
 ## Phase P15: Structural Refactoring Remainder (was Phase R)
 **Why:** `simulate()` still too large. `getElementById()` DOM calls in core.js violate separation of concerns. ES module migration blocked by `importScripts()`.
 
-**Assessment 2026-07-10 (verified against code):** all three items still open; nothing landed since R1a/R2 (PR #87). Counts refreshed:
-- core.js now 6,132 lines, 139 `getElementById` calls (plan previously said ~114).
-- `simulate()` back up to ~1,110 lines (core.js:884-1994). R1a had cut it to 987; PF5 counterfactual work (`_cfRefundIRA`, suppress flags) and later features regrew it past pre-R1a size.
-- `displayhelpers.js` exists but is a 163-line stub (1 getElementById) — R3 barely started.
-- `montecarlo/worker.js:8` still `importScripts()`; node test harness still `vm.runInContext()` — R4 untouched.
-
-**Recommended order:** R3 first (engine/UI split makes pure engine testable per-phase and defines R4's module boundaries), then R1b, then R4. Effort: R1b medium, R3 large, R4 medium-large (breakage risk: worker + node harness).
-
-- [ ] **R3:** Split core.js into pure engine + UI file — move 139 `getElementById()` DOM calls to `displayhelpers.js` (or new UI file). Drops test stubs; lets Retirement_Projection reuse the engine. (See arch review findings 2026-07-09 above.)
-- [ ] **R1b:** Decompose `simulate()` (~1,110 lines): extract 3-pass tax+gap-fill block (~150 lines) and surplus-routing (~80 lines); consider per-year phase decomposition (income → withdrawals → conversions → growth → logging).
-- [ ] **R4:** ES module migration — rewrite `worker.js` `importScripts()` + test harness `vm.runInContext()` (do last, after R3 defines module boundaries)
-- **Status:** pending (R1a + R2 already complete, see `task_completed.md`)
+**All three items done (2026-07-10):**
+- [x] **R3:** Split core.js into pure engine + UI file — DONE (PR #114, v11.11f3): `optimizer_core.js` (engine) + `optimizer_ui.js` (DOM).
+- [x] **R4:** Pragmatic dual-mode instead of full ES modules (full migration would cascade into 8 consumer HTML pages with no build step) — DONE (PR #115): UMD export guards in taxengine.js (12 symbols) / optimizer_core.js / displayhelpers.js; optimizer_core.test.js harness rewritten from vm.runInContext to require() with taxengine exports mirrored onto globalThis. Worker keeps importScripts; zero HTML changes.
+- [x] **R1b:** Full phase decomposition of `simulate()` — DONE (PR #116, v11.11ff): 1,117 → ~215 lines. Year loop = 16-line sequence of phase functions (beginYear, resolveHousehold, computeIncome, resolveSpendTarget, planPrimaryWithdrawals, applyPrimaryAndTaxPass1, fillSpendingGap, resolveResidualAndForcedIRA, routeSurplusAndConvert + cfRefundIRA helper, applyExtraConversion, attributeIncrementalTaxes, growAndSettle, evaluateYearOutcome, logYear, endYear) sharing explicit `sim` (loop-carried) and `yr` (per-year, ~76 fields) state objects. 12 commits: rename-only field conversion first, then bottom-up verbatim cut-paste moves, then dead-code removal. Every commit verified: node 60/60 + 22-fixture golden-run harness byte-identical (all strategies, cyclic, maxConversion, extraConversion, computeOC both paths, spouse death both orders, QCDs, ssFailYear).
+- **Status:** complete pending merge of PRs #115 (R4) and #116 (R1b, stacked on #115). Browser-verified at v11.11ff: 240/240, optimizer, MC worker, other consumer pages clean. Archive to task_completed.md after merge.
 
 ---
 

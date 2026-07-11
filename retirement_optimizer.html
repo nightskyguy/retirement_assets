@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.11f3</title>
+    <title>Retirement Optimizer 11.11ff</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -49,7 +49,7 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1133"></script>
-	<script src="optimizer_core.js?v=1111f3"></script>
+	<script src="optimizer_core.js?v=1111ff"></script>
 	<script src="optimizer_ui.js?v=1111f3"></script>
 	<script src="optimizer_tests.js?v=1111f3"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
@@ -569,6 +569,8 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.11ff</b> Refactor: No behavior changes. If the page looks stale after this update, do a hard refresh.
+					</li>
 				<li><b>11.11f3</b> Internal cleanup: source files renamed to a shorter, consistent scheme (optimizer_core.js, optimizer_ui.js, optimizer_tests.js, optimizer_text.js, optimizer_styles_responsive.css). The simulation engine and the page UI now live in separate files. No behavior changes. If the page looks broken after this update, do a hard refresh (Ctrl+Shift+R) to clear the old cached files.
 					</li>
 				<li><b>11.11dc</b> <strong>Break Even and Opp. Cost are now measured with a true no-conversion re-simulation.</strong> The tool re-runs your whole plan with the Roth conversions removed and compares after-tax wealth year by year. The no-conversion plan keeps the money in the IRA and pays its own larger RMD taxes and IRMAA surcharges later, so the benefit of avoiding those is now fully counted. The old approximation could report a Break Even year when there were no conversions at all, and could fail to report one for conversions that clearly paid off. Break Even now appears only when conversions actually happen. The same rework applies to the excess-withdrawal opportunity cost (excessOC). See "What is Break Even?" below.

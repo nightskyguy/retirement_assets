@@ -779,6 +779,156 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// Spousal IRA inheritance, Social Security and survivor benefits, pension, RMDs and QCDs.
+function computeIncome(sim, yr) {
+    const { inputs, balance, birthyear1, birthyear2 } = sim;
+    // 1. Inherit IRA
+    if (!yr.alive1 && balance.IRA1 > 0) { balance.IRA2 += balance.IRA1; balance.IRA1 = 0; }
+    if (!yr.alive2 && balance.IRA2 > 0) { balance.IRA1 += balance.IRA2; balance.IRA2 = 0; }
+
+
+    // 2. Base Income
+    let ssReduction = (inputs.ssFailYear > 2000 && sim.currentYear >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
+    let potentialS1 = (yr.age1 >= inputs.ss1Age) ? inputs.ss1 * sim.cpiRate * ssReduction : 0;
+    let potentialS2 = (yr.age2 >= inputs.ss2Age) ? inputs.ss2 * sim.cpiRate * ssReduction : 0;
+    yr.s1 = yr.alive1 ? potentialS1 : 0;
+    yr.s2 = yr.alive2 ? potentialS2 : 0;
+    yr.pension = (yr.age1 >= (inputs.pensionStartAge || 0))
+        ? inputs.pensionAnnual * (inputs.pensionCola ? sim.inflation : 1)
+        : 0;
+
+    // One is deceased (if both decease, it won't get here)
+    if (!yr.alive1 || !yr.alive2) {
+        let rawSurvivorMonthly;
+        if (!yr.alive1) {
+            // Person 2 (spouse) is survivor
+            rawSurvivorMonthly = calculateSurvivorBenefit(
+                inputs.die1, inputs.ss1Age, inputs.ss1 / 12,
+                inputs.ss2Age, inputs.ss2 / 12
+            );
+            yr.pension = yr.pension * (inputs.survivorPct / 100);
+        } else {
+            // Person 1 (user) is survivor
+            rawSurvivorMonthly = calculateSurvivorBenefit(
+                inputs.die2, inputs.ss2Age, inputs.ss2 / 12,
+                inputs.ss1Age, inputs.ss1 / 12
+            );
+        }
+        const survivorAge      = yr.alive1 ? yr.age1 : yr.age2;
+        const survivorStartAge = yr.alive1 ? inputs.ss1Age : inputs.ss2Age;
+        yr.s1 = survivorAge >= survivorStartAge
+            ? rawSurvivorMonthly * 12 * sim.cpiRate * ssReduction
+            : 0;
+        yr.s2 = 0;
+    }
+    yr.fixedInc = yr.s1 + yr.s2;					// Social Security
+    yr.taxableInc = yr.pension;				// Pensions, W2, RMDs, IRA withdrawals, wdBrokerage
+
+    // These will be APPROXIMATE worst case - no Withdrawals have been made.
+    yr.taxableInterest = balance.Cash * inputs.cashYield
+    yr.taxableDividends = balance.Brokerage * inputs.dividendRate
+
+
+    // 3. RMDs and QCDs
+    yr.rmd1Pct = getRMDPercentage(sim.currentYear, birthyear1);
+    let rmd2Pct = getRMDPercentage(sim.currentYear, birthyear2);
+    yr.rmd1 = yr.alive1 ? balance.IRA1 * yr.rmd1Pct || 0 : 0;
+    yr.rmd2 = yr.alive2 ? balance.IRA2 * rmd2Pct || 0 : 0;
+    yr.rmd1Pct = Math.max(yr.rmd1Pct, rmd2Pct, 0);
+    yr.rmd1Pct = Math.max(yr.rmd1Pct, rmd2Pct, 0);
+
+    // QCDs: leave IRA tax-free to charity (age 70.5+). Satisfy RMDs without adding to taxable income/MAGI.
+    // Provisional MAGI estimate (IRA withdrawals unknown here; uses pension+RMD+SS+interest/divs).
+    const qcdLimit = getQCDLimit(sim.currentYear, inputs.cpi);
+    const provisionalMAGI = yr.taxableInc + yr.rmd1 + yr.rmd2 + 0.85 * (yr.s1 + yr.s2) + yr.taxableInterest + yr.taxableDividends;
+    const _qcds = computeAnnualQCDs(inputs, balance, sim.currentYear, qcdLimit, provisionalMAGI, sim.cpiRate, yr.alive1, yr.alive2, yr.status);
+    yr.qcd1 = _qcds.qcd1;
+    yr.qcd2 = _qcds.qcd2;
+    yr.totalQCD = _qcds.totalQCD;
+
+    // QCDs leave the IRA first (charitable transfer, excluded from income)
+    balance.IRA1 = Math.max(0, balance.IRA1 - yr.qcd1);
+    balance.IRA2 = Math.max(0, balance.IRA2 - yr.qcd2);
+
+    // Remaining RMD (after QCD satisfies part/all) is taken as taxable IRA distribution
+    const remainingRmd1 = Math.max(0, yr.rmd1 - yr.qcd1);
+    const remainingRmd2 = Math.max(0, yr.rmd2 - yr.qcd2);
+    balance.IRA1 = Math.max(0, balance.IRA1 - remainingRmd1);
+    balance.IRA2 = Math.max(0, balance.IRA2 - remainingRmd2);
+    yr.curIRA = Math.max(0, balance.IRA1 + balance.IRA2 - yr.iraGoalNominal);
+
+    yr.totalRMD = yr.rmd1 + yr.rmd2;                                    // required distributions (for stats)
+    yr.taxableRMD = remainingRmd1 + remainingRmd2;              // taxable portion (excludes QCDs)
+    yr.totalIRAForcedWithdrawals = yr.qcd1 + remainingRmd1 + yr.qcd2 + remainingRmd2; // actual IRA outflow
+    yr.taxableInc += yr.taxableRMD;                                       // only non-QCD RMDs are income
+    yr.possibleIncome = yr.taxableInc + yr.taxableDividends + yr.taxableInterest + yr.fixedInc;
+}
+
+// Strategy flags, Guyton-Klinger spend adjustment, target spend, marginal-rate seeds, and the working balance snapshot.
+function resolveSpendTarget(sim, yr) {
+    const { inputs, balance } = sim;
+    const y = yr.y;
+    // 4. Determine Target Spending amount based on Strategy
+    // ACA is a STRICT-cap strategy: it shares the bracket strategy's ceiling math and
+    // Cash→Brokerage→Roth gap-fill, but is excluded from the soft-cap forced-IRA fallback
+    // (breaching an ACA FPL cap forfeits the premium subsidy — a cliff, not a tax bump).
+    yr.isACAStrategy = inputs.strategy === 'aca';
+    yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'fixedpct' || yr.isACAStrategy;
+    yr.isOrderedStrategy = inputs.strategy === 'ordered';
+
+    // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
+    if (inputs.strategy === 'gk') {
+        if (y === 0) {
+            sim.gkIWR = sim.spendGoal / sim.gkPrevPortfolio;
+            sim.gkAdjLabel = '';
+        } else {
+            const _guard  = inputs.gkGuard  ?? 0.20;
+            const _adjP   = inputs.gkAdjPct ?? 0.10;
+            const labels  = [];
+            // Inflation Rule: skip CPI if prior return negative AND already over IWR
+            if (sim.gkPriorReturn < 0 && sim.spendGoal / sim.gkPrevPortfolio > sim.gkIWR) {
+                labels.push('no-CPI');
+            } else {
+                sim.spendGoal *= (1 + yr.yearInflation);
+            }
+            // Guardrail checks on (possibly inflation-adjusted) spend
+            const _cwr = sim.spendGoal / sim.gkPrevPortfolio;
+            if (_cwr > sim.gkIWR * (1 + _guard)) {
+                sim.spendGoal *= (1 - _adjP);
+                labels.push(`−${(_adjP * 100).toFixed(0)}%cap`);
+            } else if (_cwr < sim.gkIWR * (1 - _guard)) {
+                sim.spendGoal *= (1 + _adjP);
+                labels.push(`+${(_adjP * 100).toFixed(0)}%pros`);
+            }
+            sim.gkAdjLabel = labels.join(' ') || '';
+        }
+    }
+
+    // GK bypasses goalLimit (bracket ceiling) — spend is dynamically set by GK rules
+    const isGKStrategy = inputs.strategy === 'gk';
+    yr.targetSpend = (yr.isBracketStrategy || yr.isOrderedStrategy || isGKStrategy) ? sim.spendGoal : Math.min(sim.spendGoal, yr.goalLimit);
+    yr.additionalSpendNeeded = Math.max(0, yr.targetSpend + yr.IRMAA - yr.possibleIncome);
+
+    // INCOMPLETE: marginalFedTaxRate and marginalStateTaxRate are set to the rates AT the
+    // spendGoal bracket, not refined to the next lower IRMAA/state limit. To fix: after
+    // finding goalFedBracketLimit, walk down findLimitByRate() to find the ceiling that
+    // keeps MAGI below the next IRMAA threshold, then re-derive the state bracket ceiling.
+    yr.marginalFedTaxRate = yr.goalFedBracketLimit.rate
+    yr.marginalStateTaxRate = yr.goalStateBracketLimit.rate
+
+    //	calculateProgressive('FEDERAL', status, amount, inflation=1, ratecreep=1)
+
+    yr.nominalFedTaxRateAtLimit = 0.14;
+    yr.nominalStateTaxAtLimit = 0.07
+    yr.withdrawStrategy = { order: [], weight: [], taxrate: [] };
+
+    yr.curBalances = { IRA: balance.IRA1 + balance.IRA2, Brokerage: balance.Brokerage, BrokerageBasis: balance.BrokerageBasis, Roth: balance.Roth1 + balance.Roth2, Cash: balance.Cash, IRA1: balance.IRA1, IRA2: balance.IRA2 };
+
+    yr.capGainsPercentage = balance.Brokerage !== 0
+        ? (balance.Brokerage - balance.BrokerageBasis) / balance.Brokerage
+        : 0;
+}
+
 // Cyclic harvest-year decision plus the per-strategy primary withdrawal plan.
 function planPrimaryWithdrawals(sim, yr) {
     const { inputs, balance } = sim;
@@ -1754,146 +1904,9 @@ function simulate(inputs) {
         // any unmet spending stays a shortfall and is flagged via `acaBreach`. The
         // isBracketInfeasible flag (~line 1503) summarizes overage across years.
 
-        // 1. Inherit IRA
-        if (!yr.alive1 && balance.IRA1 > 0) { balance.IRA2 += balance.IRA1; balance.IRA1 = 0; }
-        if (!yr.alive2 && balance.IRA2 > 0) { balance.IRA1 += balance.IRA2; balance.IRA2 = 0; }
+        computeIncome(sim, yr);
 
-
-        // 2. Base Income
-        let ssReduction = (inputs.ssFailYear > 2000 && sim.currentYear >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
-        let potentialS1 = (yr.age1 >= inputs.ss1Age) ? inputs.ss1 * sim.cpiRate * ssReduction : 0;
-        let potentialS2 = (yr.age2 >= inputs.ss2Age) ? inputs.ss2 * sim.cpiRate * ssReduction : 0;
-        yr.s1 = yr.alive1 ? potentialS1 : 0;
-        yr.s2 = yr.alive2 ? potentialS2 : 0;
-        yr.pension = (yr.age1 >= (inputs.pensionStartAge || 0))
-            ? inputs.pensionAnnual * (inputs.pensionCola ? sim.inflation : 1)
-            : 0;
-
-        // One is deceased (if both decease, it won't get here)
-        if (!yr.alive1 || !yr.alive2) {
-            let rawSurvivorMonthly;
-            if (!yr.alive1) {
-                // Person 2 (spouse) is survivor
-                rawSurvivorMonthly = calculateSurvivorBenefit(
-                    inputs.die1, inputs.ss1Age, inputs.ss1 / 12,
-                    inputs.ss2Age, inputs.ss2 / 12
-                );
-                yr.pension = yr.pension * (inputs.survivorPct / 100);
-            } else {
-                // Person 1 (user) is survivor
-                rawSurvivorMonthly = calculateSurvivorBenefit(
-                    inputs.die2, inputs.ss2Age, inputs.ss2 / 12,
-                    inputs.ss1Age, inputs.ss1 / 12
-                );
-            }
-            const survivorAge      = yr.alive1 ? yr.age1 : yr.age2;
-            const survivorStartAge = yr.alive1 ? inputs.ss1Age : inputs.ss2Age;
-            yr.s1 = survivorAge >= survivorStartAge
-                ? rawSurvivorMonthly * 12 * sim.cpiRate * ssReduction
-                : 0;
-            yr.s2 = 0;
-        }
-        yr.fixedInc = yr.s1 + yr.s2;					// Social Security
-        yr.taxableInc = yr.pension;				// Pensions, W2, RMDs, IRA withdrawals, wdBrokerage
-
-        // These will be APPROXIMATE worst case - no Withdrawals have been made.
-        yr.taxableInterest = balance.Cash * inputs.cashYield
-        yr.taxableDividends = balance.Brokerage * inputs.dividendRate
-
-
-        // 3. RMDs and QCDs
-        yr.rmd1Pct = getRMDPercentage(sim.currentYear, birthyear1);
-        let rmd2Pct = getRMDPercentage(sim.currentYear, birthyear2);
-        yr.rmd1 = yr.alive1 ? balance.IRA1 * yr.rmd1Pct || 0 : 0;
-        yr.rmd2 = yr.alive2 ? balance.IRA2 * rmd2Pct || 0 : 0;
-        yr.rmd1Pct = Math.max(yr.rmd1Pct, rmd2Pct, 0);
-        yr.rmd1Pct = Math.max(yr.rmd1Pct, rmd2Pct, 0);
-
-        // QCDs: leave IRA tax-free to charity (age 70.5+). Satisfy RMDs without adding to taxable income/MAGI.
-        // Provisional MAGI estimate (IRA withdrawals unknown here; uses pension+RMD+SS+interest/divs).
-        const qcdLimit = getQCDLimit(sim.currentYear, inputs.cpi);
-        const provisionalMAGI = yr.taxableInc + yr.rmd1 + yr.rmd2 + 0.85 * (yr.s1 + yr.s2) + yr.taxableInterest + yr.taxableDividends;
-        const _qcds = computeAnnualQCDs(inputs, balance, sim.currentYear, qcdLimit, provisionalMAGI, sim.cpiRate, yr.alive1, yr.alive2, yr.status);
-        yr.qcd1 = _qcds.qcd1;
-        yr.qcd2 = _qcds.qcd2;
-        yr.totalQCD = _qcds.totalQCD;
-
-        // QCDs leave the IRA first (charitable transfer, excluded from income)
-        balance.IRA1 = Math.max(0, balance.IRA1 - yr.qcd1);
-        balance.IRA2 = Math.max(0, balance.IRA2 - yr.qcd2);
-
-        // Remaining RMD (after QCD satisfies part/all) is taken as taxable IRA distribution
-        const remainingRmd1 = Math.max(0, yr.rmd1 - yr.qcd1);
-        const remainingRmd2 = Math.max(0, yr.rmd2 - yr.qcd2);
-        balance.IRA1 = Math.max(0, balance.IRA1 - remainingRmd1);
-        balance.IRA2 = Math.max(0, balance.IRA2 - remainingRmd2);
-        yr.curIRA = Math.max(0, balance.IRA1 + balance.IRA2 - yr.iraGoalNominal);
-
-        yr.totalRMD = yr.rmd1 + yr.rmd2;                                    // required distributions (for stats)
-        yr.taxableRMD = remainingRmd1 + remainingRmd2;              // taxable portion (excludes QCDs)
-        yr.totalIRAForcedWithdrawals = yr.qcd1 + remainingRmd1 + yr.qcd2 + remainingRmd2; // actual IRA outflow
-        yr.taxableInc += yr.taxableRMD;                                       // only non-QCD RMDs are income
-        yr.possibleIncome = yr.taxableInc + yr.taxableDividends + yr.taxableInterest + yr.fixedInc;
-
-        // 4. Determine Target Spending amount based on Strategy
-        // ACA is a STRICT-cap strategy: it shares the bracket strategy's ceiling math and
-        // Cash→Brokerage→Roth gap-fill, but is excluded from the soft-cap forced-IRA fallback
-        // (breaching an ACA FPL cap forfeits the premium subsidy — a cliff, not a tax bump).
-        yr.isACAStrategy = inputs.strategy === 'aca';
-        yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'fixedpct' || yr.isACAStrategy;
-        yr.isOrderedStrategy = inputs.strategy === 'ordered';
-
-        // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
-        if (inputs.strategy === 'gk') {
-            if (y === 0) {
-                sim.gkIWR = sim.spendGoal / sim.gkPrevPortfolio;
-                sim.gkAdjLabel = '';
-            } else {
-                const _guard  = inputs.gkGuard  ?? 0.20;
-                const _adjP   = inputs.gkAdjPct ?? 0.10;
-                const labels  = [];
-                // Inflation Rule: skip CPI if prior return negative AND already over IWR
-                if (sim.gkPriorReturn < 0 && sim.spendGoal / sim.gkPrevPortfolio > sim.gkIWR) {
-                    labels.push('no-CPI');
-                } else {
-                    sim.spendGoal *= (1 + yr.yearInflation);
-                }
-                // Guardrail checks on (possibly inflation-adjusted) spend
-                const _cwr = sim.spendGoal / sim.gkPrevPortfolio;
-                if (_cwr > sim.gkIWR * (1 + _guard)) {
-                    sim.spendGoal *= (1 - _adjP);
-                    labels.push(`−${(_adjP * 100).toFixed(0)}%cap`);
-                } else if (_cwr < sim.gkIWR * (1 - _guard)) {
-                    sim.spendGoal *= (1 + _adjP);
-                    labels.push(`+${(_adjP * 100).toFixed(0)}%pros`);
-                }
-                sim.gkAdjLabel = labels.join(' ') || '';
-            }
-        }
-
-        // GK bypasses goalLimit (bracket ceiling) — spend is dynamically set by GK rules
-        const isGKStrategy = inputs.strategy === 'gk';
-        yr.targetSpend = (yr.isBracketStrategy || yr.isOrderedStrategy || isGKStrategy) ? sim.spendGoal : Math.min(sim.spendGoal, yr.goalLimit);
-        yr.additionalSpendNeeded = Math.max(0, yr.targetSpend + yr.IRMAA - yr.possibleIncome);
-
-        // INCOMPLETE: marginalFedTaxRate and marginalStateTaxRate are set to the rates AT the
-        // spendGoal bracket, not refined to the next lower IRMAA/state limit. To fix: after
-        // finding goalFedBracketLimit, walk down findLimitByRate() to find the ceiling that
-        // keeps MAGI below the next IRMAA threshold, then re-derive the state bracket ceiling.
-        yr.marginalFedTaxRate = yr.goalFedBracketLimit.rate
-        yr.marginalStateTaxRate = yr.goalStateBracketLimit.rate
-
-        //	calculateProgressive('FEDERAL', status, amount, inflation=1, ratecreep=1)
-
-        yr.nominalFedTaxRateAtLimit = 0.14;
-        yr.nominalStateTaxAtLimit = 0.07
-        yr.withdrawStrategy = { order: [], weight: [], taxrate: [] };
-
-        yr.curBalances = { IRA: balance.IRA1 + balance.IRA2, Brokerage: balance.Brokerage, BrokerageBasis: balance.BrokerageBasis, Roth: balance.Roth1 + balance.Roth2, Cash: balance.Cash, IRA1: balance.IRA1, IRA2: balance.IRA2 };
-
-        yr.capGainsPercentage = balance.Brokerage !== 0
-            ? (balance.Brokerage - balance.BrokerageBasis) / balance.Brokerage
-            : 0;
+        resolveSpendTarget(sim, yr);
 
         planPrimaryWithdrawals(sim, yr);
 

@@ -1817,14 +1817,11 @@ function simulate(inputs) {
     let inflation    = Math.pow(1 + inputs.inflation, gapYears);
     let medicareRate = Math.pow(1 + inputs.cpi + inputs.inflation, gapYears);
     let fixedWithdrawal = 0;
-    let currentTaxableGuess = 0;
     let spendDelta = 1 + inputs.spendChange;
     let spendGoal = inputs.spendGoal * Math.pow(1 + inputs.inflation, gapYears);
     let cumulativeTaxes = 0;
     let nominalTaxRate = 0.20; // Just a guess.
-    let marginalTaxRate = 0.33; // Just a guess.
     let capitalGainsRate = 0.15; // A guess.
-    let tax = {};
 
     // Phase 20 (reworked): opportunity cost is now measured with a full counterfactual
     // simulation (see the end of simulate()) instead of per-dollar shadow deltas. During a

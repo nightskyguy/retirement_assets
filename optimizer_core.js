@@ -779,6 +779,122 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// Start-of-year setup: amortized IRA target, growth rates, withdrawal-timing auto-select, pre-withdrawal growth, and the withdrawal accumulators (netWithdrawals aliases withdrawals).
+function beginYear(sim, yr) {
+    const { inputs, balance, log } = sim;
+    const y = yr.y;
+    yr.loopStart = performance.now();
+    // Phase 24 interaction fix: cyclic brokerage "harvest" years draw $0 from the IRA
+    // (the isBrokerageYear branch runs instead of the 'fixed' branch), so they consume a
+    // calendar year of the N-year drawdown window without reducing the IRA. Amortizing over
+    // remaining *calendar* years would then dump the deferred balance into the final year as
+    // one balloon draw/conversion. Instead, amortize over the expected remaining *draw* years
+    // (calendar years minus estimated brokerage years) so each IRA-draw year is sized to hit
+    // the target on schedule. The cycle does ~1 brokerage year per cycN IRA years, where
+    // cycN = round(IRA/Brokerage) (see line ~947), i.e. a 1/(cycN+1) fraction of years are skips.
+    // Yearly re-amortization self-corrects any estimation drift.
+    let amortYears = inputs.nYears - y;
+    if (inputs.cyclicEnabled && balance.Brokerage > 0 && amortYears > 1) {
+        const cycN = Math.max(1, Math.round((balance.IRA1 + balance.IRA2) / balance.Brokerage));
+        const expectedSkips = amortYears / (cycN + 1);
+        amortYears = Math.max(1, amortYears - expectedSkips);
+    }
+    // IRA Goal is entered in today's dollars (matches the today's-dollar "Suggested IRA Goal"
+    // hint and the inflation-indexed tax/IRMAA/ACA thresholds the goal is meant to manage).
+    // Inflate it to this year's nominal dollars with cpiRate = (1+cpi)^(gapYears+y), the same
+    // factor the bracket/IRMAA/ACA ceilings use, before comparing against nominal IRA balances.
+    yr.iraGoalNominal = inputs.iraBaseGoal * sim.cpiRate;
+    sim.fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, yr.iraGoalNominal, amortYears, inputs.growth)
+
+    // Phase 12: growthRates moved here (from below withdrawal block) to enable pre-withdrawal growth.
+    // Monte Carlo uses per-year return from injected sequence if provided; else constant rate.
+    // Cash keeps its own yield regardless (not market-correlated).
+    // IRA and Roth always reinvest dividends (tax-deferred / tax-free); effective return = appreciation + dividendRate.
+    // Brokerage dividends handled separately below (taxed first, then reinvested or sent to Cash).
+    // Bootstrap MC passes per-year sampled inflation; GBM and deterministic use the fixed rate.
+    yr.baseReturn    = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
+    yr.yearInflation = inputs.inflationSequence?.[y] ?? inputs.inflation;
+    yr.growthRates = computeYearGrowthRates(inputs, y);
+
+    // Withdrawal timing auto-selection (Phase 12): Early (Jan) for conversion years; Late (Dec) otherwise.
+    // Early: preMonths=1, postMonths=11. Late: preMonths=11, postMonths=1.
+    // Year 0: use strategy flag (bracket or explicit extraConv). Year 1+: prior year's actual conversion amount.
+    // Do NOT use maxConversion as a trigger — it is hardcoded true in the optimizer and does not guarantee a conversion fires.
+    const _stratImpliesConversion = inputs.strategy === 'bracket' || inputs.strategy === 'aca' || (inputs.extraConversionAmount ?? 0) > 0;
+    const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
+    yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
+    const yearTiming   = yr._useEarly ? 'early' : 'late';
+    yr.timingReason = yr._useEarly ? 'Conv'  : 'Spend';
+    const preMonths    = yearTiming === 'early' ? 1 : 11;
+    yr.postMonths   = 12 - preMonths;
+
+    // Pre-withdrawal growth: portfolio earns for preMonths before withdrawal exits.
+    yr.preGains = applyGrowth(balance, yr.growthRates, preMonths);
+
+    yr.withdrawals = { IRA: 0, IRA1: 0, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0 };
+    yr.netWithdrawals = yr.withdrawals;
+}
+
+// Ages, survivorship and filing status, IRMAA lookback charge, bracket limits, and the
+// per-year accumulator initializations. Returns false when both spouses are deceased
+// (the caller ends the simulation).
+function resolveHousehold(sim, yr) {
+    const { inputs, balance, totals, birthyear1, birthyear2 } = sim;
+    // Age at December 31 of the simulation year — the IRS convention for RMD eligibility.
+    // Everyone has had their birthday by Dec 31, so no birth-month adjustment is needed.
+    yr.age1 = sim.currentYear - birthyear1;
+    yr.age2 = sim.currentYear - birthyear2;
+    yr.alive1 = yr.age1 <= inputs.die1;
+    yr.alive2 = yr.age2 <= inputs.die2;
+    if (!yr.alive1 && !yr.alive2) return false;
+
+    totals.yearstested += 1;
+
+    yr.status = (yr.alive1 && yr.alive2) ? 'MFJ' : 'SGL';
+    // IRMAA is already known since it is based on income from 2 years ago (MAGI lookback),
+    // compared against thresholds inflated to THIS payment year (matches SSA indexing).
+    // Only spouses actually on Medicare (living, 65+) pay the surcharge — a 61-year-old
+    // household pays nothing no matter how large the conversion income.
+    yr.onMedicare = (yr.alive1 && yr.age1 >= 65 ? 1 : 0) + (yr.alive2 && yr.age2 >= 65 ? 1 : 0);
+    const magiLookback = balance.magiHistory[balance.magiHistory.length - 2];
+    yr.IRMAA = calcIRMAA(magiLookback, yr.status, sim.cpiRate, sim.medicareRate, yr.onMedicare);
+    // Tier for display/milestones — same lookback MAGI and same age gate as the charge
+    // (the log row used to recompute this AFTER the year's MAGI push, showing the tier a
+    // year early).
+    yr.IRMAATier = yr.onMedicare > 0 ? getIRMAATier(magiLookback, yr.status, sim.cpiRate) : '-none-';
+    // Base Medicare Part B + Part D premiums (informational — tracked, not deducted from
+    // spendable; assumed to live inside the spend goal). Grows at CPI + Inflation (user inputs),
+    // not CPI alone.
+    yr.medicareBase = yr.onMedicare * (TAXData.IRMAA.standardPartB + TAXData.IRMAA.standardPartD) * 12 * sim.medicareRate;
+
+    // Calculate the bracket limits based on: stated limit.
+    // let tgtBracketLimit = findLimitByRate('FEDERAL',status,inputs.stratRate)
+
+    // Find federal & state rates and limits by spending goal:
+    yr.goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', yr.status, sim.spendGoal, sim.cpiRate)
+    yr.goalStateBracketLimit = findUpperLimitByAmount(STATEname, yr.status, sim.spendGoal, sim.cpiRate)
+    yr.goalLimit = Math.min(yr.goalFedBracketLimit.limit, yr.goalStateBracketLimit.limit)
+    let IRMAABracket = findUpperLimitByAmount('IRMAA', yr.status, yr.goalLimit, sim.cpiRate)
+    yr.IRMAALimit = Math.min(yr.goalLimit, IRMAABracket.limit);
+    yr.totalIncome = 0;
+    yr.netIncome = 0;
+    yr.capitalGains = 0;
+    yr.limit = undefined;   // MAGI ceiling for bracket/minlimit/aca strategies (see computeBracketCeiling)
+    yr.stateLimit = undefined;
+    yr.bracketTarget = 0;  // ceiling being targeted by bracket/minlimit/aca strategies
+    yr.bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy)
+    yr.forcedIRA = 0;      // soft-cap break: IRA drawn ABOVE the ceiling to fund mandatory spending
+    yr.acaBreach = false;  // strict ACA cap could not fund spending → plan untenable this year
+
+    // Soft caps (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when spending can't be met
+    // within the ceiling and Cash/Brokerage/Roth are exhausted, the 3rd-pass fallback draws
+    // extra IRA above the ceiling to fund spending (recorded in `forcedIRA`; the bracket
+    // overage is recomputed afterward). Strict cap (ACA): never breaches the FPL ceiling —
+    // any unmet spending stays a shortfall and is flagged via `acaBreach`. The
+    // isBracketInfeasible flag (~line 1503) summarizes overage across years.
+    return true;
+}
+
 // Spousal IRA inheritance, Social Security and survivor benefits, pension, RMDs and QCDs.
 function computeIncome(sim, yr) {
     const { inputs, balance, birthyear1, birthyear2 } = sim;
@@ -1800,123 +1916,14 @@ function simulate(inputs) {
         // Per-year context: every value that crosses a phase boundary within the year
         // lives here; block-internal temporaries stay plain locals.
         const yr = { y };
-        yr.loopStart = performance.now();
-        // Phase 24 interaction fix: cyclic brokerage "harvest" years draw $0 from the IRA
-        // (the isBrokerageYear branch runs instead of the 'fixed' branch), so they consume a
-        // calendar year of the N-year drawdown window without reducing the IRA. Amortizing over
-        // remaining *calendar* years would then dump the deferred balance into the final year as
-        // one balloon draw/conversion. Instead, amortize over the expected remaining *draw* years
-        // (calendar years minus estimated brokerage years) so each IRA-draw year is sized to hit
-        // the target on schedule. The cycle does ~1 brokerage year per cycN IRA years, where
-        // cycN = round(IRA/Brokerage) (see line ~947), i.e. a 1/(cycN+1) fraction of years are skips.
-        // Yearly re-amortization self-corrects any estimation drift.
-        let amortYears = inputs.nYears - y;
-        if (inputs.cyclicEnabled && balance.Brokerage > 0 && amortYears > 1) {
-            const cycN = Math.max(1, Math.round((balance.IRA1 + balance.IRA2) / balance.Brokerage));
-            const expectedSkips = amortYears / (cycN + 1);
-            amortYears = Math.max(1, amortYears - expectedSkips);
-        }
-        // IRA Goal is entered in today's dollars (matches the today's-dollar "Suggested IRA Goal"
-        // hint and the inflation-indexed tax/IRMAA/ACA thresholds the goal is meant to manage).
-        // Inflate it to this year's nominal dollars with cpiRate = (1+cpi)^(gapYears+y), the same
-        // factor the bracket/IRMAA/ACA ceilings use, before comparing against nominal IRA balances.
-        yr.iraGoalNominal = inputs.iraBaseGoal * sim.cpiRate;
-        sim.fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, yr.iraGoalNominal, amortYears, inputs.growth)
-
-        // Phase 12: growthRates moved here (from below withdrawal block) to enable pre-withdrawal growth.
-        // Monte Carlo uses per-year return from injected sequence if provided; else constant rate.
-        // Cash keeps its own yield regardless (not market-correlated).
-        // IRA and Roth always reinvest dividends (tax-deferred / tax-free); effective return = appreciation + dividendRate.
-        // Brokerage dividends handled separately below (taxed first, then reinvested or sent to Cash).
-        // Bootstrap MC passes per-year sampled inflation; GBM and deterministic use the fixed rate.
-        yr.baseReturn    = (inputs.returnSequence != null) ? inputs.returnSequence[y] : inputs.growth;
-        yr.yearInflation = inputs.inflationSequence?.[y] ?? inputs.inflation;
-        yr.growthRates = computeYearGrowthRates(inputs, y);
-
-        // Withdrawal timing auto-selection (Phase 12): Early (Jan) for conversion years; Late (Dec) otherwise.
-        // Early: preMonths=1, postMonths=11. Late: preMonths=11, postMonths=1.
-        // Year 0: use strategy flag (bracket or explicit extraConv). Year 1+: prior year's actual conversion amount.
-        // Do NOT use maxConversion as a trigger — it is hardcoded true in the optimizer and does not guarantee a conversion fires.
-        const _stratImpliesConversion = inputs.strategy === 'bracket' || inputs.strategy === 'aca' || (inputs.extraConversionAmount ?? 0) > 0;
-        const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
-        yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
-        const yearTiming   = yr._useEarly ? 'early' : 'late';
-        yr.timingReason = yr._useEarly ? 'Conv'  : 'Spend';
-        const preMonths    = yearTiming === 'early' ? 1 : 11;
-        yr.postMonths   = 12 - preMonths;
-
-        // Pre-withdrawal growth: portfolio earns for preMonths before withdrawal exits.
-        yr.preGains = applyGrowth(balance, yr.growthRates, preMonths);
-
-        yr.withdrawals = { IRA: 0, IRA1: 0, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0 };
-        yr.netWithdrawals = yr.withdrawals;
-
-        // Age at December 31 of the simulation year — the IRS convention for RMD eligibility.
-        // Everyone has had their birthday by Dec 31, so no birth-month adjustment is needed.
-        yr.age1 = sim.currentYear - birthyear1;
-        yr.age2 = sim.currentYear - birthyear2;
-        yr.alive1 = yr.age1 <= inputs.die1;
-        yr.alive2 = yr.age2 <= inputs.die2;
-        if (!yr.alive1 && !yr.alive2) break;
-
-        totals.yearstested += 1;
-
-        yr.status = (yr.alive1 && yr.alive2) ? 'MFJ' : 'SGL';
-        // IRMAA is already known since it is based on income from 2 years ago (MAGI lookback),
-        // compared against thresholds inflated to THIS payment year (matches SSA indexing).
-        // Only spouses actually on Medicare (living, 65+) pay the surcharge — a 61-year-old
-        // household pays nothing no matter how large the conversion income.
-        yr.onMedicare = (yr.alive1 && yr.age1 >= 65 ? 1 : 0) + (yr.alive2 && yr.age2 >= 65 ? 1 : 0);
-        const magiLookback = balance.magiHistory[balance.magiHistory.length - 2];
-        yr.IRMAA = calcIRMAA(magiLookback, yr.status, sim.cpiRate, sim.medicareRate, yr.onMedicare);
-        // Tier for display/milestones — same lookback MAGI and same age gate as the charge
-        // (the log row used to recompute this AFTER the year's MAGI push, showing the tier a
-        // year early).
-        yr.IRMAATier = yr.onMedicare > 0 ? getIRMAATier(magiLookback, yr.status, sim.cpiRate) : '-none-';
-        // Base Medicare Part B + Part D premiums (informational — tracked, not deducted from
-        // spendable; assumed to live inside the spend goal). Grows at CPI + Inflation (user inputs),
-        // not CPI alone.
-        yr.medicareBase = yr.onMedicare * (TAXData.IRMAA.standardPartB + TAXData.IRMAA.standardPartD) * 12 * sim.medicareRate;
-
-        // Calculate the bracket limits based on: stated limit.
-        // let tgtBracketLimit = findLimitByRate('FEDERAL',status,inputs.stratRate)
-
-        // Find federal & state rates and limits by spending goal:
-        yr.goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', yr.status, sim.spendGoal, sim.cpiRate)
-        yr.goalStateBracketLimit = findUpperLimitByAmount(STATEname, yr.status, sim.spendGoal, sim.cpiRate)
-        yr.goalLimit = Math.min(yr.goalFedBracketLimit.limit, yr.goalStateBracketLimit.limit)
-        let IRMAABracket = findUpperLimitByAmount('IRMAA', yr.status, yr.goalLimit, sim.cpiRate)
-        yr.IRMAALimit = Math.min(yr.goalLimit, IRMAABracket.limit);
-        yr.totalIncome = 0;
-        yr.netIncome = 0;
-        yr.capitalGains = 0;
-        yr.limit = undefined;   // MAGI ceiling for bracket/minlimit/aca strategies (see computeBracketCeiling)
-        yr.stateLimit = undefined;
-        yr.bracketTarget = 0;  // ceiling being targeted by bracket/minlimit/aca strategies
-        yr.bracketOverage = 0; // how far MAGI exceeded bracketTarget (0 when no bracket strategy)
-        yr.forcedIRA = 0;      // soft-cap break: IRA drawn ABOVE the ceiling to fund mandatory spending
-        yr.acaBreach = false;  // strict ACA cap could not fund spending → plan untenable this year
-
-        // Soft caps (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when spending can't be met
-        // within the ceiling and Cash/Brokerage/Roth are exhausted, the 3rd-pass fallback draws
-        // extra IRA above the ceiling to fund spending (recorded in `forcedIRA`; the bracket
-        // overage is recomputed afterward). Strict cap (ACA): never breaches the FPL ceiling —
-        // any unmet spending stays a shortfall and is flagged via `acaBreach`. The
-        // isBracketInfeasible flag (~line 1503) summarizes overage across years.
-
+        beginYear(sim, yr);
+        if (!resolveHousehold(sim, yr)) break;   // both spouses deceased
         computeIncome(sim, yr);
-
         resolveSpendTarget(sim, yr);
-
         planPrimaryWithdrawals(sim, yr);
-
-
         applyPrimaryAndTaxPass1(sim, yr);
-
         fillSpendingGap(sim, yr);
-
         resolveResidualAndForcedIRA(sim, yr);
-
         routeSurplusAndConvert(sim, yr);
         applyExtraConversion(sim, yr);
         attributeIncrementalTaxes(sim, yr);

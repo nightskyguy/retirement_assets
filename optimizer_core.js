@@ -779,6 +779,151 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// Cyclic harvest-year decision plus the per-strategy primary withdrawal plan.
+function planPrimaryWithdrawals(sim, yr) {
+    const { inputs, balance } = sim;
+    const y = yr.y;
+    // Phase 24: Cyclic — determine if this is a brokerage harvest year.
+    // N = ratio of IRA to Brokerage balances (min 1). After N IRA years, one brokerage year.
+    yr.isBrokerageYear = false;
+    yr.subCycleLabel = null;
+    if (inputs.cyclicEnabled) {
+        if (yr.curBalances.Brokerage > 0) {
+            const _cycN = Math.max(1, Math.round(yr.curBalances.IRA / yr.curBalances.Brokerage));
+            if (sim.subCycleIRAYears >= _cycN) {
+                yr.isBrokerageYear = true;
+                sim.subCycleIRAYears = 0;
+            } else {
+                sim.subCycleIRAYears++;
+            }
+        } else {
+            sim.subCycleIRAYears++;   // Brokerage depleted; keep counting IRA years
+        }
+        yr.subCycleLabel = yr.isBrokerageYear ? 'Brok' : 'IRA';
+    }
+
+    if (yr.isBrokerageYear) {
+        // Brokerage harvest year: draw from Brokerage instead of IRA. Always max out the
+        // nerd-knob-selected LTCG bracket (0% or 15% top) rather than only drawing to meet
+        // spend — this realizes gains + steps up basis even when spend doesn't need it.
+        // If spend needs force realization beyond the target, top off whichever LTCG bracket
+        // the forced amount actually lands in (capture the room in the bracket you're already
+        // paying for) — but never past the active bracket/minlimit/aca strategy's own MAGI
+        // ceiling (`limit`), if one is in effect this year.
+        const _baseOrdinaryInc = yr.taxableInc + yr.fixedInc + yr.taxableInterest + yr.taxableDividends;
+        const _cycleTargetRate = inputs.cycleLTCGTarget ?? 0.15;   // nerd knob: 0.15=target 0% bracket (default), 0.20=target 15% bracket
+        const _targetRoom = getLTCGBracketRoom(_baseOrdinaryInc, yr.status, _cycleTargetRate, sim.cpiRate);
+        const _targetNetRoom = _targetRoom * (1 - yr.capGainsPercentage * sim.capitalGainsRate);
+        let _brokerageNetTarget;
+        if (yr.additionalSpendNeeded <= _targetNetRoom) {
+            // Spend fits inside the target bracket — max it out anyway.
+            _brokerageNetTarget = _targetNetRoom;
+        } else {
+            // Spend forces gains beyond the target bracket. Find which LTCG bracket the
+            // forced realization lands in and top off to that bracket's own ceiling.
+            const _spendGrossNeeded = yr.additionalSpendNeeded / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
+            const _landedRate = getLTCGBracketTopRate(_baseOrdinaryInc, _spendGrossNeeded, yr.status, sim.cpiRate);
+            const _ltcgRates = (TAXData.FEDERAL.CAPITAL_GAINS[yr.status]?.brackets ?? []).map(b => b.r);
+            const _nextRate = _ltcgRates.find(r => r > _landedRate);
+            let _room = (_nextRate !== undefined)
+                ? getLTCGBracketRoom(_baseOrdinaryInc, yr.status, _nextRate, sim.cpiRate)
+                : _spendGrossNeeded;   // already in the top LTCG bracket — no higher ceiling to top off to
+            if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
+                // Don't let the LTCG top-off push total realized income past the active
+                // strategy's own ceiling (IRMAA tier / ACA cliff / bracket ceiling). This
+                // branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
+                // year, so compute it fresh here rather than reading a stale/undefined `limit`.
+                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit).limit;
+                _room = Math.min(_room, Math.max(0, _ceil - _baseOrdinaryInc));
+            }
+            _brokerageNetTarget = Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
+        }
+        if (_brokerageNetTarget > 1 && yr.curBalances.Brokerage > 0) {
+            // Depletion check: warn if Brokerage < 50% of what we need
+            const _grossNeeded = _brokerageNetTarget / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
+            if (yr.curBalances.Brokerage < _grossNeeded * 0.5) {
+                yr.subCycleLabel = '⚠Brok';
+            }
+            yr.withdrawals = calculateWithdrawals(yr.curBalances, _brokerageNetTarget,
+                { order: ['Brokerage'], weight: [1], taxrate: [yr.capGainsPercentage * sim.capitalGainsRate] });
+        } else {
+            yr.withdrawals = {};
+        }
+    } else if (inputs.strategy === 'fixed') {
+        // In this strategy, we confine withdrawals to the IRA for the first round. 
+        // We don't care about the tax implications.
+
+        let remYears = Math.max(1, inputs.nYears - y);
+        let amortized = Math.max(0, sim.fixedWithdrawal - yr.totalIRAForcedWithdrawals);
+
+        // Withdraw the fixed amount left after RMDs, or whatever is left in IRAs after leaving room.
+        // Intra-year growth correction: iraGoalNominal is an END-OF-YEAR target, but the
+        // withdrawal happens mid-year and the retained balance still grows for postMonths
+        // afterward (applyGrowth is simple proportional: factor = 1 + rate*postMonths/12).
+        // Drawing down to exactly the goal would leave goal*(1+growth) at year end — a
+        // systematic ~one-year-of-growth overshoot. Instead draw down to goal/postGrowth so
+        // the retained balance lands on the goal at year end; the ×0.99 biases it ~1% under
+        // (preferred to overshooting). growthRates.IRA carries the actual per-year return,
+        // including the Monte Carlo sequence, so this is correct under variable growth too.
+        const postGrowthIRA = 1 + (yr.growthRates.IRA ?? 0) * (yr.postMonths / 12);
+        const reduceFloor = (yr.iraGoalNominal / postGrowthIRA) * 0.99;
+        const curIRAreduce = Math.max(0, balance.IRA1 + balance.IRA2 - reduceFloor);
+        let IRAwd = Math.max(0, Math.min(curIRAreduce, amortized))
+        yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd }
+
+    } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
+        ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
+            computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit));
+
+        yr.bracketTarget = yr.limit;
+
+        // Cap IRA draw at the bracket ceiling; any spending shortfall is filled from
+        // Cash → Brokerage → Roth in the gap-fill pass below (bracket-strategy path).
+        const iRAbracketRoom = Math.max(0, yr.limit - yr.taxableInc - yr.fixedInc - yr.taxableInterest - yr.taxableDividends);
+        const IRAwd = Math.min(yr.curIRA, iRAbracketRoom);
+        yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
+
+    } else if (inputs.strategy === 'fixedpct') {
+        // Withdraw a fixed % of the original IRA balance (before RMDs) each year.
+        // RMDs already taken count toward the target; any excess beyond RMDs is the
+        // additional draw. Spending shortfall fills from Cash → Brokerage → Roth below.
+        const pct = inputs.iraWithdrawPct ?? 0.05;
+        const originalIRA = balance.IRA1 + balance.IRA2 + yr.totalIRAForcedWithdrawals;
+        const targetTotal = originalIRA * pct;
+        const IRAwd = Math.max(0, Math.min(yr.curIRA, targetTotal - yr.totalIRAForcedWithdrawals));
+        yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
+
+    } else if (inputs.strategy === 'propwd') {
+        // Proportional +%: first withdraw proportionally for spending (same as baseline),
+        // then add an IRA-only boost of propWithdraw × spendGoal strictly from IRA.
+        // The after-tax surplus from the boost flows to Roth/Cash via step 7.
+        yr.withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash'];
+        yr.withdrawStrategy.taxrate = [sim.nominalTaxRate, yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0, 0];
+        yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy);
+        const pct = inputs.propWithdraw ?? 0;
+        if (pct > 0) {
+            const remainingIRA = Math.max(0, yr.curBalances.IRA - (yr.withdrawals.IRA || 0));
+            const boost = Math.min(sim.spendGoal * pct, remainingIRA);
+            yr.withdrawals.IRA = (yr.withdrawals.IRA || 0) + boost;
+        }
+
+    } else if (inputs.strategy === 'ordered') {
+        // Ordered strategy: all spending handled in gap-fill to avoid surplus distortion.
+        // Cash draws in the main block don't reduce possibleIncome, causing overdraw + refund loops.
+        yr.withdrawals = {};
+
+    } else {
+        /*********************/
+        /* BASELINE Strategy */
+        /*********************/
+        // Withdraw enough proportionately to get to spendGoal - including taxes.
+        yr.withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash']
+        yr.withdrawStrategy.taxrate = [sim.nominalTaxRate, yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0, 0]
+        yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy)
+
+    }
+}
+
 // Apply the primary withdrawals, first tax pass, MAGI-history seeding and the year-0 IRMAA retro-correction.
 function applyPrimaryAndTaxPass1(sim, yr) {
     const { balance, birthyear1, birthyear2 } = sim;
@@ -1750,145 +1895,7 @@ function simulate(inputs) {
             ? (balance.Brokerage - balance.BrokerageBasis) / balance.Brokerage
             : 0;
 
-        // Phase 24: Cyclic — determine if this is a brokerage harvest year.
-        // N = ratio of IRA to Brokerage balances (min 1). After N IRA years, one brokerage year.
-        yr.isBrokerageYear = false;
-        yr.subCycleLabel = null;
-        if (inputs.cyclicEnabled) {
-            if (yr.curBalances.Brokerage > 0) {
-                const _cycN = Math.max(1, Math.round(yr.curBalances.IRA / yr.curBalances.Brokerage));
-                if (sim.subCycleIRAYears >= _cycN) {
-                    yr.isBrokerageYear = true;
-                    sim.subCycleIRAYears = 0;
-                } else {
-                    sim.subCycleIRAYears++;
-                }
-            } else {
-                sim.subCycleIRAYears++;   // Brokerage depleted; keep counting IRA years
-            }
-            yr.subCycleLabel = yr.isBrokerageYear ? 'Brok' : 'IRA';
-        }
-
-        if (yr.isBrokerageYear) {
-            // Brokerage harvest year: draw from Brokerage instead of IRA. Always max out the
-            // nerd-knob-selected LTCG bracket (0% or 15% top) rather than only drawing to meet
-            // spend — this realizes gains + steps up basis even when spend doesn't need it.
-            // If spend needs force realization beyond the target, top off whichever LTCG bracket
-            // the forced amount actually lands in (capture the room in the bracket you're already
-            // paying for) — but never past the active bracket/minlimit/aca strategy's own MAGI
-            // ceiling (`limit`), if one is in effect this year.
-            const _baseOrdinaryInc = yr.taxableInc + yr.fixedInc + yr.taxableInterest + yr.taxableDividends;
-            const _cycleTargetRate = inputs.cycleLTCGTarget ?? 0.15;   // nerd knob: 0.15=target 0% bracket (default), 0.20=target 15% bracket
-            const _targetRoom = getLTCGBracketRoom(_baseOrdinaryInc, yr.status, _cycleTargetRate, sim.cpiRate);
-            const _targetNetRoom = _targetRoom * (1 - yr.capGainsPercentage * sim.capitalGainsRate);
-            let _brokerageNetTarget;
-            if (yr.additionalSpendNeeded <= _targetNetRoom) {
-                // Spend fits inside the target bracket — max it out anyway.
-                _brokerageNetTarget = _targetNetRoom;
-            } else {
-                // Spend forces gains beyond the target bracket. Find which LTCG bracket the
-                // forced realization lands in and top off to that bracket's own ceiling.
-                const _spendGrossNeeded = yr.additionalSpendNeeded / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
-                const _landedRate = getLTCGBracketTopRate(_baseOrdinaryInc, _spendGrossNeeded, yr.status, sim.cpiRate);
-                const _ltcgRates = (TAXData.FEDERAL.CAPITAL_GAINS[yr.status]?.brackets ?? []).map(b => b.r);
-                const _nextRate = _ltcgRates.find(r => r > _landedRate);
-                let _room = (_nextRate !== undefined)
-                    ? getLTCGBracketRoom(_baseOrdinaryInc, yr.status, _nextRate, sim.cpiRate)
-                    : _spendGrossNeeded;   // already in the top LTCG bracket — no higher ceiling to top off to
-                if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
-                    // Don't let the LTCG top-off push total realized income past the active
-                    // strategy's own ceiling (IRMAA tier / ACA cliff / bracket ceiling). This
-                    // branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
-                    // year, so compute it fresh here rather than reading a stale/undefined `limit`.
-                    const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit).limit;
-                    _room = Math.min(_room, Math.max(0, _ceil - _baseOrdinaryInc));
-                }
-                _brokerageNetTarget = Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
-            }
-            if (_brokerageNetTarget > 1 && yr.curBalances.Brokerage > 0) {
-                // Depletion check: warn if Brokerage < 50% of what we need
-                const _grossNeeded = _brokerageNetTarget / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
-                if (yr.curBalances.Brokerage < _grossNeeded * 0.5) {
-                    yr.subCycleLabel = '⚠Brok';
-                }
-                yr.withdrawals = calculateWithdrawals(yr.curBalances, _brokerageNetTarget,
-                    { order: ['Brokerage'], weight: [1], taxrate: [yr.capGainsPercentage * sim.capitalGainsRate] });
-            } else {
-                yr.withdrawals = {};
-            }
-        } else if (inputs.strategy === 'fixed') {
-            // In this strategy, we confine withdrawals to the IRA for the first round. 
-            // We don't care about the tax implications.
-
-            let remYears = Math.max(1, inputs.nYears - y);
-            let amortized = Math.max(0, sim.fixedWithdrawal - yr.totalIRAForcedWithdrawals);
-
-            // Withdraw the fixed amount left after RMDs, or whatever is left in IRAs after leaving room.
-            // Intra-year growth correction: iraGoalNominal is an END-OF-YEAR target, but the
-            // withdrawal happens mid-year and the retained balance still grows for postMonths
-            // afterward (applyGrowth is simple proportional: factor = 1 + rate*postMonths/12).
-            // Drawing down to exactly the goal would leave goal*(1+growth) at year end — a
-            // systematic ~one-year-of-growth overshoot. Instead draw down to goal/postGrowth so
-            // the retained balance lands on the goal at year end; the ×0.99 biases it ~1% under
-            // (preferred to overshooting). growthRates.IRA carries the actual per-year return,
-            // including the Monte Carlo sequence, so this is correct under variable growth too.
-            const postGrowthIRA = 1 + (yr.growthRates.IRA ?? 0) * (yr.postMonths / 12);
-            const reduceFloor = (yr.iraGoalNominal / postGrowthIRA) * 0.99;
-            const curIRAreduce = Math.max(0, balance.IRA1 + balance.IRA2 - reduceFloor);
-            let IRAwd = Math.max(0, Math.min(curIRAreduce, amortized))
-            yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd }
-
-        } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
-            ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-                computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit));
-
-            yr.bracketTarget = yr.limit;
-
-            // Cap IRA draw at the bracket ceiling; any spending shortfall is filled from
-            // Cash → Brokerage → Roth in the gap-fill pass below (bracket-strategy path).
-            const iRAbracketRoom = Math.max(0, yr.limit - yr.taxableInc - yr.fixedInc - yr.taxableInterest - yr.taxableDividends);
-            const IRAwd = Math.min(yr.curIRA, iRAbracketRoom);
-            yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
-
-        } else if (inputs.strategy === 'fixedpct') {
-            // Withdraw a fixed % of the original IRA balance (before RMDs) each year.
-            // RMDs already taken count toward the target; any excess beyond RMDs is the
-            // additional draw. Spending shortfall fills from Cash → Brokerage → Roth below.
-            const pct = inputs.iraWithdrawPct ?? 0.05;
-            const originalIRA = balance.IRA1 + balance.IRA2 + yr.totalIRAForcedWithdrawals;
-            const targetTotal = originalIRA * pct;
-            const IRAwd = Math.max(0, Math.min(yr.curIRA, targetTotal - yr.totalIRAForcedWithdrawals));
-            yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd };
-
-        } else if (inputs.strategy === 'propwd') {
-            // Proportional +%: first withdraw proportionally for spending (same as baseline),
-            // then add an IRA-only boost of propWithdraw × spendGoal strictly from IRA.
-            // The after-tax surplus from the boost flows to Roth/Cash via step 7.
-            yr.withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash'];
-            yr.withdrawStrategy.taxrate = [sim.nominalTaxRate, yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0, 0];
-            yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy);
-            const pct = inputs.propWithdraw ?? 0;
-            if (pct > 0) {
-                const remainingIRA = Math.max(0, yr.curBalances.IRA - (yr.withdrawals.IRA || 0));
-                const boost = Math.min(sim.spendGoal * pct, remainingIRA);
-                yr.withdrawals.IRA = (yr.withdrawals.IRA || 0) + boost;
-            }
-
-        } else if (inputs.strategy === 'ordered') {
-            // Ordered strategy: all spending handled in gap-fill to avoid surplus distortion.
-            // Cash draws in the main block don't reduce possibleIncome, causing overdraw + refund loops.
-            yr.withdrawals = {};
-
-        } else {
-            /*********************/
-            /* BASELINE Strategy */
-            /*********************/
-            // Withdraw enough proportionately to get to spendGoal - including taxes.
-            yr.withdrawStrategy.order = ['IRA', 'Brokerage', 'Cash']
-            yr.withdrawStrategy.taxrate = [sim.nominalTaxRate, yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0, 0]
-            yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy)
-
-        }
+        planPrimaryWithdrawals(sim, yr);
 
 
         applyPrimaryAndTaxPass1(sim, yr);

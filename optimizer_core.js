@@ -779,6 +779,59 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// Apply the primary withdrawals, first tax pass, MAGI-history seeding and the year-0 IRMAA retro-correction.
+function applyPrimaryAndTaxPass1(sim, yr) {
+    const { balance, birthyear1, birthyear2 } = sim;
+    applyWithdrawals(yr.curBalances, yr.withdrawals)
+    inspectForErrors(yr.curBalances, yr.withdrawals)
+
+    yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, yr.withdrawals])
+    yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
+
+    // 5. Tax Calc (Including IRMAA lag)
+    // NOTE: This first tax pass may undercount income if the IRA accounts are exhausted
+    // and Cash/Brokerage/Roth must backfill (handled ~line 884). The second tax pass
+    // (~line 922) recalculates with updated withdrawals. If that second pass introduces
+    // a bracket crossing, a third pass would be needed for accuracy. Current two-pass
+    // approach is an accepted approximation.
+
+    inspectForErrors({ fixedInc: yr.fixedInc, totalRMD: yr.totalRMD, taxableInterest: yr.taxableInterest, capitalGains: yr.capitalGains, taxableDividends: yr.taxableDividends, age1: yr.age1, age2: yr.age2, cpiRate: sim.cpiRate })
+
+
+    yr.tax = calculateTaxes({
+        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
+        totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
+        earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
+        pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
+        qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
+        taxExemptInterest: 0, state: STATEname
+    })
+    inspectForErrors(yr.tax)  // See if any numbers look fishy.
+
+    yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
+    yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
+    sim.capitalGainsRate = yr.tax.capitalGainsRate;
+
+    //!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
+
+    let magiHistoryLength = balance.magiHistory.length
+    if (magiHistoryLength < 1) {
+        balance.magiHistory.push(yr.tax.MAGI);
+        balance.magiHistory.push(yr.tax.MAGI);
+        // Year 0 read undefined MAGI at the lookback above (no history existed yet), forcing
+        // IRMAA to $0/'-none-' regardless of actual income. Retroactively correct THIS year's
+        // charge now that tax.MAGI is known — steady-state assumption per the comment above,
+        // still "computed once at charge time" (doesn't reintroduce the prior tier-lag bug).
+        yr.IRMAA = calcIRMAA(yr.tax.MAGI, yr.status, sim.cpiRate, sim.medicareRate, yr.onMedicare);
+        yr.IRMAATier = yr.onMedicare > 0 ? getIRMAATier(yr.tax.MAGI, yr.status, sim.cpiRate) : '-none-';
+        yr.tax.IRMAAAnnualCost = yr.IRMAA;
+        yr.tax.IRMAARate = yr.tax.MAGI > 0 ? yr.IRMAA / yr.tax.MAGI : 0;
+        yr.tax.nominalRate = yr.tax.federalNominalRate + yr.tax.stateNominalRate + yr.tax.IRMAARate;
+    }
+
+    yr.totalTax = yr.tax.totalTax + yr.IRMAA;
+}
+
 // Cash-flow gap fill (strategy-dependent supplemental withdrawals) and second tax pass.
 function fillSpendingGap(sim, yr) {
     const { inputs, birthyear1, birthyear2 } = sim;
@@ -1838,54 +1891,7 @@ function simulate(inputs) {
         }
 
 
-        applyWithdrawals(yr.curBalances, yr.withdrawals)
-        inspectForErrors(yr.curBalances, yr.withdrawals)
-
-        yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, yr.withdrawals])
-        yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
-
-        // 5. Tax Calc (Including IRMAA lag)
-        // NOTE: This first tax pass may undercount income if the IRA accounts are exhausted
-        // and Cash/Brokerage/Roth must backfill (handled ~line 884). The second tax pass
-        // (~line 922) recalculates with updated withdrawals. If that second pass introduces
-        // a bracket crossing, a third pass would be needed for accuracy. Current two-pass
-        // approach is an accepted approximation.
-
-        inspectForErrors({ fixedInc: yr.fixedInc, totalRMD: yr.totalRMD, taxableInterest: yr.taxableInterest, capitalGains: yr.capitalGains, taxableDividends: yr.taxableDividends, age1: yr.age1, age2: yr.age2, cpiRate: sim.cpiRate })
-
-
-        yr.tax = calculateTaxes({
-            filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
-            totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
-            earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
-            pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
-            qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-            taxExemptInterest: 0, state: STATEname
-        })
-        inspectForErrors(yr.tax)  // See if any numbers look fishy.
-
-        yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
-        yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
-        sim.capitalGainsRate = yr.tax.capitalGainsRate;
-
-        //!!! Assume MAGI for prior to years is the same as this year. Should allow this to be entered
-
-        let magiHistoryLength = balance.magiHistory.length
-        if (magiHistoryLength < 1) {
-            balance.magiHistory.push(yr.tax.MAGI);
-            balance.magiHistory.push(yr.tax.MAGI);
-            // Year 0 read undefined MAGI at the lookback above (no history existed yet), forcing
-            // IRMAA to $0/'-none-' regardless of actual income. Retroactively correct THIS year's
-            // charge now that tax.MAGI is known — steady-state assumption per the comment above,
-            // still "computed once at charge time" (doesn't reintroduce the prior tier-lag bug).
-            yr.IRMAA = calcIRMAA(yr.tax.MAGI, yr.status, sim.cpiRate, sim.medicareRate, yr.onMedicare);
-            yr.IRMAATier = yr.onMedicare > 0 ? getIRMAATier(yr.tax.MAGI, yr.status, sim.cpiRate) : '-none-';
-            yr.tax.IRMAAAnnualCost = yr.IRMAA;
-            yr.tax.IRMAARate = yr.tax.MAGI > 0 ? yr.IRMAA / yr.tax.MAGI : 0;
-            yr.tax.nominalRate = yr.tax.federalNominalRate + yr.tax.stateNominalRate + yr.tax.IRMAARate;
-        }
-
-        yr.totalTax = yr.tax.totalTax + yr.IRMAA;
+        applyPrimaryAndTaxPass1(sim, yr);
 
         fillSpendingGap(sim, yr);
 

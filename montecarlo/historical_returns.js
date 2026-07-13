@@ -1,11 +1,61 @@
 // Historical annual return and inflation data for Monte Carlo bootstrap simulation.
-// Sources: Damodaran (S&P 500 proxy, US 10-yr Treasury), MSCI (EAFE),
+// Sources: Damodaran (S&P 500 proxy, US 10-yr Treasury, US Small Cap, Gold), MSCI (EAFE),
 //          BLS CPI-U (December-over-December, 1928–2025).
 // All values are decimal fractions: 0.10 = 10%, -0.37 = -37%.
 // Loadable via <script src="..."> (browser) or importScripts() (web worker).
+//
+// gold / smallCap source (added [DATE]): Aswath Damodaran, NYU Stern —
+//   "Historical Returns on Stocks, Bonds and Bills: 1928-2024"
+//   https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/histretSP.html
+//   (raw file: https://pages.stern.nyu.edu/~adamodar/pc/datasets/histretSP.xls)
+//   US Small Cap = bottom decile by market cap; Gold = annual % change, USD.
+//   NOTE: this S&P 500 series is Damodaran's own composite and differs slightly
+//   (methodology/rounding) from the `equity` array above, which is not sourced
+//   from Damodaran — gold/smallCap are still internally consistent with each other.
+//
+// growth / dividend source: Kenneth R. French Data Library (Dartmouth Tuck),
+//   value-weighted annual portfolio returns, 1928–2025 — total return (price +
+//   dividends reinvested), NOT the "[ex. Dividends]" variant.
+//   https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html
+//   growth   = "Lo 30" (bottom 30% by book-equity/market-equity, i.e. growth/glamour
+//              stocks) from Portfolios_Formed_on_BE-ME_CSV.zip
+//              (Portfolios_Formed_on_BE-ME.csv, "Value Weight Returns -- Annual").
+//   dividend = "Hi 30" (top 30% by dividend yield) from Portfolios_Formed_on_D-P_CSV.zip
+//              (Portfolios_Formed_on_D-P.csv, "Value Weight Returns -- Annual").
+//              NOTE: an earlier version of this file used Portfolios_Formed_on_D-P_
+//              Wout_Div_CSV.zip ("[ex. Dividends]" — price-only, no dividend income)
+//              by mistake; this has been corrected to the standard total-return file.
+//   These are academic factor portfolios (CRSP/Compustat universe), not investable
+//   indices — real-world funds tracking growth/dividend styles will differ somewhat.
+//
+// hysa source: 1928–1999 backfilled with Damodaran's 3-month T-Bill annual rate (see
+//   above) as a cash-yield proxy; 2000–2026 carried over unchanged from hysa_data.js
+//   (FRED/FDIC/Fed-funds-based competitive HYSA rate estimates). See `hysa` array below
+//   for full detail — hysa_data.js itself was left untouched.
 
 const HISTORICAL_RETURNS = {
     // S&P 500 proxy (large-cap US equity), 1928–2025.  98 observations.
+	series: [   // [ name, startyear, endyear, description ] 
+				["equity", 1928, 2025, "S&P500 Equity equivalent"], 
+				["bonds", 1928, 2025, "Bonds"], 
+				["intl", 1970, 2025, "International Stock (non US)"],
+				["smallCap", 1928, 2025, "Small CAP stock"], 
+				["gold", 1928, 2025, "Gold prices"], 
+				["growth", 1928, 2025, "Growth Stock"],
+				["dividend", 1928, 2025, "Dividend Stock - inclusive of dividends"],
+				["inflation", 1928, 2026, "Consumer Price Index (CPI) per US gov"],
+				["hysa", 1928, 2026, "High-Yield Savings Account rate (T-Bill proxy pre-2000)"]
+			],
+    equityStartYear:    1928,
+    bondsStartYear:     1928,
+    intlStartYear:      1970,
+    smallCapStartYear:  1928,
+    goldStartYear:      1928,
+    growthStartYear:    1928,
+    dividendStartYear:  1928,
+    inflationStartYear: 1928,
+    hysaStartYear:      1928,
+			
     equity: [
         // 1928–1934
          0.4381, -0.0830, -0.2512, -0.4384, -0.0864,  0.4998, -0.0119,
@@ -89,9 +139,141 @@ const HISTORICAL_RETURNS = {
          0.2200,  0.0780,  0.1130, -0.1450,  0.1820,  0.0470,
     ],
 
-    // US CPI-U annual inflation (December-over-December), 1928–2025.  98 observations.
+    // US Small Cap (bottom decile by market cap), 1928–2025.  98 observations.
+    // Source: Damodaran, NYU Stern (see header note above).
+    smallCap: [
+        // 1928–1934
+         0.6215, -0.4608, -0.4835, -0.4362,  0.2865,  1.4660,  0.2307,
+        // 1935–1941
+         0.5490,  0.9641, -0.5394,  0.0516, -0.0486, -0.3288, -0.0675,
+        // 1942–1948
+         0.6301,  1.4302,  0.7115,  0.9441, -0.1373, -0.0174, -0.0001,
+        // 1949–1955
+         0.2760,  0.5281,  0.0387,  0.0102, -0.0597,  0.6497,  0.2672,
+        // 1956–1962
+        -0.0089, -0.1519,  0.6880,  0.1270, -0.0357,  0.2945, -0.0978,
+        // 1963–1969
+         0.1965,  0.2325,  0.4524, -0.0947,  1.1587,  0.6069, -0.3295,
+        // 1970–1976
+        -0.1878,  0.1596,  0.0016, -0.3880, -0.2690,  0.5968,  0.4862,
+        // 1977–1983
+         0.3029,  0.2889,  0.4169,  0.4192, -0.0429,  0.2685,  0.3486,
+        // 1984–1990
+        -0.1450,  0.2451,  0.0209, -0.1400,  0.1715,  0.0696, -0.2777,
+        // 1991–1997
+         0.4607,  0.2534,  0.2556, -0.0476,  0.3212,  0.1479,  0.2206,
+        // 1998–2004
+        -0.1347,  0.3771, -0.0913,  0.3214, -0.0361,  0.9123,  0.1730,
+        // 2005–2011
+         0.0378,  0.1840, -0.0911, -0.4468,  0.4694,  0.2773, -0.1404,
+        // 2012–2018
+         0.1896,  0.5030,  0.0153, -0.0912,  0.1702,  0.1513, -0.1621,
+        // 2019–2025
+         0.1192,  0.3416,  0.2241, -0.2290,  0.0519,  0.0870,  0.1653,
+    ],
+
+    // Gold, annual % change (USD), 1928–2025.  98 observations.
+    // Source: Damodaran, NYU Stern (see header note above).
+    gold: [
+        // 1928–1934
+         0.0010, -0.0015,  0.0010, -0.1738,  0.2128,  0.2726,  0.3175,
+        // 1935–1941
+         0.0043,  0.0009, -0.0023,  0.0017, -0.0123, -0.0166,  0.0000,
+        // 1942–1948
+         0.0000,  0.0000,  0.0000,  0.0254,  0.0000,  0.0000,  0.0000,
+        // 1949–1955
+        -0.0870,  0.0956,  0.0000, -0.0035,  0.0069,  0.0057, -0.0003,
+        // 1956–1962
+        -0.0011, -0.0011,  0.0043,  0.0000,  0.0048, -0.0006, -0.0006,
+        // 1963–1969
+        -0.0040,  0.0003,  0.0006,  0.0003, -0.0051,  0.1247,  0.0501,
+        // 1970–1976
+        -0.0945,  0.1669,  0.4878,  0.7296,  0.6615, -0.2480, -0.0410,
+        // 1977–1983
+         0.2264,  0.3701,  1.2655,  0.1519, -0.3260,  0.1562, -0.1680,
+        // 1984–1990
+        -0.1938,  0.0600,  0.1896,  0.2453, -0.1526, -0.0284, -0.0311,
+        // 1991–1997
+        -0.0856, -0.0573,  0.1768, -0.0217,  0.0098, -0.0459, -0.2141,
+        // 1998–2004
+        -0.0083,  0.0085, -0.0544,  0.0075,  0.2557,  0.1989,  0.0465,
+        // 2005–2011
+         0.1777,  0.2320,  0.3192,  0.0432,  0.2504,  0.2924,  0.1202,
+        // 2012–2018
+         0.0568, -0.2761,  0.0012, -0.1211,  0.0810,  0.1266, -0.0093,
+        // 2019–2025
+         0.1908,  0.2417, -0.0375,  0.0055,  0.1326,  0.2596,  0.6622,
+    ],
+
+    // Growth stocks (low BE/ME "Lo 30" decile, value-weighted), 1928–2025.  98 observations.
+    // Source: Kenneth R. French Data Library (see header note above).
+    growth: [
+        // 1928–1934
+         0.4583, -0.1964, -0.2624, -0.3607, -0.0691,  0.4419,  0.0875,
+        // 1935–1941
+         0.4351,  0.2650, -0.3497,  0.3390,  0.0778, -0.1009, -0.1403,
+        // 1942–1948
+         0.1431,  0.2115,  0.1615,  0.3342, -0.0975,  0.0273,  0.0277,
+        // 1949–1955
+         0.2334,  0.2346,  0.2033,  0.1290,  0.0235,  0.4747,  0.2850,
+        // 1956–1962
+         0.0713, -0.0882,  0.4166,  0.1305, -0.0260,  0.2623, -0.1108,
+        // 1963–1969
+         0.2158,  0.1428,  0.1399, -0.1065,  0.3086,  0.0556,  0.0005,
+        // 1970–1976
+        -0.0678,  0.2460,  0.2060, -0.2258, -0.2946,  0.3544,  0.1816,
+        // 1977–1983
+        -0.0822,  0.0761,  0.1960,  0.3687, -0.0796,  0.2186,  0.1533,
+        // 1984–1990
+        -0.0298,  0.3220,  0.1303,  0.0494,  0.1202,  0.3411, -0.0086,
+        // 1991–1997
+         0.4378,  0.0626,  0.0208,  0.0062,  0.3644,  0.2074,  0.3035,
+        // 1998–2004
+         0.3620,  0.2707, -0.1321, -0.1411, -0.2348,  0.2804,  0.0861,
+        // 2005–2011
+         0.0437,  0.1099,  0.1231, -0.3429,  0.3058,  0.1570,  0.0367,
+        // 2012–2018
+         0.1529,  0.3365,  0.1320,  0.0399,  0.0903,  0.2913, -0.0026,
+        // 2019–2025
+         0.3374,  0.3662,  0.2480, -0.2577,  0.3737,  0.2952,  0.1786,
+    ],
+
+    // Dividend stocks (high dividend-yield "Hi 30" decile, value-weighted), 1928–2025.  98 observations.
+    // Source: Kenneth R. French Data Library (see header note above).
+    dividend: [
+        // 1928–1934
+         0.3198, -0.1907, -0.4298, -0.5352,  0.1367,  0.8459,  0.0500,
+        // 1935–1941
+         0.4516,  0.1663, -0.4080,  0.4035, -0.0075, -0.0031, -0.1995,
+        // 1942–1948
+         0.3629,  0.3924,  0.3456,  0.4351, -0.0440, -0.0102,  0.0236,
+        // 1949–1955
+         0.2249,  0.3322,  0.1961,  0.1568, -0.0788,  0.6479,  0.2715,
+        // 1956–1962
+         0.0643, -0.2000,  0.6127,  0.1270,  0.0334,  0.3192, -0.0025,
+        // 1963–1969
+         0.2844,  0.2266,  0.1371, -0.1661,  0.2288,  0.2083, -0.1495,
+        // 1970–1976
+         0.1937,  0.0732,  0.1482, -0.1288, -0.2010,  0.4883,  0.4011,
+        // 1977–1983
+         0.0342,  0.0359,  0.1318,  0.1620,  0.1343,  0.2365,  0.2651,
+        // 1984–1990
+         0.1659,  0.3213,  0.2338,  0.0146,  0.2284,  0.2794, -0.0696,
+        // 1991–1997
+         0.2363,  0.1297,  0.1512,  0.0036,  0.4008,  0.1870,  0.3634,
+        // 1998–2004
+         0.1930, -0.1074,  0.2771,  0.0619, -0.0732,  0.2719,  0.1514,
+        // 2005–2011
+         0.0306,  0.1915, -0.0132, -0.3301,  0.1383,  0.1853,  0.1399,
+        // 2012–2018
+         0.1166,  0.2772,  0.1155, -0.0114,  0.2093,  0.1063, -0.0579,
+        // 2019–2025
+         0.2142, -0.0274,  0.3269,  0.0769,  0.1046,  0.1591,  0.1811,
+    ],
+
+    // US CPI-U annual inflation (December-over-December), 1928–2026.  99 observations.
     // Great Depression deflation, WWII price controls, post-war surge, Volcker disinflation,
-    // and 2021–2022 post-COVID spike are all captured.
+    // and 2021–2022 post-COVID spike are all captured. Final value (0.0420) is a 2026 estimate.
     inflation: [
         // 1928–1934
         -0.0170,  0.0000, -0.0230, -0.0900, -0.0990, -0.0510,  0.0340,
@@ -120,11 +302,48 @@ const HISTORICAL_RETURNS = {
         // 2012–2018
          0.0210,  0.0150,  0.0160,  0.0010,  0.0210,  0.0210,  0.0240,
         // 2019–2025
-         0.0230,  0.0140,  0.0700,  0.0650,  0.0340,  0.0290,  0.0270,
+         0.0230,  0.0140,  0.0700,  0.0650,  0.0340,  0.0290,  0.0270, 0.0420
     ],
 
-    equityStartYear:    1928,
-    bondsStartYear:     1928,
-    intlStartYear:      1970,
-    inflationStartYear: 1928,
+    // High-Yield Savings Account rate, 1928–2026.  99 observations.
+    // 1928–1999: 3-month T-Bill annual rate (Damodaran, NYU Stern — see header note above),
+    //   used as a proxy since no true "high-yield savings" product/rate data exists this far
+    //   back (FDIC's official national deposit-rate series only starts in 2009, and
+    //   competitive online HYSAs as a product didn't exist before ~2000).
+    // 2000–2026: from hysa_data.js (unchanged) — top competitive rates estimated from
+    //   FRED, FDIC, and Fed funds history; 2026 is a partial-year estimate.
+    // Pair with the `inflation` array above for real (inflation-adjusted) HYSA yield.
+    hysa: [
+        // 1928–1934
+         0.0308,  0.0316,  0.0455,  0.0231,  0.0107,  0.0096,  0.0028,
+        // 1935–1941
+         0.0017,  0.0017,  0.0028,  0.0007,  0.0005,  0.0004,  0.0013,
+        // 1942–1948
+         0.0034,  0.0038,  0.0038,  0.0038,  0.0038,  0.0060,  0.0105,
+        // 1949–1955
+         0.0112,  0.0120,  0.0152,  0.0172,  0.0189,  0.0094,  0.0172,
+        // 1956–1962
+         0.0262,  0.0322,  0.0177,  0.0339,  0.0287,  0.0235,  0.0277,
+        // 1963–1969
+         0.0316,  0.0355,  0.0395,  0.0486,  0.0429,  0.0534,  0.0667,
+        // 1970–1976
+         0.0639,  0.0433,  0.0406,  0.0704,  0.0785,  0.0579,  0.0498,
+        // 1977–1983
+         0.0526,  0.0718,  0.1005,  0.1139,  0.1404,  0.1109,  0.0895,
+        // 1984–1990
+         0.0992,  0.0772,  0.0615,  0.0596,  0.0689,  0.0839,  0.0775,
+        // 1991–1997
+         0.0554,  0.0351,  0.0307,  0.0437,  0.0566,  0.0515,  0.0520,
+        // 1998–2004 (1998–1999 T-Bill proxy, 2000–2004 hysa_data.js)
+         0.0491,  0.0478,  0.0600,  0.0420,  0.0180,  0.0100,  0.0150,
+        // 2005–2011
+         0.0330,  0.0520,  0.0490,  0.0300,  0.0130,  0.0120,  0.0110,
+        // 2012–2018
+         0.0100,  0.0100,  0.0100,  0.0110,  0.0110,  0.0130,  0.0220,
+        // 2019–2025
+         0.0240,  0.0090,  0.0050,  0.0300,  0.0510,  0.0500,  0.0430,
+        // 2026
+         0.0400,
+    ],
+
 };

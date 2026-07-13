@@ -135,6 +135,18 @@
   body.nominal-on .lg-nom { display: inline-block; }
   .legend-hint { font-size: 10px; color: #aaa9a5; margin-bottom: 8px; }
 
+  /* Additional (optional) series checkboxes */
+  .extra-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 4px; font-size: 12px; color: #6b6b67; }
+  .ex-item { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .ex-item input[type=checkbox] { margin: 0; accent-color: #6b6b67; cursor: pointer; }
+  .extra-title { font-size: 10px; font-weight: 600; color: #6b6b67; text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 6px; }
+
+  /* Intl-of-equity sub-row, nested under the Equity allocation row */
+  .alloc-sub-row { display: flex; align-items: center; gap: 8px; flex-basis: 100%; min-width: 180px; margin-left: 26px; opacity: 0.85; }
+  .alloc-sub-row label { font-size: 11px; font-weight: 500; white-space: nowrap; min-width: 78px; }
+  .alloc-sub-row input[type=range] { flex: 1; }
+  .alloc-sub-row .alloc-pct { font-size: 12px; font-weight: 600; min-width: 34px; text-align: right; }
+
   .chart-wrapper { position: relative; width: 100%; height: 420px; margin-bottom: 12px; }
 
   .source-note {
@@ -217,13 +229,18 @@
       <div class="alloc-row">
         <span class="alloc-dot" style="background:#378add"></span>
         <label for="eqPct">Equity</label>
-        <input type="range" id="eqPct" min="0" max="100" step="5" value="60" style="accent-color:#378add">
+        <input type="range" id="eqPct" min="0" max="100" step="1" value="60" style="accent-color:#378add">
         <span class="alloc-pct" id="eqVal" style="color:#378add">60%</span>
+      </div>
+      <div class="alloc-sub-row">
+        <label for="intlOfEqPct" title="Splits the Equity sleeve of Custom Mix between US and international equity. Pre-1970 years (no intl data) fall back to US equity.">Intl % of Eq</label>
+        <input type="range" id="intlOfEqPct" min="0" max="100" step="1" value="0" style="accent-color:#0a9d9d">
+        <span class="alloc-pct" id="intlOfEqVal" style="color:#0a9d9d">0%</span>
       </div>
       <div class="alloc-row">
         <span class="alloc-dot" style="background:#2a9d5c"></span>
         <label for="bdPct">Bonds</label>
-        <input type="range" id="bdPct" min="0" max="40" step="5" value="30" style="accent-color:#2a9d5c">
+        <input type="range" id="bdPct" min="0" max="40" step="1" value="30" style="accent-color:#2a9d5c">
         <span class="alloc-pct" id="bdVal" style="color:#2a9d5c">30%</span>
       </div>
       <div class="alloc-row">
@@ -245,10 +262,10 @@
       <span class="lg-ln lg-nom" style="background:#186838"></span>
       US Bonds
     </span>
-    <span class="lg-item" data-asset="2" onclick="legendClick(2)" title="Click to isolate Cash / T-bills">
+    <span class="lg-item" data-asset="2" onclick="legendClick(2)" title="Click to isolate Cash (HYSA/T-Bills)">
       <span class="lg-ln" style="background:#ef9f27"></span>
       <span class="lg-ln lg-nom" style="background:#9e6408"></span>
-      Cash / T-bills
+      Cash (HYSA/T-Bills)
     </span>
     <span class="lg-item" data-asset="3" onclick="legendClick(3)" title="Click to isolate Custom Mix">
       <span class="lg-ln-wide" style="background:#7f77dd"></span>
@@ -262,9 +279,38 @@
   </div>
   <p class="legend-hint" id="legend-hint">Click any asset to isolate &mdash; shows real + nominal side by side (when overlay is on)</p>
 
+  <p class="extra-title">Additional Series (optional)</p>
+  <div class="extra-legend" id="extraLegend">
+    <label class="ex-item">
+      <input type="checkbox" id="chk-intl" checked>
+      <span class="lg-ln" style="background:#0a9d9d"></span>
+      International
+    </label>
+    <label class="ex-item">
+      <input type="checkbox" id="chk-smallCap">
+      <span class="lg-ln" style="background:#c94f82"></span>
+      Small Cap
+    </label>
+    <label class="ex-item">
+      <input type="checkbox" id="chk-gold">
+      <span class="lg-ln" style="background:#816500"></span>
+      Gold
+    </label>
+    <label class="ex-item">
+      <input type="checkbox" id="chk-growth">
+      <span class="lg-ln" style="background:#0075a3"></span>
+      Growth Stocks
+    </label>
+    <label class="ex-item">
+      <input type="checkbox" id="chk-dividend">
+      <span class="lg-ln" style="background:#8f3fc2"></span>
+      Dividend Stocks
+    </label>
+  </div>
+
   <div class="chart-wrapper">
     <canvas id="mainChart" role="img"
-      aria-label="Line chart of cumulative inflation-adjusted value of $10,000 in US stocks, bonds, T-bills, and a custom allocation from the selected start year through 2025.">
+      aria-label="Line chart of cumulative inflation-adjusted value of $10,000 in US stocks, bonds, cash (HYSA/T-bills), and a custom allocation from the selected start year through 2025, with optional international, small cap, gold, growth, and dividend stock series.">
     </canvas>
   </div>
 
@@ -272,9 +318,13 @@
     <strong>Methodology:</strong> Real return per year = (1 + nominal return) / (1 + CPI inflation) &minus; 1 (Fisher equation). Balances compound from $10,000. All returns are pre-tax (gross of income and capital gains taxes). <em>Uninvested</em> shows the real purchasing power of $10,000 held in physical cash earning 0% &mdash; eroded entirely by inflation each year. <em>Market Returns</em> overlay shows nominal (pre-inflation) compound growth for comparison.<br>
     <strong>Equity:</strong> S&amp;P 500 total return proxy, 1928&ndash;2025.
     <strong>Bonds:</strong> US 10-year Treasury total return, 1928&ndash;2025.
-    <strong>Cash:</strong> 3-month US Treasury bill annual return, 1928&ndash;2025.
+    <strong>Cash:</strong> the greater of the 3-month US Treasury bill annual return or a competitive HYSA rate estimate, each year, 1928&ndash;2025.
     <strong>Inflation:</strong> BLS CPI-U (December-over-December), 1928&ndash;2025.<br>
+    <strong>International</strong> (optional): MSCI EAFE proxy, 1970&ndash;2025 &mdash; no data before 1970, so the line simply starts in 1970 rather than being estimated. The Custom Mix's &ldquo;Intl % of Equity&rdquo; split uses this same series from 1970 on and falls back to US equity for any earlier years in the selected period.
+    <strong>Small Cap &amp; Gold</strong> (optional): Damodaran Online, 1928&ndash;2025.
+    <strong>Growth &amp; Dividend</strong> (optional): Kenneth R. French Data Library (value-weighted annual factor portfolios), 1928&ndash;2025.<br>
     Sources: <a href="https://pages.stern.nyu.edu/~adamodar/" rel="nofollow" target="_blank">Damodaran Online</a>,
+    <a href="https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html" rel="nofollow" target="_blank">Kenneth R. French Data Library</a>,
     <a href="https://www.bls.gov/cpi/" rel="nofollow" target="_blank">BLS CPI-U</a>.
     <span id="rr-vintage"></span>
   </p>
@@ -298,12 +348,18 @@ Chart.defaults.plugins.tooltip.callbacks.labelColor = ctx => ({
 });
 
 // --- Data refs ---
-const EQ  = HISTORICAL_RETURNS.equity;
-const BD  = HISTORICAL_RETURNS.bonds;
-const INF = HISTORICAL_RETURNS.inflation;
-const CA  = RR_TBILLS;
+const EQ   = HISTORICAL_RETURNS.equity;
+const BD   = HISTORICAL_RETURNS.bonds;
+const INF  = HISTORICAL_RETURNS.inflation;
+const CA   = RR_TBILLS.map((tb, i) => Math.max(tb, HISTORICAL_RETURNS.hysa[i])); // greater of T-bills or HYSA, each year
+const INTL = HISTORICAL_RETURNS.intl;
+const SC   = HISTORICAL_RETURNS.smallCap;
+const GD   = HISTORICAL_RETURNS.gold;
+const GR   = HISTORICAL_RETURNS.growth;
+const DV   = HISTORICAL_RETURNS.dividend;
 const DATA_START = 1928;
 const DATA_END   = 2025;
+const INTL_OFF   = HISTORICAL_RETURNS.intlStartYear - DATA_START; // 42 — intl data starts 1970
 
 // --- Colors ---
 const C_EQ  = '#378add', C_EQ_NOM  = '#1d5491';
@@ -311,13 +367,26 @@ const C_BD  = '#2a9d5c', C_BD_NOM  = '#186838';
 const C_CA  = '#ef9f27', C_CA_NOM  = '#9e6408';
 const C_MIX = '#7f77dd', C_MIX_NOM = '#4841a9';
 const C_INF = '#e24b4a';
+// Optional series — validated (node scripts/validate_palette.js, dataviz skill, --pairs all)
+// against the 5 colors above: worst pairwise CVD ΔE 15.3, well clear of the 12.0 target.
+const C_INTL = '#0a9d9d', C_SC = '#c94f82', C_GD = '#816500', C_GR = '#0075a3', C_DV = '#8f3fc2';
+const EXTRA_KEYS = ['intl', 'smallCap', 'gold', 'growth', 'dividend'];
+const EXTRA_DEFAULTS = { intl: true, smallCap: false, gold: false, growth: false, dividend: false };
+const EXTRA_META = {
+  intl:     { label: 'International',   color: C_INTL },
+  smallCap: { label: 'Small Cap',       color: C_SC },
+  gold:     { label: 'Gold',            color: C_GD },
+  growth:   { label: 'Growth Stocks',   color: C_GR },
+  dividend: { label: 'Dividend Stocks', color: C_DV },
+};
 
 document.getElementById('rr-vintage').textContent =
   'Data through ' + DATA_END + ' (updated ' + RR_VINTAGE + ').';
 
 // --- State ---
-let startYr = 2016, numYears = DATA_END - 2016 + 1, eqPct = 60, bdPct = 30;
+let startYr = 2016, numYears = DATA_END - 2016 + 1, eqPct = 60, bdPct = 30, intlOfEqPct = 0;
 let nominalOn = false, isolatedAsset = -1;
+let extraChecked = { ...EXTRA_DEFAULTS };
 let annualData = [];
 
 // Load from URL before chart init
@@ -330,8 +399,14 @@ let annualData = [];
   numYears = Math.min(numYears, DATA_END - startYr + 1); // guard against stale/hand-edited yr+ny combos
   if (p.has('eq')) eqPct = Math.max(0, Math.min(100, +p.get('eq') || 60));
   if (p.has('bd')) bdPct = Math.max(0, Math.min(100 - eqPct, +p.get('bd') || 30));
+  if (p.has('ieq')) intlOfEqPct = Math.max(0, Math.min(100, +p.get('ieq') || 0));
   if (p.get('nom') === '1') nominalOn = true;
   if (p.has('iso')) { const v = +p.get('iso'); if (v >= 0 && v <= 3) isolatedAsset = v; }
+  if (p.get('xi') === '0') extraChecked.intl = false;
+  if (p.get('xs') === '1') extraChecked.smallCap = true;
+  if (p.get('xg') === '1') extraChecked.gold = true;
+  if (p.get('xgr') === '1') extraChecked.growth = true;
+  if (p.get('xd') === '1') extraChecked.dividend = true;
 })();
 
 // --- Helpers ---
@@ -352,27 +427,55 @@ function computeSeries() {
   const eqNomVals   = [10000], bdNomVals = [10000], caNomVals = [10000], mixNomVals = [10000];
   const cpiVals     = [10000]; // cumulative CPI cost-of-goods index (1+inf compounding) — NOT the inverse of inflVals (purchasing-power decay, 1/(1+inf)-1); the two diverge over multi-year compounding
 
+  // Optional series. Intl starts null until intlStartYear (1970) is reached — no proxy,
+  // the line simply has a gap; the other three always have data across 1928–2025.
+  const intlStartsInWindow = startYr - 1 >= HISTORICAL_RETURNS.intlStartYear;
+  const intlVals = [intlStartsInWindow ? 10000 : null];
+  const scVals = [10000], gdVals = [10000], grVals = [10000], dvVals = [10000];
+
   annualData = [];
 
   let eqB = 10000, bdB = 10000, caB = 10000, mixB = 10000, inflB = 10000, cpiB = 10000;
   let eqNomB = 10000, bdNomB = 10000, caNomB = 10000, mixNomB = 10000;
+  let intlB = intlStartsInWindow ? 10000 : null;
+  let scB = 10000, gdB = 10000, grB = 10000, dvB = 10000;
 
   for (let i = 0; i < n; i++) {
     const yr    = startYr + i;
-    const eq    = EQ[idx0 + i];
-    const bd    = BD[idx0 + i];
-    const ca    = CA[idx0 + i];
-    const inf   = INF[idx0 + i];
+    const idx   = idx0 + i;
+    const eq    = EQ[idx];
+    const bd    = BD[idx];
+    const ca    = CA[idx];
+    const inf   = INF[idx];
     const rEq   = realRet(eq, inf);
     const rBd   = realRet(bd, inf);
     const rCa   = realRet(ca, inf);
-    const rMix  = (eqPct * rEq + bdPct * rBd + caPct * rCa) / 100;
-    const mixNom = (eqPct * eq  + bdPct * bd  + caPct * ca)  / 100;
+
+    // Intl-of-equity blend for Custom Mix only — years outside intl's data range fall back to
+    // domestic equity (same convention montecarlo/prng.js uses for its intl gap/bounds guard).
+    // Standalone Equity stays pure.
+    const intlIdx    = idx - INTL_OFF;
+    const intlAvail  = yr >= HISTORICAL_RETURNS.intlStartYear && intlIdx < INTL.length;
+    const intlNomForMix = intlAvail ? INTL[intlIdx] : eq;
+    const eqBlend    = (1 - intlOfEqPct / 100) * eq + (intlOfEqPct / 100) * intlNomForMix;
+    const rEqBlend   = realRet(eqBlend, inf);
+    const rMix       = (eqPct * rEqBlend + bdPct * rBd + caPct * rCa) / 100;
+    const mixNom     = (eqPct * eqBlend  + bdPct * bd  + caPct * ca)  / 100;
     const rInfl = 1 / (1 + inf) - 1;
 
     eqB   *= 1 + rEq;  bdB  *= 1 + rBd;  caB  *= 1 + rCa;
     mixB  *= 1 + rMix; inflB *= 1 + rInfl; cpiB *= 1 + inf;
     eqNomB *= 1 + eq;  bdNomB *= 1 + bd;  caNomB *= 1 + ca;  mixNomB *= 1 + mixNom;
+
+    const rSc = realRet(SC[idx], inf), rGd = realRet(GD[idx], inf);
+    const rGr = realRet(GR[idx], inf), rDv = realRet(DV[idx], inf);
+    scB *= 1 + rSc; gdB *= 1 + rGd; grB *= 1 + rGr; dvB *= 1 + rDv;
+
+    let rIntl = null;
+    if (intlAvail) {
+      rIntl = realRet(INTL[intlIdx], inf);
+      intlB = (intlB === null ? 10000 : intlB) * (1 + rIntl);
+    }
 
     labels.push(yr);
     eqVals.push(+eqB.toFixed(2));      bdVals.push(+bdB.toFixed(2));
@@ -380,11 +483,15 @@ function computeSeries() {
     inflVals.push(+inflB.toFixed(2));  cpiVals.push(+cpiB.toFixed(2));
     eqNomVals.push(+eqNomB.toFixed(2)); bdNomVals.push(+bdNomB.toFixed(2));
     caNomVals.push(+caNomB.toFixed(2)); mixNomVals.push(+mixNomB.toFixed(2));
-    annualData.push({ yr, eq, bd, ca, inf, rEq, rBd, rCa, rMix, mixNom });
+    intlVals.push(intlB === null ? null : +intlB.toFixed(2));
+    scVals.push(+scB.toFixed(2)); gdVals.push(+gdB.toFixed(2));
+    grVals.push(+grB.toFixed(2)); dvVals.push(+dvB.toFixed(2));
+    annualData.push({ yr, eq, bd, ca, inf, rEq, rBd, rCa, rMix, mixNom, rSc, rGd, rGr, rDv, rIntl });
   }
 
   return { labels, eqVals, bdVals, caVals, mixVals, inflVals, cpiVals,
-           eqNomVals, bdNomVals, caNomVals, mixNomVals, n };
+           eqNomVals, bdNomVals, caNomVals, mixNomVals,
+           intlVals, scVals, gdVals, grVals, dvVals, n };
 }
 
 // --- Stat cards ---
@@ -431,7 +538,7 @@ function renderStats(series) {
   document.getElementById('statsGrid').innerHTML = [
     card(eqVals,  C_EQ,  'US Equity',          annualData.map(d => d.rEq), eqNomVals),
     card(bdVals,  C_BD,  'US Bonds',            annualData.map(d => d.rBd), bdNomVals),
-    card(caVals,  C_CA,  'Cash (T-bills)',       annualData.map(d => d.rCa), caNomVals),
+    card(caVals,  C_CA,  'Cash (HYSA/T-Bills)',  annualData.map(d => d.rCa), caNomVals),
     card(mixVals, C_MIX, `Mix ${eqPct}/${bdPct}/${100-eqPct-bdPct}`, annualData.map(d => d.rMix), mixNomVals),
   ].join('');
 }
@@ -483,6 +590,9 @@ document.getElementById('numYrs').max = DATA_END - startYr + 1;
 document.getElementById('eqPct').value = eqPct;
 document.getElementById('bdPct').value = bdPct;
 document.getElementById('bdPct').max = 100 - eqPct;
+document.getElementById('intlOfEqPct').value = intlOfEqPct;
+document.getElementById('intlOfEqVal').textContent = intlOfEqPct + '%';
+EXTRA_KEYS.forEach(key => { document.getElementById('chk-' + key).checked = extraChecked[key]; });
 syncAllocDisplay();
 updatePeriodDisplay();
 
@@ -518,14 +628,21 @@ const chart = new Chart(document.getElementById('mainChart'), {
       // Real lines (indices 0-4) — hidden pre-computed from URL state so log scale is correct on first render
       { label: 'US Equity',              data: s0.eqVals,      borderColor: C_EQ,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 2, hidden: isolatedAsset !== -1 && isolatedAsset !== 0 },
       { label: 'US Bonds',               data: s0.bdVals,      borderColor: C_BD,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 3, hidden: isolatedAsset !== -1 && isolatedAsset !== 1 },
-      { label: 'Cash (T-bills)',          data: s0.caVals,      borderColor: C_CA,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 4, hidden: isolatedAsset !== -1 && isolatedAsset !== 2 },
+      { label: 'Cash (HYSA/T-Bills)',     data: s0.caVals,      borderColor: C_CA,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 4, hidden: isolatedAsset !== -1 && isolatedAsset !== 2 },
       { label: 'Custom Mix',             data: s0.mixVals,     borderColor: C_MIX, backgroundColor: 'transparent', borderWidth: 4,   pointRadius: 0, tension: 0.2, order: 1, hidden: isolatedAsset !== -1 && isolatedAsset !== 3 },
       { label: 'Uninvested (0%)',        data: s0.inflVals,    borderColor: C_INF, backgroundColor: 'transparent', borderWidth: 1.8, pointRadius: 0, tension: 0.2, order: 5, borderDash: [6, 4], hidden: isolatedAsset !== -1 },
       // Nominal (market) lines (indices 5-8) — hidden until toggled on
       { label: 'US Equity (nominal)',     data: s0.eqNomVals,  borderColor: C_EQ_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 6,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 0), borderDash: [3, 2] },
       { label: 'US Bonds (nominal)',      data: s0.bdNomVals,  borderColor: C_BD_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 7,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 1), borderDash: [3, 2] },
-      { label: 'Cash / T-bills (nom.)',   data: s0.caNomVals,  borderColor: C_CA_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 8,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 2), borderDash: [3, 2] },
+      { label: 'Cash (HYSA/T-Bills, nom.)', data: s0.caNomVals, borderColor: C_CA_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 8,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 2), borderDash: [3, 2] },
       { label: 'Custom Mix (nominal)',    data: s0.mixNomVals, borderColor: C_MIX_NOM, backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 9,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 3), borderDash: [3, 2] },
+      // Optional series (indices 9-13) — real only, no nominal counterpart. Visibility driven by
+      // the "Additional Series" checkboxes, not the core-4 legend isolate mechanism.
+      { label: EXTRA_META.intl.label,     data: s0.intlVals, borderColor: C_INTL, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 10, spanGaps: false, hidden: isolatedAsset !== -1 || !extraChecked.intl },
+      { label: EXTRA_META.smallCap.label, data: s0.scVals,   borderColor: C_SC,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 11, hidden: isolatedAsset !== -1 || !extraChecked.smallCap },
+      { label: EXTRA_META.gold.label,     data: s0.gdVals,   borderColor: C_GD,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 12, hidden: isolatedAsset !== -1 || !extraChecked.gold },
+      { label: EXTRA_META.growth.label,   data: s0.grVals,   borderColor: C_GR,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 13, hidden: isolatedAsset !== -1 || !extraChecked.growth },
+      { label: EXTRA_META.dividend.label, data: s0.dvVals,   borderColor: C_DV,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 14, hidden: isolatedAsset !== -1 || !extraChecked.dividend },
     ]
   },
   options: {
@@ -547,18 +664,23 @@ const chart = new Chart(document.getElementById('mainChart'), {
             if (yr === startYr - 1) return '  ' + ctx.dataset.label + ': $10,000';
             const i = ctx.dataIndex - 1;
             const d = annualData[i];
-            const isNom = ctx.datasetIndex >= 5;
+            const isNom = ctx.datasetIndex >= 5 && ctx.datasetIndex <= 8;
             const retMap = isNom ? {
-              'US Equity (nominal)':    d?.eq,
-              'US Bonds (nominal)':     d?.bd,
-              'Cash / T-bills (nom.)':  d?.ca,
-              'Custom Mix (nominal)':   d?.mixNom,
+              'US Equity (nominal)':            d?.eq,
+              'US Bonds (nominal)':              d?.bd,
+              'Cash (HYSA/T-Bills, nom.)':        d?.ca,
+              'Custom Mix (nominal)':            d?.mixNom,
             } : {
-              'US Equity':       d?.rEq,
-              'US Bonds':        d?.rBd,
-              'Cash (T-bills)':  d?.rCa,
-              'Custom Mix':      d?.rMix,
-              'Uninvested (0%)': d ? 1 / (1 + d.inf) - 1 : null,
+              'US Equity':            d?.rEq,
+              'US Bonds':             d?.rBd,
+              'Cash (HYSA/T-Bills)':  d?.rCa,
+              'Custom Mix':           d?.rMix,
+              'Uninvested (0%)':      d ? 1 / (1 + d.inf) - 1 : null,
+              [EXTRA_META.intl.label]:     d?.rIntl,
+              [EXTRA_META.smallCap.label]: d?.rSc,
+              [EXTRA_META.gold.label]:     d?.rGd,
+              [EXTRA_META.growth.label]:   d?.rGr,
+              [EXTRA_META.dividend.label]: d?.rDv,
             };
             const r = retMap[ctx.dataset.label];
             const tag = r != null ? '  (' + pctFmt(r) + (isNom ? ' nom)' : ' real)') : '';
@@ -569,12 +691,18 @@ const chart = new Chart(document.getElementById('mainChart'), {
             if (yr === startYr - 1) return [];
             const d = annualData[items[0].dataIndex - 1];
             if (!d) return [];
-            return [
+            const lines = [
               'Equity nominal: '  + pctFmt(d.eq),
               'Bonds nominal: '   + pctFmt(d.bd),
-              'T-bills nominal: ' + pctFmt(d.ca),
+              'Cash nominal: '    + pctFmt(d.ca),
               'CPI inflation: '   + pctFmt(d.inf),
             ];
+            EXTRA_KEYS.forEach(key => {
+              if (!extraChecked[key]) return;
+              const r = { intl: d.rIntl, smallCap: d.rSc, gold: d.rGd, growth: d.rGr, dividend: d.rDv }[key];
+              if (r != null) lines.push(EXTRA_META[key].label + ' (real): ' + pctFmt(r));
+            });
+            return lines;
           }
         }
       }
@@ -654,10 +782,14 @@ function applyVisibility() {
     } else if (i === 4) {
       // uninvested — hide when anything isolated
       vis = isolatedAsset === -1;
-    } else {
+    } else if (i <= 8) {
       // nominal lines (i - 5 = asset index)
       const ai = i - 5;
       vis = nominalOn && (isolatedAsset === -1 || ai === isolatedAsset);
+    } else {
+      // optional series (i - 9 = EXTRA_KEYS index) — checkbox-driven, hidden when anything isolated
+      const key = EXTRA_KEYS[i - 9];
+      vis = isolatedAsset === -1 && extraChecked[key];
     }
     chart.setDatasetVisibility(i, vis);
   });
@@ -686,6 +818,11 @@ function refresh() {
   chart.data.datasets[6].data = s.bdNomVals;
   chart.data.datasets[7].data = s.caNomVals;
   chart.data.datasets[8].data = s.mixNomVals;
+  chart.data.datasets[9].data = s.intlVals;
+  chart.data.datasets[10].data = s.scVals;
+  chart.data.datasets[11].data = s.gdVals;
+  chart.data.datasets[12].data = s.grVals;
+  chart.data.datasets[13].data = s.dvVals;
   chart.update();
   renderStats(s);
   renderInflationSummary(s);
@@ -728,7 +865,7 @@ function updatePeriodDisplay() {
   document.getElementById('periodLabel').textContent =
     `Period: ${startYr}–${endYr} (${numYears} yr${numYears === 1 ? '' : 's'})`;
   document.getElementById('mainChart').setAttribute('aria-label',
-    `Line chart of cumulative inflation-adjusted value of $10,000 in US stocks, bonds, T-bills, and a custom allocation from ${startYr} through ${endYr}.`);
+    `Line chart of cumulative inflation-adjusted value of $10,000 in US stocks, bonds, cash (HYSA/T-bills), and a custom allocation from ${startYr} through ${endYr}, with optional international, small cap, gold, growth, and dividend stock series.`);
 }
 
 // --- Allocation sliders ---
@@ -757,6 +894,22 @@ function syncAllocDisplay() {
   document.getElementById('caVal').textContent = caPct + '%';
 }
 
+// --- Intl % of Equity slider ---
+const intlOfEqSlider = document.getElementById('intlOfEqPct');
+intlOfEqSlider.addEventListener('input', function() {
+  intlOfEqPct = +this.value;
+  document.getElementById('intlOfEqVal').textContent = intlOfEqPct + '%';
+  refresh();
+});
+
+// --- Additional Series checkboxes ---
+EXTRA_KEYS.forEach(key => {
+  document.getElementById('chk-' + key).addEventListener('change', function() {
+    extraChecked[key] = this.checked;
+    applyVisibility();
+  });
+});
+
 // --- Share URL ---
 function buildShareURL() {
   const params = new URLSearchParams();
@@ -764,9 +917,15 @@ function buildShareURL() {
   if (numYears !== DATA_END - startYr + 1) params.set('ny', numYears);
   if (eqPct !== 60) params.set('eq', eqPct);
   if (bdPct !== 30) params.set('bd', bdPct);
+  if (intlOfEqPct !== 0) params.set('ieq', intlOfEqPct);
   if (chart.options.scales.y.type !== 'logarithmic') params.set('sc', 'lin');
   if (nominalOn) params.set('nom', '1');
   if (isolatedAsset !== -1) params.set('iso', isolatedAsset);
+  if (!extraChecked.intl) params.set('xi', '0');
+  if (extraChecked.smallCap) params.set('xs', '1');
+  if (extraChecked.gold) params.set('xg', '1');
+  if (extraChecked.growth) params.set('xgr', '1');
+  if (extraChecked.dividend) params.set('xd', '1');
   const base = window.location.origin + window.location.pathname;
   const q = params.toString();
   return q ? base + '?' + q : base;

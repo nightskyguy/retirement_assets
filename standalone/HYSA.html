@@ -249,7 +249,7 @@
   </p>
 </div>
 
-<script src="hysa_data.js"></script>
+<script src="../montecarlo/historical_returns.js"></script>
 <script>
 // --- Global Chart.js defaults ---
 Chart.defaults.color = '#4a4a47';
@@ -261,6 +261,17 @@ Chart.defaults.plugins.tooltip.borderColor = 'rgba(255,255,255,0.08)';
 Chart.defaults.plugins.tooltip.borderWidth = 1;
 Chart.defaults.plugins.tooltip.padding = 10;
 Chart.defaults.plugins.tooltip.callbacks.labelColor = () => ({ borderColor: 'transparent', backgroundColor: 'transparent' });
+
+// --- Data (sourced from HISTORICAL_RETURNS; RAW shape preserved for the code below) ---
+const RAW_VINTAGE = 'May 2026';
+const HYSA_START_YR = 2000;
+const _hOff = HYSA_START_YR - HISTORICAL_RETURNS.hysaStartYear;
+const _iOff = HYSA_START_YR - HISTORICAL_RETURNS.inflationStartYear;
+const RAW = HISTORICAL_RETURNS.hysa.slice(_hOff).map((rate, i) => ({
+  yr: HYSA_START_YR + i,
+  rate,
+  cpi: HISTORICAL_RETURNS.inflation[_iOff + i],
+}));
 
 const FIRST_YR = RAW[0].yr;
 const LAST_YR  = RAW[RAW.length - 1].yr;

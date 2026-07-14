@@ -1934,8 +1934,11 @@ function simulate(inputs) {
     // convOC[y] = this run's after-tax wealth minus the same plan re-simulated with conversions
     // suppressed (converted dollars stay in the IRA, no conversion tax, bigger RMDs later, each
     // taxed at that year's actual bracket/IRMAA conditions). excessOC[y] = same idea for excess
-    // IRA withdrawals banked to Cash. Break Even = first year the difference goes non-negative,
-    // reported only when the action actually occurred by that year.
+    // IRA withdrawals banked to Cash. Break Even = the earliest year OC stays non-negative all
+    // the way to the LAST simulated year (a sustained crossing) — not just the first year that
+    // happens to touch non-negative, since a plan can blip positive for a year on its way to a
+    // permanently worse outcome. Reported only once the costed action has actually occurred by
+    // that year; null if the plan never sustains a non-negative gap through its final year.
     // Valuation: row totalWealth (IRA at the run's own nominal rate, brokerage gains at the
     // cap-gains rate, Roth/Cash/basis at face) unless the user supplied futureIRATaxRate
     // (Marginal Heirs Tax Rate) — then both runs' IRAs are discounted at that shared rate.
@@ -1950,21 +1953,40 @@ function simulate(inputs) {
             const n = Math.min(log.length, cfLog.length);
             for (let i = 0; i < n; i++) log[i][key] = _atw(log[i]) - _atw(cfLog[i]);
         };
+        // Break-Even year selector: the earliest index that is BOTH (a) the start of the
+        // trailing run of rows whose `key` value is non-negative all the way to the log's last
+        // row, and (b) at or after the point the cumulative action total first exceeds $1. Both
+        // (a) and (b) are individually "upward-closed" (once true at an index, stays true for
+        // every later index), so their intersection is the suffix starting at the LATER of the
+        // two cutoffs, including the edge case where OC is trivially non-negative before the
+        // action even starts. Returns null when the plan ends negative (no sustained crossing
+        // exists) or the action never occurred.
+        const _sustainedBEYear = (key, actionAmount) => {
+            let ocCutoff = log.length;
+            for (let i = log.length - 1; i >= 0; i--) {
+                const oc = log[i][key];
+                if (oc == null || oc < 0) break;
+                ocCutoff = i;
+            }
+            if (ocCutoff >= log.length) return null;
+            let cum = 0, actionCutoff = -1;
+            for (let i = 0; i < log.length; i++) {
+                cum += actionAmount(log[i]);
+                if (cum > 1) { actionCutoff = i; break; }
+            }
+            return actionCutoff < 0 ? null : log[Math.max(ocCutoff, actionCutoff)].year;
+        };
         if (log.some(r => (r.rothConv ?? 0) > 1)) {
             // extraConversionAmount: 0 (not just the suppress flag) so conversion-driven
             // early-withdrawal timing (line ~1038) doesn't leak into the no-conversion plan.
             const cfConv = simulate({ ...inputs, _cfRun: true, _cfSuppressConversions: true, extraConversionAmount: 0, computeOC: false });
             _annotate(cfConv.log, 'convOC');
-            let _cumConv = 0;
-            totals.convBEYear = log.find(r =>
-                (_cumConv += (r.rothConv ?? 0)) > 1 && (r.convOC ?? -1) >= 0)?.year ?? null;
+            totals.convBEYear = _sustainedBEYear('convOC', r => r.rothConv ?? 0);
         }
         if (log.some(r => (r.surplusCash ?? 0) > 1 && (r.IRAwd ?? 0) > 1)) {
             const cfExcess = simulate({ ...inputs, _cfRun: true, _cfSuppressExcess: true, computeOC: false });
             _annotate(cfExcess.log, 'excessOC');
-            let _cumExcess = 0;
-            totals.excessBEYear = log.find(r =>
-                (_cumExcess += Math.min(r.surplusCash ?? 0, r.IRAwd ?? 0)) > 1 && (r.excessOC ?? -1) >= 0)?.year ?? null;
+            totals.excessBEYear = _sustainedBEYear('excessOC', r => Math.min(r.surplusCash ?? 0, r.IRAwd ?? 0));
         }
     }
 
@@ -2144,6 +2166,12 @@ function buildVariations(base) {
         const conv = overrides.maxConversion;
         variations.push({
             ...base,
+            // A swept variation must not silently inherit a leftover sidebar value (e.g. from
+            // loading an Optimizer ⇌ row) — none of the overrides blocks below set this key.
+            // Non-mutating (unlike runOptimizer()'s equivalent guard): `base` here is the SAME
+            // object reference callers keep as _mcBase / the "Current Plan" stress fallback,
+            // which must keep the real sidebar value.
+            extraConversionAmount: 0,
             ...overrides,
             _label:          `${family} ${paramLabel}${conv ? ' ✓' : ''}`,
             _strategyFamily: family,

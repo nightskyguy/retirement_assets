@@ -46,6 +46,7 @@ const OPT_OBJECTIVES = {
     mintax:    { label: 'Minimal Taxes',               metric: r => r.totals?.taxCurrentDollars ?? Infinity,       dir: 'asc'  },
     roth:      { label: 'Maximum Roth',                metric: r => r.totals?.terminal?.roth ?? -Infinity,         dir: 'desc' },
     conveffect:{ label: 'Roth Conversion Effectiveness', metric: r => r._convSavings ?? -Infinity,                 dir: 'desc' },
+    earliestbe:{ label: 'Earliest Break Even',          metric: r => r._convBEYear ?? 9999,                        dir: 'asc'  },
 };
 
 // Returns rows ranked best→worst under an objective. Successful rows always outrank failed ones
@@ -199,6 +200,7 @@ function getInputs() {
         ssFailYear: +val('ssFailYear'),
         ssFailPct: +val('ssFailPct') / 100.0,
         maxConversion: valChecked('maxConversion'),
+        extraConversionAmount: +val('extraConversionAmount') || 0,
         propWithdraw: +val('propWithdraw') / 100.0,
         iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
         startAge: +val('startAge') || (new Date().getFullYear() - +val('birthyear1')),
@@ -365,6 +367,13 @@ let _lastOptimizerHash = null;
 
 function runOptimizer() {
     const base = getInputs();
+    // extraConversionAmount must never leak from the sidebar into the main strategy sweep or its
+    // cyclic/Optimize-Spend passes below — none of their overrides objects set this key, so
+    // without this line every family would silently inherit whatever's currently in the sidebar
+    // (e.g. left over from loading a ⇌ row), corrupting the whole table. Phase 23 (further down)
+    // is unaffected either way: it always sets this key explicitly on every simulate() call it
+    // makes. Placed before currentHash so the cache hash is correctly insensitive to this field.
+    base.extraConversionAmount = 0;
     const currentHash = JSON.stringify(base)
         + ';optimizeSpend=' + (document.getElementById('optimizeSpend')?.checked ?? false)
         + ';convOpt=' + (document.getElementById('includeConvOpt')?.checked ?? false);
@@ -573,14 +582,32 @@ function runOptimizer() {
             const overrides = {
                 strategy: baseRow._strategy,
                 maxConversion: baseRow._maxConversion,
+                // stratIRMAATier/stratACAMultiple always have a defined sentinel on every row
+                // (tier -1 / multiple 0), so pin them unconditionally rather than letting a
+                // bracket-family top5 row silently fall back to the sidebar's current stratRate.
+                stratIRMAATier: baseRow._stratIRMAATier ?? -1,
+                stratACAMultiple: baseRow._stratACAMultiple ?? 0,
                 ...(baseRow._stratRate   != null ? { stratRate:      baseRow._stratRate }   : {}),
                 ...(baseRow._nYears      != null ? { nYears:         baseRow._nYears }      : {}),
                 ...(baseRow._propWithdraw!= null ? { propWithdraw:   baseRow._propWithdraw }: {}),
                 ...(baseRow._iraWithdrawPct != null ? { iraWithdrawPct: baseRow._iraWithdrawPct } : {}),
+                // A cyclic (🗘/🔄) top5 candidate must keep cycling brokerage in the
+                // conversion-optimized re-run, or beResult silently simulates the non-cyclic
+                // variant while the displayed row still inherits the 🗘/🔄 prefix from
+                // baseRow._strategyLabel — a real label/computation mismatch.
+                ...(baseRow._cyclicEnabled ? { cyclicEnabled: true, cyclicOrder: baseRow._cyclicOrder ?? 'ira-first' } : {}),
             };
             const { optConv, optResult } = optimizeConversionAmount(base, overrides, 'finalNW');
             if (!optResult || optConv === 0) continue;
-            const lastEntry = optResult.log[optResult.log.length - 1];
+            // Break Even: re-run once more at the already-known winning conversion amount with
+            // computeOC on, so this row's convBEYear uses the same sustained-crossing definition
+            // as the single-scenario tab. Cheap: optimizeConversionAmount() already found optConv
+            // via its own $25k sweep; this is one extra simulate() call (plus its internal
+            // counterfactual pass) at that fixed amount, not a repeat of the sweep. beResult
+            // carries the identical primary-run numbers as optResult (computeOC only adds
+            // annotations), so it's used directly below instead of optResult.
+            const beResult = simulate({ ...base, ...overrides, extraConversionAmount: optConv, computeOC: true });
+            const lastEntry = beResult.log[beResult.log.length - 1];
             results.push({
                 _id: results.length,
                 _strategyLabel: baseRow._strategyLabel + ' ⇌',
@@ -598,9 +625,11 @@ function runOptimizer() {
                 _isSpendOptimized: false,
                 _isConvOptimized: true,
                 _optConvAmt: optConv,
-                _convSavings: (baseRow.totals.tax - optResult.totals.tax),
-                totals: optResult.totals,
-                finalNW: optResult.finalNW,
+                _convSavings: (baseRow.totals.tax - beResult.totals.tax),
+                _convBEYear: beResult.totals.convBEYear,
+                _convOCFinal: lastEntry?.convOC ?? null,
+                totals: beResult.totals,
+                finalNW: beResult.finalNW,
                 finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
             });
         }
@@ -804,9 +833,15 @@ function getOptimizerColumns() {
         },
         {
             key: 'convSavings', label: 'Conv Savings',
-            title: 'Lifetime tax savings from the additional IRA→Roth conversions run by Optimize Conversions, vs the same strategy with no extra conversions. Positive = converting more reduces your total lifetime tax bill.',
+            title: 'Lifetime tax savings from the additional IRA→Roth conversions run by Optimize Conversions, vs the same strategy with no extra conversions. Positive = less tax paid so far. This counts only realized tax during the plan, not the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so it can be positive even when Break Even (which prices in that deferred tax) shows the conversions never paid off in total wealth. See the Break Even column for the fuller comparison.',
             getValue: r => r._convSavings != null ? '$' + Math.round(r._convSavings).toLocaleString() : '—',
             getSortValue: r => r._convSavings ?? -Infinity
+        },
+        {
+            key: 'convBE', label: 'Break Even',
+            title: 'The year this Optimize Conversions strategy\'s after-tax wealth permanently overtakes the same strategy with no extra conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead. Unlike Conv Savings, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Appears for Optimize Conversions rows (⇌) only.',
+            getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
+            getSortValue: r => r._convBEYear ?? 9999
         }
     ];
     // Nerd-only: expose the raw baseline-ranking score so the pinned ⚓ pick can be inspected.
@@ -1121,6 +1156,15 @@ function loadOptimizerResult(id) {
     }
     const cyclicOrderEl = document.getElementById('cyclicOrder');
     if (cyclicOrderEl) cyclicOrderEl.value = result._cyclicOrder ?? 'ira-first';
+    // Restore the extra flat annual conversion $ that made a ⇌ (Optimize Conversions) row
+    // special. Explicitly zero it for every other row type so a value left over from a
+    // previously-loaded ⇌ row doesn't silently linger and misrepresent the newly loaded
+    // (non-conversion-optimized) strategy in the opposite direction.
+    if (result._isConvOptimized && result._optConvAmt != null) {
+        DisplayHelpers.setDollarValue('extraConversionAmount', Math.round(result._optConvAmt));
+    } else {
+        DisplayHelpers.setDollarValue('extraConversionAmount', 0);
+    }
     // For spend-optimized rows, restore the optimized spend goal
     if (result._spendGoal != null) {
         DisplayHelpers.setDollarValue('spendGoal', Math.round(result._spendGoal));
@@ -1502,8 +1546,8 @@ function updateTable(log) {
         'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Likely due to errors in the calculation or unexpected bracket changes - or running out of assets.',
         'totalIncome': 'Funds from all sources, taxable and tax-free.',
         'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA',
-        'convOC': 'Roth Conversion Opportunity Cost: this plan\'s after-tax total wealth minus the same plan re-simulated with no conversions (the dollars stay in the IRA, no conversion tax is paid, and the bigger IRA pays its own larger RMD taxes and IRMAA later). Positive = the conversions have paid off by this year. The first non-negative year is the Break Even stat.',
-        'excessOC': 'Excess Withdrawal Opportunity Cost: same comparison as Conv OC but for surplus IRA withdrawals banked to Cash. The no-action plan keeps those dollars in the IRA. Positive = having the extra cash out early beat leaving it in the IRA.',
+        'convOC': 'Roth Conversion Opportunity Cost: this plan\'s after-tax total wealth minus the same plan re-simulated with no conversions (the dollars stay in the IRA, no conversion tax is paid, and the bigger IRA pays its own larger RMD taxes and IRMAA later). Positive = the conversions have paid off by this year. The Break Even stat is the year the plan permanently pulls ahead and stays ahead for the rest of the plan, not just the first year that happens to touch non-negative.',
+        'excessOC': 'Excess Withdrawal Opportunity Cost: same comparison as Conv OC but for surplus IRA withdrawals banked to Cash. The no-action plan keeps those dollars in the IRA. Positive = having the extra cash out early beat leaving it in the IRA. Same "permanently ahead" Break Even definition as Conv OC.',
         'convTax': 'Incremental federal + state tax attributable to this year\'s Roth conversion (true marginal method: re-runs tax calculation without the conversion and takes the difference). Does not include IRMAA.',
         'excessTax': 'Incremental federal + state tax attributable to this year\'s excess IRA withdrawal routed to Cash (same method as Conv Tax).',
         'BETR%': 'Break-Even Tax Rate (Kitces formula): t_now × (1 + r_taxable)^n / (1 + r_ira)^n. The future marginal rate at which converting now is tax-neutral vs leaving in IRA. If your expected future rate (Future IRA Tax %) exceeds BETR → conversion advantageous (▲). When r_taxable < r_ira (taxable drag), BETR falls below current rate, making conversion even more compelling.',
@@ -2129,8 +2173,9 @@ function makeChartLegendInteraction(groupSize = 1) {
 //  3. Every year the IRMAA tier INCREASES over the prior year (e.g. Tier 1→Tier 2), labelled with
 //     the new tier ("IRMAA Tier 2"). Same-or-lower tiers are not marked.
 //  4. Every year net income falls short of the spend goal by more than 10%.
-//  5. Roth conversion break-even — the first year the converting plan overtakes the no-conversion
-//     shadow (totals.convBEYear).
+//  5. Roth conversion break-even — the year the converting plan permanently overtakes the
+//     no-conversion shadow, i.e. totals.convBEYear (already the sustained-crossing year; this
+//     function just looks it up and places the marker, no "first touch" logic here).
 function computeMilestones(log) {
     const ms = [];
     // Numeric IRMAA tier from the string field ("-none-"/"-"→0, "Tier 3 (TOP)"→3).
@@ -2842,7 +2887,7 @@ function toggleStrategyUI() {
 const OPT_LONG_TO_SHORT = {
     spendGoal:'sg', spendChange:'sc', strategy:'str', nYears:'ny',
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os',
-    maxConversion:'mc', iraBaseGoal:'ibg',
+    maxConversion:'mc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
     IRA1:'i1', IRA2:'i2', Roth:'ro', Roth2:'ro2',
@@ -3179,7 +3224,8 @@ function loadScenario() {
  */
 const DOLLAR_INPUT_IDS = new Set([
     'spendGoal', 'iraBaseGoal', 'IRA1', 'IRA2', 'Roth', 'Roth2',
-    'Brokerage', 'BrokerageBasis', 'Cash', 'CashReserve', 'ss1', 'ss2', 'pensionAnnual'
+    'Brokerage', 'BrokerageBasis', 'Cash', 'CashReserve', 'ss1', 'ss2', 'pensionAnnual',
+    'extraConversionAmount'
 ]);
 
 function applyScenario(data) {

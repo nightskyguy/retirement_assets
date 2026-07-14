@@ -180,7 +180,7 @@ individual).
 + View the detailed transactions (**Annual Details ⊞**) or a simplified graph (**Chart 📊**).
 + On the Annual Details page, click either the year column or the "totalTax" column and it will generate up to 3 different tax payment plans - showing which is the most effective.
 + By default dividends from the Brokerage and interest on cash are accumulated into the Cash account. The "Reinvest Brokerage Dividends" changes this behavior and dividends are reinvested (meaning your cost basis grows over time).
-+ If you do Roth Conversions (even a $1), the tool will determine when you "break even" - if ever. Break Even means the value of your total assets is the same or greater than the value of your assets had you done NO Roth conversions (and paid no taxes on those conversions).
++ If you do Roth Conversions (even a $1), the tool will determine when you "break even" - if ever. Break Even means the value of your total assets becomes the same or greater than the value of your assets had you done NO Roth conversions (and paid no taxes on those conversions), and stays that way for the rest of the plan - a one-year blip that later falls behind again does not count.
 
 
 ### What the Tool IGNORES (No Plans to Implement)

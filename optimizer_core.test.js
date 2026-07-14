@@ -765,7 +765,9 @@ test('regression: exclusion params are inert for a non-exclusion state (CA)', ()
 // ── Break Even / Opp. Cost — dual-simulation counterfactual ──────────────────
 // convOC[y] = after-tax wealth of the actual run minus a full counterfactual run with
 // conversions suppressed (dollars stay in the IRA, no conversion tax, bigger RMDs later).
-// Break Even (totals.convBEYear) = first year with conversions done and convOC >= 0.
+// Break Even (totals.convBEYear) = earliest year convOC stays >= 0 through the LAST simulated
+// year (a sustained crossing, not just the first year that happens to touch >= 0), reported
+// only once conversions have actually occurred. See the two "brief positive blip" tests below.
 
 const OC_BASE = {
     ...BASE,
@@ -845,6 +847,43 @@ test('OC: optimizer/MC path (computeOC unset) skips counterfactual, convOC null'
     const r = simulate({ ...OC_BASE, computeOC: undefined, extraConversionAmount: 50000 });
     assert(r.totals.convBEYear === null, 'without computeOC, convBEYear must stay null');
     assert(r.log.every(x => x.convOC == null), 'without computeOC, convOC must stay null');
+});
+
+test('OC: brief positive blip then sustained negative through plan end → convBEYear null', () => {
+    // fixedpct converts a fixed % of the CURRENT (not original) IRA balance every year with no
+    // bracket ceiling, so conversions keep firing long after they stop paying off. Combined with
+    // a flat futureIRATaxRate valuation and a horizon (die1:80) that ends before the plan's later
+    // years would have recovered, this reproduces the reported bug shape: convOC touches
+    // non-negative for exactly the first year, then stays negative for every remaining year
+    // (never recovers). The old first-touch .find() reported the year-0 blip as Break Even; the
+    // correct answer is null (no sustained crossing exists).
+    const inputs = { ...OC_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.10,
+                     maxConversion: true, futureIRATaxRate: 0.34, die1: 80 };
+    const r = simulate(inputs);
+    const totalConv = r.log.reduce((s, x) => s + (x.rothConv ?? 0), 0);
+    assert(totalConv > 100000, `expected substantial conversions, got ${totalConv}`);
+    assert(r.log[0].convOC > 0, `year-0 convOC should be the reported blip (positive), got ${r.log[0].convOC}`);
+    assert(r.log.slice(1).every(x => x.convOC < 0), 'every year after the blip must be negative (never recovers)');
+    assert(r.totals.convBEYear === null,
+        `a blip that never sustains must report convBEYear null, got ${r.totals.convBEYear}`);
+});
+
+test('OC: excess-withdrawal double-dip → excessBEYear is the sustained crossing, not the first touch', () => {
+    // A one-year spike briefly pushes excessOC non-negative (2027), then it dips negative again
+    // for two more years (2028-2029) before permanently crossing over at 2030. The old
+    // first-touch .find() reported the one-year spike (2027) as Break Even even though the plan
+    // fell behind again the very next year; the correct answer is the start of the FINAL
+    // non-negative run (2030).
+    const inputs = { ...OC_BASE, strategy: 'propwd', propWithdraw: 0.9, growth: 0.08,
+                     IRA1: 2000000, die1: 76, ss1: 60000 };
+    const r = simulate(inputs);
+    const oc = r.log.map(x => x.excessOC);
+    assert(oc[1] >= 0 && oc[2] < 0,
+        `expected a one-year spike at index 1 followed by a dip at index 2, got ${JSON.stringify(oc)}`);
+    assert(r.log.slice(4).every(x => x.excessOC >= 0),
+        'the plan must stay non-negative from index 4 (2030) through the end');
+    assert(r.totals.excessBEYear === 2030,
+        `sustained crossing must land on the start of the final non-negative run (2030), got ${r.totals.excessBEYear}`);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

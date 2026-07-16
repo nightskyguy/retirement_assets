@@ -84,7 +84,7 @@ const BASE = {
     inflation: 0.00, cpi: 0.00, growth: 0.00,  // zero growth for predictable math
     cashYield: 0.00, dividendRate: 0.00,
     ssFailYear: 2099, ssFailPct: 1.0,
-    maxConversion: false, propWithdraw: 0, iraWithdrawPct: 0.05,
+    convertExcessToRoth: false, propWithdraw: 0, iraWithdrawPct: 0.05,
     startInYear: 2026, dividendReinvest: false,
     startYear: 2026,
     hasSpouse: false,
@@ -212,7 +212,7 @@ test('cyclicEnabled: surplus reinvested into Brokerage (not Cash) in IRA years',
         propWithdraw: 0.50,   // 50% over-draw → surplus flows to Brokerage, not Cash
         cyclicEnabled: true,
         growth: 0.00, cpi: 0.00, inflation: 0.00,
-        maxConversion: false,
+        convertExcessToRoth: false,
     };
     const result = simulate(surplusInputs);
     // In IRA years, surplus should go to Brokerage, so surplusCash should be 0
@@ -417,7 +417,7 @@ test('totalWealth fix: IRA discounted by ordinary rate, brokerage gains by cap-g
 });
 
 test('no-conversion run: zero Roth conversions over the whole plan', () => {
-    const res = simulate({ ...BASE, maxConversion: false, extraConversionAmount: 0 });
+    const res = simulate({ ...BASE, convertExcessToRoth: false, extraConversionAmount: 0 });
     const totalConv = res.log.reduce((s, r) => s + (r.rothConv ?? 0), 0);
     assertNear(totalConv, 0, 'sum of rothConv with conversions off', 1);
 });
@@ -508,7 +508,7 @@ const GK_OPT_BASE = {
     spendGoal: 55000, spendChange: 0, iraBaseGoal: 0,
     inflation: 0.02, cpi: 0.02, growth: 0.05, cashYield: 0, dividendRate: 0,
     ssFailYear: 2099, ssFailPct: 1.0,
-    maxConversion: false, propWithdraw: 0, iraWithdrawPct: 0.05,
+    convertExcessToRoth: false, propWithdraw: 0, iraWithdrawPct: 0.05,
     startInYear: 2026, dividendReinvest: false, startYear: 2026,
     hasSpouse: false, nYears: 30, gkGuard: 0.20, gkAdjPct: 0.10,
 };
@@ -679,7 +679,7 @@ const CAP_BASE = {
     pensionAnnual: 0, survivorPct: 75, pensionCola: false,
     spendGoal: 160000, spendChange: -0.01, iraBaseGoal: 0,
     inflation: 0.025, cpi: 0.025, growth: 0.05, cashYield: 0.02, dividendRate: 0.0,
-    ssFailYear: 2099, ssFailPct: 1.0, maxConversion: false, propWithdraw: 0, iraWithdrawPct: 0.05,
+    ssFailYear: 2099, ssFailPct: 1.0, convertExcessToRoth: false, propWithdraw: 0, iraWithdrawPct: 0.05,
     startYear: 2026, dividendReinvest: false,
 };
 const _sumAbsShortfall = log => log.reduce((s, e) => s + Math.abs(e.shortfall || 0), 0);
@@ -808,7 +808,7 @@ test('OC: profitable conversions → convBEYear reported; final convOC = finalNW
 
 test('OC: counterfactual pays the RMD counter-effect (bigger IRA → bigger RMDs, more tax)', () => {
     const inputs = { ...OC_BASE, IRA1: 1500000, Brokerage: 400000, BrokerageBasis: 300000,
-                     strategy: 'bracket', stratRate: 0.22, maxConversion: true };
+                     strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true };
     const actual = simulate(inputs);
     const cf = simulate({ ...inputs, _cfRun: true, _cfSuppressConversions: true,
                           extraConversionAmount: 0, computeOC: false });
@@ -834,7 +834,7 @@ test('OC: counterfactual recursion guard — _cfRun never spawns another counter
 });
 
 test('OC: excess withdrawals → excessBEYear gated on excess actually occurring', () => {
-    // propwd over-withdraws to Cash (no maxConversion) → excess path.
+    // propwd over-withdraws to Cash (no convertExcessToRoth) → excess path.
     const excess = simulate({ ...OC_BASE, strategy: 'propwd', propWithdraw: 0.5 });
     const hadExcess = excess.log.some(r => (r.surplusCash ?? 0) > 1 && (r.IRAwd ?? 0) > 1);
     assert(hadExcess, 'scenario should produce excess IRA→Cash withdrawals');
@@ -860,7 +860,7 @@ test('OC: brief positive blip then sustained negative through plan end → convB
     // (never recovers). The old first-touch .find() reported the year-0 blip as Break Even; the
     // correct answer is null (no sustained crossing exists).
     const inputs = { ...OC_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.10,
-                     maxConversion: true, futureIRATaxRate: 0.34, die1: 80 };
+                     convertExcessToRoth: true, futureIRATaxRate: 0.34, die1: 80 };
     const r = simulate(inputs);
     const totalConv = r.log.reduce((s, x) => s + (x.rothConv ?? 0), 0);
     assert(totalConv > 100000, `expected substantial conversions, got ${totalConv}`);
@@ -971,6 +971,114 @@ test('optimizeConversionAmount: non-GK strategies are unaffected by the stabilit
     const inputs = { ...OC_BASE, strategy: 'bracket', stratRate: 0.22 };
     const res = optimizeConversionAmount(inputs, { strategy: 'bracket', stratRate: 0.22 }, 'finalNW');
     assert(res.optResult !== null, 'a non-GK strategy must still find a winning conversion amount');
+});
+
+// ── Cash-funded conversions (fundConversionWithCash) ─────────────────────────────────────────
+// Two mechanisms, two formulas. applyExtraConversion already knows its gross amount, so it just
+// pays the known tax from Cash instead of netting it out. routeSurplusAndConvert only has a net
+// reallocation, so applyConversionGrossUp pulls an ADDITIONAL gross increase = conversion*t/(1-t)
+// (t = the slice's true marginal rate), funds that increase's own tax from Cash, and credits the
+// full increase to Roth. Both degrade gracefully to today's exact behavior when Cash runs out.
+
+const CF_BASE = {
+    ...BASE,
+    birthyear1: 1955, die1: 90,
+    IRA1: 1000000, Brokerage: 0, BrokerageBasis: 0, Cash: 200000, Roth: 0,
+    spendGoal: 40000, nYears: 5,
+};
+
+test('cash-funding: Extra Conversion lands the FULL gross in Roth; Cash pays the tax', () => {
+    const off = simulate({ ...CF_BASE, extraConversionAmount: 20000, fundConversionWithCash: false });
+    const on  = simulate({ ...CF_BASE, extraConversionAmount: 20000, fundConversionWithCash: true });
+    const a = off.log[0], b = on.log[0];
+    // Baseline: the reported behavior — $20k requested, less than $20k converted.
+    assert(a.extraConv === 20000, `test setup: gross must be the full request, got ${a.extraConv}`);
+    assert(a.rothConv < 19000, `flag OFF must net tax out of the conversion, got ${a.rothConv}`);
+    // Flag on: the entire gross lands in Roth.
+    assertNear(b.rothConv, b.extraConv, 'flag ON must convert the full gross', 1);
+    // The Cash draw is exactly the tax the OFF run had netted out.
+    assertNear(b['-extraConvCashTax'], a.extraConv - a.rothConv, 'cash draw must equal the tax OFF netted out', 1);
+    // Funding source changed, not the tax itself.
+    assertNear(b.totalTax, a.totalTax, 'total tax must be identical — only the funding source changed', 1);
+    assertNear(a.Cash - b.Cash, b['-extraConvCashTax'], 'Cash must fall by exactly the tax paid', 1);
+});
+
+test('cash-funding: gross-up satisfies increase = conversion*t/(1-t) and conserves every dollar', () => {
+    const inputs = { ...CF_BASE, convertExcessToRoth: true, strategy: 'fixedpct', iraWithdrawPct: 0.15 };
+    const off = simulate({ ...inputs, fundConversionWithCash: false });
+    const on  = simulate({ ...inputs, fundConversionWithCash: true });
+    const a = off.log[0], b = on.log[0];
+    const conversion = a.rothConv;              // conv1+conv2, the pure reallocation
+    const increase = b['-grossUpIRA'];
+    const taxCost  = b['-grossUpTax'];
+    assert(conversion > 1000, `test setup: need a real surplus conversion, got ${conversion}`);
+    assert(increase > 1000, `gross-up must fire with ample Cash, got ${increase}`);
+    const t = taxCost / increase;
+    // The user's formula, verified against the engine's own marginal-rate calc.
+    assertNear(increase, conversion * t / (1 - t), 'increase must equal conversion*t/(1-t)', 1);
+    // ...which is equivalent to grossing the conversion up to conversion/(1-t).
+    assertNear(conversion + increase, conversion / (1 - t), 'conversion+increase must equal conversion/(1-t)', 1);
+    assertNear(b.rothConv, conversion + increase, 'Roth must receive the conversion plus the full increase', 1);
+    // Conservation: the extra IRA draw reallocates to Roth; Cash covers only the new tax.
+    assertNear(a.TotalIRA - b.TotalIRA, increase, 'IRA must fall by exactly the increase', 1);
+    assertNear(a.Cash - b.Cash, taxCost, 'Cash must fall by exactly the increase\'s tax', 1);
+    assertNear(b.totalTax - a.totalTax, taxCost, 'the increase\'s tax is genuinely new tax', 1);
+});
+
+test('cash-funding: scales down to available Cash and never overdraws it', () => {
+    const inputs = { ...CF_BASE, convertExcessToRoth: true, strategy: 'fixedpct', iraWithdrawPct: 0.15 };
+    const rich = simulate({ ...inputs, fundConversionWithCash: true });
+    const poor = simulate({ ...inputs, Cash: 2000, fundConversionWithCash: true });
+    const p = poor.log[0];
+    assert(p['-grossUpTax'] <= 2000 + 1, `cash draw must not exceed available Cash, got ${p['-grossUpTax']}`);
+    assert(p['-grossUpIRA'] < rich.log[0]['-grossUpIRA'], 'a cash-constrained run must gross up less than a cash-rich one');
+    assert(poor.log.every(r => r.Cash >= -0.01), 'Cash must never go negative');
+});
+
+test('cash-funding: no-op when Cash is $0 (bit-identical to the flag being off)', () => {
+    const inputs = { ...CF_BASE, convertExcessToRoth: true, strategy: 'fixedpct', iraWithdrawPct: 0.15, Cash: 0 };
+    const on  = simulate({ ...inputs, fundConversionWithCash: true });
+    const off = simulate({ ...inputs, fundConversionWithCash: false });
+    assertNear(on.finalNW, off.finalNW, 'Cash=$0 must make the flag a hard no-op', 0.01);
+    assert(on.log[0]['-grossUpIRA'] === 0, 'no gross-up is possible without Cash to fund its tax');
+});
+
+test('cash-funding: both mechanisms together — Extra Conversion tax is not understated by the gross-up', () => {
+    // Regression: applyConversionGrossUp adds its tax to yr.totalTax, and applyExtraConversion
+    // isolates its own marginal tax by subtracting yr.totalTax. If the gross-up's INCOME isn't
+    // also in applyExtraConversion's basis (yr._extraIRAIncome), it subtracts a baseline that
+    // includes the gross-up's tax from a shadow calc that excludes the gross-up's income, and
+    // silently understates itself by roughly that tax.
+    const inputs = { ...CF_BASE, convertExcessToRoth: true, strategy: 'fixedpct', iraWithdrawPct: 0.15,
+                     extraConversionAmount: 20000, fundConversionWithCash: true };
+    const both = simulate(inputs);
+    const r = both.log[0];
+    assert(r['-grossUpIRA'] > 1, 'test setup: the gross-up must actually fire');
+    assert(r['-extraConvCashTax'] > 1, 'test setup: the extra conversion must actually pay tax from cash');
+    // Isolate the same extra conversion with no gross-up running, for a like-for-like rate.
+    const alone = simulate({ ...inputs, convertExcessToRoth: false });
+    const rateAlone = alone.log[0]['-extraConvCashTax'] / alone.log[0].extraConv;
+    const rateBoth  = r['-extraConvCashTax'] / r.extraConv;
+    // Stacking MORE income on top can only hold or raise the marginal rate, never lower it.
+    assert(rateBoth >= rateAlone - 0.001,
+        `extra conversion's marginal rate must not drop when the gross-up stacks income beneath it (alone ${rateAlone.toFixed(4)} vs both ${rateBoth.toFixed(4)})`);
+    // The year's Roth credit must account for all three contributions: the surplus reallocation,
+    // the gross-up's increase, and the extra conversion's full gross (Cash covered its tax).
+    const surplusConv = r.rothConv - r['-grossUpIRA'] - r.extraConv;
+    assert(surplusConv > 1, `rothConv must decompose into surplus + gross-up + full extra gross; residual surplus was ${surplusConv}`);
+    assert(r.rothConv > r.extraConv + r['-grossUpIRA'], 'all three contributions must be present in rothConv');
+});
+
+test('cash-funding: flag off leaves every balance untouched (regression guard)', () => {
+    // The whole mechanism must be inert unless explicitly opted into — this is what makes every
+    // pre-existing scenario, saved plan, and shared URL numerically identical after the rename.
+    const inputs = { ...CF_BASE, convertExcessToRoth: true, strategy: 'fixedpct', iraWithdrawPct: 0.15,
+                     extraConversionAmount: 20000 };
+    const bare = simulate({ ...inputs });                                  // flag absent entirely
+    const explicitOff = simulate({ ...inputs, fundConversionWithCash: false });
+    assertNear(bare.finalNW, explicitOff.finalNW, 'an absent flag must behave exactly like an explicit false', 0.01);
+    assert(bare.log.every(r => r['-grossUpIRA'] === 0 && r['-extraConvCashTax'] === 0),
+        'no cash-funding may occur with the flag off');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

@@ -1654,7 +1654,7 @@ assertEqual(
 		inflation: 0.03, cpi: 0.028, growth: 0.06,
 		cashYield: 0.03, dividendRate: 0.005,
 		ssFailYear: 2099, ssFailPct: 1.0,
-		maxConversion: false, propWithdraw: 0,
+		convertExcessToRoth: false, propWithdraw: 0,
 		startInYear: 0, dividendReinvest: false,
 		startYear: 2026
 	};
@@ -1727,7 +1727,7 @@ assertEqual(
 	//        final-year conversion; the skip-aware amortization keeps conversions smooth.
 	{
 		const inp = { ...baseInputs, IRA1: 600000, IRA2: 0, nYears: 6,
-			iraBaseGoal: 150000, maxConversion: true,
+			iraBaseGoal: 150000, convertExcessToRoth: true,
 			cyclicEnabled: true, cyclicOrder: 'ira-first',
 			birthyear1: 1955, die1: 92 };
 		const result = simulate(inp);
@@ -1797,11 +1797,11 @@ assertEqual(
 	// Shared strategy list used by reverse optimizer tests
 	const miniStrategyList = [
 		{ strategyLabel: 'Proportional', paramLabel: '0%',  paramSortVal: 0,
-		  overrides: { strategy: 'propwd',  propWithdraw: 0,    maxConversion: false } },
+		  overrides: { strategy: 'propwd',  propWithdraw: 0,    convertExcessToRoth: false } },
 		{ strategyLabel: 'Fill Bracket', paramLabel: '22%', paramSortVal: 0.22,
-		  overrides: { strategy: 'bracket', stratRate: 0.22,    maxConversion: false } },
+		  overrides: { strategy: 'bracket', stratRate: 0.22,    convertExcessToRoth: false } },
 		{ strategyLabel: 'Reduce',       paramLabel: '5 yrs', paramSortVal: 5,
-		  overrides: { strategy: 'fixed',   nYears: 5,          maxConversion: false } },
+		  overrides: { strategy: 'fixed',   nYears: 5,          convertExcessToRoth: false } },
 	];
 
 	// Wealthy scenario — large portfolio, conservative spend — forward optimizer should find higher spend
@@ -1833,7 +1833,7 @@ assertEqual(
 
 	// (opt-1) Forward optimizer: wealthy baseline passes and returns a higher optimized spend
 	{
-		const opt = optimizeSpend(wealthyInputs, { strategy: 'bracket', stratRate: 0.22, maxConversion: false });
+		const opt = optimizeSpend(wealthyInputs, { strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: false });
 		assertEqual(opt !== null, true, 'optimizeSpend: returns result for comfortably-passing scenario');
 		assertEqual(opt.optimizedSpend > wealthyInputs.spendGoal, true,
 			'optimizeSpend: optimized spend exceeds baseline spend goal');
@@ -1845,7 +1845,7 @@ assertEqual(
 
 	// (opt-2) Forward optimizer: returns null when baseline itself fails
 	{
-		const opt = optimizeSpend(strainedInputs, { strategy: 'propwd', propWithdraw: 0, maxConversion: false });
+		const opt = optimizeSpend(strainedInputs, { strategy: 'propwd', propWithdraw: 0, convertExcessToRoth: false });
 		assertEqual(opt, null, 'optimizeSpend: returns null when baseline fails the wealth criterion');
 	}
 
@@ -1914,7 +1914,7 @@ assertEqual(
 
 	// (betr-5) BETR appears in Annual Details log when conversions occur.
 	{
-		const r = simulate({ ...baseInputs, IRA1: 600000, maxConversion: true });
+		const r = simulate({ ...baseInputs, IRA1: 600000, convertExcessToRoth: true });
 		const convYears = r.log.filter(row => (row.rothConv ?? 0) > 0 || (row.extraConv ?? 0) > 0);
 		const withBETR = convYears.filter(row => row['BETR%'] !== null && row['BETR%'] !== undefined);
 		assertEqual(withBETR.length > 0, true,
@@ -1931,8 +1931,8 @@ assertEqual(
 
 	// (conv23-1) Regression: extraConversionAmount=0 produces bit-identical results to baseline.
 	{
-		const base = simulate({ ...baseInputs, IRA1: 500000, maxConversion: true });
-		const withZero = simulate({ ...baseInputs, IRA1: 500000, maxConversion: true, extraConversionAmount: 0 });
+		const base = simulate({ ...baseInputs, IRA1: 500000, convertExcessToRoth: true });
+		const withZero = simulate({ ...baseInputs, IRA1: 500000, convertExcessToRoth: true, extraConversionAmount: 0 });
 		assertEqual(
 			Math.abs(base.finalNW - withZero.finalNW) < 1,
 			true,
@@ -1947,8 +1947,8 @@ assertEqual(
 
 	// (conv23-2) Extra conversion increases Roth balance in first year (log[0]).
 	{
-		const base  = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false });
-		const extra = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false, extraConversionAmount: 50000 });
+		const base  = simulate({ ...baseInputs, IRA1: 800000, convertExcessToRoth: false });
+		const extra = simulate({ ...baseInputs, IRA1: 800000, convertExcessToRoth: false, extraConversionAmount: 50000 });
 		const baseRoth  = base.log[0].Roth;
 		const extraRoth = extra.log[0].Roth;
 		assertEqual(extraRoth > baseRoth, true,
@@ -1957,8 +1957,8 @@ assertEqual(
 
 	// (conv23-3) Extra conversion reduces IRA balance by approximately the gross amount in year 0.
 	{
-		const base  = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false });
-		const extra = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false, extraConversionAmount: 50000 });
+		const base  = simulate({ ...baseInputs, IRA1: 800000, convertExcessToRoth: false });
+		const extra = simulate({ ...baseInputs, IRA1: 800000, convertExcessToRoth: false, extraConversionAmount: 50000 });
 		const ira0Base  = base.log[0].TotalIRA;
 		const ira0Extra = extra.log[0].TotalIRA;
 		assertEqual(ira0Base - ira0Extra > 40000, true,
@@ -1969,8 +1969,8 @@ assertEqual(
 	// Year 0 gets 30k extra, year 1 gets 0. Verify year-0 Roth > base.
 	{
 		const schedule = [30000, 0];
-		const extra = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false, extraConversionAmount: schedule });
-		const base  = simulate({ ...baseInputs, IRA1: 800000, maxConversion: false });
+		const extra = simulate({ ...baseInputs, IRA1: 800000, convertExcessToRoth: false, extraConversionAmount: schedule });
+		const base  = simulate({ ...baseInputs, IRA1: 800000, convertExcessToRoth: false });
 		assertEqual(extra.log[0].Roth > base.log[0].Roth, true,
 			'extraConversionAmount array: year 0 Roth higher with 30k extra conv');
 		// Year 1 IRA delta should be smaller than year 0 delta (no further extra conv in year 1)
@@ -1994,7 +1994,7 @@ assertEqual(
 			birthyear1: 1966, birthmonth1: 1, die1: 95,
 			birthyear2: 1968, birthmonth2: 1, die2: 95,
 			IRA1: 10000000, IRA2: 0, nYears: 10,
-			maxConversion: true,
+			convertExcessToRoth: true,
 			spendGoal: 80000,
 		};
 		const r = simulate(gateInputs);
@@ -2041,7 +2041,7 @@ assertEqual(
 	{
 		const r = simulate({
 			...baseInputs,
-			strategy: 'propwd', propWithdraw: 0, maxConversion: false,
+			strategy: 'propwd', propWithdraw: 0, convertExcessToRoth: false,
 			IRA1: 400000, Brokerage: 500000, BrokerageBasis: 80000, // 84% unrealized gains ratio
 			Cash: 20000, Roth: 30000,
 			spendGoal: 110000, ss1: 35000, ss2: 0, hasSpouse: false,
@@ -2061,7 +2061,7 @@ assertEqual(
 		const spouseDeathAge = 75; // born 1952, dies 2027 → status changes to SGL
 		const r = simulate({
 			...baseInputs,
-			strategy: 'fixedpct', iraWithdrawPct: 0.10, maxConversion: false,
+			strategy: 'fixedpct', iraWithdrawPct: 0.10, convertExcessToRoth: false,
 			birthyear1: 1955, die1: 88, birthyear2: 1952, die2: spouseDeathAge,
 			hasSpouse: true,
 			IRA1: 600000, IRA2: 100000, Roth: 80000, Roth2: 10000,
@@ -2088,7 +2088,7 @@ assertEqual(
 	{
 		const r = simulate({
 			...baseInputs,
-			strategy: 'propwd', propWithdraw: 0, maxConversion: false,
+			strategy: 'propwd', propWithdraw: 0, convertExcessToRoth: false,
 			IRA1: 20000, Brokerage: 5000, BrokerageBasis: 5000, Cash: 2000, Roth: 0,
 			spendGoal: 150000, ss1: 15000, ss2: 0, hasSpouse: false,
 		});

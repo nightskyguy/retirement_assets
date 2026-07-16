@@ -758,6 +758,13 @@ function buildSimYearLogRecord(p) {
         'BETR%': p.yearBETR,
         betrFlag: p.yearBETRflag,
         extraConv: p.extraConvGross || null,
+        // Cash-funded conversion bookkeeping (fundConversionWithCash). Leading '-' → no table
+        // column; exposed for tests/debug only. grossUpIRA = additional IRA pulled by the
+        // gross-up, grossUpTax = its tax paid from Cash, extraConvCashTax = Extra Conversion's
+        // tax paid from Cash instead of being netted out of the conversion.
+        '-grossUpIRA': p.grossUpIRA || 0,
+        '-grossUpTax': p.grossUpTax || 0,
+        '-extraConvCashTax': p.extraConvCashTax || 0,
         // Phase 27: inflows/outflows + withdrawal rate
         grossOut: p.grossOutflows,
         netOut: p.netOutflows,
@@ -819,7 +826,7 @@ function beginYear(sim, yr) {
     // Withdrawal timing auto-selection (Phase 12): Early (Jan) for conversion years; Late (Dec) otherwise.
     // Early: preMonths=1, postMonths=11. Late: preMonths=11, postMonths=1.
     // Year 0: use strategy flag (bracket or explicit extraConv). Year 1+: prior year's actual conversion amount.
-    // Do NOT use maxConversion as a trigger — it is hardcoded true in the optimizer and does not guarantee a conversion fires.
+    // Do NOT use convertExcessToRoth as a trigger — it is hardcoded true in the optimizer and does not guarantee a conversion fires.
     const _stratImpliesConversion = inputs.strategy === 'bracket' || inputs.strategy === 'aca' || (inputs.extraConversionAmount ?? 0) > 0;
     const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
     yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
@@ -1424,7 +1431,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
 }
 
 // Route the year's surplus: refund unneeded Roth draws, convert IRA-sourced surplus to
-// True if conversion activity (both maxConversion-surplus and Extra Conversion) should be
+// True if conversion activity (both convertExcessToRoth-surplus and Extra Conversion) should be
 // suppressed for year y -- either the existing all-years counterfactual flag, or (new) a
 // from-year-onward cutoff used by diagnoseConvBreakEvenFailure to test truncated conversion
 // schedules. Purely additive: with _cfSuppressConversionsFromYear unset (every existing
@@ -1433,7 +1440,7 @@ function _convSuppressedThisYear(inputs, y) {
     return !!inputs._cfSuppressConversions || (inputs._cfSuppressConversionsFromYear != null && y >= inputs._cfSuppressConversionsFromYear);
 }
 
-// Roth (maxConversion), replace excess Cash draws, apply withdrawals to balances, and
+// Roth (convertExcessToRoth), replace excess Cash draws, apply withdrawals to balances, and
 // reinvest whatever remains (Brokerage under Cyclic, otherwise Cash).
 function routeSurplusAndConvert(sim, yr) {
     const { inputs, balance } = sim;
@@ -1456,25 +1463,26 @@ function routeSurplusAndConvert(sim, yr) {
     yr.netWithdrawals.Roth -= rothRefund;
     yr.surplus.Total -= rothRefund;
 
-    // With MaxConversion: route the IRA-sourced surplus to Roth instead of Cash.
+    // convertExcessToRoth: route the IRA-sourced surplus to Roth instead of Cash.
     // Roth1 receives conversions funded by IRA1 withdrawals; Roth2 by IRA2 withdrawals.
     // Each conversion is capped by the respective IRA withdrawal so we never convert
     // more from an account than was actually withdrawn from it.
-    // TAX GAP: nominalTaxRate here is the effective rate on spending income, not the
-    // marginal rate on the surplus being converted. The correct approach is a third
-    // tax-recalculation pass: recalculate calculateTaxes() with (spendingIncome + surplus)
-    // and apply only the incremental tax to the conversion. This could affect conversions
-    // near bracket boundaries by several thousand dollars per year.
+    // NOTE: this is a pure REALLOCATION — the IRA dollars are already being withdrawn (for
+    // spending, per the strategy), their tax is already fully in yr.totalTax regardless of
+    // destination, and conv1/conv2 just chooses Roth-vs-Cash for the leftover. Nothing is
+    // netted out for tax here (yr.surplus is already after-tax). The separate opt-in mechanism
+    // that pulls ADDITIONAL IRA and funds its tax from Cash is applyConversionGrossUp(), called
+    // right after this function in the phase sequence (gated on fundConversionWithCash).
     yr.surplus.Roth1 = 0;
     yr.surplus.Roth2 = 0;
 
-    if (inputs.maxConversion && !_convSuppressedThisYear(inputs, yr.y)) {
+    if (inputs.convertExcessToRoth && !_convSuppressedThisYear(inputs, yr.y)) {
         const conv1 = Math.min(yr.surplus.Total * yr.ira1_ratio,       yr.netWithdrawals.IRA1 || 0);
         const conv2 = Math.min(yr.surplus.Total * (1 - yr.ira1_ratio), yr.netWithdrawals.IRA2 || 0);
         yr.surplus.Roth1 = conv1;
         yr.surplus.Roth2 = conv2;
         yr.surplus.Total -= (conv1 + conv2);
-    } else if (inputs.maxConversion && _convSuppressedThisYear(inputs, yr.y)) {
+    } else if (inputs.convertExcessToRoth && _convSuppressedThisYear(inputs, yr.y)) {
         // Counterfactual: the surplus that would have converted stays in the IRA instead.
         cfRefundIRA(sim, yr, yr.surplus.Total);
     }
@@ -1561,7 +1569,7 @@ function cfRefundIRA(sim, yr, netTarget) {
 
 // Phase 23: extra conversion — additional IRA→Roth independent of spending strategy.
 // extraConversionAmount[y] (or scalar $) = gross IRA to additionally withdraw and convert.
-// Taxes come from IRA gross (same convention as maxConversion surplus). Net Roth = gross - tax.
+// Taxes come from IRA gross (same convention as convertExcessToRoth surplus). Net Roth = gross - tax.
 function applyExtraConversion(sim, yr) {
     const { inputs, balance, birthyear1, birthyear2 } = sim;
     const y = yr.y;
@@ -1570,23 +1578,41 @@ function applyExtraConversion(sim, yr) {
             ? (inputs.extraConversionAmount[y] ?? 0)
             : (inputs.extraConversionAmount ?? 0);
     yr.extraConvGross = 0;
+    yr.extraConvCashTax = 0;
     let incrementalExtraConvTax = 0;
     if (_extraConvReq > 0) {
         const _availIRA = balance.IRA1 + balance.IRA2;
         const _gross = Math.min(_extraConvReq, _availIRA);
         if (_gross > 0) {
-            // Incremental tax on extra IRA withdrawal via marginal-method re-calc
-            const _baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest + (yr.netWithdrawals.IRA ?? 0);
+            // Incremental tax on extra IRA withdrawal via marginal-method re-calc.
+            // _extraIRAIncome: IRA income already added this year by applyConversionGrossUp
+            // (not in netWithdrawals.IRA, but its tax is already in yr.totalTax). It must be in
+            // this basis so the subtraction below stays like-for-like — otherwise this compares
+            // tax(income WITHOUT the gross-up) against a yr.totalTax that INCLUDES the gross-up's
+            // tax, and silently understates the extra conversion's own tax by that amount.
+            const _priorIRAInc = (yr.netWithdrawals.IRA ?? 0) + (yr._extraIRAIncome ?? 0);
+            const _baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest + _priorIRAInc;
             const _exTaxCalc = calculateTaxes({
                 filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
                 IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: sim.cpiRate,
-                pensionIncome: yr.pension, iraIncome: yr.taxableRMD + (yr.netWithdrawals.IRA ?? 0) + _gross,
+                pensionIncome: yr.pension, iraIncome: yr.taxableRMD + _priorIRAInc + _gross,
                 qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
                 hsaContrib: 0, taxExemptInterest: 0, state: STATEname
             });
             incrementalExtraConvTax = Math.max(0, _exTaxCalc.totalTax - (yr.totalTax - yr.IRMAA));
             yr.extraConvGross = _gross;
-            const _net = _gross - incrementalExtraConvTax;
+            // fundConversionWithCash: pay this conversion's incremental tax from Cash (capped at
+            // available Cash) instead of netting it out of the conversion, so more of _gross lands
+            // in Roth. Blends gracefully — funds what Cash allows, nets the uncovered remainder.
+            let _net;
+            if (inputs.fundConversionWithCash && incrementalExtraConvTax > 0) {
+                const _cashForTax = Math.min(incrementalExtraConvTax, Math.max(0, balance.Cash));
+                balance.Cash -= _cashForTax;
+                yr.extraConvCashTax = _cashForTax;
+                _net = _gross - (incrementalExtraConvTax - _cashForTax);
+            } else {
+                _net = _gross - incrementalExtraConvTax;
+            }
             const _ec1 = _gross * yr.ira1_ratio;
             const _ec2 = _gross * (1 - yr.ira1_ratio);
             balance.IRA1 -= _ec1;
@@ -1596,8 +1622,73 @@ function applyExtraConversion(sim, yr) {
             yr.totalConverted += _net;
             yr.totalTax += incrementalExtraConvTax;
             sim.cumulativeTaxes += incrementalExtraConvTax;
+            yr._extraIRAIncome = (yr._extraIRAIncome ?? 0) + _gross;   // keep the basis consistent for any later consumer
         }
     }
+}
+
+// Cash-funded gross-up (fundConversionWithCash): pull an ADDITIONAL gross amount from the IRA
+// on top of whatever routeSurplusAndConvert already reallocated to Roth (conv1+conv2, sitting
+// in yr.surplus.Roth1/Roth2 at this point — nothing else has touched them yet), fund THIS NEW
+// slice's own tax from Cash (never netted from the conversion), and credit the full additional
+// amount to Roth. Must run AFTER routeSurplusAndConvert has fully settled balance.Cash/IRA1/IRA2
+// for the year, and BEFORE applyExtraConversion (so `conversion` measures only conv1+conv2, and
+// this mechanism gets first claim on Cash).
+//
+// Derivation: t = marginal rate on the conv1+conv2 slice (shadow calc removing `conversion`
+// dollars of IRA income already being withdrawn; the tax drop is that top slice's marginal tax
+// — same subtractive technique as attributeIncrementalTaxes/cfRefundIRA). Gross-up:
+// increase = conversion * t/(1-t), so conversion + increase = conversion/(1-t), the flat-t
+// gross-equivalent of the conversion. increase's own tax (increase*t) is paid from Cash;
+// increase lands in Roth in full. Never partially funds an increase's tax — scales the whole
+// increase down to what Cash/IRA availability allows instead.
+function applyConversionGrossUp(sim, yr) {
+    const { inputs, balance, birthyear1, birthyear2 } = sim;
+    yr.grossUpIRA = 0;
+    yr.grossUpTax = 0;
+    const conversion = (yr.surplus.Roth1 ?? 0) + (yr.surplus.Roth2 ?? 0);
+    if (!inputs.fundConversionWithCash || conversion <= 1) return;
+
+    const baseEI = yr.pension + yr.taxableRMD + yr.taxableInterest;
+    const shadowIRA = Math.max(0, (yr.netWithdrawals.IRA ?? 0) - conversion);
+    const shadowCalc = calculateTaxes({
+        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2], totalSS: yr.s1 + yr.s2,
+        IRMAAAnnualCost: 0, earnedIncome: baseEI + shadowIRA, inflation: sim.cpiRate,
+        pensionIncome: yr.pension, iraIncome: yr.taxableRMD + shadowIRA,
+        qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
+        hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+    });
+    const dT = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowCalc.totalTax);
+    const t = Math.min(0.6, dT / conversion);   // 0.6 is a numeric safety guard, not a business rate
+    if (t <= 0.0001) return;
+
+    const idealIncrease = conversion * t / (1 - t);
+    const availCash = Math.max(0, balance.Cash);
+    const availIRA  = Math.max(0, balance.IRA1 + balance.IRA2);
+    const increase = Math.max(0, Math.min(idealIncrease, availCash / t, availIRA));
+    if (increase <= 1) return;
+    const taxCost = increase * t;
+
+    const increase1 = increase * yr.ira1_ratio;
+    const increase2 = increase * (1 - yr.ira1_ratio);
+    balance.IRA1 -= increase1;
+    balance.IRA2 -= increase2;
+    balance.Cash -= taxCost;
+
+    yr.surplus.Roth1 = (yr.surplus.Roth1 ?? 0) + increase1;
+    yr.surplus.Roth2 = (yr.surplus.Roth2 ?? 0) + increase2;
+    yr.totalConverted += increase;
+    yr.totalTax += taxCost;              // genuinely new tax, unlike conversion's (already counted)
+    sim.cumulativeTaxes += taxCost;
+    // This IRA income is NOT in yr.netWithdrawals.IRA (it's an extra draw applied straight to
+    // balance), but its tax IS now in yr.totalTax. Any later mechanism that isolates its own
+    // marginal tax by subtracting yr.totalTax must therefore include this in its income basis,
+    // or it compares a with-this-tax baseline against a without-this-income shadow calc and
+    // understates itself. applyExtraConversion reads this for exactly that reason.
+    yr._extraIRAIncome = (yr._extraIRAIncome ?? 0) + increase;
+
+    yr.grossUpIRA = increase;   // bookkeeping for grossOut
+    yr.grossUpTax = taxCost;
 }
 
 // Phase 20 (reworked): per-year incremental tax attribution for the convTax / excessTax
@@ -1731,6 +1822,7 @@ function evaluateYearOutcome(sim, yr) {
     // Phase 27: Withdrawal rate = (net outflows − inflows) / start-of-year wealth.
     // Gross outflows: all account withdrawals incl. conversion-funding draws.
     yr._grossOutflows = (yr.netWithdrawals.IRA ?? 0) + yr.totalIRAForcedWithdrawals + yr.extraConvGross
+        + (yr.grossUpIRA ?? 0) + (yr.grossUpTax ?? 0) + (yr.extraConvCashTax ?? 0)
         + (yr.netWithdrawals.Brokerage ?? 0)
         + (yr.netWithdrawals.Cash ?? 0)
         + (yr.netWithdrawals.Roth1 ?? 0)
@@ -1758,6 +1850,7 @@ function logYear(sim, yr) {
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
         extraConvGross: yr.extraConvGross,
+        grossUpIRA: yr.grossUpIRA, grossUpTax: yr.grossUpTax, extraConvCashTax: yr.extraConvCashTax,
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
         yearInflows: yr._yearInflows, wdRate: yr._wdRate,
         useEarly: yr._useEarly, timingReason: yr.timingReason,
@@ -1931,6 +2024,7 @@ function simulate(inputs) {
         fillSpendingGap(sim, yr);
         resolveResidualAndForcedIRA(sim, yr);
         routeSurplusAndConvert(sim, yr);
+        applyConversionGrossUp(sim, yr);
         applyExtraConversion(sim, yr);
         attributeIncrementalTaxes(sim, yr);
         growAndSettle(sim, yr);
@@ -2220,7 +2314,7 @@ function buildVariations(base) {
     const variations = [];
 
     const push = (family, paramLabel, paramSortVal, overrides) => {
-        const conv = overrides.maxConversion;
+        const conv = overrides.convertExcessToRoth;
         variations.push({
             ...base,
             // A swept variation must not silently inherit a leftover sidebar value (e.g. from
@@ -2237,58 +2331,58 @@ function buildVariations(base) {
         });
     };
 
-    const maxConv = true;
+    const convOn = true;
 
     for (const pct of [0, 5, 10, 20, 50])
         push('Proportional', `${pct}%`, pct,
-            { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
+            { strategy: 'propwd', propWithdraw: pct / 100, convertExcessToRoth: convOn });
     // Include user's current value if it isn't one of the standard Proportional steps
     const userPropPct = Math.round((base.propWithdraw ?? 0) * 100);
     if (base.strategy === 'propwd' && ![0, 5, 10, 20, 50].includes(userPropPct))
         push('Proportional', `${userPropPct}%`, userPropPct,
-            { strategy: 'propwd', propWithdraw: base.propWithdraw, maxConversion: maxConv });
+            { strategy: 'propwd', propWithdraw: base.propWithdraw, convertExcessToRoth: convOn });
 
     for (const n of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25])
         push('Reduce', `${n} yrs`, n,
-            { strategy: 'fixed', nYears: n, maxConversion: maxConv });
+            { strategy: 'fixed', nYears: n, convertExcessToRoth: convOn });
     // Include user's current value if it isn't one of the standard Reduce steps
     if (base.strategy === 'fixed' && ![2,3,4,5,6,7,8,9,10,11,12,13,14,15,20,25].includes(base.nYears))
         push('Reduce', `${base.nYears} yrs`, base.nYears,
-            { strategy: 'fixed', nYears: base.nYears, maxConversion: maxConv });
+            { strategy: 'fixed', nYears: base.nYears, convertExcessToRoth: convOn });
 
     for (const rate of bracketRates) {
         const pct = Math.round(rate * 100);
         push('Fill Bracket', `${pct}%`, rate,
-            { strategy: 'bracket', stratRate: rate, maxConversion: maxConv });
+            { strategy: 'bracket', stratRate: rate, convertExcessToRoth: convOn });
     }
     // Include user's current value if it isn't one of the standard Fill Bracket rates
     const userBracketPct = Math.round((base.stratRate ?? 0) * 100);
     if (base.strategy === 'bracket' && !bracketRates.map(r => Math.round(r * 100)).includes(userBracketPct))
         push('Fill Bracket', `${userBracketPct}%`, base.stratRate,
-            { strategy: 'bracket', stratRate: base.stratRate, maxConversion: maxConv });
+            { strategy: 'bracket', stratRate: base.stratRate, convertExcessToRoth: convOn });
 
     for (const pct of [5, 6, 7, 8, 10])
         push('IRA Draw', `${pct}%`, pct,
-            { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
+            { strategy: 'fixedpct', iraWithdrawPct: pct / 100, convertExcessToRoth: convOn });
     // Include user's current value if it isn't one of the standard IRA Draw steps
     const userDrawPct = Math.round((base.iraWithdrawPct ?? 0) * 100);
     if (base.strategy === 'fixedpct' && ![5, 6, 7, 8, 10].includes(userDrawPct))
         push('IRA Draw', `${userDrawPct}%`, userDrawPct,
-            { strategy: 'fixedpct', iraWithdrawPct: base.iraWithdrawPct, maxConversion: maxConv });
+            { strategy: 'fixedpct', iraWithdrawPct: base.iraWithdrawPct, convertExcessToRoth: convOn });
 
     for (const seq of ['CBIR', 'RIBC', 'BIRC'])
-        push('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
+        push('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, convertExcessToRoth: convOn });
 
     // Phase 22: Guyton-Klinger — single entry using user's guardrail settings.
     // Label shows the actual guard/adjust knobs, e.g. "Grd:20 Adj:10".
     const gkLabel = `Grd:${Math.round((base.gkGuard ?? 0.20) * 100)} Adj:${Math.round((base.gkAdjPct ?? 0.10) * 100)}`;
     push('Guyton-Klinger', gkLabel, 0,
-        { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, maxConversion: maxConv });
+        { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, convertExcessToRoth: convOn });
 
     // Phase 24: Cyclic variants for MC — IRA-first (🔄) and brokerage-first (🔄B).
+    const nonCyclicCount = variations.length;   // snapshot BEFORE either expansion below
     {
-        const baseCount = variations.length;
-        for (let i = 0; i < baseCount; i++) {
+        for (let i = 0; i < nonCyclicCount; i++) {
             const v = variations[i];
             for (const [plainPfx, htmlPfx, order] of [
                 ['\u{1F5D8} ', '<span style="color:#cc0000">\u{1F5D8}</span> ', 'ira-first'],
@@ -2304,6 +2398,26 @@ function buildVariations(base) {
                     _paramSortVal:   v._paramSortVal,
                 });
             }
+        }
+    }
+
+    // fundConversionWithCash comparison rows (see applyConversionGrossUp). Non-cyclic families
+    // only, and only when there's Cash to spend: with base.Cash <= 0 the mechanism is a hard
+    // no-op, so those clones would be bit-identical to their twins — pure wasted simulate()
+    // calls (MC runs numPaths × variations.length trials). Cyclic rows are excluded to keep the
+    // row count bounded; they reinvest surplus into Brokerage rather than Cash anyway, leaving
+    // proportionally less for this mechanism to act on.
+    if (base.Cash > 0) {
+        for (let i = 0; i < nonCyclicCount; i++) {
+            const v = variations[i];
+            variations.push({
+                ...v,
+                fundConversionWithCash: true,
+                _label:          '💵 ' + v._label,
+                _strategyFamily: '💵 ' + v._strategyFamily,
+                _paramLabel:     v._paramLabel,
+                _paramSortVal:   v._paramSortVal,
+            });
         }
     }
 

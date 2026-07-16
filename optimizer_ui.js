@@ -79,9 +79,12 @@ function applyNerdKnobVisibility() {
     // Cycle Brokerage LTCG bracket target (0%/15%)
     const cycleLTCGWrap = document.getElementById('cycleLTCGTarget-wrap');
     if (cycleLTCGWrap) cycleLTCGWrap.style.display = NERD_KNOBS ? '' : 'none';
-    // Maximize Conversions sub-flags (Convert Excess to Roth / Fund Conversion Taxes with Cash)
+    // Maximize Conversions sub-flags (Convert Excess to Roth / Use Cash)
     const convAdvWrap = document.getElementById('convAdvanced-wrap');
     if (convAdvWrap) convAdvWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // 💵 legend — only meaningful once nerd mode is sweeping the cash-funded arm
+    const cashFundLegend = document.getElementById('opt-legend-cashfund');
+    if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
     // Docs: ACA Cliff strategy discussion paragraph (nerd-only strategy)
     const docAcaCliff = document.getElementById('doc-aca-cliff');
     if (docAcaCliff) docAcaCliff.style.display = NERD_KNOBS ? '' : 'none';
@@ -403,6 +406,13 @@ function runOptimizer() {
     const strategyOverridesList = [];
 
     function addResult(strategyLabel, paramLabel, paramSortVal, overrides, noConv = false) {
+        // Nerd mode sweeps fundConversionWithCash as its own dimension (the 💵 rows added after
+        // the cyclic pass), so base rows must NOT inherit the sidebar's value — otherwise a user
+        // with it already on would get two identical arms instead of an A/B. Outside nerd mode
+        // rows keep inheriting it, so the table reflects the plan you actually configured.
+        if (NERD_KNOBS && overrides.fundConversionWithCash === undefined) {
+            overrides = { ...overrides, fundConversionWithCash: false };
+        }
         const inputs = Object.assign({}, base, overrides);
         const res = simulate(inputs);
         const lastEntry = res.log[res.log.length - 1];
@@ -417,11 +427,15 @@ function runOptimizer() {
         const row = {
             _id: results.length,
             _isNoConv: noConv,
-            _strategyLabel: strategyLabel + (overrides.convertExcessToRoth ? ' ✓' : '') + (noConv ? ' (no conv)' : '') + ((isBracketInfeasible || isACAUntenable) ? ' ⚠️' : ''),
+            _strategyLabel: strategyLabel + (inputs.convertExcessToRoth ? ' ✓' : '') + (noConv ? ' (no conv)' : '') + ((isBracketInfeasible || isACAUntenable) ? ' ⚠️' : ''),
             _paramLabel: paramLabel,
             _paramSortVal: paramSortVal,
-            _convertExcessToRoth: overrides.convertExcessToRoth,
-            _fundConversionWithCash: overrides.fundConversionWithCash ?? false,
+            // Record the EFFECTIVE values (base + overrides), not just the overrides: outside
+            // nerd mode fundConversionWithCash is inherited from the sidebar rather than set as
+            // an override, and loadOptimizerResult() restores from these fields — reading the
+            // override alone would load a plan that differs from the row the table evaluated.
+            _convertExcessToRoth: !!inputs.convertExcessToRoth,
+            _fundConversionWithCash: !!inputs.fundConversionWithCash,
             _spendGoal: inputs.spendGoal,
             _strategy: overrides.strategy,
             _nYears: overrides.nYears ?? null,
@@ -511,6 +525,19 @@ function runOptimizer() {
                 { ...overrides, cyclicEnabled: true, cyclicOrder: 'ira-first' });
             addResult(_BRK_PFX + strategyLabel, paramLabel, paramSortVal,
                 { ...overrides, cyclicEnabled: true, cyclicOrder: 'brokerage-first' });
+        }
+    }
+
+    // Cash-funded conversion arm (💵) — nerd mode only, and only when there's Cash to spend
+    // (applyConversionGrossUp/applyExtraConversion's cash path are hard no-ops at $0 Cash, so
+    // these rows would be bit-identical twins of their base rows: pure wasted simulate() calls).
+    // Non-cyclic families only, matching buildVariations()'s scope: cyclic reinvests surplus into
+    // Brokerage rather than Cash, so there's proportionally less for this mechanism to act on,
+    // and crossing all three dimensions would balloon the table.
+    if (NERD_KNOBS && base.Cash > 0) {
+        for (const { strategyLabel, paramLabel, paramSortVal, overrides } of baseFamilies) {
+            addResult('💵 ' + strategyLabel, paramLabel, paramSortVal,
+                { ...overrides, fundConversionWithCash: true });
         }
     }
 
@@ -1548,7 +1575,7 @@ function updateTable(log) {
         'Roth1': "Person 1's Roth balance at year end.",
         'Roth2': "Person 2's Roth balance at year end.",
         'rothG': 'Growth in the Roth (added to Roth account)',
-        'rothConv': 'Amount that actually landed in Roth this year (IRA→Roth). A conversion owes tax on the amount converted: unless "Fund Conversion Taxes with Cash" is on, that tax is taken out of the conversion itself, so this reads LOWER than the gross amount withdrawn (e.g. a $20,000 Extra Annual Roth Conversion lands ~$13,700 at a 31% marginal rate). With cash-funding on, the tax is paid from Cash instead and the full amount lands here. See the extraConv column (Opp. Cost category) for the gross figure.',
+        'rothConv': 'Amount that actually landed in Roth this year (IRA→Roth). A conversion owes tax on the amount converted: unless "Use Cash" (under Maximize Conversions) is on, that tax is taken out of the conversion itself, so this reads LOWER than the gross amount withdrawn (e.g. a $20,000 Extra Annual Roth Conversion lands ~$13,700 at a 31% marginal rate). With cash-funding on, the tax is paid from Cash instead and the full amount lands here. See the extraConv column (Opp. Cost category) for the gross figure.',
         'CashWD': 'Tax free withdrawals from Cash',
         'surplusCash': 'Cash left over after spending and taxes were covered — routed back into the Cash account (or on to Roth conversion if Max Conversion is enabled).',
         'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
@@ -1827,13 +1854,25 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     if (changeEl) changeEl.innerText = _lastChangedInputLabel ? '↺ ' + _lastChangedInputLabel : '';
     const convBEEl = document.getElementById('stat-conv-be');
     if (convBEEl) convBEEl.innerText = totals.convBEYear ?? '—';
-    const diagBtn = document.getElementById('stat-conv-be-diagnose');
+    // Break Even "why not?" — computed eagerly so hovering the ⓘ shows the real reason with no
+    // click first. Affordable on this path: the scan reuses truncated (cheaper) runs and measures
+    // well under one runSimulation() even at its worst case (every year a conversion year).
+    const diagIcon = document.getElementById('stat-conv-be-diagnose');
     const diagResultEl = document.getElementById('stat-conv-be-diagnose-result');
-    if (diagBtn && diagResultEl) {
+    if (diagIcon && diagResultEl) {
         const _canDiagnose = totals.convBEYear == null && (lastSimulationLog?.some(r => (r.rothConv ?? 0) > 1) ?? false);
-        diagBtn.style.display = _canDiagnose ? '' : 'none';
-        diagBtn.innerText = 'ⓘ';
-        diagBtn.title = 'Click to find out why this plan never breaks even.';
+        _beDiagnosisMsg = '';
+        if (_canDiagnose && lastSimInputs) {
+            try {
+                const diag = diagnoseConvBreakEvenFailure(lastSimInputs, lastSimulationLog);
+                if (diag) _beDiagnosisMsg = formatBreakEvenDiagnosis(diag);
+            } catch (e) {
+                console.error('Break Even diagnosis failed:', e);
+            }
+        }
+        diagIcon.style.display = _beDiagnosisMsg ? '' : 'none';
+        diagIcon.title = _beDiagnosisMsg;
+        // Collapse any previously-expanded text: it belongs to the prior run's numbers.
         diagResultEl.innerText = '';
         diagResultEl.style.display = 'none';
     }
@@ -1914,34 +1953,18 @@ function formatBreakEvenDiagnosis(diag) {
     return msg;
 }
 
-// On-demand: identifies which specific conversion year breaks a plan's Break Even lead.
-// Runs up to k extra simulate() calls (k = distinct conversion years) -- deferred one tick so
-// the "…" busy state repaints before the synchronous work blocks. The result is written both
-// inline (visible immediately) and to the icon's title (re-readable on hover).
-function runBreakEvenDiagnosis() {
-    const diagBtn = document.getElementById('stat-conv-be-diagnose');
-    const diagResultEl = document.getElementById('stat-conv-be-diagnose-result');
-    if (!diagBtn || !diagResultEl || !lastSimInputs || !lastSimulationLog) return;
-    if (diagBtn.dataset.busy) return;
-    diagBtn.dataset.busy = '1';
-    diagBtn.innerText = '…';
-    setTimeout(() => {
-        try {
-            const diag = diagnoseConvBreakEvenFailure(lastSimInputs, lastSimulationLog);
-            const msg = diag ? formatBreakEvenDiagnosis(diag) : '';
-            diagResultEl.innerText = msg;
-            diagResultEl.style.display = msg ? '' : 'none';
-            diagBtn.title = msg || 'No diagnosis available.';
-            diagBtn.innerText = 'ⓘ';
-        } catch (e) {
-            diagResultEl.innerText = 'Diagnosis failed -- see console.';
-            diagResultEl.style.display = '';
-            console.error('runBreakEvenDiagnosis failed:', e);
-            diagBtn.innerText = 'ⓘ';
-        } finally {
-            delete diagBtn.dataset.busy;
-        }
-    }, 20);
+// The Break Even diagnosis for the current run, computed in updateStats(). Held here so the ⓘ
+// can toggle it inline without recomputing.
+let _beDiagnosisMsg = '';
+
+// Click the ⓘ to expand the diagnosis inline; click again to collapse it. The same text is
+// always on the icon's title, so hovering reveals it without clicking at all.
+function toggleBreakEvenDiagnosis() {
+    const el = document.getElementById('stat-conv-be-diagnose-result');
+    if (!el || !_beDiagnosisMsg) return;
+    const isOpen = el.style.display !== 'none';
+    el.innerText = isOpen ? '' : _beDiagnosisMsg;
+    el.style.display = isOpen ? 'none' : '';
 }
 
 function updateProjectedRMDStat() {

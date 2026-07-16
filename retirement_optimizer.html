@@ -1038,8 +1038,9 @@ window.addEventListener('DOMContentLoaded', function () {
         var el = document.getElementById(id);
         if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0 });
     });
-    captureDefaults?.();   // Snapshot pristine defaults BEFORE loadFromURL mutates fields (for share-URL default-omission)
-    loadFromURL?.();   // Preset inputs from URL params if present (must run after dropdowns are built)
+    captureDefaults?.();   // Snapshot pristine defaults BEFORE anything else mutates fields (for share-URL default-omission)
+    loadScenarioByName?.('default');   // Auto-restore the reserved "default" scenario, if saved -- must run AFTER captureDefaults so OPT_DEFAULTS stays the true markup defaults, not this scenario's values (else Share silently omits every field the two happen to agree on)
+    loadFromURL?.();   // Preset inputs from URL params if present (must run after dropdowns are built); wins over the "default" scenario for any param it specifies
     toggleStrategyUI();
     setupAutoRecalc();
     setupTopScrollSync();   // #2 — mirror horizontal scrollbar above the Annual Details table
@@ -1060,8 +1061,6 @@ window.addEventListener('DOMContentLoaded', function () {
 // Auto-run tests when page loads (comment out if you don't want auto-run)
 // window.addEventListener('DOMContentLoaded', runTests);
 runTests?.();
-
-loadScenarioByName?.('default');
 
 runSimulation?.();
 </script>

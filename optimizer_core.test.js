@@ -39,6 +39,8 @@ const optimizeSpend = core.optimizeSpend;
 const calculateTaxes = taxengine.calculateTaxes;
 const getLTCGBracketRoom = core.getLTCGBracketRoom;
 const compactNum = core.compactNum;
+const diagnoseConvBreakEvenFailure = core.diagnoseConvBreakEvenFailure;
+const optimizeConversionAmount = core.optimizeConversionAmount;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 
 // ── Test harness ──────────────────────────────────────────────────────────────
@@ -884,6 +886,91 @@ test('OC: excess-withdrawal double-dip → excessBEYear is the sustained crossin
         'the plan must stay non-negative from index 4 (2030) through the end');
     assert(r.totals.excessBEYear === 2030,
         `sustained crossing must land on the start of the final non-negative run (2030), got ${r.totals.excessBEYear}`);
+});
+
+// ── Break Even diagnostic — pinpoints which conversion year breaks a sustained lead ─────────
+// diagnoseConvBreakEvenFailure() truncates the plan's conversion schedule at each successive
+// conversion year (via _cfSuppressConversionsFromYear) and finds the first truncation that
+// still fails to sustain — i.e. the specific conversion whose inclusion erases the lead for
+// good, not just which calendar year the totals happen to go negative.
+
+test('diagnoseConvBreakEvenFailure: boundary — pinpoints the specific conversion year that breaks a sustained lead', () => {
+    // 5 modest conversions (2026-2030) each individually sustain a Break Even on their own;
+    // a large 6th lump conversion (2031) is the one that permanently erases the lead.
+    const arr = new Array(30).fill(0);
+    for (let y = 0; y < 5; y++) arr[y] = 40000;
+    arr[5] = 600000;
+    const inputs = { ...OC_BASE, birthyear1: 1966, die1: 90, IRA1: 1200000,
+                     inflation: 0.025, cpi: 0.025, nYears: 30,
+                     extraConversionAmount: arr, futureIRATaxRate: 0.30 };
+    const r = simulate(inputs);
+    assert(r.totals.convBEYear === null, 'test setup: full run must fail to sustain a Break Even lead');
+
+    const d = diagnoseConvBreakEvenFailure(inputs, r.log);
+    assert(d && d.outcome === 'boundary', `expected a boundary diagnosis, got ${JSON.stringify(d)}`);
+    assert(d.breakingYear === 2031, `expected the 6th (2031) conversion to be the breaking one, got ${d.breakingYear}`);
+    assertNear(d.breakingAmount, 355478, 'breaking conversion amount', 5);
+    assert(d.lastSustainableYear === 2030, `expected 2030 as the last sustainable conversion year, got ${d.lastSustainableYear}`);
+    assert(d.lastSustainableBEYear === 2041, `expected the truncated plan to break even in 2041, got ${d.lastSustainableBEYear}`);
+
+    // Invariant: re-running truncated exactly at the reported boundaries must reproduce them.
+    const convIdxs = [];
+    r.log.forEach((x, i) => { if ((x.rothConv ?? 0) > 1) convIdxs.push(i); });
+    const sustainedRerun = simulate({ ...inputs, _cfSuppressConversionsFromYear: convIdxs[convIdxs.length - 2] + 1 });
+    assert(sustainedRerun.totals.convBEYear === d.lastSustainableBEYear,
+        'truncating right before the breaking year must reproduce lastSustainableBEYear');
+    const brokenRerun = simulate({ ...inputs, _cfSuppressConversionsFromYear: convIdxs[convIdxs.length - 1] + 1 });
+    assert(brokenRerun.totals.convBEYear === null,
+        'truncating right after the breaking year (numerically a no-op vs. the real plan) must still be null');
+});
+
+test('diagnoseConvBreakEvenFailure: neverSustains — even the first conversion never earns back its tax cost', () => {
+    const arr = new Array(30).fill(0);
+    arr[0] = 900000; // one huge lump conversion, nothing else
+    const inputs = { ...OC_BASE, birthyear1: 1966, die1: 90, IRA1: 1200000,
+                     inflation: 0.025, cpi: 0.025, nYears: 30,
+                     extraConversionAmount: arr, futureIRATaxRate: 0.30 };
+    const r = simulate(inputs);
+    assert(r.totals.convBEYear === null, 'test setup: full run must fail to sustain a Break Even lead');
+
+    const d = diagnoseConvBreakEvenFailure(inputs, r.log);
+    assert(d && d.outcome === 'neverSustains', `expected neverSustains, got ${JSON.stringify(d)}`);
+    assert(d.breakingYear === 2026, `expected the first conversion year (2026), got ${d.breakingYear}`);
+    assert(d.lastSustainableYear === null && d.lastSustainableBEYear === null,
+        'neverSustains must report no sustainable prefix');
+});
+
+test('diagnoseConvBreakEvenFailure: no conversions in the log → returns null', () => {
+    const r = simulate({ ...OC_BASE });
+    assert(diagnoseConvBreakEvenFailure(OC_BASE, r.log) === null,
+        'must return null when no conversions occurred (precondition violated)');
+});
+
+// ── Optimize Conversions sweep — Guyton-Klinger stability gate ──────────────────────────────
+// optimizeConversionAmount() must reject conversion amounts that only "win" on raw finalNW
+// because GK's own guardrails silently cut future spend to absorb the tax hit — the same
+// runaway-optimization trap gkSpendStable already guards against for optimizeSpend/
+// optimizeSpendDown.
+
+test('optimizeConversionAmount: GK sweep rejects a higher-scoring but spend-unstable conversion amount', () => {
+    const gkBase = { ...OC_BASE, strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10,
+                     IRA1: 1000000, spendGoal: 75000, growth: 0.05 };
+    // Without a stability gate, $425k/yr out-scores $175k/yr on raw finalNW alone...
+    const unconstrained = simulate({ ...gkBase, extraConversionAmount: 425000 });
+    const stableCandidate = simulate({ ...gkBase, extraConversionAmount: 175000 });
+    assert(unconstrained.finalNW > stableCandidate.finalNW,
+        'test setup: $425k must out-score $175k on raw finalNW for this to be a meaningful test');
+    // ...but the gated sweep must not pick it, since GK can only "afford" $425k by breaching
+    // its own guard band on future spend.
+    const gated = optimizeConversionAmount(gkBase, { strategy: 'gk' }, 'finalNW');
+    assert(gated.optConv < 425000, `gated sweep must not pick the unstable $425k candidate, got ${gated.optConv}`);
+    assertNear(gated.optConv, 175000, 'gated sweep should land on the largest still-stable candidate', 1);
+});
+
+test('optimizeConversionAmount: non-GK strategies are unaffected by the stability gate', () => {
+    const inputs = { ...OC_BASE, strategy: 'bracket', stratRate: 0.22 };
+    const res = optimizeConversionAmount(inputs, { strategy: 'bracket', stratRate: 0.22 }, 'finalNW');
+    assert(res.optResult !== null, 'a non-GK strategy must still find a winning conversion amount');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

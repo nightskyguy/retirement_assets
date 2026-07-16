@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1253</title>
+    <title>Retirement Optimizer 11.1271</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -49,8 +49,8 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1133"></script>
-	<script src="optimizer_core.js?v=111253"></script>
-	<script src="optimizer_ui.js?v=111253"></script>
+	<script src="optimizer_core.js?v=111271"></script>
+	<script src="optimizer_ui.js?v=111271"></script>
 	<script src="optimizer_tests.js?v=1111f3"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
@@ -130,7 +130,7 @@
 				</label>
 			</div>
 			<div class="input-group" style="margin-top:4px;">
-				<label title="A fixed additional IRA→Roth conversion amount, converted every year on top of whatever Maximize Conversions/your strategy already does. This is the exact amount the Optimizer's 'Optimize Conversions' sweep (⇌ rows) searches for in $25k steps — loading a ⇌ row from the Optimizer table fills this in automatically. Set to 0 to disable; automatically capped at the remaining IRA balance each year.">Extra Annual Roth Conversion $
+				<label title="A fixed additional IRA→Roth conversion amount, converted every year on top of whatever Maximize Conversions/your strategy already does. This is the exact amount the Optimizer's 'Optimize Conversions' sweep (⇌ rows) searches for in $25k steps — loading a ⇌ row from the Optimizer table fills this in automatically. Set to 0 to disable; capped only by the remaining IRA balance each year -- it does NOT stop at your IRA Goal. IRA Goal paces ordinary withdrawals for tax/IRMAA/ACA management; a conversion moves money IRA-to-Roth rather than out of the household, so it can draw the IRA below that goal.">Extra Annual Roth Conversion $
 				<input type="text" id="extraConversionAmount" value="0" placeholder="0" style="width:110px;font-size:14px;"></label>
 			</div>
 			<div class="input-group" style="margin-top:4px;">
@@ -399,7 +399,10 @@
                 <div title="Total Required Minimum Distributions taken. Sub-label shows RMDs' share of lifetime taxes."><small>All RMDs</small><br><strong id="stat-rmd">$0</strong><div id="stat-rmd-pct" style="font-size:0.75em;min-height:1em;color:#888;"></div></div>
                 <div title="Total after-tax spendable income produced across all years."><small>Spendable</small><br><strong id="stat-spend">$0</strong><div id="stat-spend-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total portfolio value (after-tax) remaining at the end of the final simulation year."><small>End Wealth</small><br><strong id="stat-nw">$0</strong><div id="stat-nw-delta" style="font-size:0.75em;min-height:1em;"></div></div>
-                <div title="First year the plan's after-tax portfolio value permanently overtakes what it would have been with no Roth conversions, and stays ahead for the rest of the plan, or &quot;--&quot; if that never happens (including a brief lead that doesn't hold). Computed by re-running the entire plan without the conversions. Only shown when conversions actually occur. See Documentation for details."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;">—</strong></div>
+                <div title="First year the plan's after-tax portfolio value permanently overtakes what it would have been with no Roth conversions, and stays ahead for the rest of the plan, or &quot;--&quot; if that never happens (including a brief lead that doesn't hold). Computed by re-running the entire plan without the conversions. Only shown when conversions actually occur. See Documentation for details."><small>Break Even</small><br><strong id="stat-conv-be" style="font-size:0.9em;">—</strong>
+                    <div><button id="stat-conv-be-diagnose" onclick="runBreakEvenDiagnosis()" style="display:none;font-size:0.75em;padding:0;border:none;background:none;color:#2980b9;text-decoration:underline;cursor:pointer;">Diagnose &rsaquo;</button></div>
+                    <div id="stat-conv-be-diagnose-result" style="font-size:0.75em;max-width:220px;color:#555;"></div>
+                </div>
                 <div id="stat-betr-wrap" title="Average Break-Even Tax Rate across all conversion years (Kitces formula). If your expected future rate exceeds this, conversions are advantageous on average. See BETR% column in Annual Details (Opp. Cost category). '—' means no conversions."><small>Avg BETR</small><br><strong id="stat-betr-avg" style="font-size:0.9em;">—</strong></div>
                 <div title="Average of (net portfolio outflows − SS/pension inflows) ÷ start-of-year wealth. The classic 4% rule targets ~4%. Negative = income exceeded spending. See wdRate% column in Annual Details."><small>Avg Withdrawal Rate</small><br><strong id="stat-avg-spend-rate" style="font-size:0.9em;">—</strong></div>
 				<div id="popUpMessage" class="scenario-message"></div>
@@ -573,6 +576,8 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.1271</b> <strong>Three fixes from testing the Extra Conversion field and Break Even.</strong> (1) The Optimizer's conversion-amount search could recommend a Guyton-Klinger conversion so large that GK could only "afford" it by continuously cutting your future spend behind the scenes -- the search now rejects any amount that isn't actually sustainable for GK, the same stability check already used elsewhere in the optimizer. (2) The "Extra Annual Roth Conversion $" tooltip now says plainly that it is capped only by the remaining IRA balance, not by your IRA Goal -- a conversion moves money IRA-to-Roth rather than out of the household, so it is allowed to draw the IRA below that goal on purpose. (3) When Break Even shows &ldquo;&mdash;&rdquo;, a new <strong>Diagnose</strong> link next to the stat identifies the specific conversion year that erases an otherwise-sustained lead, instead of leaving you to guess why.
+					</li>
 				<li><b>11.1253</b> <strong>Optimizer strategies loaded from the table now actually match what the table showed.</strong> Clicking a "⇌ Optimize Conversions" row to load it previously dropped the extra conversion amount that made that row special, so the loaded plan's Break Even (and everything else) could disagree with the Optimizer table. A new "Extra Annual Roth Conversion $" field now holds that amount, is filled in automatically when you load a ⇌ row, and is shareable/saveable like any other input. Loading a cyclic-brokerage or IRMAA/ACA-ceiling ⇌ row now also correctly carries those settings over. Also clarified the Conv Savings tooltip: it only counts tax actually paid so far, so it can look good even when Break Even (which also counts the tax still owed on money left in the IRA) says the conversions never really paid off.
 					</li>
 				<li><b>11.1247</b> <strong>Optimizer: Break Even now shown for Optimize Conversions strategies.</strong> When the Optimize Conversions checkbox is on, the top 5 strategy rows now report a Break Even year (same permanent-crossover definition as the single-scenario stat) in a new column, and a new "Earliest Break Even" objective (nerd mode) ranks strategies by how soon their conversions permanently pull ahead. Strategies that never sustain a lead show &ldquo;&mdash;&rdquo;.
@@ -740,7 +745,7 @@
 					</div>
 					</details>
 				</li>
-				<li><strong>What is &ldquo;Break Even&rdquo;?</strong> When your plan does Roth conversions, the tool quietly runs your entire plan a second time with the conversions removed: the money stays in the traditional IRA, no conversion tax is paid, and that bigger IRA later forces bigger Required Minimum Distributions, taxed in whatever bracket you are actually in those years (including the higher Single rates a surviving spouse pays, and any Medicare IRMAA surcharges the RMDs trigger). Each year the two plans are compared on equal footing, and the earliest year the converting plan pulls ahead <strong>and stays ahead for the rest of the plan</strong> is marked as <strong>Break Even</strong>. A year where the converting plan is only briefly ahead before falling behind again does not count. It only appears if conversions actually happen, and shows &ldquo;&mdash;&rdquo; if the lead never becomes permanent.
+				<li><strong>What is &ldquo;Break Even&rdquo;?</strong> When your plan does Roth conversions, the tool quietly runs your entire plan a second time with the conversions removed: the money stays in the traditional IRA, no conversion tax is paid, and that bigger IRA later forces bigger Required Minimum Distributions, taxed in whatever bracket you are actually in those years (including the higher Single rates a surviving spouse pays, and any Medicare IRMAA surcharges the RMDs trigger). Each year the two plans are compared on equal footing, and the earliest year the converting plan pulls ahead <strong>and stays ahead for the rest of the plan</strong> is marked as <strong>Break Even</strong>. A year where the converting plan is only briefly ahead before falling behind again does not count. It only appears if conversions actually happen, and shows &ldquo;&mdash;&rdquo; if the lead never becomes permanent. When it does show &ldquo;&mdash;&rdquo;, a <strong>Diagnose</strong> link appears next to the stat that pinpoints exactly which conversion year is the one that erases the lead for good, and how far the plan got before that.
 				<p style="margin:6px 0 0;">Both plans are compared by after-tax portfolio <strong>value</strong>: taxable (IRA) assets are reduced by the tax that will eventually be owed on them, and non-taxable (Roth) assets count at face value. The net figure is shown as <i>Total Wealth</i> on the main chart. The IRA discount rate is either each plan's own current tax rate, or the Marginal Heirs Tax if you entered one (see 4. Assumptions). Conversions pay tax early, so the no-conversion plan usually leads at first; the crossover often lands when RMDs ramp up, or when one spouse passes away and the survivor&rsquo;s tax rate jumps when filing Single, aka &ldquo;the widow penalty&rdquo;.</p>
 				<p style="margin:6px 0 0;">The year-by-year numbers are in <i>Annual Details</i> &rarr; <i>Opp. Cost</i> (the <i>convOC</i> column; <i>excessOC</i> is the same comparison for surplus IRA withdrawals banked to Cash, using the same permanent-crossover definition of Break Even). One caveat: with <i>Guyton-Klinger</i> guardrails the no-conversion plan may adjust spending on different years, since the guardrails react to that plan's own portfolio. That is the honest comparison, not an error.</p>
 				</li>

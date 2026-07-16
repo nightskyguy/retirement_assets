@@ -1424,6 +1424,15 @@ function resolveResidualAndForcedIRA(sim, yr) {
 }
 
 // Route the year's surplus: refund unneeded Roth draws, convert IRA-sourced surplus to
+// True if conversion activity (both maxConversion-surplus and Extra Conversion) should be
+// suppressed for year y -- either the existing all-years counterfactual flag, or (new) a
+// from-year-onward cutoff used by diagnoseConvBreakEvenFailure to test truncated conversion
+// schedules. Purely additive: with _cfSuppressConversionsFromYear unset (every existing
+// caller), this is exactly !!inputs._cfSuppressConversions, zero behavior change.
+function _convSuppressedThisYear(inputs, y) {
+    return !!inputs._cfSuppressConversions || (inputs._cfSuppressConversionsFromYear != null && y >= inputs._cfSuppressConversionsFromYear);
+}
+
 // Roth (maxConversion), replace excess Cash draws, apply withdrawals to balances, and
 // reinvest whatever remains (Brokerage under Cyclic, otherwise Cash).
 function routeSurplusAndConvert(sim, yr) {
@@ -1459,13 +1468,13 @@ function routeSurplusAndConvert(sim, yr) {
     yr.surplus.Roth1 = 0;
     yr.surplus.Roth2 = 0;
 
-    if (inputs.maxConversion && !inputs._cfSuppressConversions) {
+    if (inputs.maxConversion && !_convSuppressedThisYear(inputs, yr.y)) {
         const conv1 = Math.min(yr.surplus.Total * yr.ira1_ratio,       yr.netWithdrawals.IRA1 || 0);
         const conv2 = Math.min(yr.surplus.Total * (1 - yr.ira1_ratio), yr.netWithdrawals.IRA2 || 0);
         yr.surplus.Roth1 = conv1;
         yr.surplus.Roth2 = conv2;
         yr.surplus.Total -= (conv1 + conv2);
-    } else if (inputs.maxConversion && inputs._cfSuppressConversions) {
+    } else if (inputs.maxConversion && _convSuppressedThisYear(inputs, yr.y)) {
         // Counterfactual: the surplus that would have converted stays in the IRA instead.
         cfRefundIRA(sim, yr, yr.surplus.Total);
     }
@@ -1556,7 +1565,7 @@ function cfRefundIRA(sim, yr, netTarget) {
 function applyExtraConversion(sim, yr) {
     const { inputs, balance, birthyear1, birthyear2 } = sim;
     const y = yr.y;
-    const _extraConvReq = inputs._cfSuppressConversions ? 0
+    const _extraConvReq = _convSuppressedThisYear(inputs, y) ? 0
         : Array.isArray(inputs.extraConversionAmount)
             ? (inputs.extraConversionAmount[y] ?? 0)
             : (inputs.extraConversionAmount ?? 0);
@@ -2020,6 +2029,48 @@ function simulate(inputs) {
 
 ///////////////////////////
 
+// Diagnoses WHY a plan's Roth conversions never sustain a Break Even lead (totals.convBEYear
+// === null) despite conversions having occurred. Isolates the specific conversion YEAR whose
+// inclusion flips the plan from "would eventually break even" to "never does," by re-testing
+// truncated versions of the plan that keep conversions only through each successive actual
+// conversion year and suppress everything after (via _cfSuppressConversionsFromYear). Linear
+// scan over conversion years only (not calendar years), exits as soon as the boundary is
+// found. Deliberately not a binary search: nominalTaxRate is a discrete bracket-table step
+// function, so the sustains(j) sequence isn't guaranteed monotonic near a boundary -- binary
+// search could silently converge on the wrong year with no way to detect it.
+// Only call when totals.convBEYear === null AND conversions occurred
+// (log.some(r => (r.rothConv ?? 0) > 1)) -- same precondition simulate()'s own BE block uses.
+// On-demand only (up to k simulate() calls, k = distinct conversion years) -- never call from
+// a hot path.
+function diagnoseConvBreakEvenFailure(inputs, actualLog) {
+    const convYearIdxs = [];
+    for (let i = 0; i < actualLog.length; i++) {
+        if ((actualLog[i].rothConv ?? 0) > 1) convYearIdxs.push(i);
+    }
+    const k = convYearIdxs.length;
+    if (k === 0) return null; // precondition violated by caller; nothing to diagnose
+
+    let prevBEYear = null;
+    for (let j = 1; j <= k; j++) {
+        const cutoff = convYearIdxs[j - 1] + 1; // yr.y index; suppress this index and later
+        const truncated = simulate({ ...inputs, computeOC: true, _cfSuppressConversionsFromYear: cutoff });
+        const beYear = truncated.totals.convBEYear;
+        if (beYear == null) {
+            const breakIdx = convYearIdxs[j - 1];
+            return {
+                outcome: j === 1 ? 'neverSustains' : 'boundary',
+                breakingYear: actualLog[breakIdx].year,
+                breakingAmount: actualLog[breakIdx].rothConv,
+                lastSustainableYear: j > 1 ? actualLog[convYearIdxs[j - 2]].year : null,
+                lastSustainableBEYear: j > 1 ? prevBEYear : null,
+                futureIRATaxRateUnset: inputs.futureIRATaxRate == null,
+            };
+        }
+        prevBEYear = beYear;
+    }
+    return null; // unreachable given the precondition (j=k is numerically the real plan, already null)
+}
+
 // When ALL strategies fail at baseline, searches downward across every strategy to find
 // the highest spend goal where at least one strategy succeeds.
 // Returns { result, optimizedSpend, strategyLabel, paramLabel, paramSortVal, overrides } or null.
@@ -2148,8 +2199,14 @@ function optimizeConversionAmount(baseInputs, strategyOverrides = {}, metric = '
     for (let conv = 0; conv <= totalIRA + STEP; conv += STEP) {
         const c = Math.min(conv, totalIRA);
         const res = simulate({ ...baseInputs, ...strategyOverrides, extraConversionAmount: c });
-        const s = score(res);
-        if (s > bestScore) { bestScore = s; bestConv = c; bestResult = res; }
+        // Guyton-Klinger can "afford" almost any conversion amount by continuously slashing
+        // future spend via its own guardrails (finalNW rewards the under-spending, not the
+        // conversion) -- same runaway-optimization failure mode gkSpendStable already guards
+        // against for optimizeSpend/optimizeSpendDown. No-op for non-GK strategies.
+        if (gkSpendStable(res, strategyOverrides, baseInputs)) {
+            const s = score(res);
+            if (s > bestScore) { bestScore = s; bestConv = c; bestResult = res; }
+        }
         if (c >= totalIRA) break;
     }
     return { optConv: bestConv, optResult: bestResult };
@@ -2321,7 +2378,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth };
+    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, diagnoseConvBreakEvenFailure, optimizeConversionAmount };
 }
 
 

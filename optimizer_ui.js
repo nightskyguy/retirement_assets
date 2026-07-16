@@ -323,7 +323,9 @@ function applySuggestIraGoal() {
 function runSimulation() {
     refreshStratRateOptions();   // keep bracket dropdown labels in sync with CPI + filing status
     // computeOC: single-scenario runs also produce the Opp. Cost counterfactual (Break Even).
-    let res = simulate({ ...getInputs(), computeOC: true });
+    const _simInputs = { ...getInputs(), computeOC: true };
+    let res = simulate(_simInputs);
+    lastSimInputs = _simInputs;
     lastSimulationLog = res.log;
     lastTotals = res.totals;
     lastFinalNW = res.finalNW;
@@ -1815,6 +1817,15 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     if (changeEl) changeEl.innerText = _lastChangedInputLabel ? '↺ ' + _lastChangedInputLabel : '';
     const convBEEl = document.getElementById('stat-conv-be');
     if (convBEEl) convBEEl.innerText = totals.convBEYear ?? '—';
+    const diagBtn = document.getElementById('stat-conv-be-diagnose');
+    const diagResultEl = document.getElementById('stat-conv-be-diagnose-result');
+    if (diagBtn && diagResultEl) {
+        const _canDiagnose = totals.convBEYear == null && (lastSimulationLog?.some(r => (r.rothConv ?? 0) > 1) ?? false);
+        diagBtn.style.display = _canDiagnose ? '' : 'none';
+        diagBtn.disabled = false;
+        diagBtn.innerText = 'Diagnose ›';
+        diagResultEl.innerText = '';
+    }
 
     // Phase 21: BETR average display
     const betrAvgEl = document.getElementById('stat-betr-avg');
@@ -1877,6 +1888,44 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
 // Phase 23: update projected-RMD stats in the stats bar.
 // RMD divisors come from RMD_TABLE in taxengine.js (full table, ages 72–120).
 // Reads IRA balances, birth years, and growth rate from DOM inputs — no totals arg needed.
+// Formats a diagnoseConvBreakEvenFailure() result as a plain-English explanation.
+function formatBreakEvenDiagnosis(diag) {
+    const _fmt = (n) => '$' + Math.round(n).toLocaleString();
+    let msg;
+    if (diag.outcome === 'neverSustains') {
+        msg = `Even the first conversion, in ${diag.breakingYear} (${_fmt(diag.breakingAmount)}), never earns back its own tax cost by the end of the plan.`;
+    } else {
+        msg = `Conversions through ${diag.lastSustainableYear} would have broken even in ${diag.lastSustainableBEYear}. The ${diag.breakingYear} conversion (${_fmt(diag.breakingAmount)}) is the one that erases the lead for good.`;
+    }
+    if (diag.futureIRATaxRateUnset) {
+        msg += ' (Valued at each year\'s own tax bracket -- set a Marginal Heirs Tax Rate in Assumptions for a steadier comparison.)';
+    }
+    return msg;
+}
+
+// On-demand: identifies which specific conversion year breaks a plan's Break Even lead.
+// Runs up to k extra simulate() calls (k = distinct conversion years) -- deferred one tick
+// so the "Diagnosing..." button state repaints before the synchronous work blocks.
+function runBreakEvenDiagnosis() {
+    const diagBtn = document.getElementById('stat-conv-be-diagnose');
+    const diagResultEl = document.getElementById('stat-conv-be-diagnose-result');
+    if (!diagBtn || !diagResultEl || !lastSimInputs || !lastSimulationLog) return;
+    diagBtn.disabled = true;
+    diagBtn.innerText = 'Diagnosing…';
+    setTimeout(() => {
+        try {
+            const diag = diagnoseConvBreakEvenFailure(lastSimInputs, lastSimulationLog);
+            diagResultEl.innerText = diag ? formatBreakEvenDiagnosis(diag) : '';
+            diagBtn.style.display = 'none';
+        } catch (e) {
+            diagResultEl.innerText = 'Diagnosis failed -- see console.';
+            console.error('runBreakEvenDiagnosis failed:', e);
+            diagBtn.disabled = false;
+            diagBtn.innerText = 'Diagnose ›';
+        }
+    }, 20);
+}
+
 function updateProjectedRMDStat() {
     const now = new Date();
     const curYear = now.getFullYear();
@@ -1966,6 +2015,7 @@ function updateProjectedRMDStat() {
 }
 
 let lastSimulationLog = null;
+let lastSimInputs = null;
 let lastTotals = null, lastFinalNW = null, lastFinalNWCurrentDollars = null;
 let _prevStatsTotals = null, _prevStatsFinalNW = null, _prevStatsFinalNWCD = null;
 let _lastChangedInputLabel = null;

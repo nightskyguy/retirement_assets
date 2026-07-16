@@ -191,6 +191,10 @@ function findCurrentStrategyIdx(variations, base) {
         if (v.strategy !== base.strategy) return false;
         if (!!v.cyclicEnabled !== !!base.cyclicEnabled) return false;
         if (v.cyclicEnabled && (v.cyclicOrder ?? 'ira-first') !== (base.cyclicOrder ?? 'ira-first')) return false;
+        // buildVariations() now emits 💵 fundConversionWithCash clones of every non-cyclic row;
+        // without this the first-match findIndex would pair a cash-funding user with the
+        // non-cash-funded twin, so Stress mode would model a materially different plan.
+        if (!!v.fundConversionWithCash !== !!base.fundConversionWithCash) return false;
         if (base.strategy === 'propwd')   return Math.abs((v.propWithdraw   ?? 0) - (base.propWithdraw   ?? 0)) < 0.001;
         if (base.strategy === 'fixed')    return v.nYears === base.nYears;
         if (base.strategy === 'bracket')  return Math.abs((v.stratRate      ?? 0) - (base.stratRate      ?? 0)) < 0.001;
@@ -502,7 +506,10 @@ function loadMCVariation(v) {
     if (v.strategy === 'fixed'     && v.nYears         != null) document.getElementById('nYears').value          = v.nYears;
     if (v.strategy === 'bracket'   && v.stratRate      != null) document.getElementById('stratRate').value       = Math.round(v.stratRate * 100);
     if (v.strategy === 'fixedpct'  && v.iraWithdrawPct != null) document.getElementById('iraWithdrawPct').value  = Math.round(v.iraWithdrawPct * 100);
-    document.getElementById('maxConversion').checked = !!v.maxConversion;
+    document.getElementById('convertExcessToRoth').checked = !!v.convertExcessToRoth;
+    const fccEl = document.getElementById('fundConversionWithCash');
+    if (fccEl) fccEl.checked = !!v.fundConversionWithCash;
+    onConvSubFlagChange();
     const cyclicEl = document.getElementById('cyclicEnabled');
     if (cyclicEl) { cyclicEl.checked = !!v.cyclicEnabled; onCyclicChange(); }
     const cyclicOrderEl = document.getElementById('cyclicOrder');

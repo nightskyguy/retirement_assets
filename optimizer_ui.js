@@ -79,6 +79,12 @@ function applyNerdKnobVisibility() {
     // Cycle Brokerage LTCG bracket target (0%/15%)
     const cycleLTCGWrap = document.getElementById('cycleLTCGTarget-wrap');
     if (cycleLTCGWrap) cycleLTCGWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // Maximize Conversions sub-flags (Convert Excess to Roth / Use Cash)
+    const convAdvWrap = document.getElementById('convAdvanced-wrap');
+    if (convAdvWrap) convAdvWrap.style.display = NERD_KNOBS ? '' : 'none';
+    // 💵 legend — only meaningful once nerd mode is sweeping the cash-funded arm
+    const cashFundLegend = document.getElementById('opt-legend-cashfund');
+    if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
     // Docs: ACA Cliff strategy discussion paragraph (nerd-only strategy)
     const docAcaCliff = document.getElementById('doc-aca-cliff');
     if (docAcaCliff) docAcaCliff.style.display = NERD_KNOBS ? '' : 'none';
@@ -199,7 +205,8 @@ function getInputs() {
         dividendRate: +val('dividendRate') / 100.0,
         ssFailYear: +val('ssFailYear'),
         ssFailPct: +val('ssFailPct') / 100.0,
-        maxConversion: valChecked('maxConversion'),
+        convertExcessToRoth: valChecked('convertExcessToRoth'),
+        fundConversionWithCash: valChecked('fundConversionWithCash'),
         extraConversionAmount: +val('extraConversionAmount') || 0,
         propWithdraw: +val('propWithdraw') / 100.0,
         iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
@@ -323,7 +330,9 @@ function applySuggestIraGoal() {
 function runSimulation() {
     refreshStratRateOptions();   // keep bracket dropdown labels in sync with CPI + filing status
     // computeOC: single-scenario runs also produce the Opp. Cost counterfactual (Break Even).
-    let res = simulate({ ...getInputs(), computeOC: true });
+    const _simInputs = { ...getInputs(), computeOC: true };
+    let res = simulate(_simInputs);
+    lastSimInputs = _simInputs;
     lastSimulationLog = res.log;
     lastTotals = res.totals;
     lastFinalNW = res.finalNW;
@@ -397,6 +406,13 @@ function runOptimizer() {
     const strategyOverridesList = [];
 
     function addResult(strategyLabel, paramLabel, paramSortVal, overrides, noConv = false) {
+        // Nerd mode sweeps fundConversionWithCash as its own dimension (the 💵 rows added after
+        // the cyclic pass), so base rows must NOT inherit the sidebar's value — otherwise a user
+        // with it already on would get two identical arms instead of an A/B. Outside nerd mode
+        // rows keep inheriting it, so the table reflects the plan you actually configured.
+        if (NERD_KNOBS && overrides.fundConversionWithCash === undefined) {
+            overrides = { ...overrides, fundConversionWithCash: false };
+        }
         const inputs = Object.assign({}, base, overrides);
         const res = simulate(inputs);
         const lastEntry = res.log[res.log.length - 1];
@@ -411,10 +427,15 @@ function runOptimizer() {
         const row = {
             _id: results.length,
             _isNoConv: noConv,
-            _strategyLabel: strategyLabel + (overrides.maxConversion ? ' ✓' : '') + (noConv ? ' (no conv)' : '') + ((isBracketInfeasible || isACAUntenable) ? ' ⚠️' : ''),
+            _strategyLabel: strategyLabel + (inputs.convertExcessToRoth ? ' ✓' : '') + (noConv ? ' (no conv)' : '') + ((isBracketInfeasible || isACAUntenable) ? ' ⚠️' : ''),
             _paramLabel: paramLabel,
             _paramSortVal: paramSortVal,
-            _maxConversion: overrides.maxConversion,
+            // Record the EFFECTIVE values (base + overrides), not just the overrides: outside
+            // nerd mode fundConversionWithCash is inherited from the sidebar rather than set as
+            // an override, and loadOptimizerResult() restores from these fields — reading the
+            // override alone would load a plan that differs from the row the table evaluated.
+            _convertExcessToRoth: !!inputs.convertExcessToRoth,
+            _fundConversionWithCash: !!inputs.fundConversionWithCash,
             _spendGoal: inputs.spendGoal,
             _strategy: overrides.strategy,
             _nYears: overrides.nYears ?? null,
@@ -438,28 +459,28 @@ function runOptimizer() {
         strategyOverridesList.push({ strategyLabel, paramLabel, paramSortVal, overrides });
     }
 
-    const maxConv = true;
+    const convOn = true;
 
     // Proportional +% — 0% is the pure baseline; 5/10/20/50% add IRA-only boost
     for (const pct of [0, 5, 10, 20, 50]) {
-        addResult('Proportional', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, maxConversion: maxConv });
+        addResult('Proportional', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, convertExcessToRoth: convOn });
     }
 
     // Reduce IRA over N years
     for (const n of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
-        addResult('Reduce', `${n} yrs`, n, { strategy: 'fixed', nYears: n, maxConversion: maxConv });
+        addResult('Reduce', `${n} yrs`, n, { strategy: 'fixed', nYears: n, convertExcessToRoth: convOn });
     }
 
     // Fill bracket — one row per bracket level
     for (const rate of bracketRates) {
         const pct = Math.round(rate * 100);
-        addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, stratIRMAATier: -1, maxConversion: maxConv });
+        addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, stratIRMAATier: -1, convertExcessToRoth: convOn });
     }
 
     // Fill bracket — IRMAA tier ceilings (tiers 0=Below IRMAA through 4=Tier 4 ceiling)
     const IRMAATierLabels = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
     for (let tier = 0; tier <= 4; tier++) {
-        addResult('IRMAA Ceil', IRMAATierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, maxConversion: maxConv });
+        addResult('IRMAA Ceil', IRMAATierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, convertExcessToRoth: convOn });
     }
 
     // Fill bracket — ACA FPL cliffs. Nerd-mode only (item 12): the ACA cliff model is rough, so it
@@ -471,23 +492,23 @@ function runOptimizer() {
         const acaMultiples = [200, 250, 300, 400];
         const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL ⚠️' };
         for (const pct of acaMultiples) {
-            addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'aca', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, maxConversion: maxConv });
+            addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'aca', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, convertExcessToRoth: convOn });
         }
     }
 
     // IRA Draw — fixed % of IRA balance each year
     for (const pct of [5, 6, 7, 8, 10, 12, 15, 20]) {
-        addResult('IRA Draw', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, maxConversion: maxConv });
+        addResult('IRA Draw', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, convertExcessToRoth: convOn });
     }
 
     // Ordered — strict account sequence
     for (const seq of ['CBIR', 'RIBC', 'BIRC']) {
-        addResult('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, maxConversion: maxConv });
+        addResult('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, convertExcessToRoth: convOn });
     }
 
     // Guyton-Klinger — label shows the actual guard/adjust knobs, e.g. "Grd:20 Adj:10".
     const gkOptLabel = `Grd:${Math.round((base.gkGuard ?? 0.20) * 100)} Adj:${Math.round((base.gkAdjPct ?? 0.10) * 100)}`;
-    addResult('Guyton-Klinger', gkOptLabel, 0, { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, maxConversion: maxConv });
+    addResult('Guyton-Klinger', gkOptLabel, 0, { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, convertExcessToRoth: convOn });
 
     // Snapshot the non-cyclic strategy families before the cyclic pass appends to the list.
     // Reused below to build the no-conversion baseline sweep over the same families.
@@ -504,6 +525,19 @@ function runOptimizer() {
                 { ...overrides, cyclicEnabled: true, cyclicOrder: 'ira-first' });
             addResult(_BRK_PFX + strategyLabel, paramLabel, paramSortVal,
                 { ...overrides, cyclicEnabled: true, cyclicOrder: 'brokerage-first' });
+        }
+    }
+
+    // Cash-funded conversion arm (💵) — nerd mode only, and only when there's Cash to spend
+    // (applyConversionGrossUp/applyExtraConversion's cash path are hard no-ops at $0 Cash, so
+    // these rows would be bit-identical twins of their base rows: pure wasted simulate() calls).
+    // Non-cyclic families only, matching buildVariations()'s scope: cyclic reinvests surplus into
+    // Brokerage rather than Cash, so there's proportionally less for this mechanism to act on,
+    // and crossing all three dimensions would balloon the table.
+    if (NERD_KNOBS && base.Cash > 0) {
+        for (const { strategyLabel, paramLabel, paramSortVal, overrides } of baseFamilies) {
+            addResult('💵 ' + strategyLabel, paramLabel, paramSortVal,
+                { ...overrides, fundConversionWithCash: true });
         }
     }
 
@@ -524,10 +558,10 @@ function runOptimizer() {
                 const lastEntry = opt.result.log[opt.result.log.length - 1];
                 results.push({
                     _id: results.length,
-                    _strategyLabel: (strategyLabel + (overrides.maxConversion ? ' ✓' : '')) + (opt.hitCeiling ? ' ✦+' : ' ✦'),
+                    _strategyLabel: (strategyLabel + (overrides.convertExcessToRoth ? ' ✓' : '')) + (opt.hitCeiling ? ' ✦+' : ' ✦'),
                     _paramLabel: paramLabel,
                     _paramSortVal: paramSortVal,
-                    _maxConversion: overrides.maxConversion,
+                    _convertExcessToRoth: overrides.convertExcessToRoth,
                     _spendGoal: opt.optimizedSpend,
                     _strategy: overrides.strategy,
                     _nYears: overrides.nYears ?? null,
@@ -548,10 +582,10 @@ function runOptimizer() {
                 const lastEntry = opt.result.log[opt.result.log.length - 1];
                 results.push({
                     _id: results.length,
-                    _strategyLabel: (opt.strategyLabel + (opt.overrides.maxConversion ? ' ✓' : '')) + ' ▼',
+                    _strategyLabel: (opt.strategyLabel + (opt.overrides.convertExcessToRoth ? ' ✓' : '')) + ' ▼',
                     _paramLabel: opt.paramLabel,
                     _paramSortVal: opt.paramSortVal,
-                    _maxConversion: opt.overrides.maxConversion,
+                    _convertExcessToRoth: opt.overrides.convertExcessToRoth,
                     _spendGoal: opt.optimizedSpend,
                     _strategy: opt.overrides.strategy,
                     _nYears: opt.overrides.nYears ?? null,
@@ -581,7 +615,8 @@ function runOptimizer() {
         for (const baseRow of top5) {
             const overrides = {
                 strategy: baseRow._strategy,
-                maxConversion: baseRow._maxConversion,
+                convertExcessToRoth: baseRow._convertExcessToRoth,
+                fundConversionWithCash: baseRow._fundConversionWithCash ?? false,
                 // stratIRMAATier/stratACAMultiple always have a defined sentinel on every row
                 // (tier -1 / multiple 0), so pin them unconditionally rather than letting a
                 // bracket-family top5 row silently fall back to the sidebar's current stratRate.
@@ -613,7 +648,8 @@ function runOptimizer() {
                 _strategyLabel: baseRow._strategyLabel + ' ⇌',
                 _paramLabel: baseRow._paramLabel,
                 _paramSortVal: baseRow._paramSortVal,
-                _maxConversion: baseRow._maxConversion,
+                _convertExcessToRoth: baseRow._convertExcessToRoth,
+                _fundConversionWithCash: baseRow._fundConversionWithCash ?? false,
                 _spendGoal: base.spendGoal,
                 _strategy: baseRow._strategy,
                 _nYears: baseRow._nYears,
@@ -636,12 +672,12 @@ function runOptimizer() {
     }
 
     // Baseline accounting — no-conversion / no-cyclic sweep over the same families.
-    // These rows force conversions off (maxConversion=false, extraConversionAmount=0) and
+    // These rows force conversions off (convertExcessToRoth=false, extraConversionAmount=0) and
     // cyclic brokerage maneuvering off, so the best of them is the honest "do it without
     // Roth or brokerage antics" reference every other strategy is measured against.
     for (const fam of baseFamilies) {
         addResult(fam.strategyLabel, fam.paramLabel, fam.paramSortVal,
-            { ...fam.overrides, maxConversion: false, cyclicEnabled: false, extraConversionAmount: 0, qcdHHMax: 0 }, true);
+            { ...fam.overrides, convertExcessToRoth: false, cyclicEnabled: false, extraConversionAmount: 0, qcdHHMax: 0 }, true);
     }
 
     // After-tax net worth for every row, using one shared future-IRA rate so deltas are fair.
@@ -1148,7 +1184,10 @@ function loadOptimizerResult(id) {
         document.getElementById('iraWithdrawPct').value = Math.round(result._iraWithdrawPct * 100);
     }
 
-    document.getElementById('maxConversion').checked = result._maxConversion;
+    document.getElementById('convertExcessToRoth').checked = !!result._convertExcessToRoth;
+    const fccEl = document.getElementById('fundConversionWithCash');
+    if (fccEl) fccEl.checked = !!result._fundConversionWithCash;
+    onConvSubFlagChange();
     const cyclicEl = document.getElementById('cyclicEnabled');
     if (cyclicEl) {
         cyclicEl.checked = !!(result._cyclicEnabled);
@@ -1535,8 +1574,8 @@ function updateTable(log) {
         'Roth': 'Combined Roth balance at year end.',
         'Roth1': "Person 1's Roth balance at year end.",
         'Roth2': "Person 2's Roth balance at year end.",
-        'RothG': 'Growth in the Roth (added to Roth account)',
-        'RothConv': 'Amount moved from IRA to Roth (converted)',
+        'rothG': 'Growth in the Roth (added to Roth account)',
+        'rothConv': 'Amount that actually landed in Roth this year (IRA→Roth). A conversion owes tax on the amount converted: unless "Use Cash" (under Maximize Conversions) is on, that tax is taken out of the conversion itself, so this reads LOWER than the gross amount withdrawn (e.g. a $20,000 Extra Annual Roth Conversion lands ~$13,700 at a 31% marginal rate). With cash-funding on, the tax is paid from Cash instead and the full amount lands here. See the extraConv column (Opp. Cost category) for the gross figure.',
         'CashWD': 'Tax free withdrawals from Cash',
         'surplusCash': 'Cash left over after spending and taxes were covered — routed back into the Cash account (or on to Roth conversion if Max Conversion is enabled).',
         'cashD+I': 'Dividends (from brokerage) and interest from Cash (deposits)',
@@ -1815,6 +1854,28 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     if (changeEl) changeEl.innerText = _lastChangedInputLabel ? '↺ ' + _lastChangedInputLabel : '';
     const convBEEl = document.getElementById('stat-conv-be');
     if (convBEEl) convBEEl.innerText = totals.convBEYear ?? '—';
+    // Break Even "why not?" — computed eagerly so hovering the ⓘ shows the real reason with no
+    // click first. Affordable on this path: the scan reuses truncated (cheaper) runs and measures
+    // well under one runSimulation() even at its worst case (every year a conversion year).
+    const diagIcon = document.getElementById('stat-conv-be-diagnose');
+    const diagResultEl = document.getElementById('stat-conv-be-diagnose-result');
+    if (diagIcon && diagResultEl) {
+        const _canDiagnose = totals.convBEYear == null && (lastSimulationLog?.some(r => (r.rothConv ?? 0) > 1) ?? false);
+        _beDiagnosisMsg = '';
+        if (_canDiagnose && lastSimInputs) {
+            try {
+                const diag = diagnoseConvBreakEvenFailure(lastSimInputs, lastSimulationLog);
+                if (diag) _beDiagnosisMsg = formatBreakEvenDiagnosis(diag);
+            } catch (e) {
+                console.error('Break Even diagnosis failed:', e);
+            }
+        }
+        diagIcon.style.display = _beDiagnosisMsg ? '' : 'none';
+        diagIcon.title = _beDiagnosisMsg;
+        // Collapse any previously-expanded text: it belongs to the prior run's numbers.
+        diagResultEl.innerText = '';
+        diagResultEl.style.display = 'none';
+    }
 
     // Phase 21: BETR average display
     const betrAvgEl = document.getElementById('stat-betr-avg');
@@ -1877,6 +1938,35 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
 // Phase 23: update projected-RMD stats in the stats bar.
 // RMD divisors come from RMD_TABLE in taxengine.js (full table, ages 72–120).
 // Reads IRA balances, birth years, and growth rate from DOM inputs — no totals arg needed.
+// Formats a diagnoseConvBreakEvenFailure() result as a plain-English explanation.
+function formatBreakEvenDiagnosis(diag) {
+    const _fmt = (n) => '$' + Math.round(n).toLocaleString();
+    let msg;
+    if (diag.outcome === 'neverSustains') {
+        msg = `Even the first conversion, in ${diag.breakingYear} (${_fmt(diag.breakingAmount)}), never earns back its own tax cost by the end of the plan.`;
+    } else {
+        msg = `Conversions through ${diag.lastSustainableYear} would have broken even in ${diag.lastSustainableBEYear}. The ${diag.breakingYear} conversion (${_fmt(diag.breakingAmount)}) is the one that erases the lead for good.`;
+    }
+    if (diag.futureIRATaxRateUnset) {
+        msg += ' (Valued at each year\'s own tax bracket -- set a Marginal Heirs Tax Rate in Assumptions for a steadier comparison.)';
+    }
+    return msg;
+}
+
+// The Break Even diagnosis for the current run, computed in updateStats(). Held here so the ⓘ
+// can toggle it inline without recomputing.
+let _beDiagnosisMsg = '';
+
+// Click the ⓘ to expand the diagnosis inline; click again to collapse it. The same text is
+// always on the icon's title, so hovering reveals it without clicking at all.
+function toggleBreakEvenDiagnosis() {
+    const el = document.getElementById('stat-conv-be-diagnose-result');
+    if (!el || !_beDiagnosisMsg) return;
+    const isOpen = el.style.display !== 'none';
+    el.innerText = isOpen ? '' : _beDiagnosisMsg;
+    el.style.display = isOpen ? 'none' : '';
+}
+
 function updateProjectedRMDStat() {
     const now = new Date();
     const curYear = now.getFullYear();
@@ -1966,6 +2056,7 @@ function updateProjectedRMDStat() {
 }
 
 let lastSimulationLog = null;
+let lastSimInputs = null;
 let lastTotals = null, lastFinalNW = null, lastFinalNWCurrentDollars = null;
 let _prevStatsTotals = null, _prevStatsFinalNW = null, _prevStatsFinalNWCD = null;
 let _lastChangedInputLabel = null;
@@ -2812,7 +2903,8 @@ function setupAutoRecalc() {
     const LABELS = {
         spendGoal: 'Spend Goal', spendChange: 'Spend Δ%', strategy: 'Strategy',
         nYears: 'N Years', stratRate: 'Bracket', propWithdraw: 'Boost%',
-        iraBaseGoal: 'IRA Goal', maxConversion: 'Max Conv',
+        iraBaseGoal: 'IRA Goal', maximizeConversions: 'Max Conversions',
+        convertExcessToRoth: 'Convert Excess', fundConversionWithCash: 'Fund w/ Cash',
         birthyear1: 'Your Birth', die1: 'Your Life Exp',
         birthyear2: 'Spouse Birth', die2: 'Spouse Life Exp',
         IRA1: 'Your IRA', IRA2: 'Spouse IRA',
@@ -2862,6 +2954,32 @@ function onCyclicChange() {
     }
 }
 
+// "Maximize Conversions" is a convenience control (data-no-share, never read by getInputs()):
+// it WRITES both real flags, and DISPLAYS their combined state. The two real flags —
+// convertExcessToRoth and fundConversionWithCash — are what the engine and the share URL use.
+// Recalc is handled by setupAutoRecalc()'s change listener on this checkbox (it's in .sidebar),
+// so these handlers only sync state — calling runSimulation() here would double-run.
+function onMaximizeConversionsChange() {
+    const on = !!valChecked('maximizeConversions');
+    const cxr = document.getElementById('convertExcessToRoth');
+    const fcc = document.getElementById('fundConversionWithCash');
+    if (cxr) cxr.checked = on;
+    if (fcc) fcc.checked = on;
+}
+
+// Keeps the convenience checkbox honest when the two sub-flags are set independently (nerd
+// panel) or restored programmatically (URL / scenario / optimizer row / MC variation), none of
+// which fire onchange. Indeterminate = exactly one of the two is on.
+function onConvSubFlagChange() {
+    const cxr = !!valChecked('convertExcessToRoth');
+    const fcc = !!valChecked('fundConversionWithCash');
+    const main = document.getElementById('maximizeConversions');
+    if (main) {
+        main.checked = cxr && fcc;
+        main.indeterminate = cxr !== fcc;
+    }
+}
+
 function toggleSpouseUI() {
     const on = !!valChecked('hasSpouse');
     document.querySelectorAll('.spouse-field').forEach(el => el.classList.toggle('spouse-disabled', !on));
@@ -2887,7 +3005,7 @@ function toggleStrategyUI() {
 const OPT_LONG_TO_SHORT = {
     spendGoal:'sg', spendChange:'sc', strategy:'str', nYears:'ny',
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os',
-    maxConversion:'mc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
+    convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
     IRA1:'i1', IRA2:'i2', Roth:'ro', Roth2:'ro2',
@@ -2916,10 +3034,16 @@ const OPT_SHORT_TO_LONG = Object.fromEntries(
 // Single source of truth for default-omission: buildShareURL omits a param when its current
 // value equals this snapshot, and loadFromURL leaves absent params at their (default) markup
 // value, so the two stay symmetric.
+// Shareable/snapshotted inputs: the sidebar, plus the Optimizer tab's own search options
+// (Optimize Spend / Optimize Conversions live in #tab-opt since they only drive runOptimizer(),
+// but they are still URL-shareable — 'opt'/'copt' in OPT_LONG_TO_SHORT — so they must be in
+// this selector or buildShareURL would silently stop emitting them while loadFromURL kept
+// restoring them, an asymmetric round-trip.)
+const SHARE_INPUT_SELECTOR = '.sidebar input, .sidebar select, #opt-search-options input';
 const OPT_DEFAULTS = {};
 function captureDefaults() {
-    document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
-        if (!el.id) return;
+    document.querySelectorAll(SHARE_INPUT_SELECTOR).forEach(el => {
+        if (!el.id || el.dataset.noShare !== undefined) return;
         if (el.type === 'checkbox') {
             OPT_DEFAULTS[el.id] = { c: el.checked };
         } else {
@@ -2932,8 +3056,8 @@ function captureDefaults() {
 
 function buildShareURL() {
     const params = new URLSearchParams();
-    document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
-        if (!el.id) return;
+    document.querySelectorAll(SHARE_INPUT_SELECTOR).forEach(el => {
+        if (!el.id || el.dataset.noShare !== undefined) return;
         const def = OPT_DEFAULTS[el.id];
         const short = OPT_LONG_TO_SHORT[el.id] ?? el.id;
         if (el.type === 'checkbox') {
@@ -2996,6 +3120,12 @@ function loadFromURL() {
     if (!raw.size) return;
     const params = new URLSearchParams();
     raw.forEach((v, k) => params.set(OPT_SHORT_TO_LONG[k] ?? k, v));
+    // Legacy: maxConversion was renamed to convertExcessToRoth. Short-coded links ('mc') resolve
+    // for free via OPT_SHORT_TO_LONG; this covers a raw long-form param. fundConversionWithCash
+    // is deliberately NOT implied — old links predate it and must keep their exact behavior.
+    if (params.has('maxConversion') && !params.has('convertExcessToRoth')) {
+        params.set('convertExcessToRoth', params.get('maxConversion'));
+    }
     params.forEach((value, key) => {
         const el = document.getElementById(key);
         if (!el) return;
@@ -3020,6 +3150,7 @@ function loadFromURL() {
         }
     });
     toggleStrategyUI();
+    onConvSubFlagChange();   // .checked set programmatically above → no change event; resync the convenience checkbox
     runSimulation();
 }
 
@@ -3229,6 +3360,13 @@ const DOLLAR_INPUT_IDS = new Set([
 ]);
 
 function applyScenario(data) {
+    // Legacy: scenarios saved before the rename store maxConversion. Map it to its renamed
+    // continuation; fundConversionWithCash stays at its own default (those scenarios predate it,
+    // so implying it would silently change their numbers).
+    if (data.maxConversion !== undefined && data.convertExcessToRoth === undefined) {
+        data = { ...data, convertExcessToRoth: data.maxConversion };
+    }
+
     // Handle IRMAA / ACA stratRate values that don't map to a plain numeric key
     if ((data.stratIRMAATier ?? -1) >= 0) {
         const el = document.getElementById('stratRate');
@@ -3274,7 +3412,7 @@ function applyScenario(data) {
             } else if (key === 'stratRate') {
                 element.value = (value * 100).toFixed(3);
             } else {
-                if (['maxConversion', 'pensionCola', 'dividendReinvest', 'cyclicEnabled'].includes(key)) {
+                if (['convertExcessToRoth', 'fundConversionWithCash', 'pensionCola', 'dividendReinvest', 'cyclicEnabled'].includes(key)) {
                     element.checked = !!value;
                 } else if (DOLLAR_INPUT_IDS.has(key)) {
                     DisplayHelpers.setDollarValue(key, value);
@@ -3294,6 +3432,9 @@ function applyScenario(data) {
 
     // Sync strategy sub-UI to the newly loaded strategy value
     if (typeof toggleStrategyUI === 'function') toggleStrategyUI();
+
+    // Resync the "Maximize Conversions" convenience checkbox to the two restored sub-flags
+    if (typeof onConvSubFlagChange === 'function') onConvSubFlagChange();
 
     // Sync MC mode UI (grays out μ/σ when bootstrap mode is restored from scenario)
     if (typeof updateMCModeUI === 'function') updateMCModeUI();

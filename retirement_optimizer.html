@@ -575,7 +575,7 @@
 				<ul>
 				<li><b>11.1287</b> <strong>Maximize Conversions now actually maximizes: available Cash can cover conversion taxes.</strong> Previously nothing in the tool paid a conversion's tax bill from outside funds, so a $20,000 Extra Annual Roth Conversion only landed about $13,700 in Roth - the rest went to the tax on its own withdrawal. Standard practice is to cover that tax from Cash so the full amount gets to grow tax-free, and Maximize Conversions now does exactly that, on top of its original behavior of routing leftover IRA withdrawals into Roth. It uses only the Cash you have: when Cash is short it funds what it can, and at $0 Cash nothing changes, so existing plans are unaffected until you turn it on. Turn on nerd knobs to control the two behaviors separately ("Convert Excess to Roth" and "Use Cash"), in which case the Optimizer also sweeps each strategy both with and without cash-funded taxes (&#128181; rows).
 					</li>
-				<li><b>11.1287</b> <strong>Optimize Spend and Optimize Conversions moved to the Optimizer tab.</strong> Both only ever affected the Optimizer, but sat in the sidebar next to the strategy settings that drive every tab, which made them look like plan settings. They now live at the top of the Optimizer tab under "Search options", where they apply. Your saved scenarios and shared links keep working unchanged.
+				<li><b>11.1287</b> <strong>Optimize Spend and Optimize Conversions moved to the Optimizer tab, and Optimize Conversions is now on by default.</strong> Both only ever affected the Optimizer, but sat in the sidebar next to the strategy settings that drive every tab, which made them look like plan settings. They now live at the top of the Optimizer tab under "Search options", where they apply. Optimize Conversions starts on so the conversion-optimized ⇌ rows are found without having to know to ask for them; turn it off if you want a faster sweep. Note that ⇌ rows only appear where an extra conversion actually improves the result for one of the top-ranked strategies, so a plan whose best strategies do not benefit from converting more will correctly show none. Your saved scenarios and shared links keep working unchanged.
 					</li>
 				<li><b>11.1287</b> <strong>Smaller fixes.</strong> The Roth Conv column in Annual Details had silently lost its explanatory tooltip to a naming typo (as had the Roth Growth column); Roth Conv's now spells out why it can read lower than the amount you asked to convert. The Break Even explainer is a compact &#9432; next to the year instead of a standing button, and it no longer makes you click before telling you anything - hover reads the reason, click pins it open, click again closes it.
 					</li>
@@ -905,7 +905,7 @@
                   <span>Optimize Spend</span>
                 </label>
                 <label class="toggle" title="For each of the top 5 strategies, sweep extra IRA→Roth conversion amounts ($25k steps) to find the optimal additional fixed annual conversion (on top of Maximize Conversions). Adds new rows showing the conversion-optimized result. Slower — ~5–15 sec for large IRAs.">
-                  <input type="checkbox" id="includeConvOpt" onchange="runOptimizer()">
+                  <input type="checkbox" id="includeConvOpt" onchange="runOptimizer()" checked>
                   <span class="toggle-label"></span>
                   <span class="toggle-switch"></span>
                   <span>Optimize Conversions</span>

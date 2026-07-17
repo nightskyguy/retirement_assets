@@ -1081,6 +1081,72 @@ test('cash-funding: flag off leaves every balance untouched (regression guard)',
         'no cash-funding may occur with the flag off');
 });
 
+// ── Accurate per-account IRA-withdrawal accounting + prefer-larger conversion sourcing ─────────
+// Lopsided IRAs so "prefer the larger IRA" is observable: a 100k conversion should come entirely
+// from the $1M IRA, not have a slice split off into the $10k one.
+const SRC_BASE = {
+    ...BASE,
+    hasSpouse: true,
+    birthyear2: 1955, birthmonth2: 6, die2: 90,
+    IRA1: 1000000, IRA2: 10000, Cash: 200000, Brokerage: 0, BrokerageBasis: 0,
+    spendGoal: 40000,
+};
+
+test('sourcing: an extra conversion is drawn from the larger IRA, spilling only when it cannot cover', () => {
+    const r = simulate({ ...SRC_BASE, extraConversionAmount: 100000, fundConversionWithCash: false }).log[0];
+    assert(r.extraConv === 100000, `setup: full gross must be requested, got ${r.extraConv}`);
+    assertNear(r['-iraConvGross1'], 100000, 'the whole conversion must come from the larger IRA1', 1);
+    assertNear(r['-iraConvGross2'], 0, 'nothing should be pulled from the tiny IRA2', 1);
+    // Spill: a conversion larger than the (post-RMD/spending) big IRA must overflow into the small one.
+    const rc = simulate({ ...SRC_BASE, IRA1: 60000, IRA2: 20000, extraConversionAmount: 70000, fundConversionWithCash: false }).log[0];
+    assert(rc['-iraConvGross1'] > 0 && rc['-iraConvGross2'] > 0, 'a conversion beyond the big IRA must spill into the small one');
+    assert(rc['-iraConvGross1'] > rc['-iraConvGross2'], 'the larger IRA still supplies the bigger share');
+    assertNear(rc['-iraConvGross1'] + rc['-iraConvGross2'], rc.extraConv, 'the per-IRA split must sum to the gross', 1);
+});
+
+test('accounting: withdrawal columns include conversions, decompose correctly, and reconcile the IRA balance', () => {
+    const res = simulate({ ...SRC_BASE, extraConversionAmount: 150000, fundConversionWithCash: true,
+                           convertExcessToRoth: true, strategy: 'fixedpct', iraWithdrawPct: 0.12 });
+    assert(res.log.some(r => (r.extraConv ?? 0) > 0), 'setup: extra conversions must occur');
+    assert(res.log.some(r => (r['-grossUpIRA'] ?? 0) > 0), 'setup: the gross-up must fire in some year');
+    let prev = SRC_BASE.IRA1 + SRC_BASE.IRA2;
+    for (const x of res.log) {
+        assertNear(x.IRAwd, (x['IRA1-'] || 0) + (x['IRA2-'] || 0), 'IRAwd must equal IRA1- + IRA2-', 1);
+        assertNear(x['IRA1-'], (x['-iraVolSpend1'] || 0) + (x['-iraConvGross1'] || 0), 'IRA1- = spending draw + conversion gross', 1);
+        assertNear(x['IRA2-'], (x['-iraVolSpend2'] || 0) + (x['-iraConvGross2'] || 0), 'IRA2- = spending draw + conversion gross', 1);
+        assert((x.rothConv || 0) <= x.IRAwd + 1, `rothConv (${Math.round(x.rothConv)}) must never exceed the voluntary IRA withdrawal (${Math.round(x.IRAwd)})`);
+        // The IRA balance must be fully explained by growth minus RMD minus the (now conversion-inclusive)
+        // voluntary withdrawal — RMD is the only other IRA outflow and has its own columns.
+        const expEnd = prev + (x['-iraG'] || 0) - (x.RMDwd || 0) - (x.IRAwd || 0);
+        assertNear(expEnd, x.TotalIRA, `year ${x.year}: IRA balance must reconcile from the withdrawal columns`, 1);
+        prev = x.TotalIRA;
+    }
+});
+
+test('accounting: conversion-gross total equals the actual converted pulls (no reallocation)', () => {
+    // convertExcessToRoth off → the only conversions are the extra conversion and (with fcc) the gross-up.
+    const r = simulate({ ...SRC_BASE, extraConversionAmount: 100000, fundConversionWithCash: false }).log[0];
+    assertNear(r['-iraConvGrossTot'], (r.extraConv || 0) + (r['-grossUpIRA'] || 0),
+        'total gross converted must equal extraConv + gross-up when there is no surplus reallocation', 1);
+    assertNear(r['-iraConvGrossTot'], (r['-iraConvGross1'] || 0) + (r['-iraConvGross2'] || 0), 'per-IRA gross must sum to the total', 1);
+    assertNear(r['-iraSpend'], (r['-iraVolSpend1'] || 0) + (r['-iraVolSpend2'] || 0), 'per-IRA spending draw must sum to the total', 1);
+});
+
+test('accounting: Fed + State + IRMAA tax columns reconcile to Total Tax through the conversions', () => {
+    // Large extra conversion (marginal-method tax attributed to Fed/State from the full tax calc).
+    const A = simulate({ ...SRC_BASE, extraConversionAmount: 150000, fundConversionWithCash: true });
+    const ra = A.log.find(r => (r.extraConv ?? 0) > 1);
+    assert(ra, 'setup: need a year with an extra conversion');
+    assertNear((ra.FedTax || 0) + (ra.StateTax || 0) + (ra.IRMAA || 0), ra.totalTax,
+        'Fed + State + IRMAA must equal Total Tax in an extra-conversion year', 1);
+    // Gross-up-only year (no extra conversion): its tax is split proportionally by marginal rate.
+    const B = simulate({ ...SRC_BASE, convertExcessToRoth: true, fundConversionWithCash: true, strategy: 'fixedpct', iraWithdrawPct: 0.15 });
+    const rb = B.log.find(r => (r['-grossUpIRA'] ?? 0) > 1 && (r.extraConv ?? 0) < 1);
+    assert(rb, 'setup: need a gross-up-only year');
+    assertNear((rb.FedTax || 0) + (rb.StateTax || 0) + (rb.IRMAA || 0), rb.totalTax,
+        'Fed + State + IRMAA must equal Total Tax in a gross-up-only year', 1);
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

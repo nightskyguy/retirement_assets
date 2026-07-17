@@ -1559,8 +1559,9 @@ function updateTable(log) {
         'Brokerage': 'Year end Brokerage balance',
         'Brokerage-': 'Withdrawals from Brokerage account (asset sales/cash withdrawal)',
         'Basis': 'The amount in brokerage which can be withdrawn tax free.',
-        'IRA1-': 'Withdrawals from IRA1',
-        'IRA2-': 'Withdrawals from IRA2',
+        'IRAwd': 'Total voluntary IRA withdrawals this year (IRA1- + IRA2-): spending draws plus Roth conversions. Excludes RMD, which is the involuntary draw shown in the RMD columns.',
+        'IRA1-': 'Voluntary withdrawals from IRA1 this year: the spending draw plus any Roth conversions sourced from IRA1. Conversions are taken from whichever of the two IRAs is larger first, spilling to the other only when the larger cannot supply the full amount. Excludes RMD (see RMD1-).',
+        'IRA2-': 'Voluntary withdrawals from IRA2 this year: the spending draw plus any Roth conversions sourced from IRA2. Conversions are taken from whichever of the two IRAs is larger first, spilling to the other only when the larger cannot supply the full amount. Excludes RMD (see RMD2-).',
         'CapGains': 'Amount of gains from withdrawing brokerage assets.',
         'IRMAA': 'Annual IRMAA surcharge based on MAGI from 2 years prior. Charged only for spouses 65+ (Medicare age).',
         'IRMAATier': 'IRMAA tier (e.g. Tier 1–6) derived from MAGI 2 years ago. Shows -none- until a spouse reaches 65 (Medicare age).',
@@ -1591,7 +1592,7 @@ function updateTable(log) {
         'excessTax': 'Incremental federal + state tax attributable to this year\'s excess IRA withdrawal routed to Cash (same method as Conv Tax).',
         'BETR%': 'Break-Even Tax Rate (Kitces formula): t_now × (1 + r_taxable)^n / (1 + r_ira)^n. The future marginal rate at which converting now is tax-neutral vs leaving in IRA. If your expected future rate (Future IRA Tax %) exceeds BETR → conversion advantageous (▲). When r_taxable < r_ira (taxable drag), BETR falls below current rate, making conversion even more compelling.',
         'betrFlag': '▲ = expected future rate exceeds BETR by >2pp → conversion beneficial. ▼ = expected future rate is below BETR → conversion costly. ≈ = within 2pp either way (marginal).',
-        'extraConv': 'Gross IRA amount additionally withdrawn and converted to Roth by the Phase 23 conversion optimizer, independent of spending strategy. Taxes come from IRA gross; net Roth credit = extraConv − incremental tax.',
+        'extraConv': 'Gross IRA amount additionally withdrawn and converted to Roth, independent of spending strategy. Sourced from the larger IRA first, and included in the IRA WD / IRA1-/IRA2- withdrawal totals. Taxes come from IRA gross (net Roth credit = extraConv − incremental tax) unless "Use Cash" funds the tax so the full gross lands in Roth.',
         'subCycle': 'Cyclic sub-cycle marker. Brok = brokerage harvest year (spending drawn from Brokerage; IRA free for conversions). IRA = IRA draw year (normal IRA withdrawal). ⚠Brok = brokerage harvest year but balance was below 50% of target — fell back to partial IRA draw.',
         'grossOut': 'Gross outflows: all account withdrawals this year (IRA + RMD + Brokerage + Cash + Roth), including amounts converted to Roth.',
         'netOut': 'Net outflows: portfolio draws funding spending/taxes. Gross outflows minus Roth conversions and reinvested surplus.',
@@ -1795,17 +1796,13 @@ function openTaxPlanner(row, prevRow) {
     set('capitalGains', row.CapGains);
     set('ira1Rmd', row['RMD1-']);
     set('ira2Rmd', row['RMD2-']);
-    set('ira1Voluntary', Math.max(0, (row['IRA1-'] || 0) - (row['RMD1-'] || 0)));
-    set('ira2Voluntary', Math.max(0, (row['IRA2-'] || 0) - (row['RMD2-'] || 0)));
-
-    const rothConv = row.rothConv || 0;
-    if (rothConv > 0) {
-        if ((row.IRA1 || 0) >= (row.IRA2 || 0)) {
-            set('ira1RothConversion', rothConv);
-        } else {
-            set('ira2RothConversion', rothConv);
-        }
-    }
+    // Accurate per-IRA decomposition (from the engine's own accounting): voluntary = spending-only
+    // draw per IRA; RothConversion = actual gross converted per IRA (conv reallocation + extra +
+    // gross-up, sourced prefer-larger). RMD is passed separately above.
+    set('ira1Voluntary', row['-iraVolSpend1']);
+    set('ira2Voluntary', row['-iraVolSpend2']);
+    set('ira1RothConversion', row['-iraConvGross1']);
+    set('ira2RothConversion', row['-iraConvGross2']);
 
     const marginalOrd = ((row['FedRate%'] || 0) + (row['StateRate%'] || 0)) * 100;
     if (marginalOrd > 0) setF('marginalOrdRate', marginalOrd.toFixed(1));
@@ -2700,9 +2697,10 @@ function updateCharts(log) {
     // Brokerage basis return: the untaxed (return-of-basis) portion of brokerage withdrawals
     const basisReturn = r => Math.max(0, (r['Brokerage-'] ?? 0) - (r.CapGains ?? 0));
 
-    // All income sources (including Cash WD and Basis Return). IRAwd excludes rothConv since
-    // that is shown separately as a cost above the Spendable line.
-    const visibleSum = r => r.SSincome + r.pension + r.RMDwd + Math.max(0, r.IRAwd - r.rothConv)
+    // All income sources (including Cash WD and Basis Return). The IRA contribution to spendable
+    // income is the spending-funding draw only (-iraSpend); Roth-conversion dollars left the IRA for
+    // Roth (not for spending) and are shown separately as a cost above the Spendable line.
+    const visibleSum = r => r.SSincome + r.pension + r.RMDwd + (r['-iraSpend'] ?? 0)
         + r.RothWD + r.CapGains + r.cashDividends + r.cashInterest
         + (r.CashWD ?? 0) + basisReturn(r);
 
@@ -2737,7 +2735,7 @@ function updateCharts(log) {
                 mkInc('Pension',         '#7f8c8dB0', r => r.pension),
                 mkInc('IRA RMD',         '#e67e22B0', r => r.RMDwd),
                 mkInc('Interest',        '#f1c40fB0', r => r.cashInterest),
-                mkInc('IRA WD',          '#d35400B0', r => Math.max(0, r.IRAwd - r.rothConv)),
+                mkInc('IRA WD',          '#d35400B0', r => r['-iraSpend'] ?? 0),
                 mkInc('Roth WD',         '#8e44adB0', r => r.RothWD),
                 mkInc('Gains+Div',       '#1abc9cB0', r => r.CapGains + r.cashDividends),
                 mkInc('Cash WD',         '#27ae60B0', r => r.CashWD ?? 0),

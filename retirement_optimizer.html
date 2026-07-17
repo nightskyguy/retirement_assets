@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.1287</title>
+    <title>Retirement Optimizer 11.129e</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -49,8 +49,8 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1133"></script>
-	<script src="optimizer_core.js?v=111287"></script>
-	<script src="optimizer_ui.js?v=111287"></script>
+	<script src="optimizer_core.js?v=11129e"></script>
+	<script src="optimizer_ui.js?v=11129e"></script>
 	<script src="optimizer_tests.js?v=1111f3"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
@@ -573,6 +573,8 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.129d</b> <strong>Annual Details now shows Roth conversions as the IRA withdrawals they are, and conversions draw from the larger IRA.</strong> A Roth conversion is money leaving the IRA, so the IRA WD, IRA1- and IRA2- columns now include it. Before, a year could show a large conversion with little or no IRA withdrawal, which looked wrong even though the balances were correct. RMD stays in its own columns (it is the involuntary draw and is never a conversion). The Federal and State tax columns now include the tax on conversions, so they add up to Total Tax and the Taxation chart shows the real tax. Conversions are now taken from the larger IRA first (spilling to the smaller only when the larger cannot supply the full amount) instead of being split by size, which is what you would actually do and avoids converting a token slice out of a tiny IRA. This changes each IRA's balance over time and therefore each person's future RMDs; the combined yearly tax is unchanged. Clicking a year to open the Tax Payment Planner now sends the correct per-IRA voluntary, conversion, and tax figures.
+					</li>
 				<li><b>11.1287</b> <strong>Maximize Conversions now actually maximizes: available Cash can cover conversion taxes.</strong> Previously nothing in the tool paid a conversion's tax bill from outside funds, so a $20,000 Extra Annual Roth Conversion only landed about $13,700 in Roth - the rest went to the tax on its own withdrawal. Standard practice is to cover that tax from Cash so the full amount gets to grow tax-free, and Maximize Conversions now does exactly that, on top of its original behavior of routing leftover IRA withdrawals into Roth. It uses only the Cash you have: when Cash is short it funds what it can, and at $0 Cash nothing changes, so existing plans are unaffected until you turn it on. Turn on nerd knobs to control the two behaviors separately ("Convert Excess to Roth" and "Use Cash"), in which case the Optimizer also sweeps each strategy both with and without cash-funded taxes (&#128181; rows).
 					</li>
 				<li><b>11.1287</b> <strong>Optimize Spend and Optimize Conversions moved to the Optimizer tab, and Optimize Conversions is now on by default.</strong> Both only ever affected the Optimizer, but sat in the sidebar next to the strategy settings that drive every tab, which made them look like plan settings. They now live at the top of the Optimizer tab under "Search options", where they apply. Optimize Conversions starts on so the conversion-optimized ⇌ rows are found without having to know to ask for them; turn it off if you want a faster sweep. Note that ⇌ rows only appear where an extra conversion actually improves the result for one of the top-ranked strategies, so a plan whose best strategies do not benefit from converting more will correctly show none. Your saved scenarios and shared links keep working unchanged.

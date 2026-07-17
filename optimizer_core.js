@@ -692,9 +692,20 @@ function buildSimYearLogRecord(p) {
         'QCD2': p.qcd2,
         'cashD+I': p.taxableDividends + p.taxableInterest,
         // Withdrawals
-        'IRAwd': p.netWithdrawals.IRA,
-        'IRA1-': p.netWithdrawals.IRA1,
-        'IRA2-': p.netWithdrawals.IRA2,
+        // Voluntary IRA withdrawals = spending draw + Roth-conversion gross (per account),
+        // EXCLUDING RMD (which is the involuntary draw, itemized separately below). IRAwd is their
+        // sum, so a Roth conversion always shows as a withdrawal and rothConv <= IRAwd.
+        'IRAwd': (p.iraVolSpend1 || 0) + (p.iraConvGross1 || 0) + (p.iraVolSpend2 || 0) + (p.iraConvGross2 || 0),
+        'IRA1-': (p.iraVolSpend1 || 0) + (p.iraConvGross1 || 0),
+        'IRA2-': (p.iraVolSpend2 || 0) + (p.iraConvGross2 || 0),
+        // Hidden decomposition (leading '-' → no table column) for charts + the tax-planner handoff:
+        // -iraVolSpend* = spending-funding draw per IRA; -iraConvGross* = gross converted per IRA.
+        '-iraVolSpend1': p.iraVolSpend1 || 0,
+        '-iraVolSpend2': p.iraVolSpend2 || 0,
+        '-iraConvGross1': p.iraConvGross1 || 0,
+        '-iraConvGross2': p.iraConvGross2 || 0,
+        '-iraSpend': (p.iraVolSpend1 || 0) + (p.iraVolSpend2 || 0),
+        '-iraConvGrossTot': (p.iraConvGross1 || 0) + (p.iraConvGross2 || 0),
         'RMD1-': p.rmd1,
         'RMD2-': p.rmd2,
         'Brokerage-': p.netWithdrawals.Brokerage,
@@ -1487,6 +1498,16 @@ function routeSurplusAndConvert(sim, yr) {
         cfRefundIRA(sim, yr, yr.surplus.Total);
     }
 
+    // Per-account conversion accounting (accurate Annual Details / tax-planner handoff).
+    // conv1/conv2 (the convertExcessToRoth reallocation) are the ONLY conversion in surplus.Roth1/2
+    // at this point; applyConversionGrossUp and applyExtraConversion add their prefer-larger splits
+    // to yr.iraConvGross1/2 later. iraVolSpend_n = the part of each IRA's voluntary draw that funded
+    // spending (i.e. was NOT reallocated to Roth).
+    yr.iraConvGross1 = yr.surplus.Roth1;
+    yr.iraConvGross2 = yr.surplus.Roth2;
+    yr.iraVolSpend1 = Math.max(0, (yr.netWithdrawals.IRA1 || 0) - yr.iraConvGross1);
+    yr.iraVolSpend2 = Math.max(0, (yr.netWithdrawals.IRA2 || 0) - yr.iraConvGross2);
+
     // If there is still a surplus, replace any excess Cash withdrawal.
     yr.surplus.Cash = Math.min(yr.surplus.Total, yr.netWithdrawals.Cash);
     yr.netWithdrawals.Cash -= yr.surplus.Cash;
@@ -1613,18 +1634,42 @@ function applyExtraConversion(sim, yr) {
             } else {
                 _net = _gross - incrementalExtraConvTax;
             }
-            const _ec1 = _gross * yr.ira1_ratio;
-            const _ec2 = _gross * (1 - yr.ira1_ratio);
+            // Prefer-larger sourcing: pull the gross from the larger IRA first. The net Roth credit
+            // follows the same per-account source (net scaled to each account's gross share).
+            const _ecSplit = splitPreferLarger(_gross, balance.IRA1, balance.IRA2);
+            const _ec1 = _ecSplit.i1;
+            const _ec2 = _ecSplit.i2;
+            const _netFrac = _gross > 0 ? _net / _gross : 0;
             balance.IRA1 -= _ec1;
             balance.IRA2 -= _ec2;
-            yr.surplus.Roth1 = (yr.surplus.Roth1 || 0) + _net * yr.ira1_ratio;
-            yr.surplus.Roth2 = (yr.surplus.Roth2 || 0) + _net * (1 - yr.ira1_ratio);
+            yr.surplus.Roth1 = (yr.surplus.Roth1 || 0) + _ec1 * _netFrac;
+            yr.surplus.Roth2 = (yr.surplus.Roth2 || 0) + _ec2 * _netFrac;
+            yr.iraConvGross1 = (yr.iraConvGross1 ?? 0) + _ec1;
+            yr.iraConvGross2 = (yr.iraConvGross2 ?? 0) + _ec2;
             yr.totalConverted += _net;
             yr.totalTax += incrementalExtraConvTax;
+            // Fed/State attribution: _exTaxCalc is the full with-conversion income-tax calc (it already
+            // includes any gross-up income via _priorIRAInc), so its Fed/State split is exact and makes
+            // FedTax + StateTax + IRMAA reconcile to totalTax. capGainsTax is unchanged (ordinary income).
+            yr.tax.federalTax = _exTaxCalc.federalTax;
+            yr.tax.stateTax   = _exTaxCalc.stateTax;
             sim.cumulativeTaxes += incrementalExtraConvTax;
             yr._extraIRAIncome = (yr._extraIRAIncome ?? 0) + _gross;   // keep the basis consistent for any later consumer
         }
     }
+}
+
+// Prefer-larger IRA sourcing for the additional conversion pulls (extra conversion, gross-up):
+// take the whole amount from the larger-balance IRA, spilling to the smaller only when the larger
+// cannot cover it. Keeps a real-world-sensible plan (no converting a token slice out of a tiny IRA)
+// and changes per-account balances (hence downstream per-spouse RMDs) — combined totals unchanged.
+function splitPreferLarger(amount, ira1Avail, ira2Avail) {
+    if (ira1Avail >= ira2Avail) {
+        const f1 = Math.min(amount, Math.max(0, ira1Avail));
+        return { i1: f1, i2: Math.min(amount - f1, Math.max(0, ira2Avail)) };
+    }
+    const f2 = Math.min(amount, Math.max(0, ira2Avail));
+    return { i1: Math.min(amount - f2, Math.max(0, ira1Avail)), i2: f2 };
 }
 
 // Cash-funded gross-up (fundConversionWithCash): pull an ADDITIONAL gross amount from the IRA
@@ -1669,16 +1714,27 @@ function applyConversionGrossUp(sim, yr) {
     if (increase <= 1) return;
     const taxCost = increase * t;
 
-    const increase1 = increase * yr.ira1_ratio;
-    const increase2 = increase * (1 - yr.ira1_ratio);
+    // Prefer-larger sourcing: pull the whole gross-up from the larger IRA when it can cover it.
+    const _guSplit = splitPreferLarger(increase, balance.IRA1, balance.IRA2);
+    const increase1 = _guSplit.i1;
+    const increase2 = _guSplit.i2;
     balance.IRA1 -= increase1;
     balance.IRA2 -= increase2;
     balance.Cash -= taxCost;
 
     yr.surplus.Roth1 = (yr.surplus.Roth1 ?? 0) + increase1;
     yr.surplus.Roth2 = (yr.surplus.Roth2 ?? 0) + increase2;
+    yr.iraConvGross1 = (yr.iraConvGross1 ?? 0) + increase1;
+    yr.iraConvGross2 = (yr.iraConvGross2 ?? 0) + increase2;
     yr.totalConverted += increase;
     yr.totalTax += taxCost;              // genuinely new tax, unlike conversion's (already counted)
+    // Attribute this new tax across the Fed/State display split (marginal-rate proportional, sums to
+    // taxCost) so FedTax + StateTax + IRMAA reconciles to totalTax. applyExtraConversion, if it runs
+    // after, re-sets Fed/State exactly from its full tax calc (which already includes this income).
+    { const fm = yr.tax.federalMarginalRate ?? 0, sm = yr.tax.stateMarginalRate ?? 0, tot = fm + sm;
+      const fedFrac = tot > 0 ? fm / tot : 1;
+      yr.tax.federalTax += taxCost * fedFrac;
+      yr.tax.stateTax   += taxCost * (1 - fedFrac); }
     sim.cumulativeTaxes += taxCost;
     // This IRA income is NOT in yr.netWithdrawals.IRA (it's an extra draw applied straight to
     // balance), but its tax IS now in yr.totalTax. Any later mechanism that isolates its own
@@ -1844,6 +1900,7 @@ function logYear(sim, yr) {
         fixedInc: yr.fixedInc, pension: yr.pension, targetSpend: yr.targetSpend, netIncome: yr.netIncome, totalIncome: yr.totalIncome,
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
+        iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
         totalTax: yr.totalTax, capitalGains: yr.capitalGains, cumulativeTaxes: sim.cumulativeTaxes, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         totalsSpend: totals.spend,

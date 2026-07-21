@@ -18,6 +18,11 @@ const SPEND_SEARCH_CEILING   = 1.50;  // Binary search upper bound: 150% above b
 const SPEND_SEARCH_TOLERANCE = 0.005; // Stop binary search when bounds are within 0.5%
 const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase spending" banner
 
+// Baseline ranking weight: a dollar the household actually spends outranks a dollar bequeathed
+// by 10%. Single source of truth shared by the optimizer table's _baselineScore (optimizer_ui.js)
+// and the conversion sweep's 'baselineScore' metric (baselineScoreOf below) so the two cannot drift.
+const SPENDABLE_WEIGHT = 1.10;
+
 /** TAX CONSTANTS **/
 // Find these in taxengine.js
 
@@ -2330,11 +2335,144 @@ function optimizeSpend(baseInputs, overrides) {
     return { result: bestResult, optimizedSpend: lo, hitCeiling: false };
 }
 
+// Real-dollar, spendable-weighted score for one simulate() result. Same value as the optimizer
+// table's per-row `_baselineScore` (optimizer_ui.js), but computed from a result object so the
+// conversion sweep can rank on it too. Note: the UI derives real-dollar after-tax NW as
+// afterTaxNW * (finalNWCurrentDollars / finalNW); since finalNWCurrentDollars = totalWealth /
+// inflationFactor and finalNW = totalWealth, that ratio IS 1/inflationFactor, so dividing here is
+// algebraically identical and drops the finalNW===0 guard. futureIRARate MUST be the caller's
+// SHARED rate across strategies -- passing a per-run rate reintroduces exactly the self-referential
+// comparison this metric exists to remove (raw finalNW discounts each run's IRA at its own rate).
+function baselineScoreOf(res, futureIRARate, spendableWeight = SPENDABLE_WEIGHT) {
+    if (!res || !res.log || !res.log.length) return -Infinity;
+    const last = res.log[res.log.length - 1];
+    const defl = last.inflationFactor || 1;
+    const atNW = afterTaxNetWorth(res.totals.terminal, futureIRARate, res.totals.capGainsRate);
+    return atNW / defl + spendableWeight * (res.totals.spendCurrentDollars ?? 0);
+}
+
+// PF11: pick the conversion-sweep candidate pool -- the best (highest _baselineScore) row from
+// each strategy FAMILY, ranked, capped at maxPool. Ranking by ending wealth alone (the old flat
+// top-5) let one family monopolize every seat while the families that actually benefit from
+// converting ranked just below the cut and were never swept. Pure: reads only plain row fields,
+// no DOM, no simulate(). Rows must already carry _baselineScore.
+//   Family key = strategyKey|cyclicKey:
+//     strategyKey = _strategy, EXCEPT 'bracket' splits on _stratIRMAATier (<0 = fill-a-tax-bracket,
+//                   >=0 = fill-to-an-IRMAA-tier-ceiling) -- these share strategy:'bracket' but answer
+//                   different questions, so keying on _strategy alone would silently drop one.
+//     cyclicKey   = _cyclicEnabled ? 'cyc' : 'lin' (ira-first/brokerage-first collapse to one bucket;
+//                   keep whichever scores better). Cyclic MUST be its own dimension -- the reported
+//                   failure was five cyclic rows crowding out the non-cyclic champion of the same
+//                   strategy. The 💵 cash-funded arm is deliberately NOT a dimension (nerd-only,
+//                   Cash-gated); it rides along via the winning row's _fundConversionWithCash.
+// Eligibility: successful, and not a no-conv reference / infeasible-bracket / untenable-ACA /
+// spend-optimized row (the last is excluded because its overrides are rebuilt without spendGoal or
+// the cyclic/tier/cash fields, so it would be swept at the wrong spend under a mismatched label --
+// making ✦ rows eligible needs spendGoal threaded through and is a separate phase).
+function selectConversionCandidates(rows, maxPool = 12) {
+    const champions = new Map(); // familyKey -> best-scoring eligible row
+    for (const r of (rows || [])) {
+        if (!r || !r.totals || !r.totals.success) continue;
+        if (r._isNoConv || r._isSpendOptimized || r._isBracketInfeasible || r._isACAUntenable) continue;
+        let strategyKey = r._strategy;
+        if (strategyKey === 'bracket') strategyKey = (r._stratIRMAATier ?? -1) >= 0 ? 'bracket-irmaa' : 'bracket-rate';
+        const familyKey = strategyKey + '|' + (r._cyclicEnabled ? 'cyc' : 'lin');
+        const cur = champions.get(familyKey);
+        if (!cur || (r._baselineScore ?? -Infinity) > (cur._baselineScore ?? -Infinity)) {
+            champions.set(familyKey, r);
+        }
+    }
+    return [...champions.values()]
+        .sort((a, b) => (b._baselineScore ?? -Infinity) - (a._baselineScore ?? -Infinity))
+        .slice(0, maxPool);
+}
+
+// PF13: the optimizer's "Optimize for" objectives. Pure ranking logic (no DOM, no OptimizerState)
+// so it is unit-testable and shared by the table body order, the ⚓ baseline pick, and the Rank
+// column. Labels live in optimizer_ui.js (OPT_OBJECTIVE_LABELS); this holds only the comparison.
+//   metric(r, rate) -> a scalar sorted per `dir` ('desc' = bigger is better, 'asc' = smaller).
+//   rank(rows, rate) -> optional custom full ordering (used instead of metric when present).
+//   `rate` is the shared future-IRA (heirs) rate, passed in so this stays UI-free.
+// The three after-tax buckets at end of plan (used by Tax Flexibility):
+//   pre-tax IRA net = terminal.ira * (1 - rate); Roth = terminal.roth (face);
+//   taxable net = cash + basis + max(0, brokerage - basis) * (1 - capGainsRate).
+function _afterTaxBuckets(r, rate) {
+    const t = (r.totals && r.totals.terminal) || {};
+    const capG = r.totals?.capGainsRate ?? 0.15;
+    const preTax  = (t.ira ?? 0) * (1 - (rate ?? 0));
+    const roth    = (t.roth ?? 0);
+    const taxable = (t.cash ?? 0) + (t.basis ?? 0) + Math.max(0, (t.brokerage ?? 0) - (t.basis ?? 0)) * (1 - capG);
+    return [preTax, roth, taxable];
+}
+const OPTIMIZER_OBJECTIVES = {
+    // Tax Flexibility (default): among the genuinely wealthy plans (after-tax NW within 10% of the
+    // best), the one whose three after-tax buckets are closest to equal -- maximum freedom to draw
+    // from whichever bucket is tax-advantaged each year. The wealth cutoff first stops a plan that
+    // drains everything to near-zero from "winning" on trivial equality.
+    taxflex: {
+        dir: 'desc',
+        rank: (rows, rate) => {
+            if (!rows.length) return rows.slice();
+            const nw = r => r.afterTaxNWCurrentDollars ?? -Infinity;
+            const maxNW = Math.max(...rows.map(nw));
+            const cutoff = maxNW - 0.10 * Math.abs(maxNW); // 10% band; correct for negative maxNW
+            const spread = r => {
+                const b = _afterTaxBuckets(r, rate);
+                const tot = b[0] + b[1] + b[2];
+                return tot > 0 ? (Math.max(...b) - Math.min(...b)) / tot : Infinity;
+            };
+            const eligible = rows.filter(r => nw(r) >= cutoff).sort((a, b) => spread(a) - spread(b));
+            const rest     = rows.filter(r => nw(r) <  cutoff).sort((a, b) => nw(b) - nw(a));
+            return [...eligible, ...rest];
+        },
+    },
+    networth: { dir: 'desc', metric: r => r.afterTaxNWCurrentDollars ?? -Infinity },
+    // Avoid Widow & RMD Tax: RMD tax paid in life + the deferred tax a survivor/heir still owes on
+    // the leftover pre-tax IRA. Both nominal. Smaller is better.
+    widowrmd: { dir: 'asc',  metric: (r, rate) => (r.totals?.rmdTax ?? 0) + (r.totals?.terminal?.ira ?? 0) * (rate ?? 0) },
+    mintax:   { dir: 'asc',  metric: r => r.totals?.taxCurrentDollars ?? Infinity },
+    maxspend: { dir: 'desc', metric: r => r.totals?.spendCurrentDollars ?? -Infinity },
+    maxroth:  { dir: 'desc', metric: r => r.totals?.terminal?.roth ?? -Infinity },
+    balanced: { dir: 'desc', metric: r => r._baselineScore ?? -Infinity },
+    conveffect:{ dir: 'desc', metric: r => r._convSavings ?? -Infinity },
+    earliestbe:{ dir: 'asc',  metric: r => r._convBEYear ?? 9999 },
+};
+
+// Rank rows best->worst under an objective. Successful rows ALWAYS outrank failed ones (a depleted
+// plan can show inflated terminal wealth), then the objective's own order. Pure.
+function rankRowsByObjective(rows, objKey, rate = 0) {
+    const obj = OPTIMIZER_OBJECTIVES[objKey] || OPTIMIZER_OBJECTIVES.taxflex;
+    const succ = rows.filter(r => r.totals && r.totals.success);
+    const fail = rows.filter(r => !(r.totals && r.totals.success));
+    let orderedSucc;
+    if (obj.rank) {
+        orderedSucc = obj.rank(succ, rate);
+    } else {
+        const sign = obj.dir === 'asc' ? 1 : -1;
+        orderedSucc = [...succ].sort((a, b) => sign * (obj.metric(a, rate) - obj.metric(b, rate)));
+    }
+    return [...orderedSucc, ...fail];
+}
+
+// True when EITHER person is already on Medicare (65+) at retirement start. Sibling of
+// bothOnMedicareAtStart (optimizer_ui.js) but OR: once one spouse is on Medicare, their RMDs/SS
+// push household MAGI past any ACA FPL cap, so an ACA-limit strategy is impractical for the whole
+// household -- used to flag every ACA row untenable, not just the hardcoded 400% one. Pure.
+function eitherOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
+    if (!by1 || !startAge) return false;
+    const startYear  = by1 + startAge;
+    const p1Medicare = startAge >= 65;
+    const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
+    return hasSpouse ? (p1Medicare || p2Medicare) : p1Medicare;
+}
+
 // Phase 23: find the extraConversionAmount (flat annual $) that maximizes a given metric for
 // a fixed strategy. Sweeps from $0 to totalIRA in $25k steps; returns best amount found.
-// metric: 'finalNW' (default), 'spend' (max spendable), 'minTax' (min lifetime taxes).
-// baseInputs: inputs object with a fixed strategy already set; strategyOverrides layered on top.
-function optimizeConversionAmount(baseInputs, strategyOverrides = {}, metric = 'finalNW') {
+// metric: 'finalNW' (default), 'spend' (max spendable), 'minTax' (min lifetime taxes),
+//   'baselineScore' (PF11: real-dollar after-tax NW + weighted spendable -- pass opts.futureIRARate
+//   as the shared cross-strategy rate). baseInputs: inputs with a fixed strategy already set;
+//   strategyOverrides layered on top. opts: { futureIRARate?, spendableWeight? } (baselineScore only).
+function optimizeConversionAmount(baseInputs, strategyOverrides = {}, metric = 'finalNW', opts = {}) {
     const totalIRA = (baseInputs.IRA1 || 0) + (baseInputs.IRA2 || 0);
     if (totalIRA <= 0) return { optConv: 0, optResult: null };
 
@@ -2344,6 +2482,12 @@ function optimizeConversionAmount(baseInputs, strategyOverrides = {}, metric = '
     const score = (res) => {
         if (metric === 'spend')   return res.totals.spend;
         if (metric === 'minTax')  return -res.totals.tax;
+        if (metric === 'baselineScore') {
+            // Fallback to the per-run rate only defends against a missing opts; the sole production
+            // caller passes the shared rate. See baselineScoreOf's warning about per-run rates.
+            return baselineScoreOf(res, opts.futureIRARate ?? res.totals.futureIRARate ?? 0,
+                                   opts.spendableWeight ?? SPENDABLE_WEIGHT);
+        }
         return res.finalNW; // default: finalNW
     };
 
@@ -2549,7 +2693,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, diagnoseConvBreakEvenFailure, optimizeConversionAmount };
+    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, diagnoseConvBreakEvenFailure, optimizeConversionAmount, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart };
 }
 
 

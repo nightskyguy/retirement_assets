@@ -22,7 +22,7 @@ function initMCTab() {
     if (!btn) return;
     btn.style.display = '';  // Tab always visible.
 
-    // Show the Simulation Parameters panel only for nerd-knob users.
+    // Show the Simulation Parameters panel only for nerdknob users.
     // Normal users: panel stays hidden and the tab click auto-runs.
     const nerdPanel = document.getElementById('mc-nerd-panel');
     if (nerdPanel) {
@@ -81,7 +81,7 @@ function updateMCModeUI() {
 
 // Called by the always-visible mode selector onchange.
 // Syncs UI state, then re-runs immediately in normal mode.
-// In nerd mode the user controls runs manually.
+// In nerdknob the user controls runs manually.
 function onMCModeChange() {
     updateMCModeUI();
     _lastMCHash = null;   // force re-run regardless of other inputs

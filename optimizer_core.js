@@ -1093,14 +1093,14 @@ function planPrimaryWithdrawals(sim, yr) {
 
     if (yr.isBrokerageYear) {
         // Brokerage harvest year: draw from Brokerage instead of IRA. Always max out the
-        // nerd-knob-selected LTCG bracket (0% or 15% top) rather than only drawing to meet
+        // nerdknob-selected LTCG bracket (0% or 15% top) rather than only drawing to meet
         // spend — this realizes gains + steps up basis even when spend doesn't need it.
         // If spend needs force realization beyond the target, top off whichever LTCG bracket
         // the forced amount actually lands in (capture the room in the bracket you're already
         // paying for) — but never past the active bracket/minlimit/aca strategy's own MAGI
         // ceiling (`limit`), if one is in effect this year.
         const _baseOrdinaryInc = yr.taxableInc + yr.fixedInc + yr.taxableInterest + yr.taxableDividends;
-        const _cycleTargetRate = inputs.cycleLTCGTarget ?? 0.15;   // nerd knob: 0.15=target 0% bracket (default), 0.20=target 15% bracket
+        const _cycleTargetRate = inputs.cycleLTCGTarget ?? 0.15;   // nerdknob: 0.15=target 0% bracket (default), 0.20=target 15% bracket
         const _targetRoom = getLTCGBracketRoom(_baseOrdinaryInc, yr.status, _cycleTargetRate, sim.cpiRate);
         const _targetNetRoom = _targetRoom * (1 - yr.capGainsPercentage * sim.capitalGainsRate);
         let _brokerageNetTarget;

@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.12ea</title>
+    <title>Retirement Optimizer 11.12f7</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -49,8 +49,8 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1133"></script>
-	<script src="optimizer_core.js?v=1112ea"></script>
-	<script src="optimizer_ui.js?v=1112ea"></script>
+	<script src="optimizer_core.js?v=1112f7"></script>
+	<script src="optimizer_ui.js?v=1112f7"></script>
 	<script src="optimizer_tests.js?v=1111f3"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
@@ -425,7 +425,7 @@
 		<div id="tab-mc" class="card hidden">
 			<!-- Mode selector — always visible; changing it triggers an immediate re-run. -->
 			<div id="mc-mode-panel" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric model using μ and σ (advanced, nerd-mode only).">Simulation Mode
+				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric model using μ and σ (advanced, nerdknob only).">Simulation Mode
 					<select id="mc-sim-mode" style="margin-left:6px;font-size:0.95em;" onchange="onMCModeChange()">
 						<option value="bootstrap" selected>Historical (1928–2024)</option>
 						<option value="gbm">Synthetic (parametric)</option>
@@ -467,7 +467,7 @@
 				<div style="margin-top:6px;font-size:0.78em;color:#888;">Historical: returns and inflation are block-sampled from 1928–2024 data; each path sees a different sequence. Synthetic: parametric model using the μ and σ inputs; inflation is fixed.</div>
 			</div>
 
-			<!-- Cancel button + path count — visible during any run (nerd-mode or auto-run) -->
+			<!-- Cancel button + path count — visible during any run (nerdknob or auto-run) -->
 			<div id="mc-cancel-wrap" style="display:none;margin-bottom:6px;align-items:center;gap:10px;">
 				<button id="mc-cancel-btn" onclick="cancelMC()" style="padding:6px 12px;font-size:0.9em;background:#dc3545;color:white;border:none;border-radius:4px;cursor:pointer;">Cancel</button>
 				<span id="mc-run-est" style="font-size:1em;color:#555;"></span>
@@ -573,6 +573,7 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
+				<li><b>11.12f7</b> <strong>"Optimize for" moved to the top of the Optimizer tab and is now documented.</strong> It sits directly under the search switches, in a larger panel, since it controls how the whole table is ranked. The Documentation tab now explains what each choice measures, including why Tax Flexibility only compares plans that also finish among the wealthiest, and why Minimum Lifetime Taxes and Avoiding Widow and RMD Tax can disagree. Choice names were also made consistent (Maximum Net Wealth, Avoiding Widow and RMD Tax, Minimum Lifetime Taxes).</li>
 				<li><b>11.12ea</b> <strong>The "Optimize for" choice now re-orders the whole strategy table, and there are new ways to rank.</strong> Pick what matters to you and the table sorts to put the best plan for that goal on top, and moves the baseline to match. The choices, in the order most people asked for them: Tax Flexibility (the new default, which favors plans that end with your money spread more evenly across pre-tax, Roth, and taxable accounts so you have room to draw from whichever is cheapest each year, chosen among the plans that also finish with strong wealth); Maximize Net Wealth; Avoid Widow and RMD Tax (favors plans that leave less in the pre-tax IRA, since that is what drives forced withdrawals and the higher single-filer tax a survivor pays); Minimize Lifetime Taxes; plus Maximum Spending, Maximum Roth, and a Balanced blend. A few smaller fixes came along with it: the "Best" summary no longer lists a strategy that cannot actually be run; Annual Details shows the Roth Conversion column when you turn on the Opp. Cost view; when a spouse is already on Medicare, all of the ACA income-limit rows are marked not applicable rather than just one; and the Score column was dropped since the row order and the Rank column already show the ranking.</li>
 				<li><b>11.12e5</b> <strong>Optimize Conversions now looks at the best plan from each family of strategies, not just the five with the highest ending wealth.</strong> The strategies that benefit most from converting are often not the ones that finish with the most money, so the old five-highest list could be filled entirely by strategies that gain nothing from converting, leaving the ⇌ table empty even when other strategies had a real conversion to recommend. It now considers the best Proportional, Reduce, Fill Bracket, IRMAA Ceiling, IRA Draw, Ordered, and Guyton-Klinger plan (each with and without the cyclic brokerage option), so a strategy that converts well gets a seat. It also judges how much to convert by the same measure it uses to rank everything else - after-tax wealth left over plus the money you actually get to spend, in today's dollars - rather than raw ending wealth, which used to reward simply hoarding in the IRA. Because of these two changes, the recommended conversion amounts and the strategies shown may differ from before on the same plan. When no strategy benefits from converting more, the tool now says so plainly instead of showing an empty table.</li>
 				<li><b>11.129d</b> <strong>Annual Details now shows Roth conversions as the IRA withdrawals they are, and conversions draw from the larger IRA.</strong> A Roth conversion is money leaving the IRA, so the IRA WD, IRA1- and IRA2- columns now include it. Before, a year could show a large conversion with little or no IRA withdrawal, which looked wrong even though the balances were correct. RMD stays in its own columns (it is the involuntary draw and is never a conversion). The Federal and State tax columns now include the tax on conversions, so they add up to Total Tax and the Taxation chart shows the real tax. Conversions are now taken from the larger IRA first (spilling to the smaller only when the larger cannot supply the full amount) instead of being split by size, which is what you would actually do and avoids converting a token slice out of a tiny IRA. This changes each IRA's balance over time and therefore each person's future RMDs; the combined yearly tax is unchanged. Clicking a year to open the Tax Payment Planner now sends the correct per-IRA voluntary, conversion, and tax figures.
@@ -752,13 +753,25 @@
 				Rules: age 70½+ per person (the simulation uses birth month for precision); the IRS limit is $111,000/person/year in 2026, CPI-indexed annually. QCDs are sourced first from the larger eligible IRA, then the smaller.
 				Two modes: <em>Always</em> (switch right, green) donates the full amount every eligible year regardless of tax situation — useful for regular charitable giving goals.
 				<em>As Needed</em> (switch left) applies only as much as needed to drop two IRMAA tiers from your projected MAGI, or to escape the surcharge entirely — whichever requires fewer dollars. Use this when your primary goal is IRMAA avoidance rather than a fixed giving commitment. In either mode your entered amount is the ceiling — the simulation never exceeds it.</p>
-				<p><strong>Optimizer note:</strong> Every Optimizer row converts surplus after spending to Roth, regardless of your sidebar setting — enable <em>Maximize Conversions</em> in the strategy panel to match that assumption in single-scenario mode. Cash-funded conversion taxes work differently: normally Optimizer rows just follow your sidebar setting, so toggling <em>Maximize Conversions</em> changes what the table reports. Under nerd knobs the Optimizer instead sweeps it as its own dimension, listing each strategy both with cash-funded taxes (&#128181;) and without, so you can see what that choice is worth rather than assuming it. Those extra rows only appear when you actually have Cash, since the feature does nothing without it.</p>
+				<p><strong>Optimizer note:</strong> Every Optimizer row converts surplus after spending to Roth, regardless of your sidebar setting — enable <em>Maximize Conversions</em> in the strategy panel to match that assumption in single-scenario mode. Cash-funded conversion taxes work differently: normally Optimizer rows just follow your sidebar setting, so toggling <em>Maximize Conversions</em> changes what the table reports. Under nerdknob the Optimizer instead sweeps it as its own dimension, listing each strategy both with cash-funded taxes (&#128181;) and without, so you can see what that choice is worth rather than assuming it. Those extra rows only appear when you actually have Cash, since the feature does nothing without it.</p>
 					</div>
 					</details>
 				</li>
 				<li><strong>What is &ldquo;Break Even&rdquo;?</strong> When your plan does Roth conversions, the tool quietly runs your entire plan a second time with the conversions removed: the money stays in the traditional IRA, no conversion tax is paid, and that bigger IRA later forces bigger Required Minimum Distributions, taxed in whatever bracket you are actually in those years (including the higher Single rates a surviving spouse pays, and any Medicare IRMAA surcharges the RMDs trigger). Each year the two plans are compared on equal footing, and the earliest year the converting plan pulls ahead <strong>and stays ahead for the rest of the plan</strong> is marked as <strong>Break Even</strong>. A year where the converting plan is only briefly ahead before falling behind again does not count. It only appears if conversions actually happen, and shows &ldquo;&mdash;&rdquo; if the lead never becomes permanent. When it does show &ldquo;&mdash;&rdquo;, a &#9432; appears next to it; click that to pinpoint exactly which conversion year is the one that erases the lead for good, and how far the plan got before that.
 				<p style="margin:6px 0 0;">Both plans are compared by after-tax portfolio <strong>value</strong>: taxable (IRA) assets are reduced by the tax that will eventually be owed on them, and non-taxable (Roth) assets count at face value. The net figure is shown as <i>Total Wealth</i> on the main chart. The IRA discount rate is either each plan's own current tax rate, or the Marginal Heirs Tax if you entered one (see 4. Assumptions). Conversions pay tax early, so the no-conversion plan usually leads at first; the crossover often lands when RMDs ramp up, or when one spouse passes away and the survivor&rsquo;s tax rate jumps when filing Single, aka &ldquo;the widow penalty&rdquo;.</p>
 				<p style="margin:6px 0 0;">The year-by-year numbers are in <i>Annual Details</i> &rarr; <i>Opp. Cost</i> (the <i>convOC</i> column; <i>excessOC</i> is the same comparison for surplus IRA withdrawals banked to Cash, using the same permanent-crossover definition of Break Even). One caveat: with <i>Guyton-Klinger</i> guardrails the no-conversion plan may adjust spending on different years, since the guardrails react to that plan's own portfolio. That is the honest comparison, not an error.</p>
+				</li>
+				<li><strong>What does &ldquo;Optimize for&rdquo; do?</strong> The Optimizer always tests the same set of strategies. What changes is how they are <em>ranked</em>. The <i>Optimize for</i> selector at the top of the Optimizer tab picks the goal used to sort the table, so the best plan for that goal appears first, the &#9875; baseline moves to the best no-conversion plan under the same goal, and the <i>Rank</i> column renumbers to match. It never changes the underlying numbers, only which plan the tool puts in front of you. Clicking any column header sorts by that column instead; changing the goal returns the table to goal order. The choices:
+					<ul style="margin:6px 0 0;">
+						<li><strong>Tax Flexibility</strong> (the default) favors plans that finish with your money spread evenly across the three tax treatments: pre-tax (IRA), Roth, and taxable (brokerage and cash). An even spread means that in any future year you can draw from whichever account is cheapest at the time, rather than being forced into whatever one account you have left. Because a plan that simply runs out of money would technically be perfectly &ldquo;even&rdquo; at zero, this only compares plans that also finish among the wealthiest, then picks the most evenly divided of those.</li>
+						<li><strong>Maximum Net Wealth</strong> ranks by after-tax wealth remaining at the end of the plan, with the tax still owed on the IRA subtracted first. This is the estate or legacy view.</li>
+						<li><strong>Avoiding Widow &amp; RMD Tax</strong> ranks by how much forced, higher-rate taxation the plan leaves behind. It adds the tax paid on Required Minimum Distributions during the plan to the tax still owed on whatever is left in the IRA at the end. Both problems come from the same place, a large surviving pre-tax balance, which drives bigger RMDs and is taxed at the higher Single rates once one spouse has passed.</li>
+						<li><strong>Minimum Lifetime Taxes</strong> ranks by total tax paid over the whole plan, in today's dollars. Note this counts only tax actually paid during the plan, so it can favor leaving a large untaxed IRA behind. Compare it against Avoiding Widow &amp; RMD Tax.</li>
+						<li><strong>Maximum Spending</strong> ranks by the total you actually get to spend, in today's dollars. Most useful with dynamic strategies such as Guyton-Klinger, where spending varies.</li>
+						<li><strong>Maximum Roth</strong> ranks by the Roth balance at the end of the plan.</li>
+						<li><strong>Balanced (Wealth + Spend)</strong> is the older default: after-tax ending wealth plus what you spend, with spending weighted slightly higher on the view that a dollar enjoyed beats a dollar bequeathed.</li>
+						<li><strong>Roth Conversion Effectiveness</strong> and <strong>Earliest Break Even</strong> rank by the conversion columns, so they are only meaningful when <i>Optimize Conversions</i> has produced &#8646; rows. Plans without them sort to the bottom.</li>
+					</ul>
 				</li>
 				<li><strong>1. Profile &amp; Ages:</strong> Enter the birth year and month of each person and estimated life expectancy. The current age, RMD start age, and projected first-year RMD amount are shown below each person's birth fields and update live. Use the <i>Include Spouse</i> checkbox to model a single taxpayer — unchecking it hides all spouse fields and excludes the spouse from the simulation. <i>Retirement Start Age</i> is the age at which you stop earning income; the simulation inflates tax brackets, SS COLA, and spending forward to that year automatically.</li>
 				<li><strong>2. Assets at Retirement Age:</strong> Enter balances in today's dollars. <i>Brokerage Basis</i> is used to calculate capital gains vs. principal. Total all after-tax investment assets into <i>Brokerage</i>, and all cash-like holdings into <i>Cash</i>. The <i>Reinvest Brokerage Dividends</i> checkbox keeps dividends inside the brokerage account (growing both balance and basis); when unchecked, dividends flow to Cash. Should one spouse predecease the other, all IRA assets are inherited by the remaining spouse. Enter Roth balances separately — <i>Your Roth IRA</i> and <i>Spouse Roth IRA</i> are tracked independently throughout the simulation. The collapsible <i>Account Composition</i> subsection records Equity/Bond ratios — informational only in single-scenario mode, but used by Monte Carlo Bootstrap and Stress modes to apply per-account return sequences.</li>
@@ -794,7 +807,7 @@
 					<tbody id="ins_tableBody"></tbody>
 				</table>
 			</div>
-		<!-- Hidden runtime nerd-knob toggle (item 13). Unlabeled; flips NERD_KNOBS at runtime
+		<!-- Hidden runtime nerdknob toggle (item 13). Unlabeled; flips NERD_KNOBS at runtime
 			     as if ?nerdknob were on the URL. Deliberately faint. NOT persisted to the URL. -->
 			<div style="margin-top:28px;text-align:right;">
 				<input type="checkbox" id="secret-nerdknob" onchange="setNerdKnob(this.checked)" title="Do not click this. Quantum Instability may result causing the universe to suddenly disappear into a black hole." style="cursor:pointer;">
@@ -915,18 +928,15 @@
                   <span>Optimize Conversions</span>
                 </label>
             </div>
-            <div id="opt-perf" style="display:none;margin-bottom:8px;font-size:0.8em;color:#888;font-family:monospace;"></div>
-            <div id="opt-spend-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
-            <div id="opt-conv-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
-            <div id="opt-best" style="display:none;"></div>
-            <!-- Optimizer objective selector — PF13: visible to all users; drives the whole table ranking. -->
-            <div id="opt-objective-wrap" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:0.85em;color:#444;margin-bottom:6px;">
-                <label style="font-weight:600;">Optimize for:
-                    <select id="opt-objective" onchange="setOptObjective(this.value)" style="font-size:0.95em;">
+            <!-- "Optimize for" — the primary ranking control, so it sits directly under the search
+                 switches at the top of the tab. Visible to all users; drives the whole table order. -->
+            <div id="opt-objective-wrap" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:1em;color:#333;padding:10px 14px;margin-bottom:10px;background:#eef4fb;border:1px solid #c9dcf0;border-radius:6px;">
+                <label style="font-weight:700;font-size:1.05em;">Optimize for:
+                    <select id="opt-objective" onchange="setOptObjective(this.value)" style="font-size:1em;font-weight:600;padding:3px 6px;margin-left:4px;">
                         <option value="taxflex" selected>Tax Flexibility</option>
-                        <option value="networth">Maximize Net Wealth</option>
-                        <option value="widowrmd">Avoid Widow &amp; RMD Tax</option>
-                        <option value="mintax">Minimize Lifetime Taxes</option>
+                        <option value="networth">Maximum Net Wealth</option>
+                        <option value="widowrmd">Avoiding Widow &amp; RMD Tax</option>
+                        <option value="mintax">Minimum Lifetime Taxes</option>
                         <option value="maxspend">Maximum Spending</option>
                         <option value="maxroth">Maximum Roth</option>
                         <option value="balanced">Balanced (Wealth + Spend)</option>
@@ -934,8 +944,12 @@
                         <option value="earliestbe">Earliest Break Even</option>
                     </select>
                 </label>
-                <span style="color:#888;">re-orders the table &amp; moves the ⚓ baseline to match your goal</span>
+                <span style="color:#555;">Ranks every strategy by this goal, re-orders the table, and moves the ⚓ baseline to match. See Documentation for what each choice measures.</span>
             </div>
+            <div id="opt-perf" style="display:none;margin-bottom:8px;font-size:0.8em;color:#888;font-family:monospace;"></div>
+            <div id="opt-spend-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
+            <div id="opt-conv-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
+            <div id="opt-best" style="display:none;"></div>
             <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:0.8em;color:#444;padding:4px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
                 <span style="font-weight:600;color:#666;">Row colors:</span>
                 <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>⚓ Baseline — strongest plan with no conversions / no brokerage cycling (Δ columns measure against it)</span>
@@ -948,8 +962,8 @@
             <!-- Symbol legend (item 8) — explains the marks on strategy names / status column. -->
             <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:0.78em;color:#444;padding:2px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px;">
                 <span style="font-weight:600;color:#666;">Symbols:</span>
-                <span title="Convert Excess to Roth enabled — surplus after spending is converted to Roth rather than left in Cash. (Whether conversion taxes are also funded from Cash follows your sidebar's Maximize Conversions setting, except in nerd mode where both arms are swept — see 💵.)">✓ Convert Excess on</span>
-                <span id="opt-legend-cashfund" style="display:none;" title="Uses available Cash to cover conversion taxes, so more of the conversion lands in Roth (the 'Use Cash' half of Maximize Conversions). Nerd mode sweeps this as its own dimension, so each strategy appears both with and without it. Only shown when you have Cash to spend.">💵 Cash-funded taxes</span>
+                <span title="Convert Excess to Roth enabled — surplus after spending is converted to Roth rather than left in Cash. (Whether conversion taxes are also funded from Cash follows your sidebar's Maximize Conversions setting, except under nerdknob, where both arms are swept — see 💵.)">✓ Convert Excess on</span>
+                <span id="opt-legend-cashfund" style="display:none;" title="Uses available Cash to cover conversion taxes, so more of the conversion lands in Roth (the 'Use Cash' half of Maximize Conversions). Nerdknob sweeps this as its own dimension, so each strategy appears both with and without it. Only shown when you have Cash to spend.">💵 Cash-funded taxes</span>
                 <span title="Optimize Spend: a binary search found a higher sustainable After-Tax Spend than your input.">✦ Optimize Spend</span>
                 <span title="Optimize Spend hit its search ceiling — the true sustainable spend may be even higher.">✦+ / + hit search ceiling</span>
                 <span title="Reverse-optimized: every strategy failed at your spend, so the highest feasible spend is shown instead.">▼ Reverse-optimized</span>

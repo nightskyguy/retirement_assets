@@ -48,9 +48,9 @@ const OptimizerState = {
 const OPT_OBJECTIVE_ORDER = ['taxflex', 'networth', 'widowrmd', 'mintax', 'maxspend', 'maxroth', 'balanced', 'conveffect', 'earliestbe'];
 const OPT_OBJECTIVE_LABELS = {
     taxflex:   'Tax Flexibility',
-    networth:  'Maximize Net Wealth',
-    widowrmd:  'Avoid Widow & RMD Tax',
-    mintax:    'Minimize Lifetime Taxes',
+    networth:  'Maximum Net Wealth',
+    widowrmd:  'Avoiding Widow & RMD Tax',
+    mintax:    'Minimum Lifetime Taxes',
     maxspend:  'Maximum Spending',
     maxroth:   'Maximum Roth',
     balanced:  'Balanced (Wealth + Spend)',
@@ -63,7 +63,7 @@ function rankRows(rows, objKey) {
     return rankRowsByObjective(rows, objKey, OptimizerState.sharedFutureIRARate ?? 0);
 }
 
-// Flip the nerd-knob at runtime and re-apply every gated UI surface. Called by the hidden
+// Flip the nerdknob at runtime and re-apply every gated UI surface. Called by the hidden
 // Documentation-page checkbox. Not persisted to the URL.
 function setNerdKnob(on) {
     NERD_KNOBS = !!on;
@@ -76,7 +76,7 @@ function applyNerdKnobVisibility() {
     const betrWrap = document.getElementById('stat-betr-wrap');
     if (betrWrap) betrWrap.style.display = NERD_KNOBS ? '' : 'none';
     // Optimizer objective selector — PF13: now drives the whole table ranking, so visible to ALL
-    // users regardless of nerd mode (kept here only so a runtime toggle doesn't hide it).
+    // users regardless of nerdknob (kept here only so a runtime toggle doesn't hide it).
     const objWrap = document.getElementById('opt-objective-wrap');
     if (objWrap) objWrap.style.display = 'flex';
     // Cycle Brokerage LTCG bracket target (0%/15%)
@@ -87,7 +87,7 @@ function applyNerdKnobVisibility() {
     // toggle can't hide them).
     const convAdvWrap = document.getElementById('convAdvanced-wrap');
     if (convAdvWrap) convAdvWrap.style.display = '';
-    // 💵 legend — only meaningful once nerd mode is sweeping the cash-funded arm
+    // 💵 legend — only meaningful once nerdknob is sweeping the cash-funded arm
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
     // Docs: ACA Cliff strategy discussion paragraph (nerd-only strategy)
@@ -107,7 +107,7 @@ function applyNerdKnobVisibility() {
     if (cb) cb.checked = NERD_KNOBS;
 }
 
-// Optimizer objective setter — wired to the nerd-mode <select id="opt-objective">.
+// Optimizer objective setter — wired to the nerdknob <select id="opt-objective">.
 function setOptObjective(key) {
     OptimizerState.objective = OPT_OBJECTIVE_LABELS[key] ? key : 'taxflex';
     // Changing the objective re-follows it for the body order (drop any user column override).
@@ -119,14 +119,18 @@ function setOptObjective(key) {
 }
 
 // Picks the ⚓ baseline (best no-conversion / no-cyclic successful row) under the active objective,
-// then recomputes every row's Δ columns against it. 'balanced' reproduces the historical pick
-// (highest weighted Score). Called by runOptimizer and whenever the objective changes.
+// then recomputes every row's Δ columns against it. Called by runOptimizer and whenever the
+// objective changes. Prefers a FEASIBLE row: an infeasible (⚠️) baseline would be pinned on top of
+// the table and listed in the "Best" summary as a strategy you cannot actually run. Falls back to
+// the unfiltered set only when every no-conversion row is infeasible, so the Δ columns still work.
 function recomputeBaselineForObjective() {
     const results = OptimizerState.results;
     if (!results) return;
     const noConvSuccesses = results.filter(r => r._isNoConv && r.totals.success);
-    OptimizerState.baseline = noConvSuccesses.length > 0
-        ? rankRows(noConvSuccesses, OptimizerState.objective)[0]
+    const feasibleNoConv = noConvSuccesses.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
+    const baselinePool = feasibleNoConv.length > 0 ? feasibleNoConv : noConvSuccesses;
+    OptimizerState.baseline = baselinePool.length > 0
+        ? rankRows(baselinePool, OptimizerState.objective)[0]
         : null;
     const baselineRow = OptimizerState.baseline;
     for (const r of results) {
@@ -435,9 +439,9 @@ function runOptimizer() {
     const strategyOverridesList = [];
 
     function addResult(strategyLabel, paramLabel, paramSortVal, overrides, noConv = false) {
-        // Nerd mode sweeps fundConversionWithCash as its own dimension (the 💵 rows added after
+        // Nerdknob sweeps fundConversionWithCash as its own dimension (the 💵 rows added after
         // the cyclic pass), so base rows must NOT inherit the sidebar's value — otherwise a user
-        // with it already on would get two identical arms instead of an A/B. Outside nerd mode
+        // with it already on would get two identical arms instead of an A/B. Outside nerdknob
         // rows keep inheriting it, so the table reflects the plan you actually configured.
         if (NERD_KNOBS && overrides.fundConversionWithCash === undefined) {
             overrides = { ...overrides, fundConversionWithCash: false };
@@ -465,7 +469,7 @@ function runOptimizer() {
             _paramLabel: paramLabel,
             _paramSortVal: paramSortVal,
             // Record the EFFECTIVE values (base + overrides), not just the overrides: outside
-            // nerd mode fundConversionWithCash is inherited from the sidebar rather than set as
+            // nerdknob fundConversionWithCash is inherited from the sidebar rather than set as
             // an override, and loadOptimizerResult() restores from these fields — reading the
             // override alone would load a plan that differs from the row the table evaluated.
             _convertExcessToRoth: !!inputs.convertExcessToRoth,
@@ -517,7 +521,7 @@ function runOptimizer() {
         addResult('IRMAA Ceil', IRMAATierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, convertExcessToRoth: convOn });
     }
 
-    // Fill bracket — ACA FPL cliffs. Nerd-mode only (item 12): the ACA cliff model is rough, so it
+    // Fill bracket — ACA FPL cliffs. Nerdknob only (item 12): the ACA cliff model is rough, so it
     // is excluded from the optimizer sweep unless ?nerdknob is on. Also skipped when both persons
     // are 65+ at retirement start (on Medicare → ACA income limits are irrelevant).
     const acaDisabled = bothOnMedicareAtStart(base.birthyear1, base.startAge, !!base.hasSpouse,
@@ -562,7 +566,7 @@ function runOptimizer() {
         }
     }
 
-    // Cash-funded conversion arm (💵) — nerd mode only, and only when there's Cash to spend
+    // Cash-funded conversion arm (💵) — nerdknob only, and only when there's Cash to spend
     // (applyConversionGrossUp/applyExtraConversion's cash path are hard no-ops at $0 Cash, so
     // these rows would be bit-identical twins of their base rows: pure wasted simulate() calls).
     // Non-cyclic families only, matching buildVariations()'s scope: cyclic reinvests surplus into
@@ -733,7 +737,7 @@ function runOptimizer() {
 
     // Pick the ⚓ baseline (best no-conv successful row) under the active objective, and compute
     // every row's Δ columns against it. 'balanced' (default) reproduces the historical weighted-score
-    // pick; a nerd-mode objective (item 9) re-picks the baseline under that single metric.
+    // pick; a nerdknob objective (item 9) re-picks the baseline under that single metric.
     OptimizerState.results = results;
     recomputeBaselineForObjective();
 
@@ -955,7 +959,7 @@ function renderOptimizerTable(results) {
     const sortState = OptimizerState.sortState ?? { colKey: '__objective__', direction: 'desc' };
 
     // Rank map (item 10): number successful rows 1 (best) … N under the active objective. Looked up
-    // by the nerd-mode Rank column; failed rows are left unranked ('—').
+    // by the nerdknob Rank column; failed rows are left unranked ('—').
     const _ranked = rankRows(results.filter(r => r.totals.success), OptimizerState.objective);
     OptimizerState._rankMap = {};
     _ranked.forEach((r, idx) => { OptimizerState._rankMap[r._id] = idx + 1; });
@@ -4061,7 +4065,7 @@ function updateACAWarning() {
     const warnEl  = document.getElementById('aca-age-warn');
     if (!sel || !warnEl) return;
 
-    // No ACA options present (nerd mode off, item 12) → nothing to warn about.
+    // No ACA options present (nerdknob off, item 12) → nothing to warn about.
     if (![...sel.options].some(o => o.value.startsWith('aca'))) { warnEl.style.display = 'none'; return; }
 
     const by1       = +val('birthyear1') || 0;
@@ -4160,7 +4164,7 @@ function generateStratRateOptions() {
     }
 
     // ── ACA FPL cliffs ────────────────────────────────────────────────────────
-    // Nerd-mode only (item 12): the ACA cliff model is rough, so these options are hidden from the
+    // Nerdknob only (item 12): the ACA cliff model is rough, so these options are hidden from the
     // bracket dropdown unless ?nerdknob is on (or the hidden runtime toggle is enabled).
     // FPL base (2025): 2-person $20,440; 1-person $15,060. CPI-approx for future years.
     const FPL_BASE_YEAR = 2025;

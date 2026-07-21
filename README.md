@@ -9,7 +9,6 @@
 You can DIRECTLY invoke these tools:
 
 + **[Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html)**  A full tool, with optimizers!  This is the original, and most featured tool.
-
 + **[Historical Real Returns](https://tools.netcitizen.us/standalone/RealReturns.html)** How did stocks, bonds, and T-bills really perform after inflation? 98 years of data (1928–2025) with a custom allocation mix.
 + **[Income Tax Planner](https://tools.netcitizen.us/standalone/IncomeTaxPlanner.html)** What does taxation look like at different ordinary income levels (includes many states)
 + **[Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html)** Compares 3 ways to pay taxes in retirement - provides reminders. Retirement Optimizer calls it.
@@ -18,6 +17,8 @@ You can DIRECTLY invoke these tools:
 + **[After Tax REAL Growth](https://tools.netcitizen.us/standalone/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
 + **[HYSA Real Returns](https://tools.netcitizen.us/standalone/HYSA.html)** Does my "safe" high-yield savings account actually grow after taxes and inflation? Annual and cumulative views in one tool.
 
+
+All tools are "open source". Nothing is hidden.
 
 A California resident built these with [Google gemini](https://gemini.google.com), [claude.ai](https://claude.ai) and [ChatGPT](https://chatgpt.com") AI assistance. The author is a retired software engineer, spreadsheet twiddler, has a strong knowledge of Python, and Javascript. See **Standalone Tools** and **Key Features** below for a summary of what the tools can do - and be sure to look at *What the Tool IGNOREs* (and *Known Bugs*, below) so you understand the limitations of the *Retirement Optimizer*.
 
@@ -37,15 +38,18 @@ A California resident built these with [Google gemini](https://gemini.google.com
     - [Retirement Figures](#retirement-figures)
     - [AARP Federal Tax Calculator](#aarp-federal-tax-calculator)
     - [Visual Federal Tax Tool](#visual-federal-tax-tool)
-  - [Paid Tools](#paid-tools)
-    - [Boldin](#boldin)
-    - [MaxiFi](#maxifi)
-    - [ProjectionLab](#projection-lab)
+    - [NumberCrunch Nerds](#number-crunch-nerds) (spreadsheets)
+    - [TaxVantage](#taxvantage) (free for now)
+  - [Paid Tools](#paid-tools) - Commercial
+    - [Boldin](#boldin) - Probably the leading tool
+    - [MaxiFi](#maxifi) - Lesser known tool
+    - [ProjectionLab](#projection-lab) - Best of Breed?!
     - [Others](#others)
-      - [RetirementIQ](#retirementiq)
-      - [Retirement Scenarios](#retirement-scenarios)
-      - [CliffEdge App](#cliffedge-app)
+      - [RetirementIQ](#retirementiq) 
+      - [Retirement Scenarios](#retirement-scenarios) 
+      - [CliffEdge App](#cliffedge-app) 
 - [Ramblings and Observations](#ramblings-and-observations)
+
   - [Some of the Things I Learned About Taxation](#some-of-the-things-i-learned-about-taxation)
 
 --- 
@@ -63,6 +67,35 @@ Here are less ambitious, standalone tools. Each should have a "How to Use" set i
 
 These tools are all being actively developed and improved. Each tool runs standalone in your browser - though most load additional local resources (e.g. they share the same **taxengine.js**). An internet connection is needed to load fonts and the tool for graphing charts. Basic, anonymous page-load analytics are collected (Google Analytics and Cloudflare Web Analytics) solely to understand how often the tools are used and from what general region - no personally identifiable information is collected, stored, or transmitted. General region information helps prioritize which state tax rules to add in future releases. You are welcome to see for yourself by inspecting the [source code](https://github.com/nightskyguy/retirement_assets).
 
+### Historical Real Returns
+**[Historical Real Returns](standalone/RealReturns.html) - Inflation-Adjusted Cumulative Growth of $10,000 (1928–2025)**
+Plots the real (inflation-adjusted) cumulative growth of $10,000 in US equity (S&P 500 proxy), US bonds (10-yr Treasury), and T-bills across 98 years of history, alongside a custom allocation mix (equity/bond/cash sliders) and an uninvested cash reference line showing the full purchasing-power loss from holding dollars with no return. A "Market Returns" overlay adds nominal (pre-inflation) companion lines in darker colors to make the inflation drag viscerally visible. Clicking any legend asset isolates that real + nominal pair. Log/linear scale toggle; shareable URLs encode start year, allocation, and scale.
+
+### Future Cost
+**[FutureCost.html](standalone/FutureCost.html) - Present Value of Growing Payments**
+Answers the question: how much money must be set aside today - and left to grow - to fund a stream of payments that increase faster than inflation? The primary use case is Medicare IRMAA surcharges: because IRMAA penalties are paid from pre-tax IRA/401k withdrawals, the tool tracks federal and state marginal tax rates separately and grosses up every payment to reflect the actual account draw required. Sliders control the annual penalty, planning horizon, CPI inflation, extra growth above inflation (Medicare premiums have historically risen 2–4% above CPI), portfolio return rate, and income (MAGI). Four result metrics - funds to allocate now, year-1 pre-tax draw, final-year pre-tax draw, and total real cost in today's dollars - plus a year-by-year chart of the payment as a percentage of income make the central point viscerally clear: those "small potatoes" grow in real purchasing-power terms every single year.
+
+### IRMAA and RMDs
+**[IRMAA and RMDs](https://tools.netcitizen.us/standalone/irmaa_and_rmds.html) - What balances get me in trouble with IRMAA**
+Given entered fixed income, calculate what size IRA balance will cause RMDs that hit IRMAA tiers at various ages.  The tool uses current rates and does not attempt to adjust for inflation.  For example a married couple with a $16,607,550 balance at age **73** together with $130,000 income (pensions/social security/etc) will hit the highest IRMAA Tier 5 due to $626,700 forced RMD. Yeah, that is clearly not most of us. But at age **80** a $2,882,540 IRA balance together with that same income will hit **Tier 2** $5.2K annual charge because that balance at that age forces a $142,000 RMD.  A balance of $1,286,740 for a single 80 year old lands in **Tier 4** with a $5.7k annual charge.  At 75 that same single person would be in Tier 4 with a 1.5M IRA balance.  The Retirement Optimizer will suggest a target (combined) IRA balance that minimizes IRMAA jeopardy.
+
+### After Tax Real Growth
+**[AfterTaxRealGrowth.html](standalone/AfterTaxRealGrowth.html) - After-Tax Real Growth Rate**
+Did you know that your 2.5% interest bearing savings account LOSES money even if inflation is LESS than 2.5%?  I suspected that, but this tool will show you the real answer - and surprise, it matters what your tax bracket is!
+
+Visualize how inflation and taxation combine to erode nominal investment returns. Set an inflation rate and your portfolio's nominal return, and the tool plots the real after-tax return across six federal tax brackets (0%, 12%, 22%, 24%, 32%, 37%), with the 24% bracket highlighted as the typical IRMAA Tier 1 landing zone. A dashed break-even line at 0% real return makes immediately visible that a 2.50% nominal return at 2.50% inflation and 25% tax is not a wash - it is a net loss of purchasing power (~0.61%/year). Each bracket card shows your real return at the current portfolio return alongside the minimum nominal return needed to merely preserve purchasing power at that bracket and inflation rate. Useful for stress-testing conservative accounts (CDs, money markets, bond funds) where the real return is easily negative without realizing it.
+
+### Income Tax Planner
+**[IncomeTaxPlanner.html](standalone/IncomeTaxPlanner.html) - Federal + State Tax Sweep with IRMAA & Capital Gains**
+Sweeps ordinary income from $0 to $1.1M in $10k steps and plots your true all-in effective tax rate - federal, state, and IRMAA combined - with a marginal rate curve that makes the Social Security torpedo, IRMAA tier crossings, and NIIT threshold immediately visible. Configure filing status, state (14 options currently), taxpayer ages, fixed Social Security income, capital gains proceeds and basis, a target year 2026–2035 with configurable CPI, and OBBBA provisions (senior deduction, elevated SALT cap). Two linked charts update instantly on any control change, and hovering either chart activates the corresponding tooltip on the other at the same income level.
+
+Uses 2026 IRS Rev. Proc. 2025-32 federal brackets inflated forward by your chosen CPI rate; IRMAA premiums grow at that rate plus a configurable Medicare-specific increment. Designed to answer four questions: *How sensitive is my tax burden to a $10k income change? Where are my sweet spots and danger zones (SS torpedo, IRMAA cliffs, NIIT)? What is my real all-in effective rate? What withholding should I target?* The Share button encodes all settings into a compact URL that works from a local file or a web server - save it as a bookmark or paste it into a discussion to let someone else replicate your exact scenario.
+
+### High Yield Savings Accounts Real Returns
+**[HYSA Real Returns](standalone/HYSA.html) - Annual and Cumulative Real Value of a High-Yield Savings Account**
+Two views in one tool. The **Annual** tab shows year-by-year after-tax interest and inflation erosion as stacked bars with a net real return line - making visible how often a "safe" savings account actually loses purchasing power. The **Cumulative** tab computes the real value of $10,000 compounding from a chosen start year, with three lines: Roth / 0%-tax, a custom tax-rate slider, and uninvested cash eroded by inflation alone. Rates are 80th-percentile competitive HYSA estimates (FDIC national rate data, Fed funds rate history, Bankrate benchmarks); inflation is BLS CPI-U.
+
+### Retirement Projection
 **[Retirement Projection](Retirement_Projection.html) - How might *most* of your retirement assets fare during your lifetime.**
 Retirement Projection is visually richer tool than the [Retirement Optimizer](https://tools.netcitizen.us/retirement_optimizer.html), but it's less featured. Various Reddit and YouTube discussions do a lot of handwaving about IRA/401K balances. What this tool does is allow you to set your current age, current account balances, growth and inflation, filing status, and withdrawal rate.  It then calculates the account balances and RMDs (once they kick in).  
 
@@ -74,35 +107,11 @@ Like the "Retirement Optimizer" you cannot specify different growth rates for Br
 
 In real life, yes you are very likely to put your Bonds, TIPS, and Money Market funds in your IRA when you move your faster growing assets to your Roth - to take advantage of the magic of compounding tax free.  And if you have a choice, your high dividend, and high interest assets are better placed in a Roth where the tax moth won't feed.
 
-There is no provision for adding lumpy withdrawals, but there is a way to apply a "spending smile" curve to withdrawals. 
-
-
-**[FutureCost.html](standalone/FutureCost.html) - Present Value of Growing Payments**
-Answers the question: how much money must be set aside today - and left to grow - to fund a stream of payments that increase faster than inflation? The primary use case is Medicare IRMAA surcharges: because IRMAA penalties are paid from pre-tax IRA/401k withdrawals, the tool tracks federal and state marginal tax rates separately and grosses up every payment to reflect the actual account draw required. Sliders control the annual penalty, planning horizon, CPI inflation, extra growth above inflation (Medicare premiums have historically risen 2–4% above CPI), portfolio return rate, and income (MAGI). Four result metrics - funds to allocate now, year-1 pre-tax draw, final-year pre-tax draw, and total real cost in today's dollars - plus a year-by-year chart of the payment as a percentage of income make the central point viscerally clear: those "small potatoes" grow in real purchasing-power terms every single year.
-
-**[IRMAA and RMDs](https://tools.netcitizen.us/standalone/irmaa_and_rmds.html) - What balances get me in trouble with IRMAA**
-Given entered fixed income, calculate what size IRA balance will cause RMDs that hit IRMAA tiers at various ages.  The tool uses current rates and does not attempt to adjust for inflation.  For example a married couple with a $16,607,550 balance at age **73** together with $130,000 income (pensions/social security/etc) will hit the highest IRMAA Tier 5 due to $626,700 forced RMD. Yeah, that is clearly not most of us. But at age **80** a $2,882,540 IRA balance together with that same income will hit **Tier 2** $5.2K annual charge because that balance at that age forces a $142,000 RMD.  A balance of $1,286,740 for a single 80 year old lands in **Tier 4** with a $5.7k annual charge.  At 75 that same single person would be in Tier 4 with a 1.5M IRA balance.  The Retirement Optimizer will suggest a target (combined) IRA balance that minimizes IRMAA jeopardy.
-
-**[AfterTaxRealGrowth.html](standalone/AfterTaxRealGrowth.html) - After-Tax Real Growth Rate**
-Did you know that your 2.5% interest bearing savings account LOSES money even if inflation is LESS than 2.5%?  I suspected that, but this tool will show you the real answer - and surprise, it matters what your tax bracket is!
-
-Visualize how inflation and taxation combine to erode nominal investment returns. Set an inflation rate and your portfolio's nominal return, and the tool plots the real after-tax return across six federal tax brackets (0%, 12%, 22%, 24%, 32%, 37%), with the 24% bracket highlighted as the typical IRMAA Tier 1 landing zone. A dashed break-even line at 0% real return makes immediately visible that a 2.50% nominal return at 2.50% inflation and 25% tax is not a wash - it is a net loss of purchasing power (~0.61%/year). Each bracket card shows your real return at the current portfolio return alongside the minimum nominal return needed to merely preserve purchasing power at that bracket and inflation rate. Useful for stress-testing conservative accounts (CDs, money markets, bond funds) where the real return is easily negative without realizing it.
-
-**[IncomeTaxPlanner.html](standalone/IncomeTaxPlanner.html) - Federal + State Tax Sweep with IRMAA & Capital Gains**
-Sweeps ordinary income from $0 to $1.1M in $10k steps and plots your true all-in effective tax rate - federal, state, and IRMAA combined - with a marginal rate curve that makes the Social Security torpedo, IRMAA tier crossings, and NIIT threshold immediately visible. Configure filing status, state (14 options currently), taxpayer ages, fixed Social Security income, capital gains proceeds and basis, a target year 2026–2035 with configurable CPI, and OBBBA provisions (senior deduction, elevated SALT cap). Two linked charts update instantly on any control change, and hovering either chart activates the corresponding tooltip on the other at the same income level.
-
-Uses 2026 IRS Rev. Proc. 2025-32 federal brackets inflated forward by your chosen CPI rate; IRMAA premiums grow at that rate plus a configurable Medicare-specific increment. Designed to answer four questions: *How sensitive is my tax burden to a $10k income change? Where are my sweet spots and danger zones (SS torpedo, IRMAA cliffs, NIIT)? What is my real all-in effective rate? What withholding should I target?* The Share button encodes all settings into a compact URL that works from a local file or a web server - save it as a bookmark or paste it into a discussion to let someone else replicate your exact scenario.
-
-**[HYSA Real Returns](standalone/HYSA.html) - Annual and Cumulative Real Value of a High-Yield Savings Account**
-Two views in one tool. The **Annual** tab shows year-by-year after-tax interest and inflation erosion as stacked bars with a net real return line - making visible how often a "safe" savings account actually loses purchasing power. The **Cumulative** tab computes the real value of $10,000 compounding from a chosen start year, with three lines: Roth / 0%-tax, a custom tax-rate slider, and uninvested cash eroded by inflation alone. Rates are 80th-percentile competitive HYSA estimates (FDIC national rate data, Fed funds rate history, Bankrate benchmarks); inflation is BLS CPI-U.
-
-**[Historical Real Returns](standalone/RealReturns.html) - Inflation-Adjusted Cumulative Growth of $10,000 (1928–2025)**
-Plots the real (inflation-adjusted) cumulative growth of $10,000 in US equity (S&P 500 proxy), US bonds (10-yr Treasury), and T-bills across 98 years of history, alongside a custom allocation mix (equity/bond/cash sliders) and an uninvested cash reference line showing the full purchasing-power loss from holding dollars with no return. A "Market Returns" overlay adds nominal (pre-inflation) companion lines in darker colors to make the inflation drag viscerally visible. Clicking any legend asset isolates that real + nominal pair. Log/linear scale toggle; shareable URLs encode start year, allocation, and scale.
-
+There is no provision for adding lumpy withdrawals, but there is a way to apply a "spending smile" curve to withdrawals.
 
 ## The Retirement Optimizer
 
-This is the original tool. And while I like it, it's definitely not for everyone. There is no "accumulation phase". The focus is managing withdrawals from your accounts. But it has something I haven't found in any tool: a withdrawal strategy optimizer - and a Monte Carlo stress-test tab to show you how your plan holds up across hundreds of simulated market scenarios.
+This is the original tool. It's definitely not for everyone. There is no "accumulation phase". The focus is managing withdrawals from your accounts. But it has something I haven't found in any tool: a withdrawal strategy optimizer - and a Monte Carlo stress-test tab to show you how your plan holds up across hundreds of simulated market scenarios. Monte Carlo is familiar - it's used as the "Chance of Success" in quite a few tools, but it's done here a bit differently.
 
 My primary motivations for this tool are: 
 + What does the withdrawal phase look like?
@@ -246,6 +255,9 @@ Well, it's gone now. But it's the tool that made me realize that using Javascrip
 #### Retirement Figures
 [Retirement Figures](http://retirementfigures.com/) seems pretty robust and is currently free.  I have no access to the source to look for problems.
 
+#### TaxVantage
+[TaxVantage](http://taxvant.com/) Recently came on the scene. I have not evaluated it yet, though I have taken a look at the tax engine being used.
+
 #### Google Sheet by Redittor
 [GoogleSheet](https://docs.google.com/spreadsheets/d/1orZQ9g1KvGVrCShibutjyreaeqbmRFVAZ9aSY_57-DQ/edit?gid=1250894970#gid=1250894970) by Charles Eglington found on [Reddit](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/nu9lawc/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1). It's got lots of options. I want some things that aren't in it like a "Life Expectancy" for each person, properly calculate deductions, deduce filing status, etc.  In addition, I'd like it to "self optimize" by varying the amounts of IRA/401K withdrawals (and the number of years for withdrawals).  Ideally it would properly, or more properly calculate California Tax, and have a way to forecast based on inflation. But it's still a helpful tool.
 
@@ -302,6 +314,9 @@ More later.
 
 #### Others
 
+##### Number Crunch Nerds
+[NumberCrunch Nerds](https://www.youtube.com/@NumberCrunchNerds) "Justin, the Honest Tax Accountant" has produced many useful videos, and sells an extensive set of spreadsheets that you can buy and fill with your own data. I've used the spreadsheets in Google Sheets (with mixed results), and LibreOffice Calc. They are designed for Excel. He methodically explains many concepts and if you don't mind being read the slides aloud he's worth paying attention to. His spreadsheets are obviously one of the most "private" ways to manage your planning since the data stays in your computer (unless you put it in a cloud).
+
 ##### RetirementIQ
 [RetirementIQ](https://retirementiq.app/) Free for 7 days, $50/year. I've not dabbled much with this, partly because I prefer open source that I can inspect for possible flaws, back-doors, etc.  Directly invoke it here: [retirementiq.app](https://retirementiq.app/app/)
 
@@ -314,6 +329,32 @@ More later.
 ---
 
 ## Ramblings and Observations
+
+### References and Useful Resources
+I've read more than a dozen books, viewed 100s of YouTube videos, read perhaps a 100 papers and online articles.  Here I've distilled down what I found useful. I'd call it my recommended reading list.
+
+#### YouTube Sources
++ [Rob Berger](https://www.youtube.com/@rob_berger) formerly a securities lawyer in Washington DC, I find his pragmatism refreshing. He focusses on retirement topics.
++ [Zacc Call Money Education](https://www.youtube.com/@ZaccMoneyEducation) - Zacc provides math-based insights into not just retirement topics, but also money management in general.
++ [Erin Talks Money](https://www.youtube.com/@ErinTalksMoney) - Erin presents some interesting and compelling ideas in a clean, clear-headed way. 
++ [NumberCrunchNerds](https://www.youtube.com/@NumberCrunchNerds) - Extensive calculation oriented videos with well supported math. He (Justin) also sells a suite of spreadsheets that you can use to do your own projections and calculations.
++ [Even Better Retirement](https://www.youtube.com/@EvenBetterRetirement) - Ben Brandt, a CFP, is another level-headed, straight talk guy with a wry sense of humor and compelling insights.
++ [Kevin Lum, Foundry Financial](https://www.youtube.com/@foundryfinancial) - Kevin Lum, CFP, is also a "straight shooter" who avoids click-baity content.
++ [Ramit Sethi - I Will Teach You to Be Rich](https://www.youtube.com/@ramitsethi) - Sethi is the author of the bestseller book "I Will Teach You to Be Rich" - also a Netflix series. I highly recommend the book. His YouTube content is less retirement oriented and more "life" oriented.
+
+The list of click bait presenters would be very long.
+
+#### Papers by Edward McQuarrie 
+Edward McQuarrie is a former professor at Santa Clara University School of Business, in California. He has tackled several topics, including the "payout" of *Roth Conversions* and the Widow's Tax *penalty*. His conclusion is that generally for the mass affluent, Roth conversions do not pay off.  He has three papers on the topic, and a fourth that is thought provoking. I would call him a *responsible contrarian* - meaning he doesn't just espouse opinions, he backs them with math and facts.
+
+1. [Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN)
+2. [When and For Whom Are Roth Conversions - 2021](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3860359) - download the paper from there. This is his original paper on the subject.
+3. [Widow Tax Hit Debunked - 2023](https://www.financialplanningassociation.org/learning/publications/journal/DEC23-widow-tax-hit-debunked-OPEN) - McQuarrie illustrates that the "widows tax" is overstated. I think he errs in saying it's **debunked** because his numbers illustrate the reality of the survivor penalty - and worse numbers can be had.
+4. [Charts you Never Saw - 2025](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3050736) - McQuarrie shows an even longer market timeframe which illuminates the reality that "the market always returns value in the long term" is a bit illusory.
+
+I notice that he is releasing a book with Bill Bernstein (the founder of the 4% idea, and a prolific author) in March 2027 called "[Retirement: How to save enough, invest it well, and make your money last](https://www.amazon.com/Retirement-save-enough-invest-money-ebook/dp/B0GQWCS15F)"
+
+
 
 ### Some of the Things I Learned About Taxation
 

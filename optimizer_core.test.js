@@ -41,6 +41,10 @@ const getLTCGBracketRoom = core.getLTCGBracketRoom;
 const compactNum = core.compactNum;
 const diagnoseConvBreakEvenFailure = core.diagnoseConvBreakEvenFailure;
 const optimizeConversionAmount = core.optimizeConversionAmount;
+const baselineScoreOf = core.baselineScoreOf;
+const selectConversionCandidates = core.selectConversionCandidates;
+const rankRowsByObjective = core.rankRowsByObjective;
+const eitherOnMedicareAtStart = core.eitherOnMedicareAtStart;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 
 // ── Test harness ──────────────────────────────────────────────────────────────
@@ -1145,6 +1149,222 @@ test('accounting: Fed + State + IRMAA tax columns reconcile to Total Tax through
     assert(rb, 'setup: need a gross-up-only year');
     assertNear((rb.FedTax || 0) + (rb.StateTax || 0) + (rb.IRMAA || 0), rb.totalTax,
         'Fed + State + IRMAA must equal Total Tax in a gross-up-only year', 1);
+});
+
+// ── PF11: family-diversified, _baselineScore-ranked conversion candidate pool ────────────────
+// The old pool was a flat top-5 by raw finalNW, which let one strategy family monopolize every
+// seat while the families that actually benefit from converting ranked just below the cut. The
+// fix ranks the best row per family on _baselineScore (after-tax NW + weighted real spendable),
+// the same measure the table ranks on.
+
+// Minimal row factory for the pure selector tests. Only the fields selectConversionCandidates
+// reads are set; score is _baselineScore.
+function poolRow(strategy, score, extra = {}) {
+    return {
+        _strategy: strategy, _baselineScore: score,
+        _cyclicEnabled: false, _stratIRMAATier: -1,
+        totals: { success: true },
+        ...extra,
+    };
+}
+
+test('baselineScoreOf: real-dollar after-tax NW / deflator + weighted spendable', () => {
+    // terminal = {ira,roth,cash,basis,brokerage}; futureIRARate 0.24, capGains 0.15.
+    // afterTaxNW = roth + cash + basis + max(0,brk-basis)*(1-0.15) + ira*(1-0.24)
+    //            = 50000 + 10000 + 20000 + 20000*0.85 + 100000*0.76 = 173000
+    // /defl(2) = 86500; + 1.10*30000 = 33000 -> 119500
+    const res = { log: [{ inflationFactor: 2 }],
+        totals: { terminal: { ira: 100000, roth: 50000, cash: 10000, basis: 20000, brokerage: 40000 },
+                  capGainsRate: 0.15, spendCurrentDollars: 30000 } };
+    assertNear(baselineScoreOf(res, 0.24), 119500, 'baselineScoreOf hand-computed value', 1);
+    // Independent cross-check against the exported afterTaxNetWorth helper.
+    const atNW = afterTaxNetWorth(res.totals.terminal, 0.24, 0.15);
+    assertNear(baselineScoreOf(res, 0.24), atNW / 2 + 1.10 * 30000, 'matches afterTaxNetWorth/defl formula', 0.01);
+    // Empty/degenerate result -> -Infinity, never throws.
+    assert(baselineScoreOf(null, 0.24) === -Infinity, 'null result scores -Infinity');
+    assert(baselineScoreOf({ log: [] }, 0.24) === -Infinity, 'empty log scores -Infinity');
+});
+
+test('selectConversionCandidates: REGRESSION — a flat top-N would drop the family that benefits', () => {
+    // Reproduces the observed $2M topology: five cyclic-fixedpct rows hold the five HIGHEST scores,
+    // and a non-cyclic propwd row ranks sixth. A flat top-5 (by finalNW OR by _baselineScore) keeps
+    // only the five cyclic rows and never sweeps propwd. The family-diversified pool must include
+    // propwd and must keep at most ONE cyclic-fixedpct row.
+    const rows = [
+        poolRow('fixedpct', 900, { _cyclicEnabled: true }),
+        poolRow('fixedpct', 890, { _cyclicEnabled: true }),
+        poolRow('fixedpct', 880, { _cyclicEnabled: true }),
+        poolRow('fixedpct', 870, { _cyclicEnabled: true }),
+        poolRow('fixedpct', 860, { _cyclicEnabled: true }),
+        poolRow('propwd',   500, { _cyclicEnabled: false }),
+    ];
+    const pool = selectConversionCandidates(rows, 12);
+    assert(pool.some(r => r._strategy === 'propwd'), 'pool MUST include the propwd family (top-N drops it)');
+    const cyc = pool.filter(r => r._strategy === 'fixedpct' && r._cyclicEnabled);
+    assert(cyc.length === 1, `pool must keep exactly one cyclic-fixedpct champion, got ${cyc.length}`);
+    assertNear(cyc[0]._baselineScore, 900, 'the retained cyclic-fixedpct row is the best-scoring one', 0.01);
+});
+
+test('selectConversionCandidates: bracket-rate and bracket-IRMAA are distinct families', () => {
+    // Both carry strategy:'bracket'; the tier sign (<0 vs >=0) separates fill-a-tax-bracket from
+    // fill-to-an-IRMAA-ceiling. Keying on _strategy alone would silently drop one.
+    const rows = [
+        poolRow('bracket', 700, { _stratIRMAATier: -1 }),  // fill-bracket
+        poolRow('bracket', 690, { _stratIRMAATier: 2 }),   // IRMAA ceil
+    ];
+    const pool = selectConversionCandidates(rows, 12);
+    assert(pool.length === 2, `bracket-rate and bracket-IRMAA must both appear, got ${pool.length}`);
+});
+
+test('selectConversionCandidates: ineligible rows are excluded', () => {
+    // Top scorers are each ineligible for a different reason; the sole eligible row must win.
+    const rows = [
+        poolRow('propwd', 999, { _isNoConv: true }),
+        poolRow('fixed',  998, { _isSpendOptimized: true }),
+        poolRow('bracket',997, { _isBracketInfeasible: true }),
+        poolRow('aca',    996, { _isACAUntenable: true }),
+        poolRow('gk',     995, { totals: { success: false } }),
+        poolRow('ordered',100, { _cyclicEnabled: false }),  // the only eligible row
+    ];
+    const pool = selectConversionCandidates(rows, 12);
+    assert(pool.length === 1 && pool[0]._strategy === 'ordered',
+        `only the eligible 'ordered' row should be returned, got ${JSON.stringify(pool.map(r => r._strategy))}`);
+});
+
+test('selectConversionCandidates: caps at maxPool and returns champions in descending score', () => {
+    const rows = [];
+    for (let i = 0; i < 16; i++) rows.push(poolRow('s' + i, 100 + i));  // 16 distinct families
+    const pool = selectConversionCandidates(rows, 12);
+    assert(pool.length === 12, `must cap at maxPool=12, got ${pool.length}`);
+    // Highest 12 scores are 115..104; assert descending and that the top is 115.
+    for (let i = 1; i < pool.length; i++) {
+        assert(pool[i - 1]._baselineScore >= pool[i]._baselineScore, 'pool must be sorted descending by score');
+    }
+    assertNear(pool[0]._baselineScore, 115, 'top champion is the highest scorer', 0.01);
+    assertNear(pool[11]._baselineScore, 104, '12th champion is the 12th-highest scorer', 0.01);
+});
+
+// T6 scenario: converting HURTS raw ending wealth (finalNW picks $0) but HELPS the after-tax +
+// spendable measure (baselineScore picks $50k/yr). Directly encodes the reported defect: the old
+// metric told the user "no benefit" while the honest measure finds a real conversion.
+const PF11_BASE = {
+    STATEname: 'CA', strategy: 'propwd', propWithdraw: 0, nYears: 25,
+    birthyear1: 1958, birthmonth1: 1, die1: 90,
+    birthyear2: 1960, birthmonth2: 6, die2: 92, hasSpouse: true,
+    IRA1: 560000, IRA2: 240000, Roth: 100000, Roth2: 0,
+    Brokerage: 300000, BrokerageBasis: 200000, Cash: 100000,
+    ss1: 40000, ss1Age: 67, ss2: 25000, ss2Age: 67,
+    pensionAnnual: 0, survivorPct: 0, pensionCola: false,
+    spendGoal: 90000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0.025, cpi: 0.025, growth: 0.04, cashYield: 0.02, dividendRate: 0.015,
+    ssFailYear: 2099, ssFailPct: 1.0,
+    convertExcessToRoth: true, iraWithdrawPct: 0.05,
+    startInYear: 2026, startYear: 2026, dividendReinvest: false, futureIRATaxRate: 0.37,
+};
+
+test("optimizeConversionAmount: 'baselineScore' finds a conversion where 'finalNW' finds none", () => {
+    const ov = { strategy: 'propwd', propWithdraw: 0 };
+    assert(simulate({ ...PF11_BASE }).totals.success, 'test setup: base scenario must succeed');
+    const fn = optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv;
+    const bl = optimizeConversionAmount(PF11_BASE, ov, 'baselineScore', { futureIRARate: 0.37 }).optConv;
+    assert(fn === 0, `finalNW should pick $0 for this scenario, got ${fn}`);
+    assertNear(bl, 50000, 'baselineScore should pick $50k/yr', 1);
+});
+
+test('optimizeConversionAmount: legacy metric modes and the 3-arg signature are unchanged', () => {
+    const ov = { strategy: 'propwd', propWithdraw: 0 };
+    // 4-arg finalNW, 3-arg finalNW, and default-metric must all agree at the pre-change value ($0).
+    assert(optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv === 0, "4-arg 'finalNW' unchanged");
+    assert(optimizeConversionAmount(PF11_BASE, ov, 'finalNW', {}).optConv === 0, "explicit empty opts unchanged");
+    assert(optimizeConversionAmount(PF11_BASE, ov).optConv === 0, 'default metric (no 3rd/4th arg) unchanged');
+});
+
+// ── PF13: objective ranking + Medicare helper ───────────────────────────────────────────────
+// rankRowsByObjective(rows, objKey, rate) is pure: successful rows always outrank failed ones,
+// then the objective's own order. Fixtures carry only the fields each metric reads.
+
+// Row factory for ranking tests. terminal buckets + the scalar fields the metrics use.
+function objRow(id, opts = {}) {
+    return {
+        _id: id,
+        afterTaxNWCurrentDollars: opts.nw ?? 0,
+        _baselineScore: opts.score ?? 0,
+        totals: {
+            success: opts.success !== false,
+            terminal: opts.terminal ?? { ira: 0, roth: 0, cash: 0, brokerage: 0, basis: 0 },
+            capGainsRate: opts.capG ?? 0.15,
+            rmdTax: opts.rmdTax ?? 0,
+            taxCurrentDollars: opts.tax ?? 0,
+            spendCurrentDollars: opts.spend ?? 0,
+        },
+    };
+}
+
+test('rankRowsByObjective: failed rows always sort last, whatever the metric', () => {
+    const rows = [
+        objRow('a', { nw: 100 }),
+        objRow('f', { nw: 999, success: false }),  // huge NW but failed
+        objRow('b', { nw: 200 }),
+    ];
+    const order = rankRowsByObjective(rows, 'networth', 0.24).map(r => r._id);
+    assert(order[order.length - 1] === 'f', `failed row must be last, got ${order.join(',')}`);
+    assert(order[0] === 'b' && order[1] === 'a', `successful rows by NW desc, got ${order.join(',')}`);
+});
+
+test('rankRowsByObjective: networth desc, mintax asc', () => {
+    const rows = [objRow('lo', { nw: 100, tax: 300 }), objRow('hi', { nw: 500, tax: 50 }), objRow('mid', { nw: 300, tax: 120 })];
+    assert(rankRowsByObjective(rows, 'networth', 0).map(r => r._id).join(',') === 'hi,mid,lo', 'networth desc');
+    assert(rankRowsByObjective(rows, 'mintax', 0).map(r => r._id).join(',') === 'hi,mid,lo', 'mintax asc puts lowest tax first');
+});
+
+test('rankRowsByObjective: widowrmd = rmdTax + terminal.ira × rate, minimized', () => {
+    // rate 0.30. scores: A = 10k + 100k*0.3 = 40k; B = 30k + 20k*0.3 = 36k; C = 5k + 200k*0.3 = 65k.
+    const rows = [
+        objRow('A', { rmdTax: 10000, terminal: { ira: 100000, roth: 0, cash: 0, brokerage: 0, basis: 0 } }),
+        objRow('B', { rmdTax: 30000, terminal: { ira: 20000,  roth: 0, cash: 0, brokerage: 0, basis: 0 } }),
+        objRow('C', { rmdTax: 5000,  terminal: { ira: 200000, roth: 0, cash: 0, brokerage: 0, basis: 0 } }),
+    ];
+    assert(rankRowsByObjective(rows, 'widowrmd', 0.30).map(r => r._id).join(',') === 'B,A,C',
+        'widowrmd ranks by rmdTax + IRA tax-bomb ascending (B<A<C)');
+});
+
+test('rankRowsByObjective: Tax Flexibility prefers the balanced plan among the top-wealth ones', () => {
+    // rate 0 so pre-tax bucket = terminal.ira at face. All three below have equal-ish NW except POOR.
+    // LOPSIDED: everything in one bucket (max spread). BALANCED: even split (min spread), NW within 10%.
+    // POOR: perfectly balanced but tiny NW (must NOT win — fails the wealth cutoff).
+    const rows = [
+        objRow('LOPSIDED', { nw: 1000000, terminal: { ira: 900000, roth: 50000, cash: 50000, brokerage: 0, basis: 0 } }),
+        objRow('BALANCED', { nw:  950000, terminal: { ira: 316667, roth: 316667, cash: 316666, brokerage: 0, basis: 0 } }),
+        objRow('POOR',     { nw:  100000, terminal: { ira: 33333,  roth: 33333,  cash: 33334,  brokerage: 0, basis: 0 } }),
+    ];
+    const order = rankRowsByObjective(rows, 'taxflex', 0).map(r => r._id);
+    assert(order[0] === 'BALANCED', `most-balanced top-wealth plan wins, got ${order.join(',')}`);
+    assert(order[order.length - 1] === 'POOR', `the poor (sub-cutoff) plan ranks last despite perfect balance, got ${order.join(',')}`);
+});
+
+test('rankRowsByObjective: Tax Flexibility cutoff handles negative after-tax NW', () => {
+    // maxNW negative: cutoff = maxNW - 0.10*|maxNW| must be BELOW maxNW so the best row stays eligible.
+    const rows = [
+        objRow('best', { nw: -100000, terminal: { ira: 100000, roth: 100000, cash: 100000, brokerage: 0, basis: 0 } }),
+        objRow('worse', { nw: -500000, terminal: { ira: 300000, roth: 0, cash: 0, brokerage: 0, basis: 0 } }),
+    ];
+    // Should not throw; the higher-NW balanced row should lead.
+    const order = rankRowsByObjective(rows, 'taxflex', 0).map(r => r._id);
+    assert(order[0] === 'best', `negative-NW cutoff must keep the best row eligible, got ${order.join(',')}`);
+});
+
+test('eitherOnMedicareAtStart: OR semantics, single-filer, and guard', () => {
+    // both under 65 → false
+    assert(eitherOnMedicareAtStart(1965, 60, true, 1963) === false, 'both <65 → false');
+    // self <65 but spouse (older) 65+ at start → true  (self born 1965 start age 60 → startYear 2025; spouse 1955 → 70)
+    assert(eitherOnMedicareAtStart(1965, 60, true, 1955) === true, 'spouse already on Medicare → true');
+    // self 65+ → true regardless of spouse
+    assert(eitherOnMedicareAtStart(1958, 66, true, 1970) === true, 'self 65+ → true');
+    // single filer 65+ → true; single filer <65 → false
+    assert(eitherOnMedicareAtStart(1958, 66, false, 0) === true, 'single 65+ → true');
+    assert(eitherOnMedicareAtStart(1965, 60, false, 0) === false, 'single <65 → false');
+    // missing inputs → false (matches bothOnMedicareAtStart guard)
+    assert(eitherOnMedicareAtStart(0, 66, true, 1950) === false, 'missing birthyear → false');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

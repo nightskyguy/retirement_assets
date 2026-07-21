@@ -27,41 +27,43 @@ let NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
 const OptimizerState = {
     results: null,
     baseline: null,
-    sortState: { colKey: 'afterTaxNW', direction: 'desc' },
+    // colKey '__objective__' (default) orders the body by the active "Optimize for" objective;
+    // clicking a column header switches to that column (user override) until the objective changes.
+    sortState: { colKey: '__objective__', direction: 'desc' },
     showInfeasible: false,
     showFailed: false,
-    objective: 'balanced',
+    objective: 'taxflex',       // PF13: default ranking = Tax Flexibility (most-requested)
+    sharedFutureIRARate: 0,     // PF13: heirs rate for widowrmd/taxflex metrics; set each runOptimizer
     perfStats: null,
     noSolutionFloor: null,
+    convOptCandidateCount: 0,   // PF11: size of the conversion candidate pool this run
+    convOptRowsAdded: 0,        // PF11: how many ⇌ rows actually improved (drives the empty-state banner)
 };
 
-// Optimizer "what do you want to maximize?" objectives (nerd-mode only, item 9).
-// Each maps to a per-row metric + direction. 'balanced' is the default weighted Score and keeps
-// the historical baseline-pick behavior; the others re-rank candidates AND re-pick the ⚓ baseline
-// under that single metric. metric(r) returns a comparable number; higher `dir` wins when desc.
-const OPT_OBJECTIVES = {
-    balanced:  { label: 'Balanced (default)',          metric: r => r._baselineScore ?? -Infinity,                 dir: 'desc' },
-    legacy:    { label: 'Maximum Legacy',              metric: r => r.afterTaxNWCurrentDollars ?? -Infinity,       dir: 'desc' },
-    spend:     { label: 'Maximum Spend',               metric: r => r.totals?.spendCurrentDollars ?? -Infinity,    dir: 'desc' },
-    mintax:    { label: 'Minimal Taxes',               metric: r => r.totals?.taxCurrentDollars ?? Infinity,       dir: 'asc'  },
-    roth:      { label: 'Maximum Roth',                metric: r => r.totals?.terminal?.roth ?? -Infinity,         dir: 'desc' },
-    conveffect:{ label: 'Roth Conversion Effectiveness', metric: r => r._convSavings ?? -Infinity,                 dir: 'desc' },
-    earliestbe:{ label: 'Earliest Break Even',          metric: r => r._convBEYear ?? 9999,                        dir: 'asc'  },
+// Optimizer "Optimize for" objectives (PF13) — labels + <select> display order live here; the
+// ranking logic (metrics, the Tax Flexibility two-stage ranker) lives in optimizer_core.js
+// (OPTIMIZER_OBJECTIVES / rankRowsByObjective) so it is pure and unit-testable. Keys must match.
+// This drives BOTH the visible table order (when sortState is the '__objective__' sentinel) and
+// the ⚓ baseline pick + Rank column. Visible to all users; default = Tax Flexibility.
+const OPT_OBJECTIVE_ORDER = ['taxflex', 'networth', 'widowrmd', 'mintax', 'maxspend', 'maxroth', 'balanced', 'conveffect', 'earliestbe'];
+const OPT_OBJECTIVE_LABELS = {
+    taxflex:   'Tax Flexibility',
+    networth:  'Maximum Net Wealth',
+    widowrmd:  'Avoiding Widow & RMD Tax',
+    mintax:    'Minimum Lifetime Taxes',
+    maxspend:  'Maximum Spending',
+    maxroth:   'Maximum Roth',
+    balanced:  'Balanced (Wealth + Spend)',
+    conveffect:'Roth Conversion Effectiveness',
+    earliestbe:'Earliest Break Even',
 };
-
-// Returns rows ranked best→worst under an objective. Successful rows always outrank failed ones
-// (a depleted plan can show inflated terminal wealth), matching the table sort tiebreak.
-function rankRowsByObjective(rows, objKey) {
-    const obj = OPT_OBJECTIVES[objKey] || OPT_OBJECTIVES.balanced;
-    const sign = obj.dir === 'asc' ? 1 : -1;
-    return [...rows].sort((a, b) => {
-        const sa = a.totals?.success ? 1 : 0, sb = b.totals?.success ? 1 : 0;
-        if (sa !== sb) return sb - sa;
-        return sign * (obj.metric(a) - obj.metric(b));
-    });
+// Thin UI wrapper over the core ranker: supplies the shared heirs rate the widowrmd/taxflex metrics
+// need. Core enforces "failed rows always last".
+function rankRows(rows, objKey) {
+    return rankRowsByObjective(rows, objKey, OptimizerState.sharedFutureIRARate ?? 0);
 }
 
-// Flip the nerd-knob at runtime and re-apply every gated UI surface. Called by the hidden
+// Flip the nerdknob at runtime and re-apply every gated UI surface. Called by the hidden
 // Documentation-page checkbox. Not persisted to the URL.
 function setNerdKnob(on) {
     NERD_KNOBS = !!on;
@@ -73,16 +75,19 @@ function applyNerdKnobVisibility() {
     // Avg BETR summary stat (Kitces metric)
     const betrWrap = document.getElementById('stat-betr-wrap');
     if (betrWrap) betrWrap.style.display = NERD_KNOBS ? '' : 'none';
-    // Optimizer objective selector
+    // Optimizer objective selector — PF13: now drives the whole table ranking, so visible to ALL
+    // users regardless of nerdknob (kept here only so a runtime toggle doesn't hide it).
     const objWrap = document.getElementById('opt-objective-wrap');
-    if (objWrap) objWrap.style.display = NERD_KNOBS ? '' : 'none';
+    if (objWrap) objWrap.style.display = 'flex';
     // Cycle Brokerage LTCG bracket target (0%/15%)
     const cycleLTCGWrap = document.getElementById('cycleLTCGTarget-wrap');
     if (cycleLTCGWrap) cycleLTCGWrap.style.display = NERD_KNOBS ? '' : 'none';
-    // Maximize Conversions sub-flags (Convert Excess to Roth / Use Cash)
+    // Maximize Conversions sub-flags (Convert Excess to Roth / Use Cash) — always visible: they are
+    // two financially distinct decisions, not experimental knobs (kept here so a runtime nerd
+    // toggle can't hide them).
     const convAdvWrap = document.getElementById('convAdvanced-wrap');
-    if (convAdvWrap) convAdvWrap.style.display = NERD_KNOBS ? '' : 'none';
-    // 💵 legend — only meaningful once nerd mode is sweeping the cash-funded arm
+    if (convAdvWrap) convAdvWrap.style.display = '';
+    // 💵 legend — only meaningful once nerdknob is sweeping the cash-funded arm
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
     // Docs: ACA Cliff strategy discussion paragraph (nerd-only strategy)
@@ -102,9 +107,11 @@ function applyNerdKnobVisibility() {
     if (cb) cb.checked = NERD_KNOBS;
 }
 
-// Optimizer objective setter — wired to the nerd-mode <select id="opt-objective">.
+// Optimizer objective setter — wired to the nerdknob <select id="opt-objective">.
 function setOptObjective(key) {
-    OptimizerState.objective = OPT_OBJECTIVES[key] ? key : 'balanced';
+    OptimizerState.objective = OPT_OBJECTIVE_LABELS[key] ? key : 'taxflex';
+    // Changing the objective re-follows it for the body order (drop any user column override).
+    OptimizerState.sortState = { colKey: '__objective__', direction: 'desc' };
     if (OptimizerState.results) {
         recomputeBaselineForObjective();
         renderOptimizerTable(OptimizerState.results);
@@ -112,14 +119,18 @@ function setOptObjective(key) {
 }
 
 // Picks the ⚓ baseline (best no-conversion / no-cyclic successful row) under the active objective,
-// then recomputes every row's Δ columns against it. 'balanced' reproduces the historical pick
-// (highest weighted Score). Called by runOptimizer and whenever the objective changes.
+// then recomputes every row's Δ columns against it. Called by runOptimizer and whenever the
+// objective changes. Prefers a FEASIBLE row: an infeasible (⚠️) baseline would be pinned on top of
+// the table and listed in the "Best" summary as a strategy you cannot actually run. Falls back to
+// the unfiltered set only when every no-conversion row is infeasible, so the Δ columns still work.
 function recomputeBaselineForObjective() {
     const results = OptimizerState.results;
     if (!results) return;
     const noConvSuccesses = results.filter(r => r._isNoConv && r.totals.success);
-    OptimizerState.baseline = noConvSuccesses.length > 0
-        ? rankRowsByObjective(noConvSuccesses, OptimizerState.objective)[0]
+    const feasibleNoConv = noConvSuccesses.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
+    const baselinePool = feasibleNoConv.length > 0 ? feasibleNoConv : noConvSuccesses;
+    OptimizerState.baseline = baselinePool.length > 0
+        ? rankRows(baselinePool, OptimizerState.objective)[0]
         : null;
     const baselineRow = OptimizerState.baseline;
     for (const r of results) {
@@ -374,6 +385,26 @@ function updateCurrentDollarsView() {
 
 let _lastOptimizerHash = null;
 
+// Assign afterTaxNW / afterTaxNWCurrentDollars / _baselineScore to every row using one shared
+// future-IRA rate so deltas are comparable across strategies. Baseline score = after-tax terminal
+// wealth (bequest) + lifetime money actually spent (spendable weighted +10% via core's
+// SPENDABLE_WEIGHT, since a dollar enjoyed outranks a dollar bequeathed). Both in current (real)
+// dollars. Ranking on this -- instead of raw finalNW -- stops a spend-cutting strategy (e.g. GK)
+// from "winning" by hoarding. Called once BEFORE Phase 23 (so the conversion pool can rank on
+// _baselineScore) and once AFTER (so the newly pushed ⇌ rows and no-conv rows get scored too);
+// it is pure arithmetic with zero simulate() calls, so the double pass is free. Rows do not retain
+// res.log, so real-dollar after-tax NW is derived as afterTaxNW * (finalNWCurrentDollars/finalNW),
+// which equals afterTaxNW / inflationFactor -- the exact value core's baselineScoreOf computes.
+function _scoreRows(rows, sharedFutureIRARate) {
+    for (const r of rows) {
+        r.afterTaxNW = afterTaxNetWorth(r.totals.terminal, sharedFutureIRARate, r.totals.capGainsRate);
+        const _defl = (r.finalNW && r.finalNW !== 0) ? (r.finalNWCurrentDollars / r.finalNW) : 1;
+        r.afterTaxNWCurrentDollars = r.afterTaxNW * _defl;
+        r._baselineScore = (r.afterTaxNWCurrentDollars ?? 0)
+            + SPENDABLE_WEIGHT * (r.totals.spendCurrentDollars ?? 0);
+    }
+}
+
 function runOptimizer() {
     const base = getInputs();
     // extraConversionAmount must never leak from the sidebar into the main strategy sweep or its
@@ -395,6 +426,8 @@ function runOptimizer() {
 
     const results = [];
     simulationCount = 0;
+    OptimizerState.convOptCandidateCount = 0;
+    OptimizerState.convOptRowsAdded = 0;
     const optimizerStart = performance.now();
 
     // Get all bracket rates from TAXData (skip the last Infinity bracket)
@@ -406,9 +439,9 @@ function runOptimizer() {
     const strategyOverridesList = [];
 
     function addResult(strategyLabel, paramLabel, paramSortVal, overrides, noConv = false) {
-        // Nerd mode sweeps fundConversionWithCash as its own dimension (the 💵 rows added after
+        // Nerdknob sweeps fundConversionWithCash as its own dimension (the 💵 rows added after
         // the cyclic pass), so base rows must NOT inherit the sidebar's value — otherwise a user
-        // with it already on would get two identical arms instead of an A/B. Outside nerd mode
+        // with it already on would get two identical arms instead of an A/B. Outside nerdknob
         // rows keep inheriting it, so the table reflects the plan you actually configured.
         if (NERD_KNOBS && overrides.fundConversionWithCash === undefined) {
             overrides = { ...overrides, fundConversionWithCash: false };
@@ -420,10 +453,15 @@ function runOptimizer() {
         const ovYears = res.log.filter(e => (e['BracketOverage'] ?? 0) > 0).length;
         const bracketOveragePct = totalYears > 0 ? ovYears / totalYears : 0;
         const isBracketInfeasible = overrides.strategy === 'bracket' && bracketOveragePct > 0.5;
-        // ACA is strict: any year its FPL cap can't fund spending makes the plan untenable
-        // (the subsidy is forfeited rather than the cap being broken).
+        // ACA is strict: any year its FPL cap can't fund spending makes the plan untenable (the
+        // subsidy is forfeited rather than the cap being broken). PF13 item 3: it is ALSO untenable
+        // whenever either spouse is already on Medicare at start — their RMDs/SS push household MAGI
+        // past any FPL cap, so an ACA-limit strategy is impractical for the whole household. This
+        // flags all four ACA rows consistently (not just the hardcoded 400% label) in that case.
         const acaBreachYears = res.totals?.acaBreachYears ?? 0;
-        const isACAUntenable = overrides.strategy === 'aca' && acaBreachYears > 0;
+        const acaMedicareIrrelevant = eitherOnMedicareAtStart(
+            base.birthyear1, base.startAge, !!base.hasSpouse, base.hasSpouse ? (base.birthyear2 || 0) : 0);
+        const isACAUntenable = overrides.strategy === 'aca' && (acaBreachYears > 0 || acaMedicareIrrelevant);
         const row = {
             _id: results.length,
             _isNoConv: noConv,
@@ -431,7 +469,7 @@ function runOptimizer() {
             _paramLabel: paramLabel,
             _paramSortVal: paramSortVal,
             // Record the EFFECTIVE values (base + overrides), not just the overrides: outside
-            // nerd mode fundConversionWithCash is inherited from the sidebar rather than set as
+            // nerdknob fundConversionWithCash is inherited from the sidebar rather than set as
             // an override, and loadOptimizerResult() restores from these fields — reading the
             // override alone would load a plan that differs from the row the table evaluated.
             _convertExcessToRoth: !!inputs.convertExcessToRoth,
@@ -483,14 +521,14 @@ function runOptimizer() {
         addResult('IRMAA Ceil', IRMAATierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, convertExcessToRoth: convOn });
     }
 
-    // Fill bracket — ACA FPL cliffs. Nerd-mode only (item 12): the ACA cliff model is rough, so it
+    // Fill bracket — ACA FPL cliffs. Nerdknob only (item 12): the ACA cliff model is rough, so it
     // is excluded from the optimizer sweep unless ?nerdknob is on. Also skipped when both persons
     // are 65+ at retirement start (on Medicare → ACA income limits are irrelevant).
     const acaDisabled = bothOnMedicareAtStart(base.birthyear1, base.startAge, !!base.hasSpouse,
         base.hasSpouse ? (base.birthyear2 || 0) : 0);
     if (NERD_KNOBS && !acaDisabled) {
         const acaMultiples = [200, 250, 300, 400];
-        const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL ⚠️' };
+        const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL' };
         for (const pct of acaMultiples) {
             addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'aca', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, convertExcessToRoth: convOn });
         }
@@ -528,7 +566,7 @@ function runOptimizer() {
         }
     }
 
-    // Cash-funded conversion arm (💵) — nerd mode only, and only when there's Cash to spend
+    // Cash-funded conversion arm (💵) — nerdknob only, and only when there's Cash to spend
     // (applyConversionGrossUp/applyExtraConversion's cash path are hard no-ops at $0 Cash, so
     // these rows would be bit-identical twins of their base rows: pure wasted simulate() calls).
     // Non-cyclic families only, matching buildVariations()'s scope: cyclic reinvests surplus into
@@ -605,14 +643,23 @@ function runOptimizer() {
         }
     }
 
-    // Phase 23: Conversion Amount Optimizer — when checkbox enabled, sweep extraConversionAmount
-    // for the top 5 successful strategies and add new rows showing the optimized conversion result.
+    // Shared future-IRA rate for after-tax scoring — hoisted above Phase 23 so the conversion
+    // candidate pool and the sweep's own objective can both rank on _baselineScore (the same
+    // measure the table ranks on) rather than raw finalNW, which discounts each run's IRA at its
+    // own rate and ignores spendable. results[0] is the propwd 0% row, present before Phase 23.
+    const sharedFutureIRARate = base.futureIRATaxRate ?? (results[0]?.totals.futureIRARate ?? 0);
+    OptimizerState.sharedFutureIRARate = sharedFutureIRARate;  // PF13: widowrmd/taxflex metrics read it
+    _scoreRows(results, sharedFutureIRARate);
+
+    // Phase 23 / PF11: Conversion Amount Optimizer — when the checkbox is enabled, sweep
+    // extraConversionAmount for the best plan from EACH strategy family (not a flat top-5 by
+    // ending wealth, which let one family monopolize every seat while the families that actually
+    // benefit from converting ranked just below the cut). Each surviving candidate adds a ⇌ row.
     if (document.getElementById('includeConvOpt')?.checked) {
-        const successes = results.filter(r => r.totals.success);
-        const top5 = successes
-            .slice().sort((a, b) => b.finalNW - a.finalNW)
-            .slice(0, 5);
-        for (const baseRow of top5) {
+        const pool = selectConversionCandidates(results, 12);
+        OptimizerState.convOptCandidateCount = pool.length;
+        let convRowsAdded = 0;
+        for (const baseRow of pool) {
             const overrides = {
                 strategy: baseRow._strategy,
                 convertExcessToRoth: baseRow._convertExcessToRoth,
@@ -632,7 +679,8 @@ function runOptimizer() {
                 // baseRow._strategyLabel — a real label/computation mismatch.
                 ...(baseRow._cyclicEnabled ? { cyclicEnabled: true, cyclicOrder: baseRow._cyclicOrder ?? 'ira-first' } : {}),
             };
-            const { optConv, optResult } = optimizeConversionAmount(base, overrides, 'finalNW');
+            const { optConv, optResult } = optimizeConversionAmount(
+                base, overrides, 'baselineScore', { futureIRARate: sharedFutureIRARate });
             if (!optResult || optConv === 0) continue;
             // Break Even: re-run once more at the already-known winning conversion amount with
             // computeOC on, so this row's convBEYear uses the same sustained-crossing definition
@@ -668,7 +716,9 @@ function runOptimizer() {
                 finalNW: beResult.finalNW,
                 finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
             });
+            convRowsAdded++;
         }
+        OptimizerState.convOptRowsAdded = convRowsAdded;
     }
 
     // Baseline accounting — no-conversion / no-cyclic sweep over the same families.
@@ -680,30 +730,14 @@ function runOptimizer() {
             { ...fam.overrides, convertExcessToRoth: false, cyclicEnabled: false, extraConversionAmount: 0, qcdHHMax: 0 }, true);
     }
 
-    // After-tax net worth for every row, using one shared future-IRA rate so deltas are fair.
-    const sharedFutureIRARate = base.futureIRATaxRate ?? (results[0]?.totals.futureIRARate ?? 0);
-    for (const r of results) {
-        r.afterTaxNW = afterTaxNetWorth(r.totals.terminal, sharedFutureIRARate, r.totals.capGainsRate);
-        // Current-dollars variant: scale by the same deflation factor as raw final wealth.
-        const _defl = (r.finalNW && r.finalNW !== 0) ? (r.finalNWCurrentDollars / r.finalNW) : 1;
-        r.afterTaxNWCurrentDollars = r.afterTaxNW * _defl;
-    }
-
-    // Baseline score = after-tax terminal wealth (bequest) + lifetime money actually spent
-    // (spendable weighted +10%, since a dollar enjoyed in retirement outranks a dollar bequeathed).
-    // Both in current (real) dollars so the stock (NW) and the spend flow share one basis. Ranking
-    // on this — instead of NW alone — stops a spend-cutting strategy (e.g. GK) from "winning" by
-    // hoarding: under-spending lifts terminal NW but loses weighted spendable. (Tax is already
-    // netted out — afterTaxNW and spendable are both after-tax — so it is not subtracted again.)
-    const SPENDABLE_WEIGHT = 1.10;
-    for (const r of results) {
-        r._baselineScore = (r.afterTaxNWCurrentDollars ?? 0)
-            + SPENDABLE_WEIGHT * (r.totals.spendCurrentDollars ?? 0);
-    }
+    // Re-score after Phase 23: the ⇌ rows pushed above and the no-conv baseline sweep rows (added
+    // just above, after Phase 23) still need afterTaxNW / _baselineScore. Same shared rate, pure
+    // arithmetic, no simulate() calls.
+    _scoreRows(results, sharedFutureIRARate);
 
     // Pick the ⚓ baseline (best no-conv successful row) under the active objective, and compute
     // every row's Δ columns against it. 'balanced' (default) reproduces the historical weighted-score
-    // pick; a nerd-mode objective (item 9) re-picks the baseline under that single metric.
+    // pick; a nerdknob objective (item 9) re-picks the baseline under that single metric.
     OptimizerState.results = results;
     recomputeBaselineForObjective();
 
@@ -714,10 +748,28 @@ function runOptimizer() {
     }
 
     OptimizerState.perfStats = { totalMs: performance.now() - optimizerStart, runsCount: simulationCount };
-    OptimizerState.sortState = { colKey: 'afterTaxNW', direction: 'desc' };
+    OptimizerState.sortState = { colKey: '__objective__', direction: 'desc' };
     renderOptimizerTable(results);
     renderSpendOptimizerBanner(results, base.spendGoal);
+    renderConvOptBanner();
     showTab('tab-opt');
+}
+
+// PF11 empty-state: when Optimize Conversions examined a real pool of strategies but none of them
+// improved by converting more than the plan already does, every candidate legitimately returns
+// optConv 0 and no ⇌ row is added. Without this, the user sees an empty ⇌ table and reads it as
+// broken. Purely reports what already happened (reads the run's stored counts, no recompute).
+function renderConvOptBanner() {
+    const el = document.getElementById('opt-conv-banner');
+    if (!el) return;
+    const on = document.getElementById('includeConvOpt')?.checked;
+    const n = OptimizerState.convOptCandidateCount || 0;
+    if (on && n > 0 && (OptimizerState.convOptRowsAdded || 0) === 0) {
+        el.textContent = `⇌ Optimize Conversions examined the best ${n} strategies and found none where converting more improves the result. The tax cost of extra conversions outweighs what they would save.`;
+        el.style.display = 'block';
+    } else {
+        el.style.display = 'none';
+    }
 }
 
 function renderSpendOptimizerBanner(results, baseSpendGoal) {
@@ -880,26 +932,18 @@ function getOptimizerColumns() {
             getSortValue: r => r._convBEYear ?? 9999
         }
     ];
-    // Nerd-only: expose the raw baseline-ranking score so the pinned ⚓ pick can be inspected.
-    // Score = after-tax NetWealth + 1.1 × Total Spendable (today's dollars, real). Inserted right
-    // after NetWealth since it is derived from NetWealth + Spendable.
-    if (NERD_KNOBS) {
+    // Rank column: numbers rows 1 (best) … N by the currently-selected objective (looked up from
+    // the per-render map on OptimizerState; failed rows show '—'). Always visible — it is the
+    // readout for the "Optimize for" choice, which every user can now set. PF13 item 4 removed the
+    // redundant raw Score column, since the row order already conveys the ranking.
+    {
         const i = cols.findIndex(c => c.key === 'afterTaxNW');
-        const objKey   = OptimizerState.objective || 'balanced';
-        const objLabel = (OPT_OBJECTIVES[objKey] || OPT_OBJECTIVES.balanced).label;
-        // Keep the raw weighted Score column (item 10), and add a Rank column that numbers rows
-        // 1 (best) … N by the currently-selected objective (item 9). Rank is looked up from the
-        // per-render map on OptimizerState; failed rows get '—'.
+        const objKey   = OptimizerState.objective || 'taxflex';
+        const objLabel = OPT_OBJECTIVE_LABELS[objKey] || OPT_OBJECTIVE_LABELS.taxflex;
         cols.splice(i + 1, 0,
             {
-                key: 'score', label: 'Score',
-                title: 'Baseline-ranking score = after-tax NetWealth + 1.1 × Total Spendable (today\'s dollars). The pinned ⚓ baseline is the no-conversion strategy with the highest score; spending is weighted 10% above bequest. Always in current dollars. Nerd-mode column.',
-                getValue: r => Math.round(r._baselineScore ?? 0).toLocaleString(),
-                getSortValue: r => r._baselineScore ?? -Infinity
-            },
-            {
                 key: 'rank', label: 'Rank',
-                title: `Rank under the selected objective — "${objLabel}". 1 = best, N = worst among successful plans (failed plans show —). Change the objective with the "Optimize for" selector above. Nerd-mode column.`,
+                title: `Rank under the selected objective — "${objLabel}". 1 = best, N = worst among successful plans (failed plans show —). Change the objective with the "Optimize for" selector above.`,
                 getValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : '—',
                 getSortValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : Infinity
             }
@@ -912,11 +956,11 @@ function renderOptimizerTable(results) {
     if (!results || results.length === 0) return;
     const columns = getOptimizerColumns();
     // Default: sort by After-Tax NW descending; Spendable descending as tiebreaker
-    const sortState = OptimizerState.sortState ?? { colKey: 'afterTaxNW', direction: 'desc' };
+    const sortState = OptimizerState.sortState ?? { colKey: '__objective__', direction: 'desc' };
 
     // Rank map (item 10): number successful rows 1 (best) … N under the active objective. Looked up
-    // by the nerd-mode Rank column; failed rows are left unranked ('—').
-    const _ranked = rankRowsByObjective(results.filter(r => r.totals.success), OptimizerState.objective);
+    // by the nerdknob Rank column; failed rows are left unranked ('—').
+    const _ranked = rankRows(results.filter(r => r.totals.success), OptimizerState.objective);
     OptimizerState._rankMap = {};
     _ranked.forEach((r, idx) => { OptimizerState._rankMap[r._id] = idx + 1; });
 
@@ -934,6 +978,11 @@ function renderOptimizerTable(results) {
     if (!showFailed) display = display.filter(r => r.totals.success);
     const afterTaxCol = columns.find(c => c.key === 'afterTaxNW');
     const spendCol = columns.find(c => c.key === 'spend');
+    // PF13: default body order follows the active "Optimize for" objective (same order as the Rank
+    // column) until the user clicks a real column header. rankRows already keeps failed rows last.
+    if (sortState.colKey === '__objective__') {
+        display = rankRows(display, OptimizerState.objective);
+    }
     const col   = columns.find(c => c.key === sortState.colKey);
     if (col) {
         display.sort((a, b) => {
@@ -955,17 +1004,20 @@ function renderOptimizerTable(results) {
         });
     }
 
-    // Identify per-metric winners among successful rows
+    // Identify per-metric winners. PF13 item 2: pick only from FEASIBLE successful rows — an
+    // infeasible (⚠️ bracket-unreachable / ACA-untenable) row could otherwise win a metric and
+    // show up green in the Best table even though the plan can't actually be run.
     const successes = results.filter(r => r.totals.success);
+    const feasibleSuccesses = successes.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
     const bestIds = new Set();
     const colWinners = {}; // key -> winning _id
-    if (successes.length > 0) {
+    if (feasibleSuccesses.length > 0) {
         const pick = (arr, fn, isMax) => arr.reduce((a, b) => isMax ? (fn(b) > fn(a) ? b : a) : (fn(b) < fn(a) ? b : a));
-        const w1 = pick(successes, r => r.totals.tax, false);
-        const w2 = pick(successes, r => r.totals.tax / r.totals.gross, false);
-        const w3 = pick(successes, r => r.totals.spend, true);
-        const w5 = pick(successes, r => r.totals.rmdTax / (r.totals.tax || 1), false);
-        const w6 = pick(successes, r => r.afterTaxNW ?? -Infinity, true);
+        const w1 = pick(feasibleSuccesses, r => r.totals.tax, false);
+        const w2 = pick(feasibleSuccesses, r => r.totals.tax / r.totals.gross, false);
+        const w3 = pick(feasibleSuccesses, r => r.totals.spend, true);
+        const w5 = pick(feasibleSuccesses, r => r.totals.rmdTax / (r.totals.tax || 1), false);
+        const w6 = pick(feasibleSuccesses, r => r.afterTaxNW ?? -Infinity, true);
         [w1, w2, w3, w5, w6].forEach(w => bestIds.add(w._id));
         colWinners.tax        = w1._id;
         colWinners.rate       = w2._id;
@@ -992,7 +1044,9 @@ function renderOptimizerTable(results) {
             ? 'Failed — the portfolio ran out of money before the end of the plan (a real shortfall)'
             : isInfeasible
             ? (r._isACAUntenable
-                ? `ACA subsidy cliff: spending cannot be met within the FPL cap in ${r._acaBreachYears} year(s) — plan untenable at this spend (strict ACA never breaches the cap)`
+                ? ((r._acaBreachYears ?? 0) > 0
+                    ? `ACA subsidy cliff: spending cannot be met within the FPL cap in ${r._acaBreachYears} year(s) — plan untenable at this spend (strict ACA never breaches the cap)`
+                    : 'ACA not applicable — a spouse is already on Medicare at the start, so the household cannot hold income to an ACA subsidy cap')
                 : 'Bracket target exceeded in >50% of years — income sources already push MAGI above this ceiling')
             : 'Click to load this strategy';
         const cells = columns.map(col => {
@@ -1067,7 +1121,7 @@ function renderOptimizerTable(results) {
     // Best summary table — unique winner rows labeled by what they won
     const bestEl = document.getElementById('opt-best');
     if (bestEl) {
-        if (successes.length > 0) {
+        if (feasibleSuccesses.length > 0) {
             const winnerDefs = [
                 { key: 'afterTaxNW', label: '💎 Most NetWealth',    id: colWinners.afterTaxNW },
                 { key: 'spend',  label: '🏆 Most Spendable',   id: colWinners.spend  },
@@ -1272,7 +1326,7 @@ const columnCategories = {
     'RMDwd': ['IRA Δ', 'Income'],
     'QCD1': ['IRA Δ', 'Spending'],
     'QCD2': ['IRA Δ', 'Spending'],
-    'rothConv': ['IRA Δ', 'Roth Δ', 'Spending'],  // Conversion comes from IRA
+    'rothConv': ['IRA Δ', 'Roth Δ', 'Spending', 'Opp. Cost'],  // Conversion comes from IRA; also shown in Opp. Cost view
 
     // Roth Changes - balance, withdrawals, growth, conversions
     'Roth1': ['Balances', 'Roth Δ'],
@@ -4011,7 +4065,7 @@ function updateACAWarning() {
     const warnEl  = document.getElementById('aca-age-warn');
     if (!sel || !warnEl) return;
 
-    // No ACA options present (nerd mode off, item 12) → nothing to warn about.
+    // No ACA options present (nerdknob off, item 12) → nothing to warn about.
     if (![...sel.options].some(o => o.value.startsWith('aca'))) { warnEl.style.display = 'none'; return; }
 
     const by1       = +val('birthyear1') || 0;
@@ -4110,7 +4164,7 @@ function generateStratRateOptions() {
     }
 
     // ── ACA FPL cliffs ────────────────────────────────────────────────────────
-    // Nerd-mode only (item 12): the ACA cliff model is rough, so these options are hidden from the
+    // Nerdknob only (item 12): the ACA cliff model is rough, so these options are hidden from the
     // bracket dropdown unless ?nerdknob is on (or the hidden runtime toggle is enabled).
     // FPL base (2025): 2-person $20,440; 1-person $15,060. CPI-approx for future years.
     const FPL_BASE_YEAR = 2025;

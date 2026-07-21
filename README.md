@@ -345,7 +345,7 @@ I've read more than a dozen books, viewed 100s of YouTube videos, read perhaps a
 The list of click bait presenters would be very long.
 
 #### Papers by Edward McQuarrie 
-Edward McQuarrie is a former professor at Santa Clara University School of Business, in California. He has tackled several topics, including the "payout" of *Roth Conversions* and the Widow's Tax *penalty*. His conclusion is that generally for the mass affluent, Roth conversions do not pay off.  He has three papers on the topic, and a fourth that is thought provoking. I would call him a *responsible contrarian* - meaning he doesn't just espouse opinions, he back them with math and facts.
+Edward McQuarrie is a former professor at Santa Clara University School of Business, in California. He has tackled several topics, including the "payout" of *Roth Conversions* and the Widow's Tax *penalty*. His conclusion is that generally for the mass affluent, Roth conversions do not pay off.  He has three papers on the topic, and a fourth that is thought provoking. I would call him a *responsible contrarian* - meaning he doesn't just espouse opinions, he backs them with math and facts.
 
 1. [Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN)
 2. [When and For Whom Are Roth Conversions - 2021](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3860359) - download the paper from there. This is his original paper on the subject.

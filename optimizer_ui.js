@@ -1649,9 +1649,9 @@ function updateTable(log) {
         'extraConv': 'Gross IRA amount additionally withdrawn and converted to Roth, independent of spending strategy. Sourced from the larger IRA first, and included in the IRA WD / IRA1-/IRA2- withdrawal totals. Taxes come from IRA gross (net Roth credit = extraConv − incremental tax) unless "Use Cash" funds the tax so the full gross lands in Roth.',
         'subCycle': 'Cyclic sub-cycle marker. Brok = brokerage harvest year (spending drawn from Brokerage; IRA free for conversions). IRA = IRA draw year (normal IRA withdrawal). ⚠Brok = brokerage harvest year but balance was below 50% of target — fell back to partial IRA draw.',
         'grossOut': 'Gross outflows: all account withdrawals this year (IRA + RMD + Brokerage + Cash + Roth), including amounts converted to Roth.',
-        'netOut': 'Net outflows: portfolio draws funding spending/taxes. Gross outflows minus Roth conversions and reinvested surplus.',
+        'netOut': 'Net outflows: portfolio draws funding spending/taxes. Gross outflows minus Roth conversions and reinvested surplus. Zero when Social Security and pension cover everything, since a forced RMD that gets reinvested never leaves the portfolio.',
         'inflows': 'Non-portfolio income applied to spending: Social Security + pension.',
-        'wdRate%': 'Withdrawal rate: (net outflows − inflows) ÷ start-of-year total wealth. Conversions excluded. Negative = income exceeded spending. The classic "4% rule" targets ~4%.',
+        'wdRate%': 'Withdrawal rate: net outflows ÷ start-of-year portfolio balance, so it measures what actually left the portfolio to fund spending and taxes. Roth conversions and reinvested surplus are excluded. Social Security and pension are NOT subtracted (see the inflows column for those), which is what makes this comparable to the classic "4% rule" target of ~4%.',
         'timing': 'Withdrawal timing auto-selected each year. Early(Conv) = conversion year (withdrawal in 1st quarter, ideally January — maximizes Roth compounding). Late(Spend) = spending-only year (withdrawal in last quarter, ideally December — full portfolio compounds before withdrawal exits, gaining D×r per year).',
     };
 
@@ -1942,6 +1942,20 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     if (avgSpendEl) {
         avgSpendEl.innerText = (totals.avgWdRate != null)
             ? (totals.avgWdRate * 100).toFixed(1) + '%' : '—';
+        // Tile shows the simple mean; the other two framings go in the tooltip so the single
+        // headline number can't be mistaken for the whole picture. The tile div owns the title.
+        const wdTile = avgSpendEl.closest('div[title]');
+        if (wdTile) {
+            const pct = v => (v != null) ? (v * 100).toFixed(1) + '%' : '—';
+            wdTile.title = 'Portfolio withdrawals funding spending and taxes, divided by the '
+                + 'start-of-year portfolio balance. Roth conversions and reinvested surplus are '
+                + 'excluded; Social Security and pension are not subtracted. The classic 4% rule '
+                + 'targets ~4%. See the wdRate% column in Annual Details.'
+                + '\n\nShown: simple average of the yearly rates, ' + pct(totals.avgWdRate) + '.'
+                + '\nDollar-weighted (total withdrawn ÷ total portfolio): ' + pct(totals.avgWdRateWeighted) + '.'
+                + '\nNet depletion (withdrawal rate minus portfolio return): ' + pct(totals.avgNetDepletion)
+                + '. Negative means the portfolio grew faster than it was drawn down.';
+        }
     }
 
     // Phase 23: projected RMD stat (reads from DOM inputs directly)

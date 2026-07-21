@@ -769,7 +769,15 @@ table th.empty-column {
         flex-direction: row;
         align-items: center;
     }
-    
+
+    /* .top-bar keeps justify-content: space-between, which would otherwise shove the whole
+       stat row against the right edge once the bar becomes a flex ROW. Letting the stats
+       absorb the free space instead leaves them left-aligned beside the Share button. */
+    .top-bar > #summary-stats {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
     button {
         width: auto;
         min-width: 120px;

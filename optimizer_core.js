@@ -1018,20 +1018,20 @@ function resolveSpendTarget(sim, yr) {
     // Phase 22: Guyton-Klinger dynamic spend adjustment (runs before targetSpend resolution)
     if (inputs.strategy === 'gk') {
         if (y === 0) {
-            sim.gkIWR = sim.spendGoal / sim.gkPrevPortfolio;
+            sim.gkIWR = sim.spendGoal / sim.prevPortfolio;
             sim.gkAdjLabel = '';
         } else {
             const _guard  = inputs.gkGuard  ?? 0.20;
             const _adjP   = inputs.gkAdjPct ?? 0.10;
             const labels  = [];
             // Inflation Rule: skip CPI if prior return negative AND already over IWR
-            if (sim.gkPriorReturn < 0 && sim.spendGoal / sim.gkPrevPortfolio > sim.gkIWR) {
+            if (sim.gkPriorReturn < 0 && sim.spendGoal / sim.prevPortfolio > sim.gkIWR) {
                 labels.push('no-CPI');
             } else {
                 sim.spendGoal *= (1 + yr.yearInflation);
             }
             // Guardrail checks on (possibly inflation-adjusted) spend
-            const _cwr = sim.spendGoal / sim.gkPrevPortfolio;
+            const _cwr = sim.spendGoal / sim.prevPortfolio;
             if (_cwr > sim.gkIWR * (1 + _guard)) {
                 sim.spendGoal *= (1 - _adjP);
                 labels.push(`−${(_adjP * 100).toFixed(0)}%cap`);
@@ -1880,7 +1880,11 @@ function evaluateYearOutcome(sim, yr) {
 
     inspectForErrors({ totalWealth: yr.totalWealth })  // See if any numbers look fishy.
 
-    // Phase 27: Withdrawal rate = (net outflows − inflows) / start-of-year wealth.
+    // Withdrawal rate = portfolio withdrawals / start-of-year portfolio balance.
+    // SS and pension are NOT netted out of the numerator: the classic 4% rule measures what
+    // leaves the portfolio, not what leaves it beyond guaranteed income (see the inflows column
+    // for those). The denominator is the raw balance sum, matching the basis Guyton-Klinger
+    // uses for its own guardrail rate, so the two rates in this tool are comparable.
     // Gross outflows: all account withdrawals incl. conversion-funding draws.
     yr._grossOutflows = (yr.netWithdrawals.IRA ?? 0) + yr.totalIRAForcedWithdrawals + yr.extraConvGross
         + (yr.grossUpIRA ?? 0) + (yr.grossUpTax ?? 0) + (yr.extraConvCashTax ?? 0)
@@ -1888,12 +1892,16 @@ function evaluateYearOutcome(sim, yr) {
         + (yr.netWithdrawals.Cash ?? 0)
         + (yr.netWithdrawals.Roth1 ?? 0)
         + (yr.netWithdrawals.Roth2 ?? 0);
-    // Net outflows: excludes Roth conversions (IRA→Roth reallocation) and reinvested surplus.
-    yr._netOutflows = yr._grossOutflows - yr.totalConverted - yr._reinvestedSurplus;
+    // Net outflows: the draws that actually funded spending and taxes. Roth conversions are a
+    // reallocation, not a draw, and reinvested surplus went straight back into the portfolio.
+    // Floored at zero: when guaranteed income exceeds spending the surplus being reinvested can
+    // exceed everything withdrawn, and the remainder is new money going IN. That is a
+    // contribution, not a negative withdrawal, so it belongs in avgNetDepletion rather than here.
+    yr._netOutflows = Math.max(0, yr._grossOutflows - yr.totalConverted - yr._reinvestedSurplus);
     // Inflows: non-portfolio income applied to spending (SS + pension).
     yr._yearInflows = yr.fixedInc + yr.pension;
-    yr._wdRate = (sim.prevTotalWealth != null && sim.prevTotalWealth > 0)
-        ? (yr._netOutflows - yr._yearInflows) / sim.prevTotalWealth : null;
+    yr._wdRate = (sim.prevPortfolio != null && sim.prevPortfolio > 0)
+        ? yr._netOutflows / sim.prevPortfolio : null;
 }
 
 // Log the finished year and accumulate loop timing.
@@ -1924,8 +1932,9 @@ function logYear(sim, yr) {
 // Carry wealth snapshots into next year, advance the spend goal, and compound rates.
 function endYear(sim, yr) {
     const { inputs } = sim;
-    sim.prevTotalWealth = yr.totalWealth;
-    sim.gkPrevPortfolio = yr.portfolioBalance;  // raw sum; keep GK checks apples-to-apples
+    // Raw balance sum (no tax discount). Feeds both the withdrawal rate and the GK guardrail
+    // checks, so the two stay apples-to-apples and every year uses the same basis.
+    sim.prevPortfolio = yr.portfolioBalance;
     // Advance spend goal: apply user's spend-change preference and inflation.
     // spendDelta is constant (1 + inputs.spendChange); moving this to end of loop
     // keeps year-0 spendGoal equal to the user's input in today's dollars.
@@ -2046,9 +2055,10 @@ function simulate(inputs) {
     // Phase 24: Cyclic — tracks consecutive IRA draw years before a brokerage harvest year.
     // brokerage-first: init to large value so year 0 immediately triggers a harvest.
     let subCycleIRAYears = inputs.cyclicOrder === 'brokerage-first' ? Infinity : 0;
-    // Seed year-1 spend rate denominator with starting portfolio total.
-    // Uses raw sum (no tax discount) — closest to "assets in hand" before simulation starts.
-    let prevTotalWealth = balance.IRA1 + balance.IRA2
+    // Seed the withdrawal-rate and GK guardrail denominator with the starting portfolio total.
+    // Uses raw sum (no tax discount) — closest to "assets in hand" before simulation starts,
+    // and the same basis endYear() carries forward for every later year.
+    let prevPortfolio = balance.IRA1 + balance.IRA2
         + balance.Roth1 + balance.Roth2
         + balance.Brokerage + balance.Cash;
 
@@ -2056,8 +2066,6 @@ function simulate(inputs) {
     let gkIWR = null;
     let gkPriorReturn = 0;
     let gkAdjLabel = '';
-    // GK uses raw portfolio (not tax-discounted totalWealth) so IWR and WR checks are apples-to-apples.
-    let gkPrevPortfolio = prevTotalWealth;
 
     // Sim-level state shared across years (and with the phase functions being split out of
     // this loop). Fields listed after `totals` are reassigned as the simulation advances, so
@@ -2069,8 +2077,8 @@ function simulate(inputs) {
         currentYear, cpiRate, inflation, medicareRate,
         fixedWithdrawal, spendDelta, spendGoal, cumulativeTaxes,
         nominalTaxRate, capitalGainsRate,
-        subCycleIRAYears, prevTotalWealth,
-        gkIWR, gkPriorReturn, gkAdjLabel, gkPrevPortfolio,
+        subCycleIRAYears, prevPortfolio,
+        gkIWR, gkPriorReturn, gkAdjLabel,
     };
 
     for (let y = 0; y < maxYears; y++) {
@@ -2161,11 +2169,29 @@ function simulate(inputs) {
         ? _betrYears.reduce((s, r) => s + r['BETR%'], 0) / _betrYears.length
         : null;
 
-    // Phase 27: average withdrawal rate across all simulated years.
-    const _wdRateYears = log.filter(r => r['wdRate%'] != null);
-    totals.avgWdRate = _wdRateYears.length > 0
-        ? _wdRateYears.reduce((s, r) => s + r['wdRate%'], 0) / _wdRateYears.length
-        : null;
+    // Withdrawal-rate summaries. Walked pairwise so each year can reach the prior row's
+    // portfolio balance (the same denominator the per-year wdRate% used).
+    //   avgWdRate         — simple mean of the yearly rates; the headline stat.
+    //   avgWdRateWeighted — dollar-weighted (Σ withdrawals ÷ Σ portfolios). Late high-balance
+    //                       years stop counting as much as early ones under the simple mean.
+    //   avgNetDepletion   — withdrawal rate net of portfolio return. Negative when the portfolio
+    //                       grows faster than it is drawn down. A different statistic from the
+    //                       withdrawal rate, which can never go below zero.
+    // `prevPortfolio` (the outer local) still holds the seed: endYear() advances sim.prevPortfolio,
+    // never this binding, so it is year 0's denominator.
+    let _wdSum = 0, _wdNum = 0, _wdDen = 0, _depSum = 0, _wdN = 0;
+    for (let i = 0; i < log.length; i++) {
+        const prevPort = i === 0 ? prevPortfolio : log[i - 1].portfolioBalance;
+        if (log[i]['wdRate%'] == null || !(prevPort > 0)) continue;
+        _wdSum  += log[i]['wdRate%'];
+        _wdNum  += log[i].netOut;
+        _wdDen  += prevPort;
+        _depSum += -(log[i].portfolioBalance - prevPort) / prevPort;
+        _wdN    += 1;
+    }
+    totals.avgWdRate         = _wdN > 0 ? _wdSum / _wdN : null;
+    totals.avgWdRateWeighted = _wdDen > 0 ? _wdNum / _wdDen : null;
+    totals.avgNetDepletion   = _wdN > 0 ? _depSum / _wdN : null;
 
     // Baseline accounting: expose the terminal capital-gains rate + terminal balance
     // breakdown so the optimizer's after-tax net-worth helper can value every strategy

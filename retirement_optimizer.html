@@ -14,7 +14,7 @@
          Use lowercase hex — easier to read and consistent with the hex() output of most languages.
          Example: May 25 14:00 → day 145 → (145*24)+14 = 3494 = 0xda6 → "11.da6" (current: 11.e52)
          Bump major manually for significant feature batches. -->
-    <title>Retirement Optimizer 11.12f7</title>
+    <title>Retirement Optimizer 11.12fb</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -35,7 +35,7 @@
         };
     </script>
 	<script src="displayhelpers.js"></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1111f3">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1112fb">
 	<style>
     .toggle { display: flex !important; }
     .share-panel { display:none; position:fixed; top:60px; right:1.5rem; z-index:800; background:#fff; border:1px solid #27ae60; border-radius:8px; padding:.85rem 1rem; width:min(520px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.2); }
@@ -49,8 +49,8 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1133"></script>
-	<script src="optimizer_core.js?v=1112f7"></script>
-	<script src="optimizer_ui.js?v=1112f7"></script>
+	<script src="optimizer_core.js?v=1112fb"></script>
+	<script src="optimizer_ui.js?v=1112fb"></script>
 	<script src="optimizer_tests.js?v=1111f3"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
@@ -390,7 +390,6 @@
                 </div>
             </div>
             <div id="summary-stats"><!-- layout in optimizer_styles_responsive.css: flex row on desktop, 3-col grid on phones -->
-				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;min-width:60px;"></div>
 				<div title="Years of life fully funded — portfolio covers spending goal without running out. Red when fewer than expected."><small>Funded Yrs</small><br><strong id="stat-years">0</strong><div id="stat-years-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Lifetime tax rate: total taxes paid ÷ total gross income. Lower is better."><small>Tax Rate</small><br><strong id="stat-rate">0%</strong><div id="stat-rate-delta" style="font-size:0.75em;min-height:1em;"></div></div>
                 <div title="Total tax paid over the entire simulation: federal (incl. NIIT), state, and Medicare IRMAA surcharges."><small>All Taxes</small><br><strong id="stat-tax">$0</strong><div id="stat-tax-delta" style="font-size:0.75em;min-height:1em;"></div></div>
@@ -401,7 +400,9 @@
                     <div id="stat-conv-be-diagnose-result" style="display:none;font-size:0.75em;max-width:230px;color:#555;text-align:left;margin-top:2px;"></div>
                 </div>
                 <div id="stat-betr-wrap" title="Average Break-Even Tax Rate across all conversion years (Kitces formula). If your expected future rate exceeds this, conversions are advantageous on average. See BETR% column in Annual Details (Opp. Cost category). '—' means no conversions."><small>Avg BETR</small><br><strong id="stat-betr-avg" style="font-size:0.9em;">—</strong></div>
-                <div title="Average of (net portfolio outflows − SS/pension inflows) ÷ start-of-year wealth. The classic 4% rule targets ~4%. Negative = income exceeded spending. See wdRate% column in Annual Details."><small>Avg Withdrawal Rate</small><br><strong id="stat-avg-spend-rate" style="font-size:0.9em;">—</strong></div>
+                <div title="Portfolio withdrawals funding spending and taxes, divided by the start-of-year portfolio balance. The classic 4% rule targets ~4%. See wdRate% column in Annual Details."><small>Withdrawal Rate</small><br><strong id="stat-avg-spend-rate" style="font-size:0.9em;">—</strong></div>
+				<!-- Ephemeral notes trail the stats: "↺ what changed" and the Load/Save result. -->
+				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;"></div>
 				<div id="popUpMessage" class="scenario-message"></div>
             </div>
         </div>
@@ -573,7 +574,8 @@
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
 				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<ul>
-				<li><b>11.12f7</b> <strong>New "Optimize for" choice at the top of the Optimizer ranks every strategy by the goal you care about.</strong> Pick a goal and the table sorts to put the best plan for it on top, moves the baseline to match, and renumbers the Rank column. It changes only which plan the tool puts in front of you, never the underlying numbers, and clicking any column header still sorts by that column. The choices, in the order most people asked for them: Tax Flexibility (the default, which favors plans that end with your money spread evenly across pre-tax, Roth, and taxable accounts so you can draw from whichever is cheapest in any given year, compared only among the plans that also finish among the wealthiest); Maximum Net Wealth; Avoiding Widow and RMD Tax (favors plans that leave less in the pre-tax IRA, since that is what drives forced withdrawals and the higher single-filer tax a survivor pays); Minimum Lifetime Taxes; plus Maximum Spending, Maximum Roth, and a Balanced blend. The Documentation tab explains what each one measures, including why Minimum Lifetime Taxes and Avoiding Widow and RMD Tax can legitimately disagree. A few smaller fixes came along with it: the "Best" summary no longer lists a strategy that cannot actually be run; Annual Details shows the Roth Conversion column when you turn on the Opp. Cost view; when a spouse is already on Medicare, all of the ACA income-limit rows are marked not applicable rather than just one; and the Score column was dropped since the row order and the Rank column already show the ranking.</li>
+				<li><b>11.12fb</b> <strong>The Withdrawal Rate stat was reading far too low and has been corrected.</strong> It now measures what it says: the money actually pulled out of your accounts to pay for spending and taxes, divided by what the portfolio was worth at the start of that year. Three things were wrong before. Social Security and pension income were being subtracted from the withdrawals, so a plan drawing $164,000 against $81,000 of Social Security was reported as if it had withdrawn only $19,000. The bottom of the fraction used an after-tax estimate of your wealth rather than the actual account balances, and the very first year used a different basis than every year after it. On a typical plan the stat moves from about 1.1% to about 2.4%, which is now directly comparable to the classic 4% rule and to the guardrail rate the Guyton-Klinger strategy uses internally. The tile is relabeled simply "Withdrawal Rate", and hovering it shows two extra views: a dollar-weighted average, and a net depletion figure that goes negative when your portfolio is growing faster than you draw it down. The rate itself can no longer go negative, because you cannot withdraw less than nothing. A related fix: in years when Social Security covers everything, a required distribution that gets reinvested is no longer counted as a withdrawal, since those dollars never left the portfolio. Also in the header, the summary stats are left-aligned on wide screens instead of being pushed to the right edge, and the "what you last changed" note moved to sit after the numbers alongside the save and load messages.</li>
+					<li><b>11.12f7</b> <strong>New "Optimize for" choice at the top of the Optimizer ranks every strategy by the goal you care about.</strong> Pick a goal and the table sorts to put the best plan for it on top, moves the baseline to match, and renumbers the Rank column. It changes only which plan the tool puts in front of you, never the underlying numbers, and clicking any column header still sorts by that column. The choices, in the order most people asked for them: Tax Flexibility (the default, which favors plans that end with your money spread evenly across pre-tax, Roth, and taxable accounts so you can draw from whichever is cheapest in any given year, compared only among the plans that also finish among the wealthiest); Maximum Net Wealth; Avoiding Widow and RMD Tax (favors plans that leave less in the pre-tax IRA, since that is what drives forced withdrawals and the higher single-filer tax a survivor pays); Minimum Lifetime Taxes; plus Maximum Spending, Maximum Roth, and a Balanced blend. The Documentation tab explains what each one measures, including why Minimum Lifetime Taxes and Avoiding Widow and RMD Tax can legitimately disagree. A few smaller fixes came along with it: the "Best" summary no longer lists a strategy that cannot actually be run; Annual Details shows the Roth Conversion column when you turn on the Opp. Cost view; when a spouse is already on Medicare, all of the ACA income-limit rows are marked not applicable rather than just one; and the Score column was dropped since the row order and the Rank column already show the ranking.</li>
 				<li><b>11.12e5</b> <strong>Optimize Conversions now looks at the best plan from each family of strategies, not just the five with the highest ending wealth.</strong> The strategies that benefit most from converting are often not the ones that finish with the most money, so the old five-highest list could be filled entirely by strategies that gain nothing from converting, leaving the ⇌ table empty even when other strategies had a real conversion to recommend. It now considers the best Proportional, Reduce, Fill Bracket, IRMAA Ceiling, IRA Draw, Ordered, and Guyton-Klinger plan (each with and without the cyclic brokerage option), so a strategy that converts well gets a seat. It also judges how much to convert by the same measure it uses to rank everything else - after-tax wealth left over plus the money you actually get to spend, in today's dollars - rather than raw ending wealth, which used to reward simply hoarding in the IRA. Because of these two changes, the recommended conversion amounts and the strategies shown may differ from before on the same plan. When no strategy benefits from converting more, the tool now says so plainly instead of showing an empty table.</li>
 				<li><b>11.129d</b> <strong>Annual Details now shows Roth conversions as the IRA withdrawals they are, and conversions draw from the larger IRA.</strong> A Roth conversion is money leaving the IRA, so the IRA WD, IRA1- and IRA2- columns now include it. Before, a year could show a large conversion with little or no IRA withdrawal, which looked wrong even though the balances were correct. RMD stays in its own columns (it is the involuntary draw and is never a conversion). The Federal and State tax columns now include the tax on conversions, so they add up to Total Tax and the Taxation chart shows the real tax. Conversions are now taken from the larger IRA first (spilling to the smaller only when the larger cannot supply the full amount) instead of being split by size, which is what you would actually do and avoids converting a token slice out of a tiny IRA. This changes each IRA's balance over time and therefore each person's future RMDs; the combined yearly tax is unchanged. Clicking a year to open the Tax Payment Planner now sends the correct per-IRA voluntary, conversion, and tax figures.
 					</li>

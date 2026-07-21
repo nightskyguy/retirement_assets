@@ -292,36 +292,57 @@ test('Phase 12: Late timing yields higher terminal balance than forced-Early for
     assert(validTiming, 'Expected every timing value to be Early(Conv) or Late(Spend)');
 });
 
-// ── Phase 27: Withdrawal Rate + Inflows/Outflows ──────────────────────────────
-test('Phase 27: no income, pure portfolio draw → wdRate% = netOut / prevWealth', () => {
+// ── Withdrawal Rate + Inflows/Outflows ────────────────────────────────────────
+// wdRate% = netOut / start-of-year PORTFOLIO balance (raw sum, no tax discount).
+// SS/pension are NOT subtracted — the rate measures what leaves the portfolio, which is
+// what makes it comparable to the 4% rule and to the GK guardrail rate.
+test('wdRate%: equals netOut ÷ prior-year portfolio balance', () => {
     const result = simulate({ ...BASE });
-    // Year 0 has no prevTotalWealth → null. Check years 1+.
     const rows = result.log.slice(1).filter(r => r['wdRate%'] != null);
     assert(rows.length > 0, 'Expected wdRate% populated for years 1+');
-    let prevWealth = result.log[0].totalWealth;
     for (let i = 1; i < result.log.length; i++) {
         const r = result.log[i];
-        if (r['wdRate%'] != null && prevWealth > 0) {
-            const expected = (r.netOut - r.inflows) / prevWealth;
+        const prevPort = result.log[i - 1].portfolioBalance;
+        if (r['wdRate%'] != null && prevPort > 0) {
+            const expected = r.netOut / prevPort;
             assert(Math.abs(r['wdRate%'] - expected) < 1e-9,
-                `Year ${r.year}: wdRate% ${r['wdRate%']} != (netOut-inflows)/prevWealth ${expected}`);
+                `Year ${r.year}: wdRate% ${r['wdRate%']} != netOut/prevPortfolio ${expected}`);
             assert(r.inflows === 0, `Year ${r.year}: expected inflows=0 with no SS/pension, got ${r.inflows}`);
         }
-        prevWealth = r.totalWealth;
     }
 });
 
-test('Phase 27: SS covers all spending → wdRate% ≈ 0 or negative', () => {
-    // ss1Age 70, born 1952 → SS active from start (age 74 in 2026). SS $100k > spend $60k.
-    const result = simulate({ ...BASE, ss1: 100000, ss1Age: 70 });
-    const rows = result.log.slice(1).filter(r => r['wdRate%'] != null);
-    assert(rows.length > 0, 'Expected wdRate% populated');
-    const high = rows.filter(r => r['wdRate%'] > 0.01);
-    assert(high.length === 0,
-        `Expected wdRate% ≤ ~0 when SS ($100k) exceeds spend ($60k); found ${high.length} years above 1%: ${high.map(r => r.year + '=' + (r['wdRate%']*100).toFixed(1) + '%').join(', ')}`);
+test('wdRate%: denominator is the raw portfolio, not tax-discounted totalWealth', () => {
+    // BASE holds a $600k IRA, so totalWealth is materially below portfolioBalance. If the old
+    // after-tax denominator leaked back in, the rate would read high by roughly that discount.
+    const result = simulate({ ...BASE });
+    const r0 = result.log[0], r1 = result.log[1];
+    assert(r0.portfolioBalance > r0.totalWealth + 1000,
+        'Fixture no longer distinguishes the two denominators; pick balances with a bigger IRA');
+    const wrongWay = r1.netOut / r0.totalWealth;
+    assert(Math.abs(r1['wdRate%'] - wrongWay) > 1e-6,
+        'wdRate% still matches the after-tax denominator');
 });
 
-test('Phase 27: reconciliation — netOut = grossOut − rothConv − reinvestedSurplus', () => {
+test('wdRate%: never negative, even when SS exceeds the spending goal', () => {
+    // ss1Age 70, born 1952 → SS active from start (age 74 in 2026). SS $100k > spend $60k.
+    // The old formula subtracted inflows and went negative here; withdrawals cannot.
+    const result = simulate({ ...BASE, ss1: 100000, ss1Age: 70 });
+    const rows = result.log.filter(r => r['wdRate%'] != null);
+    assert(rows.length > 0, 'Expected wdRate% populated');
+    const neg = rows.filter(r => r['wdRate%'] < 0);
+    assert(neg.length === 0,
+        `Withdrawal rate must never go negative; found ${neg.length} years: ${neg.map(r => r.year + '=' + (r['wdRate%']*100).toFixed(1) + '%').join(', ')}`);
+    // It bottoms out at exactly zero: RMDs still leave the IRA, but with SS covering spending
+    // and taxes they are reinvested, so the dollars never leave the portfolio. A forced
+    // IRA→taxable round-trip is not a withdrawal.
+    assert(result.totals.avgWdRate === 0,
+        `Expected a zero withdrawal rate when SS covers everything, got ${result.totals.avgWdRate}`);
+    assert(result.log.some(r => (r.grossOut ?? 0) > 1000),
+        'Expected forced RMD gross outflows even though the net rate is zero');
+});
+
+test('outflows: reconciliation — netOut = grossOut − rothConv − reinvestedSurplus', () => {
     const result = simulate({ ...BASE, extraConversionAmount: 20000 });
     for (const r of result.log) {
         // reinvestedSurplus isn't logged directly; bound: netOut ≤ grossOut − rothConv
@@ -338,28 +359,88 @@ test('Phase 27: reconciliation — netOut = grossOut − rothConv − reinvested
     }
 });
 
-test('Phase 27: pension counted as inflow → lowers wdRate% vs no pension', () => {
+test('wdRate%: a pension shows up in inflows only, never in the numerator', () => {
+    // A pension does reduce the rate, but only because fewer dollars need to be withdrawn.
+    // The numerator must stay netOut, so the reconciliation below has to hold unchanged.
     const noPension = simulate({ ...BASE });
     const withPension = simulate({ ...BASE, pensionAnnual: 30000 });
     assert(withPension.totals.avgWdRate != null && noPension.totals.avgWdRate != null,
         'Expected avgWdRate computed for both runs');
     assert(withPension.totals.avgWdRate < noPension.totals.avgWdRate,
-        `Expected pension to lower avg withdrawal rate: ${withPension.totals.avgWdRate} vs ${noPension.totals.avgWdRate}`);
+        `Expected the pension to reduce actual withdrawals: ${withPension.totals.avgWdRate} vs ${noPension.totals.avgWdRate}`);
     const r1 = withPension.log[1];
     assert(r1.inflows > 25000, `Expected year-1 inflows ≈ pension $30k, got ${r1.inflows}`);
+    // The numerator ignores that $30k entirely.
+    const prevPort = withPension.log[0].portfolioBalance;
+    assert(Math.abs(r1['wdRate%'] - r1.netOut / prevPort) < 1e-9,
+        'Pension leaked into the withdrawal-rate numerator');
 });
 
-test('Phase 27: regression — no SS/pension → avgWdRate matches old avgSpendRate semantics', () => {
-    // With zero inflows, wdRate% = netOut/prevWealth = old netSpend%.
+test('avgWdRate: simple mean of the yearly rates, including year 0', () => {
     const result = simulate({ ...BASE });
     assert(result.totals.avgWdRate != null, 'Expected avgWdRate populated');
     const rows = result.log.filter(r => r['wdRate%'] != null);
     const manualAvg = rows.reduce((s, r) => s + r['wdRate%'], 0) / rows.length;
     assert(Math.abs(result.totals.avgWdRate - manualAvg) < 1e-12,
         `avgWdRate ${result.totals.avgWdRate} != manual average ${manualAvg}`);
-    // Spend $60k on ~$850k wealth, zero growth → rate roughly 6–9% and positive
+    // Spend $60k against a $950k portfolio, zero growth → drawdown accelerates as it shrinks.
     assert(result.totals.avgWdRate > 0.04 && result.totals.avgWdRate < 0.15,
         `Expected avg rate in plausible 4–15% range, got ${result.totals.avgWdRate}`);
+});
+
+test('avgWdRateWeighted: equals Σ netOut ÷ Σ prior-year portfolio', () => {
+    const result = simulate({ ...BASE, ss1: 40000 });
+    const log = result.log;
+    // Year 0's denominator is the starting balance, which isn't logged; back it out of its
+    // own rate so the check covers exactly the year set the engine used.
+    let num = 0, den = 0;
+    for (let i = 0; i < log.length; i++) {
+        if (log[i]['wdRate%'] == null) continue;
+        const prevPort = i === 0 ? log[0].netOut / log[0]['wdRate%'] : log[i - 1].portfolioBalance;
+        if (!(prevPort > 0)) continue;
+        num += log[i].netOut;
+        den += prevPort;
+    }
+    const manual = num / den;
+    assert(Math.abs(result.totals.avgWdRateWeighted - manual) < 1e-9,
+        `avgWdRateWeighted ${result.totals.avgWdRateWeighted} != manual ${manual}`);
+    // Dollar-weighting and the simple mean must actually differ on a real plan.
+    assert(Math.abs(result.totals.avgWdRateWeighted - result.totals.avgWdRate) > 1e-6,
+        'Weighted and simple means are identical; the weighting is not being applied');
+});
+
+test('avgNetDepletion: negative when the portfolio outgrows withdrawals, positive when it shrinks', () => {
+    // Big portfolio, modest spend, 8% growth → portfolio grows every year.
+    const growing = simulate({ ...BASE, IRA1: 3000000, spendGoal: 60000, growth: 0.08, ss1: 60000 });
+    assert(growing.totals.avgNetDepletion < 0,
+        `Expected negative net depletion while the portfolio grows, got ${growing.totals.avgNetDepletion}`);
+    // BASE is zero-growth with a real draw → the portfolio only shrinks.
+    const shrinking = simulate({ ...BASE });
+    assert(shrinking.totals.avgNetDepletion > 0,
+        `Expected positive net depletion on a zero-growth drawdown, got ${shrinking.totals.avgNetDepletion}`);
+    // The withdrawal rate itself stays non-negative in both.
+    assert(growing.totals.avgWdRate > 0 && shrinking.totals.avgWdRate > 0,
+        'Withdrawal rate should stay positive in both scenarios');
+});
+
+test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses', () => {
+    // prevPortfolio replaced the old gkPrevPortfolio/prevTotalWealth pair. GK always used the raw
+    // balance sum, so merging the two fields must not move its output by a cent. The expected
+    // values below were captured from a run made BEFORE that merge.
+    const gk = simulate({
+        ...BASE, strategy: 'gk', nYears: 30,
+        birthyear1: 1960, die1: 92, birthyear2: 1962, birthmonth2: 6, die2: 94, hasSpouse: true,
+        IRA1: 1500000, IRA2: 500000, Roth: 200000, Roth2: 100000,
+        Brokerage: 600000, BrokerageBasis: 300000, Cash: 100000,
+        ss1: 45000, ss1Age: 70, ss2: 25000, ss2Age: 70,
+        spendGoal: 140000, inflation: 0.025, cpi: 0.025, growth: 0.06,
+        cashYield: 0.02, dividendRate: 0.02,
+    });
+    assertNear(gk.totals.spend, 7969501.955988, 'GK total spend', 0.01);
+    assertNear(gk.totals.tax, 2154586.451134, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 9955429.693910, 'GK final net worth', 0.01);
+    assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 4,
+        `Expected the same 4 guardrail adjustments as the pre-merge run, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
 
 // ── Baseline accounting (after-tax NW + totalWealth fix) ───────────────────────

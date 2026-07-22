@@ -1100,13 +1100,16 @@ function calculateProgressive(entity, status, amount, inflation = 1, ratecreep =
         if (startPosition + amount <= currentLimit) {
             cumulative += (startPosition + amount - prevLimit) * b.r * ratecreep;
             marginalRate = b.r * ratecreep;
-            nominalRate = b.nr ?? 0;
+            // nr is the precomputed EFFECTIVE rate at this bracket's top; every statutory rate
+            // beneath it scales by ratecreep, so the effective rate scales by exactly the same
+            // factor. No-op at ratecreep = 1.
+            nominalRate = (b.nr ?? 0) * ratecreep;
             prevLimit = currentLimit;
             break;
         } else {
             cumulative += (currentLimit - prevLimit) * b.r * ratecreep;
             marginalRate = b.r * ratecreep;
-            nominalRate = b.nr ?? 0;
+            nominalRate = (b.nr ?? 0) * ratecreep;
             prevLimit = currentLimit;
         }
     }
@@ -1250,6 +1253,10 @@ function calculateTaxableSocialSecurity(status, provisionalIncome, totalSS) {
  * @param {number} params.IRMAAAnnualCost - Annual IRMAA cost (from 2-year lookback MAGI).
  * @param {boolean} params.obbaOn - Enable OBBBA provisions (senior deduction + SALT cap).
  * @param {boolean} params.saltHigh - Use $40k SALT cap (OBBBA); false = $10k (TCJA).
+ * @param {number} params.fedRateCreep - Multiplier on federal ORDINARY bracket rates (1 = today's
+ *                 rates). Models legislated rate increases; bracket thresholds are unaffected and
+ *                 still track `inflation`. Capital gains and NIIT are deliberately excluded.
+ * @param {number} params.stateRateCreep - Same, for state bracket rates.
  * @param {number}  params.propTax - Property + local taxes paid (for SALT itemizing).
  * @returns {Object} Comprehensive tax calculation results.
  */
@@ -1272,7 +1279,9 @@ function calculateTaxes(params = {}) {
         saltHigh = false,
         propTax = 0,
         pensionIncome = 0,   // employer/govt pension + annuity portion of earnedIncome
-        iraIncome     = 0    // IRA/401k/RMD distribution portion of earnedIncome
+        iraIncome     = 0,   // IRA/401k/RMD distribution portion of earnedIncome
+        fedRateCreep   = 1,  // tax-rate creep multipliers (1 = today's statutory rates)
+        stateRateCreep = 1
     } = params;
 
     const status = filingStatus ?? "MFJ";
@@ -1342,13 +1351,14 @@ function calculateTaxes(params = {}) {
         ? federalStdBase * inflation   // track federal base (no age bumps — those are federal-only)
         : rawStateStd * inflation;
     const stateTaxableIncome = Math.max(0, stateAGI - stateStdDeduction);
-    const stateResult = calculateProgressive(state, status, stateTaxableIncome, inflation);
+    const stateResult = calculateProgressive(state, status, stateTaxableIncome, inflation, stateRateCreep);
     const stateTax = stateResult.total;
     const stateMarginalRate = stateResult.marginal;
 
-    // State ordinary vs. cap gains breakdown (for callers that need stacked display)
+    // State ordinary vs. cap gains breakdown (for callers that need stacked display). Must use the
+    // SAME creep as the total above — stateCapGainsTax is their difference.
     const stateOrdinaryTax = calculateProgressive(
-        state, status, Math.max(0, stateAGI - capGains - stateStdDeduction), inflation).total;
+        state, status, Math.max(0, stateAGI - capGains - stateStdDeduction), inflation, stateRateCreep).total;
     const stateCapGainsTax = stateTax - stateOrdinaryTax;
 
     // ========================================================================
@@ -1384,7 +1394,7 @@ function calculateTaxes(params = {}) {
     // STEP 7: Federal Ordinary Income Tax
     // ========================================================================
     const federalOrdinaryResult = calculateProgressive('FEDERAL', status,
-                                                       taxableOrdinaryIncome, inflation);
+                                                       taxableOrdinaryIncome, inflation, fedRateCreep);
     const federalOrdinaryTax = federalOrdinaryResult.total;
     const federalMarginalRate = federalOrdinaryResult.marginal;
 
@@ -1461,7 +1471,11 @@ function calculateTaxes(params = {}) {
         ordinaryIncomeInAGI,
         preferentialIncomeInAGI,
         taxableOrdinaryIncome,
-        taxablePreferentialIncome
+        taxablePreferentialIncome,
+
+        // Echoed back so callers can log what rate policy actually produced these numbers.
+        fedRateCreep,
+        stateRateCreep
     }; // return object
 } // calculateTaxes()
 

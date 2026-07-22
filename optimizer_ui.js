@@ -87,6 +87,13 @@ function applyNerdKnobVisibility() {
     // toggle can't hide them).
     const convAdvWrap = document.getElementById('convAdvanced-wrap');
     if (convAdvWrap) convAdvWrap.style.display = '';
+    // Tax-rate creep row (Assumptions). Nerdknob-gated, EXCEPT when a creep is actually set —
+    // a shared URL or loaded scenario must never leave a live tax assumption invisible.
+    const creepWrap = document.getElementById('taxRateCreep-wrap');
+    if (creepWrap) {
+        const creepOn = (+document.getElementById('taxRateCreep')?.value || 0) !== 0;
+        creepWrap.style.display = (NERD_KNOBS || creepOn) ? 'flex' : 'none';
+    }
     // 💵 legend — only meaningful once nerdknob is sweeping the cash-funded arm
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
@@ -216,6 +223,11 @@ function getInputs() {
         dividendRate: +val('dividendRate') / 100.0,
         ssFailYear: +val('ssFailYear'),
         ssFailPct: +val('ssFailPct') / 100.0,
+        // Tax-rate creep (nerdknob). Federal is the only knob today; the state multiplier is
+        // plumbed all the way through the engine but pinned at 0 until it gets its own control.
+        taxRateCreep: +val('taxRateCreep') / 100.0 || 0,
+        taxCreepStartYear: +val('taxCreepStartYear') || 0,   // 0 = start with the plan's first year
+        taxRateCreepState: 0,
         convertExcessToRoth: valChecked('convertExcessToRoth'),
         fundConversionWithCash: valChecked('fundConversionWithCash'),
         extraConversionAmount: +val('extraConversionAmount') || 0,
@@ -2162,12 +2174,13 @@ const milestonePlugin = {
     afterDatasetsDraw(chart) {
         if (!showMilestones || !_chartMilestones.length) return;
         // Milestones come from the last single-strategy run. The main charts show all of them;
-        // the Monte Carlo fan aggregates many strategies/paths, so only deterministic death
-        // markers apply there (IRMAA/GK/shortfall/break-even differ per path). All other
-        // charts (MC input fans, etc.) get none.
+        // the Monte Carlo fan aggregates many strategies/paths, so only the markers that are
+        // deterministic across every path apply there — death (fixed life expectancy) and the
+        // RMD-start ages (fixed birth years). IRMAA/GK/shortfall/break-even differ per path.
+        // All other charts (MC input fans, etc.) get none.
         const canvasId = chart.canvas?.id || '';
         let milestones = _chartMilestones;
-        if (canvasId === 'mc-chart') milestones = milestones.filter(m => m.label.includes('Passing'));
+        if (canvasId === 'mc-chart') milestones = milestones.filter(m => /Passing|RMDs begin/.test(m.label));
         else if (canvasId !== 'chartAssets' && canvasId !== 'chartIncomeSources') return;
         if (!milestones.length) return;
         const xScale = chart.scales.x;
@@ -2203,6 +2216,10 @@ const milestonePlugin = {
 // (~75%) to match the other stacked cost series.
 const IRMAA_COLOR    = '#E75480';
 const MEDICARE_COLOR = '#008080';
+
+// Milestone marker color for the two RMD-start lines — distinct from the five already in use
+// (death purple, GK orange, IRMAA pink, shortfall red, break-even teal).
+const RMD_MILESTONE_COLOR = '#2471a3';
 
 // Legend hover hint for the Medicare series (browser-native tooltip via canvas title).
 const MEDICARE_LEGEND_TIP = 'Base Cost for Medicare B+D - not deducted from spendable. Illustration only.';
@@ -2332,12 +2349,27 @@ function makeChartLegendInteraction(groupSize = 1) {
 //  5. Roth conversion break-even — the year the converting plan permanently overtakes the
 //     no-conversion shadow, i.e. totals.convBEYear (already the sustained-crossing year; this
 //     function just looks it up and places the marker, no "first touch" logic here).
+//  6. The year each person's RMDs begin — the year they reach their RMD start age, marked only
+//     when that crossing happens INSIDE the plan (see rmdCross below).
 function computeMilestones(log) {
     const ms = [];
     // Numeric IRMAA tier from the string field ("-none-"/"-"→0, "Tier 3 (TOP)"→3).
     const tierNum = t => { const m = String(t ?? '').match(/(\d+)/); return m ? +m[1] : 0; };
     const beYear = (typeof lastTotals !== 'undefined' && lastTotals) ? lastTotals.convBEYear : null;
+    // RMD start age from the log alone: the engine sets age = year − birthyear exactly
+    // (optimizer_core.js resolveHousehold), so the birth year is recoverable from any row with a
+    // numeric age, and the start age follows the same rule as getRMDPercentage() — 75 for anyone
+    // born 1960 or later, else 73. A non-numeric age ('—') means not alive / no spouse.
+    const numAge = a => (a == null || a === '—') ? null : +a;
+    const rmdAgeFor = (year, age) => ((year - age) >= 1960 ? 75 : 73);
+    // Fires on the first row where this person reaches their RMD age AND the prior row had them
+    // below it. Requiring the crossing to happen inside the log means a plan that starts after
+    // RMD age gets no marker (RMDs began before the plan), a spouse who dies first never fires
+    // (their age goes '—'), and a single filer never fires (age2 is '—' in every row).
+    const rmdCross = (year, age, prevAge) =>
+        age != null && prevAge != null && prevAge < rmdAgeFor(year, age) && age >= rmdAgeFor(year, age);
     let prevStatus = null, deathDone = false, prevTier = 0, beDone = false;
+    let prevAge1 = null, prevAge2 = null, rmd1Done = false, rmd2Done = false;
     for (let i = 0; i < log.length; i++) {
         const r = log[i];
         const status = r.status;
@@ -2372,6 +2404,19 @@ function computeMilestones(log) {
             ms.push({ x: i, label: 'Roth Break Even', color: '#16a085' });
             beDone = true;
         }
+        // 6. RMD start ages. Marked regardless of the IRA balance — the date is a fact about the
+        // person, and "the year RMDs would start" is worth seeing even for a fully converted IRA.
+        const a1 = numAge(r.age1), a2 = numAge(r.age2);
+        if (!rmd1Done && rmdCross(r.year, a1, prevAge1)) {
+            ms.push({ x: i, label: 'Your RMDs begin', color: RMD_MILESTONE_COLOR });
+            rmd1Done = true;
+        }
+        if (!rmd2Done && rmdCross(r.year, a2, prevAge2)) {
+            ms.push({ x: i, label: 'Spouse RMDs begin', color: RMD_MILESTONE_COLOR });
+            rmd2Done = true;
+        }
+        if (a1 != null) prevAge1 = a1;
+        if (a2 != null) prevAge2 = a2;
     }
     _chartMilestones = ms;
 }
@@ -2980,6 +3025,7 @@ function setupAutoRecalc() {
         pensionAnnual: 'Pension', pensionStartAge: 'Pension Age', survivorPct: 'Survivor%', pensionCola: 'Pension COLA',
         inflation: 'Inflation', cpi: 'CPI/COLA', growth: 'Growth', cashYield: 'Cash Yield',
         dividendRate: 'Dividends', STATEname: 'State Tax', ssFailYear: 'SS Fail Yr', ssFailPct: 'SS Payout%',
+        taxRateCreep: 'Fed Tax Creep', taxCreepStartYear: 'Creep Start',
         birthmonth1: 'Your Birth Mo', birthmonth2: 'Spouse Birth Mo', dividendReinvest: 'Div Reinvest',
         cyclicEnabled: 'Cyclic',
         cyclicOrder:   'Cyclic Order'
@@ -3079,6 +3125,7 @@ const OPT_LONG_TO_SHORT = {
     ss1:'ss1', ss1Age:'ss1a', ss2:'ss2', ss2Age:'ss2a',
     pensionAnnual:'pa', pensionStartAge:'psa', pensionCola:'pc', survivorPct:'sur', dividendRate:'div',
     STATEname:'s', ssFailYear:'sfy', ssFailPct:'sfp',
+    taxRateCreep:'trc', taxCreepStartYear:'tcy',
     growth:'g', cashYield:'cy', inflation:'inf', cpi:'cpi', futureIRATaxRate:'fitr',
     comp_IRA1_ratio:'c1r', comp_IRA1_intl:'c1x',
     comp_IRA2_ratio:'c2r', comp_IRA2_intl:'c2x',
@@ -3468,9 +3515,11 @@ function applyScenario(data) {
             // Handle percentage values (multiply by 100 for display). getInputs() stores these as
             // decimals (e.g. gkGuard 20% → 0.20), so they MUST be scaled back ×100 on load or the
             // field shows 0.2 and the next getInputs() re-divides to 0.002 (GK then reads guard=0).
+            // NOTE: taxCreepStartYear is a calendar year, NOT a percent — it must stay out of
+            // this list or it reloads as 202600.
             if (['spendChange', 'inflation', 'cpi', 'growth',
                 'cashYield', 'dividendRate', 'ssFailPct',
-                'propWithdraw', 'iraWithdrawPct',
+                'propWithdraw', 'iraWithdrawPct', 'taxRateCreep',
                 'gkGuard', 'gkAdjPct', 'futureIRATaxRate'].includes(key)) {
                 element.value = (value * 100).toFixed(3);
             } else if (key === 'stratRate' && ((data.stratIRMAATier ?? -1) >= 0 || (data.stratACAMultiple ?? 0) > 0)) {
@@ -3504,6 +3553,10 @@ function applyScenario(data) {
 
     // Sync MC mode UI (grays out μ/σ when bootstrap mode is restored from scenario)
     if (typeof updateMCModeUI === 'function') updateMCModeUI();
+
+    // Re-run the nerdknob gating: a scenario carrying a non-zero tax creep must reveal that row
+    // even without nerdknob, or the plan silently runs on an assumption the user cannot see.
+    if (typeof applyNerdKnobVisibility === 'function') applyNerdKnobVisibility();
 
     // Refresh derived/display fields that normally update via oninput handlers. Setting .value
     // programmatically does NOT fire those handlers, so the "Real Growth" line, age/RMD readouts,

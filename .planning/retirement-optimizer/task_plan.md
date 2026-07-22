@@ -205,6 +205,7 @@ Goal: Complete open features from the original priority list plus deferred items
 | 23 | **P21** | Annual Spending-by-Account View | **complete** | — |
 | 24 | **P22** | Export Annual Details to CSV | pending | — |
 | 25 | **P23** | MC Arithmetic-Mean Returns + AR(1) Variable Inflation | pending | — |
+| 26 | **P24** | Conversion End Year (act on the Break Even diagnostic) | pending | — |
 
 ---
 
@@ -980,6 +981,7 @@ P20 (README ToC) — independent
 P21 (Account Spend View) — independent; complements P8
 P22 (CSV Export) — independent; benefits from P21 (not required)
 P23 (MC Arithmetic Mean + AR1 Inflation) — independent
+P24 (Conversion End Year) — independent; diagnostic + engine flag already exist
 ```
 
 ---
@@ -1005,3 +1007,18 @@ P23 (MC Arithmetic Mean + AR1 Inflation) — independent
 | Error | Attempt | Resolution |
 |-------|---------|------------|
 | (none yet) | — | — |
+
+---
+
+## Phase P24: Conversion END YEAR — act on the Break Even diagnostic
+**Why:** The ⓘ Break Even diagnosis already computes the exact year a plan's conversions turn from profitable to harmful, and a measured scenario (2026-07-21, full numbers in `findings.md`) shows that stopping conversions at exactly that year is the BEST variant tested: +$383k after-tax NW over the plan as configured, +$31k over converting nothing, and the lowest lifetime tax of the four. The plan as configured converts $1.86M and ends up $352k WORSE than never converting at all. So the tool currently tells the user precisely where the damage starts and then gives them no way to stop it. The closest existing lever, zeroing `extraConversionAmount`, is strictly worse than the right answer because it also discards the profitable early conversions.
+
+- [ ] New input: conversion END year (blank = convert for the whole plan). The engine hook already exists as the internal counterfactual flag `_cfSuppressConversionsFromYear` (a `yr.y` index) — promote it to a real, named, URL-shareable input rather than adding a second mechanism.
+- [ ] Decide scope: does the end year stop ONLY `extraConversionAmount`, or also the strategy's own bracket-fill conversions? The measured winner suppressed BOTH (that is what `_cfSuppressConversionsFromYear` does). Suppressing only the extra is a different, untested plan.
+- [ ] Wire the diagnostic to the input: when `outcome === 'boundary'`, the ⓘ text should name the actionable year (`lastSustainableYear`) as a suggestion, ideally as a one-click "stop here" that sets the field. Careful with the wording — see the `feedback_financial_model_rigor` rule: this is a diagnostic suggestion, not a recommendation the tool can make on the user's behalf.
+- [ ] Consider an optimizer sweep dimension over the end year (it is one more axis on an already large sweep, so measure the cost first, the same way PF11 did).
+- [ ] Test: end year unset → bit-identical to today (the load-bearing regression). End year set → conversions cease from that year, earlier years untouched.
+- [ ] Test: reproduce the recorded scenario and assert the truncated plan's `convBEYear === 2051` and its after-tax NW exceeds the untruncated plan's.
+- **Caveats before generalizing (from `findings.md`):** the winning truncation's break-even lands on the plan's FINAL year, so the margin is thin and sensitive to life expectancy and growth; and the measurement is n=1 at 8.5% growth with a 33% heirs rate. Gather a second and third scenario before treating "stop at the boundary year" as general advice.
+- **Status:** pending
+- **Independent:** no phase dependencies; the diagnostic (PF6/PF5) and the counterfactual engine flag both already exist.

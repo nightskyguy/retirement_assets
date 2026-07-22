@@ -354,7 +354,11 @@ Edward McQuarrie is a former professor at Santa Clara University School of Busin
 
 I notice that he is releasing a book with Bill Bernstein (the founder of the 4% idea, and a prolific author) in March 2027 called "[Retirement: How to save enough, invest it well, and make your money last](https://www.amazon.com/Retirement-save-enough-invest-money-ebook/dp/B0GQWCS15F)"
 
+#### Miscellaneous
 
+[Quick Way to Estimate Portfolio Longevity](https://retirementincomejournal.com/article/a-quick-way-to-estimate-portfolio-longevity/) - a paper by Jim Otar.
+
+[Sequence of Inflation Risk](https://retirementoptimizer.com/articles/Sequence%20of%20Inflation.pdf) - another paper by Jim Otar, and something I learned from my own modeling.  
 
 ### Some of the Things I Learned About Taxation
 

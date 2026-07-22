@@ -45,6 +45,8 @@ const baselineScoreOf = core.baselineScoreOf;
 const selectConversionCandidates = core.selectConversionCandidates;
 const rankRowsByObjective = core.rankRowsByObjective;
 const eitherOnMedicareAtStart = core.eitherOnMedicareAtStart;
+const taxCreepFactor = core.taxCreepFactor;
+const buildVariations = core.buildVariations;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 
 // ── Test harness ──────────────────────────────────────────────────────────────
@@ -1446,6 +1448,141 @@ test('eitherOnMedicareAtStart: OR semantics, single-filer, and guard', () => {
     assert(eitherOnMedicareAtStart(1965, 60, false, 0) === false, 'single <65 → false');
     // missing inputs → false (matches bothOnMedicareAtStart guard)
     assert(eitherOnMedicareAtStart(0, 66, true, 1950) === false, 'missing birthyear → false');
+});
+
+// ── Tax-rate creep (P4 phase 1) ───────────────────────────────────────────────
+// Bracket RATES escalate a fixed % per year from a start year; bracket LIMITS are untouched.
+// Federal has a UI knob; the state multiplier is plumbed end-to-end but pinned at 0 for now,
+// so these tests are what keep the state path from rotting before it gets a control.
+// A bigger IRA than BASE so the plan actually reaches taxable brackets every year.
+const CREEP_BASE = {
+    ...BASE,
+    IRA1: 1200000,
+    spendGoal: 90000,
+};
+const sumCol = (res, col) => res.log.reduce((a, r) => a + (r[col] || 0), 0);
+
+test('taxCreepFactor: off, before start, and compounding', () => {
+    assert(taxCreepFactor(0, 2050, 2026) === 1, 'rate 0 → 1 in any year');
+    assert(taxCreepFactor(undefined, 2050, 2026) === 1, 'missing rate → 1');
+    assert(taxCreepFactor(0.02, 2025, 2030) === 1, 'before the start year → 1');
+    assert(taxCreepFactor(0.02, 2030, 2030) === 1, 'the start year itself → 1 (0 years elapsed)');
+    assertNear(taxCreepFactor(0.01, 2046, 2026), Math.pow(1.01, 20), '1%/yr over 20 years', 1e-12);
+});
+
+test('tax creep: zero creep is byte-identical to no creep at all (regression guard)', () => {
+    const bare = simulate({ ...CREEP_BASE });
+    const zeroed = simulate({ ...CREEP_BASE, taxRateCreep: 0, taxRateCreepState: 0, taxCreepStartYear: 0 });
+    assert(JSON.stringify(bare.log) === JSON.stringify(zeroed.log),
+        'an explicit zero creep must produce the exact same log as omitting the fields');
+    // And the multipliers recorded in the log are a flat 1 throughout.
+    assert(bare.log.every(r => r['-fedRateCreep'] === 1 && r['-stateRateCreep'] === 1),
+        'with creep off every year records a multiplier of 1');
+});
+
+test('tax creep: calculateTaxes scales the right walk and nothing else', () => {
+    const p = { filingStatus: 'SGL', ages: [70], birthyears: [1952], earnedIncome: 150000,
+                totalSS: 0, inflation: 1, state: 'CA' };
+    const base = calculateTaxes({ ...p });
+    const fed  = calculateTaxes({ ...p, fedRateCreep: 1.5 });
+    const st   = calculateTaxes({ ...p, stateRateCreep: 1.5 });
+    // Federal creep: ordinary federal tax scales exactly; state and cap gains untouched.
+    assertNear(fed.federalOrdinaryTax, base.federalOrdinaryTax * 1.5, 'federal ordinary tax scales', 0.01);
+    assert(fed.stateTax === base.stateTax, 'federal creep must not move state tax');
+    assert(fed.capitalGainsTax === base.capitalGainsTax, 'federal creep must not move cap gains tax');
+    // State creep: state tax scales exactly; federal untouched.
+    assertNear(st.stateTax, base.stateTax * 1.5, 'state tax scales', 0.01);
+    assert(st.federalTax === base.federalTax, 'state creep must not move federal tax');
+    // The applied multipliers are echoed back for logging.
+    assert(fed.fedRateCreep === 1.5 && fed.stateRateCreep === 1, 'multipliers echoed back');
+});
+
+test('tax creep: escalation reaches the simulation and compounds by calendar year', () => {
+    const flat = simulate({ ...CREEP_BASE });
+    const crept = simulate({ ...CREEP_BASE, taxRateCreep: 0.01 });
+    assert(sumCol(crept, 'FedTax') > sumCol(flat, 'FedTax'), 'federal tax rises with creep');
+    const last = crept.log.length - 1;
+    // Marginal rate in the final year = statutory rate × 1.01^(years elapsed).
+    assertNear(crept.log[last]['FedRate%'], flat.log[last]['FedRate%'] * Math.pow(1.01, last),
+        'final-year marginal federal rate', 1e-9);
+    // Every year's recorded multiplier matches the pure helper.
+    assert(crept.log.every((r, i) => r['-fedRateCreep'] === taxCreepFactor(0.01, r.year, crept.log[0].year)),
+        'logged multiplier matches taxCreepFactor for every year');
+    // State stays on today's rates while only the federal knob is set.
+    assert(crept.log.every(r => r['-stateRateCreep'] === 1), 'state multiplier stays 1');
+});
+
+test('tax creep: start year is respected (earlier years untouched)', () => {
+    const flat = simulate({ ...CREEP_BASE });
+    const startYear = flat.log[0].year + 8;
+    const crept = simulate({ ...CREEP_BASE, taxRateCreep: 0.02, taxCreepStartYear: startYear });
+    const before = crept.log.filter(r => r.year <= startYear);
+    assert(before.length === 9, `expected 9 pre-creep years, got ${before.length}`);
+    assert(before.every((r, i) => r.FedTax === flat.log[i].FedTax && r['-fedRateCreep'] === 1),
+        'years up to and including the start year are identical to the no-creep run');
+    const after = crept.log.filter(r => r.year > startYear);
+    assert(after.length > 0 && after.every(r => r['-fedRateCreep'] > 1), 'later years escalate');
+    assert(sumCol(crept, 'FedTax') > sumCol(flat, 'FedTax'), 'total federal tax still rises');
+});
+
+test('tax creep: the state path is live even without a UI knob', () => {
+    const flat = simulate({ ...CREEP_BASE });
+    const crept = simulate({ ...CREEP_BASE, taxRateCreepState: 0.01 });
+    assert(sumCol(crept, 'StateTax') > sumCol(flat, 'StateTax'), 'state tax rises with state creep');
+    assert(crept.log.every(r => r['-fedRateCreep'] === 1), 'federal multiplier stays 1');
+    const last = crept.log.length - 1;
+    assertNear(crept.log[last]['-stateRateCreep'], Math.pow(1.01, last), 'final-year state multiplier', 1e-12);
+});
+
+test('tax creep: reaches the Optimizer surface (buildVariations + optimizeSpend)', () => {
+    const withCreep = { ...CREEP_BASE, taxRateCreep: 0.01, taxRateCreepState: 0.02, taxCreepStartYear: 2030 };
+    // Surface 1: the swept variation list must carry all three fields untouched.
+    const variations = buildVariations(withCreep);
+    assert(variations.length > 0, 'buildVariations produced no variations');
+    assert(variations.every(v => v.taxRateCreep === 0.01 && v.taxRateCreepState === 0.02
+                              && v.taxCreepStartYear === 2030),
+        'every swept variation inherits the creep settings');
+    // And a swept variation actually pays the escalated tax.
+    const v = variations[0];
+    const crept = simulate({ ...v });
+    const flat = simulate({ ...v, taxRateCreep: 0, taxRateCreepState: 0 });
+    assert(sumCol(crept, 'FedTax') > sumCol(flat, 'FedTax')
+        && sumCol(crept, 'StateTax') > sumCol(flat, 'StateTax'),
+        'a swept variation pays both the federal and state creep');
+    // Surface 2: the optimizer's other merge path (base + overrides).
+    const optCrept = optimizeSpend(withCreep, { strategy: 'fixed' });
+    const optFlat = optimizeSpend({ ...withCreep, taxRateCreep: 0, taxRateCreepState: 0 }, { strategy: 'fixed' });
+    assert(optCrept.result.log.every(r => r['-fedRateCreep'] >= 1 && r['-stateRateCreep'] >= 1),
+        'optimizeSpend runs carry the creep multipliers');
+    assert(sumCol(optCrept.result, 'totalTax') > sumCol(optFlat.result, 'totalTax'),
+        'optimizeSpend pays more tax under creep');
+});
+
+test('tax creep: reaches Monte Carlo and is path-independent', () => {
+    // Replicates worker.js's call shape exactly: simulate({ ...variation, returnSequence, inflationSequence }).
+    const withCreep = { ...CREEP_BASE, taxRateCreep: 0.01, taxRateCreepState: 0.01 };
+    const N = 40;
+    const returnSequence = Array.from({ length: N }, (_, i) => 0.04 + (i % 5) * 0.01);
+    const inflA = Array.from({ length: N }, (_, i) => 0.01 + (i % 3) * 0.01);
+    const inflB = Array.from({ length: N }, (_, i) => 0.05 - (i % 4) * 0.01);
+    const pathA = simulate({ ...withCreep, returnSequence, inflationSequence: inflA });
+    const pathB = simulate({ ...withCreep, returnSequence, inflationSequence: inflB });
+    const flat  = simulate({ ...withCreep, returnSequence, inflationSequence: inflA,
+                             taxRateCreep: 0, taxRateCreepState: 0 });
+    // Tax POLICY is a calendar-year fact — it must be identical across paths even though the
+    // paths see different inflation. This is the guard against folding the creep into cpiRate.
+    const n = Math.min(pathA.log.length, pathB.log.length);
+    for (let i = 0; i < n; i++) {
+        assert(pathA.log[i]['-fedRateCreep'] === pathB.log[i]['-fedRateCreep']
+            && pathA.log[i]['-stateRateCreep'] === pathB.log[i]['-stateRateCreep'],
+            `creep multiplier differs between MC paths at year index ${i} — it must not depend on inflation`);
+    }
+    // The realized taxes DO differ (different inflation → different brackets/income) and both
+    // exceed the same path with creep off.
+    assert(sumCol(pathA, 'totalTax') !== sumCol(pathB, 'totalTax'),
+        'different inflation paths should still produce different tax totals');
+    assert(sumCol(pathA, 'FedTax') > sumCol(flat, 'FedTax'), 'MC path pays the federal creep');
+    assert(sumCol(pathA, 'StateTax') > sumCol(flat, 'StateTax'), 'MC path pays the state creep');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

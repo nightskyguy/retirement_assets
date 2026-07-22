@@ -61,6 +61,16 @@ function getRMDPercentage(currentYear, birthYear) {
     return 1 / (RMD_TABLE[age]);
 }
 
+// Tax-rate creep multiplier: bracket RATES escalate `rate` per year starting in `startYear`
+// (bracket LIMITS are unaffected — those still track CPI, so every strategy's bracket/IRMAA/ACA
+// ceiling is unchanged). A function of the CALENDAR YEAR only, never of realized inflation: Monte
+// Carlo gives each path its own inflationSequence, and tax policy must not differ per path.
+// Returns 1 when off or before the start year, so rate = 0 is a guaranteed no-op.
+function taxCreepFactor(rate, currentYear, startYear) {
+    if (!rate) return 1;
+    return Math.pow(1 + rate, Math.max(0, currentYear - startYear));
+}
+
 // Computes QCDs for the simulation year. Returns { qcd1, qcd2, totalQCD }.
 // "Always" mode: donate up to qcdHHMax every eligible year.
 // "As Needed" mode: donate only the minimum needed to drop below the current IRMAA tier cliff.
@@ -578,7 +588,10 @@ function getLTCGBracketTopRate(ordinaryIncome, totalGains, status, cpiRate) {
 // MAGI ceiling for bracket/minlimit/aca strategies — shared by the normal per-year withdrawal
 // sizing branch and Cycle Brokerage's LTCG top-off logic (Item 4), so a brokerage harvest year
 // still respects whatever IRMAA-tier/ACA-cliff/bracket ceiling the active strategy targets.
-function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit) {
+// fedRateCreep/stateRateCreep scale the RATES this function reports (the seeds that drive
+// withdrawal ordering) so they match what calculateTaxes() will actually charge. The bracket
+// LIMITS are deliberately left alone — creep raises rates, not thresholds.
+function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1) {
     let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
 
     if ((inputs.stratIRMAATier ?? -1) >= 0) {
@@ -591,33 +604,37 @@ function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, ag
             limit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate).limit;
         }
         const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
-        marginalFedTaxRate = fedAtLimit.rate;
-        nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation).cumulative / (limit || 1);
+        // findUpperLimitByAmount reads the statutory rate straight off the bracket table and never
+        // passes through calculateProgressive, so the creep has to be applied here by hand.
+        marginalFedTaxRate = fedAtLimit.rate * fedRateCreep;
+        nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation, fedRateCreep).cumulative / (limit || 1);
         const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
-        marginalStateTaxRate = stAtLimit.rate;
-        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
+        marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
+        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation, stateRateCreep).cumulative / (limit || 1);
     } else if ((inputs.stratACAMultiple ?? 0) > 0) {
         // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
         const FPL_2025 = status === 'MFJ' ? 20440 : 15060;
         limit = Math.round(FPL_2025 * inputs.stratACAMultiple / 100 * cpiRate * (1 + inputs.cpi)) - 1;
         const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
-        marginalFedTaxRate = fedAtLimit.rate;
-        nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation).cumulative / (limit || 1);
+        marginalFedTaxRate = fedAtLimit.rate * fedRateCreep;
+        nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation, fedRateCreep).cumulative / (limit || 1);
         const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
-        marginalStateTaxRate = stAtLimit.rate;
-        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / (limit || 1);
+        marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
+        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation, stateRateCreep).cumulative / (limit || 1);
     } else {
         // Federal bracket ceiling mode (original logic)
+        // stratRate names a bracket ("fill the 22% bracket"), which is a threshold concept — the
+        // lookup stays on statutory rates so the ceiling doesn't move when rates creep.
         let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
         limit = fedLimit.limit;
-        let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation);
+        let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation, fedRateCreep);
         nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit;
-        marginalFedTaxRate = fedLimit.rate;
+        marginalFedTaxRate = fedLimit.rate * fedRateCreep;
 
         let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
-        marginalStateTaxRate = stLimit.rate;
+        marginalStateTaxRate = stLimit.rate * stateRateCreep;
         stateLimit = stLimit.limit;
-        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation).cumulative / limit;
+        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation, stateRateCreep).cumulative / limit;
 
         limit = Math.min(stateLimit, limit);
 
@@ -736,6 +753,9 @@ function buildSimYearLogRecord(p) {
         '-capGainsTax': p.tax.capitalGainsTax,
         '-capGainsRate': p.tax.capitalGainsRate,
         '-cpiFactor': p.cpiRate,
+        // Tax-rate creep multipliers actually applied this year (1 = today's statutory rates).
+        '-fedRateCreep': p.fedRateCreep,
+        '-stateRateCreep': p.stateRateCreep,
         MAGI: p.tax.MAGI,
         'NominalRate%': p.nominalTaxRate,
         'FedCap': p.tax.fedLimit,
@@ -870,6 +890,10 @@ function resolveHousehold(sim, yr) {
     yr.alive1 = yr.age1 <= inputs.die1;
     yr.alive2 = yr.age2 <= inputs.die2;
     if (!yr.alive1 && !yr.alive2) return false;
+
+    // Tax-rate creep for THIS calendar year (1 = today's statutory rates, the default).
+    yr.fedRateCreep   = taxCreepFactor(inputs.taxRateCreep,      sim.currentYear, sim.creepStartYear);
+    yr.stateRateCreep = taxCreepFactor(inputs.taxRateCreepState, sim.currentYear, sim.creepStartYear);
 
     totals.yearstested += 1;
 
@@ -1122,7 +1146,7 @@ function planPrimaryWithdrawals(sim, yr) {
                 // strategy's own ceiling (IRMAA tier / ACA cliff / bracket ceiling). This
                 // branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
                 // year, so compute it fresh here rather than reading a stale/undefined `limit`.
-                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit).limit;
+                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep).limit;
                 _room = Math.min(_room, Math.max(0, _ceil - _baseOrdinaryInc));
             }
             _brokerageNetTarget = Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
@@ -1162,7 +1186,7 @@ function planPrimaryWithdrawals(sim, yr) {
 
     } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
         ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-            computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit));
+            computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep));
 
         yr.bracketTarget = yr.limit;
 
@@ -1238,7 +1262,7 @@ function applyPrimaryAndTaxPass1(sim, yr) {
         earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
         qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
     })
     inspectForErrors(yr.tax)  // See if any numbers look fishy.
 
@@ -1332,7 +1356,7 @@ function fillSpendingGap(sim, yr) {
         earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
         qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
     })
     inspectForErrors(yr.tax)  // See if any numbers look fishy.
 
@@ -1388,7 +1412,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
             totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
             earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-            taxExemptInterest: 0, state: STATEname
+            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
         });
         yr.totalTax = yr.tax.totalTax + yr.IRMAA;
         totals.thirdPassCount += 1;
@@ -1418,7 +1442,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
                 earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
                 pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
                 qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-                taxExemptInterest: 0, state: STATEname
+                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
             });
             yr.totalTax = yr.tax.totalTax + yr.IRMAA;
             yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
@@ -1568,7 +1592,7 @@ function cfRefundIRA(sim, yr, netTarget) {
             earnedIncome: yr.pension + yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G) + yr.taxableInterest, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G),
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-            taxExemptInterest: 0, state: STATEname
+            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
         });
         dT = Math.max(0, (yr.totalTax - yr.IRMAA) - t2.totalTax);
         const Gnext = Math.min(netTarget + dT, _cap);
@@ -1623,7 +1647,7 @@ function applyExtraConversion(sim, yr) {
                 IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: sim.cpiRate,
                 pensionIncome: yr.pension, iraIncome: yr.taxableRMD + _priorIRAInc + _gross,
                 qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-                hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+                hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
             });
             incrementalExtraConvTax = Math.max(0, _exTaxCalc.totalTax - (yr.totalTax - yr.IRMAA));
             yr.extraConvGross = _gross;
@@ -1706,7 +1730,7 @@ function applyConversionGrossUp(sim, yr) {
         IRMAAAnnualCost: 0, earnedIncome: baseEI + shadowIRA, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD + shadowIRA,
         qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-        hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+        hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
     });
     const dT = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowCalc.totalTax);
     const t = Math.min(0.6, dT / conversion);   // 0.6 is a numeric safety guard, not a business rate
@@ -1767,7 +1791,7 @@ function attributeIncrementalTaxes(sim, yr) {
             IRMAAAnnualCost: 0, earnedIncome: convShadowEI, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - yr.totalConverted),
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-            hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
         });
         yr.incrementalConvTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowConvCalc.totalTax);
     }
@@ -1782,7 +1806,7 @@ function attributeIncrementalTaxes(sim, yr) {
             IRMAAAnnualCost: 0, earnedIncome: excessShadowEI, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - excessCashOC),
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-            hsaContrib: 0, taxExemptInterest: 0, state: STATEname
+            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
         });
         yr.incrementalExcessTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowExcessCalc.totalTax);
     }
@@ -1921,6 +1945,7 @@ function logYear(sim, yr) {
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
         extraConvGross: yr.extraConvGross,
         grossUpIRA: yr.grossUpIRA, grossUpTax: yr.grossUpTax, extraConvCashTax: yr.extraConvCashTax,
+        fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep,
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
         yearInflows: yr._yearInflows, wdRate: yr._wdRate,
         useEarly: yr._useEarly, timingReason: yr.timingReason,
@@ -2079,6 +2104,9 @@ function simulate(inputs) {
         nominalTaxRate, capitalGainsRate,
         subCycleIRAYears, prevPortfolio,
         gkIWR, gkPriorReturn, gkAdjLabel,
+        // Tax-rate creep: blank/0 start year means the creep begins with the plan's first year.
+        // Never advanced — resolveHousehold() derives each year's factor from the calendar year.
+        creepStartYear: inputs.taxCreepStartYear > 0 ? inputs.taxCreepStartYear : currentYear,
     };
 
     for (let y = 0; y < maxYears; y++) {
@@ -2719,7 +2747,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, diagnoseConvBreakEvenFailure, optimizeConversionAmount, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart };
+    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, diagnoseConvBreakEvenFailure, optimizeConversionAmount, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, taxCreepFactor, buildVariations };
 }
 
 

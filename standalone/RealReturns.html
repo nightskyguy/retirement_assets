@@ -136,9 +136,12 @@
   .legend-hint { font-size: 10px; color: #aaa9a5; margin-bottom: 8px; }
 
   /* Additional (optional) series checkboxes */
-  .extra-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 4px; font-size: 12px; color: #6b6b67; }
+  .extra-legend { display: flex; flex-wrap: wrap; gap: 14px 20px; margin-bottom: 4px; font-size: 12px; color: #6b6b67; }
+  .ex-group { display: flex; flex-direction: column; gap: 2px; }
   .ex-item { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
   .ex-item input[type=checkbox] { margin: 0; accent-color: #6b6b67; cursor: pointer; }
+  .ex-cagr { font-size: 11px; font-weight: 600; margin-left: 22px; white-space: nowrap; }
+  .ex-cagr .ex-cagr-yrs { font-weight: 500; color: #aaa9a5; }
   .extra-title { font-size: 10px; font-weight: 600; color: #6b6b67; text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 6px; }
 
   /* Intl-of-equity sub-row, nested under the Equity allocation row */
@@ -272,40 +275,55 @@
       <span class="lg-ln-wide lg-nom" style="background:#4841a9"></span>
       Custom Mix
     </span>
-    <span class="lg-item lg-static">
+    <span class="lg-item" data-asset="4" onclick="legendClick(4)" title="Click to isolate Uninvested (inflation / 0% return)">
       <span class="lg-ln-dash" style="border-color:#e24b4a"></span>
       Uninvested (0% return)
     </span>
   </div>
-  <p class="legend-hint" id="legend-hint">Click any asset to isolate &mdash; shows real + nominal side by side (when overlay is on)</p>
+  <p class="legend-hint" id="legend-hint">Click any asset to isolate &mdash; primary assets only; optional series below stay on so you can compare. Shows real + nominal side by side (when overlay is on).</p>
 
   <p class="extra-title">Additional Series (optional)</p>
   <div class="extra-legend" id="extraLegend">
-    <label class="ex-item">
-      <input type="checkbox" id="chk-intl" checked>
-      <span class="lg-ln" style="background:#0a9d9d"></span>
-      International
-    </label>
-    <label class="ex-item">
-      <input type="checkbox" id="chk-smallCap">
-      <span class="lg-ln" style="background:#c94f82"></span>
-      Small Cap
-    </label>
-    <label class="ex-item">
-      <input type="checkbox" id="chk-gold">
-      <span class="lg-ln" style="background:#816500"></span>
-      Gold
-    </label>
-    <label class="ex-item">
-      <input type="checkbox" id="chk-growth">
-      <span class="lg-ln" style="background:#0075a3"></span>
-      Growth Stocks
-    </label>
-    <label class="ex-item">
-      <input type="checkbox" id="chk-dividend">
-      <span class="lg-ln" style="background:#8f3fc2"></span>
-      Dividend Stocks
-    </label>
+    <div class="ex-group">
+      <label class="ex-item">
+        <input type="checkbox" id="chk-intl" checked>
+        <span class="lg-ln" style="background:#0a9d9d"></span>
+        International
+      </label>
+      <span class="ex-cagr" id="cagr-intl"></span>
+    </div>
+    <div class="ex-group">
+      <label class="ex-item">
+        <input type="checkbox" id="chk-smallCap">
+        <span class="lg-ln" style="background:#c94f82"></span>
+        Small Cap
+      </label>
+      <span class="ex-cagr" id="cagr-smallCap"></span>
+    </div>
+    <div class="ex-group">
+      <label class="ex-item">
+        <input type="checkbox" id="chk-gold">
+        <span class="lg-ln" style="background:#816500"></span>
+        Gold
+      </label>
+      <span class="ex-cagr" id="cagr-gold"></span>
+    </div>
+    <div class="ex-group">
+      <label class="ex-item">
+        <input type="checkbox" id="chk-growth">
+        <span class="lg-ln" style="background:#0075a3"></span>
+        Growth Stocks
+      </label>
+      <span class="ex-cagr" id="cagr-growth"></span>
+    </div>
+    <div class="ex-group">
+      <label class="ex-item">
+        <input type="checkbox" id="chk-dividend">
+        <span class="lg-ln" style="background:#8f3fc2"></span>
+        Dividend Stocks
+      </label>
+      <span class="ex-cagr" id="cagr-dividend"></span>
+    </div>
   </div>
 
   <div class="chart-wrapper">
@@ -320,7 +338,7 @@
     <strong>Bonds:</strong> US 10-year Treasury total return, 1928&ndash;2025.
     <strong>Cash:</strong> the greater of the 3-month US Treasury bill annual return or a competitive HYSA rate estimate, each year, 1928&ndash;2025.
     <strong>Inflation:</strong> BLS CPI-U (December-over-December), 1928&ndash;2025.<br>
-    <strong>International</strong> (optional): MSCI EAFE proxy, 1970&ndash;2025 &mdash; no data before 1970, so the line simply starts in 1970 rather than being estimated. The Custom Mix's &ldquo;Intl % of Equity&rdquo; split uses this same series from 1970 on and falls back to US equity for any earlier years in the selected period.
+    <strong>International</strong> (optional): MSCI EAFE net total return (USD), 1970&ndash;2025 &mdash; 1970 is the index's first full year (inception Dec 31 1969), so the line simply starts in 1970 rather than being estimated. The Custom Mix's &ldquo;Intl % of Equity&rdquo; split uses this same series and falls back to US equity for any earlier years in the selected period.
     <strong>Small Cap &amp; Gold</strong> (optional): Damodaran Online, 1928&ndash;2025.
     <strong>Growth &amp; Dividend</strong> (optional): Kenneth R. French Data Library (value-weighted annual factor portfolios), 1928&ndash;2025.<br>
     Sources: <a href="https://pages.stern.nyu.edu/~adamodar/" rel="nofollow" target="_blank">Damodaran Online</a>,
@@ -330,8 +348,8 @@
   </p>
 </div>
 
-<script src="../montecarlo/historical_returns.js"></script>
-<script src="real_returns_data.js"></script>
+<script src="../montecarlo/historical_returns.js?v=132b"></script>
+<script src="real_returns_data.js?v=132b"></script>
 <script>
 // --- Global Chart.js defaults ---
 Chart.defaults.color = '#4a4a47';
@@ -360,6 +378,7 @@ const DV   = HISTORICAL_RETURNS.dividend;
 const DATA_START = 1928;
 const DATA_END   = 2025;
 const INTL_OFF   = HISTORICAL_RETURNS.intlStartYear - DATA_START; // 42 — intl data starts 1970
+const INTL_END   = HISTORICAL_RETURNS.intlStartYear + INTL.length - 1; // last year with intl data (2024)
 
 // --- Colors ---
 const C_EQ  = '#378add', C_EQ_NOM  = '#1d5491';
@@ -388,6 +407,9 @@ let startYr = 2016, numYears = DATA_END - 2016 + 1, eqPct = 60, bdPct = 30, intl
 let nominalOn = false, isolatedAsset = -1;
 let extraChecked = { ...EXTRA_DEFAULTS };
 let annualData = [];
+// Real CAGR per optional series for the current period, keyed by EXTRA_KEYS.
+// { cagr, years } — years may be < numYears for intl (data only from 1970), or null when no data.
+let extraCAGR = {};
 
 // Load from URL before chart init
 (function loadFromURL() {
@@ -401,7 +423,7 @@ let annualData = [];
   if (p.has('bd')) bdPct = Math.max(0, Math.min(100 - eqPct, +p.get('bd') || 30));
   if (p.has('ieq')) intlOfEqPct = Math.max(0, Math.min(100, +p.get('ieq') || 0));
   if (p.get('nom') === '1') nominalOn = true;
-  if (p.has('iso')) { const v = +p.get('iso'); if (v >= 0 && v <= 3) isolatedAsset = v; }
+  if (p.has('iso')) { const v = +p.get('iso'); if (v >= 0 && v <= 4) isolatedAsset = v; }
   if (p.get('xi') === '0') extraChecked.intl = false;
   if (p.get('xs') === '1') extraChecked.smallCap = true;
   if (p.get('xg') === '1') extraChecked.gold = true;
@@ -483,7 +505,10 @@ function computeSeries() {
     inflVals.push(+inflB.toFixed(2));  cpiVals.push(+cpiB.toFixed(2));
     eqNomVals.push(+eqNomB.toFixed(2)); bdNomVals.push(+bdNomB.toFixed(2));
     caNomVals.push(+caNomB.toFixed(2)); mixNomVals.push(+mixNomB.toFixed(2));
-    intlVals.push(intlB === null ? null : +intlB.toFixed(2));
+    // Past the end of the intl series the line stops rather than carrying the last balance
+    // forward — a flat segment would read as "intl returned 0% real that year", which is a
+    // claim the data does not make.
+    intlVals.push(intlB === null || yr > INTL_END ? null : +intlB.toFixed(2));
     scVals.push(+scB.toFixed(2)); gdVals.push(+gdB.toFixed(2));
     grVals.push(+grB.toFixed(2)); dvVals.push(+dvB.toFixed(2));
     annualData.push({ yr, eq, bd, ca, inf, rEq, rBd, rCa, rMix, mixNom, rSc, rGd, rGr, rDv, rIntl });
@@ -580,6 +605,34 @@ function renderInflationSummary(series) {
     </div>`;
 }
 
+// --- Optional-series real CAGR (shown under each label, always, whether checked or not) ---
+// Compounds only the years each series actually has data (intl starts 1970), so the exponent
+// matches the number of years compounded — a shorter intl window is labeled with its year count.
+const EXTRA_RET_FIELD = { intl: 'rIntl', smallCap: 'rSc', gold: 'rGd', growth: 'rGr', dividend: 'rDv' };
+function renderExtraCAGRs() {
+  extraCAGR = {};
+  EXTRA_KEYS.forEach(key => {
+    const field = EXTRA_RET_FIELD[key];
+    let cum = 1, cnt = 0;
+    annualData.forEach(d => { const r = d[field]; if (r != null) { cum *= 1 + r; cnt++; } });
+    const el = document.getElementById('cagr-' + key);
+    if (cnt === 0) {
+      extraCAGR[key] = { cagr: null, years: 0 };
+      if (el) { el.innerHTML = '<span class="ex-cagr-yrs">no data in period</span>'; }
+      return;
+    }
+    const cg = Math.pow(cum, 1 / cnt) - 1;
+    extraCAGR[key] = { cagr: cg, years: cnt };
+    if (el) {
+      const yrsTag = cnt < annualData.length ? ` <span class="ex-cagr-yrs">(${cnt}y)</span>` : '';
+      el.className = 'ex-cagr ' + (cg >= 0 ? 'positive' : 'negative');
+      el.innerHTML = pctFmt(cg) + '/yr' + yrsTag;
+      el.title = `Real (inflation-adjusted) compound annual growth rate for ${EXTRA_META[key].label}`
+        + ` over the ${cnt} year${cnt === 1 ? '' : 's'} of data in the selected period.`;
+    }
+  });
+}
+
 // --- Sync sliders/display to loaded state ---
 document.getElementById('startYr').value = startYr;
 document.getElementById('startYrVal').textContent = startYr;
@@ -600,6 +653,7 @@ updatePeriodDisplay();
 const s0 = computeSeries();
 renderStats(s0);
 renderInflationSummary(s0);
+renderExtraCAGRs();
 
 const breakevenPlugin = {
   id: 'breakeven',
@@ -630,7 +684,7 @@ const chart = new Chart(document.getElementById('mainChart'), {
       { label: 'US Bonds',               data: s0.bdVals,      borderColor: C_BD,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 3, hidden: isolatedAsset !== -1 && isolatedAsset !== 1 },
       { label: 'Cash (HYSA/T-Bills)',     data: s0.caVals,      borderColor: C_CA,  backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 4, hidden: isolatedAsset !== -1 && isolatedAsset !== 2 },
       { label: 'Custom Mix',             data: s0.mixVals,     borderColor: C_MIX, backgroundColor: 'transparent', borderWidth: 4,   pointRadius: 0, tension: 0.2, order: 1, hidden: isolatedAsset !== -1 && isolatedAsset !== 3 },
-      { label: 'Uninvested (0%)',        data: s0.inflVals,    borderColor: C_INF, backgroundColor: 'transparent', borderWidth: 1.8, pointRadius: 0, tension: 0.2, order: 5, borderDash: [6, 4], hidden: isolatedAsset !== -1 },
+      { label: 'Uninvested (0%)',        data: s0.inflVals,    borderColor: C_INF, backgroundColor: 'transparent', borderWidth: 1.8, pointRadius: 0, tension: 0.2, order: 5, borderDash: [6, 4], hidden: isolatedAsset !== -1 && isolatedAsset !== 4 },
       // Nominal (market) lines (indices 5-8) — hidden until toggled on
       { label: 'US Equity (nominal)',     data: s0.eqNomVals,  borderColor: C_EQ_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 6,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 0), borderDash: [3, 2] },
       { label: 'US Bonds (nominal)',      data: s0.bdNomVals,  borderColor: C_BD_NOM,  backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0.2, order: 7,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 1), borderDash: [3, 2] },
@@ -638,11 +692,11 @@ const chart = new Chart(document.getElementById('mainChart'), {
       { label: 'Custom Mix (nominal)',    data: s0.mixNomVals, borderColor: C_MIX_NOM, backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 9,  hidden: !nominalOn || (isolatedAsset !== -1 && isolatedAsset !== 3), borderDash: [3, 2] },
       // Optional series (indices 9-13) — real only, no nominal counterpart. Visibility driven by
       // the "Additional Series" checkboxes, not the core-4 legend isolate mechanism.
-      { label: EXTRA_META.intl.label,     data: s0.intlVals, borderColor: C_INTL, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 10, spanGaps: false, hidden: isolatedAsset !== -1 || !extraChecked.intl },
-      { label: EXTRA_META.smallCap.label, data: s0.scVals,   borderColor: C_SC,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 11, hidden: isolatedAsset !== -1 || !extraChecked.smallCap },
-      { label: EXTRA_META.gold.label,     data: s0.gdVals,   borderColor: C_GD,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 12, hidden: isolatedAsset !== -1 || !extraChecked.gold },
-      { label: EXTRA_META.growth.label,   data: s0.grVals,   borderColor: C_GR,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 13, hidden: isolatedAsset !== -1 || !extraChecked.growth },
-      { label: EXTRA_META.dividend.label, data: s0.dvVals,   borderColor: C_DV,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 14, hidden: isolatedAsset !== -1 || !extraChecked.dividend },
+      { label: EXTRA_META.intl.label,     data: s0.intlVals, borderColor: C_INTL, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 10, spanGaps: false, hidden: !extraChecked.intl },
+      { label: EXTRA_META.smallCap.label, data: s0.scVals,   borderColor: C_SC,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 11, hidden: !extraChecked.smallCap },
+      { label: EXTRA_META.gold.label,     data: s0.gdVals,   borderColor: C_GD,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 12, hidden: !extraChecked.gold },
+      { label: EXTRA_META.growth.label,   data: s0.grVals,   borderColor: C_GR,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 13, hidden: !extraChecked.growth },
+      { label: EXTRA_META.dividend.label, data: s0.dvVals,   borderColor: C_DV,   backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.2, order: 14, hidden: !extraChecked.dividend },
     ]
   },
   options: {
@@ -702,6 +756,17 @@ const chart = new Chart(document.getElementById('mainChart'), {
               const r = { intl: d.rIntl, smallCap: d.rSc, gold: d.rGd, growth: d.rGr, dividend: d.rDv }[key];
               if (r != null) lines.push(EXTRA_META[key].label + ' (real): ' + pctFmt(r));
             });
+            // Period real CAGR for each selected optional series (constant across the tooltip's
+            // hover position — it's the whole-period figure, same as shown under the series label).
+            const cagrLines = [];
+            EXTRA_KEYS.forEach(key => {
+              if (!extraChecked[key]) return;
+              const c = extraCAGR[key];
+              if (!c || c.cagr == null) return;
+              const yrsTag = c.years < annualData.length ? ` (${c.years}y)` : '';
+              cagrLines.push(EXTRA_META[key].label + ' CAGR: ' + pctFmt(c.cagr) + '/yr' + yrsTag);
+            });
+            if (cagrLines.length) { lines.push(''); cagrLines.forEach(l => lines.push(l)); }
             return lines;
           }
         }
@@ -776,20 +841,18 @@ function legendClick(idx) {
 function applyVisibility() {
   chart.data.datasets.forEach((ds, i) => {
     let vis;
-    if (i < 4) {
-      // real asset lines
+    if (i <= 4) {
+      // primary real asset lines, incl. uninvested/inflation (index 4) — isolate applies here only
       vis = isolatedAsset === -1 || i === isolatedAsset;
-    } else if (i === 4) {
-      // uninvested — hide when anything isolated
-      vis = isolatedAsset === -1;
     } else if (i <= 8) {
-      // nominal lines (i - 5 = asset index)
+      // nominal lines (i - 5 = asset index; no nominal counterpart for uninvested, so iso===4 hides all)
       const ai = i - 5;
       vis = nominalOn && (isolatedAsset === -1 || ai === isolatedAsset);
     } else {
-      // optional series (i - 9 = EXTRA_KEYS index) — checkbox-driven, hidden when anything isolated
+      // optional series (i - 9 = EXTRA_KEYS index) — purely checkbox-driven, independent of isolate
+      // so a user can pit an isolated primary against any optional series.
       const key = EXTRA_KEYS[i - 9];
-      vis = isolatedAsset === -1 && extraChecked[key];
+      vis = extraChecked[key];
     }
     chart.setDatasetVisibility(i, vis);
   });
@@ -826,6 +889,7 @@ function refresh() {
   chart.update();
   renderStats(s);
   renderInflationSummary(s);
+  renderExtraCAGRs();
 }
 
 // --- Start year / period length sliders ---

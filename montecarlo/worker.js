@@ -27,7 +27,7 @@ self.onmessage = function ({ data: cfg }) {
         let inflationStats = null;
 
         if (mode === 'bootstrap') {
-            // Multi-asset block bootstrap: synchronized draws from equity, bonds, intl, inflation (1970–2024 window).
+            // Multi-asset block bootstrap: synchronized draws from equity, bonds, intl, inflation (1970–2025 window).
             multiAssetBank = bootstrapMultiAssetBank(rng, numPaths, years);
             const bearFraction = (cfg.bearFraction ?? 25) / 100;
             if (bearFraction > 0) applyBearStartOverlay(multiAssetBank, rng, numPaths, years, bearFraction, cfg.stressCount ?? 10);

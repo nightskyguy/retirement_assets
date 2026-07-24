@@ -26,6 +26,13 @@ A California resident built these with [Google gemini](https://gemini.google.com
 
 - [Who Are These Tools For? What Can They Do?](#who-are-these-tools-for--what-can-they-do)
 - [Standalone Calculator Tools](#standalone-calculator-tools)
+  - [Historical Real Returns](#historical-real-returns)
+  - [Future Cost](#future-cost)
+  - [IRMAA and RMDs](#irmaa-and-rmds)
+  - [After Tax Real Growth](#after-tax-real-growth)
+  - [Income Tax Planner](#income-tax-planner)
+  - [High Yield Savings Accounts Real Returns](#high-yield-savings-accounts-real-returns)
+  - [Retirement Projection](#retirement-projection)
 - [The Retirement Optimizer](#the-retirement-optimizer)
   - [Features in the Works (and Known Bugs)](#features-in-the-works-and-known-bugs)
   - [Why This Tool?](#why-this-tool)
@@ -49,8 +56,20 @@ A California resident built these with [Google gemini](https://gemini.google.com
       - [Retirement Scenarios](#retirement-scenarios) 
       - [CliffEdge App](#cliffedge-app) 
 - [Ramblings and Observations](#ramblings-and-observations)
-
+  - [References and Useful Resources](#references-and-useful-resources)
+    - [YouTube Sources](#youtube-sources)
+    - [Papers by Edward McQuarrie](#papers-by-edward-mcquarrie)
+    - [Miscellaneous](#miscellaneous)
   - [Some of the Things I Learned About Taxation](#some-of-the-things-i-learned-about-taxation)
+    - [Late Payment Penalties](#late-payment-penalties)
+    - [Moldy Brackets](#moldy-brackets)
+    - [IRMAA Escalation](#irmaa-escalation)
+    - [The Tax Torpedo](#the-tax-torpedo)
+      - [State Tax Rates on Social Security Income by Federal Bracket Level (2026)](#state-tax-rates-on-social-security-income-by-federal-bracket-level-2026)
+      - [Combined Tax Torpedo Examples](#combined-tax-torpedo-examples-during-85-ss-phase-out)
+    - [No "Long Term Capital Gains" in most states](#no-long-term-capital-gains-in-most-states)
+    - [Roth Conversion Gotchas](#roth-conversion-gotchas)
+    - [How Reliable Is the Break-Even Tax Rate?](#how-reliable-is-the-break-even-tax-rate)
 
 --- 
 
@@ -362,7 +381,9 @@ I notice that he is releasing a book with Bill Bernstein (the founder of the 4% 
 
 ### Some of the Things I Learned About Taxation
 
-**Late Payment Penalties**  One of the biggest bugaboos in retirement is managing your tax payments.  Unlike working years where you were getting frequent payments with tax withholding already done, in retirement you can take taxable withdrawals anytime you like: beginning of the year, middle of the year, monthly, etc. However federal and state taxing authorities expect you to pay your taxes "timely" (e.g. quarterly or through appropriate withdrawals).  It doesn't matter to the IRS whether you withdraw 50K at the beginning, middle or end of the year, the IRS expects you to pay your taxes "quarterly" based on your total income at year end. 
+#### Late Payment Penalties
+
+One of the biggest bugaboos in retirement is managing your tax payments.  Unlike working years where you were getting frequent payments with tax withholding already done, in retirement you can take taxable withdrawals anytime you like: beginning of the year, middle of the year, monthly, etc. However federal and state taxing authorities expect you to pay your taxes "timely" (e.g. quarterly or through appropriate withdrawals).  It doesn't matter to the IRS whether you withdraw 50K at the beginning, middle or end of the year, the IRS expects you to pay your taxes "quarterly" based on your total income at year end. 
 
 You CANNOT solve the timeliness problem by plunking down your tax debt when you file your taxes by the April 15 deadline!
 
@@ -375,9 +396,15 @@ Option B allows another workaround: Suppose you convert 10k from your IRA to you
 
 Safe Harbor is another "gotcha" in the tax code. If you "timely" pay 90% of your current year taxes and 100% or 110% of your prior taxes (depending on income), you will not get an underpayment/late payment penalty.
 
-**Moldy Brackets** While the Social Security payments are adjusted annually by the CPI (Consumer Price Index), the rate at which Social Security is taxed is based on thresholds have NEVER been adjusted for inflation since they were established (1983 for 50%, and 1993 for 85%). This is no doubt why congress has churned and churned on trying to make Social Security non taxable.
+#### Moldy Brackets
 
-**IRMAA Escalation** My original model assumed that the IRMAA tax brackets and amounts are adjusted by CPI, but that's not true. The *brackets* are adjusted per CPI, but the amounts are tied to Medicare. The CPI has averaged about 2.8% annually over the last 20 years, but Medicare has averaged 5.6% annual increase.  IRMAA, as mentioned is a TAX CLIFF, not a graduated bracket. That means if you make $1 more than the maximum you move up an IRMAA tier. The result is not only the need to pay the tax, say an extra 4k per year, but you may have to withdraw more from an IRA to pay the tax.  At a 20% nominal tax rate, that extra $1 costs at least $5K AND may result in pushing you up into higher marginal brackets. IRMAA penalties will cost significantly more REAL dollars in the future - if you have a chance to eat IRMAA now, or eat IRMAA later, neither is appetizing, but the future will be more painful.
+While the Social Security payments are adjusted annually by the CPI (Consumer Price Index), the rate at which Social Security is taxed is based on thresholds have NEVER been adjusted for inflation since they were established (1983 for 50%, and 1993 for 85%). This is no doubt why congress has churned and churned on trying to make Social Security non taxable.
+
+#### IRMAA Escalation
+
+My original model assumed that the IRMAA tax brackets and amounts are adjusted by CPI, but that's not true. The *brackets* are adjusted per CPI, but the amounts are tied to Medicare. The CPI has averaged about 2.8% annually over the last 20 years, but Medicare has averaged 5.6% annual increase.  IRMAA, as mentioned is a TAX CLIFF, not a graduated bracket. That means if you make $1 more than the maximum you move up an IRMAA tier. The result is not only the need to pay the tax, say an extra 4k per year, but you may have to withdraw more from an IRA to pay the tax.  At a 20% nominal tax rate, that extra $1 costs at least $5K AND may result in pushing you up into higher marginal brackets. IRMAA penalties will cost significantly more REAL dollars in the future - if you have a chance to eat IRMAA now, or eat IRMAA later, neither is appetizing, but the future will be more painful.
+
+#### The Tax Torpedo
 
 Those *Moldy Brackets* have added to another problem: there is a ["Tax Torpedo"](https://www.fidelity.com/learning-center/personal-finance/social-security-tax-torpedo-and-hidden-taxes) - along with several other tax "pitfalls" - that hits *middle income* retirees particularly hard. The so-called **Tax Torpedo** turns a portion of your income in the federal 10%, 12% and 22% brackets into an effective tax rate of 18.5%, 22.2% and **40.7%** respectively. To add more injury, eight states tax Social Security and that can make these rates even worse.  Here are the net effects:
 
@@ -446,3 +473,9 @@ Here are some of the harms of having or accruing a large IRA/401K:
 10. As your IRA/401K grows, your RMDs will also grow. At some point this causes 85% of your social security to become taxable, AND causes IRMAA taxes, AND possibly NIIT.
 11. IRA/401K withdrawals are taxable income in MOST states. Roth withdrawals are not taxable in any state.
 12. You die wealthy, not having spent what you could have, and your heirs pay the highest taxes of their lives to draw down the remaining balance in 10 years.  Though they may still be able to use QCDs if they are 70.5 at the time.
+
+#### How Reliable Is the Break-Even Tax Rate?
+
+The tool shows a "Break-Even Tax Rate" next to each year you convert. The idea, from a well-known formula by Michael Kitces, is to answer one simple question: how high would your future tax rate have to be for a conversion today to pay off? If you expect your future rate to be *above* that break-even number, converting looks worthwhile; *below* it, it does not. To check whether that number can be trusted, I built a small test harness that compares it against what the full simulation actually delivers. The harness runs each plan twice, once converting and once not, and finds the future tax rate at which the two plans finish in a dead heat. That is the honest break-even, because it captures everything the tidy formula leaves out: the larger required distributions a bigger IRA forces on you later, the extra Social Security that becomes taxable, the IRMAA surcharges, and where your surplus cash actually ends up invested.
+
+The finding is that the displayed Break-Even Tax Rate is not trustworthy, and it can be wrong in *either* direction. The formula itself is algebraically correct, but it models only "money grows, then is taxed once" and ignores the cascade of knock-on effects above. In my tests the true break-even was sometimes far *below* the displayed number (so the tool discouraged conversions that clearly won) and sometimes far *above* it (so the tool encouraged conversions that clearly lost). Which way it erred depended heavily on a single modeling choice that has nothing to do with the formula: whether your surplus money is left sitting in cash or reinvested at market rates (this is what the new Cash Reserve setting controls). Meanwhile the one input the formula fusses over most, the number of years until your required distributions begin, turned out to matter the least. The practical takeaway: treat the Break-Even Tax Rate as a rough conversation-starter, not a decision rule, and trust the plan's actual after-tax ending balances instead.

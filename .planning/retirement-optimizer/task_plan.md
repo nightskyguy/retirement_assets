@@ -2,7 +2,30 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-17 (worktree mystifying-babbage-559d99, v11.129d)
+**As of:** 2026-07-24 (worktree context-ab498f, v11.1340 + documentation polish)
+
+---
+
+## Documentation Polish (2026-07-24, v11.1340): Post-P2 clarifications & FAQ prep
+
+**Status: COMPLETE** (tooltip + BETR section + ToC rebuild)
+- [x] **Cash Reserve tooltip revision:** Removed redundant "blank or -1" mention, replaced with recommendation to turn on Dividend Reinvestment for best benefit. Verified in-browser.
+- [x] **Dividend + reserve + growth rate interaction:** Documented how DRIP off routes dividends to Cash at cashYield; reserve fills buffer first, overflow to Brokerage at market growth. Clarified per-account growth rates.
+- [x] **README "How Reliable Is the Break-Even Tax Rate?" section:** Added under "Some Things I Learned About Taxation" — non-technical explanation of BETR (closed-form heuristic), finding (unreliable in practice), and recommendation (treat as conversation-starter, not decision rule). One paragraph.
+- [x] **README ToC rebuild:** Promoted bold subtopic labels to real `####` headings, added Standalone Calculator Tools subtopics and full Taxation subsections so table of contents reflects all navigable sections.
+
+**New Work Item: README FAQ Section**
+Add FAQ at end of README.md addressing user questions:
+1. How does Cash Reserve work with dividends?
+2. When might Cash Reserve be depleted?
+3. Where is cash interest routed?
+4. Does the brokerage account for "cash"?
+5. How do I find the most efficient Roth conversions?
+6. How reliable is the Break-Even Tax Rate? (move/expand from Taxation section if needed)
+
+For simple answers (1 paragraph), include inline. For complex (requires scenarios/examples), mark "To be provided" with a link to open a follow-up task.
+
+**Files:** `retirement_optimizer.html` (tooltip), `README.md` (BETR section + ToC + FAQ to be added).
 
 ---
 
@@ -180,7 +203,7 @@ Goal: Complete open features from the original priority list plus deferred items
 | — | **PF6** | Break Even sustained-crossing fix (first-touch bug) | **complete** | — |
 | — | **PF7** | Break Even in the Optimizer (Optimize Conversions top-5) | **complete** | — |
 | — | **P1** | Suggest Spend Goal (38#10) | **complete** | — |
-| 1 | **P2** | Cash Reserve enforcement (38#9) | pending | — |
+| 1 | **P2** | Cash Reserve — surplus routing + reserve floor | **done** (v11.1340) | — |
 | 2 | **PA** | Pension Start Age | **complete** | — |
 | 3 | **PB** | Lumpy Spending (no URL encoding) | pending | — |
 | 4 | **PC** | Auto-Persist + Restore Offer | pending | — |
@@ -205,7 +228,7 @@ Goal: Complete open features from the original priority list plus deferred items
 | 23 | **P21** | Annual Spending-by-Account View | **complete** | — |
 | 24 | **P22** | Export Annual Details to CSV | pending | — |
 | 25 | **P23** | MC Arithmetic-Mean Returns + AR(1) Variable Inflation | pending | — |
-| 26 | **P24** | Conversion End Year (act on the Break Even diagnostic) | pending | — |
+| 26 | **P24** | Conversion End Year — searched stop-year + one-click | **implemented** (v11.1330, sweep dim deferred) | — |
 
 ---
 
@@ -426,22 +449,20 @@ const AUTOSAVE_KEY = 'SLCRetireOptimizeAutoSave';
 
 ---
 
-## Phase P2: Cash Reserve Enforcement (was 38#9)
-**Why:** `CashReserve` input captured in `core.js` but never enforced. Reserve = portion of Cash balance (not additional funds); breakable hard floor of last resort; refill from surplus years.
+## Phase P2: Cash Reserve — surplus routing + reserve floor (DONE, v11.1340, was 38#9)
+**Why:** `CashReserve` was captured but inert. The BETR/DRIP audit (findings.md 2026-07-23) showed the non-cyclic default banked ALL surplus (mostly forced RMDs) into 3% Cash and left it, starving the no-conversion world and biasing Break Even / opportunity cost / BETR / the P24 stop-year toward converting. Implementing CashReserve as a target cash buffer fixes both the routing and the (planned) floor, and is the largest single lever over the tool's conversion verdict (it flips the empirical break-even; see findings.md P2 entry).
 
-**Design decision (made in Phase 38 session):**
-- Effective drawable Cash = `max(0, Cash − CashReserve)` in normal years
-- Last-resort: can break below reserve (flag year with `cashBreach=true`)
-- Surplus years: reinvest into Cash until `Cash ≥ CashReserve`
+**Semantics (user-specified, three-way):** blank or negative -> `undefined` = OFF (legacy: all surplus to Cash, no floor; the revert switch). `0` = zero buffer, reinvest ALL surplus to Brokerage. positive $Y = keep $Y (today's dollars, inflated by `sim.inflation`) in Cash, reinvest the overflow to Brokerage (basis step-up), and protect $Y on withdrawal as a breakable last resort.
 
-- [ ] Read `core.js` around CashReserve capture (line ~1923) and withdrawal routing block
-- [ ] Apply `effectiveCash = max(0, Cash − cashReserve)` in withdrawal candidate calculation
-- [ ] Last-resort: if all accounts near zero AND spend unfunded, allow drawing from reserve; log `cashBreach=true`
-- [ ] Surplus refill: if `surplus.Cash > 0 && Cash < cashReserve`, route surplus to fill reserve first
-- [ ] Annual Details: add `cashBreach` flag column (Debug category)
-- [ ] Test: CashReserve=$50k, Cash=$60k → only $10k drawable normally
-- [ ] Test: fully depleted scenario → reserve breakable as last resort
-- **Status:** pending
+- [x] **Surplus routing** — `routeSurplusAndConvert` tail: OFF/Cyclic unchanged (Cyclic subsumes); active -> `toCash = clamp(0, reserveNominal - Cash, surplus)`, overflow to Brokerage + basis step-up. New hidden log `-surplusToBrokerage`.
+- [x] **Reserve floor** — `resolveSpendTarget` hides the buffer from `curBalances.Cash` (via `yr._reserveHidden`); `resolveResidualAndForcedIRA` restores it and, only if spending is still unfunded after Cash/Brokerage/Roth/forced-IRA, draws it and sets `yr.cashBreach` (hidden log `-cashBreach`). Both new log fields wired into `logYear`'s record object (they are NOT auto-picked from `yr`).
+- [x] **UI** — `getInputs` three-way parse (blank/neg -> undefined; 0/positive pass through); markup default `value=""` + tooltip rewrite; URL `cr` already mapped; no `runOptimizer` leak-guard (a uniform assumption, applied to all strategies).
+- [x] **Load warning** — `maybeWarnCashReserveActive()` fires from `loadFromURL`/`applyScenario` when the incoming value is active (>= 0), naming blank/-1 as the revert. Not on recalc.
+- [x] Tests (`optimizer_core.test.js`, +6, 114/114): OFF byte-identical + never reinvests/breaches; 0 reinvests all (basis step-up, far less terminal Cash); 0 != OFF; positive buffer reinvests overflow; floor protected early + breaks as last resort when depleted; healthy plan never breaches.
+- [x] Harness re-run captured in findings.md (`.test_harnesses/betr_harness.js` gained a reserve-sensitivity table). Reserve flips both BETR's empirical t* and the P24 stop-year recommendation.
+- **GOTCHA:** `logYear` builds its record from an EXPLICIT param object, not `yr` — a new `yr.<field>` logs as 0/undefined until added there (cost ~15 min chasing a "floor not firing" ghost that was really an unlogged flag).
+- **Status:** DONE (v11.1340, worktree context-ab498f, branch worktrees/roth-breakeven-diagnosis-dd3075, UNCOMMITTED). node 114/114 + taxPaymentPlanner 12/12. Browser end-to-end pending.
+- **Follow-up (separate):** BETR itself is unreliable in both reserve regimes (findings.md); consider replacing the closed-form signal with the empirical break-even from two sims.
 
 ---
 
@@ -1010,15 +1031,24 @@ P24 (Conversion End Year) — independent; diagnostic + engine flag already exis
 
 ---
 
-## Phase P24: Conversion END YEAR — act on the Break Even diagnostic
-**Why:** The ⓘ Break Even diagnosis already computes the exact year a plan's conversions turn from profitable to harmful, and a measured scenario (2026-07-21, full numbers in `findings.md`) shows that stopping conversions at exactly that year is the BEST variant tested: +$383k after-tax NW over the plan as configured, +$31k over converting nothing, and the lowest lifetime tax of the four. The plan as configured converts $1.86M and ends up $352k WORSE than never converting at all. So the tool currently tells the user precisely where the damage starts and then gives them no way to stop it. The closest existing lever, zeroing `extraConversionAmount`, is strictly worse than the right answer because it also discards the profitable early conversions.
+## Phase P24: Conversion END YEAR — a searched stop-year, NOT the diagnostic's boundary year
+**Why:** Stopping Roth conversions partway through a plan can beat both converting to the end and converting nothing. The 2026-07-23 evidence sweep (`findings.md`, harness `stopyear_harness.js`) established the shape of the win across 23 scenarios: `gainVsFull >= 0` in every one, up to +$2.97M, scaling hard with growth and longevity; delivered spend is identical across every cutoff (`spendRange` $0), so it is a clean wealth/tax comparison. The tool currently gives the user no way to act on this, and the closest existing lever (zeroing `extraConversionAmount`) is worse than the right answer because it also throws away the profitable early conversions.
 
-- [ ] New input: conversion END year (blank = convert for the whole plan). The engine hook already exists as the internal counterfactual flag `_cfSuppressConversionsFromYear` (a `yr.y` index) — promote it to a real, named, URL-shareable input rather than adding a second mechanism.
-- [ ] Decide scope: does the end year stop ONLY `extraConversionAmount`, or also the strategy's own bracket-fill conversions? The measured winner suppressed BOTH (that is what `_cfSuppressConversionsFromYear` does). Suppressing only the extra is a different, untested plan.
-- [ ] Wire the diagnostic to the input: when `outcome === 'boundary'`, the ⓘ text should name the actionable year (`lastSustainableYear`) as a suggestion, ideally as a one-click "stop here" that sets the field. Careful with the wording — see the `feedback_financial_model_rigor` rule: this is a diagnostic suggestion, not a recommendation the tool can make on the user's behalf.
-- [ ] Consider an optimizer sweep dimension over the end year (it is one more axis on an already large sweep, so measure the cost first, the same way PF11 did).
-- [ ] Test: end year unset → bit-identical to today (the load-bearing regression). End year set → conversions cease from that year, earlier years untouched.
-- [ ] Test: reproduce the recorded scenario and assert the truncated plan's `convBEYear === 2051` and its after-tax NW exceeds the untruncated plan's.
-- **Caveats before generalizing (from `findings.md`):** the winning truncation's break-even lands on the plan's FINAL year, so the margin is thin and sensitive to life expectancy and growth; and the measurement is n=1 at 8.5% growth with a 33% heirs rate. Gather a second and third scenario before treating "stop at the boundary year" as general advice.
-- **Status:** pending
-- **Independent:** no phase dependencies; the diagnostic (PF6/PF5) and the counterfactual engine flag both already exist.
+**CORRECTION — the diagnostic's boundary year is NOT the answer.** The original P24 (2026-07-21, n=1) assumed the ⓘ boundary year was the year to stop. Sweeping every cutoff overturned it: in the recorded scenario the true optimum is **2031**, not the diagnostic's 2043 — off by 12 years and **$662k**. `diagnoseConvBreakEvenFailure` answers "which conversion erases the lead for good" (the last cutoff that still breaks even at all), which is a much weaker condition than max after-tax wealth. In no scenario did the boundary year equal the optimum, and in 10 of 23 the diagnostic never fires while stopping early still gained $99k–$2.97M. **So P24 is a searched stop-year feature, and the ⓘ boundary year must NOT be presented as a "stop here" suggestion — it would be systematically wrong.**
+
+**Design consequences locked by the evidence:**
+- **Search, don't heuristic.** Four candidate shortcut rules all failed (marginal-rate crossing, IRA-share threshold, RMD/age rule, terminal-mix target — see finding §6). The stop year must be searched per plan.
+- **Linear scan only.** The cutoff curve is not unimodal (up to 7 sign flips; step-function brackets/IRMAA). Cost is a non-issue: k+1 runs, ~46ms for a 26-year plan.
+- **Stop ALL conversions by default.** Extra-only truncation is much worse ($23.47M vs $24.23M) and never breaks even at any cutoff — the late damage is the strategy's own bracket-fill, not the Extra. Per user decision, ALSO model extra-only (the user notes it is what a naive user expects), but label clearly that it is the weaker of the two.
+- **The gain must be shown next to any suggested year.** In low-tax states the win is only ~$100k and a stop year off by ±2 goes NEGATIVE — worse than not stopping. A bare year suggestion with no dollar figure is a trap.
+
+**Tasks:**
+- [x] New input, **nerdknob-gated** (per user, until fully investigated): conversion END year (`#convEndYear`). Accepts BOTH forms in one field — <4 digits = age of person 1, ≥4 digits = calendar year (e.g. "2044" or "75"); blank = convert for the whole plan. Engine reads a public calendar-year `convEndYear`, OR'd into `_convSuppressedThisYear` / new `_extraConvSuppressedThisYear` (kept the internal `_cfSuppressConversionsFromYear` index flag as the counterfactual/search mechanism — one gate, two feeders). Nerd-gate follows the tax-creep pattern: hidden unless nerdknob OR a value is set (a shared URL must never hide a live cutoff). `getInputs` parses age→`birthyear1 + age`.
+- [x] Scope selector (`#convEndMode`, nerd-gated): "all conversions" (default) vs "extra only". Engine: `convEndMode !== 'extra'` suppresses both surplus + extra past the cutoff; `'extra'` suppresses only the Extra path (`_extraConvSuppressedThisYear`). No per-year array needed for the single-run path.
+- [x] URL param + `OPT_LONG_TO_SHORT` entries (`cey`/`cem`); leak-guard in `runOptimizer` (`base.convEndYear = undefined; base.convEndMode = 'all'`, mirroring the existing `base.extraConversionAmount = 0`).
+- [x] **Engine search** `bestConversionStopYear(inputs, {mode})` (pure, exported): linear scan over cutoffs scored on the shared `afterTaxWealthOfLogRow` basis (factored out of the Break Even block so the two can't drift). Returns `{stopYearCalendar, stopIndex, atnwStop, atnwNoStop, atnwNoConv, gainVsFull, gainVsNone, beAtStop, convertsNothingIsBest, neverStopIsBest}`. Strips any pre-set stop year so it always searches from full conversions.
+- [x] **Diagnostic rewired** (`updateStats` + `formatStopYearMessage` + `applyConvStopYear` + `toggleBreakEvenDiagnosis`): the ⓘ now leads with the SEARCHED year + dollar gain (never the boundary year), surfaces whenever conversions occur (not just when Break Even is blank), and the expanded panel offers a one-click "Stop after YYYY ▸" that fills the field and re-runs. Boundary-year sentence demoted to secondary color, shown only when Break Even is blank. Always shows the dollar gain (findings §7).
+- [x] Tests (`optimizer_core.test.js`, 6 new, 108/108): unset → bit-identical; all-mode cutoff == internal `_cfSuppressConversionsFromYear` and zeroes conversions after Y with earlier years untouched; extra-mode leaves strategy bracket-fill running past Y; `bestConversionStopYear` finds the interior optimum, dominates full+none, self-consistent when applied through the public input; search strips a pre-set stop year; `afterTaxWealthOfLogRow` matches the BE formula.
+- [ ] **DEFERRED — Optimizer sweep dimension over the stop year** (user chose "measure cost first"). No per-row stop-year column ships this round because the leak guard strips `convEndYear` from every optimizer row; the calendar-year display contract is already met in the single-scenario surfaces (diagnostic message + one-click apply). When wired: measured cost is one k+1 linear scan per plan; the concern is multiplying it across the ⇌ candidate pool × the amount grid — the joint (amount × stop) grid is where the real value is (finding §3: C−D was +$228k to +$1.887M). Optimizer table then displays the stop as a **calendar year** even when entered as an age.
+- **Status:** IMPLEMENTED (v11.1330, worktree context-ab498f, branch worktrees/roth-breakeven-diagnosis-dd3075, UNCOMMITTED). Node 108/108 + taxPaymentPlanner 12/12. Browser end-to-end pending. Only the optimizer sweep dimension deferred.
+- **Independent:** no phase dependencies; the diagnostic (PF6/PF5) and the counterfactual engine flag both already existed.

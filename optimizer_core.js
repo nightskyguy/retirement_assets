@@ -735,6 +735,8 @@ function buildSimYearLogRecord(p) {
         'CashWD': p.netWithdrawals.Cash,
         'rothConv': p.totalConverted,
         'surplusCash': p.surplus.Cash,
+        '-surplusToBrokerage': p.surplusToBrokerage ?? 0,   // Cash Reserve overflow reinvested (hidden)
+        '-cashBreach': p.cashBreach ? 1 : 0,                // spending forced a draw into the reserve (hidden)
         'cashDividends': p.taxableDividends,
         'cashInterest': p.taxableInterest,
         // Taxes
@@ -1086,6 +1088,16 @@ function resolveSpendTarget(sim, yr) {
     yr.withdrawStrategy = { order: [], weight: [], taxrate: [] };
 
     yr.curBalances = { IRA: balance.IRA1 + balance.IRA2, Brokerage: balance.Brokerage, BrokerageBasis: balance.BrokerageBasis, Roth: balance.Roth1 + balance.Roth2, Cash: balance.Cash, IRA1: balance.IRA1, IRA2: balance.IRA2 };
+
+    // Cash Reserve floor (P2): keep the target buffer (cashReserve is TODAY'S dollars, inflated to
+    // this year's terms) out of reach of ordinary spending draws by hiding it from curBalances.Cash.
+    // resolveResidualAndForcedIRA restores it as the LAST resort (after Cash/Brokerage/Roth/forced-
+    // IRA are exhausted) and flags cashBreach. OFF (cashReserve == null) or Cyclic (no cash buffer
+    // concept) -> nothing hidden, byte-identical to today.
+    yr._reserveHidden = (inputs.CashReserve != null && !inputs.cyclicEnabled)
+        ? Math.min(inputs.CashReserve * sim.inflation, Math.max(0, yr.curBalances.Cash))
+        : 0;
+    yr.curBalances.Cash -= yr._reserveHidden;
 
     yr.capGainsPercentage = balance.Brokerage !== 0
         ? (balance.Brokerage - balance.BrokerageBasis) / balance.Brokerage
@@ -1450,6 +1462,22 @@ function resolveResidualAndForcedIRA(sim, yr) {
         }
     }
 
+    // Cash Reserve floor (P2), last resort: restore the buffer hidden in resolveSpendTarget and,
+    // only if spending is STILL unfunded after Cash/Brokerage/Roth/forced-IRA, break into it. A
+    // Cash draw is tax-free, so no tax recompute is needed; it must land before totalIncome below.
+    if (yr._reserveHidden > 0) {
+        yr.curBalances.Cash += yr._reserveHidden;
+        const _incNow = yr.fixedInc + yr.netWithdrawals.IRA + yr.pension + yr.taxableDividends +
+            yr.taxableInterest + yr.netWithdrawals.Roth + yr.netWithdrawals.Cash + yr.netWithdrawals.Brokerage + yr.taxableRMD;
+        const _lastResort = yr.targetSpend - (_incNow - yr.totalTax);
+        if (_lastResort > 1 && yr.curBalances.Cash > 0) {
+            const _rWd = calculateWithdrawals(yr.curBalances, _lastResort, { order: ['Cash'], weight: [1], taxrate: [0] });
+            yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, _rWd]);
+            applyWithdrawals(yr.curBalances, _rWd);
+            yr.cashBreach = true;
+        }
+    }
+
     // Recompute overage after any 3rd-pass forced IRA draw (soft caps may now exceed the
     // ceiling). For the strict ACA strategy, a MAGI above the FPL cap — whether from a
     // forced draw (blocked) or unavoidable income (RMDs/SS) — flags the plan untenable.
@@ -1470,14 +1498,33 @@ function resolveResidualAndForcedIRA(sim, yr) {
     sim.nominalTaxRate = yr.tax.nominalRate;
 }
 
+// True once the user's public Conversion End Year (calendar) has passed for year-index y.
+// convEndYear is the LAST year conversions still run, so suppression begins the year AFTER it.
+// Unset (every existing caller) -> false, zero behavior change.
+function _convEndReached(inputs, y) {
+    if (inputs.convEndYear == null) return false;
+    const startYr = inputs.startInYear || new Date().getFullYear();
+    return (startYr + y) > inputs.convEndYear;
+}
+
 // Route the year's surplus: refund unneeded Roth draws, convert IRA-sourced surplus to
-// True if conversion activity (both convertExcessToRoth-surplus and Extra Conversion) should be
-// suppressed for year y -- either the existing all-years counterfactual flag, or (new) a
-// from-year-onward cutoff used by diagnoseConvBreakEvenFailure to test truncated conversion
-// schedules. Purely additive: with _cfSuppressConversionsFromYear unset (every existing
-// caller), this is exactly !!inputs._cfSuppressConversions, zero behavior change.
+// True if the SURPLUS conversion path (convertExcessToRoth) should be suppressed for year y --
+// the existing all-years counterfactual flag, the from-year-onward cutoff used by
+// diagnoseConvBreakEvenFailure / bestConversionStopYear to test truncated schedules, or (new)
+// the user's public Conversion End Year when the End Year stops ALL conversions (convEndMode
+// !== 'extra'). Purely additive: with all three unset (every existing caller), this is exactly
+// !!inputs._cfSuppressConversions, zero behavior change.
 function _convSuppressedThisYear(inputs, y) {
-    return !!inputs._cfSuppressConversions || (inputs._cfSuppressConversionsFromYear != null && y >= inputs._cfSuppressConversionsFromYear);
+    return !!inputs._cfSuppressConversions
+        || (inputs._cfSuppressConversionsFromYear != null && y >= inputs._cfSuppressConversionsFromYear)
+        || (inputs.convEndMode !== 'extra' && _convEndReached(inputs, y));
+}
+
+// True if the EXTRA conversion path (extraConversionAmount) should be suppressed for year y.
+// Superset of _convSuppressedThisYear: the End Year always stops the extra conversion, in BOTH
+// 'all' mode (via _convSuppressedThisYear) and 'extra' mode (extra stops, surplus keeps firing).
+function _extraConvSuppressedThisYear(inputs, y) {
+    return _convSuppressedThisYear(inputs, y) || _convEndReached(inputs, y);
 }
 
 // Roth (convertExcessToRoth), replace excess Cash draws, apply withdrawals to balances, and
@@ -1558,17 +1605,30 @@ function routeSurplusAndConvert(sim, yr) {
     // the IRA instead (RMD-driven surplus cannot be refunded and still flows out below).
     if (inputs._cfSuppressExcess && yr.surplus.Total > 1) cfRefundIRA(sim, yr, yr.surplus.Total);
 
-    // If there is STILL a surplus, reinvest into Brokerage (Cyclic) or put in Cash.
-    // Cyclic: stepping up brokerage basis on reinvestment keeps proceeds in the LTCG regime.
+    // If there is STILL a surplus, decide where it lands. Three regimes:
+    //   Cyclic            -> all to Brokerage (unchanged; Cyclic subsumes the Cash Reserve routing).
+    //   Cash Reserve OFF  -> all to Cash (inputs.CashReserve == null: today's legacy behavior).
+    //   Cash Reserve set  -> top Cash up to the target buffer (cashReserve is TODAY'S dollars, so it
+    //                        inflates by sim.inflation to this year's terms), reinvest the OVERFLOW
+    //                        into Brokerage. cashReserve === 0 keeps no buffer -> reinvest everything.
+    // Brokerage reinvestment steps up basis (after-tax dollars re-entering the LTCG regime), the
+    // same convention as the Cyclic path.
     yr._reinvestedSurplus = yr.surplus.Total;
-    yr.surplus.Cash = yr.surplus.Total;
-    if (inputs.cyclicEnabled && yr.surplus.Cash > 0) {
-        balance.Brokerage += yr.surplus.Cash;
-        balance.BrokerageBasis += yr.surplus.Cash;
-        yr.surplus.Cash = 0;
-    } else {
-        balance.Cash += yr.surplus.Cash;
+    let _toCash = yr.surplus.Total, _toBrokerage = 0;
+    if (inputs.cyclicEnabled) {
+        _toBrokerage = yr.surplus.Total; _toCash = 0;
+    } else if (inputs.CashReserve != null) {
+        const _reserveNominal = inputs.CashReserve * sim.inflation;
+        _toCash = Math.max(0, Math.min(yr.surplus.Total, _reserveNominal - balance.Cash));
+        _toBrokerage = yr.surplus.Total - _toCash;
     }
+    balance.Cash += _toCash;
+    if (_toBrokerage > 0) {
+        balance.Brokerage += _toBrokerage;
+        balance.BrokerageBasis += _toBrokerage;
+    }
+    yr.surplus.Cash = _toCash;              // literal cash banked (feeds the surplusCash log field)
+    yr.surplusToBrokerage = _toBrokerage;   // reinvested overflow (hidden log field for Annual Details)
     yr.surplus.Total = 0;
 }
 
@@ -1623,7 +1683,7 @@ function cfRefundIRA(sim, yr, netTarget) {
 function applyExtraConversion(sim, yr) {
     const { inputs, balance, birthyear1, birthyear2 } = sim;
     const y = yr.y;
-    const _extraConvReq = _convSuppressedThisYear(inputs, y) ? 0
+    const _extraConvReq = _extraConvSuppressedThisYear(inputs, y) ? 0
         : Array.isArray(inputs.extraConversionAmount)
             ? (inputs.extraConversionAmount[y] ?? 0)
             : (inputs.extraConversionAmount ?? 0);
@@ -1944,6 +2004,7 @@ function logYear(sim, yr) {
         gains: yr.gains, rmd1Pct: yr.rmd1Pct, subCycleLabel: yr.subCycleLabel, convNetValue: null, excessNetValue: null,
         incrementalConvTax: yr.incrementalConvTax, incrementalExcessTax: yr.incrementalExcessTax, yearBETR: yr.yearBETR, yearBETRflag: yr.yearBETRflag,
         extraConvGross: yr.extraConvGross,
+        surplusToBrokerage: yr.surplusToBrokerage, cashBreach: yr.cashBreach,
         grossUpIRA: yr.grossUpIRA, grossUpTax: yr.grossUpTax, extraConvCashTax: yr.extraConvCashTax,
         fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep,
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
@@ -2146,10 +2207,7 @@ function simulate(inputs) {
     totals.convBEYear = null;
     totals.excessBEYear = null;
     if (inputs.computeOC && !inputs._cfRun) {
-        const _atw = (r) => inputs.futureIRATaxRate == null ? r.totalWealth
-            : (r.IRA1 + r.IRA2) * (1 - inputs.futureIRATaxRate)
-              + Math.max(0, r.Brokerage - r.Basis) * (1 - (r['-capGainsRate'] ?? 0.15))
-              + r.Roth + r.Cash + r.Basis;
+        const _atw = (r) => afterTaxWealthOfLogRow(r, inputs.futureIRATaxRate);
         const _annotate = (cfLog, key) => {
             const n = Math.min(log.length, cfLog.length);
             for (let i = 0; i < n; i++) log[i][key] = _atw(log[i]) - _atw(cfLog[i]);
@@ -2279,6 +2337,90 @@ function diagnoseConvBreakEvenFailure(inputs, actualLog) {
         prevBEYear = beYear;
     }
     return null; // unreachable given the precondition (j=k is numerically the real plan, already null)
+}
+
+// After-tax value of a single simulate() LOG ROW, in the Break Even valuation basis: the row's
+// own totalWealth (IRA at that run's nominal rate) unless a Marginal Heirs Tax Rate is supplied,
+// in which case the IRA is discounted at that shared rate and brokerage gains at the row's own
+// cap-gains rate. Factored out of simulate()'s Break Even block so bestConversionStopYear scores
+// on the identical basis -- the two can never drift.
+function afterTaxWealthOfLogRow(r, futureIRATaxRate) {
+    if (futureIRATaxRate == null) return r.totalWealth;
+    return (r.IRA1 + r.IRA2) * (1 - futureIRATaxRate)
+        + Math.max(0, r.Brokerage - r.Basis) * (1 - (r['-capGainsRate'] ?? 0.15))
+        + r.Roth + r.Cash + r.Basis;
+}
+
+// Searches for the year that MAXIMIZES after-tax wealth by stopping Roth conversions after it.
+// Evidence (2026-07-23, .planning/retirement-optimizer/findings.md) established that this is a
+// real lever (spend is identical across every cutoff; stopping early never hurt across 23
+// scenarios) and that the Break Even diagnostic's boundary year is NOT it -- the boundary year
+// is the last cutoff that still breaks even at all, a far weaker condition than max wealth
+// (off by $662k / 12 years in the recorded scenario). So this cannot be a heuristic (four
+// candidate shortcut rules all failed) and must be a linear scan (the cutoff curve is not
+// unimodal -- step-function brackets/IRMAA -- so binary/ternary search converges wrong
+// undetectably, the same reasoning diagnoseConvBreakEvenFailure documents).
+//
+// mode 'all'   -> stop ALL conversion activity after the cutoff (surplus + extra), via the
+//                 internal _cfSuppressConversionsFromYear cutoff.
+// mode 'extra' -> stop ONLY the Extra Annual Roth Conversion (strategy bracket-fill keeps
+//                 running), via a zero-tail extraConversionAmount array. Empirically weaker.
+//
+// Scores each cutoff on afterTaxWealthOfLogRow of the final row, the same basis as Break Even
+// (honors the user's Marginal Heirs Tax Rate when set, else row totalWealth). Any stop-year the
+// user has already set is stripped first, so the search always explores from a full-conversion
+// baseline. Caller should gate on conversions actually occurring (log.some(rothConv > 1)), same
+// precondition as the Break Even diagnostic. Cost: n+1 cheap (no-OC) simulate() calls plus one
+// OC re-run at the winner -- on-demand only, never a hot path.
+// Returns null if the plan is too short to have any conversion years; else:
+//   { mode, stopYearCalendar, stopIndex, atnwStop, atnwNoStop, atnwNoConv,
+//     gainVsFull, gainVsNone, beAtStop, convertsNothingIsBest, neverStopIsBest }
+function bestConversionStopYear(inputs, opts) {
+    const mode = (opts && opts.mode) || 'all';
+    const rate = inputs.futureIRATaxRate;
+    // Strip any stop-year the user already set: the search explores from full conversions.
+    const base = { ...inputs, convEndYear: undefined, convEndMode: undefined,
+                   _cfSuppressConversions: false, _cfSuppressConversionsFromYear: undefined };
+    const probe = simulate({ ...base, computeOC: false });
+    const n = probe.log.length;
+    const start = probe.log[0].year;
+    if (n === 0) return null;
+    const scoreOf = (res) => afterTaxWealthOfLogRow(res.log[res.log.length - 1], rate);
+
+    const runAtCutoff = (cut, computeOC) => {
+        if (mode === 'all') {
+            return simulate({ ...base, _cfSuppressConversionsFromYear: cut, computeOC });
+        }
+        const scalar = Array.isArray(base.extraConversionAmount) ? null : (base.extraConversionAmount ?? 0);
+        const arr = new Array(n + 2).fill(0).map((_, y) => y < cut
+            ? (scalar != null ? scalar : (base.extraConversionAmount[y] ?? 0)) : 0);
+        return simulate({ ...base, extraConversionAmount: arr, computeOC });
+    };
+
+    let bestCut = 0, bestATNW = -Infinity, atnwNoConv = 0, atnwNoStop = 0;
+    for (let cut = 0; cut <= n; cut++) {
+        const atnw = scoreOf(runAtCutoff(cut, false));
+        if (cut === 0) atnwNoConv = atnw;
+        if (cut === n) atnwNoStop = atnw;
+        if (atnw > bestATNW) { bestATNW = atnw; bestCut = cut; }
+    }
+    // One OC re-run at the winner to report its Break Even year (the cheap sweep skips OC).
+    const beAtStop = runAtCutoff(bestCut, true).totals.convBEYear;
+
+    return {
+        mode,
+        // cut 0 = convert nothing (no last-conversion year); cut n = never stop (full plan).
+        stopYearCalendar: (bestCut === 0 || bestCut >= n) ? null : start + bestCut - 1,
+        stopIndex: bestCut,
+        atnwStop: bestATNW,
+        atnwNoStop,
+        atnwNoConv,
+        gainVsFull: bestATNW - atnwNoStop,
+        gainVsNone: bestATNW - atnwNoConv,
+        beAtStop,
+        convertsNothingIsBest: bestCut === 0,
+        neverStopIsBest: bestCut >= n,
+    };
 }
 
 // When ALL strategies fail at baseline, searches downward across every strategy to find
@@ -2747,7 +2889,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, diagnoseConvBreakEvenFailure, optimizeConversionAmount, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, taxCreepFactor, buildVariations };
+    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, taxCreepFactor, buildVariations };
 }
 
 

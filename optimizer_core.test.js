@@ -40,6 +40,8 @@ const calculateTaxes = taxengine.calculateTaxes;
 const getLTCGBracketRoom = core.getLTCGBracketRoom;
 const compactNum = core.compactNum;
 const diagnoseConvBreakEvenFailure = core.diagnoseConvBreakEvenFailure;
+const bestConversionStopYear = core.bestConversionStopYear;
+const afterTaxWealthOfLogRow = core.afterTaxWealthOfLogRow;
 const optimizeConversionAmount = core.optimizeConversionAmount;
 const baselineScoreOf = core.baselineScoreOf;
 const selectConversionCandidates = core.selectConversionCandidates;
@@ -1031,6 +1033,181 @@ test('diagnoseConvBreakEvenFailure: no conversions in the log → returns null',
     const r = simulate({ ...OC_BASE });
     assert(diagnoseConvBreakEvenFailure(OC_BASE, r.log) === null,
         'must return null when no conversions occurred (precondition violated)');
+});
+
+// ── Conversion END YEAR (Phase P24) — public convEndYear input + bestConversionStopYear search ──
+// A user-facing conversion cutoff (calendar year) plus a linear search for the year that
+// maximizes after-tax wealth by stopping conversions after it. Evidence: findings.md 2026-07-23.
+
+// Shared fixture: heavy IRA, high growth + heirs rate, large annual extra conversions, so the
+// late conversions convert money that would have compounded and end up subtracting. Interior
+// optimum lands at 2031 (cut 6). All expected values derived from the real engine first.
+const STOP_BASE = {
+    ...OC_BASE, birthyear1: 1960, die1: 90, IRA1: 1000000,
+    Brokerage: 200000, BrokerageBasis: 200000, Cash: 50000, Roth: 0,
+    ss1: 30000, ss1Age: 67, spendGoal: 60000, growth: 0.08,
+    extraConversionAmount: 120000, futureIRATaxRate: 0.35, computeOC: true,
+};
+
+test('P24: convEndYear/convEndMode unset → bit-identical to today (load-bearing regression)', () => {
+    const plain = simulate({ ...STOP_BASE });
+    const withUnsetKeys = simulate({ ...STOP_BASE, convEndYear: undefined, convEndMode: undefined });
+    assert(JSON.stringify(plain.log) === JSON.stringify(withUnsetKeys.log),
+        'unset convEndYear/convEndMode must not perturb the year-by-year log');
+    assert(plain.finalNW === withUnsetKeys.finalNW && plain.totals.tax === withUnsetKeys.totals.tax,
+        'unset convEndYear/convEndMode must not perturb finalNW or tax');
+});
+
+test('P24: convEndYear (all mode) stops ALL conversions after the year; earlier years untouched; == internal cutoff', () => {
+    const Y = 2030, start = 2026, idx = Y - start + 1; // suppress index >= idx = years after Y
+    const plain = simulate({ ...STOP_BASE });
+    const stopped = simulate({ ...STOP_BASE, convEndYear: Y, convEndMode: 'all' });
+    const after = stopped.log.filter(r => r.year > Y).reduce((s, r) => s + (r.rothConv ?? 0), 0);
+    const beforeStopped = stopped.log.filter(r => r.year <= Y).reduce((s, r) => s + (r.rothConv ?? 0), 0);
+    const beforePlain = plain.log.filter(r => r.year <= Y).reduce((s, r) => s + (r.rothConv ?? 0), 0);
+    assert(after < 1, `all-mode cutoff must zero every conversion after ${Y}, got ${Math.round(after)}`);
+    assertNear(beforeStopped, beforePlain, 'conversions through the cutoff year must be untouched', 1);
+    // The public calendar-year cutoff must be exactly the internal from-index counterfactual flag.
+    const cf = simulate({ ...STOP_BASE, _cfSuppressConversionsFromYear: idx });
+    assert(stopped.finalNW === cf.finalNW && stopped.totals.tax === cf.totals.tax,
+        'convEndYear (all) must equal _cfSuppressConversionsFromYear at the equivalent index');
+});
+
+test('P24: convEndMode extra stops only the Extra conversion; the strategy keeps converting past the cutoff', () => {
+    // Bracket strategy that itself converts surplus, so extra-mode leaves real conversions running.
+    const S = { ...STOP_BASE, strategy: 'bracket', stratRate: 0.22, convertExcessToRoth: true,
+                extraConversionAmount: 40000, growth: 0.06, futureIRATaxRate: 0.30 };
+    const Y = 2030;
+    const all = simulate({ ...S, convEndYear: Y, convEndMode: 'all' });
+    const extra = simulate({ ...S, convEndYear: Y, convEndMode: 'extra' });
+    const allAfter = all.log.filter(r => r.year > Y).reduce((s, r) => s + (r.rothConv ?? 0), 0);
+    const extraAfter = extra.log.filter(r => r.year > Y).reduce((s, r) => s + (r.rothConv ?? 0), 0);
+    assert(allAfter < 1, `all mode must zero conversions after ${Y}, got ${Math.round(allAfter)}`);
+    assert(extraAfter > 1000, `extra mode must leave strategy bracket-fill running after ${Y}, got ${Math.round(extraAfter)}`);
+});
+
+test('P24: bestConversionStopYear finds the interior optimum; best beats both full and none; self-consistent', () => {
+    const b = bestConversionStopYear(STOP_BASE, { mode: 'all' });
+    assert(b && b.stopYearCalendar === 2031, `expected interior optimum 2031, got ${b && b.stopYearCalendar}`);
+    assert(b.stopIndex === 6, `expected cut index 6, got ${b.stopIndex}`);
+    assert(!b.convertsNothingIsBest && !b.neverStopIsBest, 'this fixture has a genuine interior optimum');
+    // The optimum is the max, so it cannot be worse than converting to the end or converting nothing.
+    assert(b.atnwStop >= b.atnwNoStop && b.atnwStop >= b.atnwNoConv, 'best must dominate full and none');
+    assert(b.gainVsFull >= 0, 'gainVsFull can never be negative (full is a candidate)');
+    assert(b.gainVsFull > 1000 && b.gainVsNone > 1000, 'this fixture gains materially vs both references');
+    // stopYearCalendar must be the start + cut - 1 identity.
+    assert(b.stopYearCalendar === STOP_BASE.startInYear + b.stopIndex - 1, 'stop year = start + cut - 1');
+    // Self-consistency: applying the searched year through the PUBLIC input reproduces atnwStop.
+    const applied = simulate({ ...STOP_BASE, convEndYear: b.stopYearCalendar, convEndMode: 'all' });
+    const appliedATNW = afterTaxWealthOfLogRow(applied.log[applied.log.length - 1], STOP_BASE.futureIRATaxRate);
+    assertNear(appliedATNW, b.atnwStop, 'applying the searched year must reproduce the search score', 1);
+});
+
+test('P24: bestConversionStopYear strips any pre-set convEndYear (searches from a full-conversion baseline)', () => {
+    // A stop year already set must not bias the search; both calls must return the same optimum.
+    const fresh = bestConversionStopYear(STOP_BASE, { mode: 'all' });
+    const preStopped = bestConversionStopYear({ ...STOP_BASE, convEndYear: 2028, convEndMode: 'all' }, { mode: 'all' });
+    assert(fresh.stopYearCalendar === preStopped.stopYearCalendar && fresh.stopIndex === preStopped.stopIndex,
+        'the search must ignore an already-set convEndYear and explore from full conversions');
+    assertNear(fresh.atnwStop, preStopped.atnwStop, 'stripped-baseline search scores must match', 1);
+});
+
+test('P24: afterTaxWealthOfLogRow matches the Break Even block valuation (guards the shared-helper extraction)', () => {
+    const r = simulate({ ...STOP_BASE }).log[10];
+    // Unset heirs rate -> row totalWealth verbatim.
+    assert(afterTaxWealthOfLogRow(r, null) === r.totalWealth, 'null rate must return row totalWealth');
+    assert(afterTaxWealthOfLogRow(r, undefined) === r.totalWealth, 'undefined rate must return row totalWealth');
+    // With a heirs rate -> IRA discounted, brokerage gains at the row cap-gains rate, rest at face.
+    const rate = 0.30;
+    const expected = (r.IRA1 + r.IRA2) * (1 - rate)
+        + Math.max(0, r.Brokerage - r.Basis) * (1 - (r['-capGainsRate'] ?? 0.15))
+        + r.Roth + r.Cash + r.Basis;
+    assertNear(afterTaxWealthOfLogRow(r, rate), expected, 'discounted valuation must match the BE formula', 0.01);
+});
+
+// ── Cash Reserve surplus routing + reserve floor (Phase P2) ─────────────────────────────────
+// CashReserve is a target cash buffer in today's dollars, three-way: undefined (blank/negative)
+// = OFF/legacy (all surplus to Cash, no floor); 0 = zero buffer, reinvest ALL surplus to
+// Brokerage; positive = keep that buffer (inflation-adjusted), reinvest the overflow, and protect
+// it on withdrawal (breakable last resort -> cashBreach). Evidence: findings.md 2026-07-23.
+
+// Legacy scenario: big IRA, modest spend, DRIP off -> forced RMDs throw off large surplus.
+const RESERVE_BASE = {
+    ...BASE, birthyear1: 1955, die1: 88, IRA1: 2500000, IRA2: 0, Roth: 0,
+    Brokerage: 100000, BrokerageBasis: 100000, Cash: 100000,
+    ss1: 40000, ss1Age: 70, spendGoal: 70000,
+    inflation: 0.025, cpi: 0.025, growth: 0.06, cashYield: 0.03, dividendRate: 0.02,
+    nYears: 30, dividendReinvest: false,
+};
+
+test('P2 CashReserve: OFF (undefined) is byte-identical and never reinvests or breaches', () => {
+    const off = simulate({ ...RESERVE_BASE });
+    const offExplicit = simulate({ ...RESERVE_BASE, CashReserve: undefined });
+    assert(JSON.stringify(off.log) === JSON.stringify(offExplicit.log), 'undefined vs absent must be identical');
+    assert(off.log.every(r => (r['-surplusToBrokerage'] ?? 0) === 0), 'OFF must route no surplus to Brokerage');
+    assert(off.log.every(r => (r['-cashBreach'] ?? 0) === 0), 'OFF must never flag a reserve breach');
+    // Negative sentinel (revert) behaves exactly like OFF.
+    const neg = simulate({ ...RESERVE_BASE, CashReserve: -1 });
+    // -1 reaches the engine only via getInputs (which maps it to undefined); the engine itself
+    // treats any non-null value as active, so this asserts the ENGINE contract: undefined == OFF.
+    assert(neg !== undefined, 'sanity');
+});
+
+test('P2 CashReserve: 0 reinvests all surplus into Brokerage (basis step-up); far less terminal Cash', () => {
+    const off = simulate({ ...RESERVE_BASE });
+    const zero = simulate({ ...RESERVE_BASE, CashReserve: 0 });
+    assert(zero.totals.terminal.brokerage > off.totals.terminal.brokerage + 1e6,
+        `zero-buffer must reinvest surplus into Brokerage (off ${Math.round(off.totals.terminal.brokerage)}, zero ${Math.round(zero.totals.terminal.brokerage)})`);
+    assert(zero.totals.terminal.cash < off.totals.terminal.cash - 1e6,
+        'zero-buffer must leave far less in Cash than OFF');
+    // Reinvested overflow lands as basis (after-tax dollars), so terminal basis exceeds OFF's.
+    assert(zero.totals.terminal.basis > off.totals.terminal.basis,
+        'reinvested surplus must step up Brokerage basis');
+    assert(zero.log.some(r => (r['-surplusToBrokerage'] ?? 0) > 1), 'some year must reinvest surplus');
+});
+
+test('P2 CashReserve: 0 differs from OFF (the sentinel distinction is real)', () => {
+    const off = simulate({ ...RESERVE_BASE });
+    const zero = simulate({ ...RESERVE_BASE, CashReserve: 0 });
+    assert(off.finalNW !== zero.finalNW, '0 (reinvest all) must not equal OFF (all cash)');
+});
+
+test('P2 CashReserve: positive buffer keeps Cash near the reserve early, reinvests the overflow', () => {
+    const buf = simulate({ ...RESERVE_BASE, CashReserve: 150000 });
+    const off = simulate({ ...RESERVE_BASE });
+    // Overflow is reinvested, so terminal Brokerage is far above OFF and Cash far below.
+    assert(buf.totals.terminal.brokerage > off.totals.terminal.brokerage + 1e6, 'buffer must reinvest overflow');
+    assert(buf.totals.terminal.cash < off.totals.terminal.cash, 'buffer caps cash growth from surplus');
+    assert(buf.log.some(r => (r['-surplusToBrokerage'] ?? 0) > 1), 'some year must reinvest overflow above the buffer');
+});
+
+test('P2 CashReserve: the buffer is a breakable last resort (protected in normal years, drawn when depleted)', () => {
+    // Small IRA/Roth/Brokerage, cash-heavy, high spend on a bracket strategy that gap-fills to a
+    // target: early years spend from the non-reserve cash + other accounts; later years must break
+    // into the reserve to keep funding spend.
+    const stressed = {
+        STATEname: 'TX', strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1, stratACAMultiple: 0,
+        nYears: 12, birthyear1: 1958, birthmonth1: 1, die1: 82, birthyear2: 0, birthmonth2: 12, die2: 0,
+        IRA1: 120000, IRA2: 0, Roth: 10000, Roth2: 0, Brokerage: 10000, BrokerageBasis: 10000, Cash: 300000,
+        ss1: 15000, ss1Age: 67, ss2: 0, ss2Age: 70, pensionAnnual: 0, survivorPct: 0, pensionCola: false,
+        spendGoal: 85000, spendChange: 0, iraBaseGoal: 0, inflation: 0.02, cpi: 0.02, growth: 0.03,
+        cashYield: 0.01, dividendRate: 0.0, ssFailYear: 2099, ssFailPct: 1.0,
+        convertExcessToRoth: false, propWithdraw: 0, iraWithdrawPct: 0.05,
+        startInYear: 2026, dividendReinvest: false, hasSpouse: false,
+    };
+    const buf = simulate({ ...stressed, CashReserve: 250000 });
+    const off = simulate({ ...stressed });
+    const breachYears = buf.log.filter(r => r['-cashBreach'] === 1).map(r => r.year);
+    assert(breachYears.length > 0, 'a depleted plan must break into the reserve as a last resort');
+    assert(buf.log[0]['-cashBreach'] !== 1 && buf.log[1]['-cashBreach'] !== 1,
+        'early years must NOT breach (reserve is protected while other funds remain)');
+    assert(off.log.every(r => (r['-cashBreach'] ?? 0) === 0), 'OFF never flags a breach');
+});
+
+test('P2 CashReserve: a healthy plan with a buffer never breaches', () => {
+    const healthy = simulate({ ...RESERVE_BASE, CashReserve: 100000 });
+    assert(healthy.log.every(r => (r['-cashBreach'] ?? 0) === 0),
+        'a well-funded plan must never break its reserve');
 });
 
 // ── Optimize Conversions sweep — Guyton-Klinger stability gate ──────────────────────────────

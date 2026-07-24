@@ -94,6 +94,14 @@ function applyNerdKnobVisibility() {
         const creepOn = (+document.getElementById('taxRateCreep')?.value || 0) !== 0;
         creepWrap.style.display = (NERD_KNOBS || creepOn) ? 'flex' : 'none';
     }
+    // Stop-conversions-after (year/age) input. Nerdknob-gated while the feature is new, EXCEPT
+    // when a stop year is actually set — a shared URL or loaded scenario must never leave a live
+    // conversion cutoff invisible (same rule as the tax-rate creep row above).
+    const convEndWrap = document.getElementById('convEndYear-wrap');
+    if (convEndWrap) {
+        const convEndSet = (document.getElementById('convEndYear')?.value ?? '').trim() !== '';
+        convEndWrap.style.display = (NERD_KNOBS || convEndSet) ? '' : 'none';
+    }
     // 💵 legend — only meaningful once nerdknob is sweeping the cash-funded arm
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
@@ -201,7 +209,16 @@ function getInputs() {
         IRA2: +val('IRA2'),
         Roth: +val('Roth'),
         Roth2: +val('Roth2') || 0,
-        CashReserve: +val('CashReserve') || 0, // stored, never drawn by simulation
+        // Cash Reserve, three-way (P2): blank or negative -> undefined = OFF (legacy: all surplus to
+        // Cash, no floor). 0 -> zero buffer, reinvest ALL surplus to Brokerage. positive -> target
+        // cash buffer (today's $): keep it in Cash, reinvest the overflow, protect it on withdrawal.
+        CashReserve: (() => {
+            const raw = (val('CashReserve') ?? '').toString().trim();
+            if (raw === '') return undefined;
+            const n = DisplayHelpers.parseShorthand(raw);
+            const v = (n == null || Number.isNaN(n)) ? +raw : n;
+            return (!Number.isFinite(v) || v < 0) ? undefined : v;
+        })(),
         Brokerage: Brokerage,
         BrokerageBasis: BrokerageBasis,
         Cash: +val('Cash'),
@@ -231,6 +248,18 @@ function getInputs() {
         convertExcessToRoth: valChecked('convertExcessToRoth'),
         fundConversionWithCash: valChecked('fundConversionWithCash'),
         extraConversionAmount: +val('extraConversionAmount') || 0,
+        // Conversion END: the LAST year conversions run; blank = never stop (today's behavior).
+        // One field accepts a calendar year (4+ digits, e.g. 2031) or an age of person 1 (fewer
+        // than 4 digits, e.g. 71 -> birthyear1 + 71). Engine reads it as a calendar year.
+        convEndYear: (() => {
+            const raw = (val('convEndYear') ?? '').toString().trim();
+            if (!raw) return undefined;
+            const n = parseInt(raw, 10);
+            if (!Number.isFinite(n) || n <= 0) return undefined;
+            const digits = raw.replace(/[^0-9]/g, '').length;
+            return digits < 4 ? (+val('birthyear1') + n) : n;
+        })(),
+        convEndMode: val('convEndMode') === 'extra' ? 'extra' : 'all',
         propWithdraw: +val('propWithdraw') / 100.0,
         iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
         startAge: +val('startAge') || (new Date().getFullYear() - +val('birthyear1')),
@@ -426,6 +455,12 @@ function runOptimizer() {
     // is unaffected either way: it always sets this key explicitly on every simulate() call it
     // makes. Placed before currentHash so the cache hash is correctly insensitive to this field.
     base.extraConversionAmount = 0;
+    // Same reasoning for the sidebar's Conversion End Year: no family override sets it, so leaving
+    // it on `base` would silently truncate every strategy in the table at the sidebar's cutoff.
+    // The optimizer explores full-conversion plans; a per-row stop-year is a separate (deferred)
+    // sweep dimension. Cleared before currentHash so the cache stays insensitive to it.
+    base.convEndYear = undefined;
+    base.convEndMode = 'all';
     const currentHash = JSON.stringify(base)
         + ';optimizeSpend=' + (document.getElementById('optimizeSpend')?.checked ?? false)
         + ';convOpt=' + (document.getElementById('includeConvOpt')?.checked ?? false);
@@ -1917,26 +1952,41 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
     if (changeEl) changeEl.innerText = _lastChangedInputLabel ? '↺ ' + _lastChangedInputLabel : '';
     const convBEEl = document.getElementById('stat-conv-be');
     if (convBEEl) convBEEl.innerText = totals.convBEYear ?? '—';
-    // Break Even "why not?" — computed eagerly so hovering the ⓘ shows the real reason with no
-    // click first. Affordable on this path: the scan reuses truncated (cheaper) runs and measures
-    // well under one runSimulation() even at its worst case (every year a conversion year).
+    // Break Even ⓘ — now a SEARCHED stop-year suggestion, not just a "why blank" explanation.
+    // Evidence (findings.md, 2026-07-23) proved (a) stopping conversions partway can beat both
+    // converting to the end and converting nothing, and (b) the old boundary-year text named the
+    // WRONG year (off $662k). So whenever conversions occur we run bestConversionStopYear and lead
+    // with the year that maximizes after-tax wealth + its dollar gain; the old boundary diagnosis
+    // is demoted to secondary color, shown only when Break Even is actually blank. Computed eagerly
+    // so hovering reveals it with no click. Cost: n+1 cheap runs + 1 OC re-run, well under a
+    // runSimulation(), same order as the prior diagnostic scan.
     const diagIcon = document.getElementById('stat-conv-be-diagnose');
     const diagResultEl = document.getElementById('stat-conv-be-diagnose-result');
     if (diagIcon && diagResultEl) {
-        const _canDiagnose = totals.convBEYear == null && (lastSimulationLog?.some(r => (r.rothConv ?? 0) > 1) ?? false);
         _beDiagnosisMsg = '';
-        if (_canDiagnose && lastSimInputs) {
+        _beStopSuggestion = null;
+        const _hasConversions = lastSimulationLog?.some(r => (r.rothConv ?? 0) > 1) ?? false;
+        if (_hasConversions && lastSimInputs) {
             try {
-                const diag = diagnoseConvBreakEvenFailure(lastSimInputs, lastSimulationLog);
-                if (diag) _beDiagnosisMsg = formatBreakEvenDiagnosis(diag);
+                const mode = lastSimInputs.convEndMode === 'extra' ? 'extra' : 'all';
+                const sugg = bestConversionStopYear(lastSimInputs, { mode });
+                // Secondary color, only when Break Even is blank: which conversion erased the lead.
+                let boundaryNote = '';
+                if (totals.convBEYear == null) {
+                    const diag = diagnoseConvBreakEvenFailure(lastSimInputs, lastSimulationLog);
+                    if (diag) boundaryNote = formatBreakEvenDiagnosis(diag);
+                }
+                const built = formatStopYearMessage(sugg, boundaryNote, mode);
+                _beDiagnosisMsg = built.msg;
+                _beStopSuggestion = built.suggestion;
             } catch (e) {
-                console.error('Break Even diagnosis failed:', e);
+                console.error('Stop-year suggestion failed:', e);
             }
         }
         diagIcon.style.display = _beDiagnosisMsg ? '' : 'none';
         diagIcon.title = _beDiagnosisMsg;
         // Collapse any previously-expanded text: it belongs to the prior run's numbers.
-        diagResultEl.innerText = '';
+        diagResultEl.innerHTML = '';
         diagResultEl.style.display = 'none';
     }
 
@@ -2030,18 +2080,71 @@ function formatBreakEvenDiagnosis(diag) {
     return msg;
 }
 
-// The Break Even diagnosis for the current run, computed in updateStats(). Held here so the ⓘ
-// can toggle it inline without recomputing.
-let _beDiagnosisMsg = '';
+// Turns a bestConversionStopYear() result into the ⓘ headline + a one-click suggestion object.
+// Leads with the searched year and its dollar gain (findings.md §7: never show a bare year -- the
+// gain is what tells low-tax-state users a nearby year is worthless). `boundaryNote` is the old
+// which-conversion-erased-the-lead sentence, appended as secondary color only when Break Even is
+// blank. Returns { msg, suggestion } where suggestion is { year, mode } for the one-click apply,
+// or null when there is nothing actionable to click (converting through the end is already best,
+// or converting nothing is best -- the latter has no natural "stop after YEAR" the field expresses).
+function formatStopYearMessage(sugg, boundaryNote, mode) {
+    if (!sugg) return { msg: boundaryNote || '', suggestion: null };
+    const _m = (n) => '$' + Math.round(n).toLocaleString();
+    const scopeWord = mode === 'extra' ? 'the extra conversion' : 'conversions';
+    let msg = '', suggestion = null;
+    if (sugg.stopYearCalendar != null && sugg.gainVsFull > 1) {
+        msg = `Stopping ${scopeWord} after ${sugg.stopYearCalendar} keeps about ${_m(sugg.gainVsFull)} more after-tax than converting to the end`;
+        if (sugg.gainVsNone > 1) msg += `, and ${_m(sugg.gainVsNone)} more than never converting`;
+        msg += '.';
+        suggestion = { year: sugg.stopYearCalendar, mode };
+    } else if (sugg.convertsNothingIsBest && sugg.gainVsFull > 1) {
+        msg = `Converting nothing keeps about ${_m(sugg.gainVsFull)} more after-tax than this plan's ${scopeWord}. Consider turning ${mode === 'extra' ? 'the Extra Annual Roth Conversion' : 'conversions'} off.`;
+    }
+    // else: neverStopIsBest -- converting through the end is already best; no stop-year to suggest.
+    if (boundaryNote) msg = msg ? (msg + ' ' + boundaryNote) : boundaryNote;
+    return { msg, suggestion };
+}
 
-// Click the ⓘ to expand the diagnosis inline; click again to collapse it. The same text is
-// always on the icon's title, so hovering reveals it without clicking at all.
+// Applies a suggested conversion stop year to the sidebar input and re-runs. convEndYear is a
+// plain text field (not a DisplayHelpers dollar field), so a direct .value set is what getInputs
+// reads. applyNerdKnobVisibility keeps the (nerd-gated) row visible now that a value is set.
+function applyConvStopYear(year, mode) {
+    const yearEl = document.getElementById('convEndYear');
+    const modeEl = document.getElementById('convEndMode');
+    if (!yearEl) return;
+    yearEl.value = String(year);
+    if (modeEl && mode) modeEl.value = mode;
+    _lastChangedInputLabel = 'Stop Conversions';
+    if (typeof applyNerdKnobVisibility === 'function') applyNerdKnobVisibility();
+    if (typeof runSimulation === 'function') runSimulation();
+}
+
+// The Break Even stop-year message for the current run, computed in updateStats(). Held here so
+// the ⓘ can toggle it inline without recomputing.
+let _beDiagnosisMsg = '';
+// The one-click suggestion { year, mode } for the current run, or null. Set alongside the message.
+let _beStopSuggestion = null;
+
+// Click the ⓘ to expand the suggestion inline; click again to collapse it. The same text is
+// always on the icon's title, so hovering reveals it without clicking at all. When a stop year is
+// actionable, an "Apply" link is appended that sets the field and re-runs.
 function toggleBreakEvenDiagnosis() {
     const el = document.getElementById('stat-conv-be-diagnose-result');
     if (!el || !_beDiagnosisMsg) return;
     const isOpen = el.style.display !== 'none';
-    el.innerText = isOpen ? '' : _beDiagnosisMsg;
-    el.style.display = isOpen ? 'none' : '';
+    if (isOpen) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    el.textContent = _beDiagnosisMsg;
+    if (_beStopSuggestion && _beStopSuggestion.year != null) {
+        const y = _beStopSuggestion.year, m = _beStopSuggestion.mode;
+        const link = document.createElement('a');
+        link.href = '#';
+        link.textContent = `Stop after ${y} ▸`;
+        link.style.cssText = 'display:inline-block;margin-top:4px;cursor:pointer;color:#2980b9;text-decoration:underline;';
+        link.addEventListener('click', (e) => { e.preventDefault(); applyConvStopYear(y, m); });
+        el.appendChild(document.createElement('br'));
+        el.appendChild(link);
+    }
 }
 
 function updateProjectedRMDStat() {
@@ -3016,6 +3119,7 @@ function setupAutoRecalc() {
         nYears: 'N Years', stratRate: 'Bracket', propWithdraw: 'Boost%',
         iraBaseGoal: 'IRA Goal', maximizeConversions: 'Max Conversions',
         convertExcessToRoth: 'Convert Excess', fundConversionWithCash: 'Fund w/ Cash',
+        extraConversionAmount: 'Extra Conversion', convEndYear: 'Stop Conversions', convEndMode: 'Stop Scope',
         birthyear1: 'Your Birth', die1: 'Your Life Exp',
         birthyear2: 'Spouse Birth', die2: 'Spouse Life Exp',
         IRA1: 'Your IRA', IRA2: 'Spouse IRA',
@@ -3118,6 +3222,7 @@ const OPT_LONG_TO_SHORT = {
     spendGoal:'sg', spendChange:'sc', strategy:'str', nYears:'ny',
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
+    convEndYear:'cey', convEndMode:'cem',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
     IRA1:'i1', IRA2:'i2', Roth:'ro', Roth2:'ro2',
@@ -3246,7 +3351,10 @@ function loadFromURL() {
             el.checked = (value === '1' || value === 'true');   // new '1'/'0' + legacy 'true'/'false'
         } else {
             const decoded = DisplayHelpers.parseShorthand(value);
-            if (decoded !== null && (el.type === 'text' || el.type === '')) {
+            // `data-plain` marks a numeric TEXT field that is NOT a dollar amount (e.g. the
+            // conversion stop year/age) — it must keep its literal value, not be reformatted as
+            // "$2,031". Without this, any numeric text input gets the dollar treatment on load.
+            if (decoded !== null && (el.type === 'text' || el.type === '') && el.dataset.plain === undefined) {
                 el.dataset.numVal = String(decoded);
                 el.value = DisplayHelpers.formatDollar(decoded);
             } else {
@@ -3264,7 +3372,20 @@ function loadFromURL() {
     });
     toggleStrategyUI();
     onConvSubFlagChange();   // .checked set programmatically above → no change event; resync the convenience checkbox
+    maybeWarnCashReserveActive();
     runSimulation();
+}
+
+// One-time load warning: a shared URL or saved scenario that carries an ACTIVE Cash Reserve
+// (blank/negative = off, so >= 0 is active) now behaves differently than in releases before the
+// surplus-reinvestment feature. Fire only on load (loadFromURL/applyScenario), never on recalc.
+function maybeWarnCashReserveActive() {
+    const raw = (document.getElementById('CashReserve')?.value ?? '').toString().trim();
+    if (raw === '') return;
+    const n = DisplayHelpers.parseShorthand(raw);
+    const v = (n == null || Number.isNaN(n)) ? +raw : n;
+    if (!Number.isFinite(v) || v < 0) return;   // blank/negative = off, no change to warn about
+    showMessage('Note: this scenario sets a Cash Reserve, which now reinvests surplus above it into your Brokerage. Results differ from releases before this feature. Set Cash Reserve blank (or -1) to restore the original all-cash behavior.', 'warning');
 }
 
 
@@ -3569,6 +3690,8 @@ function applyScenario(data) {
     if (typeof updateSuggestSpendTooltip === 'function') updateSuggestSpendTooltip();
     if (typeof updateIRAGoalHint === 'function') updateIRAGoalHint();
     if (typeof updateCompAdvisory === 'function') updateCompAdvisory();
+
+    maybeWarnCashReserveActive();
 
     // Trigger any recalculations your app needs
     if (typeof runSimulation === 'function') {

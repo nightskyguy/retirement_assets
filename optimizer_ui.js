@@ -209,12 +209,14 @@ function getInputs() {
         IRA2: +val('IRA2'),
         Roth: +val('Roth'),
         Roth2: +val('Roth2') || 0,
-        // Cash Reserve, three-way (P2): blank or negative -> undefined = OFF (legacy: all surplus to
-        // Cash, no floor). 0 -> zero buffer, reinvest ALL surplus to Brokerage. positive -> target
-        // cash buffer (today's $): keep it in Cash, reinvest the overflow, protect it on withdrawal.
+        // Cash Reserve, three-way (P2): "Off" (recommended), blank, or negative -> undefined = OFF
+        // (legacy: all surplus to Cash, no floor). 0 -> zero buffer, reinvest ALL surplus to
+        // Brokerage. positive -> target cash buffer (today's $): keep it in Cash, reinvest the
+        // overflow, protect it on withdrawal. Blank/negative are still accepted silently for
+        // old saved scenarios and shared links, but "Off" is the only value shown to users now.
         CashReserve: (() => {
             const raw = (val('CashReserve') ?? '').toString().trim();
-            if (raw === '') return undefined;
+            if (raw === '' || raw.toLowerCase() === 'off') return undefined;
             const n = DisplayHelpers.parseShorthand(raw);
             const v = (n == null || Number.isNaN(n)) ? +raw : n;
             return (!Number.isFinite(v) || v < 0) ? undefined : v;
@@ -2070,7 +2072,7 @@ function formatBreakEvenDiagnosis(diag) {
     const _fmt = (n) => '$' + Math.round(n).toLocaleString();
     let msg;
     if (diag.outcome === 'neverSustains') {
-        msg = `Even the first conversion, in ${diag.breakingYear} (${_fmt(diag.breakingAmount)}), never earns back its own tax cost by the end of the plan.`;
+        msg = `The first conversion, in ${diag.breakingYear} (${_fmt(diag.breakingAmount)}), never earns back its own tax cost by the end of the plan.`;
     } else {
         msg = `Conversions through ${diag.lastSustainableYear} would have broken even in ${diag.lastSustainableBEYear}. The ${diag.breakingYear} conversion (${_fmt(diag.breakingAmount)}) is the one that erases the lead for good.`;
     }
@@ -3377,14 +3379,14 @@ function loadFromURL() {
 }
 
 // One-time load warning: a shared URL or saved scenario that carries an ACTIVE Cash Reserve
-// (blank/negative = off, so >= 0 is active) now behaves differently than in releases before the
-// surplus-reinvestment feature. Fire only on load (loadFromURL/applyScenario), never on recalc.
+// (Off/blank/negative = off, so >= 0 is active) now behaves differently than in releases before
+// the surplus-reinvestment feature. Fire only on load (loadFromURL/applyScenario), never on recalc.
 function maybeWarnCashReserveActive() {
     const raw = (document.getElementById('CashReserve')?.value ?? '').toString().trim();
-    if (raw === '') return;
+    if (raw === '' || raw.toLowerCase() === 'off') return;
     const n = DisplayHelpers.parseShorthand(raw);
     const v = (n == null || Number.isNaN(n)) ? +raw : n;
-    if (!Number.isFinite(v) || v < 0) return;   // blank/negative = off, no change to warn about
+    if (!Number.isFinite(v) || v < 0) return;   // Off/blank/negative = off, no change to warn about
     showMessage('Note: this scenario sets a Cash Reserve, which now reinvests surplus above it into your Brokerage. Results differ from releases before this feature. Set Cash Reserve blank (or -1) to restore the original all-cash behavior.', 'warning');
 }
 

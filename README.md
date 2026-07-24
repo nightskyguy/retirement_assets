@@ -479,3 +479,121 @@ Here are some of the harms of having or accruing a large IRA/401K:
 The tool shows a "Break-Even Tax Rate" next to each year you convert. The idea, from a well-known formula by Michael Kitces, is to answer one simple question: how high would your future tax rate have to be for a conversion today to pay off? If you expect your future rate to be *above* that break-even number, converting looks worthwhile; *below* it, it does not. To check whether that number can be trusted, I built a small test harness that compares it against what the full simulation actually delivers. The harness runs each plan twice, once converting and once not, and finds the future tax rate at which the two plans finish in a dead heat. That is the honest break-even, because it captures everything the tidy formula leaves out: the larger required distributions a bigger IRA forces on you later, the extra Social Security that becomes taxable, the IRMAA surcharges, and where your surplus cash actually ends up invested.
 
 The finding is that the displayed Break-Even Tax Rate is not trustworthy, and it can be wrong in *either* direction. The formula itself is algebraically correct, but it models only "money grows, then is taxed once" and ignores the cascade of knock-on effects above. In my tests the true break-even was sometimes far *below* the displayed number (so the tool discouraged conversions that clearly won) and sometimes far *above* it (so the tool encouraged conversions that clearly lost). Which way it erred depended heavily on a single modeling choice that has nothing to do with the formula: whether your surplus money is left sitting in cash or reinvested at market rates (this is what the new Cash Reserve setting controls). Meanwhile the one input the formula fusses over most, the number of years until your required distributions begin, turned out to matter the least. The practical takeaway: treat the Break-Even Tax Rate as a rough conversation-starter, not a decision rule, and trust the plan's actual after-tax ending balances instead.
+
+## Frequently Asked Questions
+
+### How does Cash Reserve work with dividends?
+
+The **Cash Reserve** setting and **Dividend Reinvestment (DRIP)** are independent controls that interact to determine where your annual surplus ends up. Here's how it works:
+
+**Cash Reserve** creates a target cash buffer (if set to a positive amount like $50,000). Each year, the tool calculates your surplus and routes it in order:
+1. First, surplus fills the cash buffer up to your target (inflation-adjusted)
+2. Any excess beyond the buffer overflows to your **Brokerage** account
+
+**Dividend Reinvestment** separately controls where annual dividends go:
+- If DRIP is **ON**: Dividends stay in the **Brokerage** account, reinvested at market growth rates. The basis steps up, so future capital gains are smaller.
+- If DRIP is **OFF**: Dividends flow to the **Cash** account, growing at the cash yield rate (usually 4–5%, vs. 7–10%+ market returns).
+
+**The interaction:** Turning off DRIP diverts dividends from Brokerage to Cash, which fills your reserve faster but sacrifices market-rate compounding. Conversely, DRIP ON keeps dividends invested at higher returns, leaving your regular surplus to fill the buffer.
+
+**Key gotcha:** The per-account growth rates differ dramatically. Money in Brokerage appreciates at market rates; money in Cash grows at much lower yields. So the location of your surplus has outsized impact on long-term wealth.
+
+### When might Cash Reserve be depleted?
+
+Your **Cash Reserve** is a protective buffer, but it can be drawn down if spending demands exceed available sources in a given year. Here's the order the tool uses to cover spending:
+
+1. Draw from regular **Cash** balance first (no taxes)
+2. If Cash runs out, liquidate from **Brokerage** (triggers capital gains tax)
+3. If Brokerage is exhausted, withdraw from **Roth** accounts (tax-free, but reduces future growth)
+4. If Roth is exhausted, take forced **IRA withdrawals** (ordinary income tax)
+5. Only if all else fails, the tool dips into your hidden **Cash Reserve buffer** as a true last resort
+
+When the reserve is breached, it's flagged internally so you can see in logs that this happened.
+
+**Common depletion scenarios:**
+- **High spending year**: Unexpected major expenses or planned large purchases
+- **Market downturn**: Brokerage value drops, forcing earlier liquidation to meet goals
+- **Early retirement**: Spending exceeds portfolio growth in the first decade
+- **Healthcare crisis**: Long-term care costs drain the buffer rapidly
+
+**The practical implication:** A Cash Reserve protects you from forced selling in downturns, but only if your overall spending is sustainable. The tool flags if the reserve gets breached repeatedly, signaling the plan may be too aggressive.
+
+### Where is cash interest routed?
+
+**Cash interest always stays in the Cash account.** It doesn't move to Brokerage or anywhere else.
+
+Here's what happens each year:
+- Your Cash balance grows by the cash yield rate (e.g., 4.5% on $50,000 = $2,250 interest)
+- That interest accrues directly in Cash and is reinvested there
+- It's taxed as **ordinary income** (not the lower qualified dividend rate)—meaning your full marginal tax rate applies
+
+**Contrast with dividends:**
+- Dividends (with DRIP ON) move to Brokerage, reinvest at market rates, taxed at qualified rates
+- Dividends (with DRIP OFF) move to Cash, taxed at qualified rates
+- Interest has no qualified treatment; it's always ordinary income
+
+**Why it matters:** If you maintain a large Cash Reserve, the interest compounds annually, but the after-tax return is lower due to ordinary income taxation. This is one reason the tool recommends enabling DRIP—to capture market-rate growth in Brokerage rather than letting cash balances idle at low yields.
+
+### Does the brokerage account for "cash"?
+
+No—**Cash** and **Brokerage** are two separate accounts in the model.
+
+**Brokerage** holds stocks, bonds, and investments. It:
+- Grows at your specified market growth rate
+- Accumulates unrealized capital gains (tracked separately as **basis**)
+- Pays long-term capital gains tax on those gains when liquidated
+- Can receive dividend reinvestments (if DRIP ON), which step up the basis
+
+**Cash** is your high-yield savings or money market fund. It:
+- Grows at the cash yield rate (typically 4–5%, not market rates)
+- Never has capital gains (interest is ordinary income)
+- Serves as your spending pool and reserve buffer
+- Can receive dividends if DRIP is OFF
+
+**Why the distinction matters:**
+- When you need spending money, the tool withdraws from Cash first (tax-free)
+- When Cash runs out, it liquidates Brokerage and pays capital gains tax on appreciation
+- The **Cash Reserve** setting controls how much to keep in Cash; surplus overflows to Brokerage for better growth
+
+**Gotcha:** The tool tracks basis separately. When dividends reinvest to Brokerage (DRIP ON), the basis steps up by the dividend amount, reducing your future capital gains tax. If dividends route to Cash (DRIP OFF), there's no basis step-up, and you pay ordinary income tax on the interest later.
+
+### How do I find the most efficient Roth conversions?
+
+The tool provides a built-in diagnostic called **Stop-Year** that identifies the optimal conversion cutoff. Here's how to use it:
+
+1. **Enable conversions** (set up a strategy: Extra Annual Roth Conversion, or let it bracket-fill)
+2. **Look for the "Break Even ⓘ" diagnostic**
+   - It shows the first year your plan's after-tax wealth permanently overtakes a no-conversion scenario
+   - This is a milestone, but *not* always the best stopping point
+3. **The Stop-Year suggestion** appears as: *"Stop after 2031 — gain $125k vs converting through 2040, gain $340k vs never converting"*
+   - This is the year that *maximizes* your after-tax wealth
+   - Click **"Stop after YYYY ▸"** to apply it one-click
+   - It often differs from Break-Even by significant amounts ($662k+ in some scenarios)
+
+4. **"Optimize for" selector** lets you rank all strategies by your goal:
+   - **Tax Flexibility** (default): Balances your three buckets (pre-tax IRA, Roth, taxable) for maximum flexibility each year
+   - **Minimum Lifetime Taxes**: Lowest total tax bill
+   - **Maximum Net Wealth**: Highest after-tax ending balance
+   - **Avoid Widow & RMD Tax**: Minimize taxes your heirs will pay
+
+**Key insight:** Break-Even tells you when conversions "paid off"; Stop-Year tells you when to *stop* for maximum final wealth. The boundary year is the wrong cutoff—trust the Stop-Year suggestion instead.
+
+### How reliable is the Break-Even Tax Rate?
+
+Not very. See the section above for the full details, but here's the summary:
+
+The **Break-Even Tax Rate (BETR)** uses the Kitces formula to answer: *"How high would your future tax rate need to be for this conversion to pay off?"* If you expect rates to rise above that number, converting looks good; below it, it looks bad.
+
+**The problem:** The formula is mathematically correct but incomplete. It models "money grows, then is taxed once"—missing the cascade of real effects that the full simulation captures:
+- Larger IRAs force bigger required distributions later
+- Bigger RMDs cause more Social Security to become taxable
+- IRMAA surcharges kick in at higher income brackets
+- Your surplus cash either sits idle or gets reinvested (controlled by Cash Reserve)
+
+**The practical result:** The displayed BETR is often unreliable in both directions. Sometimes it's far too low (discouraging conversions that clearly win); sometimes far too high (encouraging conversions that clearly lose). Which way it errs depends on your specific situation, especially your cash reserve strategy.
+
+**Better approach:**
+- Use the **Stop-Year** diagnostic instead (it simulates the full cascade and finds the wealth-maximizing cutoff)
+- Trust the **Break-Even *year*** (when your plan pulls ahead) more than the Break-Even *tax rate*
+- Treat BETR as a rough conversation-starter with a tax advisor, not a decision rule
+- Let the plan's actual after-tax ending balances guide your conversion decisions

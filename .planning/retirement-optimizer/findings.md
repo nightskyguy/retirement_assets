@@ -288,3 +288,171 @@ Three things follow:
 - n=1. This is one scenario with an aggressive 8.5% growth rate and a 33% heirs rate. The mechanism (late conversions convert at a rate at or above the heirs rate, so they subtract) is general, but the size of the effect is not established.
 
 **Follow-up:** see Phase P24 in `task_plan.md`.
+
+## P24 evidence sweep: the Break Even boundary year is NOT the year to stop converting (2026-07-23, v11.12fd)
+
+The previous entry recorded a single measured truncation (stop after 2043, the year the ⓘ
+diagnostic names) and found it beat every other variant tried. It did, but only because the
+right answer was never tried. Sweeping EVERY cutoff instead of the four hand-picked ones
+overturns the conclusion.
+
+Harness: `.test_harnesses/stopyear_harness.js` (browser console, research only,
+not shipped). It re-runs the plan once per cutoff and scores each on
+`afterTaxNetWorth(terminal, heirs, capGainsRate)` at a SHARED heirs rate. One 27-cutoff sweep of
+a 26-year plan is ~46ms, so the whole scenario matrix below is a few seconds.
+
+Same recorded scenario, reproduced exactly first (`atnw 22,809,307`, `spend 8,668,149`,
+`conv 1,858,960`, `convBEYear null`).
+
+### 1. The optimum is 2031, not 2043. The diagnostic is off by 12 years and $662k.
+
+| stop after | after-tax NW | lifetime tax | Break Even | converted | end IRA |
+|---|---|---|---|---|---|
+| no conversions | $23.161M | $4.789M | -- | $0 | $9.42M |
+| **2031 (the true optimum)** | **$23.855M** | $3.751M | **2046** | $585k | $6.59M |
+| 2043 (the ⓘ boundary year) | $23.193M | $3.367M | 2051 | $1,414k | $3.26M |
+| 2051 (as configured) | $22.809M | $3.601M | -- | $1,859k | $1.99M |
+
+The curve rises to cut=6 then falls monotonically. Break Even at the true optimum lands on
+2046, five years before plan end, which retires the "thin margin, breaks even only on the
+final year" caveat from the previous entry: that caveat was an artifact of measuring the wrong
+cutoff.
+
+**Why the diagnostic cannot find this.** `diagnoseConvBreakEvenFailure` answers "which
+conversion erases the lead for good," i.e. the LAST cutoff that still produces any Break Even
+year at all. That is the right answer to the question it was built for and the wrong answer to
+"where should I stop." Existence of a Break Even is a much weaker condition than maximum
+after-tax wealth: every cutoff from 2026 through 2043 breaks even, and they differ by $662k.
+
+### 2. Delivered spend is identical across every cutoff, in every scenario measured.
+
+`spendRange` (max minus min total spend over all 27 cutoffs) is **$0** in all 18 scenarios
+checked, and no truncation flipped `totals.success`. Truncating conversions is a pure
+wealth/tax comparison with nothing else moving. That is what makes a stop-year search safe to
+rank on after-tax NW alone.
+
+### 3. Larger-and-shorter beats smaller-and-longer. The stop year is worth more than the amount.
+
+Joint (Extra Conversion amount x stop year) grid, $0-$400k in $25k steps x every cutoff:
+
+| policy | after-tax NW | amount | stop |
+|---|---|---|---|
+| A. plan as configured | $22.809M | $33k | none |
+| B. best stop year, configured amount | $23.855M | $33k | 2031 |
+| D. best amount, no stop (**what the ⇌ optimizer searches today**) | $23.192M | $50k | none |
+| C. best amount AND stop year jointly | **$24.228M** | $200k | 2031 |
+
+Stop-year alone (B-A, +$1.045M) is worth slightly MORE than amount alone (D-A, +$383k), and
+the two are close to additive. C-D, the value the stop-year axis would add on top of today's
+optimizer, is **+$1.036M** here and was positive in all 11 scenarios tested (+$228k to
++$1.887M, median ~$1.0M). Converting $200k/yr for six years then stopping beats every
+amount-only plan, and beats converting nothing by $1.07M.
+
+### 4. Stopping only the EXTRA conversion (what a user would expect the knob to do) is much worse.
+
+Mode `'extra'` keeps the strategy's own bracket-fill running to plan end and caps only
+`extraConversionAmount`. Best result over the same amount grid: **$23.465M**, versus $24.228M
+for stopping all conversion activity. And `convBEYear` is **null at every cutoff and every
+amount** in extra-only mode. The conversions doing the damage in the late years are the
+strategy's own bracket-fill, not the Extra. A stop-year control wired to the Extra only would
+look like it was working and would leave most of the money on the table.
+
+No engine change was needed to measure this: `extraConversionAmount` already accepts a per-year
+ARRAY, so extra-only truncation is a zero tail.
+
+### 5. Generality: stopping early never hurt, but the size of the win varies enormously.
+
+23 scenarios across growth 3-12%, `die1` 80-100, spend $120k-$400k, IRA $0.8M-$8M, states
+CA/TX/NY/PA, heirs rate 0-50%.
+
+- **`gainVsFull` (best cutoff vs converting to the end) was >= 0 in every single scenario.**
+  Never negative. Range $0 to $2.97M.
+- **In 7 of 23, the best cutoff is "convert nothing at all"**: growth <= 3%, `die1` 80, spend
+  $300k, IRA1 $0.8M and $1.5M. Low growth, short horizon, or a small IRA means conversions
+  never pay, and the sweep says so cleanly.
+- **The payoff scales hard with growth and longevity.** vs-never-converting: $0 at 3% growth,
+  $37k at 6%, $693k at 8.5%, $1.32M at 10%, $2.97M at 12%. And $0 at die 80, $218k at die 88,
+  $2.11M at die 95, $5.86M at die 100.
+- **The diagnostic's boundary year never equaled the optimum in any scenario.** In 10 of 23 the
+  diagnostic does not fire at all (Break Even is non-null, so the ⓘ never appears) and yet
+  stopping early still gained $99k to $2.97M. The actionable quantity exists independently of
+  whether Break Even is blank.
+
+### 6. No heuristic substitutes for the search. Four candidate rules all failed.
+
+- **Marginal-rate crossing** ("stop when the conversion's marginal rate reaches the heirs
+  rate"): the bracket-fill strategy pins the combined marginal rate at 33.3% (24% fed + 9.3%
+  CA) in EVERY year of this plan. The rule cannot discriminate at all, yet the optimum is a
+  sharp six years in. The real driver is paying conversion tax out of a portfolio compounding
+  at 8.5%, not a rate comparison.
+- **Portfolio-mix trigger** ("stop when the IRA falls below X% of the portfolio"): the IRA
+  share at the optimal stop year ranges from 4% to 78% across scenarios. No usable threshold.
+- **Age / RMD-onset rule**: age at stop clustered at 70-75 until birth year was varied, which
+  exposed it as an artifact of the fixed 1960/1952 birth years. Sweeping birth year 1948-1968
+  gives stop-minus-RMD-year offsets from -15 to +14.
+- **Terminal-mix target** (the user's "is there an optimum pre-tax/taxable/tax-free ratio to
+  drive toward?"): the taxable share at the optimum is fairly stable at 43-48% of after-tax NW
+  in the mainstream cases, but pre-tax net ranges 3-71% and Roth 0-68%. Nothing tight enough to
+  drive toward. The optimal MIX is an output of the search, not an input to it.
+
+Conclusion: the stop year has to be searched per plan. That is the argument for building the
+search rather than shipping a rule of thumb.
+
+### 7. The search must stay a linear scan, and the peak can be sharp.
+
+- **Not unimodal.** First-difference sign flips over the cutoff curve: 1 to 7 across scenarios
+  (7 at growth 10%, 5 at Extra $200k). Bracket and IRMAA tables are step functions, so ternary
+  or binary search converges on the wrong cutoff undetectably. Same reasoning
+  `diagnoseConvBreakEvenFailure` already documents for its own linear scan. Cost is not the
+  issue anyway: k+1 runs, ~46ms.
+- **Precision matters most exactly where the win is smallest.** Fraction of the gain retained
+  if the stop year is off by +/- N years: baseline keeps 94% at +/-1 and 48% at +/-5, but
+  low-tax states, where the gain is only $99k-$113k, go NEGATIVE at +/-2 (TX: -10%) and +/-3
+  (TX: -117%, PA: +1%). In those plans a mis-set stop year is worse than not stopping at all.
+  Any UI that suggests a year must show the size of the win next to it.
+
+**Follow-up:** Phase P24 in `task_plan.md`, rewritten against this evidence.
+
+## Surplus routing (Cash Reserve, P2) is upstream of every conversion metric — it flips the verdict (2026-07-23, v11.1330)
+
+Closing the BETR audit's Q2. The non-cyclic default banked ALL surplus (dominated by forced RMDs)
+into Cash at `cashYield` (~3%). Phase P2 implements the dormant `CashReserve` input as a target cash
+buffer: blank/negative = OFF (legacy, all-to-cash); 0 = reinvest all surplus to Brokerage; positive
+$Y = keep $Y (today's dollars, inflated), reinvest the overflow, protect $Y on withdrawal
+(breakable last resort). Re-running the harnesses with surplus reinvested overturns the conversion
+conclusions the OFF default produced.
+
+**BETR harness (`node .test_harnesses/betr_harness.js`), empirical break-even heirs rate t*:**
+
+| scenario | reserve OFF | reserve 0 / 200k | code BETR |
+|---|---|---|---|
+| lump $500k, g6% | t* ≤0 (convert always), gain@0% +$581k | **t* 209%** (never convert), gain@0% **−$952k** | 24.6% |
+| annual $80k, g8% | t* 6%, gain@0% −$144k | **t* 84%**, gain@0% **−$2.0M** | 29.6% |
+
+**P24 stop-year search (`bestConversionStopYear`), same flip:**
+
+| reserve | best stop | gain vs converting-to-end | gain vs never-converting |
+|---|---|---|---|
+| OFF | 2046 | +$100k | **+$914k (convert)** |
+| 0 / 200k | none — **convert nothing is best** | +$1,698k | **+$0** |
+
+Three conclusions:
+
+1. **The cash-drag was the artifact.** With surplus left in 3% cash, the no-conversion world was
+   starved of growth, making conversions look great (t* ≤0, P24 says convert). Reinvest that surplus
+   at market and the no-conversion world compounds instead, and conversions LOSE at every plausible
+   rate. The OFF default systematically biased Break Even, opportunity cost, BETR, and the P24
+   stop-year all toward conversions.
+2. **BETR is wrong in BOTH regimes, in opposite directions.** OFF: code BETR ~25% overstates the
+   threshold (true ≤0) → understates benefit. ON: code BETR ~25-30% understates it (true 84-209%)
+   → overstates benefit. The closed form ignores surplus routing AND the RMD/IRMAA/SS second-order
+   cascade, which together dominate the simulator's actual outcome. The years-to-RMD horizon is a
+   minor error either way. **BETR as shown is not a reliable signal**; the honest replacement is the
+   empirical break-even t* computed from two full sims (what the harness does).
+3. **`0` and a positive buffer often coincide in legacy plans** because the forced-RMD surplus dwarfs
+   any few-hundred-k buffer, so nearly everything reinvests either way. The buffer only bites when
+   surplus is comparable to it (modest-IRA plans).
+
+Reserve OFF stays byte-identical to pre-P2 (regression-locked). The default is OFF, so existing
+scenarios/URLs are unchanged until a user opts in; a load-time warning fires for any scenario/URL
+that carries an active Cash Reserve.

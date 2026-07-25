@@ -2,30 +2,24 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-24 (worktree context-ab498f, v11.1340 + documentation polish)
+**As of:** 2026-07-25 (worktree context-ab498f, v11.1340 + documentation polish + changelog refactor + Cash Reserve "Off")
 
 ---
 
-## Documentation Polish (2026-07-24, v11.1340): Post-P2 clarifications & FAQ prep
+## Documentation Polish (2026-07-24/25, v11.1340): Post-P2 clarifications, FAQ, changelog refactor, Cash Reserve "Off"
 
-**Status: COMPLETE** (tooltip + BETR section + ToC rebuild)
+**Status: COMPLETE** (tooltip + BETR section + ToC rebuild + FAQ + changelog refactor + Cash Reserve default)
 - [x] **Cash Reserve tooltip revision:** Removed redundant "blank or -1" mention, replaced with recommendation to turn on Dividend Reinvestment for best benefit. Verified in-browser.
 - [x] **Dividend + reserve + growth rate interaction:** Documented how DRIP off routes dividends to Cash at cashYield; reserve fills buffer first, overflow to Brokerage at market growth. Clarified per-account growth rates.
 - [x] **README "How Reliable Is the Break-Even Tax Rate?" section:** Added under "Some Things I Learned About Taxation" — non-technical explanation of BETR (closed-form heuristic), finding (unreliable in practice), and recommendation (treat as conversation-starter, not decision rule). One paragraph.
 - [x] **README ToC rebuild:** Promoted bold subtopic labels to real `####` headings, added Standalone Calculator Tools subtopics and full Taxation subsections so table of contents reflects all navigable sections.
+- [x] **README FAQ section:** 6 Q&A entries (Cash Reserve/dividend interaction, depletion scenarios, cash interest routing, brokerage-vs-cash distinction, Roth conversion efficiency / Stop-Year, BETR reliability), matching the Taxation section's conversational-precise tone.
+- [x] **Changelog restructure (PR #129):** inline changelog trimmed to the 5 most recent entries; older entries (v11.12e5 and back) moved to new `optimizer_history.js`, lazy-loaded on "Older changes…" expand instead of shipping on every page load. Version stat added to Summary Header, sourced at runtime from `<title>` (title itself stays hardcoded — see findings.md "GA title-timing" entry for why). "Latest Change" banner added above the collapsible Change Log (always visible, can't be hidden), plus a `data-flag="behavior"` convention to flag entries that alter computed results.
+- [x] **Cash Reserve now defaults to "Off"** (was a blank box). Blank and `-1` still work silently for old saved scenarios/shared links but are no longer advertised in tooltip/placeholder. Capture-phase blur listener normalizes case and bypasses the shared dollar-formatting helper so the value isn't reformatted or reverted. See findings.md for the full investigation (getInputs()/DOLLAR_INPUT_IDS/share-URL implications).
+- [x] Small wording fix: "Even the first conversion…" → "The first conversion…" in the Break-Even diagnosis message (`optimizer_ui.js`).
 
-**New Work Item: README FAQ Section**
-Add FAQ at end of README.md addressing user questions:
-1. How does Cash Reserve work with dividends?
-2. When might Cash Reserve be depleted?
-3. Where is cash interest routed?
-4. Does the brokerage account for "cash"?
-5. How do I find the most efficient Roth conversions?
-6. How reliable is the Break-Even Tax Rate? (move/expand from Taxation section if needed)
-
-For simple answers (1 paragraph), include inline. For complex (requires scenarios/examples), mark "To be provided" with a link to open a follow-up task.
-
-**Files:** `retirement_optimizer.html` (tooltip), `README.md` (BETR section + ToC + FAQ to be added).
+**Files:** `retirement_optimizer.html`, `optimizer_ui.js`, `optimizer_history.js` (new), `README.md`.
+**Status:** merged as [PR #129](https://github.com/nightskyguy/retirement_assets/pull/129).
 
 ---
 

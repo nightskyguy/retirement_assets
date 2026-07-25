@@ -77,8 +77,11 @@ First, **NOTE this** I use the term "**IRA**" for any account that is "Pre-Tax".
 
 Trivia for fun: _IRA_ stands for "Individual Retirement *AGREEMENT*", not account. Yeah, weird. And it's not ROTH but Roth. It's named after Senator William *Roth* who introduced it.  Oh, and the "(k)" in 401(k) does NOT refer to Eugene Keogh, it's a reference to the Internal Revenue Code. 
 
-You can inspect or [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) in about any browser (Brave and Chrome have been tested).  Or you can directly run the tools from Cloudflare (_tools.netcitizen.us_).  You need internet access for the fonts and charts to work properly because those are downloaded from public sources.
+[![github logo](./github_black_green_50x.png)](https://github.com/nightskyguy/retirement_assets) You can inspect or [download the files](https://github.com/nightskyguy/retirement_assets) and run the tool(s) in about any browser (Brave and Chrome have been tested). You must have an internet access for the fonts and charts to work properly because those are downloaded from public sources.
 
+Or you can directly run the tools from _tools.netcitizen.us_ 
+
+---
 
 ## Standalone Calculator Tools
 
@@ -132,28 +135,35 @@ There is no provision for adding lumpy withdrawals, but there is a way to apply 
 
 This is the original tool. It's definitely not for everyone. There is no "accumulation phase". The focus is managing withdrawals from your accounts. But it has something I haven't found in any tool: a withdrawal strategy optimizer - and a Monte Carlo stress-test tab to show you how your plan holds up across hundreds of simulated market scenarios. Monte Carlo is familiar - it's used as the "Chance of Success" in quite a few tools, but it's done here a bit differently.
 
+I think retirement is like [going to the moon](https://engineering.mit.edu/ask-an-engineer/how-were-we-able-to-navigate-from-the-earth-to-the-moon-with-such-precision). There are lots of critical calculations, lots of variables, lots of complexity, and lots of ways to fail. For the moon launch, add too much thrust at the wrong time and you miss the moon, land in a crater or crash.  Get the angle of reentry into the earth's atmosphere wrong and the spacecraft bounces off into space or burns up. Fortunately in retirement miscalculation has far less deadly consequences than a moon mission, but many more speed bumps and potholes.  Purist will rightly point out that there are a LOT of unknowns: market returns, inflation, spending, taxation and taxation changes. As one CFP put it: "It's a tower of guesses". The longer range the projection, the more likely the guesses are to be wrong. BUT failing to try to plan, is in-my-opinion itself a failure. Moreover taxation is the one thing that only changes at the speed of congress - which means years in the same direction is likely. The market and inflation, of course behave like petulant children and are truly unknowable.
+
 My primary motivations for this tool are: 
 + What does the withdrawal phase look like?
 + What happens to my assets over time? 
 + Am I in RMD jeopardy? E.g. Will I experience tax bracket escalation?  
-+ What withdrawal strategy results in: the lowest taxation, the highest ending wealth, and my favorite: the most **lifetime spending**.
++ What withdrawal strateg(ies) result in: the lowest taxation, the highest ending wealth, and my favorite: the most **lifetime spending**.
 + Is it really true that *heavy* Roth conversions, **no Roth conversions**, or "*some*" Roth conversions are BETTER? (Setting aside some of the significant advantages of Roth)
 + How painful is the so-called widow's penalty, really?
 + How different might things look for me if I move to another state?
 + How much should I withdraw, convert or sell from each of my accounts to stay on track, and what will the tax consequences be?
 
 > [!WARNING]
-> While I've renewed development of this tool and conquered some daunting bugs, it's still a work in progress.
+> This is a work in progress. It may contain flaws beyond the presumption of the future being similar to the present. Use at your own risk. Consult a CFP and/or tax attorney before you make life-changing decisions.
 
 ### Features in the Works (and Known Bugs):
 
-+ Add a "tax creep" to see what harm a creeping tax rate might do.  I notice some states (e.g. Georgia) are reducing their tax rates, while others are adding more brackets and increasing rates.
+I use AI to keep track of and categorize possible future enhancements. You can read the [CURRENT PLANS](.planning/retirement-optimizer/task_plan.md) to see the nitty-gritty, up-to-date details. Do note that the ordering in PLANS does not reflect my view of priority. You can also peruse the [findings](.planning/retirement-optimizer/findings.md) and [progress](.planning/retirement-optimizer/progress.md) files to get insights into what has been done. Or you can check below which may not be up-to-date. I make weekly and sometimes daily changes.
+
 + Better organize the Annual Details tables. There are just too many columns to easily navigate.
 + Allow exporting of the Annual Details table(s). 
 + **State standard deduction accuracy:** States that use the Federal standard deduction (AZ, CO, ME, MN, ND, SC) now reference it directly so the deduction updates automatically when the Federal value changes. States with *fixed* standard deductions that are **not** indexed to inflation (AL, MT, OH) are incorrectly inflated by the engine each year - this overstates the deduction and slightly understates future taxes for those state residents. A future fix will properly handle those (and any future similar) states.
 + Model variable inflation in the synthetic Monte Carlo.
 
 #### Recent Fixes / Improvements
++ Cash Reserve has been implemented. Specifying a cash reserve attempts to keep that much cash on hand. The reserves are built from interest and dividends, and only spent if there is no other way to meet annual spending goals.  See the [Cash Reserve handling](#where-is-cash-interest-routed) and related topics in the [FAQ](#frequently-asked-questions).
++ Great strides have been made in improving the ability to find Break Even Roth conversion strategies. One significant finding is that the BETR (Break Even Tax Rate) proffered by Vanguard has been [proved unreliable](#how-reliable-is-the-break-even-tax-rate) in my modeling. I will continue to provide BETR calculations in Annual Details, but will be removing them from taking up space in the summary bar.
++ An arithmetic bug was understating the asset withdrawal rate.
++ Tax creep (increasing or decreasing future tax rates) has been added to the tool, but it's only currently accessible via a special switch.
 + Lots of chart improvements were made - additional charts, highlighting of specific categories.
 + Improved usability on small devices by allowing the "Tooltips" that are visible in a large browser to be clickable. (Most headers and titles have tooltips).
 + State tax rates have been updated to 2026 - and more states are included.  Some - especially those with odd taxation are still not present.
@@ -482,6 +492,22 @@ The finding is that the displayed Break-Even Tax Rate is not trustworthy, and it
 
 ## Frequently Asked Questions
 
+### Is it a Fools Errand to make multi decade projections?
+
+The single most frequent objection to multi-decade projections is that it is all "*unknowable*". No one knows what future taxation, market growth, inflation, or spending shocks are likely to occur - so projection is a "fools errand".
+
+Arguments that assert "the future is unknowable, so why bother" neglect that forecasting doesn't require *certainty* to be useful, it requires the range of outcomes to be bounded enough to inform a decision. Directional correctness is still useful. 30-year capital markets and demographic data give a workable range even if any single point estimate is wrong. 
+
+> Actuaries price life insurance and pensions on multi-decade projections professionally and profitably; the fact that no one nails the exact number doesn't mean the exercise is worthless.
+
+A well-constructed range (Monte Carlo, sensitivity tables, scenario bands) still tells you whether a strategy is robust across plausible futures or only works in a narrow lucky case. Also, the alternative to projecting isn't some cleaner truth. Doing no projection is an *implicit* projection - just as "taking no action" **IS** a default action. Doing nothing, or assuming today's tax rates never change, or assuming zero market growth, are all projections too, just unexamined ones. Some inputs are far more knowable than others: mortality tables, the mechanics of compounding, and RMD schedules are close to deterministic, so a chunk of the "30 years out" uncertainty is smaller than a blanket dismissal would allow.
+
+On the other hand: point estimates decades out have a well-documented history of being wrong, often badly, because the variables compound and interact rather than staying independent (a market downturn coincides with a recession that changes tax policy that changes your income that changes your bracket). Historical base rates back this up: 30-year forecasts of tax brackets, inflation, or market returns made in 1995 or 2005 would have missed major regime shifts (TCJA, zero-rate era, 2008, 2022 inflation spike) that materially changed the "right" answer in hindsight. There's also a real difference between a probabilistic range being technically producible and that range being decision-useful. If the 90% confidence interval on 30-year outcomes is enormous, as it often is for equity returns and tax policy both, the model can look rigorous while still not meaningfully narrowing the decision. And behaviorally, precise-looking long-horizon projections can create **false confidence**, leading people to over-anchor on a specific number rather than staying flexible as reality unfolds. 
+
+In a reddit discussion someone noted that for the early retiree the "4.7% withdrawal rate and the proposed '4.9%' withdrawal rate for a 50-year retirement" were *indistinguishable*. But not only was the "4.7%  withdrawal number taken out of context", but over 50 years there is a consequential difference. A 50 year mortgage at the higher rate will result in 10% more total payment. For a retirement, that means a 10% higher starting balance is needed.
+
+The take away: the real point isn't "don't model at all," it's "don't mistake a model's precision for accuracy."
+
 ### How does Cash Reserve work with dividends?
 
 The **Cash Reserve** setting and **Dividend Reinvestment (DRIP)** are independent controls that interact to determine where your annual surplus ends up. Here's how it works:
@@ -511,12 +537,13 @@ Your **Cash Reserve** is a protective buffer, but it can be drawn down if spendi
 When the reserve is breached, it's flagged internally so you can see in logs that this happened.
 
 **Common depletion scenarios:**
+Note "high spending year" and "Healthcare crises" are not modeled. The "high spending year" element is in the backlog under the heading "lumpy spending".
 - **High spending year**: Unexpected major expenses or planned large purchases
 - **Market downturn**: Brokerage value drops, forcing earlier liquidation to meet goals
 - **Early retirement**: Spending exceeds portfolio growth in the first decade
 - **Healthcare crisis**: Long-term care costs drain the buffer rapidly
 
-**The practical implication:** A Cash Reserve protects you from forced selling in downturns, but only if your overall spending is sustainable. The tool flags if the reserve gets breached repeatedly, signaling the plan may be too aggressive.
+**The practical implication:** A Cash Reserve protects you from some spending shocks, but only if your overall spending is sustainable. The tool flags if the reserve gets breached repeatedly, signaling the plan may be too aggressive.
 
 ### Where is cash interest routed?
 
@@ -531,8 +558,9 @@ Here's what happens each year:
 - Dividends (with DRIP ON) move to Brokerage, reinvest at market rates, taxed at qualified rates
 - Dividends (with DRIP OFF) move to Cash, taxed at qualified rates
 - Interest has no qualified treatment; it's always ordinary income
+- Dividends from some sources may be tax free or only taxable to the Federal or State government.
 
-**Why it matters:** If you maintain a large Cash Reserve, the interest compounds annually, but the after-tax return is lower due to ordinary income taxation. This is one reason the tool recommends enabling DRIP—to capture market-rate growth in Brokerage rather than letting cash balances idle at low yields.
+**Why it matters:** If you maintain a large Cash Reserve, the interest compounds annually, but the after-tax return is lower due to ordinary income taxation. This is one reason the tool recommends enabling DRIP—to capture market-rate growth in Brokerage rather than letting cash balances idle at low yields. On the other hand, if you regularly will spend the cash, then having it available in the cash account is more convenient.
 
 ### Does the brokerage account for "cash"?
 
@@ -569,31 +597,32 @@ The tool provides a built-in diagnostic called **Stop-Year** that identifies the
    - This is the year that *maximizes* your after-tax wealth
    - Click **"Stop after YYYY ▸"** to apply it one-click
    - It often differs from Break-Even by significant amounts ($662k+ in some scenarios)
-
 4. **"Optimize for" selector** lets you rank all strategies by your goal:
-   - **Tax Flexibility** (default): Balances your three buckets (pre-tax IRA, Roth, taxable) for maximum flexibility each year
+   - **Tax Flexibility** (default): Balances your three buckets (pre-tax IRA, Roth, taxable [brokerage and  cash]) for maximum flexibility each year
    - **Minimum Lifetime Taxes**: Lowest total tax bill
    - **Maximum Net Wealth**: Highest after-tax ending balance
    - **Avoid Widow & RMD Tax**: Minimize taxes your heirs will pay
 
-**Key insight:** Break-Even tells you when conversions "paid off"; Stop-Year tells you when to *stop* for maximum final wealth. The boundary year is the wrong cutoff—trust the Stop-Year suggestion instead.
+**Key insight:** Break-Even tells you when conversions "paid off"; Stop-Year tells you when to *stop* for maximum final wealth. Generally you'll want to stop both "annual" and opportunistic conversion.
 
 ### How reliable is the Break-Even Tax Rate?
 
 Not very. See the section above for the full details, but here's the summary:
 
-The **Break-Even Tax Rate (BETR)** uses the Kitces formula to answer: *"How high would your future tax rate need to be for this conversion to pay off?"* If you expect rates to rise above that number, converting looks good; below it, it looks bad.
+The **Break-Even Tax Rate (BETR)** uses the formula created by [Passman, Wong and Dickson](https://corporate.vanguard.com/content/dam/corp/research/pdf/a_betr_approach_to_roth_conversions_072025.pdf) of Vanguard to answer: *"How high would your future tax rate need to be for this conversion to pay off?"* If you expect rates to rise above that number, converting looks good; below it, it looks bad.  Passman, Wong and Dickson reference Michael Kitces' [Roth or Not to Roth](https://www.kitces.com/wp-content/uploads/2014/11/Kitces-Report-May-2009.pdf) paper - but that paper looks at whether accumulation into Roth is preferable to accumulation into an IRA and then expands to Conversions. It's worth noting that when Kitces wrote the paper there were several "loopholes" in the conversion laws that have subsequently been closed. E.g. a Roth Conversion is no longer undoable.
 
 **The problem:** The formula is mathematically correct but incomplete. It models "money grows, then is taxed once"—missing the cascade of real effects that the full simulation captures:
 - Larger IRAs force bigger required distributions later
-- Bigger RMDs cause more Social Security to become taxable
+- Bigger RMDs may cause more Social Security to become taxable
 - IRMAA surcharges kick in at higher income brackets
 - Your surplus cash either sits idle or gets reinvested (controlled by Cash Reserve)
 
-**The practical result:** The displayed BETR is often unreliable in both directions. Sometimes it's far too low (discouraging conversions that clearly win); sometimes far too high (encouraging conversions that clearly lose). Which way it errs depends on your specific situation, especially your cash reserve strategy.
+**The practical result:** The displayed BETR is often unreliable in both directions. Sometimes it's far too low (discouraging conversions that clearly win); sometimes far too high (encouraging conversions that clearly lose). Which way it errs depends on your specific situation, especially your cash reserve strategy and more importantly the amount of time that elapses between conversion and possible consumption.
 
 **Better approach:**
 - Use the **Stop-Year** diagnostic instead (it simulates the full cascade and finds the wealth-maximizing cutoff)
-- Trust the **Break-Even *year*** (when your plan pulls ahead) more than the Break-Even *tax rate*
+- Trust the **Break-Even *year*** (when your plan pulls ahead) more than the *Break-Even tax rate*
 - Treat BETR as a rough conversation-starter with a tax advisor, not a decision rule
 - Let the plan's actual after-tax ending balances guide your conversion decisions
+
+Keep in mind that Professor Emeritus Edward McQuarrie pretty forcefully proves in [Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN) that Roth Conversions are unlikely to break even. Despite the conventional wisdom that the gains are driven by differences in tax rates - that is **not** the primary factor.   

@@ -350,6 +350,7 @@ One other shortcoming: Boldin likes to present things in future dollars. This is
 
 Final comment: at $144/year it's a great deal compared to a ruinous retirement. You may spend a week putting a plan together. But you will have no use for the tool for the rest of the year. If it did real portfolio tracking, or budget tracking, or tax planning (e.g. how to pay your taxes in retirement) it WOULD make the tool more useful on a monthly basis. But ultimately, what Boldin provides is a complex calculator that responds to your tweaking. That is, it takes a complex problem, and makes you the decider. It will help you think about organizing, timing and accounts, but it won't suggest to you how to do it BETTER.  It won't help you pick a "more ideal portfolio allocation", tell you that your chosen growth rates are unrealistic. It doesn't appear to optimize your annual withdrawals, or provide insights on the best time to do conversions (early in the year - by default it schedules them for December!)
 
+---
 #### MaxiFi
 
 I've not had this subscription for very long, so I'll withhold my comments until I've kicked the tires more aggressively.  I will offer for now, that it's less "polished" than Boldin (I run into reference errors pretty often). So far the main quirk I noticed:
@@ -358,6 +359,7 @@ It wants to know ONLY the IRA balances at the end of last year. I understand thi
 
 More later.
 
+---
 #### Projection Lab
 [Projection Lab](https://projectionlab.com) - Just now getting a look at this tool. First, don't pluralize labs... that's an empty webpage. It offers a free to try phase, current cost is $129 / year.
 It is definitely more "geeky" than say Boldin, but I already know it does two things that are awesome: 
@@ -366,6 +368,7 @@ It is definitely more "geeky" than say Boldin, but I already know it does two th
 
 More later.
 
+---
 #### Others
 
 ##### Number Crunch Nerds
@@ -406,7 +409,7 @@ Edward McQuarrie is a former professor at Santa Clara University School of Busin
 3. [Widow Tax Hit Debunked - 2023](https://www.financialplanningassociation.org/learning/publications/journal/DEC23-widow-tax-hit-debunked-OPEN) - McQuarrie illustrates that the "widows tax" is overstated. I think he errs in saying it's **debunked** because his numbers illustrate the reality of the survivor penalty - and worse numbers can be had.
 4. [Charts you Never Saw - 2025](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3050736) - McQuarrie shows an even longer market timeframe which illuminates the reality that "the market always returns value in the long term" is a bit illusory.
 
-I notice that he is releasing a book with Bill Bernstein (the founder of the 4% idea, and a prolific author) in March 2027 called "[Retirement: How to save enough, invest it well, and make your money last](https://www.amazon.com/Retirement-save-enough-invest-money-ebook/dp/B0GQWCS15F)"
+I notice that he is releasing a book with Bill Bernstein (a prolific author of financial books) in March 2027 called "[Retirement: How to save enough, invest it well, and make your money last](https://www.amazon.com/Retirement-save-enough-invest-money-ebook/dp/B0GQWCS15F)"
 
 #### Miscellaneous
 
@@ -485,7 +488,7 @@ If you live in, or plan to move in a different state and you want to use this to
 
 0. You withdraw/convert now at a (significantly) higher tax rate than you will face in your future. Converting into the 24% bracket might save you even if you expect to be in the 22% bracket, but converting into the 32% bracket will *likely* not help - at least this is the conventional wisdom, and I believe it is, like much conventional wisdom, is incomplete and does not apply universally.  Indeed, exploring the veracity of the conventional wisdom is one of the reasons I created the retirement optimizer. Let's say I have a healthy dose of skepticism.
 0. You convert before you're 59.5 and do not have funds to pay the taxes AND/or that conversion pushes you into a significantly higher taxation situation.
-0. You have modest IRA balances and expect that to be the case once you start drawing them in retirement. Modest here means something less than 1 million with 12 or fewer years before you plan to start drawing down assets. If you have 1M now, 10 years of 10% gains like those from 2016 to 2025 could TRIPLE that 1M to 3M.  3M would force you to take about 115k from your IRA at age 75. If married the RMD plus 70k in social security and other income lands you in the Federal 24% bracket.  At 83 just the RMD will put you in the 24% Federal Bracket.  If single, your first RMD will land you in the 24% Federal Bracket above the IRMAA tier 1.
+0. You have modest IRA balances and expect that to be the case once you start drawing them in retirement. Modest here means something less than 1 million with 12 or fewer years before you plan to start drawing down assets. If you have 1M now, 10 years of 10% gains like those from 2016 to 2025 could TRIPLE that 1M to 3M.  3M will   force you to take about 115k from your IRA at age 75. If married the RMD plus 70k in social security and other income MAY land you in the Federal 24% bracket - if inflation is low. At 83 just the RMD will put you in the 24% Federal Bracket.  If single, your first RMD may land you in the 24% Federal Bracket above the IRMAA tier 1.
 0. Your remainder estate is going to charity (not people).  Charities pay zero tax regardless of the income source. If you can stomach the RMD forced income, it may not be necessary to bother with conversions.
 0. You plan to take advantage of QCDs (Qualified Chraritable Deductions) after 70.5 years of age. QCDs satisfy RMD requirements, and do not count against your MAGI so do not incur IRMAA penalties.
 0. You already have a healthy mix of assets (e.g. 60% IRA/401K, 30% Roth, 10% or higher Cash/CDs/Bonds in taxable).
@@ -511,7 +514,7 @@ Here are some of the harms of having or accruing a large IRA/401K:
 
 #### How Reliable Is the Break-Even Tax Rate?
 
-The tool shows a "Break-Even Tax Rate" next to each year you convert. The idea, from a well-known formula by Michael Kitces, is to answer one simple question: how high would your future tax rate have to be for a conversion today to pay off? If you expect your future rate to be *above* that break-even number, converting looks worthwhile; *below* it, it does not. To check whether that number can be trusted, I built a small test harness that compares it against what the full simulation actually delivers. The harness runs each plan twice, once converting and once not, and finds the future tax rate at which the two plans finish in a dead heat. That is the honest break-even, because it captures everything the tidy formula leaves out: the larger required distributions a bigger IRA forces on you later, the extra Social Security that becomes taxable, the IRMAA surcharges, and where your surplus cash actually ends up invested.
+The tool shows a "Break-Even Tax Rate" next to each year you convert. The idea is from 3 folks at Vanguard who based their formula on publications by Michael Kitces.  It is intended to answer the question: how high would your future tax rate have to be for a conversion today to pay off? If you expect your future rate to be *above* that break-even number, converting looks worthwhile; *below* it, it does not. To check whether that number can be trusted, I built a small test harness that compares it against what the full simulation actually delivers. The harness runs each plan twice, once converting and once not, and finds the future tax rate at which the two plans finish in a dead heat. That is the honest break-even, because it captures everything the tidy formula leaves out: the larger required distributions a bigger IRA forces on you later, the extra Social Security that becomes taxable, the IRMAA surcharges, and where your surplus cash actually ends up invested.
 
 The finding is that the displayed Break-Even Tax Rate is not trustworthy, and it can be wrong in *either* direction. The formula itself is algebraically correct, but it models only "money grows, then is taxed once" and ignores the cascade of knock-on effects above. In my tests the true break-even was sometimes far *below* the displayed number (so the tool discouraged conversions that clearly won) and sometimes far *above* it (so the tool encouraged conversions that clearly lost). Which way it erred depended heavily on a single modeling choice that has nothing to do with the formula: whether your surplus money is left sitting in cash or reinvested at market rates (this is what the new Cash Reserve setting controls). Meanwhile the one input the formula fusses over most, the number of years until your required distributions begin, turned out to matter the least. The practical takeaway: treat the Break-Even Tax Rate as a rough conversation-starter, not a decision rule, and trust the plan's actual after-tax ending balances instead.
 

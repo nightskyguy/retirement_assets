@@ -45,13 +45,13 @@ A California resident built these with [Google gemini](https://gemini.google.com
 - [What about Other Tools](#what-about-other-tools)
   - [Free Tools](#free-tools)
     - [NestWise](#nestwise)
-    - [Anonymous Reddit Tool](#anonymous-reddit-tool)
     - [Visual Federal Tax Tool](#visual-federal-tax-tool)
     - [AARP Federal Tax Calculator](#aarp-federal-tax-calculator)
     - [Retirement Figures](#retirement-figures)
     - [TaxVantage](#taxvantage) (free for now)
     - [Google Sheet by Redditor](#google-sheet-by-redditor)
     - [Roth Helper](#roth-helper)
+    - [AiRA Retirement Application](#aira-retirement-application)
   - [Paid Tools](#paid-tools) - Commercial
     - [Boldin](#boldin) - Probably the leading tool
     - [MaxiFi](#maxifi) - Lesser known tool
@@ -154,6 +154,7 @@ There is no provision for adding lumpy withdrawals, but there is a way to apply 
 This is the original tool. It's definitely not for everyone. There is no "accumulation phase". The focus is managing withdrawals from your accounts. But it has something I haven't found in any tool: a withdrawal strategy optimizer - and a Monte Carlo stress-test tab to show you how your plan holds up across hundreds of simulated market scenarios. Monte Carlo is familiar - it's used as the "Chance of Success" in quite a few tools, but it's done here a bit differently.
 
 I think retirement is like [going to the moon](https://engineering.mit.edu/ask-an-engineer/how-were-we-able-to-navigate-from-the-earth-to-the-moon-with-such-precision). There are lots of critical calculations, lots of variables, lots of complexity, and lots of ways to fail. For the moon launch, add too much thrust at the wrong time and you miss the moon, land in a crater or crash.  Get the angle of reentry into the earth's atmosphere wrong and the spacecraft bounces off into space or burns up. Fortunately in retirement miscalculation has far less deadly consequences than a moon mission, but many more speed bumps and potholes.  Purists will rightly point out that there are a LOT of unknowns: market returns, inflation, spending, taxation and taxation changes. As one CFP put it: "It's a tower of guesses". The longer range the projection, the more likely the guesses are to be wrong. BUT failing to try to plan, is in-my-opinion itself a failure. Moreover taxation is the one thing that only changes at the speed of congress - which means years in the same direction is likely. The market and inflation, of course behave like petulant children and are truly unknowable.
+Further musings on the subject are located in [Is It a Fool's Errand to Make Multi-Decade Projections?](#is-it-a-fools-errand-to-make-multi-decade-projections), in the [FAQ](#frequently-asked-questions), below.
 
 My primary motivations for this tool are: 
 + What does the withdrawal phase look like?
@@ -291,9 +292,6 @@ I haven't determined whether inflation is being used in the Monte Carlo or Histo
 
 It's currently the best of breed. The user interface is more approachable than typical tools - but also more nerdy. One flaw is the frequent, long recalculation times - but that can be tweaked to only recalculate on demand. You can use it without logging in. It saves your progress in your browser. It has Debt Payoff, Budgeting (rather rare for a free tool) that allows you to import transactions.  The tool is lingo heavy (meaning it uses financial terms).  
 
-#### Anonymous Reddit Tool
-Well, it's gone now. But it's the tool that made me realize that using Javascript to create a tool is much, much nicer than a spreadsheet.
-
 #### Visual Federal Tax Tool
 [Visual Federal Tax Tool](https://engaging-data.com/tax-brackets/) - this tool shows how your federal taxes are calculated.  As of 2026-01-17, it doesn't handle taxability of Social Security income, and as best I can tell, doesn't handle the OBBBA (One Big Beautiful Bill Act) provisions for seniors.
 
@@ -311,6 +309,11 @@ Well, it's gone now. But it's the tool that made me realize that using Javascrip
 
 #### Roth Helper
 [RothHelper](https://rothhelper.com/) is another tool that was posted in the same [Reddit DIY thread](https://www.reddit.com/r/DIYRetirement/comments/1pnpufa/comment/op600xx/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button). It has an accumulation phase and a simple analysis.  Probably OK for modest IRA balances. I like the tabular output though it's several pages worth of entry to get there.  I recognize the graphics... same chart.js engine I've been using.
+
+#### AiRA Retirement Application
+This is a new tool that was announced on July 25, 2026 in [Reddit DIYRetirement](https://www.reddit.com/r/DIYRetirement/comments/1v6ltzf/i_made_a_free_retirement_calculator/). It lives at a peculiar address: [aira.tiredtoretire.com](http://aira.tiredtoretire.com/) "tired to retire".  I first read it as "tried to retire".  First attempts at the tool uncovered a number of issues. For example it uses a "Bucket Strategy" and seems to enforce a Guyton Klinger withdrawal strategy. Bucket Strategy is not explained - and the 3-buckets allotted for I think will not make sense to people who think differently about bucket strategies. Entry fields lack tooltips, and there is some confusing language like "D-Day" - which apparently means retirement day. Oddly it asks for the specific day, but when it showed my withdrawals, it started them in 2020 - 6 years ago but I entered the retirement date as 2024. It makes me wonder if the tool would be usable by someone who has already retired more than a year or so ago.
+
+There are some interesting ideas in the tool: for example "Health Care Spending Shock" with a percent likelihood of the occurrence. But I'm not sure that makes sense. I think statistically speaking the chance of health care shocks goes up over time.
 
 ### Paid Tools
 #### Boldin
@@ -644,4 +647,4 @@ The **Break-Even Tax Rate (BETR)** uses the formula created by [Passman, Wong an
 - Treat BETR as a rough conversation-starter with a tax advisor, not a decision rule
 - Let the plan's actual after-tax ending balances guide your conversion decisions
 
-Keep in mind that Professor Emeritus Edward McQuarrie pretty forcefully proves in [Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN) that Roth Conversions are unlikely to break even. Despite the conventional wisdom that the gains are driven by differences in tax rates - that is **not** the primary factor.   
+Keep in mind that Professor Emeritus Edward McQuarrie pretty forcefully proves in [Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN) that Roth Conversions are unlikely to break even. Despite the conventional wisdom that the gains are driven by differences in tax rates - that is **not** the primary factor. The primary hurdle is overcoming the cost of early taxes by growth in the Roth.

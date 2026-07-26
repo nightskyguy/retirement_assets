@@ -1,5 +1,39 @@
 # Progress Log
 
+## Session: 2026-07-26 (worktree readme-review-updates-c9df11) — PR1 Roth conversion diagnostics (v11.1370)
+
+User asked why the Optimizer reports "found none where converting more improves the result" on default inputs, plus four follow-on tasks. Planned in plan mode; user chose to do PR1 only (Roth conversion batch + BETR removal) and re-plan SS timing / head-to-head compare / MC stress auto-run later.
+
+**Investigation first, in the real engine.** Established that the feature is correct: the candidate pool is properly diversified (10 of 12 hold $700k-$1.3M terminal IRA, so PF11 holds), the sweep honestly returns `optConv: 0`, and the actual lever is the assumed future/heirs rate (24% → $0, 40% → +$42,355, 65% → +$200,516 on a $1.29M-IRA candidate). Also confirmed the apparent "conversions help at lower spend" effect is the P2 cash-drag confound: +$20,539 with Cash Reserve off, **$0** with reserve on + DRIP. Full detail in findings.md.
+
+**Shipped:**
+- **A.** `Avg BETR` column and the `#stat-betr-wrap` summary tile removed (the tile had only been nerd-gated, never removed, despite README:183 claiming otherwise). `computeBETR`/`totals.betrAvg`/Annual Details `BETR%` untouched; added a caveat to the Annual Details BETR tooltip, which still asserted the metric was decisive.
+- **B.** `Conv Savings` → **`Tax Paid Δ`**, tooltip rewritten to lead with the limitation. Worked example: +$197k "saved" alongside a ~$145k after-tax loss at defaults. Key/sort/objective untouched.
+- **C.** New pure `breakEvenHeirsRate()` + `lowestBreakEvenHeirsRate()`; banner now names the assumed rate and offers an on-demand "What rate would change that?" link (click-triggered, ~0.5-1.2s — same affordance as the Break Even ⓘ).
+- **D.** New pure `bestTimeLimitedConversion()` — convert-then-stop, a shape the flat sweep cannot express. Runs only for candidates the flat sweep left empty, capped at 6 by terminal IRA to stay in budget. Rows tagged `⏹YYYY`; `_convEndYear` restored by `loadOptimizerResult`.
+
+**Three real bugs caught by cross-validating the fast paths against brute force, none visible from code review or a green test run:**
+1. A coarse 8-point probe grid reported "never pays" where the true answer was 48%, and 25% where the truth was 15% — paying amounts are ~16% of the IRA and an even grid steps over them. Replaced with the real $25k grid, early-exiting on first improvement.
+2. A "skip candidates with no IRA left" filter looked obviously safe and lost the right answer (25% vs a true 5%): a plan that drains its IRA still gains from converting *earlier*.
+3. Float rounding let the snapped rate land just below threshold, printing a rate next to a $0 conversion. Now nudges up one step and returns null if the sweep still disagrees.
+
+**Latent engine inconsistency found, not fixed (logged in findings.md):** a per-year `extraConversionAmount` array and the equivalent scalar + `convEndYear` produce identical per-year conversion dollars but *different* simulations (opening-year `RMDwd` 16,620.92 vs 15,771.24; `finalNW` 679,867 vs 639,182). The array path also reported time-limited "gains" that vanish under the scalar form. `bestTimeLimitedConversion` scores the **loadable** form so rows and loaded plans agree by construction (the PF8 lesson), but one of the two paths is presumably wrong.
+
+**Verification:** node **122/122** (114 + 8 new, all expected values derived from the engine first, incl. a monotonicity tripwire pinning the binary-search precondition). Browser (v11.1370, port 8768): BETR gone from tile + table, retained in Annual Details under Opp. Cost; `Tax Paid Δ` renders; banner names the 30% assumed rate; diagnostic reports 43%; **setting Future IRA Tax % to 45% produces 2 ⇌ rows, both time-limited (⏹2026/⏹2027) — plans the old flat sweep could not express**; clicking one reproduces the row exactly ($1,168,707 / $580,176). Cost 1240ms / 1538 runs (was 2216 runs before the 6-candidate cap). Console clean apart from the 4 known intentional bad-input fixtures.
+
+**Note:** `.claude/launch.json` preview port moved 8767 → 8768; a stale `python3.12.exe` holds 8767 without serving.
+
+## Session: 2026-07-25 (cont.) — README audit round 2 + AiRA tool review (PR #131)
+
+Follow-up README pass after PF129/PR #130 planning-notes merge. Three commits, all doc-only (`README.md`, `.gitignore`, new `.planning/FILE_DIRECTORY.md`):
+
+1. **`9ca111c` README audit fixes:** rebuilt ToC (was missing the whole FAQ section, 3 Free Tools entries, misfiled NumberCrunch Nerds), fixed a broken chatgpt.com link (stray trailing quote), renamed a duplicate BETR heading (GitHub anchor collision), added Retirement Tax Planner + IRMAA-and-RMDs quick-launch entries (existed but were undocumented), added a missed Recent Fixes bullet, ~20 spelling/grammar fixes. Plus: `.gitignore` entry for `netcitizen.us.*` (personal-email DNS notes file), and new `.planning/FILE_DIRECTORY.md` mapping every repo file to its purpose (documents that root-level `*.html` + `HYSA_*` files are intentional redirect stubs, not stale dupes).
+2. **`18ce139` AiRA tool review:** new "AiRA Retirement Application" entry under Free Tools (announced 2026-07-25 on r/DIYRetirement) with first-look notes (bucket strategy, missing tooltips, a D-Day/retirement-date discrepancy found during testing); linked to the "Is It a Fool's Errand…" FAQ entry. Dropped "Anonymous Reddit Tool" (dead — tool no longer exists). Fixed a few mechanical hand-edit issues (empty ToC anchor, a link split across two lines, typos, stray divider).
+3. **`1a99fd3` polish:** rejoined a link split across two lines, subject-verb agreement fix, cleaned up bucket-strategy sentence, expanded the McQuarrie closing note (present-value/inflation reasoning for why early tax payment is a real hurdle for Roth conversions).
+4. **`a04f1d8` misc fixes:** wrong references + typos.
+
+Merged as [PR #131](https://github.com/nightskyguy/retirement_assets/pull/131) (`c9c6b57`). Working tree clean at `c9c6b57` in worktree `readme-review-updates-c9df11`. No code/engine changes — README + repo-hygiene only.
+
 ## Session: 2026-07-25 (worktree context-ab498f) — README FAQ + changelog refactor + Cash Reserve "Off" (v11.1340, PR #129)
 
 User asked for a README FAQ section, then iteratively for a changelog restructure (the inline changelog had grown to bloat every page load), a single source of truth for the version number, and finally for Cash Reserve to default to an explicit "Off" instead of a blank/`-1` sentinel.

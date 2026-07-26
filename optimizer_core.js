@@ -2703,6 +2703,199 @@ function optimizeConversionAmount(baseInputs, strategyOverrides = {}, metric = '
     return { optConv: bestConv, optResult: bestResult };
 }
 
+// Does ANY conversion amount beat converting nothing, at one assumed future/heirs tax rate?
+//
+// Uses the SAME $25k grid as optimizeConversionAmount, exiting on the first amount that improves
+// on $0. A coarser probe was tried first and rejected: at the threshold the winning amount is
+// specific and the gain is marginal, so a grid of 8 points across the IRA missed real thresholds
+// entirely (it reported "never pays" for the default scenario, where the $25k sweep finds 63%, and
+// overstated the low-spend threshold as 25% against a true 15%). Both errors overstate the rate
+// conversions need, which would wrongly talk a user out of a conversion that does pay.
+//
+// gkSpendStable is applied for the same reason optimizeConversionAmount applies it -- without it a
+// Guyton-Klinger plan "affords" any conversion by starving future spend via its own guardrails.
+function _conversionHelpsAtRate(baseInputs, strategyOverrides, rate, spendableWeight) {
+    const totalIRA = (baseInputs.IRA1 || 0) + (baseInputs.IRA2 || 0);
+    if (totalIRA <= 0) return false;
+    const scoreOf = (c) => {
+        const res = simulate({ ...baseInputs, ...strategyOverrides, extraConversionAmount: c });
+        if (!gkSpendStable(res, strategyOverrides, baseInputs)) return null;
+        return baselineScoreOf(res, rate, spendableWeight);
+    };
+    const baseScore = scoreOf(0);
+    if (baseScore == null) return false;
+    const STEP = 25000;
+    for (let c = STEP; c <= totalIRA; c += STEP) {
+        const s = scoreOf(Math.min(c, totalIRA));
+        if (s != null && s > baseScore) return true;   // early exit: one winner is enough
+    }
+    return false;
+}
+
+// The lowest future/heirs tax rate at which converting more starts to improve this plan -- the
+// number that turns "converting doesn't help" from a dead end into a testable assumption.
+//
+// Binary search is safe here ONLY because the predicate was verified monotonic in the rate first
+// (measured across default / low-spend / large-IRA / reserve-on / high-growth scenarios at 2.5pp
+// steps: once conversions start paying they never stop as the rate rises). This is the same
+// hazard that forced bestConversionStopYear to scan linearly -- nominalTaxRate is a bracket STEP
+// function, so monotonicity along a new axis must be measured, never assumed. If a future change
+// makes this non-monotonic the search silently returns the wrong threshold, so the test suite
+// pins the monotonicity property directly.
+//
+// Returns { rate, optConv, gain } with optConv/gain refined by the real $25k sweep at the found
+// rate, or null when no rate up to maxRate makes conversions worthwhile (itself a real finding).
+function breakEvenHeirsRate(baseInputs, strategyOverrides = {}, opts = {}) {
+    const minRate    = opts.minRate ?? 0.05;
+    const maxRate    = opts.maxRate ?? 0.75;
+    const resolution = opts.resolution ?? 0.01;
+    const weight     = opts.spendableWeight ?? SPENDABLE_WEIGHT;
+    const helps = (r) => _conversionHelpsAtRate(baseInputs, strategyOverrides, r, weight);
+
+    if (!helps(maxRate)) return null;          // never pays, even at an implausible rate
+    let lo = minRate, hi = maxRate;
+    if (helps(lo)) {
+        hi = lo;                               // already worth it at the lowest rate considered
+    } else {
+        while (hi - lo > resolution) {
+            const mid = (lo + hi) / 2;
+            if (helps(mid)) hi = mid; else lo = mid;
+        }
+    }
+    // Snap to the reporting resolution, then re-check with the real sweep. Rounding can land a
+    // hair BELOW the true threshold, which would print a rate alongside a $0 conversion; nudge up
+    // one step in that case so the reported rate and amount always agree.
+    const snap = (r) => +(Math.round(r / resolution) * resolution).toFixed(6);
+    let rate = snap(hi);
+    const sweepAt = (r) => optimizeConversionAmount(baseInputs, strategyOverrides, 'baselineScore',
+                                                    { futureIRARate: r, spendableWeight: weight });
+    let swept = sweepAt(rate);
+    if (swept.optConv === 0 && rate + resolution <= maxRate) {
+        rate = snap(rate + resolution);
+        swept = sweepAt(rate);
+    }
+    if (swept.optConv === 0) return null;
+    const at = (c) => baselineScoreOf(simulate({ ...baseInputs, ...strategyOverrides,
+                                                 extraConversionAmount: c }), rate, weight);
+    return { rate, optConv: swept.optConv, gain: at(swept.optConv) - at(0) };
+}
+
+// Find a TIME-LIMITED conversion: an amount converted for the first N years and then stopped.
+//
+// optimizeConversionAmount only ever tests a flat amount applied for the whole plan, so a plan
+// whose conversions pay early and lose later can only answer "convert nothing" -- the shape it
+// wants is inexpressible. Measured on the default scenario, where the flat sweep finds $0 for
+// every candidate: converting $225,000/yr and stopping after 4 years gains $9,906. That is the
+// reported "found none where converting more improves the result" turning into a real answer.
+//
+// Cost is why this is coarse-then-refine and why the caller only invokes it when the flat sweep
+// already came back empty: an exhaustive amount x cutoff grid measured 2.4s for FOUR candidates.
+// Coarse amounts across the IRA x every cutoff, then a $25k refinement around the winner, brings a
+// full 12-candidate pool to roughly a second. Scored on baselineScore with the caller's shared
+// rate so the result is directly comparable to the flat sweep it is standing in for.
+function bestTimeLimitedConversion(baseInputs, strategyOverrides = {}, opts = {}) {
+    const totalIRA = (baseInputs.IRA1 || 0) + (baseInputs.IRA2 || 0);
+    if (totalIRA <= 0) return null;
+    const rate   = opts.futureIRARate ?? 0;
+    const weight = opts.spendableWeight ?? SPENDABLE_WEIGHT;
+    const coarse = opts.coarseSteps ?? 4;
+
+    const probe = simulate({ ...baseInputs, ...strategyOverrides, extraConversionAmount: 0 });
+    const n = probe.log.length;
+    if (!n) return null;
+    const startYear = probe.log[0].year;
+
+    // Scored through convEndYear/convEndMode -- the SAME representation the sidebar holds -- rather
+    // than a per-year extraConversionAmount array. The two are not interchangeable: an array of
+    // [amount x cut, then 0] and the equivalent scalar + convEndYear produce the same per-year
+    // conversion dollars but diverge elsewhere in the log from year one (measured: RMDwd 16,620 vs
+    // 15,771 in the opening year). Evaluating the loadable form means a ⇌ row and the plan the user
+    // gets when they click it are the same plan by construction -- the PF8 failure mode, where the
+    // optimizer and the single-scenario tab silently scored two different plans under one label.
+    const scoreAt = (amount, cut) => {
+        const res = simulate({ ...baseInputs, ...strategyOverrides,
+                               extraConversionAmount: amount,
+                               convEndYear: cut >= n ? undefined : startYear + cut - 1,
+                               convEndMode: 'extra' });
+        // Same runaway guard the flat sweep uses: without it Guyton-Klinger "affords" any
+        // conversion by cutting future spend through its own guardrails.
+        if (!gkSpendStable(res, strategyOverrides, baseInputs)) return null;
+        return baselineScoreOf(res, rate, weight);
+    };
+
+    const zero = baselineScoreOf(probe, rate, weight);
+    let best = { gain: 0, amount: 0, cut: 0 };
+    const consider = (amount, cut) => {
+        if (amount <= 0 || cut < 1 || cut > n) return;
+        const s = scoreAt(amount, cut);
+        if (s != null && s - zero > best.gain) best = { gain: s - zero, amount, cut };
+    };
+
+    // Fractions of the IRA to probe, deliberately dense at the LOW end. An evenly-spaced grid was
+    // tried first and missed every real winner: on the default scenario the paying amounts are
+    // $225k-$250k out of a $1.4M IRA (~16%), which sits below the first sample of an even 4-step
+    // grid, so the search reported "nothing" where an exhaustive grid found $9,906.
+    const FRACTIONS = [1/16, 1/8, 3/16, 1/4, 3/8, 1/2, 3/4, 1];
+    const cutStride = n > 12 ? 2 : 1;   // coarse cutoff pass; refined around the winner below
+    for (const f of FRACTIONS) {
+        const amount = Math.round(totalIRA * f);
+        for (let cut = 1; cut <= n; cut += cutStride) consider(amount, cut);
+        consider(amount, n);
+    }
+    if (best.gain <= 0) return null;
+
+    // Refine on the real $25k grid around the winner, re-testing neighbouring cutoffs since the
+    // best cutoff shifts as the amount moves.
+    const span = Math.max(25000, Math.round(totalIRA / 16));
+    const coarseBest = { ...best };
+    const lo = Math.max(25000, coarseBest.amount - span);
+    const hi = Math.min(totalIRA, coarseBest.amount + span);
+    for (let a = Math.ceil(lo / 25000) * 25000; a <= hi; a += 25000) {
+        for (let cut = Math.max(1, coarseBest.cut - cutStride); cut <= Math.min(n, coarseBest.cut + cutStride); cut++) {
+            consider(a, cut);
+        }
+    }
+    return {
+        amount: best.amount,
+        stopIndex: best.cut,
+        // null when conversions run to the end of the plan: there is no "stop year" to report.
+        stopYearCalendar: best.cut >= n ? null : startYear + best.cut - 1,
+        gain: best.gain
+    };
+}
+
+// Lowest break-even heirs rate across a set of candidate strategies -- the one number the
+// "converting doesn't help" banner needs ("conversions start paying above X%"), since the
+// best-SCORING strategy is often not the one most willing to convert (on the default scenario the
+// top-ranked Guyton-Klinger row never pays at any rate, while another pool member pays at 48%).
+//
+// Cost control, measured: searching every candidate independently took 1.3s on the default
+// scenario and 3.3s at a $3.3M IRA, past this project's 2.5s budget. The prune that fixes it
+// without changing the answer: once some candidate yields a threshold T, later candidates only get
+// searched if they beat T -- one predicate call at T minus one step, instead of a full binary
+// search. Candidates are visited largest-terminal-IRA first only as a heuristic to land a low T
+// early, which prunes the rest hardest.
+//
+// Deliberately does NOT skip candidates that end with a drained IRA. That filter was tried and it
+// silently lost the right answer (a $3.3M scenario reported 25% against a true 5%): a plan that
+// spends its IRA down still benefits from converting EARLIER, since that moves the growth into the
+// Roth rather than avoiding a terminal tax bill. "No IRA left at the end" does not mean "no
+// conversion opportunity."
+function lowestBreakEvenHeirsRate(baseInputs, candidates = [], opts = {}) {
+    const resolution = opts.resolution ?? 0.01;
+    const weight = opts.spendableWeight ?? SPENDABLE_WEIGHT;
+    const usable = [...candidates].sort((a, b) => (b.terminalIRA ?? 0) - (a.terminalIRA ?? 0));
+
+    let best = null;
+    for (const c of usable) {
+        if (best && !_conversionHelpsAtRate(baseInputs, c.overrides, best.rate - resolution, weight)) continue;
+        const r = breakEvenHeirsRate(baseInputs, c.overrides,
+                                     { ...opts, maxRate: best ? best.rate : opts.maxRate });
+        if (r && (!best || r.rate < best.rate)) best = { ...r, overrides: c.overrides, label: c.label };
+    }
+    return best;
+}
+
 // Build the full variation list (same parameter sweep as the optimizer) without running
 // simulations. Used by both the optimizer and Monte Carlo module.
 // base: result of getInputs() — no DOM access needed after this point.
@@ -2889,7 +3082,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, taxCreepFactor, buildVariations };
+    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, taxCreepFactor, buildVariations };
 }
 
 

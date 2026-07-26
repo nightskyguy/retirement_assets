@@ -72,9 +72,6 @@ function setNerdKnob(on) {
 
 // Re-runs all NERD_KNOBS-gated UI so toggling at runtime matches a fresh ?nerdknob load.
 function applyNerdKnobVisibility() {
-    // Avg BETR summary stat (Kitces metric)
-    const betrWrap = document.getElementById('stat-betr-wrap');
-    if (betrWrap) betrWrap.style.display = NERD_KNOBS ? '' : 'none';
     // Optimizer objective selector — PF13: now drives the whole table ranking, so visible to ALL
     // users regardless of nerdknob (kept here only so a runtime toggle doesn't hide it).
     const objWrap = document.getElementById('opt-objective-wrap');
@@ -707,7 +704,22 @@ function runOptimizer() {
     if (document.getElementById('includeConvOpt')?.checked) {
         const pool = selectConversionCandidates(results, 12);
         OptimizerState.convOptCandidateCount = pool.length;
+        // Stashed for the on-demand break-even-rate diagnostic below, which needs the exact
+        // candidates and base inputs this run used rather than re-deriving them later.
+        const poolCandidates = [];
+        OptimizerState.convOptBase = base;
+        OptimizerState.convOptPool = poolCandidates;
         let convRowsAdded = 0;
+        // The time-limited (convert-then-stop) fallback below costs a coarse amount x cutoff scan
+        // per candidate. Measured on the default scenario, where all 12 candidates come back empty
+        // and so all 12 would get the fallback, that pushed one optimizer run to 2,216 simulations
+        // -- past this project's 1,500-run budget. Restricting it to the candidates holding the
+        // most IRA at the end keeps the run inside budget while targeting the plans with the most
+        // left to convert. Deliberately NOT filtered to "has an IRA left": a plan that spends its
+        // IRA down still gains from converting earlier.
+        const tlEligible = new Set([...pool]
+            .sort((a, b) => (b.totals?.terminal?.ira ?? 0) - (a.totals?.terminal?.ira ?? 0))
+            .slice(0, 6));
         for (const baseRow of pool) {
             const overrides = {
                 strategy: baseRow._strategy,
@@ -728,8 +740,27 @@ function runOptimizer() {
                 // baseRow._strategyLabel — a real label/computation mismatch.
                 ...(baseRow._cyclicEnabled ? { cyclicEnabled: true, cyclicOrder: baseRow._cyclicOrder ?? 'ira-first' } : {}),
             };
-            const { optConv, optResult } = optimizeConversionAmount(
+            poolCandidates.push({ overrides, terminalIRA: baseRow.totals?.terminal?.ira ?? 0,
+                                  label: baseRow._strategyLabel || baseRow._strategy });
+            let { optConv, optResult } = optimizeConversionAmount(
                 base, overrides, 'baselineScore', { futureIRARate: sharedFutureIRARate });
+            // When a flat forever-conversion doesn't help, try a TIME-LIMITED one before giving up:
+            // convert for the first few years, then stop. That shape is inexpressible to the flat
+            // sweep, and it is often the only one that pays (measured across the candidate pool:
+            // 10 of 12 candidates rescued on a $3.3M-IRA scenario, 5 at a 45% future rate, 0 on the
+            // default scenario -- where "conversions don't pay" is simply the true answer).
+            // Only runs on candidates that already came back empty, so plans the flat sweep solves
+            // pay nothing for it.
+            let convEndYear = null;
+            if (optConv === 0 && tlEligible.has(baseRow)) {
+                const tl = bestTimeLimitedConversion(base, overrides,
+                    { futureIRARate: sharedFutureIRARate, spendableWeight: SPENDABLE_WEIGHT });
+                if (tl && tl.stopYearCalendar != null && tl.amount > 0) {
+                    optConv = tl.amount;
+                    convEndYear = tl.stopYearCalendar;
+                    optResult = true;   // re-simulated as beResult below
+                }
+            }
             if (!optResult || optConv === 0) continue;
             // Break Even: re-run once more at the already-known winning conversion amount with
             // computeOC on, so this row's convBEYear uses the same sustained-crossing definition
@@ -738,11 +769,13 @@ function runOptimizer() {
             // counterfactual pass) at that fixed amount, not a repeat of the sweep. beResult
             // carries the identical primary-run numbers as optResult (computeOC only adds
             // annotations), so it's used directly below instead of optResult.
-            const beResult = simulate({ ...base, ...overrides, extraConversionAmount: optConv, computeOC: true });
+            const beResult = simulate({ ...base, ...overrides, extraConversionAmount: optConv,
+                                        ...(convEndYear != null ? { convEndYear, convEndMode: 'extra' } : {}),
+                                        computeOC: true });
             const lastEntry = beResult.log[beResult.log.length - 1];
             results.push({
                 _id: results.length,
-                _strategyLabel: baseRow._strategyLabel + ' ⇌',
+                _strategyLabel: baseRow._strategyLabel + ' ⇌' + (convEndYear != null ? ` ⏹${convEndYear}` : ''),
                 _paramLabel: baseRow._paramLabel,
                 _paramSortVal: baseRow._paramSortVal,
                 _convertExcessToRoth: baseRow._convertExcessToRoth,
@@ -758,6 +791,7 @@ function runOptimizer() {
                 _isSpendOptimized: false,
                 _isConvOptimized: true,
                 _optConvAmt: optConv,
+                _convEndYear: convEndYear,
                 _convSavings: (baseRow.totals.tax - beResult.totals.tax),
                 _convBEYear: beResult.totals.convBEYear,
                 _convOCFinal: lastEntry?.convOC ?? null,
@@ -814,11 +848,50 @@ function renderConvOptBanner() {
     const on = document.getElementById('includeConvOpt')?.checked;
     const n = OptimizerState.convOptCandidateCount || 0;
     if (on && n > 0 && (OptimizerState.convOptRowsAdded || 0) === 0) {
-        el.textContent = `⇌ Optimize Conversions examined the best ${n} strategies and found none where converting more improves the result. The tax cost of extra conversions outweighs what they would save.`;
+        const ratePct = ((OptimizerState.sharedFutureIRARate || 0) * 100).toFixed(0);
+        el.innerHTML = `⇌ Optimize Conversions examined the best ${n} strategies and found none where converting more improves the result. ` +
+            `At the ${ratePct}% future tax rate this plan assumes, the tax cost of extra conversions outweighs what they would save. ` +
+            `<span id="opt-conv-rate-link" onclick="runConvBreakEvenRateDiagnosis()" style="cursor:pointer;color:#2980b9;white-space:nowrap;">What rate would change that? ▸</span>` +
+            `<div id="opt-conv-rate-result" style="display:none;margin-top:4px;"></div>`;
         el.style.display = 'block';
     } else {
         el.style.display = 'none';
     }
+}
+
+// On demand (not on every run): the lowest future/heirs tax rate at which converting more would
+// start to help. Deliberately click-triggered — measured at 0.5-1.2s across scenarios, which is
+// affordable to ask for but not to spend on every optimizer run, and it is only ever relevant on
+// the empty-state banner. Same affordance as the Break Even ⓘ diagnostic.
+function runConvBreakEvenRateDiagnosis() {
+    const link = document.getElementById('opt-conv-rate-link');
+    const out  = document.getElementById('opt-conv-rate-result');
+    if (!out) return;
+    if (out.style.display === 'block') { out.style.display = 'none'; return; }  // click again to collapse
+    const baseInputs = OptimizerState.convOptBase;
+    const cands = OptimizerState.convOptPool || [];
+    if (!baseInputs || !cands.length) return;
+
+    if (link) link.textContent = 'Searching…';
+    // Yield a frame so the "Searching…" label paints before the synchronous sweep blocks the thread.
+    setTimeout(() => {
+        const found = lowestBreakEvenHeirsRate(baseInputs, cands,
+            { spendableWeight: SPENDABLE_WEIGHT });
+        const cur = ((OptimizerState.sharedFutureIRARate || 0) * 100).toFixed(0);
+        if (found) {
+            out.innerHTML = `Converting starts to pay once your future tax rate is about ` +
+                `<b>${(found.rate * 100).toFixed(0)}%</b> or higher (vs the ${cur}% assumed now) — ` +
+                `at that rate the best plan found converts <b>$${found.optConv.toLocaleString()}</b>/yr ` +
+                `for a gain of <b>$${Math.round(found.gain).toLocaleString()}</b>. ` +
+                `Set "Future IRA Tax %" above that to explore it.`;
+        } else {
+            out.innerHTML = `No future tax rate up to 75% makes converting more worthwhile for this plan. ` +
+                `That is a real result, not a missing answer: this plan's conversions cost more in tax now ` +
+                `than they can recover later at any plausible rate.`;
+        }
+        out.style.display = 'block';
+        if (link) link.textContent = 'What rate would change that? ▾';
+    }, 0);
 }
 
 function renderSpendOptimizerBanner(results, baseSpendGoal) {
@@ -963,20 +1036,14 @@ function getOptimizerColumns() {
             getSortValue: r => r.totals.rmdTax / (r.totals.tax || 1)
         },
         {
-            key: 'betrAvg', label: 'Avg BETR',
-            title: 'Average Break-Even Tax Rate across conversion years. If your expected future marginal rate exceeds this, conversions were advantageous on average. Appears for Optimize Conversions rows (⇌) and standard rows with conversions.',
-            getValue: r => r.totals.betrAvg != null ? `${(r.totals.betrAvg * 100).toFixed(1)}%` : '—',
-            getSortValue: r => r.totals.betrAvg ?? 999
-        },
-        {
-            key: 'convSavings', label: 'Conv Savings',
-            title: 'Lifetime tax savings from the additional IRA→Roth conversions run by Optimize Conversions, vs the same strategy with no extra conversions. Positive = less tax paid so far. This counts only realized tax during the plan, not the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so it can be positive even when Break Even (which prices in that deferred tax) shows the conversions never paid off in total wealth. See the Break Even column for the fuller comparison.',
+            key: 'convSavings', label: 'Tax Paid Δ',
+            title: 'Counts only tax actually paid during the plan, so it is NOT a verdict on whether converting was worth it. Positive = the extra IRA→Roth conversions run by Optimize Conversions lowered lifetime tax vs the same strategy without them. It does not price the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so a big positive number here can sit alongside a plan that ends up worse off overall. Use the Break Even column, which prices in that deferred tax, for the actual answer.',
             getValue: r => r._convSavings != null ? '$' + Math.round(r._convSavings).toLocaleString() : '—',
             getSortValue: r => r._convSavings ?? -Infinity
         },
         {
             key: 'convBE', label: 'Break Even',
-            title: 'The year this Optimize Conversions strategy\'s after-tax wealth permanently overtakes the same strategy with no extra conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead. Unlike Conv Savings, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Appears for Optimize Conversions rows (⇌) only.',
+            title: 'The year this Optimize Conversions strategy\'s after-tax wealth permanently overtakes the same strategy with no extra conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead. Unlike Tax Paid Δ, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Appears for Optimize Conversions rows (⇌) only.',
             getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
             getSortValue: r => r._convBEYear ?? 9999
         }
@@ -1306,6 +1373,20 @@ function loadOptimizerResult(id) {
         DisplayHelpers.setDollarValue('extraConversionAmount', Math.round(result._optConvAmt));
     } else {
         DisplayHelpers.setDollarValue('extraConversionAmount', 0);
+    }
+    // A ⏹YYYY row converts only until that year, so the stop year has to travel with it or the
+    // loaded plan converts forever and stops matching the row it came from. Cleared for every
+    // other row type for the same reason the amount above is: a leftover stop year would silently
+    // truncate the conversions of the next strategy loaded.
+    const convEndEl = document.getElementById('convEndYear');
+    const convEndModeEl = document.getElementById('convEndMode');
+    if (convEndEl) {
+        convEndEl.value = (result._isConvOptimized && result._convEndYear != null)
+            ? String(result._convEndYear) : '';
+        if (convEndModeEl && result._convEndYear != null) convEndModeEl.value = 'extra';
+        // The stop-year row is nerdknob-gated but un-hides itself whenever a value is set, so the
+        // user can always see the assumption driving the plan they just loaded.
+        applyNerdKnobVisibility();
     }
     // For spend-optimized rows, restore the optimized spend goal
     if (result._spendGoal != null) {
@@ -1693,7 +1774,7 @@ function updateTable(log) {
         'excessOC': 'Excess Withdrawal Opportunity Cost: same comparison as Conv OC but for surplus IRA withdrawals banked to Cash. The no-action plan keeps those dollars in the IRA. Positive = having the extra cash out early beat leaving it in the IRA. Same "permanently ahead" Break Even definition as Conv OC.',
         'convTax': 'Incremental federal + state tax attributable to this year\'s Roth conversion (true marginal method: re-runs tax calculation without the conversion and takes the difference). Does not include IRMAA.',
         'excessTax': 'Incremental federal + state tax attributable to this year\'s excess IRA withdrawal routed to Cash (same method as Conv Tax).',
-        'BETR%': 'Break-Even Tax Rate (Kitces formula): t_now × (1 + r_taxable)^n / (1 + r_ira)^n. The future marginal rate at which converting now is tax-neutral vs leaving in IRA. If your expected future rate (Future IRA Tax %) exceeds BETR → conversion advantageous (▲). When r_taxable < r_ira (taxable drag), BETR falls below current rate, making conversion even more compelling.',
+        'BETR%': 'Break-Even Tax Rate (Kitces formula): t_now × (1 + r_taxable)^n / (1 + r_ira)^n. The future marginal rate at which converting now is tax-neutral vs leaving in IRA. If your expected future rate (Future IRA Tax %) exceeds BETR → conversion advantageous (▲). When r_taxable < r_ira (taxable drag), BETR falls below current rate, making conversion even more compelling. Treat this as a conversation-starter, not a decision rule: it is a closed-form estimate that ignores surplus routing and the RMD/IRMAA/Social Security cascade, and testing showed it can err in either direction. Trust the Break Even column instead.',
         'betrFlag': '▲ = expected future rate exceeds BETR by >2pp → conversion beneficial. ▼ = expected future rate is below BETR → conversion costly. ≈ = within 2pp either way (marginal).',
         'extraConv': 'Gross IRA amount additionally withdrawn and converted to Roth, independent of spending strategy. Sourced from the larger IRA first, and included in the IRA WD / IRA1-/IRA2- withdrawal totals. Taxes come from IRA gross (net Roth credit = extraConv − incremental tax) unless "Use Cash" funds the tax so the full gross lands in Roth.',
         'subCycle': 'Cyclic sub-cycle marker. Brok = brokerage harvest year (spending drawn from Brokerage; IRA free for conversions). IRA = IRA draw year (normal IRA withdrawal). ⚠Brok = brokerage harvest year but balance was below 50% of target — fell back to partial IRA draw.',
@@ -1990,16 +2071,6 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
         // Collapse any previously-expanded text: it belongs to the prior run's numbers.
         diagResultEl.innerHTML = '';
         diagResultEl.style.display = 'none';
-    }
-
-    // Phase 21: BETR average display
-    const betrAvgEl = document.getElementById('stat-betr-avg');
-    if (betrAvgEl) {
-        if (totals.betrAvg !== null && totals.betrAvg !== undefined) {
-            betrAvgEl.innerText = (totals.betrAvg * 100).toFixed(1) + '%';
-        } else {
-            betrAvgEl.innerText = '—';
-        }
     }
 
     const avgSpendEl = document.getElementById('stat-avg-spend-rate');

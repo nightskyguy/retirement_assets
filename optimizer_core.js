@@ -865,7 +865,16 @@ function beginYear(sim, yr) {
     // Early: preMonths=1, postMonths=11. Late: preMonths=11, postMonths=1.
     // Year 0: use strategy flag (bracket or explicit extraConv). Year 1+: prior year's actual conversion amount.
     // Do NOT use convertExcessToRoth as a trigger — it is hardcoded true in the optimizer and does not guarantee a conversion fires.
-    const _stratImpliesConversion = inputs.strategy === 'bracket' || inputs.strategy === 'aca' || (inputs.extraConversionAmount ?? 0) > 0;
+    // Year 0 must be decided from the conversion SCHEDULED for year 0, never from the raw
+    // extraConversionAmount field: the field has two shapes (scalar or per-year array — a
+    // multi-element array coerces to NaN, so `> 0` silently reported "no conversion") and three
+    // suppression flags can zero it (convEndYear, _cfSuppressConversions,
+    // _cfSuppressConversionsFromYear). Reading it through the same accessor applyExtraConversion
+    // uses is what makes a per-year array and the equivalent scalar + convEndYear the same plan.
+    // Years 1+ read the prior year's realized conversion, which was already shape-safe.
+    const _stratImpliesConversion =
+          ((inputs.strategy === 'bracket' || inputs.strategy === 'aca') && !_convSuppressedThisYear(inputs, 0))
+       || _extraConvAmountFor(inputs, 0) > 0;
     const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
     yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
     const yearTiming   = yr._useEarly ? 'early' : 'late';
@@ -1527,6 +1536,17 @@ function _extraConvSuppressedThisYear(inputs, y) {
     return _convSuppressedThisYear(inputs, y) || _convEndReached(inputs, y);
 }
 
+// The extra conversion actually SCHEDULED for year y: array element or scalar, zeroed by any
+// active suppression. Single source for both the withdrawal-timing trigger (Early/Late) and the
+// conversion itself, so a per-year array and the equivalent scalar + convEndYear can no longer
+// disagree. Pure (inputs + y), safe to call from the early per-year setup phase.
+function _extraConvAmountFor(inputs, y) {
+    if (_extraConvSuppressedThisYear(inputs, y)) return 0;
+    return Array.isArray(inputs.extraConversionAmount)
+        ? (inputs.extraConversionAmount[y] ?? 0)
+        : (inputs.extraConversionAmount ?? 0);
+}
+
 // Roth (convertExcessToRoth), replace excess Cash draws, apply withdrawals to balances, and
 // reinvest whatever remains (Brokerage under Cyclic, otherwise Cash).
 function routeSurplusAndConvert(sim, yr) {
@@ -1683,10 +1703,7 @@ function cfRefundIRA(sim, yr, netTarget) {
 function applyExtraConversion(sim, yr) {
     const { inputs, balance, birthyear1, birthyear2 } = sim;
     const y = yr.y;
-    const _extraConvReq = _extraConvSuppressedThisYear(inputs, y) ? 0
-        : Array.isArray(inputs.extraConversionAmount)
-            ? (inputs.extraConversionAmount[y] ?? 0)
-            : (inputs.extraConversionAmount ?? 0);
+    const _extraConvReq = _extraConvAmountFor(inputs, y);
     yr.extraConvGross = 0;
     yr.extraConvCashTax = 0;
     let incrementalExtraConvTax = 0;
@@ -2364,7 +2381,10 @@ function afterTaxWealthOfLogRow(r, futureIRATaxRate) {
 // mode 'all'   -> stop ALL conversion activity after the cutoff (surplus + extra), via the
 //                 internal _cfSuppressConversionsFromYear cutoff.
 // mode 'extra' -> stop ONLY the Extra Annual Roth Conversion (strategy bracket-fill keeps
-//                 running), via a zero-tail extraConversionAmount array. Empirically weaker.
+//                 running), via the public convEndYear + convEndMode:'extra' pair. Empirically
+//                 weaker. (Was a zero-tail extraConversionAmount array; that array mis-fired the
+//                 year-0 Early/Late withdrawal-timing trigger, so every cutoff it scored was a
+//                 differently-timed plan than the one the user could load.)
 //
 // Scores each cutoff on afterTaxWealthOfLogRow of the final row, the same basis as Break Even
 // (honors the user's Marginal Heirs Tax Rate when set, else row totalWealth). Any stop-year the
@@ -2391,10 +2411,16 @@ function bestConversionStopYear(inputs, opts) {
         if (mode === 'all') {
             return simulate({ ...base, _cfSuppressConversionsFromYear: cut, computeOC });
         }
-        const scalar = Array.isArray(base.extraConversionAmount) ? null : (base.extraConversionAmount ?? 0);
-        const arr = new Array(n + 2).fill(0).map((_, y) => y < cut
-            ? (scalar != null ? scalar : (base.extraConversionAmount[y] ?? 0)) : 0);
-        return simulate({ ...base, extraConversionAmount: arr, computeOC });
+        // Cut via the PUBLIC convEndYear/convEndMode pair — the same representation the sidebar
+        // holds and bestTimeLimitedConversion scores — so the plan scored here is the plan the
+        // user gets. cut 0 -> start-1, suppressed from year 0; cut n -> never reached, exactly
+        // the untruncated scalar plan. The array branch survives only for a caller that already
+        // passed a per-year array (no UI path does); it is equivalent since _extraConvAmountFor.
+        if (Array.isArray(base.extraConversionAmount)) {
+            const arr = new Array(n + 2).fill(0).map((_, y) => y < cut ? (base.extraConversionAmount[y] ?? 0) : 0);
+            return simulate({ ...base, extraConversionAmount: arr, computeOC });
+        }
+        return simulate({ ...base, convEndYear: start + cut - 1, convEndMode: 'extra', computeOC });
     };
 
     let bestCut = 0, bestATNW = -Infinity, atnwNoConv = 0, atnwNoStop = 0;
@@ -2569,7 +2595,10 @@ function selectConversionCandidates(rows, maxPool = 12) {
     const champions = new Map(); // familyKey -> best-scoring eligible row
     for (const r of (rows || [])) {
         if (!r || !r.totals || !r.totals.success) continue;
-        if (r._isNoConv || r._isSpendOptimized || r._isBracketInfeasible || r._isACAUntenable) continue;
+        // _isCurrentPlan: the user's own configured plan is a fixed reference row, not a family
+        // representative -- letting it stand for its family would hide the family's best plan.
+        if (r._isNoConv || r._isSpendOptimized || r._isBracketInfeasible || r._isACAUntenable
+            || r._isCurrentPlan) continue;
         let strategyKey = r._strategy;
         if (strategyKey === 'bracket') strategyKey = (r._stratIRMAATier ?? -1) >= 0 ? 'bracket-irmaa' : 'bracket-rate';
         const familyKey = strategyKey + '|' + (r._cyclicEnabled ? 'cyc' : 'lin');
@@ -2631,8 +2660,93 @@ const OPTIMIZER_OBJECTIVES = {
     maxroth:  { dir: 'desc', metric: r => r.totals?.terminal?.roth ?? -Infinity },
     balanced: { dir: 'desc', metric: r => r._baselineScore ?? -Infinity },
     conveffect:{ dir: 'desc', metric: r => r._convSavings ?? -Infinity },
-    earliestbe:{ dir: 'asc',  metric: r => r._convBEYear ?? 9999 },
+    // Earliest Break Even: the year a strategy's conversions permanently overtake the same strategy
+    // without them. Ties are common (the year is an integer and many strategies cross together), so
+    // they break on real-dollar after-tax net wealth -- the same measure `networth` and the ⚓
+    // baseline pick use, so "higher net wealth" means one thing everywhere in the table. Rows with
+    // no break-even (null: no conversions, or the lead never sustains) sort last via the 9999
+    // sentinel and can never outrank a row that actually has a year.
+    earliestbe:{
+        dir: 'asc',
+        rank: (rows) => [...rows].sort((a, b) =>
+            ((a._convBEYear ?? 9999) - (b._convBEYear ?? 9999))
+            || ((b.afterTaxNWCurrentDollars ?? -Infinity) - (a.afterTaxNWCurrentDollars ?? -Infinity))),
+    },
 };
+
+// True when two plans select the SAME withdrawal strategy: same family, same family parameter, and
+// the same cyclic / cash-funding modifiers. Both arguments use plain engine field names, so a
+// buildVariations() variation, a getInputs() sidebar snapshot, and an optimizer row's recorded
+// _selection can all be compared against each other. Pure.
+// Used by Monte Carlo (to run Stress against the user's actual strategy) and by the Optimizer (to
+// mark the swept row nearest the user's current plan).
+function sameStrategySelection(a, b) {
+    if (!a || !b) return false;
+    if (a.strategy !== b.strategy) return false;
+    if (!!a.cyclicEnabled !== !!b.cyclicEnabled) return false;
+    if (a.cyclicEnabled && (a.cyclicOrder ?? 'ira-first') !== (b.cyclicOrder ?? 'ira-first')) return false;
+    // buildVariations() emits 💵 fundConversionWithCash clones of every non-cyclic row; without
+    // this a first-match search would pair a cash-funding user with the non-cash-funded twin, a
+    // materially different plan.
+    if (!!a.fundConversionWithCash !== !!b.fundConversionWithCash) return false;
+    const near = (x, y) => Math.abs((x ?? 0) - (y ?? 0)) < 0.001;
+    switch (a.strategy) {
+        case 'propwd':   return near(a.propWithdraw,   b.propWithdraw);
+        case 'fixed':    return a.nYears === b.nYears;
+        // An IRMAA-ceiling plan and a bracket-rate plan are different strategies even when both
+        // report stratRate 0, so the tier (and the ACA multiple) are part of the identity.
+        case 'bracket':  return near(a.stratRate, b.stratRate)
+                             && (a.stratIRMAATier ?? -1) === (b.stratIRMAATier ?? -1)
+                             && (a.stratACAMultiple ?? 0) === (b.stratACAMultiple ?? 0);
+        case 'aca':      return (a.stratACAMultiple ?? 0) === (b.stratACAMultiple ?? 0);
+        case 'fixedpct': return near(a.iraWithdrawPct, b.iraWithdrawPct);
+        case 'ordered':  return (a.orderedSeq ?? 'CBIR') === (b.orderedSeq ?? 'CBIR');
+        case 'gk':       return near(a.gkGuard, b.gkGuard) && near(a.gkAdjPct, b.gkAdjPct);
+        default:         return false;
+    }
+}
+
+// The user's current family parameter as a sweep row, when it does NOT sit on that family's
+// standard grid -- so a user at Proportional 7% or Reduce 18 yrs sees their own setting on the
+// family's curve instead of only the neighbouring steps. Returns null when the value is already on
+// the grid, or the family has no numeric grid (ordered/gk/aca: gk already sweeps the user's own
+// guardrails, ordered is a small fixed set). Shared by buildVariations() and the Optimizer's own
+// sweep so the two cannot drift; the grids themselves are passed in because they differ (the
+// Optimizer sweeps IRA Draw further out than Monte Carlo does). Pure.
+function offGridParamFor(base, grids = {}) {
+    if (!base) return null;
+    const on = (arr, v) => (arr || []).some(x => Math.abs(x - v) < 0.001);
+    switch (base.strategy) {
+        case 'propwd': {
+            const pct = Math.round((base.propWithdraw ?? 0) * 100);
+            if (on(grids.propwd, pct)) return null;
+            return { family: 'Proportional', paramLabel: `${pct}%`, paramSortVal: pct,
+                     overrides: { strategy: 'propwd', propWithdraw: base.propWithdraw } };
+        }
+        case 'fixed': {
+            const n = base.nYears;
+            if (!n || on(grids.fixed, n)) return null;
+            return { family: 'Reduce', paramLabel: `${n} yrs`, paramSortVal: n,
+                     overrides: { strategy: 'fixed', nYears: n } };
+        }
+        case 'bracket': {
+            // Only the bracket-RATE arm has a grid; an IRMAA-ceiling selection is swept as its own
+            // family (tiers 0-4), so there is no off-grid case for it.
+            if ((base.stratIRMAATier ?? -1) >= 0 || (base.stratACAMultiple ?? 0) > 0) return null;
+            const pct = Math.round((base.stratRate ?? 0) * 100);
+            if (on((grids.bracket || []).map(r => Math.round(r * 100)), pct)) return null;
+            return { family: 'Fill Bracket', paramLabel: `${pct}%`, paramSortVal: base.stratRate,
+                     overrides: { strategy: 'bracket', stratRate: base.stratRate } };
+        }
+        case 'fixedpct': {
+            const pct = Math.round((base.iraWithdrawPct ?? 0) * 100);
+            if (on(grids.fixedpct, pct)) return null;
+            return { family: 'IRA Draw', paramLabel: `${pct}%`, paramSortVal: pct,
+                     overrides: { strategy: 'fixedpct', iraWithdrawPct: base.iraWithdrawPct } };
+        }
+        default: return null;
+    }
+}
 
 // Rank rows best->worst under an objective. Successful rows ALWAYS outrank failed ones (a depleted
 // plan can show inflated terminal wealth), then the objective's own order. Pure.
@@ -2805,13 +2919,12 @@ function bestTimeLimitedConversion(baseInputs, strategyOverrides = {}, opts = {}
     if (!n) return null;
     const startYear = probe.log[0].year;
 
-    // Scored through convEndYear/convEndMode -- the SAME representation the sidebar holds -- rather
-    // than a per-year extraConversionAmount array. The two are not interchangeable: an array of
-    // [amount x cut, then 0] and the equivalent scalar + convEndYear produce the same per-year
-    // conversion dollars but diverge elsewhere in the log from year one (measured: RMDwd 16,620 vs
-    // 15,771 in the opening year). Evaluating the loadable form means a ⇌ row and the plan the user
-    // gets when they click it are the same plan by construction -- the PF8 failure mode, where the
-    // optimizer and the single-scenario tab silently scored two different plans under one label.
+    // Scored through convEndYear/convEndMode -- the SAME representation the sidebar holds -- so a ⇌
+    // row and the plan the user gets when they click it are the same plan by construction (the PF8
+    // failure mode, where the optimizer and the single-scenario tab silently scored two different
+    // plans under one label). A per-year [amount x cut, then 0] array is now numerically equivalent
+    // (_extraConvAmountFor made the year-0 timing trigger read the scheduled conversion instead of
+    // the raw field); the loadable form is still the one to score, since it needs no translation.
     const scoreAt = (amount, cut) => {
         const res = simulate({ ...baseInputs, ...strategyOverrides,
                                extraConversionAmount: amount,
@@ -2923,42 +3036,37 @@ function buildVariations(base) {
 
     const convOn = true;
 
-    for (const pct of [0, 5, 10, 20, 50])
+    const MC_GRIDS = {
+        propwd:   [0, 5, 10, 20, 50],
+        fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
+        bracket:  bracketRates,
+        fixedpct: [5, 6, 7, 8, 10],
+    };
+
+    for (const pct of MC_GRIDS.propwd)
         push('Proportional', `${pct}%`, pct,
             { strategy: 'propwd', propWithdraw: pct / 100, convertExcessToRoth: convOn });
-    // Include user's current value if it isn't one of the standard Proportional steps
-    const userPropPct = Math.round((base.propWithdraw ?? 0) * 100);
-    if (base.strategy === 'propwd' && ![0, 5, 10, 20, 50].includes(userPropPct))
-        push('Proportional', `${userPropPct}%`, userPropPct,
-            { strategy: 'propwd', propWithdraw: base.propWithdraw, convertExcessToRoth: convOn });
 
-    for (const n of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25])
+    for (const n of MC_GRIDS.fixed)
         push('Reduce', `${n} yrs`, n,
             { strategy: 'fixed', nYears: n, convertExcessToRoth: convOn });
-    // Include user's current value if it isn't one of the standard Reduce steps
-    if (base.strategy === 'fixed' && ![2,3,4,5,6,7,8,9,10,11,12,13,14,15,20,25].includes(base.nYears))
-        push('Reduce', `${base.nYears} yrs`, base.nYears,
-            { strategy: 'fixed', nYears: base.nYears, convertExcessToRoth: convOn });
 
     for (const rate of bracketRates) {
         const pct = Math.round(rate * 100);
         push('Fill Bracket', `${pct}%`, rate,
             { strategy: 'bracket', stratRate: rate, convertExcessToRoth: convOn });
     }
-    // Include user's current value if it isn't one of the standard Fill Bracket rates
-    const userBracketPct = Math.round((base.stratRate ?? 0) * 100);
-    if (base.strategy === 'bracket' && !bracketRates.map(r => Math.round(r * 100)).includes(userBracketPct))
-        push('Fill Bracket', `${userBracketPct}%`, base.stratRate,
-            { strategy: 'bracket', stratRate: base.stratRate, convertExcessToRoth: convOn });
 
-    for (const pct of [5, 6, 7, 8, 10])
+    for (const pct of MC_GRIDS.fixedpct)
         push('IRA Draw', `${pct}%`, pct,
             { strategy: 'fixedpct', iraWithdrawPct: pct / 100, convertExcessToRoth: convOn });
-    // Include user's current value if it isn't one of the standard IRA Draw steps
-    const userDrawPct = Math.round((base.iraWithdrawPct ?? 0) * 100);
-    if (base.strategy === 'fixedpct' && ![5, 6, 7, 8, 10].includes(userDrawPct))
-        push('IRA Draw', `${userDrawPct}%`, userDrawPct,
-            { strategy: 'fixedpct', iraWithdrawPct: base.iraWithdrawPct, convertExcessToRoth: convOn });
+
+    // The user's own parameter, when it falls between the standard steps of its family, so their
+    // setting appears on the family's curve. Shared rule with the Optimizer's sweep.
+    const offGrid = offGridParamFor(base, MC_GRIDS);
+    if (offGrid)
+        push(offGrid.family, offGrid.paramLabel, offGrid.paramSortVal,
+            { ...offGrid.overrides, convertExcessToRoth: convOn });
 
     for (const seq of ['CBIR', 'RIBC', 'BIRC'])
         push('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, convertExcessToRoth: convOn });
@@ -3082,7 +3190,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, taxCreepFactor, buildVariations };
+    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, taxCreepFactor, buildVariations, sameStrategySelection, offGridParamFor };
 }
 
 

@@ -185,22 +185,15 @@ function cancelMC() {
 
 // Returns the index of the variation that matches the user's current strategy settings,
 // or -1 if no match is found (e.g. the strategy isn't in the variation list).
+// Matching lives in optimizer_core.js (sameStrategySelection) so Monte Carlo and the Optimizer
+// cannot disagree about which swept row IS the user's plan. That shared version also matches the
+// two families this used to miss -- Guyton-Klinger (by guardrails) and Ordered (by sequence), both
+// of which previously fell through to `return false` and dropped Stress mode onto the synthetic
+// "Current Plan" fallback -- and it treats an IRMAA-ceiling selection as distinct from a
+// bracket-rate one rather than pairing them.
 function findCurrentStrategyIdx(variations, base) {
     if (!base) return -1;
-    return variations.findIndex(v => {
-        if (v.strategy !== base.strategy) return false;
-        if (!!v.cyclicEnabled !== !!base.cyclicEnabled) return false;
-        if (v.cyclicEnabled && (v.cyclicOrder ?? 'ira-first') !== (base.cyclicOrder ?? 'ira-first')) return false;
-        // buildVariations() now emits 💵 fundConversionWithCash clones of every non-cyclic row;
-        // without this the first-match findIndex would pair a cash-funding user with the
-        // non-cash-funded twin, so Stress mode would model a materially different plan.
-        if (!!v.fundConversionWithCash !== !!base.fundConversionWithCash) return false;
-        if (base.strategy === 'propwd')   return Math.abs((v.propWithdraw   ?? 0) - (base.propWithdraw   ?? 0)) < 0.001;
-        if (base.strategy === 'fixed')    return v.nYears === base.nYears;
-        if (base.strategy === 'bracket')  return Math.abs((v.stratRate      ?? 0) - (base.stratRate      ?? 0)) < 0.001;
-        if (base.strategy === 'fixedpct') return Math.abs((v.iraWithdrawPct ?? 0) - (base.iraWithdrawPct ?? 0)) < 0.001;
-        return false;
-    });
+    return variations.findIndex(v => sameStrategySelection(v, base));
 }
 
 function renderMCResults(msg) {

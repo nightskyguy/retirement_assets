@@ -2,20 +2,53 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-25 (worktree readme-review-updates-c9df11, PR #131 merged — README audit round 2 + AiRA tool review + file directory. Working tree clean at `c9c6b57`.)
+**As of:** 2026-07-26 (worktree context-e73361, PR #132 merged at `9d3ed21`. PR2 below is implemented and uncommitted on branch `worktrees/planning-with-files-d2b68e`.)
 
 ---
 
-## PR1 Roth Conversion Diagnostics (2026-07-26, v11.1370) — COMPLETE, uncommitted
+## PR3 CURRENT PLAN row in the Optimizer + Earliest Break Even winner (2026-07-27, v11.1387) — COMPLETE, uncommitted
 
-**Status: COMPLETE**, branch `roth-conv-diagnostics`, node 122/122, browser verified. Full detail in progress.md and findings.md.
+**Status: COMPLETE**, node 133/133 (+8) + taxPaymentPlanner 12/12, browser verified. User decisions via AskUserQuestion: real simulated row + inline marker; mirror `buildVariations`' off-grid rule into the Optimizer's own sweep; rank the current plan AND let it win metrics.
+
+**Why:** the table ranked ~180 swept strategies but never contained the user's own plan, so "is the optimizer's pick better than what I'm doing?" was unanswerable. Three causes: every swept row forces `convertExcessToRoth: true` and `runOptimizer` strips the sidebar's `extraConversionAmount`/`convEndYear` (correct for the sweep, but it means no row is the user's plan); off-grid parameters produced no row at all; and no "current" marker existed.
+- [x] **`sameStrategySelection(a, b)`** (pure, core): full strategy identity on plain engine field names. Replaces MC's local `findCurrentStrategyIdx` matcher, which returned `false` for **gk and ordered** (those users silently got the synthetic "Current Plan" fallback in Stress mode) and ignored `stratIRMAATier` (an IRMAA-ceiling user paired with a plain bracket row). `findCurrentStrategyIdx` now delegates. **MC behavior change for gk/ordered users.**
+- [x] **`offGridParamFor(base, grids)`** (pure, core): the "push the user's value when it is off the grid" rule, extracted from `buildVariations` and now used by both sweeps so they cannot drift. Grids are passed in because they genuinely differ (Optimizer sweeps IRA Draw to 20%, MC to 10%).
+- [x] **`_selection` on every row** (effective `inputs`, never `overrides`): what the matcher consumes, and it closes a **pre-existing round-trip bug** — `orderedSeq` was never recorded nor restored, so clicking "Ordered RIBC" left the sidebar's own sequence (PF8 bug class). GK guardrails restore from it too.
+- [x] **📍 CURRENT PLAN row:** simulated from a `userPlan` snapshot taken before `runOptimizer` strips the conversion fields; added last so it is never cloned into 🗘/🔄/💵/(no conv)/✦ variants; pinned sticky under ⚓ BASELINE (amber `#fff3cd`, offset measured from the rendered rows since `display:contents` wrappers report height 0); also ranked in the body and eligible to win metrics. Excluded from `selectConversionCandidates`. **Trap:** `currentHash` is computed from the already-stripped `base`, so `extraConversionAmount`/`convEndYear`/`convEndMode` had to be hashed separately or a cached table returns a stale current row.
+- [x] **📍 inline marker** on exactly one swept row (prefers the match whose conversion switch also agrees with the sidebar).
+- [x] **⏱ Earliest Break Even Best winner**, plus the latent defect behind it: `_convBEYear` was set only on ⇌ rows, so the `earliestbe` objective sorted every row on the same 9999 sentinel and did nothing. `addResult` now runs `computeOC: true` (measured 1.96x / +74ms on a 144-row sweep; live table 1337ms / 1711 runs, inside the 2.5s budget). Winner picks only rows that HAVE a break-even; ties break on `afterTaxNWCurrentDollars`, and `OPTIMIZER_OBJECTIVES.earliestbe` got the identical rule so ordering and winner cannot disagree.
+- **Verify:** node 133/133 (+8: matcher per family incl. gk/ordered, bracket tier identity, cyclic/💵 identity, MC regression, off-grid on/off-grid, +3 variations for an off-grid user, earliestbe tie order, computeOC precondition). All 8 engine hashes byte-identical (engine untouched). Browser v11.1387: CURRENT row == `simulate(getInputs())` to the dollar ($813,254) and differs from its swept twin ($1,201,165); it won 📉 Lowest Tax on its own merits; off-grid 7% row present and marked; clicking the pinned row left the sidebar intact; changing only the Extra Conversion re-ran and updated the row ($564,869 → $983,705); Earliest Break Even reorders the body (BE 2049 rows on top, net wealth descending within the tie); Ordered CBIR → clicking an RIBC row now sets RIBC; MC matches gk (idx 35) and ordered RIBC (idx 33); only the 4 known console fixtures.
+- **Not byte-identical:** the table gains 2 rows (current + off-grid) and the Break Even column fills in; MC Stress changes for gk/ordered users; MC variation order shifts for off-grid users (the row moved from mid-list to after IRA Draw).
+- [x] **Follow-up (user-reported): the Summary Header went stale on the Optimizer tab.** Flipping Maximize Conversions there appeared to do nothing to Break Even. Not the hash (the table recomputed correctly, 813,254 -> 805,737): `setupAutoRecalc`'s `scheduleRecalc` branched `tab-opt -> runOptimizer()` only, and the always-visible Summary Header (Break Even + its ⓘ, End Wealth, taxes, Withdrawal Rate) is rendered by `runSimulation()`. Clicking Chart / Annual Details "fixed" it only because those tab buttons call `runSimulation()` themselves. Now `runSimulation()` always runs and `runOptimizer()` is additive. Cost: 79ms against a 1185ms sweep (~6%). Pre-existing, predates this session.
+- **Files:** `optimizer_core.js`, `optimizer_ui.js`, `montecarlo/mc_tab.js`, `optimizer_core.test.js`, `retirement_optimizer.html`.
+
+---
+
+## PR2 Conversion-schedule representation divergence (2026-07-26, v11.137f) — COMPLETE, PR #133
+
+**Status: COMPLETE**, node 125/125 (+3) + taxPaymentPlanner 12/12, browser verified. Root-cause and the general rule in findings.md.
+
+**The bug (one expression, `optimizer_core.js:868`):** the year-0 Early(Conv)/Late(Spend) withdrawal-timing trigger read `(inputs.extraConversionAmount ?? 0) > 0`. A multi-element array coerces to `NaN`, so array-driven plans silently ran Late(Spend); the same test ignored suppression, so a stop year already in the past still claimed a conversion year. This is the divergence PR1 left open.
+- [x] New pure `_extraConvAmountFor(inputs, y)` next to the existing suppression helpers: array-or-scalar element, zeroed by `_extraConvSuppressedThisYear`. Now the single accessor for BOTH `applyExtraConversion` and the timing predicate; the bracket/aca half of the predicate also gained `!_convSuppressedThisYear(inputs, 0)`.
+- [x] `bestConversionStopYear` mode `'extra'` cuts via the public `convEndYear`/`convEndMode` pair instead of a zero-tail array, so no production path builds the divergent representation. Array branch kept (and now correct) for a caller that passes one.
+- [x] 3 new tests: array ≡ scalar+convEndYear at cut 0 / interior / n; full array ≡ plain scalar with `timing === 'Early(Conv)'`; a suppressed year 0 (past `convEndYear` and `_cfSuppressConversionsFromYear: 0`) ≡ converting nothing. All three verified to FAIL when the one-line predicate change alone is reverted.
+- [x] Two hard-coded expectations re-derived in the array-driven `diagnoseConvBreakEvenFailure` boundary test (`breakingAmount` 355,478 → 355,562; `lastSustainableBEYear` 2041 → 2042). `breakingYear` 2031 and `lastSustainableYear` 2030 unchanged.
+- **Impact:** the two ⓘ stop-scope modes used to report different gains for the same cutoff ($59,706 vs $57,549 `gainVsFull`) and `gainVsNone` was overstated by $8,916 (STOP_BASE fixture). Both now agree, and the one-click "Stop after YYYY ▸" reproduces the searched score to the dollar (browser: promised = actual = $17,342,828, both modes).
+- **Not byte-identical:** the ⓘ suggested stop year / gains; scenarios with `convEndYear` at or before the start year; anything driven by a per-year array. **Verified byte-identical** across 8 scenarios (fixed/bracket/aca/propwd/gk/cyclic/scalar-eca/no-conv) — the strategy sweep, MC, Annual Details and the Tax Planner handoff are untouched.
+- **Files:** `optimizer_core.js`, `optimizer_core.test.js`, `retirement_optimizer.html` (title + core `?v=` + changelog `data-flag="behavior"`).
+
+---
+
+## PR1 Roth Conversion Diagnostics (2026-07-26, v11.1370) — COMPLETE, merged PR #132
+
+**Status: COMPLETE**, merged as [PR #132](https://github.com/nightskyguy/retirement_assets/pull/132) at `9d3ed21`, node 122/122, browser verified. Full detail in progress.md and findings.md.
 - [x] **A.** `Avg BETR` column + `#stat-betr-wrap` tile removed; kept in Annual Details (`BETR%`/`betrFlag`, Opp. Cost) with a reliability caveat added to its tooltip.
 - [x] **B.** `Conv Savings` → `Tax Paid Δ`; tooltip leads with the limitation.
 - [x] **C.** New pure `breakEvenHeirsRate()` / `lowestBreakEvenHeirsRate()` in `optimizer_core.js`; banner names the assumed future rate and offers an on-demand threshold search.
 - [x] **D.** New pure `bestTimeLimitedConversion()` (convert-then-stop). Fires only for candidates the flat sweep left empty, capped at 6 by terminal IRA. Rows tagged `⏹YYYY`, `_convEndYear` round-trips through `loadOptimizerResult`.
 - [x] Docs: findings.md investigation writeup, README FAQ entry + Recent Fixes, changelog `data-flag="behavior"`.
 - **Not byte-identical:** the ⇌ row set and suggested amounts change (D). A/B are display-only.
-- **Left open:** the array-vs-`convEndYear` engine divergence documented in findings.md — one of the two paths is presumably wrong, worth root-causing on its own.
+- **Left open → CLOSED by PR2 above (v11.137f):** the array-vs-`convEndYear` engine divergence. The array path was the wrong one; root cause was the year-0 withdrawal-timing predicate, not the conversion math.
 - **Deferred (re-plan later, per user):** Social Security first-year proration + 3 milestones + birth-year FRA (design preserved in the plan file appendix at `C:\Users\starc\.claude\plans\not-sure-where-it-eventual-gray.md`), head-to-head strategy compare, MC historical-stress auto-run + "Stress Failure X of Y" tile.
 
 ---

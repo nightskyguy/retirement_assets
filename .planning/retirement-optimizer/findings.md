@@ -1,5 +1,25 @@
 # Findings & Decisions
 
+## A feature can be fully wired and still do nothing, if nobody populates its input (2026-07-27, v11.1387)
+
+The Optimizer shipped an **Earliest Break Even** entry in its "Optimize for" selector, a `Break Even` column, and `OPTIMIZER_OBJECTIVES.earliestbe` to sort on it. All three were correct. The feature still did nothing, because **`_convBEYear` was only ever set on ⇌ Optimize-Conversions rows** — they were the only rows that re-ran with `computeOC: true`, and `simulate()` computes `totals.convBEYear` solely inside `if (inputs.computeOC && !inputs._cfRun)`. So every swept row fell back to the same `9999` sentinel, the column showed "—" table-wide, and selecting the objective reordered nothing. No error, no empty state, no test failure: a green suite and a rendered column that is honestly reporting "no data" look identical to a working feature.
+
+**Cost was the reason it was never turned on, and the cost was never measured.** Measured now (node, JIT-warmed, 144-variation sweep): 78 ms → 152 ms, **1.96× / +74 ms**; the live 181-row table runs 1337 ms / 1711 runs, inside the 2.5 s budget. The second counterfactual (`excessOC`) fired on **0 of 144** rows and is separately guarded, so the real cost is one extra `simulate()` on converting rows only. **The feature was withheld for a price nobody had checked.**
+
+**Rule:** when a column or a sort option is present but universally empty, treat that as a defect to investigate, not as "this scenario has no data". And when a cost concern is the reason something is off, measure it before accepting it — this one was affordable the whole time.
+
+## Two strategy-matching gaps, and why the current plan was invisible (2026-07-27, v11.1387)
+
+Adding the 📍 CURRENT PLAN row surfaced three separate reasons the user's own plan could not appear in the Optimizer, worth separating because only one of them is about the table:
+
+1. **The sweep cannot represent it.** Every swept row forces `convertExcessToRoth: true`, and `runOptimizer` deliberately clears `extraConversionAmount` / `convEndYear` / `convEndMode` off `base` (they would otherwise contaminate every family). Both are correct — but together they mean no swept row is ever the user's plan, even when strategy and parameter match exactly. Measured on a conversions-off plan with a $60k Extra Conversion: current $813,254 vs its swept twin $1,201,165.
+2. **`findCurrentStrategyIdx` (MC) silently failed for two families.** Its per-family chain had no branch for `gk` or `ordered`, so both fell through to `return false` and those users got the synthetic "Current Plan" fallback in Stress mode instead of their own strategy. It also ignored `stratIRMAATier`, pairing an IRMAA-ceiling user with a plain bracket row. Now one shared pure `sameStrategySelection()` in core, used by both MC and the Optimizer.
+3. **`orderedSeq` never round-tripped.** Third instance of the PF8 bug class: the row recorded no sequence and `loadOptimizerResult` restored none, so clicking "Ordered RIBC" set `strategy: 'ordered'` and left whatever the sidebar had. Fixed by recording a complete `_selection` (from effective `inputs`, never `overrides`) and restoring from it.
+
+**The trap this change nearly walked into:** `currentHash`, the optimizer's result cache key, is computed from the already-stripped `base`, so it is blind to the three conversion fields. Correct for the sweep, wrong the moment a row depends on them — a user changing only their Extra Conversion would get the cached table back with a stale current row. **When you add a row that depends on inputs a cache key deliberately ignores, the key has to change with it.** Verified live: $564,869 → $983,705.
+
+**Rendering gotcha:** the table's row wrappers are `display: contents`, so they have no box and report `offsetHeight` 0. Stacking a second sticky row under the ⚓ baseline required measuring a *cell*, not the wrapper, or the two pinned rows overlap.
+
 ## "Optimize Conversions found nothing" on the default scenario is correct, and why (2026-07-26, v11.1370)
 
 Investigated the complaint that the Optimizer reports "examined the best 12 strategies and found none where converting more improves the result" on stock default inputs. **The feature is answering correctly.** Everything below was measured against the real engine, not reasoned from the code.
@@ -21,11 +41,38 @@ Investigated the complaint that the Optimizer reports "examined the best 12 stra
 
 Neither was visible from reading the code or from a green test run; both surfaced only by scoring the fast path against an exhaustive scan on the same fixtures. **Anything that replaces a full sweep with a heuristic grid must be diffed against the sweep it replaces, on several scenarios, before it is trusted.**
 
-### Latent engine inconsistency worth a separate look (not fixed here)
+### Latent engine inconsistency (ROOT-CAUSED AND FIXED 2026-07-26, v11.137f — see below)
 
-A per-year `extraConversionAmount` **array** of `[amount × N years, then 0]` and the equivalent scalar `extraConversionAmount` + `convEndYear` + `convEndMode:'extra'` produce **identical per-year conversion dollars but different simulations**. Measured on the default scenario at $87,500 for 5 years: opening-year `RMDwd` 16,620.92 (array) vs 15,771.24 (scalar+stop-year), diverging from log row 0, with `finalNW` 679,867 vs 639,182. The array path also reported time-limited conversion "gains" that vanish under the scalar form, so those gains appear to be an artifact of that path rather than real opportunities.
+A per-year `extraConversionAmount` **array** of `[amount × N years, then 0]` and the equivalent scalar `extraConversionAmount` + `convEndYear` + `convEndMode:'extra'` produce **identical per-year conversion dollars but different simulations**. Measured on the default scenario at $87,500 for 5 years: opening-year `RMDwd` 16,620.92 (array) vs 15,771.24 (scalar+stop-year), diverging from log row 0, with `finalNW` 679,867 vs 639,182. The array path also reported time-limited conversion "gains" that vanish under the scalar form. Resolution below.
 
-`bestTimeLimitedConversion` sidesteps this by scoring the **loadable** representation (scalar + `convEndYear`), so a ⇌ row and the plan a user gets when they click it are the same plan by construction — the PF8 failure mode. But the divergence itself is unexplained and one of the two paths is presumably wrong. Worth root-causing on its own.
+## A predicate must read its input through the same accessor the behavior uses (2026-07-26, v11.137f)
+
+The divergence above was **one expression**, `optimizer_core.js:868`, the year-0 half of the Early(Conv)/Late(Spend) withdrawal-timing rule:
+
+```js
+const _stratImpliesConversion = inputs.strategy === 'bracket' || inputs.strategy === 'aca' || (inputs.extraConversionAmount ?? 0) > 0;
+```
+
+Two independent defects in it:
+
+1. **Not array-safe.** `[87500, 87500, …] > 0` coerces the array to the string `"87500,87500,…"` → `NaN > 0` → **false**. A multi-element array never trips the trigger, so an array-driven plan ran year 0 with 11 months of pre-withdrawal growth instead of 1, moving the RMD basis and every downstream balance. A *single*-element array coerces to a number and accidentally works, which is part of why this survived.
+2. **Ignores suppression.** A scalar `> 0` claims "converting" even when year 0's conversion is zeroed by `convEndYear`, `_cfSuppressConversions` or `_cfSuppressConversionsFromYear`.
+
+Measured before the fix (OC fixture, $87,500/yr):
+
+| run | year-0 timing | year-0 conv | finalNW |
+|---|---|---|---|
+| scalar full | Early(Conv) | 59,235 | 1,565,702 |
+| array full (should equal it) | **Late(Spend)** | 59,235 | 1,577,361 |
+| scalar + `_cfSuppressConversionsFromYear: 0` | **Early(Conv)** | **0** | 1,197,684 |
+| true no-conversion (`eca: 0`) | Late(Spend) | 0 | 1,201,283 |
+| scalar + `convEndYear: 2020` | **Early(Conv)** | **0** | 1,197,684 |
+
+**Both defects were on the live ⓘ path.** `bestConversionStopYear` cut `mode:'extra'` with a zero-tail array (every cutoff mis-timed) and `mode:'all'` with `_cfSuppressConversionsFromYear` on a still-positive scalar (its `cut === 0` "convert nothing" endpoint mis-timed). Measured on the STOP_BASE fixture: the two modes reported **different gains for the same cutoff** ($59,706 vs $57,549 `gainVsFull`), and `gainVsNone` was overstated by **$8,916** because "converting nothing" was scored as a January-withdrawal year. After the fix both modes return identical numbers, and clicking the suggested year reproduces the searched score to the dollar (browser-verified: promised $17,342,828, actual $17,342,828, in both modes).
+
+**Fix:** one accessor, `_extraConvAmountFor(inputs, y)` — array-or-scalar, zeroed by suppression — used by BOTH `applyExtraConversion` and the timing predicate; the bracket/aca half now also checks `!_convSuppressedThisYear(inputs, 0)`. `bestConversionStopYear` mode `'extra'` cuts via `convEndYear`/`convEndMode` instead of building arrays, so no production path constructs the divergent representation any more.
+
+**The general rule this earns:** *a predicate that gates behavior on an input must read that input through the same accessor the behavior itself uses.* `x > 0` on a field that may be a scalar or an array, and that three flags can suppress, is not one check — it is two silent bugs. Whenever a field has more than one shape or an override path, give it a single named accessor and route every reader through it. A corollary specific to JS: a truthiness/comparison test against a field that *might* be an array fails silently and asymmetrically (single-element arrays coerce and pass, longer ones become `NaN` and fail), so it cannot be caught by spot-checking one fixture.
 
 ### Rate-axis monotonicity (the binary search precondition)
 

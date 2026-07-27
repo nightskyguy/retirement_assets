@@ -1,5 +1,25 @@
 # Findings & Decisions
 
+## A feature can be fully wired and still do nothing, if nobody populates its input (2026-07-27, v11.1387)
+
+The Optimizer shipped an **Earliest Break Even** entry in its "Optimize for" selector, a `Break Even` column, and `OPTIMIZER_OBJECTIVES.earliestbe` to sort on it. All three were correct. The feature still did nothing, because **`_convBEYear` was only ever set on ⇌ Optimize-Conversions rows** — they were the only rows that re-ran with `computeOC: true`, and `simulate()` computes `totals.convBEYear` solely inside `if (inputs.computeOC && !inputs._cfRun)`. So every swept row fell back to the same `9999` sentinel, the column showed "—" table-wide, and selecting the objective reordered nothing. No error, no empty state, no test failure: a green suite and a rendered column that is honestly reporting "no data" look identical to a working feature.
+
+**Cost was the reason it was never turned on, and the cost was never measured.** Measured now (node, JIT-warmed, 144-variation sweep): 78 ms → 152 ms, **1.96× / +74 ms**; the live 181-row table runs 1337 ms / 1711 runs, inside the 2.5 s budget. The second counterfactual (`excessOC`) fired on **0 of 144** rows and is separately guarded, so the real cost is one extra `simulate()` on converting rows only. **The feature was withheld for a price nobody had checked.**
+
+**Rule:** when a column or a sort option is present but universally empty, treat that as a defect to investigate, not as "this scenario has no data". And when a cost concern is the reason something is off, measure it before accepting it — this one was affordable the whole time.
+
+## Two strategy-matching gaps, and why the current plan was invisible (2026-07-27, v11.1387)
+
+Adding the 📍 CURRENT PLAN row surfaced three separate reasons the user's own plan could not appear in the Optimizer, worth separating because only one of them is about the table:
+
+1. **The sweep cannot represent it.** Every swept row forces `convertExcessToRoth: true`, and `runOptimizer` deliberately clears `extraConversionAmount` / `convEndYear` / `convEndMode` off `base` (they would otherwise contaminate every family). Both are correct — but together they mean no swept row is ever the user's plan, even when strategy and parameter match exactly. Measured on a conversions-off plan with a $60k Extra Conversion: current $813,254 vs its swept twin $1,201,165.
+2. **`findCurrentStrategyIdx` (MC) silently failed for two families.** Its per-family chain had no branch for `gk` or `ordered`, so both fell through to `return false` and those users got the synthetic "Current Plan" fallback in Stress mode instead of their own strategy. It also ignored `stratIRMAATier`, pairing an IRMAA-ceiling user with a plain bracket row. Now one shared pure `sameStrategySelection()` in core, used by both MC and the Optimizer.
+3. **`orderedSeq` never round-tripped.** Third instance of the PF8 bug class: the row recorded no sequence and `loadOptimizerResult` restored none, so clicking "Ordered RIBC" set `strategy: 'ordered'` and left whatever the sidebar had. Fixed by recording a complete `_selection` (from effective `inputs`, never `overrides`) and restoring from it.
+
+**The trap this change nearly walked into:** `currentHash`, the optimizer's result cache key, is computed from the already-stripped `base`, so it is blind to the three conversion fields. Correct for the sweep, wrong the moment a row depends on them — a user changing only their Extra Conversion would get the cached table back with a stale current row. **When you add a row that depends on inputs a cache key deliberately ignores, the key has to change with it.** Verified live: $564,869 → $983,705.
+
+**Rendering gotcha:** the table's row wrappers are `display: contents`, so they have no box and report `offsetHeight` 0. Stacking a second sticky row under the ⚓ baseline required measuring a *cell*, not the wrapper, or the two pinned rows overlap.
+
 ## "Optimize Conversions found nothing" on the default scenario is correct, and why (2026-07-26, v11.1370)
 
 Investigated the complaint that the Optimizer reports "examined the best 12 strategies and found none where converting more improves the result" on stock default inputs. **The feature is answering correctly.** Everything below was measured against the real engine, not reasoned from the code.

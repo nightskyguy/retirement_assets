@@ -445,8 +445,36 @@ function _scoreRows(rows, sharedFutureIRARate) {
     }
 }
 
+// Family + parameter label for an arbitrary plan, matching the names the sweep uses for the same
+// selection ('Proportional' / '7%', 'IRMAA Ceil' / 'Tier 2 ceil', 'Ordered' / 'RIBC', ...). Used to
+// label the 📍 CURRENT PLAN row so it reads as a peer of the swept rows.
+const _IRMAA_TIER_LABELS = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
+function describeSelection(p) {
+    const pct = v => `${Math.round((v ?? 0) * 100)}%`;
+    switch (p.strategy) {
+        case 'propwd':   return { family: 'Proportional', paramLabel: pct(p.propWithdraw), paramSortVal: Math.round((p.propWithdraw ?? 0) * 100) };
+        case 'fixed':    return { family: 'Reduce', paramLabel: `${p.nYears} yrs`, paramSortVal: p.nYears ?? 0 };
+        case 'fixedpct': return { family: 'IRA Draw', paramLabel: pct(p.iraWithdrawPct), paramSortVal: Math.round((p.iraWithdrawPct ?? 0) * 100) };
+        case 'ordered':  return { family: 'Ordered', paramLabel: p.orderedSeq ?? 'CBIR', paramSortVal: p.orderedSeq ?? 'CBIR' };
+        case 'gk':       return { family: 'Guyton-Klinger', paramLabel: `Grd:${Math.round((p.gkGuard ?? 0.20) * 100)} Adj:${Math.round((p.gkAdjPct ?? 0.10) * 100)}`, paramSortVal: 0 };
+        case 'aca':      return { family: 'ACA Cliff', paramLabel: `${p.stratACAMultiple ?? 0}% FPL`, paramSortVal: 50 + (p.stratACAMultiple ?? 0) / 100 };
+        case 'bracket':
+            if ((p.stratACAMultiple ?? 0) > 0)
+                return { family: 'ACA Cliff', paramLabel: `${p.stratACAMultiple}% FPL`, paramSortVal: 50 + p.stratACAMultiple / 100 };
+            if ((p.stratIRMAATier ?? -1) >= 0)
+                return { family: 'IRMAA Ceil', paramLabel: _IRMAA_TIER_LABELS[p.stratIRMAATier] ?? `Tier ${p.stratIRMAATier}`, paramSortVal: p.stratIRMAATier - 0.5 };
+            return { family: 'Fill Bracket', paramLabel: pct(p.stratRate), paramSortVal: p.stratRate ?? 0 };
+        default:         return { family: p.strategy ?? 'Plan', paramLabel: '', paramSortVal: 0 };
+    }
+}
+
 function runOptimizer() {
     const base = getInputs();
+    // The user's plan exactly as configured, captured BEFORE the three guards below strip the
+    // sidebar's conversion settings off `base`. The 📍 CURRENT PLAN row is simulated from this, so
+    // it keeps conversions off when the user has them off, keeps their Extra Conversion, and keeps
+    // their stop year -- none of which any swept row does.
+    const userPlan = { ...base };
     // extraConversionAmount must never leak from the sidebar into the main strategy sweep or its
     // cyclic/Optimize-Spend passes below — none of their overrides objects set this key, so
     // without this line every family would silently inherit whatever's currently in the sidebar
@@ -460,9 +488,14 @@ function runOptimizer() {
     // sweep dimension. Cleared before currentHash so the cache stays insensitive to it.
     base.convEndYear = undefined;
     base.convEndMode = 'all';
+    // The three fields cleared above are absent from `base`, so they must be hashed from userPlan:
+    // the sweep is correctly insensitive to them, but the 📍 CURRENT PLAN row is not, and without
+    // this a user who only changes their Extra Conversion or stop year gets the cached table back
+    // with a stale current row.
     const currentHash = JSON.stringify(base)
         + ';optimizeSpend=' + (document.getElementById('optimizeSpend')?.checked ?? false)
-        + ';convOpt=' + (document.getElementById('includeConvOpt')?.checked ?? false);
+        + ';convOpt=' + (document.getElementById('includeConvOpt')?.checked ?? false)
+        + ';cur=' + JSON.stringify([userPlan.extraConversionAmount, userPlan.convEndYear, userPlan.convEndMode]);
     if (currentHash === _lastOptimizerHash && OptimizerState.results) {
         renderOptimizerTable(OptimizerState.results);
         showTab('tab-opt');
@@ -493,7 +526,13 @@ function runOptimizer() {
             overrides = { ...overrides, fundConversionWithCash: false };
         }
         const inputs = Object.assign({}, base, overrides);
-        const res = simulate(inputs);
+        // computeOC on for every row so the Break Even column is populated table-wide, not just on
+        // the ⇌ rows that used to re-run for it. Without this the "Earliest Break Even" objective
+        // and its Best-table winner have nothing to sort on (every row falls back to the same
+        // sentinel). Measured cost on a 144-row sweep: 78ms -> 152ms, ~+110ms at this table's size,
+        // well inside the 2.5s budget. The second counterfactual (excessOC) is separately guarded
+        // inside simulate() and fired on 0 of 144 rows.
+        const res = simulate({ ...inputs, computeOC: true });
         const lastEntry = res.log[res.log.length - 1];
         const totalYears = res.log.length;
         const ovYears = res.log.filter(e => (e['BracketOverage'] ?? 0) > 0).length;
@@ -530,6 +569,21 @@ function runOptimizer() {
             _iraWithdrawPct: overrides.iraWithdrawPct ?? null,
             _cyclicEnabled: !!(overrides.cyclicEnabled),
             _cyclicOrder:   overrides.cyclicOrder ?? 'ira-first',
+            _convBEYear: res.totals.convBEYear ?? null,
+            // The complete strategy selection, in plain engine field names, read from the EFFECTIVE
+            // inputs. sameStrategySelection() compares this against the sidebar to mark the row
+            // that matches the user's current plan, and loadOptimizerResult() restores the fields
+            // the older _-prefixed set never carried (orderedSeq, the GK guardrails).
+            _selection: {
+                strategy: inputs.strategy,
+                propWithdraw: inputs.propWithdraw, nYears: inputs.nYears,
+                stratRate: inputs.stratRate, stratIRMAATier: inputs.stratIRMAATier ?? -1,
+                stratACAMultiple: inputs.stratACAMultiple ?? 0,
+                iraWithdrawPct: inputs.iraWithdrawPct, orderedSeq: inputs.orderedSeq,
+                gkGuard: inputs.gkGuard, gkAdjPct: inputs.gkAdjPct,
+                cyclicEnabled: !!inputs.cyclicEnabled, cyclicOrder: inputs.cyclicOrder ?? 'ira-first',
+                fundConversionWithCash: !!inputs.fundConversionWithCash,
+            },
             _isSpendOptimized: false,
             _bracketOveragePct: bracketOveragePct,
             _isBracketInfeasible: isBracketInfeasible,
@@ -593,6 +647,25 @@ function runOptimizer() {
     // Guyton-Klinger — label shows the actual guard/adjust knobs, e.g. "Grd:20 Adj:10".
     const gkOptLabel = `Grd:${Math.round((base.gkGuard ?? 0.20) * 100)} Adj:${Math.round((base.gkAdjPct ?? 0.10) * 100)}`;
     addResult('Guyton-Klinger', gkOptLabel, 0, { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, convertExcessToRoth: convOn });
+
+    // The user's own family parameter when it falls between the standard steps (Proportional 7%,
+    // Reduce 18 yrs, Fill Bracket 26%, IRA Draw 9%). Same rule Monte Carlo's buildVariations() uses
+    // -- shared helper, so the two sweeps cannot drift -- but with THIS table's grids, which run
+    // further out on IRA Draw and sweep IRMAA ceilings as their own family. Added before the
+    // snapshot below so it also gets cyclic / no-conv / 💵 twins like any other family member.
+    {
+        const offGrid = offGridParamFor(base, {
+            propwd:   [0, 5, 10, 20, 50],
+            fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
+            bracket:  bracketRates,
+            fixedpct: [5, 6, 7, 8, 10, 12, 15, 20],
+        });
+        if (offGrid) {
+            const _ov = { ...offGrid.overrides, convertExcessToRoth: convOn };
+            if (offGrid.overrides.strategy === 'bracket') _ov.stratIRMAATier = -1;
+            addResult(offGrid.family, offGrid.paramLabel, offGrid.paramSortVal, _ov);
+        }
+    }
 
     // Snapshot the non-cyclic strategy families before the cyclic pass appends to the list.
     // Reused below to build the no-conversion baseline sweep over the same families.
@@ -686,6 +759,54 @@ function runOptimizer() {
                 // Reverse search also failed — report the lowest spend level that was tried
                 OptimizerState.noSolutionFloor = Math.max(500, base.spendGoal * 0.02);
             }
+        }
+    }
+
+    // 📍 CURRENT PLAN — the sidebar's own plan, simulated exactly as configured so the table can
+    // answer "is the optimizer's pick actually better than what I'm doing?". Every swept row forces
+    // convertExcessToRoth on and runs with the sidebar's extra conversion and stop year stripped,
+    // so none of them is this plan even when the strategy and parameter line up.
+    // Added LAST, after the cyclic / 💵 / no-conv / Optimize-Spend passes, so it is never cloned
+    // into a 🗘 / 🔄 / 💵 / (no conv) / ✦ variant -- it is one fixed reference, not a family.
+    // fundConversionWithCash is passed explicitly so addResult's nerdknob guard cannot force it to
+    // false and quietly model a different plan than the user has.
+    {
+        const _curOv = {
+            strategy: userPlan.strategy,
+            propWithdraw: userPlan.propWithdraw, nYears: userPlan.nYears,
+            stratRate: userPlan.stratRate, stratIRMAATier: userPlan.stratIRMAATier ?? -1,
+            stratACAMultiple: userPlan.stratACAMultiple ?? 0,
+            iraWithdrawPct: userPlan.iraWithdrawPct, orderedSeq: userPlan.orderedSeq,
+            gkGuard: userPlan.gkGuard, gkAdjPct: userPlan.gkAdjPct,
+            cyclicEnabled: !!userPlan.cyclicEnabled, cyclicOrder: userPlan.cyclicOrder ?? 'ira-first',
+            convertExcessToRoth: !!userPlan.convertExcessToRoth,
+            fundConversionWithCash: !!userPlan.fundConversionWithCash,
+            extraConversionAmount: userPlan.extraConversionAmount ?? 0,
+            convEndYear: userPlan.convEndYear, convEndMode: userPlan.convEndMode ?? 'all',
+        };
+        // Name it the way the swept rows are named, so the pinned row reads as a peer of the table
+        // ("Proportional 7%", "Guyton-Klinger Grd:20 Adj:10") rather than an unlabelled special case.
+        const _fam = describeSelection(userPlan);
+        addResult(_fam.family, _fam.paramLabel, _fam.paramSortVal, _curOv);
+        const curRow = results[results.length - 1];
+        curRow._isCurrentPlan = true;
+        curRow._strategyLabel = '📍 ' + curRow._strategyLabel;
+        // Carried so clicking the pinned row restores the plan intact — loadOptimizerResult() zeroes
+        // the extra conversion and the stop year for every row type that doesn't claim them.
+        curRow._optConvAmt  = userPlan.extraConversionAmount ?? 0;
+        curRow._convEndYear = userPlan.convEndYear ?? null;
+        curRow._convEndMode = userPlan.convEndMode ?? 'all';
+        OptimizerState.currentPlanId = curRow._id;
+
+        // Mark the swept row that uses the same strategy selection, so the user can see where their
+        // setting sits on its family's curve. Exactly one row is marked: several can match (the base
+        // row, its (no conv) twin, a 💵 clone), so prefer the one whose conversion switch also
+        // agrees with the sidebar and fall back to the first match otherwise.
+        const _matches = results.filter(r => !r._isCurrentPlan && sameStrategySelection(r._selection, userPlan));
+        const _match = _matches.find(r => !!r._convertExcessToRoth === !!userPlan.convertExcessToRoth) ?? _matches[0];
+        if (_match) {
+            _match._isCurrentMatch = true;
+            _match._strategyLabel = '📍 ' + _match._strategyLabel;
         }
     }
 
@@ -1043,7 +1164,7 @@ function getOptimizerColumns() {
         },
         {
             key: 'convBE', label: 'Break Even',
-            title: 'The year this Optimize Conversions strategy\'s after-tax wealth permanently overtakes the same strategy with no extra conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead. Unlike Tax Paid Δ, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Appears for Optimize Conversions rows (⇌) only.',
+            title: 'The year this strategy\'s after-tax wealth permanently overtakes the same strategy with no conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead, or the strategy never converts at all. Unlike Tax Paid Δ, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Sort by it, or choose "Earliest Break Even" under Optimize for, to rank strategies by how fast their conversions pay back.',
             getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
             getSortValue: r => r._convBEYear ?? 9999
         }
@@ -1140,6 +1261,19 @@ function renderOptimizerTable(results) {
         colWinners.spend      = w3._id;
         colWinners.rmdtax     = w5._id;
         colWinners.afterTaxNW = w6._id;
+        // Earliest Break Even — the year conversions permanently overtake the same strategy without
+        // them. Only rows that HAVE a break-even can win: a plan that never converts has none, and
+        // the 9999 sort sentinel must not be allowed to look like the earliest year. Ties break on
+        // real-dollar after-tax net wealth, the same rule OPTIMIZER_OBJECTIVES.earliestbe uses.
+        const beRows = feasibleSuccesses.filter(r => r._convBEYear != null);
+        if (beRows.length > 0) {
+            // Negative = the first argument is better (earlier year; equal years -> greater wealth).
+            const beBetter = (x, y) => (x._convBEYear - y._convBEYear)
+                || ((y.afterTaxNWCurrentDollars ?? -Infinity) - (x.afterTaxNWCurrentDollars ?? -Infinity));
+            const w7 = beRows.reduce((a, b) => (beBetter(b, a) < 0 ? b : a));
+            bestIds.add(w7._id);
+            colWinners.convBE = w7._id;
+        }
     }
 
     // Header — flat div cells for CSS grid
@@ -1170,7 +1304,8 @@ function renderOptimizerTable(results) {
                          || (col.key === 'rate'   && r._id === colWinners.rate)
                          || (col.key === 'spend'  && r._id === colWinners.spend)
                          || (col.key === 'afterTaxNW' && r._id === colWinners.afterTaxNW)
-                         || (col.key === 'rmdtax' && r._id === colWinners.rmdtax);
+                         || (col.key === 'rmdtax' && r._id === colWinners.rmdtax)
+                         || (col.key === 'convBE' && r._id === colWinners.convBE);
             const bg = cellWin    ? '#4CAF5080'
                      : isFailed   ? '#fde0e0'
                      : isInfeasible ? '#e8e8e8'
@@ -1194,7 +1329,7 @@ function renderOptimizerTable(results) {
     if (baselineRow) {
         const _bCell = 'padding:4px 8px;cursor:pointer;background-color:#dbeafe;font-weight:bold;position:sticky;top:30px;z-index:1;';
         const bTitle = 'BASELINE — the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s Δ columns are measured against this. Click to load it.';
-        baselineRowHtml = '<div style="display:contents;">' + columns.map(col => {
+        baselineRowHtml = '<div style="display:contents;" id="opt-baseline-row">' + columns.map(col => {
             let v;
             if (col.key === 'strategy')      v = '⚓ BASELINE — ' + baselineRow._strategyLabel;
             else if (col.key === 'dNW' || col.key === 'dTax') v = '0';
@@ -1203,9 +1338,43 @@ function renderOptimizerTable(results) {
         }).join('') + '</div>';
     }
 
+    // Pinned 📍 CURRENT PLAN row — the sidebar's own plan. Always rendered, even when it failed or
+    // is infeasible: those rows are hidden from the body by default, and the user's own plan being
+    // the hidden one is exactly the case worth seeing. It also stays in the ranked body (unlike the
+    // ⚓ baseline, whose Δ columns are 0 by definition), so the Rank column still answers "where
+    // does my plan actually stand?".
+    let currentRowHtml = '';
+    const currentRow = results.find(r => r._isCurrentPlan);
+    if (currentRow) {
+        const curFailed = !currentRow.totals.success;
+        const curInfeas = currentRow._isBracketInfeasible || currentRow._isACAUntenable;
+        const _cBg = curFailed ? '#fde0e0' : curInfeas ? '#e8e8e8' : '#fff3cd';
+        const _cExtra = curFailed ? 'opacity:0.85;' : curInfeas ? 'text-decoration:line-through;opacity:0.7;' : '';
+        const _cCell = `padding:4px 8px;cursor:pointer;background-color:${_cBg};font-weight:bold;position:sticky;top:60px;z-index:1;${_cExtra}`;
+        const cTitle = 'YOUR PLAN — the strategy and settings currently in the sidebar, simulated exactly as configured '
+            + '(conversions on or off as you have them, your Extra Conversion, your stop year). Every swept row runs with '
+            + 'conversions forced on, so none of them is this plan. Click to reload it.'
+            + (curFailed ? ' This plan runs out of money before the end.' : '')
+            + (curInfeas ? ' This plan\'s bracket/ACA target cannot actually be held.' : '');
+        currentRowHtml = '<div style="display:contents;" id="opt-current-row">' + columns.map(col => {
+            const v = col.key === 'strategy' ? 'CURRENT — ' + currentRow._strategyLabel : col.getValue(currentRow);
+            return `<div style="${_cCell}" onclick="loadOptimizerResult(${currentRow._id})" title="${cTitle}">${v}</div>`;
+        }).join('') + '</div>';
+    }
+
     const optTableEl = document.getElementById('opt-table');
     optTableEl.style.gridTemplateColumns = columns.map(() => 'max-content').join(' ');
-    optTableEl.innerHTML = headerHtml + baselineRowHtml + rowsHtml;
+    optTableEl.innerHTML = headerHtml + baselineRowHtml + currentRowHtml + rowsHtml;
+    // Stack the second sticky row directly under the first: the 60px default assumes header +
+    // baseline row heights, which depend on the rendered font/zoom, so measure once it is in the DOM.
+    if (currentRowHtml) {
+        // The row wrappers are display:contents (no box of their own), so measure a CELL, not the
+        // wrapper — a wrapper reports offsetHeight 0 and the sticky rows would overlap.
+        const _hdrH  = optTableEl.children[0]?.offsetHeight ?? 30;
+        const _baseH = document.querySelector('#opt-baseline-row > div')?.offsetHeight ?? 0;
+        const _top = _hdrH + _baseH;
+        document.querySelectorAll('#opt-current-row > div').forEach(d => { d.style.top = _top + 'px'; });
+    }
 
     // Legend — make the "Infeasible" item a click toggle (rows hidden by default).
     const legendInfeasEl = document.getElementById('opt-legend-infeasible');
@@ -1244,6 +1413,7 @@ function renderOptimizerTable(results) {
                 { key: 'tax',    label: '📉 Lowest Tax',        id: colWinners.tax    },
                 { key: 'rate',   label: '📊 Lowest Tax Rate',   id: colWinners.rate   },
                 { key: 'rmdtax', label: '📋 Lowest RMD Tax%',   id: colWinners.rmdtax },
+                ...(colWinners.convBE != null ? [{ key: 'convBE', label: '⏱ Earliest Break Even', id: colWinners.convBE }] : []),
                 ...(OptimizerState.baseline ? [{ key: 'afterTaxNW', label: '⚓ Best w/o Conv', id: OptimizerState.baseline._id }] : []),
             ];
             // Deduplicate: a row can win multiple metrics; show it once under its first/best label
@@ -1354,6 +1524,21 @@ function loadOptimizerResult(id) {
         document.getElementById('iraWithdrawPct').value = Math.round(result._iraWithdrawPct * 100);
     }
 
+    // Ordered / Guyton-Klinger were never restored: the row recorded no sequence and no guardrails,
+    // so loading "Ordered RIBC" set strategy=ordered and left whatever sequence the sidebar already
+    // had — the table showed one plan and clicking it ran another (the PF8 bug class). _selection
+    // carries the effective values; guard on it so rows from an older cached run still load.
+    if (result._selection) {
+        if (result._strategy === 'ordered' && result._selection.orderedSeq) {
+            const seqEl = document.getElementById('orderedSeq');
+            if (seqEl) seqEl.value = result._selection.orderedSeq;
+        } else if (result._strategy === 'gk') {
+            const gEl = document.getElementById('gkGuard'), aEl = document.getElementById('gkAdjPct');
+            if (gEl && result._selection.gkGuard != null) gEl.value = Math.round(result._selection.gkGuard * 100);
+            if (aEl && result._selection.gkAdjPct != null) aEl.value = Math.round(result._selection.gkAdjPct * 100);
+        }
+    }
+
     document.getElementById('convertExcessToRoth').checked = !!result._convertExcessToRoth;
     const fccEl = document.getElementById('fundConversionWithCash');
     if (fccEl) fccEl.checked = !!result._fundConversionWithCash;
@@ -1369,7 +1554,7 @@ function loadOptimizerResult(id) {
     // special. Explicitly zero it for every other row type so a value left over from a
     // previously-loaded ⇌ row doesn't silently linger and misrepresent the newly loaded
     // (non-conversion-optimized) strategy in the opposite direction.
-    if (result._isConvOptimized && result._optConvAmt != null) {
+    if ((result._isConvOptimized || result._isCurrentPlan) && result._optConvAmt != null) {
         DisplayHelpers.setDollarValue('extraConversionAmount', Math.round(result._optConvAmt));
     } else {
         DisplayHelpers.setDollarValue('extraConversionAmount', 0);
@@ -1381,9 +1566,12 @@ function loadOptimizerResult(id) {
     const convEndEl = document.getElementById('convEndYear');
     const convEndModeEl = document.getElementById('convEndMode');
     if (convEndEl) {
-        convEndEl.value = (result._isConvOptimized && result._convEndYear != null)
+        convEndEl.value = ((result._isConvOptimized || result._isCurrentPlan) && result._convEndYear != null)
             ? String(result._convEndYear) : '';
-        if (convEndModeEl && result._convEndYear != null) convEndModeEl.value = 'extra';
+        // A ⇌ row's stop year is always an extra-conversion cutoff; the 📍 current row carries the
+        // user's own scope, so it restores that rather than being forced to 'extra'.
+        if (convEndModeEl && result._convEndYear != null)
+            convEndModeEl.value = result._isCurrentPlan ? (result._convEndMode ?? 'all') : 'extra';
         // The stop-year row is nerdknob-gated but un-hides itself whenever a value is set, so the
         // user can always see the assumption driving the plan they just loaded.
         applyNerdKnobVisibility();
@@ -3213,11 +3401,14 @@ function setupAutoRecalc() {
         clearTimeout(timer);
         timer = setTimeout(() => {
             const tab = document.querySelector('.tab-btn.active')?.getAttribute('onclick') || '';
-            if (tab.includes('tab-opt')) {
-                runOptimizer();
-            } else {
-                runSimulation();
-            }
+            // The Summary Header (Break Even and its ⓘ, End Wealth, taxes, Withdrawal Rate) is
+            // rendered by runSimulation() and is visible on EVERY tab, including the Optimizer.
+            // Running only runOptimizer() here left that header showing the previous plan until
+            // something else happened to call runSimulation() -- the Chart and Annual Details tab
+            // buttons do, which is why clicking either one appeared to "fix" it. Always refresh the
+            // single-scenario run; it is one simulate() against the optimizer's ~1.3s sweep.
+            runSimulation();
+            if (tab.includes('tab-opt')) runOptimizer();
         }, 400);
     }
     document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {

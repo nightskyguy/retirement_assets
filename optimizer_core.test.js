@@ -52,6 +52,8 @@ const breakEvenHeirsRate = core.breakEvenHeirsRate;
 const lowestBreakEvenHeirsRate = core.lowestBreakEvenHeirsRate;
 const bestTimeLimitedConversion = core.bestTimeLimitedConversion;
 const buildVariations = core.buildVariations;
+const sameStrategySelection = core.sameStrategySelection;
+const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 
 // ── Test harness ──────────────────────────────────────────────────────────────
@@ -1897,6 +1899,109 @@ test('bestTimeLimitedConversion: its answer survives being replayed through the 
 test('bestTimeLimitedConversion: no IRA means nothing to find', () => {
     assert(bestTimeLimitedConversion({ ...CONV_BASE, IRA1: 0, IRA2: 0 }, FIXED_OV,
         { futureIRARate: 0.24 }) === null, 'no IRA, no conversion');
+});
+
+// ── Current-plan identification: sameStrategySelection / offGridParamFor ──────
+// The Optimizer pins the user's own plan and marks the swept row that matches it, and Monte Carlo
+// runs Stress against that same row. Both go through sameStrategySelection, which replaced an
+// MC-local matcher that returned false for Guyton-Klinger and Ordered (those users silently got a
+// synthetic fallback plan) and ignored the IRMAA tier (an IRMAA-ceiling user was paired with a
+// plain bracket row).
+
+test('sameStrategySelection: matches each family on its own parameter', () => {
+    const cases = [
+        [{ strategy: 'propwd',   propWithdraw: 0.07 },   { strategy: 'propwd',   propWithdraw: 0.07 },   true],
+        [{ strategy: 'propwd',   propWithdraw: 0.07 },   { strategy: 'propwd',   propWithdraw: 0.10 },   false],
+        [{ strategy: 'fixed',    nYears: 18 },           { strategy: 'fixed',    nYears: 18 },           true],
+        [{ strategy: 'fixed',    nYears: 18 },           { strategy: 'fixed',    nYears: 20 },           false],
+        [{ strategy: 'fixedpct', iraWithdrawPct: 0.09 }, { strategy: 'fixedpct', iraWithdrawPct: 0.09 }, true],
+        [{ strategy: 'ordered',  orderedSeq: 'RIBC' },   { strategy: 'ordered',  orderedSeq: 'RIBC' },   true],
+        [{ strategy: 'ordered',  orderedSeq: 'RIBC' },   { strategy: 'ordered',  orderedSeq: 'CBIR' },   false],
+        [{ strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, true],
+        [{ strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 }, { strategy: 'gk', gkGuard: 0.25, gkAdjPct: 0.10 }, false],
+        [{ strategy: 'propwd', propWithdraw: 0 },        { strategy: 'fixed', nYears: 10 },              false],
+    ];
+    for (const [a, b, want] of cases) {
+        assert(sameStrategySelection(a, b) === want,
+            `${a.strategy} vs ${b.strategy}: expected ${want}, got ${sameStrategySelection(a, b)}`);
+    }
+});
+
+test('sameStrategySelection: bracket identity includes the IRMAA tier and the ACA multiple', () => {
+    const rate = { strategy: 'bracket', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: 0 };
+    const tier2 = { strategy: 'bracket', stratRate: 0, stratIRMAATier: 2, stratACAMultiple: 0 };
+    assert(!sameStrategySelection(rate, tier2), 'an IRMAA-ceiling plan is not a bracket-rate plan');
+    assert(sameStrategySelection(tier2, { ...tier2 }), 'same tier must match');
+    assert(!sameStrategySelection({ strategy: 'aca', stratACAMultiple: 200 },
+                                  { strategy: 'aca', stratACAMultiple: 400 }), 'ACA multiples differ');
+});
+
+test('sameStrategySelection: cyclic and cash-funding modifiers are part of the identity', () => {
+    const p = { strategy: 'propwd', propWithdraw: 0.05 };
+    assert(!sameStrategySelection(p, { ...p, cyclicEnabled: true }), 'cyclic vs non-cyclic');
+    assert(!sameStrategySelection({ ...p, cyclicEnabled: true, cyclicOrder: 'ira-first' },
+                                  { ...p, cyclicEnabled: true, cyclicOrder: 'brokerage-first' }), 'cyclic order');
+    assert(!sameStrategySelection(p, { ...p, fundConversionWithCash: true }), 'cash-funded twin is a different plan');
+});
+
+test('sameStrategySelection: finds GK and Ordered users in buildVariations output (the MC regression)', () => {
+    const gkBase = { ...BASE, strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 };
+    const gkIdx = buildVariations(gkBase).findIndex(v => sameStrategySelection(v, gkBase));
+    assert(gkIdx >= 0, 'a Guyton-Klinger user must match a swept variation (previously never did)');
+    const ordBase = { ...BASE, strategy: 'ordered', orderedSeq: 'RIBC' };
+    const ordIdx = buildVariations(ordBase).findIndex(v => sameStrategySelection(v, ordBase));
+    assert(ordIdx >= 0, 'an Ordered user must match a swept variation (previously never did)');
+    assert(buildVariations(ordBase)[ordIdx].orderedSeq === 'RIBC', 'and it must be their own sequence');
+    const absent = { ...BASE, strategy: 'nosuchstrategy' };
+    assert(buildVariations(absent).findIndex(v => sameStrategySelection(v, absent)) === -1,
+        'a strategy absent from the sweep must report no match');
+});
+
+test('offGridParamFor: returns the user parameter only when it is off the grid', () => {
+    const grids = { propwd: [0, 5, 10, 20, 50], fixed: [2, 5, 10, 20, 25],
+                    bracket: [0.10, 0.12, 0.22, 0.24], fixedpct: [5, 6, 7, 8, 10] };
+    assert(offGridParamFor({ strategy: 'propwd', propWithdraw: 0.07 }, grids)?.paramLabel === '7%', 'propwd 7% is off-grid');
+    assert(offGridParamFor({ strategy: 'propwd', propWithdraw: 0.10 }, grids) === null, 'propwd 10% is on the grid');
+    assert(offGridParamFor({ strategy: 'fixed', nYears: 18 }, grids)?.paramLabel === '18 yrs', 'reduce 18 is off-grid');
+    assert(offGridParamFor({ strategy: 'fixed', nYears: 20 }, grids) === null, 'reduce 20 is on the grid');
+    assert(offGridParamFor({ strategy: 'bracket', stratRate: 0.26 }, grids)?.paramLabel === '26%', 'bracket 26% is off-grid');
+    assert(offGridParamFor({ strategy: 'bracket', stratRate: 0.22 }, grids) === null, 'bracket 22% is on the grid');
+    assert(offGridParamFor({ strategy: 'fixedpct', iraWithdrawPct: 0.09 }, grids)?.paramLabel === '9%', 'IRA draw 9% is off-grid');
+    // An IRMAA-ceiling selection is swept as its own family, so it has no off-grid case.
+    assert(offGridParamFor({ strategy: 'bracket', stratRate: 0, stratIRMAATier: 2 }, grids) === null, 'IRMAA tier has no grid');
+    assert(offGridParamFor({ strategy: 'gk', gkGuard: 0.2 }, grids) === null, 'GK already sweeps the user guardrails');
+});
+
+test('offGridParamFor: buildVariations gains exactly one non-cyclic row for an off-grid user', () => {
+    const onGrid  = { ...BASE, strategy: 'propwd', propWithdraw: 0.10, Cash: 0 };
+    const offGrid = { ...onGrid, propWithdraw: 0.07 };
+    const a = buildVariations(onGrid).length, b = buildVariations(offGrid).length;
+    // Every non-cyclic row is tripled by the cyclic pass (base + 2 cyclic clones); Cash 0 suppresses
+    // the 💵 clones, so one extra base row means exactly three more variations.
+    assert(b - a === 3, `expected 3 more variations (1 base + 2 cyclic), got ${b - a}`);
+    assert(buildVariations(offGrid).some(v => sameStrategySelection(v, offGrid)),
+        'and the off-grid user must now match one of them');
+});
+
+test('earliestbe: earliest year wins; ties break on real-dollar after-tax net wealth', () => {
+    const row = (id, be, nw) => ({ _id: id, _convBEYear: be, afterTaxNWCurrentDollars: nw,
+                                   totals: { success: true } });
+    const ranked = rankRowsByObjective(
+        [row('late', 2040, 9e6), row('tieLow', 2032, 1e6), row('none', null, 9.9e6), row('tieHigh', 2032, 5e6)],
+        'earliestbe');
+    assert(ranked[0]._id === 'tieHigh', `tie must go to the higher net wealth, got ${ranked[0]._id}`);
+    assert(ranked[1]._id === 'tieLow',  `then its poorer twin, got ${ranked[1]._id}`);
+    assert(ranked[2]._id === 'late',    `then the later break-even, got ${ranked[2]._id}`);
+    assert(ranked[3]._id === 'none',    'a row with no break-even can never outrank one that has it');
+});
+
+test('earliestbe: a swept row simulated with computeOC actually reports a break-even year', () => {
+    // The precondition for the whole feature: before this, only ⇌ rows ran with computeOC, so every
+    // swept row fell back to the same sort sentinel and the objective did nothing.
+    const conv = simulate({ ...OC_BASE, extraConversionAmount: 50000, computeOC: true });
+    assert(conv.totals.convBEYear != null, 'a converting row must report a break-even year');
+    const plain = simulate({ ...OC_BASE, extraConversionAmount: 50000, computeOC: false });
+    assert(plain.totals.convBEYear == null, 'and without computeOC it stays null (the old behavior)');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

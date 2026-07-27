@@ -2,7 +2,27 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-25 (worktree context-ab498f, v11.1340 + documentation polish + changelog refactor + Cash Reserve "Off")
+**As of:** 2026-07-25 (worktree readme-review-updates-c9df11, PR #131 merged — README audit round 2 + AiRA tool review + file directory. Working tree clean at `c9c6b57`.)
+
+---
+
+## PR1 Roth Conversion Diagnostics (2026-07-26, v11.1370) — COMPLETE, uncommitted
+
+**Status: COMPLETE**, branch `roth-conv-diagnostics`, node 122/122, browser verified. Full detail in progress.md and findings.md.
+- [x] **A.** `Avg BETR` column + `#stat-betr-wrap` tile removed; kept in Annual Details (`BETR%`/`betrFlag`, Opp. Cost) with a reliability caveat added to its tooltip.
+- [x] **B.** `Conv Savings` → `Tax Paid Δ`; tooltip leads with the limitation.
+- [x] **C.** New pure `breakEvenHeirsRate()` / `lowestBreakEvenHeirsRate()` in `optimizer_core.js`; banner names the assumed future rate and offers an on-demand threshold search.
+- [x] **D.** New pure `bestTimeLimitedConversion()` (convert-then-stop). Fires only for candidates the flat sweep left empty, capped at 6 by terminal IRA. Rows tagged `⏹YYYY`, `_convEndYear` round-trips through `loadOptimizerResult`.
+- [x] Docs: findings.md investigation writeup, README FAQ entry + Recent Fixes, changelog `data-flag="behavior"`.
+- **Not byte-identical:** the ⇌ row set and suggested amounts change (D). A/B are display-only.
+- **Left open:** the array-vs-`convEndYear` engine divergence documented in findings.md — one of the two paths is presumably wrong, worth root-causing on its own.
+- **Deferred (re-plan later, per user):** Social Security first-year proration + 3 milestones + birth-year FRA (design preserved in the plan file appendix at `C:\Users\starc\.claude\plans\not-sure-where-it-eventual-gray.md`), head-to-head strategy compare, MC historical-stress auto-run + "Stress Failure X of Y" tile.
+
+---
+
+## README Audit Round 2 + AiRA Tool Review (2026-07-25): PR #131 — COMPLETE
+
+**Status: COMPLETE**, merged [PR #131](https://github.com/nightskyguy/retirement_assets/pull/131). Doc-only (README.md, .gitignore, .planning/FILE_DIRECTORY.md new). Full detail in progress.md. Summary: ToC rebuild (missing FAQ + 3 Free Tools + misfiled entry), broken link fix, duplicate-heading anchor collision fix, 2 new quick-launch entries documented, ~20 typo/grammar fixes, new AiRA Retirement Application review entry, dead Anonymous Reddit Tool entry dropped, `.planning/FILE_DIRECTORY.md` added, `netcitizen.us.*` gitignored.
 
 ---
 
@@ -201,7 +221,7 @@ Goal: Complete open features from the original priority list plus deferred items
 | 2 | **PA** | Pension Start Age | **complete** | — |
 | 3 | **PB** | Lumpy Spending (no URL encoding) | pending | — |
 | 4 | **PC** | Auto-Persist + Restore Offer | pending | — |
-| 5 | **P4** | Creeping Tax Rate Model | pending | — |
+| 5 | **P4** | Creeping Tax Rate Model | Option A done, nerd-gated (un-gate decision pending); Option B not started | — |
 | 6 | **P5** | Conversion Schedule — Greedy DP (23b) | pending | — |
 | 7 | **P6** | Simulation Sanity-Check Tests | pending | — |
 | 8 | **PD** | Onboarding Interview (replaces P7 stepper) | pending | — |
@@ -477,20 +497,17 @@ const AUTOSAVE_KEY = 'SLCRetireOptimizeAutoSave';
 ## Phase P4: Creeping Tax Rate Model (was Phase 29)
 **Why:** Tool assumes today's brackets persist forever. Future rate increases plausible. TCJA is now permanent but Congress can change rates. Default: off.
 
-**Two options:**
+**Two options were scoped; only Option A shipped:**
 
-**A. Rate Escalation:** input `taxRateEscalation` (% per year) + `taxEscalationStartYear`. Applies rate multiplier `(1+escalation)^max(0,year−startYear)` to all bracket rates in `calculateTaxes()`.
-
-**B. Pre-TCJA Cliff:** `taxRateChangeYear` → swap to `BRACKETS_PRE_TCJA` (25/28/33/35/39.6%) at that year. Label: "Pre-TCJA rates (hypothetical stress test)" — NOT "TCJA expiration" since TCJA is permanent.
-
-- [ ] Add `BRACKETS_PRE_TCJA` constant (25/28/33/35/39.6 + MFJ thresholds)
-- [ ] Inputs: `taxRateEscalation`, `taxEscalationStartYear`, `taxRateChangeYear` (all default 0 = off)
-- [ ] `calculateTaxes()`: apply rate multiplier and/or bracket swap per year
-- [ ] Annual Details: `taxRateMult` column (Debug/Tax Policy category)
-- [ ] Test: escalation=0 → bit-identical to current (regression)
-- [ ] Test: pre-TCJA switch year set → taxes jump matching pre-TCJA bracket rates
-- [ ] Test: escalation=1%/yr × 20 yrs → 22% bracket becomes ~26.8%
-- **Status:** pending
+**A. Rate Escalation — IMPLEMENTED, not yet found by user because it's nerdknob-gated.** Discovered 2026-07-26 via code grep (`Creep`) after the user flagged "implemented but not exposed." Built as `taxRateCreep` (% per year, federal) + `taxCreepStartYear` (calendar year, blank = plan's first year). Engine: `taxCreepFactor(rate, currentYear, startYear)` returns `(1+rate)^max(0,year-startYear)`; multiplies federal AND state bracket rates via `fedRateCreep`/`stateRateCreep` params threaded through `calculateTaxes()`/`computeBracketCeiling()`. **State creep is plumbed end-to-end in the engine but pinned at `taxRateCreepState: 0` in `getInputs()` (`optimizer_ui.js:249`) — no UI control exists for it yet**, per an explicit comment at line 245-246 ("Federal is the only knob today"). UI: "Fed Tax Creep" / "Creep Starts" row (`retirement_optimizer.html:378-380`, `#taxRateCreep-wrap`), hidden by default — `applyNerdKnobVisibility()` (`optimizer_ui.js:90-96`) shows it only when `NERD_KNOBS` is on OR a nonzero creep value is already loaded (leak-guard, same pattern as the conversion Stop-Year feature — a shared URL/scenario with creep set must never hide the control that explains it). Short URL keys `trc`/`tcy` wired (`optimizer_core.js:759-760`, `optimizer_ui.js:3235`). Sweep pass-through confirmed (`buildVariations` carries the fields). Logged per-year as `-fedRateCreep`/`-stateRateCreep` (log record).
+- [x] Inputs: `taxRateCreep`, `taxCreepStartYear` (federal). `taxRateCreepState` exists in the engine, no UI input yet.
+- [x] `calculateTaxes()`/`computeBracketCeiling()`: apply rate multiplier per year
+- [x] Test: creep=0 → bit-identical to current (regression) — `optimizer_core.test.js:1652-1656`
+- [x] Test: escalation compounding, before/after start year, fed-only vs state-only isolation, sweep pass-through, path-independence — `optimizer_core.test.js:1642-1754` (11 assertions total)
+- [ ] Annual Details `taxRateMult`-style column (Debug/Tax Policy category) — not added; only the hidden `-fedRateCreep`/`-stateRateCreep` log fields exist, no visible column
+- [ ] State-rate creep UI control (input + tooltip + short-key)
+- **B. Pre-TCJA Cliff — NOT implemented.** No `BRACKETS_PRE_TCJA` constant, no `taxRateChangeYear`, no bracket-swap logic anywhere in the codebase (grepped clean). Original spec's second option, never started.
+- **Status:** Option A done but ungated-decision pending — is nerdknob-gating still wanted now that it's a finished, tested feature (cf. PF13 round 2, which un-gated Rank/Maximize-Conversions once they stopped being experimental), or does it stay gated until a Debug/Tax Policy Annual Details column + state-creep UI land? Option B untouched.
 - **Independent:** modifies `calculateTaxes()` which is already isolated
 
 ---

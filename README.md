@@ -83,6 +83,7 @@ A California resident built these with [Google gemini](https://gemini.google.com
   - [Where is cash interest routed?](#where-is-cash-interest-routed)
   - [Does the brokerage account for "cash"?](#does-the-brokerage-account-for-cash)
   - [How do I find the most efficient Roth conversions?](#how-do-i-find-the-most-efficient-roth-conversions)
+  - [Why does the Optimizer say converting never helps?](#why-does-the-optimizer-say-converting-never-helps)
   - [Is the Break-Even Tax Rate Trustworthy?](#is-the-break-even-tax-rate-trustworthy)
 
 --- 
@@ -180,7 +181,10 @@ I use AI to keep track of and categorize possible future enhancements. You can r
 
 #### Recent Fixes / Improvements
 + Cash Reserve has been implemented. Specifying a cash reserve attempts to keep that much cash on hand. The reserves are built from interest and dividends, and only spent if there is no other way to meet annual spending goals.  See the [Cash Reserve handling](#where-is-cash-interest-routed) and related topics in the [FAQ](#frequently-asked-questions).
-+ Great strides have been made in improving the ability to find Break Even Roth conversion strategies. One significant finding is that the BETR (Break Even Tax Rate) proffered by Vanguard has been [proved unreliable](#how-reliable-is-the-break-even-tax-rate) in my modeling. I will continue to provide BETR calculations in Annual Details, but will be removing them from taking up space in the summary bar.
++ Great strides have been made in improving the ability to find Break Even Roth conversion strategies. One significant finding is that the BETR (Break Even Tax Rate) proffered by Vanguard has been [proved unreliable](#how-reliable-is-the-break-even-tax-rate) in my modeling. BETR calculations are still provided per year in Annual Details, but they no longer take up space in the summary bar or the Optimizer table.
++ When the Optimizer finds no worthwhile Roth conversion, it now tells you what would have to change instead of stopping at "nothing helps". It names the future tax rate your plan assumes and can work out the lowest rate at which converting would start to pay. See [Why does the Optimizer say converting never helps?](#why-does-the-optimizer-say-converting-never-helps) in the FAQ.
++ The Optimizer can now suggest converting for a limited number of years and then stopping. It previously only ever tested converting the same amount every year for the rest of the plan, so plans that should convert heavily early and then stop were told to convert nothing at all.
++ The Optimizer's "Conv Savings" column is now called "Tax Paid Δ", because it only counts tax paid during the plan and can look positive on a plan that ends up worse off overall. Break Even remains the column to trust.
 + An arithmetic bug was understating the asset withdrawal rate.
 + Tax creep (increasing or decreasing future tax rates) has been added to the tool, but it's only currently accessible via a special switch.
 + RMD milestone markers now show up on the charts, so you can see at a glance which year RMDs kick in.
@@ -632,6 +636,20 @@ The tool provides a built-in diagnostic called **Stop-Year** that identifies the
    - **Avoid Widow & RMD Tax**: Minimize taxes your heirs will pay
 
 **Key insight:** Break-Even tells you when conversions "paid off"; Stop-Year tells you when to *stop* for maximum final wealth. Generally you'll want to stop both "annual" and "opportunistic" conversions.
+
+### Why does the Optimizer say converting never helps?
+
+Turn on **Optimize Conversions** and you may get a message saying it examined the best strategies and found none where converting more improves the result. That is usually a real answer about your plan rather than a broken feature, and the tool now tells you enough to check it yourself.
+
+The message names the **future tax rate your plan is assuming** (the "Future IRA Tax %" field, which defaults to a rate derived from your own plan). Whether a conversion pays comes down to a comparison: you pay tax now at today's marginal rate to avoid tax later at that future rate. If the future rate you are assuming is not meaningfully higher than what you would pay today, converting is simply a bad trade, and the tool says so.
+
+Click **"What rate would change that?"** and the tool searches for the lowest future tax rate at which converting would start to pay, then reports that rate along with how much it would convert and what you would gain. Using the stock example plan, it reports that conversions start paying at about 43%, against the roughly 30% the plan assumes. Set "Future IRA Tax %" above the reported figure and re-run, and conversion rows appear as promised. If no rate up to 75% makes conversions worthwhile, it says that plainly too.
+
+Three things worth knowing before concluding conversions are useless for you:
+
+- **Your spending rate matters more than your tax rate.** A plan spending heavily relative to its portfolio is consuming the IRA anyway, which leaves little for a conversion to improve. In testing, dropping the example plan's spending was a far stronger lever than any tax assumption.
+- **Check your Cash Reserve setting.** With Cash Reserve off, surplus money sits in cash earning the cash yield, which quietly makes almost anything that moves money out of cash look like a win. A conversion "gain" that disappears once you turn Cash Reserve on was never a conversion gain.
+- **Converting for a few years and then stopping is a different question.** The Optimizer now tests that shape too, and flags any plan it finds with a ⏹ and the year conversions stop. On some plans this is the only conversion strategy that pays at all.
 
 ### Is the Break-Even Tax Rate Trustworthy?
 

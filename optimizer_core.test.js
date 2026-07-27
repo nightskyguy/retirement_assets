@@ -48,6 +48,9 @@ const selectConversionCandidates = core.selectConversionCandidates;
 const rankRowsByObjective = core.rankRowsByObjective;
 const eitherOnMedicareAtStart = core.eitherOnMedicareAtStart;
 const taxCreepFactor = core.taxCreepFactor;
+const breakEvenHeirsRate = core.breakEvenHeirsRate;
+const lowestBreakEvenHeirsRate = core.lowestBreakEvenHeirsRate;
+const bestTimeLimitedConversion = core.bestTimeLimitedConversion;
 const buildVariations = core.buildVariations;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 
@@ -1760,6 +1763,89 @@ test('tax creep: reaches Monte Carlo and is path-independent', () => {
         'different inflation paths should still produce different tax totals');
     assert(sumCol(pathA, 'FedTax') > sumCol(flat, 'FedTax'), 'MC path pays the federal creep');
     assert(sumCol(pathA, 'StateTax') > sumCol(flat, 'StateTax'), 'MC path pays the state creep');
+});
+
+// ── PR1: break-even heirs rate + time-limited conversions ─────────────────────
+// All expected values below were captured from the real engine before being pinned here.
+const CONV_BASE = { ...BASE, IRA1: 1500000, spendGoal: 90000,
+                    growth: 0.06, inflation: 0.03, cpi: 0.028 };
+const FIXED_OV    = { strategy: 'fixed', nYears: 20 };
+const FIXEDPCT_OV = { strategy: 'fixedpct', iraWithdrawPct: 0.05 };
+
+test('breakEvenHeirsRate: no IRA means no threshold', () => {
+    assert(breakEvenHeirsRate({ ...CONV_BASE, IRA1: 0, IRA2: 0 }, FIXED_OV, {}) === null,
+        'a plan with no IRA has nothing to convert, so there is no break-even rate');
+});
+
+test('breakEvenHeirsRate: returns null when no rate up to the ceiling pays', () => {
+    // Honest "never" is a real answer, not a missing one -- the banner depends on telling them apart.
+    assert(breakEvenHeirsRate(CONV_BASE, FIXED_OV, { maxRate: 0.06 }) === null,
+        'a ceiling below the true threshold must report null rather than guessing');
+});
+
+test('breakEvenHeirsRate: the rate/amount pair it reports is self-consistent', () => {
+    const r = breakEvenHeirsRate(CONV_BASE, FIXEDPCT_OV, {});
+    assert(r !== null, 'this fixture does have a threshold');
+    assertNear(r.rate, 0.57, 'break-even heirs rate for the fixedpct fixture', 0.011);
+    assert(r.optConv === 75000, `expected a $75,000 conversion at the threshold, got ${r.optConv}`);
+    // The rounding nudge exists so a reported rate never comes back with a $0 conversion.
+    assert(r.optConv > 0, 'a reported rate must always carry a real conversion amount');
+    assert(r.gain > 0, 'and a positive gain');
+});
+
+test('breakEvenHeirsRate: the predicate is monotonic in the rate (binary search precondition)', () => {
+    // The search is a binary search, which is only valid because "conversions pay" never turns
+    // back off as the assumed future rate rises. nominalTaxRate is a bracket STEP function, so
+    // this is a measured property, not an obvious one -- if a change breaks it the search starts
+    // returning wrong thresholds silently. This test is the tripwire.
+    const seq = [];
+    for (let r = 0.05; r <= 0.75001; r += 0.025) {
+        seq.push(breakEvenHeirsRate(CONV_BASE, FIXEDPCT_OV, { maxRate: +r.toFixed(4) }) ? 1 : 0);
+    }
+    const first = seq.indexOf(1);
+    assert(first === -1 || seq.slice(first).every(x => x === 1),
+        `once conversions start paying they must keep paying as the rate rises; got ${seq.join('')}`);
+});
+
+test('lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidate does not have', () => {
+    // The whole reason this searches the pool: the top-ranked strategy is often the one LEAST
+    // willing to convert, so asking only it would report "never" while another candidate pays.
+    assert(breakEvenHeirsRate(CONV_BASE, FIXED_OV, {}) === null,
+        'precondition: the fixed candidate alone reports no threshold');
+    const best = lowestBreakEvenHeirsRate(CONV_BASE, [
+        { overrides: FIXED_OV,    terminalIRA: 100000, label: 'fixed' },
+        { overrides: FIXEDPCT_OV, terminalIRA: 500000, label: 'fixedpct' }
+    ], {});
+    assert(best !== null, 'the pool search must find the candidate that does have a threshold');
+    assertNear(best.rate, 0.57, 'pool-wide lowest break-even heirs rate', 0.011);
+    assert(best.label === 'fixedpct', `expected the fixedpct candidate to win, got ${best.label}`);
+});
+
+test('bestTimeLimitedConversion: finds a convert-then-stop plan and reports it in calendar years', () => {
+    const tl = bestTimeLimitedConversion(CONV_BASE, FIXED_OV, { futureIRARate: 0.24 });
+    assert(tl !== null, 'this fixture has a paying time-limited conversion');
+    assert(tl.amount === 93750, `expected $93,750/yr, got ${tl.amount}`);
+    assert(tl.stopIndex === 1, `expected a 1-year conversion window, got ${tl.stopIndex}`);
+    assert(tl.stopYearCalendar === 2026,
+        `stop year must be a calendar year the sidebar can hold, got ${tl.stopYearCalendar}`);
+    assert(tl.gain > 0, 'and it must actually beat converting nothing');
+});
+
+test('bestTimeLimitedConversion: its answer survives being replayed through the sidebar inputs', () => {
+    // The PF8 failure mode: the optimizer scoring one plan while clicking the row runs another.
+    // A per-year extraConversionAmount ARRAY and the equivalent scalar + convEndYear are NOT
+    // interchangeable in this engine, so the search scores the loadable form and this pins it.
+    const tl = bestTimeLimitedConversion(CONV_BASE, FIXED_OV, { futureIRARate: 0.24 });
+    const asLoaded = simulate({ ...CONV_BASE, ...FIXED_OV, extraConversionAmount: tl.amount,
+                                convEndYear: tl.stopYearCalendar, convEndMode: 'extra' });
+    const noConv = simulate({ ...CONV_BASE, ...FIXED_OV, extraConversionAmount: 0 });
+    const gain = baselineScoreOf(asLoaded, 0.24) - baselineScoreOf(noConv, 0.24);
+    assertNear(gain, tl.gain, 'gain reproduced from the loadable inputs', 1);
+});
+
+test('bestTimeLimitedConversion: no IRA means nothing to find', () => {
+    assert(bestTimeLimitedConversion({ ...CONV_BASE, IRA1: 0, IRA2: 0 }, FIXED_OV,
+        { futureIRARate: 0.24 }) === null, 'no IRA, no conversion');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

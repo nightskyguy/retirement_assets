@@ -865,7 +865,16 @@ function beginYear(sim, yr) {
     // Early: preMonths=1, postMonths=11. Late: preMonths=11, postMonths=1.
     // Year 0: use strategy flag (bracket or explicit extraConv). Year 1+: prior year's actual conversion amount.
     // Do NOT use convertExcessToRoth as a trigger — it is hardcoded true in the optimizer and does not guarantee a conversion fires.
-    const _stratImpliesConversion = inputs.strategy === 'bracket' || inputs.strategy === 'aca' || (inputs.extraConversionAmount ?? 0) > 0;
+    // Year 0 must be decided from the conversion SCHEDULED for year 0, never from the raw
+    // extraConversionAmount field: the field has two shapes (scalar or per-year array — a
+    // multi-element array coerces to NaN, so `> 0` silently reported "no conversion") and three
+    // suppression flags can zero it (convEndYear, _cfSuppressConversions,
+    // _cfSuppressConversionsFromYear). Reading it through the same accessor applyExtraConversion
+    // uses is what makes a per-year array and the equivalent scalar + convEndYear the same plan.
+    // Years 1+ read the prior year's realized conversion, which was already shape-safe.
+    const _stratImpliesConversion =
+          ((inputs.strategy === 'bracket' || inputs.strategy === 'aca') && !_convSuppressedThisYear(inputs, 0))
+       || _extraConvAmountFor(inputs, 0) > 0;
     const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
     yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
     const yearTiming   = yr._useEarly ? 'early' : 'late';
@@ -1527,6 +1536,17 @@ function _extraConvSuppressedThisYear(inputs, y) {
     return _convSuppressedThisYear(inputs, y) || _convEndReached(inputs, y);
 }
 
+// The extra conversion actually SCHEDULED for year y: array element or scalar, zeroed by any
+// active suppression. Single source for both the withdrawal-timing trigger (Early/Late) and the
+// conversion itself, so a per-year array and the equivalent scalar + convEndYear can no longer
+// disagree. Pure (inputs + y), safe to call from the early per-year setup phase.
+function _extraConvAmountFor(inputs, y) {
+    if (_extraConvSuppressedThisYear(inputs, y)) return 0;
+    return Array.isArray(inputs.extraConversionAmount)
+        ? (inputs.extraConversionAmount[y] ?? 0)
+        : (inputs.extraConversionAmount ?? 0);
+}
+
 // Roth (convertExcessToRoth), replace excess Cash draws, apply withdrawals to balances, and
 // reinvest whatever remains (Brokerage under Cyclic, otherwise Cash).
 function routeSurplusAndConvert(sim, yr) {
@@ -1683,10 +1703,7 @@ function cfRefundIRA(sim, yr, netTarget) {
 function applyExtraConversion(sim, yr) {
     const { inputs, balance, birthyear1, birthyear2 } = sim;
     const y = yr.y;
-    const _extraConvReq = _extraConvSuppressedThisYear(inputs, y) ? 0
-        : Array.isArray(inputs.extraConversionAmount)
-            ? (inputs.extraConversionAmount[y] ?? 0)
-            : (inputs.extraConversionAmount ?? 0);
+    const _extraConvReq = _extraConvAmountFor(inputs, y);
     yr.extraConvGross = 0;
     yr.extraConvCashTax = 0;
     let incrementalExtraConvTax = 0;
@@ -2364,7 +2381,10 @@ function afterTaxWealthOfLogRow(r, futureIRATaxRate) {
 // mode 'all'   -> stop ALL conversion activity after the cutoff (surplus + extra), via the
 //                 internal _cfSuppressConversionsFromYear cutoff.
 // mode 'extra' -> stop ONLY the Extra Annual Roth Conversion (strategy bracket-fill keeps
-//                 running), via a zero-tail extraConversionAmount array. Empirically weaker.
+//                 running), via the public convEndYear + convEndMode:'extra' pair. Empirically
+//                 weaker. (Was a zero-tail extraConversionAmount array; that array mis-fired the
+//                 year-0 Early/Late withdrawal-timing trigger, so every cutoff it scored was a
+//                 differently-timed plan than the one the user could load.)
 //
 // Scores each cutoff on afterTaxWealthOfLogRow of the final row, the same basis as Break Even
 // (honors the user's Marginal Heirs Tax Rate when set, else row totalWealth). Any stop-year the
@@ -2391,10 +2411,16 @@ function bestConversionStopYear(inputs, opts) {
         if (mode === 'all') {
             return simulate({ ...base, _cfSuppressConversionsFromYear: cut, computeOC });
         }
-        const scalar = Array.isArray(base.extraConversionAmount) ? null : (base.extraConversionAmount ?? 0);
-        const arr = new Array(n + 2).fill(0).map((_, y) => y < cut
-            ? (scalar != null ? scalar : (base.extraConversionAmount[y] ?? 0)) : 0);
-        return simulate({ ...base, extraConversionAmount: arr, computeOC });
+        // Cut via the PUBLIC convEndYear/convEndMode pair — the same representation the sidebar
+        // holds and bestTimeLimitedConversion scores — so the plan scored here is the plan the
+        // user gets. cut 0 -> start-1, suppressed from year 0; cut n -> never reached, exactly
+        // the untruncated scalar plan. The array branch survives only for a caller that already
+        // passed a per-year array (no UI path does); it is equivalent since _extraConvAmountFor.
+        if (Array.isArray(base.extraConversionAmount)) {
+            const arr = new Array(n + 2).fill(0).map((_, y) => y < cut ? (base.extraConversionAmount[y] ?? 0) : 0);
+            return simulate({ ...base, extraConversionAmount: arr, computeOC });
+        }
+        return simulate({ ...base, convEndYear: start + cut - 1, convEndMode: 'extra', computeOC });
     };
 
     let bestCut = 0, bestATNW = -Infinity, atnwNoConv = 0, atnwNoStop = 0;
@@ -2805,13 +2831,12 @@ function bestTimeLimitedConversion(baseInputs, strategyOverrides = {}, opts = {}
     if (!n) return null;
     const startYear = probe.log[0].year;
 
-    // Scored through convEndYear/convEndMode -- the SAME representation the sidebar holds -- rather
-    // than a per-year extraConversionAmount array. The two are not interchangeable: an array of
-    // [amount x cut, then 0] and the equivalent scalar + convEndYear produce the same per-year
-    // conversion dollars but diverge elsewhere in the log from year one (measured: RMDwd 16,620 vs
-    // 15,771 in the opening year). Evaluating the loadable form means a ⇌ row and the plan the user
-    // gets when they click it are the same plan by construction -- the PF8 failure mode, where the
-    // optimizer and the single-scenario tab silently scored two different plans under one label.
+    // Scored through convEndYear/convEndMode -- the SAME representation the sidebar holds -- so a ⇌
+    // row and the plan the user gets when they click it are the same plan by construction (the PF8
+    // failure mode, where the optimizer and the single-scenario tab silently scored two different
+    // plans under one label). A per-year [amount x cut, then 0] array is now numerically equivalent
+    // (_extraConvAmountFor made the year-0 timing trigger read the scheduled conversion instead of
+    // the raw field); the loadable form is still the one to score, since it needs no translation.
     const scoreAt = (amount, cut) => {
         const res = simulate({ ...baseInputs, ...strategyOverrides,
                                extraConversionAmount: amount,

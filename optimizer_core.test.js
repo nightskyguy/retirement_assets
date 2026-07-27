@@ -1001,9 +1001,12 @@ test('diagnoseConvBreakEvenFailure: boundary — pinpoints the specific conversi
     const d = diagnoseConvBreakEvenFailure(inputs, r.log);
     assert(d && d.outcome === 'boundary', `expected a boundary diagnosis, got ${JSON.stringify(d)}`);
     assert(d.breakingYear === 2031, `expected the 6th (2031) conversion to be the breaking one, got ${d.breakingYear}`);
-    assertNear(d.breakingAmount, 355478, 'breaking conversion amount', 5);
+    // 355,562 not the pre-fix 355,478: this fixture drives conversions through a per-year ARRAY,
+    // whose year 0 used to be mis-timed Late(Spend) because `extraConversionAmount > 0` coerced a
+    // multi-element array to NaN. Re-derived from the engine after _extraConvAmountFor.
+    assertNear(d.breakingAmount, 355562, 'breaking conversion amount', 5);
     assert(d.lastSustainableYear === 2030, `expected 2030 as the last sustainable conversion year, got ${d.lastSustainableYear}`);
-    assert(d.lastSustainableBEYear === 2041, `expected the truncated plan to break even in 2041, got ${d.lastSustainableBEYear}`);
+    assert(d.lastSustainableBEYear === 2042, `expected the truncated plan to break even in 2042, got ${d.lastSustainableBEYear}`);
 
     // Invariant: re-running truncated exactly at the reported boundaries must reproduce them.
     const convIdxs = [];
@@ -1113,6 +1116,54 @@ test('P24: bestConversionStopYear strips any pre-set convEndYear (searches from 
     assert(fresh.stopYearCalendar === preStopped.stopYearCalendar && fresh.stopIndex === preStopped.stopIndex,
         'the search must ignore an already-set convEndYear and explore from full conversions');
     assertNear(fresh.atnwStop, preStopped.atnwStop, 'stripped-baseline search scores must match', 1);
+});
+
+// ── Conversion-schedule representation equivalence ────────────────────────────
+// A per-year extraConversionAmount ARRAY and the equivalent scalar + convEndYear/convEndMode:'extra'
+// schedule the same dollars, so they must BE the same plan. They were not: the year-0 Early(Conv) /
+// Late(Spend) withdrawal-timing trigger read `(inputs.extraConversionAmount ?? 0) > 0`, and a
+// multi-element array coerces to NaN, so the array form silently ran Late(Spend) — 11 months of
+// pre-withdrawal growth instead of 1, moving the RMD basis and every downstream balance. The same
+// expression also ignored suppression, so a stop year already in the past still claimed a
+// conversion year. _extraConvAmountFor() is now the single accessor for both the trigger and the
+// conversion. These three tests fail if any of that is reverted.
+
+const EQV_BASE = { ...OC_BASE, extraConversionAmount: 0, computeOC: false };
+const EQV_AMT = 87500;
+
+test('representation: array [amt x cut, 0...] === scalar + convEndYear, at cut 0 / interior / n', () => {
+    const n = simulate(EQV_BASE).log.length;
+    for (const cut of [0, 5, n]) {
+        const arr = new Array(n + 2).fill(0).map((_, y) => y < cut ? EQV_AMT : 0);
+        const asArray  = simulate({ ...EQV_BASE, extraConversionAmount: arr });
+        const asLoaded = simulate({ ...EQV_BASE, extraConversionAmount: EQV_AMT,
+                                    convEndYear: EQV_BASE.startInYear + cut - 1, convEndMode: 'extra' });
+        assert(JSON.stringify(asArray.log) === JSON.stringify(asLoaded.log),
+            `cut ${cut}: the array and the loadable scalar+convEndYear form must produce the same log`);
+        assert(asArray.finalNW === asLoaded.finalNW, `cut ${cut}: finalNW must match`);
+    }
+});
+
+test('representation: a full array === the plain scalar (the array must not change the timing)', () => {
+    const n = simulate(EQV_BASE).log.length;
+    const full = simulate({ ...EQV_BASE, extraConversionAmount: new Array(n + 2).fill(EQV_AMT) });
+    const scalar = simulate({ ...EQV_BASE, extraConversionAmount: EQV_AMT });
+    assert(full.log[0].timing === 'Early(Conv)', `a converting year 0 must be Early(Conv), got ${full.log[0].timing}`);
+    assert(JSON.stringify(full.log) === JSON.stringify(scalar.log), 'full array and scalar must be the same plan');
+});
+
+test('representation: a suppressed year 0 is not a conversion year (timing must not claim Early)', () => {
+    const noConv = simulate({ ...EQV_BASE, extraConversionAmount: 0 });
+    assert(noConv.log[0].timing === 'Late(Spend)', 'precondition: no conversion means Late(Spend)');
+    // A stop year at/before the start year — a value the sidebar accepts — suppresses year 0.
+    const past = simulate({ ...EQV_BASE, extraConversionAmount: EQV_AMT,
+                            convEndYear: EQV_BASE.startInYear - 1, convEndMode: 'extra' });
+    assert(JSON.stringify(past.log) === JSON.stringify(noConv.log),
+        'a stop year before the start year must be identical to converting nothing');
+    // Same for the internal cutoff the stop-year search uses at cut 0.
+    const cf = simulate({ ...EQV_BASE, extraConversionAmount: EQV_AMT, _cfSuppressConversionsFromYear: 0 });
+    assert(JSON.stringify(cf.log) === JSON.stringify(noConv.log),
+        'cutting all conversions from year 0 must be identical to converting nothing');
 });
 
 test('P24: afterTaxWealthOfLogRow matches the Break Even block valuation (guards the shared-helper extraction)', () => {

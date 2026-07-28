@@ -28,7 +28,9 @@ function runMCWorker(cfg, onProgress, onComplete) {
             onProgress?.(msg.pct);
         } else if (msg.type === 'results') {
             _mcWorker = null;
-            if (msg.totalMs && msg.numPaths && cfg.variations?.length) {
+            // A stress-only refresh runs a handful of sims; using it to calibrate would wreck the
+            // ms-per-sim estimate the full run's time display depends on.
+            if (!msg.stressOnly && msg.totalMs && msg.numPaths && cfg.variations?.length) {
                 _mcMsPerSim = msg.totalMs / (msg.numPaths * cfg.variations.length);
             }
             onComplete?.(msg);
@@ -43,6 +45,12 @@ function runMCWorker(cfg, onProgress, onComplete) {
     };
 
     _mcWorker.postMessage(cfg);
+}
+
+// True while a worker run is in flight. Callers that want to slip a cheap extra pass in (the
+// stress-only refresh) check this first, because runMCWorker terminates any running worker.
+function _mcWorkerBusy() {
+    return _mcWorker !== null;
 }
 
 function cancelMCWorker() {
@@ -350,16 +358,30 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
     const willRunStress = simulationMode === 'bootstrap';
     const stressCountEstimate = cfg.stressCount ?? 10;
+    // See worker.js for why cfg.stressOnly exists: the main pass is ~numPaths × variations sims and
+    // is far too expensive to re-run on every input change; the stress pass is stressCount × 1.
+    const stressOnly = !!cfg.stressOnly && willRunStress;
     const totalWork = willRunStress ? (cfg.numPaths + stressCountEstimate) : cfg.numPaths;
-    const mainWeight = willRunStress ? cfg.numPaths / totalWork : 1;
+    const mainWeight = stressOnly ? 0 : (willRunStress ? cfg.numPaths / totalWork : 1);
 
-    const main = await runPass(simulationMode === 'bootstrap' ? 'bootstrap' : 'gbm', 0, mainWeight);
-    if (main === null) return; // cancelled mid-pass
+    const main = stressOnly ? null : await runPass(simulationMode === 'bootstrap' ? 'bootstrap' : 'gbm', 0, mainWeight);
+    if (!stressOnly && main === null) return; // cancelled mid-pass
     // Stress runs against ONLY the current withdrawal strategy (mc_tab.js's runMonteCarlo()
     // builds this), not the full variations sweep — falls back to the full array if missing.
     const stressVars = cfg.stressVariations?.length ? cfg.stressVariations : variations;
     const stress = willRunStress ? await runPass('stress', mainWeight, 1 - mainWeight, stressVars) : null;
     if (willRunStress && stress === null) return; // cancelled mid-pass
+
+    if (stressOnly) {
+        onComplete?.({
+            type: 'results',
+            stressOnly: true,
+            years,
+            totalMs: performance.now() - t0,
+            stress: _buildStressMsg(stress),
+        });
+        return;
+    }
 
     const totalMs = performance.now() - t0;
     _mcMsPerSim = totalMs / (main.numPaths * variations.length);
@@ -376,15 +398,20 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         assetRanges:       main.assetRanges,
         inflationStats:    main.inflationStats,
         inputFan:          main.inputFan,
-        stress: stress ? {
-            variations:    stress.varResults,
-            numPaths:      stress.numPaths,
-            assetRanges:   stress.assetRanges,
-            inflationStats: stress.inflationStats,
-            labels:        stress.stressLabels,
-            startYears:    stress.stressStartYears,
-            decadeCAGRs:   stress.stressDecadeCAGRs,
-            decadeInflationCAGRs: stress.stressInflationCAGRs,
-        } : null,
+        stress: _buildStressMsg(stress),
     });
+}
+
+// Shared so the stress-only refresh and the full run cannot drift in shape (mirrors worker.js).
+function _buildStressMsg(stress) {
+    return stress ? {
+        variations:    stress.varResults,
+        numPaths:      stress.numPaths,
+        assetRanges:   stress.assetRanges,
+        inflationStats: stress.inflationStats,
+        labels:        stress.stressLabels,
+        startYears:    stress.stressStartYears,
+        decadeCAGRs:   stress.stressDecadeCAGRs,
+        decadeInflationCAGRs: stress.stressInflationCAGRs,
+    } : null;
 }

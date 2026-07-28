@@ -188,12 +188,15 @@ function resolveCompareRow() {
     if (!OptimizerState.compareRow) OptimizerState.compareSelection = null;
 }
 
-// Row click handler for the ⚖ affordance. Pinning the row that is already pinned clears it.
+// Click handler for the ⚖ compare zone. Clicking whichever row is ALREADY the reference clears the
+// comparison, which is the same thing the "Stop comparing" button does. That includes the ⚓
+// baseline: it is the default reference, so clicking its ⚖ can only mean "put things back", never
+// "pin the thing that is already pinned".
 function toggleCompareRow(id) {
     const results = OptimizerState.results;
     const row = results?.find(r => r._id === id);
     if (!row) return;
-    if (OptimizerState.compareRow === row) {
+    if (deltaReferenceRow() === row) {
         OptimizerState.compareSelection = null;
         OptimizerState.compareIsCurrentPlan = false;
         OptimizerState.compareRow = null;
@@ -218,14 +221,32 @@ function deltaRefDescription() {
         : 'the ⚓ baseline (the strongest plan with no Roth conversions and no cyclic brokerage maneuvering)';
 }
 
-// The ⚖ affordance in the Strategy cell. Filled when this row IS the reference.
+// The ⚖ glyph. Highlighted on whichever row the Δ columns are CURRENTLY measured against, which is
+// the ⚓ baseline until something else is picked -- so the table opens already showing where the
+// comparison point is, rather than looking like the feature is switched off.
 function compareToggleHtml(r) {
-    const pinned = OptimizerState.compareRow === r;
-    const tip = pinned
-        ? 'This row is the comparison reference: every Δ column is measured against it. Click to go back to the ⚓ baseline.'
-        : 'Compare against this row: every Δ column is re-measured against it instead of the ⚓ baseline.';
-    return `<span onclick="event.stopPropagation();toggleCompareRow(${r._id})" title="${tip}" `
-        + `style="cursor:pointer;margin-right:5px;${pinned ? 'font-size:1.15em;' : 'opacity:0.55;'}">⚖</span>`;
+    const isRef = deltaReferenceRow() === r;
+    return `<span style="${isRef ? 'font-size:1.2em;' : 'opacity:0.55;'}">⚖</span>`;
+}
+
+// Click routing for a table cell. The leading ⚖ / outcome / spacer cells select the comparison row;
+// everything else loads the strategy. Keeping them in separate CELLS rather than nesting a small
+// glyph inside the Strategy cell is what makes the two targets hard to hit by accident.
+function cellActionCss(col) {
+    if (col.inert) return 'cursor:default;';
+    return 'cursor:pointer;';
+}
+
+function cellActionAttrs(col, r, loadTitle) {
+    if (col.inert) return '';
+    if (col.compareZone) {
+        const isRef = deltaReferenceRow() === r;
+        const tip = isRef
+            ? 'Every Δ column is currently measured against this row. Click to go back to the ⚓ baseline.'
+            : 'Compare against this row: the ΔNetWealth and ΔTax columns are re-measured from it instead of the ⚓ baseline.';
+        return ` onclick="toggleCompareRow(${r._id})" title="${tip}"`;
+    }
+    return ` onclick="loadOptimizerResult(${r._id})" title="${loadTitle}"`;
 }
 
 // One line above the table that is always saying something: how to start a comparison when none is
@@ -1207,18 +1228,35 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
 function getOptimizerColumns() {
     const inC = () => document.getElementById('show-current-dollars')?.checked;
     const cols = [
+        // compareZone: these cells select the comparison row instead of loading the strategy.
+        // The ⚖ used to be a small glyph inside the Strategy cell, where a near miss loaded the
+        // strategy instead -- a destructive, surprising outcome for a click aimed at a comparison.
+        // Giving it a whole column, extending the zone across the outcome marker, and separating the
+        // two zones with a spacer column makes the two actions hard to confuse.
         {
-            key: 'status', label: '✓',
-            title: 'Plan outcome. 🟢 = every year of the plan was fully funded. 🚨 = the portfolio ran out before the end (the plan failed). Failed plans always sort below successful ones.',
+            key: 'compare', label: '⚖', sortable: false, compareZone: true,
+            title: 'Click to compare every other strategy against this row. The ΔNetWealth and ΔTax columns then measure from it instead of the ⚓ baseline. Click the highlighted one again to go back to the baseline.',
+            getValue: r => compareToggleHtml(r),
+            getSortValue: () => 0
+        },
+        {
+            key: 'status', label: '✓', compareZone: true,
+            title: 'Plan outcome. 🟢 = every year of the plan was fully funded. 🚨 = the portfolio ran out before the end (the plan failed). Failed plans always sort below successful ones.\n\nThis cell is part of the ⚖ compare control, so clicking it selects this row as the comparison instead of loading it.',
             getValue: r => r.totals.success ? '🟢' : '🚨',
             getSortValue: r => r.totals.success ? 1 : 0
         },
         {
+            // Dead space that separates "compare with this row" from "load this row", so a slightly
+            // off click does nothing at all rather than the wrong one of the two.
+            key: 'gap', label: '', sortable: false, compareZone: true, inert: true,
+            title: '',
+            getValue: () => '',
+            getSortValue: () => 0
+        },
+        {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = bracket target unreachable. Click any row to load it, or ⚖ to measure every Δ column against it.',
-            // ⚖ has its own stopPropagation'd handler so it does not also fire the row's load-this-
-            // strategy click. Rendered per row so any row can become the comparison reference.
-            getValue: r => compareToggleHtml(r) + r._strategyLabel,
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = bracket target unreachable. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
+            getValue: r => r._strategyLabel,
             getSortValue: r => r._strategyLabel
         },
         {
@@ -1428,6 +1466,10 @@ function renderOptimizerTable(results) {
         const active = sortState.colKey === col.key;
         const arrow = active ? (sortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
         const tip = col.title ? ` title="${col.title.replace(/"/g, '&quot;')}"` : '';
+        // The ⚖ and spacer columns have nothing meaningful to sort on.
+        if (col.sortable === false) {
+            return `<div style="${_hCellStyle}cursor:default;"${tip}>${col.label}</div>`;
+        }
         return `<div style="${_hCellStyle}"${tip} onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</div>`;
     }).join('');
 
@@ -1464,7 +1506,7 @@ function renderOptimizerTable(results) {
                         : isWinner     ? 'font-weight:bold;'
                         : (r._isReverseOptimized || r._isConvOptimized || r._isSpendOptimized) ? 'font-style:italic;' : '';
             const bgCss = bg ? `background-color:${bg};` : '';
-            return `<div style="padding:4px 8px;cursor:pointer;${bgCss}${extra}" onclick="loadOptimizerResult(${r._id})" title="${rowTitle}">${col.getValue(r)}</div>`;
+            return `<div style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${col.getValue(r)}</div>`;
         }).join('');
         return `<div style="display:contents;">${cells}</div>`;
     }).join('');
@@ -1473,16 +1515,16 @@ function renderOptimizerTable(results) {
     // sticky under the header; its Δ columns read 0 by definition.
     let baselineRowHtml = '';
     if (baselineRow) {
-        const _bCell = 'padding:4px 8px;cursor:pointer;background-color:#dbeafe;font-weight:bold;position:sticky;top:30px;z-index:1;';
+        const _bCell = 'padding:4px 8px;background-color:#dbeafe;font-weight:bold;position:sticky;top:30px;z-index:1;';
         const bTitle = 'BASELINE — the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s Δ columns are measured against this. Click to load it.';
         baselineRowHtml = '<div style="display:contents;" id="opt-baseline-row">' + columns.map(col => {
             let v;
-            if (col.key === 'strategy')      v = compareToggleHtml(baselineRow) + '⚓ BASELINE — ' + baselineRow._strategyLabel;
+            if (col.key === 'strategy')      v = '⚓ BASELINE — ' + baselineRow._strategyLabel;
             // Zero only when the baseline IS the reference. With a compare row pinned the baseline
             // has a real Δ like every other row, and printing 0 would be a lie.
             else if ((col.key === 'dNW' || col.key === 'dTax') && !OptimizerState.compareRow) v = '0';
             else v = col.getValue(baselineRow);
-            return `<div style="${_bCell}" onclick="loadOptimizerResult(${baselineRow._id})" title="${bTitle}">${v}</div>`;
+            return `<div style="${_bCell}${cellActionCss(col)}"${cellActionAttrs(col, baselineRow, bTitle)}>${v}</div>`;
         }).join('') + '</div>';
     }
 
@@ -1498,7 +1540,7 @@ function renderOptimizerTable(results) {
         const curInfeas = currentRow._isBracketInfeasible || currentRow._isACAUntenable;
         const _cBg = curFailed ? '#fde0e0' : curInfeas ? '#e8e8e8' : '#fff3cd';
         const _cExtra = curFailed ? 'opacity:0.85;' : curInfeas ? 'text-decoration:line-through;opacity:0.7;' : '';
-        const _cCell = `padding:4px 8px;cursor:pointer;background-color:${_cBg};font-weight:bold;position:sticky;top:60px;z-index:1;${_cExtra}`;
+        const _cCell = `padding:4px 8px;background-color:${_cBg};font-weight:bold;position:sticky;top:60px;z-index:1;${_cExtra}`;
         const cTitle = 'YOUR PLAN — the strategy and settings currently in the sidebar, simulated exactly as configured '
             + '(conversions on or off as you have them, your Extra Conversion, your stop year). Every swept row runs with '
             + 'conversions forced on, so none of them is this plan. Click to reload it.'
@@ -1506,7 +1548,7 @@ function renderOptimizerTable(results) {
             + (curInfeas ? ' This plan\'s bracket/ACA target cannot actually be held.' : '');
         currentRowHtml = '<div style="display:contents;" id="opt-current-row">' + columns.map(col => {
             const v = col.key === 'strategy' ? 'CURRENT — ' + currentRow._strategyLabel : col.getValue(currentRow);
-            return `<div style="${_cCell}" onclick="loadOptimizerResult(${currentRow._id})" title="${cTitle}">${v}</div>`;
+            return `<div style="${_cCell}${cellActionCss(col)}"${cellActionAttrs(col, currentRow, cTitle)}>${v}</div>`;
         }).join('') + '</div>';
     }
 

@@ -111,6 +111,14 @@ place. If a change removes that strategy from the table entirely, the comparison
 baseline. Clicking ⚖ does not load the strategy into the sidebar; clicking anywhere else on the row
 still does.
 
+The ⚖ control has its own column at the start of each row, and the outcome marker beside it is part
+of the same control, with a gap separating both from the rest of the row. It began as a small glyph
+inside the Strategy cell, where a near miss loaded that strategy into the sidebar instead: a
+destructive, surprising result for a click aimed at a comparison. The highlighted ⚖ always marks
+whichever row the columns are currently measured against, which is the ⚓ baseline until you pick
+something else, so the table shows where the comparison point is from the moment it opens. Clicking
+the highlighted one puts everything back, exactly like the Stop comparing button.
+
 ---
 
 ## 11.1387 (behavior change)

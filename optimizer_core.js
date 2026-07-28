@@ -491,8 +491,52 @@ function sumAccounts(obj, keys = ['IRA', 'IRA1', 'IRA2', 'Roth', 'Brokerage', 'C
 
 
 // ============================================================================
-// Social Security Survivor Benefit (SSA formula, FRA = 67)
+// Social Security Survivor Benefit (SSA formula, FRA derived from birth year)
 // ============================================================================
+
+/**
+ * Full Retirement Age in months, per the SSA schedule. FRA is 66 for anyone born 1943-1954, then
+ * rises two months per birth year through 1959, and is 67 for 1960 and later.
+ *
+ * This used to be hard-coded at 67 for everyone, which over-states an early-claiming pre-1955
+ * decedent's survivor benefit (the deceased's PIA is derived by dividing out an early-claim
+ * reduction, and assuming a later FRA makes that reduction look bigger than it was). The app's own
+ * default spouse is born in 1952, so the default scenario was affected.
+ *
+ * Birth years before 1943 are treated as 66. The real schedule steps down to 65 for 1937 and
+ * earlier, but anyone in that range is over 89 today and cannot be a plan's starting spouse.
+ * @param {number} birthYear
+ * @returns {number} FRA expressed in months
+ */
+function fraMonthsForBirthYear(birthYear) {
+    const by = Math.round(+birthYear);
+    if (!Number.isFinite(by) || by <= 1954) return 66 * 12;
+    if (by >= 1960) return 67 * 12;
+    return 66 * 12 + (by - 1954) * 2;
+}
+
+/**
+ * Fraction of a full year's Social Security actually paid in the year the person reaches their
+ * claiming age. Ages in this engine are integers (age = year - birthyear), so the whole claim year
+ * would otherwise be paid in full no matter which month the person was born in.
+ *
+ * A person born in month `bm` reaches their claiming age in month `bm` of that calendar year, so
+ * `12 - bm` months of that year remain: December -> 0, June -> 0.5, January -> 11/12. December is
+ * this app's DEFAULT birth month, so the default scenario books no Social Security at all in the
+ * claim year. That is the correct answer for a December birthday and it is disclosed in the Start
+ * Age tooltip; the default is deliberately not moved, because the birth month also drives QCD 70.5
+ * eligibility (taxengine.js isQCDEligible).
+ *
+ * Not modelled: the mirror case at the other end, where benefits stop the month of death rather
+ * than at the end of the death year.
+ * @param {number} birthMonth 1-12; anything missing or out of range is treated as December.
+ * @returns {number} 0..1
+ */
+function ssFirstYearFraction(birthMonth) {
+    const bm = Number.isFinite(+birthMonth) ? Math.round(+birthMonth) : 12;
+    if (bm < 1 || bm > 12) return 0;
+    return (12 - bm) / 12;
+}
 
 /**
  * Returns the final monthly SS benefit for a surviving spouse.
@@ -501,24 +545,31 @@ function sumAccounts(obj, keys = ['IRA', 'IRA1', 'IRA2', 'Roth', 'Brokerage', 'C
  * @param {number} userMonthlyBenefit   - Deceased's monthly benefit at their claiming age
  * @param {number} spouseClaimAge       - Age the survivor claims their benefit
  * @param {number} spouseMonthlyBenefit - Survivor's own monthly benefit at their claiming age
+ * @param {number} [userBirthYear]      - Deceased's birth year; sets THEIR FRA (default 1960+, i.e. 67)
+ * @param {number} [spouseBirthYear]    - Survivor's birth year; sets THEIR FRA
  * @returns {number} Monthly dollar amount the survivor receives
  */
 function calculateSurvivorBenefit(
     userAgeAtDeath, userClaimAge, userMonthlyBenefit,
-    spouseClaimAge, spouseMonthlyBenefit
+    spouseClaimAge, spouseMonthlyBenefit,
+    userBirthYear, spouseBirthYear
 ) {
-    const FRA_MONTHS = 67 * 12;
+    // Two different people, two different FRAs. The deceased's is what their own benefit at claim
+    // age is unwound against; the survivor's is what their early-claim reduction is measured from.
+    // A single hard-coded 67 for both was wrong for anyone born before 1960 on either side.
+    const userFRAMonths   = fraMonthsForBirthYear(userBirthYear   ?? 1960);
+    const spouseFRAMonths = fraMonthsForBirthYear(spouseBirthYear ?? 1960);
     const userClaimMonths  = Math.round(userClaimAge  * 12);
     const userDeathMonths  = Math.round(userAgeAtDeath * 12);
     const spouseClaimMonths = Math.round(Math.max(spouseClaimAge, 60) * 12);
 
     // Step 1: Derive deceased's PIA at FRA from their benefit at claiming age
     let userPIA;
-    if (userClaimMonths >= FRA_MONTHS) {
-        const delayedMonths = userClaimMonths - FRA_MONTHS;
+    if (userClaimMonths >= userFRAMonths) {
+        const delayedMonths = userClaimMonths - userFRAMonths;
         userPIA = userMonthlyBenefit / (1 + delayedMonths * (0.08 / 12));
     } else {
-        const reductionMonths = FRA_MONTHS - userClaimMonths;
+        const reductionMonths = userFRAMonths - userClaimMonths;
         const reductionFactor = reductionMonths <= 36
             ? reductionMonths * (5 / 9 / 100)
             : (36 * (5 / 9 / 100)) + ((reductionMonths - 36) * (5 / 12 / 100));
@@ -534,11 +585,13 @@ function calculateSurvivorBenefit(
 
     // Step 3: Apply survivor's early-claiming reduction if before FRA
     let rawSurvivorBenefit;
-    if (spouseClaimMonths >= FRA_MONTHS) {
+    if (spouseClaimMonths >= spouseFRAMonths) {
         rawSurvivorBenefit = deceasedBaseline;
     } else {
-        const totalPossibleEarlyMonths = FRA_MONTHS - 720; // 67→60 = 84 months
-        const earlyMonths = FRA_MONTHS - spouseClaimMonths;
+        // The 28.5% maximum reduction is spread across the survivor's own 60-to-FRA span, so the
+        // span shortens with an earlier FRA: 84 months at FRA 67, 72 at FRA 66.
+        const totalPossibleEarlyMonths = spouseFRAMonths - 720;
+        const earlyMonths = spouseFRAMonths - spouseClaimMonths;
         rawSurvivorBenefit = deceasedBaseline * (1 - (earlyMonths / totalPossibleEarlyMonths) * 0.285);
     }
 
@@ -758,6 +811,13 @@ function buildSimYearLogRecord(p) {
         // Tax-rate creep multipliers actually applied this year (1 = today's statutory rates).
         '-fedRateCreep': p.fedRateCreep,
         '-stateRateCreep': p.stateRateCreep,
+        // Leading '-' keeps these out of Annual Details (optimizer_ui.js filters on it). They mark
+        // the first year Social Security money actually arrives, which computeMilestones turns into
+        // chart markers. With the default December birth month this is the year AFTER the age
+        // crossing, because the crossing year prorates to zero months.
+        '-ssStart1': p.ssStart1,
+        '-ssStart2': p.ssStart2,
+        '-ssStartSurvivor': p.ssStartSurvivor,
         MAGI: p.tax.MAGI,
         'NominalRate%': p.nominalTaxRate,
         'FedCap': p.tax.fedLimit,
@@ -963,8 +1023,14 @@ function computeIncome(sim, yr) {
 
     // 2. Base Income
     let ssReduction = (inputs.ssFailYear > 2000 && sim.currentYear >= inputs.ssFailYear) ? inputs.ssFailPct : 1;
-    let potentialS1 = (yr.age1 >= inputs.ss1Age) ? inputs.ss1 * sim.cpiRate * ssReduction : 0;
-    let potentialS2 = (yr.age2 >= inputs.ss2Age) ? inputs.ss2 * sim.cpiRate * ssReduction : 0;
+    // Claim-year proration. Ages here are integers, so the first year a person qualifies is the one
+    // where age === ceil(claimAge); only that year is scaled, every later year is paid in full.
+    const firstYear1 = yr.age1 === Math.ceil(inputs.ss1Age);
+    const firstYear2 = yr.age2 === Math.ceil(inputs.ss2Age);
+    const ssFrac1 = firstYear1 ? ssFirstYearFraction(inputs.birthmonth1) : 1;
+    const ssFrac2 = firstYear2 ? ssFirstYearFraction(inputs.birthmonth2) : 1;
+    let potentialS1 = (yr.age1 >= inputs.ss1Age) ? inputs.ss1 * sim.cpiRate * ssReduction * ssFrac1 : 0;
+    let potentialS2 = (yr.age2 >= inputs.ss2Age) ? inputs.ss2 * sim.cpiRate * ssReduction * ssFrac2 : 0;
     yr.s1 = yr.alive1 ? potentialS1 : 0;
     yr.s2 = yr.alive2 ? potentialS2 : 0;
     yr.pension = (yr.age1 >= (inputs.pensionStartAge || 0))
@@ -978,23 +1044,91 @@ function computeIncome(sim, yr) {
             // Person 2 (spouse) is survivor
             rawSurvivorMonthly = calculateSurvivorBenefit(
                 inputs.die1, inputs.ss1Age, inputs.ss1 / 12,
-                inputs.ss2Age, inputs.ss2 / 12
+                inputs.ss2Age, inputs.ss2 / 12,
+                birthyear1, birthyear2
             );
             yr.pension = yr.pension * (inputs.survivorPct / 100);
         } else {
             // Person 1 (user) is survivor
             rawSurvivorMonthly = calculateSurvivorBenefit(
                 inputs.die2, inputs.ss2Age, inputs.ss2 / 12,
-                inputs.ss1Age, inputs.ss1 / 12
+                inputs.ss1Age, inputs.ss1 / 12,
+                birthyear2, birthyear1
             );
         }
         const survivorAge      = yr.alive1 ? yr.age1 : yr.age2;
         const survivorStartAge = yr.alive1 ? inputs.ss1Age : inputs.ss2Age;
-        yr.s1 = survivorAge >= survivorStartAge
-            ? rawSurvivorMonthly * 12 * sim.cpiRate * ssReduction
+        const survivorBirthMo  = yr.alive1 ? inputs.birthmonth1 : inputs.birthmonth2;
+        // Same claim-year proration for the survivor's own first paying year. A survivor who was
+        // already collecting before the death is past their claim year and is unaffected.
+        const survivorFirstYear = survivorAge === Math.ceil(survivorStartAge);
+        const survivorFrac = survivorFirstYear ? ssFirstYearFraction(survivorBirthMo) : 1;
+        const survivorPay = survivorAge >= survivorStartAge
+            ? rawSurvivorMonthly * 12 * sim.cpiRate * ssReduction * survivorFrac
             : 0;
+
+        // A single filer reaches this branch too (no spouse means alive2 is false from year one),
+        // and for them yr.s1 is simply their OWN benefit -- calculateSurvivorBenefit's higher-of
+        // rule returns it when the notional spouse's benefit is zero. Only flag a real widowing,
+        // or a single filer's chart would say their survivor benefit had begun.
+        yr.isSurvivorSS = birthyear2 > 0;
+
+        // DEATH-YEAR BLEND. `alive` is `age <= die`, so someone is alive through the whole year they
+        // reach `die` and the first survivor year is `age === die + 1`. Treat the death as falling
+        // in the DECEASED's birth month of that year: the months before it paid both spouses' own
+        // benefits, the months after pay the survivor benefit. Paying the survivor amount for all
+        // twelve months (what this used to do) understates the year, because the survivor benefit is
+        // only the higher of the two, never their sum.
+        const deceasedIsP1  = !yr.alive1;
+        const deceasedAge   = deceasedIsP1 ? yr.age1 : yr.age2;
+        const deceasedDie   = deceasedIsP1 ? inputs.die1 : inputs.die2;
+        const deceasedBirthMo = deceasedIsP1 ? inputs.birthmonth1 : inputs.birthmonth2;
+        // birthyear2 > 0 keeps single filers out: their notional spouse is "not alive" from year one
+        // and would otherwise look like a death in whichever year the arithmetic happened to line up.
+        const isDeathYear = birthyear2 > 0 && deceasedAge === deceasedDie + 1;
+        // ssFirstYearFraction is (12 - bm) / 12 -- here that is the share of the year AFTER the
+        // death, exactly as it is the share after a claim in the claim-year case.
+        const afterDeath  = isDeathYear ? ssFirstYearFraction(deceasedBirthMo) : 1;
+        const beforeDeath = isDeathYear ? 1 - afterDeath : 0;
+
+        yr.s1 = survivorPay * afterDeath + beforeDeath * (potentialS1 + potentialS2);
         yr.s2 = 0;
+        // The milestone latch reads this rather than yr.s1: in a death year yr.s1 can be non-zero
+        // purely from the before-death months while the survivor benefit itself has not started
+        // (the survivor has not reached their own claiming age), and that is not a survivor start.
+        yr._survivorPay = survivorPay * afterDeath;
     }
+
+    // Milestone flags for the charts: the first year money actually ARRIVES, which with the default
+    // December birth month is the year AFTER the age crossing (that year prorates to zero). Latched
+    // on `sim` so only the first such year is marked. The survivor benefit is tracked separately
+    // because the engine folds it into yr.s1 regardless of which spouse survived.
+    // The latch stores the YEAR rather than a boolean because computeIncome runs more than once for
+    // the same simulated year (the engine's later passes re-derive income). A boolean latch marks
+    // the row on the first call and then clears it on the second, so nothing ever reaches the log.
+    // yr.y > 0 for the same reason rmdCross requires a previous row: in the plan's first year there
+    // is nothing to compare against, so "benefit appears" cannot be told apart from "benefit was
+    // already being paid before the plan started". The app's own default spouse claimed years before
+    // the start year, and without this guard their chart said their Social Security began in year 0.
+    // The cost is that a plan starting exactly in someone's first paying year gets no marker, which
+    // is the same trade the RMD markers already make.
+    // The test is "was zero last year, is positive this year", not merely "is positive", so someone
+    // already drawing benefits when the plan opens is not announced as starting in year 0 (or in
+    // year 1, which a first-positive-year test would do instead).
+    const own1 = yr.isSurvivorSS ? 0 : yr.s1;
+    const own2 = yr.isSurvivorSS ? 0 : yr.s2;
+    const surv = yr.isSurvivorSS ? (yr._survivorPay ?? yr.s1) : 0;
+    if (yr.y > 0) {
+        if (sim._ssStarted1 == null && own1 > 0 && !(sim._ssPrev1 > 0)) sim._ssStarted1 = sim.currentYear;
+        if (sim._ssStarted2 == null && own2 > 0 && !(sim._ssPrev2 > 0)) sim._ssStarted2 = sim.currentYear;
+        if (sim._ssStartedSurvivor == null && surv > 0 && !(sim._ssPrevSurv > 0)) sim._ssStartedSurvivor = sim.currentYear;
+    }
+    sim._ssPrev1 = own1;
+    sim._ssPrev2 = own2;
+    sim._ssPrevSurv = surv;
+    yr['-ssStart1'] = sim._ssStarted1 === sim.currentYear;
+    yr['-ssStart2'] = sim._ssStarted2 === sim.currentYear;
+    yr['-ssStartSurvivor'] = sim._ssStartedSurvivor === sim.currentYear;
     yr.fixedInc = yr.s1 + yr.s2;					// Social Security
     yr.taxableInc = yr.pension;				// Pensions, W2, RMDs, IRA withdrawals, wdBrokerage
 
@@ -2024,6 +2158,7 @@ function logYear(sim, yr) {
         surplusToBrokerage: yr.surplusToBrokerage, cashBreach: yr.cashBreach,
         grossUpIRA: yr.grossUpIRA, grossUpTax: yr.grossUpTax, extraConvCashTax: yr.extraConvCashTax,
         fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep,
+        ssStart1: yr['-ssStart1'], ssStart2: yr['-ssStart2'], ssStartSurvivor: yr['-ssStartSurvivor'],
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
         yearInflows: yr._yearInflows, wdRate: yr._wdRate,
         useEarly: yr._useEarly, timingReason: yr.timingReason,
@@ -3190,7 +3325,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, taxCreepFactor, buildVariations, sameStrategySelection, offGridParamFor };
+    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, taxCreepFactor, buildVariations, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

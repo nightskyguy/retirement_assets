@@ -436,6 +436,13 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // prevPortfolio replaced the old gkPrevPortfolio/prevTotalWealth pair. GK always used the raw
     // balance sum, so merging the two fields must not move its output by a cent. The expected
     // values below were captured from a run made BEFORE that merge.
+    //
+    // Re-derived once since, when Social Security gained claim-year proration: this fixture claims
+    // at 70 with a January birth month for person 1 (11/12 of that year) and June for person 2
+    // (1/2), so the two claim years now pay less and everything downstream shifts. Spend
+    // 7,969,501.955988 -> 7,935,798.156794, tax 2,154,586.451134 -> 2,140,785.745597, final NW
+    // 9,955,429.693910 -> 9,920,517.469072. The guardrail-adjustment count is unchanged at 4, which
+    // is what this test is actually guarding.
     const gk = simulate({
         ...BASE, strategy: 'gk', nYears: 30,
         birthyear1: 1960, die1: 92, birthyear2: 1962, birthmonth2: 6, die2: 94, hasSpouse: true,
@@ -445,9 +452,9 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
         spendGoal: 140000, inflation: 0.025, cpi: 0.025, growth: 0.06,
         cashYield: 0.02, dividendRate: 0.02,
     });
-    assertNear(gk.totals.spend, 7969501.955988, 'GK total spend', 0.01);
-    assertNear(gk.totals.tax, 2154586.451134, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 9955429.693910, 'GK final net worth', 0.01);
+    assertNear(gk.totals.spend, 7935798.156165, 'GK total spend', 0.01);
+    assertNear(gk.totals.tax, 2141499.763082, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 9924288.129575, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 4,
         `Expected the same 4 guardrail adjustments as the pre-merge run, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
@@ -2002,6 +2009,223 @@ test('earliestbe: a swept row simulated with computeOC actually reports a break-
     assert(conv.totals.convBEYear != null, 'a converting row must report a break-even year');
     const plain = simulate({ ...OC_BASE, extraConversionAmount: 50000, computeOC: false });
     assert(plain.totals.convBEYear == null, 'and without computeOC it stays null (the old behavior)');
+});
+
+// ── Social Security claim-year proration + start milestones ───────────────────
+// Ages in the engine are integers, so before this a December claimant booked a full year of
+// benefits in the year they turned their claiming age. Expected values below were read off the
+// real engine and then hard-coded, per project convention.
+const ssFirstYearFraction = core.ssFirstYearFraction;
+
+// Single filer, zero growth/inflation so the arithmetic is inspectable: $40k claimed at 70,
+// born 1960, so age 70 falls in 2030.
+const SS_BASE = {
+    ...BASE, birthyear1: 1960, birthmonth1: 12, die1: 90, nYears: 20,
+    IRA1: 600000, Brokerage: 200000, BrokerageBasis: 100000, Cash: 200000,
+    ss1: 40000, ss1Age: 70, spendGoal: 60000,
+};
+const ssOf = (r, year) => Math.round(r.log.find(x => x.year === year)?.SSincome ?? -1);
+const ssFlags = (r) => r.log
+    .filter(x => x['-ssStart1'] || x['-ssStart2'] || x['-ssStartSurvivor'])
+    .map(x => x.year + (x['-ssStart1'] ? ' P1' : '') + (x['-ssStart2'] ? ' P2' : '') + (x['-ssStartSurvivor'] ? ' SURV' : ''));
+
+test('ssFirstYearFraction: months remaining after the birth month, December default', () => {
+    if (!ssFirstYearFraction) throw new Error('ssFirstYearFraction not exported from core.js');
+    assertNear(ssFirstYearFraction(12), 0, 'December claimant gets no months', 1e-12);
+    assertNear(ssFirstYearFraction(6), 0.5, 'June claimant gets half the year', 1e-12);
+    assertNear(ssFirstYearFraction(1), 11 / 12, 'January claimant gets 11 months', 1e-12);
+    // Anything unusable is treated as December rather than silently paying a full year.
+    assertNear(ssFirstYearFraction(0), 0, 'month 0 is out of range', 1e-12);
+    assertNear(ssFirstYearFraction(13), 0, 'month 13 is out of range', 1e-12);
+    assertNear(ssFirstYearFraction(undefined), 0, 'missing birth month defaults to December', 1e-12);
+});
+
+test('SS proration: December claimant gets nothing in the claim year, full amount the next', () => {
+    const r = simulate({ ...SS_BASE, birthmonth1: 12 });
+    assert(ssOf(r, 2030) === 0, `claim year (age 70) should pay $0, got ${ssOf(r, 2030)}`);
+    assert(ssOf(r, 2031) === 39996, `the following year should pay the full benefit, got ${ssOf(r, 2031)}`);
+});
+
+test('SS proration: June claimant gets half the benefit in the claim year', () => {
+    const r = simulate({ ...SS_BASE, birthmonth1: 6 });
+    assert(ssOf(r, 2030) === 19998, `June claim year should pay half, got ${ssOf(r, 2030)}`);
+    assert(ssOf(r, 2031) === 39996, `and full the year after, got ${ssOf(r, 2031)}`);
+    // January is the other end of the range: 11 of 12 months.
+    const jan = simulate({ ...SS_BASE, birthmonth1: 1 });
+    assert(ssOf(jan, 2030) === 36663, `January claim year should pay 11/12, got ${ssOf(jan, 2030)}`);
+});
+
+test('SS milestones: flag the first PAYING year, not the age crossing', () => {
+    // The distinction only exists because of proration: with a December birth month the age-70 year
+    // pays nothing, so the marker belongs on the year after.
+    assert(ssFlags(simulate({ ...SS_BASE, birthmonth1: 12 })).join() === '2031 P1',
+        `December: expected the marker on 2031, got ${ssFlags(simulate({ ...SS_BASE, birthmonth1: 12 })).join()}`);
+    assert(ssFlags(simulate({ ...SS_BASE, birthmonth1: 6 })).join() === '2030 P1',
+        `June: expected the marker on the claim year itself, got ${ssFlags(simulate({ ...SS_BASE, birthmonth1: 6 })).join()}`);
+});
+
+test('SS milestones: a couple gets one marker per person plus the survivor', () => {
+    // Spouse born June 1962 claiming at 67 (2029, half year), user born December 1960 claiming at
+    // 70 (2030 pays nothing, so 2031), spouse dies at 75 (2038).
+    const r = simulate({
+        ...SS_BASE, hasSpouse: true, die1: 95, nYears: 40,
+        birthyear2: 1962, birthmonth2: 6, die2: 75, ss2: 24000, ss2Age: 67, IRA2: 300000,
+    });
+    assert(ssFlags(r).join(' | ') === '2029 P2 | 2031 P1 | 2038 SURV',
+        `expected P2 2029, P1 2031, survivor 2038; got ${ssFlags(r).join(' | ')}`);
+    assert(ssOf(r, 2029) === 12000, `spouse's first year is half of $24k, got ${ssOf(r, 2029)}`);
+    assert(ssOf(r, 2030) === 24000, `spouse full, user still prorated to zero, got ${ssOf(r, 2030)}`);
+    assert(ssOf(r, 2031) === 64000, `both full, got ${ssOf(r, 2031)}`);
+});
+
+test('SS milestones: a single filer is never flagged as a survivor', () => {
+    // A single filer runs through the same "one is deceased" branch every year (alive2 is false
+    // from year one), so the survivor flag has to be gated on a spouse having actually existed.
+    const flags = ssFlags(simulate({ ...SS_BASE, birthmonth1: 6 }));
+    assert(!flags.some(f => f.includes('SURV')), `single filer should have no survivor marker, got ${flags.join()}`);
+});
+
+test('SS milestones: someone already collecting when the plan opens gets no marker', () => {
+    // Caught in the browser on the app's own defaults: the default spouse (born 1952, claiming at
+    // 70) started drawing in 2022, four years before the 2026 start year, and the chart announced
+    // "Spouse SS begins" in year 0. The flag has to mean "was zero last year, is positive now",
+    // not "is positive"; a plain first-positive-year test just moves the wrong marker to year 1.
+    const r = simulate({
+        ...SS_BASE, hasSpouse: true, nYears: 20,
+        birthyear2: 1952, birthmonth2: 12, die2: 95, ss2: 24000, ss2Age: 70, IRA2: 300000,
+    });
+    assert(Math.round(r.log[0].SSincome) > 0, 'precondition: the spouse is already being paid in year 0');
+    assert(!ssFlags(r).some(f => f.includes('P2')), `no spouse marker expected, got ${ssFlags(r).join(' | ')}`);
+    // The user's own claim is still inside the plan, so that marker survives.
+    assert(ssFlags(r).some(f => f.includes('P1')), `the user's own marker should still fire, got ${ssFlags(r).join(' | ')}`);
+});
+
+// ── Death-year Social Security: the mirror of claim-year proration ────────────
+// `alive` is `age <= die`, so someone is alive through the whole year they reach `die` and the
+// first survivor year is `age === die + 1`. The death is treated as falling in the DECEASED's
+// birth month: months before it pay both spouses' own benefits, months after pay the survivor
+// benefit. Paying the survivor amount for all twelve months (the old behavior) understated the
+// year, because the survivor benefit is only the higher of the two, never their sum.
+// Spouse born June 1962 claiming at 67, dies at 75 (2038); user born December 1960 claiming at 70.
+const DEATH_BASE = {
+    ...SS_BASE, hasSpouse: true, die1: 95, nYears: 40,
+    birthyear2: 1962, birthmonth2: 6, die2: 75, ss2: 24000, ss2Age: 67, IRA2: 300000,
+};
+
+test('SS death year: a June-born decedent splits the year half own benefits, half survivor', () => {
+    const r = simulate({ ...DEATH_BASE });
+    // 2037, both alive: 39,996 + 24,000 = 64,000 (rounding aside).
+    assert(ssOf(r, 2037) === 64000, `year before the death should pay both benefits, got ${ssOf(r, 2037)}`);
+    // 2038, death year: 0.5 x (39,996 + 24,000) + 0.5 x 39,996 = 51,998.
+    assert(ssOf(r, 2038) === 51998, `death year should blend both halves, got ${ssOf(r, 2038)}`);
+    // 2039 onward: the survivor benefit alone, unblended.
+    assert(ssOf(r, 2039) === 39996, `year after the death should be the plain survivor benefit, got ${ssOf(r, 2039)}`);
+    assert(ssFlags(r).some(f => f.includes('2038 SURV')), `survivor marker belongs on 2038, got ${ssFlags(r).join(' | ')}`);
+});
+
+test('SS death year: a December-born decedent pays both benefits all year, survivor starts next', () => {
+    // Mirrors the claim-year case: a December birth month leaves no months on the far side, so the
+    // survivor benefit does not begin until the following year.
+    const r = simulate({ ...DEATH_BASE, birthmonth2: 12 });
+    assert(ssOf(r, 2038) === 64000, `December death year should still pay both benefits, got ${ssOf(r, 2038)}`);
+    assert(ssOf(r, 2039) === 39996, `survivor benefit starts the next year, got ${ssOf(r, 2039)}`);
+    assert(ssFlags(r).some(f => f.includes('2039 SURV')), `survivor marker belongs on 2039, got ${ssFlags(r).join(' | ')}`);
+});
+
+test('SS death year: degrades correctly when the survivor has not claimed yet', () => {
+    // Spouse born June 1950 claiming at 66 dies at 79 (2030); the user is born December 1960 and
+    // reaches their own claiming age of 70 in that same 2030, which December prorates to zero. The
+    // before-death half is therefore the decedent's benefit alone and the after-death half is zero:
+    // 0.5 x (0 + 24,000) + 0.5 x 0 = 12,000. No double count, no negative.
+    const r = simulate({
+        ...SS_BASE, hasSpouse: true, die1: 95, nYears: 40,
+        birthyear2: 1950, birthmonth2: 6, die2: 79, ss2: 24000, ss2Age: 66, IRA2: 300000,
+    });
+    assert(ssOf(r, 2030) === 12000, `death year should pay only the decedent's half, got ${ssOf(r, 2030)}`);
+    assert(ssOf(r, 2031) === 39996, `survivor benefit starts once the survivor claims, got ${ssOf(r, 2031)}`);
+    // The marker follows the survivor benefit itself, not the blended total: 2030 is non-zero purely
+    // from the before-death months, which is not a survivor start.
+    assert(ssFlags(r).some(f => f.includes('2031 SURV')) && !ssFlags(r).some(f => f.includes('2030 SURV')),
+        `survivor marker belongs on 2031, not 2030; got ${ssFlags(r).join(' | ')}`);
+});
+
+// ── ⚖ compare pin: identity has to survive a re-sweep ─────────────────────────
+test('compare pin: a selection captured from one sweep re-finds its row in the next', () => {
+    // The Optimizer's row `_id` is `results.length` at build time, so it is a build-order index and
+    // means nothing after a re-run. The ⚖ comparison pin is therefore stored as the row's
+    // `_selection` and re-found with sameStrategySelection. This is the property that has to hold.
+    const base = { ...BASE, hasSpouse: true, birthyear2: 1962, die2: 94, IRA2: 400000, spendGoal: 70000 };
+    const sweep1 = buildVariations(base);
+    // A different sweep: the spend goal does not change the strategy grid, so the same strategies
+    // are present but every row object is new.
+    const sweep2 = buildVariations({ ...base, spendGoal: 75000 });
+    assert(sweep1.length === sweep2.length, 'precondition: the same strategy grid in both sweeps');
+
+    const pinned = sweep1[Math.floor(sweep1.length / 2)];
+    const matches = sweep2.filter(v => sameStrategySelection(v, pinned));
+    assert(matches.length === 1, `the pinned strategy must re-find exactly one row, got ${matches.length}`);
+    assert(matches[0] !== pinned, 'and it must be the NEW sweep\'s object, not the old one');
+
+    // A strategy that is not in the table at all must not match anything, so the pin gets dropped
+    // rather than left pointing at a stale row.
+    const absent = { ...pinned, strategy: 'gk', gkGuard: 0.99, gkAdjPct: 0.99 };
+    assert(sweep2.filter(v => sameStrategySelection(v, absent)).length === 0,
+        'an absent strategy must match nothing');
+});
+
+// ── Full Retirement Age from birth year ───────────────────────────────────────
+// FRA was hard-coded at 67 for everyone. It is 66 for 1943-1954 and steps up two months per birth
+// year through 1959, and the same constant was doing three jobs: unwinding the DECEASED's benefit
+// back to their PIA, testing the SURVIVOR's own early claim, and sizing the 60-to-FRA span the
+// 28.5% reduction is spread across. Those belong to two different people.
+const fraMonthsForBirthYear = core.fraMonthsForBirthYear;
+const calculateSurvivorBenefit = core.calculateSurvivorBenefit;
+
+test('fraMonthsForBirthYear: SSA schedule, two months per year from 1955 to 1959', () => {
+    if (!fraMonthsForBirthYear) throw new Error('fraMonthsForBirthYear not exported from core.js');
+    assert(fraMonthsForBirthYear(1954) === 792, `1954 should be 66y = 792 months, got ${fraMonthsForBirthYear(1954)}`);
+    assert(fraMonthsForBirthYear(1955) === 794, `1955 should be 66y2m, got ${fraMonthsForBirthYear(1955)}`);
+    assert(fraMonthsForBirthYear(1957) === 798, `1957 should be 66y6m = 798, got ${fraMonthsForBirthYear(1957)}`);
+    assert(fraMonthsForBirthYear(1959) === 802, `1959 should be 66y10m, got ${fraMonthsForBirthYear(1959)}`);
+    assert(fraMonthsForBirthYear(1960) === 804, `1960 should be 67y = 804 months, got ${fraMonthsForBirthYear(1960)}`);
+    assert(fraMonthsForBirthYear(1975) === 804, '1960 and later are all 67');
+    assert(fraMonthsForBirthYear(1940) === 792, 'pre-1943 is clamped to 66, documented in the helper');
+});
+
+test('FRA: the old hard-coded 67 over-stated an early-claiming pre-1955 decedent', () => {
+    if (!calculateSurvivorBenefit) throw new Error('calculateSurvivorBenefit not exported from core.js');
+    // Deceased born 1952 (FRA 66) claimed early at 62 on $2,000/mo; survivor born 1955 claims at 67.
+    // Passing 1960 for both reproduces the old behavior exactly.
+    const oldWay = calculateSurvivorBenefit(85, 62, 2000, 67, 1000, 1960, 1960);
+    const newWay = calculateSurvivorBenefit(85, 62, 2000, 67, 1000, 1952, 1955);
+    assert(oldWay === 2857, `old hard-coded FRA 67 gives $2,857/mo, got ${oldWay}`);
+    assert(newWay === 2666, `real FRAs give $2,666/mo, got ${newWay}`);
+    // The error direction is what matters: the hard-code paid the survivor MORE than they are due,
+    // which is the wrong way round for a tool that ships a widow-RMD objective.
+    assert(newWay < oldWay, 'deriving FRA from birth year must reduce, not raise, this benefit');
+});
+
+test('FRA: a 1960-or-later couple is completely unaffected', () => {
+    const a = calculateSurvivorBenefit(85, 62, 2000, 67, 1000, 1960, 1962);
+    const b = calculateSurvivorBenefit(85, 62, 2000, 67, 1000);   // omitted birth years default to 67
+    assert(a === b, `born-1960+ must match the old constant exactly, got ${a} vs ${b}`);
+});
+
+test('FRA: end to end, a pre-1955 couple pays a smaller survivor benefit', () => {
+    // User born 1950 claiming early at 62, spouse born 1952 claiming at 64, user dies at 80.
+    const r = simulate({
+        ...BASE, nYears: 35, hasSpouse: true,
+        birthyear1: 1950, birthmonth1: 6, die1: 80,
+        birthyear2: 1952, birthmonth2: 6, die2: 95,
+        IRA1: 900000, IRA2: 400000, Roth: 50000, Brokerage: 300000, BrokerageBasis: 150000, Cash: 100000,
+        ss1: 36000, ss1Age: 62, ss2: 18000, ss2Age: 64,
+        spendGoal: 90000, inflation: 0.025, cpi: 0.025, growth: 0.06, cashYield: 0.02, dividendRate: 0.015,
+    });
+    const surv = r.log.find(x => x['-ssStartSurvivor']);
+    assert(surv && surv.year === 2031, `survivor benefit should start in 2031, got ${surv && surv.year}`);
+    // Was 51,076 with the hard-coded 67; 49,148 with the real FRAs (66 and 66); 55,122 once the
+    // death year was blended (the decedent is June-born, so half that year pays both own benefits).
+    assert(Math.round(surv.SSincome) === 55122, `expected $55,122 in the first survivor year, got ${Math.round(surv.SSincome)}`);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

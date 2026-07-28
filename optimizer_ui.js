@@ -38,6 +38,12 @@ const OptimizerState = {
     noSolutionFloor: null,
     convOptCandidateCount: 0,   // PF11: size of the conversion candidate pool this run
     convOptRowsAdded: 0,        // PF11: how many ⇌ rows actually improved (drives the empty-state banner)
+    // ⚖ head-to-head: the row every Δ column is measured against, when it is not the ⚓ baseline.
+    // The row OBJECT is per-sweep; compareSelection is the durable identity that survives a re-run
+    // (see resolveCompareRow — _id is a build-order index and does not).
+    compareRow: null,
+    compareSelection: null,
+    compareIsCurrentPlan: false,
 };
 
 // Optimizer "Optimize for" objectives (PF13) — labels + <select> display order live here; the
@@ -144,13 +150,103 @@ function recomputeBaselineForObjective() {
     OptimizerState.baseline = baselinePool.length > 0
         ? rankRows(baselinePool, OptimizerState.objective)[0]
         : null;
-    const baselineRow = OptimizerState.baseline;
+    resolveCompareRow();
+    recomputeDeltasAgainst(deltaReferenceRow());
+}
+
+// The row every Δ column is measured against: the compare pin when one is set, otherwise the
+// ⚓ baseline. Splitting this out is what turns the existing Δ columns into a head-to-head diff --
+// pin row A and every other row's Δ answers "how does this compare with A".
+function deltaReferenceRow() {
+    return OptimizerState.compareRow ?? OptimizerState.baseline ?? null;
+}
+
+function recomputeDeltasAgainst(referenceRow) {
+    const results = OptimizerState.results;
+    if (!results) return;
     for (const r of results) {
-        r._dNW  = baselineRow ? (r.afterTaxNW   - baselineRow.afterTaxNW)   : null;
-        r._dTax = baselineRow ? (baselineRow.totals.tax - r.totals.tax)     : null;
-        r._dNWCurrent  = baselineRow ? (r.afterTaxNWCurrentDollars - baselineRow.afterTaxNWCurrentDollars) : null;
-        r._dTaxCurrent = baselineRow ? (baselineRow.totals.taxCurrentDollars - r.totals.taxCurrentDollars) : null;
+        r._dNW  = referenceRow ? (r.afterTaxNW   - referenceRow.afterTaxNW)   : null;
+        r._dTax = referenceRow ? (referenceRow.totals.tax - r.totals.tax)     : null;
+        r._dNWCurrent  = referenceRow ? (r.afterTaxNWCurrentDollars - referenceRow.afterTaxNWCurrentDollars) : null;
+        r._dTaxCurrent = referenceRow ? (referenceRow.totals.taxCurrentDollars - r.totals.taxCurrentDollars) : null;
     }
+}
+
+// Re-finds the pinned comparison row after a sweep. `_id` is just `results.length` at build time,
+// so it does not survive a re-run; the pin is stored as the row's `_selection` and matched with
+// sameStrategySelection, the same identity the 📍 CURRENT PLAN row uses. A pin whose strategy is no
+// longer in the table (the user changed a parameter out from under it) is dropped rather than left
+// pointing at a stale object.
+function resolveCompareRow() {
+    const results = OptimizerState.results;
+    const sel = OptimizerState.compareSelection;
+    if (!results || !sel) { OptimizerState.compareRow = null; return; }
+    OptimizerState.compareRow = results.find(r =>
+        r._selection && sameStrategySelection(r._selection, sel)
+        && !!r._isCurrentPlan === !!OptimizerState.compareIsCurrentPlan
+    ) ?? results.find(r => r._selection && sameStrategySelection(r._selection, sel)) ?? null;
+    if (!OptimizerState.compareRow) OptimizerState.compareSelection = null;
+}
+
+// Row click handler for the ⚖ affordance. Pinning the row that is already pinned clears it.
+function toggleCompareRow(id) {
+    const results = OptimizerState.results;
+    const row = results?.find(r => r._id === id);
+    if (!row) return;
+    if (OptimizerState.compareRow === row) {
+        OptimizerState.compareSelection = null;
+        OptimizerState.compareIsCurrentPlan = false;
+        OptimizerState.compareRow = null;
+    } else {
+        OptimizerState.compareSelection = row._selection ?? null;
+        OptimizerState.compareIsCurrentPlan = !!row._isCurrentPlan;
+        OptimizerState.compareRow = row;
+    }
+    recomputeDeltasAgainst(deltaReferenceRow());
+    renderOptimizerTable();
+}
+
+// Column-header and tooltip wording for whatever the Δ columns currently measure against.
+function deltaRefSuffix() {
+    return OptimizerState.compareRow ? ' vs ⚖' : '';
+}
+
+function deltaRefDescription() {
+    const row = OptimizerState.compareRow;
+    return row
+        ? `the ⚖ comparison row (${row._strategyLabel}${row._paramLabel ? ' — ' + row._paramLabel : ''})`
+        : 'the ⚓ baseline (the strongest plan with no Roth conversions and no cyclic brokerage maneuvering)';
+}
+
+// The ⚖ affordance in the Strategy cell. Filled when this row IS the reference.
+function compareToggleHtml(r) {
+    const pinned = OptimizerState.compareRow === r;
+    const tip = pinned
+        ? 'This row is the comparison reference: every Δ column is measured against it. Click to go back to the ⚓ baseline.'
+        : 'Compare against this row: every Δ column is re-measured against it instead of the ⚓ baseline.';
+    return `<span onclick="event.stopPropagation();toggleCompareRow(${r._id})" title="${tip}" `
+        + `style="cursor:pointer;margin-right:4px;${pinned ? '' : 'opacity:0.35;'}">⚖</span>`;
+}
+
+// Sentence above the table naming what the Δ columns are measured against. Without it a pinned
+// comparison row silently changes what every Δ number means.
+function renderCompareBanner() {
+    const el = document.getElementById('opt-compare-banner');
+    if (!el) return;
+    const row = OptimizerState.compareRow;
+    if (!row) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    const label = `${row._strategyLabel}${row._paramLabel ? ' — ' + row._paramLabel : ''}`;
+    el.innerHTML = `⚖ <strong>Δ columns are measured against:</strong> ${label}`
+        + ` <button onclick="clearCompareRow()" style="margin-left:8px;padding:2px 10px;font-size:0.9em;cursor:pointer;">Back to ⚓ baseline</button>`;
+    el.style.display = '';
+}
+
+function clearCompareRow() {
+    OptimizerState.compareSelection = null;
+    OptimizerState.compareIsCurrentPlan = false;
+    OptimizerState.compareRow = null;
+    recomputeDeltasAgainst(deltaReferenceRow());
+    renderOptimizerTable();
 }
 
 
@@ -1074,8 +1170,10 @@ function getOptimizerColumns() {
         },
         {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = bracket target unreachable. Click any row to load it.',
-            getValue: r => r._strategyLabel,
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = bracket target unreachable. Click any row to load it, or ⚖ to measure every Δ column against it.',
+            // ⚖ has its own stopPropagation'd handler so it does not also fire the row's load-this-
+            // strategy click. Rendered per row so any row can become the comparison reference.
+            getValue: r => compareToggleHtml(r) + r._strategyLabel,
             getSortValue: r => r._strategyLabel
         },
         {
@@ -1109,8 +1207,8 @@ function getOptimizerColumns() {
             getSortValue: r => inC() ? (r.afterTaxNWCurrentDollars ?? 0) : (r.afterTaxNW ?? 0)
         },
         {
-            key: 'dNW', label: 'ΔNetWealth',
-            title: 'NetWealth minus the baseline (the strongest plan with no Roth conversions and no cyclic brokerage maneuvering). Positive (green) = this strategy ends wealthier after tax than that baseline; negative (red) = it ends behind it.',
+            key: 'dNW', label: 'ΔNetWealth' + deltaRefSuffix(),
+            title: 'NetWealth minus ' + deltaRefDescription() + '. Positive (green) = this strategy ends wealthier after tax than that reference; negative (red) = it ends behind it.',
             getValue: r => {
                 const d = inC() ? r._dNWCurrent : r._dNW;
                 if (d == null) return '—';
@@ -1121,8 +1219,8 @@ function getOptimizerColumns() {
             getSortValue: r => (inC() ? r._dNWCurrent : r._dNW) ?? -Infinity
         },
         {
-            key: 'dTax', label: 'ΔTax',
-            title: 'Baseline lifetime tax minus this strategy\'s lifetime tax (each = federal incl. NIIT + state + IRMAA). Positive (green) = this strategy pays less total tax than the baseline; negative (red) = it pays more.',
+            key: 'dTax', label: 'ΔTax' + deltaRefSuffix(),
+            title: 'Lifetime tax of ' + deltaRefDescription() + ' minus this strategy\'s lifetime tax (each = federal incl. NIIT + state + IRMAA). Positive (green) = this strategy pays less total tax than that reference; negative (red) = it pays more.',
             getValue: r => {
                 const d = inC() ? r._dTaxCurrent : r._dTax;
                 if (d == null) return '—';
@@ -1190,6 +1288,9 @@ function getOptimizerColumns() {
 }
 
 function renderOptimizerTable(results) {
+    // Re-renders triggered by the ⚖ compare toggle pass no argument — they are redrawing whatever
+    // is already in state, not a fresh sweep.
+    results = results ?? OptimizerState.results;
     if (!results || results.length === 0) return;
     const columns = getOptimizerColumns();
     // Default: sort by After-Tax NW descending; Spendable descending as tiebreaker
@@ -1331,8 +1432,10 @@ function renderOptimizerTable(results) {
         const bTitle = 'BASELINE — the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s Δ columns are measured against this. Click to load it.';
         baselineRowHtml = '<div style="display:contents;" id="opt-baseline-row">' + columns.map(col => {
             let v;
-            if (col.key === 'strategy')      v = '⚓ BASELINE — ' + baselineRow._strategyLabel;
-            else if (col.key === 'dNW' || col.key === 'dTax') v = '0';
+            if (col.key === 'strategy')      v = compareToggleHtml(baselineRow) + '⚓ BASELINE — ' + baselineRow._strategyLabel;
+            // Zero only when the baseline IS the reference. With a compare row pinned the baseline
+            // has a real Δ like every other row, and printing 0 would be a lie.
+            else if ((col.key === 'dNW' || col.key === 'dTax') && !OptimizerState.compareRow) v = '0';
             else v = col.getValue(baselineRow);
             return `<div style="${_bCell}" onclick="loadOptimizerResult(${baselineRow._id})" title="${bTitle}">${v}</div>`;
         }).join('') + '</div>';
@@ -1362,6 +1465,7 @@ function renderOptimizerTable(results) {
         }).join('') + '</div>';
     }
 
+    renderCompareBanner();
     const optTableEl = document.getElementById('opt-table');
     optTableEl.style.gridTemplateColumns = columns.map(() => 'max-content').join(' ');
     optTableEl.innerHTML = headerHtml + baselineRowHtml + currentRowHtml + rowsHtml;
@@ -2281,9 +2385,6 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
         }
     }
 
-    // Phase 23: projected RMD stat (reads from DOM inputs directly)
-    updateProjectedRMDStat();
-
     // Delta vs previous run
     if (_prevStatsTotals) {
         const pTax   = inCD ? _prevStatsTotals.taxCurrentDollars   : _prevStatsTotals.tax;
@@ -2408,93 +2509,6 @@ function toggleBreakEvenDiagnosis() {
     }
 }
 
-function updateProjectedRMDStat() {
-    const now = new Date();
-    const curYear = now.getFullYear();
-    const curMonth = now.getMonth() + 1;
-
-    function calcRMDProjection(birthYear, birthMonth, iraBalance, growthRate) {
-        if (!birthYear || !iraBalance || iraBalance <= 0) return null;
-        const rmdAge = birthYear >= 1960 ? 75 : 73;
-        const age = curYear - birthYear - (curMonth <= (birthMonth || 12) ? 1 : 0);
-        const yearsTo = rmdAge - age;
-        if (yearsTo <= 0) {
-            // Already in RMD — estimate current RMD from current IRA balance
-            const factor = RMD_TABLE[Math.min(age, 120)] ?? 2.0;
-            return { rmdAge, rmdYear: curYear, projIRA: iraBalance, firstRMD: iraBalance / factor, alreadyRMD: true };
-        }
-        const projIRA = iraBalance * Math.pow(1 + growthRate, yearsTo);
-        const factor = RMD_TABLE[rmdAge] ?? 26.5;
-        return { rmdAge, rmdYear: curYear + yearsTo, projIRA, firstRMD: projIRA / factor, alreadyRMD: false };
-    }
-
-    const growthRate = (+val('growth') / 100) || 0.06;
-    const ira1 = +val('IRA1') || 0;
-    const ira2 = +val('IRA2') || 0;
-    const by1 = +val('birthyear1');
-    const bm1 = +val('birthmonth1') || 12;
-    const by2 = +val('birthyear2');
-    const bm2 = +val('birthmonth2') || 12;
-    const hasSpouse = !!(by2 && ira2 > 0);
-
-    const rmd1 = calcRMDProjection(by1, bm1, ira1, growthRate);
-    const rmd2 = hasSpouse ? calcRMDProjection(by2, bm2, ira2, growthRate) : null;
-
-    function fmtRMD(rmd, label) {
-        if (!rmd) return '';
-        const amt = '$' + Math.round(rmd.firstRMD).toLocaleString();
-        return rmd.alreadyRMD
-            ? `${label} RMD (est. now): ${amt}/yr`
-            : `${label} RMD at ${rmd.rmdAge} (${rmd.rmdYear}): ~${amt}/yr`;
-    }
-
-    const el1 = document.getElementById('stat-proj-rmd1');
-    const el2 = document.getElementById('stat-proj-rmd2');
-
-    // When a simulation has run, use actual RMD values from the log (strategy-dependent).
-    if (lastSimulationLog?.length > 0) {
-        const row1 = lastSimulationLog.find(r => (r['RMD1-'] ?? 0) > 0);
-        const row2 = lastSimulationLog.find(r => (r['RMD2-'] ?? 0) > 0);
-        if (el1) {
-            if (row1) {
-                el1.textContent = `You RMD (${row1.year}): ~$${Math.round(row1['RMD1-']).toLocaleString()} (strategy)`;
-                el1.title = `First actual RMD in simulation year ${row1.year}`;
-                el1.style.display = '';
-            } else {
-                el1.style.display = 'none';
-            }
-        }
-        if (el2) {
-            if (row2) {
-                el2.textContent = `Spouse RMD (${row2.year}): ~$${Math.round(row2['RMD2-']).toLocaleString()} (strategy)`;
-                el2.title = `First actual RMD in simulation year ${row2.year}`;
-                el2.style.display = '';
-            } else {
-                el2.style.display = 'none';
-            }
-        }
-        return;
-    }
-
-    if (el1) {
-        if (rmd1) {
-            el1.innerText = fmtRMD(rmd1, 'You') + ' (projected)';
-            el1.title = `IRA1 projected at age ${rmd1.rmdAge}: $${Math.round(rmd1.projIRA).toLocaleString()}`;
-            el1.style.display = '';
-        } else {
-            el1.style.display = 'none';
-        }
-    }
-    if (el2) {
-        if (rmd2) {
-            el2.innerText = fmtRMD(rmd2, 'Spouse') + ' (projected)';
-            el2.title = `IRA2 projected at age ${rmd2.rmdAge}: $${Math.round(rmd2.projIRA).toLocaleString()}`;
-            el2.style.display = '';
-        } else {
-            el2.style.display = 'none';
-        }
-    }
-}
 
 let lastSimulationLog = null;
 let lastSimInputs = null;
@@ -2539,12 +2553,13 @@ const milestonePlugin = {
         if (!showMilestones || !_chartMilestones.length) return;
         // Milestones come from the last single-strategy run. The main charts show all of them;
         // the Monte Carlo fan aggregates many strategies/paths, so only the markers that are
-        // deterministic across every path apply there — death (fixed life expectancy) and the
-        // RMD-start ages (fixed birth years). IRMAA/GK/shortfall/break-even differ per path.
+        // deterministic across every path apply there — death (fixed life expectancy), the
+        // RMD-start ages (fixed birth years) and the Social Security start years (fixed birth
+        // years and claiming ages). IRMAA/GK/shortfall/break-even differ per path.
         // All other charts (MC input fans, etc.) get none.
         const canvasId = chart.canvas?.id || '';
         let milestones = _chartMilestones;
-        if (canvasId === 'mc-chart') milestones = milestones.filter(m => /Passing|RMDs begin/.test(m.label));
+        if (canvasId === 'mc-chart') milestones = milestones.filter(m => /Passing|RMDs begin|SS begins/.test(m.label));
         else if (canvasId !== 'chartAssets' && canvasId !== 'chartIncomeSources') return;
         if (!milestones.length) return;
         const xScale = chart.scales.x;
@@ -2584,6 +2599,10 @@ const MEDICARE_COLOR = '#008080';
 // Milestone marker color for the two RMD-start lines — distinct from the five already in use
 // (death purple, GK orange, IRMAA pink, shortfall red, break-even teal).
 const RMD_MILESTONE_COLOR = '#2471a3';
+
+// Milestone marker color for the Social Security start lines. Green, so it reads as income
+// arriving rather than as one of the cost/warning markers.
+const SS_MILESTONE_COLOR = '#1e8449';
 
 // Legend hover hint for the Medicare series (browser-native tooltip via canvas title).
 const MEDICARE_LEGEND_TIP = 'Base Cost for Medicare B+D - not deducted from spendable. Illustration only.';
@@ -2779,6 +2798,15 @@ function computeMilestones(log) {
             ms.push({ x: i, label: 'Spouse RMDs begin', color: RMD_MILESTONE_COLOR });
             rmd2Done = true;
         }
+        // 7. Social Security start. Unlike the RMD markers these are not derived from age here: the
+        // engine flags the first year a benefit is actually PAID, which with the default December
+        // birth month is the year AFTER the claiming age is reached, since the claim year prorates
+        // to zero months. The engine also knows which spouse the survivor benefit belongs to, which
+        // the log's combined SSincome column cannot say. Hidden '-' fields, so they never show up
+        // as Annual Details columns.
+        if (r['-ssStart1']) ms.push({ x: i, label: 'Your SS begins', color: SS_MILESTONE_COLOR });
+        if (r['-ssStart2']) ms.push({ x: i, label: 'Spouse SS begins', color: SS_MILESTONE_COLOR });
+        if (r['-ssStartSurvivor']) ms.push({ x: i, label: 'Survivor SS begins', color: SS_MILESTONE_COLOR });
         if (a1 != null) prevAge1 = a1;
         if (a2 != null) prevAge2 = a2;
     }
@@ -3409,6 +3437,14 @@ function setupAutoRecalc() {
             // single-scenario run; it is one simulate() against the optimizer's ~1.3s sweep.
             runSimulation();
             if (tab.includes('tab-opt')) runOptimizer();
+            // Monte Carlo has the same staleness problem but cannot be handled the same way: its
+            // main sweep is numPaths x variations simulations (measured 27.4s on the default
+            // scenario), so re-running it on every edit is not viable. mcInputsChanged() refreshes
+            // only the cheap stress pass and flags the rest as out of date. See mc_tab.js.
+            // Runs on EVERY tab, not just tab-mc, because the Stress Test tile it feeds lives in the
+            // summary bar and is visible from everywhere. mcInputsChanged is a no-op when its own
+            // hash has not moved, so a change Monte Carlo does not care about costs nothing.
+            if (typeof mcInputsChanged === 'function') mcInputsChanged();
         }, 400);
     }
     document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
@@ -3418,6 +3454,10 @@ function setupAutoRecalc() {
             el.addEventListener('blur', () => scheduleRecalc(el));
         }
     });
+    // Prime the Stress Test tile once on load so it reads a real number before the user touches
+    // anything or visits the Monte Carlo tab. Deferred past the first paint because it spawns a
+    // worker; the pass itself is ~10 simulations. Everything after this is driven by scheduleRecalc.
+    setTimeout(() => { if (typeof mcInputsChanged === 'function') mcInputsChanged(); }, 600);
 }
 
 

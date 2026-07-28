@@ -221,15 +221,6 @@ function markMCStale(stale) {
     const el = document.getElementById('mc-stale-banner');
     if (!el) return;
     el.style.display = stale ? '' : 'none';
-    // Synthetic mode runs no stress pass at all, so the "Stress Failure result is current" half of
-    // the message would be a claim about something that is not on screen.
-    const txt = el.querySelector('#mc-stale-text');
-    if (txt) {
-        const hasStress = (document.getElementById('mc-sim-mode')?.value ?? 'gbm') === 'bootstrap';
-        txt.textContent = hasStress
-            ? 'The chart and survival table below were run before your latest changes. The Stress Failure result is current.'
-            : 'The results below were run before your latest changes.';
-    }
 }
 
 // Re-runs ONLY the stress pass against the edited plan and swaps it into the cached results.
@@ -237,10 +228,12 @@ function markMCStale(stale) {
 function refreshMCStressOnly() {
     if (_mcStressRefreshing) return;
     const simulationMode = document.getElementById('mc-sim-mode')?.value ?? 'gbm';
-    if (simulationMode !== 'bootstrap') return;   // Synthetic mode has no stress pass
     if (_mcWorkerBusy()) return;                  // never interrupt a full run in flight
 
     const base = getInputs();
+    // The stress chart's x-axis needs these, and a nerdknob user can reach a stress result without
+    // ever running the full sweep, so they cannot be left to runMonteCarlo() to set.
+    _mcStartYear = base.startYear ?? 2026;
     const variations = buildVariations(base);
     const currentIdx = findCurrentStrategyIdx(variations, base);
     const stressVariations = currentIdx >= 0
@@ -269,6 +262,10 @@ function refreshMCStressOnly() {
         (msg) => {
             _mcStressRefreshing = false;
             if (msg.error || !msg.stress) return;
+            // renderStressChart labels its x-axis from the plan length. It used to read that off
+            // _mcResults, which is null until a full sweep has run -- so a nerdknob user got the
+            // headline count with an empty chart underneath it.
+            msg.stress.years = msg.years;
             // Standalone state, so the summary-bar tile works before any full run has happened.
             // _mcResults.stress is kept in step when a full run exists, since renderMCResults and
             // the Current Dollars re-render both read it from there.
@@ -484,13 +481,6 @@ function updateStressStat(stress) {
     const el = document.getElementById('stat-stress');
     if (!el) return;
     const cell = el.closest('div[title]') ?? el.parentElement;
-    const mode = document.getElementById('mc-sim-mode')?.value ?? 'gbm';
-    if (mode !== 'bootstrap') {
-        el.textContent = '—';
-        el.style.color = '';
-        if (cell) cell.title = 'Only available in Historical mode. Synthetic mode has no historical sequences to stress against.';
-        return;
-    }
     const s = stressFailureSummary(stress);
     if (!s) {
         el.textContent = '—';
@@ -888,7 +878,9 @@ function renderStressChart(stress) {
         return;
     }
 
-    const years  = _mcResults?.years ?? 0;
+    // stress.years is set by the stress-only refresh, which can happen before any full sweep has
+    // run; _mcResults.years covers the full-run path.
+    const years  = stress.years ?? _mcResults?.years ?? 0;
     const labels = Array.from({ length: years }, (_, i) => _mcStartYear + i);
 
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;

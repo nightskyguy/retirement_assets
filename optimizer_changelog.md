@@ -80,6 +80,22 @@ percentile chart, with a headline count and a fold-away control for readers who 
 projection. In Synthetic mode there is no historical record to stress against, so the tile reads a
 dash.
 
+**The stress test is always available, and the Optimizer says when it is working.**
+
+The stress test used to be skipped entirely in Synthetic mode. It never needed the main projection
+to be Historical: it builds its own set of worst-case sequences from the real record, so it now runs
+in both modes. Choosing synthetic returns for the projection is not a reason to hide the question of
+whether the plan would have survived the worst of what actually happened.
+
+The stress chart also failed to draw for anyone who reached a stress result without running a full
+Monte Carlo sweep first, which is the normal path with advanced controls turned on: the headline
+count appeared with an empty chart beneath it.
+
+The Optimizer blocks the page for a second or more while it tests every strategy, which looked like
+a freeze with the previous run still on screen. It now shows a "Calculating strategies" banner
+first. The comparison feature also gained a permanent one-line explanation above the table, and the
+button to end a comparison now says so plainly.
+
 **Any two strategies in the Optimizer table can now be compared directly against each other.**
 
 The two Δ columns have always measured every strategy against the anchor ⚓ baseline, which answers

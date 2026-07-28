@@ -225,19 +225,29 @@ function compareToggleHtml(r) {
         ? 'This row is the comparison reference: every Δ column is measured against it. Click to go back to the ⚓ baseline.'
         : 'Compare against this row: every Δ column is re-measured against it instead of the ⚓ baseline.';
     return `<span onclick="event.stopPropagation();toggleCompareRow(${r._id})" title="${tip}" `
-        + `style="cursor:pointer;margin-right:4px;${pinned ? '' : 'opacity:0.35;'}">⚖</span>`;
+        + `style="cursor:pointer;margin-right:5px;${pinned ? 'font-size:1.15em;' : 'opacity:0.55;'}">⚖</span>`;
 }
 
-// Sentence above the table naming what the Δ columns are measured against. Without it a pinned
-// comparison row silently changes what every Δ number means.
+// One line above the table that is always saying something: how to start a comparison when none is
+// running, and what the Δ columns now mean when one is. Without the second half a pinned comparison
+// row silently changes the meaning of every Δ number; without the first half nobody finds ⚖ at all.
 function renderCompareBanner() {
     const el = document.getElementById('opt-compare-banner');
+    const hint = document.getElementById('opt-compare-hint');
     if (!el) return;
     const row = OptimizerState.compareRow;
-    if (!row) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    if (!row) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        if (hint) hint.style.display = '';
+        return;
+    }
+    if (hint) hint.style.display = 'none';
     const label = `${row._strategyLabel}${row._paramLabel ? ' — ' + row._paramLabel : ''}`;
-    el.innerHTML = `⚖ <strong>Δ columns are measured against:</strong> ${label}`
-        + ` <button onclick="clearCompareRow()" style="margin-left:8px;padding:2px 10px;font-size:0.9em;cursor:pointer;">Back to ⚓ baseline</button>`;
+    el.innerHTML = `⚖ <strong>Comparing every row against:</strong> ${label}.`
+        + ` The ΔNetWealth and ΔTax columns now show the difference from this row instead of the ⚓ baseline,`
+        + ` and this row itself reads 0.`
+        + ` <button onclick="clearCompareRow()" style="margin-left:8px;padding:3px 12px;font-size:0.95em;cursor:pointer;font-weight:600;">✕ Stop comparing</button>`;
     el.style.display = '';
 }
 
@@ -564,7 +574,42 @@ function describeSelection(p) {
     }
 }
 
+let _optimizerScheduled = false;
+
+// The sweep is a few hundred simulations and blocks the main thread for one to several seconds,
+// during which the page looks frozen and the table still shows the previous run. Show a banner
+// first, then yield so the browser can paint it before the work starts.
+//
+// The yield races two frames against a timer, and takes whichever arrives first. Two frames is what
+// a visible tab needs (one to lay the banner out, one to commit the paint -- a single frame can run
+// the callback before the paint lands). The timer is the fallback, because a tab that is not
+// compositing never fires requestAnimationFrame at all: relying on frames alone means the sweep
+// simply never runs for anyone who switches browser tabs while it is queued.
 function runOptimizer() {
+    if (_optimizerScheduled) return;   // a sweep is already queued; the upstream debounce coalesces edits
+    _optimizerScheduled = true;
+    setOptimizerBusy(true);
+    let started = false;
+    const start = () => {
+        if (started) return;
+        started = true;
+        try {
+            _runOptimizerNow();
+        } finally {
+            _optimizerScheduled = false;
+            setOptimizerBusy(false);
+        }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(start));
+    setTimeout(start, 60);
+}
+
+function setOptimizerBusy(busy) {
+    const el = document.getElementById('opt-busy');
+    if (el) el.style.display = busy ? '' : 'none';
+}
+
+function _runOptimizerNow() {
     const base = getInputs();
     // The user's plan exactly as configured, captured BEFORE the three guards below strip the
     // sidebar's conversion settings off `base`. The 📍 CURRENT PLAN row is simulated from this, so

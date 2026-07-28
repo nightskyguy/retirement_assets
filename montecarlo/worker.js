@@ -298,7 +298,11 @@ self.onmessage = function ({ data: cfg }) {
     // Historical mode auto-runs a stress pass alongside the main bootstrap pass (Item 7 — Stress
     // is no longer a separate selectable mode). Weight the shared progress bar by each pass's
     // share of total path-work so it doesn't jump to 100% and restart for the second pass.
-    const willRunStress = simulationMode === 'bootstrap';
+    // Stress runs in BOTH modes. It builds its own bank from the worst historical decades
+    // (buildStressBank in runPass), so it never depended on the main pass being Historical -- it was
+    // only ever gated that way by association. Choosing Synthetic returns for the projection is not
+    // a reason to hide the question "would this plan have survived the worst of the real record".
+    const willRunStress = true;
     const stressCountEstimate = cfg.stressCount ?? 10;
     // cfg.stressOnly: refresh just the stress pass against the edited plan and leave the main sweep
     // to the caller. The main pass is ~numPaths × variations sims (measured 27s / 72,000 sims on the

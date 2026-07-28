@@ -356,7 +356,9 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         };
     }
 
-    const willRunStress = simulationMode === 'bootstrap';
+    // Stress runs in BOTH modes -- see worker.js for why. It builds its own bank from the worst
+    // historical decades and never needed the main pass to be Historical.
+    const willRunStress = true;
     const stressCountEstimate = cfg.stressCount ?? 10;
     // See worker.js for why cfg.stressOnly exists: the main pass is ~numPaths × variations sims and
     // is far too expensive to re-run on every input change; the stress pass is stressCount × 1.

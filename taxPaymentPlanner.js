@@ -487,6 +487,10 @@ const TaxPaymentPlanner = (() => {
   // before the conversion; this leaves room for it to settle first.
   const ORDERING_BUFFER_DAYS = 7;
 
+  // Earliest practical replacement: the next business day after the conversion. Used only
+  // to price what acting sooner than the 45-day target is worth, not to schedule anything.
+  const RESTORE_EARLIEST_DAYS = 1;
+
   function restoreDateFor(taxYear, convMonth, convDay) {
     const conv = new Date(taxYear, convMonth - 1, convDay);
     const raw  = new Date(conv);
@@ -708,14 +712,31 @@ const TaxPaymentPlanner = (() => {
       const monthsRem = Math.max(0, 12 - convMonth);
       const altRate   = hysaNet;
       const spread    = p.portfolioRate - altRate;
+      const YEAR_MS   = 365 * 24 * 60 * 60 * 1000;
+      const yearEnd   = new Date(yr + 1, 0, 1);
+      const yearsTo   = d => Math.max(0, (yearEnd - d) / YEAR_MS);
       // Growth accrues from where the money actually lands, not from the conversion date.
-      const { restore } = restoreDateFor(yr, convMonth, convDay);
-      const yearEnd  = new Date(yr + 1, 0, 1);
-      const yearsRem = Math.max(0, (yearEnd - restore) / (365 * 24 * 60 * 60 * 1000));
+      const { conv, restore } = restoreDateFor(yr, convMonth, convDay);
+      const yearsRem = yearsTo(restore);
       const gain     = withheld * spread * yearsRem;
+
+      // The replacement date is a lever, not a fixed fact. Because the gain is
+      //     withheld × spread × yearsFromRestoreToYearEnd
+      // every day earlier is another day at the spread instead of the cash rate. The 45-day
+      // target is a deadline buffer, not a goal, so quantify what acting sooner is worth and
+      // let the user decide. Sooner is better on both axes: more compounding AND more margin
+      // against the 60-day cliff. The only reason to wait is not having the cash yet.
+      const earliestRaw = new Date(conv);
+      earliestRaw.setDate(earliestRaw.getDate() + RESTORE_EARLIEST_DAYS);
+      const earliest       = nextBusinessDay(earliestRaw);
+      const gainIfEarliest = withheld * spread * yearsTo(earliest);
+      const earlyBonus     = Math.max(0, gainIfEarliest - gain);
+
       return {
         withheld, altRate, spread, monthsRem, yearsRem, gain,
-        restoreDate: { year: restore.getFullYear(), month: restore.getMonth() + 1, day: restore.getDate() },
+        gainIfEarliest, earlyBonus,
+        restoreDate:  { year: restore.getFullYear(),  month: restore.getMonth() + 1,  day: restore.getDate() },
+        earliestDate: { year: earliest.getFullYear(), month: earliest.getMonth() + 1, day: earliest.getDate() },
         // Replacing wins whenever the portfolio outgrows the cash rate and there is cash to
         // do it with. True in December too: yearsRem is 0 so the first-year gain is 0, but
         // the spread applies every year the money stays in the Roth.
@@ -1031,8 +1052,12 @@ const TaxPaymentPlanner = (() => {
             `for penalty relief, not growth. ${fmt$(sda.withheld)} withheld in December is credited as ` +
             `if paid in equal parts on all four due dates, which cures an earlier-quarter shortfall that ` +
             `a January 15 estimate cannot reach [IRC 6654(g)]. Still replace the ${fmt$(sda.withheld)} from ` +
-            `cash: the restore lands in ${MONTH_NAMES[sda.restoreDate.month-1]}, so this year's gain is $0, ` +
-            `but the ${fmtPct(sda.spread, 2)} spread between the Roth and your cash applies every year ` +
+            `cash: the restore lands in ${MONTH_NAMES[sda.restoreDate.month-1]}, so at the 45-day target ` +
+            `this year's gain is $0, ` +
+            (sda.earlyBonus > 0
+              ? `though replacing before December 31 instead would capture about ${fmt$(sda.earlyBonus)} of it. `
+              : '') +
+            `The ${fmtPct(sda.spread, 2)} spread between the Roth and your cash then applies every year ` +
             `afterward, and the full conversion stays in the Roth.`
           : `Replacing the ${fmt$(sda.withheld)}: it moves from cash earning ${fmtPct(sda.altRate, 2)} after tax ` +
             `into the Roth earning ${fmtPct(p.portfolioRate)} tax free, counted from the restore date ` +
@@ -1041,6 +1066,17 @@ const TaxPaymentPlanner = (() => {
             `The same spread applies every year the money stays in the Roth, so treat ${fmt$(sda.gain)} as a ` +
             `floor, not the total. Replacing is worth it whenever your portfolio outgrows your cash rate ` +
             `and you have the cash on hand.`;
+
+      // The replacement date is a lever. Sooner is better on both axes and costs nothing.
+      const earlyNote = (sda.withheld > 0 && sda.earlyBonus > 0)
+        ? `Sooner is better. The gain runs from the day the cash lands in the Roth, so replacing as soon ` +
+          `as you have it, around ${fmtDate(sda.earliestDate.year, sda.earliestDate.month, sda.earliestDate.day)}, ` +
+          `is worth about ${fmt$(sda.earlyBonus)} more than waiting for the ${RESTORE_TARGET_DAYS}-day target ` +
+          `(${fmt$(sda.gainIfEarliest)} versus ${fmt$(sda.gain)} this year, and the gap persists in every later year). ` +
+          `The ${RESTORE_TARGET_DAYS} days is a safety buffer against the ${ROLLOVER_DEADLINE_DAYS}-day deadline, ` +
+          `not a target to aim for. Acting earlier also widens that margin, so the only reason to wait is not ` +
+          `having the cash yet.`
+        : '';
 
       if (doWithhold) {
         const restoreAmt = convFedW + convStW;
@@ -1065,6 +1101,7 @@ const TaxPaymentPlanner = (() => {
               ? `Plan C fallback: December draws cover most taxes, but a ${fmt$(restoreAmt)} gap required this minimum conversion withholding. Restoring this amount keeps the full conversion in Roth.`
               : 'Withholding reduces the Roth credit — the 60-day cash replacement makes the conversion whole so the full amount earns tax-free Roth growth.',
             sdaNote,
+            earlyNote,
             'The 60-day replacement is part of a traditional-to-Roth conversion rollover, and the IRS ' +
             'excludes conversions from the one-rollover-per-12-months limit. You can do this on every ' +
             'conversion you make, in the same year, in both IRAs. It also does not use up your one ' +
@@ -1106,7 +1143,8 @@ const TaxPaymentPlanner = (() => {
             `Restore ${fmt$(restoreAmt)} cash into IRA ${iraNum} Roth by ${restoreDateStr}. ` +
             `This replaces the ${fmt$(restoreAmt)} withheld at conversion so the full ${fmt$(convAmt)} earns tax-free Roth growth.`,
           notes: [
-            `Target date: ${RESTORE_TARGET_DAYS} days from conversion (${convDateStr}). The statutory limit is ${ROLLOVER_DEADLINE_DAYS} days [IRS Rollovers], so this leaves a ${ROLLOVER_DEADLINE_DAYS - RESTORE_TARGET_DAYS}-day buffer for transfer processing.`,
+            `This date is the LATEST you should act, not the goal. It is ${RESTORE_TARGET_DAYS} days from the conversion (${convDateStr}), inside the ${ROLLOVER_DEADLINE_DAYS}-day statutory limit [IRS Rollovers], leaving a ${ROLLOVER_DEADLINE_DAYS - RESTORE_TARGET_DAYS}-day buffer for transfer processing. Do it as soon as the cash is available.`,
+            earlyNote,
             `Source: any personal cash account (checking, HYSA, brokerage). Transfer directly into the Roth account.`,
             `This completes a traditional-to-Roth conversion rollover, which the IRS excludes from the one-rollover-per-12-months limit. There is no cap on how many times per year you can do it, and it does not consume your one regular IRA-to-IRA rollover [IRS Rollovers; IRS Ann. 2014-32].`,
             crossesYearEnd

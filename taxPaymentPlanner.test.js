@@ -567,6 +567,42 @@ test('Property: withholding never exceeds the conversion, across a grid', () => 
   assert(offenders.length === 0, `Over-withholding:\n       ${offenders.join('\n       ')}`);
 });
 
+// ── 16. Replacing sooner is worth something, and the tool says so ─────────
+test('Earlier replacement always beats the 45-day target, never the reverse', () => {
+  // gain = withheld x spread x yearsFromRestoreToYearEnd, so pulling the restore date
+  // earlier is strictly positive whenever the portfolio outgrows the cash rate. The 45-day
+  // target is a deadline buffer; presenting it as a goal silently leaves this on the table.
+  const B = { state: 'TX', stateTax: 0, priorYearFedTax: 19000, priorYearStateTax: 0,
+              federalTax: 15000, ira1RothConversion: 80000, taxYear: 2026 };
+  [['February', new Date(2026, 0, 1)], ['June', new Date(2026, 4, 21)]].forEach(([label, todayDate]) => {
+    const r = TaxPaymentPlanner.computePaymentPlan({ ...B, todayDate }).summary.ira1.replacement;
+    assert(r.withheld > 0, `${label}: expected withholding`);
+    assert(r.gainIfEarliest > r.gain, `${label}: earliest (${r.gainIfEarliest}) should beat 45-day (${r.gain})`);
+    assert(r.earlyBonus > 0, `${label}: expected a positive early bonus, got ${r.earlyBonus}`);
+    // The bonus is exactly the spread over the days saved, nothing more.
+    const daysSaved = (new Date(r.restoreDate.year, r.restoreDate.month - 1, r.restoreDate.day)
+                     - new Date(r.earliestDate.year, r.earliestDate.month - 1, r.earliestDate.day)) / 86400000;
+    assertNear(r.earlyBonus, r.withheld * r.spread * daysSaved / 365,
+      `${label}: early bonus must be the spread over the days saved`, 0.5);
+  });
+});
+
+test('December is where the 45-day target costs the most, proportionally', () => {
+  // A December conversion restores in late January, so at the 45-day target the first-year
+  // gain is exactly $0. Replacing before December 31 recovers all of it. This is the case
+  // where treating 45 days as a goal rather than a ceiling does real damage.
+  const r = TaxPaymentPlanner.computePaymentPlan({
+    state: 'TX', stateTax: 0, priorYearFedTax: 19000, priorYearStateTax: 0,
+    federalTax: 15000, ira1RothConversion: 80000, taxYear: 2026,
+    todayDate: new Date(2026, 10, 15),
+  }).summary.ira1.replacement;
+  assert(r.gain === 0, `Expected $0 at the 45-day target, got ${r.gain}`);
+  assert(r.restoreDate.year === 2027, 'The 45-day restore should land next year');
+  assert(r.earliestDate.year === 2026, 'The earliest restore should still be in the tax year');
+  assert(r.gainIfEarliest > 0, `Expected a positive gain from replacing before year end, got ${r.gainIfEarliest}`);
+  assert(r.earlyBonus === r.gainIfEarliest, 'With a $0 baseline the whole gain is the early bonus');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

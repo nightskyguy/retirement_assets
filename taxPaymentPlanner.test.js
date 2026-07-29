@@ -6,12 +6,16 @@
  * Covers:
  *   1. No IRA operations — all quarterly
  *   2. RMD only — full tax coverage from IRA draw
- *   3. Conversion only — no RMD (60-day replace auto-analysis, month from todayDate)
+ *   3. Conversion only — no RMD (60-day replace auto-analysis, month from todayDate),
+ *      plus both December branches: withholding fires when coverage misses safe harbor,
+ *      and stays off when safe harbor is already met
  *   4. Insufficient IRA withdrawal — partial coverage + quarterly shortfall
  *   5. Dual-IRA cross-optimizer — later IRA carries all withholding
  *   6. IRA-exempt state — state tax forced to quarterly
- *   7. 60-day replace — December conversion not recommended (November todayDate → nextMonth=Dec)
- *   8. 60-day replace — early-year conversion recommended (January todayDate → nextMonth=Feb)
+ *   7. Replacement analysis — December conversion with draws covering everything, so
+ *      nothing is withheld and there is nothing to replace
+ *   8. Replacement analysis — early-year conversion has a large first-year gain,
+ *      plus 8b, the regression guard: both sides of the trade share ONE period
  *   9. RMD + conversion same IRA — ordering rule enforced (February todayDate → nextMonth=Mar)
  *  10. Zero taxes — no actions generated
  */
@@ -118,17 +122,50 @@ test('Conversion only — 60-day replace recommended for June conversion', () =>
   assert(convAction.federalWithholding > 0, 'Expected federal withholding on conversion');
 });
 
-test('Conversion only — 60-day replace NOT recommended for December conversion', () => {
-  // November todayDate → nextMonth = December → 0 months remaining → not recommended
+test('December conversion — withholds when coverage would miss safe harbor', () => {
+  // November todayDate → nextMonth = December → 0 months of Roth growth remaining.
+  // No draws, so nothing covers the tax and safe harbor (prior-year $19,000) is missed.
+  // Withholding is deemed paid across all four due dates (IRC 6654(g)), so it fires here
+  // even though there is no Roth growth left to capture.
   const plan = TaxPaymentPlanner.computePaymentPlan({
     ...BASE,
     ira1RothConversion: 80000,
     federalTax: 15000,
     todayDate: new Date(2026, 10, 15), // November 15 → nextMonth = December
   });
-  assert(plan.summary.ira1.doWithhold === false, '60-day replace should NOT be recommended for December');
+  assert(plan.summary.ira1.doWithhold === true, 'December withholding should fire when safe harbor is missed');
   const convAction = plan.actions.find(a => a.type === T.ROTH_CONV);
-  assert(convAction.federalWithholding === 0, 'Expected no withholding on December conversion');
+  assert(convAction.date.month === 12, `Expected December conversion, got month ${convAction.date.month}`);
+  assert(convAction.federalWithholding > 0, 'Expected federal withholding on the December conversion');
+  const restore = plan.actions.find(a => a.type === T.CASH_RESTORE);
+  assert(restore, 'Expected a restore-cash action alongside the withholding');
+  // The substantive reversal from the duration fix: replacing is still right in December.
+  // yearsRem is 0 because the money does not land until January, so the first-year gain is
+  // $0, but the Roth-vs-cash spread applies every year afterward. The old formula returned
+  // recommended=false here only because a phantom 60-day cost survived a zeroed-out benefit.
+  const rep = plan.summary.ira1.replacement;
+  assert(rep.withheld > 0, 'Expected the replacement analysis to see the withheld amount');
+  assert(rep.gain === 0, `Expected first-year gain=0 for a December restore, got ${rep.gain}`);
+  assert(rep.recommended === true, 'December replacement should still be recommended');
+  assert(rep.restoreDate.year === 2027, `Expected the restore to land in 2027, got ${rep.restoreDate.year}`);
+});
+
+test('December conversion — no withholding when safe harbor is already met', () => {
+  // Prior-year federal tax $10,000 → safe harbor $10,000. Draws cover $12,000 of the
+  // $20,000 liability, so safe harbor is satisfied and the $8,000 remainder can ride to
+  // quarterly estimates penalty-free. No reason to touch the December conversion.
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE,
+    ira1Rmd: 12000,
+    ira1RothConversion: 20000,
+    federalTax: 20000,
+    priorYearFedTax: 10000,
+    todayDate: new Date(2026, 10, 15), // November 15 → nextMonth = December
+  });
+  assert(plan.summary.ira1.doWithhold === false, 'Safe harbor already met — December withholding should stay off');
+  const convAction = plan.actions.find(a => a.type === T.ROTH_CONV);
+  assert(convAction.federalWithholding === 0, 'Expected no withholding on the December conversion');
+  assert(plan.summary.shortfall > 0, 'Expected the remainder to flow to quarterly estimates');
 });
 
 // ── 4. Insufficient IRA withdrawal ───────────────────────────────────────
@@ -198,9 +235,12 @@ test('IRA-exempt state (IL) — state tax via quarterly only', () => {
   assertNear(totalStateQ, 5000, 'State quarterly estimates should cover state tax', 5);
 });
 
-// ── 7. 60-day analysis — December conversion ──────────────────────────────
-test('60-day analysis — December conversion has monthsRem=0, net negative', () => {
-  // November todayDate → nextMonth = December → monthsRem = 12-12 = 0 → not recommended
+// ── 7. Replacement analysis — December, nothing withheld ──────────────────
+test('Replacement analysis — December conversion, draws cover everything', () => {
+  // November todayDate → nextMonth = December → monthsRem = 12-12 = 0.
+  // `recommended` scores the Roth-growth economics only. It is no longer the sole gate on
+  // December withholding — see the safe-harbor tests above — but with draws covering the
+  // full liability here there is no shortfall to close, so nothing is withheld either way.
   const plan = TaxPaymentPlanner.computePaymentPlan({
     ...BASE,
     ira1Rmd: 30000,
@@ -208,27 +248,64 @@ test('60-day analysis — December conversion has monthsRem=0, net negative', ()
     federalTax: 20000,
     todayDate: new Date(2026, 10, 15), // November 15 → nextMonth = December
   });
-  const sda = plan.summary.ira1.sixtyDay;
-  assert(sda, 'Expected sixtyDay analysis on summary');
-  assert(sda.monthsRem === 0, `Expected monthsRem=0, got ${sda.monthsRem}`);
-  assert(sda.benefit === 0, `Expected benefit=0, got ${sda.benefit}`);
-  assert(sda.recommended === false, 'December conversion should NOT recommend 60-day replace');
+  const r = plan.summary.ira1.replacement;
+  assert(r, 'Expected replacement analysis on summary');
+  assert(r.monthsRem === 0, `Expected monthsRem=0, got ${r.monthsRem}`);
+  assert(r.withheld === 0, `Draws cover the liability, so nothing is withheld; got ${r.withheld}`);
+  assert(r.gain === 0, `Expected first-year gain=0, got ${r.gain}`);
+  // Not recommended here because there is nothing to replace, NOT because December is a bad
+  // month to replace in. The withholding case is covered in test 3c above.
+  assert(r.recommended === false, 'Nothing withheld means nothing to replace');
+  assert(r.spread > 0, `Roth-vs-cash spread should still be positive, got ${r.spread}`);
 });
 
-// ── 8. 60-day analysis — early-year conversion ────────────────────────────
-test('60-day analysis — early-year conversion is strongly recommended', () => {
+// ── 8. Replacement analysis — early-year conversion ───────────────────────
+test('Replacement analysis — early-year conversion has a large first-year gain', () => {
   // January 1 todayDate → nextMonth = February → monthsRem = 12-2 = 10
-  // 10 months of Roth growth >> 60-day HYSA cost → strongly recommended
   const plan = TaxPaymentPlanner.computePaymentPlan({
     ...BASE,
     ira1RothConversion: 50000,
     federalTax: 8000,
     todayDate: new Date(2026, 0, 1), // January 1 → nextMonth = February
   });
-  const sda = plan.summary.ira1.sixtyDay;
-  assert(sda.monthsRem === 10, `Expected monthsRem=10 (Feb conversion), got ${sda.monthsRem}`);
-  assert(sda.benefit > sda.cost60, `Benefit (${sda.benefit.toFixed(0)}) should exceed cost60 (${sda.cost60.toFixed(0)})`);
-  assert(sda.recommended === true, 'Early-year conversion should recommend 60-day replace');
+  const r = plan.summary.ira1.replacement;
+  assert(r.monthsRem === 10, `Expected monthsRem=10 (Feb conversion), got ${r.monthsRem}`);
+  assert(r.withheld > 0, 'Expected withholding on an early-year conversion');
+  assert(r.gain > 0, `Expected a positive first-year gain, got ${r.gain}`);
+  assert(r.recommended === true, 'Early-year replacement should be recommended');
+  // Growth accrues from the restore date, not the conversion date, so the period is short of
+  // the full 10 months remaining.
+  assert(r.yearsRem < 10 / 12, `yearsRem (${r.yearsRem}) should start at the restore date, not the conversion`);
+});
+
+// ── 8b. Regression guard — both sides of the trade share ONE period ───────
+test('Replacement gain = withheld x spread x yearsRem, at two conversion months', () => {
+  // This is the defect this test exists to catch. The Roth side and the cash side must be
+  // weighted by the SAME period. The previous implementation used monthsRem/12 for the Roth
+  // and 60/365 for the cash, which inflated the gain by 20-50% and went negative in December.
+  // BASE uses the module defaults: portfolioRate 0.07, hysaGross 0.038, marginalOrdRate 0.30.
+  const hysaNet = 0.038 * (1 - 0.30);
+  const spread  = 0.07 - hysaNet;
+
+  [
+    ['February', new Date(2026, 0, 1)],
+    ['June',     new Date(2026, 4, 21)],
+  ].forEach(([label, todayDate]) => {
+    const plan = TaxPaymentPlanner.computePaymentPlan({
+      ...BASE,
+      ira1RothConversion: 80000,
+      federalTax: 15000,
+      todayDate,
+    });
+    const r = plan.summary.ira1.replacement;
+    assertNear(r.spread, spread, `${label}: spread should be portfolioRate minus hysaNet`, 1e-9);
+    assertNear(r.altRate, hysaNet, `${label}: altRate should be the after-tax HYSA rate`, 1e-9);
+    assertNear(r.gain, r.withheld * spread * r.yearsRem,
+      `${label}: gain must be one differential over one period`, 0.01);
+    // And the old shape must be gone, so a future edit cannot quietly resurrect it.
+    assert(r.cost60 === undefined, `${label}: cost60 should no longer exist`);
+    assert(r.benefit === undefined, `${label}: benefit should no longer exist`);
+  });
 });
 
 // ── 9. RMD + conversion same IRA — ordering rule ──────────────────────────
@@ -293,18 +370,20 @@ test('Coverage invariant: totalCovered + shortfall === totalTaxDue for both plan
 
   const totalTax = plan.summary.totalTaxDue;
 
-  // Plan A invariant
-  const aCovered  = plan.summary.totalCovered;
+  // The decomposition is withholding + shortfall, NOT totalCovered + shortfall.
+  // totalCovered means everything the plan pays, quarterly estimates included, so adding
+  // shortfall to it double-counts the gap. This test used to read the gap off totalCovered,
+  // which only worked because the comparison plans skipped building their estimates.
+  const aWithheld  = plan.summary.iraWithholdingUsed;
   const aShortfall = plan.summary.shortfall;
-  assertNear(aCovered + aShortfall, totalTax,
-    `Plan A: covered(${aCovered}) + shortfall(${aShortfall}) should equal tax(${totalTax})`, 2);
+  assertNear(aWithheld + aShortfall, totalTax,
+    `Plan A: withholding(${aWithheld}) + shortfall(${aShortfall}) should equal tax(${totalTax})`, 2);
 
-  // Plan B must also satisfy invariant
   assert(plan.planB !== null, 'Expected Plan B to exist (conversion present)');
-  const bCovered   = plan.planB.summary.totalCovered;
+  const bWithheld  = plan.planB.summary.iraWithholdingUsed;
   const bShortfall = plan.planB.summary.shortfall;
-  assertNear(bCovered + bShortfall, totalTax,
-    `Plan B: covered(${bCovered}) + shortfall(${bShortfall}) should equal tax(${totalTax})`, 2);
+  assertNear(bWithheld + bShortfall, totalTax,
+    `Plan B: withholding(${bWithheld}) + shortfall(${bShortfall}) should equal tax(${totalTax})`, 2);
 
   // Plan B specifically should have a shortfall here because December conversion
   // skips 60-day withholding (0 months of Roth growth → not worth the cost),
@@ -315,6 +394,286 @@ test('Coverage invariant: totalCovered + shortfall === totalTaxDue for both plan
   // Plan A should have no shortfall — conversion withholding plugs the gap.
   assert(aShortfall === 0,
     `Plan A should fully cover taxes via conversion withholding; shortfall was ${aShortfall}`);
+});
+
+// ── 12. Business-day helpers ──────────────────────────────────────────────
+const {
+  isBusinessDay, nextBusinessDay, firstMondayAfter, dueDateFor, ORDERING_BUFFER_DAYS,
+} = TaxPaymentPlanner;
+
+test('isBusinessDay — weekends, the two holidays, and their observance shifts', () => {
+  assert(isBusinessDay(new Date(2026, 6, 15)) === true,  'Wed Jul 15 2026 is a business day');
+  assert(isBusinessDay(new Date(2026, 6, 18)) === false, 'Sat Jul 18 2026 is not');
+  assert(isBusinessDay(new Date(2026, 6, 19)) === false, 'Sun Jul 19 2026 is not');
+  // Jan 1 2026 is a Thursday, Dec 25 2026 is a Friday — both fall on their actual dates.
+  assert(isBusinessDay(new Date(2026, 0,  1)) === false, "New Year's Day 2026 is not");
+  assert(isBusinessDay(new Date(2026, 11, 25)) === false, 'Christmas 2026 is not');
+  // 5 USC 6103(b): Christmas 2027 is a Saturday, so it is observed Friday Dec 24.
+  assert(isBusinessDay(new Date(2027, 11, 24)) === false, 'Christmas observed Fri Dec 24 2027 is not');
+  // Jan 1 2028 is a Saturday, so it is observed Friday Dec 31 2027.
+  assert(isBusinessDay(new Date(2027, 11, 31)) === false, "New Year's observed Fri Dec 31 2027 is not");
+  // Jan 1 2033 is a Saturday -> observed Fri Dec 31 2032; Jan 1 2034 is a Sunday -> observed Mon Jan 2.
+  assert(isBusinessDay(new Date(2034, 0, 2)) === false, "New Year's observed Mon Jan 2 2034 is not");
+});
+
+test('nextBusinessDay — rolls forward off weekends and across year end', () => {
+  const iso = d => d.toISOString().slice(0, 10);
+  assert(iso(nextBusinessDay(new Date(2026, 6, 17))) === '2026-07-17', 'a Friday stays put');
+  assert(iso(nextBusinessDay(new Date(2026, 6, 18))) === '2026-07-20', 'Saturday rolls to Monday');
+  // Dec 31 2026 is a Thursday, but Jan 1 2027 is a Friday holiday, so a Jan 1 target
+  // must land on Monday Jan 4.
+  assert(iso(nextBusinessDay(new Date(2027, 0, 1))) === '2027-01-04', "New Year's Day 2027 rolls to Mon Jan 4");
+});
+
+test('firstMondayAfter — the January draw target, every year 2026 to 2032', () => {
+  for (let y = 2026; y <= 2032; y++) {
+    const m = firstMondayAfter(y, 1, 1);
+    assert(m.getDay() === 1, `${y}: expected a Monday, got day ${m.getDay()}`);
+    assert(m > new Date(y, 0, 1), `${y}: must be strictly after New Year's Day`);
+    assert(m.getMonth() === 0, `${y}: must still be in January`);
+  }
+});
+
+// ── 13. The January 1 regression ──────────────────────────────────────────
+test('Future tax year with RMD + conversion no longer schedules January 1', () => {
+  // nextMonth is forced to January for any future tax year, and the same-month split used
+  // to be day 1 / day 8. For 2028 that produced Jan 1 (New Year's Day AND a Saturday) and
+  // Jan 8 (also a Saturday). Now: first Monday after New Year's, plus the ordering buffer.
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE,
+    taxYear: 2028,
+    ira1Rmd: 30000,
+    ira1RothConversion: 40000,
+    federalTax: 20000,
+    todayDate: new Date(2026, 6, 29),
+  });
+  const rmd  = plan.actions.find(a => a.type === T.RMD);
+  const conv = plan.actions.find(a => a.type === T.ROTH_CONV);
+  assert(rmd.date.month === 1 && rmd.date.day === 3,  `Expected RMD on Jan 3 2028, got ${rmd.date.month}/${rmd.date.day}`);
+  assert(conv.date.month === 1 && conv.date.day === 10, `Expected conversion on Jan 10 2028, got ${conv.date.month}/${conv.date.day}`);
+  const gap = (new Date(2028, 0, conv.date.day) - new Date(2028, 0, rmd.date.day)) / 86400000;
+  assert(gap >= ORDERING_BUFFER_DAYS, `Ordering buffer must survive the nudge; gap was ${gap} days`);
+});
+
+// ── 13b. The sweep — the real guard ───────────────────────────────────────
+test('No action lands on a non-business day, tax years 2026 to 2035', () => {
+  // Catches any future emission point that forgets to nudge.
+  const offenders = [];
+  for (let y = 2026; y <= 2035; y++) {
+    // Two shapes: RMD and conversion in the same month (the split path), and draws only
+    // (the day-15 path). Run a state with its own schedule so state due dates are covered.
+    [{ ira1Rmd: 30000, ira1RothConversion: 40000 },
+     { ira1Rmd: 25000, ira1Voluntary: 15000 }].forEach(shape => {
+      const plan = TaxPaymentPlanner.computePaymentPlan({
+        ...BASE, ...shape,
+        taxYear: y,
+        state: 'VA',              // May 1 Q1 deadline, hits a Saturday in 2027 and 2032
+        federalTax: 20000,
+        stateTax: 6000,
+        priorYearStateTax: 5000,
+        todayDate: new Date(2026, 6, 29),
+      });
+      plan.actions.filter(a => a.date).forEach(a => {
+        const d = new Date(a.date.year, a.date.month - 1, a.date.day);
+        if (!isBusinessDay(d)) offenders.push(`${y} ${a.type} ${d.toDateString()}`);
+      });
+    });
+  }
+  assert(offenders.length === 0, `Non-business-day actions:\n       ${offenders.join('\n       ')}`);
+});
+
+// ── 14. IRC 7503 on due dates ─────────────────────────────────────────────
+test('IRC 7503 — a due date on a weekend moves to the next business day', () => {
+  // April 15 2028 is a Saturday.
+  const d = dueDateFor({ month: 4, day: 15, w: 0.25, label: 'Q1', nextYear: false }, 2028);
+  assert(d.shifted === true, 'Apr 15 2028 falls on a Saturday and should shift');
+  assert(d.date.month === 4 && d.date.day === 17, `Expected Apr 17 2028, got ${d.date.month}/${d.date.day}`);
+  // April 15 2026 is a Wednesday and must not move.
+  const same = dueDateFor({ month: 4, day: 15, w: 0.25, label: 'Q1', nextYear: false }, 2026);
+  assert(same.shifted === false, 'Apr 15 2026 is a Wednesday and should not shift');
+});
+
+test('IRC 7503 — the shifted date drives the past-due check, not the statutory one', () => {
+  // April 15 2029 is a Sunday, so the real deadline is Monday April 16. Under the old
+  // code the tool compared today against Sunday the 15th and flagged the installment past
+  // due a day early.
+  const onMonday = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, taxYear: 2029, federalTax: 20000, todayDate: new Date(2029, 3, 16),
+  });
+  const q1 = onMonday.actions.find(a => a.type === T.Q_FED && a.date.month === 4);
+  assert(q1, 'Expected a Q1 federal estimate');
+  assert(q1.date.day === 16, `Expected the deadline shown as Apr 16 2029, got day ${q1.date.day}`);
+  assert(!/PAST DUE/.test(q1.description), 'On Apr 16 2029 the deadline has not passed, so not past due');
+  assert(q1.notes.some(n => n.includes('IRC 7503')), 'Expected the shift to be explained in a note');
+  // One day later it is past due.
+  const after = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, taxYear: 2029, federalTax: 20000, todayDate: new Date(2029, 3, 17),
+  });
+  const q1b = after.actions.find(a => a.type === T.Q_FED && a.date.month === 4);
+  assert(/PAST DUE/.test(q1b.description), 'Apr 17 2029 is after the shifted deadline');
+});
+
+// ── 15. Conversion withholding can never exceed the conversion ────────────
+test('Gap fill caps withholding at the conversion amount (the 497% bug)', () => {
+  // Reported case: 2027 CA, $67,000 total tax, $30,000 of draws, and a $5,000 conversion.
+  // The gap fill sized withholding off the $37,000 shortfall without ever looking at the
+  // conversion, producing $24,851 federal (497% of the conversion) and $12,149 state (243%).
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    taxYear: 2027, state: 'CA',
+    federalTax: 45000, stateTax: 22000,
+    priorYearFedTax: 33000, priorYearStateTax: 11500,
+    ira1Rmd: 15000, ira1Voluntary: 10000, ira1RothConversion: 5000, ira2Rmd: 5000,
+    ssIncome: 20000, pensionIncome: 15000, interest: 5000, qualifiedDivs: 8000, capitalGains: 10000,
+    todayDate: new Date(2026, 6, 29),
+  });
+  const c = plan.actions.find(a => a.type === T.ROTH_CONV);
+  const withheld = c.federalWithholding + c.stateWithholding;
+  assert(withheld <= c.amount,
+    `Withholding (${withheld}) must not exceed the conversion (${c.amount})`);
+  assert(withheld === 5000, `Expected the full $5,000 cap to be used, got ${withheld}`);
+  // The uncovered remainder has to become quarterly estimates, not vanish.
+  assert(plan.summary.shortfall > 0, 'Expected the unabsorbed gap to become a shortfall');
+  assert(plan.actions.some(a => a.type === T.Q_FED), 'Expected quarterly federal estimates');
+  assert(c.notes.some(n => n.includes('too small to carry')), 'Expected the cap to be explained');
+});
+
+test('Property: withholding never exceeds the conversion, across a grid', () => {
+  // The class of bug, not just the one instance. Sweeps conversion size against tax size so
+  // the gap fill is forced to want far more than the conversion can carry.
+  const offenders = [];
+  [1000, 5000, 25000, 100000].forEach(conv => {
+    [10000, 67000, 200000].forEach(fed => {
+      ['CA', 'TX', 'IL'].forEach(state => {           // IL is IRA-exempt
+        const plan = TaxPaymentPlanner.computePaymentPlan({
+          taxYear: 2027, state,
+          federalTax: fed, stateTax: state === 'TX' ? 0 : Math.round(fed * 0.4),
+          priorYearFedTax: Math.round(fed * 0.8), priorYearStateTax: 0,
+          ira1Rmd: 15000, ira1Voluntary: 10000, ira1RothConversion: conv,
+          ira2Rmd: 5000, ira2RothConversion: Math.round(conv / 2),
+          todayDate: new Date(2026, 6, 29),
+        });
+        plan.actions.filter(a => a.type === T.ROTH_CONV).forEach(a => {
+          const w = a.federalWithholding + a.stateWithholding;
+          if (w > a.amount) offenders.push(`conv=${conv} fed=${fed} ${state}: withheld ${w} on ${a.amount}`);
+          // An IRA-exempt state cannot withhold state tax from an IRA distribution at all.
+          if (state === 'IL' && a.stateWithholding > 0) {
+            offenders.push(`conv=${conv} fed=${fed} IL: state withholding ${a.stateWithholding} in an IRA-exempt state`);
+          }
+        });
+        // And federal withholding must never exceed the federal liability.
+        const fedW = plan.actions.reduce((s, a) => s + (a.type === T.Q_FED ? 0 : a.federalWithholding), 0);
+        if (fedW > fed + 2) offenders.push(`conv=${conv} fed=${fed} ${state}: federal withheld ${fedW} > liability ${fed}`);
+      });
+    });
+  });
+  assert(offenders.length === 0, `Over-withholding:\n       ${offenders.join('\n       ')}`);
+});
+
+// ── 16. Replacing sooner is worth something, and the tool says so ─────────
+test('Earlier replacement always beats the 45-day target, never the reverse', () => {
+  // gain = withheld x spread x yearsFromRestoreToYearEnd, so pulling the restore date
+  // earlier is strictly positive whenever the portfolio outgrows the cash rate. The 45-day
+  // target is a deadline buffer; presenting it as a goal silently leaves this on the table.
+  const B = { state: 'TX', stateTax: 0, priorYearFedTax: 19000, priorYearStateTax: 0,
+              federalTax: 15000, ira1RothConversion: 80000, taxYear: 2026 };
+  [['February', new Date(2026, 0, 1)], ['June', new Date(2026, 4, 21)]].forEach(([label, todayDate]) => {
+    const r = TaxPaymentPlanner.computePaymentPlan({ ...B, todayDate }).summary.ira1.replacement;
+    assert(r.withheld > 0, `${label}: expected withholding`);
+    assert(r.gainIfEarliest > r.gain, `${label}: earliest (${r.gainIfEarliest}) should beat 45-day (${r.gain})`);
+    assert(r.earlyBonus > 0, `${label}: expected a positive early bonus, got ${r.earlyBonus}`);
+    // The bonus is exactly the spread over the days saved, nothing more.
+    const daysSaved = (new Date(r.restoreDate.year, r.restoreDate.month - 1, r.restoreDate.day)
+                     - new Date(r.earliestDate.year, r.earliestDate.month - 1, r.earliestDate.day)) / 86400000;
+    assertNear(r.earlyBonus, r.withheld * r.spread * daysSaved / 365,
+      `${label}: early bonus must be the spread over the days saved`, 0.5);
+  });
+});
+
+test('December is where the 45-day target costs the most, proportionally', () => {
+  // A December conversion restores in late January, so at the 45-day target the first-year
+  // gain is exactly $0. Replacing before December 31 recovers all of it. This is the case
+  // where treating 45 days as a goal rather than a ceiling does real damage.
+  const r = TaxPaymentPlanner.computePaymentPlan({
+    state: 'TX', stateTax: 0, priorYearFedTax: 19000, priorYearStateTax: 0,
+    federalTax: 15000, ira1RothConversion: 80000, taxYear: 2026,
+    todayDate: new Date(2026, 10, 15),
+  }).summary.ira1.replacement;
+  assert(r.gain === 0, `Expected $0 at the 45-day target, got ${r.gain}`);
+  assert(r.restoreDate.year === 2027, 'The 45-day restore should land next year');
+  assert(r.earliestDate.year === 2026, 'The earliest restore should still be in the tax year');
+  assert(r.gainIfEarliest > 0, `Expected a positive gain from replacing before year end, got ${r.gainIfEarliest}`);
+  assert(r.earlyBonus === r.gainIfEarliest, 'With a $0 baseline the whole gain is the early bonus');
+});
+
+// ── 17. Missing the 60-day deadline is spelled out, and spelled out correctly ──
+test('Restore action states the consequences of blowing the deadline', () => {
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, ira1RothConversion: 80000, federalTax: 15000,
+  });
+  const restore = plan.actions.find(a => a.type === T.CASH_RESTORE);
+  assert(restore, 'Expected a restore-cash action');
+  const all = restore.notes.join(' ');
+  assert(/IF YOU MISS THE 60 DAYS/.test(all), 'Expected an explicit missed-deadline note');
+  assert(all.includes('IRC 4973'), 'Expected the 6% excess-contribution excise cited');
+  assert(all.includes('Rev. Proc. 2020-46'), 'Expected the self-certification route cited');
+  assert(all.includes('IRC 408(d)(3)'), 'Expected the 60-day statute cited');
+  // The precision that generic advice gets wrong: for a CONVERSION the gross is taxable
+  // either way, so missing the deadline costs Roth space and possibly the 10% penalty,
+  // NOT extra income tax. The note must not claim the withheld amount "becomes taxable".
+  assert(all.includes('Your income tax does not change'),
+    'The note must say income tax is unchanged, since the gross was taxable either way');
+  assert(!/becomes taxable/i.test(all), 'Must not imply the withheld amount newly becomes taxable');
+});
+
+// ── 18. EVERY displayed plan pays the whole liability ─────────────────────
+// The one that matters. All three plans are complete action lists a user is meant to
+// follow, so each must add up to the full tax due. Two of them used to skip building
+// their quarterly estimates entirely, so 25k of draws and a 10k conversion against a
+// 72k liability produced 35k of payments and no estimates in the displayed Plan A and
+// Plan C. Nothing caught it, because the old invariant read the gap off totalCovered
+// and therefore depended on those estimates being absent.
+test('Every plan pays 100% of the tax due, to within $1', () => {
+  const paidBy = acts => acts.reduce((s, a) => s + a.federalWithholding + a.stateWithholding, 0);
+  const offenders = [];
+
+  // The reported case, both tax years, plus shapes that stress each funding path:
+  // withholding covers everything, withholding covers nothing, and no conversion at all.
+  const scenarios = [];
+  [2026, 2027].forEach(taxYear => {
+    ['CA', 'TX', 'IL', 'VA'].forEach(state => {          // incl. an IRA-exempt and an odd schedule
+      [
+        { label: 'reported case',    ira1Rmd: 5000,  ira1Voluntary: 15000, ira1RothConversion: 10000, ira2Rmd: 5000 },
+        { label: 'draws cover all',  ira1Rmd: 60000, ira1Voluntary: 30000, ira1RothConversion: 10000 },
+        { label: 'nothing to draw',  ira1RothConversion: 5000 },
+        { label: 'no conversion',    ira1Rmd: 5000,  ira1Voluntary: 5000 },
+        { label: 'dual IRA conv',    ira1Rmd: 5000,  ira1RothConversion: 8000, ira2Rmd: 4000, ira2RothConversion: 6000 },
+      ].forEach(shape => scenarios.push({ taxYear, state, ...shape }));
+    });
+  });
+
+  scenarios.forEach(sc => {
+    const { label, ...inputs } = sc;
+    const plan = TaxPaymentPlanner.computePaymentPlan({
+      federalTax: 45000, stateTax: sc.state === 'TX' ? 0 : 27000,
+      priorYearFedTax: 33000, priorYearStateTax: sc.state === 'TX' ? 0 : 11500,
+      ssIncome: 20000, pensionIncome: 15000, interest: 5000,
+      qualifiedDivs: 8000, capitalGains: 10000,
+      todayDate: new Date(2026, 6, 29),
+      ...inputs,
+    });
+    const due = plan.summary.totalTaxDue;
+    // planC is displayed as Plan A, the main object as Plan B, planB as Plan C.
+    const variants = [['A', plan.planC], ['B', plan], ['C', plan.planB]].filter(v => v[1]);
+    variants.forEach(([name, obj]) => {
+      const paid = paidBy(obj.actions);
+      if (Math.abs(paid - due) > 1) {
+        offenders.push(`${sc.taxYear} ${sc.state} "${label}" Plan ${name}: paid ${paid} of ${due} (short ${due - paid})`);
+      }
+    });
+  });
+
+  assert(offenders.length === 0,
+    `Plans that do not pay the full liability:\n       ${offenders.join('\n       ')}`);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────

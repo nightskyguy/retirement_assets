@@ -6,6 +6,106 @@ Goal: Complete open features from the original priority list plus deferred items
 
 ---
 
+## TPP-1..5 Tax Payment Planner backlog (2026-07-29) — OPEN
+
+Requested by the user after testing `RetirementTaxPlanner.html` v1.13b9 on branch
+`worktrees/roth-conversion-withhold-replace-a9c195` (PR #136). That branch corrected the
+Roth rollover rules, the replacement economics, business-day scheduling, IRC 7503 due-date
+shifting, the 497%-over-withholding bug, and the two displayed plans that were not paying
+the full liability. Everything below is new work on top of it.
+
+Engine is `taxPaymentPlanner.js`; the HTML is a thin shell. Tests are `taxPaymentPlanner.test.js`
+(27 passing, node-only today).
+
+### TPP-1 — Estimate the penalty when the user is already late
+
+`detectMissed()` already flags past-due installments and the UI says "PAST DUE", but never
+says what it will cost. Quantify it.
+
+IRC 6654 is interest-like, not a flat fee: per installment period, on the amount by which
+that period's required installment exceeded what was credited by its due date, running from
+the due date to the earlier of the date paid or the following April 15. Simple, not
+compounded. Rate is the §6621(a)(2) federal short-term rate plus 3 points, redetermined
+quarterly.
+
+Pieces the engine already has: `dueDateFor` (IRC 7503 shifted dates), `shFed`/`shState`
+(required annual payment via safe harbor), `FED_Q` weights, and the IRC 6654(g)(1) ratable
+withholding credit, which must be applied here or the estimate will be far too high for
+anyone using year-end withholding.
+
+Missing, and the main design decision: **the rate table.** Rates are announced quarterly, so
+hardcode the announced ones with an explicit documented fallback for quarters not yet
+announced, cite the IRS quarterly-interest-rate page in `RULE_CITES`, and label the output an
+estimate. Do not silently extrapolate.
+
+Also implement the §6654(e) exceptions or the tool will invent penalties that do not exist:
+no penalty where tax minus withholding is under $1,000, or where the prior year showed no
+liability over a full 12-month year.
+
+Scope: federal only in the first pass. State penalty regimes differ per state and the
+`STATE_DB` has no rate data; say plainly that the state figure is not modeled rather than
+implying the federal number covers it.
+
+### TPP-2 — Remedies that actually reduce the penalty
+
+Given the same facts, rank what the user can still do. The important asymmetry, which the
+engine already understands but does not exploit for this purpose:
+
+- **Extra withholding retroactively cures elapsed quarters** (IRC 6654(g)(1) credits it
+  ratably across all four due dates). This is the strong remedy.
+- **A larger quarterly payment does not.** Estimates are credited when paid, so front-loading
+  helps future periods only and cannot repair Q1 in November.
+- **Form 2210 Schedule AI** re-cuts each period against income actually received by then,
+  which can erase the early-quarter underpayment outright when the income was genuinely
+  late-year. Already narrated by the tool; here it becomes a scored option.
+- **Reaching safe harbor** caps exposure regardless of the shape of the year.
+
+For "take an extra IRA withdrawal and withhold it": model the self-defeat. Withdrawing `W`
+and withholding all of it pays `W` toward the liability but adds `m·W` of new tax at the
+marginal rate, so net progress is `W(1-m)` and closing a gap `G` needs `G/(1-m)` gross. That
+is the same gross-up shape as `applyConversionGrossUp()` in `optimizer_core.js:1930`; reuse
+the approach rather than deriving it again. Compare the grossed-up cost against the penalty
+avoided and only recommend it when it actually wins.
+
+### TPP-3 — Run the tests from the browser
+
+`taxPaymentPlanner.test.js` is node-only: bare `require` at the top, `process.exitCode` at the
+bottom. Make it dual-mode so `RetirementTaxPlanner.html?runtests` runs it.
+
+Follow the existing pattern rather than inventing one: `optimizer_tests.js` defines a global
+`runTests()` that logs to console and writes a pass/fail glyph into a `#testsFailed` element,
+called from `retirement_optimizer.html:1129`. Differences to handle here: guard the `require`
+for the browser, replace `process.exitCode` with a return value, and gate on the `?runtests`
+param instead of running unconditionally. Render results on the page as well as the console,
+since the request was to see them directly.
+
+### TPP-4 — Compute button reachable without scrolling
+
+`#compute` sits at `RetirementTaxPlanner.html:446`, at the bottom of a long input panel.
+Duplicate it at the top. IDs must stay unique, so use a shared class or `compute-top` /
+`compute-bottom` bound to one handler. Note the panel is collapsible (`.inputs.collapsed`
+hides `.inputs-body` entirely), so check both states; a sticky button may serve better than
+two copies.
+
+### TPP-5 — Deduplicate the long-form note text
+
+Measured on a dual-IRA dual-conversion scenario: **174 notes across the three plans, 69 of
+them over 200 characters, 26,184 characters total.** Each boilerplate block repeats six times
+(once per IRA per plan), and "Sooner is better" twelve times, since it rides both the
+conversion and the restore action.
+
+Move the long form into `RULE_CITES` entries and leave a short inline pointer. Candidates,
+all in `taxPaymentPlanner.js`: the "IF YOU MISS THE 60 DAYS" block, "Relief is narrow", "This
+completes a traditional-to-Roth conversion rollover", "The exclusion covers the CONVERSION
+only", and "Sooner is better".
+
+Constraint: the plain-text tab has no clickable anchors, so the pointer must name the tag in
+a form that is findable by eye, e.g. `[see IRC 4973 in Rules and sources]`. Both `buildText`
+and `buildHtml` need the treatment. Keep whatever is genuinely per-scenario (dollar amounts,
+dates, the capped-withholding explanation) inline, since that is not boilerplate.
+
+---
+
 ## PR-E/F/G Round 2: user-testing fixes (2026-07-28, v11.13a1) — COMPLETE
 
 Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs were re-versioned from v11.1391 to **v11.13a1** and ship together.

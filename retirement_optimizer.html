@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here — do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1387</title>
+    <title>Retirement Optimizer 11.13a1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -54,11 +54,11 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1112fd"></script>
-	<script src="optimizer_core.js?v=111387"></script>
+	<script src="optimizer_core.js?v=1113a1a"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=111387a"></script>
+	<script src="optimizer_ui.js?v=1113a1ja"></script>
 	<script src="optimizer_tests.js?v=1111f3"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
@@ -191,7 +191,7 @@
         <summary>1. Profile &amp; Ages</summary>
         <div class="compact-row">
             <label title="Your year of birth (e.g. 1960). Used to calculate your current age and Required Minimum Distribution (RMD) schedule.">Birth Year<input type="number" id="birthyear1" value="1960" oninput="updateProfileAgeDisplay()"></label>
-            <label title="Your birth month. Combined with birth year to determine the exact year you reach key ages (RMD start, SS claiming, etc.).">Mo.<select id="birthmonth1" onchange="updateProfileAgeDisplay()"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
+            <label title="Your birth month. Combined with birth year to determine the exact year you reach key ages (RMD start, SS claiming, etc.). It also sets how much Social Security you are paid in your claiming year, counting from this month to the end of that year.">Mo.<select id="birthmonth1" onchange="updateProfileAgeDisplay()"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
             <label class="compact-age" title="The age you expect to live to. The simulation runs until this age. Use a conservative (older) estimate to stress-test your plan.">Life Exp.<input type="number" id="die1" value="88"></label>
         </div>
         <div class="compact-row" style="font-size:0.82em;color:#555;margin-top:0;padding-top:0;" id="age-display-1"></div>
@@ -211,7 +211,7 @@
         </div>
         <div class="compact-row spouse-field">
             <label title="Spouse's year of birth. Used to calculate their age, Required Minimum Distribution (RMD) schedule, and when survivor filing status applies."><i>Sp. Birth Year</i><input type="number" id="birthyear2" value="1952" oninput="updateProfileAgeDisplay()"></label>
-            <label title="Spouse's birth month. Used with birth year to determine exact ages for RMDs and Social Security."><i>Mo.</i><select id="birthmonth2" onchange="updateProfileAgeDisplay()"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
+            <label title="Spouse's birth month. Used with birth year to determine exact ages for RMDs and Social Security. It also sets how much Social Security they are paid in their claiming year, counting from this month to the end of that year."><i>Mo.</i><select id="birthmonth2" onchange="updateProfileAgeDisplay()"><option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option><option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option><option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12" selected>Dec</option></select></label>
             <label class="compact-age" title="The age your spouse is expected to live to. After this age the simulation switches to Single filing status and survivor Social Security rules apply."><i>Sp. Life</i><input type="number" id="die2" value="98"></label>
         </div>
         <div class="compact-row spouse-field" style="font-size:0.82em;color:#555;margin-top:0;padding-top:0;" id="age-display-2"></div>
@@ -318,14 +318,14 @@
         <summary>3. Annual Income &amp; QCDs</summary>
         <div class="row">
             <div><label title="Your gross annual Social Security benefit in today's dollars, at the start age below. Grows with the CPI/COLA rate each year.">Social Security Amt<input type="text" id="ss1" value="48000"></label></div>
-            <div><label title="Age you start claiming Social Security. Benefits before this age are $0. Eligibility usually begins at 62; benefits stop increasing after 70.">Start Age<input type="number" id="ss1Age" value="70"
+            <div><label title="Age you start claiming Social Security. Benefits before this age are $0. Eligibility usually begins at 62; benefits stop increasing after 70.&#10;&#10;The first year is paid from your birth month onward, not in full: a June birth month means 6 months of benefit that year, and the default December means none at all until the following year.">Start Age<input type="number" id="ss1Age" value="70"
               oninput="(function(v,el){el.style.display=v>0&&v<62?'block':v>70?'block':'none';el.textContent=v<62?'⚠ SS eligibility usually begins at 62.':'⚠ SS benefits do not increase after 70.';})(+this.value,document.getElementById('ss1Age-warn'))"></label></div>
         </div>
         <div id="ss1Age-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;"></div>
         <div class="row spouse-field">
             <div><label title="Your spouse's gross annual Social Security benefit in today's dollars, at their start age. Grows with the CPI/COLA rate each year."><B><I>Spouse</I></B> SS Amt<input type="text" id="ss2" value="24000"></label></div>
             <!-- TODO: Change default Spouse SS Start Age from 70 to 62. -->
-            <div><label title="Age your spouse starts claiming Social Security. Benefits before this age are $0. Eligibility usually begins at 62; benefits stop increasing after 70."><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"
+            <div><label title="Age your spouse starts claiming Social Security. Benefits before this age are $0. Eligibility usually begins at 62; benefits stop increasing after 70.&#10;&#10;The first year is paid from their birth month onward, not in full: a June birth month means 6 months of benefit that year, and the default December means none at all until the following year."><B><I>Spouse</I></B> Start Age<input type="number" id="ss2Age" value="70"
               oninput="(function(v,el){el.style.display=v>0&&v<62?'block':v>70?'block':'none';el.textContent=v<62?'⚠ SS eligibility usually begins at 62.':'⚠ SS benefits do not increase after 70.';})(+this.value,document.getElementById('ss2Age-warn'))"></label></div>
         </div>
         <div id="ss2Age-warn" style="display:none;background:#fff3cd;color:#856404;border:1px solid #ffc107;border-radius:4px;padding:3px 7px;font-size:0.82em;margin-top:3px;"></div>
@@ -423,6 +423,11 @@
                     <div id="stat-conv-be-diagnose-result" style="display:none;font-size:0.75em;max-width:230px;color:#555;text-align:left;margin-top:2px;"></div>
                 </div>
                 <div title="Portfolio withdrawals funding spending and taxes, divided by the start-of-year portfolio balance. The classic 4% rule targets ~4%. See wdRate% column in Annual Details."><small>Withdrawal Rate</small><br><strong id="stat-avg-spend-rate" style="font-size:0.9em;">—</strong></div>
+                <!-- Written by updateStressStat() in montecarlo/mc_tab.js, NOT by updateStats().
+                     The stress pass re-runs on every input change (it is ~10 simulations), so unlike
+                     the rest of Monte Carlo this number is always current and belongs on a bar that
+                     is visible from every tab. Tooltip is rebuilt with the value. -->
+                <div title="Of the harshest return periods in the historical record, how many your current plan runs out of money in."><small>Stress Test</small><br><strong id="stat-stress" style="font-size:0.9em;">—</strong></div>
                 <div title="The current version of this software. See 'Change Log' on the Documentation tab for details."><small>Version</small><br><strong id="stat-version" style="font-size:0.9em;"></strong></div>
 				<!-- Ephemeral notes trail the stats: "↺ what changed" and the Load/Save result. -->
 				<div id="stat-success" style="font-size:0.8em;color:#555;align-self:center;"></div>
@@ -511,6 +516,14 @@
 			<!-- Error display -->
 			<div id="mc-error" style="display:none;padding:8px 12px;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;color:#721c24;margin-bottom:10px;font-size:0.9em;"></div>
 
+			<!-- Shown when the sidebar has changed since the last full run. The stress pass below
+			     refreshes on its own (it is ~10 simulations); the 500-path sweep is far too
+			     expensive to re-run on every edit, so it is flagged rather than recomputed. -->
+			<div id="mc-stale-banner" style="display:none;padding:8px 12px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;color:#856404;margin-bottom:10px;font-size:0.9em;">
+				<strong>Out of date.</strong> The chart and survival table below were run before your latest changes. The Stress Test result is current.
+				<button onclick="runMonteCarlo()" style="margin-left:8px;padding:3px 12px;font-size:0.9em;cursor:pointer;">Re-run</button>
+			</div>
+
 			<!-- Survival rate table -->
 			<div id="mc-table-wrap" style="display:none;margin-bottom:16px;">
 				<div id="mc-table-title" style="font-size:0.9em;font-weight:600;color:#333;margin-bottom:3px;"></div>
@@ -532,22 +545,30 @@
 				</div>
 			</div>
 
+			<!-- Stress test comes FIRST: it is the part that recomputes on every input change, so it
+			     is the only section here guaranteed to describe the plan currently in the sidebar.
+			     Foldable (same <details> idiom as Input Distributions below) for readers who only
+			     want the 500-path view; the headline count is mirrored into the <summary> so the
+			     number stays readable while collapsed. Hidden entirely in Synthetic mode. -->
+			<div id="mc-stress-chart-wrap" style="display:none;">
+				<details open>
+					<summary style="font-size:0.95em;color:#333;cursor:pointer;user-select:none;font-weight:600;margin-bottom:8px;">Stress Test <span id="mc-stress-fold-label" style="font-weight:400;color:#666;"></span></summary>
+					<div id="mc-stress-headline"></div>
+					<div id="mc-stress-metrics" style="margin-bottom:8px;font-size:0.82em;color:#444;"></div>
+					<div id="mc-stress-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;"></div>
+					<div style="position:relative;height:420px;">
+						<canvas id="mc-stress-chart"></canvas>
+					</div>
+				</details>
+			</div>
+
 			<!-- Percentile band chart -->
-			<div id="mc-chart-wrap" style="display:none;">
+			<div id="mc-chart-wrap" style="display:none;margin-top:16px;">
 				<div id="mc-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;">
 					Shaded areas: outer = p5–p95, inner = p25–p75. Solid line = median (p50). Paths that hit ruin stay at $0.
 				</div>
 				<div style="position:relative;height:420px;">
 					<canvas id="mc-chart"></canvas>
-				</div>
-			</div>
-
-			<!-- Stress-test chart — auto-computed alongside Historical mode; hidden in Synthetic mode -->
-			<div id="mc-stress-chart-wrap" style="display:none;margin-top:16px;">
-				<div id="mc-stress-metrics" style="margin-bottom:8px;font-size:0.82em;color:#444;"></div>
-				<div id="mc-stress-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;"></div>
-				<div style="position:relative;height:420px;">
-					<canvas id="mc-stress-chart"></canvas>
 				</div>
 			</div>
 
@@ -603,21 +624,30 @@
 			</div>
 			<details style="margin-bottom:12px;">
 				<summary style="cursor:pointer;font-weight:bold;">Change Log</summary>
-				<p>For more details, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
+				<p>The five most recent releases are summarized here. Full write-ups of every release live in <STRONG><A HREF="optimizer_changelog.md" target="_blank" rel="noopener">optimizer_changelog.md</A></STRONG>. For what the tool does and how to use it, consult the <STRONG><A HREF="https://tools.netcitizen.us/">README.md</A></STRONG>.</p>
 				<!-- VERSION SYNC — read before adding a new entry below:
 				     The number in the NEXT <li><b> you add must also be typed into the <title> tag
 				     in <head> (search the "Version:" comment near the top of the file). The two are
 				     independent hardcoded values on purpose — see that comment for why — so bumping
 				     one without the other will silently desync the page title, Google Analytics, and
-				     the Version stat in the Summary Header. -->
+				     the Version stat in the Summary Header.
+
+				     WHERE THE DETAIL LIVES: this list holds a SHORT summary of the five most recent
+				     releases only. The full write-up of every release, including everything older
+				     than these five, lives in optimizer_changelog.md at the repo root. When you add
+				     a release: write the detailed entry there first, then a two or three sentence
+				     summary here, then drop the sixth-oldest <li> from this list (its detail is
+				     already preserved in the .md, so nothing is lost). Keep the "Details" link.
+
+				     The banner above copies the FIRST <li>'s innerHTML verbatim, so keeping these
+				     entries short is what keeps the banner short. -->
+
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.1387</b> <strong>Your own plan now appears in the Optimizer table, so you can compare it against every strategy it suggests.</strong> A pinned 📍 CURRENT row sits under the ⚓ baseline showing your sidebar settings run exactly as they are, including whether conversions are on, any Extra Annual Roth Conversion, and any stop year. That matters because every strategy the Optimizer sweeps is run with conversions turned on and your own conversion settings set aside, so until now nothing in the table was actually your plan, even when the strategy and its parameter matched. Your plan is also ranked with the others, so the Rank column tells you where it stands, and it can win a metric in the Best table if it genuinely beats everything else. The same 📍 marks the swept row that uses your strategy and parameter, which lets you see where your setting sits on that family's curve. If your parameter falls between the standard steps, for example a 7% proportional boost or an 18 year drawdown, that exact value is now swept as its own row instead of being skipped. The Break Even column is filled in for every strategy now, not just the ⇌ conversion rows, so sorting by it works and there is a new "⏱ Earliest Break Even" entry in the Best table: the strategy whose conversions pay for themselves soonest, with ties going to the one that leaves more after-tax wealth. Choosing "Earliest Break Even" under Optimize for now reorders the table, which it previously could not do because the column had no values to sort. Three fixes came out of the same work. Clicking an Ordered row now brings its account sequence with it instead of leaving whatever was in the sidebar. The Monte Carlo stress test now recognizes Guyton-Klinger and Ordered plans as your current strategy rather than falling back to a generic one. And the summary numbers at the top of the page, including Break Even, now refresh when you change a setting while the Optimizer tab is open: they used to keep showing the previous plan until you clicked over to Chart or Annual Details, which is what made a change like turning Maximize Conversions on look like it had no effect.</li>
-				<li data-flag="behavior"><b>11.137f</b> <strong>The suggested year to stop converting is now measured against the plan you would actually get.</strong> The tool decides whether to take money out of your accounts in January or in December based on whether that year makes a Roth conversion, because a conversion year is better done early. When the Break Even ⓘ searched for the best year to stop converting, it built each trial plan in a way that failed to set that switch, so every year it compared was run with December withdrawals even where conversions were happening. It also treated "convert nothing" as a January-withdrawal year, which no plan with no conversions would ever be. The result was a suggested stop year and dollar gain measured against plans that were not quite the ones you could load, and the two "stop scope" choices could report different gains for the very same cutoff. On a large-IRA example the gain compared with never converting was overstated by about $8,900, and the two scopes disagreed by about $2,200 on a cutoff where they should have matched. All of that now lines up: click the suggested year and the plan you get is the plan that was scored. A stop year set at or before the first year of the plan is also now correctly treated as converting nothing. Plans with no stop year, including the whole strategy table, Monte Carlo and Annual Details, are unchanged to the dollar.</li>
-				<li data-flag="behavior"><b>11.1370</b> <strong>When converting more does not help, the Optimizer now tells you what would have to be true for it to help, and it can find conversions it used to miss.</strong> Optimize Conversions previously reported only that none of the strategies it examined improved by converting more, which is accurate but a dead end. It now names the future tax rate your plan is assuming, and a link works out the lowest future tax rate at which converting would start to pay, along with the amount and the gain at that rate. If no plausible rate makes conversions worthwhile, it says so plainly, because that is a real answer about your plan rather than a missing one. Separately, the search itself was too narrow: it only ever tested converting the same amount every year for the rest of the plan, so a plan that should convert heavily for a few years and then stop could only be told to convert nothing. When a flat conversion does not help, the Optimizer now also tries converting for a limited number of years, and any plan it finds this way appears as a ⇌ row tagged with the year conversions stop (⏹). Clicking it fills in both the amount and the stop year. This changes which conversion rows appear and the amounts they suggest. Two columns also changed: the Avg BETR column and its summary-bar tile were removed, because testing showed the Break-Even Tax Rate is not reliable enough to decide anything (it is still available per year in Annual Details), and "Conv Savings" is now called "Tax Paid Δ", since it only counts tax paid during the plan and can look positive on a plan that ends up worse off. Break Even remains the column to trust.</li>
-				<li data-flag="behavior"><b>11.1340</b> <strong>Cash Reserve now controls what happens to money you withdraw beyond your spending needs.</strong> Most retirees with a large IRA are forced to take out more than they spend once required distributions begin. Until now the tool left all of that surplus sitting in cash, earning only the cash yield, for the rest of the plan. That understated how well a plan does when those extra dollars are reinvested, and it quietly tilted the Roth conversion comparison in favor of converting. The Cash Reserve field now decides where the surplus goes. Leave it blank (or enter -1) to keep the original behavior: all surplus stays in cash. Enter 0 to reinvest every surplus dollar into your Brokerage account, where it grows at the market rate. Enter a dollar amount to keep that much as a cash cushion, in today's dollars, and reinvest only the surplus above it; spending will not draw the cushion down unless every other account is exhausted. If you load a saved plan or a shared link that already sets a Cash Reserve, a note reminds you that results now differ from older versions and that blank or -1 restores the old behavior. This one setting can meaningfully change Break Even, the suggested year to stop converting, and the final balances, so it is worth trying both ways.</li>
-				<li><b>11.1330</b> <strong>The Break Even note now tells you the best year to stop converting, and offers one click to do it.</strong> When your plan makes Roth conversions, the ⓘ next to Break Even now names the year that leaves you with the most after-tax wealth if you stop converting after it, along with how much more that keeps than converting all the way through, and how much more than never converting at all. This replaces the older note, which pointed at the year conversions first turned unprofitable; that year is usually not the best place to stop, because it ignores how much a plan can still gain by stopping earlier. The point is that converting past a certain year can leave you worse off than never converting, since the tax paid on a late conversion no longer earns its keep before the plan ends. Click the suggested year to fill in a new "Stop conversions after" control and re-run: enter a calendar year like 2031, or your own age like 71, and conversions run through that point and then stop. You can choose whether stopping applies to all conversions or only the Extra Annual Roth Conversion; stopping all of them is the stronger lever. Spending is unchanged by where you stop, so this is a pure comparison of what your heirs receive after tax.</li>
-				<li><b>11.12fd</b> <strong>The charts now mark the year each person's RMDs begin.</strong> Two new dashed lines, "Your RMDs begin" and "Spouse RMDs begin", join the existing markers on both charts, and because the date depends only on a birth year they also appear on the Monte Carlo chart. The line is drawn for the year you reach your RMD age (73 or 75, depending on when you were born), and only when that birthday falls inside the plan, so a plan that starts after your RMDs have already begun does not get a line. It is drawn whether or not there is anything left in the IRA to withdraw, since the date itself is worth seeing. The "Show milestones" tooltip now lists every marker the charts can draw, which it had stopped doing some versions ago.</li>
-				<li><b>11.12fb</b> <strong>The Withdrawal Rate stat was reading far too low and has been corrected.</strong> It now measures what it says: the money actually pulled out of your accounts to pay for spending and taxes, divided by what the portfolio was worth at the start of that year. Three things were wrong before. Social Security and pension income were being subtracted from the withdrawals, so a plan drawing $164,000 against $81,000 of Social Security was reported as if it had withdrawn only $19,000. The bottom of the fraction used an after-tax estimate of your wealth rather than the actual account balances, and the very first year used a different basis than every year after it. On a typical plan the stat moves from about 1.1% to about 2.4%, which is now directly comparable to the classic 4% rule and to the guardrail rate the Guyton-Klinger strategy uses internally. The tile is relabeled simply "Withdrawal Rate", and hovering it shows two extra views: a dollar-weighted average, and a net depletion figure that goes negative when your portfolio is growing faster than you draw it down. The rate itself can no longer go negative, because you cannot withdraw less than nothing. A related fix: in years when Social Security covers everything, a required distribution that gets reinvested is no longer counted as a withdrawal, since those dollars never left the portfolio. Also in the header, the summary stats are left-aligned on wide screens instead of being pushed to the right edge, and the "what you last changed" note moved to sit after the numbers alongside the save and load messages.</li>
+				<li data-flag="behavior"><b>11.13a1</b> <strong>Social Security is now counted from your birth month, not paid in full for the whole year you claim it, and the same applies to the year a spouse dies.</strong> Survivor benefits also use the deceased spouse's real Full Retirement Age instead of assuming 67 for everyone. Both change the numbers in most plans. Separately: a Stress Test result now sits in the summary bar on every tab and stays current as you edit, the stress chart is always available including in Synthetic mode, the Monte Carlo tab flags itself as out of date instead of quietly showing the previous plan, any two Optimizer rows can be compared head to head with the new ⚖ button, and the Optimizer says it is calculating instead of appearing to freeze. <a href="optimizer_changelog.md#11.13a1" target="_blank" rel="noopener">Details</a></li>
+				<li data-flag="behavior"><b>11.1387</b> <strong>Your own plan now appears in the Optimizer table, so you can compare it against every strategy the tool suggests.</strong> It is pinned as a 📍 CURRENT row, ranked with the others, and can win a metric on its own merits. Break Even is now filled in for every strategy, and a new "⏱ Earliest Break Even" entry names the plan whose conversions pay for themselves soonest. <a href="optimizer_changelog.md#11.1387" target="_blank" rel="noopener">Details</a></li>
+				<li data-flag="behavior"><b>11.137f</b> <strong>The suggested year to stop converting is now measured against the plan you would actually get.</strong> The trial plans behind that suggestion were built with the wrong withdrawal timing, so the suggested year and its dollar gain did not match the plan you loaded when you clicked it. Plans with no stop year are unchanged to the dollar. <a href="optimizer_changelog.md#11.137f" target="_blank" rel="noopener">Details</a></li>
+				<li data-flag="behavior"><b>11.1370</b> <strong>When converting more does not help, the Optimizer now tells you what would have to be true for it to help.</strong> It names the future tax rate your plan assumes and can find the lowest rate at which converting starts to pay. It also searches plans that convert for a few years and then stop, which it previously could not find. The Avg BETR column was removed and "Conv Savings" became "Tax Paid Δ". <a href="optimizer_changelog.md#11.1370" target="_blank" rel="noopener">Details</a></li>
+				<li data-flag="behavior"><b>11.1340</b> <strong>Cash Reserve now controls what happens to money you withdraw beyond your spending needs.</strong> Blank or -1 keeps the old behavior of leaving all surplus in cash; 0 reinvests every surplus dollar into Brokerage; a dollar amount keeps that much as a cushion and reinvests the rest. This can meaningfully change Break Even and the final balances, so it is worth trying both ways. <a href="optimizer_changelog.md#11.1340" target="_blank" rel="noopener">Details</a></li>
 				</ul>
 				<script>
 					/* The Version stat reads the number back out of the <title> tag rather than
@@ -656,36 +686,20 @@
 						}
 					})();
 				</script>
-				<!-- CHANGELOG PATTERN: Keep 5 most recent inline. Older entries lazy-load from optimizer_history.js.
-				     When adding new versions: prepend to this list, keep 5 newest, move rest to optimizer_history.js. -->
-				<details>
-					<summary style="cursor:pointer;color:#888;font-size:0.9em;">Older changes…</summary>
-					<p style="font-size:0.85em;color:#666;margin-bottom:4px;">💡 <em>Tip: Use Ctrl+F to search loaded changes</em></p>
-					<ul id="older-changes-list">
-						<li style="color:#999;">Loading…</li>
-					</ul>
-					<script>
-						/* Lazy-load older changelog from optimizer_history.js on expand.
-						   Uses the 'toggle' event (fires reliably after open state changes),
-						   not 'click' on summary (fires before the browser applies the toggle). */
-						document.currentScript.parentElement.addEventListener('toggle', function() {
-							if (this.open && document.getElementById('older-changes-list').innerHTML.includes('Loading')) {
-								fetch('optimizer_history.js')
-									.then(response => response.text())
-									.then(data => {
-										const match = data.match(/window\.optimizerHistoryHTML = `([\s\S]*)`/);
-										if (match) {
-											document.getElementById('older-changes-list').innerHTML = match[1];
-										}
-									})
-									.catch(error => {
-										console.error('Failed to load changelog history:', error);
-										document.getElementById('older-changes-list').innerHTML = '<li style="color:#c00;">Error loading older changes. Please try again.</li>';
-									});
-							}
-						});
-					</script>
-				</details>
+				<!-- CHANGELOG PATTERN: the 5 most recent releases are summarized in the list above,
+				     each linking to its own section of optimizer_changelog.md. That file holds the
+				     full write-up of EVERY release, so there is one archive rather than three.
+
+				     This used to be a lazy <details> that fetched optimizer_history.js and regexed a
+				     template literal out of it. Two problems: fetch() is blocked on file:// URLs, so
+				     anyone opening the page from disk got "Error loading older changes", and it left
+				     the history in a second archive that had to be maintained separately. Both are
+				     gone -- optimizer_history.js was folded into the .md and deleted. -->
+				<p style="font-size:0.9em;color:#666;">
+					Every earlier release is written up in
+					<a href="optimizer_changelog.md" target="_blank" rel="noopener">optimizer_changelog.md</a>,
+					newest first.
+				</p>
 			</details>
 			<h3>How to Use</h3>
 			<div class="log-entry"><ul>
@@ -915,6 +929,13 @@
                 </label>
                 <span style="color:#555;">Ranks every strategy by this goal, re-orders the table, and moves the ⚓ baseline to match. See Documentation for what each choice measures.</span>
             </div>
+            <!-- Shown while the sweep runs, then held on "DONE" for a few seconds. The sweep blocks
+                 the main thread for a second or more, so without this the page looks frozen with the
+                 previous run still on screen; and without the hold, a fast sweep flashed the banner
+                 for well under a second, which reads as a glitch rather than an answer. Content and
+                 colours are set by setOptimizerBusy() in optimizer_ui.js -- keep the wording there,
+                 not here, so there is one source of truth. -->
+            <div id="opt-busy" style="display:none;margin-bottom:8px;padding:10px 14px;background:#eef4fb;border:1px solid #c9dcf0;border-radius:6px;font-size:0.95em;color:#1a4d70;font-weight:600;"></div>
             <div id="opt-perf" style="display:none;margin-bottom:8px;font-size:0.8em;color:#888;font-family:monospace;"></div>
             <div id="opt-spend-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
             <div id="opt-conv-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
@@ -932,6 +953,7 @@
             <!-- Symbol legend (item 8) — explains the marks on strategy names / status column. -->
             <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:0.78em;color:#444;padding:2px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px;">
                 <span style="font-weight:600;color:#666;">Symbols:</span>
+                <span title="Your own plan, pinned above the table. If a swept strategy uses your settings but differs from your plan in its conversions, that row is marked too, so you can see where your setting sits on its family's curve. When the swept row IS your plan, only the pinned row is marked.">📍 Your plan</span>
                 <span title="Convert Excess to Roth enabled — surplus after spending is converted to Roth rather than left in Cash. (Whether conversion taxes are also funded from Cash follows your sidebar's Maximize Conversions setting, except under nerdknob, where both arms are swept — see 💵.)">✓ Convert Excess on</span>
                 <span id="opt-legend-cashfund" style="display:none;" title="Uses available Cash to cover conversion taxes, so more of the conversion lands in Roth (the 'Use Cash' half of Maximize Conversions). Nerdknob sweeps this as its own dimension, so each strategy appears both with and without it. Only shown when you have Cash to spend.">💵 Cash-funded taxes</span>
                 <span title="Your current plan. The pinned CURRENT row is your sidebar settings run exactly as configured, including whether conversions are on and any Extra Conversion or stop year. The same mark in the table body is the swept row that uses the same strategy and parameter, which is not the same plan: every swept row runs with conversions on.">📍 Your plan</span>
@@ -945,7 +967,16 @@
                 <span title="Plan success — every year of the plan was fully funded.">🟢 Success</span>
                 <span title="Plan failure — the portfolio ran out of money before the end of the plan.">🚨 Failure</span>
                 <span title="The pinned baseline reference row — the strongest no-conversion plan.">⚓ Baseline</span>
+                <span title="Click ⚖ on any row to measure every Δ column against that row instead of the baseline — a head-to-head comparison of any two strategies.">⚖ Compare</span>
             </div>
+            <!-- These two swap: the hint whenever no comparison is running, the banner whenever one
+                 is. renderCompareBanner() in optimizer_ui.js owns both. The hint exists because the
+                 ⚖ control is easy to miss; the banner because a pinned row silently changes what
+                 every Δ number means. -->
+            <div id="opt-compare-hint" style="padding:6px 12px;background:#f4f8fb;border:1px solid #dfe8ef;border-radius:4px;color:#4a5c6a;margin-bottom:8px;font-size:0.88em;">
+                ⚖ <strong>Compare two strategies:</strong> click the ⚖ or 🟢 at the start of any row to measure every other row against that one. The ΔNetWealth and ΔTax columns then show the difference from your chosen row instead of the ⚓ baseline. The highlighted ⚖ marks whichever row is currently the comparison point; clicking it puts everything back.
+            </div>
+            <div id="opt-compare-banner" style="display:none;padding:6px 12px;background:#e8f4fd;border:1px solid #a8d0f0;border-radius:4px;color:#1a4d70;margin-bottom:8px;font-size:0.9em;"></div>
             <div style="overflow-x:auto;width:fit-content;max-width:100%;">
                 <div id="opt-table" style="display:grid;width:fit-content;"></div>
             </div>
@@ -1110,8 +1141,8 @@ runSimulation?.();
 <script src="montecarlo/historical_returns.js"></script>
 <script src="montecarlo/prng.js?v=111091"></script>
 <script src="montecarlo/stats.js?v=111091"></script>
-<script src="montecarlo/mc_controller.js?v=1111c1"></script>
-<script src="montecarlo/mc_tab.js?v=1111c1"></script>
+<script src="montecarlo/mc_controller.js?v=1113a1b"></script>
+<script src="montecarlo/mc_tab.js?v=1113a1b"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

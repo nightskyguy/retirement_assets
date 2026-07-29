@@ -2,11 +2,116 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-26 (worktree context-e73361, PR #132 merged at `9d3ed21`. PR2 below is implemented and uncommitted on branch `worktrees/planning-with-files-d2b68e`.)
+**As of:** 2026-07-27 (worktree context-e73361, branch `worktrees/planning-with-files-6d0fed`). PR1/PR2/PR3 merged. Now working the deferred backlog from PR1's appendix as four sequenced PRs (plan file: `C:\Users\starc\.claude\plans\there-are-several-items-tender-newt.md`). PR-A DONE and uncommitted.
 
 ---
 
-## PR3 CURRENT PLAN row in the Optimizer + Earliest Break Even winner (2026-07-27, v11.1387) — COMPLETE, uncommitted
+## PR-E/F/G Round 2: user-testing fixes (2026-07-28, v11.13a1) — COMPLETE
+
+Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs were re-versioned from v11.1391 to **v11.13a1** and ship together.
+
+**PR-E — the nerdknob guard was too broad (my bug).** `mcInputsChanged()` opened with `if (_mcNerdMode()) return;`. The intent was "nerd mode owns the cadence of the expensive sweep"; the effect was that in nerd mode nothing refreshed the stress pass and nothing marked the sweep out of date. `mcTabActivated()` had the same over-broad wrapper. Only `runMonteCarlo()` is gated now. Verified: nerdknob on, spend 140k -> 90k, stress went 7 of 10 -> 0 of 10, banner appeared, main sweep untouched.
+
+**PR-F — the stress result was buried.**
+- [x] **Summary-bar `Stress Test` tile** (`#stat-stress`), reading e.g. `7 of 10 fail`, coloured on `renderSurvivalTable`'s bands. Written by `updateStressStat()` in `mc_tab.js`, deliberately NOT by `updateStats()` — that runs on every `runSimulation()` and would blank it between passes.
+- [x] **Stress now runs from page load**, not only after the MC tab is opened: `_mcStress` is standalone state (`_mcResults.stress` kept in sync when a full run exists), and `scheduleRecalc` calls `mcInputsChanged()` on **every** tab, since the tile it feeds is global. One primed call 600ms after `setupAutoRecalc`. Verified: the tile reads `7 of 10 fail` 303ms after load with Monte Carlo never opened, and follows an edit made on the Chart tab.
+- [x] **Stress section moved above the percentile chart** and wrapped in `<details open>` (the `#mc-input-dist` idiom), with `renderStressHeadline()` drawing a large coloured `7 / 10` plus a plain sentence, mirrored into the `<summary>` so the number survives collapsing.
+- [x] Synthetic mode reads a dash with an explaining tooltip, since it has no stress pass.
+- **Byte-identical** (PR-E and PR-F both): engine untouched, 8-scenario harness unchanged vs PR-D.
+
+**PR-G commit 1 — death-year Social Security (behavior change).** `alive` is `age <= die`, so the first survivor year is `age === die + 1`. The death is now treated as falling in the **deceased's** birth month: `s1 = survivorPay x afterDeath + (1 - afterDeath) x (own1 + own2)`, reusing `ssFirstYearFraction`. The old model paid the survivor amount for all twelve months, which **understated** the year, since the survivor benefit is the higher of the two and never their sum.
+- The milestone latch reads a new `yr._survivorPay`, not `yr.s1`: in a death year `s1` can be non-zero purely from the before-death months while the survivor benefit has not started, and that is not a survivor start.
+- `birthyear2 > 0` keeps single filers out, whose notional spouse is "not alive" from year one.
+- **Verified against the engine:** June-born decedent 2038 = $51,998 = 0.5 x (39,996 + 24,000) + 0.5 x 39,996; December-born decedent pays $64,000 for the whole year and the survivor benefit starts 2039; a survivor who has not claimed yet gets $12,000 (the decedent's half alone, no double count) with the marker correctly on 2031. Reverting the blend fails 5 tests.
+- **Not byte-identical:** all 8 scenarios up, net wealth +0.50% (cyclic) to +0.89% (scalarEca), tax -0.59% (bracket) to +0.93% (propwd/noconv). Three existing expectations re-derived (GK regression, FRA end-to-end, and the survivor test rewritten as a death-year blend test).
+
+**PR-G commit 2 — changelog split.** New `optimizer_changelog.md` at the repo root holds the full write-up of every release, newest first. `#changelog-list` keeps only the **5 most recent**, cut to two or three sentences each with a "Details" link. The top entry went from 4,640 to 595 characters, so the always-visible banner (which copies the first `<li>` verbatim) shrank with it. `data-flag="behavior"` and the title/`<li>` version pairing are preserved, and the maintenance comment now documents where detail lives and what to do when adding a release. Also repaired a sentence mangled by an earlier scripted edit ("The chart also gained markers, and for the year a survivor benefit begins").
+
+- **Verify:** node **148/148** + taxPaymentPlanner 12/12; console clean apart from the 4 known fixtures; `optimizer_changelog.md` serves 200.
+- **Files:** `montecarlo/mc_tab.js`, `optimizer_ui.js`, `optimizer_core.js`, `optimizer_core.test.js`, `retirement_optimizer.html`, `optimizer_changelog.md` (new).
+
+---
+
+## PR-D ⚖ head-to-head strategy compare (2026-07-27, v11.1391 -> shipped as v11.13a1) — COMPLETE
+
+**Status: COMPLETE**, node 146/146 (+1) + taxPaymentPlanner 12/12, browser verified, engine untouched so byte-identical (8-scenario harness confirms).
+
+**Why:** the two Δ columns were hard-wired to the single `OptimizerState.baseline`, so the table could answer "is this better than the anchor" but never "is this better than THAT one".
+
+- [x] **Reused the existing Δ machinery instead of building a second diff surface.** `recomputeBaselineForObjective()` split: baseline *selection* stays put, the delta *write* moved to `recomputeDeltasAgainst(referenceRow)`, and `deltaReferenceRow()` returns `compareRow ?? baseline`. Pinning any row turns every other row's existing Δ column into an A-vs-B answer, with no new columns.
+- [x] **Durable pin identity.** `_id` is `results.length` at build time, so it does not survive a re-run; the pin is stored as `compareSelection = row._selection` and re-found via `sameStrategySelection` — the same matcher the 📍 CURRENT PLAN row uses. `compareIsCurrentPlan` disambiguates the current-plan row from its swept twin (they share a selection but not a conversion setup). A pin whose strategy leaves the table is dropped, not left dangling.
+- [x] **The change in meaning is never silent:** `#opt-compare-banner` names the reference with a "Back to ⚓ baseline" button, the two column headers gain " vs ⚖", and both Δ tooltips are built from `deltaRefDescription()`.
+- [x] **The ⚓ BASELINE pinned row no longer prints a hard-coded `0`** in its Δ cells when a compare row is pinned — with a different reference it has a real Δ like everything else, and printing 0 would have been a lie.
+- [x] ⚖ carries `event.stopPropagation()` so it does not also fire the row's load-this-strategy click.
+- **Verify:** browser — pinning Proportional ✓ set its own Δ to 0 and the ⚓ baseline to +554,876, exactly `baseNW - pickNW`; header read "ΔNetWealth vs ⚖" and the dTax tooltip named the row; a full re-sweep at a different spend goal kept the pin on a **new row object** (`sameObject: false`, Δ still 0); a selection matching nothing cleared the pin, hid the banner, restored the baseline Δ to 0 and reverted the header; a real DOM click on ⚖ pinned without touching the sidebar (strategy/param/years all unchanged), and a second click unpinned; 160 ⚖ affordances for 160 displayed rows. Console clean apart from the 4 known fixtures.
+- **Files:** `optimizer_ui.js`, `optimizer_core.test.js`, `retirement_optimizer.html`.
+
+---
+
+## PR-C Full Retirement Age from birth year (2026-07-27, v11.1391) — COMPLETE, uncommitted
+
+**Status: COMPLETE**, node 145/145 (+4) + taxPaymentPlanner 12/12, browser verified.
+
+**Why:** `FRA_MONTHS = 67 * 12` was hard-coded (`optimizer_core.js:510` before this change) and did **three** jobs belonging to **two** people: unwinding the DECEASED's benefit back to their PIA, testing the SURVIVOR's own early claim, and sizing the 60-to-FRA span the 28.5% reduction is spread across. FRA is 66 for 1943-1954 and steps up two months per birth year through 1959.
+
+- [x] **`fraMonthsForBirthYear(birthYear)`** (pure, exported). Pre-1943 clamped to 66 with the reason documented (the real schedule steps to 65 for 1937 and earlier, but that person is over 89 today and cannot be a plan's starting spouse).
+- [x] `calculateSurvivorBenefit` gained `userBirthYear` / `spouseBirthYear`, each defaulting to 1960 so an omitted argument reproduces the old constant exactly. Both call sites pass `birthyear1`/`birthyear2` in the correct order for who died.
+- [x] **Error direction confirmed, not assumed:** deceased born 1952 claiming early at 62 on $2,000/mo, survivor born 1955 claiming at 67 -> **$2,857/mo before, $2,666/mo after**. The hard-code paid the survivor MORE than they are due, which is the wrong direction for a tool shipping a `widowrmd` objective. This reproduces the appendix's measured 6.7% ($68,568 vs $63,996 at $4,000/mo).
+- [x] End-to-end on a pre-1955 couple (born 1950/1952, higher earner claims at 62, dies at 80): first survivor year **$51,076 -> $49,148**, final NW $3,467,750 -> $3,426,064 (-1.2%), tax $775,770 -> $765,463 (-1.3%).
+- **Byte-identical for anyone born 1960 or later** — asserted as a test, and the 8-scenario harness is unchanged because every fixture in it is born 1960+. **The app's own default scenario is also unchanged**, because both defaults claim at 70: a late claimer's baseline is `max(PIA, benefit)` = the benefit, so FRA drops out. Only early claimers move.
+- **Files:** `optimizer_core.js`, `optimizer_core.test.js`, `retirement_optimizer.html`.
+
+---
+
+## PR-B Social Security claim-year proration + start milestones (2026-07-27, v11.1391) — COMPLETE, uncommitted
+
+**Status: COMPLETE**, node 141/141 (+8) + taxPaymentPlanner 12/12, browser verified. **Not byte-identical, by design** — see the measured table below.
+
+**Why:** SS was gated all-or-nothing on integer age (`optimizer_core.js:966`), so a December claimant booked a full year of benefits in the year they turned their claiming age. `birthmonth1`/`birthmonth2` already existed, already reached the engine and already round-tripped in share URLs; only `isQCDEligible()` read them.
+
+- [x] **`ssFirstYearFraction(birthMonth)`** (pure, exported): `(12 - bm) / 12`, anything missing or out of range treated as December. Applied at the normal-claim gate and at the survivor gate, in each case only in the year `age === Math.ceil(claimAge)`.
+- [x] **The survivor branch is not only for survivors.** A single filer has `alive2 === false` from year one, so `!yr.alive1 || !yr.alive2` is true for them every year and their own benefit is computed through `calculateSurvivorBenefit`'s higher-of rule. Flagging that as a survivor start would have told every single filer their survivor benefit had begun; `yr.isSurvivorSS` is therefore gated on `birthyear2 > 0`.
+- [x] **`-ssStart1` / `-ssStart2` / `-ssStartSurvivor`** hidden log fields (leading `-` keeps them out of Annual Details, the `-fedRateCreep` idiom) + `Your SS begins` / `Spouse SS begins` / `Survivor SS begins` markers in `computeMilestones`, in a new green `SS_MILESTONE_COLOR`. Added to the `mc-chart` filter too: SS start years are deterministic across MC paths for the same reason death and RMD start are.
+- [x] **Two latch bugs, both caught by running it rather than reading it.** (1) A boolean latch marked the row on `computeIncome`'s first call and cleared it on a later one, so nothing ever reached the log; the latch stores the YEAR instead. (2) Found in the browser on the app's OWN defaults: the default spouse (born 1952, claiming at 70) started in 2022, four years before the 2026 start year, and the chart announced "Spouse SS begins" in year 0. The flag now means "was zero last year, is positive now" — a plain first-positive-year test just relocates the wrong marker to year 1. Both cases are now tests.
+- [x] **Disclosure** (per the user's "unconditional, disclosed" decision): both Start Age tooltips and both birth-month tooltips name the proration and the December consequence; changelog entry carries `data-flag="behavior"`. December default deliberately kept — moving it to June would silently shift QCD 70.5 eligibility via `taxengine.js:1512-1515`.
+- **Not modelled (stated in the changelog, not half-built):** the mirror case at the other end, where benefits stop the month of death rather than at year end.
+- **Verify:** node 141/141; reverting only the three `ssFrac` expressions fails exactly 5 of the 8 new tests (the two pure-helper tests correctly still pass). Browser v11.1391 on the app's defaults: 2030 SS $26,803 (spouse only, user prorated to zero), 2031 $82,661 (both); switching the user to a June birth month moved the marker to 2030 and paid $53,606 there, exactly spouse $26,803 + half of the user's $53,606. No `ssStart` columns leaked into Annual Details. Console clean apart from the 4 known fixtures.
+- **Not byte-identical** — 8-scenario harness, both fixture people December-born so each loses a full claim year:
+
+| scenario | final NW | tax | | scenario | final NW | tax |
+|---|---|---|---|---|---|---|
+| fixed | -2.10% | -2.05% | | gk | -1.88% | -4.24% |
+| bracket | -4.54% | -4.39% | | cyclic | -5.50% | -0.78% |
+| aca | -0.28% | -4.69% | | scalarEca | -4.39% | -3.38% |
+| propwd | -3.87% | -4.96% | | noconv | -4.54% | -7.46% |
+
+  Direction is consistent here only because every fixture is December-born; magnitude is not proportional between wealth and tax (cyclic -5.50% NW but -0.78% tax; noconv -4.54% NW but -7.46% tax), which is the provisional-income threshold effect the plan predicted.
+- **One existing test re-derived:** the GK prevPortfolio regression test (January + June birth months, claiming at 70) — spend 7,969,501.955988 -> 7,935,798.156794, tax 2,154,586.451134 -> 2,140,785.745597, final NW 9,955,429.693910 -> 9,920,517.469072. Its actual subject, the guardrail-adjustment count, is unchanged at 4.
+- **Files:** `optimizer_core.js`, `optimizer_ui.js`, `optimizer_core.test.js`, `retirement_optimizer.html`.
+
+---
+
+## PR-A MC stress auto-run + Stress Failure tile + dead-code delete (2026-07-27, v11.1391) — COMPLETE, uncommitted
+
+**Status: COMPLETE**, node 133/133 + taxPaymentPlanner 12/12, browser verified, engine files untouched so byte-identity is guaranteed by construction.
+
+**Why:** editing an input while the Monte Carlo tab was open left every chart, the survival table and the stress pass silently describing the PREVIOUS plan until the tab was re-activated. `mcTabActivated()` was only ever called from the tab button.
+
+- [x] **The plan's first design was wrong and the measurement caught it.** The plan proposed calling `mcTabActivated()` from `scheduleRecalc`, mirroring the `tab-opt` branch. Measured on the default scenario: **27.4s** for a full run (500 paths x 144 variations = 72,000 sims), so an edit-triggered full run costs half a minute of CPU per blur. User chose (AskUserQuestion) the split: refresh the cheap pass, flag the expensive one.
+- [x] **`cfg.stressOnly`** in BOTH `montecarlo/worker.js` and `montecarlo/mc_controller.js` (the main-thread `file://` fallback mirrors the worker and the two must not drift): skips the main pass, gives stress the whole progress weight, posts `{ stressOnly:true, stress }`. The stress message shape was extracted to a shared `buildStressMsg()` / `_buildStressMsg()` in each file so the two exit paths cannot diverge.
+- [x] **`mcInputsChanged()`** (`mc_tab.js`), called from `scheduleRecalc`'s new `tab-mc` branch. Guards: no-op in nerd mode, no-op when nothing has been run yet, no-op when the hash is unchanged. Then `markMCStale(true)` + `refreshMCStressOnly()`.
+- [x] **`refreshMCStressOnly()`** re-runs stress only (stressCount x 1 sims) and swaps `_mcResults.stress`. Deliberately does NOT call `setMCRunning()` (the progress bar would flash for a sub-second run), returns early in Synthetic mode (no stress pass exists), and checks the new **`_mcWorkerBusy()`** so it never terminates a full run in flight — `runMCWorker` kills any live worker on entry.
+- [x] **`#mc-stale-banner`** with a Re-run button; text is rewritten by `markMCStale()` per mode, because in Synthetic mode the "Stress Failure result is current" half would describe something not on screen. Cleared by `runMonteCarlo`'s completion and by `mcTabActivated`'s cache-hit branch.
+- [x] **Calibration guard:** `runMCWorker` fed `msg.totalMs / (numPaths * variations)` into `_mcMsPerSim`. A stress-only run is a handful of sims and would have wrecked the time estimate; now skipped when `msg.stressOnly`.
+- [x] **Stress Failure tile** (`buildStressFailureTile`, `mc_tab.js`) above the existing asset-range table. Reads `stress.variations[0].survivalRate` (since PF3 the stress pass runs exactly one variation, the current plan) and `stress.numPaths`. Same colour bands as `renderSurvivalTable`.
+- [x] **Dead code deleted:** `updateProjectedRMDStat()` and its only call site. It wrote to `stat-proj-rmd1`/`stat-proj-rmd2`, which have not existed in the HTML for some time. `RMD_TABLE` is used elsewhere and stays.
+- **Verify:** browser v11.1391 — full run 45.1s / stress 7 of 10 sequences (median ruin year 2040); spend goal 140k -> 200k then blur: stress refreshed in **306ms** to 10 of 10 (median ruin 2034), stale banner appeared, and the main sweep was untouched to the dollar (same `totalMs`, 144 variations, identical `variations[0].survivalRate`). Synthetic banner text verified; `mcInputsChanged()` with no prior results does not start a run; console clean apart from the 4 known intentional bad-input fixtures.
+- **Byte-identical:** yes, trivially — `optimizer_core.js` and `taxengine.js` are untouched (`git diff --stat` empty).
+- **Files:** `montecarlo/mc_tab.js`, `montecarlo/mc_controller.js`, `montecarlo/worker.js`, `optimizer_ui.js`, `retirement_optimizer.html`.
+
+---
+
+## PR3 CURRENT PLAN row in the Optimizer + Earliest Break Even winner (2026-07-27, v11.1387) — COMPLETE, merged PR #133 (`5ceda24`)
 
 **Status: COMPLETE**, node 133/133 (+8) + taxPaymentPlanner 12/12, browser verified. User decisions via AskUserQuestion: real simulated row + inline marker; mirror `buildVariations`' off-grid rule into the Optimizer's own sweep; rank the current plan AND let it win metrics.
 
@@ -24,7 +129,7 @@ Goal: Complete open features from the original priority list plus deferred items
 
 ---
 
-## PR2 Conversion-schedule representation divergence (2026-07-26, v11.137f) — COMPLETE, PR #133
+## PR2 Conversion-schedule representation divergence (2026-07-26, v11.137f) — COMPLETE, merged PR #133 (`a2fb3f8`)
 
 **Status: COMPLETE**, node 125/125 (+3) + taxPaymentPlanner 12/12, browser verified. Root-cause and the general rule in findings.md.
 
@@ -49,7 +154,7 @@ Goal: Complete open features from the original priority list plus deferred items
 - [x] Docs: findings.md investigation writeup, README FAQ entry + Recent Fixes, changelog `data-flag="behavior"`.
 - **Not byte-identical:** the ⇌ row set and suggested amounts change (D). A/B are display-only.
 - **Left open → CLOSED by PR2 above (v11.137f):** the array-vs-`convEndYear` engine divergence. The array path was the wrong one; root cause was the year-0 withdrawal-timing predicate, not the conversion math.
-- **Deferred (re-plan later, per user):** Social Security first-year proration + 3 milestones + birth-year FRA (design preserved in the plan file appendix at `C:\Users\starc\.claude\plans\not-sure-where-it-eventual-gray.md`), head-to-head strategy compare, MC historical-stress auto-run + "Stress Failure X of Y" tile.
+- **Deferred → ALL CLOSED 2026-07-27** by PR-A/PR-B/PR-C/PR-D above (SS first-year proration + milestones + birth-year FRA, head-to-head strategy compare, MC stress auto-run + "Stress Failure X of Y" tile). The original design notes remain in the plan file appendix at `C:\Users\starc\.claude\plans\not-sure-where-it-eventual-gray.md`; the appendix's dead-code note (`updateProjectedRMDStat`) was actioned in PR-A.
 
 ---
 
@@ -276,6 +381,8 @@ Goal: Complete open features from the original priority list plus deferred items
 | 24 | **P22** | Export Annual Details to CSV | pending | — |
 | 25 | **P23** | MC Arithmetic-Mean Returns + AR(1) Variable Inflation | pending | — |
 | 26 | **P24** | Conversion End Year — searched stop-year + one-click | **implemented** (v11.1330, sweep dim deferred) | — |
+| 27 | **P25** | Generic in-repo Markdown viewer (`docs.html`) | pending | — |
+| 28 | **P26** | README/FAQ cross-references from tooltips | pending | P25 helps |
 
 ---
 
@@ -1096,3 +1203,30 @@ P24 (Conversion End Year) — independent; diagnostic + engine flag already exis
 - [ ] **DEFERRED — Optimizer sweep dimension over the stop year** (user chose "measure cost first"). No per-row stop-year column ships this round because the leak guard strips `convEndYear` from every optimizer row; the calendar-year display contract is already met in the single-scenario surfaces (diagnostic message + one-click apply). When wired: measured cost is one k+1 linear scan per plan; the concern is multiplying it across the ⇌ candidate pool × the amount grid — the joint (amount × stop) grid is where the real value is (finding §3: C−D was +$228k to +$1.887M). Optimizer table then displays the stop as a **calendar year** even when entered as an age.
 - **Status:** IMPLEMENTED (v11.1330, worktree context-ab498f, branch worktrees/roth-breakeven-diagnosis-dd3075, UNCOMMITTED). Node 108/108 + taxPaymentPlanner 12/12. Browser end-to-end pending. Only the optimizer sweep dimension deferred.
 - **Independent:** no phase dependencies; the diagnostic (PF6/PF5) and the counterfactual engine flag both already existed.
+
+---
+
+## Phase P25: Generic in-repo Markdown viewer (pending, 2026-07-28)
+
+**Why:** the changelog now lives in `optimizer_changelog.md`, and the Documentation tab links straight to it. A raw `.md` is served as `text/markdown`, which some browsers **download instead of rendering**, and an anchor into plain text does nothing. So the per-version anchors (`optimizer_changelog.md#11.13a1`) only pay off where something renders the file. Today that means GitHub, which is exactly the dependency worth removing: the repo is self-hosted at tools.netcitizen.us and should not need github.com to display its own documentation.
+
+**Shape (user's preference):** not a single-purpose `optimizer_changelog.html`, but **one generic viewer** that renders whichever `.md` it is pointed at, defaulting to `optimizer_changelog.md`. Something like `docs.html?f=optimizer_changelog.md#11.13a1`, so the same page serves the README, the changelog and any future `.md` without another file per document.
+
+**Design notes to carry in:**
+- **The `file://` constraint is the whole problem.** A viewer has to `fetch()` the `.md`, and `fetch()` is blocked on `file://` URLs. That is precisely what broke the old `optimizer_history.js` lazy loader (see Round 8). A viewer that only works over http is a regression for anyone opening the tool from disk, and this project is routinely opened that way. Options to weigh: accept it and show a clear "open over http, or read it on GitHub" message with a working link; or keep the plain `.md` link as the file:// fallback and use the viewer only when `location.protocol !== 'file:'`.
+- **No CDN.** Everything in this repo is self-contained and loads from the same origin, so a `marked.js`/`markdown-it` CDN tag would be out of character and adds a third-party dependency to documentation. Either vendor a small parser into the repo or write a deliberately limited one: the `.md` files here only use headings, bold, links, inline code, bullet lists, tables and paragraphs.
+- **Anchors already exist.** `optimizer_changelog.md` carries explicit `<a id="11.13a1"></a>` before every heading (markdown's generated ids drop the dot), so a viewer that emits that HTML verbatim gets working deep links for free. Duplicated versions use `-2`/`-3` suffixes.
+- **Sanitize.** The `.md` files are repo-authored, not user input, so this is a low risk, but a viewer that injects fetched text as `innerHTML` should still strip `<script>`/event handlers rather than trusting the source blindly.
+- Scope check before building: `README.md` is ~95KB and already the site's front page via GitHub Pages. Decide whether the viewer is meant to replace that or only serve the smaller docs.
+
+**Files (expected):** new `docs.html` (or similar), `retirement_optimizer.html` (link targets).
+
+**Independent:** no phase dependencies. Pairs naturally with P26 below, which wants to link tooltips at README FAQ anchors and has the same "where does the reader land" question.
+
+---
+
+## Phase P26: README/FAQ cross-references from tooltips (pending, deferred 2026-07-28)
+
+**Why:** several tooltips and banners restate material that already exists under `## Frequently Asked Questions` in `README.md` (anchored headings such as "Is It a Fool's Errand to Make Multi-Decade Projections?", "Is the Break-Even Tax Rate Trustworthy?", "Why does the Optimizer say converting never helps?"). Pointing at those anchors keeps one source of truth and shortens the in-app text.
+
+**Needs:** a pass to decide which existing text has a matching FAQ entry, which needs one written, and where the link should land (see P25 — the same "raw .md does not render" question applies).

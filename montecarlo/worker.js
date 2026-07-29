@@ -298,17 +298,37 @@ self.onmessage = function ({ data: cfg }) {
     // Historical mode auto-runs a stress pass alongside the main bootstrap pass (Item 7 — Stress
     // is no longer a separate selectable mode). Weight the shared progress bar by each pass's
     // share of total path-work so it doesn't jump to 100% and restart for the second pass.
-    const willRunStress = simulationMode === 'bootstrap';
+    // Stress runs in BOTH modes. It builds its own bank from the worst historical decades
+    // (buildStressBank in runPass), so it never depended on the main pass being Historical -- it was
+    // only ever gated that way by association. Choosing Synthetic returns for the projection is not
+    // a reason to hide the question "would this plan have survived the worst of the real record".
+    const willRunStress = true;
     const stressCountEstimate = cfg.stressCount ?? 10;
+    // cfg.stressOnly: refresh just the stress pass against the edited plan and leave the main sweep
+    // to the caller. The main pass is ~numPaths × variations sims (measured 27s / 72,000 sims on the
+    // default scenario); stress is stressCount × 1, so this is the only pass cheap enough to re-run
+    // on every input change. Never set in Synthetic mode, which has no stress pass at all.
+    const stressOnly = !!cfg.stressOnly && willRunStress;
     const totalWork = willRunStress ? (cfg.numPaths + stressCountEstimate) : cfg.numPaths;
-    const mainWeight = willRunStress ? cfg.numPaths / totalWork : 1;
+    const mainWeight = stressOnly ? 0 : (willRunStress ? cfg.numPaths / totalWork : 1);
 
-    const main = runPass(simulationMode === 'bootstrap' ? 'bootstrap' : 'gbm', 0, mainWeight);
+    const main = stressOnly ? null : runPass(simulationMode === 'bootstrap' ? 'bootstrap' : 'gbm', 0, mainWeight);
     // Stress runs against ONLY the current withdrawal strategy (mc_tab.js's runMonteCarlo()
     // builds this), not the full variations sweep — cfg.stressVariations falls back to the full
     // array if missing (e.g. a stale cached page mid-deploy), degrading to the old full-sweep behavior.
     const stressVars = cfg.stressVariations?.length ? cfg.stressVariations : variations;
     const stress = willRunStress ? runPass('stress', mainWeight, 1 - mainWeight, stressVars) : null;
+
+    if (stressOnly) {
+        postMessage({
+            type: 'results',
+            stressOnly: true,
+            years,
+            totalMs: performance.now() - t0,
+            stress: buildStressMsg(stress),
+        });
+        return;
+    }
 
     postMessage({
         type: 'results',
@@ -323,15 +343,20 @@ self.onmessage = function ({ data: cfg }) {
         assetRanges:       main.assetRanges,
         inflationStats:    main.inflationStats,
         inputFan:          main.inputFan,
-        stress: stress ? {
-            variations:    stress.varResults,
-            numPaths:      stress.numPaths,
-            assetRanges:   stress.assetRanges,
-            inflationStats: stress.inflationStats,
-            labels:        stress.stressLabels,
-            startYears:    stress.stressStartYears,
-            decadeCAGRs:   stress.stressDecadeCAGRs,
-            decadeInflationCAGRs: stress.stressInflationCAGRs,
-        } : null,
+        stress: buildStressMsg(stress),
     });
 };
+
+// Shared so the stress-only refresh and the full run cannot drift in shape.
+function buildStressMsg(stress) {
+    return stress ? {
+        variations:    stress.varResults,
+        numPaths:      stress.numPaths,
+        assetRanges:   stress.assetRanges,
+        inflationStats: stress.inflationStats,
+        labels:        stress.stressLabels,
+        startYears:    stress.stressStartYears,
+        decadeCAGRs:   stress.stressDecadeCAGRs,
+        decadeInflationCAGRs: stress.stressInflationCAGRs,
+    } : null;
+}

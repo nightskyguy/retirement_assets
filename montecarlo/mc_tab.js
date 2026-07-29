@@ -97,14 +97,23 @@ function mcTabActivated() {
     // but the tab wasn't visible when applyScenario() ran.
     updateMCModeUI();
 
-    if (!_mcNerdMode()) {
-        const hash = _buildMCHash();
-        if (hash === _lastMCHash && _mcResults) {
-            renderMCResults(_mcResults);
-            return;
-        }
-        runMonteCarlo();
+    const hash = _buildMCHash();
+    if (hash === _lastMCHash && _mcResults) {
+        markMCStale(false);
+        renderMCResults(_mcResults);
+        return;
     }
+    // Nerd mode owns the cadence of the EXPENSIVE sweep only. Everything else here -- noticing the
+    // results on screen describe an older plan, and refreshing the cheap stress pass -- is
+    // mode-independent. Gating the whole function on nerd mode (as this used to) meant a nerdknob
+    // user could edit an input, come back to the tab, and be shown stale numbers with nothing
+    // saying so.
+    if (!_mcNerdMode()) {
+        runMonteCarlo();
+        return;
+    }
+    if (_mcResults) markMCStale(true);
+    refreshMCStressOnly();
 }
 
 function _buildMCHash() {
@@ -171,6 +180,7 @@ function runMonteCarlo() {
             }
             _mcResults = msg;
             _mcSelected.clear();
+            markMCStale(false);
             renderMCResults(msg);
         }
     );
@@ -179,6 +189,91 @@ function runMonteCarlo() {
 function cancelMC() {
     cancelMCWorker();
     setMCRunning(false);
+}
+
+// --- Reacting to sidebar edits --------------------------------------------
+
+let _mcStressRefreshing = false;
+// Latest stress-pass payload, independent of whether a full Monte Carlo run has ever happened.
+// The stress pass is ~10 simulations, so it runs from page load and on every input change; that
+// makes it the one Monte Carlo number that is always current, which is why it earns a summary-bar
+// tile visible from every tab.
+let _mcStress = null;
+
+// Called by optimizer_ui.js's scheduleRecalc when an input changes while the MC tab is open.
+// Until this existed the whole tab kept showing the PREVIOUS plan until you clicked away and back.
+// Re-running everything is not an option: the main sweep is numPaths × variations simulations
+// (measured 27.4s / 72,000 sims on the default scenario), so an edit-triggered full run would burn
+// half a minute of CPU per keystroke-and-blur. Instead the cheap pass runs and the expensive one is
+// labelled: the stress pass is stressCount × 1 sims, so it refreshes silently, and the sweep gets
+// the #mc-stale-banner with a Re-run button.
+function mcInputsChanged() {
+    if (_buildMCHash() === _lastMCHash) return;
+    // No nerd-mode guard here on purpose. Nerd mode controls when the expensive SWEEP runs, and
+    // nothing in this function runs it. Marking the sweep out of date and refreshing the ~10-sim
+    // stress pass have to happen in both modes, or a nerdknob user silently reads the previous
+    // plan's numbers -- which is exactly what the first version of this shipped with.
+    if (_mcResults) markMCStale(true);   // nothing on screen yet means nothing to go stale
+    refreshMCStressOnly();
+}
+
+function markMCStale(stale) {
+    const el = document.getElementById('mc-stale-banner');
+    if (!el) return;
+    el.style.display = stale ? '' : 'none';
+}
+
+// Re-runs ONLY the stress pass against the edited plan and swaps it into the cached results.
+// Deliberately does not call setMCRunning(): at ~10 simulations the progress bar would flash.
+function refreshMCStressOnly() {
+    if (_mcStressRefreshing) return;
+    const simulationMode = document.getElementById('mc-sim-mode')?.value ?? 'gbm';
+    if (_mcWorkerBusy()) return;                  // never interrupt a full run in flight
+
+    const base = getInputs();
+    // The stress chart's x-axis needs these, and a nerdknob user can reach a stress result without
+    // ever running the full sweep, so they cannot be left to runMonteCarlo() to set.
+    _mcStartYear = base.startYear ?? 2026;
+    const variations = buildVariations(base);
+    const currentIdx = findCurrentStrategyIdx(variations, base);
+    const stressVariations = currentIdx >= 0
+        ? [variations[currentIdx]]
+        : [{ ...base, _label: 'Current Plan', _strategyFamily: '', _paramLabel: '' }];
+    const years = Math.max(
+        base.birthyear1 + base.die1,
+        base.birthyear2 + base.die2
+    ) - (base.startYear ?? 2026) + 1;
+
+    _mcStressRefreshing = true;
+    runMCWorker(
+        {
+            stressOnly: true,
+            variations: stressVariations, stressVariations,
+            numPaths:      parseInt(document.getElementById('mc-num-paths')?.value     ?? '500'),
+            mu:            parseFloat(document.getElementById('mc-mu')?.value          ?? '7')  / 100,
+            sigma:         parseFloat(document.getElementById('mc-sigma')?.value       ?? '12') / 100,
+            seed:          parseInt(document.getElementById('mc-seed')?.value          ?? '42'),
+            years, simulationMode,
+            stressCount:   parseInt(document.getElementById('mc-stress-count')?.value    ?? '10'),
+            bearFraction:  parseFloat(document.getElementById('mc-bear-fraction')?.value ?? '25'),
+            inflationRate: base.inflation,
+        },
+        null,
+        (msg) => {
+            _mcStressRefreshing = false;
+            if (msg.error || !msg.stress) return;
+            // renderStressChart labels its x-axis from the plan length. It used to read that off
+            // _mcResults, which is null until a full sweep has run -- so a nerdknob user got the
+            // headline count with an empty chart underneath it.
+            msg.stress.years = msg.years;
+            // Standalone state, so the summary-bar tile works before any full run has happened.
+            // _mcResults.stress is kept in step when a full run exists, since renderMCResults and
+            // the Current Dollars re-render both read it from there.
+            _mcStress = msg.stress;
+            if (_mcResults) _mcResults.stress = msg.stress;
+            renderStressChart(msg.stress);   // calls renderMCStressMetrics, which updates the tile
+        }
+    );
 }
 
 // --- Rendering ------------------------------------------------------------
@@ -311,12 +406,91 @@ function renderMCMainMetrics(msg) {
 // Stress-pass metrics — same Min/CAGR/Max grid, sourced from the ~10-20 worst historical decades
 // instead of the ~500-path bootstrap sample. `stress` is msg.stress (null in Synthetic mode).
 function renderMCStressMetrics(stress) {
+    // Always refresh the summary-bar tile from here, including the empty case, so a mode switch to
+    // Synthetic blanks it rather than leaving a stale Historical number on every tab.
+    updateStressStat(stress);
     const el = document.getElementById('mc-stress-metrics');
     if (!el) return;
-    if (!stress || !stress.assetRanges) { el.innerHTML = ''; el.style.display = 'none'; return; }
+    if (!stress || !stress.assetRanges) { el.innerHTML = ''; el.style.display = 'none'; renderStressHeadline(null); return; }
     const srcLabel = `Stress: ${stress.labels?.length ?? 0} worst sequences (by 10yr real CAGR, inflation-adjusted)`;
     el.innerHTML = buildAssetRangeTable(stress.assetRanges, stress.inflationStats, srcLabel);
     el.style.display = '';
+    renderStressHeadline(stress);
+}
+
+// The one number this whole pass exists to produce: how many of the worst historical sequences the
+// current plan does NOT survive. Since PF3 the stress pass runs exactly one variation (the sidebar's
+// own plan), so variations[0] is that plan and numPaths is the number of sequences.
+// Returns null when there is nothing to report, so every caller can share the same shaping.
+function stressFailureSummary(stress) {
+    const v = stress?.variations?.[0];
+    const total = stress?.numPaths ?? 0;
+    if (!v || !total) return null;
+    const failures = Math.round((1 - v.survivalRate) * total);
+    // Same three bands as renderSurvivalTable, so a reader who has looked at one recognises the
+    // other. bg is for filled chips, fg for text on the page background.
+    const ok = v.survivalRate >= 0.90, warn = v.survivalRate >= 0.75;
+    return {
+        failures, total,
+        survivalRate: v.survivalRate,
+        ruinYear: v.medianRuinYear ?? null,
+        bg: ok ? '#d4edda' : warn ? '#fff3cd' : '#f8d7da',
+        fg: ok ? '#1a7f37' : warn ? '#8a6d00' : '#c0392b',
+    };
+}
+
+const STRESS_TOOLTIP_BASE =
+      'Of the harshest return periods in the historical record, how many your current plan runs out '
+    + 'of money in. These sequences are chosen to be the worst on record, so this is a durability '
+    + 'test and not a forecast: failing some of them does not mean the plan is likely to fail.';
+
+// Tooltip text shared by the summary-bar tile and the Monte Carlo headline.
+function stressTooltip(s) {
+    if (!s) return STRESS_TOOLTIP_BASE;
+    return STRESS_TOOLTIP_BASE
+        + `\n\nYour plan survives ${s.total - s.failures} of ${s.total} and fails ${s.failures}.`
+        + (s.ruinYear ? `\nIn the runs that fail, the money typically runs out around ${s.ruinYear}.` : '')
+        + '\n\nSee the Monte Carlo tab for the full stress chart.';
+}
+
+// Headline block at the top of the (foldable) stress section, plus the same number mirrored into
+// the <summary> so it stays readable while the section is collapsed.
+function renderStressHeadline(stress) {
+    const el = document.getElementById('mc-stress-headline');
+    const fold = document.getElementById('mc-stress-fold-label');
+    const s = stressFailureSummary(stress);
+    if (!el) return;
+    if (!s) { el.innerHTML = ''; if (fold) fold.textContent = ''; return; }
+    const sentence = s.failures === 0
+        ? `Your plan survives all ${s.total} of the worst historical periods on record.`
+        : `Your plan runs out of money in ${s.failures} of the ${s.total} worst historical periods on record`
+          + (s.ruinYear ? `, typically around ${s.ruinYear}.` : '.');
+    el.innerHTML =
+        `<div title="${stressTooltip(s)}" style="display:flex;align-items:center;gap:12px;background:${s.bg};`
+        + `border-radius:6px;padding:10px 14px;margin-bottom:8px;">`
+        + `<div style="font-size:1.9em;font-weight:700;line-height:1;color:${s.fg};white-space:nowrap;">${s.failures} / ${s.total}</div>`
+        + `<div style="font-size:0.92em;color:#333;">${sentence}</div></div>`;
+    if (fold) fold.textContent = `— ${s.failures} of ${s.total} fail`;
+}
+
+// Summary-bar tile. Visible on EVERY tab, which is the point: after the stress pass started
+// refreshing on each input change it became the only Monte Carlo number that is always current.
+// Deliberately not written by updateStats() in optimizer_ui.js -- that runs on every
+// runSimulation() and would blank the tile between stress passes.
+function updateStressStat(stress) {
+    const el = document.getElementById('stat-stress');
+    if (!el) return;
+    const cell = el.closest('div[title]') ?? el.parentElement;
+    const s = stressFailureSummary(stress);
+    if (!s) {
+        el.textContent = '—';
+        el.style.color = '';
+        if (cell) cell.title = STRESS_TOOLTIP_BASE + '\n\nStill measuring.';
+        return;
+    }
+    el.textContent = `${s.failures} of ${s.total} fail`;
+    el.style.color = s.fg;
+    if (cell) cell.title = stressTooltip(s);
 }
 
 // --- Time estimate --------------------------------------------------------
@@ -700,10 +874,13 @@ function renderStressChart(stress) {
     if (!stress || !stress.variations?.length) {
         wrap.style.display = 'none';
         if (_mcStressChart) { _mcStressChart.destroy(); _mcStressChart = null; }
+        renderMCStressMetrics(null);   // clears the headline and the summary-bar tile too
         return;
     }
 
-    const years  = _mcResults?.years ?? 0;
+    // stress.years is set by the stress-only refresh, which can happen before any full sweep has
+    // run; _mcResults.years covers the full-run path.
+    const years  = stress.years ?? _mcResults?.years ?? 0;
     const labels = Array.from({ length: years }, (_, i) => _mcStartYear + i);
 
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;

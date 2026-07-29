@@ -38,6 +38,12 @@ const OptimizerState = {
     noSolutionFloor: null,
     convOptCandidateCount: 0,   // PF11: size of the conversion candidate pool this run
     convOptRowsAdded: 0,        // PF11: how many ⇌ rows actually improved (drives the empty-state banner)
+    // ⚖ head-to-head: the row every Δ column is measured against, when it is not the ⚓ baseline.
+    // The row OBJECT is per-sweep; compareSelection is the durable identity that survives a re-run
+    // (see resolveCompareRow — _id is a build-order index and does not).
+    compareRow: null,
+    compareSelection: null,
+    compareIsCurrentPlan: false,
 };
 
 // Optimizer "Optimize for" objectives (PF13) — labels + <select> display order live here; the
@@ -144,13 +150,134 @@ function recomputeBaselineForObjective() {
     OptimizerState.baseline = baselinePool.length > 0
         ? rankRows(baselinePool, OptimizerState.objective)[0]
         : null;
-    const baselineRow = OptimizerState.baseline;
+    resolveCompareRow();
+    recomputeDeltasAgainst(deltaReferenceRow());
+}
+
+// The row every Δ column is measured against: the compare pin when one is set, otherwise the
+// ⚓ baseline. Splitting this out is what turns the existing Δ columns into a head-to-head diff --
+// pin row A and every other row's Δ answers "how does this compare with A".
+function deltaReferenceRow() {
+    return OptimizerState.compareRow ?? OptimizerState.baseline ?? null;
+}
+
+function recomputeDeltasAgainst(referenceRow) {
+    const results = OptimizerState.results;
+    if (!results) return;
     for (const r of results) {
-        r._dNW  = baselineRow ? (r.afterTaxNW   - baselineRow.afterTaxNW)   : null;
-        r._dTax = baselineRow ? (baselineRow.totals.tax - r.totals.tax)     : null;
-        r._dNWCurrent  = baselineRow ? (r.afterTaxNWCurrentDollars - baselineRow.afterTaxNWCurrentDollars) : null;
-        r._dTaxCurrent = baselineRow ? (baselineRow.totals.taxCurrentDollars - r.totals.taxCurrentDollars) : null;
+        r._dNW  = referenceRow ? (r.afterTaxNW   - referenceRow.afterTaxNW)   : null;
+        r._dTax = referenceRow ? (referenceRow.totals.tax - r.totals.tax)     : null;
+        r._dNWCurrent  = referenceRow ? (r.afterTaxNWCurrentDollars - referenceRow.afterTaxNWCurrentDollars) : null;
+        r._dTaxCurrent = referenceRow ? (referenceRow.totals.taxCurrentDollars - r.totals.taxCurrentDollars) : null;
     }
+}
+
+// Re-finds the pinned comparison row after a sweep. `_id` is just `results.length` at build time,
+// so it does not survive a re-run; the pin is stored as the row's `_selection` and matched with
+// sameStrategySelection, the same identity the 📍 CURRENT PLAN row uses. A pin whose strategy is no
+// longer in the table (the user changed a parameter out from under it) is dropped rather than left
+// pointing at a stale object.
+function resolveCompareRow() {
+    const results = OptimizerState.results;
+    const sel = OptimizerState.compareSelection;
+    if (!results || !sel) { OptimizerState.compareRow = null; return; }
+    OptimizerState.compareRow = results.find(r =>
+        r._selection && sameStrategySelection(r._selection, sel)
+        && !!r._isCurrentPlan === !!OptimizerState.compareIsCurrentPlan
+    ) ?? results.find(r => r._selection && sameStrategySelection(r._selection, sel)) ?? null;
+    if (!OptimizerState.compareRow) OptimizerState.compareSelection = null;
+}
+
+// Click handler for the ⚖ compare zone. Clicking whichever row is ALREADY the reference clears the
+// comparison, which is the same thing the "Stop comparing" button does. That includes the ⚓
+// baseline: it is the default reference, so clicking its ⚖ can only mean "put things back", never
+// "pin the thing that is already pinned".
+function toggleCompareRow(id) {
+    const results = OptimizerState.results;
+    const row = results?.find(r => r._id === id);
+    if (!row) return;
+    if (deltaReferenceRow() === row) {
+        OptimizerState.compareSelection = null;
+        OptimizerState.compareIsCurrentPlan = false;
+        OptimizerState.compareRow = null;
+    } else {
+        OptimizerState.compareSelection = row._selection ?? null;
+        OptimizerState.compareIsCurrentPlan = !!row._isCurrentPlan;
+        OptimizerState.compareRow = row;
+    }
+    recomputeDeltasAgainst(deltaReferenceRow());
+    renderOptimizerTable();
+}
+
+// Column-header and tooltip wording for whatever the Δ columns currently measure against.
+function deltaRefSuffix() {
+    return OptimizerState.compareRow ? ' vs ⚖' : '';
+}
+
+function deltaRefDescription() {
+    const row = OptimizerState.compareRow;
+    return row
+        ? `the ⚖ comparison row (${row._strategyLabel}${row._paramLabel ? ' — ' + row._paramLabel : ''})`
+        : 'the ⚓ baseline (the strongest plan with no Roth conversions and no cyclic brokerage maneuvering)';
+}
+
+// The ⚖ glyph. Highlighted on whichever row the Δ columns are CURRENTLY measured against, which is
+// the ⚓ baseline until something else is picked -- so the table opens already showing where the
+// comparison point is, rather than looking like the feature is switched off.
+function compareToggleHtml(r) {
+    const isRef = deltaReferenceRow() === r;
+    return `<span style="${isRef ? 'font-size:1.2em;' : 'opacity:0.55;'}">⚖</span>`;
+}
+
+// Click routing for a table cell. The leading ⚖ / outcome / spacer cells select the comparison row;
+// everything else loads the strategy. Keeping them in separate CELLS rather than nesting a small
+// glyph inside the Strategy cell is what makes the two targets hard to hit by accident.
+function cellActionCss(col) {
+    if (col.inert) return 'cursor:default;';
+    return 'cursor:pointer;';
+}
+
+function cellActionAttrs(col, r, loadTitle) {
+    if (col.inert) return '';
+    if (col.compareZone) {
+        const isRef = deltaReferenceRow() === r;
+        const tip = isRef
+            ? 'Every Δ column is currently measured against this row. Click to go back to the ⚓ baseline.'
+            : 'Compare against this row: the ΔNetWealth and ΔTax columns are re-measured from it instead of the ⚓ baseline.';
+        return ` onclick="toggleCompareRow(${r._id})" title="${tip}"`;
+    }
+    return ` onclick="loadOptimizerResult(${r._id})" title="${loadTitle}"`;
+}
+
+// One line above the table that is always saying something: how to start a comparison when none is
+// running, and what the Δ columns now mean when one is. Without the second half a pinned comparison
+// row silently changes the meaning of every Δ number; without the first half nobody finds ⚖ at all.
+function renderCompareBanner() {
+    const el = document.getElementById('opt-compare-banner');
+    const hint = document.getElementById('opt-compare-hint');
+    if (!el) return;
+    const row = OptimizerState.compareRow;
+    if (!row) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        if (hint) hint.style.display = '';
+        return;
+    }
+    if (hint) hint.style.display = 'none';
+    const label = `${row._strategyLabel}${row._paramLabel ? ' — ' + row._paramLabel : ''}`;
+    el.innerHTML = `⚖ <strong>Comparing every row against:</strong> ${label}.`
+        + ` The ΔNetWealth and ΔTax columns now show the difference from this row instead of the ⚓ baseline,`
+        + ` and this row itself reads 0.`
+        + ` <button onclick="clearCompareRow()" style="margin-left:8px;padding:3px 12px;font-size:0.95em;cursor:pointer;font-weight:600;">✕ Stop comparing</button>`;
+    el.style.display = '';
+}
+
+function clearCompareRow() {
+    OptimizerState.compareSelection = null;
+    OptimizerState.compareIsCurrentPlan = false;
+    OptimizerState.compareRow = null;
+    recomputeDeltasAgainst(deltaReferenceRow());
+    renderOptimizerTable();
 }
 
 
@@ -448,6 +575,16 @@ function _scoreRows(rows, sharedFutureIRARate) {
 // Family + parameter label for an arbitrary plan, matching the names the sweep uses for the same
 // selection ('Proportional' / '7%', 'IRMAA Ceil' / 'Tier 2 ceil', 'Ordered' / 'RIBC', ...). Used to
 // label the 📍 CURRENT PLAN row so it reads as a peer of the swept rows.
+// One constant so the marker that is PREPENDED to a label and the one STRIPPED back off it in the
+// pinned row cannot drift apart.
+const CURRENT_PLAN_MARK = '📍 ';
+const BASELINE_MARK = '⚓ ';
+
+// The ⚓ baseline is identified by object/id rather than by a label prefix: unlike the current plan,
+// its label is never rewritten, because which row IS the baseline changes with the active objective.
+function isBaselineRow(r) {
+    return !!(r && OptimizerState.baseline && r._id === OptimizerState.baseline._id);
+}
 const _IRMAA_TIER_LABELS = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
 function describeSelection(p) {
     const pct = v => `${Math.round((v ?? 0) * 100)}%`;
@@ -468,7 +605,79 @@ function describeSelection(p) {
     }
 }
 
+// Handles for a sweep that is queued but has not started yet. Deliberately NOT a boolean "already
+// scheduled, skip" latch: that version could only be cleared by the queued work actually running, so
+// anything that stopped it running (a hidden tab that never fires frames, a torn-down context) left
+// the flag stuck true and every later click did nothing at all. Cancelling and re-queueing cannot
+// wedge, and it also does the more useful thing when inputs change twice quickly -- the newest wins.
+let _optPendingTimer = null;
+let _optPendingFrame = null;
+
+// The sweep is a few hundred simulations and blocks the main thread for one to several seconds,
+// during which the page looks frozen and the table still shows the previous run. Show a banner
+// first, then yield so the browser can paint it before the work starts.
+//
+// The yield races two frames against a timer, and takes whichever arrives first. Two frames is what
+// a visible tab needs (one to lay the banner out, one to commit the paint -- a single frame can run
+// the callback before the paint lands). The timer is the fallback, because a tab that is not
+// compositing never fires requestAnimationFrame at all: relying on frames alone means the sweep
+// simply never runs for anyone who switches browser tabs while it is queued.
 function runOptimizer() {
+    if (_optPendingTimer) { clearTimeout(_optPendingTimer); _optPendingTimer = null; }
+    if (_optPendingFrame) { cancelAnimationFrame(_optPendingFrame); _optPendingFrame = null; }
+    setOptimizerBusy('busy');
+    let started = false;
+    const start = () => {
+        if (started) return;          // whichever of the two racers arrived first already ran it
+        started = true;
+        _optPendingTimer = null;
+        _optPendingFrame = null;
+        const t0 = performance.now();
+        try {
+            _runOptimizerNow();
+        } finally {
+            // Measured wall time, not OptimizerState.perfStats: that is only written by a real
+            // sweep, so a cached re-render would have reported the PREVIOUS sweep's duration. This
+            // also counts the render, which is time the user waited either way.
+            setOptimizerBusy('done', performance.now() - t0);
+        }
+    };
+    _optPendingFrame = requestAnimationFrame(() => { _optPendingFrame = requestAnimationFrame(start); });
+    _optPendingTimer = setTimeout(start, 60);
+}
+
+// How long the finished banner stays up. A banner that vanishes the instant the work ends reads as
+// a glitch rather than as an answer -- on a fast sweep it was on screen for well under a second.
+// Holding it lets the reader see that something ran, and what it cost, before it goes.
+const OPT_BUSY_HOLD_MS = 5000;
+let _optBusyHideTimer = null;
+
+// state: 'busy' while the sweep runs, 'done' once it has finished. 'done' is not the same as hidden:
+// it swaps the message and starts the hold timer.
+function setOptimizerBusy(state, ms) {
+    const el = document.getElementById('opt-busy');
+    if (!el) return;
+    clearTimeout(_optBusyHideTimer);   // a new run cancels the previous run's hold
+    if (state === 'busy') {
+        el.style.background = '#eef4fb';
+        el.style.borderColor = '#c9dcf0';
+        el.style.color = '#1a4d70';
+        el.innerHTML = '⏳ Calculating strategies…'
+            + '<span style="font-weight:400;color:#4a5c6a;"> testing every withdrawal and conversion strategy against your plan.</span>';
+        el.style.display = '';
+        return;
+    }
+    const secs = ms != null ? (ms / 1000).toFixed(1) : null;
+    el.style.background = '#e8f6ec';
+    el.style.borderColor = '#b7dfc4';
+    el.style.color = '#1a7f37';
+    el.innerHTML = '✓ Calculating strategies… <strong>DONE</strong>'
+        + (secs != null ? `<span style="font-weight:400;color:#4a5c6a;"> in ${secs}s.</span>` : '');
+    el.style.display = '';
+    _optBusyHideTimer = setTimeout(() => { el.style.display = 'none'; }, OPT_BUSY_HOLD_MS);
+}
+
+function _runOptimizerNow() {
     const base = getInputs();
     // The user's plan exactly as configured, captured BEFORE the three guards below strip the
     // sidebar's conversion settings off `base`. The 📍 CURRENT PLAN row is simulated from this, so
@@ -790,7 +999,7 @@ function runOptimizer() {
         addResult(_fam.family, _fam.paramLabel, _fam.paramSortVal, _curOv);
         const curRow = results[results.length - 1];
         curRow._isCurrentPlan = true;
-        curRow._strategyLabel = '📍 ' + curRow._strategyLabel;
+        curRow._strategyLabel = CURRENT_PLAN_MARK + curRow._strategyLabel;
         // Carried so clicking the pinned row restores the plan intact — loadOptimizerResult() zeroes
         // the extra conversion and the stop year for every row type that doesn't claim them.
         curRow._optConvAmt  = userPlan.extraConversionAmount ?? 0;
@@ -804,9 +1013,18 @@ function runOptimizer() {
         // agrees with the sidebar and fall back to the first match otherwise.
         const _matches = results.filter(r => !r._isCurrentPlan && sameStrategySelection(r._selection, userPlan));
         const _match = _matches.find(r => !!r._convertExcessToRoth === !!userPlan.convertExcessToRoth) ?? _matches[0];
-        if (_match) {
+        // ...but only when the twin is a DIFFERENT plan. A swept row differs from the user's plan
+        // solely in the conversion fields runOptimizer strips (the on/off switch, any Extra Annual
+        // Conversion, any stop year). When none of those differ, the twin IS the user's plan, run
+        // again: marking it just puts a second 📍 on an identical row, which reads as a bug.
+        const _curDiffersFromSweep = !!_match && (
+               !!_match._convertExcessToRoth !== !!userPlan.convertExcessToRoth
+            || (userPlan.extraConversionAmount ?? 0) !== 0
+            || userPlan.convEndYear != null
+        );
+        if (_match && _curDiffersFromSweep) {
             _match._isCurrentMatch = true;
-            _match._strategyLabel = '📍 ' + _match._strategyLabel;
+            _match._strategyLabel = CURRENT_PLAN_MARK + _match._strategyLabel;
         }
     }
 
@@ -1066,15 +1284,34 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
 function getOptimizerColumns() {
     const inC = () => document.getElementById('show-current-dollars')?.checked;
     const cols = [
+        // compareZone: these cells select the comparison row instead of loading the strategy.
+        // The ⚖ used to be a small glyph inside the Strategy cell, where a near miss loaded the
+        // strategy instead -- a destructive, surprising outcome for a click aimed at a comparison.
+        // Giving it a whole column, extending the zone across the outcome marker, and separating the
+        // two zones with a spacer column makes the two actions hard to confuse.
         {
-            key: 'status', label: '✓',
-            title: 'Plan outcome. 🟢 = every year of the plan was fully funded. 🚨 = the portfolio ran out before the end (the plan failed). Failed plans always sort below successful ones.',
+            key: 'compare', label: '⚖', sortable: false, compareZone: true,
+            title: 'Click to compare every other strategy against this row. The ΔNetWealth and ΔTax columns then measure from it instead of the ⚓ baseline. Click the highlighted one again to go back to the baseline.',
+            getValue: r => compareToggleHtml(r),
+            getSortValue: () => 0
+        },
+        {
+            key: 'status', label: '✓', compareZone: true,
+            title: 'Plan outcome. 🟢 = every year of the plan was fully funded. 🚨 = the portfolio ran out before the end (the plan failed). Failed plans always sort below successful ones.\n\nThis cell is part of the ⚖ compare control, so clicking it selects this row as the comparison instead of loading it.',
             getValue: r => r.totals.success ? '🟢' : '🚨',
             getSortValue: r => r.totals.success ? 1 : 0
         },
         {
+            // Dead space that separates "compare with this row" from "load this row", so a slightly
+            // off click does nothing at all rather than the wrong one of the two.
+            key: 'gap', label: '', sortable: false, compareZone: true, inert: true,
+            title: '',
+            getValue: () => '',
+            getSortValue: () => 0
+        },
+        {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = bracket target unreachable. Click any row to load it.',
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = bracket target unreachable. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
             getValue: r => r._strategyLabel,
             getSortValue: r => r._strategyLabel
         },
@@ -1109,8 +1346,8 @@ function getOptimizerColumns() {
             getSortValue: r => inC() ? (r.afterTaxNWCurrentDollars ?? 0) : (r.afterTaxNW ?? 0)
         },
         {
-            key: 'dNW', label: 'ΔNetWealth',
-            title: 'NetWealth minus the baseline (the strongest plan with no Roth conversions and no cyclic brokerage maneuvering). Positive (green) = this strategy ends wealthier after tax than that baseline; negative (red) = it ends behind it.',
+            key: 'dNW', label: 'ΔNetWealth' + deltaRefSuffix(),
+            title: 'NetWealth minus ' + deltaRefDescription() + '. Positive (green) = this strategy ends wealthier after tax than that reference; negative (red) = it ends behind it.',
             getValue: r => {
                 const d = inC() ? r._dNWCurrent : r._dNW;
                 if (d == null) return '—';
@@ -1121,8 +1358,8 @@ function getOptimizerColumns() {
             getSortValue: r => (inC() ? r._dNWCurrent : r._dNW) ?? -Infinity
         },
         {
-            key: 'dTax', label: 'ΔTax',
-            title: 'Baseline lifetime tax minus this strategy\'s lifetime tax (each = federal incl. NIIT + state + IRMAA). Positive (green) = this strategy pays less total tax than the baseline; negative (red) = it pays more.',
+            key: 'dTax', label: 'ΔTax' + deltaRefSuffix(),
+            title: 'Lifetime tax of ' + deltaRefDescription() + ' minus this strategy\'s lifetime tax (each = federal incl. NIIT + state + IRMAA). Positive (green) = this strategy pays less total tax than that reference; negative (red) = it pays more.',
             getValue: r => {
                 const d = inC() ? r._dTaxCurrent : r._dTax;
                 if (d == null) return '—';
@@ -1190,6 +1427,9 @@ function getOptimizerColumns() {
 }
 
 function renderOptimizerTable(results) {
+    // Re-renders triggered by the ⚖ compare toggle pass no argument — they are redrawing whatever
+    // is already in state, not a fresh sweep.
+    results = results ?? OptimizerState.results;
     if (!results || results.length === 0) return;
     const columns = getOptimizerColumns();
     // Default: sort by After-Tax NW descending; Spendable descending as tiebreaker
@@ -1210,7 +1450,11 @@ function renderOptimizerTable(results) {
     const infeasibleCount = results.filter(r => r._isBracketInfeasible || r._isACAUntenable).length;
     // Failed = the portfolio ran out of money (success===false). Hidden by default (item 11).
     const failedCount = results.filter(r => !r.totals.success).length;
-    let display = results.filter(r => !(baselineRow && r._id === baselineRow._id));
+    // Both pinned rows come out of the body, for the same reason: each is already rendered once,
+    // sticky, above the table. The current plan used to stay in the body so its Rank was visible,
+    // but the pinned row carries the Rank column too, so the body copy only produced a second 📍 on
+    // an identical row.
+    let display = results.filter(r => !(baselineRow && r._id === baselineRow._id) && !r._isCurrentPlan);
     if (!showInfeasible) display = display.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
     if (!showFailed) display = display.filter(r => r.totals.success);
     const afterTaxCol = columns.find(c => c.key === 'afterTaxNW');
@@ -1282,6 +1526,10 @@ function renderOptimizerTable(results) {
         const active = sortState.colKey === col.key;
         const arrow = active ? (sortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
         const tip = col.title ? ` title="${col.title.replace(/"/g, '&quot;')}"` : '';
+        // The ⚖ and spacer columns have nothing meaningful to sort on.
+        if (col.sortable === false) {
+            return `<div style="${_hCellStyle}cursor:default;"${tip}>${col.label}</div>`;
+        }
         return `<div style="${_hCellStyle}"${tip} onclick="sortOptimizerBy('${col.key}')">${col.label}${arrow}</div>`;
     }).join('');
 
@@ -1318,7 +1566,7 @@ function renderOptimizerTable(results) {
                         : isWinner     ? 'font-weight:bold;'
                         : (r._isReverseOptimized || r._isConvOptimized || r._isSpendOptimized) ? 'font-style:italic;' : '';
             const bgCss = bg ? `background-color:${bg};` : '';
-            return `<div style="padding:4px 8px;cursor:pointer;${bgCss}${extra}" onclick="loadOptimizerResult(${r._id})" title="${rowTitle}">${col.getValue(r)}</div>`;
+            return `<div style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${col.getValue(r)}</div>`;
         }).join('');
         return `<div style="display:contents;">${cells}</div>`;
     }).join('');
@@ -1327,14 +1575,16 @@ function renderOptimizerTable(results) {
     // sticky under the header; its Δ columns read 0 by definition.
     let baselineRowHtml = '';
     if (baselineRow) {
-        const _bCell = 'padding:4px 8px;cursor:pointer;background-color:#dbeafe;font-weight:bold;position:sticky;top:30px;z-index:1;';
+        const _bCell = 'padding:4px 8px;background-color:#dbeafe;font-weight:bold;position:sticky;top:30px;z-index:1;';
         const bTitle = 'BASELINE — the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s Δ columns are measured against this. Click to load it.';
         baselineRowHtml = '<div style="display:contents;" id="opt-baseline-row">' + columns.map(col => {
             let v;
-            if (col.key === 'strategy')      v = '⚓ BASELINE — ' + baselineRow._strategyLabel;
-            else if (col.key === 'dNW' || col.key === 'dTax') v = '0';
+            if (col.key === 'strategy')      v = BASELINE_MARK + 'BASELINE — ' + baselineRow._strategyLabel;
+            // Zero only when the baseline IS the reference. With a compare row pinned the baseline
+            // has a real Δ like every other row, and printing 0 would be a lie.
+            else if ((col.key === 'dNW' || col.key === 'dTax') && !OptimizerState.compareRow) v = '0';
             else v = col.getValue(baselineRow);
-            return `<div style="${_bCell}" onclick="loadOptimizerResult(${baselineRow._id})" title="${bTitle}">${v}</div>`;
+            return `<div style="${_bCell}${cellActionCss(col)}"${cellActionAttrs(col, baselineRow, bTitle)}>${v}</div>`;
         }).join('') + '</div>';
     }
 
@@ -1350,18 +1600,25 @@ function renderOptimizerTable(results) {
         const curInfeas = currentRow._isBracketInfeasible || currentRow._isACAUntenable;
         const _cBg = curFailed ? '#fde0e0' : curInfeas ? '#e8e8e8' : '#fff3cd';
         const _cExtra = curFailed ? 'opacity:0.85;' : curInfeas ? 'text-decoration:line-through;opacity:0.7;' : '';
-        const _cCell = `padding:4px 8px;cursor:pointer;background-color:${_cBg};font-weight:bold;position:sticky;top:60px;z-index:1;${_cExtra}`;
+        const _cCell = `padding:4px 8px;background-color:${_cBg};font-weight:bold;position:sticky;top:60px;z-index:1;${_cExtra}`;
         const cTitle = 'YOUR PLAN — the strategy and settings currently in the sidebar, simulated exactly as configured '
             + '(conversions on or off as you have them, your Extra Conversion, your stop year). Every swept row runs with '
             + 'conversions forced on, so none of them is this plan. Click to reload it.'
             + (curFailed ? ' This plan runs out of money before the end.' : '')
             + (curInfeas ? ' This plan\'s bracket/ACA target cannot actually be held.' : '');
         currentRowHtml = '<div style="display:contents;" id="opt-current-row">' + columns.map(col => {
-            const v = col.key === 'strategy' ? 'CURRENT — ' + currentRow._strategyLabel : col.getValue(currentRow);
-            return `<div style="${_cCell}" onclick="loadOptimizerResult(${currentRow._id})" title="${cTitle}">${v}</div>`;
+            // Marker first, matching '⚓ BASELINE — …' on the row above. _strategyLabel already
+            // carries the 📍 prefix (it is what marks the row everywhere else), so it is moved to
+            // the front rather than printed twice as 'CURRENT — 📍 …'.
+            const _curBare = currentRow._strategyLabel.startsWith(CURRENT_PLAN_MARK)
+                ? currentRow._strategyLabel.slice(CURRENT_PLAN_MARK.length)
+                : currentRow._strategyLabel;
+            const v = col.key === 'strategy' ? CURRENT_PLAN_MARK + 'CURRENT — ' + _curBare : col.getValue(currentRow);
+            return `<div style="${_cCell}${cellActionCss(col)}"${cellActionAttrs(col, currentRow, cTitle)}>${v}</div>`;
         }).join('') + '</div>';
     }
 
+    renderCompareBanner();
     const optTableEl = document.getElementById('opt-table');
     optTableEl.style.gridTemplateColumns = columns.map(() => 'max-content').join(' ');
     optTableEl.innerHTML = headerHtml + baselineRowHtml + currentRowHtml + rowsHtml;
@@ -1431,7 +1688,13 @@ function renderOptimizerTable(results) {
                 const dataCells = columns.slice(1).map(col => {
                     const cellWin = col.key === w.key;
                     const bg = cellWin ? '#4CAF5080' : '#90EE90';
-                    return `<div style="padding:4px 8px;background-color:${bg};font-weight:bold;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} — click to load">${col.getValue(r)}</div>`;
+                    let cellVal = col.getValue(r);
+                    // Carry the pinned rows' markers into this table so a winner is recognisable as
+                    // the SAME row the reader already saw pinned above. The marker alone does that;
+                    // repeating "BASELINE —" / "CURRENT —" here would just be noise, and 📍 is
+                    // already on the current row's own label.
+                    if (col.key === 'strategy' && isBaselineRow(r)) cellVal = BASELINE_MARK + cellVal;
+                    return `<div style="padding:4px 8px;background-color:${bg};font-weight:bold;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} — click to load">${cellVal}</div>`;
                 }).join('');
                 return `<div style="display:contents;">${labelCell}${dataCells}</div>`;
             }).join('');
@@ -2281,9 +2544,6 @@ function updateStats(totals, finalNW, finalNWCurrentDollars = finalNW, minNetWor
         }
     }
 
-    // Phase 23: projected RMD stat (reads from DOM inputs directly)
-    updateProjectedRMDStat();
-
     // Delta vs previous run
     if (_prevStatsTotals) {
         const pTax   = inCD ? _prevStatsTotals.taxCurrentDollars   : _prevStatsTotals.tax;
@@ -2408,93 +2668,6 @@ function toggleBreakEvenDiagnosis() {
     }
 }
 
-function updateProjectedRMDStat() {
-    const now = new Date();
-    const curYear = now.getFullYear();
-    const curMonth = now.getMonth() + 1;
-
-    function calcRMDProjection(birthYear, birthMonth, iraBalance, growthRate) {
-        if (!birthYear || !iraBalance || iraBalance <= 0) return null;
-        const rmdAge = birthYear >= 1960 ? 75 : 73;
-        const age = curYear - birthYear - (curMonth <= (birthMonth || 12) ? 1 : 0);
-        const yearsTo = rmdAge - age;
-        if (yearsTo <= 0) {
-            // Already in RMD — estimate current RMD from current IRA balance
-            const factor = RMD_TABLE[Math.min(age, 120)] ?? 2.0;
-            return { rmdAge, rmdYear: curYear, projIRA: iraBalance, firstRMD: iraBalance / factor, alreadyRMD: true };
-        }
-        const projIRA = iraBalance * Math.pow(1 + growthRate, yearsTo);
-        const factor = RMD_TABLE[rmdAge] ?? 26.5;
-        return { rmdAge, rmdYear: curYear + yearsTo, projIRA, firstRMD: projIRA / factor, alreadyRMD: false };
-    }
-
-    const growthRate = (+val('growth') / 100) || 0.06;
-    const ira1 = +val('IRA1') || 0;
-    const ira2 = +val('IRA2') || 0;
-    const by1 = +val('birthyear1');
-    const bm1 = +val('birthmonth1') || 12;
-    const by2 = +val('birthyear2');
-    const bm2 = +val('birthmonth2') || 12;
-    const hasSpouse = !!(by2 && ira2 > 0);
-
-    const rmd1 = calcRMDProjection(by1, bm1, ira1, growthRate);
-    const rmd2 = hasSpouse ? calcRMDProjection(by2, bm2, ira2, growthRate) : null;
-
-    function fmtRMD(rmd, label) {
-        if (!rmd) return '';
-        const amt = '$' + Math.round(rmd.firstRMD).toLocaleString();
-        return rmd.alreadyRMD
-            ? `${label} RMD (est. now): ${amt}/yr`
-            : `${label} RMD at ${rmd.rmdAge} (${rmd.rmdYear}): ~${amt}/yr`;
-    }
-
-    const el1 = document.getElementById('stat-proj-rmd1');
-    const el2 = document.getElementById('stat-proj-rmd2');
-
-    // When a simulation has run, use actual RMD values from the log (strategy-dependent).
-    if (lastSimulationLog?.length > 0) {
-        const row1 = lastSimulationLog.find(r => (r['RMD1-'] ?? 0) > 0);
-        const row2 = lastSimulationLog.find(r => (r['RMD2-'] ?? 0) > 0);
-        if (el1) {
-            if (row1) {
-                el1.textContent = `You RMD (${row1.year}): ~$${Math.round(row1['RMD1-']).toLocaleString()} (strategy)`;
-                el1.title = `First actual RMD in simulation year ${row1.year}`;
-                el1.style.display = '';
-            } else {
-                el1.style.display = 'none';
-            }
-        }
-        if (el2) {
-            if (row2) {
-                el2.textContent = `Spouse RMD (${row2.year}): ~$${Math.round(row2['RMD2-']).toLocaleString()} (strategy)`;
-                el2.title = `First actual RMD in simulation year ${row2.year}`;
-                el2.style.display = '';
-            } else {
-                el2.style.display = 'none';
-            }
-        }
-        return;
-    }
-
-    if (el1) {
-        if (rmd1) {
-            el1.innerText = fmtRMD(rmd1, 'You') + ' (projected)';
-            el1.title = `IRA1 projected at age ${rmd1.rmdAge}: $${Math.round(rmd1.projIRA).toLocaleString()}`;
-            el1.style.display = '';
-        } else {
-            el1.style.display = 'none';
-        }
-    }
-    if (el2) {
-        if (rmd2) {
-            el2.innerText = fmtRMD(rmd2, 'Spouse') + ' (projected)';
-            el2.title = `IRA2 projected at age ${rmd2.rmdAge}: $${Math.round(rmd2.projIRA).toLocaleString()}`;
-            el2.style.display = '';
-        } else {
-            el2.style.display = 'none';
-        }
-    }
-}
 
 let lastSimulationLog = null;
 let lastSimInputs = null;
@@ -2539,12 +2712,13 @@ const milestonePlugin = {
         if (!showMilestones || !_chartMilestones.length) return;
         // Milestones come from the last single-strategy run. The main charts show all of them;
         // the Monte Carlo fan aggregates many strategies/paths, so only the markers that are
-        // deterministic across every path apply there — death (fixed life expectancy) and the
-        // RMD-start ages (fixed birth years). IRMAA/GK/shortfall/break-even differ per path.
+        // deterministic across every path apply there — death (fixed life expectancy), the
+        // RMD-start ages (fixed birth years) and the Social Security start years (fixed birth
+        // years and claiming ages). IRMAA/GK/shortfall/break-even differ per path.
         // All other charts (MC input fans, etc.) get none.
         const canvasId = chart.canvas?.id || '';
         let milestones = _chartMilestones;
-        if (canvasId === 'mc-chart') milestones = milestones.filter(m => /Passing|RMDs begin/.test(m.label));
+        if (canvasId === 'mc-chart') milestones = milestones.filter(m => /Passing|RMDs begin|SS begins/.test(m.label));
         else if (canvasId !== 'chartAssets' && canvasId !== 'chartIncomeSources') return;
         if (!milestones.length) return;
         const xScale = chart.scales.x;
@@ -2584,6 +2758,10 @@ const MEDICARE_COLOR = '#008080';
 // Milestone marker color for the two RMD-start lines — distinct from the five already in use
 // (death purple, GK orange, IRMAA pink, shortfall red, break-even teal).
 const RMD_MILESTONE_COLOR = '#2471a3';
+
+// Milestone marker color for the Social Security start lines. Green, so it reads as income
+// arriving rather than as one of the cost/warning markers.
+const SS_MILESTONE_COLOR = '#1e8449';
 
 // Legend hover hint for the Medicare series (browser-native tooltip via canvas title).
 const MEDICARE_LEGEND_TIP = 'Base Cost for Medicare B+D - not deducted from spendable. Illustration only.';
@@ -2779,6 +2957,15 @@ function computeMilestones(log) {
             ms.push({ x: i, label: 'Spouse RMDs begin', color: RMD_MILESTONE_COLOR });
             rmd2Done = true;
         }
+        // 7. Social Security start. Unlike the RMD markers these are not derived from age here: the
+        // engine flags the first year a benefit is actually PAID, which with the default December
+        // birth month is the year AFTER the claiming age is reached, since the claim year prorates
+        // to zero months. The engine also knows which spouse the survivor benefit belongs to, which
+        // the log's combined SSincome column cannot say. Hidden '-' fields, so they never show up
+        // as Annual Details columns.
+        if (r['-ssStart1']) ms.push({ x: i, label: 'Your SS begins', color: SS_MILESTONE_COLOR });
+        if (r['-ssStart2']) ms.push({ x: i, label: 'Spouse SS begins', color: SS_MILESTONE_COLOR });
+        if (r['-ssStartSurvivor']) ms.push({ x: i, label: 'Survivor SS begins', color: SS_MILESTONE_COLOR });
         if (a1 != null) prevAge1 = a1;
         if (a2 != null) prevAge2 = a2;
     }
@@ -3409,6 +3596,14 @@ function setupAutoRecalc() {
             // single-scenario run; it is one simulate() against the optimizer's ~1.3s sweep.
             runSimulation();
             if (tab.includes('tab-opt')) runOptimizer();
+            // Monte Carlo has the same staleness problem but cannot be handled the same way: its
+            // main sweep is numPaths x variations simulations (measured 27.4s on the default
+            // scenario), so re-running it on every edit is not viable. mcInputsChanged() refreshes
+            // only the cheap stress pass and flags the rest as out of date. See mc_tab.js.
+            // Runs on EVERY tab, not just tab-mc, because the Stress Test tile it feeds lives in the
+            // summary bar and is visible from everywhere. mcInputsChanged is a no-op when its own
+            // hash has not moved, so a change Monte Carlo does not care about costs nothing.
+            if (typeof mcInputsChanged === 'function') mcInputsChanged();
         }, 400);
     }
     document.querySelectorAll('.sidebar input, .sidebar select').forEach(el => {
@@ -3418,6 +3613,10 @@ function setupAutoRecalc() {
             el.addEventListener('blur', () => scheduleRecalc(el));
         }
     });
+    // Prime the Stress Test tile once on load so it reads a real number before the user touches
+    // anything or visits the Monte Carlo tab. Deferred past the first paint because it spawns a
+    // worker; the pass itself is ~10 simulations. Everything after this is driven by scheduleRecalc.
+    setTimeout(() => { if (typeof mcInputsChanged === 'function') mcInputsChanged(); }, 600);
 }
 
 

@@ -111,6 +111,13 @@ place. If a change removes that strategy from the table entirely, the comparison
 baseline. Clicking ⚖ does not load the strategy into the sidebar; clicking anywhere else on the row
 still does.
 
+Your plan is now marked in exactly one place when there is nothing else to say. It was possible to
+see three 📍 markers at once: the pinned row, the same row repeated in the ranked body, and the swept
+strategy that matches your settings. The body copy is gone, since the pinned row already carries the
+Rank column, and the swept row is only marked when it is genuinely a different plan from yours,
+which happens when your conversion switch, Extra Annual Conversion or stop year differ from what the
+sweep runs. When the swept row simply is your plan, only the pinned row is marked.
+
 The pinned rows read ⚓ BASELINE and 📍 CURRENT, marker first in both cases, and a row that wins a
 metric in the Best table keeps its marker there too, so it is recognisable as the same row without
 repeating the words.

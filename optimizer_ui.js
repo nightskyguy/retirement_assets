@@ -1013,7 +1013,16 @@ function _runOptimizerNow() {
         // agrees with the sidebar and fall back to the first match otherwise.
         const _matches = results.filter(r => !r._isCurrentPlan && sameStrategySelection(r._selection, userPlan));
         const _match = _matches.find(r => !!r._convertExcessToRoth === !!userPlan.convertExcessToRoth) ?? _matches[0];
-        if (_match) {
+        // ...but only when the twin is a DIFFERENT plan. A swept row differs from the user's plan
+        // solely in the conversion fields runOptimizer strips (the on/off switch, any Extra Annual
+        // Conversion, any stop year). When none of those differ, the twin IS the user's plan, run
+        // again: marking it just puts a second 📍 on an identical row, which reads as a bug.
+        const _curDiffersFromSweep = !!_match && (
+               !!_match._convertExcessToRoth !== !!userPlan.convertExcessToRoth
+            || (userPlan.extraConversionAmount ?? 0) !== 0
+            || userPlan.convEndYear != null
+        );
+        if (_match && _curDiffersFromSweep) {
             _match._isCurrentMatch = true;
             _match._strategyLabel = CURRENT_PLAN_MARK + _match._strategyLabel;
         }
@@ -1441,7 +1450,11 @@ function renderOptimizerTable(results) {
     const infeasibleCount = results.filter(r => r._isBracketInfeasible || r._isACAUntenable).length;
     // Failed = the portfolio ran out of money (success===false). Hidden by default (item 11).
     const failedCount = results.filter(r => !r.totals.success).length;
-    let display = results.filter(r => !(baselineRow && r._id === baselineRow._id));
+    // Both pinned rows come out of the body, for the same reason: each is already rendered once,
+    // sticky, above the table. The current plan used to stay in the body so its Rank was visible,
+    // but the pinned row carries the Rank column too, so the body copy only produced a second 📍 on
+    // an identical row.
+    let display = results.filter(r => !(baselineRow && r._id === baselineRow._id) && !r._isCurrentPlan);
     if (!showInfeasible) display = display.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
     if (!showFailed) display = display.filter(r => r.totals.success);
     const afterTaxCol = columns.find(c => c.key === 'afterTaxNW');

@@ -58,7 +58,7 @@
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1113a1ha"></script>
+	<script src="optimizer_ui.js?v=1113a1ia"></script>
 	<script src="optimizer_tests.js?v=1111f3"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
@@ -969,6 +969,7 @@
             <!-- Symbol legend (item 8) — explains the marks on strategy names / status column. -->
             <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:0.78em;color:#444;padding:2px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px;">
                 <span style="font-weight:600;color:#666;">Symbols:</span>
+                <span title="Your own plan, pinned above the table. If a swept strategy uses your settings but differs from your plan in its conversions, that row is marked too, so you can see where your setting sits on its family's curve. When the swept row IS your plan, only the pinned row is marked.">📍 Your plan</span>
                 <span title="Convert Excess to Roth enabled — surplus after spending is converted to Roth rather than left in Cash. (Whether conversion taxes are also funded from Cash follows your sidebar's Maximize Conversions setting, except under nerdknob, where both arms are swept — see 💵.)">✓ Convert Excess on</span>
                 <span id="opt-legend-cashfund" style="display:none;" title="Uses available Cash to cover conversion taxes, so more of the conversion lands in Roth (the 'Use Cash' half of Maximize Conversions). Nerdknob sweeps this as its own dimension, so each strategy appears both with and without it. Only shown when you have Cash to spend.">💵 Cash-funded taxes</span>
                 <span title="Your current plan. The pinned CURRENT row is your sidebar settings run exactly as configured, including whether conversions are on and any Extra Conversion or stop year. The same mark in the table body is the swept row that uses the same strategy and parameter, which is not the same plan: every swept row runs with conversions on.">📍 Your plan</span>

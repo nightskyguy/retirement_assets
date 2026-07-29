@@ -575,6 +575,16 @@ function _scoreRows(rows, sharedFutureIRARate) {
 // Family + parameter label for an arbitrary plan, matching the names the sweep uses for the same
 // selection ('Proportional' / '7%', 'IRMAA Ceil' / 'Tier 2 ceil', 'Ordered' / 'RIBC', ...). Used to
 // label the 📍 CURRENT PLAN row so it reads as a peer of the swept rows.
+// One constant so the marker that is PREPENDED to a label and the one STRIPPED back off it in the
+// pinned row cannot drift apart.
+const CURRENT_PLAN_MARK = '📍 ';
+const BASELINE_MARK = '⚓ ';
+
+// The ⚓ baseline is identified by object/id rather than by a label prefix: unlike the current plan,
+// its label is never rewritten, because which row IS the baseline changes with the active objective.
+function isBaselineRow(r) {
+    return !!(r && OptimizerState.baseline && r._id === OptimizerState.baseline._id);
+}
 const _IRMAA_TIER_LABELS = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
 function describeSelection(p) {
     const pct = v => `${Math.round((v ?? 0) * 100)}%`;
@@ -989,7 +999,7 @@ function _runOptimizerNow() {
         addResult(_fam.family, _fam.paramLabel, _fam.paramSortVal, _curOv);
         const curRow = results[results.length - 1];
         curRow._isCurrentPlan = true;
-        curRow._strategyLabel = '📍 ' + curRow._strategyLabel;
+        curRow._strategyLabel = CURRENT_PLAN_MARK + curRow._strategyLabel;
         // Carried so clicking the pinned row restores the plan intact — loadOptimizerResult() zeroes
         // the extra conversion and the stop year for every row type that doesn't claim them.
         curRow._optConvAmt  = userPlan.extraConversionAmount ?? 0;
@@ -1005,7 +1015,7 @@ function _runOptimizerNow() {
         const _match = _matches.find(r => !!r._convertExcessToRoth === !!userPlan.convertExcessToRoth) ?? _matches[0];
         if (_match) {
             _match._isCurrentMatch = true;
-            _match._strategyLabel = '📍 ' + _match._strategyLabel;
+            _match._strategyLabel = CURRENT_PLAN_MARK + _match._strategyLabel;
         }
     }
 
@@ -1556,7 +1566,7 @@ function renderOptimizerTable(results) {
         const bTitle = 'BASELINE — the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s Δ columns are measured against this. Click to load it.';
         baselineRowHtml = '<div style="display:contents;" id="opt-baseline-row">' + columns.map(col => {
             let v;
-            if (col.key === 'strategy')      v = '⚓ BASELINE — ' + baselineRow._strategyLabel;
+            if (col.key === 'strategy')      v = BASELINE_MARK + 'BASELINE — ' + baselineRow._strategyLabel;
             // Zero only when the baseline IS the reference. With a compare row pinned the baseline
             // has a real Δ like every other row, and printing 0 would be a lie.
             else if ((col.key === 'dNW' || col.key === 'dTax') && !OptimizerState.compareRow) v = '0';
@@ -1584,7 +1594,13 @@ function renderOptimizerTable(results) {
             + (curFailed ? ' This plan runs out of money before the end.' : '')
             + (curInfeas ? ' This plan\'s bracket/ACA target cannot actually be held.' : '');
         currentRowHtml = '<div style="display:contents;" id="opt-current-row">' + columns.map(col => {
-            const v = col.key === 'strategy' ? 'CURRENT — ' + currentRow._strategyLabel : col.getValue(currentRow);
+            // Marker first, matching '⚓ BASELINE — …' on the row above. _strategyLabel already
+            // carries the 📍 prefix (it is what marks the row everywhere else), so it is moved to
+            // the front rather than printed twice as 'CURRENT — 📍 …'.
+            const _curBare = currentRow._strategyLabel.startsWith(CURRENT_PLAN_MARK)
+                ? currentRow._strategyLabel.slice(CURRENT_PLAN_MARK.length)
+                : currentRow._strategyLabel;
+            const v = col.key === 'strategy' ? CURRENT_PLAN_MARK + 'CURRENT — ' + _curBare : col.getValue(currentRow);
             return `<div style="${_cCell}${cellActionCss(col)}"${cellActionAttrs(col, currentRow, cTitle)}>${v}</div>`;
         }).join('') + '</div>';
     }
@@ -1659,7 +1675,13 @@ function renderOptimizerTable(results) {
                 const dataCells = columns.slice(1).map(col => {
                     const cellWin = col.key === w.key;
                     const bg = cellWin ? '#4CAF5080' : '#90EE90';
-                    return `<div style="padding:4px 8px;background-color:${bg};font-weight:bold;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} — click to load">${col.getValue(r)}</div>`;
+                    let cellVal = col.getValue(r);
+                    // Carry the pinned rows' markers into this table so a winner is recognisable as
+                    // the SAME row the reader already saw pinned above. The marker alone does that;
+                    // repeating "BASELINE —" / "CURRENT —" here would just be noise, and 📍 is
+                    // already on the current row's own label.
+                    if (col.key === 'strategy' && isBaselineRow(r)) cellVal = BASELINE_MARK + cellVal;
+                    return `<div style="padding:4px 8px;background-color:${bg};font-weight:bold;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} — click to load">${cellVal}</div>`;
                 }).join('');
                 return `<div style="display:contents;">${labelCell}${dataCells}</div>`;
             }).join('');

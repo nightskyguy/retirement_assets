@@ -111,6 +111,10 @@ place. If a change removes that strategy from the table entirely, the comparison
 baseline. Clicking ⚖ does not load the strategy into the sidebar; clicking anywhere else on the row
 still does.
 
+The pinned rows read ⚓ BASELINE and 📍 CURRENT, marker first in both cases, and a row that wins a
+metric in the Best table keeps its marker there too, so it is recognisable as the same row without
+repeating the words.
+
 The ⚖ control has its own column at the start of each row, and the outcome marker beside it is part
 of the same control, with a gap separating both from the rest of the row. It began as a small glyph
 inside the Strategy cell, where a near miss loaded that strategy into the sidebar instead: a

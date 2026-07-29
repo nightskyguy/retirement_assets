@@ -511,6 +511,62 @@ test('IRC 7503 — the shifted date drives the past-due check, not the statutory
   assert(/PAST DUE/.test(q1b.description), 'Apr 17 2029 is after the shifted deadline');
 });
 
+// ── 15. Conversion withholding can never exceed the conversion ────────────
+test('Gap fill caps withholding at the conversion amount (the 497% bug)', () => {
+  // Reported case: 2027 CA, $67,000 total tax, $30,000 of draws, and a $5,000 conversion.
+  // The gap fill sized withholding off the $37,000 shortfall without ever looking at the
+  // conversion, producing $24,851 federal (497% of the conversion) and $12,149 state (243%).
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    taxYear: 2027, state: 'CA',
+    federalTax: 45000, stateTax: 22000,
+    priorYearFedTax: 33000, priorYearStateTax: 11500,
+    ira1Rmd: 15000, ira1Voluntary: 10000, ira1RothConversion: 5000, ira2Rmd: 5000,
+    ssIncome: 20000, pensionIncome: 15000, interest: 5000, qualifiedDivs: 8000, capitalGains: 10000,
+    todayDate: new Date(2026, 6, 29),
+  });
+  const c = plan.actions.find(a => a.type === T.ROTH_CONV);
+  const withheld = c.federalWithholding + c.stateWithholding;
+  assert(withheld <= c.amount,
+    `Withholding (${withheld}) must not exceed the conversion (${c.amount})`);
+  assert(withheld === 5000, `Expected the full $5,000 cap to be used, got ${withheld}`);
+  // The uncovered remainder has to become quarterly estimates, not vanish.
+  assert(plan.summary.shortfall > 0, 'Expected the unabsorbed gap to become a shortfall');
+  assert(plan.actions.some(a => a.type === T.Q_FED), 'Expected quarterly federal estimates');
+  assert(c.notes.some(n => n.includes('too small to carry')), 'Expected the cap to be explained');
+});
+
+test('Property: withholding never exceeds the conversion, across a grid', () => {
+  // The class of bug, not just the one instance. Sweeps conversion size against tax size so
+  // the gap fill is forced to want far more than the conversion can carry.
+  const offenders = [];
+  [1000, 5000, 25000, 100000].forEach(conv => {
+    [10000, 67000, 200000].forEach(fed => {
+      ['CA', 'TX', 'IL'].forEach(state => {           // IL is IRA-exempt
+        const plan = TaxPaymentPlanner.computePaymentPlan({
+          taxYear: 2027, state,
+          federalTax: fed, stateTax: state === 'TX' ? 0 : Math.round(fed * 0.4),
+          priorYearFedTax: Math.round(fed * 0.8), priorYearStateTax: 0,
+          ira1Rmd: 15000, ira1Voluntary: 10000, ira1RothConversion: conv,
+          ira2Rmd: 5000, ira2RothConversion: Math.round(conv / 2),
+          todayDate: new Date(2026, 6, 29),
+        });
+        plan.actions.filter(a => a.type === T.ROTH_CONV).forEach(a => {
+          const w = a.federalWithholding + a.stateWithholding;
+          if (w > a.amount) offenders.push(`conv=${conv} fed=${fed} ${state}: withheld ${w} on ${a.amount}`);
+          // An IRA-exempt state cannot withhold state tax from an IRA distribution at all.
+          if (state === 'IL' && a.stateWithholding > 0) {
+            offenders.push(`conv=${conv} fed=${fed} IL: state withholding ${a.stateWithholding} in an IRA-exempt state`);
+          }
+        });
+        // And federal withholding must never exceed the federal liability.
+        const fedW = plan.actions.reduce((s, a) => s + (a.type === T.Q_FED ? 0 : a.federalWithholding), 0);
+        if (fedW > fed + 2) offenders.push(`conv=${conv} fed=${fed} ${state}: federal withheld ${fedW} > liability ${fed}`);
+      });
+    });
+  });
+  assert(offenders.length === 0, `Over-withholding:\n       ${offenders.join('\n       ')}`);
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

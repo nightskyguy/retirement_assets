@@ -801,42 +801,52 @@ const TaxPaymentPlanner = (() => {
     // coverage would otherwise fall short of safe harbor.
     const _gapFillAllowed = monthsRem =>
       monthsRem > 0 || totalCovered < safeHarborTotal;
+    //
+    // WITHHOLDING COMES OUT OF THE DISTRIBUTION, so it can never exceed the conversion
+    // itself. Form W-4R allows a 0% to 100% federal election on an IRA distribution, and
+    // 100% of the gross is the hard ceiling. The old version sized this purely off the
+    // shortfall and never looked at the conversion amount, so a $5,000 conversion against a
+    // $37,000 gap was told to withhold $24,851 federal (497%) and $12,149 state (243%).
+    // Whatever the conversions cannot absorb belongs in quarterly estimates instead.
+    let convWithholdCapped = false;
     if (shortfall > 0) {
-      const totalConv = p.ira1RothConversion + p.ira2RothConversion;
-      if (totalConv > 0) {
-        if (p.ira1RothConversion > 0 && p.ira1RothWithhold !== false && !doWithhold1) {
-          const monthsRem1 = Math.max(0, 12 - ira1.planAConvMonth);
-          if (_gapFillAllowed(monthsRem1)) {
-            const share = p.ira1RothConversion / totalConv;
-            ira1ConvFedW = Math.round(shortfall * share * (stateIraExempt ? 1.0 : fedFrac));
-            ira1ConvStW  = stateIraExempt ? 0 : Math.round(shortfall * share * stFrac);
-            if (ira1ConvFedW + ira1ConvStW > 0) {
-              doWithhold1 = true;
-              convWithholdFed   += ira1ConvFedW;
-              convWithholdState += ira1ConvStW;
-              ira1Replacement = _replacementAnalysis(p.ira1RothConversion, ira1.planAConvMonth, ira1.planAConvDay,
-                { total: ira1ConvFedW + ira1ConvStW, fed: ira1ConvFedW, state: ira1ConvStW });
-            }
-          }
-        }
-        if (p.ira2RothConversion > 0 && p.ira2RothWithhold !== false && !doWithhold2) {
-          const monthsRem2 = Math.max(0, 12 - ira2.planAConvMonth);
-          if (_gapFillAllowed(monthsRem2)) {
-            const share = p.ira2RothConversion / totalConv;
-            ira2ConvFedW = Math.round(shortfall * share * (stateIraExempt ? 1.0 : fedFrac));
-            ira2ConvStW  = stateIraExempt ? 0 : Math.round(shortfall * share * stFrac);
-            if (ira2ConvFedW + ira2ConvStW > 0) {
-              doWithhold2 = true;
-              convWithholdFed   += ira2ConvFedW;
-              convWithholdState += ira2ConvStW;
-              ira2Replacement = _replacementAnalysis(p.ira2RothConversion, ira2.planAConvMonth, ira2.planAConvDay,
-                { total: ira2ConvFedW + ira2ConvStW, fed: ira2ConvFedW, state: ira2ConvStW });
-            }
-          }
-        }
-        totalCovered = totalIraDrawWithheld + convWithholdFed + convWithholdState;
-        shortfall    = Math.max(0, totalTax - totalCovered);
+      // In an IRA-exempt state no state tax can be withheld from an IRA distribution, so
+      // conversion withholding can only chase the FEDERAL gap. Sizing it off the whole
+      // shortfall there would over-withhold federal past the federal liability.
+      let need = stateIraExempt
+        ? Math.max(0, p.federalTax - totalIraDrawWithheld - convWithholdFed)
+        : shortfall;
+      const needAtStart = need;
+
+      // Largest conversion first. When one conversion is too small to carry its share, the
+      // remainder rolls to the other rather than being silently dropped.
+      const convSlots = [
+        { num: 1, ira: ira1, amt: p.ira1RothConversion, allowed: p.ira1RothWithhold !== false && !doWithhold1 },
+        { num: 2, ira: ira2, amt: p.ira2RothConversion, allowed: p.ira2RothWithhold !== false && !doWithhold2 },
+      ].filter(s => s.amt > 0 && s.allowed).sort((a, b) => b.amt - a.amt);
+
+      for (const s of convSlots) {
+        if (need <= 0) break;
+        if (!_gapFillAllowed(Math.max(0, 12 - s.ira.planAConvMonth))) continue;
+
+        const take = Math.min(need, s.amt);          // the cap that was missing
+        const fedW = Math.round(take * (stateIraExempt ? 1.0 : fedFrac));
+        const stW  = stateIraExempt ? 0 : take - fedW; // exact, so fedW + stW === take
+        if (fedW + stW <= 0) continue;
+
+        if (s.num === 1) { ira1ConvFedW = fedW; ira1ConvStW = stW; doWithhold1 = true; }
+        else             { ira2ConvFedW = fedW; ira2ConvStW = stW; doWithhold2 = true; }
+        convWithholdFed   += fedW;
+        convWithholdState += stW;
+        const rep = _replacementAnalysis(s.amt, s.ira.planAConvMonth, s.ira.planAConvDay,
+          { total: fedW + stW, fed: fedW, state: stW });
+        if (s.num === 1) ira1Replacement = rep; else ira2Replacement = rep;
+        need -= (fedW + stW);
       }
+
+      convWithholdCapped = needAtStart > 0 && need > 0 && convSlots.length > 0;
+      totalCovered = totalIraDrawWithheld + convWithholdFed + convWithholdState;
+      shortfall    = Math.max(0, totalTax - totalCovered);
     }
 
     // 8. Strategy selection
@@ -1064,6 +1074,18 @@ const TaxPaymentPlanner = (() => {
             'withdrawal and then replacing that money is an ordinary IRA-to-IRA rollover, which is ' +
             'limited to once per 12 months, and RMD dollars cannot be rolled over at all ' +
             '[IRC 408(d)(3)(B)].',
+            // Withholding is taken out of the distribution, so the conversion is a hard ceiling.
+            convWithholdCapped
+              ? `This conversion is too small to carry the rest of the tax gap. Withholding is ` +
+                `capped at the ${fmt$(convAmt)} being converted, because it comes out of the ` +
+                `distribution and cannot exceed it. The remainder is scheduled as quarterly ` +
+                `estimates below.`
+              : '',
+            (convFedW + convStW) >= convAmt
+              ? `Note the rate: this withholds the entire ${fmt$(convAmt)}, so nothing lands in the ` +
+                `Roth unless you complete the cash replacement below. If you cannot replace it, ` +
+                `withhold less here and pay the difference as an estimate instead.`
+              : '',
             ira.hasConflict
               ? `RMD ordering enforced: IRA ${iraNum} RMD distributed on ${MONTH_NAMES[ira.planARmdMonth-1]} ${ira.planARmdDay}; conversion follows on ${MONTH_NAMES[ira.planAConvMonth-1]} ${ira.planAConvDay}.`
               : monthsOfGrowth > 0

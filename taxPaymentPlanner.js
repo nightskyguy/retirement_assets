@@ -519,6 +519,21 @@ const TaxPaymentPlanner = (() => {
     return { conv, restore, elapsed };
   }
 
+  // Split a total across weighted installments so the parts sum EXACTLY to the total.
+  // Rounding each installment independently drifts by up to a dollar per installment, which
+  // is enough to leave a plan a few dollars short of the liability it is supposed to pay.
+  // The last installment absorbs the remainder.
+  function splitExact(total, weights) {
+    const out = [];
+    let assigned = 0;
+    weights.forEach((w, i) => {
+      const amt = (i === weights.length - 1) ? total - assigned : Math.round(total * w);
+      out.push(amt);
+      assigned += amt;
+    });
+    return out;
+  }
+
   // Explains an IRC 7503 shift on an action's note, or '' when the date did not move.
   function shiftNote(d) {
     if (!d.shifted) return '';
@@ -1324,9 +1339,18 @@ const TaxPaymentPlanner = (() => {
       }
 
       // ── Shortfall quarterly estimates ──────────────────────────────────────
-      // Baseline and planC are comparison plans — skip quarterly estimates so the
-      // summary.shortfall accurately reflects uncovered IRA-draw gap for invariant checks.
-      if (shortfall > 0 && !isBaseline && !isPlanC) {
+      // EVERY plan must pay the whole liability. The _baseline and _planC variants are not
+      // internal scratch work: they are rendered as the displayed Plan C and Plan A, complete
+      // action lists a user is meant to follow. They used to skip this block so that
+      // summary.totalCovered would equal withholding alone and an old invariant test could
+      // read the gap off it. That test convenience made two of the three displayed plans
+      // silently underpay: 25k of draws and a 10k conversion against a 72k liability produced
+      // 35k of withholding and no estimates at all.
+      //
+      // The gap is reported through summary.iraWithholdingUsed and summary.shortfall instead,
+      // which is where it belonged. summary.totalCovered now means what it says: everything
+      // the plan actually pays.
+      if (shortfall > 0) {
         const sfFed   = stateIraExempt
           ? Math.max(0, p.federalTax - totalIraDrawWithheld - convWithholdFed)
           : Math.round(shortfall * fedFrac);
@@ -1367,8 +1391,9 @@ const TaxPaymentPlanner = (() => {
           });
         }
 
-        FED_Q.forEach(q => {
-          const amt = Math.round(sfFed * q.w);
+        const sfFedAmts = splitExact(sfFed, FED_Q.map(q => q.w));
+        FED_Q.forEach((q, qi) => {
+          const amt = sfFedAmts[qi];
           if (amt === 0) return;
           const d      = dueDateFor(q, yr);
           const isPast = d.dueDate < today;
@@ -1390,8 +1415,9 @@ const TaxPaymentPlanner = (() => {
         });
 
         if (sfState > 0 && stateInfo.hasIncomeTax && stateInfo.quarterlySchedule.length > 0) {
-          stateInfo.quarterlySchedule.forEach(q => {
-            const amt = Math.round(sfState * q.w);
+          const sfStAmts = splitExact(sfState, stateInfo.quarterlySchedule.map(q => q.w));
+          stateInfo.quarterlySchedule.forEach((q, qi) => {
+            const amt = sfStAmts[qi];
             if (amt === 0) return;
             const d      = dueDateFor(q, yr);
             const isPast = d.dueDate < today;
@@ -1417,8 +1443,9 @@ const TaxPaymentPlanner = (() => {
 
     } else {
       // ── All quarterly (no IRA withholding) ──────────────────────────────────
-      FED_Q.forEach(q => {
-        const amt = Math.round(p.federalTax * q.w);
+      const fedAmts = splitExact(p.federalTax, FED_Q.map(q => q.w));
+      FED_Q.forEach((q, qi) => {
+        const amt = fedAmts[qi];
         if (amt === 0) return;
         const d      = dueDateFor(q, yr);
         const isPast = d.dueDate < today;
@@ -1440,8 +1467,9 @@ const TaxPaymentPlanner = (() => {
       });
 
       if (stateInfo.hasIncomeTax && stateInfo.quarterlySchedule.length > 0 && p.stateTax > 0) {
-        stateInfo.quarterlySchedule.forEach(q => {
-          const amt = Math.round(p.stateTax * q.w);
+        const stAmts = splitExact(p.stateTax, stateInfo.quarterlySchedule.map(q => q.w));
+        stateInfo.quarterlySchedule.forEach((q, qi) => {
+          const amt = stAmts[qi];
           if (amt === 0) return;
           const d      = dueDateFor(q, yr);
           const isPast = d.dueDate < today;

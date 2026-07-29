@@ -370,18 +370,20 @@ test('Coverage invariant: totalCovered + shortfall === totalTaxDue for both plan
 
   const totalTax = plan.summary.totalTaxDue;
 
-  // Plan A invariant
-  const aCovered  = plan.summary.totalCovered;
+  // The decomposition is withholding + shortfall, NOT totalCovered + shortfall.
+  // totalCovered means everything the plan pays, quarterly estimates included, so adding
+  // shortfall to it double-counts the gap. This test used to read the gap off totalCovered,
+  // which only worked because the comparison plans skipped building their estimates.
+  const aWithheld  = plan.summary.iraWithholdingUsed;
   const aShortfall = plan.summary.shortfall;
-  assertNear(aCovered + aShortfall, totalTax,
-    `Plan A: covered(${aCovered}) + shortfall(${aShortfall}) should equal tax(${totalTax})`, 2);
+  assertNear(aWithheld + aShortfall, totalTax,
+    `Plan A: withholding(${aWithheld}) + shortfall(${aShortfall}) should equal tax(${totalTax})`, 2);
 
-  // Plan B must also satisfy invariant
   assert(plan.planB !== null, 'Expected Plan B to exist (conversion present)');
-  const bCovered   = plan.planB.summary.totalCovered;
+  const bWithheld  = plan.planB.summary.iraWithholdingUsed;
   const bShortfall = plan.planB.summary.shortfall;
-  assertNear(bCovered + bShortfall, totalTax,
-    `Plan B: covered(${bCovered}) + shortfall(${bShortfall}) should equal tax(${totalTax})`, 2);
+  assertNear(bWithheld + bShortfall, totalTax,
+    `Plan B: withholding(${bWithheld}) + shortfall(${bShortfall}) should equal tax(${totalTax})`, 2);
 
   // Plan B specifically should have a shortfall here because December conversion
   // skips 60-day withholding (0 months of Roth growth → not worth the cost),
@@ -621,6 +623,57 @@ test('Restore action states the consequences of blowing the deadline', () => {
   assert(all.includes('Your income tax does not change'),
     'The note must say income tax is unchanged, since the gross was taxable either way');
   assert(!/becomes taxable/i.test(all), 'Must not imply the withheld amount newly becomes taxable');
+});
+
+// ── 18. EVERY displayed plan pays the whole liability ─────────────────────
+// The one that matters. All three plans are complete action lists a user is meant to
+// follow, so each must add up to the full tax due. Two of them used to skip building
+// their quarterly estimates entirely, so 25k of draws and a 10k conversion against a
+// 72k liability produced 35k of payments and no estimates in the displayed Plan A and
+// Plan C. Nothing caught it, because the old invariant read the gap off totalCovered
+// and therefore depended on those estimates being absent.
+test('Every plan pays 100% of the tax due, to within $1', () => {
+  const paidBy = acts => acts.reduce((s, a) => s + a.federalWithholding + a.stateWithholding, 0);
+  const offenders = [];
+
+  // The reported case, both tax years, plus shapes that stress each funding path:
+  // withholding covers everything, withholding covers nothing, and no conversion at all.
+  const scenarios = [];
+  [2026, 2027].forEach(taxYear => {
+    ['CA', 'TX', 'IL', 'VA'].forEach(state => {          // incl. an IRA-exempt and an odd schedule
+      [
+        { label: 'reported case',    ira1Rmd: 5000,  ira1Voluntary: 15000, ira1RothConversion: 10000, ira2Rmd: 5000 },
+        { label: 'draws cover all',  ira1Rmd: 60000, ira1Voluntary: 30000, ira1RothConversion: 10000 },
+        { label: 'nothing to draw',  ira1RothConversion: 5000 },
+        { label: 'no conversion',    ira1Rmd: 5000,  ira1Voluntary: 5000 },
+        { label: 'dual IRA conv',    ira1Rmd: 5000,  ira1RothConversion: 8000, ira2Rmd: 4000, ira2RothConversion: 6000 },
+      ].forEach(shape => scenarios.push({ taxYear, state, ...shape }));
+    });
+  });
+
+  scenarios.forEach(sc => {
+    const { label, ...inputs } = sc;
+    const plan = TaxPaymentPlanner.computePaymentPlan({
+      federalTax: 45000, stateTax: sc.state === 'TX' ? 0 : 27000,
+      priorYearFedTax: 33000, priorYearStateTax: sc.state === 'TX' ? 0 : 11500,
+      ssIncome: 20000, pensionIncome: 15000, interest: 5000,
+      qualifiedDivs: 8000, capitalGains: 10000,
+      todayDate: new Date(2026, 6, 29),
+      ...inputs,
+    });
+    const due = plan.summary.totalTaxDue;
+    // planC is displayed as Plan A, the main object as Plan B, planB as Plan C.
+    const variants = [['A', plan.planC], ['B', plan], ['C', plan.planB]].filter(v => v[1]);
+    variants.forEach(([name, obj]) => {
+      const paid = paidBy(obj.actions);
+      if (Math.abs(paid - due) > 1) {
+        offenders.push(`${sc.taxYear} ${sc.state} "${label}" Plan ${name}: paid ${paid} of ${due} (short ${due - paid})`);
+      }
+    });
+  });
+
+  assert(offenders.length === 0,
+    `Plans that do not pay the full liability:\n       ${offenders.join('\n       ')}`);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────

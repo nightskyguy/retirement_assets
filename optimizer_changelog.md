@@ -11,6 +11,36 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.13bd"></a>
+
+## 11.13bd
+
+**Two controls are now available to everyone: "Stop conversions after (year or age)" in the sidebar and "Fed Tax Creep %/yr" in Assumptions.**
+
+Both are plain inputs like any other now. Neither does anything until you fill it in, so no existing
+plan, saved scenario or shared link produces a different number because of this release.
+
+**Stop conversions after (year or age)** sits just under Extra Annual Roth Conversion. Enter a
+calendar year (2031) or your age (71) and that is the last year conversions run; they cease the year
+after. Blank means convert for the whole plan, which is what the tool has always done. The dropdown
+beside it chooses the scope: "all conversions" stops your strategy's own bracket filling as well as
+the Extra Annual Roth Conversion, while "extra only" stops the extra conversion and lets the strategy
+keep filling brackets.
+
+This is the field the Break Even ⓘ has been filling in all along. When the diagnostic finds a year
+worth stopping at, it offers a "Stop after YYYY" link, and clicking it writes the year here and
+re-runs. Converting past the point where the tax paid stops earning its keep can leave you worse off
+than never converting at all, so the year that maximizes after-tax wealth is worth knowing.
+
+**Fed Tax Creep %/yr**, with **Creep Starts** beside it, sits in Assumptions under the growth row. It
+multiplies the federal ordinary-income bracket rates by a little more each year from the start year
+onward, so a 22% bracket becomes roughly 26.8% after twenty years at 1%/yr. Bracket thresholds still
+track CPI as before, and state tax, capital gains, the NIIT surtax and IRMAA are unaffected. It is a
+stress test for a higher-tax future, not a forecast. Leave it at 0 to keep today's rates for the
+whole plan.
+
+---
+
 <a id="11.13a1"></a>
 
 ## 11.13a1 (behavior change)

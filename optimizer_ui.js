@@ -90,21 +90,9 @@ function applyNerdKnobVisibility() {
     // toggle can't hide them).
     const convAdvWrap = document.getElementById('convAdvanced-wrap');
     if (convAdvWrap) convAdvWrap.style.display = '';
-    // Tax-rate creep row (Assumptions). Nerdknob-gated, EXCEPT when a creep is actually set —
-    // a shared URL or loaded scenario must never leave a live tax assumption invisible.
-    const creepWrap = document.getElementById('taxRateCreep-wrap');
-    if (creepWrap) {
-        const creepOn = (+document.getElementById('taxRateCreep')?.value || 0) !== 0;
-        creepWrap.style.display = (NERD_KNOBS || creepOn) ? 'flex' : 'none';
-    }
-    // Stop-conversions-after (year/age) input. Nerdknob-gated while the feature is new, EXCEPT
-    // when a stop year is actually set — a shared URL or loaded scenario must never leave a live
-    // conversion cutoff invisible (same rule as the tax-rate creep row above).
-    const convEndWrap = document.getElementById('convEndYear-wrap');
-    if (convEndWrap) {
-        const convEndSet = (document.getElementById('convEndYear')?.value ?? '').trim() !== '';
-        convEndWrap.style.display = (NERD_KNOBS || convEndSet) ? '' : 'none';
-    }
+    // Tax-rate creep (Assumptions) and Stop-conversions-after (sidebar) are NOT handled here any
+    // more: both graduated out of nerdknob once they were finished and tested, so their markup
+    // carries no display:none and nothing hides them. Same treatment as convAdvanced-wrap above.
     // 💵 legend — only meaningful once nerdknob is sweeping the cash-funded arm
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
@@ -1835,9 +1823,6 @@ function loadOptimizerResult(id) {
         // user's own scope, so it restores that rather than being forced to 'extra'.
         if (convEndModeEl && result._convEndYear != null)
             convEndModeEl.value = result._isCurrentPlan ? (result._convEndMode ?? 'all') : 'extra';
-        // The stop-year row is nerdknob-gated but un-hides itself whenever a value is set, so the
-        // user can always see the assumption driving the plan they just loaded.
-        applyNerdKnobVisibility();
     }
     // For spend-optimized rows, restore the optimized spend goal
     if (result._spendGoal != null) {
@@ -2628,7 +2613,7 @@ function formatStopYearMessage(sugg, boundaryNote, mode) {
 
 // Applies a suggested conversion stop year to the sidebar input and re-runs. convEndYear is a
 // plain text field (not a DisplayHelpers dollar field), so a direct .value set is what getInputs
-// reads. applyNerdKnobVisibility keeps the (nerd-gated) row visible now that a value is set.
+// reads.
 function applyConvStopYear(year, mode) {
     const yearEl = document.getElementById('convEndYear');
     const modeEl = document.getElementById('convEndMode');
@@ -2636,7 +2621,6 @@ function applyConvStopYear(year, mode) {
     yearEl.value = String(year);
     if (modeEl && mode) modeEl.value = mode;
     _lastChangedInputLabel = 'Stop Conversions';
-    if (typeof applyNerdKnobVisibility === 'function') applyNerdKnobVisibility();
     if (typeof runSimulation === 'function') runSimulation();
 }
 

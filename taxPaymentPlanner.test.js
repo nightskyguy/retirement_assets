@@ -683,6 +683,118 @@ test('Every plan pays 100% of the tax due, to within $1', () => {
     `Plans that do not pay the full liability:\n       ${offenders.join('\n       ')}`);
 });
 
+// ── 19. A plan must not claim taxes are covered while scheduling estimates ─
+// The reported confusion. Plan C converts in December, so the gap fill declines to withhold from
+// the conversion (no Roth growth left AND safe harbor already met), and the residual goes to
+// quarterly estimates. The conversion step nevertheless asserted "Taxes covered by December draws"
+// and "Taxes funded by IRA draws", flatly contradicting the estimate schedule printed below it.
+const REPORTED = {
+  taxYear: 2026, state: 'CA', federalTax: 35000, stateTax: 22000,
+  priorYearFedTax: 33000, priorYearStateTax: 11500,
+  ira1Rmd: 15000, ira1Voluntary: 30000, ira1RothConversion: 10000, ira2Rmd: 5000,
+  ssIncome: 20000, pensionIncome: 15000, interest: 5000, qualifiedDivs: 8000, capitalGains: 10000,
+  todayDate: new Date(2026, 6, 29),
+};
+
+test('A no-withholding conversion never claims the draws cover taxes they do not', () => {
+  const plan = TaxPaymentPlanner.computePaymentPlan(REPORTED);
+  const variants = [['A', plan.planC], ['B', plan], ['C', plan.planB]].filter(v => v[1]);
+  const offenders = [];
+
+  variants.forEach(([name, obj]) => {
+    const shortfall = obj.summary.shortfall;
+    obj.actions
+      .filter(a => a.type === T.ROTH_CONV && a.federalWithholding === 0 && a.stateWithholding === 0)
+      .forEach(a => {
+        const all = a.description + ' ' + a.notes.join(' ');
+        if (shortfall > 0) {
+          // Must not assert full coverage...
+          if (/covers? all taxes|[Tt]axes covered by|[Tt]axes funded (?:by|entirely)/.test(all)) {
+            offenders.push(`Plan ${name}: claims full coverage while ${shortfall} goes to estimates`);
+          }
+          // ...and must own up to the part that does not come from withholding.
+          if (!all.includes('quarterly estimates')) {
+            offenders.push(`Plan ${name}: shortfall of ${shortfall} never mentioned on the conversion step`);
+          }
+        }
+      });
+  });
+
+  assert(offenders.length === 0, offenders.join('\n       '));
+
+  // Guard the specific case, so the test fails if Plan C stops exercising this path at all.
+  assert(plan.planB.summary.shortfall === 7000,
+    `Expected Plan C to route 7000 to estimates, got ${plan.planB.summary.shortfall}`);
+});
+
+// ── 20. Penalty-free is a claim that has to be checked ────────────────────
+// The missed-payment alert used to branch on `usesIraWithholding` alone — "am I withholding at
+// all" — and then told the user no action was required. In the reported scenario the federal share
+// of the withholding is 30,702 against a 31,500 required annual payment, so it is 798 short and a
+// penalty does accrue, while California is comfortably covered. The two schedules disagree, and the
+// alert has to say so rather than reassure.
+test('Missed-payment alert only claims penalty-free when withholding actually covers', () => {
+  const plan = TaxPaymentPlanner.computePaymentPlan(REPORTED);
+
+  const alertOf = obj => obj.actions.find(a => a.type === T.ALERT
+    && /installment dates have passed|installment/i.test(a.description));
+
+  // Plan C: federal short, state covered.
+  const c = alertOf(plan.planB);
+  assert(c, 'Expected a missed-installment alert on Plan C');
+  const cAll = c.description + ' ' + c.notes.join(' ');
+  assert(!/No action is required/.test(c.description),
+    'Plan C withholding is 798 short on the federal schedule — must not say no action is required');
+  assert(/does not fully cover/.test(c.description), 'Alert should name the uncovered schedule');
+  assert(/federal/.test(c.description), 'Alert should identify FEDERAL as the short schedule');
+  assert(/California/.test(cAll), 'Alert should credit California as covered rather than lumping them together');
+
+  // Plans A and B withhold the full liability, so both schedules clear and the reassurance is true.
+  [['A', plan.planC], ['B', plan]].forEach(([name, obj]) => {
+    const a = alertOf(obj);
+    assert(a, `Expected a missed-installment alert on Plan ${name}`);
+    assert(/No action is required/.test(a.description),
+      `Plan ${name} covers both schedules, so the alert should say so`);
+    assert(a.notes.some(n => /Checked, not assumed/.test(n)),
+      `Plan ${name} should show the figures the claim rests on`);
+  });
+
+  // Per-installment wording must agree with the alert, which is where the contradiction showed.
+  const qFed   = plan.planB.actions.filter(a => a.type === T.Q_FED   && a.date && new Date(a.date.year, a.date.month - 1, a.date.day) < REPORTED.todayDate);
+  const qState = plan.planB.actions.filter(a => a.type === T.Q_STATE && a.date && new Date(a.date.year, a.date.month - 1, a.date.day) < REPORTED.todayDate);
+  assert(qFed.length > 0 && qState.length > 0, 'Expected elapsed installments on both schedules');
+  qFed.forEach(a => assert(/PAST DUE/.test(a.description),
+    'Federal is genuinely late here, so the urgent wording is correct'));
+  qState.forEach(a => {
+    assert(!/PAST DUE/.test(a.description),
+      'California withholding covers its schedule, so its elapsed installments are not PAST DUE');
+    assert(a.notes.some(n => /does not create an underpayment penalty/.test(n)),
+      'Covered state installments should say plainly that no penalty arises');
+  });
+});
+
+// ── 21. The cumulative test, on a weighted schedule ───────────────────────
+// Not reachable through a whole-plan assertion: California is 30/40/30, so ratable withholding
+// equal to the FULL annual requirement still misses the second due date. cumReq after two dates is
+// 70% of the requirement while a uniform credit has only delivered two thirds of it.
+test('withholdingCoversSchedule is cumulative, not a total-versus-total test', () => {
+  const covers = TaxPaymentPlanner._withholdingCoversSchedule;
+  const even   = [{ w: 0.25 }, { w: 0.25 }, { w: 0.25 }, { w: 0.25 }];
+  const ca     = [{ w: 0.30 }, { w: 0.40 }, { w: 0.30 }];
+
+  assert(covers(1000, 1000, even) === true,  'Even schedule: exactly the requirement clears every date');
+  // The check carries a deliberate $1-per-date tolerance to match splitExact's rounding, so a
+  // shortfall has to exceed that before it counts. 990 is 2.50 short at the first date.
+  assert(covers(999,  1000, even) === true,  'Even schedule: inside the $1 rounding tolerance');
+  assert(covers(990,  1000, even) === false, 'Even schedule: a real shortfall fails');
+  assert(covers(1000, 1000, ca)   === false,
+    'Weighted schedule: meeting the annual total is NOT enough — 2/3 credited vs 70% required at date 2');
+  assert(covers(1050, 1000, ca)   === true,
+    '1050 across three dates delivers 700 by date 2, which is the 70% required');
+  assert(covers(0, 0, even) === true,       'No requirement, nothing to miss');
+  assert(covers(0, 5000, []) === true,      'No schedule means nothing to be late for');
+});
+
 // ── Runner ────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
 // The node entry point below is what still sets the exit code.

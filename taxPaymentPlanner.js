@@ -601,6 +601,25 @@ const TaxPaymentPlanner = (() => {
     return STATE_DB[code] || STATE_DB._DEFAULT;
   }
 
+  // IRC 6654(g)(1) credits withholding as if an equal part were paid on each due date, whatever
+  // date it actually happened. So "does withholding alone make me timely" is a CUMULATIVE question,
+  // not one comparison: at every due date, is the cumulative ratable credit at least the cumulative
+  // required installment? A uniform credit against a WEIGHTED schedule can clear the annual total
+  // and still miss an early date — California is 30/40/30 — which is the case a single
+  // total-versus-total test gets wrong.
+  function withholdingCoversSchedule(withheldTotal, reqAnnual, schedule) {
+    if (reqAnnual <= 0) return true;
+    const n = schedule.length;
+    if (n === 0) return true;            // no schedule means nothing to be late for
+    let cumReq = 0, cumCredit = 0;
+    for (const q of schedule) {
+      cumReq    += reqAnnual * q.w;
+      cumCredit += withheldTotal / n;
+      if (cumCredit + 1 < cumReq) return false;   // $1 tolerance, matches splitExact rounding
+    }
+    return true;
+  }
+
   function detectMissed(schedule, taxYear, todayDate) {
     return schedule
       .map(q => {
@@ -895,6 +914,25 @@ const TaxPaymentPlanner = (() => {
     const shState = p.priorYearStateTax != null ? p.priorYearStateTax * sfStateMult : p.stateTax   * 0.90;
     const safeHarborTotal = shFed + shState;
 
+    // Required annual payment, IRC 6654(d)(1)(B): the LESSER of 90% of this year's tax and
+    // 100% (110% for a high earner) of last year's. shFed/shState above do NOT take that
+    // minimum — they use the prior year whenever it is supplied — so they OVERSTATE the
+    // requirement whenever 90% of the current year is the smaller number. Example: current
+    // federal tax 35,000 and prior year 33,000 gives shFed 33,000 where the real requirement is
+    // 31,500.
+    //
+    // Those two are displayed figures and they also drive the gap-fill gate below, so correcting
+    // them in place would move withholding decisions. That is deliberately left for the penalty
+    // work (TPP-1), which has to unify them anyway. What follows is used ONLY to decide whether
+    // withholding alone makes the taxpayer timely, and that question needs the real number.
+    const reqAnnualFed = p.priorYearFedTax != null
+      ? Math.min(p.federalTax * 0.90, p.priorYearFedTax * sfFedMult)
+      : p.federalTax * 0.90;
+    const reqAnnualState = p.priorYearStateTax != null
+      ? Math.min(p.stateTax * 0.90, p.priorYearStateTax * sfStateMult)
+      : p.stateTax * 0.90;
+
+
     // Gap fill — applies to ALL plans.
     // If draws (+ any forced override withholding) don't cover everything, add the minimum
     // conversion withholding needed to close the gap. Split pro-rata across IRAs by conv size.
@@ -983,6 +1021,22 @@ const TaxPaymentPlanner = (() => {
     const missedState = stateInfo.hasIncomeTax ? detectMissed(stateInfo.quarterlySchedule, yr, today) : [];
     const hasMissed   = missedFed.length > 0 || missedState.length > 0;
 
+    // 10b. Does withholding ALONE make each schedule timely?
+    // The old missed-payment alert answered this with `usesIraWithholding` — i.e. "am I using any
+    // withholding at all" — and then told the user no action was required and they were
+    // penalty-free. That is only true when the withholding actually clears the installments.
+    // A plan can use withholding heavily, still be short, and still be told it is safe: with
+    // federal tax 35,000 against 50,000 of draws, the federal share of the withholding is 30,702
+    // against a 31,500 requirement, so it misses by 798 while the alert claimed penalty-free.
+    // Federal and state are tested separately because they can disagree — in that same scenario
+    // California is comfortably covered while federal is not.
+    const fedWithheldTotal   = Math.round(totalIraDrawWithheld * wFedFrac) + convWithholdFed;
+    const stateWithheldTotal = (totalIraDrawWithheld - Math.round(totalIraDrawWithheld * wFedFrac))
+                             + convWithholdState;
+    const fedTimelyByWithholding   = withholdingCoversSchedule(fedWithheldTotal, reqAnnualFed, FED_Q);
+    const stateTimelyByWithholding = !stateInfo.hasIncomeTax
+      || withholdingCoversSchedule(stateWithheldTotal, reqAnnualState, stateInfo.quarterlySchedule);
+
     // 11. Build action list
     const actions = [];
     const addAction = obj => {
@@ -992,6 +1046,13 @@ const TaxPaymentPlanner = (() => {
         totalWithholding: 0, netReceived: 0,
         fedWithholdPct: 0, stateWithholdPct: 0,
         description: '', notes: [],
+        // A date in the past is not the same thing as money being late. Withholding is credited
+        // ratably across every due date [IRC 6654(g)(1)], so an elapsed installment on a schedule
+        // that withholding already covers is owed but carries no penalty. buildHtml reads this to
+        // decide between a red PAST DUE badge and a neutral one, and `benign` to decide whether an
+        // alert is reassurance or a warning. Both default to the cautious reading.
+        noPenalty: false,
+        benign: false,
       };
       const a = Object.assign(base, obj);
       a.totalWithholding = a.federalWithholding + a.stateWithholding;
@@ -1082,23 +1143,62 @@ const TaxPaymentPlanner = (() => {
     // ── 11b. Missed-payment alerts ──────────────────────────────────────────
     if (hasMissed) {
       const todayStr = fmtDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
-      if (usesIraWithholding) {
+      if (usesIraWithholding && fedTimelyByWithholding && stateTimelyByWithholding) {
         const missedLabels = [
           ...missedFed.map(q => `Federal ${q.label} (due ${fmtDate(q.dueYear, q.month, q.day)})`),
           ...missedState.map(q => `${stateInfo.name} ${q.label} (due ${fmtDate(q.dueYear, q.month, q.day)})`),
         ].join('; ');
         addAction({
           type: T.ALERT,
+          benign: true,
           description:
             `As of ${todayStr}, the following quarterly installment dates have passed: ${missedLabels}. ` +
-            `No action is required — your strategy uses year-end IRA withholding, which the IRS (and most ` +
-            `state revenue agencies) credit as if paid pro-rata throughout the year.`,
+            `No action is required — your withholding covers every installment on both schedules, and it is ` +
+            `credited as if paid pro-rata through the year.`,
           notes: [
             'A December IRA distribution satisfies all four quarterly installments retroactively. ' + seeAlso('IRC 6654(g)'),
-            stateInfo.withholdingCreditedProRata
-              ? `${stateInfo.name} similarly credits IRA withholding pro-rata — your state is also penalty-free.`
-              : `Verify that ${stateInfo.name} applies the same pro-rata withholding credit rule.`,
-          ],
+            `Checked, not assumed: ${fmt$(fedWithheldTotal)} of federal withholding against a ` +
+            `${fmt$(Math.round(reqAnnualFed))} required annual payment` +
+            (stateInfo.hasIncomeTax
+              ? `, and ${fmt$(stateWithheldTotal)} of ${stateInfo.name} withholding against ${fmt$(Math.round(reqAnnualState))}`
+              : '') + `, compared cumulatively at each due date.`,
+            stateInfo.withholdingCreditedProRata || !stateInfo.hasIncomeTax
+              ? ''
+              : `Verify that ${stateInfo.name} applies the same pro-rata withholding credit rule — this ` +
+                `planner assumes it does not, so the state figure above may be optimistic.`,
+          ].filter(Boolean),
+        });
+      } else if (usesIraWithholding) {
+        // Withholding is in use but does NOT clear both schedules. This is the branch the old code
+        // was missing: it sent this case down the reassuring path above and told the user they were
+        // penalty-free. Name which schedule is short, because the answer differs per schedule.
+        const shortSchedules = [
+          !fedTimelyByWithholding
+            ? `federal (${fmt$(fedWithheldTotal)} withheld against a ${fmt$(Math.round(reqAnnualFed))} required annual payment)`
+            : '',
+          !stateTimelyByWithholding
+            ? `${stateInfo.name} (${fmt$(stateWithheldTotal)} withheld against ${fmt$(Math.round(reqAnnualState))})`
+            : '',
+        ].filter(Boolean).join(' and ');
+        const coveredSchedules = [
+          fedTimelyByWithholding ? 'federal' : '',
+          stateTimelyByWithholding && stateInfo.hasIncomeTax ? stateInfo.name : '',
+        ].filter(Boolean).join(' and ');
+        addAction({
+          type: T.ALERT,
+          description:
+            `As of ${todayStr}, installment dates have passed and your withholding does not fully cover ` +
+            `${shortSchedules}. Your withholding IS credited as if paid pro-rata through the year, so it ` +
+            `repairs most of the timing problem, but the uncovered part of an elapsed installment is still ` +
+            `late. The estimated payments scheduled below close the gap.`,
+          notes: [
+            'Withholding is credited in equal parts on every due date, whenever it actually happened, which is why it reaches back to quarters that have already passed. An estimated payment does not. ' + seeAlso('IRC 6654(g)'),
+            coveredSchedules
+              ? `${coveredSchedules} withholding does clear every installment on its own schedule, so no penalty arises there.`
+              : '',
+            'The strongest remedy is more withholding rather than a larger estimate, because only withholding reaches an elapsed quarter. Form 2210 Schedule AI is the other lever when the income genuinely arrived late in the year.',
+            'This planner does not yet quantify the penalty.',
+          ].filter(Boolean),
         });
       } else {
         const fedMissedAmt = missedFed.reduce((s, q) => s + Math.round(p.federalTax * q.w), 0);
@@ -1254,12 +1354,55 @@ const TaxPaymentPlanner = (() => {
         const drawTimingLabel = isBaseline ? 'December draws'
           : isPlanC ? 'December draws (Plan A hybrid)'
           : 'IRA draws';
+        // These used to assert "Taxes covered by December draws" / "Taxes funded by IRA draws"
+        // unconditionally, which is false whenever a shortfall is being routed to quarterly
+        // estimates further down the same plan. That is the common case for a December conversion:
+        // the gap fill declines to withhold (no Roth growth left AND safe harbor already met), so
+        // the residual goes to estimates while this step claimed the draws had it handled. Say what
+        // the plan actually does.
+        const partlyEstimated = shortfall > 0;
+        const fundingClause = partlyEstimated
+          ? `Draws cover ${fmt$(totalCovered)} of the ${fmt$(totalTax)} due; the remaining ` +
+            `${fmt$(shortfall)} is scheduled as quarterly estimates below.`
+          : `Taxes covered by ${drawTimingLabel}.`;
         const noWithholdDesc = sda.monthsRem === 0
-          ? `No withholding — December conversion; no Roth growth remaining to capture this year. Taxes covered by December draws.`
-          : `No withholding — ${drawTimingLabel} cover all taxes. Full ${fmt$(convAmt)} earns ${monthsOfGrowth} months of tax-free Roth growth. No 60-day rollover needed.`;
-        const noWithholdNote = sda.monthsRem === 0
-          ? `December conversion: 0 months of Roth growth remaining. Taxes funded by IRA draws.`
-          : `Taxes funded entirely by IRA draw withholding — no out-of-pocket cash required and no 60-day rollover needed.`;
+          ? `No withholding — December conversion; no Roth growth remaining to capture this year. ${fundingClause}`
+          : `No withholding — full ${fmt$(convAmt)} earns ${monthsOfGrowth} months of tax-free Roth growth, and no 60-day rollover is needed. ${fundingClause}`;
+        // Why withholding was declined rather than merely "not needed" — the reasoning a reader
+        // cannot otherwise see. Three genuinely different causes, so do not report one of them as
+        // if it were the others. The safe-harbor clause is CHECKED against the figure rather than
+        // inferred from the gate, because a second conversion in another month can move coverage
+        // after the gate ran.
+        const declinedByOverride = iraNum === 1
+          ? p.ira1RothWithhold === false
+          : p.ira2RothWithhold === false;
+        const shMet = totalCovered >= safeHarborTotal;
+        let noWithholdNote;
+        if (declinedByOverride && partlyEstimated) {
+          noWithholdNote =
+            `Conversion withholding is switched off for IRA ${iraNum} by your override, so the residual ` +
+            `${fmt$(shortfall)} goes to quarterly estimates instead. The full ${fmt$(convAmt)} stays in the Roth.`;
+        } else if (sda.monthsRem === 0 && partlyEstimated) {
+          noWithholdNote =
+            `Withholding from this conversion was considered and declined: a December conversion has no Roth ` +
+            `growth left to capture` +
+            (shMet
+              ? `, and your withholding already covers the ${fmt$(Math.round(safeHarborTotal))} safe-harbor minimum, so withholding here would buy neither growth nor penalty relief. `
+              : `, so withholding here would buy no growth. `) +
+            `Paying the ${fmt$(shortfall)} as estimates keeps the full ${fmt$(convAmt)} in the Roth and needs no ` +
+            `60-day replacement.`;
+        } else if (sda.monthsRem === 0) {
+          noWithholdNote =
+            `December conversion: 0 months of Roth growth remaining, and the draws already fund the whole ` +
+            `liability, so there is nothing for conversion withholding to do.`;
+        } else if (partlyEstimated) {
+          noWithholdNote =
+            `Conversion withholding was not used to close the gap; the residual ${fmt$(shortfall)} goes to ` +
+            `quarterly estimates, and the full conversion stays in the Roth.`;
+        } else {
+          noWithholdNote =
+            `Taxes funded entirely by IRA draw withholding — no out-of-pocket cash required and no 60-day rollover needed.`;
+        }
         addAction({
           type: T.ROTH_CONV,
           iraNum,
@@ -1449,14 +1592,23 @@ const TaxPaymentPlanner = (() => {
             date: d.date,
             amount: amt,
             federalWithholding: amt,
+            noPenalty: fedTimelyByWithholding,
             description:
               `Pay federal estimated tax of ${fmt$(amt)} by ${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
               `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfFed)} federal shortfall).` +
-              (isPast ? ' [PAST DUE — pay immediately]' : ''),
+              (isPast ? (fedTimelyByWithholding ? ' [DATE PASSED]' : ' [PAST DUE — pay immediately]') : ''),
             notes: [
               'Pay via IRS Direct Pay at directpay.irs.gov or EFTPS at eftps.gov.',
               shiftNote(d),
-              isPast ? 'This installment is past due. Make a catch-up payment now to minimise underpayment penalty.' : '',
+              // "Pay now to minimise the penalty" is only true if a penalty is actually accruing.
+              // When federal withholding already clears every installment by itself, this money is
+              // still owed but it is not late in the IRC 6654 sense, and saying otherwise invents
+              // urgency the numbers do not support.
+              isPast
+                ? (fedTimelyByWithholding
+                    ? 'This date has passed, but your federal withholding covers every installment on its own, so paying this late does not create an underpayment penalty. It is still owed.'
+                    : 'This installment is past due. Make a catch-up payment now to minimise underpayment penalty.')
+                : '',
             ].filter(Boolean),
           });
         });
@@ -1473,15 +1625,20 @@ const TaxPaymentPlanner = (() => {
               date: d.date,
               amount: amt,
               stateWithholding: amt,
+              noPenalty: stateTimelyByWithholding,
               description:
                 `Pay ${stateInfo.name} estimated tax of ${fmt$(amt)} by ` +
                 `${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
                 `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfState)} ${stateInfo.name} shortfall).` +
-                (isPast ? ' [PAST DUE — pay immediately]' : ''),
+                (isPast ? (stateTimelyByWithholding ? ' [DATE PASSED]' : ' [PAST DUE — pay immediately]') : ''),
               notes: [
                 stateInfo.paymentNote,
                 shiftNote(d),
-                isPast ? 'This installment is past due. Pay now to minimise the underpayment penalty.' : '',
+                isPast
+                  ? (stateTimelyByWithholding
+                      ? `This date has passed, but your ${stateInfo.name} withholding covers every installment on its own, so paying this late does not create an underpayment penalty. It is still owed.`
+                      : 'This installment is past due. Pay now to minimise the underpayment penalty.')
+                  : '',
               ].filter(Boolean),
             });
           });
@@ -2167,9 +2324,12 @@ const TaxPaymentPlanner = (() => {
         const isPast  = a.date && new Date(a.date.year, a.date.month - 1, a.date.day) < summary.todayDate;
 
         if (isAlert) {
-          const usesIra = planSummary.strategy === 'ye_ira_full' || planSummary.strategy === 'ye_ira_partial';
-          const html = `${icon} <strong>${usesIra ? 'Calendar Notice' : 'MISSED PAYMENT WARNING'}:</strong> ${a.description}`;
-          h += usesIra ? good(html) : alert(html);
+          // Green "Calendar Notice" vs red "MISSED PAYMENT WARNING" used to be chosen from the
+          // STRATEGY — any plan using IRA withholding got the green treatment. That painted a
+          // reassuring box around text saying the withholding falls short and a penalty accrues.
+          // The action now carries `benign`, set only where the coverage was actually checked.
+          const html = `${icon} <strong>${a.benign ? 'Calendar Notice' : 'MISSED PAYMENT WARNING'}:</strong> ${a.description}`;
+          h += a.benign ? good(html) : alert(html);
           if (a.notes.length > 0) {
             h += `<ul style="margin:0 0 8px 28px;padding:0;font-size:0.86em;color:#555;">`;
             a.notes.forEach(n => { h += `<li style="margin-bottom:3px;">${n}</li>`; });
@@ -2180,11 +2340,16 @@ const TaxPaymentPlanner = (() => {
         if (isNote) { h += info(`<strong>Note:</strong> ${a.description}`); return; }
 
         stepNum++;
-        const pastBadge = isPast
-          ? `<span style="background:#CC0000;color:#fff;font-size:0.72em;padding:1px 6px;border-radius:3px;margin-left:8px;vertical-align:middle;">PAST DUE</span>`
-          : '';
+        // An elapsed date on a schedule that withholding already covers is owed, but not late in
+        // the IRC 6654 sense, so it gets a neutral grey badge and no red border. Only a genuine
+        // underpayment gets the alarm.
+        const lateBadge = isPast && !a.noPenalty;
+        const pastBadge = !isPast ? ''
+          : lateBadge
+            ? `<span style="background:#CC0000;color:#fff;font-size:0.72em;padding:1px 6px;border-radius:3px;margin-left:8px;vertical-align:middle;">PAST DUE</span>`
+            : `<span style="background:#777;color:#fff;font-size:0.72em;padding:1px 6px;border-radius:3px;margin-left:8px;vertical-align:middle;" title="This date has passed, but your withholding covers this schedule, so no underpayment penalty arises.">DATE PASSED</span>`;
 
-        h += `<div style="border:1px solid #ddd;border-left:4px solid ${color};border-radius:0 4px 4px 0;margin:0 0 8px 0;padding:10px 14px;background:#fff;${isPast ? 'border-color:#CC0000;' : ''}">`;
+        h += `<div style="border:1px solid #ddd;border-left:4px solid ${color};border-radius:0 4px 4px 0;margin:0 0 8px 0;padding:10px 14px;background:#fff;${lateBadge ? 'border-color:#CC0000;' : ''}">`;
         h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">`;
         h += `<span style="font-weight:700;color:${color};font-size:0.95em;">${icon} Step ${stepNum} — ${a.dateLabel || 'As needed'}${pastBadge}</span>`;
         if (a.federalWithholding > 0 || a.stateWithholding > 0) {
@@ -2367,6 +2532,7 @@ const TaxPaymentPlanner = (() => {
     RESTORE_TARGET_DAYS,
     ORDERING_BUFFER_DAYS,
     restoreDateFor,
+    _withholdingCoversSchedule: withholdingCoversSchedule,
     OBSERVED_HOLIDAYS,
     isBusinessDay,
     nextBusinessDay,

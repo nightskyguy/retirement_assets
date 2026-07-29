@@ -590,3 +590,52 @@ Three conclusions:
 Reserve OFF stays byte-identical to pre-P2 (regression-locked). The default is OFF, so existing
 scenarios/URLs are unchanged until a user opts in; a load-time warning fires for any scenario/URL
 that carries an active Cash Reserve.
+
+## Two classic scripts cannot both declare the same top-level `const` (2026-07-29, v1.13be)
+
+Making `taxPaymentPlanner.test.js` dual-mode for TPP-3 failed in a way worth recording, because the
+failure mode gives you almost nothing to go on. The test file opened with
+
+```js
+const TaxPaymentPlanner = (typeof module !== 'undefined' && module.exports)
+  ? require('./taxPaymentPlanner.js') : window.TaxPaymentPlanner;
+```
+
+and the engine, already on the page, opens with `const TaxPaymentPlanner = (() => { ... })();`.
+Two classic `<script>` elements share ONE global lexical scope, so that is a duplicate `const`
+declaration and a **SyntaxError for the whole file**. Nothing in it runs.
+
+The symptoms: the network panel showed `200 OK` for the test file, the loading glyph stayed on ⏳
+because `script.onload` fired (the fetch succeeded) while `window.runTaxPlannerTests` was never
+defined, `script.onerror` never fired (it is for load failures, not parse failures), and
+`read_console_messages` reported nothing. A 200 and an `onload` are not evidence that a script
+executed.
+
+Fix: wrap the test file in an IIFE. That also keeps `test`, `assert`, `BASE`, `TODAY` and the
+business-day helpers out of the app's global scope, which matters now that a test file loads into a
+live application page.
+
+Two related facts from the same session:
+
+- **A top-level `const` is not a `window` property.** `const X = ...` at script scope creates a
+  global lexical binding, so the bare identifier `X` resolves from any later script, but
+  `window.X` is `undefined`. Code that has to find a module without knowing how it was loaded needs
+  an explicit `window.X = X` in the browser branch of the export tail.
+- **TDZ across a module's own top level.** `RULE_CITES` and `CONCEPT_NOTES` interpolate
+  `ROLLOVER_DEADLINE_DAYS` / `RESTORE_TARGET_DAYS` rather than hardcoding 60 and 45. Those arrays
+  are evaluated at module init, so the constants had to be MOVED above them. Quoting a constant
+  inside a data table is the right instinct, but it silently imposes a declaration order.
+
+## `T.NOTE` actions render their description and drop their notes (2026-07-29)
+
+Found while verifying TPP-5. In `taxPaymentPlanner.js`, `buildHtml`'s `if (isNote)` branch returns
+after emitting `a.description`, before the `a.notes` loop every other action type gets, and
+`buildText`'s `T.NOTE` branch pushes only the description. So sub-notes on advisory actions have
+never been rendered in either output.
+
+Two are lost today, both on the RMD-ordering advisory that fires whenever an IRA has both an RMD and
+a conversion, six occurrences each in a dual-IRA scenario: "Only the balance beyond the RMD can be
+converted", and the QCD alternative. The QCD one is real guidance and is invisible.
+
+Left unfixed in PR 1 because rendering them ADDS visible output, and that PR's remit was
+byte-identical numbers with note text only. Spawned as a separate task.

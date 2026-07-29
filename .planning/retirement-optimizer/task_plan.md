@@ -6,7 +6,14 @@ Goal: Complete open features from the original priority list plus deferred items
 
 ---
 
-## TPP-1..5 Tax Payment Planner backlog (2026-07-29) — OPEN
+## TPP-1..5 Tax Payment Planner backlog (2026-07-29) — TPP-3/4/5 DONE, TPP-1/TPP-2 OPEN
+
+**Sequencing decided 2026-07-29** (plan file `C:\Users\starc\.claude\plans\calm-snacking-newt.md`):
+three PRs, cheap and independent first. PR 1 = TPP-3 + TPP-4 + TPP-5, **DONE and uncommitted**
+at v1.13be on branch `worktrees/planning-with-files-be4b53`. PR 2 = TPP-1. PR 3 = TPP-2.
+User decisions: TPP-2 output is a **priced menu with no winner named** (keeps the tool clear of
+personalized tax advice); TPP-4 is a **single sticky footer button**, not a duplicate at the top.
+
 
 Requested by the user after testing `RetirementTaxPlanner.html` v1.13b9 on branch
 `worktrees/roth-conversion-withhold-replace-a9c195` (PR #136). That branch corrected the
@@ -67,7 +74,7 @@ is the same gross-up shape as `applyConversionGrossUp()` in `optimizer_core.js:1
 the approach rather than deriving it again. Compare the grossed-up cost against the penalty
 avoided and only recommend it when it actually wins.
 
-### TPP-3 — Run the tests from the browser
+### TPP-3 — Run the tests from the browser — DONE (v1.13be, uncommitted)
 
 `taxPaymentPlanner.test.js` is node-only: bare `require` at the top, `process.exitCode` at the
 bottom. Make it dual-mode so `RetirementTaxPlanner.html?runtests` runs it.
@@ -79,7 +86,7 @@ for the browser, replace `process.exitCode` with a return value, and gate on the
 param instead of running unconditionally. Render results on the page as well as the console,
 since the request was to see them directly.
 
-### TPP-4 — Compute button reachable without scrolling
+### TPP-4 — Compute button reachable without scrolling — DONE (v1.13be, uncommitted)
 
 `#compute` sits at `RetirementTaxPlanner.html:446`, at the bottom of a long input panel.
 Duplicate it at the top. IDs must stay unique, so use a shared class or `compute-top` /
@@ -87,7 +94,7 @@ Duplicate it at the top. IDs must stay unique, so use a shared class or `compute
 hides `.inputs-body` entirely), so check both states; a sticky button may serve better than
 two copies.
 
-### TPP-5 — Deduplicate the long-form note text
+### TPP-5 — Deduplicate the long-form note text — DONE (v1.13be, uncommitted)
 
 Measured on a dual-IRA dual-conversion scenario: **174 notes across the three plans, 69 of
 them over 200 characters, 26,184 characters total.** Each boilerplate block repeats six times

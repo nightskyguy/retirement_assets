@@ -381,6 +381,8 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 | 24 | **P22** | Export Annual Details to CSV | pending | — |
 | 25 | **P23** | MC Arithmetic-Mean Returns + AR(1) Variable Inflation | pending | — |
 | 26 | **P24** | Conversion End Year — searched stop-year + one-click | **implemented** (v11.1330, sweep dim deferred) | — |
+| 27 | **P25** | Generic in-repo Markdown viewer (`docs.html`) | pending | — |
+| 28 | **P26** | README/FAQ cross-references from tooltips | pending | P25 helps |
 
 ---
 
@@ -1201,3 +1203,30 @@ P24 (Conversion End Year) — independent; diagnostic + engine flag already exis
 - [ ] **DEFERRED — Optimizer sweep dimension over the stop year** (user chose "measure cost first"). No per-row stop-year column ships this round because the leak guard strips `convEndYear` from every optimizer row; the calendar-year display contract is already met in the single-scenario surfaces (diagnostic message + one-click apply). When wired: measured cost is one k+1 linear scan per plan; the concern is multiplying it across the ⇌ candidate pool × the amount grid — the joint (amount × stop) grid is where the real value is (finding §3: C−D was +$228k to +$1.887M). Optimizer table then displays the stop as a **calendar year** even when entered as an age.
 - **Status:** IMPLEMENTED (v11.1330, worktree context-ab498f, branch worktrees/roth-breakeven-diagnosis-dd3075, UNCOMMITTED). Node 108/108 + taxPaymentPlanner 12/12. Browser end-to-end pending. Only the optimizer sweep dimension deferred.
 - **Independent:** no phase dependencies; the diagnostic (PF6/PF5) and the counterfactual engine flag both already existed.
+
+---
+
+## Phase P25: Generic in-repo Markdown viewer (pending, 2026-07-28)
+
+**Why:** the changelog now lives in `optimizer_changelog.md`, and the Documentation tab links straight to it. A raw `.md` is served as `text/markdown`, which some browsers **download instead of rendering**, and an anchor into plain text does nothing. So the per-version anchors (`optimizer_changelog.md#11.13a1`) only pay off where something renders the file. Today that means GitHub, which is exactly the dependency worth removing: the repo is self-hosted at tools.netcitizen.us and should not need github.com to display its own documentation.
+
+**Shape (user's preference):** not a single-purpose `optimizer_changelog.html`, but **one generic viewer** that renders whichever `.md` it is pointed at, defaulting to `optimizer_changelog.md`. Something like `docs.html?f=optimizer_changelog.md#11.13a1`, so the same page serves the README, the changelog and any future `.md` without another file per document.
+
+**Design notes to carry in:**
+- **The `file://` constraint is the whole problem.** A viewer has to `fetch()` the `.md`, and `fetch()` is blocked on `file://` URLs. That is precisely what broke the old `optimizer_history.js` lazy loader (see Round 8). A viewer that only works over http is a regression for anyone opening the tool from disk, and this project is routinely opened that way. Options to weigh: accept it and show a clear "open over http, or read it on GitHub" message with a working link; or keep the plain `.md` link as the file:// fallback and use the viewer only when `location.protocol !== 'file:'`.
+- **No CDN.** Everything in this repo is self-contained and loads from the same origin, so a `marked.js`/`markdown-it` CDN tag would be out of character and adds a third-party dependency to documentation. Either vendor a small parser into the repo or write a deliberately limited one: the `.md` files here only use headings, bold, links, inline code, bullet lists, tables and paragraphs.
+- **Anchors already exist.** `optimizer_changelog.md` carries explicit `<a id="11.13a1"></a>` before every heading (markdown's generated ids drop the dot), so a viewer that emits that HTML verbatim gets working deep links for free. Duplicated versions use `-2`/`-3` suffixes.
+- **Sanitize.** The `.md` files are repo-authored, not user input, so this is a low risk, but a viewer that injects fetched text as `innerHTML` should still strip `<script>`/event handlers rather than trusting the source blindly.
+- Scope check before building: `README.md` is ~95KB and already the site's front page via GitHub Pages. Decide whether the viewer is meant to replace that or only serve the smaller docs.
+
+**Files (expected):** new `docs.html` (or similar), `retirement_optimizer.html` (link targets).
+
+**Independent:** no phase dependencies. Pairs naturally with P26 below, which wants to link tooltips at README FAQ anchors and has the same "where does the reader land" question.
+
+---
+
+## Phase P26: README/FAQ cross-references from tooltips (pending, deferred 2026-07-28)
+
+**Why:** several tooltips and banners restate material that already exists under `## Frequently Asked Questions` in `README.md` (anchored headings such as "Is It a Fool's Errand to Make Multi-Decade Projections?", "Is the Break-Even Tax Rate Trustworthy?", "Why does the Optimizer say converting never helps?"). Pointing at those anchors keeps one source of truth and shortens the in-app text.
+
+**Needs:** a pass to decide which existing text has a matching FAQ entry, which needs one written, and where the link should land (see P25 — the same "raw .md does not render" question applies).

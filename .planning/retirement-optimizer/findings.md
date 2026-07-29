@@ -1,5 +1,51 @@
 # Findings & Decisions
 
+## Self-consistent arithmetic is not a correct model, and an invariant can lock in the bug it was meant to catch (2026-07-29, Tax Payment Planner v1.13b9)
+
+Two user-reported defects in one session, both in `taxPaymentPlanner.js`, both sitting under a green suite, both the same shape.
+
+**One.** A $5,000 Roth conversion was told to withhold $24,851 federal (**497%**) and $12,149 state. The gap fill sized conversion withholding entirely off the shortfall and never looked at the conversion: `shortfall * share * fedFrac`, where `share` was that IRA's share of total *conversions*. It looked proportional, so it read as reasonable. Nothing bounded it by what the distribution could physically carry. Withholding comes out of the distribution; 100% of the gross is the ceiling.
+
+**Two.** With 25k of draws and a 10k conversion against a 72k liability, the displayed Plan A and Plan C paid 35k and scheduled **no estimated tax at all**. Cause, written in the code:
+
+```js
+// Baseline and planC are comparison plans — skip quarterly estimates so the
+// summary.shortfall accurately reflects uncovered IRA-draw gap for invariant checks.
+if (shortfall > 0 && !isBaseline && !isPlanC) {
+```
+
+The `_baseline` and `_planC` variants are not scratch work. They are rendered as the displayed Plan C and Plan A, complete action lists a user is meant to follow. Their estimates were suppressed so an old test could read the withholding gap off `summary.totalCovered`.
+
+**Why 26 tests never caught either.** The suite had a coverage invariant, `totalCovered + shortfall === totalTaxDue`. It passed throughout both bugs.
+
+- For the 497% case it passed because the arithmetic *was* self-consistent. $37,000 of withholding plus $0 of shortfall does equal $37,000 of tax. It simply was not a thing that can happen.
+- For the underpayment case it passed **because of** the bug: `covered + shortfall` only summed to the liability while the estimates were missing. Adding them made it double-count and the test went red. The invariant had been written against the broken behavior, so it could never have flagged it.
+
+**Two distinct failure modes worth naming.** A consistency check confirms the books balance; it says nothing about whether the quantities are possible. And a test whose assertion depends on an internal convenience will defend that convenience, not the user-facing behavior.
+
+**What replaced them.** Property tests over grids, asserting things that must be true of the world rather than of the arithmetic: withholding never exceeds the conversion (36 cells; reports 42 violations against the pre-fix engine), and every displayed plan pays 100% of the liability to within $1 (40 scenarios x 3 plans = 120 checks; reports 58 of 104 underpaying pre-fix). The old invariant was restated on the correct decomposition, `withholding + shortfall === tax`, since `totalCovered` now legitimately includes estimates.
+
+A third defect fell out of writing the $1 assertion: each installment was rounded independently, so a schedule could drift several dollars off target (72001 and 66999 both observed and both previously dismissed as harmless). `splitExact()` gives the last installment the remainder.
+
+**Rule:** when an invariant survives a bug report, suspect the invariant. Ask what it would look like if the model were impossible rather than merely unbalanced, and prefer assertions about physical limits (a part cannot exceed its whole, a plan must pay what it owes) over assertions about internal bookkeeping. If a comparison variant is ever rendered to the user, it is not internal and must not be simplified for a test's benefit.
+
+## User-facing text can carry a legal claim nobody ever checked (2026-07-29, Tax Payment Planner v1.13b9)
+
+The tool warned, in two action notes and in `README.md`, that the withhold-then-replace maneuver on a Roth conversion was limited to **once every 365 days**. The user suspected this was wrong. It was.
+
+IRC 408(d)(3)(B)'s one-per-12-months limit applies to **IRA-to-IRA** 60-day rollovers. The IRS lists what is excluded and conversions are on the list ("rollovers from traditional IRAs to Roth IRAs (conversions)"), and IR-2014-107 / Ann. 2014-32 adds that conversions "are not subject to the one-per-year limit and **are disregarded in applying the limit to other rollovers**". So it is repeatable per conversion, in the same year, in both IRAs, and it does not consume the one ordinary rollover.
+
+The claim had propagated into engine *behavior*, not just prose: a policy comment justified draw-first withholding as avoiding "unnecessary 60-day cash rollovers" (a scarcity argument for a thing that is not scarce), December conversion withholding was skipped outright, and the restore deadline was capped at Dec 22.
+
+**Two neighbouring rules the same review surfaced, both load-bearing and both previously unmodeled:**
+
+- **IRC 6654(g)(1)** is why the whole withholding strategy works: withholding is "deemed paid on each due date" in equal parts regardless of when it happened. A December withholding cures a Q1 shortfall; a December *estimate* does not. This is also the strongest remedy when a user is already late (see TPP-2 in `task_plan.md`).
+- **IRC 7503** shifts a deadline landing on a weekend or holiday to the next business day. The tool printed raw statutory dates and compared them to today, so it could flag an installment past due while the real deadline was still ahead. 13 collisions in the next 8 years.
+
+**A precision that generic advice gets wrong.** Sources commonly say the withheld amount "becomes taxable" if you miss the 60 days. For a *conversion* that is misleading: you converted the gross and the whole gross is taxable this year either way (replace, and it is all conversion income; do not, and it is conversion income plus an ordinary distribution — same total). Income tax does not change. What you lose is the Roth space permanently, the 10% §72(t) tax under 59½ on the unconverted part, and, if you deposit late anyway, it is not a rollover at all: at best a regular contribution against the annual limit, with anything that does not fit drawing 6% per year under §4973 until corrected. The shipped note says this, and a test asserts it does **not** say "becomes taxable".
+
+**Rule:** treat a legal or tax assertion in user-facing text as unverified until it has a citation attached, and check whether it has leaked into behavior as well as prose. Rules the tool relies on but never names (6654(g) here) are the ones most likely to be silently wrong. The tool now carries a `RULE_CITES` panel so every rule it applies is traceable to a source.
+
 ## A feature can be fully wired and still do nothing, if nobody populates its input (2026-07-27, v11.1387)
 
 The Optimizer shipped an **Earliest Break Even** entry in its "Optimize for" selector, a `Break Even` column, and `OPTIMIZER_OBJECTIVES.earliestbe` to sort on it. All three were correct. The feature still did nothing, because **`_convBEYear` was only ever set on ⇌ Optimize-Conversions rows** — they were the only rows that re-ran with `computeOC: true`, and `simulate()` computes `totals.convBEYear` solely inside `if (inputs.computeOC && !inputs._cfRun)`. So every swept row fell back to the same `9999` sentinel, the column showed "—" table-wide, and selecting the objective reordered nothing. No error, no empty state, no test failure: a green suite and a rendered column that is honestly reporting "no data" look identical to a working feature.

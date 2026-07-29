@@ -8,7 +8,7 @@ MAINTENANCE NOTE: this heading and the per-phase status lines are injected into 
 
 ---
 
-## Nerdknob graduation: Stop-Year + Tax Creep (2026-07-29, v11.13bd) — COMPLETE, PR #137 open (`7e3b0e7`)
+## Nerdknob graduation: Stop-Year + Tax Creep (2026-07-29, v11.13bd) — COMPLETE, PR #137 open (`584a94a`)
 
 User: "remove the nerdknob control from the Stop conversions settings, it seems robust enough."
 Asked whether to include the tax-creep row, which sat as an open question at the P4 phase below

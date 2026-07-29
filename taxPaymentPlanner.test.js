@@ -394,6 +394,123 @@ test('Coverage invariant: totalCovered + shortfall === totalTaxDue for both plan
     `Plan A should fully cover taxes via conversion withholding; shortfall was ${aShortfall}`);
 });
 
+// ── 12. Business-day helpers ──────────────────────────────────────────────
+const {
+  isBusinessDay, nextBusinessDay, firstMondayAfter, dueDateFor, ORDERING_BUFFER_DAYS,
+} = TaxPaymentPlanner;
+
+test('isBusinessDay — weekends, the two holidays, and their observance shifts', () => {
+  assert(isBusinessDay(new Date(2026, 6, 15)) === true,  'Wed Jul 15 2026 is a business day');
+  assert(isBusinessDay(new Date(2026, 6, 18)) === false, 'Sat Jul 18 2026 is not');
+  assert(isBusinessDay(new Date(2026, 6, 19)) === false, 'Sun Jul 19 2026 is not');
+  // Jan 1 2026 is a Thursday, Dec 25 2026 is a Friday — both fall on their actual dates.
+  assert(isBusinessDay(new Date(2026, 0,  1)) === false, "New Year's Day 2026 is not");
+  assert(isBusinessDay(new Date(2026, 11, 25)) === false, 'Christmas 2026 is not');
+  // 5 USC 6103(b): Christmas 2027 is a Saturday, so it is observed Friday Dec 24.
+  assert(isBusinessDay(new Date(2027, 11, 24)) === false, 'Christmas observed Fri Dec 24 2027 is not');
+  // Jan 1 2028 is a Saturday, so it is observed Friday Dec 31 2027.
+  assert(isBusinessDay(new Date(2027, 11, 31)) === false, "New Year's observed Fri Dec 31 2027 is not");
+  // Jan 1 2033 is a Saturday -> observed Fri Dec 31 2032; Jan 1 2034 is a Sunday -> observed Mon Jan 2.
+  assert(isBusinessDay(new Date(2034, 0, 2)) === false, "New Year's observed Mon Jan 2 2034 is not");
+});
+
+test('nextBusinessDay — rolls forward off weekends and across year end', () => {
+  const iso = d => d.toISOString().slice(0, 10);
+  assert(iso(nextBusinessDay(new Date(2026, 6, 17))) === '2026-07-17', 'a Friday stays put');
+  assert(iso(nextBusinessDay(new Date(2026, 6, 18))) === '2026-07-20', 'Saturday rolls to Monday');
+  // Dec 31 2026 is a Thursday, but Jan 1 2027 is a Friday holiday, so a Jan 1 target
+  // must land on Monday Jan 4.
+  assert(iso(nextBusinessDay(new Date(2027, 0, 1))) === '2027-01-04', "New Year's Day 2027 rolls to Mon Jan 4");
+});
+
+test('firstMondayAfter — the January draw target, every year 2026 to 2032', () => {
+  for (let y = 2026; y <= 2032; y++) {
+    const m = firstMondayAfter(y, 1, 1);
+    assert(m.getDay() === 1, `${y}: expected a Monday, got day ${m.getDay()}`);
+    assert(m > new Date(y, 0, 1), `${y}: must be strictly after New Year's Day`);
+    assert(m.getMonth() === 0, `${y}: must still be in January`);
+  }
+});
+
+// ── 13. The January 1 regression ──────────────────────────────────────────
+test('Future tax year with RMD + conversion no longer schedules January 1', () => {
+  // nextMonth is forced to January for any future tax year, and the same-month split used
+  // to be day 1 / day 8. For 2028 that produced Jan 1 (New Year's Day AND a Saturday) and
+  // Jan 8 (also a Saturday). Now: first Monday after New Year's, plus the ordering buffer.
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE,
+    taxYear: 2028,
+    ira1Rmd: 30000,
+    ira1RothConversion: 40000,
+    federalTax: 20000,
+    todayDate: new Date(2026, 6, 29),
+  });
+  const rmd  = plan.actions.find(a => a.type === T.RMD);
+  const conv = plan.actions.find(a => a.type === T.ROTH_CONV);
+  assert(rmd.date.month === 1 && rmd.date.day === 3,  `Expected RMD on Jan 3 2028, got ${rmd.date.month}/${rmd.date.day}`);
+  assert(conv.date.month === 1 && conv.date.day === 10, `Expected conversion on Jan 10 2028, got ${conv.date.month}/${conv.date.day}`);
+  const gap = (new Date(2028, 0, conv.date.day) - new Date(2028, 0, rmd.date.day)) / 86400000;
+  assert(gap >= ORDERING_BUFFER_DAYS, `Ordering buffer must survive the nudge; gap was ${gap} days`);
+});
+
+// ── 13b. The sweep — the real guard ───────────────────────────────────────
+test('No action lands on a non-business day, tax years 2026 to 2035', () => {
+  // Catches any future emission point that forgets to nudge.
+  const offenders = [];
+  for (let y = 2026; y <= 2035; y++) {
+    // Two shapes: RMD and conversion in the same month (the split path), and draws only
+    // (the day-15 path). Run a state with its own schedule so state due dates are covered.
+    [{ ira1Rmd: 30000, ira1RothConversion: 40000 },
+     { ira1Rmd: 25000, ira1Voluntary: 15000 }].forEach(shape => {
+      const plan = TaxPaymentPlanner.computePaymentPlan({
+        ...BASE, ...shape,
+        taxYear: y,
+        state: 'VA',              // May 1 Q1 deadline, hits a Saturday in 2027 and 2032
+        federalTax: 20000,
+        stateTax: 6000,
+        priorYearStateTax: 5000,
+        todayDate: new Date(2026, 6, 29),
+      });
+      plan.actions.filter(a => a.date).forEach(a => {
+        const d = new Date(a.date.year, a.date.month - 1, a.date.day);
+        if (!isBusinessDay(d)) offenders.push(`${y} ${a.type} ${d.toDateString()}`);
+      });
+    });
+  }
+  assert(offenders.length === 0, `Non-business-day actions:\n       ${offenders.join('\n       ')}`);
+});
+
+// ── 14. IRC 7503 on due dates ─────────────────────────────────────────────
+test('IRC 7503 — a due date on a weekend moves to the next business day', () => {
+  // April 15 2028 is a Saturday.
+  const d = dueDateFor({ month: 4, day: 15, w: 0.25, label: 'Q1', nextYear: false }, 2028);
+  assert(d.shifted === true, 'Apr 15 2028 falls on a Saturday and should shift');
+  assert(d.date.month === 4 && d.date.day === 17, `Expected Apr 17 2028, got ${d.date.month}/${d.date.day}`);
+  // April 15 2026 is a Wednesday and must not move.
+  const same = dueDateFor({ month: 4, day: 15, w: 0.25, label: 'Q1', nextYear: false }, 2026);
+  assert(same.shifted === false, 'Apr 15 2026 is a Wednesday and should not shift');
+});
+
+test('IRC 7503 — the shifted date drives the past-due check, not the statutory one', () => {
+  // April 15 2029 is a Sunday, so the real deadline is Monday April 16. Under the old
+  // code the tool compared today against Sunday the 15th and flagged the installment past
+  // due a day early.
+  const onMonday = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, taxYear: 2029, federalTax: 20000, todayDate: new Date(2029, 3, 16),
+  });
+  const q1 = onMonday.actions.find(a => a.type === T.Q_FED && a.date.month === 4);
+  assert(q1, 'Expected a Q1 federal estimate');
+  assert(q1.date.day === 16, `Expected the deadline shown as Apr 16 2029, got day ${q1.date.day}`);
+  assert(!/PAST DUE/.test(q1.description), 'On Apr 16 2029 the deadline has not passed, so not past due');
+  assert(q1.notes.some(n => n.includes('IRC 7503')), 'Expected the shift to be explained in a note');
+  // One day later it is past due.
+  const after = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, taxYear: 2029, federalTax: 20000, todayDate: new Date(2029, 3, 17),
+  });
+  const q1b = after.actions.find(a => a.type === T.Q_FED && a.date.month === 4);
+  assert(/PAST DUE/.test(q1b.description), 'Apr 17 2029 is after the shifted deadline');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

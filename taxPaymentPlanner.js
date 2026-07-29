@@ -1,7 +1,19 @@
 /**
- * taxPaymentPlanner.js — v4
+ * taxPaymentPlanner.js — v5
  * =========================
  * Retirement Tax Payment Strategy Planner — Dual-IRA Edition
+ *
+ * Enhancements over v4:
+ *   • Business-day arithmetic. Every date the planner prints is one you have to act on,
+ *     and nothing used to check that you could. A future tax year forces nextMonth to
+ *     January, and the same-month RMD/conversion split was day 1 / day 8, so tax year
+ *     2028 scheduled the draw on January 1 (a federal holiday AND a Saturday). January
+ *     now starts on the first Monday after New Year's Day; every other target is day 15
+ *     nudged forward. The restore date is nudged too.
+ *     Models weekends plus New Year's Day and Christmas Day only — see OBSERVED_HOLIDAYS.
+ *   • IRC 7503 applied to federal and state estimated-tax due dates, for both the printed
+ *     deadline and the past-due check, so an installment is no longer flagged late while
+ *     the real deadline is still ahead.
  *
  * Enhancements over v3:
  *   • Rule correction: the 60-day cash replacement after a Roth conversion is a
@@ -158,6 +170,13 @@ const TaxPaymentPlanner = (() => {
       cite:  'IRS Publication 505, Tax Withholding and Estimated Tax',
       url:   'https://www.irs.gov/publications/p505',
       note:  null,
+    },
+    {
+      tag:   'IRC 7503',
+      label: 'A deadline landing on a weekend or holiday moves to the next business day',
+      cite:  '26 U.S.C. 7503',
+      url:   'https://www.law.cornell.edu/uscode/text/26/7503',
+      note:  'Applied to the estimated-tax due dates shown above, for both the printed deadline and the past-due check.',
     },
     {
       tag:   'Form 2210 Sch. AI',
@@ -377,6 +396,85 @@ const TaxPaymentPlanner = (() => {
     return (16 - Math.max(1, Math.min(12, rmdMonth))) / 12;
   }
 
+  // ── Business-day arithmetic ────────────────────────────────────────────────
+  // Every date this planner prints is a date you have to act on, so none of them may
+  // land on a day your custodian is shut.
+  //
+  // DELIBERATE SIMPLIFICATION: this models weekends plus the two holidays below, and
+  // nothing else. A target date can still land on Thanksgiving, July 4, or Memorial Day.
+  // Widening the model is a one-line addition to OBSERVED_HOLIDAYS, not a code change.
+  // The output says which days it knows about so nobody has to guess.
+  const OBSERVED_HOLIDAYS = [
+    { month: 1,  day: 1,  name: "New Year's Day" },
+    { month: 12, day: 25, name: 'Christmas Day'  },
+  ];
+
+  // A fixed-date federal holiday falling on Saturday is observed the preceding Friday,
+  // and one falling on Sunday the following Monday (5 U.S.C. 6103(b)).
+  function observedHolidayName(date) {
+    const y = date.getFullYear();
+    for (const h of OBSERVED_HOLIDAYS) {
+      const actual = new Date(y, h.month - 1, h.day);
+      const obs    = new Date(actual);
+      if (actual.getDay() === 6) obs.setDate(obs.getDate() - 1);        // Sat → Fri
+      else if (actual.getDay() === 0) obs.setDate(obs.getDate() + 1);   // Sun → Mon
+      if (obs.getMonth() === date.getMonth() && obs.getDate() === date.getDate()) return h.name;
+      // New Year's Day observed on the preceding Friday falls in the PREVIOUS year.
+      if (h.month === 1 && h.day === 1) {
+        const nextActual = new Date(y + 1, 0, 1);
+        if (nextActual.getDay() === 6) {
+          const nextObs = new Date(nextActual); nextObs.setDate(nextObs.getDate() - 1);
+          if (nextObs.getFullYear() === y && nextObs.getMonth() === date.getMonth()
+              && nextObs.getDate() === date.getDate()) return h.name;
+        }
+      }
+    }
+    return null;
+  }
+
+  function isBusinessDay(date) {
+    const wd = date.getDay();
+    if (wd === 0 || wd === 6) return false;
+    return observedHolidayName(date) === null;
+  }
+
+  function nextBusinessDay(date) {
+    const d = new Date(date);
+    while (!isBusinessDay(d)) d.setDate(d.getDate() + 1);
+    return d;
+  }
+
+  function prevBusinessDay(date) {
+    const d = new Date(date);
+    while (!isBusinessDay(d)) d.setDate(d.getDate() - 1);
+    return d;
+  }
+
+  // First Monday strictly after the given date. Used for the January draw target so the
+  // year's first action clears New Year's week rather than landing on the holiday itself.
+  function firstMondayAfter(year, month, day) {
+    const d = new Date(year, month - 1, day);
+    do { d.setDate(d.getDate() + 1); } while (d.getDay() !== 1);
+    return d;
+  }
+
+  // IRC 7503: an act due on a Saturday, Sunday, or legal holiday is timely if performed
+  // on the next succeeding business day. Returns the shifted date plus the statutory one,
+  // so callers can show both. Used for BOTH the displayed deadline and the past-due test,
+  // which is how those two can never disagree.
+  function dueDateFor(q, taxYear) {
+    const dueYear   = q.nextYear ? taxYear + 1 : taxYear;
+    const statutory = new Date(dueYear, q.month - 1, q.day);
+    const due       = nextBusinessDay(statutory);
+    return {
+      statutory,
+      dueDate: due,
+      shifted: due.getTime() !== statutory.getTime(),
+      date: { year: due.getFullYear(), month: due.getMonth() + 1, day: due.getDate() },
+      statutoryStr: fmtDate(dueYear, q.month, q.day),
+    };
+  }
+
   // ── Replacing the withheld amount after a Roth conversion ──────────────────
   // 60 days is the statutory rollover window. 45 is the date we actually recommend,
   // leaving a buffer for transfer processing. These are a DEADLINE, not a holding
@@ -385,11 +483,29 @@ const TaxPaymentPlanner = (() => {
   const ROLLOVER_DEADLINE_DAYS = 60;
   const RESTORE_TARGET_DAYS    = 45;
 
+  // Gap between an RMD and a same-month Roth conversion. The RMD must be distributed
+  // before the conversion; this leaves room for it to settle first.
+  const ORDERING_BUFFER_DAYS = 7;
+
   function restoreDateFor(taxYear, convMonth, convDay) {
-    const conv    = new Date(taxYear, convMonth - 1, convDay);
-    const restore = new Date(conv);
-    restore.setDate(restore.getDate() + RESTORE_TARGET_DAYS);
-    return { conv, restore };
+    const conv = new Date(taxYear, convMonth - 1, convDay);
+    const raw  = new Date(conv);
+    raw.setDate(raw.getDate() + RESTORE_TARGET_DAYS);
+    const restore = nextBusinessDay(raw);
+    // The 45-day target can absorb at most a few days of nudge, so the statutory ceiling
+    // is never at risk. Assert it rather than assume it.
+    const elapsed = Math.round((restore - conv) / 86400000);
+    if (elapsed > ROLLOVER_DEADLINE_DAYS) {
+      throw new Error(`restore date ${elapsed} days after conversion exceeds the ${ROLLOVER_DEADLINE_DAYS}-day rollover window`);
+    }
+    return { conv, restore, elapsed };
+  }
+
+  // Explains an IRC 7503 shift on an action's note, or '' when the date did not move.
+  function shiftNote(d) {
+    if (!d.shifted) return '';
+    return `The statutory date is ${d.statutoryStr}, which falls on a weekend or a holiday, ` +
+           `so the deadline moves to the next business day [IRC 7503].`;
   }
 
   function getStateInfo(code) {
@@ -399,8 +515,13 @@ const TaxPaymentPlanner = (() => {
   function detectMissed(schedule, taxYear, todayDate) {
     return schedule
       .map(q => {
-        const dueYear = q.nextYear ? taxYear + 1 : taxYear;
-        return Object.assign({}, q, { dueYear, dueDate: new Date(dueYear, q.month - 1, q.day) });
+        const d = dueDateFor(q, taxYear);
+        // dueYear/dueDate are the IRC 7503 shifted values, so an installment is never
+        // flagged past due on a weekend when the real deadline is the following Monday.
+        return Object.assign({}, q, {
+          dueYear: d.date.year, dueDate: d.dueDate,
+          shifted: d.shifted, statutoryStr: d.statutoryStr,
+        });
       })
       .filter(q => q.dueDate < todayDate);
   }
@@ -408,18 +529,41 @@ const TaxPaymentPlanner = (() => {
   // ── Per-IRA ordering rule helper ──────────────────────────────────────────
   // convFuture=false when the conversion is already completed — skip the
   // pull-forward rule so a past conv month doesn't drag the draw backward.
-  function resolveIraOrdering(rmd, rmdMonth, conv, convMonth, convFuture = true) {
+  function resolveIraOrdering(taxYear, rmd, rmdMonth, conv, convMonth, convFuture = true) {
     const clamp = m => Math.max(1, Math.min(12, Math.round(m || 12)));
     const rm = clamp(rmdMonth);
     const cm = clamp(convMonth);
     const hasConflict = convFuture && rmd > 0 && conv > 0 && cm <= rm;
     const planARmdMonth = hasConflict ? cm : rm;
     const sameMonth = rmd > 0 && conv > 0 && planARmdMonth === cm;
+
+    // Day targets. Base is the 15th in every month, nudged forward off weekends and the
+    // holidays we model.
+    //
+    // When the RMD and the conversion share a month they have to be split, because the RMD
+    // must be distributed before the conversion. The old split was day 1 and day 8, which
+    // put the draw on January 1 for every future tax year (nextMonth is forced to January
+    // then) — a federal holiday, and a Saturday in 2028. January now starts on the first
+    // Monday after New Year's Day instead, and the conversion keeps its 7-day buffer.
+    let rmdDate, convDate;
+    if (sameMonth) {
+      const rmdBase = planARmdMonth === 1
+        ? firstMondayAfter(taxYear, 1, 1)
+        : new Date(taxYear, planARmdMonth - 1, 1);
+      rmdDate = nextBusinessDay(rmdBase);
+      const convBase = new Date(rmdDate);
+      convBase.setDate(convBase.getDate() + ORDERING_BUFFER_DAYS);
+      convDate = nextBusinessDay(convBase);
+    } else {
+      rmdDate  = nextBusinessDay(new Date(taxYear, planARmdMonth - 1, 15));
+      convDate = nextBusinessDay(new Date(taxYear, cm - 1, 15));
+    }
+
     return {
       planARmdMonth,
       planAConvMonth: cm,
-      planARmdDay:  sameMonth ? 1 : 15,
-      planAConvDay: sameMonth ? 8 : 15,
+      planARmdDay:  rmdDate.getDate(),
+      planAConvDay: convDate.getDate(),
       hasConflict,
       sameMonth,
       origRmdMonth: rm,
@@ -501,8 +645,8 @@ const TaxPaymentPlanner = (() => {
     const ira2VolMonth  = p.ira2VolTaken  ? prevMonth : drawTargetMonth;
 
     // resolveIraOrdering uses the RMD month (IRS ordering: RMD must precede conversion)
-    const ira1 = resolveIraOrdering(p.ira1Rmd, ira1RmdMonth, p.ira1RothConversion, ira1ConvMonth, !p.ira1ConvDone);
-    const ira2 = resolveIraOrdering(p.ira2Rmd, ira2RmdMonth, p.ira2RothConversion, ira2ConvMonth, !p.ira2ConvDone);
+    const ira1 = resolveIraOrdering(yr, p.ira1Rmd, ira1RmdMonth, p.ira1RothConversion, ira1ConvMonth, !p.ira1ConvDone);
+    const ira2 = resolveIraOrdering(yr, p.ira2Rmd, ira2RmdMonth, p.ira2RothConversion, ira2ConvMonth, !p.ira2ConvDone);
 
     // 3. Core derived values
     const totalTax  = p.federalTax + p.stateTax;
@@ -946,6 +1090,11 @@ const TaxPaymentPlanner = (() => {
             crossesYearEnd
               ? `This deadline falls in ${restoreDate.year}, which is fine. The 60-day window is measured from the distribution, not from year end. The replacement still completes the ${yr} conversion, so expect the 1099-R for ${yr} and the 5498 for ${restoreDate.year}. Keep the transfer confirmation.`
               : '',
+            // The date itself is left alone; the 60-day window is what it is. This just warns
+            // that the last week of December is a bad time to rely on a custodian transfer.
+            (restoreDate.year === yr && restoreDate.month === 12 && restoreDate.day >= 24)
+              ? `Heads up: this lands in the last week of December, when custodians are running year-end processing and staffing is thin. Move the transfer earlier in the window rather than up against this date.`
+              : '',
           ].filter(Boolean),
         });
       } else {
@@ -1061,7 +1210,7 @@ const TaxPaymentPlanner = (() => {
         if (iRmd > 0) {
           notes.push(
             ira.sameMonth
-              ? `RMD must be completed before the Roth conversion in the same month. Complete draw by the ${ira.planARmdDay}th; conversion follows on the ${ira.planAConvDay}th (7-day IRS ordering buffer).`
+              ? `RMD must be completed before the Roth conversion in the same month. Complete draw by the ${ira.planARmdDay}th; conversion follows on the ${ira.planAConvDay}th (${ORDERING_BUFFER_DAYS}-day IRS ordering buffer, both dates moved off weekends and holidays).`
               : `RMD must be completed by December 31.`
           );
         }
@@ -1131,19 +1280,20 @@ const TaxPaymentPlanner = (() => {
         FED_Q.forEach(q => {
           const amt = Math.round(sfFed * q.w);
           if (amt === 0) return;
-          const dueYear = q.nextYear ? yr + 1 : yr;
-          const isPast  = new Date(dueYear, q.month - 1, q.day) < today;
+          const d      = dueDateFor(q, yr);
+          const isPast = d.dueDate < today;
           addAction({
             type: T.Q_FED,
-            date: { year: dueYear, month: q.month, day: q.day },
+            date: d.date,
             amount: amt,
             federalWithholding: amt,
             description:
-              `Pay federal estimated tax of ${fmt$(amt)} by ${fmtDate(dueYear, q.month, q.day)} ` +
+              `Pay federal estimated tax of ${fmt$(amt)} by ${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
               `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfFed)} federal shortfall).` +
               (isPast ? ' [PAST DUE — pay immediately]' : ''),
             notes: [
               'Pay via IRS Direct Pay at directpay.irs.gov or EFTPS at eftps.gov.',
+              shiftNote(d),
               isPast ? 'This installment is past due. Make a catch-up payment now to minimise underpayment penalty.' : '',
             ].filter(Boolean),
           });
@@ -1153,20 +1303,21 @@ const TaxPaymentPlanner = (() => {
           stateInfo.quarterlySchedule.forEach(q => {
             const amt = Math.round(sfState * q.w);
             if (amt === 0) return;
-            const dueYear = q.nextYear ? yr + 1 : yr;
-            const isPast  = new Date(dueYear, q.month - 1, q.day) < today;
+            const d      = dueDateFor(q, yr);
+            const isPast = d.dueDate < today;
             addAction({
               type: T.Q_STATE,
-              date: { year: dueYear, month: q.month, day: q.day },
+              date: d.date,
               amount: amt,
               stateWithholding: amt,
               description:
                 `Pay ${stateInfo.name} estimated tax of ${fmt$(amt)} by ` +
-                `${fmtDate(dueYear, q.month, q.day)} ` +
+                `${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
                 `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfState)} ${stateInfo.name} shortfall).` +
                 (isPast ? ' [PAST DUE — pay immediately]' : ''),
               notes: [
                 stateInfo.paymentNote,
+                shiftNote(d),
                 isPast ? 'This installment is past due. Pay now to minimise the underpayment penalty.' : '',
               ].filter(Boolean),
             });
@@ -1179,19 +1330,20 @@ const TaxPaymentPlanner = (() => {
       FED_Q.forEach(q => {
         const amt = Math.round(p.federalTax * q.w);
         if (amt === 0) return;
-        const dueYear = q.nextYear ? yr + 1 : yr;
-        const isPast  = new Date(dueYear, q.month - 1, q.day) < today;
+        const d      = dueDateFor(q, yr);
+        const isPast = d.dueDate < today;
         addAction({
           type: T.Q_FED,
-          date: { year: dueYear, month: q.month, day: q.day },
+          date: d.date,
           amount: amt,
           federalWithholding: amt,
           description:
-            `Pay federal estimated tax of ${fmt$(amt)} by ${fmtDate(dueYear, q.month, q.day)} ` +
+            `Pay federal estimated tax of ${fmt$(amt)} by ${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
             `(${q.label} — ${fmtPct(q.w)} of ${fmt$(p.federalTax)} federal tax).` +
             (isPast ? ' [PAST DUE — pay immediately]' : ''),
           notes: [
             'Pay via IRS Direct Pay at directpay.irs.gov or EFTPS at eftps.gov.',
+            shiftNote(d),
             isPast ? 'This installment is past due. Make a catch-up payment immediately.' : '',
           ].filter(Boolean),
         });
@@ -1201,20 +1353,21 @@ const TaxPaymentPlanner = (() => {
         stateInfo.quarterlySchedule.forEach(q => {
           const amt = Math.round(p.stateTax * q.w);
           if (amt === 0) return;
-          const dueYear = q.nextYear ? yr + 1 : yr;
-          const isPast  = new Date(dueYear, q.month - 1, q.day) < today;
+          const d      = dueDateFor(q, yr);
+          const isPast = d.dueDate < today;
           addAction({
             type: T.Q_STATE,
-            date: { year: dueYear, month: q.month, day: q.day },
+            date: d.date,
             amount: amt,
             stateWithholding: amt,
             description:
               `Pay ${stateInfo.name} estimated tax of ${fmt$(amt)} by ` +
-              `${fmtDate(dueYear, q.month, q.day)} ` +
+              `${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
               `(${q.label} — ${fmtPct(q.w)} of ${fmt$(p.stateTax)} ${stateInfo.name} tax).` +
               (isPast ? ' [PAST DUE — pay immediately]' : ''),
             notes: [
               stateInfo.paymentNote,
+              shiftNote(d),
               isPast ? 'This installment is past due.' : '',
             ].filter(Boolean),
           });
@@ -1609,6 +1762,10 @@ const TaxPaymentPlanner = (() => {
       if (c.note) lines.push(`      ${c.note}`);
       lines.push('');
     });
+    lines.push('  SCHEDULING: every date above is moved off Saturdays, Sundays, New Year\'s Day,');
+    lines.push('  and Christmas Day. The other federal holidays are not tracked, so a date can still');
+    lines.push('  land on Thanksgiving, July 4, or Memorial Day. Confirm the date with your custodian.');
+    lines.push('');
 
     return lines.join('\n');
   }
@@ -2000,7 +2157,10 @@ const TaxPaymentPlanner = (() => {
     h += `</table>`;
     h += `<div style="font-size:0.80em;color:#777;margin-top:10px;">`;
     h += `Tags in square brackets inside the action notes above point at these entries. `;
-    h += `This is a planning tool, not tax advice. Confirm anything consequential with your own preparer.`;
+    h += `<br><strong>Scheduling:</strong> every date above is moved off Saturdays, Sundays, New Year's Day, and `;
+    h += `Christmas Day. The other federal holidays are not tracked, so a date can still land on `;
+    h += `Thanksgiving, July 4, or Memorial Day. Confirm the date with your custodian before you rely on it.`;
+    h += `<br>This is a planning tool, not tax advice. Confirm anything consequential with your own preparer.`;
     h += `</div></div></details>`;
 
     h += `</div>`;
@@ -2017,7 +2177,14 @@ const TaxPaymentPlanner = (() => {
     iraOcFactor,
     ROLLOVER_DEADLINE_DAYS,
     RESTORE_TARGET_DAYS,
+    ORDERING_BUFFER_DAYS,
     restoreDateFor,
+    OBSERVED_HOLIDAYS,
+    isBusinessDay,
+    nextBusinessDay,
+    prevBusinessDay,
+    firstMondayAfter,
+    dueDateFor,
   };
 
 })();

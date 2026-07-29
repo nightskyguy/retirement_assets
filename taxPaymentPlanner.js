@@ -1,7 +1,24 @@
 /**
- * taxPaymentPlanner.js — v3
+ * taxPaymentPlanner.js — v4
  * =========================
  * Retirement Tax Payment Strategy Planner — Dual-IRA Edition
+ *
+ * Enhancements over v3:
+ *   • Rule correction: the 60-day cash replacement after a Roth conversion is a
+ *     traditional-to-Roth CONVERSION rollover, which the IRS excludes from the
+ *     one-rollover-per-12-months limit of IRC 408(d)(3)(B). v3 wrongly warned that
+ *     it was limited to once per rolling 12 months. It is repeatable per conversion.
+ *   • December conversion withholding is no longer skipped outright. It now fires
+ *     when the shortfall would breach safe harbor, because withholding is deemed
+ *     paid ratably across all four due dates under IRC 6654(g)(1).
+ *   • Restore-cash deadline follows the real 60-day window and may cross year end.
+ *   • RULE_CITES — sources rendered in both the HTML and plain-text output.
+ *   • _sixtyDayAnalysis replaced by _replacementAnalysis (summary key sixtyDay →
+ *     replacement). The old version weighted the Roth side by the rest of the year and
+ *     the cash side by 60 days, which overstated the gain by 20-50% and went negative in
+ *     December. It is one differential over one period:
+ *         gain = withheld × (portfolioRate − hysaNet) × yearsFromRestoreToYearEnd
+ *     Growth now accrues from the restore date, not the conversion date.
  *
  * Enhancements over v2:
  *   • Two independent IRAs (IRA 1 and IRA 2), each with separate RMD,
@@ -103,6 +120,53 @@ const TaxPaymentPlanner = (() => {
     Q_FED:   8.0 / 12,
     MONTHLY: 9.5 / 12,
   };
+
+  // ── Authorities behind the rules this planner applies ──────────────────────
+  // `tag` is the short marker used inline in action notes; the footer carries the URL.
+  const RULE_CITES = [
+    {
+      tag:   'IRS Rollovers',
+      label: '60-day rollover deadline, and using other funds to replace the amount withheld',
+      cite:  'IRS, Rollovers of retirement plan and IRA distributions',
+      url:   'https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions',
+      note:  'Lists the transactions excluded from the one-rollover-per-year limit. Rollovers from traditional IRAs to Roth IRAs (conversions) are on that list.',
+    },
+    {
+      tag:   'IRS Ann. 2014-32',
+      label: 'Roth conversions are outside the one-rollover-per-year limit',
+      cite:  'IRS IR-2014-107 / Announcement 2014-32',
+      url:   'https://www.irs.gov/uac/newsroom/irs-clarifies-application-of-one-per-year-limit-on-ira-rollovers-allows-owners-of-multiple-iras-a-fresh-start-in-2015',
+      note:  'Roth conversions are not subject to the one-per-year limit and are disregarded in applying the limit to other rollovers.',
+    },
+    {
+      tag:   'IRC 6654(g)',
+      label: 'Withholding is credited as if paid in equal parts on every due date',
+      cite:  '26 U.S.C. 6654(g)(1)',
+      url:   'https://www.law.cornell.edu/uscode/text/26/6654',
+      note:  'This is why year-end withholding cures an earlier-quarter underpayment while a Q4 estimated payment does not.',
+    },
+    {
+      tag:   'IRC 408(d)(3)(B)',
+      label: 'The one-rollover-per-12-months limit, and what it actually covers',
+      cite:  '26 U.S.C. 408(d)(3)(B)',
+      url:   'https://www.law.cornell.edu/uscode/text/26/408',
+      note:  'Applies to IRA-to-IRA 60-day rollovers only. Conversions, trustee-to-trustee transfers, and plan rollovers are outside it.',
+    },
+    {
+      tag:   'Pub 505',
+      label: 'Safe harbor: 90% of this year, or 100% of last year (110% above $150K AGI)',
+      cite:  'IRS Publication 505, Tax Withholding and Estimated Tax',
+      url:   'https://www.irs.gov/publications/p505',
+      note:  null,
+    },
+    {
+      tag:   'Form 2210 Sch. AI',
+      label: 'Annualized income installment method, for income that arrived late in the year',
+      cite:  'IRS Form 2210, Schedule AI (see also Pub 505)',
+      url:   'https://www.irs.gov/forms-pubs/about-form-2210',
+      note:  'Attributes a late-year conversion to the quarter it arose in, which can remove an earlier-quarter penalty without any withholding.',
+    },
+  ];
 
   // ── STATE_DB builder helpers ───────────────────────────────────────────────
   function _s(name, extra) {
@@ -313,6 +377,21 @@ const TaxPaymentPlanner = (() => {
     return (16 - Math.max(1, Math.min(12, rmdMonth))) / 12;
   }
 
+  // ── Replacing the withheld amount after a Roth conversion ──────────────────
+  // 60 days is the statutory rollover window. 45 is the date we actually recommend,
+  // leaving a buffer for transfer processing. These are a DEADLINE, not a holding
+  // period: once the cash is replaced it stays in the Roth, so nothing about the
+  // economics of the maneuver lasts 60 days.
+  const ROLLOVER_DEADLINE_DAYS = 60;
+  const RESTORE_TARGET_DAYS    = 45;
+
+  function restoreDateFor(taxYear, convMonth, convDay) {
+    const conv    = new Date(taxYear, convMonth - 1, convDay);
+    const restore = new Date(conv);
+    restore.setDate(restore.getDate() + RESTORE_TARGET_DAYS);
+    return { conv, restore };
+  }
+
   function getStateInfo(code) {
     return STATE_DB[code] || STATE_DB._DEFAULT;
   }
@@ -447,7 +526,14 @@ const TaxPaymentPlanner = (() => {
     // 5. Conversion withholding setup — draw-first for ALL plans.
     //    All plans prefer to fund taxes through IRA draw withholding rather than conversion
     //    withholding. Conversion withholding is only used as a fallback when draws are insufficient
-    //    to cover the full tax liability. This avoids unnecessary 60-day cash rollovers.
+    //    to cover the full tax liability.
+    //
+    //    Why draw-first, now that the once-per-12-months story is gone: draw withholding needs no
+    //    out-of-pocket cash, has no 60-day deadline to miss, and generates no rollover paperwork.
+    //    It is NOT because the maneuver is scarce. A traditional-to-Roth conversion rollover is
+    //    excluded from the IRC 408(d)(3)(B) one-rollover-per-12-months limit and is disregarded in
+    //    applying that limit to other rollovers, so withhold-and-replace is repeatable per
+    //    conversion. doWithhold1 and doWithhold2 are independent for exactly that reason.
     //
     //    ira1RothWithhold / ira2RothWithhold override:
     //      true  → force full pro-rata conversion withholding (explicit user override)
@@ -463,12 +549,34 @@ const TaxPaymentPlanner = (() => {
       return { fed: fedW, state: stW, total: fedW + stW };
     }
 
-    function _sixtyDayAnalysis(convAmt, convMonth, estW) {
+    // Should the withheld W be replaced from outside cash?
+    //   replace → W earns altRate until the restore date, then portfolioRate tax-free
+    //   don't   → W earns altRate in the taxable account all year, Roth stays short by W
+    // Subtracting one from the other, the pre-restore stretch cancels and what is left is a
+    // SINGLE differential over ONE period:
+    //     gain = W × (portfolioRate − altRate) × yearsFromRestoreToYearEnd
+    // The previous version weighted the Roth side by the rest of the year and the cash side
+    // by 60 days. Same principal, same year, two different clocks, which overstated the gain
+    // by 20-50% and produced a negative result in December. 60 days is the deadline for the
+    // rollover, not a holding period for the money.
+    function _replacementAnalysis(convAmt, convMonth, convDay, estW) {
+      const withheld  = estW.total;
       const monthsRem = Math.max(0, 12 - convMonth);
-      const benefit   = estW.total * p.portfolioRate * monthsRem / 12;
-      const cost60    = estW.total * hysaNet * 60 / 365;
-      const net       = benefit - cost60;
-      return { benefit, cost60, net, monthsRem, recommended: net > 0 && convAmt > 0, estWithheld: estW.total };
+      const altRate   = hysaNet;
+      const spread    = p.portfolioRate - altRate;
+      // Growth accrues from where the money actually lands, not from the conversion date.
+      const { restore } = restoreDateFor(yr, convMonth, convDay);
+      const yearEnd  = new Date(yr + 1, 0, 1);
+      const yearsRem = Math.max(0, (yearEnd - restore) / (365 * 24 * 60 * 60 * 1000));
+      const gain     = withheld * spread * yearsRem;
+      return {
+        withheld, altRate, spread, monthsRem, yearsRem, gain,
+        restoreDate: { year: restore.getFullYear(), month: restore.getMonth() + 1, day: restore.getDate() },
+        // Replacing wins whenever the portfolio outgrows the cash rate and there is cash to
+        // do it with. True in December too: yearsRem is 0 so the first-year gain is 0, but
+        // the spread applies every year the money stays in the Roth.
+        recommended: withheld > 0 && spread > 0,
+      };
     }
 
     // Withholding variables — all start at zero; gap fill below may update them.
@@ -477,8 +585,8 @@ const TaxPaymentPlanner = (() => {
     let ira1ConvFedW = 0, ira1ConvStW = 0;
     let ira2ConvFedW = 0, ira2ConvStW = 0;
     // 60-day analysis initialised with zero withholding; updated after gap is known.
-    let ira1SixtyDay = _sixtyDayAnalysis(p.ira1RothConversion, ira1.planAConvMonth, { total: 0, fed: 0, state: 0 });
-    let ira2SixtyDay = _sixtyDayAnalysis(p.ira2RothConversion, ira2.planAConvMonth, { total: 0, fed: 0, state: 0 });
+    let ira1Replacement = _replacementAnalysis(p.ira1RothConversion, ira1.planAConvMonth, ira1.planAConvDay, { total: 0, fed: 0, state: 0 });
+    let ira2Replacement = _replacementAnalysis(p.ira2RothConversion, ira2.planAConvMonth, ira2.planAConvDay, { total: 0, fed: 0, state: 0 });
 
     // Explicit override: ira1RothWithhold === true → pre-draw full pro-rata conversion withholding.
     // This is included in taxAfterConvW so the draw optimizer knows less remains to cover.
@@ -487,14 +595,14 @@ const TaxPaymentPlanner = (() => {
       ira1ConvFedW = w.fed;  ira1ConvStW = w.state;
       convWithholdFed += ira1ConvFedW;  convWithholdState += ira1ConvStW;
       doWithhold1 = true;
-      ira1SixtyDay = _sixtyDayAnalysis(p.ira1RothConversion, ira1.planAConvMonth, w);
+      ira1Replacement = _replacementAnalysis(p.ira1RothConversion, ira1.planAConvMonth, ira1.planAConvDay, w);
     }
     if (p.ira2RothConversion > 0 && p.ira2RothWithhold === true) {
       const w = _estConvW(p.ira2RothConversion);
       ira2ConvFedW = w.fed;  ira2ConvStW = w.state;
       convWithholdFed += ira2ConvFedW;  convWithholdState += ira2ConvStW;
       doWithhold2 = true;
-      ira2SixtyDay = _sixtyDayAnalysis(p.ira2RothConversion, ira2.planAConvMonth, w);
+      ira2Replacement = _replacementAnalysis(p.ira2RothConversion, ira2.planAConvMonth, ira2.planAConvDay, w);
     }
 
     // 6. Cross-IRA withholding optimizer
@@ -528,18 +636,33 @@ const TaxPaymentPlanner = (() => {
     let totalCovered = totalIraDrawWithheld + convWithholdFed + convWithholdState;
     let shortfall    = Math.max(0, totalTax - totalCovered);
 
+    // 7. Safe-harbor amounts (computed before the gap fill — the December branch needs them)
+    const sfFedMult   = p.highIncomeFiler ? 1.10 : 1.00;
+    const sfStateMult = stateInfo.safeHarborAlways110 ? 1.10
+                      : (p.highIncomeFiler && p.stateTax >= (stateInfo.safeHarborHighIncomeThreshold || Infinity))
+                        ? 1.10 : 1.00;
+    const shFed   = p.priorYearFedTax   != null ? p.priorYearFedTax   * sfFedMult   : p.federalTax * 0.90;
+    const shState = p.priorYearStateTax != null ? p.priorYearStateTax * sfStateMult : p.stateTax   * 0.90;
+    const safeHarborTotal = shFed + shState;
+
     // Gap fill — applies to ALL plans.
     // If draws (+ any forced override withholding) don't cover everything, add the minimum
     // conversion withholding needed to close the gap. Split pro-rata across IRAs by conv size.
     // Skipped when ira1RothWithhold === false (explicit "no conv withholding") or already applied (true).
-    // Also skipped when the conversion is in December (monthsRem=0) — no Roth growth remaining,
-    // so the 60-day replacement is not worthwhile; the residual shortfall flows to quarterly estimates.
+    //
+    // December conversions (monthsRem=0) have no Roth growth left to capture, so withholding buys
+    // nothing on that axis. It still buys penalty relief: withholding is deemed paid in equal parts
+    // on all four due dates (IRC 6654(g)(1)), so a December withholding retroactively cures Q1-Q3,
+    // while a Q4 estimate paid January 15 does not. So December withholding is used only when the
+    // coverage would otherwise fall short of safe harbor.
+    const _gapFillAllowed = monthsRem =>
+      monthsRem > 0 || totalCovered < safeHarborTotal;
     if (shortfall > 0) {
       const totalConv = p.ira1RothConversion + p.ira2RothConversion;
       if (totalConv > 0) {
         if (p.ira1RothConversion > 0 && p.ira1RothWithhold !== false && !doWithhold1) {
           const monthsRem1 = Math.max(0, 12 - ira1.planAConvMonth);
-          if (monthsRem1 > 0) {
+          if (_gapFillAllowed(monthsRem1)) {
             const share = p.ira1RothConversion / totalConv;
             ira1ConvFedW = Math.round(shortfall * share * (stateIraExempt ? 1.0 : fedFrac));
             ira1ConvStW  = stateIraExempt ? 0 : Math.round(shortfall * share * stFrac);
@@ -547,14 +670,14 @@ const TaxPaymentPlanner = (() => {
               doWithhold1 = true;
               convWithholdFed   += ira1ConvFedW;
               convWithholdState += ira1ConvStW;
-              ira1SixtyDay = _sixtyDayAnalysis(p.ira1RothConversion, ira1.planAConvMonth,
+              ira1Replacement = _replacementAnalysis(p.ira1RothConversion, ira1.planAConvMonth, ira1.planAConvDay,
                 { total: ira1ConvFedW + ira1ConvStW, fed: ira1ConvFedW, state: ira1ConvStW });
             }
           }
         }
         if (p.ira2RothConversion > 0 && p.ira2RothWithhold !== false && !doWithhold2) {
           const monthsRem2 = Math.max(0, 12 - ira2.planAConvMonth);
-          if (monthsRem2 > 0) {
+          if (_gapFillAllowed(monthsRem2)) {
             const share = p.ira2RothConversion / totalConv;
             ira2ConvFedW = Math.round(shortfall * share * (stateIraExempt ? 1.0 : fedFrac));
             ira2ConvStW  = stateIraExempt ? 0 : Math.round(shortfall * share * stFrac);
@@ -562,7 +685,7 @@ const TaxPaymentPlanner = (() => {
               doWithhold2 = true;
               convWithholdFed   += ira2ConvFedW;
               convWithholdState += ira2ConvStW;
-              ira2SixtyDay = _sixtyDayAnalysis(p.ira2RothConversion, ira2.planAConvMonth,
+              ira2Replacement = _replacementAnalysis(p.ira2RothConversion, ira2.planAConvMonth, ira2.planAConvDay,
                 { total: ira2ConvFedW + ira2ConvStW, fed: ira2ConvFedW, state: ira2ConvStW });
             }
           }
@@ -571,14 +694,6 @@ const TaxPaymentPlanner = (() => {
         shortfall    = Math.max(0, totalTax - totalCovered);
       }
     }
-
-    // 7. Safe-harbor amounts
-    const sfFedMult   = p.highIncomeFiler ? 1.10 : 1.00;
-    const sfStateMult = stateInfo.safeHarborAlways110 ? 1.10
-                      : (p.highIncomeFiler && p.stateTax >= (stateInfo.safeHarborHighIncomeThreshold || Infinity))
-                        ? 1.10 : 1.00;
-    const shFed   = p.priorYearFedTax   != null ? p.priorYearFedTax   * sfFedMult   : p.federalTax * 0.90;
-    const shState = p.priorYearStateTax != null ? p.priorYearStateTax * sfStateMult : p.stateTax   * 0.90;
 
     // 8. Strategy selection
     let strategy;
@@ -744,29 +859,40 @@ const TaxPaymentPlanner = (() => {
 
     // ── 11c. Roth conversion actions (per IRA) ──────────────────────────────
     for (const [iraNum, ira, convFedW, convStW, convAmt, doWithhold, sda] of [
-      [1, ira1, ira1ConvFedW, ira1ConvStW, p.ira1RothConversion, doWithhold1, ira1SixtyDay],
-      [2, ira2, ira2ConvFedW, ira2ConvStW, p.ira2RothConversion, doWithhold2, ira2SixtyDay],
+      [1, ira1, ira1ConvFedW, ira1ConvStW, p.ira1RothConversion, doWithhold1, ira1Replacement],
+      [2, ira2, ira2ConvFedW, ira2ConvStW, p.ira2RothConversion, doWithhold2, ira2Replacement],
     ]) {
       if (convAmt <= 0) continue;
       const convDate    = { year: yr, month: ira.planAConvMonth, day: ira.planAConvDay };
       const convDateStr = fmtDate(yr, ira.planAConvMonth, ira.planAConvDay);
       const monthsOfGrowth = 12 - ira.planAConvMonth;
-      const sdaNote = sda.estWithheld > 0
-        ? `60-day replacement analysis: extra Roth growth = +${fmt$(sda.benefit)} ` +
-          `(${sda.monthsRem} month${sda.monthsRem !== 1 ? 's' : ''} × ${fmtPct(p.portfolioRate)} portfolio rate); ` +
-          `cash OC = −${fmt$(sda.cost60)} (${fmt$(sda.estWithheld)} out-of-pocket for 60 days at ${fmtPct(hysaNet, 2)} HYSA net). ` +
-          `Net = ${sda.net >= 0 ? '+' : ''}${fmt$(sda.net)} → ${sda.recommended ? 'replacement recommended' : 'not recommended'}.`
-        : '';
+      const restoreStr = fmtDate(sda.restoreDate.year, sda.restoreDate.month, sda.restoreDate.day);
+      // The gain is a single differential over one period. An earlier version of this note
+      // credited the Roth for the rest of the year while charging the cash side only 60 days,
+      // which OVERSTATED the gain by roughly 20% to 50% and turned negative in December.
+      const sdaNote = sda.withheld === 0
+        ? ''
+        : sda.monthsRem === 0
+          ? `December conversion: no Roth growth left to capture this year, so this withholding is here ` +
+            `for penalty relief, not growth. ${fmt$(sda.withheld)} withheld in December is credited as ` +
+            `if paid in equal parts on all four due dates, which cures an earlier-quarter shortfall that ` +
+            `a January 15 estimate cannot reach [IRC 6654(g)]. Still replace the ${fmt$(sda.withheld)} from ` +
+            `cash: the restore lands in ${MONTH_NAMES[sda.restoreDate.month-1]}, so this year's gain is $0, ` +
+            `but the ${fmtPct(sda.spread, 2)} spread between the Roth and your cash applies every year ` +
+            `afterward, and the full conversion stays in the Roth.`
+          : `Replacing the ${fmt$(sda.withheld)}: it moves from cash earning ${fmtPct(sda.altRate, 2)} after tax ` +
+            `into the Roth earning ${fmtPct(p.portfolioRate)} tax free, counted from the restore date ` +
+            `(${restoreStr}) to year end. First-year gain = +${fmt$(sda.gain)} ` +
+            `(${fmt$(sda.withheld)} × ${fmtPct(sda.spread, 2)} spread × ${sda.yearsRem.toFixed(2)} years). ` +
+            `The same spread applies every year the money stays in the Roth, so treat ${fmt$(sda.gain)} as a ` +
+            `floor, not the total. Replacing is worth it whenever your portfolio outgrows your cash rate ` +
+            `and you have the cash on hand.`;
 
       if (doWithhold) {
         const restoreAmt = convFedW + convStW;
-        // Restore-cash deadline: 30 days after conversion or Dec 22, whichever is earlier
-        const convDateObj  = new Date(yr, ira.planAConvMonth - 1, ira.planAConvDay);
-        const restoreRaw   = new Date(convDateObj); restoreRaw.setDate(restoreRaw.getDate() + 30);
-        const dec22        = new Date(yr, 11, 22);
-        const restoreDateObj = restoreRaw < dec22 ? restoreRaw : dec22;
-        const restoreDate  = { year: restoreDateObj.getFullYear(), month: restoreDateObj.getMonth() + 1, day: restoreDateObj.getDate() };
-        const restoreDateStr = fmtDate(restoreDate.year, restoreDate.month, restoreDate.day);
+        const restoreDate    = sda.restoreDate;
+        const restoreDateStr = restoreStr;
+        const crossesYearEnd = restoreDate.year > yr;
 
         addAction({
           type: T.ROTH_CONV,
@@ -785,7 +911,15 @@ const TaxPaymentPlanner = (() => {
               ? `Plan C fallback: December draws cover most taxes, but a ${fmt$(restoreAmt)} gap required this minimum conversion withholding. Restoring this amount keeps the full conversion in Roth.`
               : 'Withholding reduces the Roth credit — the 60-day cash replacement makes the conversion whole so the full amount earns tax-free Roth growth.',
             sdaNote,
-            'CAUTION: The 60-day replacement counts as an indirect rollover — you are limited to ONE indirect rollover per rolling 12-month period across all IRAs combined.',
+            'The 60-day replacement is part of a traditional-to-Roth conversion rollover, and the IRS ' +
+            'excludes conversions from the one-rollover-per-12-months limit. You can do this on every ' +
+            'conversion you make, in the same year, in both IRAs. It also does not use up your one ' +
+            'regular IRA-to-IRA rollover, because conversions are disregarded when that limit is ' +
+            'applied to other rollovers [IRS Rollovers; IRS Ann. 2014-32].',
+            'The exclusion covers the CONVERSION only. Withholding from an RMD or a plain IRA ' +
+            'withdrawal and then replacing that money is an ordinary IRA-to-IRA rollover, which is ' +
+            'limited to once per 12 months, and RMD dollars cannot be rolled over at all ' +
+            '[IRC 408(d)(3)(B)].',
             ira.hasConflict
               ? `RMD ordering enforced: IRA ${iraNum} RMD distributed on ${MONTH_NAMES[ira.planARmdMonth-1]} ${ira.planARmdDay}; conversion follows on ${MONTH_NAMES[ira.planAConvMonth-1]} ${ira.planAConvDay}.`
               : monthsOfGrowth > 0
@@ -806,10 +940,13 @@ const TaxPaymentPlanner = (() => {
             `Restore ${fmt$(restoreAmt)} cash into IRA ${iraNum} Roth by ${restoreDateStr}. ` +
             `This replaces the ${fmt$(restoreAmt)} withheld at conversion so the full ${fmt$(convAmt)} earns tax-free Roth growth.`,
           notes: [
-            `Deadline: 30 days from conversion (${convDateStr}), capped at December 22 to avoid year-end processing delays. The IRS allows up to 60 days — the 30-day target provides a safety buffer.`,
+            `Target date: ${RESTORE_TARGET_DAYS} days from conversion (${convDateStr}). The statutory limit is ${ROLLOVER_DEADLINE_DAYS} days [IRS Rollovers], so this leaves a ${ROLLOVER_DEADLINE_DAYS - RESTORE_TARGET_DAYS}-day buffer for transfer processing.`,
             `Source: any personal cash account (checking, HYSA, brokerage). Transfer directly into the Roth account.`,
-            `The IRS treats this as an indirect rollover. You are limited to ONE indirect rollover per rolling 12-month period across all IRAs combined — do not use this method if you have done another indirect rollover in the past 12 months.`,
-          ],
+            `This completes a traditional-to-Roth conversion rollover, which the IRS excludes from the one-rollover-per-12-months limit. There is no cap on how many times per year you can do it, and it does not consume your one regular IRA-to-IRA rollover [IRS Rollovers; IRS Ann. 2014-32].`,
+            crossesYearEnd
+              ? `This deadline falls in ${restoreDate.year}, which is fine. The 60-day window is measured from the distribution, not from year end. The replacement still completes the ${yr} conversion, so expect the 1099-R for ${yr} and the 5498 for ${restoreDate.year}. Keep the transfer confirmation.`
+              : '',
+          ].filter(Boolean),
         });
       } else {
         // No conversion withholding — draws cover taxes. Build a plan-aware description.
@@ -968,6 +1105,28 @@ const TaxPaymentPlanner = (() => {
             (stateIraExempt ? ` Note: ${stateInfo.name} retirement income is IRA-exempt — the full ${fmt$(p.stateTax)} state tax is covered by quarterly estimates.` : ''),
           notes: ['Pay from a high-yield savings account — HYSA earnings partially offset the opportunity cost.'],
         });
+
+        // Late-year conversion + residual shortfall → Schedule AI is the alternative lever.
+        // Narrative only; this planner does not compute the annualized penalty.
+        const latestConvMonth = Math.max(
+          p.ira1RothConversion > 0 ? ira1.planAConvMonth : 0,
+          p.ira2RothConversion > 0 ? ira2.planAConvMonth : 0,
+        );
+        if (latestConvMonth >= 7) {
+          addAction({
+            type: T.NOTE,
+            description:
+              `Your conversion lands in ${MONTH_NAMES[latestConvMonth-1]}, and ${fmt$(shortfall)} is still ` +
+              `unpaid. Quarterly estimates are dated when you pay them, so a late payment does not fix an ` +
+              `earlier quarter. Two levers can: withholding, which is credited across all four due dates ` +
+              `[IRC 6654(g)], or Form 2210 Schedule AI.`,
+            notes: [
+              'Schedule AI (the annualized income installment method) recomputes each quarter from the income you actually had by that point, so a Q3 or Q4 conversion is charged to the quarter it arose in instead of being spread back over the whole year.',
+              'Cost of using it: an extra form with your return, and quarter-by-quarter records of income, deductions, and withholding for the year. It changes only the penalty computation, not the tax you owe.',
+              'This planner does not compute the Schedule AI result. It is listed so you can weigh it against withholding rather than assuming quarterly estimates are your only option.',
+            ],
+          });
+        }
 
         FED_Q.forEach(q => {
           const amt = Math.round(sfFed * q.w);
@@ -1138,8 +1297,8 @@ const TaxPaymentPlanner = (() => {
       missedFedCount:      missedFed.length,
       missedStateCount:    missedState.length,
       effectiveWithholdMonth,
-      ira1: { rmdMonth: ira1.origRmdMonth, planARmdMonth: ira1.planARmdMonth, convMonth: ira1.planAConvMonth, hasConflict: ira1.hasConflict, withheld: ira1Withheld, sixtyDay: ira1SixtyDay, doWithhold: doWithhold1 },
-      ira2: { rmdMonth: ira2.origRmdMonth, planARmdMonth: ira2.planARmdMonth, convMonth: ira2.planAConvMonth, hasConflict: ira2.hasConflict, withheld: ira2Withheld, sixtyDay: ira2SixtyDay, doWithhold: doWithhold2 },
+      ira1: { rmdMonth: ira1.origRmdMonth, planARmdMonth: ira1.planARmdMonth, convMonth: ira1.planAConvMonth, hasConflict: ira1.hasConflict, withheld: ira1Withheld, replacement: ira1Replacement, doWithhold: doWithhold1 },
+      ira2: { rmdMonth: ira2.origRmdMonth, planARmdMonth: ira2.planARmdMonth, convMonth: ira2.planAConvMonth, hasConflict: ira2.hasConflict, withheld: ira2Withheld, replacement: ira2Replacement, doWithhold: doWithhold2 },
       todayDate: today,
       coverageSummary,
     };
@@ -1439,6 +1598,17 @@ const TaxPaymentPlanner = (() => {
     lines.push(`  Federal: ${fmt$(summary.safeHarborFed)}`);
     lines.push(`  ${stateInfo.name}: ${fmt$(summary.safeHarborState)}` +
                (stateInfo.safeHarborAlways110 ? ' (always 110% — MD rule)' : ''));
+
+    lines.push('');
+    lines.push('RULES AND SOURCES');
+    lines.push(hr);
+    RULE_CITES.forEach(c => {
+      lines.push(`  [${c.tag}] ${c.label}`);
+      lines.push(`      ${c.cite}`);
+      lines.push(`      ${c.url}`);
+      if (c.note) lines.push(`      ${c.note}`);
+      lines.push('');
+    });
 
     return lines.join('\n');
   }
@@ -1813,6 +1983,26 @@ const TaxPaymentPlanner = (() => {
     h += `Selling brokerage shares eliminates future dividends on those shares. These are typically small second-order effects.`;
     h += `</div>`;
 
+    // ── Rules and sources ──────────────────────────────────────────────────
+    h += `<details style="margin:12px 0;border:2px solid #1F4E79;border-radius:6px;overflow:hidden;">`;
+    h += `<summary style="background:#1F4E79;color:#fff;padding:10px 16px;font-weight:700;font-size:0.95em;cursor:pointer;">📚 Rules and sources</summary>`;
+    h += `<div style="padding:12px 16px;background:#F8FAFF;">`;
+    h += `<table style="width:100%;border-collapse:collapse;font-size:0.84em;">`;
+    RULE_CITES.forEach(c => {
+      h += `<tr style="border-bottom:1px solid #E3F2FD;">`;
+      h += `<td style="padding:8px 10px;vertical-align:top;white-space:nowrap;color:#1F4E79;font-weight:700;">[${c.tag}]</td>`;
+      h += `<td style="padding:8px 10px;vertical-align:top;">`;
+      h += `<div style="font-weight:600;color:#222;">${c.label}</div>`;
+      h += `<div style="margin-top:2px;"><a href="${c.url}" target="_blank" rel="noopener">${c.cite}</a></div>`;
+      if (c.note) h += `<div style="margin-top:3px;color:#555;">${c.note}</div>`;
+      h += `</td></tr>`;
+    });
+    h += `</table>`;
+    h += `<div style="font-size:0.80em;color:#777;margin-top:10px;">`;
+    h += `Tags in square brackets inside the action notes above point at these entries. `;
+    h += `This is a planning tool, not tax advice. Confirm anything consequential with your own preparer.`;
+    h += `</div></div></details>`;
+
     h += `</div>`;
     return h;
   }
@@ -1825,6 +2015,9 @@ const TaxPaymentPlanner = (() => {
     STATE_DB,
     getStateInfo,
     iraOcFactor,
+    ROLLOVER_DEADLINE_DAYS,
+    RESTORE_TARGET_DAYS,
+    restoreDateFor,
   };
 
 })();

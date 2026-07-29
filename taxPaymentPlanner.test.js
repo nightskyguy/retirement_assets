@@ -6,12 +6,16 @@
  * Covers:
  *   1. No IRA operations — all quarterly
  *   2. RMD only — full tax coverage from IRA draw
- *   3. Conversion only — no RMD (60-day replace auto-analysis, month from todayDate)
+ *   3. Conversion only — no RMD (60-day replace auto-analysis, month from todayDate),
+ *      plus both December branches: withholding fires when coverage misses safe harbor,
+ *      and stays off when safe harbor is already met
  *   4. Insufficient IRA withdrawal — partial coverage + quarterly shortfall
  *   5. Dual-IRA cross-optimizer — later IRA carries all withholding
  *   6. IRA-exempt state — state tax forced to quarterly
- *   7. 60-day replace — December conversion not recommended (November todayDate → nextMonth=Dec)
- *   8. 60-day replace — early-year conversion recommended (January todayDate → nextMonth=Feb)
+ *   7. Replacement analysis — December conversion with draws covering everything, so
+ *      nothing is withheld and there is nothing to replace
+ *   8. Replacement analysis — early-year conversion has a large first-year gain,
+ *      plus 8b, the regression guard: both sides of the trade share ONE period
  *   9. RMD + conversion same IRA — ordering rule enforced (February todayDate → nextMonth=Mar)
  *  10. Zero taxes — no actions generated
  */
@@ -118,17 +122,50 @@ test('Conversion only — 60-day replace recommended for June conversion', () =>
   assert(convAction.federalWithholding > 0, 'Expected federal withholding on conversion');
 });
 
-test('Conversion only — 60-day replace NOT recommended for December conversion', () => {
-  // November todayDate → nextMonth = December → 0 months remaining → not recommended
+test('December conversion — withholds when coverage would miss safe harbor', () => {
+  // November todayDate → nextMonth = December → 0 months of Roth growth remaining.
+  // No draws, so nothing covers the tax and safe harbor (prior-year $19,000) is missed.
+  // Withholding is deemed paid across all four due dates (IRC 6654(g)), so it fires here
+  // even though there is no Roth growth left to capture.
   const plan = TaxPaymentPlanner.computePaymentPlan({
     ...BASE,
     ira1RothConversion: 80000,
     federalTax: 15000,
     todayDate: new Date(2026, 10, 15), // November 15 → nextMonth = December
   });
-  assert(plan.summary.ira1.doWithhold === false, '60-day replace should NOT be recommended for December');
+  assert(plan.summary.ira1.doWithhold === true, 'December withholding should fire when safe harbor is missed');
   const convAction = plan.actions.find(a => a.type === T.ROTH_CONV);
-  assert(convAction.federalWithholding === 0, 'Expected no withholding on December conversion');
+  assert(convAction.date.month === 12, `Expected December conversion, got month ${convAction.date.month}`);
+  assert(convAction.federalWithholding > 0, 'Expected federal withholding on the December conversion');
+  const restore = plan.actions.find(a => a.type === T.CASH_RESTORE);
+  assert(restore, 'Expected a restore-cash action alongside the withholding');
+  // The substantive reversal from the duration fix: replacing is still right in December.
+  // yearsRem is 0 because the money does not land until January, so the first-year gain is
+  // $0, but the Roth-vs-cash spread applies every year afterward. The old formula returned
+  // recommended=false here only because a phantom 60-day cost survived a zeroed-out benefit.
+  const rep = plan.summary.ira1.replacement;
+  assert(rep.withheld > 0, 'Expected the replacement analysis to see the withheld amount');
+  assert(rep.gain === 0, `Expected first-year gain=0 for a December restore, got ${rep.gain}`);
+  assert(rep.recommended === true, 'December replacement should still be recommended');
+  assert(rep.restoreDate.year === 2027, `Expected the restore to land in 2027, got ${rep.restoreDate.year}`);
+});
+
+test('December conversion — no withholding when safe harbor is already met', () => {
+  // Prior-year federal tax $10,000 → safe harbor $10,000. Draws cover $12,000 of the
+  // $20,000 liability, so safe harbor is satisfied and the $8,000 remainder can ride to
+  // quarterly estimates penalty-free. No reason to touch the December conversion.
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE,
+    ira1Rmd: 12000,
+    ira1RothConversion: 20000,
+    federalTax: 20000,
+    priorYearFedTax: 10000,
+    todayDate: new Date(2026, 10, 15), // November 15 → nextMonth = December
+  });
+  assert(plan.summary.ira1.doWithhold === false, 'Safe harbor already met — December withholding should stay off');
+  const convAction = plan.actions.find(a => a.type === T.ROTH_CONV);
+  assert(convAction.federalWithholding === 0, 'Expected no withholding on the December conversion');
+  assert(plan.summary.shortfall > 0, 'Expected the remainder to flow to quarterly estimates');
 });
 
 // ── 4. Insufficient IRA withdrawal ───────────────────────────────────────
@@ -198,9 +235,12 @@ test('IRA-exempt state (IL) — state tax via quarterly only', () => {
   assertNear(totalStateQ, 5000, 'State quarterly estimates should cover state tax', 5);
 });
 
-// ── 7. 60-day analysis — December conversion ──────────────────────────────
-test('60-day analysis — December conversion has monthsRem=0, net negative', () => {
-  // November todayDate → nextMonth = December → monthsRem = 12-12 = 0 → not recommended
+// ── 7. Replacement analysis — December, nothing withheld ──────────────────
+test('Replacement analysis — December conversion, draws cover everything', () => {
+  // November todayDate → nextMonth = December → monthsRem = 12-12 = 0.
+  // `recommended` scores the Roth-growth economics only. It is no longer the sole gate on
+  // December withholding — see the safe-harbor tests above — but with draws covering the
+  // full liability here there is no shortfall to close, so nothing is withheld either way.
   const plan = TaxPaymentPlanner.computePaymentPlan({
     ...BASE,
     ira1Rmd: 30000,
@@ -208,27 +248,64 @@ test('60-day analysis — December conversion has monthsRem=0, net negative', ()
     federalTax: 20000,
     todayDate: new Date(2026, 10, 15), // November 15 → nextMonth = December
   });
-  const sda = plan.summary.ira1.sixtyDay;
-  assert(sda, 'Expected sixtyDay analysis on summary');
-  assert(sda.monthsRem === 0, `Expected monthsRem=0, got ${sda.monthsRem}`);
-  assert(sda.benefit === 0, `Expected benefit=0, got ${sda.benefit}`);
-  assert(sda.recommended === false, 'December conversion should NOT recommend 60-day replace');
+  const r = plan.summary.ira1.replacement;
+  assert(r, 'Expected replacement analysis on summary');
+  assert(r.monthsRem === 0, `Expected monthsRem=0, got ${r.monthsRem}`);
+  assert(r.withheld === 0, `Draws cover the liability, so nothing is withheld; got ${r.withheld}`);
+  assert(r.gain === 0, `Expected first-year gain=0, got ${r.gain}`);
+  // Not recommended here because there is nothing to replace, NOT because December is a bad
+  // month to replace in. The withholding case is covered in test 3c above.
+  assert(r.recommended === false, 'Nothing withheld means nothing to replace');
+  assert(r.spread > 0, `Roth-vs-cash spread should still be positive, got ${r.spread}`);
 });
 
-// ── 8. 60-day analysis — early-year conversion ────────────────────────────
-test('60-day analysis — early-year conversion is strongly recommended', () => {
+// ── 8. Replacement analysis — early-year conversion ───────────────────────
+test('Replacement analysis — early-year conversion has a large first-year gain', () => {
   // January 1 todayDate → nextMonth = February → monthsRem = 12-2 = 10
-  // 10 months of Roth growth >> 60-day HYSA cost → strongly recommended
   const plan = TaxPaymentPlanner.computePaymentPlan({
     ...BASE,
     ira1RothConversion: 50000,
     federalTax: 8000,
     todayDate: new Date(2026, 0, 1), // January 1 → nextMonth = February
   });
-  const sda = plan.summary.ira1.sixtyDay;
-  assert(sda.monthsRem === 10, `Expected monthsRem=10 (Feb conversion), got ${sda.monthsRem}`);
-  assert(sda.benefit > sda.cost60, `Benefit (${sda.benefit.toFixed(0)}) should exceed cost60 (${sda.cost60.toFixed(0)})`);
-  assert(sda.recommended === true, 'Early-year conversion should recommend 60-day replace');
+  const r = plan.summary.ira1.replacement;
+  assert(r.monthsRem === 10, `Expected monthsRem=10 (Feb conversion), got ${r.monthsRem}`);
+  assert(r.withheld > 0, 'Expected withholding on an early-year conversion');
+  assert(r.gain > 0, `Expected a positive first-year gain, got ${r.gain}`);
+  assert(r.recommended === true, 'Early-year replacement should be recommended');
+  // Growth accrues from the restore date, not the conversion date, so the period is short of
+  // the full 10 months remaining.
+  assert(r.yearsRem < 10 / 12, `yearsRem (${r.yearsRem}) should start at the restore date, not the conversion`);
+});
+
+// ── 8b. Regression guard — both sides of the trade share ONE period ───────
+test('Replacement gain = withheld x spread x yearsRem, at two conversion months', () => {
+  // This is the defect this test exists to catch. The Roth side and the cash side must be
+  // weighted by the SAME period. The previous implementation used monthsRem/12 for the Roth
+  // and 60/365 for the cash, which inflated the gain by 20-50% and went negative in December.
+  // BASE uses the module defaults: portfolioRate 0.07, hysaGross 0.038, marginalOrdRate 0.30.
+  const hysaNet = 0.038 * (1 - 0.30);
+  const spread  = 0.07 - hysaNet;
+
+  [
+    ['February', new Date(2026, 0, 1)],
+    ['June',     new Date(2026, 4, 21)],
+  ].forEach(([label, todayDate]) => {
+    const plan = TaxPaymentPlanner.computePaymentPlan({
+      ...BASE,
+      ira1RothConversion: 80000,
+      federalTax: 15000,
+      todayDate,
+    });
+    const r = plan.summary.ira1.replacement;
+    assertNear(r.spread, spread, `${label}: spread should be portfolioRate minus hysaNet`, 1e-9);
+    assertNear(r.altRate, hysaNet, `${label}: altRate should be the after-tax HYSA rate`, 1e-9);
+    assertNear(r.gain, r.withheld * spread * r.yearsRem,
+      `${label}: gain must be one differential over one period`, 0.01);
+    // And the old shape must be gone, so a future edit cannot quietly resurrect it.
+    assert(r.cost60 === undefined, `${label}: cost60 should no longer exist`);
+    assert(r.benefit === undefined, `${label}: benefit should no longer exist`);
+  });
 });
 
 // ── 9. RMD + conversion same IRA — ordering rule ──────────────────────────

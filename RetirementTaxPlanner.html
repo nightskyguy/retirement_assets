@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Retirement Tax Payment Planner</title>
+  <!-- Version: major.minor where minor = lowercase hex((day-of-year * 24) + hour-of-day) at
+       build time, the same convention retirement_optimizer.html uses.
+       Example: Jul 29 08:00 -> day 210 -> (210*24)+8 = 5048 = 0x13b8 -> "1.13b8"
+       Bump major manually for significant feature batches. Hardcode it here: the heading
+       reads it back out of this tag at runtime rather than duplicating the number. -->
+  <title>Retirement Tax Payment Planner 1.13b8</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -241,7 +246,9 @@
   </style>
 </head>
 <body>
-<h1>Retirement Tax Payment Planner</h1>
+<h1>Retirement Tax Payment Planner
+  <span id="app-version" style="font-size:0.5em;font-weight:400;color:#888;vertical-align:middle;"
+        title="Version. Minor is hex(day-of-year x 24 + hour) at build time."></span></h1>
 
 <div class="layout">
 
@@ -471,9 +478,15 @@
 
 </div><!-- end .layout -->
 
-<script src="displayhelpers.js"></script>
-<script src="taxPaymentPlanner.js"></script>
+<script src="displayhelpers.js?v=13b8"></script>
+<script src="taxPaymentPlanner.js?v=13b8"></script>
 <script>
+  // Version readout — parsed out of <title> so the number lives in exactly one place.
+  (() => {
+    const m = document.title.match(/([\d]+\.[0-9a-f]+)\s*$/);
+    if (m) document.getElementById('app-version').textContent = 'v' + m[1];
+  })();
+
   // ── Tab switching ──────────────────────────────────────────────────────────
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {

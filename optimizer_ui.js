@@ -595,7 +595,13 @@ function describeSelection(p) {
     }
 }
 
-let _optimizerScheduled = false;
+// Handles for a sweep that is queued but has not started yet. Deliberately NOT a boolean "already
+// scheduled, skip" latch: that version could only be cleared by the queued work actually running, so
+// anything that stopped it running (a hidden tab that never fires frames, a torn-down context) left
+// the flag stuck true and every later click did nothing at all. Cancelling and re-queueing cannot
+// wedge, and it also does the more useful thing when inputs change twice quickly -- the newest wins.
+let _optPendingTimer = null;
+let _optPendingFrame = null;
 
 // The sweep is a few hundred simulations and blocks the main thread for one to several seconds,
 // during which the page looks frozen and the table still shows the previous run. Show a banner
@@ -607,27 +613,58 @@ let _optimizerScheduled = false;
 // compositing never fires requestAnimationFrame at all: relying on frames alone means the sweep
 // simply never runs for anyone who switches browser tabs while it is queued.
 function runOptimizer() {
-    if (_optimizerScheduled) return;   // a sweep is already queued; the upstream debounce coalesces edits
-    _optimizerScheduled = true;
-    setOptimizerBusy(true);
+    if (_optPendingTimer) { clearTimeout(_optPendingTimer); _optPendingTimer = null; }
+    if (_optPendingFrame) { cancelAnimationFrame(_optPendingFrame); _optPendingFrame = null; }
+    setOptimizerBusy('busy');
     let started = false;
     const start = () => {
-        if (started) return;
+        if (started) return;          // whichever of the two racers arrived first already ran it
         started = true;
+        _optPendingTimer = null;
+        _optPendingFrame = null;
+        const t0 = performance.now();
         try {
             _runOptimizerNow();
         } finally {
-            _optimizerScheduled = false;
-            setOptimizerBusy(false);
+            // Measured wall time, not OptimizerState.perfStats: that is only written by a real
+            // sweep, so a cached re-render would have reported the PREVIOUS sweep's duration. This
+            // also counts the render, which is time the user waited either way.
+            setOptimizerBusy('done', performance.now() - t0);
         }
     };
-    requestAnimationFrame(() => requestAnimationFrame(start));
-    setTimeout(start, 60);
+    _optPendingFrame = requestAnimationFrame(() => { _optPendingFrame = requestAnimationFrame(start); });
+    _optPendingTimer = setTimeout(start, 60);
 }
 
-function setOptimizerBusy(busy) {
+// How long the finished banner stays up. A banner that vanishes the instant the work ends reads as
+// a glitch rather than as an answer -- on a fast sweep it was on screen for well under a second.
+// Holding it lets the reader see that something ran, and what it cost, before it goes.
+const OPT_BUSY_HOLD_MS = 5000;
+let _optBusyHideTimer = null;
+
+// state: 'busy' while the sweep runs, 'done' once it has finished. 'done' is not the same as hidden:
+// it swaps the message and starts the hold timer.
+function setOptimizerBusy(state, ms) {
     const el = document.getElementById('opt-busy');
-    if (el) el.style.display = busy ? '' : 'none';
+    if (!el) return;
+    clearTimeout(_optBusyHideTimer);   // a new run cancels the previous run's hold
+    if (state === 'busy') {
+        el.style.background = '#eef4fb';
+        el.style.borderColor = '#c9dcf0';
+        el.style.color = '#1a4d70';
+        el.innerHTML = '⏳ Calculating strategies…'
+            + '<span style="font-weight:400;color:#4a5c6a;"> testing every withdrawal and conversion strategy against your plan.</span>';
+        el.style.display = '';
+        return;
+    }
+    const secs = ms != null ? (ms / 1000).toFixed(1) : null;
+    el.style.background = '#e8f6ec';
+    el.style.borderColor = '#b7dfc4';
+    el.style.color = '#1a7f37';
+    el.innerHTML = '✓ Calculating strategies… <strong>DONE</strong>'
+        + (secs != null ? `<span style="font-weight:400;color:#4a5c6a;"> in ${secs}s.</span>` : '');
+    el.style.display = '';
+    _optBusyHideTimer = setTimeout(() => { el.style.display = 'none'; }, OPT_BUSY_HOLD_MS);
 }
 
 function _runOptimizerNow() {

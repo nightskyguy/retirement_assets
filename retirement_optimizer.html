@@ -58,7 +58,7 @@
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1113a1da"></script>
+	<script src="optimizer_ui.js?v=1113a1ga"></script>
 	<script src="optimizer_tests.js?v=1111f3"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
@@ -945,12 +945,13 @@
                 </label>
                 <span style="color:#555;">Ranks every strategy by this goal, re-orders the table, and moves the ⚓ baseline to match. See Documentation for what each choice measures.</span>
             </div>
-            <!-- Shown while the sweep runs. It blocks the main thread for a second or more, so
-                 without this the page looks frozen and the table below still shows the previous
-                 run. runOptimizer() paints this before starting work; see optimizer_ui.js. -->
-            <div id="opt-busy" style="display:none;margin-bottom:8px;padding:10px 14px;background:#eef4fb;border:1px solid #c9dcf0;border-radius:6px;font-size:0.95em;color:#1a4d70;font-weight:600;">
-                ⏳ Calculating strategies…<span style="font-weight:400;color:#4a5c6a;"> testing every withdrawal and conversion strategy against your plan.</span>
-            </div>
+            <!-- Shown while the sweep runs, then held on "DONE" for a few seconds. The sweep blocks
+                 the main thread for a second or more, so without this the page looks frozen with the
+                 previous run still on screen; and without the hold, a fast sweep flashed the banner
+                 for well under a second, which reads as a glitch rather than an answer. Content and
+                 colours are set by setOptimizerBusy() in optimizer_ui.js -- keep the wording there,
+                 not here, so there is one source of truth. -->
+            <div id="opt-busy" style="display:none;margin-bottom:8px;padding:10px 14px;background:#eef4fb;border:1px solid #c9dcf0;border-radius:6px;font-size:0.95em;color:#1a4d70;font-weight:600;"></div>
             <div id="opt-perf" style="display:none;margin-bottom:8px;font-size:0.8em;color:#888;font-family:monospace;"></div>
             <div id="opt-spend-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
             <div id="opt-conv-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>

@@ -158,11 +158,25 @@ const TaxPaymentPlanner = (() => {
       note:  'This is why year-end withholding cures an earlier-quarter underpayment while a Q4 estimated payment does not.',
     },
     {
-      tag:   'IRC 408(d)(3)(B)',
-      label: 'The one-rollover-per-12-months limit, and what it actually covers',
-      cite:  '26 U.S.C. 408(d)(3)(B)',
+      tag:   'IRC 408(d)(3)',
+      label: 'The 60-day deadline itself, the one-rollover-per-12-months limit, and the waiver',
+      cite:  '26 U.S.C. 408(d)(3)(A), (B) and (I)',
       url:   'https://www.law.cornell.edu/uscode/text/26/408',
-      note:  'Applies to IRA-to-IRA 60-day rollovers only. Conversions, trustee-to-trustee transfers, and plan rollovers are outside it.',
+      note:  '(A) requires the money be paid in "not later than the 60th day after the day on which he receives the payment or distribution". (B) is the one-per-12-months limit, which applies to IRA-to-IRA rollovers only, not conversions. (I) lets the Secretary waive the 60 days "where the failure to waive such requirement would be against equity or good conscience".',
+    },
+    {
+      tag:   'Rev. Proc. 2020-46',
+      label: 'Self-certifying a late rollover when you miss the 60 days',
+      cite:  'IRS Revenue Procedure 2020-46 (see also: Accepting late rollover contributions)',
+      url:   'https://www.irs.gov/retirement-plans/accepting-late-rollover-contributions',
+      note:  'One of three routes to a waiver, alongside an automatic waiver and a private letter ruling. You give the custodian the Model Letter, and it may rely on that "unless they have actual knowledge contrary to the certification". Only listed reasons qualify, it covers the lateness only and not whether the amount was rollover-eligible, and the IRS can still disagree on audit.',
+    },
+    {
+      tag:   'IRC 4973',
+      label: '6% per year on an excess contribution, until you fix it',
+      cite:  '26 U.S.C. 4973(a) and (f)',
+      url:   'https://www.law.cornell.edu/uscode/text/26/4973',
+      note:  'Why a late deposit is not a harmless one. Past 60 days it is not a rollover, so at best it counts as a regular Roth contribution against the annual limit and the MAGI rules. Anything that does not fit is an excess contribution taxed "6 percent of the amount of the excess contributions", recurring every year until corrected.',
     },
     {
       tag:   'Pub 505',
@@ -1147,6 +1161,22 @@ const TaxPaymentPlanner = (() => {
             earlyNote,
             `Source: any personal cash account (checking, HYSA, brokerage). Transfer directly into the Roth account.`,
             `This completes a traditional-to-Roth conversion rollover, which the IRS excludes from the one-rollover-per-12-months limit. There is no cap on how many times per year you can do it, and it does not consume your one regular IRA-to-IRA rollover [IRS Rollovers; IRS Ann. 2014-32].`,
+            // What missing the deadline actually costs. Deliberately does NOT say "the withheld
+            // amount becomes taxable" — for a conversion it was taxable either way, and saying
+            // otherwise implies an income-tax hit that does not exist.
+            `IF YOU MISS THE ${ROLLOVER_DEADLINE_DAYS} DAYS: the deposit is no longer a rollover [IRC 408(d)(3)]. ` +
+            `Your income tax does not change, because you converted ${fmt$(convAmt)} gross and that whole amount is ` +
+            `taxable this year whether or not you replace the ${fmt$(restoreAmt)}. What you lose is the Roth space: ` +
+            `the ${fmt$(restoreAmt)} stays out of the Roth permanently, and you cannot put it back later. A deposit ` +
+            `made after the deadline counts at best as a regular Roth contribution for that year, against the annual ` +
+            `limit and the income eligibility rules. Anything that does not fit is an excess contribution taxed 6% ` +
+            `per year until you correct it [IRC 4973].`,
+            `Relief is narrow if you do miss it. There are three routes: an automatic waiver, a private letter ruling, ` +
+            `or self-certification using the Model Letter in Rev. Proc. 2020-46, which your custodian may accept ` +
+            `unless it has actual knowledge to the contrary. Self-certification only covers the REASON you were late, ` +
+            `and only for listed reasons such as serious illness, a death in the family, or a financial institution ` +
+            `error. It does not bless the rollover otherwise, and the IRS can still disagree on audit ` +
+            `[Rev. Proc. 2020-46; IRC 408(d)(3)(I)]. Treat the deadline as real rather than as something you can undo.`,
             crossesYearEnd
               ? `This deadline falls in ${restoreDate.year}, which is fine. The 60-day window is measured from the distribution, not from year end. The replacement still completes the ${yr} conversion, so expect the 1099-R for ${yr} and the 5498 for ${restoreDate.year}. Keep the transfer confirmation.`
               : '',

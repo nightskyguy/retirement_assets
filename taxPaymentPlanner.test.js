@@ -603,6 +603,26 @@ test('December is where the 45-day target costs the most, proportionally', () =>
   assert(r.earlyBonus === r.gainIfEarliest, 'With a $0 baseline the whole gain is the early bonus');
 });
 
+// ── 17. Missing the 60-day deadline is spelled out, and spelled out correctly ──
+test('Restore action states the consequences of blowing the deadline', () => {
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, ira1RothConversion: 80000, federalTax: 15000,
+  });
+  const restore = plan.actions.find(a => a.type === T.CASH_RESTORE);
+  assert(restore, 'Expected a restore-cash action');
+  const all = restore.notes.join(' ');
+  assert(/IF YOU MISS THE 60 DAYS/.test(all), 'Expected an explicit missed-deadline note');
+  assert(all.includes('IRC 4973'), 'Expected the 6% excess-contribution excise cited');
+  assert(all.includes('Rev. Proc. 2020-46'), 'Expected the self-certification route cited');
+  assert(all.includes('IRC 408(d)(3)'), 'Expected the 60-day statute cited');
+  // The precision that generic advice gets wrong: for a CONVERSION the gross is taxable
+  // either way, so missing the deadline costs Roth space and possibly the 10% penalty,
+  // NOT extra income tax. The note must not claim the withheld amount "becomes taxable".
+  assert(all.includes('Your income tax does not change'),
+    'The note must say income tax is unchanged, since the gross was taxable either way');
+  assert(!/becomes taxable/i.test(all), 'Must not imply the withheld amount newly becomes taxable');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Results: ${passed} passed, ${failed} failed`);

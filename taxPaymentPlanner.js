@@ -133,8 +133,34 @@ const TaxPaymentPlanner = (() => {
     MONTHLY: 9.5 / 12,
   };
 
+  // ── Replacing the withheld amount after a Roth conversion ──────────────────
+  // 60 days is the statutory rollover window. 45 is the date we actually recommend,
+  // leaving a buffer for transfer processing. These are a DEADLINE, not a holding
+  // period: once the cash is replaced it stays in the Roth, so nothing about the
+  // economics of the maneuver lasts 60 days.
+  //
+  // Declared up here, ahead of RULE_CITES and CONCEPT_NOTES, because those arrays quote the
+  // numbers rather than hardcoding them and are evaluated at module init.
+  const ROLLOVER_DEADLINE_DAYS = 60;
+  const RESTORE_TARGET_DAYS    = 45;
+
+  // Gap between an RMD and a same-month Roth conversion. The RMD must be distributed
+  // before the conversion; this leaves room for it to settle first.
+  const ORDERING_BUFFER_DAYS = 7;
+
+  // Earliest practical replacement: the next business day after the conversion. Used only
+  // to price what acting sooner than the 45-day target is worth, not to schedule anything.
+  const RESTORE_EARLIEST_DAYS = 1;
+
   // ── Authorities behind the rules this planner applies ──────────────────────
   // `tag` is the short marker used inline in action notes; the footer carries the URL.
+  //
+  // `long` is prose that used to be repeated inline in every affected action. Each block
+  // appeared once per IRA per plan, and there are three plans, so the same paragraph rendered
+  // three or six times: measured on a dual-IRA dual-conversion scenario, 13.2k of 20.7k total
+  // note characters were duplicate boilerplate. The prose lives here once now and the action
+  // carries a pointer built by seeAlso(). Anything scenario-specific — dollars, dates, the
+  // capped-withholding explanation — deliberately stays inline, because it is not boilerplate.
   const RULE_CITES = [
     {
       tag:   'IRS Rollovers',
@@ -142,6 +168,7 @@ const TaxPaymentPlanner = (() => {
       cite:  'IRS, Rollovers of retirement plan and IRA distributions',
       url:   'https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions',
       note:  'Lists the transactions excluded from the one-rollover-per-year limit. Rollovers from traditional IRAs to Roth IRAs (conversions) are on that list.',
+      long:  'Replacing the withheld amount from cash completes a traditional-to-Roth conversion rollover, which the IRS excludes from the one-rollover-per-12-months limit. There is no cap on how many times per year you can do it, and it does not consume your one regular IRA-to-IRA rollover. Source the cash from any personal account — checking, HYSA, or brokerage — and transfer it directly into the Roth.',
     },
     {
       tag:   'IRS Ann. 2014-32',
@@ -149,6 +176,7 @@ const TaxPaymentPlanner = (() => {
       cite:  'IRS IR-2014-107 / Announcement 2014-32',
       url:   'https://www.irs.gov/uac/newsroom/irs-clarifies-application-of-one-per-year-limit-on-ira-rollovers-allows-owners-of-multiple-iras-a-fresh-start-in-2015',
       note:  'Roth conversions are not subject to the one-per-year limit and are disregarded in applying the limit to other rollovers.',
+      long:  'Because conversions are excluded from the one-rollover-per-12-months limit, withhold-and-replace is repeatable: you can do it on every conversion you make, in the same year, in both IRAs. It also does not use up your one regular IRA-to-IRA rollover, because conversions are disregarded when that limit is applied to other rollovers.',
     },
     {
       tag:   'IRC 6654(g)',
@@ -156,6 +184,7 @@ const TaxPaymentPlanner = (() => {
       cite:  '26 U.S.C. 6654(g)(1)',
       url:   'https://www.law.cornell.edu/uscode/text/26/6654',
       note:  'This is why year-end withholding cures an earlier-quarter underpayment while a Q4 estimated payment does not.',
+      long:  'Withholding from an IRA distribution is deemed paid pro-rata on each quarterly due date, whatever date it actually happened on. So even a December draw satisfies the whole year of quarterly installments retroactively. An estimated payment gets no such treatment: it is credited when you actually pay it, which is why a January 15 estimate cannot repair a Q1 shortfall.',
     },
     {
       tag:   'IRC 408(d)(3)',
@@ -163,6 +192,15 @@ const TaxPaymentPlanner = (() => {
       cite:  '26 U.S.C. 408(d)(3)(A), (B) and (I)',
       url:   'https://www.law.cornell.edu/uscode/text/26/408',
       note:  '(A) requires the money be paid in "not later than the 60th day after the day on which he receives the payment or distribution". (B) is the one-per-12-months limit, which applies to IRA-to-IRA rollovers only, not conversions. (I) lets the Secretary waive the 60 days "where the failure to waive such requirement would be against equity or good conscience".',
+      long:  'The exclusion covers the CONVERSION only. Withholding from an RMD or from a plain IRA withdrawal and then replacing that money is an ordinary IRA-to-IRA rollover, which really is limited to once per 12 months. RMD dollars cannot be rolled over or converted at all, so only the balance beyond the RMD is available to convert.',
+    },
+    {
+      tag:   'IRC 408(d)(8)',
+      label: 'Qualified charitable distribution — an RMD sent straight to charity',
+      cite:  '26 U.S.C. 408(d)(8)',
+      url:   'https://www.irs.gov/retirement-plans/retirement-plans-faqs-regarding-iras-distributions-withdrawals',
+      note:  'The annual QCD limit is inflation-indexed; the planner cites the 2025 figure of $108,000. Confirm the current year\'s limit.',
+      long:  'Directing an RMD to charity as a QCD satisfies the RMD requirement and excludes the amount from income, which also lets a Roth conversion go ahead without taking the RMD as cash first. The exclusion is why it beats taking the RMD and deducting a donation.',
     },
     {
       tag:   'Rev. Proc. 2020-46',
@@ -170,6 +208,7 @@ const TaxPaymentPlanner = (() => {
       cite:  'IRS Revenue Procedure 2020-46 (see also: Accepting late rollover contributions)',
       url:   'https://www.irs.gov/retirement-plans/accepting-late-rollover-contributions',
       note:  'One of three routes to a waiver, alongside an automatic waiver and a private letter ruling. You give the custodian the Model Letter, and it may rely on that "unless they have actual knowledge contrary to the certification". Only listed reasons qualify, it covers the lateness only and not whether the amount was rollover-eligible, and the IRS can still disagree on audit.',
+      long:  'Relief is narrow if you do miss the deadline. There are three routes: an automatic waiver, a private letter ruling, or self-certification using the Model Letter in Rev. Proc. 2020-46, which your custodian may accept unless it has actual knowledge to the contrary. Self-certification only covers the REASON you were late, and only for listed reasons such as serious illness, a death in the family, or a financial institution error. It does not bless the rollover otherwise, and the IRS can still disagree on audit. Treat the deadline as real rather than as something you can undo.',
     },
     {
       tag:   'IRC 4973',
@@ -177,6 +216,7 @@ const TaxPaymentPlanner = (() => {
       cite:  '26 U.S.C. 4973(a) and (f)',
       url:   'https://www.law.cornell.edu/uscode/text/26/4973',
       note:  'Why a late deposit is not a harmless one. Past 60 days it is not a rollover, so at best it counts as a regular Roth contribution against the annual limit and the MAGI rules. Anything that does not fit is an excess contribution taxed "6 percent of the amount of the excess contributions", recurring every year until corrected.',
+      long:  'What a late deposit becomes: past the 60 days it is not a rollover, so it counts at best as a regular Roth contribution for that year, against the annual limit and the income eligibility rules. Anything that does not fit is an excess contribution taxed 6% per year until you correct it. The Roth space itself is gone either way — the withheld amount stays out of the Roth permanently and you cannot put it back later.',
     },
     {
       tag:   'Pub 505',
@@ -200,6 +240,38 @@ const TaxPaymentPlanner = (() => {
       note:  'Attributes a late-year conversion to the quarter it arose in, which can remove an earlier-quarter penalty without any withholding.',
     },
   ];
+
+  // ── Repeated explanations that are NOT law ─────────────────────────────────
+  // Same shape as RULE_CITES and rendered in the same panel, but with no `cite` or `url`,
+  // because these are economic arguments and scheduling mechanics rather than authorities.
+  // Keeping them out of RULE_CITES is the point: everything in that array is something you
+  // can look up, and a reader should be able to trust that.
+  const CONCEPT_NOTES = [
+    {
+      tag:  'Replacement timing',
+      label: 'Sooner is better, and the deadline is not the target',
+      long: 'The gain from replacing the withheld cash runs from the day the cash lands in the Roth, ' +
+            'not from the conversion date, so replacing as soon as you have the money is worth more than ' +
+            `waiting. The ${RESTORE_TARGET_DAYS}-day date the planner prints is a safety buffer against the ` +
+            `${ROLLOVER_DEADLINE_DAYS}-day statutory deadline, not a date to aim for. Acting earlier also widens ` +
+            'that margin, so the only reason to wait is not having the cash yet. The per-conversion dollar ' +
+            'figures are on the conversion and restore steps.',
+    },
+    {
+      tag:  'RMD ordering',
+      label: 'Why the RMD is scheduled before the conversion',
+      long: 'The RMD for the year must be distributed before any Roth conversion from the same IRA, and RMD ' +
+            'dollars themselves cannot be converted. When both land in the same month the planner splits them ' +
+            'and leaves a settlement buffer between the two, and moves both dates off weekends and the ' +
+            'holidays it models. The RMD must in any case be completed by December 31.',
+    },
+  ];
+
+  // The plain-text tab has no clickable anchors, so a pointer has to name the tag in a form you
+  // can find by eye in the sources list. Same string in both outputs, deliberately.
+  function seeAlso(tag) {
+    return `[see ${tag} in Rules and sources]`;
+  }
 
   // ── STATE_DB builder helpers ───────────────────────────────────────────────
   function _s(name, extra) {
@@ -488,22 +560,6 @@ const TaxPaymentPlanner = (() => {
       statutoryStr: fmtDate(dueYear, q.month, q.day),
     };
   }
-
-  // ── Replacing the withheld amount after a Roth conversion ──────────────────
-  // 60 days is the statutory rollover window. 45 is the date we actually recommend,
-  // leaving a buffer for transfer processing. These are a DEADLINE, not a holding
-  // period: once the cash is replaced it stays in the Roth, so nothing about the
-  // economics of the maneuver lasts 60 days.
-  const ROLLOVER_DEADLINE_DAYS = 60;
-  const RESTORE_TARGET_DAYS    = 45;
-
-  // Gap between an RMD and a same-month Roth conversion. The RMD must be distributed
-  // before the conversion; this leaves room for it to settle first.
-  const ORDERING_BUFFER_DAYS = 7;
-
-  // Earliest practical replacement: the next business day after the conversion. Used only
-  // to price what acting sooner than the 45-day target is worth, not to schedule anything.
-  const RESTORE_EARLIEST_DAYS = 1;
 
   function restoreDateFor(taxYear, convMonth, convDay) {
     const conv = new Date(taxYear, convMonth - 1, convDay);
@@ -964,8 +1020,9 @@ const TaxPaymentPlanner = (() => {
             `before any Roth conversion in the same tax year. ${timing} ` +
             `See the two-plan comparison below.`,
           notes: [
-            'RMD amounts are not eligible for rollover or Roth conversion — only the balance beyond the RMD can be converted.',
-            'QCD: directing this RMD to charity (up to $108,000/yr) satisfies the RMD requirement, excludes the amount from income, and allows an earlier conversion without taking the RMD cash first.',
+            'Only the balance beyond the RMD can be converted. ' + seeAlso('IRC 408(d)(3)'),
+            'QCD alternative: sending this RMD to charity satisfies the RMD and keeps it out of income, which allows ' +
+            'an earlier conversion. ' + seeAlso('IRC 408(d)(8)'),
           ],
         });
       }
@@ -1037,7 +1094,7 @@ const TaxPaymentPlanner = (() => {
             `No action is required — your strategy uses year-end IRA withholding, which the IRS (and most ` +
             `state revenue agencies) credit as if paid pro-rata throughout the year.`,
           notes: [
-            'IRS Publication 505: withholding from IRA distributions is deemed paid equally on each quarterly due date — a December IRA distribution fully satisfies all four quarterly installments retroactively.',
+            'A December IRA distribution satisfies all four quarterly installments retroactively. ' + seeAlso('IRC 6654(g)'),
             stateInfo.withholdingCreditedProRata
               ? `${stateInfo.name} similarly credits IRA withholding pro-rata — your state is also penalty-free.`
               : `Verify that ${stateInfo.name} applies the same pro-rata withholding credit rule.`,
@@ -1097,14 +1154,15 @@ const TaxPaymentPlanner = (() => {
             `and you have the cash on hand.`;
 
       // The replacement date is a lever. Sooner is better on both axes and costs nothing.
+      // This note rides BOTH the conversion action and the restore action, and there are three
+      // plans, so it renders six times. The dollar figures are per-scenario and stay here; the
+      // argument for acting early is identical every time and lives in CONCEPT_NOTES.
       const earlyNote = (sda.withheld > 0 && sda.earlyBonus > 0)
-        ? `Sooner is better. The gain runs from the day the cash lands in the Roth, so replacing as soon ` +
-          `as you have it, around ${fmtDate(sda.earliestDate.year, sda.earliestDate.month, sda.earliestDate.day)}, ` +
-          `is worth about ${fmt$(sda.earlyBonus)} more than waiting for the ${RESTORE_TARGET_DAYS}-day target ` +
-          `(${fmt$(sda.gainIfEarliest)} versus ${fmt$(sda.gain)} this year, and the gap persists in every later year). ` +
-          `The ${RESTORE_TARGET_DAYS} days is a safety buffer against the ${ROLLOVER_DEADLINE_DAYS}-day deadline, ` +
-          `not a target to aim for. Acting earlier also widens that margin, so the only reason to wait is not ` +
-          `having the cash yet.`
+        ? `Sooner is better: replacing around ` +
+          `${fmtDate(sda.earliestDate.year, sda.earliestDate.month, sda.earliestDate.day)} rather than waiting for ` +
+          `the ${RESTORE_TARGET_DAYS}-day date is worth about ${fmt$(sda.earlyBonus)} more this year ` +
+          `(${fmt$(sda.gainIfEarliest)} versus ${fmt$(sda.gain)}), and the gap persists in every later year. ` +
+          seeAlso('Replacement timing')
         : '';
 
       if (doWithhold) {
@@ -1131,15 +1189,10 @@ const TaxPaymentPlanner = (() => {
               : 'Withholding reduces the Roth credit — the 60-day cash replacement makes the conversion whole so the full amount earns tax-free Roth growth.',
             sdaNote,
             earlyNote,
-            'The 60-day replacement is part of a traditional-to-Roth conversion rollover, and the IRS ' +
-            'excludes conversions from the one-rollover-per-12-months limit. You can do this on every ' +
-            'conversion you make, in the same year, in both IRAs. It also does not use up your one ' +
-            'regular IRA-to-IRA rollover, because conversions are disregarded when that limit is ' +
-            'applied to other rollovers [IRS Rollovers; IRS Ann. 2014-32].',
-            'The exclusion covers the CONVERSION only. Withholding from an RMD or a plain IRA ' +
-            'withdrawal and then replacing that money is an ordinary IRA-to-IRA rollover, which is ' +
-            'limited to once per 12 months, and RMD dollars cannot be rolled over at all ' +
-            '[IRC 408(d)(3)(B)].',
+            'Repeatable: you can withhold and replace on every conversion you make, in the same year, ' +
+            'in both IRAs. ' + seeAlso('IRS Ann. 2014-32'),
+            'The exclusion covers the CONVERSION only, not an RMD or a plain withdrawal. ' +
+            seeAlso('IRC 408(d)(3)'),
             // Withholding is taken out of the distribution, so the conversion is a hard ceiling.
             convWithholdCapped
               ? `This conversion is too small to carry the rest of the tax gap. Withholding is ` +
@@ -1172,26 +1225,20 @@ const TaxPaymentPlanner = (() => {
             `Restore ${fmt$(restoreAmt)} cash into IRA ${iraNum} Roth by ${restoreDateStr}. ` +
             `This replaces the ${fmt$(restoreAmt)} withheld at conversion so the full ${fmt$(convAmt)} earns tax-free Roth growth.`,
           notes: [
-            `This date is the LATEST you should act, not the goal. It is ${RESTORE_TARGET_DAYS} days from the conversion (${convDateStr}), inside the ${ROLLOVER_DEADLINE_DAYS}-day statutory limit [IRS Rollovers], leaving a ${ROLLOVER_DEADLINE_DAYS - RESTORE_TARGET_DAYS}-day buffer for transfer processing. Do it as soon as the cash is available.`,
+            `This date is the LATEST you should act, not the goal. It is ${RESTORE_TARGET_DAYS} days from the conversion (${convDateStr}), inside the ${ROLLOVER_DEADLINE_DAYS}-day statutory limit [IRS Rollovers]. ` + seeAlso('Replacement timing'),
             earlyNote,
-            `Source: any personal cash account (checking, HYSA, brokerage). Transfer directly into the Roth account.`,
-            `This completes a traditional-to-Roth conversion rollover, which the IRS excludes from the one-rollover-per-12-months limit. There is no cap on how many times per year you can do it, and it does not consume your one regular IRA-to-IRA rollover [IRS Rollovers; IRS Ann. 2014-32].`,
+            `Source the cash from any personal account and transfer it straight into the Roth. ` + seeAlso('IRS Rollovers'),
             // What missing the deadline actually costs. Deliberately does NOT say "the withheld
             // amount becomes taxable" — for a conversion it was taxable either way, and saying
-            // otherwise implies an income-tax hit that does not exist.
-            `IF YOU MISS THE ${ROLLOVER_DEADLINE_DAYS} DAYS: the deposit is no longer a rollover [IRC 408(d)(3)]. ` +
-            `Your income tax does not change, because you converted ${fmt$(convAmt)} gross and that whole amount is ` +
-            `taxable this year whether or not you replace the ${fmt$(restoreAmt)}. What you lose is the Roth space: ` +
-            `the ${fmt$(restoreAmt)} stays out of the Roth permanently, and you cannot put it back later. A deposit ` +
-            `made after the deadline counts at best as a regular Roth contribution for that year, against the annual ` +
-            `limit and the income eligibility rules. Anything that does not fit is an excess contribution taxed 6% ` +
-            `per year until you correct it [IRC 4973].`,
-            `Relief is narrow if you do miss it. There are three routes: an automatic waiver, a private letter ruling, ` +
-            `or self-certification using the Model Letter in Rev. Proc. 2020-46, which your custodian may accept ` +
-            `unless it has actual knowledge to the contrary. Self-certification only covers the REASON you were late, ` +
-            `and only for listed reasons such as serious illness, a death in the family, or a financial institution ` +
-            `error. It does not bless the rollover otherwise, and the IRS can still disagree on audit ` +
-            `[Rev. Proc. 2020-46; IRC 408(d)(3)(I)]. Treat the deadline as real rather than as something you can undo.`,
+            // otherwise implies an income-tax hit that does not exist. That precision is
+            // scenario-specific (it names the gross), so it stays here rather than moving to a cite.
+            `IF YOU MISS THE ${ROLLOVER_DEADLINE_DAYS} DAYS: the deposit is no longer a rollover [IRC 408(d)(3)], and the ` +
+            `${fmt$(restoreAmt)} stays out of the Roth permanently. Your income tax does not change, because you ` +
+            `converted ${fmt$(convAmt)} gross and that whole amount is taxable this year whether or not you replace ` +
+            `the ${fmt$(restoreAmt)}. ` + seeAlso('IRC 4973') + ` for what a late deposit becomes.`,
+            `Relief is narrow if you do miss it: an automatic waiver, a private letter ruling, or self-certification ` +
+            `under Rev. Proc. 2020-46, and only for listed reasons. Treat the deadline as real rather than as ` +
+            `something you can undo. ` + seeAlso('Rev. Proc. 2020-46'),
             crossesYearEnd
               ? `This deadline falls in ${restoreDate.year}, which is fine. The 60-day window is measured from the distribution, not from year end. The replacement still completes the ${yr} conversion, so expect the 1099-R for ${yr} and the 5498 for ${restoreDate.year}. Keep the transfer confirmation.`
               : '',
@@ -1300,7 +1347,7 @@ const TaxPaymentPlanner = (() => {
             ? `Total withholding: ${fmt$(totW)} (${fmtPct(pctTot)} of distribution).`
             : `No withholding on this draw — taxes covered by another draw.`
         );
-        notes.push('IRS credit rule: withholding from IRA distributions is deemed paid pro-rata on each quarterly due date — even a December draw satisfies the entire-year quarterly safe-harbor retroactively.');
+        notes.push('Withholding is credited pro-rata on all four due dates, so even a December draw satisfies the whole year retroactively. ' + seeAlso('IRC 6654(g)'));
         if (optimizerNote) notes.push(optimizerNote);
         if (stateIraExempt) {
           notes.push(`${stateInfo.name}: IRA distributions are exempt from state tax — no state withholding applied. State tax covered by quarterly estimates.`);
@@ -1315,7 +1362,7 @@ const TaxPaymentPlanner = (() => {
         if (iRmd > 0) {
           notes.push(
             ira.sameMonth
-              ? `RMD must be completed before the Roth conversion in the same month. Complete draw by the ${ira.planARmdDay}th; conversion follows on the ${ira.planAConvDay}th (${ORDERING_BUFFER_DAYS}-day IRS ordering buffer, both dates moved off weekends and holidays).`
+              ? `Same month as the conversion: complete the draw by the ${ira.planARmdDay}th, conversion follows on the ${ira.planAConvDay}th. ` + seeAlso('RMD ordering')
               : `RMD must be completed by December 31.`
           );
         }
@@ -1877,7 +1924,16 @@ const TaxPaymentPlanner = (() => {
       lines.push(`  [${c.tag}] ${c.label}`);
       lines.push(`      ${c.cite}`);
       lines.push(`      ${c.url}`);
+      if (c.long) lines.push(`      ${c.long}`);
       if (c.note) lines.push(`      ${c.note}`);
+      lines.push('');
+    });
+    // Same panel, separate heading: these are arguments and mechanics, not authorities.
+    lines.push('  CONCEPTS');
+    lines.push('');
+    CONCEPT_NOTES.forEach(c => {
+      lines.push(`  [${c.tag}] ${c.label}`);
+      lines.push(`      ${c.long}`);
       lines.push('');
     });
     lines.push('  SCHEDULING: every date above is moved off Saturdays, Sundays, New Year\'s Day,');
@@ -2269,7 +2325,21 @@ const TaxPaymentPlanner = (() => {
       h += `<td style="padding:8px 10px;vertical-align:top;">`;
       h += `<div style="font-weight:600;color:#222;">${c.label}</div>`;
       h += `<div style="margin-top:2px;"><a href="${c.url}" target="_blank" rel="noopener">${c.cite}</a></div>`;
+      if (c.long) h += `<div style="margin-top:3px;color:#333;">${c.long}</div>`;
       if (c.note) h += `<div style="margin-top:3px;color:#555;">${c.note}</div>`;
+      h += `</td></tr>`;
+    });
+    h += `</table>`;
+    // Same panel, separate heading: these are arguments and mechanics, not authorities, so they
+    // carry no cite or link and must not look like they do.
+    h += `<div style="font-weight:700;color:#1F4E79;margin:14px 0 4px;font-size:0.88em;">CONCEPTS</div>`;
+    h += `<table style="width:100%;border-collapse:collapse;font-size:0.84em;">`;
+    CONCEPT_NOTES.forEach(c => {
+      h += `<tr style="border-bottom:1px solid #E3F2FD;">`;
+      h += `<td style="padding:8px 10px;vertical-align:top;white-space:nowrap;color:#1F4E79;font-weight:700;">[${c.tag}]</td>`;
+      h += `<td style="padding:8px 10px;vertical-align:top;">`;
+      h += `<div style="font-weight:600;color:#222;">${c.label}</div>`;
+      h += `<div style="margin-top:3px;color:#333;">${c.long}</div>`;
       h += `</td></tr>`;
     });
     h += `</table>`;
@@ -2309,4 +2379,10 @@ const TaxPaymentPlanner = (() => {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = TaxPaymentPlanner;
+} else if (typeof window !== 'undefined') {
+  // A top-level `const` in a classic script lives in the global LEXICAL scope, which is not the
+  // same thing as a property of window. The page itself reads the bare identifier and works
+  // either way, but taxPaymentPlanner.test.js has to resolve the engine without knowing how it
+  // was loaded, so publish it explicitly.
+  window.TaxPaymentPlanner = TaxPaymentPlanner;
 }

@@ -20,22 +20,31 @@
  *  10. Zero taxes — no actions generated
  */
 
-const TaxPaymentPlanner = require('./taxPaymentPlanner.js');
+// Everything below is wrapped in an IIFE for the browser's sake. Two classic scripts cannot both
+// declare a top-level `const TaxPaymentPlanner` — that is one global lexical scope and a duplicate
+// declaration there is a SyntaxError, so without the wrapper the whole test file silently fails to
+// parse once the engine is already on the page. The wrapper also keeps `test`, `assert`, `BASE` and
+// friends out of the app's global scope, which matters now that this file loads into a live page.
+(() => {
+
+// Dual-mode: node `require`, or the global the engine sets when loaded by a <script> tag.
+// Mirrors the export guard at the bottom of taxPaymentPlanner.js.
+const TaxPaymentPlanner = (typeof module !== 'undefined' && module.exports)
+  ? require('./taxPaymentPlanner.js')
+  : window.TaxPaymentPlanner;
 
 const T = TaxPaymentPlanner.ACTION_TYPES;
 
 let passed = 0, failed = 0;
 
+// test() REGISTERS rather than runs. Everything below is top-level, and running on registration
+// would mean the browser could only ever get the results as a side effect of loading the file.
+// Registering instead lets runTaxPlannerTests() be called on demand, and keeps the file
+// otherwise unchanged — no reindenting 600 lines into a wrapper function.
+const TESTS = [];
+
 function test(name, fn) {
-  try {
-    fn();
-    console.log(`  ✓  ${name}`);
-    passed++;
-  } catch (e) {
-    console.log(`  ✗  ${name}`);
-    console.log(`       ${e.message}`);
-    failed++;
-  }
+  TESTS.push([name, fn]);
 }
 
 function assert(cond, msg) {
@@ -69,8 +78,6 @@ const BASE = {
   appreciationPct: 0.40,
   todayDate: TODAY,
 };
-
-console.log('\ntaxPaymentPlanner.test.js\n' + '─'.repeat(60));
 
 // ── 1. No IRA operations ──────────────────────────────────────────────────
 test('No IRA — strategy is all_quarterly', () => {
@@ -676,12 +683,38 @@ test('Every plan pays 100% of the tax due, to within $1', () => {
     `Plans that do not pay the full liability:\n       ${offenders.join('\n       ')}`);
 });
 
-// ── Summary ───────────────────────────────────────────────────────────────
-console.log('');
-console.log(`Results: ${passed} passed, ${failed} failed`);
-if (failed > 0) {
-  console.log('\n*** SOME TESTS FAILED ***');
-  process.exitCode = 1;
-} else {
-  console.log('All tests passed.');
+// ── Runner ────────────────────────────────────────────────────────────────
+// Returns the counts instead of setting process.exitCode, so the browser can render them.
+// The node entry point below is what still sets the exit code.
+function runTaxPlannerTests() {
+  passed = 0;
+  failed = 0;
+  console.log('\ntaxPaymentPlanner.test.js\n' + '─'.repeat(60));
+  const failures = [];
+  TESTS.forEach(([name, fn]) => {
+    try {
+      fn();
+      console.log(`  ✓  ${name}`);
+      passed++;
+    } catch (e) {
+      console.log(`  ✗  ${name}`);
+      console.log(`       ${e.message}`);
+      failures.push(`${name}: ${e.message}`);
+      failed++;
+    }
+  });
+  console.log('');
+  console.log(`Results: ${passed} passed, ${failed} failed`);
+  console.log(failed > 0 ? '\n*** SOME TESTS FAILED ***' : 'All tests passed.');
+  return { passed, failed, total: TESTS.length, failures };
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+  const r = runTaxPlannerTests();
+  if (r.failed > 0) process.exitCode = 1;
+  module.exports = { runTaxPlannerTests };
+} else {
+  window.runTaxPlannerTests = runTaxPlannerTests;
+}
+
+})();

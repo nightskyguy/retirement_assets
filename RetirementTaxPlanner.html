@@ -8,7 +8,7 @@
        Example: Jul 29 08:00 -> day 210 -> (210*24)+8 = 5048 = 0x13b8 -> "1.13b8"
        Bump major manually for significant feature batches. Hardcode it here: the heading
        reads it back out of this tag at runtime rather than duplicating the number. -->
-  <title>Retirement Tax Payment Planner 1.13b9</title>
+  <title>Retirement Tax Payment Planner 1.13be</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -127,9 +127,25 @@
       margin-top: 4px;
       font-style: italic;
     }
+    /* The Compute button sits in a sticky footer that is a SIBLING of .inputs-body, not a child
+       of it. The panel is height:fit-content with no inner scroller, so it runs well past the
+       bottom of the viewport and a button at the end of the field list meant scrolling down to
+       compute after every edit. Sticky keeps it on screen at any panel height.
+       It is a sibling rather than a child because `.inputs.collapsed .inputs-body` is
+       display:none, which used to hide the button outright. The footer is still hidden when the
+       panel is collapsed, but that is now a choice rather than an accident: nothing can be
+       edited while collapsed, so there is nothing to recompute. */
+    .inputs-footer {
+      position: sticky;
+      bottom: 0;
+      padding: 10px 16px 12px;
+      background: #fff;
+      border-top: 1px solid #BDD7EE;
+      border-radius: 0 0 6px 6px;
+    }
+    .inputs.collapsed .inputs-footer { display: none; }
     button#compute {
       width: 100%;
-      margin-top: 14px;
       padding: 10px;
       background: #1F4E79;
       color: #fff;
@@ -248,7 +264,9 @@
 <body>
 <h1>Retirement Tax Payment Planner
   <span id="app-version" style="font-size:0.5em;font-weight:400;color:#888;vertical-align:middle;"
-        title="Version. Minor is hex(day-of-year x 24 + hour) at build time."></span></h1>
+        title="Version. Minor is hex(day-of-year x 24 + hour) at build time."></span>
+  <!-- Populated only on ?runtests. Mirrors the optimizer's #testsFailed glyph convention. -->
+  <span id="testsFailed" style="font-size:0.5em;font-weight:400;vertical-align:middle;"></span></h1>
 
 <div class="layout">
 
@@ -443,9 +461,10 @@
     </div>
     <div class="today-display" id="todayDisplay"></div>
 
-    <button id="compute">Compute Payment Plan</button>
-
     </div><!-- end .inputs-body -->
+    <div class="inputs-footer">
+      <button id="compute">Compute Payment Plan</button>
+    </div>
   </div><!-- end .inputs -->
 
   <!-- ── Output Panel ─────────────────────────────────────────────────── -->
@@ -478,8 +497,8 @@
 
 </div><!-- end .layout -->
 
-<script src="displayhelpers.js?v=13b9"></script>
-<script src="taxPaymentPlanner.js?v=13b9"></script>
+<script src="displayhelpers.js?v=13be"></script>
+<script src="taxPaymentPlanner.js?v=13be"></script>
 <script>
   // Version readout — parsed out of <title> so the number lives in exactly one place.
   (() => {
@@ -896,6 +915,9 @@
 
   function loadFromUrl() {
     const raw = new URLSearchParams(window.location.search);
+    // runtests is a page switch, not an input. Left in, a bare ?runtests would look like
+    // pre-filled parameters and auto-collapse the panel and auto-compute with defaults.
+    raw.delete('runtests');
     if (raw.toString() === '') return false;
     // Expand short-form aliases → long-form field IDs (backward compat: long keys still work)
     const SHORT_TO_LONG = {
@@ -969,6 +991,34 @@
       collapseInputs();
       runCompute();
     }
+  });
+
+  // ── ?runtests — run the engine's unit suite from the browser ──────────────
+  // The test file is injected on demand rather than shipped in a <script> tag, so the default
+  // page loads exactly the code it did before. Results go to the console AND to the glyph beside
+  // the version, because the point of this was being able to see them without opening devtools.
+  window.addEventListener('DOMContentLoaded', () => {
+    if (!new URLSearchParams(window.location.search).has('runtests')) return;
+    const badge = document.getElementById('testsFailed');
+    badge.textContent = '⏳';
+    badge.title = 'Loading taxPaymentPlanner.test.js…';
+    const s = document.createElement('script');
+    s.src = 'taxPaymentPlanner.test.js?v=13be';
+    s.onload = () => {
+      const r = window.runTaxPlannerTests();
+      badge.textContent = r.failed === 0 ? `🟢 ${r.passed}/${r.total}` : `❌ ${r.failed} failed`;
+      badge.title = r.failed === 0
+        ? `All ${r.total} tests passed. Full output in the console.`
+        : `${r.failed} of ${r.total} failed:\n${r.failures.join('\n')}`;
+      badge.style.color = r.failed === 0 ? '#375623' : '#C00000';
+    };
+    s.onerror = () => {
+      badge.textContent = '❌ test file not loaded';
+      badge.title = 'taxPaymentPlanner.test.js could not be fetched. On file:// URLs the browser '
+                  + 'blocks it; serve the page over http instead.';
+      badge.style.color = '#C00000';
+    };
+    document.head.appendChild(s);
   });
 
   // Attach smart numeric formatting to all dollar-amount inputs

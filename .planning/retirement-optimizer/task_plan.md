@@ -6,6 +6,32 @@ Goal: Complete open features from the original priority list plus deferred items
 
 ---
 
+## Nerdknob graduation: Stop-Year + Tax Creep (2026-07-29, v11.13bd) — COMPLETE, uncommitted
+
+User: "remove the nerdknob control from the Stop conversions settings, it seems robust enough."
+Asked whether to include the tax-creep row, which sat as an open question at the P4 phase below
+citing the same PF13 precedent; user said un-gate both, and asked for a regression test.
+
+Gating in this codebase is inline `element.style.display` only, set from `applyNerdKnobVisibility()`
+(`optimizer_ui.js:80`). No CSS class exists for it. So un-gating = delete `display:none` from the
+markup AND delete the JS branch, per the PF13 pattern at `optimizer_ui.js:88-92`.
+
+- `retirement_optimizer.html` — dropped `display:none` from `#convEndYear-wrap` and
+  `#taxRateCreep-wrap`; rewrote the creep comment that explained the gate.
+- `optimizer_ui.js` — deleted both branches from `applyNerdKnobVisibility()`. Also deleted the two
+  call sites that existed ONLY to un-hide the stop-year row after writing into it:
+  `loadOptimizerResult()` and `applyConvStopYear()`.
+- `optimizer_tests.js` — new `assertUngated()` asserting computed display for both wraps.
+- `README.md:191` said tax creep was "only currently accessible via a special switch" — now false.
+  `README.md:632-648` already described Stop-Year as visible, so un-gating made the docs correct.
+
+STILL GATED, deliberately: `cycleLTCGTarget-wrap`, `opt-legend-cashfund`, `doc-aca-cliff`, MC nerd
+panels, GK strategy params, ACA FPL dropdown options, ACA-cliff + 💵 optimizer sweep arms.
+
+**Closes** the open question at "Phase P4: Creeping Tax Rate Model" below.
+
+---
+
 ## TPP-1..5 Tax Payment Planner backlog (2026-07-29) — OPEN
 
 Requested by the user after testing `RetirementTaxPlanner.html` v1.13b9 on branch
@@ -16,6 +42,28 @@ the full liability. Everything below is new work on top of it.
 
 Engine is `taxPaymentPlanner.js`; the HTML is a thin shell. Tests are `taxPaymentPlanner.test.js`
 (27 passing, node-only today).
+
+**Baseline re-verified 2026-07-29** on branch `worktrees/planning-with-files-453213` (clean, on
+top of `e1ddb71` which merged PR #136): `node taxPaymentPlanner.test.js` -> 27 passed / 0 failed.
+`taxPaymentPlanner.js` 2312 lines, `RULE_CITES` at :138. `RetirementTaxPlanner.html` 989 lines,
+`#compute` at :446. Every fact in the specs below still holds.
+
+**Sequencing and status**
+
+| Item | Status | Size | Depends on | Ships as |
+|------|--------|------|------------|----------|
+| TPP-3 run tests from browser | pending | S | — | PR-T1 |
+| TPP-4 compute button reachable | pending | S | — | PR-T1 |
+| TPP-5 dedupe note text | pending | M | — | PR-T2 |
+| TPP-1 IRC 6654 penalty estimate | pending | L | — | PR-T3 |
+| TPP-2 scored remedies | pending | L | TPP-1 | PR-T4 |
+
+Order rationale: TPP-2 scores remedies against "penalty avoided", so it cannot be built before
+TPP-1 computes a penalty. Everything else is independent. TPP-3 lands first on purpose — a
+browser-runnable suite is the verification surface for the three items after it. TPP-3 and TPP-4
+are both small and both touch only `RetirementTaxPlanner.html` plus the test file's module
+guard, so they bundle. TPP-5 is text-only and byte-identical in the numeric engine, so it stays
+its own PR to keep that claim reviewable.
 
 ### TPP-1 — Estimate the penalty when the user is already late
 
@@ -747,7 +795,7 @@ const AUTOSAVE_KEY = 'SLCRetireOptimizeAutoSave';
 - [ ] Annual Details `taxRateMult`-style column (Debug/Tax Policy category) — not added; only the hidden `-fedRateCreep`/`-stateRateCreep` log fields exist, no visible column
 - [ ] State-rate creep UI control (input + tooltip + short-key)
 - **B. Pre-TCJA Cliff — NOT implemented.** No `BRACKETS_PRE_TCJA` constant, no `taxRateChangeYear`, no bracket-swap logic anywhere in the codebase (grepped clean). Original spec's second option, never started.
-- **Status:** Option A done but ungated-decision pending — is nerdknob-gating still wanted now that it's a finished, tested feature (cf. PF13 round 2, which un-gated Rank/Maximize-Conversions once they stopped being experimental), or does it stay gated until a Debug/Tax Policy Annual Details column + state-creep UI land? Option B untouched.
+- **Status:** Option A done and NOW UN-GATED (2026-07-29, v11.13bd — see the nerdknob-graduation phase at the top of this file). The row is plain markup with no `display:none` and `applyNerdKnobVisibility()` no longer touches it. The two open sub-items above (Annual Details creep column, state-creep UI control) are still open and did NOT block un-gating: the federal control is finished and tested on its own. Option B untouched.
 - **Independent:** modifies `calculateTaxes()` which is already isolated
 
 ---

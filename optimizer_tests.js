@@ -2140,6 +2140,25 @@ assertEqual(
 	// Run the test suite
 	runAllTaxTests();
 
+	// ===== Un-gated controls stay un-gated =====
+	// Stop-conversions-after and the tax-rate creep row both graduated out of the nerdknob
+	// preview gate once they were finished and tested. Nothing should ever hide them again.
+	//
+	// SCOPE OF THIS CHECK: runTests() is called at parse time (retirement_optimizer.html), which
+	// is BEFORE applyNerdKnobVisibility() runs in the DOMContentLoaded handler. So this pins the
+	// MARKUP default and catches the likely regression -- someone re-adding display:none. It does
+	// not exercise the JS path. Do NOT "improve" it by calling applyNerdKnobVisibility() here:
+	// that function calls initMCTab(), which has not run yet at this point, so the test would
+	// double-initialize the Monte Carlo tab ahead of its real init. Verify the JS path by hand
+	// instead, by toggling the Documentation-tab nerdknob checkbox on and then off.
+	function assertUngated(id) {
+		const el = document.getElementById(id);
+		assertEqual(el ? getComputedStyle(el).display !== 'none' : 'MISSING ELEMENT', true,
+			`#${id} is visible without nerdknob`);
+	}
+	assertUngated('convEndYear-wrap');
+	assertUngated('taxRateCreep-wrap');
+
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`);
 	console.log(`   chart.js version ${Chart.version}`);

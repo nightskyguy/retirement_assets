@@ -11,6 +11,29 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.13d0"></a>
+
+## 11.13d0
+
+**A link labelled with a file name now shows the page it actually opens.**
+
+The previous release pointed the Change Log's "Details" links, and the link to the full change log
+itself, at the formatted page the site publishes. It changed where those links went but not what they
+said, so the Documentation tab read "optimizer_changelog.md" while the link underneath opened
+`optimizer_changelog.html`. Naming one file and opening another is confusing in both directions: it
+looks like the fix never shipped, and anyone who copied the visible name got a file that downloads
+instead of displaying.
+
+The label now follows the link. This applies only where the visible text *is* the file name.
+Descriptive wording, "Details" or the theme's "Improve this page", is never rewritten, and neither is
+the name README.md, which is still the honest name of what sits at the site root.
+
+Nothing changes when you run the tool from your own disk or your own local web server. There the
+formatted pages do not exist, so both the link and its label stay on the plain file, which is what is
+really there.
+
+---
+
 <a id="11.13c5"></a>
 
 ## 11.13c5

@@ -3,8 +3,9 @@
  * doclinks.test.js
  * Run with: node doclinks.test.js
  *
- * Covers docHref(), the pure half of doclinks.js: the map from a .md href on disk to
- * the .html page Jekyll publishes on GitHub Pages.
+ * Covers the pure half of doclinks.js: docHref(), the map from a .md href on disk to the
+ * .html page Jekyll publishes on GitHub Pages, and docLabel(), which keeps a link whose
+ * visible text is a filename honest about where it now points.
  *
  *   1. Plain .md -> .html, with #hash and ?query preserved
  *   2. README.md -> the directory index, never README.html (that URL 404s)
@@ -12,6 +13,9 @@
  *   4. Non-.md hrefs untouched
  *   5. Dot-directories untouched (Jekyll never publishes them, in any form)
  *   6. rendered=false is a straight pass-through, so local use is unaffected
+ *   7. sourceFile maps a rendered page back to the .md it was generated from
+ *   8. docLabel swaps a filename label to match the rewritten href, and leaves every
+ *      descriptive label ("Details", "Improve this page") alone
  */
 
 const DocLinks = require('./doclinks.js');
@@ -142,6 +146,54 @@ test('sourceFile maps a rendered page back to its source .md', () => {
   // The index is the rendered README, and Pages serves it at both / and /index.html.
   assert(src('/index.html') === 'README.md', 'index.html');
   assert(src('/') === 'README.md', 'root');
+});
+
+// ── 8. docLabel: a link labelled with a filename must not lie ──────────────
+// Rewriting the href alone left the page reading "optimizer_changelog.md" while the link
+// went to the .html. Only filename labels get swapped; descriptive text never does.
+
+test('a label that is exactly the old filename follows the href', () => {
+  const lbl = DocLinks.docLabel;
+  assert(lbl('optimizer_changelog.md', 'optimizer_changelog.md', 'optimizer_changelog.html')
+         === 'optimizer_changelog.html', 'bare filename');
+  assert(lbl('optimizer_changelog.md', 'optimizer_changelog.md#11.13a1', 'optimizer_changelog.html#11.13a1')
+         === 'optimizer_changelog.html', 'anchored href, filename label');
+  assert(lbl('ARCHITECTURE.md', 'docs/ARCHITECTURE.md', 'docs/ARCHITECTURE.html')
+         === 'ARCHITECTURE.html', 'label is the basename of a deeper path');
+});
+
+test('surrounding whitespace in the label survives', () => {
+  assert(DocLinks.docLabel('\n\t optimizer_changelog.md \n', 'optimizer_changelog.md', 'optimizer_changelog.html')
+         === '\n\t optimizer_changelog.html \n', 'padding lost');
+});
+
+test('descriptive labels are never touched', () => {
+  const lbl = DocLinks.docLabel;
+  ['Details', 'the changelog', 'Improve this page', 'optimizer_changelog', 'See optimizer_changelog.md'
+  ].forEach(t => {
+    assert(lbl(t, 'optimizer_changelog.md', 'optimizer_changelog.html') === t, `relabelled "${t}"`);
+  });
+});
+
+test('README keeps its name, since the index has no filename to show', () => {
+  // docHref('README.md') is './' — there is no .html basename to swap in, and "README.md"
+  // is still the honest name of what lives at the site root.
+  assert(DocLinks.docLabel('README.md', 'README.md', './') === 'README.md', 'README relabelled');
+});
+
+test('an unchanged href never relabels', () => {
+  const lbl = DocLinks.docLabel;
+  assert(lbl('optimizer_changelog.md', 'optimizer_changelog.md', 'optimizer_changelog.md')
+         === 'optimizer_changelog.md', 'no-op href');
+  // Local pages: docHref returns the input, so this is the path every local run takes.
+  const href = 'optimizer_changelog.md#11.13a1';
+  assert(lbl('optimizer_changelog.md', href, docHref(href, false)) === 'optimizer_changelog.md',
+         'local run relabelled');
+});
+
+test('non-string label is returned as given', () => {
+  assert(DocLinks.docLabel(null, 'a.md', 'a.html') === null, 'null');
+  assert(DocLinks.docLabel(undefined, 'a.md', 'a.html') === undefined, 'undefined');
 });
 
 test('the DOM half of the module is exported', () => {

@@ -2,7 +2,7 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-29 (worktree context-e73361, branch `worktrees/markdown-changelog-rendering-a11a86`). Everything through PR #138 is merged into `main` (`1752a7b`, TPP brokerage handoff, v11.13c3 / planner v1.13c3); PR-A..PR-G all shipped inside PR #135 (v11.13a1). **P25 (v11.13c5) is COMMITTED on this branch and carried by open PR #139**, which now also carries a merge of `origin/main`. Nothing uncommitted.
+**As of:** 2026-07-30 (worktree `readme-review-updates-c9df11`, branch `worktrees/planning-with-files-f027a2`, forked at `main` = `2537135`). **PR #140 open (`838a870`, v11.13d0): README audit round 3 + doc-link labels. Working tree clean.** Everything through PR #139 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5). Next work starts from a clean base.
 
 VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + hour)`, so two branches worked on in the same afternoon produce ADJACENT numbers, and whichever merges first is not necessarily the lower one. P25 was built as v11.13c2 (hour 18) but PR #138 merged v11.13c3 (hour 19) ahead of it, so P25 was renumbered to v11.13c5 on merge. When resolving a version conflict, recompute from the clock rather than taking either side.
 
@@ -10,7 +10,96 @@ MAINTENANCE NOTE: this heading and the per-phase status lines are injected into 
 
 ---
 
-## Nerdknob graduation: Stop-Year + Tax Creep (2026-07-29, v11.13bd) — COMPLETE, PR #137 open (`584a94a`)
+## README Audit Round 3 (2026-07-30) — COMPLETE, committed `838a870`, PR #140 open
+
+User asked for a README review after PRs #135-#139. Full claim-by-claim audit is in `findings.md`
+under "README audit round 3"; every item below was checked against code, not against the changelog.
+
+Scope decision: fix what is **wrong or self-contradictory** first, then close the coverage gap for
+features that shipped in #135-#139. Do not rewrite prose that is merely opinionated - the voice of
+this README is the author's and it is not a defect.
+
+| # | Item | Fix | Status |
+|---|------|-----|--------|
+| A1 | `:258` "(The *Cash Reserve* is ignored currently)" - false since v11.1340, and it sits in **What the Tool IGNORES** contradicting `:185` and 3 FAQ entries | delete the parenthetical, restate what the tool really does not do (hold a brokerage/cash floor *other than* the reserve) | **DONE** |
+| A2 | `:135` planner "Version 1.13b9" - actual `<title>` is 1.13c3; paragraph misses all of PR #138 | bump number, add the #138 items (`?runtests`, sticky Compute, deduped notes, brokerage handoff) | **DONE** |
+| A3 | `:127` Income Tax Planner "state (14 options currently)" - dropdown is built from TAXData and holds 38 | correct the count, say it is data-driven so it stops going stale | **DONE** |
+| A4 | `:233` three wrong sweep facts: Reduce is 2-15/20/25 not "1 to 30"; IRA Draw is 5-20% not 5-10%; "× Max Conversion on/off" does not exist (`convOn = true`) | correct all three; note ACA arms are advanced-only | **DONE** |
+| A5 | `:181` federal-standard-deduction states omit MS and IA | list all 8 | **DONE** |
+| A6 | `:499` points at `retirement_optimizer_taxdata.js`, which does not exist | point at `taxengine.js` / `TAXData` | **DONE** |
+| A7 | `:642-646` FAQ lists 4 of 9 "Optimize for" objectives; mislabels and misdefines widowrmd | list all 9, fix the label and the definition | **DONE** |
+| A8 | Nothing in the README covers ⚖ compare, the Stress Failure tile, SS birth-month proration, real-FRA survivor math, Guyton-Klinger, cyclic rows, 💵 cash-funded rows, or ⚓/📍 + Rank | add to **Recent Fixes / Improvements** and **Key Features** | **DONE** |
+| A9 | `retirement_optimizer.html:1119` comment still claims the objective selector is nerdknob-gated (PF13 un-gated it) | one-line comment fix, found in passing | **DONE** |
+
+Verified correct, leave alone: the AL/MT/OH standard-deduction inflation bug (still real -
+`INFLATION_INDEXED:false` guards brackets at `taxengine.js:1089` but the std is inflated
+unconditionally at `:1349`), the 23% SS reduction, RealReturns 1928-2025, and every relative link
+and in-page anchor (all 30 resolve).
+
+RESOLVED (was an open question): GitHub Pages renders the README at `/` through kramdown, whose
+heading ids are not guaranteed to match GitHub.com's. Checked against the live page with
+`curl https://tools.netcitizen.us/` - all 30 Table of Contents anchors match the ids kramdown
+actually emits, including the awkward ones (`who-are-these-tools-for--what-can-they-do`,
+`combined-tax-torpedo-examples-during-85-ss-phase-out`). No TOC change needed.
+
+Verification: node 148/32/16, in-page 242/242, console clean apart from the 4 known TEST fixtures.
+Live UI confirms the 9 objective labels the FAQ now lists, the selector visible without nerdknob,
+and the 💵 legend still hidden without it (which is what the new Key Features bullet says).
+No version bump: docs plus one comment, no behavior change.
+
+---
+
+## Link labels follow the href (2026-07-30, v11.13d0) — COMPLETE, committed `838a870`, PR #140 open
+
+User: the live 11.13a1 "Details" link and the "Every earlier release is written up in
+optimizer_changelog.md" sentence still name the `.md`, though v11.13c5 claimed that was fixed.
+
+Diagnosis split in two. The **href half is genuinely fixed** - the live DOM has zero `.md` hrefs and
+all eight changelog links are `.html`, `#11.13a1` included. The user's page listed 11.13a1 FIRST
+while live lists 11.13c5 first, so that tab was a cached copy predating `doclinks.js`. Nothing to
+change there; hard reload. The **label half was never addressed**: `doclinks.js` rewrote `href`
+attributes only, so a current page reads `optimizer_changelog.md` while opening
+`optimizer_changelog.html`. Naming one file and opening another reads as a bug from either end.
+
+Fix: new pure `docLabel(text, oldHref, newHref)` in `doclinks.js`, wired into `rewriteLinks()` behind
+a `childElementCount === 0` guard (relabelling rewrites textContent, which would flatten markup
+inside an anchor). Swaps only when the href moved, the old text is exactly the old basename, and the
+new href ends `.html`. README falls through by construction (`docHref('README.md')` is `'./'`, no
+`.html` basename to swap in). Descriptive labels never match a basename, so "Details" and the theme's
+"Improve this page" are untouched. 6 new tests, 16 -> 22.
+
+Version 11.13d0 computed from the clock, not incremented, per the collision note above.
+
+---
+
+## README Caveats Audit (2026-07-30) — DEFERRED by the user, corrections done
+
+A separate read-only session audited what belongs in **What the Tool IGNORES** and **Limitations and
+Restrictions**. Its full evidence, with file:line citations, is preserved at
+`.planning/retirement-optimizer/readme_caveats_findings.md` (that session never wrote it into this
+worktree). Five citations were spot-checked here before accepting it.
+
+User decision: **corrections only now, caveats deferred.** All 5 of its factual corrections are done
+(3 landed in Round 3; Account Composition and the duplicate Roth sentence landed with v11.13d0).
+
+Deferred, in three clusters:
+
+1. **16 limitations** for the two caveat sections - no capital losses, no basis step-up at death, ACA
+   models the MAGI cap but never subsidy dollars, no healthcare or LTC costs, state fixed for the
+   whole plan, MC never varies mortality, dividends assumed 100% qualified, abridged
+   Uniform-Lifetime-only RMD table, no QSS window, flat national Medicare premiums, and more.
+2. **State coverage** - 38 of 51 modeled; missing AR, DE, HI, KS, LA, MO, NJ, NM, OK, RI, UT, VT, WV.
+   Sharpest point: README's own Tax Torpedo table names NM, RI, UT and VT as SS-taxing states the
+   tool cannot model. Also no local or city income tax anywhere in the engine (NYC ~3.1-3.9% is the
+   largest unacknowledged understatement), and each person's entered SS gets no actuarial reduction
+   or delayed-retirement credit for claim age - changing the claim age moves only WHEN, never HOW MUCH.
+3. **~10 features** still absent from the feature list - QCD modeling, Future $ / Current $ toggle,
+   nerdknob gating and how to reveal it, Marginal Heirs Tax Rate, the full milestones overlay, MC
+   input-distribution charts, the Tax Planner handoff mechanics, share URLs omitting defaults.
+
+---
+
+## Nerdknob graduation: Stop-Year + Tax Creep (2026-07-29, v11.13bd) — COMPLETE, PR #137 MERGED
 
 User: "remove the nerdknob control from the Stop conversions settings, it seems robust enough."
 Asked whether to include the tax-creep row, which sat as an open question at the P4 phase below
@@ -39,8 +128,8 @@ panels, GK strategy params, ACA FPL dropdown options, ACA-cliff + 💵 optimizer
 ## TPP-1..5 Tax Payment Planner backlog (2026-07-29) — TPP-3/4/5 DONE, TPP-1/TPP-2 OPEN
 
 **Sequencing decided 2026-07-29** (plan file `C:\Users\starc\.claude\plans\calm-snacking-newt.md`):
-three PRs, cheap and independent first. PR 1 = TPP-3 + TPP-4 + TPP-5, **DONE and uncommitted**
-at v1.13be on branch `worktrees/planning-with-files-be4b53`. PR 2 = TPP-1. PR 3 = TPP-2.
+three PRs, cheap and independent first. PR 1 = TPP-3 + TPP-4 + TPP-5, **MERGED as PR #138**
+at v1.13be. PR 2 = TPP-1 (not started). PR 3 = TPP-2 (not started).
 User decisions: TPP-2 output is a **priced menu with no winner named** (keeps the tool clear of
 personalized tax advice); TPP-4 is a **single sticky footer button**, not a duplicate at the top.
 
@@ -128,7 +217,7 @@ is the same gross-up shape as `applyConversionGrossUp()` in `optimizer_core.js:1
 the approach rather than deriving it again. Compare the grossed-up cost against the penalty
 avoided and only recommend it when it actually wins.
 
-### TPP-3 — Run the tests from the browser — DONE (v1.13be, uncommitted)
+### TPP-3 — Run the tests from the browser — DONE (v1.13be, merged PR #138)
 
 `taxPaymentPlanner.test.js` is node-only: bare `require` at the top, `process.exitCode` at the
 bottom. Make it dual-mode so `RetirementTaxPlanner.html?runtests` runs it.
@@ -140,7 +229,7 @@ for the browser, replace `process.exitCode` with a return value, and gate on the
 param instead of running unconditionally. Render results on the page as well as the console,
 since the request was to see them directly.
 
-### TPP-4 — Compute button reachable without scrolling — DONE (v1.13be, uncommitted)
+### TPP-4 — Compute button reachable without scrolling — DONE (v1.13be, merged PR #138)
 
 `#compute` sits at `RetirementTaxPlanner.html:446`, at the bottom of a long input panel.
 Duplicate it at the top. IDs must stay unique, so use a shared class or `compute-top` /
@@ -148,7 +237,7 @@ Duplicate it at the top. IDs must stay unique, so use a shared class or `compute
 hides `.inputs-body` entirely), so check both states; a sticky button may serve better than
 two copies.
 
-### TPP-5 — Deduplicate the long-form note text — DONE (v1.13be, uncommitted)
+### TPP-5 — Deduplicate the long-form note text — DONE (v1.13be, merged PR #138)
 
 Measured on a dual-IRA dual-conversion scenario: **174 notes across the three plans, 69 of
 them over 200 characters, 26,184 characters total.** Each boilerplate block repeats six times
@@ -520,7 +609,7 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 | 2 | **PA** | Pension Start Age | **complete** | — |
 | 3 | **PB** | Lumpy Spending (no URL encoding) | pending | — |
 | 4 | **PC** | Auto-Persist + Restore Offer | pending | — |
-| 5 | **P4** | Creeping Tax Rate Model | Option A done, nerd-gated (un-gate decision pending); Option B not started | — |
+| 5 | **P4** | Creeping Tax Rate Model | Option A done and **un-gated** (PR #137, v11.13bd); Option B not started | — |
 | 6 | **P5** | Conversion Schedule — Greedy DP (23b) | pending | — |
 | 7 | **P6** | Simulation Sanity-Check Tests | pending | — |
 | 8 | **PD** | Onboarding Interview (replaces P7 stepper) | pending | — |

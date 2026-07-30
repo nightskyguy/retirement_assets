@@ -685,3 +685,97 @@ accrues.
 tested separately, because they routinely disagree — in the scenario above California was covered
 while federal was not. Anything that renders an alarm or a reassurance needs a flag set where the
 check happened, not a heuristic re-derived at draw time.
+
+---
+
+## README audit round 3 (2026-07-30) — what the code actually says
+
+Read of `README.md` (685 lines) checked claim-by-claim against the tree at `main` = `2537135`
+(everything through PR #139). Each item below was verified in code, not inferred from the changelog.
+
+### Contradictions — the README argues with itself
+
+- **`README.md:258` says the Cash Reserve is ignored.** Exact text: "The tool doesn't try to
+  maintain a brokerage balance or a cash balance. It will deplete those accounts to zero if required
+  to meet your spend goal.  (The *Cash Reserve* is ignored currently)." That parenthetical has been
+  false since P2 landed at v11.1340. It sits in **What the Tool IGNORES (No Plans to Implement)**,
+  the one section a skeptical reader trusts most, and it directly contradicts `README.md:185`
+  ("Cash Reserve has been implemented") plus three whole FAQ entries that explain the routing order.
+  Engine proof: `optimizer_core.js:1235` (reserve floor, `cashBreach` flag) and `:1765` (surplus
+  tops Cash to target, overflow to Brokerage).
+
+### Numbers that no longer match the code
+
+- **Tax Payment Planner version.** `README.md:135` opens "**Version 1.13b9.**"; the tool's own
+  `<title>` at `RetirementTaxPlanner.html:11` reads **1.13c3**. The paragraph describes PR #136 work
+  only and never mentions PR #138: the browser-runnable suite (`?runtests`), the sticky Compute
+  button, the deduplicated notes with "Rules and sources" pointers, or the Optimizer handing the
+  brokerage position across.
+- **Income Tax Planner state count.** `README.md:127` says "state (14 options currently)". The
+  dropdown is built at runtime from every `TAXData` entry that has a `STATE` key
+  (`standalone/IncomeTaxPlanner.html:1157-1168`), which is **38** today: 29 taxing jurisdictions
+  including DC, plus 9 no-tax states added via `NO_TAX_SHELL`.
+- **Optimizer sweep grids** (`README.md:233`), all three wrong:
+  - "Optimizer 🎯 checks years 1 to 30 automatically" — the Reduce grid is
+    `[2,3,4,5,6,7,8,9,10,11,12,13,14,15,20,25]` (`optimizer_ui.js:805`). 16 values, never 1, never 30.
+  - "📉IRA Draw % ... (5–10% in the Optimizer)" — the grid is `[5,6,7,8,10,12,15,20]`
+    (`optimizer_ui.js:834`), so the range is 5–20%.
+  - "The Optimizer tests this at 0/5/10/20/50% × Max Conversion on/off" — **the on/off half does not
+    exist.** `optimizer_ui.js:797` sets `const convOn = true;` and every `addResult` in the sweep
+    passes `convertExcessToRoth: convOn`. `buildVariations()` in `optimizer_core.js:3172` does the
+    same for Monte Carlo. The 0/5/10/20/50 percentages are right.
+  - The same sentence offers ACA FPL ceilings (200/250/300/400%) as if they were ordinary sweep
+    arms; `optimizer_ui.js:825` gates them behind `NERD_KNOBS` and skips them when both people are
+    on Medicare at plan start.
+- **States that borrow the federal standard deduction** (`README.md:181`) are listed as
+  "AZ, CO, ME, MN, ND, SC". There are **8**: `MS, IA, AZ, CO, ME, MN, ND, SC` (`std: 'FEDERAL'`).
+- **`retirement_optimizer_taxdata.js` does not exist** (`README.md:499` tells readers to ask an AI to
+  add their state to it). The data is `var TAXData` at the top of `taxengine.js`; the README also
+  spells it *TAXdata*, which matches only the closing comment `}; // TAXdata`, not the identifier.
+
+### Claims that survived the audit — do not "fix" these
+
+- **The AL/MT/OH standard-deduction inflation bug at `README.md:181` is still real.**
+  `INFLATION_INDEXED: false` (set on AL, MT, ND, OH, SC) is honoured only for *brackets*, at
+  `taxengine.js:1089`. The standard deduction is multiplied by inflation unconditionally at
+  `taxengine.js:1349-1351`. ND and SC escape because their std is `'FEDERAL'`, which leaves exactly
+  AL, MT, OH overstating the deduction — the three the README names.
+- SS depletion "23% reduction" vs the field default `ssFailPct = 77.3`
+  (`retirement_optimizer.html:376`): 22.7%, correctly rounded.
+- Every relative link and every one of the 30 in-page anchors in the README resolves. The root-level
+  `FutureCost.html` / `IncomeTaxPlanner.html` / `AfterTaxRealGrowth.html` / `irmaa_and_rmds.html` are
+  ~500-byte redirect stubs pointing at `standalone/`, and the README already links `standalone/`.
+- RealReturns "98 years of data (1928–2025)" matches `standalone/real_returns_data.js`.
+
+### Features shipped since the last README pass that the README never mentions
+
+Greps for each term across `README.md` returned zero hits, or hits only inside the *reviews of other
+people's tools*:
+
+| Feature | Shipped | README status |
+|---|---|---|
+| Guyton-Klinger strategy family in the sweep | Phase 22 | only ever mentioned as a NestWise/AiRA feature |
+| Cyclic rows (🗘 IRA-first, 🔄 brokerage-first) | Phase 24 | absent |
+| 💵 cash-funded conversion rows | PF10 | absent |
+| ⚓ BASELINE / 📍 CURRENT pinned rows + Rank column | PR3, PF13 | "Current Plan" appears once, in unrelated prose |
+| ⚖ head-to-head strategy compare | PR-D (v11.13a1) | absent |
+| Stress Failure tile + auto-rerun, stress in Synthetic mode | PR-A (v11.13a1) | absent |
+| Social Security paid from the birth month in the claim year | PR-B (v11.13a1) | absent |
+| Survivor benefit from the real FRA, not a flat 67 | PR-C (v11.13a1) | absent |
+| "Optimize for" ranking selector | PF13 | FAQ only, and only 4 of its 9 objectives |
+
+### FAQ specifics
+
+`README.md:642-646` lists four objectives; the selector at `retirement_optimizer.html:923-931` has
+nine (`taxflex, networth, widowrmd, mintax, maxspend, maxroth, balanced, conveffect, earliestbe`).
+Two are described wrongly:
+
+- Label is **"Avoiding Widow & RMD Tax"**, not "Avoid Widow & RMD Tax".
+- It is not "taxes your heirs will pay". `OPTIMIZER_OBJECTIVES.widowrmd`
+  (`optimizer_core.js:2789`) scores `totals.rmdTax + terminal.ira * rate` — RMD tax paid *during the
+  plan* plus the deferred tax still owed on whatever pre-tax IRA is left. Lower is better.
+
+### Found in passing, not README
+
+`retirement_optimizer.html:1119` still comments that `applyNerdKnobVisibility()` gates the
+"optimizer objective selector". PF13 un-gated that selector; the comment outlived the code.

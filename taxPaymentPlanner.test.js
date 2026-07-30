@@ -773,6 +773,37 @@ test('Missed-payment alert only claims penalty-free when withholding actually co
   });
 });
 
+// ── 21a. Advisory notes must actually render ──────────────────────────────
+// T.NOTE was the only action type whose `notes` array was dropped by both renderers: buildHtml's
+// isNote branch returned before the bullet loop, and buildText pushed only the description. The
+// QCD alternative had therefore never reached a reader in either output.
+test('T.NOTE actions render their notes, not just the description', () => {
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, federalTax: 40000, stateTax: 12000,
+    ira1Rmd: 20000, ira1RothConversion: 30000,
+    ira2Rmd: 10000, ira2RothConversion: 15000,
+  });
+
+  const noteActions = plan.actions.filter(a => a.type === T.NOTE && a.notes.length > 0);
+  assert(noteActions.length > 0, 'Expected at least one advisory note carrying sub-notes');
+
+  const missingText = [], missingHtml = [];
+  noteActions.forEach(a => a.notes.forEach(n => {
+    // Compare on a prefix: the renderers wrap the text, they do not alter it.
+    const probe = n.slice(0, 50);
+    if (!plan.text.includes(probe)) missingText.push(probe);
+    if (!plan.html.includes(probe)) missingHtml.push(probe);
+  }));
+  assert(missingText.length === 0,  `Notes absent from plan.text:\n       ${missingText.join('\n       ')}`);
+  assert(missingHtml.length === 0,  `Notes absent from plan.html:\n       ${missingHtml.join('\n       ')}`);
+
+  // The specific guidance that was invisible, named so this cannot silently regress.
+  assert(/QCD alternative/.test(plan.text) && /QCD alternative/.test(plan.html),
+    'The QCD alternative must appear in both outputs');
+  assert(/Only the balance beyond the RMD can be converted/.test(plan.text),
+    'The RMD-conversion eligibility note must appear in the text output');
+});
+
 // ── 21. The cumulative test, on a weighted schedule ───────────────────────
 // Not reachable through a whole-plan assertion: California is 30/40/30, so ratable withholding
 // equal to the FULL annual requirement still misses the second due date. cumReq after two dates is

@@ -2031,6 +2031,10 @@ const TaxPaymentPlanner = (() => {
         a.notes.forEach(n => lines.push(`      • ${n}`));
       } else if (a.type === T.NOTE) {
         lines.push(`   -- ${a.description}`);
+        // These bullets used to be dropped. T.NOTE was the only action type whose `notes` never
+        // rendered, in either output, so the QCD alternative and the RMD-conversion eligibility
+        // line had never once reached a reader.
+        a.notes.forEach(n => lines.push(`      • ${n}`));
       } else {
         lines.push(`${String(a.seq).padStart(2)} . ${a.description}`);
         a.notes.forEach(n => lines.push(`       • ${n}`));
@@ -2337,7 +2341,19 @@ const TaxPaymentPlanner = (() => {
           }
           return;
         }
-        if (isNote) { h += info(`<strong>Note:</strong> ${a.description}`); return; }
+        if (isNote) {
+          h += info(`<strong>Note:</strong> ${a.description}`);
+          // This branch used to `return` before the bullet loop that every other action type gets,
+          // which meant T.NOTE was the one type whose `notes` never rendered in either output. The
+          // QCD alternative had therefore never reached a reader. Styled to match the alert bullets
+          // above rather than the per-step ones, since a note is not a numbered step.
+          if (a.notes.length > 0) {
+            h += `<ul style="margin:0 0 8px 28px;padding:0;font-size:0.86em;color:#555;">`;
+            a.notes.forEach(n => { h += `<li style="margin-bottom:3px;">${n}</li>`; });
+            h += `</ul>`;
+          }
+          return;
+        }
 
         stepNum++;
         // An elapsed date on a schedule that withholding already covers is owed, but not late in

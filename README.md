@@ -188,7 +188,7 @@ I use AI to keep track of and categorize possible future enhancements. You can r
 + The Optimizer can now suggest converting for a limited number of years and then stopping. It previously only ever tested converting the same amount every year for the rest of the plan, so plans that should convert heavily early and then stop were told to convert nothing at all.
 + The Optimizer's "Conv Savings" column is now called "Tax Paid Δ", because it only counts tax paid during the plan and can look positive on a plan that ends up worse off overall. Break Even remains the column to trust.
 + An arithmetic bug was understating the asset withdrawal rate.
-+ Tax creep (increasing or decreasing future tax rates) has been added to the tool, but it's only currently accessible via a special switch.
++ Tax creep (rising future tax rates) is in the Assumptions section as "Fed Tax Creep %/yr", with "Creep Starts" beside it. It raises the federal ordinary-income bracket rates a little each year so you can stress-test a higher-tax future. Bracket thresholds still track CPI, and state tax, capital gains, NIIT and IRMAA are unaffected. It defaults to 0, which keeps today's rates for the whole plan.
 + RMD milestone markers now show up on the charts, so you can see at a glance which year RMDs kick in.
 + Lots of chart improvements were made - additional charts, highlighting of specific categories.
 + Improved usability on small devices by allowing the "Tooltips" that are visible in a large browser to be clickable. (Most headers and titles have tooltips).

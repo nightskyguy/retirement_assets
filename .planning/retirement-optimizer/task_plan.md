@@ -2,7 +2,35 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-27 (worktree context-e73361, branch `worktrees/planning-with-files-6d0fed`). PR1/PR2/PR3 merged. Now working the deferred backlog from PR1's appendix as four sequenced PRs (plan file: `C:\Users\starc\.claude\plans\there-are-several-items-tender-newt.md`). PR-A DONE and uncommitted.
+**As of:** 2026-07-29 (worktree context-e73361, branch `worktrees/planning-with-files-453213`). Everything through PR #136 is merged into `main`; PR-A..PR-G all shipped inside PR #135 (v11.13a1, merged 2026-07-29). Nothing is uncommitted. The only open branch is this one, carrying PR #137 (v11.13bd, nerdknob graduation).
+
+MAINTENANCE NOTE: this heading and the per-phase status lines are injected into every turn by the planning hook, so a stale "uncommitted" here reads as a live claim about the working tree. Update them in the same turn you commit, not later.
+
+---
+
+## Nerdknob graduation: Stop-Year + Tax Creep (2026-07-29, v11.13bd) — COMPLETE, PR #137 open (`584a94a`)
+
+User: "remove the nerdknob control from the Stop conversions settings, it seems robust enough."
+Asked whether to include the tax-creep row, which sat as an open question at the P4 phase below
+citing the same PF13 precedent; user said un-gate both, and asked for a regression test.
+
+Gating in this codebase is inline `element.style.display` only, set from `applyNerdKnobVisibility()`
+(`optimizer_ui.js:80`). No CSS class exists for it. So un-gating = delete `display:none` from the
+markup AND delete the JS branch, per the PF13 pattern at `optimizer_ui.js:88-92`.
+
+- `retirement_optimizer.html` — dropped `display:none` from `#convEndYear-wrap` and
+  `#taxRateCreep-wrap`; rewrote the creep comment that explained the gate.
+- `optimizer_ui.js` — deleted both branches from `applyNerdKnobVisibility()`. Also deleted the two
+  call sites that existed ONLY to un-hide the stop-year row after writing into it:
+  `loadOptimizerResult()` and `applyConvStopYear()`.
+- `optimizer_tests.js` — new `assertUngated()` asserting computed display for both wraps.
+- `README.md:191` said tax creep was "only currently accessible via a special switch" — now false.
+  `README.md:632-648` already described Stop-Year as visible, so un-gating made the docs correct.
+
+STILL GATED, deliberately: `cycleLTCGTarget-wrap`, `opt-legend-cashfund`, `doc-aca-cliff`, MC nerd
+panels, GK strategy params, ACA FPL dropdown options, ACA-cliff + 💵 optimizer sweep arms.
+
+**Closes** the open question at "Phase P4: Creeping Tax Rate Model" below.
 
 ---
 
@@ -22,7 +50,31 @@ shifting, the 497%-over-withholding bug, and the two displayed plans that were n
 the full liability. Everything below is new work on top of it.
 
 Engine is `taxPaymentPlanner.js`; the HTML is a thin shell. Tests are `taxPaymentPlanner.test.js`
-(27 passing, node-only today).
+(**30 passing** as of v1.13c0, and runnable from the browser via `?runtests`).
+
+**Sequencing and status.** An earlier session on `worktrees/planning-with-files-453213` proposed a
+four-PR split (PR-T1..T4) and re-verified the specs against `e1ddb71`. The user then chose a
+**three-PR** split, which is what shipped; that table is superseded by this one. The line counts and
+the 27-test baseline from that session are also now stale.
+
+| Item | Status | Ships as |
+|------|--------|----------|
+| TPP-3 run tests from browser | **DONE** v1.13be | PR 1 (#138) |
+| TPP-4 compute button reachable | **DONE** v1.13be | PR 1 (#138) |
+| TPP-5 dedupe note text | **DONE** v1.13be | PR 1 (#138) |
+| Plan C legibility (found in testing) | **DONE** v1.13c0 | PR 1 (#138) |
+| `T.NOTE` sub-notes never render (found in testing) | pending | PR 2 prep |
+| `shFed`/`shState` miss the 6654(d)(1)(B) lesser-of | pending | PR 2 commit 1 |
+| TPP-1 IRC 6654 penalty estimate | pending | PR 2 |
+| TPP-2 priced remedies | pending | PR 3 |
+
+Order rationale: TPP-2 prices remedies against "penalty avoided", so it cannot be built before
+TPP-1 computes a penalty. TPP-3 landed first on purpose — a browser-runnable suite is the
+verification surface for everything after it. The two items found while testing PR 1 are sequenced
+ahead of the penalty engine because TPP-1's arithmetic depends on the safe-harbor rule being right,
+and because the `T.NOTE` fix is what makes some of TPP-5's shortened notes visible at all.
+
+Current plan file: `C:\Users\starc\.claude\plans\calm-snacking-newt.md`.
 
 ### TPP-1 — Estimate the penalty when the user is already late
 
@@ -155,7 +207,7 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 
 ---
 
-## PR-C Full Retirement Age from birth year (2026-07-27, v11.1391) — COMPLETE, uncommitted
+## PR-C Full Retirement Age from birth year (2026-07-27) — COMPLETE, merged in PR #135 as v11.13a1
 
 **Status: COMPLETE**, node 145/145 (+4) + taxPaymentPlanner 12/12, browser verified.
 
@@ -170,7 +222,7 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 
 ---
 
-## PR-B Social Security claim-year proration + start milestones (2026-07-27, v11.1391) — COMPLETE, uncommitted
+## PR-B Social Security claim-year proration + start milestones (2026-07-27) — COMPLETE, merged in PR #135 as v11.13a1
 
 **Status: COMPLETE**, node 141/141 (+8) + taxPaymentPlanner 12/12, browser verified. **Not byte-identical, by design** — see the measured table below.
 
@@ -198,7 +250,7 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 
 ---
 
-## PR-A MC stress auto-run + Stress Failure tile + dead-code delete (2026-07-27, v11.1391) — COMPLETE, uncommitted
+## PR-A MC stress auto-run + Stress Failure tile + dead-code delete (2026-07-27) — COMPLETE, merged in PR #135 as v11.13a1
 
 **Status: COMPLETE**, node 133/133 + taxPaymentPlanner 12/12, browser verified, engine files untouched so byte-identity is guaranteed by construction.
 
@@ -722,7 +774,7 @@ const AUTOSAVE_KEY = 'SLCRetireOptimizeAutoSave';
 - [x] Tests (`optimizer_core.test.js`, +6, 114/114): OFF byte-identical + never reinvests/breaches; 0 reinvests all (basis step-up, far less terminal Cash); 0 != OFF; positive buffer reinvests overflow; floor protected early + breaks as last resort when depleted; healthy plan never breaches.
 - [x] Harness re-run captured in findings.md (`.test_harnesses/betr_harness.js` gained a reserve-sensitivity table). Reserve flips both BETR's empirical t* and the P24 stop-year recommendation.
 - **GOTCHA:** `logYear` builds its record from an EXPLICIT param object, not `yr` — a new `yr.<field>` logs as 0/undefined until added there (cost ~15 min chasing a "floor not firing" ghost that was really an unlogged flag).
-- **Status:** DONE (v11.1340, worktree context-ab498f, branch worktrees/roth-breakeven-diagnosis-dd3075, UNCOMMITTED). node 114/114 + taxPaymentPlanner 12/12. Browser end-to-end pending.
+- **Status:** DONE and MERGED (v11.1340, confirmed present on `origin/main`). node 114/114 + taxPaymentPlanner 12/12 at the time.
 - **Follow-up (separate):** BETR itself is unreliable in both reserve regimes (findings.md); consider replacing the closed-form signal with the empirical break-even from two sims.
 
 ---
@@ -754,7 +806,7 @@ const AUTOSAVE_KEY = 'SLCRetireOptimizeAutoSave';
 - [ ] Annual Details `taxRateMult`-style column (Debug/Tax Policy category) — not added; only the hidden `-fedRateCreep`/`-stateRateCreep` log fields exist, no visible column
 - [ ] State-rate creep UI control (input + tooltip + short-key)
 - **B. Pre-TCJA Cliff — NOT implemented.** No `BRACKETS_PRE_TCJA` constant, no `taxRateChangeYear`, no bracket-swap logic anywhere in the codebase (grepped clean). Original spec's second option, never started.
-- **Status:** Option A done but ungated-decision pending — is nerdknob-gating still wanted now that it's a finished, tested feature (cf. PF13 round 2, which un-gated Rank/Maximize-Conversions once they stopped being experimental), or does it stay gated until a Debug/Tax Policy Annual Details column + state-creep UI land? Option B untouched.
+- **Status:** Option A done and NOW UN-GATED (2026-07-29, v11.13bd — see the nerdknob-graduation phase at the top of this file). The row is plain markup with no `display:none` and `applyNerdKnobVisibility()` no longer touches it. The two open sub-items above (Annual Details creep column, state-creep UI control) are still open and did NOT block un-gating: the federal control is finished and tested on its own. Option B untouched.
 - **Independent:** modifies `calculateTaxes()` which is already isolated
 
 ---
@@ -1308,7 +1360,7 @@ P24 (Conversion End Year) — independent; diagnostic + engine flag already exis
 - [x] **Diagnostic rewired** (`updateStats` + `formatStopYearMessage` + `applyConvStopYear` + `toggleBreakEvenDiagnosis`): the ⓘ now leads with the SEARCHED year + dollar gain (never the boundary year), surfaces whenever conversions occur (not just when Break Even is blank), and the expanded panel offers a one-click "Stop after YYYY ▸" that fills the field and re-runs. Boundary-year sentence demoted to secondary color, shown only when Break Even is blank. Always shows the dollar gain (findings §7).
 - [x] Tests (`optimizer_core.test.js`, 6 new, 108/108): unset → bit-identical; all-mode cutoff == internal `_cfSuppressConversionsFromYear` and zeroes conversions after Y with earlier years untouched; extra-mode leaves strategy bracket-fill running past Y; `bestConversionStopYear` finds the interior optimum, dominates full+none, self-consistent when applied through the public input; search strips a pre-set stop year; `afterTaxWealthOfLogRow` matches the BE formula.
 - [ ] **DEFERRED — Optimizer sweep dimension over the stop year** (user chose "measure cost first"). No per-row stop-year column ships this round because the leak guard strips `convEndYear` from every optimizer row; the calendar-year display contract is already met in the single-scenario surfaces (diagnostic message + one-click apply). When wired: measured cost is one k+1 linear scan per plan; the concern is multiplying it across the ⇌ candidate pool × the amount grid — the joint (amount × stop) grid is where the real value is (finding §3: C−D was +$228k to +$1.887M). Optimizer table then displays the stop as a **calendar year** even when entered as an age.
-- **Status:** IMPLEMENTED (v11.1330, worktree context-ab498f, branch worktrees/roth-breakeven-diagnosis-dd3075, UNCOMMITTED). Node 108/108 + taxPaymentPlanner 12/12. Browser end-to-end pending. Only the optimizer sweep dimension deferred.
+- **Status:** IMPLEMENTED and MERGED (v11.1330, confirmed present on `origin/main`). Node 108/108 + taxPaymentPlanner 12/12 at the time. Only the optimizer sweep dimension deferred.
 - **Independent:** no phase dependencies; the diagnostic (PF6/PF5) and the counterfactual engine flag both already existed.
 
 ---

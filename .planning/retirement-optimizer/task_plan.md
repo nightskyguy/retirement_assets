@@ -2,7 +2,7 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-30 (worktree `readme-review-updates-c9df11`, branch `worktrees/planning-with-files-f027a2`, forked at `main` = `2537135`). **No open PRs; nothing uncommitted; working tree clean.** Everything through PR #139 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5). Next work starts from a clean base.
+**As of:** 2026-07-30 (worktree `readme-review-updates-c9df11`, branch `worktrees/planning-with-files-f027a2`, forked at `main` = `2537135`). **PR #140 open (`838a870`, v11.13d0): README audit round 3 + doc-link labels. Working tree clean.** Everything through PR #139 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5). Next work starts from a clean base.
 
 VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + hour)`, so two branches worked on in the same afternoon produce ADJACENT numbers, and whichever merges first is not necessarily the lower one. P25 was built as v11.13c2 (hour 18) but PR #138 merged v11.13c3 (hour 19) ahead of it, so P25 was renumbered to v11.13c5 on merge. When resolving a version conflict, recompute from the clock rather than taking either side.
 
@@ -10,7 +10,7 @@ MAINTENANCE NOTE: this heading and the per-phase status lines are injected into 
 
 ---
 
-## README Audit Round 3 (2026-07-30) — COMPLETE, uncommitted
+## README Audit Round 3 (2026-07-30) — COMPLETE, committed `838a870`, PR #140 open
 
 User asked for a README review after PRs #135-#139. Full claim-by-claim audit is in `findings.md`
 under "README audit round 3"; every item below was checked against code, not against the changelog.
@@ -49,7 +49,7 @@ No version bump: docs plus one comment, no behavior change.
 
 ---
 
-## Link labels follow the href (2026-07-30, v11.13d0) — COMPLETE, uncommitted
+## Link labels follow the href (2026-07-30, v11.13d0) — COMPLETE, committed `838a870`, PR #140 open
 
 User: the live 11.13a1 "Details" link and the "Every earlier release is written up in
 optimizer_changelog.md" sentence still name the `.md`, though v11.13c5 claimed that was fixed.

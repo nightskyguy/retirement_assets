@@ -2,7 +2,9 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-29 (worktree context-e73361, branch `worktrees/planning-with-files-453213`). Everything through PR #136 is merged into `main`; PR-A..PR-G all shipped inside PR #135 (v11.13a1, merged 2026-07-29). Nothing is uncommitted. The only open branch is this one, carrying PR #137 (v11.13bd, nerdknob graduation).
+**As of:** 2026-07-29 (worktree context-e73361, branch `worktrees/markdown-changelog-rendering-a11a86`). Everything through PR #138 is merged into `main` (`1752a7b`, TPP brokerage handoff, v11.13c3 / planner v1.13c3); PR-A..PR-G all shipped inside PR #135 (v11.13a1). **P25 (v11.13c5) is COMMITTED on this branch and carried by open PR #139**, which now also carries a merge of `origin/main`. Nothing uncommitted.
+
+VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + hour)`, so two branches worked on in the same afternoon produce ADJACENT numbers, and whichever merges first is not necessarily the lower one. P25 was built as v11.13c2 (hour 18) but PR #138 merged v11.13c3 (hour 19) ahead of it, so P25 was renumbered to v11.13c5 on merge. When resolving a version conflict, recompute from the clock rather than taking either side.
 
 MAINTENANCE NOTE: this heading and the per-phase status lines are injected into every turn by the planning hook, so a stale "uncommitted" here reads as a live claim about the working tree. Update them in the same turn you commit, not later.
 
@@ -540,8 +542,8 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 | 24 | **P22** | Export Annual Details to CSV | pending | — |
 | 25 | **P23** | MC Arithmetic-Mean Returns + AR(1) Variable Inflation | pending | — |
 | 26 | **P24** | Conversion End Year — searched stop-year + one-click | **implemented** (v11.1330, sweep dim deferred) | — |
-| 27 | **P25** | Generic in-repo Markdown viewer (`docs.html`) | pending | — |
-| 28 | **P26** | README/FAQ cross-references from tooltips | pending | P25 helps |
+| 27 | **P25** | Markdown docs render in a browser | **complete** (v11.13c5; Jekyll already did it, no viewer built) | — |
+| 28 | **P26** | README/FAQ cross-references from tooltips | pending | P25 done, unblocked |
 
 ---
 
@@ -1365,7 +1367,61 @@ P24 (Conversion End Year) — independent; diagnostic + engine flag already exis
 
 ---
 
-## Phase P25: Generic in-repo Markdown viewer (pending, 2026-07-28)
+## Phase P25: Markdown docs render in a browser (2026-07-29, v11.13c5) — COMPLETE, premise was wrong
+
+Solved WITHOUT the viewer specced below. The spec assumed nothing rendered these files except
+github.com. **That was never true.** GitHub Pages runs Jekyll over this repo on every push to
+`main` (default theme `jekyll-theme-primer`) and publishes every `.md` as themed HTML at its
+`.html` URL. Verified by HTTP on 2026-07-29, before writing any code:
+
+| URL | Status | Content-Type |
+|---|---|---|
+| `/optimizer_changelog.md` | 200 | `text/markdown` (browser downloads it) |
+| `/optimizer_changelog.html` | **200** | **`text/html`, 57,564 bytes, fully rendered** |
+| `/ARCHITECTURE.html` | **200** | **`text/html`**, tables + ToC anchors working |
+| `/README.html` | 404 | README maps to `/` instead |
+
+Served markup proves it: `<meta name="generator" content="Jekyll v3.10.0" />` plus primer's
+`<div class="container-lg px-3 my-5 markdown-body">`. All 58 explicit `<a id="11.13a1"></a>`
+anchors survive kramdown intact, so the per-version deep links already worked at the `.html` URL.
+The 5 mermaid fences become `<pre><code class="language-mermaid">`.
+
+So the fix was to point the links at pages that already existed, not to build a renderer. Nothing
+below got built: no `docs.html`, no `?f=` parameter, no markdown parser, no sanitizer, no CDN. The
+`file://` constraint that the spec called "the whole problem" evaporated with the `fetch()`.
+
+**What shipped:**
+- `doclinks.js` + `doclinks.test.js` (16 tests) — `docHref()` maps a relative `*.md` href to the
+  Jekyll page, preserving `#hash`/`?query`. Hrefs in the markup STAY `.md` (true on disk, so
+  `file://` and localhost keep working) and are upgraded at runtime only when the origin is not
+  local. `window.__DOCLINKS_FORCE_RENDERED` overrides the origin check for testing. Guards:
+  absolute URLs untouched (the theme's "Improve this page" edit link is an absolute `.md`),
+  `README.md` -> the directory index not `README.html`, dot-directories left alone.
+- `_includes/head-custom.html` — the theme's one documented customization hook. Inline CSS plus the
+  `doclinks.js` tag. No `_config.yml`, deliberately: if Jekyll ever ignores the include, the docs
+  pages just look the way they did before it existed.
+- Mermaid: no library, per the user's choice of "style the code block only". `doclinks.js` captions
+  each fence and links to GitHub's blob view, which draws it. Nearest-preceding-heading id is used
+  so the link lands on the right section.
+- Back link on rendered doc pages (they had no navigation at all), suppressed on the index.
+- `README.md:177` fix found in passing: the three "CURRENT PLANS / findings / progress" links were
+  **404 on the live site** because Jekyll skips dot-directories. Repointed at GitHub blob URLs.
+
+**Accepted trade-off:** this leans on GitHub Pages default behavior we do not control. Written into
+`ARCHITECTURE.md` Conventions, including the load-bearing warning: **never add `.nojekyll`** - it
+would 404 every docs URL on the site.
+
+**GOTCHA:** `doclinks.js` must keep `defer` and must sweep the whole document. The inline script at
+`retirement_optimizer.html:~669` copies the newest changelog `<li>`'s innerHTML into the LATEST
+CHANGE banner during parse, so there are TWO copies of that Details link by the time the sweep runs.
+Scoping to `#changelog-list` would leave the banner pointing at the raw `.md`.
+
+**Unblocks P26** below: the "where does the reader land" question is answered, README FAQ anchors
+resolve at `/#is-it-a-fools-errand...`.
+
+---
+
+## Phase P25 (original spec, superseded 2026-07-29) — kept for the reasoning, do not build
 
 **Why:** the changelog now lives in `optimizer_changelog.md`, and the Documentation tab links straight to it. A raw `.md` is served as `text/markdown`, which some browsers **download instead of rendering**, and an anchor into plain text does nothing. So the per-version anchors (`optimizer_changelog.md#11.13a1`) only pay off where something renders the file. Today that means GitHub, which is exactly the dependency worth removing: the repo is self-hosted at tools.netcitizen.us and should not need github.com to display its own documentation.
 
@@ -1388,4 +1444,4 @@ P24 (Conversion End Year) — independent; diagnostic + engine flag already exis
 
 **Why:** several tooltips and banners restate material that already exists under `## Frequently Asked Questions` in `README.md` (anchored headings such as "Is It a Fool's Errand to Make Multi-Decade Projections?", "Is the Break-Even Tax Rate Trustworthy?", "Why does the Optimizer say converting never helps?"). Pointing at those anchors keeps one source of truth and shortens the in-app text.
 
-**Needs:** a pass to decide which existing text has a matching FAQ entry, which needs one written, and where the link should land (see P25 — the same "raw .md does not render" question applies).
+**Needs:** a pass to decide which existing text has a matching FAQ entry, which needs one written, and where the link should land. The "where does the reader land" question is settled by P25: link at `README.md#<anchor>` and `doclinks.js` maps it to `/#<anchor>` on the live site while leaving the file link intact locally. Note kramdown's generated ids, not GitHub's: check the rendered `/` for the exact id before hardcoding one.

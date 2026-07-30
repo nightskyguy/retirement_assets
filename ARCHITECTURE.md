@@ -279,8 +279,8 @@ refreshed worker can pull a stale `optimizer_core.js`.
 | `displayhelpers.js` | UI | `DisplayHelpers.setDollarValue`, `parseShorthand`, formatting and tooltip helpers |
 | `optimizer_text.js` | UI | `drawerContent` - How to Use, Documentation, FAQ copy |
 | `optimizer_tests.js` | UI | `runTests` - in-browser console suite |
-| `optimizer_history.js` | UI | `window.optimizerHistoryHTML` - older changelog, lazy-fetched |
 | `other_tools.js` | UI | shared Other Tools widget across all pages |
+| `doclinks.js` | UI | `DocLinks.docHref` - maps `.md` hrefs to the `.html` pages Pages generates |
 | `montecarlo/mc_tab.js` | MC | `initMCTab`, chart rendering, `_mcBase` / `_lastMCHash` |
 | `montecarlo/mc_controller.js` | MC | `runMCWorker`, `cancelMCWorker`, `_runMCMainThread` file:// fallback |
 | `montecarlo/worker.js` | MC | `runPass`, bank build + variation sweep |
@@ -288,6 +288,8 @@ refreshed worker can pull a stale `optimizer_core.js`.
 | `montecarlo/stats.js` | MC | `computePercentiles`, `computeInputFan` |
 | `montecarlo/historical_returns.js` | MC | `HISTORICAL_RETURNS` |
 | `optimizer_core.test.js` | test | `node optimizer_core.test.js` - loads engine via `vm.runInContext` |
+| `doclinks.test.js` | test | `node doclinks.test.js` - `docHref()` mapping table |
+| `_includes/head-custom.html` | docs | Jekyll theme hook: CSS + `doclinks.js` for rendered `.md` pages |
 
 ### Shared globals crossing file boundaries
 
@@ -306,4 +308,15 @@ refreshed worker can pull a stale `optimizer_core.js`.
   tag needs it too - easy one to forget.
 - **Chart.js:** tooltip colors, padding, and `labelColor` come from the one global `Chart.defaults`
   block after the CDN import. Never set them per chart.
-- **Changelog:** 5 newest entries inline in the HTML, older ones move to `optimizer_history.js`.
+- **Changelog:** 5 newest entries inline in the HTML, each linking to its section of
+  `optimizer_changelog.md`, which holds the full write-up of every release. Adding an entry means
+  dropping the sixth-oldest `<li>`; its detail is already in the `.md`, so nothing is lost.
+- **Docs rendering:** GitHub Pages runs Jekyll (default theme `jekyll-theme-primer`) over this repo
+  on every push to `main` and publishes each `.md` as HTML at its `.html` URL, so
+  `optimizer_changelog.html` exists on the live site without being a file in the repo. `README.md`
+  becomes `/`, not `README.html`. Jekyll skips dot-directories, so nothing under `.planning/` is
+  published in any form - link those at their GitHub blob URL. `_includes/head-custom.html` is the
+  theme's one customization hook (there is no `_config.yml` on purpose). Jekyll runs only on
+  GitHub's servers, so `file://` and a local `http.server` have no `.html` for any `.md`: hrefs in
+  the markup stay `.md` and `doclinks.js` upgrades them at runtime when the origin is not local.
+  **Never add a `.nojekyll` file** - it would 404 every docs URL on the site.

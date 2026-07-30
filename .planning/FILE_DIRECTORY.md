@@ -48,10 +48,10 @@ same stub pattern, just within `standalone/` rather than at root.)
 | `optimizer_core.js` | Pure simulation engine for the Optimizer — no DOM/localStorage access, so it's independently `node`-testable. Year-by-year withdrawal/conversion/tax simulation, optimizer sweep, Break-Even/Stop-Year diagnostics. |
 | `optimizer_ui.js` | All DOM/chart/share-URL/scenario-persistence code for `retirement_optimizer.html`. Depends on `optimizer_core.js` + `taxengine.js` being loaded first; shares global scope (not a module). |
 | `optimizer_text.js` | Long-form static content for the Optimizer's Documentation/How-to-Use tab. |
-| `optimizer_history.js` | Older changelog entries (v11.12e5 and earlier), lazy-fetched only when "Older changes…" is expanded in the Optimizer — keeps the inline changelog short on every page load. |
 | `optimizer_styles_responsive.css` | Responsive/mobile layout CSS for the Optimizer. |
 | `displayhelpers.js` | Shared numeric-input parsing/formatting + tooltip helpers, used across multiple tools. |
 | `other_tools.js` | Shared "Other Tools" cross-link widget (the `TOOLS` list) rendered on multiple pages so each tool can link to the others. |
+| `doclinks.js` | Rewrites `.md` hrefs to the `.html` pages GitHub Pages/Jekyll generates from them, but only when the page is served from a non-local origin, so `file://` and localhost keep opening the real files. Also decorates the Jekyll-rendered doc pages (mermaid captions, back link). |
 | `montecarlo/mc_controller.js` | Main-thread interface to the Monte Carlo run — dispatches to a Web Worker on `http(s)://`, falls back to chunked async on `file://`. |
 | `montecarlo/mc_tab.js` | Monte Carlo tab UI controller (charts, tables, strategy selection) in the Optimizer. |
 | `montecarlo/worker.js` | The actual Web Worker: runs all strategy variations against a shared Common-Random-Numbers scenario bank, posts progress + final results. |
@@ -66,6 +66,7 @@ same stub pattern, just within `standalone/` rather than at root.)
 |---|---|
 | `optimizer_core.test.js` | Main `node`-run test suite for `optimizer_core.js` (run with `node optimizer_core.test.js`). |
 | `optimizer_tests.js` | Older/legacy in-browser unit test runner for the Optimizer. |
+| `doclinks.test.js` | `node`-run test suite for `doclinks.js` (run with `node doclinks.test.js`) — the `docHref()` mapping table. |
 | `taxPaymentPlanner.js` / `taxPaymentPlanner.test.js` | Standalone tax-payment-strategy engine (dual-IRA withholding optimizer) behind `RetirementTaxPlanner.html`, plus its `node` test suite. |
 | `.test_harnesses/betr_harness.js` | `node` investigative script — checks whether the displayed Break-Even Tax Rate (BETR) is trustworthy vs. an empirically-derived break-even rate. Not part of the regular suite; kept so the finding can be re-derived on demand. See `.test_harnesses/README.md`. |
 | `.test_harnesses/stopyear_harness.js` | Browser-console investigative script — the research harness behind the Stop-Year feature (`bestConversionStopYear()` in `optimizer_core.js` is the production version). |
@@ -87,6 +88,7 @@ same stub pattern, just within `standalone/` rather than at root.)
 | File | What it is |
 |---|---|
 | `CNAME` | GitHub Pages custom domain (`tools.netcitizen.us`). |
+| `_includes/head-custom.html` | The one Jekyll customization hook used on this site. GitHub Pages renders every `.md` with the default `jekyll-theme-primer`, and that theme includes this file into the `<head>` of each rendered page: CSS for the mermaid/back-link decorations plus the `doclinks.js` tag. Underscore-prefixed, so Jekyll never serves it. There is no `_config.yml` on purpose, and **a `.nojekyll` file must never be added** — it would 404 every `.html` docs URL. |
 | `CODEOWNERS` | GitHub review-routing config (currently just `* @nightskyguy`). |
 | `LICENSE` | Repo license. |
 | `.gitignore` | Ignores local-only/scratch files (`retirement_optimizer_longtext.js`, `removed_functions.js`, `v6i_retirementopt_styles.css`, `.claude/`, `netcitizen.us.*` — the domain/DNS notes file, which contains personal emails and should never be committed). |

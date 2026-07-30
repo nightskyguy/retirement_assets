@@ -11,6 +11,29 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.13c2"></a>
+
+## 11.13c2
+
+**The "Details" links in the Change Log now open a properly formatted page instead of downloading a text file.**
+
+Every release write-up lives in a Markdown file, and clicking through to one used to hand your
+browser a raw `.md` file. Most browsers download that rather than displaying it, and a link to a
+particular release inside it did nothing at all. So the links went to a file you had to open by hand,
+in whatever program claims `.md` on your computer.
+
+The site already publishes a formatted version of each of those files; the links just were not
+pointing at it. They are now, and the link to a specific release lands on that release. Running the
+tool from your own disk or your own local web server still opens the plain file, because the
+formatted version only exists on the live site.
+
+Two side fixes came with it. The three links on the front page to the planning notes, under "What is
+coming next", were broken and now go to where those notes can actually be read. And the architecture
+document's diagrams, which were showing as a wall of text, are now labeled as diagram source with a
+link to a page that draws them.
+
+---
+
 <a id="11.13bd"></a>
 
 ## 11.13bd

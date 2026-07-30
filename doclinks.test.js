@@ -109,7 +109,7 @@ test('html, js and fragment hrefs are left alone', () => {
   unchanged('retirement_optimizer.html');
   unchanged('optimizer_changelog.html#11.13bd');
   unchanged('#faq');
-  unchanged('doclinks.js?v=1113c2');
+  unchanged('doclinks.js?v=1113c5');
   unchanged('');
 });
 

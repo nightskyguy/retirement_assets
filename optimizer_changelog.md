@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.13c2"></a>
+<a id="11.13c5"></a>
 
-## 11.13c2
+## 11.13c5
 
 **The "Details" links in the Change Log now open a properly formatted page instead of downloading a text file.**
 
@@ -31,6 +31,32 @@ Two side fixes came with it. The three links on the front page to the planning n
 coming next", were broken and now go to where those notes can actually be read. And the architecture
 document's diagrams, which were showing as a wall of text, are now labeled as diagram source with a
 link to a page that draws them.
+
+---
+
+<a id="11.13c3"></a>
+
+## 11.13c3
+
+**The Tax Payment Planner now receives your brokerage position, so it stops guessing at it.**
+
+Clicking a year in Annual Details opens the Tax Payment Planner with that year's figures. Three of
+them were never being sent, and the planner quietly fell back to its own built-in assumptions
+instead:
+
+- **Brokerage value and cost basis.** The planner uses the unrealized-gain share of your brokerage
+  account to price the option of raising the tax money by selling shares. With nothing handed over
+  it assumed 40% of the account was gain, no matter what basis you had entered here. On the default
+  scenario the real figure is 60.4%, which nearly doubles the capital-gains cost of that option.
+- **The blended long-term capital gains rate**, federal plus state, which had been fixed at 20%.
+- **The high-income flag.** Above $150,000 of prior-year income the estimated-tax safe harbor rises
+  from 100% to 110% of the prior year's tax. The planner had no way to know, so it always used 100%.
+
+Nothing the Optimizer computes changes; this only affects what the Tax Payment Planner is told when
+you open it. On the planner side, the single "Brokerage Appreciation (%)" field has been replaced by
+**Brokerage Value ($)** and **Brokerage Basis ($)**, with the gain share shown as a computed
+readout. That field held a fraction of account value, not a growth rate, but it sat among four
+genuine rates and was widely read as one. Shared links using the old field still work.
 
 ---
 

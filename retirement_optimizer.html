@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here — do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.13bd</title>
+    <title>Retirement Optimizer 11.13c3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -58,7 +58,7 @@
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1113a1ja"></script>
+	<script src="optimizer_ui.js?v=1113c3"></script>
 	<script src="optimizer_tests.js?v=1111f3"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
@@ -642,11 +642,11 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li><b>11.13c3</b> <strong>Clicking a year to open the Tax Payment Planner now sends your brokerage value and basis, your blended capital-gains rate, and whether you are above the high-income safe-harbor threshold.</strong> The planner was falling back to built-in guesses for all three, so editing your brokerage basis here changed nothing there. Nothing the Optimizer computes changes. <a href="optimizer_changelog.md#11.13c3" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.13bd</b> <strong>Two controls are now available to everyone: "Stop conversions after (year or age)" in the sidebar and "Fed Tax Creep %/yr" in Assumptions.</strong> Stop conversions after sets the last year Roth conversions run, and is the field the Break Even ⓘ fills in when you click its "Stop after YYYY" suggestion. Fed Tax Creep raises future federal bracket rates a little each year so you can stress-test a higher-tax future. Both default to off, so no existing plan changes. <a href="optimizer_changelog.md#11.13bd" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.13a1</b> <strong>Social Security is now counted from your birth month, not paid in full for the whole year you claim it, and the same applies to the year a spouse dies.</strong> Survivor benefits also use the deceased spouse's real Full Retirement Age instead of assuming 67 for everyone. Both change the numbers in most plans. Separately: a Stress Test result now sits in the summary bar on every tab and stays current as you edit, the stress chart is always available including in Synthetic mode, the Monte Carlo tab flags itself as out of date instead of quietly showing the previous plan, any two Optimizer rows can be compared head to head with the new ⚖ button, and the Optimizer says it is calculating instead of appearing to freeze. <a href="optimizer_changelog.md#11.13a1" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.1387</b> <strong>Your own plan now appears in the Optimizer table, so you can compare it against every strategy the tool suggests.</strong> It is pinned as a 📍 CURRENT row, ranked with the others, and can win a metric on its own merits. Break Even is now filled in for every strategy, and a new "⏱ Earliest Break Even" entry names the plan whose conversions pay for themselves soonest. <a href="optimizer_changelog.md#11.1387" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.137f</b> <strong>The suggested year to stop converting is now measured against the plan you would actually get.</strong> The trial plans behind that suggestion were built with the wrong withdrawal timing, so the suggested year and its dollar gain did not match the plan you loaded when you clicked it. Plans with no stop year are unchanged to the dollar. <a href="optimizer_changelog.md#11.137f" target="_blank" rel="noopener">Details</a></li>
-				<li data-flag="behavior"><b>11.1370</b> <strong>When converting more does not help, the Optimizer now tells you what would have to be true for it to help.</strong> It names the future tax rate your plan assumes and can find the lowest rate at which converting starts to pay. It also searches plans that convert for a few years and then stop, which it previously could not find. The Avg BETR column was removed and "Conv Savings" became "Tax Paid Δ". <a href="optimizer_changelog.md#11.1370" target="_blank" rel="noopener">Details</a></li>
 				</ul>
 				<script>
 					/* The Version stat reads the number back out of the <title> tag rather than

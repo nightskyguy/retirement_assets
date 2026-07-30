@@ -590,3 +590,98 @@ Three conclusions:
 Reserve OFF stays byte-identical to pre-P2 (regression-locked). The default is OFF, so existing
 scenarios/URLs are unchanged until a user opts in; a load-time warning fires for any scenario/URL
 that carries an active Cash Reserve.
+
+## Two classic scripts cannot both declare the same top-level `const` (2026-07-29, v1.13be)
+
+Making `taxPaymentPlanner.test.js` dual-mode for TPP-3 failed in a way worth recording, because the
+failure mode gives you almost nothing to go on. The test file opened with
+
+```js
+const TaxPaymentPlanner = (typeof module !== 'undefined' && module.exports)
+  ? require('./taxPaymentPlanner.js') : window.TaxPaymentPlanner;
+```
+
+and the engine, already on the page, opens with `const TaxPaymentPlanner = (() => { ... })();`.
+Two classic `<script>` elements share ONE global lexical scope, so that is a duplicate `const`
+declaration and a **SyntaxError for the whole file**. Nothing in it runs.
+
+The symptoms: the network panel showed `200 OK` for the test file, the loading glyph stayed on ⏳
+because `script.onload` fired (the fetch succeeded) while `window.runTaxPlannerTests` was never
+defined, `script.onerror` never fired (it is for load failures, not parse failures), and
+`read_console_messages` reported nothing. A 200 and an `onload` are not evidence that a script
+executed.
+
+Fix: wrap the test file in an IIFE. That also keeps `test`, `assert`, `BASE`, `TODAY` and the
+business-day helpers out of the app's global scope, which matters now that a test file loads into a
+live application page.
+
+Two related facts from the same session:
+
+- **A top-level `const` is not a `window` property.** `const X = ...` at script scope creates a
+  global lexical binding, so the bare identifier `X` resolves from any later script, but
+  `window.X` is `undefined`. Code that has to find a module without knowing how it was loaded needs
+  an explicit `window.X = X` in the browser branch of the export tail.
+- **TDZ across a module's own top level.** `RULE_CITES` and `CONCEPT_NOTES` interpolate
+  `ROLLOVER_DEADLINE_DAYS` / `RESTORE_TARGET_DAYS` rather than hardcoding 60 and 45. Those arrays
+  are evaluated at module init, so the constants had to be MOVED above them. Quoting a constant
+  inside a data table is the right instinct, but it silently imposes a declaration order.
+
+## `T.NOTE` actions render their description and drop their notes (2026-07-29)
+
+Found while verifying TPP-5. In `taxPaymentPlanner.js`, `buildHtml`'s `if (isNote)` branch returns
+after emitting `a.description`, before the `a.notes` loop every other action type gets, and
+`buildText`'s `T.NOTE` branch pushes only the description. So sub-notes on advisory actions have
+never been rendered in either output.
+
+Two are lost today, both on the RMD-ordering advisory that fires whenever an IRA has both an RMD and
+a conversion, six occurrences each in a dual-IRA scenario: "Only the balance beyond the RMD can be
+converted", and the QCD alternative. The QCD one is real guidance and is invisible.
+
+Left unfixed in PR 1 because rendering them ADDS visible output, and that PR's remit was
+byte-identical numbers with note text only. Spawned as a separate task.
+
+## Safe harbor is TWO different numbers in this engine, and only one of them is right (2026-07-29, v1.13c0)
+
+`shFed`/`shState` in `taxPaymentPlanner.js` are computed as
+
+```js
+const shFed = p.priorYearFedTax != null ? p.priorYearFedTax * sfFedMult : p.federalTax * 0.90;
+```
+
+which uses the prior year **whenever it is supplied**. IRC 6654(d)(1)(B) makes the required annual
+payment the **lesser** of 90% of the current year and 100% (110% for a high earner) of the prior
+year. With current federal tax 35,000 and prior year 33,000, `shFed` returns 33,000 where the real
+requirement is 31,500 — it overstates by 1,500.
+
+These are displayed figures AND they drive the `_gapFillAllowed` gate, so correcting them in place
+changes withholding decisions and every Safe Harbor readout. v1.13c0 therefore added
+`reqAnnualFed`/`reqAnnualState` with the correct minimum, used **only** to decide whether
+withholding alone makes the taxpayer timely. Two notions of the same concept now coexist on purpose.
+**TPP-1 must unify them** — the required annual payment is the direct input to the penalty
+computation, so the wrong one cannot be allowed to feed it. Do not collapse the variables without
+doing that work.
+
+### The coverage test has to be cumulative
+
+Withholding is credited as if an equal part were paid on each due date [IRC 6654(g)(1)] — a
+**uniform** credit. State schedules are not always uniform: California is 30/40/30. So withholding
+equal to the full annual requirement can still miss an early date. On 30/40/30, two dates in, a
+uniform credit has delivered two thirds while 70% was required. A total-versus-total comparison
+returns "covered" and is wrong. `withholdingCoversSchedule()` walks the schedule and compares
+cumulative credit against cumulative requirement at each date, with a $1-per-date tolerance to match
+`splitExact` rounding.
+
+### Reassurance has to be earned, not inferred
+
+The missed-payment alert branched on `usesIraWithholding` — "is this plan using withholding at
+all" — and concluded "No action is required ... penalty-free". A plan can withhold heavily and still
+be short: federal 30,702 against 31,500 misses by 798. Meanwhile the same plan's own installments
+said "PAST DUE — pay immediately to minimise underpayment penalty", so the tool contradicted itself
+inside one plan. The renderer made it worse independently, choosing the green "Calendar Notice" box
+from the strategy and the red PAST DUE badge from the date, neither of which knows whether a penalty
+accrues.
+
+**Rule:** a claim that no penalty applies is a computation, not a category. Federal and state must be
+tested separately, because they routinely disagree — in the scenario above California was covered
+while federal was not. Anything that renders an alarm or a reassurance needs a flag set where the
+check happened, not a heuristic re-derived at draw time.

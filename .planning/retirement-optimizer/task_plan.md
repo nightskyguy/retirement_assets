@@ -34,7 +34,14 @@ panels, GK strategy params, ACA FPL dropdown options, ACA-cliff + 💵 optimizer
 
 ---
 
-## TPP-1..5 Tax Payment Planner backlog (2026-07-29) — OPEN
+## TPP-1..5 Tax Payment Planner backlog (2026-07-29) — TPP-3/4/5 DONE, TPP-1/TPP-2 OPEN
+
+**Sequencing decided 2026-07-29** (plan file `C:\Users\starc\.claude\plans\calm-snacking-newt.md`):
+three PRs, cheap and independent first. PR 1 = TPP-3 + TPP-4 + TPP-5, **DONE and uncommitted**
+at v1.13be on branch `worktrees/planning-with-files-be4b53`. PR 2 = TPP-1. PR 3 = TPP-2.
+User decisions: TPP-2 output is a **priced menu with no winner named** (keeps the tool clear of
+personalized tax advice); TPP-4 is a **single sticky footer button**, not a duplicate at the top.
+
 
 Requested by the user after testing `RetirementTaxPlanner.html` v1.13b9 on branch
 `worktrees/roth-conversion-withhold-replace-a9c195` (PR #136). That branch corrected the
@@ -43,29 +50,31 @@ shifting, the 497%-over-withholding bug, and the two displayed plans that were n
 the full liability. Everything below is new work on top of it.
 
 Engine is `taxPaymentPlanner.js`; the HTML is a thin shell. Tests are `taxPaymentPlanner.test.js`
-(27 passing, node-only today).
+(**30 passing** as of v1.13c0, and runnable from the browser via `?runtests`).
 
-**Baseline re-verified 2026-07-29** on branch `worktrees/planning-with-files-453213` (clean, on
-top of `e1ddb71` which merged PR #136): `node taxPaymentPlanner.test.js` -> 27 passed / 0 failed.
-`taxPaymentPlanner.js` 2312 lines, `RULE_CITES` at :138. `RetirementTaxPlanner.html` 989 lines,
-`#compute` at :446. Every fact in the specs below still holds.
+**Sequencing and status.** An earlier session on `worktrees/planning-with-files-453213` proposed a
+four-PR split (PR-T1..T4) and re-verified the specs against `e1ddb71`. The user then chose a
+**three-PR** split, which is what shipped; that table is superseded by this one. The line counts and
+the 27-test baseline from that session are also now stale.
 
-**Sequencing and status**
+| Item | Status | Ships as |
+|------|--------|----------|
+| TPP-3 run tests from browser | **DONE** v1.13be | PR 1 (#138) |
+| TPP-4 compute button reachable | **DONE** v1.13be | PR 1 (#138) |
+| TPP-5 dedupe note text | **DONE** v1.13be | PR 1 (#138) |
+| Plan C legibility (found in testing) | **DONE** v1.13c0 | PR 1 (#138) |
+| `T.NOTE` sub-notes never render (found in testing) | pending | PR 2 prep |
+| `shFed`/`shState` miss the 6654(d)(1)(B) lesser-of | pending | PR 2 commit 1 |
+| TPP-1 IRC 6654 penalty estimate | pending | PR 2 |
+| TPP-2 priced remedies | pending | PR 3 |
 
-| Item | Status | Size | Depends on | Ships as |
-|------|--------|------|------------|----------|
-| TPP-3 run tests from browser | pending | S | — | PR-T1 |
-| TPP-4 compute button reachable | pending | S | — | PR-T1 |
-| TPP-5 dedupe note text | pending | M | — | PR-T2 |
-| TPP-1 IRC 6654 penalty estimate | pending | L | — | PR-T3 |
-| TPP-2 scored remedies | pending | L | TPP-1 | PR-T4 |
+Order rationale: TPP-2 prices remedies against "penalty avoided", so it cannot be built before
+TPP-1 computes a penalty. TPP-3 landed first on purpose — a browser-runnable suite is the
+verification surface for everything after it. The two items found while testing PR 1 are sequenced
+ahead of the penalty engine because TPP-1's arithmetic depends on the safe-harbor rule being right,
+and because the `T.NOTE` fix is what makes some of TPP-5's shortened notes visible at all.
 
-Order rationale: TPP-2 scores remedies against "penalty avoided", so it cannot be built before
-TPP-1 computes a penalty. Everything else is independent. TPP-3 lands first on purpose — a
-browser-runnable suite is the verification surface for the three items after it. TPP-3 and TPP-4
-are both small and both touch only `RetirementTaxPlanner.html` plus the test file's module
-guard, so they bundle. TPP-5 is text-only and byte-identical in the numeric engine, so it stays
-its own PR to keep that claim reviewable.
+Current plan file: `C:\Users\starc\.claude\plans\calm-snacking-newt.md`.
 
 ### TPP-1 — Estimate the penalty when the user is already late
 
@@ -117,7 +126,7 @@ is the same gross-up shape as `applyConversionGrossUp()` in `optimizer_core.js:1
 the approach rather than deriving it again. Compare the grossed-up cost against the penalty
 avoided and only recommend it when it actually wins.
 
-### TPP-3 — Run the tests from the browser
+### TPP-3 — Run the tests from the browser — DONE (v1.13be, uncommitted)
 
 `taxPaymentPlanner.test.js` is node-only: bare `require` at the top, `process.exitCode` at the
 bottom. Make it dual-mode so `RetirementTaxPlanner.html?runtests` runs it.
@@ -129,7 +138,7 @@ for the browser, replace `process.exitCode` with a return value, and gate on the
 param instead of running unconditionally. Render results on the page as well as the console,
 since the request was to see them directly.
 
-### TPP-4 — Compute button reachable without scrolling
+### TPP-4 — Compute button reachable without scrolling — DONE (v1.13be, uncommitted)
 
 `#compute` sits at `RetirementTaxPlanner.html:446`, at the bottom of a long input panel.
 Duplicate it at the top. IDs must stay unique, so use a shared class or `compute-top` /
@@ -137,7 +146,7 @@ Duplicate it at the top. IDs must stay unique, so use a shared class or `compute
 hides `.inputs-body` entirely), so check both states; a sticky button may serve better than
 two copies.
 
-### TPP-5 — Deduplicate the long-form note text
+### TPP-5 — Deduplicate the long-form note text — DONE (v1.13be, uncommitted)
 
 Measured on a dual-IRA dual-conversion scenario: **174 notes across the three plans, 69 of
 them over 200 characters, 26,184 characters total.** Each boilerplate block repeats six times

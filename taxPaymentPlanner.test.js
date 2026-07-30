@@ -804,6 +804,49 @@ test('T.NOTE actions render their notes, not just the description', () => {
     'The RMD-conversion eligibility note must appear in the text output');
 });
 
+// ── 21b. Brokerage position in dollars drives the unrealized-gain fraction ─
+// appreciationPct is a FRACTION OF VALUE, not a growth rate, and the single "Brokerage
+// Appreciation (%)" input it used to sit behind read as a rate — a user reasonably took 40 to mean
+// 40%/yr and asked for it to be lowered to 5, which would have understated the cost of selling
+// brokerage by roughly 8x. It is now derived from the two dollar amounts the caller actually has.
+test('brokerageValue/brokerageBasis derive appreciationPct, and clamp sanely', () => {
+  const run = extra => TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, federalTax: 35000, stateTax: 22000,
+    ira1Rmd: 15000, ira1Voluntary: 30000, ira2Rmd: 5000, ...extra,
+  });
+
+  assertNear(run({ brokerageValue: 100000, brokerageBasis: 60000 }).params.appreciationPct,
+    0.40, 'value 100k / basis 60k is a 40% gain share', 1e-9);
+  assertNear(run({ brokerageValue: 99378, brokerageBasis: 39318 }).params.appreciationPct,
+    0.6044, 'the real optimizer row works out to 60.4%', 0.0005);
+  assertNear(run({ brokerageValue: 100000, brokerageBasis: 0 }).params.appreciationPct,
+    1.00, 'all gain when there is no basis', 1e-9);
+
+  // A loss position has no representation here: extraCg() would go negative and start crediting a
+  // refund against the cost of selling, so it clamps to zero rather than inverting the sign.
+  assertNear(run({ brokerageValue: 100000, brokerageBasis: 150000 }).params.appreciationPct,
+    0, 'basis above value clamps to 0, not negative', 1e-9);
+  assert(run({ brokerageValue: 100000, brokerageBasis: 150000 })
+    .analysis.strategies.find(s => s.id === 'all_brokerage').cg === 0,
+    'a clamped loss position must not produce a negative capital-gains cost');
+
+  // Blank/absent dollars keep the documented default, and zero value cannot give a ratio.
+  assertNear(run({}).params.appreciationPct, 0.40, 'no dollars supplied keeps the 0.40 default', 1e-9);
+  assertNear(run({ brokerageValue: 0, brokerageBasis: 0 }).params.appreciationPct,
+    0.40, 'a zero-value position cannot give a ratio, so the default stands', 1e-9);
+  assertNear(run({ appreciationPct: 0.604 }).params.appreciationPct,
+    0.604, 'the raw fraction is still honoured for legacy ?ap= links', 1e-9);
+
+  // The direction that matters: a higher gain share must cost more to sell, monotonically.
+  const cgOf = ap => run({ brokerageValue: 100000, brokerageBasis: 100000 * (1 - ap) })
+    .analysis.strategies.find(s => s.id === 'all_brokerage').cg;
+  const costs = [0, 0.25, 0.5, 0.75, 1].map(cgOf);
+  for (let i = 1; i < costs.length; i++) {
+    assert(costs[i] > costs[i - 1],
+      `capital-gains cost must rise with the gain share: ${costs.join(' -> ')}`);
+  }
+});
+
 // ── 21. The cumulative test, on a weighted schedule ───────────────────────
 // Not reachable through a whole-plan assertion: California is 30/40/30, so ratable withholding
 // equal to the FULL annual requirement still misses the second due date. cumReq after two dates is

@@ -94,8 +94,12 @@
  *   portfolioRate        {Number}   annual portfolio return (default 0.07)
  *   hysaGross            {Number}   gross HYSA yield (default 0.045)
  *   marginalOrdRate      {Number}   marginal ordinary rate, fed+state (default 0.30)
- *   cgRateBlended        {Number}   blended LTCG rate (default 0.20)
- *   appreciationPct      {Number}   brokerage unrealized gain fraction (default 0.40)
+ *   cgRateBlended        {Number}   blended LTCG rate, fed + state (default 0.20)
+ *   brokerageValue       {Number}   brokerage market value, dollars (optional)
+ *   brokerageBasis       {Number}   brokerage cost basis, dollars (optional)
+ *   appreciationPct      {Number}   brokerage unrealized gain FRACTION, not a growth rate
+ *                                   (default 0.40). Derived from brokerageValue/brokerageBasis
+ *                                   when both are supplied; see the note at the derivation.
  *   forceStrategy        {String}   'ye_ira' | 'quarterly' | null (auto)
  *   todayDate            {Date}     for missed-payment detection (default new Date())
  */
@@ -717,11 +721,28 @@ const TaxPaymentPlanner = (() => {
       marginalOrdRate:   0.30,
       cgRateBlended:     0.20,
       appreciationPct:   0.40,
+      brokerageValue:    null,
+      brokerageBasis:    null,
       forceStrategy:     null,
       todayDate:         new Date(),
       _baseline:         false,
       _planC:            false,
     }, params);
+
+    // appreciationPct is a FRACTION OF VALUE — what share of the brokerage position is
+    // unrealized gain — and not an annual growth rate. It is easy to misread as a rate, and the
+    // callers that have the real numbers think in dollars, so the preferred way to supply it is
+    // brokerageValue + brokerageBasis, which is also exactly what the optimizer tracks
+    // (`row.Brokerage` / `row.Basis`, and `yr.capGainsPercentage` in optimizer_core.js is this
+    // same ratio). The raw fraction stays supported so existing ?ap= links keep working.
+    //
+    // Dollars win when both are present and the value is positive. A basis above the value would
+    // be a loss position, which this model has no representation for — extraCg() would go
+    // negative and start crediting a tax refund against the cost of selling — so clamp to 0.
+    if (p.brokerageValue != null && p.brokerageBasis != null && p.brokerageValue > 0) {
+      p.appreciationPct = Math.max(0, Math.min(1,
+        (p.brokerageValue - p.brokerageBasis) / p.brokerageValue));
+    }
 
     const yr        = p.taxYear;
     const today     = p.todayDate instanceof Date ? p.todayDate : new Date(p.todayDate);

@@ -2427,6 +2427,28 @@ function openTaxPlanner(row, prevRow) {
     const marginalOrd = ((row['FedRate%'] || 0) + (row['StateRate%'] || 0)) * 100;
     if (marginalOrd > 0) setF('marginalOrdRate', marginalOrd.toFixed(1));
 
+    // Brokerage position, in dollars. The planner needs the unrealized-gain SHARE to price
+    // "raise the tax money by selling brokerage", and it used to be stuck on its own hardcoded
+    // 40% because this handoff never sent anything: neither the position nor the LTCG rate was in
+    // the URL, so editing the basis here changed nothing over there. Both amounts are already on
+    // the row, and (Brokerage - Basis) / Brokerage is the same ratio the engine itself keeps as
+    // yr.capGainsPercentage.
+    set('bv', row.Brokerage);
+    set('bb', row.Basis);
+
+    // Blended LTCG rate = federal capital-gains rate plus the state marginal rate, which is the
+    // same blend optimizer_core applies to a brokerage withdrawal (capitalGainsRate +
+    // nominalStateTaxAtLimit). Most states tax long-term gains as ordinary income; the handful
+    // with preferential treatment will come out slightly high. Clamped to the input's 0-40 range.
+    const cgBlended = ((row['-capGainsRate'] || 0) + (row['StateRate%'] || 0)) * 100;
+    if (cgBlended > 0) setF('cgr', Math.min(40, cgBlended).toFixed(1));
+
+    // IRC 6654(d)(1)(C) raises the safe harbor to 110% when the PRIOR year's AGI exceeded
+    // $150,000, so this reads prevRow, not row -- the same row priorYearFedTax comes from. MAGI is
+    // the closest thing the log carries to AGI; they differ by the MAGI add-backs, which matters
+    // only for a filer sitting within those add-backs of the threshold.
+    if (prevRow && (prevRow.MAGI || 0) > 150000) p.set('hi', '1');
+
     const stateEl = document.getElementById('STATEname');
     if (stateEl?.value) p.set('state', stateEl.value);
 

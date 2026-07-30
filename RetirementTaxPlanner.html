@@ -8,7 +8,7 @@
        Example: Jul 29 08:00 -> day 210 -> (210*24)+8 = 5048 = 0x13b8 -> "1.13b8"
        Bump major manually for significant feature batches. Hardcode it here: the heading
        reads it back out of this tag at runtime rather than duplicating the number. -->
-  <title>Retirement Tax Payment Planner 1.13c2</title>
+  <title>Retirement Tax Payment Planner 1.13c3</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -448,12 +448,27 @@
       <span>Marginal Ordinary Rate (%) <small style="font-weight:400">(fed+state)</small></span>
       <input type="number" id="marginalOrdRate" value="30" step="1" min="0" max="60">
     </label>
-    <label><span>Blended LTCG Rate (%)</span>
-      <input type="number" id="cgRateBlended" value="20" step="1" min="0" max="40">
+    <label>
+      <span>Blended LTCG Rate (%) <small style="font-weight:400">(fed+state, on gains)</small></span>
+      <input type="number" id="cgRateBlended" value="20" step="1" min="0" max="40"
+             title="Long-term capital gains rate, federal plus state, applied to the GAIN portion of a brokerage sale. Used only to price the 'pay taxes by selling brokerage' alternative in the Cost Analysis.">
     </label>
-    <label><span>Brokerage Appreciation (%)</span>
-      <input type="number" id="appreciationPct" value="40" step="5" min="0" max="100">
+    <!-- Was a single "Brokerage Appreciation (%)" field holding the unrealized-gain FRACTION. It
+         sat in the Rates group between four genuine rates, so it read as an annual growth rate;
+         a user reasonably took 40 to mean 40%/yr. It is now the two dollar amounts the number is
+         actually derived from, which is also what the optimizer tracks and hands over. -->
+    <div class="section-hdr">Brokerage Position</div>
+    <label>
+      <span>Brokerage Value ($)</span>
+      <input type="text" id="brokerageValue" value=""
+             title="Market value of the taxable brokerage account. Leave both this and the basis blank to fall back to the default 40% unrealized-gain assumption.">
     </label>
+    <label>
+      <span>Brokerage Basis ($)</span>
+      <input type="text" id="brokerageBasis" value=""
+             title="Cost basis of the taxable brokerage account. Together with the value this gives the unrealized-gain share, which sets the capital-gains cost of raising cash by selling.">
+    </label>
+    <div id="gainFracReadout" style="font-size:0.80em;color:#666;margin:-2px 0 6px;"></div>
 
     <!-- Live computed preview -->
     <div class="computed" id="computed">
@@ -497,8 +512,8 @@
 
 </div><!-- end .layout -->
 
-<script src="displayhelpers.js?v=13c2"></script>
-<script src="taxPaymentPlanner.js?v=13c2"></script>
+<script src="displayhelpers.js?v=13c3"></script>
+<script src="taxPaymentPlanner.js?v=13c3"></script>
 <script>
   // Version readout — parsed out of <title> so the number lives in exactly one place.
   (() => {
@@ -550,6 +565,15 @@
     const v = DisplayHelpers.parseShorthand(document.getElementById(id).value) || 0;
     return scale ? v / scale : v;
   }
+  // Blank has to stay distinguishable from zero for the brokerage pair: both blank means "no
+  // position supplied, use the engine's default gain assumption", where a 0 value would mean
+  // "an empty account" and readNum's `|| 0` would erase the difference.
+  function readNumOrNull(id) {
+    const raw = document.getElementById(id).value.trim();
+    if (raw === '') return null;
+    const v = DisplayHelpers.parseShorthand(raw);
+    return (v == null || isNaN(v)) ? null : v;
+  }
   function readBool(id) { return document.getElementById(id).checked; }
   function readInt(id)  { return parseInt(document.getElementById(id).value) || 0; }
 
@@ -592,7 +616,11 @@
     if (p.hysaGross       !== 0.038) sp.set('hysa', +(p.hysaGross       * 100).toFixed(2));
     if (p.marginalOrdRate !== 0.30)  sp.set('mor',  +(p.marginalOrdRate  * 100).toFixed(1));
     if (p.cgRateBlended   !== 0.20)  sp.set('cgr',  +(p.cgRateBlended   * 100).toFixed(1));
-    if (p.appreciationPct !== 0.40)  sp.set('ap',   +(p.appreciationPct * 100).toFixed(1));
+    // Share the brokerage position as the two dollar amounts, not the derived fraction, so the
+    // restored page shows what was typed. Legacy ?ap= links still load (see SHORT_TO_LONG) but
+    // are never generated now.
+    if (p.brokerageValue != null) sp.set('bv', Math.round(p.brokerageValue));
+    if (p.brokerageBasis != null) sp.set('bb', Math.round(p.brokerageBasis));
 
     return `${location.origin}${location.pathname}?${sp.toString()}`;
   }
@@ -667,7 +695,10 @@
       hysaGross:         readNum('hysaGross',       100),
       marginalOrdRate:   readNum('marginalOrdRate', 100),
       cgRateBlended:     readNum('cgRateBlended',   100),
-      appreciationPct:   readNum('appreciationPct', 100),
+      // The engine derives appreciationPct from these when both are present, and keeps its own
+      // default when they are blank. No appreciationPct is sent from the UI any more.
+      brokerageValue:    readNumOrNull('brokerageValue'),
+      brokerageBasis:    readNumOrNull('brokerageBasis'),
       todayDate:         todayDate,
     };
   }
@@ -709,6 +740,34 @@
   function updateComputed() {
     syncIraControls();   // enforce ordering rules before reading params
     const p       = getParams();
+
+    // Show the unrealized-gain share the engine will actually use. This is the number the old
+    // single percent field asked you to work out yourself, and the number people misread as a
+    // growth rate, so it is a readout now rather than an input.
+    (() => {
+      const el = document.getElementById('gainFracReadout');
+      if (!el) return;
+      const bv = p.brokerageValue, bb = p.brokerageBasis;
+      if (bv == null && bb == null) {
+        el.innerHTML = 'Unrealized gain: <strong>40%</strong> assumed (default). Enter value and basis to use your own.';
+        el.style.color = '#666';
+      } else if (bv == null || bv <= 0) {
+        el.innerHTML = 'Enter a brokerage <strong>value</strong> above 0 to derive the unrealized-gain share.';
+        el.style.color = '#8B0000';
+      } else if (bb == null) {
+        el.innerHTML = 'Enter the <strong>basis</strong> too — value alone cannot give the gain share.';
+        el.style.color = '#8B0000';
+      } else {
+        const frac = Math.max(0, Math.min(1, (bv - bb) / bv));
+        const gain = Math.max(0, bv - bb);
+        el.innerHTML = `Unrealized gain: <strong>${(frac * 100).toFixed(1)}%</strong> of value ` +
+          `(${DisplayHelpers.formatDollar ? DisplayHelpers.formatDollar(gain) : '$' + Math.round(gain).toLocaleString()} of gain). ` +
+          `Sets the capital-gains cost of raising cash by selling.` +
+          (bb > bv ? ' <em>Basis exceeds value — a loss position is not modeled, so 0% is used.</em>' : '');
+        el.style.color = bb > bv ? '#8B0000' : '#375623';
+      }
+    })();
+
     const hysaNet = p.hysaGross * (1 - p.marginalOrdRate);
     const be      = p.portfolioRate / 2;
     const wins    = hysaNet < be;
@@ -929,7 +988,12 @@
       i2c:'ira2RothConversion', i2cd:'ira2ConvDone',
       ss:'ssIncome', pen:'pensionIncome', int:'interest', qdiv:'qualifiedDivs',
       cg:'capitalGains', pr:'portfolioRate', hysa:'hysaGross',
-      mor:'marginalOrdRate', cgr:'cgRateBlended', ap:'appreciationPct'
+      mor:'marginalOrdRate', cgr:'cgRateBlended',
+      bv:'brokerageValue', bb:'brokerageBasis',
+      // Legacy: ?ap= carried the unrealized-gain fraction directly, before the input became two
+      // dollar amounts. Still accepted so old shared links keep working; see the ap handling in
+      // loadFromUrl, which converts it into an equivalent value/basis pair.
+      ap:'appreciationPct'
     };
     const sp = new URLSearchParams();
     raw.forEach((v, k) => sp.set(SHORT_TO_LONG[k] ?? k, v));
@@ -939,8 +1003,21 @@
       'ira1Rmd','ira1Voluntary','ira1RothConversion',
       'ira2Rmd','ira2Voluntary','ira2RothConversion',
       'ssIncome','pensionIncome','interest','qualifiedDivs','capitalGains',
-      'portfolioRate','hysaGross','marginalOrdRate','cgRateBlended','appreciationPct',
+      'portfolioRate','hysaGross','marginalOrdRate','cgRateBlended',
+      'brokerageValue','brokerageBasis',
     ];
+    // Legacy ?ap=NN carried the unrealized-gain fraction, which no longer has an input of its own.
+    // Convert it to the value/basis pair that produces the same fraction. $100,000 is arbitrary --
+    // only the ratio reaches the engine -- so the restored page shows a position with the intended
+    // gain share rather than silently dropping the parameter.
+    const legacyAp = sp.get('appreciationPct');
+    if (legacyAp !== null && sp.get('brokerageValue') === null) {
+      const frac = Math.max(0, Math.min(100, parseFloat(legacyAp)));
+      if (!isNaN(frac)) {
+        sp.set('brokerageValue', '100000');
+        sp.set('brokerageBasis', String(Math.round(100000 * (1 - frac / 100))));
+      }
+    }
     const STR_FIELDS = ['state'];
     const BOOL_FIELDS = ['highIncomeFiler','ira1RmdTaken','ira1VolTaken','ira1ConvDone','ira2RmdTaken','ira2VolTaken','ira2ConvDone'];
 
@@ -1003,7 +1080,7 @@
     badge.textContent = '⏳';
     badge.title = 'Loading taxPaymentPlanner.test.js…';
     const s = document.createElement('script');
-    s.src = 'taxPaymentPlanner.test.js?v=13c2';
+    s.src = 'taxPaymentPlanner.test.js?v=13c3';
     s.onload = () => {
       const r = window.runTaxPlannerTests();
       badge.textContent = r.failed === 0 ? `🟢 ${r.passed}/${r.total}` : `❌ ${r.failed} failed`;
@@ -1028,6 +1105,7 @@
       'ira1Rmd', 'ira1Voluntary', 'ira1RothConversion',
       'ira2Rmd', 'ira2Voluntary', 'ira2RothConversion',
       'ssIncome', 'pensionIncome', 'interest', 'qualifiedDivs', 'capitalGains',
+      'brokerageValue', 'brokerageBasis',
     ];
     dollarIds.forEach(id => {
       const el = document.getElementById(id);

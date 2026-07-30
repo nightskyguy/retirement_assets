@@ -10,6 +10,10 @@
    upgrades them to .html at runtime when the page is served from a non-local origin.
    Same idea as the depth-aware path rewrite in other_tools.js.
 
+   Where the visible link text IS the filename ("optimizer_changelog.md"), the label is
+   swapped too. Rewriting the href alone left the page reading .md while the link went to
+   .html, which reads as a bug whichever half you look at.
+
    Loaded with `defer` from retirement_optimizer.html and, on the Jekyll-rendered doc
    pages, from _includes/head-custom.html. Also decorates those rendered pages: mermaid
    fences (which Jekyll leaves as plain <pre>) get a link to GitHub's blob view, which
@@ -53,6 +57,28 @@
     return path.slice(0, -3) + '.html' + tail;
   }
 
+  // A link whose visible text IS the filename has to be relabelled with the href, or the
+  // page tells the reader ".md" while sending them to ".html". Only that case: link text
+  // like "Details" or "Improve this page" describes the destination rather than naming it,
+  // and must not be touched.
+  //
+  // Returns the text unchanged unless the href actually moved, the old text is exactly the
+  // old basename, and the new href is a .html page. The README case (README.md -> "./")
+  // therefore falls through untouched: "README.md" is still the honest name of what sits at
+  // the site root, and there is no filename to swap in.
+  function docLabel(text, oldHref, newHref) {
+    if (typeof text !== 'string' || oldHref === newHref) return text;
+    var base = function (h) {
+      var cut = h.search(/[?#]/);
+      return (cut === -1 ? h : h.slice(0, cut)).split('/').pop();
+    };
+    var oldBase = base(oldHref);
+    var newBase = base(newHref);
+    if (!oldBase || !/\.html$/i.test(newBase)) return text;
+    if (text.trim() !== oldBase) return text;
+    return text.replace(oldBase, newBase);   // replace, not rebuild: keeps any padding
+  }
+
   // ── Origin detection ──────────────────────────────────────────────────────
 
   // True when this page came from the deployed site, i.e. somewhere Jekyll ran.
@@ -78,7 +104,17 @@
     for (var i = 0; i < links.length; i++) {
       var raw = links[i].getAttribute('href');
       var next = docHref(raw, rendered);
-      if (next !== raw) { links[i].setAttribute('href', next); n++; }
+      if (next !== raw) {
+        links[i].setAttribute('href', next);
+        // Guard on childElementCount: relabelling reads and rewrites textContent, which would
+        // flatten any markup inside the anchor. Every filename-labelled link here is plain
+        // text (the <strong> at retirement_optimizer.html:631 wraps the <a>, not the reverse).
+        if (links[i].childElementCount === 0) {
+          var label = docLabel(links[i].textContent, raw, next);
+          if (label !== links[i].textContent) links[i].textContent = label;
+        }
+        n++;
+      }
     }
     return n;
   }
@@ -150,6 +186,7 @@
 
   var DocLinks = {
     docHref: docHref,
+    docLabel: docLabel,
     isRendered: isRendered,
     rewriteLinks: rewriteLinks,
     sourceFile: sourceFile,

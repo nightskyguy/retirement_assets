@@ -786,7 +786,16 @@ function buildSimYearLogRecord(p) {
         'Brokerage-': p.netWithdrawals.Brokerage,
         'RothWD': (p.netWithdrawals.Roth1 ?? 0) + (p.netWithdrawals.Roth2 ?? 0),
         'CashWD': p.netWithdrawals.Cash,
+        // DO NOT make this the P28 unified figure. `rothConv` is read back out of the log by the
+        // NEXT year (beginYear: `log[y-1].rothConv > 1000` picks early-vs-late withdrawal timing),
+        // so it is engine state wearing a display field's clothes. Reporting the reframed number
+        // here flipped IRA Draw 6% from late to early timing and moved 780 money fields. The
+        // reframe gets its own keys below instead.
         'rothConv': p.totalConverted,
+        // P28 (research flag): the same year told as "convert the whole voluntary draw, then spend
+        // out of Roth". Hidden ('-' prefix) and never read by the engine.
+        '-unifiedConvGross': p.unifiedConvRouting ? ((p.iraConvGross1 || 0) + (p.iraConvGross2 || 0)) : 0,
+        '-unifiedRothSpend': p.unifiedRothSpend || 0,
         'surplusCash': p.surplus.Cash,
         '-surplusToBrokerage': p.surplusToBrokerage ?? 0,   // Cash Reserve overflow reinvested (hidden)
         '-cashBreach': p.cashBreach ? 1 : 0,                // spending forced a draw into the reserve (hidden)
@@ -937,6 +946,12 @@ function beginYear(sim, yr) {
        || _extraConvAmountFor(inputs, 0) > 0;
     const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
     yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
+    // Research override (no UI, default off): pin the timing to 'early' or 'late' for every year.
+    // Exists because converting flips this rule, so any A/B of convertExcessToRoth silently compares
+    // a month-1 withdrawal schedule against a month-11 one on top of the tax difference. Pinning it
+    // is the only way to separate "where the surplus lands" from "when the money leaves".
+    if (inputs.forceWithdrawTiming === 'early') yr._useEarly = true;
+    else if (inputs.forceWithdrawTiming === 'late') yr._useEarly = false;
     const yearTiming   = yr._useEarly ? 'early' : 'late';
     yr.timingReason = yr._useEarly ? 'Conv'  : 'Spend';
     const preMonths    = yearTiming === 'early' ? 1 : 11;
@@ -1458,6 +1473,46 @@ function fillSpendingGap(sim, yr) {
 
     inspectForErrors({ netSpendable: netSpendable, gap: gap, totalTax: yr.totalTax });
 
+    // P28 research input (no UI, default off): move Roth OUT of last place in the gap fill. This is
+    // the only half of the unified-conversion idea that can move money. Deliberately separate from
+    // unifiedConvRouting so the harness can measure the two independently -- the routing half is
+    // provably balance-neutral, this half is not. `ordered` is excluded by explicit instruction: its
+    // entire meaning is the account sequence the user picked.
+    //
+    //   inputs.rothGapFill
+    //     (unset)             -- today: Cash, then Brokerage, then Roth as last resort
+    //     'fillCashThenRoth'  -- Cash, then ROTH, then Brokerage
+    //     'fillRothThenCash'  -- ROTH first, ahead of everything
+    //
+    // Named for what they control -- where Roth is inserted -- and NOT given Ordered-style letter
+    // codes (CRBI / RCBI). Two reasons: today's default is already "CBRI", so a letter code invites
+    // reading the wrong mode as the current one; and this input does not set a total ordering at all.
+    // The non-bracket branch below draws Brokerage and Cash PROPORTIONALLY (40/60), so there is no
+    // full sequence for a four-letter code to name.
+    //
+    // Two positions, because measurement showed the blunt one is wrong about half the time. Roth pays
+    // off only when it displaces a TAXABLE draw (Brokerage, realizing gains). Displacing Cash is a
+    // loss: both are tax-free to withdraw, but Roth compounds at the growth rate tax-free while Cash
+    // earns cashYield and pays tax on the interest, so spending Roth to preserve Cash keeps the worse
+    // asset. Measured on IRA Draw 6%, whose gap fill only ever touched Cash: $58k of substituted
+    // withdrawals cost $137,062 of terminal value.
+    // Validated against the known values rather than tested for truthiness: with `|| null` a typo
+    // like 'fillCashThenRother' fell through to the Roth-first branch and silently modelled the
+    // OTHER mode. Anything unrecognized now means "leave today's behavior alone".
+    const _rothPos = (inputs.rothGapFill === 'fillCashThenRoth' || inputs.rothGapFill === 'fillRothThenCash')
+        ? inputs.rothGapFill : null;
+    const _preDraw = (acct, amt) => {
+        if (amt <= 1 || !(yr.curBalances[acct] > 0)) return amt;
+        const wd = calculateWithdrawals(yr.curBalances, amt, { order: [acct], weight: [1], taxrate: [0] });
+        yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, wd]);
+        applyWithdrawals(yr.curBalances, wd);
+        return wd.shortfall ?? 0;
+    };
+    if (gap > 1.00 && _rothPos && !yr.isOrderedStrategy) {
+        if (_rothPos === 'fillCashThenRoth') gap = _preDraw('Cash', gap);
+        gap = _preDraw('Roth', gap);
+    }
+
     if (gap > 1.00) {
         if (yr.isBracketStrategy) {
             // Bracket/IRMAA strategies: supplement spending from Cash first, then Brokerage, then Roth.
@@ -1543,7 +1598,18 @@ function resolveResidualAndForcedIRA(sim, yr) {
             // The 2nd-pass gap-fill already grossed up Brokerage; the 3rd pass handles the
             // leftover tax from SS phaseout and NIIT cliffs that the gross-up couldn't predict.
             // Cash (and Roth as fallback) carry no new cap gains, so they break the cycle.
-            const thirdWd = calculateWithdrawals(yr.curBalances, residualGap,
+            // P28 flag: only 'fillRothThenCash' changes the third pass. The pass is already Cash then
+            // Roth, which IS the 'fillCashThenRoth' order, so that mode leaves it untouched.
+            // Neither carries cap gains, so this only picks which tax-free account drains first.
+            let _thirdGap = residualGap;
+            if (inputs.rothGapFill === 'fillRothThenCash' && yr.curBalances.Roth > 0) {
+                const rothFirst3 = calculateWithdrawals(yr.curBalances, _thirdGap,
+                    { order: ['Roth'], weight: [1], taxrate: [0] });
+                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothFirst3]);
+                applyWithdrawals(yr.curBalances, rothFirst3);
+                _thirdGap = rothFirst3.shortfall ?? 0;
+            }
+            const thirdWd = calculateWithdrawals(yr.curBalances, _thirdGap,
                 { order: ['Cash'], weight: [1], taxrate: [0] });
             yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, thirdWd]);
             applyWithdrawals(yr.curBalances, thirdWd);
@@ -1738,6 +1804,32 @@ function routeSurplusAndConvert(sim, yr) {
     yr.iraVolSpend1 = Math.max(0, (yr.netWithdrawals.IRA1 || 0) - yr.iraConvGross1);
     yr.iraVolSpend2 = Math.max(0, (yr.netWithdrawals.IRA2 || 0) - yr.iraConvGross2);
 
+    // P28 research flag (no UI, default off): model EVERY voluntary IRA dollar as a Roth conversion,
+    // with spending then drawn back out of Roth.
+    //
+    // This re-attributes REPORTING only, and that is not a shortcut -- it is the arithmetic. Draw a
+    // gross X, pay tax T on it, fund spending S: today Roth gains the leftover L = X - T - S. Routed
+    // through Roth, Roth gains (X - T) and immediately gives back S, which is the same L. The round
+    // trip cannot move money and cannot fail (the conversion funding S arrives in the same instant S
+    // leaves), so surplus.Roth1/2 -- the only fields here that reach a balance -- are left exactly as
+    // computed above. What legitimately changes is what the year CALLS its dollars: the whole
+    // voluntary draw is conversion gross, and none of it is a spending draw.
+    //
+    // yr.totalConverted is deliberately NOT reassigned, and neither is the `rothConv` log field it
+    // feeds. Both read as reporting and neither is: beginYear picks next year's withdrawal TIMING
+    // from `log[y-1].rothConv > 1000`. Writing the reframed figure into either one flipped IRA Draw
+    // 6% from late to early timing and moved 780 money fields. The reframe gets its own log keys.
+    if (inputs.unifiedConvRouting) {
+        yr.iraConvGross1 = yr.netWithdrawals.IRA1 || 0;
+        yr.iraConvGross2 = yr.netWithdrawals.IRA2 || 0;
+        yr.iraVolSpend1 = 0;
+        yr.iraVolSpend2 = 0;
+        // The portion that round-tripped straight back out to fund spending. Reported so the
+        // Annual Details reframe can show the two legs instead of a bare net.
+        yr.unifiedRothSpend = Math.max(0,
+            (yr.iraConvGross1 + yr.iraConvGross2) - (yr.surplus.Roth1 + yr.surplus.Roth2));
+    }
+
     // If there is still a surplus, replace any excess Cash withdrawal.
     yr.surplus.Cash = Math.min(yr.surplus.Total, yr.netWithdrawals.Cash);
     yr.netWithdrawals.Cash -= yr.surplus.Cash;
@@ -1753,6 +1845,9 @@ function routeSurplusAndConvert(sim, yr) {
     // Decrement the proposed withdrawals from the balance(s).
     applyWithdrawals(balance, yr.netWithdrawals)
 
+    // Unchanged by every P28 flag, on purpose. This feeds attributeIncrementalTaxes, _netOutflows
+    // and the `rothConv` log field, and `rothConv` is read back by the NEXT year to pick withdrawal
+    // timing -- so it is engine state, not a display value. See the note in the flag block above.
     yr.totalConverted = yr.surplus.Roth1 + yr.surplus.Roth2;
 
     // Counterfactual: the surplus that would have been banked to Cash/Brokerage stays in
@@ -2149,6 +2244,7 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
+        unifiedConvRouting: !!inputs.unifiedConvRouting,
         totalTax: yr.totalTax, capitalGains: yr.capitalGains, cumulativeTaxes: sim.cumulativeTaxes, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         totalsSpend: totals.spend,

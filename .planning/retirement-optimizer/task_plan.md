@@ -633,6 +633,8 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 | 26 | **P24** | Conversion End Year — searched stop-year + one-click | **implemented** (v11.1330, sweep dim deferred) | — |
 | 27 | **P25** | Markdown docs render in a browser | **complete** (v11.13c5; Jekyll already did it, no viewer built) | — |
 | 28 | **P26** | README/FAQ cross-references from tooltips | pending | P25 done, unblocked |
+| 29 | **P27** | Assumption Sensitivity tornado (growth / inflation / lifespan / SS / tax drift) | scoped 2026-07-30, not started | — |
+| 30 | **P28** | Every voluntary IRA withdrawal as a Roth conversion | **research done** 2026-07-30 (routing inert, Roth-first is the lever); feature decision open | — |
 
 ---
 
@@ -904,6 +906,12 @@ const AUTOSAVE_KEY = 'SLCRetireOptimizeAutoSave';
 
 ## Phase P5: Greedy DP Conversion Schedule (was Phase 23b)
 **Why:** Phase 23 implemented `optimizeConversionAmount()` as a scalar sweep. Per-year optimal conversion schedule (greedy DP) is deferred.
+
+**UNBLOCKED — verified 2026-07-30, and it does not depend on P28.** The per-year lever already
+exists: `_extraConvAmountFor` (`optimizer_core.js:1677`) reads `inputs.extraConversionAmount[y]`
+whenever the input is an array, so a per-year schedule is expressible against today's engine with no
+representation change. An earlier claim in the P28 discussion that the "unified conversion" reframe
+was the precondition for a 1-D per-year search was wrong; the 1-D search is already available.
 
 **Core algorithm:**
 For each year t from retirement to max(RMD ages):
@@ -1404,6 +1412,9 @@ P21 (Account Spend View) — independent; complements P8
 P22 (CSV Export) — independent; benefits from P21 (not required)
 P23 (MC Arithmetic Mean + AR1 Inflation) — independent
 P24 (Conversion End Year) — independent; diagnostic + engine flag already exist
+P27 (Assumption Sensitivity) — independent; every axis is already a getInputs() field
+  └─→ (deferred) winner-stability grid — needs the MC worker
+P28 (Unified conversion routing) — independent; research done, does NOT gate P5
 ```
 
 ---
@@ -1412,7 +1423,7 @@ P24 (Conversion End Year) — independent; diagnostic + engine flag already exis
 
 | Decision | Rationale |
 |----------|-----------|
-| Phase 8 (Variable Growth grid) superseded | Bootstrap MC + Stress mode cover the use case |
+| ~~Phase 8 (Variable Growth grid) superseded~~ **REVERSED 2026-07-30, see P27** | The original rationale ("Bootstrap MC + Stress mode cover the use case") does not hold. MC randomizes returns AROUND an assumed mean and Stress varies the historical SEQUENCE; neither varies the mean itself, and neither varies lifespan or inflation at all. The use case was never covered. P27 rebuilds it as a current-plan tornado rather than the original grid |
 | Phase 10 (Multi-Strategy) deprioritized | Phase 23 conversion optimizer covers conversion dimension; Phase P13 for spending segments later |
 | Phase 12 (Timing) auto-implementation | Auto early/late beat manual toggle; shipped without updating individual status block |
 | Baseline = best no-conv no-cyclic row | Avoids IRA-hoarding strategies winning on raw NW; spendable-weighted score in Phase 37 |
@@ -1534,3 +1545,162 @@ resolve at `/#is-it-a-fools-errand...`.
 **Why:** several tooltips and banners restate material that already exists under `## Frequently Asked Questions` in `README.md` (anchored headings such as "Is It a Fool's Errand to Make Multi-Decade Projections?", "Is the Break-Even Tax Rate Trustworthy?", "Why does the Optimizer say converting never helps?"). Pointing at those anchors keeps one source of truth and shortens the in-app text.
 
 **Needs:** a pass to decide which existing text has a matching FAQ entry, which needs one written, and where the link should land. The "where does the reader land" question is settled by P25: link at `README.md#<anchor>` and `doclinks.js` maps it to `/#<anchor>` on the live site while leaving the file link intact locally. Note kramdown's generated ids, not GitHub's: check the rendered `/` for the exact id before hardcoding one.
+
+---
+
+## Phase P27: Assumption Sensitivity, a tornado over the guesses (scoped 2026-07-30)
+
+**Why:** every number this tool reports rests on three values the user typed into the sidebar and
+cannot verify: `growth`, `inflation`, and how long they live. Nothing in the tool asks what happens
+if those guesses are wrong. Monte Carlo randomizes returns *around* an assumed mean and the Stress
+pass varies the historical *sequence*; neither varies the mean itself, and neither touches lifespan
+or inflation at all (GBM inflation is a flat constant, `optimizer_core.js:921`). This phase reverses
+the `Decisions Made` row that retired the old Variable Growth grid as "covered by Bootstrap MC" -
+it was not covered, and the row has been rewritten to say so.
+
+**Shape (settled with the user, 2026-07-30):** the CURRENT PLAN only, one axis at a time, rendered
+as a tornado. Explicitly NOT the full winner-stability grid, and NOT a robustness column bolted onto
+all 144 optimizer rows. Growth and inflation are INDEPENDENT axes: the real return is allowed to
+move, because inflation does more in this engine than deflate (see below).
+
+**Fixed plan:** the sidebar's own plan, captured the way `_runOptimizerNow()` captures `userPlan`
+(`optimizer_ui.js:674`) - conversion switch, Extra Conversion and stop year all intact, none of the
+three stripped the way swept rows strip them. Named with the existing `describeSelection()` so the
+panel reads "Proportional 7%" like any table row.
+
+**Axes.** Each is swept alone with every other field at its sidebar value.
+
+| Axis | Field(s) | Grid |
+|---|---|---|
+| Asset growth | `growth` | base -3 .. +3 pp, 1 pp steps, floored at 0 |
+| General inflation | `inflation` | base -1.5 .. +1.5 pp, 0.5 pp steps, floored at 0 |
+| Medical inflation | `cpi` | base +/- 1 pp. Its own axis because `sim.medicareRate *= (1 + cpi + inflation)` (`optimizer_core.js:2192`) compounds it separately from everything else |
+| Lifespan, person 1 | `die1` | base +/- 5, +/- 10 yrs |
+| Lifespan, person 2 | `die2` | base +/- 5, +/- 10 yrs |
+| Death ORDER | swap `die1`/`die2` | who goes first, at matched ages. Flips the household to Single filing at a different point, which is the largest single driver of conversion value in this engine |
+| SS haircut | `ssFailPct`, `ssFailYear` | 0 / 23% / 30%, plus the year pulled 5 yrs earlier |
+| Tax policy drift | `taxRateCreep`, `taxCreepStartYear` | 0 / 0.5 / 1.0 pp per yr |
+
+Every one is already a plain `getInputs()` field (`optimizer_ui.js:339-407`) and `simulate()` is
+pure, so a cell is literally `simulate({ ...base, growth: r })`. No engine change is required for
+any axis. Two axes the user considered and declined, recorded so they are not re-proposed as new:
+`futureIRATaxRate` (it is the SCORING assumption, not a world assumption) and state-of-residence.
+
+**Scoring - the part that must not be got wrong.** Cells are not comparable in dollars; see the
+findings entry "An assumption sweep cannot be scored in dollars". Each cell therefore runs the plan
+TWICE - as configured, and again with `convertExcessToRoth:false` / `extraConversionAmount:0` - and
+the tornado bar is the WITHIN-CELL difference in `baselineScoreOf()` (`optimizer_core.js:2703`),
+the same after-tax, inflation-deflated, spendable-weighted measure the optimizer table already ranks
+on. Secondary per-cell readouts: whether `totals.success` flips, and whether the plan's rank inside
+its own family moves. Raw ending-wealth deltas ACROSS cells are out of scope and must not be drawn.
+
+**Guards:**
+- Clamp `die1`/`die2` to at least the person's current age. `maxYears` is derived from them
+  (`optimizer_core.js:2220`) and must never go non-positive.
+- Skip the `die2` and death-order axes when `hasSpouse` is false. `simulate()` already zeroes
+  person 2 at `optimizer_core.js:2198`, so those cells would be silent duplicates.
+- AL, MT and OH have `INFLATION_INDEXED:false`. Their brackets are frozen at `taxengine.js:1089`
+  while their standard deduction inflates unconditionally at `taxengine.js:1349-1351`, so the inflation
+  axis amplifies that known bug into a visible trend line. Disclose it in a NOTE on the axis, or
+  suppress the axis for those three states. Do not ship it silently.
+
+**Placement and cost:** new pure `sweepAssumptions(base, axes)` in `optimizer_core.js`, added to
+the UMD export list at `optimizer_core.js:3328` so it is node-testable the way
+`bestConversionStopYear` is. Rendering in `optimizer_ui.js`. About 45 grid points x 2 runs is ~90
+`simulate()` calls, against the ~150 the optimizer already runs synchronously in ~1.3s. Reuse the
+`_optBusy*` indicator (`optimizer_ui.js:596-666`) and stay on the main thread: no worker, no
+chunking, no progress bar.
+
+**Reuse, do not rebuild:** `baselineScoreOf`, `afterTaxWealthOfLogRow` (`optimizer_core.js:2499`),
+`describeSelection`, `rankRowsByObjective`, the `_optBusy*` helpers. The ⚖ compare and 📍 pin
+machinery is NOT needed - this panel has exactly one plan, so there is nothing to pin against.
+
+- [ ] `sweepAssumptions(base, axes)` in optimizer_core.js, pure, UMD-exported
+- [ ] Axis definitions + the two guards (age clamp, no-spouse skip)
+- [ ] Within-cell paired scoring (configured vs no-conversion) on `baselineScoreOf`
+- [ ] Tornado render in optimizer_ui.js, reusing `_optBusy*`
+- [ ] AL/MT/OH inflation NOTE or axis suppression
+- [ ] node tests: age clamp, no-spouse skip, and that a zero-width axis returns a zero bar
+- **Status:** scoped, not started
+- **Independent:** no phase dependencies
+
+**DEFERRED follow-on, named here so it is not lost:** the winner-stability GRID - run the whole
+strategy sweep at each of 3x3 assumption corners and report which family wins per cell. That is the
+question the tornado cannot answer ("is my winner an artifact of my guesses?"), it costs ~9 x 150
+simulations so it needs the worker, and it is the natural successor to this phase.
+
+---
+
+## Phase P28: "Every voluntary IRA withdrawal is a Roth conversion" (2026-07-30) — RESEARCH DONE, feature decision open
+
+**Why:** user proposal — a nerdknob that models every voluntary (non-RMD) IRA withdrawal as a Roth
+conversion, spending then drawn out of Roth. Asked whether it simplifies the logic, whether it is
+provably better, and which strategies would have to change.
+
+Built as a harness first rather than a feature, because static reading of the engine said the switch
+was a no-op and P24's history says not to ship that kind of conclusion on theory. Both halves of the
+call turned out right and wrong in useful ways.
+
+**Delivered:** `.test_harnesses/unifiedconv_harness.js` (node, registered in the harness README), two
+engine flags defaulting off and set by nothing in the UI, and two hidden log keys.
+
+| flag | what it does | verdict |
+|---|---|---|
+| `unifiedConvRouting` | the voluntary draw is reported as conversion gross; spending round-trips via Roth | **inert** — 0 money fields move in any of 6 families |
+| `rothGapFill` | Roth promoted from LAST to FIRST resort in the gap fill (`ordered` excluded) | **the real lever** — up to +$269k / -$137k |
+
+**Answers to the three questions asked:**
+- **A. Simplify or complicate?** Simplifies the decision space (one lever per year, not two);
+  changes nothing in the tax math, because the engine already taxes the whole voluntary draw as
+  ordinary income wherever the dollars land (`optimizer_core.js:1711-1716`). Complicates the engine
+  only if Roth-first comes with it.
+- **B. Provably better?** No. Provably NEUTRAL, and now measured neutral. The proposal as written
+  would ship a switch that changes no number in the tool.
+- **C. Which strategies change?** Only the ones that leave a spending gap for `fillSpendingGap`.
+  **Proportional is unreachable** — it funds spending inside `planPrimaryWithdrawals`. `ordered` is
+  excluded by instruction and verified identical in all seven arms.
+
+**The presumption ("reduction past some point becomes counterproductive") was already proven**, in
+this repo, by the P24 evidence sweep: `gainVsFull >= 0` in all 23 scenarios, up to +$2.97M. The
+shipped lever is `convEndYear`. That is a step function; the taper generalization is P5.
+
+**Found in passing, and the most reusable result:** `rothConv` and `yr.totalConverted` are engine
+state, not display fields — `beginYear` reads `log[y-1].rothConv > 1000` to choose withdrawal
+timing. See `findings.md`, "A log field the next iteration reads is engine state, not a label".
+
+- [x] Harness with identity / degeneracy / divergence / mechanism sections and scored predictions
+- [x] Two engine flags, default off, `ordered` excluded from both
+- [x] `-unifiedConvGross` / `-unifiedRothSpend` hidden log keys (do NOT reuse `rothConv`)
+- [x] Verified: node 148/32/22, in-page 242/242, browser A/B confirms routing 0 diffs / Roth-first 627
+- [x] **ROUND 2 (2026-07-30):** second scenario set run — 5-scenario ladder x 6 families x 7 arms.
+      Explains round 1's inconsistent sign and fixes it. `rothGapFill` now takes a POSITION:
+      `true`/`fillRothThenCash` (ahead of everything) or `fillCashThenRoth` (Cash, then Roth, then Brokerage).
+      `fillCashThenRoth` never destroys value in any of 20 comparable cells, where `fillRothThenCash` lost up to
+      $137,062. Full detail in `findings.md`, "P28 round 2".
+- [ ] **DECISION OPEN:** ship `rothGapFill: 'fillCashThenRoth'` as a real option, drop the routing
+      flag (inert in all 30 scenario x family cells), or delete both. The routing flag earns its
+      keep only if the Annual Details reframe is wanted as a *view*, which `-unifiedConvGross`
+      already makes possible.
+- [ ] If shipping: it is a per-family effect, not a global one. Proportional draws Brokerage in
+      `planPrimaryWithdrawals` so the gap-fill order is not its lever, and Guyton-Klinger is not
+      comparable at all (its guardrails re-cut spending). Ship it for the gap-filling families or
+      as an optimizer sweep dimension, not as one global switch.
+- [ ] No heuristic predicts the payoff from the account mix — both candidate shortcuts were scored
+      and failed. If it ships, the tool has to RUN it, the same conclusion P24 reached about the
+      stop year.
+- [x] **ROUND 3 (2026-07-30):** answered "does `convertExcessToRoth` ever lose on its own?" — **yes,
+      13 of 25 cells, worst -$1,095,454**, for the same Cash-buffer reason plus a hidden
+      withdrawal-timing flip. Added `forceWithdrawTiming` (research input, default off) to separate
+      the two. Full write-up now lives at `.test_harnesses/P28_RESULTS.md`.
+- [ ] **SPUN OFF, needs its own phase:** `convertExcessToRoth` is a DEFAULT-FACING switch that can
+      cost >$1M in plausible account mixes, and part of that is the early/late withdrawal-timing rule
+      keying off `rothConv` — invisible and uncontrollable from the UI. Decide whether timing should
+      key off conversion at all. This is a live product question, not a research curiosity.
+- [x] **ROUND 4 (2026-07-30):** spend rate added as a CONTROLLED AXIS (4/6/8% of assets) after the
+      user spotted the goals were high. Round 2 had confounded mix with strain (defaults sat at 8.6%,
+      the rest near 4.4%). 630 sims, ~1.2s. **Three earlier conclusions overturned** — payoff peaks
+      at 6% spend rather than growing with Brokerage share, "IRA Draw is unreachable" was
+      strain-specific (+$1,200,484 at 6%), and `fillCashThenRoth` DOES have one negative cell. Mechanism
+      came out sharper: every cell whose control never drew Brokerage returns exactly $0.
+- **Status:** research complete (4 rounds), feature not started
+- **Independent:** no phase dependencies

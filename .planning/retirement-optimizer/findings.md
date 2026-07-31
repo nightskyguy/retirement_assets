@@ -779,3 +779,295 @@ Two are described wrongly:
 
 `retirement_optimizer.html:1119` still comments that `applyNerdKnobVisibility()` gates the
 "optimizer objective selector". PF13 un-gated that selector; the comment outlived the code.
+
+## An assumption sweep cannot be scored in dollars (2026-07-30, P27 scoping)
+
+Sweeping `growth`, `inflation` or `die1`/`die2` moves the ruler at the same time as the thing being
+measured, so a raw ending-wealth comparison across cells is meaningless. Two independent mechanisms:
+
+- **Horizon.** `maxYears` is derived from the death ages -
+  `Math.max(birthyear1 + die1, birthyear2 + die2) - currentYear + 1` (`optimizer_core.js:2220`).
+  A +10-year lifespan cell compounds ten more years AND accumulates ten more years of
+  `spendCurrentDollars`, which `baselineScoreOf` sums into the score at `optimizer_core.js:2708`.
+  It will always "win", and the win says nothing about the plan.
+- **Scale.** `growth` multiplies every balance, and `inflation` scales every nominal figure.
+  `baselineScoreOf` already deflates by `last.inflationFactor` (`optimizer_core.js:2706`), which
+  handles the second, but nothing handles the first.
+
+Rule, and it is the same discipline the P24 evidence sweep landed on (§ "P24 evidence sweep" above,
+where spend was held identical across cutoffs precisely so the wealth comparison stayed clean):
+**compare WITHIN a cell, never across cells.** P27's tornado bar is therefore a paired difference -
+the plan as configured minus the same plan with conversions off, both run at the same assumption -
+not a cross-cell delta.
+
+## Monte Carlo does not cover the "what if my assumption is wrong" question (2026-07-30, P27 scoping)
+
+The `Decisions Made` table retired the old Variable Growth grid on the grounds that "Bootstrap MC +
+Stress mode cover the use case". They do not, and the row has been rewritten.
+
+- MC draws returns around `mu` from the nerd panel. `mu` is an input, never varied within a run.
+  Randomizing around a wrong mean does not discover that the mean is wrong.
+- The Stress pass varies the historical SEQUENCE (worst-decade orderings, `runPass` in
+  `montecarlo/worker.js`), which is sequence-of-returns risk - a different question.
+- Neither varies lifespan at all. Neither varies inflation in Synthetic mode either: `inflationSequence`
+  is only built for bootstrap/stress, and the engine falls back to the flat sidebar value at
+  `optimizer_core.js:921` (`inputs.inflationSequence?.[y] ?? inputs.inflation`).
+
+So the three knobs the user cannot verify are the three the tool never questions.
+
+## Inflation is not a discounting knob in this engine, and 3 states will draw a wrong trend line (2026-07-30, P27 scoping)
+
+`inflation` is threaded into `calculateProgressive(entity, status, amount, inflation, ratecreep)`
+and indexes federal brackets, the IRMAA tiers and the ACA thresholds. A high-inflation cell
+therefore changes the TAX answer, not merely the deflator - which is why P27 keeps growth and
+inflation as independent axes instead of collapsing them into one real-return axis.
+
+The catch: states with `INFLATION_INDEXED:false` (AL, MT, OH) have their brackets guarded at
+`taxengine.js:1089` (`effectiveInflation = ... ? 1 : inflation`) while their standard deduction is
+inflated unconditionally at `taxengine.js:1349-1351` (`rawStateStd * inflation`). This is the known bug
+the round-3 README audit confirmed and deliberately left alone. A single run shows it as a small
+error; an inflation SWEEP amplifies it into a visible, monotonic, wrong trend. P27 must either
+disclose it on the axis or suppress the axis for those three states - not ship it silently.
+
+## A log field the next iteration reads is engine state, not a label (2026-07-30, P28)
+
+The single most useful thing to come out of the P28 harness, and it was found by disbelieving a
+"reporting-only" change that measurably moved money.
+
+P28's routing flag re-tells a year as "the whole voluntary IRA draw was converted, then spending came
+out of Roth". That is arithmetic, not a model change: draw a gross X, pay tax T on it, fund spending
+S, and today Roth gains the leftover `L = X - T - S`; routed through Roth it gains `(X - T)` and
+immediately returns `S`, which is the same `L`. So the first implementation reported the reframed
+figure through the obvious channel: `yr.totalConverted`, and from there the `rothConv` log field.
+
+That moved **780 money fields** on the IRA Draw 6% family - and only that family. Bisecting the flag
+one assignment at a time (`iraConvGross` vs `iraVolSpend` vs the new `unifiedRothSpend`) pinned it on
+`iraConvGross`, which nothing reads except the log. The log was the path:
+
+```javascript
+// optimizer_core.js, beginYear()
+const _prevConv = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
+yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
+const preMonths = yr._useEarly ? 1 : 11;
+```
+
+`rothConv` is read back out of the previous year's log record to choose **withdrawal timing** - a
+month-1 draw in conversion years, month-11 otherwise - which changes how much growth accrues before
+the money leaves. IRA Draw 6% converts nothing in most years, so it ran late; the reframe pushed its
+`rothConv` over the 1000 threshold and flipped every year to early. Every other family already
+converted enough to be on the early branch either way, which is exactly why only one family moved and
+why a smaller test set would have called the change clean.
+
+Rules this leaves behind:
+
+- **`rothConv` and `yr.totalConverted` are not display fields.** Do not overload them. P28 reports
+  through `-unifiedConvGross` / `-unifiedRothSpend`, and the harness deliberately keeps `rothConv` in
+  its *money* set so a regression of this mistake fails loudly.
+- **`log` is loop-carried state.** Anything written into a log record can be read by a later year, so
+  "it only changes a column" is not a safe claim about this engine until `log[...]` is grepped.
+- Same family as the 2026-07-26 finding that a predicate must read its input through the same
+  accessor the behavior uses: both are cases where a value that looked like output was input.
+
+## P28 measured: the reframe is a relabel; the Roth-first half is the real lever (2026-07-30)
+
+Harness `.test_harnesses/unifiedconv_harness.js`, six strategy families x seven arms. Two separable
+flags, both default off: `unifiedConvRouting` (call the draw a conversion, spend from Roth) and
+`rothGapFill` (promote Roth from last resort to first in the gap fill). `ordered` excluded from
+both by instruction.
+
+**1. Routing alone is provably inert, and now measured inert.** Zero money fields move in any of the
+six families. Only the `-ira*` attribution keys change. So the nerdknob as originally proposed would
+ship a switch that changes no number in the tool - worth knowing before building UI for it.
+
+**2. Roth-first can only reach families that leave a spending gap.** The strategy sizes the primary
+IRA draw first; `fillSpendingGap` only runs on what is left over. Ceiling families (bracket, fixed,
+fixedpct) size the draw to a tax target and routinely leave a gap, so Roth-first reaches them.
+**Proportional is unreachable** - `planPrimaryWithdrawals` funds the spending need directly
+(`order: ['IRA','Brokerage','Cash']`), so there is no gap to redirect and the arm is bit-identical.
+This overturned the prediction that proportional would get *worse*; it does not get anything.
+
+**3. Where it reaches, the effect is large and signed both ways.** Today's dollars, same delivered
+spend, `baselineScoreOf`:
+
+| family | Roth-first | + cash-funded | realized LTCG, control -> Roth-first |
+|---|---|---|---|
+| Fill Bracket 24% | **+$269,145** | +$524,793 | $1,676,706 -> $0 |
+| Reduce 20 yrs | -$4,540 | +$242,546 | $536,651 -> $0 |
+| IRA Draw 6% | **-$137,062** | +$129,255 | $0 -> $0 |
+| Proportional 10% | $0 (unreachable) | +$101,172 | unchanged |
+
+The mechanism is visible in the last column: Roth-first stops the gap fill from harvesting Brokerage,
+so realized capital gains go to zero and the Brokerage balance survives ($6.34M -> $11.79M on Fill
+Bracket). That helps when the family was realizing gains it did not need to, and hurts IRA Draw 6%,
+which was already realizing none and simply loses its tax-free Roth balance early.
+
+**4. No degeneracy.** The stated worry was that promoting Roth everywhere would make families
+indistinguishable. Across all seven arms, all six families kept distinct money paths. The worry was
+reasonable and the data does not support it *in this scenario*; it is a one-scenario result and the
+matrix is still printed on every run.
+
+**5. Guyton-Klinger is not comparable in this table.** Its guardrails re-cut spending (delivered
+spend moved $103,150 under Roth-first), so its delta mixes a wealth change with a spending change -
+the same reason the optimizer gates GK behind `gkSpendStable()`.
+
+Read together: the feature worth building is **not** the conversion reframe. It is Roth-first gap
+filling, as a per-family option, on the families that leave a gap.
+
+## P28 round 2: Roth-first pays only when it displaces BROKERAGE, and the account mix decides (2026-07-30)
+
+Round 1 left Roth-first with an inconsistent sign (Fill Bracket +$269k, IRA Draw -$137k). Round 2
+explains it, fixes it, and answers whether the shipped defaults are a fair place to measure it.
+Harness rebuilt as a 5-scenario ladder x 6 families x 7 arms.
+
+### The mechanism, and why the first implementation was half wrong
+
+Roth and Cash are both tax-free to withdraw, so trading one for the other looks free. It is not:
+Roth compounds at the growth rate tax-free, while Cash earns `cashYield` and pays tax on the
+interest. In the round-1 scenario, IRA Draw 6%'s gap fill only ever touched Cash - $60,541 lifetime,
+$0 Brokerage. Roth-first swapped that for $58,000 of Roth and cost **$137,062** of terminal value.
+Spending the best asset to preserve the worst.
+
+So the rule is directional:
+- displacing a **Brokerage** draw with Roth avoids realizing capital gains -> **gain**
+- displacing a **Cash** draw with Roth spends the better asset -> **loss**
+
+`rothGapFill` therefore now takes a position rather than a boolean:
+`true`/`fillRothThenCash` (ahead of everything, the literal proposal) or `fillCashThenRoth` (Cash, then Roth, then
+Brokerage). The third pass is already Cash-then-Roth, so `fillCashThenRoth` leaves it alone.
+
+**`fillCashThenRoth` never destroys value in any of the 20 comparable cells** (worst case $0), where
+`fillRothThenCash` posted -$137,062, -$66,182, -$10,208, -$4,995 and -$2,081. It also wins outright almost
+everywhere - round-1 Fill Bracket goes +$269,145 -> **+$466,289**, and round-1 IRA Draw's loss goes
+to exactly **$0** because the arm reverts to the control's Cash draw.
+
+Two exceptions, both `Proportional`, both explainable: propwd draws Brokerage in
+`planPrimaryWithdrawals` rather than leaving it to the gap fill, so the gap-fill ordering is not its
+Brokerage lever. Guyton-Klinger is excluded from the comparison entirely - its guardrails re-cut
+spending, so its deltas mix a wealth change with a spending change.
+
+### The account mix decides, and the shipped defaults understate it badly
+
+| scenario | Brokerage share | best family payoff (fillCashThenRoth) |
+|---|---|---|
+| shipped defaults | 6% | $188,644 |
+| defaults x3 (same mix) | 6% | $17,189 |
+| round-1 | 23% | $466,289 |
+| balanced thirds | 32% | **$1,757,386** |
+| brokerage-heavy | 62% | $778,677 |
+
+Mechanism confirmed in the withdrawal columns: at balanced thirds, Fill Bracket's control realizes
+**$3,342,257** of capital gains funding its gap; under `fillCashThenRoth` that goes to **$0** and Brokerage
+survives. The effect is an order of magnitude larger than at the shipped defaults.
+
+**But it is not monotone in Brokerage share** - it peaks at balanced thirds and falls at 62%,
+because the win needs a Brokerage draw to displace AND enough Roth to displace it with, and the
+brokerage-heavy scenario holds only $0.6M of Roth. Two candidate shortcuts were scored and both
+fail to rank the scenarios: Brokerage share, and `min(Brokerage drawn, Roth held)`. Same conclusion
+P24 reached about the stop year - **no heuristic substitutes for running the scenario.**
+
+Also worth flagging: the shipped defaults are a *stressed* plan ($140k spend on a $1.62M portfolio),
+so most effects there land as changed spending rather than changed wealth, and those rows are not
+like-for-like comparisons. That is a poor place to evaluate any of this.
+
+### "Use Cash" (fundConversionWithCash) compounds with it, and is often harmful alone
+
+For Fill Bracket, cash-funded conversions alone are **negative** in three of five scenarios
+(-$218,645 / -$162,569 / -$201,097) - but combined with `fillCashThenRoth` the pair beats the sum of the
+parts by +$302,425 (round-1), +$115,058 (thirds), +$158,209 (brokerage-heavy). Most other cells are
+merely additive, and Proportional cancels. So "Use Cash" should not be judged on its own.
+
+### Roth-first and convertExcessToRoth are near opposites, not the same thing
+
+They sound alike and are the reverse of each other:
+
+- `convertExcessToRoth` acts in `routeSurplusAndConvert` on the **surplus left after spending** and
+  moves IRA -> Roth. It **fills** Roth.
+- `rothGapFill` acts in `fillSpendingGap` on the **gap still needed** and moves Roth ->
+  spending. It **drains** Roth.
+
+A year has a surplus or a gap, never both, so they cannot even fire in the same year. Counted on
+balanced-thirds Fill Bracket over 33 years: Roth received a conversion in 4 years, was drawn for
+spending in 28, and **both happened in 0**.
+
+They are not substitutes and not additive either. Against a both-off baseline in that scenario:
+`convertExcessToRoth` alone **-$1,095,454**, `fillCashThenRoth` alone **+$784,418**, both together
+**+$661,933** - less than Roth-first alone. They interfere.
+
+## convertExcessToRoth loses on its own in 13 of 25 cells (2026-07-30, P28 round 3)
+
+Asked whether the tool's main "should I convert" switch could ever be worse than off. It looks like a
+free win: the surplus is after-tax either way, so ON merely routes it to Roth (compounds tax-free at
+growth) rather than Cash (`cashYield`, and the interest is taxed). It is not a free win. Measured
+across the 5-scenario ladder x 5 families (GK excluded, its guardrails drift the spend):
+**ON loses in 13 of 25 cells, worst -$1,095,454.** Two separate causes.
+
+**1. It silently changes withdrawal timing.** Converting sets `rothConv > 1000`, and `beginYear`
+reads that to pick the NEXT year's timing: a month-1 draw instead of month-11. So any naive A/B of
+this switch compares two different withdrawal schedules on top of the routing difference. Added
+`inputs.forceWithdrawTiming` ('early'/'late', default off, no UI) purely so the two can be separated.
+Pinning timing to late flips most of the losses into wins, but **5 of the 13 survive** - so timing is
+a large part of the raw gap and not all of it.
+
+**2. It starves the Cash buffer, and the gap fill lands on Brokerage instead.** This is the P28
+Roth-first mechanism seen from the other side. Cash is the FIRST account `fillSpendingGap` draws;
+Roth is the LAST. Routing the surplus into Roth means the Cash buffer is never rebuilt, so later
+gaps fall on Brokerage and realize gains. Balanced thirds / Fill Bracket 24%, timing pinned late,
+terminal in today's dollars:
+
+| | Roth | Brokerage | spend | lifetime tax | realized LTCG |
+|---|---|---|---|---|---|
+| OFF | $7,938,152 | **$5,144,518** | $6,600,000 | $964,454 | $2,076,968 |
+| ON | $9,742,461 | **$2,537,057** | $6,600,000 | $908,000 | **$3,076,599** |
+
+ON holds $1.80M more Roth and $2.61M less Brokerage, on identical delivered spend and LOWER tax. It
+bought the Roth balance by liquidating Brokerage and paying $1.0M more of realized gains.
+
+**The pattern is regime-dependent, not random.** Converting the excess wins where Brokerage is
+modest (round-1, 23% Brokerage: +$1,060,370 Reduce, +$1,162,212 Fill Bracket) and loses where Roth
+and Brokerage are both large (balanced thirds -$1,095,454, brokerage-heavy -$711,851) - exactly the
+regimes where starving the Cash buffer is expensive because there is a lot of Brokerage to be forced
+into.
+
+Consequences worth acting on: this is a default-facing switch that can cost more than a million
+dollars in plausible account mixes, and part of that cost is a withdrawal-timing side effect the user
+cannot see or control. Worth deciding separately whether the early/late rule should key off
+conversion at all. Full tables in `.test_harnesses/P28_RESULTS.md` §7.
+
+## Spend rate was a hidden confound, and controlling it overturned three P28 conclusions (2026-07-30, round 3)
+
+User noticed the harness spend goals looked high and asked for a sweep at 4/6/8% of assets. That was
+right, and the reason is worse than "high": round 2 set spend per scenario BY HAND, and the two
+default mixes landed at 8.6% of assets while the other three sat near 4.4%. Account mix and spending
+strain were entangled, so "the shipped defaults show small effects" could have been either. Spend is
+now a controlled axis crossed with every mix: 5 mixes x 3 rates x 6 families x 7 arms = 630
+simulations, ~1.2s.
+
+Three conclusions did not survive:
+
+1. **"The payoff grows with Brokerage share" -> it peaks at 6% SPEND and is not monotone in either
+   axis.** Live cells (|Δ| > $1k) go 13/20 at 4%, 19/20 at 6%, 19/20 at 8%; best cell $1.06M ->
+   $3.56M -> $2.48M. At 4% Social Security ($69k combined) covers most of the spend so there is
+   barely a gap to redirect. At 8% plans strain and the deltas start mixing with changed spending.
+2. **"IRA Draw 6% is unreachable" was strain-specific.** Inert at round 2's ~4.2% spend, worth
+   **+$1,200,484** at 6% in the same mix.
+3. **"'fillCashThenRoth' never destroys value" is false.** Negative in 1 of 60 cells (-$12,466, balanced
+   thirds / Proportional / 6%). Round 2 checked 20 cells at a single spend rate and found none. It
+   still wins or ties 53/60 with a worst case of -$12,466 against `fillRothThenCash`'s -$244,689.
+
+**The mechanism came out cleaner than before, though.** Section 6 of the results doc tabulates
+lifetime Brokerage draws in the CONTROL arm against the payoff: **every cell where the control never
+touched Brokerage returns exactly $0**. `fillCashThenRoth` can only convert a Brokerage draw into a Roth
+draw, so a plan funding its gap from Cash alone has nothing to gain and nothing to lose. That is a
+sharper statement than any portfolio-ratio heuristic, and it explains both the 4% flatness (no gap)
+and the family split (Proportional draws Brokerage in `planPrimaryWithdrawals`, not the gap fill).
+
+**convertExcessToRoth got a real correction too.** Round 2 said "loses 13 of 25, 5 surviving timing".
+With strain controlled it is **28 of 75 raw, but only 7 survive pinning withdrawal timing** - and at
+4% spend it is a very large WIN in the IRA-heavy mixes (+$2,051,465 Reduce, +$1,792,983 Fill
+Bracket). So the switch is not "often harmful"; it is strain-dependent, and most of its apparent
+downside is the invisible month-1/month-11 timing flip rather than tax. The 7 genuine losses
+concentrate in Fill Bracket at high Brokerage share, which is the Cash-buffer mechanism.
+
+Method note worth repeating: this is the second time in P28 that a conclusion drawn from a single
+slice of a parameter space was overturned by sweeping that parameter (the first was round 1's
+one-scenario sign flip). Both times the fix was cheap - the whole grid runs in about a second.

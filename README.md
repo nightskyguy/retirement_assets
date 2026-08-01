@@ -269,6 +269,17 @@ individual).
 + All other strategies e.g. the **🪣Fill Fed/IRMAA Bracket** strategy, are *soft* - and will exceed the ceiling to fund spending. It warns about this, but don't expect to spend 300k/year and remain in the 12% Federal bracket unless you've got a lot of Roth or high basis brokerage assets.
 + There is no modeling of any kind of Annuity, Life Insurance, Reverse Mortgage, inheritance, or ongoing (part time or full time) Income.  If you have a lifetime annuity, or other ongoing income you can treat it like a pension.
 + There is only one pension and it's assigned to "You". If your spouse has a pension and you don't, you can swap roles. You become **your spouse**, and your spouse becomes you in the entry fields.
++ There is no modeling of rental income (Schedule E), 1099/self-employment income, or self-employment tax.
++ There is no Foreign Tax Credit modeling (relevant if your brokerage holds international funds).
++ There is no Alternative Minimum Tax (AMT) calculation.
++ There is no asset-class-specific tax treatment for alternative assets - gold/collectibles, cryptocurrency, or REIT-specific dividend/basis rules. All holdings within an account are taxed per that account's rules only.
++ There is no Estate Tax or Gift Tax modeling. This tool only models income tax.
++ There is no NUA (Net Unrealized Appreciation) handling for employer stock held inside a 401k.
++ There is no 72(t) SEPP (Substantially Equal Periodic Payments) modeling for pre-59½ withdrawal planning.
++ There is no modeling of Education Credits or 529 plan interactions.
++ There is no modeling of Alimony (pre- or post-2019 TCJA rules).
++ Capital gains are modeled at Long-Term rates only. Short-Term Capital Gains (taxed as ordinary income) are not distinguished.
++ The NIIT (Net Investment Income Tax) threshold is not inflation-indexed in the engine, unlike bracket thresholds.
 
 Why are these permanent?
 

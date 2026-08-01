@@ -53,9 +53,11 @@ A California resident built these with [Google gemini](https://gemini.google.com
     - [Roth Helper](#roth-helper)
     - [AiRA Retirement Application](#aira-retirement-application)
   - [Paid Tools](#paid-tools) - Commercial
+    - [ThunderHarbor.net by yanyan80](#thunderharbornet-by-yanyan80)
     - [Boldin](#boldin) - Probably the leading tool
     - [MaxiFi](#maxifi) - Lesser known tool
     - [Projection Lab](#projection-lab) - Best of Breed?!
+    - [Roth Done Right (Stonewood)](#roth-done-right-stonewood)
     - [Others](#others)
       - [Number Crunch Nerds](#number-crunch-nerds) (spreadsheets)
       - [RetirementIQ](#retirementiq) 
@@ -84,6 +86,7 @@ A California resident built these with [Google gemini](https://gemini.google.com
   - [Does the brokerage account for "cash"?](#does-the-brokerage-account-for-cash)
   - [How do I find the most efficient Roth conversions?](#how-do-i-find-the-most-efficient-roth-conversions)
   - [Why does the Optimizer say converting never helps?](#why-does-the-optimizer-say-converting-never-helps)
+  - [What about Doing all Conversions rather than withdrawals?](#what-about-doing-all-conversions-rather-than-withdrawals)
   - [Is the Break-Even Tax Rate Trustworthy?](#is-the-break-even-tax-rate-trustworthy)
 
 --- 
@@ -269,6 +272,17 @@ individual).
 + All other strategies e.g. the **🪣Fill Fed/IRMAA Bracket** strategy, are *soft* - and will exceed the ceiling to fund spending. It warns about this, but don't expect to spend 300k/year and remain in the 12% Federal bracket unless you've got a lot of Roth or high basis brokerage assets.
 + There is no modeling of any kind of Annuity, Life Insurance, Reverse Mortgage, inheritance, or ongoing (part time or full time) Income.  If you have a lifetime annuity, or other ongoing income you can treat it like a pension.
 + There is only one pension and it's assigned to "You". If your spouse has a pension and you don't, you can swap roles. You become **your spouse**, and your spouse becomes you in the entry fields.
++ There is no modeling of rental income (Schedule E), 1099/self-employment income, or self-employment tax.
++ There is no Foreign Tax Credit modeling (relevant if your brokerage holds international funds).
++ There is no Alternative Minimum Tax (AMT) calculation.
++ There is no asset-class-specific tax treatment for alternative assets - gold/collectibles, cryptocurrency, or REIT-specific dividend/basis rules. All holdings within an account are taxed per that account's rules only.
++ There is no Estate Tax or Gift Tax modeling. This tool only models income tax.
++ There is no NUA (Net Unrealized Appreciation) handling for employer stock held inside a 401k.
++ There is no 72(t) SEPP (Substantially Equal Periodic Payments) modeling for pre-59½ withdrawal planning.
++ There is no modeling of Education Credits or 529 plan interactions.
++ There is no modeling of Alimony (pre- or post-2019 TCJA rules).
++ Capital gains are modeled at Long-Term rates only. Short-Term Capital Gains (taxed as ordinary income) are not distinguished.
++ The NIIT (Net Investment Income Tax) threshold is not inflation-indexed in the engine because it is not inflation adjusted in the tax code.
 
 Why are these permanent?
 
@@ -277,7 +291,7 @@ More inputs and knobs and conditions make the tool less simple. If you've got th
 
 ### Limitations and Restrictions
 
-0. The tool models things a year-at-a-time. This is not strictly accurate, because, for example, **when** you make withdrawals or conversions materially affects the results. Waiting until the end of the year to make your withdrawals has a different result than making a withdrawal at the beginning of the year.  The order of calculations is:  RMD withdrawals, QCD withdrawals, calculation of spending/conversion withdrawals (and removal of those funds from the needed accounts) THEN taxes, interest and dividends on the remainder are calculated. Surplus funds after minimum spending levels are eligible for deposit into a Roth.  In real life, you must do Roth conversions as a separate operation, but this tool can help forecast what that conversion would be. The [Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html) linked from the Annual Table shows the trade offs about WHEN to withdraw or convert. Internally, the tool checks two alternatives: early withdrawals (when conversions are being done) and late withdrawals - if no conversions. Early conversions push pre-tax money into tax free money - so the earlier the conversion occurs, the more growth you gain.
+0. The tool models things a year-at-a-time. This is not strictly accurate, because, for example, **when** you make withdrawals or conversions materially affects the results. Waiting until the end of the year to make your withdrawals has a different result than making a withdrawal at the beginning of the year.  The order of calculations is:  QCD withdrawals, RMD withdrawals, calculation of spending/conversion withdrawals (and removal of those funds from the needed accounts) THEN taxes, interest and dividends on the remainder are calculated. Surplus funds after minimum spending levels are eligible for deposit into a Roth.  In real life, you must do Roth conversions as a separate operation, but this tool can help forecast what that conversion would be. The [Retirement Tax Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html) linked from the Annual Table "Year" or "totalTaxColumns" shows the trade offs about WHEN to withdraw or convert. Internally, the retirement optimizer checks two alternatives: early withdrawals (when conversions are being done) and late withdrawals - if no conversions. Early conversions push pre-tax money into tax free money - so the earlier the conversion occurs, the more tax-free growth you gain.
 0. IRA withdrawals are done *proportionately*. Some improvement may result by reducing a large balance first.  You can model this by moving the total balance to one person.
 0. There is no "Accumulation phase" and no plan to add one.  I.e. no way to say "stash X dollars per year" in an IRA or Roth, Brokerage or Cash. The goal is to keep the inputs simple.  However, you CAN calculate your expected assets as of your retirement age, and use the *Retirement Start Age* to delay retirement into the future. This will result in properly adjusted tax brackets.
 0. There is no plan to add "Part Time income", Annuities (can model those as "pension"), windfalls, lumpy spending (well, we are thinking about that last one) ...
@@ -331,6 +345,13 @@ There are some interesting ideas in the tool: for example "Health Care Spending 
 
 ### Paid Tools
 
+#### ThunderHarbor.net by yanyan80
+Free to try, $3.99 for a one week trial then $49 or $79 year. 
+
+Frankly two things dissuaded me from trying this tool. The first was the "Free to Try" banner with no pricing, and the second is the  requirement to provide an email. Pricing is now present. The $49 vs $79 is for those who "start before the 50 low-price slots are gone."  I get the idea behind the pricing, but it feels a bit like the many scammy sites that pretend the pricing is going to expire soon. It also allows $3.99 for a week trial.  When I've created throw away email address, I will evaluate the tool for the week.
+
+@[yanyan80](https://www.reddit.com/user/yanyan80/) is the author on Reddit. 
+
 ---
 
 #### Boldin
@@ -349,14 +370,7 @@ In my opinion, however the worst part of the tool is the Monte Carlo analysis. M
 
 Social security explorer is inaccessible if one of the couple has already started collecting social security. That seems odd, because maybe I want to know if 67 or 69 or 70 is a better start age.
 
-Oddly, the Roth Conversion Explorer has no AI component. And it feels very disjoint from the main components. For example, if you use the Roth Conversion Explorer but haven't ALREADY created a new scenario, you must: quit and back out, duplicate a scenario and then redo the Roth Explorer questions. Or apply the changes to whatever the "current scenario" is. This would be a perfect opportunity to create a new scenario. Another head-scratcher: you can specify that "surplus" (e.g. income in excess of spending needs) can be placed in a taxable account. But why can't I put the excess that comes from an IRA into a Roth (e.g. a conversion). That is, I don't expect to ever see years with a surplus AND a Roth conversion in the summaries, but I do.  Seems it's missing an easy win. And what about this: every withdrawal for spending is FIRST a Roth conversion. Taking that approach you gain tremendous benefits:
-
-+ until you spend the funds, you get tax free growth.
-+ unspent funds will have automatically been converted. 
-+ spent funds may have accrued some interest before they were spent that will continue compounding (tax free)
-+ If you have surplus cash in the brokerage or a taxable account, you can use it to pay the tax bill and get a larger amount converted to tax-free status.
-
-_**The tax consequences of an IRA withdrawal and a Roth conversion are identical**_.
+Oddly, the Roth Conversion Explorer has no AI component. And it feels very disjoint from the main components. For example, if you use the Roth Conversion Explorer but haven't ALREADY created a new scenario, you must: quit and back out, duplicate a scenario and then redo the Roth Explorer questions. Or apply the changes to whatever the "current scenario" is. This would be a perfect opportunity to create a new scenario. Another head-scratcher: you can specify that "surplus" (e.g. income in excess of spending needs) can be placed in a taxable account. But why can't I put the excess that comes from an IRA into a Roth (e.g. a conversion). That is, I don't expect to ever see years with a surplus AND a Roth conversion in the summaries, but I do. Seems it's missing an easy win.
 
 The Scenario Manager is another prickly point. You can name scenarios, provide a "note" about what each one is, but you can't e.g. see or compare the notes of multiple scenarios at once, nor can you readily tell how they are different. Did you want to try multiple Roth conversion strategies? You better have named them precisely and kept notes, because the Scenario Manager cannot tell you how the scenarios are different. AI can help, but it won't, for example, tell you what choices you made in the Roth Explorer.  Moreover, the explorer seems to always target drawing each spouse's IRA to Zero. This does not make sense to me.  There is value in keeping an IRA. Both due to the ability to do QCDs, leave some to charity, and - once the balance is sufficiently low - to withdraw funds at miniscule taxation.  If you happen to be in a scenario and notice that the growth rate is wrong. You really only have one choice: delete all scenarios, make the change to the Baseline and recreate all the scenarios. Unless you *happen* to know the rates or inspect the rates used in every scenario - in that case you could update all the ones that had the wrong growth rate. But then you have to also take into account any money flow monkey business you may have done to model some of the things that Boldin doesn't natively model.
 
@@ -381,6 +395,15 @@ It is definitely more "geeky" than say Boldin, but I already know it does two th
 2. It has INFLATION built in to its Monte Carlo engine
 
 More later.
+
+
+---
+#### Roth Done Right (Stonewood)
+[Stonewood Financial](https://www.stonewoodfinancial.com/pricing/). I found this while doing some research. I believe the tool is targeted to financial advisors, not individuals.  Prices are from $229 to $349/mo. I haven't test driven it, so can speak for it's value or whether it's even offered to clients who are not CFPs.
+
+In some of their website info [they discuss Roth Break Even](https://www.stonewoodfinancial.com/the-real-cost-of-roth-conversions/).  And I found them precisely because they address [BETR](#is-the-break-even-tax-rate-trustworthy) which I note is NOT trustworthy.
+
+> Nominal break-even asks when the balance looks whole again. After-tax break-even asks when the client is actually ahead. BETR asks what future tax rate would need to be true for the decision to be a wash. A client conversation that only uses one of the three is missing part of the picture.
 
 ---
 #### Others
@@ -674,24 +697,43 @@ Three things worth knowing before concluding conversions are useless for you:
 - **Check your Cash Reserve setting.** With Cash Reserve off, surplus money sits in cash earning the cash yield, which quietly makes almost anything that moves money out of cash look like a win. A conversion "gain" that disappears once you turn Cash Reserve on was never a conversion gain.
 - **Converting for a few years and then stopping is a different question.** The Optimizer now tests that shape too, and flags any plan it finds with a ⏹ and the year conversions stop. On some plans this is the only conversion strategy that pays at all.
 
+### What about Doing all Conversions rather than withdrawals?
+
+With this observation:
+
+_**The tax consequences of an IRA withdrawal and a Roth conversion are identical**_.
+
+We asked and modeled doing all conversions for spending rather than withdrawals. That is, every withdrawal for spending is FIRST a Roth conversion. Taking that approach you may gain these benefits:
+
++ until you spend the funds, you get tax free growth.
++ unspent funds will have automatically been converted - no extra step. 
++ spent funds may have accrued some interest before they were spent that will continue compounding (tax free)
++ If you have surplus cash in the brokerage or a taxable account, you can use it to pay the tax bill and get a larger amount converted to tax-free status.
+
+Modeling this found a flaw, which in hindsight might be obvious: the most effective conversions are those that use cash (an asset that does not appreciate as much). Conversions that pay the tax from the Brokerage increase income and taxes. Once cash is run-out, there is diminishing gain from "conversion first". In fact, a strategy that then becomes "spend from Roth" runs the risk of defeating the purpose of "conversion first".
+
 ### Is the Break-Even Tax Rate Trustworthy?
 
-Not very. See the section above for the full details, but here's the summary:
+Several studies of Vanguard's "BETR" have poked holes in it. So the answer is: **BETR is not very trustworthy**. We still calculate it, but no longer feature it in the Optimizer columns, or on the summary page.
 
 The **Break-Even Tax Rate (BETR)** uses the formula created by [Passman, Wong and Dickson](https://corporate.vanguard.com/content/dam/corp/research/pdf/a_betr_approach_to_roth_conversions_072025.pdf) of Vanguard to answer: *"How high would your future tax rate need to be for this conversion to pay off?"* If you expect rates to rise above that number, converting looks good; below it, it looks bad.  Passman, Wong and Dickson reference Michael Kitces' [Roth or Not to Roth](https://www.kitces.com/wp-content/uploads/2014/11/Kitces-Report-May-2009.pdf) paper - but that paper looks at whether accumulation into Roth is preferable to accumulation into an IRA and then expands to Conversions. It's worth noting that when Kitces wrote the paper there were several "loopholes" in the conversion laws that have subsequently been closed. E.g. a Roth Conversion is no longer undoable.
 
-**The problem:** The formula is mathematically correct but incomplete. It models "money grows, then is taxed once"—missing the cascade of real effects that the full simulation captures:
+**The problem:** The formula is mathematically correct but incomplete. It models "money grows, then is taxed once" completely missing the cascade of real effects that the full simulation captures:
+
+- Whether your surplus cash sits idle or gets reinvested. Idle surplus cash is itself a tax drag.
+- Inflation simultaneously devalues all assets and widens future tax brackets. Paying 22% on the last 10k of income this year does NOT imply that 22% will be paid on the last $10k of income ten years from now.  Assuming 2.5% annual inflation [$162k of MFJ income in 2026](https://tools.netcitizen.us/standalone/IncomeTaxPlanner.html?st=MFJ&s=CA&a1=65&a2=65&ss=0&pt=0&cs=0&cb=60&yr=2034&in=2.5&me=2.5&ob=1&sh=0&pi=162000&zl=50000&zh=210000&zs=2000&az=0) would incur 14.7K federal tax. But in 2034 $162k would incur 13.6k in tax. In 8 years 162K will be the equivalent of 197k in future dollars. Tax on $197k then will be $21k in future dollars and worth $16.4k in current dollars.  
+- IRMAA surcharges kick in from higher income (one of the biggest misses) and BETR doesn't model that.
+
+And BETR misses the other side of the issue:
 - Larger IRAs force bigger required distributions later
 - Bigger RMDs may cause more Social Security to become taxable
-- IRMAA surcharges kick in at higher income brackets
-- Your surplus cash either sits idle or gets reinvested (controlled by Cash Reserve)
 
-**The practical result:** The displayed BETR is often unreliable in both directions. Sometimes it's far too low (discouraging conversions that clearly win); sometimes far too high (encouraging conversions that clearly lose). Which way it errs depends on your specific situation, especially your cash reserve strategy, and, more importantly, the amount of time that elapses between conversion and possible consumption.
+**The practical result:** The displayed BETR is often unreliable in both directions. Sometimes it is far too low (discouraging conversions that clearly win); sometimes far too high (encouraging conversions that clearly lose). Which way it errs depends on your specific situation, especially your cash reserve strategy, and, more importantly, the amount of time that elapses between conversion and possible consumption.
 
-**Better approach:**
+##### What we recommend instead of BETR
+
 - Use the **Stop-Year** diagnostic instead (it simulates the full cascade and finds the wealth-maximizing cutoff)
-- Trust the **Break-Even *year*** (when your plan pulls ahead) more than the *Break-Even tax rate*
-- Treat BETR as a rough conversation-starter with a tax advisor, not a decision rule
+- Trust the **Break-Even *year*** (when your plan pulls ahead) not the *Break-Even tax rate*
 - Let the plan's actual after-tax ending balances guide your conversion decisions
 
-Keep in mind that Professor Emeritus Edward McQuarrie pretty forcefully proves in [Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN) that Roth Conversions are unlikely to break even. Despite the conventional wisdom that the gains are driven by differences in tax rates - that is **not** the primary factor. The hurdle to overcome with early tax payments is that lost value of early taxes requires enough growth time in the Roth to overcome the lost opportunity cost. Remember that $10k in taxes paid this year is worth more in present dollars than those paid in say 5 or 10 years due to inflation. And that is another clue: paying $10k in taxes now may be about the same cost as paying $15k in 7 years. Tax avoidance is not the whole picture.
+Professor Emeritus Edward McQuarrie pretty forcefully proves in [Net Present Value Analysis of Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN) that Roth Conversions are unlikely to break even. Despite the conventional wisdom that the gains are driven by differences in tax rates - that is **not** the primary factor. The hurdle to overcome with early tax payments is that the lost value of early taxes requires enough growth time in the Roth to overcome the opportunity cost.  Opportunity cost, briefly, is what you surrender when you pay taxes out of funds that would otherwise have remained invested and growing. Also consider that paying $10k in taxes this year is worth more than the same (or larger) figure paid in 5 or 10 years due to inflation. Future (or present) tax avoidance is not the whole picture.

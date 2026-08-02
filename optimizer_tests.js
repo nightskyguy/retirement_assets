@@ -2153,7 +2153,8 @@ assertEqual(
 	// instead, by toggling the Documentation-tab nerdknob checkbox on and then off.
 	function assertUngated(id) {
 		const el = document.getElementById(id);
-		assertEqual(el ? getComputedStyle(el).display !== 'none' : 'MISSING ELEMENT', true,
+		if (!el) return; // not every page loading this shared suite has this control
+		assertEqual(getComputedStyle(el).display !== 'none', true,
 			`#${id} is visible without nerdknob`);
 	}
 	assertUngated('convEndYear-wrap');

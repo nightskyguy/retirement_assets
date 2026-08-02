@@ -2,7 +2,9 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-07-30 (worktree `readme-review-updates-c9df11`, branch `worktrees/planning-with-files-f027a2`, forked at `main` = `2537135`). **PR #140 open (`838a870`, v11.13d0): README audit round 3 + doc-link labels. Working tree clean.** Everything through PR #139 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5). Next work starts from a clean base.
+**As of:** 2026-08-01 (worktree `readme-review-updates-c9df11`, branch `worktrees/task-plan-summary-d3078c`, at `main` = `4272eb8`). **Working tree clean, nothing in flight.** Everything through PR #141 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping). Next work starts from a clean base.
+
+**Current batch (added 2026-08-01):** six new phases P29-P34 from a user punch-list — Hebeler Autopilot, withdrawal policy, asset-mix reverse mapping, brokerage draws, an Insights statistics panel, and conversion-search cost. Four of the six touch questions this repo has ALREADY partly answered, two of them answered NO, so every one of those phases carries an explicit "already ruled out, do not re-derive" block. Read that block before designing anything in the phase; it is there to stop a re-derivation of P24 and P28.
 
 VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + hour)`, so two branches worked on in the same afternoon produce ADJACENT numbers, and whichever merges first is not necessarily the lower one. P25 was built as v11.13c2 (hour 18) but PR #138 merged v11.13c3 (hour 19) ahead of it, so P25 was renumbered to v11.13c5 on merge. When resolving a version conflict, recompute from the clock rather than taking either side.
 
@@ -10,7 +12,7 @@ MAINTENANCE NOTE: this heading and the per-phase status lines are injected into 
 
 ---
 
-## README Audit Round 3 (2026-07-30) — COMPLETE, committed `838a870`, PR #140 open
+## README Audit Round 3 (2026-07-30) — COMPLETE, committed `838a870`, PR #140 MERGED
 
 User asked for a README review after PRs #135-#139. Full claim-by-claim audit is in `findings.md`
 under "README audit round 3"; every item below was checked against code, not against the changelog.
@@ -49,7 +51,7 @@ No version bump: docs plus one comment, no behavior change.
 
 ---
 
-## Link labels follow the href (2026-07-30, v11.13d0) — COMPLETE, committed `838a870`, PR #140 open
+## Link labels follow the href (2026-07-30, v11.13d0) — COMPLETE, committed `838a870`, PR #140 MERGED
 
 User: the live 11.13a1 "Details" link and the "Every earlier release is written up in
 optimizer_changelog.md" sentence still name the `.md`, though v11.13c5 claimed that was fixed.
@@ -635,6 +637,30 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 | 28 | **P26** | README/FAQ cross-references from tooltips | pending | P25 done, unblocked |
 | 29 | **P27** | Assumption Sensitivity tornado (growth / inflation / lifespan / SS / tax drift) | scoped 2026-07-30, not started | — |
 | 30 | **P28** | Every voluntary IRA withdrawal as a Roth conversion | **research done** 2026-07-30 (routing inert, Roth-first is the lever); feature decision open | — |
+| 31 | **P33** | Insights panel — sources of spend, earnings, terminal mix | not started, **build-first** | shares a surface with PE |
+| 32 | **P34** | Conversion search cost — profile, cache, worker | not started; **measure before other phases add sweep arms** | — |
+| 33 | **P30** | Withdrawal policy — gap-fill constants + orderings + decoupling | not started, research-first | P28 ship decision |
+| 34 | **P32** | Brokerage draws + gain harvesting | not started, research-first | prefer after P30 |
+| 35 | **P31** | Asset mix reverse mapping | not started, research-first | prefer after P30/P32 |
+| 36 | **P29** | Hebeler Autopilot spend rule | not started, research-first | — |
+
+**Rows 31-36 are the current batch, and their ROW ORDER IS THE RECOMMENDED RUN ORDER** (so the phase
+numbers deliberately run out of sequence). P33 first: build-first, no research, no dependencies, and
+it produces the instrumentation — earnings/inflows accumulators, Brokerage-drawn total, cash-breach
+count — that P31 and P32 both want to read. It is also the only one of the six that visibly improves
+the tool this round. P34's MEASUREMENT half runs alongside it, because a baseline profile has to be
+captured before any other phase adds a sweep arm. P30 next: it settles two constants sitting on the
+code path P28 valued at up to $3.5M. P32 follows on that same path. P31 after both, because running
+it earlier risks describing a mix the tool is about to change. P29 is fully self-contained and fits
+wherever there is slack. P34's BUILD half goes last, so its budget numbers reflect whatever arms the
+other phases added.
+
+**Cross-cutting saving:** P29, P30, P31 and P32 all want P28's 5-mix x 3-spend-rate ladder. Factor it
+once — a shared fixture module under `.test_harnesses/`, or copy it with a comment naming the source.
+Largest schedule saving available across the six.
+
+**Upstream item:** P28's own open ship decision (see P28 below) sits above P30 and P32. Settle it in
+the same batch or hold both explicitly.
 
 ---
 
@@ -818,7 +844,9 @@ const AUTOSAVE_KEY = 'SLCRetireOptimizeAutoSave';
 ## Phase PE: Insights / Feedback Panel
 **Why:** Users get numbers but no interpretation. A dedicated panel that reads simulation results and surfaces conditions the user should know about (RMD risk, longevity, survivor impact, Roth effectiveness) closes the "so what?" gap.
 
-**Existing placeholder:** `#tab-insight` exists with empty `#insights-table` in `retirement_optimizer.html:711–719`. No code populates it.
+**Existing placeholder:** `#tab-insight` exists with empty `#insights-table` at `retirement_optimizer.html:787` (line reference corrected 2026-08-01; it was cited as 711-719 and the markup has since moved). No code populates it.
+
+**SURFACE COLLISION with P33.** P33 (Insights panel — statistics) claims the same `#tab-insight` surface for a *statistics* section. Recommendation on record: one surface, two sections — P33's numbers ship first because they have no rule-authoring risk, PE's narrative cards land above them later. Do not build a second panel.
 
 **Architecture:**
 - `computeInsights(totals, log, inputs)` → `Insight[]` where each insight is `{id, severity, title, body, suggestion}`
@@ -1704,3 +1732,480 @@ timing. See `findings.md`, "A log field the next iteration reads is engine state
       came out sharper: every cell whose control never drew Brokerage returns exactly $0.
 - **Status:** research complete (4 rounds), feature not started
 - **Independent:** no phase dependencies
+
+---
+
+# Batch added 2026-08-01: P29-P34
+
+Six phases from a user punch-list. **Four of them touch questions this repo has already partly
+answered, and two were answered NO.** Each carries an explicit "Already ruled out" block; that block
+is as much the deliverable as the task list, and it exists to stop a re-derivation of P24 and P28.
+Recommended run order is rows 31-36 of the Priority Order table above (P33, P34, P30, P32, P31, P29),
+not phase-number order.
+
+---
+
+## Phase P29: Hebeler Autopilot — is a second dynamic-spend rule worth a strategy slot?
+
+**Why:** Guyton-Klinger is the only dynamic-spend rule in the tool (`optimizer_core.js:1203-1228`)
+and it has exactly one shape: a deadband against a **frozen** initial withdrawal rate. `sim.gkIWR` is
+derived once at y=0 (`optimizer_core.js:1205`) and never re-based, so an unlucky year-0 portfolio pins
+the rate for the whole plan, and GK never consults age. Hebeler Autopilot is a 50/50 blend of an
+**age-driven** RMD-method divisor and last year's inflation-adjusted spend — self-correcting, with no
+memory of the initial rate. Structurally the opposite of GK, so on paper the two are not redundant.
+
+Every piece of state a Hebeler branch needs already exists: `sim.prevPortfolio`
+(`optimizer_core.js:2271`) is the denominator, `sim.spendGoal` carries prior-year spend, and
+`yr.yearInflation` (`optimizer_core.js:930`) is the CPI leg. It slots into `resolveSpendTarget` beside
+the GK block. GK's 4th classic rule (portfolio management / withdrawal sourcing) is **not**
+implemented — GK falls through to the baseline proportional branch
+(`optimizer_core.js:1398-1406`) — so a Hebeler branch inherits identical sourcing and gives a clean
+spend-rule A/B with no confound.
+
+**OPEN DECISION, must be settled IN THIS PHASE before any code is written (user chose to leave it
+open, 2026-08-01).** The divisor. `RMD_TABLE` (`taxengine.js:976-983`, labelled "Uniform Lifetime
+Table (Simplified)") runs ages **72 to 120 with no gaps** — verified. `getRMDPercentage`
+(`optimizer_core.js:55-62`) returns 0 below the RMD start age and clamps above 120. There is no
+single-life table, no Table I, and no pre-72 extension anywhere in the repo. A plan starting at 60 has
+no divisor for its first 12-15 years, which is exactly the window this tool exists for. The three
+options, to be decided rather than discovered mid-implementation:
+
+- **(a) Extend the table downward.** Means adopting a *different* IRS table — Uniform Lifetime starts
+  at 72 by construction. Owns a new data source and compounds "abridged Uniform-Lifetime-only RMD
+  table", already on the deferred README caveats list (see the caveats phase above).
+- **(b) Derive from the plan's own `die1`/`die2`:** `divisor = max(1, plannedDeathYear - currentYear + 1)`.
+  Self-consistent with `maxYears` (`optimizer_core.js:2220`), no new tax data, no false precision, and
+  the user already told the tool when they die.
+- **(c) CPI leg only until RMD age.** Simplest, but it makes Hebeler identical to inflation-indexed
+  fixed spend for 12-15 years and therefore measures nothing in the window that matters.
+
+**Falsifiable questions:**
+- **Q1.** Does the Hebeler spend path differ from GK by more than noise, sourcing held fixed? Metric:
+  max per-year `|spendGoal_H - spendGoal_GK|`, plus the count of years differing by >1%.
+- **Q2.** Does the difference move the score the tool actually ranks on? Metric: `baselineScoreOf`
+  (`optimizer_core.js:2799`) and `totals.success`, within scenario.
+- **Q3.** Is any advantage the *age term* or the *50/50 damping*? Third arm at 100% RMD leg (pure RMD
+  method). If pure-RMD equals Hebeler, the blend is decoration.
+- **Q4.** Does divisor choice (a/b/c) change the ranking? If yes, the phase cannot ship without
+  settling the data question first.
+
+**Scoring rule that must not be got wrong.** A spend rule changes delivered spend, so wealth alone is
+meaningless — a rule that ends richer by spending less has won nothing. P24's stop-year sweep was a
+clean wealth comparison *only because* delivered spend was identical across every cutoff (`spendRange`
+$0, findings.md §2). That does not hold here. Report spend and wealth as a **pair**, within scenario,
+and apply P27's rule that assumption-style sweeps are not comparable in raw dollars across cells.
+
+**Already ruled out — do not re-derive:**
+- "Does dynamic spending beat static" in general. Not the question; GK already ships.
+- Any sourcing rule as part of Hebeler. GK's 4th rule is deliberately absent, and sourcing belongs to
+  P30/P32. This phase touches `resolveSpendTarget` only.
+
+**Tasks:**
+- [ ] **Settle the divisor decision (a/b/c)**; write the choice AND the rejected options into this phase
+- [ ] Research input `spendRule: 'gk' | 'hebeler' | 'rmdpure'`, default unset = bit-identical, no UI (the P28 research-flag pattern)
+- [ ] Hebeler branch in `resolveSpendTarget` beside `optimizer_core.js:1203`; log keys mirroring `gkSpend`/`gkAdj` (`optimizer_core.js:883-884`)
+- [ ] Harness with predictions stated up front and scored
+- [ ] Scenario ladder: reuse P28's 5-mix x 3-spend-rate ladder
+- [ ] Paired spend/wealth reporting; never a bare wealth delta
+- [ ] Add as a sweep arm next to the single GK arm (`optimizer_ui.js:846`); check whether it ever outranks GK
+- [ ] Decision: ship as a strategy, ship nerdknob-gated, or record and drop
+- **Status:** not started, research-first. **Harness:** `.test_harnesses/hebeler_harness.js` (node)
+- **Independent:** no phase dependencies. Adds one sweep arm, so it interacts with P34's run budget.
+
+---
+
+## Phase P30: Withdrawal policy — the constants nobody chose, and whether strategy should imply order at all
+
+**Why:** the gap fill has three mutually exclusive orderings (`optimizer_core.js:1516-1556`) and which
+one a user gets is a **side effect of the spend strategy they picked**, not a choice they made. Fill
+Bracket gets Cash, then Brokerage, then Roth, strictly sequential (`optimizer_core.js:1520-1534`).
+Proportional / Reduce / GK get Brokerage+Cash blended at a hardcoded `[40, 60]`
+(`optimizer_core.js:1543` — verified a bare literal with no comment justifying it) then Roth. Ordered
+gets the user's own sequence. Nobody chose the 40/60. Nobody chose that the bracket family drains Cash
+to zero before touching Brokerage. Both constants sit directly on the code path P28 measured at up to
++$3,559,596.
+
+**Scope — the user chose the FULL withdrawal-policy review (2026-08-01).** Three parts, in this order:
+1. The two unchosen constants.
+2. The orderings beyond the three shipped ones. `resolveOrderedSeq` (`optimizer_core.js:709-719`)
+   implements CBIR (default), RIBC and BIRC. 24 orderings of four accounts exist. Harness-only;
+   shipping any subset is a separate decision.
+3. The structural question: **should strategy choice keep implying gap-fill order at all?** Today
+   `yr.isBracketStrategy` / `yr.isOrderedStrategy` route the gap fill, so picking a *spend* strategy
+   silently picks a *sourcing* policy. Decoupling them is the largest change in this phase and is
+   design work rather than a sweep — cost it before committing to it.
+
+**Falsifiable questions:**
+- **Q1.** Is `[40, 60]` better than any other weight? Sweep w in {0, 20, 40, 60, 80, 100}. A flat curve
+  is a real result: "the constant is not load-bearing" ends part 1 and is worth recording.
+- **Q2.** Is Cash-before-Brokerage right for the bracket family? The two are not symmetric — Cash earns
+  `cashYield` taxed as ordinary income, Brokerage realizes LTCG and steps up basis. P28's mechanism
+  settles Roth-vs-X and says nothing about Cash-vs-Brokerage.
+- **Q3 (prediction to state up front and score).** P28's "no Brokerage draw, no lever"
+  (`.test_harnesses/README.md:79-81`) predicts the weight is inert wherever Brokerage is never touched.
+  If the prediction holds, Q1's answer is conditional, not global.
+- **Q4.** Does any of the 21 unimplemented orderings beat all three shipped ones?
+- **Q5.** How many rows would change if gap-fill order became independent of spend strategy?
+
+**Design decisions forced by the evidence:**
+- The weight must become a research **input** before it can be swept: `gapFillWeights`, default
+  `[40, 60]` so unset is bit-identical. Same shape as P28's research inputs.
+- Score on `baselineScoreOf` (`optimizer_core.js:2799`), not `finalNW` — PF11 established `finalNW` is
+  orthogonal to "would this change help."
+- Exclude `ordered` from the weight sweep, for the reason P28 excludes it (`optimizer_core.js:1511`):
+  it has its own order.
+- **Do not touch `resolveResidualAndForcedIRA` in this phase.** That is P32.
+
+**Already ruled out — do not re-derive:**
+- Roth's position in the gap fill. P28 rounds 2+4, 630 sims, `fillCashThenRoth` established. What
+  remains there is a **ship** decision (P28's open checkbox), not research.
+- Whether the three shipped `orderedSeq` sequences matter — already swept (`optimizer_ui.js:841`).
+- The unified-conversion reframe — measured inert, 0 money fields moved in 90 cells.
+
+**Tasks:**
+- [ ] `gapFillWeights` research input, default `[40,60]`, no UI, `ordered` excluded
+- [ ] Harness: weight sweep x P28 mix/spend ladder x gap-filling families; predictions scored
+- [ ] Q2 arm: bracket-family order Brokerage-before-Cash as an explicit alternative
+- [ ] Q4 arm: the remaining orderings of four accounts, harness-only
+- [ ] Q5: cost the decoupling (new input vs derived), count affected rows, do NOT build yet
+- [ ] Report against P28's zero-predicate: split cells by "did the control ever draw Brokerage"
+- [ ] Decision: change the default, expose a control, decouple, or record that the constant is inert
+- **Status:** not started, research-first. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
+  new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
+  `P28_RESULTS.md` as its reference)
+- **Depends on:** no code dependency. Its *ship* decision is downstream of P28's open decision —
+  settle both in one batch or the weight question shifts underneath it.
+
+---
+
+## Phase P31: Asset mix is an OUTPUT — the reverse mapping, asked honestly
+
+**Why — and this phase must lead with the prior finding.** The question as literally posed ("what asset
+mix target is ideal for a given spend level") **was already asked in this repo and answered NO.** P24
+§6 (findings.md:515-533) tested a terminal-mix target as a stop-year heuristic and it failed: taxable
+share is fairly stable at 43-48% of after-tax net worth, but pre-tax net ranges 3-71% and Roth 0-68%.
+The recorded conclusion is that the optimal mix is an **output of the search, not an input to it**.
+Re-running that is forbidden.
+
+The user's *actual* question is the **reverse mapping**, and it has never been asked: given a mix you
+want, which strategies get you there? That is descriptive, over a sweep the tool already runs. Every
+one of the ~177 rows already carries its terminal mix — `totals.terminal`
+(`optimizer_core.js:2535-2541`) holds `{ira, roth, cash, brokerage, basis}`, and `_afterTaxBuckets`
+(`optimizer_core.js:2855-2862`) already collapses it to the three tax buckets. The only consumer is
+the `taxflex` objective (`optimizer_core.js:2863-2884`), which sorts on `spread()` and **never
+displays it**. The tool computes this for every row and shows the user none of it.
+
+**Bound on any possible answer — state it out loud in the deliverable.** There are **no contributions**
+in this engine. No wage, salary or savings input exists; the only money in is SS + pension
+(`yr._yearInflows`, `optimizer_core.js:2232`). A user cannot "get to" a mix by saving differently
+inside this tool. The only levers on the terminal mix are conversions, withdrawal sourcing, and spend
+level.
+
+**Falsifiable questions:**
+- **Q1 (make-or-break).** Is the terminal mix predictable from the strategy family? For each family,
+  compare the spread of its terminal mix **across** scenarios against the spread **between** families
+  at a fixed scenario. If within > between, "pick strategy X to get mix Y" is unanswerable and the
+  deliverable is a disclosure, not a control.
+- **Q2.** Which input moves the mix most — family, conversion amount, or stop year? The prior from P24
+  §6 (Roth share 0-68%) says conversion amount. If conversions dominate, the honest answer is "your
+  conversion policy sets your mix, and the tool already searches that," and the deliverable is a
+  *display*.
+- **Q3.** Does spend level change the answer? The user asked "for a given spend level," and P28 round 4
+  overturned three conclusions once spend rate was controlled. Spend rate is a controlled axis **from
+  the start here**, not added in a later round.
+- **Q4.** Is any mix *unreachable*? A negative result ("nothing in the reachable set exceeds X% Roth at
+  8% spend") is directly useful and cheap to extract.
+
+**Already ruled out — do not re-derive:**
+- Terminal-mix-as-target (findings.md:515-533). Do not propose a target-mix objective or any mix-based
+  heuristic.
+- Two account-mix shortcuts, both scored and both failed to *rank* (findings.md:962-966): Brokerage
+  share, and `min(Brokerage drawn, Roth held)`. The payoff is **non-monotone** in Brokerage share — it
+  peaks at balanced thirds ($1,757,386) and falls at 62% ($778,677).
+- The one rule that survived is a **zero-test, not a ranking**: every cell whose control never touched
+  Brokerage returns exactly $0. It prunes; it cannot order.
+
+**Tasks:**
+- [ ] Harness reusing P28's mix x spend-rate ladder wholesale
+- [ ] Per-row terminal mix extracted via `_afterTaxBuckets` — reuse, do not recompute
+- [ ] Q1 within-vs-between variance test, reported as a number
+- [ ] Q2 attribution across family / conversion amount / stop year
+- [ ] Q4 reachable-set boundary per spend rate
+- [ ] **If Q1 is yes:** Mix column in the optimizer table plus a mix readout in P33's Insights panel.
+      **If Q1 is no:** publish the finding and, at most, surface `taxflex`'s `spread()` so the user can
+      see what that objective already optimizes silently
+- **Status:** not started, research-first. **Harness:** `.test_harnesses/assetmix_harness.js` (node)
+- **Independent:** no research dependency. Its display half lands on P33's surface.
+
+---
+
+## Phase P32: Brokerage is barely drawn — why, and is the third-pass exclusion still right?
+
+**Why:** three observations converge on one place. (1) The user reports Brokerage draws not occurring
+as expected. (2) The repo has already measured that this is load-bearing: every cell whose control arm
+never touched Brokerage returns exactly $0 (`.test_harnesses/README.md:79-81`, findings.md:1057-1062).
+(3) **Gain harvesting already exists and most users never see it** — the cyclic modifier maxes out the
+LTCG bracket *on purpose* even when spend does not need the money (`optimizer_core.js:1301-1303`, a
+deliberate basis step-up), and its target-bracket knob `cycleLTCGTarget` (default 0.15 = target the 0%
+bracket) is nerdknob-gated (`optimizer_ui.js:86`).
+
+This phase is **both** halves of the framing question, because they are one investigation: "why so
+little Brokerage" is a list of five draw sites and three exclusions, and "why isn't harvesting
+selected" is whether cyclic ever wins. Splitting them would make each half read the same code.
+
+**The three exclusions — design decisions to re-examine, not bugs:**
+1. **The third pass excludes Brokerage deliberately** (`optimizer_core.js:1596-1600` — verified). The
+   stated reason is a cap-gains spiral: more gains → higher SS taxation → bigger residual → repeat.
+   The reasoning is sound and it is **unmeasured** — the comment asserts a spiral and cites no run.
+   Falsifiable: with a Brokerage leg allowed and a bounded iteration count (the forced-IRA loop at
+   `optimizer_core.js:1649-1672` already establishes the 4-iteration convergence pattern in this
+   engine), does it actually diverge, and on how many scenarios? If it converges, this exclusion is
+   costing the tool the exact lever P28 valued at up to $3.5M.
+2. **The forced-IRA convergence loop never considers Brokerage** (`optimizer_core.js:1649-1672`) — it
+   forces IRA *above the ceiling* while a Brokerage balance may sit untouched. The counterfactual is
+   starker here: forced IRA is ordinary income at the marginal rate, a Brokerage draw may be LTCG at 0%.
+3. **The Cash-Reserve breach** (`optimizer_core.js:1677-1688`, sets `yr.cashBreach`) fires before
+   Brokerage is reconsidered.
+
+**Two accounting facts to check BEFORE concluding anything about behavior:**
+- Brokerage growth **excludes** the dividend rate (`optimizer_core.js:743`) while IRA and Roth include
+  it (`:740-746`); dividends are then accrued separately on the **pre-withdrawal** balance
+  (`optimizer_core.js:1152`, whose own comment at `:1150` calls it "APPROXIMATE worst case"). Brokerage's
+  total return is assembled differently from every other account. A systematic understatement here
+  would suppress Brokerage draws everywhere with no strategy logic being wrong.
+- Basis is a **single aggregate scalar** with proportional consumption (`optimizer_core.js:165-182`):
+  `basisChange = basis * (withdrawal/balance)`. No lot selection, so the tool cannot model HIFO or
+  specific-ID — the single largest real-world lever on "raise cash without raising gains." That is a
+  **modeling ceiling** bounding what this phase can honestly claim. Name it; do not build lots.
+
+**Falsifiable questions:**
+- **Q1.** In the shipped sweep, what fraction of rows ever draw Brokerage, by family? Predict from the
+  five draw sites first, then measure, then score the prediction.
+- **Q2.** Does allowing Brokerage in the third pass diverge, converge, or improve? Three arms: off /
+  bounded / unbounded-with-a-counter — the last exists to prove the spiral is real or is not.
+- **Q3.** Does cyclic ever *win* the sweep? It is already a x2 dimension (132 of ~177 rows), so this is
+  a scan of existing results, not a new run. If it never wins, that is the answer to "why isn't
+  harvesting used."
+- **Q4.** Is `cycleLTCGTarget` correctly defaulted and correctly gated? If the 0.20 arm (target 15%)
+  ever wins materially, a nerdknob is hiding a real lever.
+- **Q5.** Does "max the bracket out anyway" (`optimizer_core.js:1301-1303`) pay? It costs nothing at 0%
+  LTCG but raises MAGI, which feeds IRMAA and SS taxation. A/B against a spend-only harvest.
+
+**Already ruled out — do not re-derive:**
+- Brokerage share as a ranking heuristic (findings.md:962-966), non-monotone. Do not build "draw
+  Brokerage when share > X."
+- The zero-test "no Brokerage draw, no lever" is established and is a *prune*, not a ranking. Reuse it;
+  do not re-measure it.
+- Whether Roth belongs before Cash — P28.
+
+**Tasks:**
+- [ ] Q1 scan FIRST — it may reframe everything that follows
+- [ ] Audit the two accounting facts (`:743` dividend-rate exclusion, `:1152` pre-withdrawal accrual) before running any behavior arm
+- [ ] Research inputs, default off, P28 pattern: `thirdPassBrokerage` ('off'|'bounded'), `forcedIRAAllowBrokerage`, `cycleHarvestMode` ('maxbracket'|'spendonly')
+- [ ] Q2 with an explicit iteration counter, so "spiral" becomes a measured claim either way
+- [ ] Q3/Q4 as scans over existing sweep output
+- [ ] Record the aggregate-basis modeling ceiling as a README limitation regardless of outcome
+- [ ] Decision: re-scope the third-pass exclusion, un-gate `cycleLTCGTarget`, or record and keep
+- **Status:** not started, research-first with a likely build tail. **Harness:**
+  `.test_harnesses/brokerage_harness.js` (node), results to a sibling `.md` if large
+- **Depends on:** shares the gap-fill path with P30. Sequencing preference, not a hard dependency: run
+  P30 first so the `[40,60]` question is settled before the third-pass arms move the same numbers.
+
+---
+
+## Phase P33: Insights panel — where the money came from
+
+**Why:** the stats bar answers "how much" and never "from where." All ten tiles
+(`retirement_optimizer.html:419-433`) are a level or a rate — taxes, spend, end wealth, funded years,
+withdrawal rate, break even, stress. None is a decomposition. The user's example (share of lifetime
+spend from growth vs starting assets) is exactly the missing axis, and the raw material is already
+computed and thrown away: `applyGrowth` returns per-account gains (`optimizer_core.js:468-483`), the
+two per-year calls are merged at `optimizer_core.js:2135` so `yr.gains` is full-year earnings per
+account, and the asset-flows chart already sums them (`optimizer_ui.js:3275`) — per year, chart-only,
+never accumulated to a lifetime total, never in `totals`.
+
+**This is the only build-first item of the six.** Nothing here is a question about the world; it is
+arithmetic over fields that already exist. The risk is not correctness, it is labelling and surface.
+
+**Surface (user decision, 2026-08-01): a separate Insights panel, NOT the stats bar.** The stats bar
+already holds ten tiles and a slate this size would not fit.
+
+**SURFACE COLLISION — resolve before building.** `Phase PE: Insights / Feedback Panel` (above,
+pending) already claims that surface for *narrative* cards with severity levels. The placeholder is
+live: `#tab-insight` with an empty `#insights-table` at `retirement_optimizer.html:787`.
+Recommendation on record: **one surface, two sections** — P33 ships the statistics section, PE later
+adds narrative cards above it. P33 goes first because it has no rule-authoring risk. If a true modal
+is wanted instead of the existing tab, that is a one-line change to where `renderInsightStats()`
+mounts, not a second panel.
+
+**Labelling decision, to be made before anything ships.** "Growth" as logged is **not** appreciation.
+`yr.gains` includes dividends (`optimizer_core.js:2139` when DRIP is on, `:2143` to Cash when off) and
+`cashG` includes cash yield. Decision: name the headline **Earnings** and define it, then break
+dividends and interest out separately in the panel, which has no character limit. `yr.taxableDividends`
+and `yr.taxableInterest` are both already per-year fields.
+
+**Second decision, which is what makes the user's statistic well-defined.** There are **no
+contributions** in this engine — no wage, salary or savings input exists. So a sources-of-lifetime-spend
+decomposition has exactly three terms and they close: **starting balances**
+(`optimizer_core.js:2301-2305`) + **investment earnings** (sum of `yr.gains`) + **guaranteed income**
+(sum of `yr._yearInflows`, `optimizer_core.js:2232`). Conversions and reinvested surplus are internal
+transfers and must not appear as sources. Say so in the panel.
+
+**The slate.** The panel is its own surface, so the full set is in scope.
+
+| Statistic | Definition | Computed from |
+|---|---|---|
+| **Growth-funded %** (the user's ask) | earnings / (earnings + starting balances + inflows) | new `totals.earnings` from `yr.gains`; starting balances `:2301-2305`; new `totals.inflows` from `yr._yearInflows` |
+| Lifetime earnings | sum of per-account gains, broken out per account | `yr.gains.{IRA1,IRA2,Roth1,Roth2,Brokerage,Cash}` — mirrors log keys `-iraG`/`rothG`/`brokerageG`/`cashG` (`:852-856`) so panel and chart cannot disagree |
+| Guaranteed-income share of spend | inflows / `totals.spend` | `totals.spend` (`:2150`), new `totals.inflows` |
+| Terminal mix | preTax / Roth / taxable as three percentages | `_afterTaxBuckets` (`:2855-2862`) — exists, is correct, currently only sorts `taxflex` |
+| Realized LTCG | sum of `yr.capitalGains`, plus the share realized at 0% | **accumulate at ONE point only, after the last recompute** — it is recomputed at `:1417`, `:1560`, `:1630`, `:1660` and naive accumulation double-counts |
+| Converted total / share of starting IRA | sum of `yr.totalConverted` / starting IRA | accumulate on the `totals` side. **Do not add a log key** — P28 established `rothConv` is engine state, `beginYear` reads `log[y-1].rothConv > 1000` to pick withdrawal timing |
+| Brokerage drawn (zero is meaningful) | sum of Brokerage withdrawals | P28's zero-predicate made user-facing: "this lever is inert for you" |
+| Cash-reserve breaches | count of years with `yr.cashBreach` | `optimizer_core.js:1677-1688` — a real failure signal with no surface today |
+| Forced IRA total | `totals.forcedIRATotal` | **already in `totals` at `:2317`, displayed nowhere** |
+| ACA breach years | `totals.acaBreachYears` | **already in `totals` at `:2317`, displayed nowhere** |
+
+The last two are the cheapest win available and are task #1 — zero engine change.
+
+**Optional extras the user named (2026-08-01):**
+- **Per-asset computed log column** in Annual Details. Cheapest useful one: a per-year `Earnings`
+  column (the four `*G` fields summed), and/or making `-iraG` visible. Costs **four** registration
+  points and getting fewer than all four is how a column silently vanishes: emit in
+  `buildSimYearLogRecord` (`optimizer_core.js:750-889`), `columnCategories`
+  (`optimizer_ui.js:1838-1935`), `columnGroupDefs` (`optimizer_ui.js:1938-1966`), tooltips
+  (`optimizer_ui.js:2171-2222`). This file's own Known TODOs already lists two suspected
+  column-registration bugs, so it is a live failure mode.
+- **New chart.** Five views exist — combined, tax, net, flows, assetflows (`optimizer_ui.js:3133`). A
+  sources-of-spend stacked area would be a sixth, reusing `earn()` at `optimizer_ui.js:3275`. Global
+  `Chart.defaults` rules apply: no per-chart tooltip colours, no per-chart `labelColor`.
+
+**Bit-identity guarantee.** Every item is accumulate-only. `simulate()` behavior must not change; the
+regression is that a fixed scenario's log and existing totals are unchanged apart from the new keys.
+Initialize new `totals.*` keys in the literal at `optimizer_core.js:2317`, not lazily — the lazy
+`totals.medicare` at `:2148` is the exception, not the model. Check `montecarlo/mc_tab.js` for
+`undefined` handling first.
+
+**Tasks:**
+- [ ] Resolve the PE surface collision (recommendation: one surface, two sections)
+- [ ] Surface `forcedIRATotal` + `acaBreachYears` — already computed, zero engine change
+- [ ] `totals.earnings` + `totals.inflows` accumulators, plus a node test asserting `totals.earnings`
+      equals the sum of the chart's per-year `earn()` (`optimizer_ui.js:3275`) — the two must agree by
+      construction
+- [ ] `computeInsightStats(totals, log, inputs)` in core (pure, UMD-exported, node-testable) +
+      `renderInsightStats()` in UI
+- [ ] Growth-funded % with the dividends/interest caveat stated in the panel
+- [ ] Terminal mix via `_afterTaxBuckets` (reuse, do not recompute)
+- [ ] Realized-LTCG accumulator at a single site; test against a scenario with a known harvest
+- [ ] Brokerage-drawn total and cash-breach count
+- [ ] Optional: per-year `Earnings` column — all four registration points
+- [ ] Optional: sources-of-spend chart as a sixth view
+- [ ] Empty state before the first run; no MC coupling, `#stat-stress` untouched
+- **Status:** not started, **build-first**, no harness
+- **Independent:** no phase dependencies. Shares a surface with PE; P31's mix display lands here if it
+  ships.
+
+---
+
+## Phase P34: The cost of finding a profitable conversion — where the time actually goes
+
+**Why — the honest answer up front:** the search itself probably cannot be shortened safely. Every
+heuristic tried in this repo has failed, several of them *silently*. But the search is also not where
+most of the wall clock goes. The two largest structural costs are not algorithmic: the optimizer sweep
+runs **entirely on the main thread** and blocks it for 0.8-2.5s (only Monte Carlo uses a worker), and
+the cache is a **single all-or-nothing hash** (`optimizer_ui.js:692-701`, key state
+`_lastOptimizerHash` at `:541`) — one character in any sidebar field re-runs all ~177 rows. There is no
+per-row memo, no `simulate()` memo, no shared-prefix reuse across cutoffs, no incremental
+re-simulation. Those two are worth more than any heuristic and **neither can produce a wrong answer**.
+
+**Tier 1 — zero risk of a wrong answer. These change WHEN work happens, not WHAT is computed:**
+1. **Move the sweep to a Web Worker.** `optimizer_core.js` is DOM-free by contract (`:4-9`), so it is
+   portable in principle. **One real blocker, named:** `simulate()` mutates two module globals —
+   `simulationCount` (`:2306`) and `STATEname` (`:2307`). `STATEname` is a genuine hidden dependency;
+   two workers on two states would race. Also `new Date().getFullYear()` is read when `startInYear` is
+   unset (`:1715`, `:2309`, `:2322`), so a worker must be pinned to the same year or results differ
+   across midnight. Payoff: the UI stops freezing. Total CPU unchanged.
+2. **Split the cache in two.** The hash is *already* computed in two pieces — `base` is hashed AFTER
+   the conversion fields are stripped, with a `;cur=` tail re-adding them. That is one step from a
+   two-level cache: the 44-arm no-conversion sweep does not depend on conversion fields at all, so
+   typing in Extra Conversion should not re-run it. **Risk to control:** cache-key omission — a field
+   not in the key but read by `simulate()` yields a stale row, the silent-wrongness class. Mitigation
+   is mechanical and is a required task: assert the key covers every field `getInputs()` produces, with
+   a test that fails when a new input is added. This exact mechanism already caused a near-miss
+   (findings.md:65, verified live $564,869 → $983,705).
+3. **Stop calling `bestConversionStopYear` eagerly.** It runs on every `updateStats()` whenever
+   conversions occurred (`optimizer_ui.js:2509-2513`) — a per-keystroke-debounce path — at n+2 sims
+   (~46ms for a 26-year plan), to fill a tooltip the user may never hover. Make it lazy on
+   hover/expand, or reuse the last result when the input hash is unchanged. Zero risk.
+4. **Memoize `simulate()` on an input hash.** None exists anywhere. Within one sweep the same inputs
+   recur (no-conv baseline arm, OC re-runs, counterfactuals). **Measure the hit rate before building**
+   — it may be near zero, and that measurement is the deliverable.
+
+**Tier 2 — bounded risk, must be diffed against the sweep it replaces:**
+5. **Coarse-to-fine on `optimizeConversionAmount`** (`optimizer_core.js:3016-3049`). This is the **one
+   pre-authorized** optimization already on record in this file (PF11: "$5M+ IRAs cross the run budget
+   (~2624 runs) → open a coarse-to-fine ($100k coarse then $25k refine) phase if a user hits it").
+   Cost today is `ceil(totalIRA/25000)+1`, measured exactly 17 / 81 / 201 sims at $400k / $2M / $5M.
+   **The risk is real and already documented:** findings.md:85 is exactly this failure — a coarse
+   8-point evenly-spaced amount grid **silently invented wrong answers**, reporting "never pays up to
+   75%" when the true answer was 48%, and 25% against a true 15%, because paying amounts are only ~16%
+   of the IRA and an even grid steps straight over them. $100k coarse on a $5M IRA is a 50-point grid,
+   not an 8-point one, and the refine window must be wide enough to recover the *neighbors* of the
+   coarse winner, not merely bracket it. Acceptance is not "it is faster" — it is a **diff against the
+   full sweep on several scenarios** (findings.md:88), including both known traps.
+6. **Early exit on a declining score in `optimizeConversionAmount`.** There is none today. Tempting,
+   and dangerous for the same reason P24 §7 recorded on the cutoff axis (findings.md:535-546: 1-7
+   first-difference sign flips, 7 at growth 10%). **Whether the AMOUNT axis is unimodal has never been
+   measured.** That measurement is a legitimate task and a hard prerequisite: no early exit ships
+   without it, and if the axis is not unimodal the answer is no.
+
+**Tier 3 — ruled out, do not propose:**
+- Binary or ternary search on the **cutoff** axis (findings.md:535-546) — not unimodal, converges on
+  the wrong answer **undetectably**. Cost was never the argument for the linear scan; it is 46ms.
+- Any stop-year heuristic (P24 §6, findings.md:515-533): marginal-rate crossing **pins at 33.3% in
+  every year and cannot discriminate at all**; IRA share ranges 4-78%; age/RMD offsets run -15 to +14;
+  terminal-mix target failed.
+- "No IRA left at the end" as a skip filter (findings.md:86) — "looked obviously safe and lost the
+  right answer on a $3.3M scenario (reported 25% against a true 5%)."
+- Any account-mix ranking heuristic (findings.md:962-966).
+- BETR as a screen (findings.md:559-585) — wrong in both regimes in opposite directions; the column and
+  tile were already removed.
+
+**The bar any Tier-2 item must clear, stated as a template.** `breakEvenHeirsRate()`
+(`optimizer_core.js:3093-3126`) uses binary search **legally**, and only because monotonicity in the
+rate axis was *measured* across five scenarios (findings.md:123-125) and is *pinned by a test*
+(`optimizer_core.test.js:1856-1868`). Measure the axis property, then pin it with a test that fails if
+the property stops holding. Nothing else qualifies.
+
+**Two costs nobody has on a list, worth pricing here.** `bestTimeLimitedConversion`
+(`optimizer_core.js:3141-3209`) at ~148 sims per candidate is **already capped at 6 candidates**
+(`optimizer_ui.js:1047-1049`) because all 12 pushed one run to 2,216 sims past the 1,500-run budget —
+that cap is a silent quality reduction, and Tier-1 wins may buy the budget back to restore it. And the
+Break Even dual-sim (`optimizer_core.js:2455-2498`) is +1 sim per converting row (measured 1.96x /
++74ms on a 144-row sweep) whose second counterfactual `cfExcess` (`:2494`) fired on **0 of 144 rows**
+(findings.md:53) — a candidate for removal or a cheap guard.
+
+**Falsifiable questions:**
+- **Q1.** Where does the time actually go? Predict the split from the inventory (~177 sweep sims, +12
+  candidates x `ceil(IRA/25k)`, +6 x ~148 time-limited, +1 per converting row for BE), then
+  instrument, then score the prediction.
+- **Q2.** Is the conversion **amount** axis unimodal? (gate for Tier-2 item 6)
+- **Q3.** What is the `simulate()` memo hit rate within one sweep? (gate for Tier-1 item 4)
+- **Q4.** Does a two-level cache change any displayed number? The answer must be zero.
+
+**Tasks:**
+- [ ] **Baseline profile FIRST**, before P29/P31/P32 add sweep arms, so later phases have a comparison
+- [ ] Q1 instrumentation with scored predictions
+- [ ] Tier-1 #3 (lazy stop-year) — smallest, zero-risk, ship it standalone
+- [ ] Tier-1 #2 two-level cache + the key-coverage test that fails when a new input is added
+- [ ] Q3 memo hit-rate measurement; build the memo only if the rate justifies it
+- [ ] Tier-1 #1 worker: resolve the `STATEname` / `simulationCount` module-global mutation and pin the
+      current year, or record why it is deferred
+- [ ] Q2 unimodality measurement on the amount axis; pin with a test if it holds
+- [ ] Tier-2 #5 coarse-to-fine, **only** with a full-sweep diff on several scenarios including the
+      findings.md:85 and :86 traps
+- [ ] Re-check the 6-candidate cap on `bestTimeLimitedConversion` after Tier-1 lands
+- **Status:** not started. **Research-first** on Q1-Q3 (harness `.test_harnesses/searchcost_harness.js`,
+  node), **build-first** on Tier-1 items 1-3, which need no research
+- **Depends on:** its measurement half should run **before** P29/P31/P32 add sweep arms; its build half
+  last.

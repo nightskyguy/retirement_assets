@@ -2,8 +2,9 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-08-03 (worktree `context-ab498f`, branch `worktrees/planning-with-files-76e427`, at `main` = `ce54356`). **Working tree clean. HEAD is TWO COMMITS AHEAD of `origin/main`** — P35 PR 1 (`2b8f414`) and PR 2
-(`5d5dee3`), committed on this branch, not pushed, no GitHub PR opened. No other PRs open. Everything through PR #145 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
+**As of:** 2026-08-03 (worktree `context-ab498f`, branch `worktrees/planning-with-files-76e427`, at `main` = `ce54356`). **Working tree clean. P35 PR 1 (`2b8f414`) and PR 2 (`5d5dee3`) are pushed and OPEN as
+[PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)**, mergeable, awaiting review.
+Nothing user-visible in it, so no version or changelog entry. No other PRs open. Everything through PR #145 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
 
 **Current batch (added 2026-08-01):** six new phases P29-P34 from a user punch-list — Hebeler Autopilot, withdrawal policy, asset-mix reverse mapping, brokerage draws, an Insights statistics panel, and conversion-search cost. Four of the six touch questions this repo has ALREADY partly answered, two of them answered NO, so every one of those phases carries an explicit "already ruled out, do not re-derive" block. Read that block before designing anything in the phase; it is there to stop a re-derivation of P24 and P28.
 
@@ -2405,8 +2406,9 @@ per-row memo next.
 - [ ] PR 6 — all 12 identity sites; URL keys `pcp`/`pam`/`dsu`/`ssp`
 - [ ] PR 7 — see P36
 - [ ] PR 8 — arms scoped by P36; surface the stop-year cap reduction
-- **Status:** IN PROGRESS. PR 1 and PR 2 committed on `worktrees/planning-with-files-76e427`, not yet
-  pushed or opened as a PR. **This is the review point** — PR 3 (the ACA post-65 cap release) is the
+- **Status:** IN PROGRESS. PR 1 and PR 2 are carried by
+  [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146), open and mergeable.
+  **This is the review point** — PR 3 (the ACA post-65 cap release) is the
   first one that moves numbers. **Depends on:** nothing hard. Its PR 2 unblocks P36 and
   helps P29/P30/P31/P32. Its PR 8 budget problem is P34's argument.
 - **Touches the same gap-fill code as:** P28's open ship decision (`rothGapFill`) and P30's `[40,60]`

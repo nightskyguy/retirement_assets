@@ -2,9 +2,11 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-08-01 (worktree `readme-review-updates-c9df11`, branch `worktrees/task-plan-summary-d3078c`, at `main` = `4272eb8`). **Working tree clean, nothing in flight.** Everything through PR #141 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping). Next work starts from a clean base.
+**As of:** 2026-08-03 (worktree `context-ab498f`, branch `worktrees/planning-with-files-5be427`, at `main` = `34feeb8`). **Working tree clean, nothing in flight.** Everything through PR #144 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control). Next work starts from a clean base.
 
 **Current batch (added 2026-08-01):** six new phases P29-P34 from a user punch-list — Hebeler Autopilot, withdrawal policy, asset-mix reverse mapping, brokerage draws, an Insights statistics panel, and conversion-search cost. Four of the six touch questions this repo has ALREADY partly answered, two of them answered NO, so every one of those phases carries an explicit "already ruled out, do not re-derive" block. Read that block before designing anything in the phase; it is there to stop a re-derivation of P24 and P28.
+
+**Added 2026-08-03:** three phases P35/P36/P37 from a user design proposal — a new **"Phased"** withdrawal strategy that switches behavior by life phase, its efficiency study, and a deferred LEGACY heir-drawdown phase. P35 is an alternative answer to the long-pending **P13**, and it carries a ten-item engine survey in `findings.md` ("P35 engine survey", 2026-08-03) that must be read before any code is written: several of its items are traps where the natural implementation produces a plausible wrong answer rather than an error. **Work is to be performed in stages**, PR by PR, with a review point between each.
 
 VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + hour)`, so two branches worked on in the same afternoon produce ADJACENT numbers, and whichever merges first is not necessarily the lower one. P25 was built as v11.13c2 (hour 18) but PR #138 merged v11.13c3 (hour 19) ahead of it, so P25 was renumbered to v11.13c5 on merge. When resolving a version conflict, recompute from the clock rather than taking either side.
 
@@ -621,7 +623,7 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 | 12 | **P10** | Upgrade Equity Data (Fama-French) | pending | — |
 | 13 | **P11** | RealReturns — Intl Asset + Annual Mode | pending | — |
 | 14 | **P12** | Retire Optimizer Tab → MC Strategy Compare | pending | — |
-| 15 | **P13** | Multi-Strategy Segment Optimizer | pending | P9 |
+| 15 | **P13** | Multi-Strategy Segment Optimizer | pending — **see P35**, which answers the same need for ~4 rows instead of ~10,000 combos; decide whether P13 is superseded once P35 ships | P9 |
 | 16 | **P14** | Regime-Switching MC | pending | — |
 | 17 | **P15** | Refactoring Remainder (R1b, R3, R4) | pending | — |
 | 18 | **P16** | Responsive Layout (all tools) | partial (PF5 covered optimizer phone UX) | — |
@@ -643,6 +645,14 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 | 34 | **P32** | Brokerage draws + gain harvesting | not started, research-first | prefer after P30 |
 | 35 | **P31** | Asset mix reverse mapping | not started, research-first | prefer after P30/P32 |
 | 36 | **P29** | Hebeler Autopilot spend rule | not started, research-first | — |
+| 37 | **P35** | "Phased" withdrawal strategy (8 PRs, staged) + basis step-up | not started, **build-first**; PR 1-2 are pure scaffolding | — |
+| 38 | **P36** | Phased efficiency study — do any strategies never win? | not started; **runs between P35 PR 6 and PR 8** | P35 PR 2 (enumeration extraction) |
+| 39 | **P37** | LEGACY / heir 10-year drawdown | **deferred by the user**, recorded only | — |
+
+**Rows 37-39 are the 2026-08-03 batch.** P35 is staged internally (its own PR table below) and its
+PR 7 *is* P36, so the three do not run in row order. P35's PR 2 extracts the sweep enumeration into
+`optimizer_core.js`, which **also unblocks P36** and would benefit P29/P30/P31/P32, all of which
+currently plan to copy P28's ladder by hand.
 
 **Rows 31-36 are the current batch, and their ROW ORDER IS THE RECOMMENDED RUN ORDER** (so the phase
 numbers deliberately run out of sequence). P33 first: build-first, no research, no dependencies, and
@@ -2209,3 +2219,274 @@ Break Even dual-sim (`optimizer_core.js:2455-2498`) is +1 sim per converting row
   node), **build-first** on Tier-1 items 1-3, which need no research
 - **Depends on:** its measurement half should run **before** P29/P31/P32 add sweep arms; its build half
   last.
+
+---
+
+# Batch added 2026-08-03: P35-P37
+
+A user design proposal for a **"Phased"** withdrawal strategy, its study, and one deferred phase.
+Full design in the session plan file `C:\Users\starc\.claude\plans\composed-marinating-garden.md`;
+the engine evidence is in `findings.md` under **"P35 engine survey"** (2026-08-03).
+
+**Read the survey first.** It contains ten verified facts, several of which are traps where the
+natural implementation lands on the wrong side and produces a plausible wrong answer rather than an
+error. The sharpest one is item 1, restated here because it will otherwise be rediscovered the hard
+way: **the engine's `isDeathYear` (`optimizer_core.js:1103`) is the FIRST SINGLE year, not the last
+MFJ year.** `alive = age <= die`, so `age === die` is the last year both spouses live and the last
+`'MFJ'` year; `age === die + 1` is what `isDeathYear` tests. A feature wanting the married window
+needs the earlier year and a differently-named flag.
+
+**Work is staged.** Each PR below is a review point. Nothing that moves numbers lands before the
+harness that can measure it.
+
+---
+
+## Phase P35: "Phased" withdrawal strategy — one strategy that switches by life phase
+
+**Why:** P13 (Multi-Strategy Segment Optimizer, row 15, pending since before the current batch)
+proposes sweeping strategy-per-segment: 3 segments x ~42 strategies ~= 74k combos filtered to ~10k.
+P35 answers the same need from the other direction — **one strategy that switches internally**, so the
+search space grows by ~4 rows instead of ~10,000. If P35 ships and ranks well, P13 should be
+explicitly retired rather than left pending.
+
+**The user's design, and the refinement that makes it cheap.** Phases: 0 ACA (to 65), 1 IRA_CONTROL,
+2 BALANCED, 3 FIRST_DEATH, 4 SURVIVOR, 5 LEGACY. The user then merged 1 and 2: *"for the portion of
+the IRA above the target, do IRA control; if any shortfall still exists, use BALANCED."* That removes
+the state machine, the two-way switch and the hysteresis question entirely — and it maps onto
+machinery that **already exists**:
+
+- `yr.curIRA = Math.max(0, IRA1 + IRA2 - yr.iraGoalNominal)` (`optimizer_core.js:1181`), computed every
+  year after RMDs, before `planPrimaryWithdrawals`. This *is* "the portion above the target."
+- `yr.iraGoalNominal = inputs.iraBaseGoal * sim.cpiRate` (`:920-921`) — the IRA Goal input already
+  exists (`#iraBaseGoal`, `retirement_optimizer.html:189-192`, default $750,000, today's dollars,
+  ungated, round-trips as `ibg`). **No new target input is to be invented.**
+- `yr.additionalSpendNeeded` (`:1232`) is the BALANCED budget.
+
+**IRA_CONTROL rules A and B collapse to one expression:**
+`iraControlTarget = Math.abs(sim.prevIRAGain) * (1 + inputs.phasedControlPct)`.
+The `Math.abs()` is load-bearing: a naive `prevIRAGain * (1+pct)` goes negative in a down year and
+clamps to zero, the exact opposite of rule B. With the absolute value, a -$200k year and a +$200k year
+both target $220k at 10%, so the IRA is drawn hardest precisely when conversion is cheapest. One knob
+satisfies both rules and is the smallest thing that can be swept. **`sim.prevIRAGain` is new** —
+`sim.gkPriorReturn` is assigned only inside the GK branch (`:2276-2277`) and is unreachable; but
+`'-iraG'` (`:856`) already logs the quantity.
+
+### Settled decisions (user, 2026-08-03)
+
+| Decision | Value |
+|---|---|
+| Bundling | Phased **+ basis step-up together**; LEGACY split out as P37 |
+| IRA target | Use the existing `#iraBaseGoal`; how it is *suggested* may change later, deferred |
+| Phase 1/2 | **Merged** — per-year split on `yr.curIRA`, no hysteresis |
+| ACA ceiling after 65 | **None.** The constraint lifts outright |
+| FIRST_DEATH ceiling | **None** — convert everything above the IRA Goal. No `phasedDeathBracket` input |
+| `deathBasisStepUp` default | **`'half'`** now, so PR 4 moves numbers |
+| `survivorSpendPct` default | Ships at `100`; real default decided by P36 (80% flagged reasonable) |
+| Sweep arm count | Decided by P36's evidence, not up front |
+| Enumeration | **Extract** to `optimizer_core.js`, shared with `buildVariations()` |
+
+### PR sequence
+
+| PR | What | Byte-identical? |
+|---|---|---|
+| 1 | Characterization tests for both enumerations | Yes (tests only) |
+| 2 | Extract `buildStrategyFamilies` + `OPTIMIZER_GRIDS`/`MC_GRIDS` to core | Yes — proven by PR 1 |
+| 3 | ACA post-65 cap release (independent bug fix) | **No** — ACA rows only |
+| 4 | `deathBasisStepUp` (default `'half'`), `survivorSpendPct`, `yr.isLastMFJYear`, `sim.prevIRAGain` | **No** — step-up default |
+| 5 | Phased engine | Yes for every existing strategy |
+| 6 | Phased UI + identity/matcher sites | Yes — nothing selects Phased yet |
+| 7 | **= P36**, the efficiency study | Yes — no shipped code |
+| 8 | Phased sweep arms, scoped by P36's evidence | Per-row yes; table gains rows |
+
+**PR 1-2 rationale.** The optimizer's 44-family enumeration is inline in `_runOptimizerNow()`
+(`optimizer_ui.js:797-896`) — not exported, not tested, unreachable from node — while
+`buildVariations()` is exported but sweeps a **different, smaller space** (36 families, no IRMAA arm,
+no ACA arm, IRA Draw capped at 10% vs 20%). Goldens must be captured before the extraction or the
+extraction cannot be proven behavior-preserving. Ship `OPTIMIZER_GRIDS`/`MC_GRIDS` as pinned
+constants so the divergence is declared rather than accidental.
+
+**PR 3 is a bug fix that stands alone.** The ACA branch has no age test at all. Release the ceiling
+outright rather than falling through — every ACA sweep row sets `stratRate: 0` (`optimizer_ui.js:832`),
+so a fall-through lands on the 10% bracket, *tighter* than the cap it replaced. **State the
+consequence in the changelog:** for the standalone `aca` strategy, unbounded room collapses
+`IRAwd = Math.min(yr.curIRA, iRAbracketRoom)` (`:1366`) to `IRAwd = yr.curIRA`, draining the whole
+above-goal IRA in the year the younger spouse turns 65. Real consequence, not a bug. **Phased does not
+have this problem** — its IRA_CONTROL target stays in the `Math.min`.
+
+**PR 4 is not byte-identical, by decision.** `deathBasisStepUp` is a three-value enum
+(`'none'`/`'half'`/`'full'`, unrecognized means `'none'`, the `rothGapFill` convention) defaulting to
+`'half'`. Fires in `resolveHousehold` after `yr.status` (`:986`), on the **first Single year** — which
+is deliberately *not* Phase 3's year. `'half'` over `'full'` because 41 states are common-law;
+community-property handling is explicitly not modelled (`STATEname` is knowable at `:2307` but no
+table exists). `survivorSpendPct` multiplies **`yr.targetSpend`, never `sim.spendGoal`** (GK reads
+`spendGoal` as its own state at `:1205`, so scaling it would rebase the guardrails permanently), and
+**`routeSurplusAndConvert:1755` must see the factor too** or the freed dollars vanish from surplus.
+Guard on `birthyear2 > 0` or single filers get the reduction for their whole plan.
+
+**PR 5 dispatch: additive disjunction, not a `yr.effectiveStrategy`.** `inputs.strategy` stays scalar.
+Resolve `yr.phase` above `:1198`, then extend the three existing flags with `|| 'phased'`, add one new
+`else if` in `planPrimaryWithdrawals` before the bracket branch, and two `|| 'phased'` guards at `:945`
+and `:1314`. Five additive sites; every existing strategy is bit-identical **by construction**. A
+re-pointed `effectiveStrategy` was rejected: 15 edits is 15 chances to change a shipped strategy
+silently, and it would lie at `:2276` (GK spend advance) and `:694` (`minlimit` IRMAA clamp).
+
+**PR 5 gap fill: one new arm, do not flip `isBracketStrategy` off.** Phase 5 emits only the IRA draw;
+a second `calculateWithdrawals` there would be sized against a stale tax number and *is* the
+double-draw risk. Add an `else if (yr.phasedBalancedFill)` arm to `fillSpendingGap` between the
+bracket and ordered arms, ordering `['Brokerage','Cash','Roth']` weighted by current balance. **IRA is
+deliberately excluded** — its share is already handled by IRA_CONTROL, and including it is the
+double-draw. Flipping `isBracketStrategy` off instead would hand the plan the hardcoded `[40,60]`
+(`:1543`) *and* disable the forced-IRA fallback (`:1649`), so a Phased plan would starve rather than
+break its own ceiling for mandatory spending.
+
+**PR 6: 12 identity/matcher sites, every one a silent failure if missed.** The sharpest is
+`sameStrategySelection` (`optimizer_core.js:2914-2938`) whose `default: return false` would make the
+📍 current-plan pin, the ⚖ compare and MC's stress-vs-your-plan all fail quietly. Full table in the
+plan file. Also pin with a test that `getInputs`'s `bracket`+ACA rewrite (`optimizer_ui.js:300-306`)
+does not catch Phased.
+
+**PR 8 budget reality.** The sweep **already exceeds its own budget**: 1,711 runs measured against a
+1,500 cap, absorbed by silently halving `bestTimeLimitedConversion`'s candidate pool from 12 to 6
+(`optimizer_ui.js:1043-1049`). 4 Phased families add ~16 rows / ~150 runs. Whatever ships, **make the
+cut visible** in the `#opt-perf` readout. This is the concrete argument for doing P34's worker and
+per-row memo next.
+
+### Already ruled out — do not re-derive
+
+- **Gain harvesting.** It already exists as the Cyclic modifier, which maxes the LTCG bracket on
+  purpose even when spend does not need it (`optimizer_core.js:1301-1303`) with `cycleLTCGTarget`
+  nerdknob-gated (`optimizer_ui.js:86`). Whether it is worth selecting is **P32's Q3**, already scoped
+  as a scan of existing sweep output. Phased gets 🗘/🔄 twins like every family and adds nothing here.
+- **"Use the weightier assets more heavily."** That is `calculateWithdrawals` with
+  `order: ['IRA','Brokerage','Cash']`, i.e. exactly what `propwd` (`:1379-1391`) and the baseline
+  branch (`:1398-1406`) already do. BALANCED ~= propwd plus the IRA_CONTROL term. Do not rebuild it.
+- **A new IRA-target input.** `#iraBaseGoal` exists and `yr.curIRA` is already computed.
+- **Terminal-mix-as-target** (P24 §6, `findings.md:515-533`) — the optimal mix is an output of the
+  search. Do not add a mix-based phase trigger.
+- **Frequency-based pruning of sweep arms.** See P36's framing block; the bar is `task_plan.md`'s
+  measure-then-pin rule, and four heuristics have already failed here.
+
+### Tasks
+
+- [ ] PR 1 — characterization goldens, `NERD_KNOBS` off and on, plus 4 `buildVariations` bases
+- [ ] PR 2 — `buildStrategyFamilies(base, opts)` returning overrides only; grid constants pinned
+- [ ] PR 3 — ACA age gate on the shared branch; narrow `_isACAUntenable` to `bothOnMedicareAtStart`;
+      update `#aca-age-warn`; predict the `aca` fixture's direction before measuring
+- [ ] PR 4 — `deathBasisStepUp` enum defaulting `'half'`; `survivorSpendPct` at 100;
+      `yr.isLastMFJYear` + `yr.isFirstSingleYear` (hoisted); `sim.prevIRAGain`/`prevBaseReturn`
+- [ ] PR 4 — README: **add** a step-up entry to the uncovered-tax-situations section (there is no
+      existing "no step-up" caveat to edit), and note the second death is still unmodelled
+- [ ] PR 5 — `yr.phase` resolver; additive flags; `planPrimaryWithdrawals` branch; `fillSpendingGap` arm
+- [ ] PR 5 — test that Phased never draws more than `Fill Bracket` at the same ceiling
+- [ ] PR 6 — all 12 identity sites; URL keys `pcp`/`pam`/`dsu`/`ssp`
+- [ ] PR 7 — see P36
+- [ ] PR 8 — arms scoped by P36; surface the stop-year cap reduction
+- **Status:** not started, build-first, staged. **Depends on:** nothing hard. Its PR 2 unblocks P36 and
+  helps P29/P30/P31/P32. Its PR 8 budget problem is P34's argument.
+- **Touches the same gap-fill code as:** P28's open ship decision (`rothGapFill`) and P30's `[40,60]`
+  question. Settling P28 and P30 first would mean PR 5's new arm is written against a settled ordering
+  rather than one about to change.
+
+---
+
+## Phase P36: Phased efficiency study — do any strategies never win?
+
+**Why:** the user asked two things the repo cannot currently answer. (A) Across a dozen or more wealth
+and asset-mix points, are any shipped strategies *inefficient* — never appearing in the top ranks under
+any objective? (B) How many swept variations never produce a top result, and could more variations be
+worth adding? Neither is answerable today: the enumeration is unreachable from node (see the P35 PR 2
+extraction), and **there is no "top 10" in the code** — the Best table is 7 fixed slots keyed on
+`colWinners` (`optimizer_ui.js:1655-1662`), and the Rank column is 1..N.
+
+**Framing, which is as much the deliverable as the numbers.** This produces **evidence for DEFAULT
+ORDERING and for P35's shipped defaults — not for deleting arms.** The repo's rule
+(`task_plan.md`, P34 Tier 3) is that a search shortcut is legal only if the axis property is *measured*
+then *pinned by a test*. "IRA Draw 5% seldom wins" is a frequency observation, not an axis property,
+and frequency shortcuts are exactly what has failed here four times — including the "no IRA left" skip
+filter that "looked obviously safe and lost the right answer on a $3.3M scenario, reported 25% against
+a true 5%" (`findings.md:86`). **The only result justifying deletion is a zero test:** an arm
+bit-identical to another in *every* cell, the standard that already justifies skipping 💵 clones when
+`Cash === 0` (`optimizer_core.js:3336-3341`).
+
+**Grid — crossed, not hand-picked.** P28 round 2 confounded mix with strain by setting spend per
+scenario (`unifiedconv_harness.js:72-78`); round 4 overturned three conclusions once spend rate became
+a controlled axis. Control everything from the start:
+
+- **Mix (5)** — copy P28's ladder verbatim (`unifiedconv_harness.js:84-106`). Copy, do not import.
+- **Wealth (3)** — x0.5, x1, x3 on every mix.
+- **Spend rate (3)** — 4/6/8% of total assets.
+- **Death timing (2)** — `die1=88/die2=98` (10 survivor years) and `die1=96/die2=98` (2 survivor
+  years). **Mandatory:** without it, P35's phases 3 and 4 never execute and the study reports
+  Phased ≈ Fill Bracket *by construction*.
+
+= **90 cells** x ~12 arms ≈ 1,080 sims, ~2s in node.
+
+**Arms:** incumbents at best-known parameters (`Fill Bracket 22%`, `Fill Bracket 24%`,
+`IRMAA Ceil Tier 1`, `IRA Draw 6%`, `Reduce 20 yrs`, `Proportional 10%`, `GK`, `Ordered CBIR`) plus
+Phased at 4 control percentages. Cross `deathBasisStepUp ∈ {none, half, full}` over **every** arm —
+that is why P35 PR 4 made it strategy-agnostic. Run `survivorSpendPct ∈ {100, 80}` as a separate
+declared factor; **its result decides the shipped default.**
+
+**Scoring.** Use the exported `rankRowsByObjective` (`optimizer_core.js:2984-2996`), the same ranker
+the UI uses, so findings transfer. Two of the nine objectives are degenerate and must be handled
+openly, not dropped: `conveffect` reads `_convSavings`, which is UI-computed and absent from a bare
+`simulate()` result — **declare it out of scope with the reason**; `earliestbe` reads `_convBEYear`,
+which *can* be populated from `res.totals.convBEYear` under `computeOC: true` — populate it and report
+the no-break-even count alongside so the 9999 sentinel is visible rather than laundered. So **7 core
+objectives + `earliestbe` with a coverage count.**
+
+**Three tables, never one** — PF11's failure was top-K on a single metric returning five rows from one
+family (`findings.md:170`):
+1. Per-objective x per-family **mean rank**. A monopolist is low in every column; a niche winner is low
+   in one. This is what answers "what should the default ordering be."
+2. Per-cell winner counts, **one vote per cell per objective**, so no family takes two seats from one cell.
+3. Per-arm **zero test** — count of cells where an arm's money fields are byte-identical to another's.
+   Only 100% is a deletion candidate.
+
+**Non-negotiable:** rank on `baselineScoreOf` / `afterTaxNetWorth` with a **shared** rate, never
+`finalNW` (`findings.md:377` — "a per-run rate belongs inside a run, never in a cross-run
+comparison"). And **score predictions before running**, P28's discipline: Phased vs Fill Bracket at
+equal ceiling; step-up `half` vs `none`; survivor spend 80 vs 100; and rule B — does drawing harder on
+down years actually pay?
+
+**Two questions here are not about Phased at all** and would otherwise be settled by taste: whether
+P35's FIRST_DEATH full-drain bet pays (a one-year MFJ spike, possibly at 37% + IRMAA Tier 4, against
+the survivor's permanent Single-bracket penalty — the 2-survivor-year arm should show it losing; if it
+does not lose even there, suspect the measurement), and whether `survivorSpendPct: 80` is defensible
+as a default.
+
+**Artifact of the design to call out, not misread:** `totals.spend` accumulates `yr.targetSpend`
+(`:2149`), so a `survivorSpendPct: 80` run scores lower on `maxspend` **by construction**.
+
+- [ ] Harness `.test_harnesses/phased_harness.js` (node), calling `buildStrategyFamilies` from P35 PR 2
+- [ ] 90-cell crossed grid; predictions written and scored first
+- [ ] The three reporting tables; `conveffect` exclusion stated with its reason
+- [ ] `.test_harnesses/PHASED_RESULTS.md` + a row in `.test_harnesses/README.md`
+- [ ] Decide P35's shipped arm count and `survivorSpendPct` default from the output
+- **Status:** not started. **Depends on:** P35 PR 2. Runs as P35's PR 7.
+
+---
+
+## Phase P37: LEGACY / heir 10-year drawdown — DEFERRED by the user
+
+Recorded so P35's phase resolver having no phase-5 branch reads as a decision rather than an oversight.
+
+**What it would be.** The user's original Phase 5: a post-death drawdown for heirs that must reach zero
+within 10 years, modelled against heir withdrawal rates. Today none of that exists — see `findings.md`
+"P35 engine survey" item 5. The simulation **ends at the last death year, inclusive**
+(`maxYears`, `optimizer_core.js:2316`); terminal value is one line, `afterTaxWealthOfLogRow`
+(`:2595-2600`), haircutting the IRA by a flat `futureIRATaxRate`. No SECURE Act 10-year rule exists
+anywhere in the repo, no heir age, no bracket stacking, no time-value discount.
+
+**Why it was split out.** It is not a phase of a withdrawal strategy at all — it is a **replacement for
+the terminal scoring function**, so it re-scores every row, every objective, and every measured finding
+in `findings.md`. Largest blast radius of anything in the backlog. It is also better modelling: the
+flat haircut is exactly the assumption the BETR work found unreliable, and a real 10-year drawdown
+against heir brackets would change what terminal IRA is worth, hence the value of every conversion the
+tool recommends.
+
+**If it is picked up:** it must land alone, with the 8-scenario harness re-derived deliberately and a
+declared list of which prior findings its numbers invalidate.
+
+- **Status:** deferred, not started. **Independent:** no dependencies, but should not share a release
+  with anything else.

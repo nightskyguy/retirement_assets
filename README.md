@@ -441,10 +441,10 @@ The list of click bait presenters would be very long.
 #### Papers by Edward McQuarrie 
 Edward McQuarrie is a former professor at Santa Clara University School of Business, in California. He has tackled several topics, including the "payout" of *Roth Conversions* and the Widow's Tax *penalty*. His conclusion is that generally for the mass affluent, Roth conversions do not pay off.  He has three papers on the topic, and a fourth that is thought provoking. I would call him a *responsible contrarian* - meaning he doesn't just espouse opinions, he backs them with math and facts.
 
-1. [Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN)
-2. [When and For Whom Are Roth Conversions - 2021](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3860359) - download the paper from there. This is his original paper on the subject.
-3. [Widow Tax Hit Debunked - 2023](https://www.financialplanningassociation.org/learning/publications/journal/DEC23-widow-tax-hit-debunked-OPEN) - McQuarrie illustrates that the "widows tax" is overstated. I think he errs in saying it's **debunked** because his numbers illustrate the reality of the survivor penalty - and worse numbers can be had.
-4. [Charts you Never Saw - 2025](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3050736) - McQuarrie shows an even longer market timeframe which illuminates the reality that "the market always returns value in the long term" is a bit illusory.
+1. [2024 Net Present Value Analysis of Roth Conversions](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN). This is his latest, and perhaps most concise paper on the topic.
+2. [2021 When and For Whom Are Roth Conversions](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3860359) - download the paper from there. This is his original paper on the subject.
+3. [2023 Widow Tax Hit Debunked](https://www.financialplanningassociation.org/learning/publications/journal/DEC23-widow-tax-hit-debunked-OPEN) - McQuarrie illustrates that the "widows tax" is overstated. I think he errs in saying it's **debunked** because his numbers illustrate the reality of the survivor penalty - and worse numbers can be had.
+4. [2025 Charts you Never Saw](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3050736) - McQuarrie shows an even longer market timeframe which illuminates the reality that "the market always returns value in the long term" is a bit illusory.
 
 I notice that he is releasing a book with Bill Bernstein (a prolific author of financial books) in March 2027 called "[Retirement: How to save enough, invest it well, and make your money last](https://www.amazon.com/Retirement-save-enough-invest-money-ebook/dp/B0GQWCS15F)"
 
@@ -464,12 +464,12 @@ You CANNOT solve the timeliness problem by plunking down your tax debt when you 
 
 The easiest solution to the "when were taxes paid" problem is to have taxes withheld from withdrawals or conversions. The IRS and most state goverments treat withholding as if you paid the amounts quarterly. BUT, most custodians will NOT allow you to withhold taxes from an Roth withdrawal.  This means you have three ways to solve the "timely payment" problem: 
 A. Estimate your taxes and pay them quarterly.  (But if you miss a payment, expect late penalties!)
-B. Have the appropriate amount of taxes **withheld** from a taxable distribution to cover the years worth of taxes (or at least enought to reach "Safe Harbor").
+B. Have the appropriate amount of taxes **withheld** from a taxable distribution to cover the years worth of taxes (or at least enough to reach "Safe Harbor").
 C. File a form with the IRS (Form 2210, Schedule A) that explains why your income was "lumpy" and you didn't meet the expected timely payment requirement.
 
 Option B allows another workaround: Suppose you convert 10k from your IRA to your Roth. You can have taxes withheld from the conversion, and WITHIN 60 days, make your Roth whole by adding cash into the Roth.
 
-An earlier version of this README said that maneuver was limited to **once every 365 days**. That was wrong, and it *overstated* the restriction. The once-per-12-months limit is [IRC 408(d)(3)(B)](https://www.law.cornell.edu/uscode/text/26/408), and it applies to **IRA-to-IRA** 60-day rollovers. The IRS lists the transactions that are excluded from it, and "rollovers from traditional IRAs to Roth IRAs (conversions)" is one of them ([IRS, Rollovers of retirement plan and IRA distributions](https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions)). The IRS says elsewhere that Roth conversions "are not subject to the one-per-year limit and are disregarded in applying the limit to other rollovers" ([IR-2014-107 / Announcement 2014-32](https://www.irs.gov/uac/newsroom/irs-clarifies-application-of-one-per-year-limit-on-ira-rollovers-allows-owners-of-multiple-iras-a-fresh-start-in-2015)). So you can withhold-and-replace on every conversion you do, in the same year, in both spouses' IRAs, and doing so does not use up your one ordinary IRA-to-IRA rollover.
+An earlier version claimed that maneuver was limited to **once every 365 days**. That was wrong, and it *overstated* the restriction. The once-per-12-months limit is [IRC 408(d)(3)(B)](https://www.law.cornell.edu/uscode/text/26/408), and it applies to **IRA-to-IRA** 60-day rollovers. The IRS lists the transactions that are excluded from it, and "rollovers from traditional IRAs to Roth IRAs (conversions)" is one of them ([IRS, Rollovers of retirement plan and IRA distributions](https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions)). The IRS says elsewhere that Roth conversions "are not subject to the one-per-year limit and are disregarded in applying the limit to other rollovers" ([IR-2014-107 / Announcement 2014-32](https://www.irs.gov/uac/newsroom/irs-clarifies-application-of-one-per-year-limit-on-ira-rollovers-allows-owners-of-multiple-iras-a-fresh-start-in-2015)). So you can withhold-and-replace on every conversion you do, in the same year, in both spouses' IRAs, and doing so does not use up your one ordinary IRA-to-IRA rollover.
 
 Two things about the maneuver are still real limits. First, the exclusion covers the *conversion*. If you withhold from an RMD or from a plain IRA withdrawal and then try to replace that money, you are doing an ordinary IRA-to-IRA rollover, which really is once per 12 months, and RMD dollars cannot be rolled over at all. Second, it only makes sense if you are at least 59.5 years old. Under 59.5, any withheld dollars you fail to replace inside the 60 days are a distribution you did not convert, so they are ordinary income **plus** a 10% early-distribution penalty. That penalty, not a 365-day clock, is the actual trap.
 
@@ -479,9 +479,27 @@ Safe Harbor is another "gotcha" in the tax code. If you "timely" pay 90% of your
 
 More on Option C: [Form 2210, Schedule AI](https://www.irs.gov/forms-pubs/about-form-2210) is the annualized income installment method. It recomputes each quarter's required payment from the income you actually had by that point, so a conversion done in Q3 or Q4 is charged to the quarter it arose in instead of being spread back across the whole year. It can erase an early-quarter penalty with no withholding at all. The cost is an extra form plus quarter-by-quarter records of income, deductions, and withholding. It changes the penalty computation only, never the tax you owe. The Tax Payment Planner names Schedule AI when your conversion lands late in the year and a shortfall remains, but it does not compute the result.
 
+#### Roth Conversion Tax Withholding and Repayment
+
+Because you can "withdraw" 30k from your IRA, have 10k withheld for taxes (or any amount?) and within 60 days repay that withheld taxes, it made me wonder how that works. That is, what paper trail does the IRS use to determine whether you've done a "$10k CONTRIBUTION" (which requires income and exceeds current limits) vs a "conversion"
+
+The IRS doesn't distinguish these by watching the transaction happen — it relies on two separate information returns from your custodians, then matches them via a form you file.
+
+Your IRA custodian sends a 1099-R reporting a $30k gross distribution from the traditional IRA (with a distribution code indicating IRA money, e.g. code 2 or 7). That's the only thing that shows up on the "distribution" side, and it flags $30k as having left the IRA — it does not know or care where it ended up.
+
+Your Roth custodian sends a 5498 reporting what it actually received as a "conversion contribution" — in your example, $20k (the amount that actually landed in the Roth).
+
+On your tax return, you file Form 8606, Part II, where you report the conversion amount. The IRS's matching system essentially reconciles the 1099-R (money out) against the 5498s (money in) and your 8606. If only $20k shows up as converted while $30k left the IRA, the other $10k is just a taxable distribution — subject to ordinary income tax and, if you're under 59½, the 10% early-withdrawal penalty (conversions are exempt from that penalty, plain distributions aren't).
+
+If you then make up the withheld $10k out of pocket and deposit it into the Roth within 60 days, that deposit generates its own 5498 as a 60-day rollover contribution. Now the two 5498s together show $30k converted, matching the $30k on the 1099-R, and you report the full $30k as converted on Form 8606 — no penalty, though the withheld amount was still paid to the IRS as tax (that's separate from the taxability of the conversion itself, since conversions are fully taxable either way).
+
+So there's no ambiguity resolved after the fact by IRS guesswork — it's a paper trail (1099-R + 5498s + your 8606) that either reconciles to $30k converted or leaves a $10k gap taxed as a straight distribution - or if under 59.5 invokes a penalty.
+
+My understanding of this implies something else: even if you are **under 59.5 you can have taxes withheld from the conversion** and make them up within 60 days. The conventional wisdom is that withholding taxes counts as a distribution and the 10% penalty will apply. But not if you timely repay! Note that missing the 60 day replacement WILL result in a penalty which you might be able to get waived if you show good cause. "I forgot" will not be acceptable, but "I was in a coma in the hospital" might work. Check with your tax attorney before you try this, laws change and I am not a tax attorney!
+
 #### Moldy Brackets
 
-While the Social Security payments are adjusted annually by the CPI (Consumer Price Index), the rate at which Social Security is taxed is based on thresholds have NEVER been adjusted for inflation since they were established (1983 for 50%, and 1993 for 85%). This is no doubt why congress has churned and churned on trying to make Social Security non taxable.
+While the Social Security payments are adjusted annually according to the CPI (Consumer Price Index), the rate at which Social Security is taxed is based on thresholds have NEVER been adjusted for inflation. When taxation of Social Security began (1983 for 50%, and 1993 for 85%) the thresholds were established and have not changed since. Each "fix" to the Social Security system to prevent bankruptcy is anchored in the time that Social Security became increasingly taxed.
 
 #### IRMAA Escalation
 

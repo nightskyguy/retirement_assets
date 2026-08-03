@@ -1,5 +1,107 @@
 # Findings & Decisions
 
+## P35 engine survey: ten things about the engine that are not what a reader would assume (2026-08-03)
+
+Read-only survey done while designing the "Phased" strategy (P35). Every item is verified against
+code, not against docs or the changelog. Several are traps: the natural implementation lands on the
+wrong side of them and produces a plausible-looking wrong answer rather than an error.
+
+**1. `isDeathYear` is the FIRST SINGLE year, not the last MFJ year.** `yr.alive1 = yr.age1 <= inputs.die1`
+(`optimizer_core.js:974`), so both spouses are alive through the whole year `age === die`, and
+`yr.status` is `'MFJ'` that year (`:986`). The existing `isDeathYear` local (`:1103`) tests
+`deceasedAge === deceasedDie + 1` — the year *after*, already `'SGL'`. The engine's own comment at
+`:1091-1092` states the derivation. **Anything wanting "the last married-filing-jointly year" needs
+`age === die`, one year earlier.** Reusing `isDeathYear` for that inverts the feature silently, because
+both years exist and both produce numbers. The two need distinct names.
+
+**2. The ACA MAGI cap has no age test.** `computeBracketCeiling`'s ACA branch (`optimizer_core.js:667-676`)
+is gated only on `stratACAMultiple > 0`. Select an ACA strategy and the FPL cap is enforced at 65, 80,
+95, forever — protecting a subsidy that ended decades earlier. The IRMAA branch immediately above it
+(`:653-657`) *does* have an age test; ACA never got one. The UI papers over it rather than fixing it:
+rows are suppressed when both spouses start on Medicare (`optimizer_ui.js:824-826`) and flagged
+`_isACAUntenable` when either does (`:743-746`).
+
+**3. ACA models the MAGI cap and ZERO subsidy dollars.** Grepped the repo for
+`premium|subsidy|healthcare|insurance`: no PTC calculation, no applicable-percentage table, no
+second-lowest-cost-silver-plan, no health premium in spend. Breaching the cap costs the plan nothing
+but a boolean (`yr.acaBreach`, `:1628`/`:1694`). **Consequence for any comparison: the tool can price
+the COST of staying under the cap and not the BENEFIT.** An arm that ignores ACA will always look
+better on every metric the tool computes. Say so wherever ACA rows are ranked.
+
+**4. No basis step-up at death exists anywhere.** Grepped `step-?up|stepUp|community property|basis reset|inherit`
+— every hit is DRIP reinvestment (`README.md:646, 659`; `optimizer_core.js:1877, 2141`) or a planning
+TODO. Basis is a **single aggregate scalar**, `balance.BrokerageBasis` (`:2303`), consumed
+proportionally: `basisChange = basis * (withdrawal / balance)` (`:165-183`). No lots, no HIFO, no
+specific-ID, no owner attribution — so any step-up is necessarily a joint-tenancy proxy, not a computed
+share.
+
+**5. The simulation ends AT the last death year, inclusive. There are zero post-death years.**
+`maxYears = max(by1+die1, by2+die2) - currentYear + 1` (`:2316`). In the final iteration the
+longer-lived person has `age === die`, so the household is still simulated as living. Terminal value is
+one line: `afterTaxWealthOfLogRow` (`:2595-2600`) haircuts the IRA by a flat `futureIRATaxRate`, gives
+Roth face value, and haircuts unrealized brokerage gain. **No SECURE Act 10-year inherited-IRA rule
+exists** (grepped `SECURE Act|10-year rule|inherited IRA|stretch IRA`; the sole `SECURE` hit is the QCD
+limit at `taxengine.js:100`). No heir age, no bracket stacking, no time-value discount.
+
+**6. Survivor spend does not drop.** `yr.targetSpend` (`:1232`) reads `sim.spendGoal`, which advances
+only by `spendDelta × inflation` in `endYear` (`:2276-2281`). No reference to `alive1`, `alive2` or
+`status` anywhere in `resolveSpendTarget` or `endYear`. The **only** thing that changes on death is the
+pension: `yr.pension *= inputs.survivorPct/100` (`:1065`) — and that line sits **only inside the
+`if (!yr.alive1)` branch**, not the mirror `else`. The widow's-penalty model in its entirety is: full
+household spend retained, one SS benefit lost, 25% of pension lost by default, filing Single.
+
+**7. The Optimizer and Monte Carlo sweep DIFFERENT grids, and neither knows it.** The optimizer's
+44-family enumeration is inline in `_runOptimizerNow()` (`optimizer_ui.js:797-896`) — not exported, not
+tested, unreachable from node. `buildVariations()` (`optimizer_core.js:3246-3354`) *is* exported but
+covers 36 families: **no IRMAA-tier arm, no ACA arm, and IRA Draw capped at 10%** (`:3291-3293`) versus
+the optimizer's 20% (`optimizer_ui.js:835-837`). They share `offGridParamFor` and
+`sameStrategySelection` so identity cannot drift, but the value lists can and have. No test pins any
+row count — the only `buildVariations` assertions are `length > 0` (`optimizer_core.test.js:1781`).
+
+**8. The sweep already exceeds its own run budget, and the overrun is a silent quality reduction.**
+Budget is 1,500 runs (`optimizer_ui.js:1043`) and 2.5s (`:730`); the live 181-row table measures
+**1,337 ms / 1,711 runs**. `addResult` passes `computeOC: true` on every row (`:730`), so each
+converting row costs a second `simulate()`. The overrun is absorbed by shrinking
+`bestTimeLimitedConversion`'s candidate cap, **already cut from 12 to 6** for exactly this reason
+(`:1043-1049` records 2,216 sims on the default scenario). Nothing surfaces that cut to the user. Any
+phase adding sweep arms makes this worse invisibly — the concrete argument for P34's worker and
+per-row memo.
+
+**9. `sim.gkPriorReturn` is unreachable from any strategy but GK.** Assigned only inside
+`if (inputs.strategy === 'gk')` at `endYear:2276-2277`. Any other strategy wanting a prior-year return
+needs its own unconditionally-assigned field. Related and useful: **`'-iraG'` already exists**
+(`optimizer_core.js:856`, `(p.gains.IRA1||0) + (p.gains.IRA2||0)`) — per-year IRA earnings are already
+computed and already logged under the hidden `-` prefix convention.
+
+**10. The IRA Goal governs half the strategies and the in-app doc says it governs most.**
+`yr.iraGoalNominal = inputs.iraBaseGoal * sim.cpiRate` (`:920-921`) and
+`yr.curIRA = max(0, IRA1 + IRA2 - iraGoalNominal)` (`:1181`) are computed every year, after RMDs. But
+`curIRA` is consulted by only `bracket`/`minlimit`/`aca` (`:1366`) and `fixedpct` (`:1376`); `fixed`
+uses its own `reduceFloor` variant (`:1352-1353`); and **`propwd`, `ordered`, `gk` and the baseline
+branch ignore the goal entirely.** `retirement_optimizer.html:709` tells the user "most strategies draw
+from the IRA only until it reaches this balance" — true of four, false of four.
+
+**Bonus, deferred by the user but recorded:** the ⓘ IRA-Goal suggestion (`optimizer_ui.js:450-494`)
+discounts the age-84 target back to today at **`growth`**, while the goal itself is inflated forward by
+**`cpiRate`** (`:920`). Two different rates on the same round trip, so the suggested number and the
+enforced number do not describe the same purchasing power. It also compares a nominal age-84 RMD
+requirement against a today's-dollars spend goal.
+
+### What this means for anything built on this code path
+
+- A "last MFJ year" feature and a "first survivor year" feature are **different years** and need
+  different flags. Item 1.
+- Releasing the ACA ceiling at 65 has no defined successor: every ACA sweep row sets `stratRate: 0`
+  (`optimizer_ui.js:832`), so a fall-through to the federal-bracket branch lands on the **10% bracket,
+  tighter than the cap it replaced**. Items 2 and 3.
+- With the ceiling released outright, `IRAwd = Math.min(yr.curIRA, iRAbracketRoom)` (`:1366`) collapses
+  to `IRAwd = yr.curIRA` — the whole above-goal IRA drains in one year. A real consequence, not a bug,
+  but it must be predicted before it is measured.
+- Any study of "which strategies never win" must run in node, which means item 7's enumeration has to
+  be extracted first, and it must not repeat PF11's failure where one family took every seat.
+
+---
+
 ## Self-consistent arithmetic is not a correct model, and an invariant can lock in the bug it was meant to catch (2026-07-29, Tax Payment Planner v1.13b9)
 
 Two user-reported defects in one session, both in `taxPaymentPlanner.js`, both sitting under a green suite, both the same shape.

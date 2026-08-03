@@ -1,5 +1,63 @@
 # Progress Log
 
+## Session: 2026-08-03 (worktree context-ab498f) — P35/P36/P37 planning, no code
+
+User asked to summarize the backlog with a focus on withdrawal strategy, then proposed a new
+**"Phased"** strategy: phases for ACA (to 65), IRA control, balanced, first death, survivor, and a
+post-death legacy period, plus a modeling study to find inefficient strategies and prunable
+variations. Planned in plan mode. **No product code touched.**
+
+**Design outcome.** The proposal contained four separable products, and two of them change results for
+every existing row independent of Phased. Split per the user: Phased + basis step-up ship together
+(P35), the efficiency study is P36, the LEGACY heir drawdown is deferred as P37.
+
+The user's own refinement is what made P35 cheap: **IRA_CONTROL and BALANCED are not sequential phases**
+needing a state machine, they are a per-year split on `yr.curIRA` (`optimizer_core.js:1181`), which the
+engine already computes. That removed the hysteresis question entirely, and the IRA target turned out
+to be an input that already ships (`#iraBaseGoal`) — I had proposed inventing one and the user
+corrected it.
+
+**Ten engine facts surveyed and written to `findings.md`** ("P35 engine survey"), several of them
+traps. The sharpest, caught only by reading the code after a plan agent contradicted an earlier
+exploration: **`isDeathYear` (`optimizer_core.js:1103`) is the FIRST SINGLE year, not the last MFJ
+year.** `alive = age <= die`, so `age === die` is the last `'MFJ'` year and `isDeathYear` tests
+`age === die + 1`. Phase 3 wants the earlier year. Reusing the existing flag would have inverted the
+feature silently, since both years exist and both produce plausible numbers. Others: the ACA cap has
+no age test at all and models zero subsidy dollars; no basis step-up exists anywhere; the sim ends at
+the last death year with terminal value as a one-line flat haircut; survivor spend never drops (only
+pension does, and only in the `!alive1` branch); the Optimizer and Monte Carlo sweep **different grids**
+(44 families vs 36, IRA Draw 20% vs 10%) with the optimizer's enumeration unexported and untested; and
+**the sweep already exceeds its own 1,500-run budget at 1,711 runs**, absorbed by silently halving the
+stop-year candidate pool from 12 to 6.
+
+**User decisions.** ACA ceiling after 65: none, released outright — with the consequence recorded that
+for the standalone `aca` strategy this drains the whole above-goal IRA in one year, since unbounded
+room collapses `Math.min(curIRA, room)` to `curIRA`. FIRST_DEATH ceiling: none, convert everything
+above the IRA Goal (same principle, so no new bracket input). `deathBasisStepUp` defaults to `'half'`
+now, making that PR deliberately non-byte-identical. `survivorSpendPct` ships at 100 with the real
+default decided by the study. Sweep arm count decided by the study rather than guessed — which
+reordered the study ahead of sweep integration, since it runs in node where there is no budget.
+
+**Recorded:** `task_plan.md` header refreshed (was stale at PR #141 / `4272eb8`; main is `34feeb8`
+with #142/#143/#144 merged), Priority Order rows 37-39 added, P13 annotated as possibly superseded by
+P35, and the three phase sections appended with "already ruled out" blocks in the P29-P34 house style.
+`findings.md` gained the engine survey. Full 8-PR design lives at
+`C:\Users\starc\.claude\plans\composed-marinating-garden.md`.
+
+**Process failure, repeated from 2026-07-25 and worth a guard.** All three files were first written to
+the **main checkout** (`C:\Users\starc\source\retirement_assets\`) instead of this worktree — the exact
+mistake the 2026-07-25 entry below already records, and the reason the global CLAUDE.md carries a
+worktree-path rule. It was caught only because `git status` in the worktree came back **empty** after
+three successful-looking edits. Recovered without loss: `git diff` in main confirmed all 432 insertions
+were mine and nothing pre-existing was entangled, the diff was exported as a patch, `git apply --check`
+proved it applied cleanly here, then main's three files were reverted individually — leaving main's own
+uncommitted work (a staged `README.md` on branch `20260803_Readme`, plus two untracked files)
+untouched. **The cheap guard: an empty `git status` right after editing is a failure signal, not a
+clean tree.** Check the path before the first edit, not after the last one.
+
+**Next:** P35 PR 1 (characterization goldens for both enumerations). Work proceeds in stages with a
+review point per PR.
+
 ## Session: 2026-07-26 (worktree readme-review-updates-c9df11) — PR1 Roth conversion diagnostics (v11.1370)
 
 User asked why the Optimizer reports "found none where converting more improves the result" on default inputs, plus four follow-on tasks. Planned in plan mode; user chose to do PR1 only (Roth conversion batch + BETR removal) and re-plan SS timing / head-to-head compare / MC stress auto-run later.

@@ -706,11 +706,6 @@ function _runOptimizerNow() {
     OptimizerState.convOptRowsAdded = 0;
     const optimizerStart = performance.now();
 
-    // Get all bracket rates from TAXData (skip the last Infinity bracket)
-    const bracketRates = TAXData.FEDERAL.MFJ.brackets
-        .slice(0, -1)
-        .map(b => b.r);
-
     // strategyOverrides stored separately so the spend optimizer can reuse them
     const strategyOverridesList = [];
 
@@ -794,114 +789,45 @@ function _runOptimizerNow() {
         strategyOverridesList.push({ strategyLabel, paramLabel, paramSortVal, overrides });
     }
 
-    const convOn = true;
-
-    // Proportional +% — 0% is the pure baseline; 5/10/20/50% add IRA-only boost
-    for (const pct of [0, 5, 10, 20, 50]) {
-        addResult('Proportional', `${pct}%`, pct, { strategy: 'propwd', propWithdraw: pct / 100, convertExcessToRoth: convOn });
-    }
-
-    // Reduce IRA over N years
-    for (const n of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25]) {
-        addResult('Reduce', `${n} yrs`, n, { strategy: 'fixed', nYears: n, convertExcessToRoth: convOn });
-    }
-
-    // Fill bracket — one row per bracket level
-    for (const rate of bracketRates) {
-        const pct = Math.round(rate * 100);
-        addResult('Fill Bracket', `${pct}%`, rate, { strategy: 'bracket', stratRate: rate, stratIRMAATier: -1, convertExcessToRoth: convOn });
-    }
-
-    // Fill bracket — IRMAA tier ceilings (tiers 0=Below IRMAA through 4=Tier 4 ceiling)
-    const IRMAATierLabels = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
-    for (let tier = 0; tier <= 4; tier++) {
-        addResult('IRMAA Ceil', IRMAATierLabels[tier], tier - 0.5, { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0, convertExcessToRoth: convOn });
-    }
-
-    // Fill bracket — ACA FPL cliffs. Nerdknob only (item 12): the ACA cliff model is rough, so it
-    // is excluded from the optimizer sweep unless ?nerdknob is on. Also skipped when both persons
-    // are 65+ at retirement start (on Medicare → ACA income limits are irrelevant).
+    // The enumeration itself lives in optimizer_core.js (buildStrategyFamilies), shared with Monte
+    // Carlo's buildVariations() and — unlike the inline block this replaced — reachable from node,
+    // which is what lets a study measure the sweep without a browser. Every way THIS table's sweep
+    // differs from MC's is an argument below rather than a difference nobody declared.
     const acaDisabled = bothOnMedicareAtStart(base.birthyear1, base.startAge, !!base.hasSpouse,
         base.hasSpouse ? (base.birthyear2 || 0) : 0);
-    if (NERD_KNOBS && !acaDisabled) {
-        const acaMultiples = [200, 250, 300, 400];
-        const acaLabels = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL' };
-        for (const pct of acaMultiples) {
-            addResult('ACA Cliff', acaLabels[pct], 50 + pct / 100, { strategy: 'aca', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct, convertExcessToRoth: convOn });
-        }
+    const families = buildStrategyFamilies(base, {
+        grids: OPTIMIZER_GRIDS,
+        irmaaFamily: true,
+        // ACA cliff arms are nerdknob-only (item 12): the ACA cliff model is rough. They are also
+        // skipped once both people are on Medicare at start, when an income cap protects nothing.
+        acaFamily: NERD_KNOBS && !acaDisabled,
+        // A Fill Bracket row must not inherit a sidebar IRMAA-tier selection; the tiers are swept
+        // as their own family.
+        bracketResetsIRMAATier: true,
+        // Nerdknob sweeps cash funding as its own dimension (the 💵 rows), so the rows it clones
+        // must read false rather than inherit the sidebar, or a user who already has it on gets
+        // two identical arms instead of an A/B.
+        markCashFunding: NERD_KNOBS,
+        cashClones: NERD_KNOBS && base.Cash > 0,
+        // The user's own off-grid parameter goes last here, after Guyton-Klinger. MC puts it
+        // straight after IRA Draw. Both orders are pinned by sweep_golden.js.
+        offGridLast: true,
+    });
+    for (const f of families) {
+        addResult(f.strategyLabel, f.paramLabel, f.paramSortVal, f.overrides);
     }
+    // The un-modified rows, reused far below for the no-conversion baseline sweep. Deliberately
+    // excludes the 🗘/🔄 and 💵 clones: that sweep's whole point is a reference with the Roth and
+    // brokerage machinery switched off.
+    const baseFamilies = families.filter(f => f.modifier === null);
 
-    // IRA Draw — fixed % of IRA balance each year
-    for (const pct of [5, 6, 7, 8, 10, 12, 15, 20]) {
-        addResult('IRA Draw', `${pct}%`, pct, { strategy: 'fixedpct', iraWithdrawPct: pct / 100, convertExcessToRoth: convOn });
-    }
-
-    // Ordered — strict account sequence
-    for (const seq of ['CBIR', 'RIBC', 'BIRC']) {
-        addResult('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, convertExcessToRoth: convOn });
-    }
-
-    // Guyton-Klinger — label shows the actual guard/adjust knobs, e.g. "Grd:20 Adj:10".
-    const gkOptLabel = `Grd:${Math.round((base.gkGuard ?? 0.20) * 100)} Adj:${Math.round((base.gkAdjPct ?? 0.10) * 100)}`;
-    addResult('Guyton-Klinger', gkOptLabel, 0, { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, convertExcessToRoth: convOn });
-
-    // The user's own family parameter when it falls between the standard steps (Proportional 7%,
-    // Reduce 18 yrs, Fill Bracket 26%, IRA Draw 9%). Same rule Monte Carlo's buildVariations() uses
-    // -- shared helper, so the two sweeps cannot drift -- but with THIS table's grids, which run
-    // further out on IRA Draw and sweep IRMAA ceilings as their own family. Added before the
-    // snapshot below so it also gets cyclic / no-conv / 💵 twins like any other family member.
-    {
-        const offGrid = offGridParamFor(base, {
-            propwd:   [0, 5, 10, 20, 50],
-            fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
-            bracket:  bracketRates,
-            fixedpct: [5, 6, 7, 8, 10, 12, 15, 20],
-        });
-        if (offGrid) {
-            const _ov = { ...offGrid.overrides, convertExcessToRoth: convOn };
-            if (offGrid.overrides.strategy === 'bracket') _ov.stratIRMAATier = -1;
-            addResult(offGrid.family, offGrid.paramLabel, offGrid.paramSortVal, _ov);
-        }
-    }
-
-    // Snapshot the non-cyclic strategy families before the cyclic pass appends to the list.
-    // Reused below to build the no-conversion baseline sweep over the same families.
-    const baseFamilies = strategyOverridesList.slice();
-
-    // Phase 24: Cyclic variants — IRA-first (🗘 red) and brokerage-first (🔄) for every baseline.
-    {
-        const _IRA_PFX  = '<span style="color:#cc0000">\u{1F5D8}</span> ';
-        const _BRK_PFX  = '\u{1F504} ';
-        const baselineCount = strategyOverridesList.length;
-        for (let i = 0; i < baselineCount; i++) {
-            const { strategyLabel, paramLabel, paramSortVal, overrides } = strategyOverridesList[i];
-            addResult(_IRA_PFX + strategyLabel, paramLabel, paramSortVal,
-                { ...overrides, cyclicEnabled: true, cyclicOrder: 'ira-first' });
-            addResult(_BRK_PFX + strategyLabel, paramLabel, paramSortVal,
-                { ...overrides, cyclicEnabled: true, cyclicOrder: 'brokerage-first' });
-        }
-    }
-
-    // Cash-funded conversion arm (💵) — nerdknob only, and only when there's Cash to spend
-    // (applyConversionGrossUp/applyExtraConversion's cash path are hard no-ops at $0 Cash, so
-    // these rows would be bit-identical twins of their base rows: pure wasted simulate() calls).
-    // Non-cyclic families only, matching buildVariations()'s scope: cyclic reinvests surplus into
-    // Brokerage rather than Cash, so there's proportionally less for this mechanism to act on,
-    // and crossing all three dimensions would balloon the table.
-    if (NERD_KNOBS && base.Cash > 0) {
-        for (const { strategyLabel, paramLabel, paramSortVal, overrides } of baseFamilies) {
-            addResult('💵 ' + strategyLabel, paramLabel, paramSortVal,
-                { ...overrides, fundConversionWithCash: true });
-        }
-    }
-
-    // P35 PR 1: snapshot the finished enumeration for characterization. It is built inline here and
-    // is otherwise unreachable — not exported, not callable from node — so an extraction of it into
-    // optimizer_core.js could not be shown to preserve behavior. Taken HERE, after the cyclic and 💵
-    // passes and before the spend/conversion passes, which append their own rows to the same list.
-    // Observation only: nothing in a sweep reads it back. `base` travels with it because the
-    // enumeration branches on Cash, the birth years, the GK guardrails and the off-grid parameter.
-    // Capture recipe and the recorded goldens: sweep_golden.js.
+    // Snapshot of the finished enumeration, kept for characterization. It recorded the inline
+    // block that buildStrategyFamilies replaced, and it stays because it captures what this sweep
+    // ACTUALLY asked for after every option above resolved — a re-capture is how a change to the
+    // gating gets re-pinned. Taken HERE, before the spend/conversion passes append their own rows
+    // to the same list. Observation only: nothing in a sweep reads it back. `base` travels with it
+    // because the enumeration branches on Cash, the birth years, the GK guardrails and the
+    // off-grid parameter. Capture recipe and the recorded goldens: sweep_golden.js.
     OptimizerState.lastEnumeration = {
         nerdKnobs: NERD_KNOBS,
         base,
@@ -4722,15 +4648,8 @@ function refreshStratRateOptions() {
  * - Exactly one person ≥65                → advisory warning, options still active.
  * Called from updateProfileAgeDisplay(), refreshStratRateOptions(), and startAge oninput.
  */
-// True when both persons (or the sole person) are 65+ at retirement start — i.e. on Medicare,
-// so ACA income-limit strategies are irrelevant. Pure; shared by the UI warning + optimizer.
-function bothOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
-    if (!by1 || !startAge) return false;
-    const startYear  = by1 + startAge;
-    const p1Medicare = startAge >= 65;
-    const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
-    return hasSpouse ? (p1Medicare && p2Medicare) : p1Medicare;
-}
+// bothOnMedicareAtStart() moved to optimizer_core.js beside its eitherOnMedicareAtStart twin when
+// the strategy enumeration moved there and needed it. Pure, and still used by the warning below.
 
 function updateACAWarning() {
     const sel     = document.getElementById('stratRate');

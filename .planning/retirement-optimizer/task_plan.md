@@ -2379,12 +2379,20 @@ per-row memo next.
       (IRA Draw 10% vs 20%, no IRMAA/ACA family in MC) are now pinned from both sides on purpose, so
       PR 2 cannot collapse them onto one grid. Mutation-checked: perturbing `MC_GRIDS.fixedpct` fails
       9 tests and names the row index.
-- [ ] PR 2 — `buildStrategyFamilies(base, opts)` returning overrides only; grid constants pinned.
-      Found in PR 1: the ACA gate calls `bothOnMedicareAtStart`, which lives in `optimizer_ui.js:4714`
-      and NOT in core beside its `eitherOnMedicareAtStart` twin. It is pure, so move it rather than
-      passing the boolean in `opts` — the UI needs it too, for `_isACAUntenable` and `#aca-age-warn`.
-      Prove the extraction by feeding each `OPT_GOLDEN` entry's recorded `base` + `nerdKnobs` back in
-      and comparing to its recorded `rows`
+- [x] PR 2 — `buildStrategyFamilies(base, opts)` returning overrides only; grid constants pinned.
+      **DONE 2026-08-03**, node 167 -> 173, v11.1437. `buildStrategyFamilies` + `OPTIMIZER_GRIDS` +
+      `MC_GRIDS` now in `optimizer_core.js` and exported; `bothOnMedicareAtStart` moved there too
+      (was `optimizer_ui.js`, uncovered) beside its `eitherOnMedicareAtStart` twin. BOTH callers use
+      it: `_runOptimizerNow()` lost ~100 inline lines and `buildVariations()` is now a `.map()` over
+      the shared list. Seven opts, one per real divergence — `grids`, `irmaaFamily`, `acaFamily`,
+      `bracketResetsIRMAATier`, `markCashFunding`, `cashClones`, `offGridLast` — so each call site
+      states what its sweep covers. Rows carry `family` + `modifier` (null/'ira-first'/
+      'brokerage-first'/'cash') plus the decorated `strategyLabel`, because MC needs a PLAIN-text
+      prefix for `_label` where the Optimizer needs the HTML one. PROVEN: all four `OPT_GOLDEN`
+      captures re-run in the live page byte-identical, key order included, and regenerating
+      `MC_GOLDEN` after the extraction produces a zero diff. One bug the node tests could not have
+      caught and the browser did: the no-conversion baseline sweep still referenced the deleted
+      `baseFamilies` (`optimizer_ui.js:1073`).
 - [ ] PR 3 — ACA age gate on the shared branch; narrow `_isACAUntenable` to `bothOnMedicareAtStart`;
       update `#aca-age-warn`; predict the `aca` fixture's direction before measuring
 - [ ] PR 4 — `deathBasisStepUp` enum defaulting `'half'`; `survivorSpendPct` at 100;
@@ -2396,8 +2404,9 @@ per-row memo next.
 - [ ] PR 6 — all 12 identity sites; URL keys `pcp`/`pam`/`dsu`/`ssp`
 - [ ] PR 7 — see P36
 - [ ] PR 8 — arms scoped by P36; surface the stop-year cap reduction
-- **Status:** IN PROGRESS. PR 1 committed on `worktrees/planning-with-files-76e427`; PR 2 (the
-  extraction) is next and is the review point. **Depends on:** nothing hard. Its PR 2 unblocks P36 and
+- **Status:** IN PROGRESS. PR 1 and PR 2 committed on `worktrees/planning-with-files-76e427`, not yet
+  pushed or opened as a PR. **This is the review point** — PR 3 (the ACA post-65 cap release) is the
+  first one that moves numbers. **Depends on:** nothing hard. Its PR 2 unblocks P36 and
   helps P29/P30/P31/P32. Its PR 8 budget problem is P34's argument.
 - **Touches the same gap-fill code as:** P28's open ship decision (`rothGapFill`) and P30's `[40,60]`
   question. Settling P28 and P30 first would mean PR 5's new arm is written against a settled ordering

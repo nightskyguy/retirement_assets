@@ -52,6 +52,10 @@ const breakEvenHeirsRate = core.breakEvenHeirsRate;
 const lowestBreakEvenHeirsRate = core.lowestBreakEvenHeirsRate;
 const bestTimeLimitedConversion = core.bestTimeLimitedConversion;
 const buildVariations = core.buildVariations;
+const buildStrategyFamilies = core.buildStrategyFamilies;
+const bothOnMedicareAtStart = core.bothOnMedicareAtStart;
+const MC_GRIDS = core.MC_GRIDS;
+const OPTIMIZER_GRIDS = core.OPTIMIZER_GRIDS;
 const sameStrategySelection = core.sameStrategySelection;
 const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
@@ -2131,6 +2135,83 @@ test('OPT_GOLDEN: the four gates are actually exercised by the captured scenario
     const last = optBaseRows(o.rows)[o.baseRowCount - 1];
     assertSameList([last[0], last[1]], ['IRA Draw', '9%'], 'the off-grid row');
     assert(o.baseRowCount - a.baseRowCount === 1, 'an off-grid parameter adds exactly one base row');
+});
+
+// ── P35 PR 2: the extraction, proved against the PR 1 recording ───────────────
+// This is the whole point of the golden. Each capture carries the base and the NERD_KNOBS state it
+// was recorded under, so the extracted buildStrategyFamilies() can be handed exactly those and its
+// output compared row for row against what the inline block emitted in a live page.
+for (const [name, g] of Object.entries(OPT_GOLDEN)) {
+    test(`buildStrategyFamilies reproduces the Optimizer capture [${name}]`, () => {
+        const nerd = g.nerdKnobs;
+        const rows = buildStrategyFamilies(g.base, {
+            grids: OPTIMIZER_GRIDS,
+            irmaaFamily: true,
+            acaFamily: nerd && !bothOnMedicareAtStart(g.base.birthyear1, g.base.startAge,
+                !!g.base.hasSpouse, g.base.hasSpouse ? (g.base.birthyear2 || 0) : 0),
+            bracketResetsIRMAATier: true,
+            markCashFunding: nerd,
+            cashClones: nerd && g.base.Cash > 0,
+            offGridLast: true,
+        });
+        // Key ORDER inside an overrides object is an artifact of how the old block happened to
+        // spread its literals, not a behavior. Normalised on both sides so a faithful extraction
+        // is not reported as a failure — and so a real change still is.
+        const norm = o => JSON.stringify(Object.keys(o).sort().map(k => [k, o[k]]));
+        assertSameList(
+            rows.map(r => [r.strategyLabel, r.paramLabel, r.paramSortVal, norm(r.overrides)]),
+            g.rows.map(r => [r[0], r[1], r[2], norm(r[3])]),
+            `enumeration for [${name}]`);
+    });
+}
+
+test('buildStrategyFamilies: the options are what separate the two sweeps, nothing else', () => {
+    // Same base, same call, one option flipped at a time. If a future edit hard-codes a family or
+    // a grid instead of reading its option, one of these stops moving.
+    const b = { ...BASE, Cash: 50000, strategy: 'propwd', propWithdraw: 0.20 };
+    const call = o => buildStrategyFamilies(b, o);
+    const plain = rows => rows.filter(r => r.modifier === null);
+
+    const mc  = call({ grids: MC_GRIDS });
+    const opt = call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true });
+    assert(plain(mc).length === 36 && plain(opt).length === 44,
+        `base rows: MC ${plain(mc).length} (expected 36), Optimizer ${plain(opt).length} (expected 44)`);
+
+    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 48,
+        'the ACA family adds 4 rows');
+    assert(call({ grids: MC_GRIDS, cashClones: true }).length === 108 * 4 / 3,
+        'cashClones clones every un-modified row once more');
+    assert(call({ grids: MC_GRIDS }).every(r => r.overrides.fundConversionWithCash === undefined),
+        'without markCashFunding the key is not written at all');
+    assert(plain(call({ grids: MC_GRIDS, markCashFunding: true }))
+        .every(r => r.overrides.fundConversionWithCash === false),
+        'with markCashFunding every un-modified row declares it off');
+    assert(plain(call({ grids: MC_GRIDS })).filter(r => r.family === 'Fill Bracket')
+        .every(r => r.overrides.stratIRMAATier === undefined),
+        'MC leaves the IRMAA tier alone on a Fill Bracket row — a sidebar tier can leak in');
+    assert(plain(call({ grids: MC_GRIDS, bracketResetsIRMAATier: true })).filter(r => r.family === 'Fill Bracket')
+        .every(r => r.overrides.stratIRMAATier === -1),
+        'the Optimizer resets it');
+
+    // Where the off-grid row lands, on a base whose parameter is off BOTH grids.
+    const off = { ...b, strategy: 'fixedpct', iraWithdrawPct: 0.09 };
+    const early = plain(buildStrategyFamilies(off, { grids: MC_GRIDS }));
+    const late  = plain(buildStrategyFamilies(off, { grids: MC_GRIDS, offGridLast: true }));
+    assert(early[early.length - 1].family === 'Guyton-Klinger', 'MC ends on Guyton-Klinger');
+    assert(late[late.length - 1].paramLabel === '9%', 'the Optimizer ends on the off-grid row');
+    assert(early.length === late.length, 'and it is the same row either way, only moved');
+});
+
+test('bothOnMedicareAtStart: the stricter twin of eitherOnMedicareAtStart', () => {
+    // Moved out of optimizer_ui.js in P35 PR 2 and never covered there. The pair differ only in
+    // AND vs OR, and the ACA family hangs off which one is used.
+    const both = bothOnMedicareAtStart, either = eitherOnMedicareAtStart;
+    assert(both(1960, 65, true, 1952) === true,  'both 65+ at start');
+    assert(both(1960, 60, true, 1962) === false, 'neither 65 at start');
+    assert(both(1960, 65, true, 1975) === false, 'one 65+, one not: AND is false');
+    assert(either(1960, 65, true, 1975) === true, '...but OR is true, which is the whole difference');
+    assert(both(1960, 65, false, 0) === true,    'a single filer needs only themselves');
+    assert(both(0, 65, true, 1952) === false,    'missing inputs are not an assertion of anything');
 });
 
 test('OPT_GOLDEN: the Optimizer sweeps the two families and the wider grid that MC does not', () => {

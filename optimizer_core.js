@@ -2996,7 +2996,7 @@ function rankRowsByObjective(rows, objKey, rate = 0) {
 }
 
 // True when EITHER person is already on Medicare (65+) at retirement start. Sibling of
-// bothOnMedicareAtStart (optimizer_ui.js) but OR: once one spouse is on Medicare, their RMDs/SS
+// bothOnMedicareAtStart (just below) but OR: once one spouse is on Medicare, their RMDs/SS
 // push household MAGI past any ACA FPL cap, so an ACA-limit strategy is impractical for the whole
 // household -- used to flag every ACA row untenable, not just the hardcoded 400% one. Pure.
 function eitherOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
@@ -3005,6 +3005,18 @@ function eitherOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
     const p1Medicare = startAge >= 65;
     const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
     return hasSpouse ? (p1Medicare || p2Medicare) : p1Medicare;
+}
+
+// The stricter twin: BOTH people already on Medicare when the plan opens, which is when an ACA
+// income cap stops meaning anything at all rather than merely becoming impractical. It gates the
+// ACA family out of the Optimizer's sweep; `eitherOnMedicareAtStart` only flags those rows ⚠️.
+// Lived in optimizer_ui.js until the strategy enumeration moved here and needed it.
+function bothOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
+    if (!by1 || !startAge) return false;
+    const startYear  = by1 + startAge;
+    const p1Medicare = startAge >= 65;
+    const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
+    return hasSpouse ? (p1Medicare && p2Medicare) : p1Medicare;
 }
 
 // Phase 23: find the extraConversionAmount (flat annual $) that maximizes a given metric for
@@ -3240,117 +3252,220 @@ function lowestBreakEvenHeirsRate(baseInputs, candidates = [], opts = {}) {
     return best;
 }
 
-// Build the full variation list (same parameter sweep as the optimizer) without running
-// simulations. Used by both the optimizer and Monte Carlo module.
-// base: result of getInputs() — no DOM access needed after this point.
-function buildVariations(base) {
+// ── Strategy enumeration ──────────────────────────────────────────────────────────────────────
+// The two sweeps do NOT sweep the same space, and the difference is deliberate. It is declared
+// here as two pinned grids rather than left to drift between an inline block in the UI and this
+// file. `bracket` is absent from both because its ladder is read from TAXData at call time.
+//
+// Monte Carlo is the narrower of the two: no IRMAA-ceiling family, no ACA family, and IRA Draw
+// stops at 10% where the Optimizer runs to 20%. MC multiplies its row count by numPaths, so an
+// arm costs it far more than it costs a single-pass table.
+const MC_GRIDS = {
+    propwd:   [0, 5, 10, 20, 50],
+    fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
+    fixedpct: [5, 6, 7, 8, 10],
+    ordered:  ['CBIR', 'RIBC', 'BIRC'],
+};
+const OPTIMIZER_GRIDS = {
+    propwd:   [0, 5, 10, 20, 50],
+    fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
+    fixedpct: [5, 6, 7, 8, 10, 12, 15, 20],
+    ordered:  ['CBIR', 'RIBC', 'BIRC'],
+    irmaaTiers:   [0, 1, 2, 3, 4],
+    acaMultiples: [200, 250, 300, 400],
+};
+
+const IRMAA_TIER_LABELS = ['Below IRMAA', 'Tier 1 ceil', 'Tier 2 ceil', 'Tier 3 ceil', 'Tier 4 ceil'];
+const ACA_LABELS = { 200: '200% FPL', 250: '250% FPL', 300: '300% FPL', 400: '400% FPL' };
+
+// Family-name prefixes for the modifier clones. The 🗘 is red only in the HTML form; MC keeps a
+// plain-text twin for its `_label`, which is why `modifier` is returned alongside the decorated
+// `strategyLabel` instead of callers having to parse the prefix back off.
+const MODIFIER_PREFIX = {
+    'ira-first':       '<span style="color:#cc0000">\u{1F5D8}</span> ',
+    'brokerage-first': '\u{1F504} ',
+    'cash':            '\u{1F4B5} ',
+};
+
+/**
+ * Enumerate the strategy arms of a sweep. Pure: no DOM, no simulate(), no TAXData beyond the
+ * federal bracket ladder. Returns one entry per row, in emitted order:
+ *
+ *   { family, modifier, strategyLabel, paramLabel, paramSortVal, overrides }
+ *
+ * `family` is undecorated and `modifier` is null | 'ira-first' | 'brokerage-first' | 'cash', so a
+ * caller can build its own label shape; `strategyLabel` is the prefixed HTML form the Optimizer
+ * table uses, supplied because it is the common case.
+ *
+ * Every divergence between the two sweeps is an explicit option, so a reader can see at each call
+ * site exactly what that sweep does and does not cover:
+ *   grids            OPTIMIZER_GRIDS or MC_GRIDS
+ *   irmaaFamily      sweep the 5 IRMAA ceiling tiers as their own family
+ *   acaFamily        sweep the 4 ACA FPL cliffs. The CALLER applies its own gates (nerdknob, and
+ *                    bothOnMedicareAtStart — an ACA cap is pointless once both are on Medicare)
+ *   bracketResetsIRMAATier  write stratIRMAATier:-1 onto Fill Bracket rows so a sidebar tier
+ *                    selection cannot leak into them
+ *   markCashFunding  write fundConversionWithCash:false onto every un-cloned row, so a user who
+ *                    already has it on gets an A/B against the 💵 clones rather than two identical
+ *                    arms. Only meaningful when cashClones is also on
+ *   cashClones       append the 💵 clones. Caller gates on Cash > 0: at $0 Cash the mechanism is a
+ *                    hard no-op and the clones would be bit-identical twins, pure wasted runs
+ *   offGridLast      put the user's own off-grid parameter after Guyton-Klinger (the Optimizer)
+ *                    rather than straight after IRA Draw (MC)
+ *
+ * Recorded before this function existed, and pinned against it: sweep_golden.js.
+ */
+function buildStrategyFamilies(base, opts = {}) {
+    const {
+        grids = MC_GRIDS,
+        irmaaFamily = false,
+        acaFamily = false,
+        bracketResetsIRMAATier = false,
+        markCashFunding = false,
+        cashClones = false,
+        offGridLast = false,
+    } = opts;
+
     const bracketRates = TAXData.FEDERAL.MFJ.brackets.slice(0, -1).map(b => b.r);
-    const variations = [];
+    const convOn = true;
+    const rows = [];
 
     const push = (family, paramLabel, paramSortVal, overrides) => {
-        const conv = overrides.convertExcessToRoth;
-        variations.push({
-            ...base,
-            // A swept variation must not silently inherit a leftover sidebar value (e.g. from
-            // loading an Optimizer ⇌ row) — none of the overrides blocks below set this key.
-            // Non-mutating (unlike runOptimizer()'s equivalent guard): `base` here is the SAME
-            // object reference callers keep as _mcBase / the "Current Plan" stress fallback,
-            // which must keep the real sidebar value.
-            extraConversionAmount: 0,
-            ...overrides,
-            _label:          `${family} ${paramLabel}${conv ? ' ✓' : ''}`,
-            _strategyFamily: family,
-            _paramLabel:     paramLabel,
-            _paramSortVal:   paramSortVal,
+        rows.push({
+            family,
+            modifier: null,
+            strategyLabel: family,
+            paramLabel,
+            paramSortVal,
+            overrides: markCashFunding ? { ...overrides, fundConversionWithCash: false } : overrides,
         });
     };
 
-    const convOn = true;
-
-    const MC_GRIDS = {
-        propwd:   [0, 5, 10, 20, 50],
-        fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
-        bracket:  bracketRates,
-        fixedpct: [5, 6, 7, 8, 10],
-    };
-
-    for (const pct of MC_GRIDS.propwd)
+    for (const pct of grids.propwd)
         push('Proportional', `${pct}%`, pct,
             { strategy: 'propwd', propWithdraw: pct / 100, convertExcessToRoth: convOn });
 
-    for (const n of MC_GRIDS.fixed)
+    for (const n of grids.fixed)
         push('Reduce', `${n} yrs`, n,
             { strategy: 'fixed', nYears: n, convertExcessToRoth: convOn });
 
     for (const rate of bracketRates) {
-        const pct = Math.round(rate * 100);
-        push('Fill Bracket', `${pct}%`, rate,
-            { strategy: 'bracket', stratRate: rate, convertExcessToRoth: convOn });
+        const ov = { strategy: 'bracket', stratRate: rate };
+        if (bracketResetsIRMAATier) ov.stratIRMAATier = -1;
+        ov.convertExcessToRoth = convOn;
+        push('Fill Bracket', `${Math.round(rate * 100)}%`, rate, ov);
     }
 
-    for (const pct of MC_GRIDS.fixedpct)
+    if (irmaaFamily) {
+        // Sort values sit on half-steps so an IRMAA tier never collides with a bracket rate.
+        for (const tier of grids.irmaaTiers)
+            push('IRMAA Ceil', IRMAA_TIER_LABELS[tier], tier - 0.5,
+                { strategy: 'bracket', stratRate: 0, stratIRMAATier: tier, stratACAMultiple: 0,
+                  convertExcessToRoth: convOn });
+    }
+
+    if (acaFamily) {
+        for (const pct of grids.acaMultiples)
+            push('ACA Cliff', ACA_LABELS[pct], 50 + pct / 100,
+                { strategy: 'aca', stratRate: 0, stratIRMAATier: -1, stratACAMultiple: pct,
+                  convertExcessToRoth: convOn });
+    }
+
+    for (const pct of grids.fixedpct)
         push('IRA Draw', `${pct}%`, pct,
             { strategy: 'fixedpct', iraWithdrawPct: pct / 100, convertExcessToRoth: convOn });
 
-    // The user's own parameter, when it falls between the standard steps of its family, so their
-    // setting appears on the family's curve. Shared rule with the Optimizer's sweep.
-    const offGrid = offGridParamFor(base, MC_GRIDS);
-    if (offGrid)
-        push(offGrid.family, offGrid.paramLabel, offGrid.paramSortVal,
-            { ...offGrid.overrides, convertExcessToRoth: convOn });
+    // The user's own family parameter when it falls between the standard steps, so their setting
+    // appears on the family's curve. Shared rule, but each sweep matches it against ITS OWN grid:
+    // IRA Draw 15% is off-grid for Monte Carlo and on-grid for the Optimizer.
+    const addOffGrid = () => {
+        const offGrid = offGridParamFor(base, { ...grids, bracket: bracketRates });
+        if (!offGrid) return;
+        const ov = { ...offGrid.overrides, convertExcessToRoth: convOn };
+        if (bracketResetsIRMAATier && offGrid.overrides.strategy === 'bracket') ov.stratIRMAATier = -1;
+        push(offGrid.family, offGrid.paramLabel, offGrid.paramSortVal, ov);
+    };
+    if (!offGridLast) addOffGrid();
 
-    for (const seq of ['CBIR', 'RIBC', 'BIRC'])
+    for (const seq of grids.ordered)
         push('Ordered', seq, seq, { strategy: 'ordered', orderedSeq: seq, convertExcessToRoth: convOn });
 
-    // Phase 22: Guyton-Klinger — single entry using user's guardrail settings.
-    // Label shows the actual guard/adjust knobs, e.g. "Grd:20 Adj:10".
-    const gkLabel = `Grd:${Math.round((base.gkGuard ?? 0.20) * 100)} Adj:${Math.round((base.gkAdjPct ?? 0.10) * 100)}`;
-    push('Guyton-Klinger', gkLabel, 0,
+    // Guyton-Klinger — a single row, labelled with the user's own guardrails, e.g. "Grd:20 Adj:10".
+    push('Guyton-Klinger',
+        `Grd:${Math.round((base.gkGuard ?? 0.20) * 100)} Adj:${Math.round((base.gkAdjPct ?? 0.10) * 100)}`,
+        0,
         { strategy: 'gk', gkGuard: base.gkGuard, gkAdjPct: base.gkAdjPct, convertExcessToRoth: convOn });
 
-    // Phase 24: Cyclic variants for MC — IRA-first (🔄) and brokerage-first (🔄B).
-    const nonCyclicCount = variations.length;   // snapshot BEFORE either expansion below
-    {
-        for (let i = 0; i < nonCyclicCount; i++) {
-            const v = variations[i];
-            for (const [plainPfx, htmlPfx, order] of [
-                ['\u{1F5D8} ', '<span style="color:#cc0000">\u{1F5D8}</span> ', 'ira-first'],
-                ['\u{1F504} ', '\u{1F504} ',                                   'brokerage-first'],
-            ]) {
-                variations.push({
-                    ...v,
-                    cyclicEnabled:   true,
-                    cyclicOrder:     order,
-                    _label:          plainPfx + v._label,
-                    _strategyFamily: htmlPfx  + v._strategyFamily,
-                    _paramLabel:     v._paramLabel,
-                    _paramSortVal:   v._paramSortVal,
-                });
-            }
-        }
-    }
+    if (offGridLast) addOffGrid();
 
-    // fundConversionWithCash comparison rows (see applyConversionGrossUp). Non-cyclic families
-    // only, and only when there's Cash to spend: with base.Cash <= 0 the mechanism is a hard
-    // no-op, so those clones would be bit-identical to their twins — pure wasted simulate()
-    // calls (MC runs numPaths × variations.length trials). Cyclic rows are excluded to keep the
-    // row count bounded; they reinvest surplus into Brokerage rather than Cash anyway, leaving
-    // proportionally less for this mechanism to act on.
-    if (base.Cash > 0) {
-        for (let i = 0; i < nonCyclicCount; i++) {
-            const v = variations[i];
-            variations.push({
-                ...v,
-                fundConversionWithCash: true,
-                _label:          '💵 ' + v._label,
-                _strategyFamily: '💵 ' + v._strategyFamily,
-                _paramLabel:     v._paramLabel,
-                _paramSortVal:   v._paramSortVal,
+    // Snapshot BEFORE either clone pass. The cyclic clones cover the off-grid row like any other
+    // family; the 💵 clones cover the non-cyclic rows only — cyclic reinvests surplus into
+    // Brokerage rather than Cash, so there is proportionally less for that mechanism to act on,
+    // and crossing all three dimensions would balloon the row count.
+    const unmodified = rows.slice();
+
+    for (const r of unmodified) {
+        for (const order of ['ira-first', 'brokerage-first'])
+            rows.push({
+                family: r.family,
+                modifier: order,
+                strategyLabel: MODIFIER_PREFIX[order] + r.family,
+                paramLabel: r.paramLabel,
+                paramSortVal: r.paramSortVal,
+                overrides: { ...r.overrides, cyclicEnabled: true, cyclicOrder: order },
             });
-        }
     }
 
-    return variations;
+    if (cashClones) {
+        for (const r of unmodified)
+            rows.push({
+                family: r.family,
+                modifier: 'cash',
+                strategyLabel: MODIFIER_PREFIX.cash + r.family,
+                paramLabel: r.paramLabel,
+                paramSortVal: r.paramSortVal,
+                overrides: { ...r.overrides, fundConversionWithCash: true },
+            });
+    }
+
+    return rows;
+}
+
+// Build the full variation list (same parameter sweep as the optimizer) without running
+// simulations. Used by both the optimizer and Monte Carlo module.
+// base: result of getInputs() — no DOM access needed after this point.
+function buildVariations(base) {
+    // MC's slice of the shared enumeration. Everything it does NOT do is visible right here:
+    // no IRMAA-ceiling family, no ACA family, no stratIRMAATier reset on the Fill Bracket rows,
+    // and the off-grid row sits straight after IRA Draw rather than last. The 💵 clones are NOT
+    // nerdknob-gated on this side — MC has no nerdknob — but they are still skipped at $0 Cash,
+    // where the mechanism is a hard no-op and the clones would be bit-identical twins (MC runs
+    // numPaths × variations.length trials, so a wasted arm is expensive here).
+    const families = buildStrategyFamilies(base, {
+        grids: MC_GRIDS,
+        cashClones: base.Cash > 0,
+    });
+
+    // MC's label shape: `_strategyFamily` takes the HTML prefix the builder already applied,
+    // while `_label` needs the PLAIN-text twin — it is read into chart legends and CSV, where
+    // markup would show through.
+    const PLAIN_PREFIX = { 'ira-first': '\u{1F5D8} ', 'brokerage-first': '\u{1F504} ', 'cash': '\u{1F4B5} ' };
+
+    return families.map(f => ({
+        ...base,
+        // A swept variation must not silently inherit a leftover sidebar value (e.g. from
+        // loading an Optimizer ⇌ row) — no overrides block in the enumeration sets this key.
+        // Non-mutating (unlike runOptimizer()'s equivalent guard): `base` here is the SAME
+        // object reference callers keep as _mcBase / the "Current Plan" stress fallback,
+        // which must keep the real sidebar value.
+        extraConversionAmount: 0,
+        ...f.overrides,
+        _label: (f.modifier ? PLAIN_PREFIX[f.modifier] : '')
+                + `${f.family} ${f.paramLabel}${f.overrides.convertExcessToRoth ? ' ✓' : ''}`,
+        _strategyFamily: f.strategyLabel,
+        _paramLabel:     f.paramLabel,
+        _paramSortVal:   f.paramSortVal,
+    }));
 }
 
 /**
@@ -3421,7 +3536,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, taxCreepFactor, buildVariations, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

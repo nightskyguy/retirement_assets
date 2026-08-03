@@ -895,6 +895,19 @@ function _runOptimizerNow() {
         }
     }
 
+    // P35 PR 1: snapshot the finished enumeration for characterization. It is built inline here and
+    // is otherwise unreachable — not exported, not callable from node — so an extraction of it into
+    // optimizer_core.js could not be shown to preserve behavior. Taken HERE, after the cyclic and 💵
+    // passes and before the spend/conversion passes, which append their own rows to the same list.
+    // Observation only: nothing in a sweep reads it back. `base` travels with it because the
+    // enumeration branches on Cash, the birth years, the GK guardrails and the off-grid parameter.
+    // Capture recipe and the recorded goldens: sweep_golden.js.
+    OptimizerState.lastEnumeration = {
+        nerdKnobs: NERD_KNOBS,
+        base,
+        rows: strategyOverridesList.slice(),
+    };
+
     // Spend optimizer second pass — only runs when user enabled the toggle
     OptimizerState.noSolutionFloor = null;
     if (document.getElementById('optimizeSpend')?.checked) {

@@ -652,7 +652,7 @@ function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, ag
         const IRMAABrks = getRateBracket('IRMAA', status);
         limit = IRMAABrks[inputs.stratIRMAATier + 1].l * cpiRate - 1;
         const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
-        const IRMAARelevant = maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK;
+        const IRMAARelevant = maxAliveAge >= TAXData.IRMAA.ELIGIBILITY_AGE + TAXData.IRMAA.LOOKBACK;
         if (!IRMAARelevant) {
             limit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate).limit;
         }
@@ -693,7 +693,7 @@ function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, ag
 
         if (inputs.strategy === 'minlimit') {
             const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
-            if (maxAliveAge >= 65 + TAXData.IRMAA.LOOKBACK) {
+            if (maxAliveAge >= TAXData.IRMAA.ELIGIBILITY_AGE + TAXData.IRMAA.LOOKBACK) {
                 limit = Math.min(limit, IRMAALimit);
             }
         }
@@ -986,9 +986,11 @@ function resolveHousehold(sim, yr) {
     yr.status = (yr.alive1 && yr.alive2) ? 'MFJ' : 'SGL';
     // IRMAA is already known since it is based on income from 2 years ago (MAGI lookback),
     // compared against thresholds inflated to THIS payment year (matches SSA indexing).
-    // Only spouses actually on Medicare (living, 65+) pay the surcharge — a 61-year-old
-    // household pays nothing no matter how large the conversion income.
-    yr.onMedicare = (yr.alive1 && yr.age1 >= 65 ? 1 : 0) + (yr.alive2 && yr.age2 >= 65 ? 1 : 0);
+    // Only spouses actually on Medicare (living, at TAXData.IRMAA.ELIGIBILITY_AGE or older) pay
+    // the surcharge — a 61-year-old household pays nothing no matter how large the conversion
+    // income.
+    const medicareAge = TAXData.IRMAA.ELIGIBILITY_AGE;
+    yr.onMedicare = (yr.alive1 && yr.age1 >= medicareAge ? 1 : 0) + (yr.alive2 && yr.age2 >= medicareAge ? 1 : 0);
     const magiLookback = balance.magiHistory[balance.magiHistory.length - 2];
     yr.IRMAA = calcIRMAA(magiLookback, yr.status, sim.cpiRate, sim.medicareRate, yr.onMedicare);
     // Tier for display/milestones — same lookback MAGI and same age gate as the charge
@@ -3002,8 +3004,9 @@ function rankRowsByObjective(rows, objKey, rate = 0) {
 function eitherOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
     if (!by1 || !startAge) return false;
     const startYear  = by1 + startAge;
-    const p1Medicare = startAge >= 65;
-    const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
+    const medAge     = TAXData.IRMAA.ELIGIBILITY_AGE;
+    const p1Medicare = startAge >= medAge;
+    const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= medAge;
     return hasSpouse ? (p1Medicare || p2Medicare) : p1Medicare;
 }
 
@@ -3014,8 +3017,9 @@ function eitherOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
 function bothOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
     if (!by1 || !startAge) return false;
     const startYear  = by1 + startAge;
-    const p1Medicare = startAge >= 65;
-    const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
+    const medAge     = TAXData.IRMAA.ELIGIBILITY_AGE;
+    const p1Medicare = startAge >= medAge;
+    const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= medAge;
     return hasSpouse ? (p1Medicare && p2Medicare) : p1Medicare;
 }
 

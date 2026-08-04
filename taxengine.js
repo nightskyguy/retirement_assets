@@ -68,6 +68,12 @@ var TAXData = {
 	IRMAA: {
 		YEAR: 2026,
 		LOOKBACK: -2,  // Based on 2024 tax return
+		// Medicare eligibility age (SSA). One source of truth for every "is this person on
+		// Medicare" test: the surcharge itself, the base Part B/D premium, and the ACA-vs-Medicare
+		// checks in optimizer_core.js. NOT the same 65 as the federal standard-deduction age bump
+		// (FEDERAL.*.age above) or a state's retirement-income ageGate — separate statutes that
+		// happen to share a number today, so changing one must not move the others.
+		ELIGIBILITY_AGE: 65,
 		ANNUAL_INCREASE: 0.056,	// based on analysis of 
 		standardPartB: 202.90,
 		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary
@@ -1495,7 +1501,9 @@ function calculateTaxes(params = {}) {
 
 ///////////////////////////
 
-// onMedicareCount: number of living persons aged 65+ (i.e. actually enrolled in Medicare).
+// onMedicareCount: number of living persons at or past TAXData.IRMAA.ELIGIBILITY_AGE (i.e.
+// actually enrolled in Medicare). The age gate is the caller's job — this function never
+// sees an age.
 // null (default) keeps the legacy household-total behavior. The bracket `r` values are
 // household totals (MFJ tables are 2x the per-person surcharge), so per-person = r / persons.
 function calcIRMAA(magi, status, cpiRate, medicareRate = (1 + TAXData.IRMAA.ANNUAL_INCREASE), onMedicareCount = null) {

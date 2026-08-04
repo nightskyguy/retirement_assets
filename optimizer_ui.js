@@ -2107,6 +2107,10 @@ function updateTable(log) {
     thead.insertRow(); // group row placeholder — populated by rebuildGroupRow below
     const headerRow = thead.insertRow();
 
+    // Medicare age is stated in three tooltips below; read it from the tax data so the copy
+    // cannot drift from the gate that actually charges the surcharge.
+    const medAge = TAXData.IRMAA.ELIGIBILITY_AGE;
+
     const tooltips = {
         'year': 'When yellow, it indicates a single survivor. If the rest of the row is pink, it means the year was underfunded.',
         'age1': 'Age at end of year (Dec 31). Used for RMD eligibility. May differ from current age shown in Profile & Ages if birthday falls late in the year.',
@@ -2122,9 +2126,9 @@ function updateTable(log) {
         'IRA1-': 'Voluntary withdrawals from IRA1 this year: the spending draw plus any Roth conversions sourced from IRA1. Conversions are taken from whichever of the two IRAs is larger first, spilling to the other only when the larger cannot supply the full amount. Excludes RMD (see RMD1-).',
         'IRA2-': 'Voluntary withdrawals from IRA2 this year: the spending draw plus any Roth conversions sourced from IRA2. Conversions are taken from whichever of the two IRAs is larger first, spilling to the other only when the larger cannot supply the full amount. Excludes RMD (see RMD2-).',
         'CapGains': 'Amount of gains from withdrawing brokerage assets.',
-        'IRMAA': 'Annual IRMAA surcharge based on MAGI from 2 years prior. Charged only for spouses 65+ (Medicare age).',
-        'IRMAATier': 'IRMAA tier (e.g. Tier 1–6) derived from MAGI 2 years ago. Shows -none- until a spouse reaches 65 (Medicare age).',
-        'Medicare': 'Base cost for Medicare Parts B + D for spouses 65+ (grows ~5.6%/yr). Illustration only — not deducted from spendable income; assumed inside the spend goal. Excludes IRMAA (separate column).',
+        'IRMAA': `Annual IRMAA surcharge based on MAGI from 2 years prior. Charged only for spouses ${medAge}+ (Medicare age).`,
+        'IRMAATier': `IRMAA tier (e.g. Tier 1–6) derived from MAGI 2 years ago. Shows -none- until a spouse reaches ${medAge} (Medicare age).`,
+        'Medicare': `Base cost for Medicare Parts B + D for spouses ${medAge}+ (grows ~5.6%/yr). Illustration only — not deducted from spendable income; assumed inside the spend goal. Excludes IRMAA (separate column).`,
         'FedCap': 'Upper boundary of the current federal tax bracket.',
         'StateCap': 'Upper boundary of the current state tax bracket.',
         'BracketTarget': 'MAGI ceiling targeted by the bracket/IRMAA strategy this year (0 for other strategies).',
@@ -4667,8 +4671,9 @@ function updateACAWarning() {
     if (!by1 || !startAge) { warnEl.style.display = 'none'; return; }
 
     const startYear    = by1 + startAge;
-    const p1Medicare   = startAge >= 65;
-    const p2Medicare   = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
+    const medAge       = TAXData.IRMAA.ELIGIBILITY_AGE;
+    const p1Medicare   = startAge >= medAge;
+    const p2Medicare   = hasSpouse && by2 > 0 && (startYear - by2) >= medAge;
     const bothMedicare = bothOnMedicareAtStart(by1, startAge, hasSpouse, by2);
     const oneMedicare  = hasSpouse && (p1Medicare !== p2Medicare);
 
@@ -4685,7 +4690,7 @@ function updateACAWarning() {
     }
 
     if (bothMedicare) {
-        warnEl.textContent = '⚠ Both persons will be on Medicare at retirement start (age 65+) — ACA options are unavailable.';
+        warnEl.textContent = `⚠ Both persons will be on Medicare at retirement start (age ${medAge}+) — ACA options are unavailable.`;
         warnEl.style.display = 'block';
     } else if (oneMedicare) {
         const who = p1Medicare ? 'You' : 'Spouse';

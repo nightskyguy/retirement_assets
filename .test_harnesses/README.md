@@ -4,6 +4,11 @@ Investigative / audit scripts for the retirement optimizer engine. These are **n
 regular unit-test suite (`optimizer_core.test.js`); they are kept here so a finding can be
 re-derived on demand.
 
+**What does not belong here:** anything the suite needs in order to pass. `sweep_golden.js` and its
+two regenerators live at the repo root next to `optimizer_core.test.js`, which `require`s the golden
+at load time — they are fixtures, not studies. The rule and the reasoning are in
+[`ARCHITECTURE.md`](../ARCHITECTURE.md#where-a-test-file-belongs).
+
 | harness | runs in | what it answers |
 |---|---|---|
 | `betr_harness.js` | **node** | Is the Break-Even Tax Rate (BETR) signal trustworthy? |

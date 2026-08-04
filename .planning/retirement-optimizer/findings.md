@@ -1,5 +1,65 @@
 # Findings & Decisions
 
+## A lookup that returned 0 for "no limit" made the flagship strategy inert in 21 states (2026-08-04, v11.1447)
+
+Found while checking a different question — whether flipping `isBracketStrategy` off would clip
+spending — so it was never looked for. It had been shipped for as long as the flat-rate states have
+been modelled.
+
+**The mechanism.** `findBracketIndex` (`taxengine.js:1006`) returns the highest `i` with
+`brackets[i].l * mult <= amount`, or `-1`. `findUpperLimitByAmount` (`:1051`) turned `-1` into
+`{limit: 0}`. A **single-row** table `[{l: Infinity, r: 0}]` therefore matched `-1` on *every* lookup,
+because `Infinity <= amount` is never true. Multi-row tables only escape because their terminal
+`{l: Infinity}` row is never *selected* — it is only ever `nextB`.
+
+**The 0 was overloaded, and that is why it survived review.** The same function's last-bracket path
+(`nextB ? … : 0`) uses 0 to mean the opposite thing, "no upper limit". One sentinel, two contradictory
+meanings, and the consumers all take the pessimistic reading:
+`limit = Math.min(stateLimit, limit)` (`optimizer_core.js:692`) and
+`yr.goalLimit = Math.min(fed.limit, state.limit)` (`:1008`).
+
+**Measured across all 38 modelled jurisdictions, before vs after, three strategies:**
+
+| strategy | single-row states changed | graduated states changed |
+|---|---|---|
+| `bracket` (Fill Bracket) | **21 of 21** | **0 of 17** |
+| `propwd` | **21 of 21** | **0 of 17** |
+| `minlimit` | 21 of 21 | **17 of 17** |
+
+The 21: AK, AZ, CO, FL, GA, IA, IL, IN, KY, MA, MI, NC, NE, NH, NV, PA, SD, TN, TX, WA, WY — the 9
+no-tax states plus 12 flat-rate ones.
+
+Single filer, $600k IRA, $60k goal, Fill Bracket 22%: NV/TX/FL **$465 -> $163,686**, IL
+$6,740 -> $163,686, PA $4,047 -> $163,686, AZ $775 -> $151,101. CA ($131,832) and NY ($141,348)
+unchanged to the dollar.
+
+**`minlimit` is the one that reaches every state**, because it also clamps with
+`yr.IRMAALimit = Math.min(goalLimit, IRMAABracket.limit)` (`:1011`) and the IRMAA table's first
+threshold (~$218k MFJ) sits above an ordinary spend goal — so that lookup returned 0 too, in every
+state. Single filer above: CA **$0 -> $13,698**, NV **$465 -> $163,686**.
+
+**CORRECTION TO AN EARLIER CLAIM IN THIS SESSION, worth recording because the overstatement was
+mine.** "minlimit converts nothing anywhere" is too strong. On a couple aged 66/64 with a $750k IRA
+goal it converts $0 in CA both before *and* after — CA's brackets are narrow enough that the state
+bracket top binds legitimately. The defensible claim is the mechanism, not a universal outcome: the
+IRMAA clamp was zeroed whenever the spend goal sat below the first tier. First measurement of it also
+omitted `stratRate`, which zeroes the ceiling for an entirely unrelated reason; a `minlimit` scenario
+without a named bracket proves nothing.
+
+**The second failure is worse than the first and would never have been reported as a bug.** With
+`goalLimit` at 0, `yr.targetSpend = Math.min(spendGoal, 0)` (`:1232`) for every strategy outside the
+bracket/ordered/GK exempt set. `totals.spend` then accumulates `0 + Shortfall` (`:2150`) and goes
+**negative**, while the success test `netIncome < targetSpend * 0.99` (`:2204`) can never fail against
+a zero target. Measured in NV: total spend **-$649,857 with `success: true`**, against $810,921 and
+`success: false` after. A plan that funds nothing reported itself as working.
+
+**The lesson worth keeping.** A sentinel that means "none" and a sentinel that means "unbounded"
+cannot be the same value, and 0 is the natural spelling of both. Nothing caught this because every
+test fixture in the repo uses `STATEname: 'CA'` — the suite was 148 green tests over a single
+jurisdiction, and the bug lives in the other 21.
+
+---
+
 ## P35 engine survey: ten things about the engine that are not what a reader would assume (2026-08-03)
 
 Read-only survey done while designing the "Phased" strategy (P35). Every item is verified against

@@ -1048,12 +1048,25 @@ function findUpperLimitByAmount(entity, status, amount, inflation = 1) {
     let brks = getRateBracket(entity, status)
     const idx = findBracketIndex(brks, amount, inflation);
 
-    if (idx === -1) return { limit: 0, rate: 0, nominalRate: 0 };
+    // Below every bracket's lower bound. The band runs up to the first bracket's threshold, and no
+    // bracket rate applies inside it. A SINGLE-ROW table `[{l: Infinity}]` always lands here —
+    // `Infinity <= amount` is never true — so this is equally the "this entity imposes no ceiling"
+    // answer for the 21 flat-rate and no-tax jurisdictions, and Infinity is exactly what a caller
+    // doing Math.min(stateLimit, fedLimit) needs to see. This returned 0 until v11.14xx, which
+    // zeroed the federal ceiling and stopped Fill Bracket / IRMAA Ceiling / ACA converting anything
+    // in those states, stopped `minlimit` converting anywhere, and zeroed `yr.goalLimit` (hence
+    // `targetSpend`) for every strategy outside the bracket/ordered/GK set.
+    if (idx === -1) return { limit: brks[0].l * inflation - 1, rate: 0, nominalRate: 0 };
 
     const rate = brks[idx].r;
     const nominalRate = brks[idx].nr ?? 0;
     const nextB = brks[idx + 1];
-    const limit = nextB ? nextB.l * inflation - 1 : 0;   // matches last-bracket edge case: no upper limit
+    // Asymmetry kept on purpose: 0 here means "no upper limit" for the LAST bracket, the opposite
+    // of what 0 meant above. Unreachable in production — FEDERAL, every state and IRMAA all
+    // terminate at {l: Infinity}, which can never be selected, and the one table that does not
+    // (SOCIALSECURITY) is never passed to this function. Left alone rather than changed to
+    // Infinity, since no caller exercises it and the two would then be indistinguishable.
+    const limit = nextB ? nextB.l * inflation - 1 : 0;
     return { limit, rate: rate, nominalRate: nominalRate }
 }
 

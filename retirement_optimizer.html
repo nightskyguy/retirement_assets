@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here — do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.13d0</title>
+    <title>Retirement Optimizer 11.1447</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults — applied to every chart so individual
@@ -58,7 +58,7 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=1112fd"></script>
+	<script src="taxengine.js?v=111447"></script>
 	<script src="optimizer_core.js?v=111437"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
@@ -647,6 +647,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.1447</b> <strong>Roth conversion strategies now work in states with no income tax and in states with a single flat rate.</strong> In the 21 states the tool models with one flat rate, including Nevada, Texas, Florida, Illinois, Pennsylvania and Arizona, the bracket-filling strategies were converting almost nothing however you set them, because a state with no bracket boundary was read as having no room rather than no limit. In those same states a non-bracket plan could report success while funding no spending at all. "Minimize IRMAA" was affected in every state. Saved plans in those states, and any plan using Minimize IRMAA, will now show different numbers. <a href="optimizer_changelog.md#11.1447" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.13c3</b> <strong>Clicking a year to open the Tax Payment Planner now sends your brokerage value and basis, your blended capital-gains rate, and whether you are above the high-income safe-harbor threshold.</strong> The planner was falling back to built-in guesses for all three, so editing your brokerage basis here changed nothing there. Nothing the Optimizer computes changes. <a href="optimizer_changelog.md#11.13c3" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.13bd</b> <strong>Two controls are now available to everyone: "Stop conversions after (year or age)" in the sidebar and "Fed Tax Creep %/yr" in Assumptions.</strong> Stop conversions after sets the last year Roth conversions run, and is the field the Break Even ⓘ fills in when you click its "Stop after YYYY" suggestion. Fed Tax Creep raises future federal bracket rates a little each year so you can stress-test a higher-tax future. Both default to off, so no existing plan changes. <a href="optimizer_changelog.md#11.13bd" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.13a1</b> <strong>Social Security is now counted from your birth month, not paid in full for the whole year you claim it, and the same applies to the year a spouse dies.</strong> Survivor benefits also use the deceased spouse's real Full Retirement Age instead of assuming 67 for everyone. Both change the numbers in most plans. Separately: a Stress Test result now sits in the summary bar on every tab and stays current as you edit, the stress chart is always available including in Synthetic mode, the Monte Carlo tab flags itself as out of date instead of quietly showing the previous plan, any two Optimizer rows can be compared head to head with the new ⚖ button, and the Optimizer says it is calculating instead of appearing to freeze. <a href="optimizer_changelog.md#11.13a1" target="_blank" rel="noopener">Details</a></li>

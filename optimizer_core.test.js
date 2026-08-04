@@ -37,6 +37,9 @@ require('./displayhelpers.js');
 const simulate = core.simulate;
 const optimizeSpend = core.optimizeSpend;
 const calculateTaxes = taxengine.calculateTaxes;
+const findUpperLimitByAmount = taxengine.findUpperLimitByAmount;
+const getRateBracket = taxengine.getRateBracket;
+const TAXData = taxengine.TAXData;
 const getLTCGBracketRoom = core.getLTCGBracketRoom;
 const compactNum = core.compactNum;
 const diagnoseConvBreakEvenFailure = core.diagnoseConvBreakEvenFailure;
@@ -2465,6 +2468,93 @@ test('FRA: end to end, a pre-1955 couple pays a smaller survivor benefit', () =>
     // Was 51,076 with the hard-coded 67; 49,148 with the real FRAs (66 and 66); 55,122 once the
     // death year was blended (the decedent is June-born, so half that year pays both own benefits).
     assert(Math.round(surv.SSincome) === 55122, `expected $55,122 in the first survivor year, got ${Math.round(surv.SSincome)}`);
+});
+
+// ── Bracket-lookup floor: "below the first bracket" is not "no room at all" ───
+// findBracketIndex returns -1 when the amount is below every bracket's lower bound, and
+// findUpperLimitByAmount used to turn that into `limit: 0`. A single-row table `[{l: Infinity}]`
+// hits it on EVERY lookup, because `Infinity <= amount` is never true — and 21 of the 38 modelled
+// jurisdictions have one. `limit: 0` then propagates into `Math.min(stateLimit, limit)` and zeroes
+// the federal ceiling, so the bracket-filling strategies convert nothing at all in those states.
+
+test('findUpperLimitByAmount: a single-row table means NO upper limit, not a zero one', () => {
+    for (const st of ['NV', 'TX', 'WA', 'FL', 'IL', 'PA', 'AZ', 'CO']) {
+        const got = findUpperLimitByAmount(st, 'MFJ', 100000, 1).limit;
+        assert(got === Infinity, `${st} imposes no bracket ceiling, so the limit is Infinity, got ${got}`);
+    }
+});
+
+test('findUpperLimitByAmount: below the first bracket returns the top of that band', () => {
+    // Not hard-coded dollar figures: the relation must hold after any tax-year data update.
+    for (const ent of ['CA', 'NY', 'FEDERAL', 'IRMAA']) {
+        const firstL = getRateBracket(ent, 'MFJ')[0].l;
+        const below  = Math.floor(firstL / 2);
+        const got    = findUpperLimitByAmount(ent, 'MFJ', below, 1);
+        assert(got.limit === firstL - 1,
+            `${ent} below its first bracket: expected ${firstL - 1}, got ${got.limit}`);
+        assert(got.rate === 0, `${ent}: no bracket applies below the first one, so the rate is 0`);
+    }
+});
+
+test('findUpperLimitByAmount: an amount inside the ladder is untouched', () => {
+    // The regression guard for the fix above — the ordinary path must not move.
+    const brks = getRateBracket('CA', 'MFJ');
+    const inside = brks[1].l + 1;                       // somewhere in the second band
+    const got = findUpperLimitByAmount('CA', 'MFJ', inside, 1);
+    assert(got.limit === brks[2].l - 1, `expected ${brks[2].l - 1}, got ${got.limit}`);
+    assert(got.rate === brks[1].r, `expected rate ${brks[1].r}, got ${got.rate}`);
+});
+
+test('single-row bracket tables: the affected jurisdictions are pinned', () => {
+    // Adding a state with a single-row table should trip this rather than silently inheriting
+    // whatever the lookup does at its edges.
+    const single = Object.keys(TAXData).filter(k => k.length === 2)
+        .filter(k => (getRateBracket(k, 'MFJ') || []).length === 1).sort();
+    const expected = ['AK','AZ','CO','FL','GA','IA','IL','IN','KY','MA','MI','NC','NE','NH','NV','PA','SD','TN','TX','WA','WY'];
+    assert(JSON.stringify(single) === JSON.stringify(expected),
+        `single-row tables changed:\n         expected ${JSON.stringify(expected)}\n         actual   ${JSON.stringify(single)}`);
+});
+
+test('Fill Bracket converts in a no-tax state, not just in a graduated one', () => {
+    const base = { ...BASE, strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1,
+                   stratACAMultiple: 0, convertExcessToRoth: true, iraBaseGoal: 0 };
+    const conv = st => simulate({ ...base, STATEname: st }).log.reduce((a, e) => a + (e.rothConv || 0), 0);
+    const ca = conv('CA');
+    assert(ca > 0, `the CA control must convert something, got ${Math.round(ca)}`);
+    for (const st of ['NV', 'TX', 'AZ', 'IL']) {
+        const got = conv(st);
+        assert(got > ca * 0.5,
+            `${st} has no state bracket ceiling, so it should convert at least as much as CA ` +
+            `($${Math.round(ca)}), got $${Math.round(got)}`);
+    }
+});
+
+test('minlimit: the IRMAA ceiling is a real limit below the first tier, not zero', () => {
+    // yr.IRMAALimit is Math.min(goalLimit, IRMAABracket.limit), and the IRMAA table's first
+    // threshold is far above an ordinary spend goal — so this strategy converted nothing at all,
+    // in every state, not only the 21.
+    // stratRate is required: minlimit takes the federal-bracket branch first and clamps it with the
+    // IRMAA limit, so without a named bracket the ceiling is 0 for an entirely different reason.
+    const run = st => simulate({ ...BASE, STATEname: st, strategy: 'minlimit', stratRate: 0.22,
+                                 stratIRMAATier: -1, stratACAMultiple: 0,
+                                 convertExcessToRoth: true, iraBaseGoal: 0 })
+                        .log.reduce((a, e) => a + (e.rothConv || 0), 0);
+    assert(run('CA') > 0, `minlimit must convert something on a $600k IRA, got ${Math.round(run('CA'))}`);
+    assert(run('NV') > 0, `and in a no-tax state too, got ${Math.round(run('NV'))}`);
+});
+
+test('a no-tax state reports honest spend and honest failure', () => {
+    // With goalLimit zeroed, targetSpend went to 0 for every strategy outside the bracket/ordered/GK
+    // exempt set. totals.spend then accumulated `0 + Shortfall` (negative), while the success test
+    // `netIncome < targetSpend * 0.99` could never fail against a zero target.
+    const base = { ...BASE, strategy: 'propwd', propWithdraw: 0, spendGoal: 400000 };
+    for (const st of ['NV', 'TX', 'IL']) {
+        const r = simulate({ ...base, STATEname: st });
+        assert(r.totals.spend > 0, `${st}: total spend must be positive, got ${Math.round(r.totals.spend)}`);
+        assert(r.log[2].Spendable > 0, `${st}: year 2 spendable must be positive, got ${r.log[2].Spendable}`);
+        assert(r.totals.success === false,
+            `${st}: a $400k goal on a $600k portfolio must fail, not report success`);
+    }
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

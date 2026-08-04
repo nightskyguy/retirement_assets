@@ -2,9 +2,9 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-08-03 (worktree `context-ab498f`, branch `worktrees/planning-with-files-76e427`, at `main` = `ce54356`). **Working tree clean. P35 PR 1 (`2b8f414`) and PR 2 (`5d5dee3`) are pushed and OPEN as
-[PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)**, mergeable, awaiting review.
-Nothing user-visible in it, so no version or changelog entry. No other PRs open. Everything through PR #145 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
+**As of:** 2026-08-04 (worktree `context-ab498f`, branch `worktrees/bracket-limit-fix-a41f0c`, at `main` = `15e23c1`). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
+**P35 PR 3a is OPEN as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change), rebuilt on merged `main` after #146 landed. Working tree clean.
+Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
 
 **Current batch (added 2026-08-01):** six new phases P29-P34 from a user punch-list — Hebeler Autopilot, withdrawal policy, asset-mix reverse mapping, brokerage draws, an Insights statistics panel, and conversion-search cost. Four of the six touch questions this repo has ALREADY partly answered, two of them answered NO, so every one of those phases carries an explicit "already ruled out, do not re-derive" block. Read that block before designing anything in the phase; it is there to stop a re-derivation of P24 and P28.
 
@@ -2243,6 +2243,67 @@ harness that can measure it.
 
 ---
 
+## P35 PR 3 REPLANNED as PR 3a-3d (2026-08-04) — user corrections plus a blocker found underneath them
+
+Four corrections from the user reshaped the rest of P35. Investigating the third exposed a shipped
+defect larger than any of them, so the single "PR 3" in the table below became four PRs.
+
+| # | PR | Byte-identical | Status |
+|---|---|---|---|
+| 3a | `findUpperLimitByAmount` below the first bracket | **No** — 21 states + `minlimit` everywhere | **DONE 2026-08-04, v11.1447** |
+| 3b | Medicare age -> `TAXData.IRMAA.ELIGIBILITY_AGE` | Yes | not started |
+| 3c | ACA cap lapses at 65 -> Proportional 0% | No — `aca` rows only | blocked on 3a + 3b |
+| 3d | `Basis <= Brokerage` invariant | Yes for non-negative brokerage returns; no for MC | not started |
+| 4 | `deathBasisStepUp: 'auto'` + `COMMUNITY_PROPERTY` + `survivorSpendPct` | **No, by decision** | blocked on 3d |
+
+**The user's four corrections, and what each changed:**
+
+1. **Step-up is per STATE law.** Community-property states get a FULL step-up on first death, and it
+   should follow the existing spousal-IRA-takeover template at `optimizer_core.js:1035-1036`. This
+   **replaces the recorded `deathBasisStepUp: 'half'` default** in P35's decision table below.
+   Decided: `'auto'|'none'|'half'|'full'`, default `'auto'` -> `'full'` in a `COMMUNITY_PROPERTY`
+   state, `'half'` elsewhere. **The cheap part nobody saw:** `'half'` and `'full'` ARE the ownership
+   model (common-law joint tenancy vs community property), so no per-person brokerage attribution is
+   needed at all. The 7 modelled CP states are AZ, CA, ID, NV, TX, WA, WI; LA and NM are CP states
+   TAXData does not model; AK is excluded on purpose (opt-in by agreement, not default).
+2. **100%-basis brokerage draws tax-free**, so gap-fill could order it like Cash or Roth. **Decided:
+   observability only.** Ship `yr.capGainsPercentage` as a hidden `-` log key with PR 4 and change no
+   ordering. The inference is isomorphic to P28's Roth-vs-Cash question, where reasoning cost
+   $137,062 of terminal value once: zero tax on the *withdrawal* says nothing about the opportunity
+   cost of the asset *retained*. Not committed to P30 either — left open, with the prevalence number
+   now measurable.
+3. **ACA should fall back to Proportional 0%** when all living spouses are 65+, and the 65 should come
+   from TAXData. This **reverses the recorded "the constraint lifts outright" decision** below.
+   Releasing outright makes the crossing year's draw depend on `curIRA`, an unbounded quantity — a
+   cliff, not a policy. `propwd` at 0% is line-for-line the engine's fallback `else`, so the fallback
+   is three conjunctions and no new branch.
+4. **Run P36 before Phased lands.** Decided: run it **twice**. P36a now on the 8 shipped incumbents
+   (no step-up, no `survivorSpendPct`, death timing dropped — it detects nothing without them); P36b
+   after PR 4 with the full factor set and the Phased arms. Framing that must be written into the
+   results file: frequency **cannot** justify deleting a shipped arm, only the zero test can, and any
+   "ACA never wins" verdict is a measurement artifact because the tool prices the cap's cost and none
+   of its benefit.
+
+### PR 3a — DONE, v11.1447, not byte-identical
+
+`findBracketIndex` returns -1 below every bracket, and `findUpperLimitByAmount` turned that into
+`limit: 0` — which the consumers read as "no room" rather than "no limit". A single-row table
+`[{l: Infinity}]` hit it on every lookup, and 21 of 38 modelled jurisdictions have one. Full writeup
+and the measured before/after in `findings.md`, "A lookup that returned 0 for no limit".
+
+- [x] Fix at `taxengine.js:1051`; both meanings of the 0 sentinel documented in place
+- [x] 7 new tests, 4 of which fail without the fix (the other 2 are regression guards). node 148 -> 155
+- [x] Per-state A/B over all 38 jurisdictions: `bracket` and `propwd` move in exactly the 21
+      single-row states and **0 of 17** graduated ones; `minlimit` moves in all 38
+- [x] Browser: title/version/behavior-change banner, in-page suite green, console at the known
+      4-fixture baseline, **zero `Infinity` or `NaN` in the rendered page**, and NV at Fill Bracket
+      22% now converts $215,100 against CA's $168,128 with the federal ceiling ($223,404) intact
+- [x] `taxengine.js?v=` bumped in all four HTML files that load it. Only `IncomeTaxPlanner.html`
+      mentions the function and only in a comment, so no other tool changes behavior
+- **Status:** committed, PR open. **Unblocks** PR 3c and makes any state-general study legitimate.
+
+---
+
 ## Phase P35: "Phased" withdrawal strategy — one strategy that switches by life phase
 
 **Why:** P13 (Multi-Strategy Segment Optimizer, row 15, pending since before the current batch)
@@ -2280,9 +2341,9 @@ satisfies both rules and is the smallest thing that can be swept. **`sim.prevIRA
 | Bundling | Phased **+ basis step-up together**; LEGACY split out as P37 |
 | IRA target | Use the existing `#iraBaseGoal`; how it is *suggested* may change later, deferred |
 | Phase 1/2 | **Merged** — per-year split on `yr.curIRA`, no hysteresis |
-| ACA ceiling after 65 | **None.** The constraint lifts outright |
+| ACA ceiling after 65 | ~~**None.** The constraint lifts outright~~ **REVERSED 2026-08-04** — it falls back to Proportional 0%. See the PR 3a-3d replan above |
 | FIRST_DEATH ceiling | **None** — convert everything above the IRA Goal. No `phasedDeathBracket` input |
-| `deathBasisStepUp` default | **`'half'`** now, so PR 4 moves numbers |
+| `deathBasisStepUp` default | ~~**`'half'`**~~ **REPLACED 2026-08-04** by `'auto'` (state-driven: `'full'` in a `COMMUNITY_PROPERTY` state, `'half'` elsewhere). Still moves numbers. See the replan above |
 | `survivorSpendPct` default | Ships at `100`; real default decided by P36 (80% flagged reasonable) |
 | Sweep arm count | Decided by P36's evidence, not up front |
 | Enumeration | **Extract** to `optimizer_core.js`, shared with `buildVariations()` |
@@ -2293,7 +2354,7 @@ satisfies both rules and is the smallest thing that can be swept. **`sim.prevIRA
 |---|---|---|
 | 1 | Characterization tests for both enumerations | Yes (tests only) |
 | 2 | Extract `buildStrategyFamilies` + `OPTIMIZER_GRIDS`/`MC_GRIDS` to core | Yes — proven by PR 1 |
-| 3 | ACA post-65 cap release (independent bug fix) | **No** — ACA rows only |
+| 3 | ~~ACA post-65 cap release~~ **SPLIT into 3a/3b/3c/3d 2026-08-04**, see the replan above. 3a DONE | **No** — see the replan |
 | 4 | `deathBasisStepUp` (default `'half'`), `survivorSpendPct`, `yr.isLastMFJYear`, `sim.prevIRAGain` | **No** — step-up default |
 | 5 | Phased engine | Yes for every existing strategy |
 | 6 | Phased UI + identity/matcher sites | Yes — nothing selects Phased yet |
@@ -2406,10 +2467,11 @@ per-row memo next.
 - [ ] PR 6 — all 12 identity sites; URL keys `pcp`/`pam`/`dsu`/`ssp`
 - [ ] PR 7 — see P36
 - [ ] PR 8 — arms scoped by P36; surface the stop-year cap reduction
-- **Status:** IN PROGRESS. PR 1 and PR 2 are carried by
-  [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146), open and mergeable.
-  **This is the review point** — PR 3 (the ACA post-65 cap release) is the
-  first one that moves numbers. **Depends on:** nothing hard. Its PR 2 unblocks P36 and
+- **Status:** IN PROGRESS. PR 1 and PR 2 merged as
+  [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146); PR 3a open as
+  [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147) and it **already moves
+  numbers** — the old "PR 3 is the first one that moves numbers" note is superseded by the PR 3a-3d
+  replan above. Next at the review point: PR 3b. **Depends on:** nothing hard. Its PR 2 unblocks P36 and
   helps P29/P30/P31/P32. Its PR 8 budget problem is P34's argument.
 - **Touches the same gap-fill code as:** P28's open ship decision (`rothGapFill`) and P30's `[40,60]`
   question. Settling P28 and P30 first would mean PR 5's new arm is written against a settled ordering

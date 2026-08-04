@@ -35,7 +35,6 @@ flowchart TD
         DH["displayhelpers.js<br/>parseShorthand, setDollarValue, tooltips"]
         TEXT["optimizer_text.js<br/>drawerContent - docs and help copy"]
         TESTS["optimizer_tests.js<br/>runTests - in-browser console suite"]
-        HIST["optimizer_history.js<br/>older changelog - lazy fetch on expand"]
         OTHER["other_tools.js<br/>shared Other Tools widget"]
         CSS["optimizer_styles_responsive.css"]
     end
@@ -51,7 +50,9 @@ flowchart TD
 
     subgraph node["Node - no browser"]
         CORETEST["optimizer_core.test.js<br/>node optimizer_core.test.js<br/>vm.runInContext, no DOM stubs"]
+        GOLDEN["sweep_golden.js<br/>strategy-enumeration goldens<br/>data only - required by the suite"]
         TPPTEST["taxPaymentPlanner.test.js"]
+        DOCTEST["doclinks.test.js"]
     end
 
     HTML --> CSS
@@ -68,7 +69,6 @@ flowchart TD
     HTML --> PRNG
     HTML --> STATS
     HTML --> HRET
-    HTML -.->|fetch on expand| HIST
 
     CORE --> TAX
     UI --> CORE
@@ -88,11 +88,12 @@ flowchart TD
     WORKER -->|importScripts| HRET
     CORETEST -->|vm.runInContext| CORE
     CORETEST -->|vm.runInContext| TAX
+    CORETEST -->|require| GOLDEN
 
     classDef pure fill:#0d3b2e,stroke:#2f9e79,color:#e6fff5
     classDef dom fill:#26303f,stroke:#5b8def,color:#e8eefc
     class TAX,CORE pure
-    class UI,DH,TEXT,TESTS,HIST,OTHER dom
+    class UI,DH,TEXT,TESTS,OTHER dom
 ```
 
 **The contract that matters:** `optimizer_core.js` and `taxengine.js` touch no DOM, no
@@ -273,6 +274,7 @@ refreshed worker can pull a stale `optimizer_core.js`.
 | File | Layer | Key entry points |
 | --- | --- | --- |
 | `retirement_optimizer.html` | page | tab buttons, inline bootstrap, changelog - 5 newest inline |
+| `optimizer_styles_responsive.css` | page | the page's only stylesheet; its `?v=` token is the one most often forgotten |
 | `taxengine.js` | engine | `TAXData`, `RMD_TABLE`, `calculateTaxes`, `calcIRMAA`, `getIRMAATier`, `calculateProgressive`, `calculateTaxableSocialSecurity`, `getQCDLimit` |
 | `optimizer_core.js` | engine | `simulate`, year steps `beginYear` .. `endYear`, `optimizeSpend`, `optimizeSpendDown`, `optimizeConversionAmount`, `bestTimeLimitedConversion`, `bestConversionStopYear`, `breakEvenHeirsRate`, `lowestBreakEvenHeirsRate`, `selectConversionCandidates`, `baselineScoreOf`, `rankRowsByObjective`, `buildStrategyFamilies` (the strategy enumeration both sweeps share, with `MC_GRIDS` / `OPTIMIZER_GRIDS`), `buildVariations`, `calculateWithdrawals`, `computeBracketCeiling`, `splitPreferLarger` |
 | `optimizer_ui.js` | UI | `getInputs`, `runSimulation`, `runOptimizer`, `renderOptimizerTable`, `loadOptimizerResult`, `updateTable`, `updateStats`, `updateCharts`, `openTaxPlanner`, `buildShareURL`, `loadFromURL`, `saveScenario`, `applyScenario`, `setOptObjective`, `applyConvStopYear` |
@@ -288,8 +290,35 @@ refreshed worker can pull a stale `optimizer_core.js`.
 | `montecarlo/stats.js` | MC | `computePercentiles`, `computeInputFan` |
 | `montecarlo/historical_returns.js` | MC | `HISTORICAL_RETURNS` |
 | `optimizer_core.test.js` | test | `node optimizer_core.test.js` - loads engine via `vm.runInContext` |
+| `sweep_golden.js` | test data | `SWEEP_BASES`, `MC_GOLDEN`, `OPT_GOLDEN` - the recorded strategy enumerations both sweeps must keep emitting. Data only, dual-mode export, `require`d by `optimizer_core.test.js` on every run |
+| `sweep_golden.gen.js` | test tool | `node sweep_golden.gen.js` - rewrites the `MC_GOLDEN` block of `sweep_golden.js` from source. Run only for a deliberate `buildVariations()` change, then read the diff |
+| `sweep_golden.import.js` | test tool | `node sweep_golden.import.js <dir>` - folds a browser capture into `OPT_GOLDEN`. That half cannot be generated: the Optimizer's enumeration needs a live `getInputs()`. Capture recipe is in the file header |
 | `doclinks.test.js` | test | `node doclinks.test.js` - `docHref()` mapping table |
+| `taxPaymentPlanner.test.js` | test | `node taxPaymentPlanner.test.js` - covers `taxPaymentPlanner.js`, which the optimizer does not load |
+| `RetirementTaxPlanner.html` | sibling page | handoff target of `openTaxPlanner()`; the only page that loads `taxPaymentPlanner.js` |
+| `taxPaymentPlanner.js` | engine | `TaxPaymentPlanner.computePaymentPlan`, `getStateInfo`, `dueDateFor`, `restoreDateFor`, holiday/business-day helpers. Same no-DOM contract as the other two engine files |
+| `optimizer_changelog.md` | docs | full release history; the 5 newest entries are duplicated inline in the HTML |
 | `_includes/head-custom.html` | docs | Jekyll theme hook: CSS + `doclinks.js` for rendered `.md` pages |
+| `.test_harnesses/` | research | investigative scripts that are **not** part of any suite - see the note below and that directory's `README.md` |
+
+### Where a test file belongs
+
+Two directories, one rule, because the distinction has been asked about:
+
+- **Repo root, beside the suite it serves** - anything `node <x>.test.js` needs in order to pass.
+  `sweep_golden.js` is a *fixture*, not a study: `optimizer_core.test.js:67` `require`s it and
+  asserts against it every run, so a drift in either enumeration fails the build. `sweep_golden.gen.js`
+  and `sweep_golden.import.js` are the two ways that fixture is refreshed, and `gen` rewrites
+  `sweep_golden.js` in place by `__dirname`, so they stay next to it. None of the three is interim,
+  profiling, or throwaway: 18 named tests assert against the goldens, and because the `require` is
+  top-level, deleting the file does not lose 18 tests - it stops the whole suite from loading.
+- **`.test_harnesses/`** - scripts that answer a *research question* once and are kept only so a
+  finding can be re-derived (BETR trustworthiness, conversion stop-year, unified-conversion routing).
+  They are not run by CI or by any `.test.js`, several run only in a browser console, and their
+  output is prose in `findings.md` / `P28_RESULTS.md` rather than a pass/fail.
+
+The test that decides it: **would the suite fail without this file?** Yes goes at root; no goes in
+`.test_harnesses/`.
 
 ### Shared globals crossing file boundaries
 

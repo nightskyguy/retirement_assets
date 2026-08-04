@@ -8,7 +8,7 @@ renamed, or repurposed — it's a map, not a changelog (changelog-style history 
 
 | File | What it is |
 |---|---|
-| `retirement_optimizer.html` | The main tool — withdrawal/conversion strategy optimizer, Monte Carlo, Annual Details. Loads `optimizer_core.js`, `optimizer_ui.js`, `optimizer_history.js`, `optimizer_text.js`, `optimizer_styles_responsive.css`, `taxengine.js`, `displayhelpers.js`, `other_tools.js`, and `montecarlo/*`. |
+| `retirement_optimizer.html` | The main tool — withdrawal/conversion strategy optimizer, Monte Carlo, Annual Details. Loads `optimizer_core.js`, `optimizer_ui.js`, `optimizer_text.js`, `optimizer_tests.js`, `optimizer_styles_responsive.css`, `taxengine.js`, `displayhelpers.js`, `doclinks.js`, `other_tools.js`, and `montecarlo/*`. |
 | `Retirement_Projection.html` | Simpler, chart-forward projection tool (2 IRAs, 1 Brokerage, 1 Cash, 1 Roth). Shares `taxengine.js` with the Optimizer. |
 | `RetirementTaxPlanner.html` | Single-year "how do I actually pay this tax bill" planner (withholding vs. quarterly estimates vs. mixed). Opened by the Optimizer's Annual Details table (click a year or the `totalTax` column) with that year's numbers pre-filled. |
 | `standalone/RealReturns.html` | Historical Real Returns — inflation-adjusted growth of $10k across equities/bonds/T-bills/gold/etc, 1928–2025. Uses `standalone/real_returns_data.js` and `montecarlo/historical_returns.js`. |
@@ -70,9 +70,20 @@ same stub pattern, just within `standalone/` rather than at root.)
 | `taxPaymentPlanner.js` / `taxPaymentPlanner.test.js` | Standalone tax-payment-strategy engine (dual-IRA withholding optimizer) behind `RetirementTaxPlanner.html`, plus its `node` test suite. |
 | `.test_harnesses/betr_harness.js` | `node` investigative script — checks whether the displayed Break-Even Tax Rate (BETR) is trustworthy vs. an empirically-derived break-even rate. Not part of the regular suite; kept so the finding can be re-derived on demand. See `.test_harnesses/README.md`. |
 | `.test_harnesses/stopyear_harness.js` | Browser-console investigative script — the research harness behind the Stop-Year feature (`bestConversionStopYear()` in `optimizer_core.js` is the production version). |
+| `.test_harnesses/unifiedconv_harness.js` | `node` investigative script for P28 — models every voluntary IRA withdrawal as a Roth conversion across a 630-simulation grid. Findings live in `P28_RESULTS.md`. |
+| `.test_harnesses/P28_RESULTS.md` | The P28 reference write-up: tables, reasoning, and the seven headline findings the harness produced. |
+| `.test_harnesses/README.md` | Index for the harness directory, plus the rule for what belongs there vs. at the repo root (fixtures the suite needs stay at root). |
 | `sweep_golden.js` | Characterization goldens for the **two** strategy enumerations — Monte Carlo's `buildVariations()` and the Optimizer's sweep in `_runOptimizerNow()`. Both now call the shared `buildStrategyFamilies()` in `optimizer_core.js`; the golden is what proved that extraction byte-identical. Data only, dual-mode export, read by `optimizer_core.test.js`. Recorded before the P35 PR 2 extraction so it can be shown to preserve behavior. |
 | `sweep_golden.gen.js` | Regenerates the `MC_GOLDEN` half from source (`node sweep_golden.gen.js`). Run only for a **deliberate** `buildVariations()` change, then read the diff. |
 | `sweep_golden.import.js` | Folds a browser capture into the `OPT_GOLDEN` half. The Optimizer's enumeration only runs in a live page, so that half is recorded, not generated — the capture recipe is in this file's header. |
+
+## Docs (published by GitHub Pages at their `.html` URL)
+
+| File | What it is |
+|---|---|
+| `README.md` | The site's landing page (`/`, not `README.html`) — what the tools are, who they are for, the tax-torpedo explainer, FAQ, and the modelling caveats. |
+| `ARCHITECTURE.md` | Diagrams and file reference for `retirement_optimizer.html` and everything it loads: dependency graph, runtime data flow, `simulate()` pipeline, optimizer sweep, Monte Carlo, plus the rule for where a test file belongs. |
+| `optimizer_changelog.md` | Full release history. The 5 newest entries are duplicated inline in `retirement_optimizer.html`; adding one there means dropping the sixth-oldest `<li>`, whose detail is already here. |
 
 ## Planning / notes (this directory)
 

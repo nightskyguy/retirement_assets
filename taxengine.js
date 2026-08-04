@@ -68,6 +68,15 @@ var TAXData = {
 	IRMAA: {
 		YEAR: 2026,
 		LOOKBACK: -2,  // Based on 2024 tax return
+		// Medicare eligibility age. Lives here rather than in a separate TAXData.MEDICARE block
+		// because this block already owns everything else Medicare charges for (the Part B and
+		// Part D premiums below, and the LOOKBACK that this age gates), and two of its call sites
+		// already spell the threshold `ELIGIBILITY_AGE + LOOKBACK`.
+		// DO NOT unify this with the other 65s in this file. They are different rules that happen
+		// to share a number today: TAXData.FEDERAL.MFJ.age / .SGL.age is the standard-deduction
+		// age bump, and each state's RETIREMENT_EXCLUSION.ageGate is that state's own rule. Tying
+		// them together would silently couple three independent things to one edit.
+		ELIGIBILITY_AGE: 65,
 		ANNUAL_INCREASE: 0.056,	// based on analysis of 
 		standardPartB: 202.90,
 		standardPartD: 38.99,	// 2026 Part D base beneficiary premium (CMS, 6% IRA cap); plan premiums vary

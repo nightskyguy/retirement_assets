@@ -2395,6 +2395,17 @@ per-row memo next.
       `MC_GOLDEN` after the extraction produces a zero diff. One bug the node tests could not have
       caught and the browser did: the no-conversion baseline sweep still referenced the deleted
       `baseFamilies` (`optimizer_ui.js:1073`).
+- [x] PR 3b — Medicare age is now `TAXData.IRMAA.ELIGIBILITY_AGE`, substituted at all six sites.
+      **DONE 2026-08-04, v11.1448, byte-identical** (node 173 -> 175 with the 173 unchanged, and
+      `MC_GOLDEN` regenerates to a zero diff). The completeness proof is a COMMITTED mutation test:
+      move the constant to 70 and three independent behaviors must move with it. Verified it bites by
+      reverting each site in turn. **The sixth site is invisible to it** — `optimizer_ui.js` never
+      runs in node, the same gap that hit PR 2's `baseFamilies` — so that one was verified in the
+      browser: at 70 the ACA warning hides and all four ACA options re-enable. The three other 65s
+      (federal standard-deduction age bump, per-state `RETIREMENT_EXCLUSION.ageGate`) are deliberately
+      left alone, with a comment and a second test pinning that they stay separate.
+      NOT folded, contrary to the plan: `updateACAWarning`'s `p1Medicare` is load-bearing for the
+      "You" vs "Spouse" message, so it is not `either XOR both` and was left in place with a comment.
 - [ ] PR 3 — ACA age gate on the shared branch; narrow `_isACAUntenable` to `bothOnMedicareAtStart`;
       update `#aca-age-warn`; predict the `aca` fixture's direction before measuring
 - [ ] PR 4 — `deathBasisStepUp` enum defaulting `'half'`; `survivorSpendPct` at 100;

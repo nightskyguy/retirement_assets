@@ -54,6 +54,7 @@ const bestTimeLimitedConversion = core.bestTimeLimitedConversion;
 const buildVariations = core.buildVariations;
 const buildStrategyFamilies = core.buildStrategyFamilies;
 const bothOnMedicareAtStart = core.bothOnMedicareAtStart;
+const TAXData = taxengine.TAXData;
 const MC_GRIDS = core.MC_GRIDS;
 const OPTIMIZER_GRIDS = core.OPTIMIZER_GRIDS;
 const sameStrategySelection = core.sameStrategySelection;
@@ -2465,6 +2466,58 @@ test('FRA: end to end, a pre-1955 couple pays a smaller survivor benefit', () =>
     // Was 51,076 with the hard-coded 67; 49,148 with the real FRAs (66 and 66); 55,122 once the
     // death year was blended (the decedent is June-born, so half that year pays both own benefits).
     assert(Math.round(surv.SSincome) === 55122, `expected $55,122 in the first survivor year, got ${Math.round(surv.SSincome)}`);
+});
+
+// ── Medicare eligibility age is data, not a literal ───────────────────────────
+// The age used to be the bare number 65 in six places across three files. This is the test that
+// proves the substitution was COMPLETE: move the constant and three independent behaviors must move
+// with it. A site that was missed keeps reading 65 and its behavior stays put, which fails here.
+// It is deliberately not three separate tests — the point is that one edit moves all three.
+
+test('Medicare age: moving TAXData.IRMAA.ELIGIBILITY_AGE moves every site that reads it', () => {
+    const original = TAXData.IRMAA.ELIGIBILITY_AGE;
+    assert(original === 65, `the shipped value must be 65, got ${original}`);
+    // Aged 66 in the opening year, so the person is on Medicare at 65 and not at 70. Enough income
+    // to clear the lowest IRMAA tier, or behavior (1) has nothing to show.
+    const base = { ...BASE, birthyear1: 1960, die1: 95, IRA1: 4000000, spendGoal: 400000,
+                   strategy: 'bracket', stratRate: 0, stratIRMAATier: 2, stratACAMultiple: 0 };
+    try {
+        const at65 = simulate({ ...base });
+        const helperAt65 = [bothOnMedicareAtStart(1960, 66, false, 0),
+                            eitherOnMedicareAtStart(1960, 66, false, 0)];
+
+        TAXData.IRMAA.ELIGIBILITY_AGE = 70;
+        const at70 = simulate({ ...base });
+        const helperAt70 = [bothOnMedicareAtStart(1960, 66, false, 0),
+                            eitherOnMedicareAtStart(1960, 66, false, 0)];
+
+        // (1) The surcharge itself — yr.onMedicare is a headcount, so at 70 nobody is enrolled yet.
+        assert(at65.log[0].IRMAA > 0, `year 0 must carry a surcharge at 65, got ${at65.log[0].IRMAA}`);
+        assert(at70.log[0].IRMAA === 0,
+            `a 66-year-old is not on Medicare when eligibility is 70, so the surcharge must be 0, got ${at70.log[0].IRMAA}`);
+
+        // (2) The ceiling relaxation: IRMAARelevant is `maxAliveAge >= ELIGIBILITY_AGE + LOOKBACK`,
+        // so the IRMAA-tier ceiling binds at 65 (66 >= 63) and is discarded at 70 (66 < 68).
+        assert(at65.log[0].BracketTarget !== at70.log[0].BracketTarget,
+            `the IRMAA ceiling must stop binding when eligibility moves out of reach ` +
+            `(both runs gave ${at65.log[0].BracketTarget})`);
+
+        // (3) The two at-start helpers, which gate the ACA family out of the Optimizer sweep.
+        assert(helperAt65[0] === true && helperAt65[1] === true, 'at 65 a 66-year-old is on Medicare');
+        assert(helperAt70[0] === false && helperAt70[1] === false, 'at 70 they are not');
+    } finally {
+        TAXData.IRMAA.ELIGIBILITY_AGE = original;   // shared object: every later test reads it
+    }
+});
+
+test('Medicare age: the other 65s in TAXData are left alone on purpose', () => {
+    // Three different rules share the number today. Coupling them to one edit is the silent bug
+    // this guards against, so the standard-deduction age bump keeps its own value.
+    assert(TAXData.FEDERAL.MFJ.age === 65, 'the federal standard-deduction age bump is its own rule');
+    assert(TAXData.FEDERAL.SGL.age === 65, 'same for single filers');
+    const gated = Object.keys(TAXData).filter(k => k.length === 2)
+        .filter(k => TAXData[k].RETIREMENT_EXCLUSION);
+    assert(gated.length > 0, 'and at least one state carries its own retirement-exclusion age gate');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

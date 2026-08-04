@@ -4667,8 +4667,12 @@ function updateACAWarning() {
     if (!by1 || !startAge) { warnEl.style.display = 'none'; return; }
 
     const startYear    = by1 + startAge;
-    const p1Medicare   = startAge >= 65;
-    const p2Medicare   = hasSpouse && by2 > 0 && (startYear - by2) >= 65;
+    const medAge       = TAXData.IRMAA.ELIGIBILITY_AGE;
+    // These two duplicate what bothOnMedicareAtStart() computes on the next line, and they look
+    // redundant, but p1Medicare is load-bearing: the one-person message below has to say WHICH
+    // person, so `eitherOnMedicareAtStart XOR bothOnMedicareAtStart` is not a substitute for it.
+    const p1Medicare   = startAge >= medAge;
+    const p2Medicare   = hasSpouse && by2 > 0 && (startYear - by2) >= medAge;
     const bothMedicare = bothOnMedicareAtStart(by1, startAge, hasSpouse, by2);
     const oneMedicare  = hasSpouse && (p1Medicare !== p2Medicare);
 

@@ -11,6 +11,55 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1447"></a>
+
+## 11.1447 (behavior change)
+
+**Roth conversion strategies now work in states with no income tax and in states with a single flat
+rate.**
+
+If your state is one of the 21 the tool models with a single tax rate, the strategies that fill a tax
+bracket were converting almost nothing, however you set them. Those states are Alaska, Arizona,
+Colorado, Florida, Georgia, Illinois, Indiana, Iowa, Kentucky, Massachusetts, Michigan, Nebraska,
+Nevada, New Hampshire, North Carolina, Pennsylvania, South Dakota, Tennessee, Texas, Washington and
+Wyoming.
+
+The cause: a bracket strategy takes the tighter of the federal limit and your state's limit. To find
+the state limit the tool looks up which bracket your income falls in, and a state with one flat rate
+has no bracket boundary to find. It read that as "there is no room at all" rather than "this state
+imposes no limit", and because it then took the tighter of the two, the missing state limit wiped out
+the federal limit as well.
+
+Measured on a single filer with a $600,000 IRA and a $60,000 spending goal, Fill Bracket at 22%:
+
+| state | converted before | converted now |
+|---|---|---|
+| Nevada, Texas, Florida | $465 | $163,686 |
+| Illinois | $6,740 | $163,686 |
+| Pennsylvania | $4,047 | $163,686 |
+| Arizona | $775 | $151,101 |
+| California, New York | $131,832 / $141,348 | unchanged |
+
+Two further problems came from the same cause:
+
+- **Spending was reported wrongly in those 21 states.** For any strategy that is not bracket based,
+  the plan's yearly spending target was set to zero. The Summary then reported the plan as successful
+  while it funded no spending at all, and total spending could come out negative. In the run above,
+  a Proportional plan in Nevada reported success with total spending of -$649,857; it now reports
+  $810,921 and correctly reports failure, because a $400,000 goal on that portfolio genuinely fails.
+- **"Minimize IRMAA" converted little or nothing in every state, not just those 21.** That strategy
+  stops at the first IRMAA surcharge tier, and the same missing boundary applied whenever your
+  spending goal sat below that tier, which is most plans. The same single filer above now converts
+  $13,698 in California and $163,686 in Nevada, against $0 and $465 before.
+
+**What this means for a saved plan.** If your state is one of the 21, or if you use Minimize IRMAA
+anywhere, your saved scenarios and shared links will produce different numbers than before. In every
+case measured the new numbers are the correct ones and the old ones understated what the strategy
+would do. The 17 states the tool models with graduated brackets are unaffected for every strategy
+except Minimize IRMAA, and that was verified state by state rather than assumed.
+
+---
+
 <a id="11.13d0"></a>
 
 ## 11.13d0

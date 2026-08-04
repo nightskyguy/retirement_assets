@@ -2241,6 +2241,67 @@ harness that can measure it.
 
 ---
 
+## P35 PR 3 REPLANNED as PR 3a-3d (2026-08-04) — user corrections plus a blocker found underneath them
+
+Four corrections from the user reshaped the rest of P35. Investigating the third exposed a shipped
+defect larger than any of them, so the single "PR 3" in the table below became four PRs.
+
+| # | PR | Byte-identical | Status |
+|---|---|---|---|
+| 3a | `findUpperLimitByAmount` below the first bracket | **No** — 21 states + `minlimit` everywhere | **DONE 2026-08-04, v11.1447** |
+| 3b | Medicare age -> `TAXData.IRMAA.ELIGIBILITY_AGE` | Yes | not started |
+| 3c | ACA cap lapses at 65 -> Proportional 0% | No — `aca` rows only | blocked on 3a + 3b |
+| 3d | `Basis <= Brokerage` invariant | Yes for non-negative brokerage returns; no for MC | not started |
+| 4 | `deathBasisStepUp: 'auto'` + `COMMUNITY_PROPERTY` + `survivorSpendPct` | **No, by decision** | blocked on 3d |
+
+**The user's four corrections, and what each changed:**
+
+1. **Step-up is per STATE law.** Community-property states get a FULL step-up on first death, and it
+   should follow the existing spousal-IRA-takeover template at `optimizer_core.js:1035-1036`. This
+   **replaces the recorded `deathBasisStepUp: 'half'` default** in P35's decision table below.
+   Decided: `'auto'|'none'|'half'|'full'`, default `'auto'` -> `'full'` in a `COMMUNITY_PROPERTY`
+   state, `'half'` elsewhere. **The cheap part nobody saw:** `'half'` and `'full'` ARE the ownership
+   model (common-law joint tenancy vs community property), so no per-person brokerage attribution is
+   needed at all. The 7 modelled CP states are AZ, CA, ID, NV, TX, WA, WI; LA and NM are CP states
+   TAXData does not model; AK is excluded on purpose (opt-in by agreement, not default).
+2. **100%-basis brokerage draws tax-free**, so gap-fill could order it like Cash or Roth. **Decided:
+   observability only.** Ship `yr.capGainsPercentage` as a hidden `-` log key with PR 4 and change no
+   ordering. The inference is isomorphic to P28's Roth-vs-Cash question, where reasoning cost
+   $137,062 of terminal value once: zero tax on the *withdrawal* says nothing about the opportunity
+   cost of the asset *retained*. Not committed to P30 either — left open, with the prevalence number
+   now measurable.
+3. **ACA should fall back to Proportional 0%** when all living spouses are 65+, and the 65 should come
+   from TAXData. This **reverses the recorded "the constraint lifts outright" decision** below.
+   Releasing outright makes the crossing year's draw depend on `curIRA`, an unbounded quantity — a
+   cliff, not a policy. `propwd` at 0% is line-for-line the engine's fallback `else`, so the fallback
+   is three conjunctions and no new branch.
+4. **Run P36 before Phased lands.** Decided: run it **twice**. P36a now on the 8 shipped incumbents
+   (no step-up, no `survivorSpendPct`, death timing dropped — it detects nothing without them); P36b
+   after PR 4 with the full factor set and the Phased arms. Framing that must be written into the
+   results file: frequency **cannot** justify deleting a shipped arm, only the zero test can, and any
+   "ACA never wins" verdict is a measurement artifact because the tool prices the cap's cost and none
+   of its benefit.
+
+### PR 3a — DONE, v11.1447, not byte-identical
+
+`findBracketIndex` returns -1 below every bracket, and `findUpperLimitByAmount` turned that into
+`limit: 0` — which the consumers read as "no room" rather than "no limit". A single-row table
+`[{l: Infinity}]` hit it on every lookup, and 21 of 38 modelled jurisdictions have one. Full writeup
+and the measured before/after in `findings.md`, "A lookup that returned 0 for no limit".
+
+- [x] Fix at `taxengine.js:1051`; both meanings of the 0 sentinel documented in place
+- [x] 7 new tests, 4 of which fail without the fix (the other 2 are regression guards). node 148 -> 155
+- [x] Per-state A/B over all 38 jurisdictions: `bracket` and `propwd` move in exactly the 21
+      single-row states and **0 of 17** graduated ones; `minlimit` moves in all 38
+- [x] Browser: title/version/behavior-change banner, in-page suite green, console at the known
+      4-fixture baseline, **zero `Infinity` or `NaN` in the rendered page**, and NV at Fill Bracket
+      22% now converts $215,100 against CA's $168,128 with the federal ceiling ($223,404) intact
+- [x] `taxengine.js?v=` bumped in all four HTML files that load it. Only `IncomeTaxPlanner.html`
+      mentions the function and only in a comment, so no other tool changes behavior
+- **Status:** committed, PR open. **Unblocks** PR 3c and makes any state-general study legitimate.
+
+---
+
 ## Phase P35: "Phased" withdrawal strategy — one strategy that switches by life phase
 
 **Why:** P13 (Multi-Strategy Segment Optimizer, row 15, pending since before the current batch)

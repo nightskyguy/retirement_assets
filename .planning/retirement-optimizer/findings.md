@@ -102,6 +102,42 @@ requirement against a today's-dollars spend goal.
 
 ---
 
+## Two things found while RECORDING the Optimizer sweep, either of which would have produced a wrong golden (2026-08-03, P35 PR 1)
+
+Both surfaced only because the enumeration was captured from a live page rather than read off the
+source. Both would have silently corrupted the recording that P35 PR 2 is going to be proved against.
+
+**1. The sweep's result cache is keyed on the inputs and NOT on `NERD_KNOBS`.** `_runOptimizerNow()`
+early-returns on `currentHash` (`optimizer_ui.js:692-701`), built from `JSON.stringify(base)` plus the
+two checkbox states plus the current plan's conversion fields. The nerdknob is in none of them. So
+`setNerdKnob(true)` followed by a re-run hands back the **cached non-nerdknob table** — no ACA family,
+no 💵 clones — with no indication anything was skipped. It is also a live (if small) UI defect for the
+hidden Documentation-page checkbox, which is the only way to flip the flag without a reload. The
+capture recipe works around it by reloading with `?nerdknob` rather than toggling, and by changing a
+sidebar field between every other scenario.
+
+**2. The stock scenario can never produce an ACA row, and the reason is not the nerdknob.** Defaults
+are `birthyear1: 1960, startAge: 65, birthyear2: 1952`, so `bothOnMedicareAtStart()`
+(`optimizer_ui.js:4714`) is true and the ACA family is suppressed at `:824-826` independently of the
+flag. A capture taken as "nerdknob on, therefore ACA covered" records 176 rows with zero ACA arms and
+looks complete. Getting the family to appear needs a younger start — the golden uses `startAge: 60`
+with `birthyear2: 1962`, which yields 48 base rows against the nerdknob run's 44.
+
+Measured base-row counts, which are the numbers the plan file calls "families":
+
+| capture | NERD_KNOBS | Cash | base rows | total | what it pins |
+|---|---|---|---|---|---|
+| `default` | off | 50k | 44 | 132 | no 💵, no ACA, and `fundConversionWithCash` absent from the overrides entirely |
+| `nerdknob` | on | 50k | 44 | 176 | 💵 clones appear; ACA still does not, for reason 2 above |
+| `nerdknobACA` | on | 50k | 48 | 192 | the four FPL arms, 200/250/300/400 |
+| `nerdknobNoCashOffGrid` | on | 0 | 49 | 147 | Cash 0 kills the 💵 clones; an off-grid IRA Draw 9% is appended LAST, after Guyton-Klinger, not sorted into its family |
+
+MC's `buildVariations()` for comparison: 36 base rows, 108 without Cash and 144 with. The 8-row gap
+is the IRMAA-ceiling family (5) plus IRA Draw's 12/15/20% (3), and both sweeps are now pinned so PR 2
+cannot quietly collapse them onto one grid.
+
+---
+
 ## Self-consistent arithmetic is not a correct model, and an invariant can lock in the bug it was meant to catch (2026-07-29, Tax Payment Planner v1.13b9)
 
 Two user-reported defects in one session, both in `taxPaymentPlanner.js`, both sitting under a green suite, both the same shape.

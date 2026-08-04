@@ -2,7 +2,9 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-08-03 (worktree `context-ab498f`, branch `worktrees/planning-with-files-5be427`, at `main` = `34feeb8`). **Working tree clean, nothing in flight.** Everything through PR #144 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control). Next work starts from a clean base.
+**As of:** 2026-08-03 (worktree `context-ab498f`, branch `worktrees/planning-with-files-76e427`, at `main` = `ce54356`). **Working tree clean. P35 PR 1 (`2b8f414`) and PR 2 (`5d5dee3`) are pushed and OPEN as
+[PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)**, mergeable, awaiting review.
+Nothing user-visible in it, so no version or changelog entry. No other PRs open. Everything through PR #145 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
 
 **Current batch (added 2026-08-01):** six new phases P29-P34 from a user punch-list — Hebeler Autopilot, withdrawal policy, asset-mix reverse mapping, brokerage draws, an Insights statistics panel, and conversion-search cost. Four of the six touch questions this repo has ALREADY partly answered, two of them answered NO, so every one of those phases carries an explicit "already ruled out, do not re-derive" block. Read that block before designing anything in the phase; it is there to stop a re-derivation of P24 and P28.
 
@@ -2368,8 +2370,31 @@ per-row memo next.
 
 ### Tasks
 
-- [ ] PR 1 — characterization goldens, `NERD_KNOBS` off and on, plus 4 `buildVariations` bases
-- [ ] PR 2 — `buildStrategyFamilies(base, opts)` returning overrides only; grid constants pinned
+- [x] PR 1 — characterization goldens, `NERD_KNOBS` off and on, plus 4 `buildVariations` bases.
+      **DONE 2026-08-03**, node 148 -> 167. `sweep_golden.js` (data, dual-mode) + `sweep_golden.gen.js`
+      (regenerates the MC half from source) + `sweep_golden.import.js` (folds a browser capture into
+      the Optimizer half, capture recipe in its header). One observation-only line in
+      `optimizer_ui.js` exposes `OptimizerState.lastEnumeration`, since the enumeration is otherwise
+      unreachable. Four captures, not two: the nerdknob is NOT in the sweep's cache key, and the stock
+      scenario has both people on Medicare so `nerdknob` alone yields zero ACA rows — see
+      `findings.md` "Two things found while RECORDING the Optimizer sweep". Both sweeps' divergences
+      (IRA Draw 10% vs 20%, no IRMAA/ACA family in MC) are now pinned from both sides on purpose, so
+      PR 2 cannot collapse them onto one grid. Mutation-checked: perturbing `MC_GRIDS.fixedpct` fails
+      9 tests and names the row index.
+- [x] PR 2 — `buildStrategyFamilies(base, opts)` returning overrides only; grid constants pinned.
+      **DONE 2026-08-03**, node 167 -> 173, v11.1437. `buildStrategyFamilies` + `OPTIMIZER_GRIDS` +
+      `MC_GRIDS` now in `optimizer_core.js` and exported; `bothOnMedicareAtStart` moved there too
+      (was `optimizer_ui.js`, uncovered) beside its `eitherOnMedicareAtStart` twin. BOTH callers use
+      it: `_runOptimizerNow()` lost ~100 inline lines and `buildVariations()` is now a `.map()` over
+      the shared list. Seven opts, one per real divergence — `grids`, `irmaaFamily`, `acaFamily`,
+      `bracketResetsIRMAATier`, `markCashFunding`, `cashClones`, `offGridLast` — so each call site
+      states what its sweep covers. Rows carry `family` + `modifier` (null/'ira-first'/
+      'brokerage-first'/'cash') plus the decorated `strategyLabel`, because MC needs a PLAIN-text
+      prefix for `_label` where the Optimizer needs the HTML one. PROVEN: all four `OPT_GOLDEN`
+      captures re-run in the live page byte-identical, key order included, and regenerating
+      `MC_GOLDEN` after the extraction produces a zero diff. One bug the node tests could not have
+      caught and the browser did: the no-conversion baseline sweep still referenced the deleted
+      `baseFamilies` (`optimizer_ui.js:1073`).
 - [ ] PR 3 — ACA age gate on the shared branch; narrow `_isACAUntenable` to `bothOnMedicareAtStart`;
       update `#aca-age-warn`; predict the `aca` fixture's direction before measuring
 - [ ] PR 4 — `deathBasisStepUp` enum defaulting `'half'`; `survivorSpendPct` at 100;
@@ -2381,7 +2406,10 @@ per-row memo next.
 - [ ] PR 6 — all 12 identity sites; URL keys `pcp`/`pam`/`dsu`/`ssp`
 - [ ] PR 7 — see P36
 - [ ] PR 8 — arms scoped by P36; surface the stop-year cap reduction
-- **Status:** not started, build-first, staged. **Depends on:** nothing hard. Its PR 2 unblocks P36 and
+- **Status:** IN PROGRESS. PR 1 and PR 2 are carried by
+  [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146), open and mergeable.
+  **This is the review point** — PR 3 (the ACA post-65 cap release) is the
+  first one that moves numbers. **Depends on:** nothing hard. Its PR 2 unblocks P36 and
   helps P29/P30/P31/P32. Its PR 8 budget problem is P34's argument.
 - **Touches the same gap-fill code as:** P28's open ship decision (`rothGapFill`) and P30's `[40,60]`
   question. Settling P28 and P30 first would mean PR 5's new arm is written against a settled ordering

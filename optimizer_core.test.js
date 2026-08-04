@@ -1700,6 +1700,78 @@ test('eitherOnMedicareAtStart: OR semantics, single-filer, and guard', () => {
     assert(eitherOnMedicareAtStart(0, 66, true, 1950) === false, 'missing birthyear → false');
 });
 
+// ── Medicare eligibility age is DATA, not a literal (P35 PR 3b) ────────────────
+// Every "is this person on Medicare" gate reads TAXData.IRMAA.ELIGIBILITY_AGE. Asserting the gates
+// fire at 65 proves nothing — a hardcoded 65 passes that too. So each test below MOVES the constant
+// and asserts the behavior moved with it. Anything still holding a literal fails.
+function withEligibilityAge(age, fn) {
+    const saved = TAXData.IRMAA.ELIGIBILITY_AGE;
+    TAXData.IRMAA.ELIGIBILITY_AGE = age;
+    try { return fn(); } finally { TAXData.IRMAA.ELIGIBILITY_AGE = saved; }
+}
+
+test('ELIGIBILITY_AGE: the constant exists and ships at 65', () => {
+    assert(TAXData.IRMAA.ELIGIBILITY_AGE === 65,
+        `Medicare eligibility ships at 65, got ${TAXData.IRMAA.ELIGIBILITY_AGE}`);
+    // The federal standard-deduction age bump is a DIFFERENT statute that happens to use the same
+    // number. Pinned here so a future change to one is not "fixed" by pointing it at the other.
+    assert(TAXData.FEDERAL.MFJ.age === 65,
+        'the federal std-deduction age bump is a separate 65 and must stay separate');
+});
+
+test('ELIGIBILITY_AGE: both at-start helpers follow the constant', () => {
+    // Today a 66-year-old is already on Medicare when the plan opens.
+    assert(eitherOnMedicareAtStart(1960, 66, false, 0) === true, 'age 66 vs 65 → on Medicare');
+    withEligibilityAge(67, () => {
+        assert(eitherOnMedicareAtStart(1960, 66, false, 0) === false, 'age 66 vs 67 → not yet');
+        // startYear = 1960 + 66 = 2026; spouse born 1958 is 68 — one qualifies, one does not.
+        assert(eitherOnMedicareAtStart(1960, 66, true, 1958) === true,  'OR: older spouse qualifies');
+        assert(bothOnMedicareAtStart(1960, 66, true, 1958)  === false, 'AND: younger spouse does not');
+        // startYear = 1960 + 68 = 2028; spouse born 1956 is 72 — both past 67.
+        assert(bothOnMedicareAtStart(1960, 68, true, 1956)  === true,  'AND: both past the new age');
+    });
+});
+
+test('ELIGIBILITY_AGE: the Medicare base premium starts at the constant, not at 65', () => {
+    // Born 1966, plan opens 2026 at age 60, runs to 79 — the onset year is inside the log either way.
+    const inputs = { ...BASE, birthyear1: 1966, die1: 95 };
+    const onsetAge = () => {
+        const row = simulate(inputs).log.find(e => (e.Medicare || 0) > 0);
+        return row ? row.age1 : null;
+    };
+    assert(onsetAge() === 65, `premium onset must be 65 today, got ${onsetAge()}`);
+    withEligibilityAge(70, () => {
+        const moved = onsetAge();
+        assert(moved === 70, `premium onset must follow the constant to 70, got ${moved}`);
+    });
+});
+
+test('ELIGIBILITY_AGE: the IRMAA-tier ceiling relevance gate is ELIGIBILITY_AGE + LOOKBACK', () => {
+    // computeBracketCeiling only honours an IRMAA-tier ceiling once the household is inside the
+    // 2-year MAGI lookback (65 - 2 = 63 today); before that it falls back to the federal bracket
+    // lookup, a much higher ceiling. A 63-year-old sits exactly on that boundary.
+    const inputs = { ...BASE, birthyear1: 1963, die1: 95, strategy: 'bracket',
+                     stratIRMAATier: 0, stratRate: 0, stratACAMultiple: 0,
+                     convertExcessToRoth: true, iraBaseGoal: 0 };
+    const row0 = () => simulate(inputs).log[0];
+    const inside  = row0();
+    assert(inside.age1 === 63, `fixture must open at age 63, got ${inside.age1}`);
+    // Move eligibility to 70 and the same 63-year-old is outside the lookback (63 < 68), so the
+    // tier ceiling stops binding and the conversion room widens.
+    const outside = withEligibilityAge(70, row0);
+    assert(outside.BracketTarget > inside.BracketTarget * 1.5,
+        `releasing the tier ceiling must widen the target: ${inside.BracketTarget} → ${outside.BracketTarget}`);
+    assert((outside.rothConv || 0) > (inside.rothConv || 0) * 2,
+        `and convert materially more: ${Math.round(inside.rothConv || 0)} → ${Math.round(outside.rothConv || 0)}`);
+});
+
+test('ELIGIBILITY_AGE: the harness restores the constant', () => {
+    // Guards every test above: they mutate shared engine data, and a leaked 70 would silently
+    // change every later scenario in this file rather than fail here.
+    assert(TAXData.IRMAA.ELIGIBILITY_AGE === 65,
+        `constant leaked from an earlier test: ${TAXData.IRMAA.ELIGIBILITY_AGE}`);
+});
+
 // ── Tax-rate creep (P4 phase 1) ───────────────────────────────────────────────
 // Bracket RATES escalate a fixed % per year from a start year; bracket LIMITS are untouched.
 // Federal has a UI knob; the state multiplier is plumbed end-to-end but pinned at 0 for now,

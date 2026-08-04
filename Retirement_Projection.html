@@ -69,7 +69,7 @@ var TAXData = {
   }
 };
 </script>
-<script src="taxengine.js?v=111447"></script>
+<script src="taxengine.js?v=111448"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -1261,8 +1261,10 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
     // ── Tax calculation ──
     const prevPrevMagi = magiHistory.length >= 2 ? magiHistory[magiHistory.length - 2].magi : 0;
     // Per-spouse Medicare-age gate (mirrors optimizer_core.js's onMedicare calc) —
-    // calcIRMAA() halves the household surcharge when only one spouse has turned 65.
-    const onMedicareCount = (age >= 65 ? 1 : 0) + (!isSingle && spouseCurrentAge >= 65 ? 1 : 0);
+    // calcIRMAA() halves the household surcharge when only one spouse has reached the
+    // Medicare age. Sourced from taxengine.js so the two tools cannot diverge.
+    const medicareAge     = TAXData.IRMAA?.ELIGIBILITY_AGE ?? 65;
+    const onMedicareCount = (age >= medicareAge ? 1 : 0) + (!isSingle && spouseCurrentAge >= medicareAge ? 1 : 0);
     const medicareGrowth  = Math.pow(1 + (TAXData.IRMAA?.ANNUAL_INCREASE ?? 0), y - 1);
     const IRMAAAnnualCost = calcIRMAA(prevPrevMagi, filingStatus, inflMult, medicareGrowth, onMedicareCount);
 

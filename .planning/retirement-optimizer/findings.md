@@ -145,6 +145,178 @@ page that it does not leak a column: 87 headers, none matching.
 
 ---
 
+## The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry (2026-08-05, diagnosed at v11.1447, re-verified at v11.1464)
+
+**Verdict: a defect, not the strategy working as designed.** Pre-existing and byte-identical before
+P35 PR 3c (`d68d27f`, landed on `main` as `f71e0bf`); that PR only made it visible, because a lapsed
+ACA plan now falls through to this code path. Recorded here only. **No engine change made in this
+pass** — `propwd`, `fixed` and `gk` are shipped strategies and any fix moves numbers on every saved
+plan that uses them.
+
+**Re-verified after merging PR #150** (which brought PR 3c, the ACA un-gating and the `acaCapLapsed`
+helper onto `main`, v11.1464). Every measured number below reproduces **to the dollar**; the line
+cites are the post-merge ones (`optimizer_core.js` shifted uniformly +51). So the defect is
+orthogonal to the whole ACA batch, which is what "pre-existing" should mean and is worth having
+checked rather than assumed.
+
+**Repro** (`CAP_BASE`, `optimizer_core.test.js:782`), overrides
+`{ strategy: 'propwd', propWithdraw: 0, stratRate: 0, stratACAMultiple: 0 }`:
+
+| | `propwd` 0% | `bracket` 22% (same fixture) |
+|---|---|---|
+| `totals.success` | **false** | true |
+| `totals.shortfall` | **-304,331** over 13 of 24 years (2037-2049) | -1 |
+| end-of-plan IRA | **893,920** | 259,853 |
+| `totals.forcedIRATotal` | **0** | 708,183 |
+
+### 1. Where the shortfall originates
+
+Not in `calculateWithdrawals` and not in the `['IRA','Brokerage','Cash']` order. The primary draw
+is fine. The defect is that the two **correction** passes that follow it have no path back to the
+IRA, and the third safety net is gated off for this strategy family.
+
+`yr.additionalSpendNeeded` (`optimizer_core.js:1281`) is `targetSpend + IRMAA - possibleIncome`,
+and `possibleIncome` (`:1226`) is **gross** income — SS plus taxable RMD, pre-tax. So the primary
+draw is sized to cover the spend goal *as if the guaranteed income arrived tax-free*. It is grossed
+up only for tax on **its own** dollars, at `sim.nominalTaxRate` — last year's *effective* rate
+(`:1760`, `taxengine.js:1122-1125` calls `nr` "the EFFECTIVE rate at this bracket's top"), not the
+marginal rate the draw actually lands in. Both understatements are by design a first approximation;
+the gap fill (`:1517`) and the third pass (`:1635`) exist to correct them. They cannot, here.
+
+Measured ledger, 2040 (Cash, Brokerage and Roth all at 0; IRA at $1,679,275):
+
+| step | value | line |
+|---|---|---|
+| `targetSpend` | 196,402 | `:1280` |
+| `+ IRMAA` | 7,094 | |
+| `- possibleIncome` (GROSS: SS 67,823 + RMD 94,213) | 162,035 | `:1226` |
+| `= additionalSpendNeeded` | **41,461** | `:1281` |
+| primary IRA draw, grossed up at 2039's `nominalTaxRate` 0.2356 | 54,239 (= 41,461 / 0.7644) | `:1438` |
+| tax pass 1 `totalTax` (incl. IRMAA) | 48,097 | `:1482` |
+| `netSpendable = possibleIncome - totalTax` | 168,178 | `:1524` |
+| **`gap = targetSpend - netSpendable`** | **28,224** | `:1525` |
+| gap fill: Brokerage 40 / Cash 60, then Roth. All three are 0 | draws **0** | `:1593-1607` |
+| `residualGap` | 28,224 | `:1642` |
+| third pass: **Cash only, then Roth**. Brokerage deliberately excluded (cap-gains spiral, `:1649-1653`) | draws **0** | `:1665-1677` |
+| forced-IRA convergence loop, gate `yr.isBracketStrategy && !yr.isACAStrategy` | **SKIPPED** | `:1702` |
+| unfunded | **28,224**, next to an IRA holding **1,679,275** | |
+
+The $28,224 is exactly the unfunded tax: `48,097 totalTax - 12,778 tax assumed on the draw
+- 7,094 IRMAA (already inside additionalSpendNeeded) = 28,225`. The gap is **not** a late-plan
+artifact — it is ~$27.6k-$28.2k in *every* year of the run. Until 2039 the taxable buffers silently
+absorb it (2036: gap 27,582, filled from Cash 20,348 + Brokerage, residual 415, no shortfall). The
+shortfall appears the year the buffers empty, which is why it reads as a depletion failure.
+
+Two sub-mechanisms, both visible in the trace:
+
+**(a) 2037-2038, buffers not yet empty.** The gap fill funds `gap` in full, the recomputed tax opens
+a small residual, and the third pass may use only Cash and Roth. 2037: `residualGap` 2,196 stranded
+while **Brokerage still held 39,428** and the IRA held 1,847,396. 2038: 2,752 stranded against
+Brokerage 8,783.
+
+**(b) 2039 onward, buffers empty.** Nothing is reachable at all. The full gap strands.
+
+The exclusion is deliberate and documented (`:1696-1701`: *"Excluded: strict ACA (subsidy cliff),
+ordered (own sequence), and fixed/propwd/baseline/gk (already draw IRA for spending — left
+unchanged)"*). **The stated rationale is the bug.** These strategies do draw IRA for spending, but
+they size that draw against pre-tax income, so they under-draw by the tax on the guaranteed income
+and have no route back. `bracket` survives the identical fixture only because its soft-cap loop
+forces **708,183** of extra IRA across the same years.
+
+### 2. The `resolveSpendTarget` clamp is inert — ruled out with numbers
+
+`yr.targetSpend = ... : Math.min(sim.spendGoal, yr.goalLimit)` (`:1280`) never fires in this run,
+and structurally almost never can:
+
+- **Measured:** `targetSpend === sim.spendGoal` in all 24 years. Minimum per-year headroom
+  `goalLimit - spendGoal` = **+46,803**.
+- **Structural:** `findUpperLimitByAmount` (`taxengine.js:1053`) returns the top of the bracket
+  *containing* the amount, so `limit >= amount - 1` by construction. Swept 9 entities (FEDERAL +
+  8 states) x 2 statuses x 8 amounts: min slack **+489**. The clamp can shave at most $1.
+- The one way it could bite was the prior finding below: flat/no-tax states returned `limit: 0`,
+  zeroing `goalLimit` and hence `targetSpend`. Fixed in v11.1447 — `TX`/`FL`/`IL`/`PA` now return
+  `Infinity`.
+
+So the clamp is not depressing `targetSpend` in the single-filer years, and it is not the source of
+the shortfall.
+
+### 3. `success: false` is honest about the simulation, and the simulation is wrong
+
+Not a repeat of the negative-`totals.spend` artifact:
+
+- **Sign convention.** `Shortfall: Math.min(0, netIncome - sim.spendGoal)` (`:1812`) — negative *is*
+  the magnitude of unfunded spending, and it nets out correctly:
+  `sum(targetSpend) 4,567,609 + totals.shortfall (-304,331) = 4,263,278 = totals.spend` to the
+  dollar (`:2203`). No sign error, no double count.
+- **The success test measures the right thing.** `netIncome < targetSpend * 0.99` (`:2257`) is
+  comparing against the *unclamped* goal, since the clamp is inert. Its 1% tolerance is why the
+  first failure lands in 2037 (netIncome 185,766 vs 186,082 required, missing by **317**) even
+  though the structural gap exists from year 0.
+- **But:** the household really did receive $168,178 against a $196,402 goal in 2040, and the
+  terminal $893,920 IRA is precisely the money never withdrawn. A real household would take a larger
+  distribution. So the verdict honestly describes a withdrawal plan the engine got wrong, and the
+  user-visible claim "Proportional 0% fails on this plan" is false.
+
+**Latent, not live:** `totals.spend += yr.targetSpend + yr.surplus.Shortfall` (`:2203`) mixes a
+`targetSpend`-based term with a `spendGoal`-based `Shortfall`. Equal today only because the clamp is
+inert. If the clamp ever binds, spend is discounted twice.
+
+### Blast radius: the whole else-branch family, not just `propwd` 0%
+
+Same fixture, same overrides pattern:
+
+| strategy | success | `totals.shortfall` | end IRA | forcedIRA |
+|---|---|---|---|---|
+| `bracket` 22% | true | -1 | 259,853 | 708,183 |
+| `fixedpct` 2% | true | -0 | 263,569 | 2,245,832 |
+| `ordered` CBIR | true | -119 | 242,835 | 0 |
+| `propwd` 0% | **false** | **-304,331** | **893,920** | 0 |
+| `propwd` 10% | true | -4,247 | 183,441 | 0 |
+| `propwd` 50% | false | -47,879 | **0** | 0 |
+| `gk` | **false** | **-34,050** | **1,616,166** | 0 |
+| `fixed` | **false** | **-234,643** | **689,774** | 0 |
+| unknown string -> baseline `else` (`:1451`) | **false** | **-304,331** | **893,920** | 0 |
+
+`gk` and any unrecognized strategy fall through to the baseline `else` (`:1451`) and inherit this.
+`propwd` 50% is the one honest failure in the table: it really does drain every account to 0.
+**`propwd` 10% passes by accident** — the +10% IRA boost over-draws, the after-tax surplus lands in
+Cash, and the gap fill spends it. Solvency in this family currently depends on a knob that has
+nothing to do with funding.
+
+### Proposed fix (separate PR — not applied here)
+
+Widen the gate at `:1702` from `yr.isBracketStrategy && !yr.isACAStrategy` to
+`!yr.isACAStrategy && !yr.isOrderedStrategy`, so the bounded forced-IRA convergence loop also
+backstops `propwd` / `fixed` / `gk` / baseline. ACA keeps its cliff, `ordered` keeps its sequence.
+Measured on a scratch copy of the engine (repo untouched):
+
+| | today | patched |
+|---|---|---|
+| `propwd` 0% success | false | **true** |
+| `totals.shortfall` | -304,331 | **0** |
+| `totals.spend` | 4,263,278 | **4,567,608** (= sum of `targetSpend`) |
+| forcedIRA | 0 | 395,109 |
+| end IRA | 893,920 | 267,756 |
+| terminal after-tax wealth | 684,010 | **202,859** (-481,152) |
+
+The $481k wealth drop is the point, not a regression: that money is now spent instead of stranded.
+`bracket`, `fixedpct`, `ordered` and `propwd` 50% come out **byte-identical**; `gk` moves -13,316,
+`propwd` 10% -6,110, `fixed` -344,704.
+
+Open questions for that PR: `yr.forcedIRA` and `BracketOverage` are bracket-strategy vocabulary and
+would need a name or a separate counter for the baseline family; and every saved `propwd`/`fixed`/
+`gk` plan changes, so it needs a version bump and a changelog entry, which is why it is not bundled
+with anything else.
+
+**The lesson worth keeping.** A safety net whose gate names the strategies it *serves*
+(`isBracketStrategy`) silently excludes everything added later. The comment at `:1696-1701` states a
+justification for each exclusion, which is the right instinct, but nobody re-tested the
+justification — "already draws IRA for spending" was true and irrelevant, because *sizing* that draw
+against pre-tax income is what fails. Suite context: 189 tests green with this defect live, because
+every non-bracket fixture has taxable buffers deep enough to hide it.
+
+---
+
 ## A lookup that returned 0 for "no limit" made the flagship strategy inert in 21 states (2026-08-04, v11.1447)
 
 Found while checking a different question — whether flipping `isBracketStrategy` off would clip

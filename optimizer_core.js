@@ -1693,13 +1693,30 @@ function resolveResidualAndForcedIRA(sim, yr) {
         totals.thirdPassTime += performance.now() - thirdPassStart;
     }
 
-    // Soft-cap break (Fill Federal Bracket / IRMAA Tier / IRA Draw %): when Cash/Brokerage/
-    // Roth are exhausted but the IRA still has funds, draw extra IRA ABOVE the ceiling to
-    // fund MANDATORY spending. Bounded convergence: forcing IRA raises taxes (SS phase-in,
-    // IRMAA), which can re-open a small residual — a few iterations fully fund spending while
-    // the IRA lasts. Excluded: strict ACA (subsidy cliff), ordered (own sequence), and
-    // fixed/propwd/baseline/gk (already draw IRA for spending — left unchanged).
-    if (yr.isBracketStrategy && !yr.isACAStrategy) {
+    // Funding backstop: when Cash/Brokerage/Roth are exhausted but the IRA still has funds, draw
+    // extra IRA to fund MANDATORY spending. Bounded convergence: forcing IRA raises taxes (SS
+    // phase-in, IRMAA), which can re-open a small residual — a few iterations fully fund spending
+    // while the IRA lasts. For the soft-cap strategies (Fill Federal Bracket / IRMAA Tier / IRA
+    // Draw %) this draw is ABOVE their ceiling, which is what makes those caps soft.
+    //
+    // P38: this used to be gated `yr.isBracketStrategy && !yr.isACAStrategy`, which excluded
+    // fixed/propwd/baseline/gk on the stated grounds that they "already draw IRA for spending".
+    // They do, but they SIZE that draw against yr.possibleIncome, which is GROSS (:1226) — as if
+    // Social Security, pensions and RMDs arrived tax free. The tax on that guaranteed income is
+    // never funded, and neither the gap fill nor the third pass has a route back to the IRA, so
+    // the shortfall simply stranded: Proportional 0% left $304k unfunded next to an $894k IRA.
+    // The justification was true and irrelevant. A gate that names the strategies it SERVES also
+    // silently excludes every strategy added later, so this one now names only the two that must
+    // genuinely stay out.
+    //
+    // Still excluded, and for reasons that are about the strategy rather than about plumbing:
+    //   - Strict ACA, while the cap is LIVE. An IRA dollar is taxable income and crossing the FPL
+    //     cap forfeits the entire premium subsidy — a cliff, not a tax bump. A shortfall there is
+    //     the correct answer and means the goal could not be met from non-taxable sources. Once
+    //     the cap lapses at Medicare (yr.acaLapsed) there is nothing left to protect, the year
+    //     falls through to the baseline branch, and it is backstopped like any other.
+    //   - Ordered, which has its own user-chosen sequence and runs it in the third pass above.
+    if (!yr.isACAStrategy && !yr.isOrderedStrategy) {
         for (let _i = 0; _i < 4; _i++) {
             const _inc = yr.fixedInc + yr.netWithdrawals.IRA + yr.pension + yr.taxableDividends +
                 yr.taxableInterest + yr.netWithdrawals.Roth + yr.netWithdrawals.Cash + yr.netWithdrawals.Brokerage + yr.taxableRMD;

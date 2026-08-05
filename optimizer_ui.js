@@ -2148,7 +2148,7 @@ function updateTable(log) {
         'StateCap': 'Upper boundary of the current state tax bracket.',
         'BracketTarget': 'MAGI ceiling targeted by the bracket/IRMAA strategy this year (0 for other strategies).',
         'BracketOverage': 'Amount MAGI exceeded the bracket target. Non-zero means spending needs pushed above the ceiling.',
-        'ForcedIRA': 'Extra IRA withdrawn ABOVE the bracket/IRMAA ceiling to fund mandatory spending after Cash/Brokerage/Roth were exhausted (soft-cap break). The strict ACA strategy never does this — it leaves a shortfall instead.',
+        'ForcedIRA': 'Extra IRA withdrawn to fund mandatory spending after Cash, Brokerage and Roth were exhausted. For the Fill Bracket and IRMAA Tier strategies this draw goes above their ceiling, which is what makes those ceilings soft. ACA Cliff never does this while its cap is in force: an IRA withdrawal is taxable income and crossing the cap forfeits the premium subsidy, so it leaves a shortfall instead. Once that cap ends at Medicare it is funded like any other strategy.',
         'spendGoal': 'This amount increases by inflation less Spend Delta%.',
         'Roth': 'Combined Roth balance at year end.',
         'Roth1': "Person 1's Roth balance at year end.",

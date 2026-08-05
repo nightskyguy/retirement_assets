@@ -11,6 +11,51 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1468"></a>
+
+## 11.1468 (behavior change)
+
+**Proportional, Reduce, Guyton-Klinger and the default strategy were sizing withdrawals as if
+Social Security, pensions and RMDs arrived tax free. They now draw the IRA needed to cover the
+whole spending goal, so plans that used to report a shortfall next to a large IRA are funded.**
+
+**What was wrong.** These strategies worked out the withdrawal by subtracting your guaranteed
+income from your spending goal, using the full pre-tax value of that income. The tax owed on the
+Social Security, pension and RMD money was never included, so every year came up short by roughly
+the amount of that tax bill. While there was money in Cash or Brokerage the gap was quietly covered
+and nothing looked wrong. Once those accounts ran dry the gap had nowhere to go, and the plan
+reported unfunded spending while the IRA still held a large balance. On one test plan, Proportional
+0% left $304,331 of spending unfunded across 13 years while holding $893,920 in the IRA. Reduce
+left $234,643 unfunded, and Guyton-Klinger $34,050. Which of these plans happened to survive
+depended on details that have nothing to do with funding: Proportional at a 10% boost passed only
+because over-drawing the IRA left a cash surplus that got spent later.
+
+**What changed.** When Cash, Brokerage and Roth are exhausted and spending is still unfunded, these
+strategies now draw the additional IRA needed, the same backstop Fill Bracket and IRMAA Tier have
+always had. The amount appears in the `ForcedIRA` column.
+
+**What this does to your numbers.** If you have a saved Proportional, Reduce or Guyton-Klinger plan,
+or a shared link to one, it can now report different results. A plan that reported a shortfall may
+now succeed. Spending goes up, tax goes up because the extra withdrawal is taxable, and ending
+wealth goes down. On the test plan above, Proportional 0% went from $4,263,278 spent and $684,010
+left over, to $4,567,608 spent and $202,859 left over. The drop in ending wealth is the money being
+spent on your goal instead of sitting unspent in the IRA. Fill Bracket, IRMAA Tier, IRA Draw % and
+Ordered produce identical results to before.
+
+**ACA Cliff is deliberately excluded, and that is not an oversight.** While the cap is in force it
+will still report a shortfall rather than draw more from an IRA. An IRA withdrawal is taxable
+income, and going a single dollar over the cap forfeits the entire premium subsidy, so drawing more
+would cost far more than the spending it funds. A shortfall on ACA Cliff means the spending goal
+could not be met from non-taxable sources, which is the answer that strategy exists to give. Once
+the cap ends at Medicare there is no subsidy left to protect, and from that year the plan is funded
+like any other. On a plan whose cap runs to age 65, that shows up as seven capped years that still
+report a shortfall, followed by twenty-one funded years.
+
+**Also.** A plan that genuinely runs out of money still reports a shortfall. The change only affects
+spending that could have been funded from an IRA that was sitting there.
+
+---
+
 <a id="11.1464"></a>
 
 ## 11.1464

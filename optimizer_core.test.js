@@ -401,9 +401,23 @@ test('avgWdRate: simple mean of the yearly rates, including year 0', () => {
     const manualAvg = rows.reduce((s, r) => s + r['wdRate%'], 0) / rows.length;
     assert(Math.abs(result.totals.avgWdRate - manualAvg) < 1e-12,
         `avgWdRate ${result.totals.avgWdRate} != manual average ${manualAvg}`);
-    // Spend $60k against a $950k portfolio, zero growth → drawdown accelerates as it shrinks.
-    assert(result.totals.avgWdRate > 0.04 && result.totals.avgWdRate < 0.15,
-        `Expected avg rate in plausible 4–15% range, got ${result.totals.avgWdRate}`);
+    // Spend $60k against an $850k portfolio, zero growth, no Social Security → the plan cannot last
+    // 20 years and the drawdown accelerates as the denominator shrinks.
+    //
+    // Re-derived for P38. The old band was 4-15%, which BASE only satisfied because the engine was
+    // under-withdrawing: it stranded $290k of spending while still holding $90k in the IRA, and a
+    // draw that never happens cannot show up in a withdrawal rate. With the funding backstop the
+    // IRA is actually spent, so the final funded years draw 46%, 86% and then 100% of what is left
+    // and the simple mean rises to ~22.9%. The high number is the fixture being honest about an
+    // impossible plan, not a runaway withdrawal.
+    assert(result.totals.avgWdRate > 0.04 && result.totals.avgWdRate < 0.30,
+        `Expected avg rate in plausible 4–30% range, got ${result.totals.avgWdRate}`);
+    // Pin the depletion itself, so a future change cannot drift back to stranding a balance and
+    // quietly slide under the band again.
+    const last = result.log[result.log.length - 1];
+    assert((last.TotalIRA ?? 0) <= 1 && (last.Brokerage ?? 0) <= 1 && (last.Cash ?? 0) <= 1,
+        `BASE cannot fund 20 years and must end fully depleted, got IRA ${Math.round(last.TotalIRA)} ` +
+        `Brokerage ${Math.round(last.Brokerage)} Cash ${Math.round(last.Cash)}`);
 });
 
 test('avgWdRateWeighted: equals Σ netOut ÷ Σ prior-year portfolio', () => {
@@ -825,10 +839,31 @@ test('soft cap (fixedpct): capped % with spend over cap still funds spending fro
 const ACA_LIVE = { ...CAP_BASE, birthyear1: 1968, birthyear2: 1967 };
 const ACA_ARM  = { strategy: 'aca', stratRate: 0, stratACAMultiple: 400 };
 
+// A dead person logs age as '—', so a numeric comparison on the raw column silently drops those
+// years from BOTH sides of a filter. Youngest-living age, or null when nobody is left.
+const _minLivingAge = e => {
+    const ages = [e.age1, e.age2].filter(a => typeof a === 'number');
+    return ages.length ? Math.min(...ages) : null;
+};
+// Years the FPL cap is actually in force. ACA_LIVE opens at 58/59 and lapses mid-plan, so a whole-
+// log assertion about cap behavior silently mixes in the years after it ended. P38 made that
+// distinction load-bearing: post-lapse years are backstopped like any other strategy and DO force
+// IRA, so "this strategy never forces IRA" is only true of the live years.
+const _capLiveRows = log => log.filter(e => {
+    const a = _minLivingAge(e);
+    return a !== null && a < TAXData.IRMAA.ELIGIBILITY_AGE;
+});
+
 test('strict ACA (cap in force): cap is never breached — shortfall persists and is flagged untenable', () => {
     const r = simulate({ ...ACA_LIVE, ...ACA_ARM });
-    assert(_sumForcedIRA(r.log) === 0, `ACA must not force IRA above the FPL cap, got ${Math.round(_sumForcedIRA(r.log))}`);
-    assert(_sumAbsShortfall(r.log) > 1000, 'ACA at 400% FPL with $160k spend should leave a real shortfall');
+    const live = _capLiveRows(r.log);
+    assert(live.length > 0, 'fixture must have years where the cap is actually in force');
+    // Scoped to the live years on purpose (P38). Whole-log used to work only because NOTHING forced
+    // IRA anywhere; now the lapsed tail does, correctly, and folding it in would assert the opposite
+    // of what this test is about.
+    assert(live.reduce((s, e) => s + (e.ForcedIRA || 0), 0) === 0,
+        `ACA must not force IRA above a LIVE FPL cap, got ${Math.round(live.reduce((s, e) => s + (e.ForcedIRA || 0), 0))}`);
+    assert(_sumAbsShortfall(live) > 1000, 'ACA at 400% FPL with $160k spend should leave a real shortfall');
     assert((r.totals.acaBreachYears ?? 0) > 0, 'expected acaBreachYears > 0 (untenable flag)');
 });
 
@@ -879,13 +914,6 @@ test('ACA lapse: the cap is what changed, not the fixture — CAP_BASE breached 
     assert(revived.totals.spend < lapsed.totals.spend,
         'and must fund LESS of the spend goal over the plan');
 });
-
-// A dead person logs age as '—', so a numeric comparison on the raw column silently drops those
-// years from BOTH sides of a filter. Youngest-living age, or null when nobody is left.
-const _minLivingAge = e => {
-    const ages = [e.age1, e.age2].filter(a => typeof a === 'number');
-    return ages.length ? Math.min(...ages) : null;
-};
 
 test('ACA lapse: mid-plan crossing stops the breaches instead of releasing the ceiling', () => {
     // ACA_LIVE opens at 58/59, so the cap binds for the first several years and lapses when the
@@ -1016,16 +1044,23 @@ const FUNDING_ARMS = [
     { name: 'bracket 22%',    over: { strategy: 'bracket',  stratRate: 0.22 },                              iraStranded:  0, worst:      0 },
     { name: 'minlimit tier1', over: { strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1 },              iraStranded:  0, worst:      0 },
     { name: 'fixedpct 2%',    over: { strategy: 'fixedpct', iraWithdrawPct: 0.02 },                         iraStranded:  0, worst:      0 },
-    { name: 'propwd 0%',      over: { strategy: 'propwd',   propWithdraw: 0,    stratRate: 0 },             iraStranded: 13, worst: 28400 },
-    { name: 'propwd 10%',     over: { strategy: 'propwd',   propWithdraw: 0.10, stratRate: 0 },             iraStranded:  7, worst:   964 },
+    { name: 'propwd 0%',      over: { strategy: 'propwd',   propWithdraw: 0,    stratRate: 0 },             iraStranded:  0, worst:      0 },
+    { name: 'propwd 10%',     over: { strategy: 'propwd',   propWithdraw: 0.10, stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 50%',     over: { strategy: 'propwd',   propWithdraw: 0.50, stratRate: 0 },             iraStranded:  0, worst:      0 },
-    { name: 'fixed',          over: { strategy: 'fixed' },                                                  iraStranded: 14, worst: 45827 },
+    { name: 'fixed',          over: { strategy: 'fixed' },                                                  iraStranded:  0, worst:      0 },
     { name: 'ordered CBIR',   over: { strategy: 'ordered',  orderedSeq: 'CBIR' },                           iraStranded:  2, worst:    93, convergence: true },
     { name: 'ordered RIBC',   over: { strategy: 'ordered',  orderedSeq: 'RIBC' },                           iraStranded:  2, worst:    73, convergence: true },
-    { name: 'gk',             over: { strategy: 'gk',       gkGuard: 0.20, gkAdjPct: 0.10 },                iraStranded:  6, worst: 15540 },
-    { name: 'baseline else',  over: { strategy: '__unrecognized__' },                                       iraStranded: 13, worst: 28400 },
-    { name: 'aca lapsed',     over: { strategy: 'aca',      stratRate: 0, stratACAMultiple: 400 },          iraStranded: 13, worst: 28400 },
+    { name: 'gk',             over: { strategy: 'gk',       gkGuard: 0.20, gkAdjPct: 0.10 },                iraStranded:  0, worst:      0 },
+    { name: 'baseline else',  over: { strategy: '__unrecognized__' },                                       iraStranded:  0, worst:      0 },
+    { name: 'aca lapsed',     over: { strategy: 'aca',      stratRate: 0, stratACAMultiple: 400 },          iraStranded:  0, worst:      0 },
 ];
+// Every row above except the two `ordered` ones now reads 0, and each of those zeroes replaced a
+// number this branch measured before touching the engine:
+//   propwd 0%      13 yrs / worst $28,400   ->  0    aca lapsed   13 / $28,400  ->  0
+//   propwd 10%      7 yrs / worst    $964   ->  0    baseline     13 / $28,400  ->  0
+//   fixed          14 yrs / worst $45,827   ->  0    gk            6 / $15,540  ->  0
+// `ordered` is unchanged because it is deliberately still excluded from the backstop, and the two
+// values are the convergence residual described above, not stranded capital.
 
 for (const arm of FUNDING_ARMS) {
     test(`funding invariant [${arm.name}]: shortfall years with IRA still funded`, () => {
@@ -1085,10 +1120,11 @@ test('funding invariant: the fixture actually drains (guards a vacuous green)', 
 // alone would be satisfied by a future change that stops early for entirely the wrong reason.
 test('ACA exception: a live cap strands spending only after non-taxable sources are gone', () => {
     const r = simulate({ ...ACA_LIVE, ...ACA_ARM });
-    const short = r.log.filter(_shortYear);
+    const live = _capLiveRows(r.log);
+    const short = live.filter(_shortYear);
     assert(short.length > 0, 'ACA_LIVE at 400% FPL with $160k spend must strand something, else this proves nothing');
-    assert(_sumForcedIRA(r.log) === 0,
-        `a live cap must never force IRA, got ${Math.round(_sumForcedIRA(r.log))}`);
+    assert(_sumForcedIRA(live) === 0,
+        `a live cap must never force IRA, got ${Math.round(_sumForcedIRA(live))}`);
     const withMoneyLeft = short.filter(e => (e.Cash || 0) > 1 || (e.Roth || 0) > 1);
     assert(withMoneyLeft.length === 0,
         `${withMoneyLeft.length} shortfall year(s) still held Cash or Roth — the cap is not what stopped them ` +
@@ -1106,6 +1142,31 @@ test('ACA exception: give it enough non-taxable money and the cap strands nothin
     assert(_sumForcedIRA(r.log) === 0, 'and it still must not force IRA');
     assert((r.totals.acaBreachYears ?? 0) > 0,
         'the cap must still be binding on unavoidable income (RMDs/SS), else the fixture stopped testing the cap');
+});
+
+test('ACA exception ends at Medicare: the lapsed tail IS backstopped', () => {
+    // The decision P38 makes explicit. `isACAStrategy` is `strategy === 'aca' && !acaLapsed`, so
+    // once the cap lapses the year falls through to the baseline branch and the funding backstop
+    // applies to it like any other. That is deliberate: a lapsed cap protects nothing, and PR #150
+    // already established that a lapsed year IS Proportional 0%, warts and fixes alike.
+    const r = simulate({ ...ACA_LIVE, ...ACA_ARM });
+    const medAge = TAXData.IRMAA.ELIGIBILITY_AGE;
+    const live = _capLiveRows(r.log);
+    const lapsed = r.log.filter(e => _minLivingAge(e) !== null && _minLivingAge(e) >= medAge);
+    assert(live.length > 0 && lapsed.length > 0, 'fixture must span the crossing');
+    // Live side: refuses to draw, strands spending, flags every year.
+    assert(live.every(e => (e.ForcedIRA || 0) === 0), 'no live-cap year may force IRA');
+    assert(live.every(e => e['-acaBreach']), 'every live-cap year here breaches on unavoidable income alone');
+    // Lapsed side: draws, and funds the goal for as long as the IRA lasts.
+    assert(lapsed.some(e => (e.ForcedIRA || 0) > 0), 'the lapsed tail must be backstopped');
+    assert(lapsed.every(e => !e['-acaBreach']), 'a lapsed cap cannot be breached');
+    const fundedRun = lapsed.filter(e => !_shortYear(e)).length;
+    assert(fundedRun >= 20,
+        `the lapsed tail should fund the goal for as long as the IRA lasts, got ${fundedRun} funded year(s)`);
+    // And when it finally runs out it is honest about it rather than stranding a balance.
+    const ruined = lapsed.filter(_shortYear);
+    assert(ruined.every(e => (e.TotalIRA || 0) <= 1),
+        'a lapsed year may only report a shortfall once the IRA is genuinely empty');
 });
 
 // ── P32 tripwire, pinned but NOT owned by P38 ─────────────────────────────────
@@ -2061,9 +2122,16 @@ test('ELIGIBILITY_AGE: the harness restores the constant', () => {
 // Federal has a UI knob; the state multiplier is plumbed end-to-end but pinned at 0 for now,
 // so these tests are what keep the state path from rotting before it gets a control.
 // A bigger IRA than BASE so the plan actually reaches taxable brackets every year.
+// P38: IRA1 was 1200000, which against a $90k spend over 20 zero-growth years with no Social
+// Security is a plan that cannot fund itself — $1.45M of assets against $1.8M of spending before
+// any tax. That was invisible while the engine under-withdrew and left a balance behind; once the
+// funding backstop spends the IRA down, the run ends at exactly zero and optimizeSpend correctly
+// returns null (its baseline gate at optimizer_core.js:2835 requires the final year to still be
+// fundable). None of the creep tests are about solvency, so the fixture is now solvent and they
+// go back to measuring only what they name: crept tax vs flat tax on identical inputs.
 const CREEP_BASE = {
     ...BASE,
-    IRA1: 1200000,
+    IRA1: 2000000,
     spendGoal: 90000,
 };
 const sumCol = (res, col) => res.log.reduce((a, r) => a + (r[col] || 0), 0);

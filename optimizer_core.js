@@ -3048,23 +3048,19 @@ function rankRowsByObjective(rows, objKey, rate = 0) {
     return [...orderedSucc, ...fail];
 }
 
-// True when EITHER person is already on Medicare (65+) at retirement start. Sibling of
-// bothOnMedicareAtStart (just below) but OR: once one spouse is on Medicare, their RMDs/SS
-// push household MAGI past any ACA FPL cap, so an ACA-limit strategy is impractical for the whole
-// household -- used to flag every ACA row untenable, not just the hardcoded 400% one. Pure.
-function eitherOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
-    if (!by1 || !startAge) return false;
-    const startYear  = by1 + startAge;
-    const medAge     = TAXData.IRMAA.ELIGIBILITY_AGE;
-    const p1Medicare = startAge >= medAge;
-    const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= medAge;
-    return hasSpouse ? (p1Medicare || p2Medicare) : p1Medicare;
-}
-
-// The stricter twin: BOTH people already on Medicare when the plan opens, which is when an ACA
-// income cap stops meaning anything at all rather than merely becoming impractical. It gates the
-// ACA family out of the Optimizer's sweep; `eitherOnMedicareAtStart` only flags those rows ⚠️.
+// True when BOTH people are already on Medicare when the plan opens, which is when an ACA income
+// cap stops meaning anything at all: yr.acaLapsed is then true in every year, the engine runs
+// Proportional 0% throughout, and an ACA label describes nothing the row did. It gates the ACA
+// family out of the Optimizer's sweep and flags the rows that reach the table anyway (a plan
+// loaded from a URL, or the CURRENT PLAN row) as untenable.
 // Lived in optimizer_ui.js until the strategy enumeration moved here and needed it.
+//
+// It had an OR-sibling, eitherOnMedicareAtStart, deleted after P35 PR 3c (v11.1462). That one
+// declared a row untenable as soon as ONE spouse was on Medicare, on the reasoning that their
+// RMDs/SS push household MAGI past any FPL cap. The reasoning was right and the conclusion was
+// too broad: a 66/62 couple has real ACA years, and those breach years are now MEASURED through
+// totals.acaBreachYears rather than assumed away on day one. Do not reintroduce it — the
+// measurement is strictly better evidence than the predicate was.
 function bothOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
     if (!by1 || !startAge) return false;
     const startYear  = by1 + startAge;
@@ -3591,7 +3587,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

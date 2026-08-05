@@ -205,7 +205,7 @@ flowchart TD
         S5["ordered, Guyton-Klinger"]
         S6["cyclic brokerage arms"]
     end
-    SWEEP -->|one simulate per arm| ROWS["results[] - one row per arm<br/>feasibility flags:<br/>bracket overage, ACA breach,<br/>eitherOnMedicareAtStart"]
+    SWEEP -->|one simulate per arm| ROWS["results[] - one row per arm<br/>feasibility flags:<br/>bracket overage, ACA breach,<br/>bothOnMedicareAtStart"]
 
     ROWS --> SPENDQ{"Optimize Spend checked?"}
     SPENDQ -->|yes| SPEND["optimizeSpend / optimizeSpendDown<br/>binary search on spendGoal<br/>gkSpendStable guard"]

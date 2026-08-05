@@ -49,7 +49,6 @@ const optimizeConversionAmount = core.optimizeConversionAmount;
 const baselineScoreOf = core.baselineScoreOf;
 const selectConversionCandidates = core.selectConversionCandidates;
 const rankRowsByObjective = core.rankRowsByObjective;
-const eitherOnMedicareAtStart = core.eitherOnMedicareAtStart;
 const taxCreepFactor = core.taxCreepFactor;
 const breakEvenHeirsRate = core.breakEvenHeirsRate;
 const lowestBreakEvenHeirsRate = core.lowestBreakEvenHeirsRate;
@@ -1783,20 +1782,6 @@ test('rankRowsByObjective: Tax Flexibility cutoff handles negative after-tax NW'
     assert(order[0] === 'best', `negative-NW cutoff must keep the best row eligible, got ${order.join(',')}`);
 });
 
-test('eitherOnMedicareAtStart: OR semantics, single-filer, and guard', () => {
-    // both under 65 → false
-    assert(eitherOnMedicareAtStart(1965, 60, true, 1963) === false, 'both <65 → false');
-    // self <65 but spouse (older) 65+ at start → true  (self born 1965 start age 60 → startYear 2025; spouse 1955 → 70)
-    assert(eitherOnMedicareAtStart(1965, 60, true, 1955) === true, 'spouse already on Medicare → true');
-    // self 65+ → true regardless of spouse
-    assert(eitherOnMedicareAtStart(1958, 66, true, 1970) === true, 'self 65+ → true');
-    // single filer 65+ → true; single filer <65 → false
-    assert(eitherOnMedicareAtStart(1958, 66, false, 0) === true, 'single 65+ → true');
-    assert(eitherOnMedicareAtStart(1965, 60, false, 0) === false, 'single <65 → false');
-    // missing inputs → false (matches bothOnMedicareAtStart guard)
-    assert(eitherOnMedicareAtStart(0, 66, true, 1950) === false, 'missing birthyear → false');
-});
-
 // ── Medicare eligibility age is DATA, not a literal (P35 PR 3b) ────────────────
 // Every "is this person on Medicare" gate reads TAXData.IRMAA.ELIGIBILITY_AGE. Asserting the gates
 // fire at 65 proves nothing — a hardcoded 65 passes that too. So each test below MOVES the constant
@@ -1816,17 +1801,24 @@ test('ELIGIBILITY_AGE: the constant exists and ships at 65', () => {
         'the federal std-deduction age bump is a separate 65 and must stay separate');
 });
 
-test('ELIGIBILITY_AGE: both at-start helpers follow the constant', () => {
+test('ELIGIBILITY_AGE: the at-start Medicare helper follows the constant', () => {
+    // Covered two helpers until eitherOnMedicareAtStart was deleted, dead after P35 PR 3c.
     // Today a 66-year-old is already on Medicare when the plan opens.
-    assert(eitherOnMedicareAtStart(1960, 66, false, 0) === true, 'age 66 vs 65 → on Medicare');
+    assert(bothOnMedicareAtStart(1960, 66, false, 0) === true,  'single at 66 vs 65 → on Medicare');
+    // startYear = 1960 + 66 = 2026; spouse born 1958 is 68, so both are past 65 today.
+    assert(bothOnMedicareAtStart(1960, 66, true, 1958) === true, 'couple 66/68 vs 65 → both on Medicare');
     withEligibilityAge(67, () => {
-        assert(eitherOnMedicareAtStart(1960, 66, false, 0) === false, 'age 66 vs 67 → not yet');
-        // startYear = 1960 + 66 = 2026; spouse born 1958 is 68 — one qualifies, one does not.
-        assert(eitherOnMedicareAtStart(1960, 66, true, 1958) === true,  'OR: older spouse qualifies');
-        assert(bothOnMedicareAtStart(1960, 66, true, 1958)  === false, 'AND: younger spouse does not');
+        assert(bothOnMedicareAtStart(1960, 66, false, 0) === false, 'single at 66 vs 67 → not yet');
+        // Same couple, one on each side of the moved constant: the 68-year-old qualifies and the
+        // 66-year-old does not. This is the assertion that catches an AND silently becoming an OR
+        // — it used to be carried by contrast with the deleted twin, so it is made directly now.
+        assert(bothOnMedicareAtStart(1960, 66, true, 1958) === false,
+            'AND: the younger spouse does not qualify at 67, so the couple does not either');
         // startYear = 1960 + 68 = 2028; spouse born 1956 is 72 — both past 67.
-        assert(bothOnMedicareAtStart(1960, 68, true, 1956)  === true,  'AND: both past the new age');
+        assert(bothOnMedicareAtStart(1960, 68, true, 1956) === true, 'AND: both past the new age');
     });
+    assert(TAXData.IRMAA.ELIGIBILITY_AGE === 65,
+        'the constant must be restored on the way out, or every later test runs on a moved gate');
 });
 
 test('ELIGIBILITY_AGE: the Medicare base premium starts at the constant, not at 65', () => {
@@ -2374,14 +2366,15 @@ test('buildStrategyFamilies: the options are what separate the two sweeps, nothi
     assert(early.length === late.length, 'and it is the same row either way, only moved');
 });
 
-test('bothOnMedicareAtStart: the stricter twin of eitherOnMedicareAtStart', () => {
-    // Moved out of optimizer_ui.js in P35 PR 2 and never covered there. The pair differ only in
-    // AND vs OR, and the ACA family hangs off which one is used.
-    const both = bothOnMedicareAtStart, either = eitherOnMedicareAtStart;
+test('bothOnMedicareAtStart: AND semantics, single filer, and the missing-input guard', () => {
+    // Moved out of optimizer_ui.js in P35 PR 2 and never covered there. It had an OR twin,
+    // eitherOnMedicareAtStart, deleted once P35 PR 3c left it without a caller. The one-of-two row
+    // below is the case the twin used to contrast against, so it is asserted on its own terms.
+    const both = bothOnMedicareAtStart;
     assert(both(1960, 65, true, 1952) === true,  'both 65+ at start');
     assert(both(1960, 60, true, 1962) === false, 'neither 65 at start');
-    assert(both(1960, 65, true, 1975) === false, 'one 65+, one not: AND is false');
-    assert(either(1960, 65, true, 1975) === true, '...but OR is true, which is the whole difference');
+    assert(both(1960, 65, true, 1975) === false,
+        'one 65+, one not: AND is false, and this is the row an OR would get wrong');
     assert(both(1960, 65, false, 0) === true,    'a single filer needs only themselves');
     assert(both(0, 65, true, 1952) === false,    'missing inputs are not an assertion of anything');
 });

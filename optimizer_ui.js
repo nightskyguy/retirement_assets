@@ -4663,8 +4663,8 @@ function refreshStratRateOptions() {
  * - Exactly one person ≥65                → advisory warning, options still active.
  * Called from updateProfileAgeDisplay(), refreshStratRateOptions(), and startAge oninput.
  */
-// bothOnMedicareAtStart() moved to optimizer_core.js beside its eitherOnMedicareAtStart twin when
-// the strategy enumeration moved there and needed it. Pure, and still used by the warning below.
+// bothOnMedicareAtStart() lives in optimizer_core.js — it moved there when the strategy enumeration
+// did and needed it. Pure, and still used by the warning below.
 
 function updateACAWarning() {
     const sel     = document.getElementById('stratRate');

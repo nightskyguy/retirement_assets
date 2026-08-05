@@ -1385,3 +1385,32 @@ User feedback on the baseline-accounting UI:
 - Port note: 8767 from `launch.json` was again held by a python process answering nothing
   (`curl` -> `000`), so a second config on 8771 was added rather than killing someone else's server.
 
+
+## Session: 2026-08-05 (cont.) — `eitherOnMedicareAtStart` deleted, the follow-up PR 3c refused to carry
+
+- Dead in production the moment PR 3c narrowed `_isACAUntenable` to `bothOnMedicareAtStart`. Grep
+  first, delete second: zero production call sites, only the definition, the `module.exports` entry
+  and two comments.
+- THE PART THAT WAS NOT MECHANICAL. Two surviving tests referenced the deleted twin, and both used
+  it the same way — as the OR side of an AND-vs-OR contrast. Deleting the reference would have left
+  `bothOnMedicareAtStart` with no test that fails if it silently becomes an OR, which is the exact
+  regression the twin made visible. Each now asserts the one-of-two case (66/68 against a moved
+  `ELIGIBILITY_AGE = 67`) directly. PR 3b's move-the-constant pin survives, retargeted to one helper.
+- The surviving helper's header comment now records why the twin is gone and says not to bring it
+  back: the either-case is MEASURED through `totals.acaBreachYears`, which is strictly better
+  evidence than a predicate applied on day one.
+- BYTE-IDENTITY PROVEN RATHER THAN ARGUED, even though the change is a deletion of unreachable code:
+  528 scenarios (8 states x 3 age configs x 11 strategy arms x single/couple, 20 years each) run
+  against `HEAD` and the working tree in separate node processes — **34,057,133 bytes each, identical
+  SHA-256**. `buildVariations` 144 rows and `buildStrategyFamilies` 192 rows identical. Export
+  surface differs by exactly one key, the deleted one.
+- NO `?v=` BUMP, and the reason is the version scheme rather than laziness: the minor is
+  `hex(dayOfYear*24 + hour)` and the clock is still inside the hour that produced 11.1462, so this
+  IS that build. A stale cache is harmless here in a way it was not for PR 3b, because the output is
+  proven identical rather than expected to be. No title bump, no changelog entry.
+- VERIFIED: node optimizer_core 188/188 (189 minus the deleted OR-semantics test), taxPaymentPlanner
+  32/32, doclinks 22/22. Browser on localhost:8771 — in-page suite 242/242, console at the known
+  4-fixture baseline, `eitherOnMedicareAtStart` confirmed absent from global scope,
+  `bothOnMedicareAtStart` still resolves and still returns false for a 66/68 couple at
+  `ELIGIBILITY_AGE = 67`, and a live sweep enumerates 192 rows with all 16 ACA arms present.
+

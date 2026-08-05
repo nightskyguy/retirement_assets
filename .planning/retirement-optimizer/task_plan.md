@@ -2385,9 +2385,10 @@ predictions were wrong and the correction is recorded there rather than quietly 
       `standalone/IncomeTaxPlanner.html` clean on the new core. Data-drivenness verified live: at
       `ELIGIBILITY_AGE = 80` a 66/59 couple loses the warning entirely and an 86/87 couple gains one
       reading "(age 80+)"
-- **Follow-up, not done here:** `eitherOnMedicareAtStart` is dead in production but still exported,
-  tested, and named in `ARCHITECTURE.md`. It is also half of PR 3b's constant-mobility pin, installed
-  one PR ago. Deleting it is byte-neutral and belongs in its own PR, not inside a behavior change.
+- **Follow-up, DONE separately (see the PR 3c-cleanup entry below):** `eitherOnMedicareAtStart` was
+  left in place by PR 3c deliberately — dead in production but exported, tested, and half of PR 3b's
+  constant-mobility pin from one PR earlier. Deleted in its own commit rather than inside a behavior
+  change.
 - **Follow-up, separate defect, NOT caused here:** Proportional 0% strands $304,331 on `CAP_BASE`
   with $894k still in the IRA and reports `success: false`. Identical on `HEAD`, so pre-existing.
   Surfaced only because the lapsed ACA arm now inherits it.
@@ -2395,6 +2396,39 @@ predictions were wrong and the correction is recorded there rather than quietly 
   by commit hash: a plan file that names its own commit goes stale the moment that commit is
   amended or rebased, which already happened once here. The PR number is the stable reference and
   gets filled in on merge, the way every other entry in this file does. **Unblocks** PR 3d.
+
+### PR 3c-cleanup — `eitherOnMedicareAtStart` deleted, byte-neutral
+
+The OR-sibling had no production caller once PR 3c narrowed `_isACAUntenable` to
+`bothOnMedicareAtStart`. Removed as its own commit: no version bump, no changelog entry, and the
+`?v=` tokens stay at `111462` because the clock is still inside the same hour, so by the repo's own
+`hex(dayOfYear*24 + hour)` scheme this **is** the 11.1462 build. A stale cached copy is harmless
+here in a way it was not for PR 3b, because the output is provably unchanged rather than merely
+expected to be.
+
+- [x] Grep first: zero production call sites. The only non-test hits were the definition, the
+      `module.exports` entry, and two comments
+- [x] Function, export entry, and the `optimizer_core.test.js:52` binding removed
+- [x] The three tests handled individually rather than deleted wholesale. The OR-semantics test went
+      with the function. **The two survivors both lost their only AND-vs-OR contrast**, so each now
+      asserts the one-of-two case directly — otherwise nothing in the suite would catch
+      `bothOnMedicareAtStart` silently becoming an OR, which is the exact regression the deleted twin
+      used to make visible. PR 3b's move-the-constant pin is preserved, retargeted to the one helper
+- [x] `ARCHITECTURE.md:208` sweep feasibility-flags node, and the stale "beside its
+      eitherOnMedicareAtStart twin" comment at `optimizer_ui.js:4666`
+- [x] The surviving helper's header comment now records why the twin is gone and says not to bring
+      it back: the either-case is measured through `acaBreachYears`, which is better evidence than
+      the predicate was
+- [x] BYTE-IDENTITY PROVEN, not assumed: **528 scenarios** (8 states x 3 age configs x 11 strategy
+      arms x single/couple, 20 years each) run against `HEAD` and the working tree in separate node
+      processes — **34,057,133 bytes each, identical SHA-256**. `buildVariations` (144 rows) and
+      `buildStrategyFamilies` (192 rows) identical. The export surface differs by exactly one key,
+      the deleted one, and nothing else
+- [x] node 189 -> 188 (one test removed), planner 32/32, doclinks 22/22. Browser at
+      `localhost:8771`: in-page suite 242/242, console at the known 4-fixture baseline,
+      `eitherOnMedicareAtStart` confirmed absent from global scope, `bothOnMedicareAtStart` still
+      resolves and still follows a moved `ELIGIBILITY_AGE`, and a live sweep enumerates 192 rows with
+      all 16 ACA arms present
 
 ---
 

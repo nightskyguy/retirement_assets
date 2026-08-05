@@ -12,7 +12,101 @@ Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner
 
 VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + hour)`, so two branches worked on in the same afternoon produce ADJACENT numbers, and whichever merges first is not necessarily the lower one. P25 was built as v11.13c2 (hour 18) but PR #138 merged v11.13c3 (hour 19) ahead of it, so P25 was renumbered to v11.13c5 on merge. When resolving a version conflict, recompute from the clock rather than taking either side.
 
+**Added 2026-08-05:** **P38, a shipped correctness defect, is now the top-priority item and jumps the queue.** `propwd`, `fixed`, `gk` and the baseline `else` branch report `success: false` with hundreds of thousands of dollars of unfunded spending while the IRA still holds seven figures. Pre-existing and byte-identical before P35 PR 3c (`d68d27f`); that PR only made it visible, because a lapsed ACA plan now falls through to the same path. Diagnosis is complete and measured — see findings.md, "The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry" (2026-08-05). Its section sits at the top of this file rather than in the P29-P37 block, on purpose. It overlaps P30 and P32 and must be settled before either.
+
 MAINTENANCE NOTE: this heading and the per-phase status lines are injected into every turn by the planning hook, so a stale "uncommitted" here reads as a live claim about the working tree. Update them in the same turn you commit, not later.
+
+---
+
+## Phase P38: The baseline/proportional strategies cannot fund their own tax bill (2026-08-05) — HIGH PRIORITY, not started
+
+**This is a shipped correctness defect, not a research phase.** Diagnosis is done, mechanism traced,
+numbers measured, counterfactual fix measured. What remains is a build-and-ship decision. Read the
+findings.md entry first (2026-08-05, top of file); do not re-derive it.
+
+**The defect in one line:** for every strategy outside the bracket / ordered set, the primary IRA draw
+is sized against **pre-tax** income, and none of the three correction passes that follow can go back
+to the IRA — so once Cash, Brokerage and Roth empty, spending goes unfunded next to a seven-figure IRA.
+
+**Reproduce** (`CAP_BASE`, `optimizer_core.test.js:783`) with
+`{ strategy: 'propwd', propWithdraw: 0, stratRate: 0, stratACAMultiple: 0 }`:
+`success: false`, `totals.shortfall` **-304,331** across 13 of 24 years, end-of-plan IRA **893,920**,
+`forcedIRATotal` **0**. The same fixture on shipped `bracket` 22% funds the plan to the dollar by
+forcing **708,183** of extra IRA.
+
+**Mechanism, already traced to lines:**
+1. `yr.additionalSpendNeeded` (`optimizer_core.js:1235`) = `targetSpend + IRMAA - possibleIncome`,
+   and `possibleIncome` (`:1189`) is **gross** — SS plus taxable RMD, pre-tax. The draw is grossed up
+   only for tax on its own dollars, at last year's **effective** rate (`:1709`). Both understatements
+   are deliberate first approximations; the correction passes exist to fix them.
+2. Gap fill for this family (`:1542-1556`) draws Brokerage+Cash then Roth. **No IRA leg.**
+3. Third pass (`:1614-1626`) is Cash then Roth. **Brokerage deliberately excluded** (`:1598-1602`),
+   no IRA leg.
+4. Forced-IRA convergence loop (`:1651`) is gated `yr.isBracketStrategy && !yr.isACAStrategy`, so it
+   never runs. The comment at `:1645-1650` justifies excluding `fixed/propwd/baseline/gk` as
+   "already draw IRA for spending" — **that justification is the bug**, because sizing the draw
+   against pre-tax income is exactly what fails.
+
+The gap is ~$27.6k-$28.2k in *every* year of the run, not just the late ones. Taxable buffers absorb
+it silently until they empty, which is why it presents as a depletion failure rather than a modeling
+error.
+
+**Blast radius (same fixture):** `gk` strands **1,616,166**; `fixed` strands **689,774**; any
+unrecognized strategy string falls to the baseline `else` (`:1400`) and strands **893,920**.
+`propwd` 10% passes **by accident** — its +10% boost over-draws the IRA and the after-tax surplus
+lands in Cash, which the gap fill then spends. Solvency in this family currently depends on a knob
+that has nothing to do with funding.
+
+**Proposed fix, already measured on a scratch copy of the engine:** widen the gate at `:1651` from
+`yr.isBracketStrategy && !yr.isACAStrategy` to `!yr.isACAStrategy && !yr.isOrderedStrategy`. ACA keeps
+its subsidy cliff, `ordered` keeps its own sequence.
+
+| | today | patched |
+|---|---|---|
+| `propwd` 0% success | false | **true** |
+| `totals.shortfall` | -304,331 | **0** |
+| `totals.spend` | 4,263,278 | **4,567,608** (= sum of `targetSpend`) |
+| forcedIRA | 0 | 395,109 |
+| terminal after-tax wealth | 684,010 | **202,859** (-481,152) |
+
+`bracket`, `fixedpct`, `ordered` and `propwd` 50% come out **byte-identical**. `gk` moves -13,316,
+`propwd` 10% -6,110, `fixed` -344,704. The wealth drop is the point, not a regression: the money is
+spent instead of stranded.
+
+**Work items:**
+1. **Confirm the one-line gate change is the right shape** before writing it. The alternative is to
+   fix the *sizing* instead — make `additionalSpendNeeded` net of the tax on guaranteed income — which
+   is more honest but changes the first-pass draw for every strategy and therefore every saved plan,
+   including `bracket`. Recommend the gate change: it is a backstop, it leaves the bracket family
+   byte-identical, and it reuses a convergence loop already proven in this engine.
+2. **Naming / telemetry decision.** `yr.forcedIRA` and `BracketOverage` are bracket-strategy
+   vocabulary. Decide whether the baseline family reuses `forcedIRA` (simplest, but the Annual Details
+   column then means two things) or gets its own counter. `yr.bracketOverage` must stay 0 for these
+   strategies — `yr.bracketTarget` is 0 for them, so `:1695` already yields 0; verify, do not assume.
+3. **Tests.** Add to `optimizer_core.test.js` beside the existing soft-cap block: `propwd` 0% on
+   `CAP_BASE` funds the plan and reports `success: true`; the genuine-ruin case (`propwd` 50%, every
+   account at 0) still reports a shortfall and `success: false`; `bracket` / `fixedpct` / `ordered`
+   stay byte-identical. The suite ran **185 green with this defect live**, so a test that only asserts
+   "no shortfall" on a buffered fixture proves nothing — the fixture must drain.
+4. **Version bump + changelog entry.** This moves numbers on every saved `propwd` / `fixed` / `gk`
+   plan and on shared URLs. It cannot ride along in another PR.
+5. **README/docs check.** Whatever the docs say about Proportional and Reduce funding spending needs
+   to match the new behavior.
+
+**Relationship to neighboring phases — settle P38 first:**
+- **P32** re-examines the *same* forced-IRA loop, exclusion #2 ("the loop never considers Brokerage").
+  P38 changes *who may enter* that loop; P32 changes *which accounts it draws*. Doing P32 first means
+  measuring an account order on a loop half the strategies cannot reach. P32's exclusion #1 (Brokerage
+  out of the third pass) is also visible here: in 2037 and 2038 the run strands $2,196 and $2,752 while
+  Brokerage still holds $39,428 and $8,783.
+- **P30** sweeps the gap-fill constants on the very code path that is failing to reach the IRA. Its
+  `[40, 60]` results would be measured against a broken funding path.
+- **P6** (Simulation Sanity-Check Tests) is the phase that should have caught this. Feed it the
+  invariant this defect violates: **no year may report a shortfall while any account still holds a
+  drawable balance.**
+
+**Constraint carried from the diagnosis pass:** no engine change was made while diagnosing, on
+purpose. Do the fix as its own PR against a clean tree.
 
 ---
 
@@ -604,6 +698,7 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 
 | # | Phase | Description | Status | Blocked by |
 |---|-------|-------------|--------|-----------|
+| **!** | **P38** | **Baseline/proportional strategies cannot fund their own tax bill — shipped defect** | **not started, HIGH — jumps the queue** | — |
 | — | **PF** | UX Polish Batch (9 items, IRMAA fix + MC restructure) | **complete*** | — |
 | — | **PF2** | Item 6 round 2 — bar-chart legend hover/click | **complete** | — |
 | — | **PF3** | MC Stress pass should run current strategy only, not all variations | **complete** | — |

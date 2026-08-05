@@ -2,8 +2,9 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-08-04 (worktree `readme-review-updates-c9df11`, branch `worktrees/next-on-list-55379e`, at `main` = `9014c81`). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
-**P35 PR 3a MERGED as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change). **PR 3b built here** (v11.1448 tokens, byte-identical); PR #148 on branch `worktrees/medicare-age-data-7b2e91` was an earlier attempt at the same change that the user told me to abandon rather than rebase — **ignore it, and close it rather than merging both.**
+**As of:** 2026-08-05 (branch `p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464; the only uncommitted work is P38's two planning files, in [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151), docs only, no engine change). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
+**P35 PR 3a MERGED as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change). **P35 PR 3b MERGED as [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149)** (v11.1448 tokens, byte-identical, plus the doc file-reference gaps); the duplicate attempt PR #148 on branch `worktrees/medicare-age-data-7b2e91` is **CLOSED, not merged** — verified, nothing to do about it.
+**P35 PR 3c MERGED as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150)** (v11.1462 -> v11.1464 on merge, behavior change confined to `aca` rows, proven against `propwd`/`bracket` controls), four commits: the behavior change, the `eitherOnMedicareAtStart` deletion it made possible, the plan record, and the ACA Cliff un-gating. Next review point after it is **PR 3d** (`Basis <= Brokerage` invariant).
 Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
 
 **Current batch (added 2026-08-01):** six new phases P29-P34 from a user punch-list — Hebeler Autopilot, withdrawal policy, asset-mix reverse mapping, brokerage draws, an Insights statistics panel, and conversion-search cost. Four of the six touch questions this repo has ALREADY partly answered, two of them answered NO, so every one of those phases carries an explicit "already ruled out, do not re-derive" block. Read that block before designing anything in the phase; it is there to stop a re-derivation of P24 and P28.
@@ -12,7 +13,7 @@ Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner
 
 VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + hour)`, so two branches worked on in the same afternoon produce ADJACENT numbers, and whichever merges first is not necessarily the lower one. P25 was built as v11.13c2 (hour 18) but PR #138 merged v11.13c3 (hour 19) ahead of it, so P25 was renumbered to v11.13c5 on merge. When resolving a version conflict, recompute from the clock rather than taking either side.
 
-**Added 2026-08-05:** **P38, a shipped correctness defect, is now the top-priority item and jumps the queue.** `propwd`, `fixed`, `gk` and the baseline `else` branch report `success: false` with hundreds of thousands of dollars of unfunded spending while the IRA still holds seven figures. Pre-existing and byte-identical before P35 PR 3c (`d68d27f`); that PR only made it visible, because a lapsed ACA plan now falls through to the same path. Diagnosis is complete and measured — see findings.md, "The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry" (2026-08-05). Its section sits at the top of this file rather than in the P29-P37 block, on purpose. It overlaps P30 and P32 and must be settled before either.
+**Added 2026-08-05:** **P38, a shipped correctness defect, is now the top-priority item and jumps the queue.** `propwd`, `fixed`, `gk` and the baseline `else` branch report `success: false` with hundreds of thousands of dollars of unfunded spending while the IRA still holds seven figures. Pre-existing and byte-identical before P35 PR 3c (`d68d27f`, landed as `f71e0bf`); that PR only made it visible, because a lapsed ACA plan now falls through to the same path. Diagnosis is complete and measured — see findings.md, "The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry" (2026-08-05). Re-verified to the dollar after PR #150 merged (v11.1464), so it is orthogonal to the whole ACA batch. Its section sits at the top of this file rather than in the P29-P37 block, on purpose. It overlaps P30 and P32 and must be settled before either.
 
 MAINTENANCE NOTE: this heading and the per-phase status lines are injected into every turn by the planning hook, so a stale "uncommitted" here reads as a live claim about the working tree. Update them in the same turn you commit, not later.
 
@@ -22,28 +23,30 @@ MAINTENANCE NOTE: this heading and the per-phase status lines are injected into 
 
 **This is a shipped correctness defect, not a research phase.** Diagnosis is done, mechanism traced,
 numbers measured, counterfactual fix measured. What remains is a build-and-ship decision. Read the
-findings.md entry first (2026-08-05, top of file); do not re-derive it.
+findings.md entry first (2026-08-05, "The baseline/proportional strategy family cannot fund its own
+tax bill"); do not re-derive it. Diagnosed at v11.1447 and **re-verified at v11.1464** after PR #150
+merged; every number reproduces to the dollar and the line cites below are post-merge.
 
 **The defect in one line:** for every strategy outside the bracket / ordered set, the primary IRA draw
 is sized against **pre-tax** income, and none of the three correction passes that follow can go back
 to the IRA — so once Cash, Brokerage and Roth empty, spending goes unfunded next to a seven-figure IRA.
 
-**Reproduce** (`CAP_BASE`, `optimizer_core.test.js:783`) with
+**Reproduce** (`CAP_BASE`, `optimizer_core.test.js:782`) with
 `{ strategy: 'propwd', propWithdraw: 0, stratRate: 0, stratACAMultiple: 0 }`:
 `success: false`, `totals.shortfall` **-304,331** across 13 of 24 years, end-of-plan IRA **893,920**,
 `forcedIRATotal` **0**. The same fixture on shipped `bracket` 22% funds the plan to the dollar by
 forcing **708,183** of extra IRA.
 
 **Mechanism, already traced to lines:**
-1. `yr.additionalSpendNeeded` (`optimizer_core.js:1235`) = `targetSpend + IRMAA - possibleIncome`,
-   and `possibleIncome` (`:1189`) is **gross** — SS plus taxable RMD, pre-tax. The draw is grossed up
-   only for tax on its own dollars, at last year's **effective** rate (`:1709`). Both understatements
+1. `yr.additionalSpendNeeded` (`optimizer_core.js:1281`) = `targetSpend + IRMAA - possibleIncome`,
+   and `possibleIncome` (`:1226`) is **gross** — SS plus taxable RMD, pre-tax. The draw is grossed up
+   only for tax on its own dollars, at last year's **effective** rate (`:1760`). Both understatements
    are deliberate first approximations; the correction passes exist to fix them.
-2. Gap fill for this family (`:1542-1556`) draws Brokerage+Cash then Roth. **No IRA leg.**
-3. Third pass (`:1614-1626`) is Cash then Roth. **Brokerage deliberately excluded** (`:1598-1602`),
+2. Gap fill for this family (`:1593-1607`) draws Brokerage+Cash then Roth. **No IRA leg.**
+3. Third pass (`:1665-1677`) is Cash then Roth. **Brokerage deliberately excluded** (`:1649-1653`),
    no IRA leg.
-4. Forced-IRA convergence loop (`:1651`) is gated `yr.isBracketStrategy && !yr.isACAStrategy`, so it
-   never runs. The comment at `:1645-1650` justifies excluding `fixed/propwd/baseline/gk` as
+4. Forced-IRA convergence loop (`:1702`) is gated `yr.isBracketStrategy && !yr.isACAStrategy`, so it
+   never runs. The comment at `:1696-1701` justifies excluding `fixed/propwd/baseline/gk` as
    "already draw IRA for spending" — **that justification is the bug**, because sizing the draw
    against pre-tax income is exactly what fails.
 
@@ -52,12 +55,12 @@ it silently until they empty, which is why it presents as a depletion failure ra
 error.
 
 **Blast radius (same fixture):** `gk` strands **1,616,166**; `fixed` strands **689,774**; any
-unrecognized strategy string falls to the baseline `else` (`:1400`) and strands **893,920**.
+unrecognized strategy string falls to the baseline `else` (`:1451`) and strands **893,920**.
 `propwd` 10% passes **by accident** — its +10% boost over-draws the IRA and the after-tax surplus
 lands in Cash, which the gap fill then spends. Solvency in this family currently depends on a knob
 that has nothing to do with funding.
 
-**Proposed fix, already measured on a scratch copy of the engine:** widen the gate at `:1651` from
+**Proposed fix, already measured on a scratch copy of the engine:** widen the gate at `:1702` from
 `yr.isBracketStrategy && !yr.isACAStrategy` to `!yr.isACAStrategy && !yr.isOrderedStrategy`. ACA keeps
 its subsidy cliff, `ordered` keeps its own sequence.
 
@@ -82,11 +85,11 @@ spent instead of stranded.
 2. **Naming / telemetry decision.** `yr.forcedIRA` and `BracketOverage` are bracket-strategy
    vocabulary. Decide whether the baseline family reuses `forcedIRA` (simplest, but the Annual Details
    column then means two things) or gets its own counter. `yr.bracketOverage` must stay 0 for these
-   strategies — `yr.bracketTarget` is 0 for them, so `:1695` already yields 0; verify, do not assume.
+   strategies — `yr.bracketTarget` is 0 for them, so `:1746` already yields 0; verify, do not assume.
 3. **Tests.** Add to `optimizer_core.test.js` beside the existing soft-cap block: `propwd` 0% on
    `CAP_BASE` funds the plan and reports `success: true`; the genuine-ruin case (`propwd` 50%, every
    account at 0) still reports a shortfall and `success: false`; `bracket` / `fixedpct` / `ordered`
-   stay byte-identical. The suite ran **185 green with this defect live**, so a test that only asserts
+   stay byte-identical. The suite ran **189 green with this defect live**, so a test that only asserts
    "no shortfall" on a buffered fixture proves nothing — the fixture must drain.
 4. **Version bump + changelog entry.** This moves numbers on every saved `propwd` / `fixed` / `gk`
    plan and on shared URLs. It cannot ride along in another PR.
@@ -2346,8 +2349,8 @@ defect larger than any of them, so the single "PR 3" in the table below became f
 | # | PR | Byte-identical | Status |
 |---|---|---|---|
 | 3a | `findUpperLimitByAmount` below the first bracket | **No** — 21 states + `minlimit` everywhere | **DONE 2026-08-04, v11.1447**, merged PR #147 |
-| 3b | Medicare age -> `TAXData.IRMAA.ELIGIBILITY_AGE` | Yes — proven over 144 scenarios | **DONE 2026-08-04**, tokens `111448` |
-| 3c | ACA cap lapses at 65 -> Proportional 0% | No — `aca` rows only | **unblocked** — 3a and 3b are both done |
+| 3b | Medicare age -> `TAXData.IRMAA.ELIGIBILITY_AGE` | Yes — proven over 144 scenarios | **DONE 2026-08-04**, tokens `111448`, merged PR #149 |
+| 3c | ACA cap lapses at 65 -> Proportional 0% | No — `aca` rows only, proven by control | **DONE 2026-08-05, v11.1462** |
 | 3d | `Basis <= Brokerage` invariant | Yes for non-negative brokerage returns; no for MC | not started |
 | 4 | `deathBasisStepUp: 'auto'` + `COMMUNITY_PROPERTY` + `survivorSpendPct` | **No, by decision** | blocked on 3d |
 
@@ -2429,7 +2432,100 @@ removes. `TAXData.IRMAA.ELIGIBILITY_AGE` is now the single source.
   there is nothing to tell a user. Only the `?v=` tokens move (`taxengine.js` in all four pages that
   load it, plus `optimizer_core.js` / `optimizer_ui.js`). `standalone/IncomeTaxPlanner.html` was
   pinned at a stale `optimizer_core.js?v=1111f3` and is now current.
-- **Status:** DONE. **Unblocks** PR 3c, which is the next review point.
+- **Status:** MERGED as [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149)
+  (commit `735a8ee`, merge `494ed43`). **Unblocks** PR 3c, which is the next review point.
+
+### PR 3c — DONE, v11.1462, behavior change confined to `aca` rows
+
+`computeBracketCeiling`'s ACA branch had no age test at all, so an ACA strategy enforced its FPL cap
+at 65, 80 and 95 — protecting a subsidy that ends at Medicare eligibility. Full prediction-then-
+measurement writeup in `findings.md`, "PR 3c: the ACA cap that never ended". Two of the four
+predictions were wrong and the correction is recorded there rather than quietly dropped.
+
+- [x] `acaCapLapsed(age1, age2, alive1, alive2)` — pure, shared. **Every LIVING person** past
+      `TAXData.IRMAA.ELIGIBILITY_AGE`, and deliberately **no `LOOKBACK`**: ACA eligibility is a
+      current-year test where IRMAA charges this year off MAGI from two years ago. The two age gates
+      look alike and are not the same gate; documented at both
+- [x] `yr.acaLapsed` (resolveHousehold) -> `yr.isACAStrategy` (resolveSpendTarget). The lapsed year
+      matches NO branch in `planPrimaryWithdrawals` and falls through to the baseline `else`, which
+      is Proportional 0% line for line. **Releasing the ceiling outright stays rejected**, and the
+      reason is now a comment at the branch: every ACA row carries `stratRate: 0`, so the federal
+      branch would return the 10% bracket, tighter than the cap it lifted
+- [x] **A SECOND SITE, not in the plan and found only by the test.** `beginYear`'s
+      `_stratImpliesConversion` named `'aca'` literally, so a lapsed plan still took January
+      ("conversion year") withdrawal timing while its Proportional twin took December — 34 log
+      columns diverged in year 0. A totals-only equivalence test would have passed
+- [x] `-acaBreach` added to the log row: it was passed into `buildSimYearLogRecord` and never
+      emitted, so a breach year was only ever visible as a total. Leading `-` = no table column;
+      verified live that no column leaked
+- [x] `_isACAUntenable` narrowed `eitherOnMedicareAtStart` -> `bothOnMedicareAtStart`. The either-case
+      is now **measured** through `acaBreachYears` instead of assumed, which stops a 66/62 couple's
+      four real ACA years being erased on day one. `eitherOnMedicareAtStart` is now unused in
+      production — deliberately NOT deleted here, see the follow-up note below
+- [x] `#aca-age-warn` one-Medicare copy was wrong in both directions ("limits apply only to the other
+      person"): the cap is measured on HOUSEHOLD income and does not lift for anyone until both
+      cross. Rewritten, and verified live in all four age cases
+- [x] Docs: `doc-aca-cliff` in the page and the README caveat both state the lapse, the household
+      basis, and — new — that the tool models the cap and **zero dollars of the subsidy**, so an ACA
+      row is a constraint study and not a recommendation
+- [x] 4 new tests (node 185 -> 189), and **both gates mutation-checked in isolation**: reverting the
+      `isACAStrategy` gate fails exactly the 4 lapse tests; reverting only the `beginYear` timing
+      gate fails exactly the equivalence test. The pre-existing `strict ACA` test was retargeted to a
+      new `ACA_LIVE` fixture, because `CAP_BASE` is 66/67 in year 0 and was passing by enforcing the
+      very defect
+- [x] A/B vs `HEAD` in separate processes: `propwd` and `bracket` controls **byte-identical**, only
+      `aca` arms move. Live page reproduces every node number, including the lapsed arm equalling the
+      Proportional 0% control to the dollar
+- [x] Browser at `localhost:8771`: in-page suite 242/242, console at the known 4-fixture baseline,
+      title/version stat/amber BEHAVIOR CHANGE banner all `11.1462`, `?v=` tokens `111462` on the two
+      changed files only (`taxengine.js` did not change and stays `111448`),
+      `standalone/IncomeTaxPlanner.html` clean on the new core. Data-drivenness verified live: at
+      `ELIGIBILITY_AGE = 80` a 66/59 couple loses the warning entirely and an 86/87 couple gains one
+      reading "(age 80+)"
+- **Follow-up, DONE separately (see the PR 3c-cleanup entry below):** `eitherOnMedicareAtStart` was
+  left in place by PR 3c deliberately — dead in production but exported, tested, and half of PR 3b's
+  constant-mobility pin from one PR earlier. Deleted in its own commit rather than inside a behavior
+  change.
+- **Follow-up, separate defect, NOT caused here:** Proportional 0% strands $304,331 on `CAP_BASE`
+  with $894k still in the IRA and reports `success: false`. Identical on `HEAD`, so pre-existing.
+  Surfaced only because the lapsed ACA arm now inherits it.
+- **Status:** DONE, open as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150).
+  Deliberately NOT recorded by commit hash: a plan file that names its own commit goes stale the
+  moment that commit is amended or rebased, which happened twice here before the hash was dropped
+  for good. The PR number is the stable reference. **Unblocks** PR 3d.
+
+### PR 3c-cleanup — `eitherOnMedicareAtStart` deleted, byte-neutral
+
+The OR-sibling had no production caller once PR 3c narrowed `_isACAUntenable` to
+`bothOnMedicareAtStart`. Removed as its own commit: no version bump, no changelog entry, and the
+`?v=` tokens stay at `111462` because the clock is still inside the same hour, so by the repo's own
+`hex(dayOfYear*24 + hour)` scheme this **is** the 11.1462 build. A stale cached copy is harmless
+here in a way it was not for PR 3b, because the output is provably unchanged rather than merely
+expected to be.
+
+- [x] Grep first: zero production call sites. The only non-test hits were the definition, the
+      `module.exports` entry, and two comments
+- [x] Function, export entry, and the `optimizer_core.test.js:52` binding removed
+- [x] The three tests handled individually rather than deleted wholesale. The OR-semantics test went
+      with the function. **The two survivors both lost their only AND-vs-OR contrast**, so each now
+      asserts the one-of-two case directly — otherwise nothing in the suite would catch
+      `bothOnMedicareAtStart` silently becoming an OR, which is the exact regression the deleted twin
+      used to make visible. PR 3b's move-the-constant pin is preserved, retargeted to the one helper
+- [x] `ARCHITECTURE.md:208` sweep feasibility-flags node, and the stale "beside its
+      eitherOnMedicareAtStart twin" comment at `optimizer_ui.js:4666`
+- [x] The surviving helper's header comment now records why the twin is gone and says not to bring
+      it back: the either-case is measured through `acaBreachYears`, which is better evidence than
+      the predicate was
+- [x] BYTE-IDENTITY PROVEN, not assumed: **528 scenarios** (8 states x 3 age configs x 11 strategy
+      arms x single/couple, 20 years each) run against `HEAD` and the working tree in separate node
+      processes — **34,057,133 bytes each, identical SHA-256**. `buildVariations` (144 rows) and
+      `buildStrategyFamilies` (192 rows) identical. The export surface differs by exactly one key,
+      the deleted one, and nothing else
+- [x] node 189 -> 188 (one test removed), planner 32/32, doclinks 22/22. Browser at
+      `localhost:8771`: in-page suite 242/242, console at the known 4-fixture baseline,
+      `eitherOnMedicareAtStart` confirmed absent from global scope, `bothOnMedicareAtStart` still
+      resolves and still follows a moved `ELIGIBILITY_AGE`, and a live sweep enumerates 192 rows with
+      all 16 ACA arms present
 
 ---
 
@@ -2586,12 +2682,11 @@ per-row memo next.
       caught and the browser did: the no-conversion baseline sweep still referenced the deleted
       `baseFamilies` (`optimizer_ui.js:1073`).
 - [x] PR 3a — bracket-lookup floor. **DONE**, v11.1447, merged PR #147
-- [x] PR 3b — Medicare age becomes `TAXData.IRMAA.ELIGIBILITY_AGE`. **DONE**, byte-identical over a
-      144-scenario A/B; the write-up is in the PR 3a-3d replan above
-- [ ] PR 3c — ACA age gate on the shared branch, falling back to Proportional 0% rather than
-      releasing outright; narrow `_isACAUntenable` to `bothOnMedicareAtStart`; update `#aca-age-warn`;
-      predict the `aca` fixture's direction before measuring. The age test is now
-      `TAXData.IRMAA.ELIGIBILITY_AGE`, not a fresh literal
+- [x] PR 3b — Medicare age becomes `TAXData.IRMAA.ELIGIBILITY_AGE`. **DONE**, merged PR #149,
+      byte-identical over a 144-scenario A/B; the write-up is in the PR 3a-3d replan above
+- [x] PR 3c — ACA age gate falling back to Proportional 0%. **DONE**, v11.1462; only `aca` rows move
+      (proven against `propwd`/`bracket` controls). The direction WAS predicted first and two of the
+      predictions were wrong; both corrections are in `findings.md`
 - [ ] PR 3d — `Basis <= Brokerage` invariant
 - [ ] PR 4 — `deathBasisStepUp` enum defaulting `'half'`; `survivorSpendPct` at 100;
       `yr.isLastMFJYear` + `yr.isFirstSingleYear` (hoisted); `sim.prevIRAGain`/`prevBaseReturn`
@@ -2606,8 +2701,10 @@ per-row memo next.
   [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146); PR 3a merged as
   [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147) and it **already moves
   numbers** — the old "PR 3 is the first one that moves numbers" note is superseded by the PR 3a-3d
-  replan above. PR 3b done (byte-identical). Next at the review point: PR 3c, the first of the
-  remaining PRs that moves numbers again. **Depends on:** nothing hard. Its PR 2 unblocks P36 and
+  replan above. PR 3b merged as
+  [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149) (byte-identical). PR 3c built
+  here (v11.1462, `aca` rows only). Next at the review point: **PR 3d**, the `Basis <= Brokerage`
+  invariant. **Depends on:** nothing hard. Its PR 2 unblocks P36 and
   helps P29/P30/P31/P32. Its PR 8 budget problem is P34's argument.
 - **Touches the same gap-fill code as:** P28's open ship decision (`rothGapFill`) and P30's `[40,60]`
   question. Settling P28 and P30 first would mean PR 5's new arm is written against a settled ordering

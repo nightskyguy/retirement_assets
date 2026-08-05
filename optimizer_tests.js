@@ -2159,6 +2159,25 @@ assertEqual(
 	}
 	assertUngated('convEndYear-wrap');
 	assertUngated('taxRateCreep-wrap');
+	assertUngated('doc-aca-cliff');
+
+	// The ACA Cliff options are BUILT by refreshStratRateOptions() rather than written in the
+	// markup, so assertUngated cannot see them and neither can a plain read of the dropdown here:
+	// retirement_optimizer.html calls runTests?.() at top level, which runs BEFORE the
+	// DOMContentLoaded handler that builds the dropdown. Build it explicitly so the assertion is
+	// about the builder rather than about when the suite happened to run.
+	(function acaOptionsUngated() {
+		const sel = document.getElementById('stratRate');
+		if (!sel || typeof refreshStratRateOptions !== 'function') return;   // shared suite; not every page has these
+		refreshStratRateOptions();
+		const aca = [...sel.options].filter(o => o.value.startsWith('aca'));
+		assertEqual(aca.length, 4, 'all four ACA FPL options are offered without nerdknob');
+		// The 400% entry carried a hardcoded ⚠️ that nothing computed — it fired even when 400% was
+		// the only feasible arm and stayed silent on a 200% cap that could fund nothing. Feasibility
+		// needs a simulation, so the honest signal is the Optimizer's computed row flag.
+		assertEqual(aca.some(o => /⚠/.test(o.textContent)), false,
+			'no ACA option carries an uncomputed warning triangle');
+	})();
 
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`);

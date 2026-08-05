@@ -666,6 +666,13 @@ function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, ag
         nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation, stateRateCreep).cumulative / (limit || 1);
     } else if ((inputs.stratACAMultiple ?? 0) > 0) {
         // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
+        // NO AGE TEST HERE, ON PURPOSE. The IRMAA branch above can degrade in place (drop the tier
+        // ceiling, keep a federal one); this branch cannot, because every ACA row carries
+        // stratRate: 0, so falling through to the federal branch would return the 10% bracket —
+        // a TIGHTER ceiling than the cap it was meant to lift. The successor to a lapsed ACA cap
+        // is "no ceiling strategy at all", which only a caller can express. Both callers gate on
+        // `yr.isACAStrategy` (resolveSpendTarget), which is false once `yr.acaLapsed`. A new caller
+        // must do the same or it will re-enforce a cap that ended at Medicare eligibility.
         const FPL_2025 = status === 'MFJ' ? 20440 : 15060;
         limit = Math.round(FPL_2025 * inputs.stratACAMultiple / 100 * cpiRate * (1 + inputs.cpi)) - 1;
         const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
@@ -835,6 +842,11 @@ function buildSimYearLogRecord(p) {
         'BracketTarget': p.bracketTarget,
         'BracketOverage': p.bracketOverage,
         'ForcedIRA': p.forcedIRA,
+        // acaBreach has been passed into this builder since the strict-ACA strategy shipped and was
+        // never emitted, so the year a cap actually bound was only ever visible as a total. Leading
+        // '-' → no table column, same as '-iraG': this is a diagnostic, and the user-facing signal
+        // for a breach year is already the red shortfall row.
+        '-acaBreach': p.acaBreach,
         // Balances
         IRA1: p.balance.IRA1,
         IRA2: p.balance.IRA2,
@@ -893,6 +905,22 @@ function buildSimYearLogRecord(p) {
 // (see its construction in simulate()); `yr` is the per-year context created fresh
 // each iteration. Phases communicate by mutating those two objects.
 
+// True when an ACA FPL cap has nothing left to protect: every LIVING person in the plan is at or
+// past Medicare eligibility. "Living" is the operative word — a survivor who is 66 has lapsed even
+// if the deceased spouse never reached 65.
+//
+// NOT the IRMAA age test used elsewhere in this file, which adds TAXData.IRMAA.LOOKBACK because
+// IRMAA charges this year's premium against MAGI from two years ago. ACA eligibility is a
+// current-year test, so there is no lookback here. Pure; shared by beginYear (which decides the
+// year-0 withdrawal month before ages are resolved) and resolveHousehold. Reads the constant on
+// every call rather than closing over it, so a test can move it.
+function acaCapLapsed(age1, age2, alive1, alive2) {
+    const medAge = TAXData.IRMAA.ELIGIBILITY_AGE;
+    const living = (alive1 ? 1 : 0) + (alive2 ? 1 : 0);
+    const onMed  = (alive1 && age1 >= medAge ? 1 : 0) + (alive2 && age2 >= medAge ? 1 : 0);
+    return living > 0 && onMed === living;
+}
+
 // Start-of-year setup: amortized IRA target, growth rates, withdrawal-timing auto-select, pre-withdrawal growth, and the withdrawal accumulators (netWithdrawals aliases withdrawals).
 function beginYear(sim, yr) {
     const { inputs, balance, log } = sim;
@@ -941,8 +969,16 @@ function beginYear(sim, yr) {
     // _cfSuppressConversionsFromYear). Reading it through the same accessor applyExtraConversion
     // uses is what makes a per-year array and the equivalent scalar + convEndYear the same plan.
     // Years 1+ read the prior year's realized conversion, which was already shape-safe.
+    // 'aca' only implies a conversion while its cap is live: a lapsed ACA year never reaches the
+    // ceiling branch that creates conversion room, so it implies one no more than Proportional
+    // does. Ages are re-derived here rather than read off yr because resolveHousehold has not run
+    // yet — this runs first, and only year 0 consults it. Singles carry birthyear2/die2 = 0
+    // (simulate() normalizes them), which makes alive2 false.
+    const _a1 = sim.currentYear - sim.birthyear1, _a2 = sim.currentYear - sim.birthyear2;
+    const _acaLive = inputs.strategy === 'aca'
+        && !acaCapLapsed(_a1, _a2, _a1 <= inputs.die1, _a2 <= inputs.die2);
     const _stratImpliesConversion =
-          ((inputs.strategy === 'bracket' || inputs.strategy === 'aca') && !_convSuppressedThisYear(inputs, 0))
+          ((inputs.strategy === 'bracket' || _acaLive) && !_convSuppressedThisYear(inputs, 0))
        || _extraConvAmountFor(inputs, 0) > 0;
     const _prevConv    = y > 0 ? (log[y - 1].rothConv ?? 0) : 0;
     yr._useEarly    = y === 0 ? _stratImpliesConversion : (_prevConv > 1000);
@@ -991,6 +1027,7 @@ function resolveHousehold(sim, yr) {
     // income.
     const medicareAge = TAXData.IRMAA.ELIGIBILITY_AGE;
     yr.onMedicare = (yr.alive1 && yr.age1 >= medicareAge ? 1 : 0) + (yr.alive2 && yr.age2 >= medicareAge ? 1 : 0);
+    yr.acaLapsed = acaCapLapsed(yr.age1, yr.age2, yr.alive1, yr.alive2);
     const magiLookback = balance.magiHistory[balance.magiHistory.length - 2];
     yr.IRMAA = calcIRMAA(magiLookback, yr.status, sim.cpiRate, sim.medicareRate, yr.onMedicare);
     // Tier for display/milestones — same lookback MAGI and same age gate as the charge
@@ -1197,7 +1234,16 @@ function resolveSpendTarget(sim, yr) {
     // ACA is a STRICT-cap strategy: it shares the bracket strategy's ceiling math and
     // Cash→Brokerage→Roth gap-fill, but is excluded from the soft-cap forced-IRA fallback
     // (breaching an ACA FPL cap forfeits the premium subsidy — a cliff, not a tax bump).
-    yr.isACAStrategy = inputs.strategy === 'aca';
+    //
+    // The cap LAPSES once every living spouse is on Medicare (yr.acaLapsed, resolveHousehold).
+    // From that year the strategy stops being one: the branch chain in planPrimaryWithdrawals
+    // matches nothing and falls through to the baseline `else`, which is Proportional 0% line for
+    // line. RELEASING THE CEILING OUTRIGHT WAS CONSIDERED AND REJECTED, twice over: every ACA row
+    // carries stratRate: 0, so falling into the federal-bracket branch would land on the 10%
+    // bracket — TIGHTER than the cap it replaced — and an unbounded ceiling collapses
+    // `IRAwd = Math.min(yr.curIRA, room)` to `yr.curIRA`, draining the whole above-goal IRA in the
+    // crossing year. That is a cliff created by the fix, not a policy.
+    yr.isACAStrategy = inputs.strategy === 'aca' && !yr.acaLapsed;
     yr.isBracketStrategy = inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'fixedpct' || yr.isACAStrategy;
     yr.isOrderedStrategy = inputs.strategy === 'ordered';
 
@@ -1313,11 +1359,13 @@ function planPrimaryWithdrawals(sim, yr) {
             let _room = (_nextRate !== undefined)
                 ? getLTCGBracketRoom(_baseOrdinaryInc, yr.status, _nextRate, sim.cpiRate)
                 : _spendGrossNeeded;   // already in the top LTCG bracket — no higher ceiling to top off to
-            if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
+            if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
                 // Don't let the LTCG top-off push total realized income past the active
                 // strategy's own ceiling (IRMAA tier / ACA cliff / bracket ceiling). This
                 // branch (isBrokerageYear) runs INSTEAD of the ceiling-computing branch this
                 // year, so compute it fresh here rather than reading a stale/undefined `limit`.
+                // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
+                // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
                 const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep).limit;
                 _room = Math.min(_room, Math.max(0, _ceil - _baseOrdinaryInc));
             }
@@ -1356,7 +1404,10 @@ function planPrimaryWithdrawals(sim, yr) {
         let IRAwd = Math.max(0, Math.min(curIRAreduce, amortized))
         yr.withdrawals = { IRA: IRAwd, netAmount: IRAwd }
 
-    } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || inputs.strategy === 'aca') {
+    // yr.isACAStrategy rather than inputs.strategy === 'aca': once the cap has lapsed this chain
+    // must NOT match, so the year falls through fixedpct/propwd/ordered (none of which name 'aca')
+    // to the baseline `else` below — Proportional 0%, which is the intended successor.
+    } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
         ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
             computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep));
 
@@ -2997,23 +3048,19 @@ function rankRowsByObjective(rows, objKey, rate = 0) {
     return [...orderedSucc, ...fail];
 }
 
-// True when EITHER person is already on Medicare (65+) at retirement start. Sibling of
-// bothOnMedicareAtStart (just below) but OR: once one spouse is on Medicare, their RMDs/SS
-// push household MAGI past any ACA FPL cap, so an ACA-limit strategy is impractical for the whole
-// household -- used to flag every ACA row untenable, not just the hardcoded 400% one. Pure.
-function eitherOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
-    if (!by1 || !startAge) return false;
-    const startYear  = by1 + startAge;
-    const medAge     = TAXData.IRMAA.ELIGIBILITY_AGE;
-    const p1Medicare = startAge >= medAge;
-    const p2Medicare = hasSpouse && by2 > 0 && (startYear - by2) >= medAge;
-    return hasSpouse ? (p1Medicare || p2Medicare) : p1Medicare;
-}
-
-// The stricter twin: BOTH people already on Medicare when the plan opens, which is when an ACA
-// income cap stops meaning anything at all rather than merely becoming impractical. It gates the
-// ACA family out of the Optimizer's sweep; `eitherOnMedicareAtStart` only flags those rows ⚠️.
+// True when BOTH people are already on Medicare when the plan opens, which is when an ACA income
+// cap stops meaning anything at all: yr.acaLapsed is then true in every year, the engine runs
+// Proportional 0% throughout, and an ACA label describes nothing the row did. It gates the ACA
+// family out of the Optimizer's sweep and flags the rows that reach the table anyway (a plan
+// loaded from a URL, or the CURRENT PLAN row) as untenable.
 // Lived in optimizer_ui.js until the strategy enumeration moved here and needed it.
+//
+// It had an OR-sibling, eitherOnMedicareAtStart, deleted after P35 PR 3c (v11.1462). That one
+// declared a row untenable as soon as ONE spouse was on Medicare, on the reasoning that their
+// RMDs/SS push household MAGI past any FPL cap. The reasoning was right and the conclusion was
+// too broad: a 66/62 couple has real ACA years, and those breach years are now MEASURED through
+// totals.acaBreachYears rather than assumed away on day one. Do not reintroduce it — the
+// measurement is strictly better evidence than the predicate was.
 function bothOnMedicareAtStart(by1, startAge, hasSpouse, by2) {
     if (!by1 || !startAge) return false;
     const startYear  = by1 + startAge;
@@ -3305,8 +3352,9 @@ const MODIFIER_PREFIX = {
  * site exactly what that sweep does and does not cover:
  *   grids            OPTIMIZER_GRIDS or MC_GRIDS
  *   irmaaFamily      sweep the 5 IRMAA ceiling tiers as their own family
- *   acaFamily        sweep the 4 ACA FPL cliffs. The CALLER applies its own gates (nerdknob, and
- *                    bothOnMedicareAtStart — an ACA cap is pointless once both are on Medicare)
+ *   acaFamily        sweep the 4 ACA FPL cliffs. The CALLER applies its own gate — the Optimizer
+ *                    passes bothOnMedicareAtStart, since an ACA cap is pointless once both are on
+ *                    Medicare. MC does not sweep this family at all.
  *   bracketResetsIRMAATier  write stratIRMAATier:-1 onto Fill Bracket rows so a sidebar tier
  *                    selection cannot leak into them
  *   markCashFunding  write fundConversionWithCash:false onto every un-cloned row, so a user who
@@ -3540,7 +3588,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, eitherOnMedicareAtStart, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

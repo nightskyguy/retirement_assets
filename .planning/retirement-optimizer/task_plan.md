@@ -2,7 +2,7 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-08-05 (branch `p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464; the only uncommitted work is P38's two planning files, in [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151), docs only, no engine change). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
+**As of:** 2026-08-05, later in the day. P38 PR 1 (`e8d28d6`, tests only) and PR 2 (`f592c31`, the gate widening, **v11.1468, behavior change**) are COMMITTED but NOT PUSHED, on branch `p38-pr2-widen-forced-ira-gate` stacked on `p38-pr1-shortfall-invariant`, both off `53e8ccf`. Working tree clean. See the P38 section below for measured results. Earlier state: branch `p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464, P38's diagnosis-only planning files merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
 **P35 PR 3a MERGED as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change). **P35 PR 3b MERGED as [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149)** (v11.1448 tokens, byte-identical, plus the doc file-reference gaps); the duplicate attempt PR #148 on branch `worktrees/medicare-age-data-7b2e91` is **CLOSED, not merged** — verified, nothing to do about it.
 **P35 PR 3c MERGED as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150)** (v11.1462 -> v11.1464 on merge, behavior change confined to `aca` rows, proven against `propwd`/`bracket` controls), four commits: the behavior change, the `eitherOnMedicareAtStart` deletion it made possible, the plan record, and the ACA Cliff un-gating. Next review point after it is **PR 3d** (`Basis <= Brokerage` invariant).
 Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
@@ -19,7 +19,55 @@ MAINTENANCE NOTE: this heading and the per-phase status lines are injected into 
 
 ---
 
-## Phase P38: The baseline/proportional strategies cannot fund their own tax bill (2026-08-05) — HIGH PRIORITY, not started
+## Phase P38: The baseline/proportional strategies cannot fund their own tax bill (2026-08-05) — PR 1 + PR 2 DONE (committed, unpushed), PR 3 remaining
+
+**STATUS 2026-08-05, branch `p38-pr2-widen-forced-ira-gate` (stacked on `p38-pr1-shortfall-invariant`):**
+
+- **PR 1 `e8d28d6` — the funding invariant, pinned as a characterization recording.** Test-only, no
+  version bump. 189 -> 205 tests. Probing all 12 strategy arms separated **three** failure classes
+  where the diagnosis had assumed one, so the invariant is scoped to the IRA leg:
+  - **P38** shortfall with the IRA still funded: `propwd` 0% (13 yrs / worst $28,400), `fixed`
+    (14 / $45,827), `gk` (6 / $15,540), baseline `else` (13), lapsed `aca` (13), `propwd` 10%
+    (7 / $964).
+  - **P32** IRA empty, Brokerage funded: **`minlimit` only**, and NOT fixed by anything in P38 -
+    nine consecutive years 2041-2049, **$71,382** total, the first with **$945,376** of Brokerage
+    untouched. Pinned as its own tripwire so P32 starts from measurement.
+  - **convergence** money still reachable: `ordered` CBIR (2 / $93) and RIBC (2 / $73). RIBC strands
+    $73 while holding **$58,597 of Cash** because Cash is last in its order and the third pass never
+    runs a second time. Tagged, not fixed.
+- **PR 2 `f592c31` — the gate widened, v11.1468, behavior change.** Gate is now
+  `!yr.isACAStrategy && !yr.isOrderedStrategy`. All six P38 pins drop to 0. Byte-identical:
+  `bracket`, `minlimit`, `fixedpct`, `propwd` 50%, both `ordered`, **and both pinned-number fixtures
+  (GK totals at `:444`, `OC_BASE` at `:1138`/`:1422`)** - the plan expected those two to move and
+  they do not, their fixtures never reach the backstop, so no re-derivation was needed.
+- **Two tests moved for stale fixtures, not engine faults.** `avgWdRate`'s 4-15% band only held
+  while the engine under-withdrew (`BASE` has $850k against $1.2M of spending; it now depletes fully
+  and the mean is ~22.9%). `CREEP_BASE` had $1.45M against $1.8M, so once the IRA is actually spent
+  `optimizeSpend` correctly returns null at its baseline gate; fixture made solvent.
+- **ACA verified end to end.** Live cap: 7 years, `ForcedIRA` **0** in every one, all 7 flagged,
+  shortfall stands. Lapse at 2033: 21 funded years. 2054-2057: honest ruin, all accounts at 0.
+  Two whole-log assertions rescoped to live-cap years via a new `_capLiveRows` helper, and a new
+  test pins the lapsed tail directly so the decision is asserted rather than merely permitted.
+  **Total spend DROPS $144,193 on `aca live 400%`** - fully funding 21 lapsed years burns the IRA by
+  2054 where the old code limped along partially funded for 25. Greedy year-by-year funding is the
+  engine's existing contract (identical to `bracket`), but it is a visible number change.
+- **`BracketOverage` confirmed 0** across all 13 forced-IRA years, in node and in the browser. That
+  was work item 2's "verify, do not assume"; `forcedIRA` is reused, no new counter, and `fixedpct`
+  was already precedent for `ForcedIRA > 0` with `bracketTarget === 0`.
+- **Golden captures untouched**, as predicted - they record enumeration, never `simulate()`.
+  `sweep_golden.gen.js` regenerates content byte-identical (line endings only).
+- Verified: node 206/32/22, in-page 245/245 without `?nerdknob`.
+
+**REMAINING — PR 3, the sizing fix.** Make `additionalSpendNeeded` net of tax on guaranteed income
+at `:1281`, so the first-pass draw stops under-sizing for **every** strategy including `bracket`.
+The trap is unchanged and is the reason this is its own PR: `possibleIncome` mixes SS (0-85%
+taxable), ordinary pension/RMD, and qualified dividends, so a flat `sim.nominalTaxRate` overstates
+the tax and over-draws. Call `calculateTaxes` on the guaranteed-income base alone and subtract its
+`totalTax`; watch the cost of a 4th tax call per year.
+
+---
+
+### Original diagnosis (retained; superseded above where they disagree)
 
 **This is a shipped correctness defect, not a research phase.** Diagnosis is done, mechanism traced,
 numbers measured, counterfactual fix measured. What remains is a build-and-ship decision. Read the

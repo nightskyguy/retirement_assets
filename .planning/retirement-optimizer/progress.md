@@ -1465,3 +1465,51 @@ User feedback on the baseline-accounting UI:
 - v11.1464, changelog entry added and the sixth-oldest dropped. `?v=` bumped on `optimizer_ui.js`,
   `optimizer_core.js` and `optimizer_tests.js`; `optimizer_tests.js` had been stale at `1111f3`.
 
+
+## 2026-08-05 (later) — P38 PR 1 + PR 2: the funding backstop
+
+- **PR 1 `e8d28d6`, tests only, no version bump.** Pinned the funding invariant as a
+  characterization recording before fixing anything, the same pattern `sweep_golden.js` uses, so the
+  fix lands as a diff on existing lines rather than as a test appearing from nowhere. 189 -> 205.
+- **THE DIAGNOSIS ASSUMED ONE DEFECT; PROBING ALL 12 ARMS FOUND THREE.** Writing the invariant as
+  "no shortfall while ANY account has a balance" would have left it permanently red for reasons P38
+  is not allowed to fix:
+  - P38 (IRA still funded) - the six arms the fix targets.
+  - **P32 (IRA empty, Brokerage funded) - `minlimit` only, and worse than recorded: nine
+    consecutive years, $71,382, first one with $945,376 of Brokerage sitting there.** Its IRA is
+    already at zero, so widening the gate cannot touch it. Own tripwire, pinned to the dollar.
+  - **Convergence - `ordered` strands $73 while holding $58,597 of Cash** (RIBC puts Cash last; the
+    third pass funds the gap, recomputes tax, and nothing loops back for the tax that recompute just
+    created). Tagged and left alone; `ordered` is deliberately out of the backstop.
+- **PR 2 `f592c31`, v11.1468, behavior change.** Gate went to
+  `!yr.isACAStrategy && !yr.isOrderedStrategy`. All six pins to 0. propwd 0%: shortfall -304,331 ->
+  0, spend +304,330, finalNW 684,010 -> 202,859, forcedIRA 0 -> 395,109.
+- **THE PLAN PREDICTED THREE PINNED-NUMBER TESTS WOULD BREAK AND ALL THREE ARE BYTE-IDENTICAL.**
+  The GK totals at `:444` and `OC_BASE` at `:1138`/`:1422` never reach the backstop because their
+  fixtures are well funded. Measuring beat predicting; no re-derivation was needed.
+- **Two tests DID move, and both were stale fixtures rather than engine faults.** `avgWdRate`'s
+  4-15% band only ever held because the engine under-withdrew - `BASE` has $850k against $1.2M of
+  spending and now depletes fully, so the mean is ~22.9%. `CREEP_BASE` ($1.45M against $1.8M) now
+  ends at zero, so `optimizeSpend` correctly returns null at its baseline gate and the creep tests,
+  none of which are about solvency, needed a solvent fixture.
+- **ACA came out exactly as specified.** Live cap: 7 years, ForcedIRA 0 in every one, all 7 flagged.
+  Lapse 2033: 21 funded years. 2054-2057: honest ruin. Two whole-log assertions were silently
+  mixing live and lapsed years and are now scoped via `_capLiveRows`; a new test pins the lapsed
+  tail so the post-lapse decision is asserted, not merely permitted.
+- **WATCH THIS ONE: `aca live 400%` total spend DROPS $144,193.** Fully funding the 21 lapsed years
+  burns the IRA out by 2054, where the old code limped along partially funded for 25. Greedy
+  year-by-year funding is the engine's existing contract and `bracket` has always behaved this way,
+  but it is a real user-visible number moving in the unintuitive direction.
+- `BracketOverage` verified 0 across all 13 forced-IRA years in node AND in the browser, so
+  `forcedIRA` is reused with no new counter. `fixedpct` was already precedent.
+- Docs: ForcedIRA tooltip dropped "ABOVE the bracket/IRMAA ceiling" (meaningless where there is no
+  ceiling); Proportional / Reduce / IRA Draw % gap-fill chains gained their IRA tail; the Annual
+  Details bullet un-scoped from the Fill Bracket / IRMAA family.
+- Changelog states the ACA exclusion as intended behavior in the BODY, per explicit user direction:
+  a reader who still sees a shortfall on ACA Cliff must not read their own correct result as a bug.
+- Verified: node 206/32/22, in-page 245/245 without `?nerdknob`, served engine reproduces node to
+  the dollar, `sweep_golden.gen.js` content byte-identical.
+- GOTCHA: `sweep_golden.gen.js` rewrites the file with LF, so it always shows as modified on Windows
+  even when the content is unchanged. Check with `git diff --ignore-cr-at-eol` before believing it.
+- GOTCHA: `orderedSeq` accepts only `CBIR` / `RIBC` / `BIRC`. Anything else silently falls back to
+  CBIR, so two "different" ordered arms can produce identical output and look like a bug.

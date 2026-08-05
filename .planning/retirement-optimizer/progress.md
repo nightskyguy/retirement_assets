@@ -1414,3 +1414,11 @@ User feedback on the baseline-accounting UI:
   `bothOnMedicareAtStart` still resolves and still returns false for a 66/68 couple at
   `ELIGIBILITY_AGE = 67`, and a live sweep enumerates 192 rows with all 16 ACA arms present.
 
+- SHIPPED as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150), two commits kept
+  separate at the user's request: the behavior change, then the deletion it made possible. The
+  intermediate `docs(plan): name the real PR 3c commit hash` commit was squashed away and the
+  self-referential hash removed from the plan file entirely — it had already gone stale twice (once
+  from an amend, once from this rewrite). PR number is the stable reference; hashes are not.
+- Both commits verified INDEPENDENTLY green so a bisect lands on a working tree either way: commit 1
+  node 189/189, commit 2 node 188/188. Code tree after the rewrite diffed against the pre-rewrite
+  branch: empty outside `.planning/`.

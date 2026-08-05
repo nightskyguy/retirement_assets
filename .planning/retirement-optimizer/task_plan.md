@@ -4,7 +4,7 @@ Goal: Complete open features from the original priority list plus deferred items
 
 **As of:** 2026-08-04 (worktree `readme-review-updates-c9df11`, branch `worktrees/planning-with-files-1492fc`, at `main` = `494ed43`, working tree clean, nothing uncommitted). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
 **P35 PR 3a MERGED as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change). **P35 PR 3b MERGED as [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149)** (v11.1448 tokens, byte-identical, plus the doc file-reference gaps); the duplicate attempt PR #148 on branch `worktrees/medicare-age-data-7b2e91` is **CLOSED, not merged** — verified, nothing to do about it.
-**P35 PR 3c BUILT HERE 2026-08-05** (v11.1462, behavior change confined to `aca` rows, proven against `propwd`/`bracket` controls). PR not yet opened. Next review point after it is **PR 3d** (`Basis <= Brokerage` invariant).
+**P35 PR 3c OPEN as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150)** (v11.1462, behavior change confined to `aca` rows, proven against `propwd`/`bracket` controls), two commits: the behavior change, then the `eitherOnMedicareAtStart` deletion it made possible. Next review point after it is **PR 3d** (`Basis <= Brokerage` invariant).
 Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
 
 **Current batch (added 2026-08-01):** six new phases P29-P34 from a user punch-list — Hebeler Autopilot, withdrawal policy, asset-mix reverse mapping, brokerage draws, an Insights statistics panel, and conversion-search cost. Four of the six touch questions this repo has ALREADY partly answered, two of them answered NO, so every one of those phases carries an explicit "already ruled out, do not re-derive" block. Read that block before designing anything in the phase; it is there to stop a re-derivation of P24 and P28.
@@ -2392,10 +2392,10 @@ predictions were wrong and the correction is recorded there rather than quietly 
 - **Follow-up, separate defect, NOT caused here:** Proportional 0% strands $304,331 on `CAP_BASE`
   with $894k still in the IRA and reports `success: false`. Identical on `HEAD`, so pre-existing.
   Surfaced only because the lapsed ACA arm now inherits it.
-- **Status:** DONE, committed on `worktrees/planning-with-files-1492fc`. Deliberately NOT recorded
-  by commit hash: a plan file that names its own commit goes stale the moment that commit is
-  amended or rebased, which already happened once here. The PR number is the stable reference and
-  gets filled in on merge, the way every other entry in this file does. **Unblocks** PR 3d.
+- **Status:** DONE, open as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150).
+  Deliberately NOT recorded by commit hash: a plan file that names its own commit goes stale the
+  moment that commit is amended or rebased, which happened twice here before the hash was dropped
+  for good. The PR number is the stable reference. **Unblocks** PR 3d.
 
 ### PR 3c-cleanup — `eitherOnMedicareAtStart` deleted, byte-neutral
 

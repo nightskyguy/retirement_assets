@@ -17,7 +17,9 @@ const STORAGE_KEY = 'SLCRetireOptimizeScenario';
 const OLD_STORAGE_KEY = 'retirementScenarios';
 
 // Feature flags
-// NERD_KNOBS: shows advanced controls (Monte Carlo params, optimizer objective/score, ACA, etc.).
+// NERD_KNOBS: shows advanced controls (Monte Carlo params, GK guardrails, the 💵 cash-funded
+// sweep dimension, etc.). The optimizer objective selector graduated out of this in PF13 and the
+// ACA Cliff options in v11.1464 — do not add either back to this list.
 // Enabled via ?nerdknob URL param, OR flipped at runtime by the hidden Documentation-page checkbox
 // (see setNerdKnob / applyNerdKnobVisibility). Therefore a `let`, not a `const` — it can change
 // after load. The runtime flip is NOT persisted to the URL.
@@ -96,9 +98,10 @@ function applyNerdKnobVisibility() {
     // 💵 legend — only meaningful once nerdknob is sweeping the cash-funded arm
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
-    // Docs: ACA Cliff strategy discussion paragraph (nerd-only strategy)
-    const docAcaCliff = document.getElementById('doc-aca-cliff');
-    if (docAcaCliff) docAcaCliff.style.display = NERD_KNOBS ? '' : 'none';
+    // The ACA Cliff documentation paragraph used to be hidden here. It is now always visible, like
+    // every other strategy's paragraph, so there is nothing to toggle — the inline display:none was
+    // dropped from the markup rather than being switched off from JS, which keeps it visible even
+    // if this function never runs.
     // Monte Carlo nerd panels (initMCTab reads _mcNerdMode() → NERD_KNOBS)
     if (typeof initMCTab === 'function') initMCTab();
     // Strategy panel (GK params gated) + bracket dropdown (ACA options gated, item 12)
@@ -731,14 +734,25 @@ function _runOptimizerNow() {
         const bracketOveragePct = totalYears > 0 ? ovYears / totalYears : 0;
         const isBracketInfeasible = overrides.strategy === 'bracket' && bracketOveragePct > 0.5;
         // ACA is strict: any year its FPL cap can't fund spending makes the plan untenable (the
-        // subsidy is forfeited rather than the cap being broken). PF13 item 3: it is ALSO untenable
-        // whenever either spouse is already on Medicare at start — their RMDs/SS push household MAGI
-        // past any FPL cap, so an ACA-limit strategy is impractical for the whole household. This
-        // flags all four ACA rows consistently (not just the hardcoded 400% label) in that case.
+        // subsidy is forfeited rather than the cap being broken).
+        //
+        // NARROWED from eitherOnMedicareAtStart to bothOnMedicareAtStart (P35 PR 3c). PF13 item 3
+        // flagged the row whenever EITHER spouse was already on Medicare, on the reasoning that the
+        // older spouse's RMDs/SS push household MAGI past any FPL cap. That reasoning is still
+        // right, but it is now MEASURED instead of assumed: those years breach the cap and land in
+        // acaBreachYears, so the row is flagged by evidence from its own simulation. What the
+        // assumption got wrong was the other side — a 66/62 couple has four real ACA years, and
+        // declaring the whole plan untenable on day one erased them.
+        //
+        // The remaining case is not a proxy for anything: when BOTH are past Medicare age at start,
+        // yr.acaLapsed is true in every year, the engine runs Proportional 0% throughout, and the
+        // row's ACA label describes nothing it did. The sweep already omits the family here
+        // (acaDisabled, below); this still catches a plan loaded from a URL or restored as the
+        // CURRENT PLAN row, which bypass that gate.
         const acaBreachYears = res.totals?.acaBreachYears ?? 0;
-        const acaMedicareIrrelevant = eitherOnMedicareAtStart(
+        const acaNeverApplies = bothOnMedicareAtStart(
             base.birthyear1, base.startAge, !!base.hasSpouse, base.hasSpouse ? (base.birthyear2 || 0) : 0);
-        const isACAUntenable = overrides.strategy === 'aca' && (acaBreachYears > 0 || acaMedicareIrrelevant);
+        const isACAUntenable = overrides.strategy === 'aca' && (acaBreachYears > 0 || acaNeverApplies);
         const row = {
             _id: results.length,
             _isNoConv: noConv,
@@ -798,9 +812,10 @@ function _runOptimizerNow() {
     const families = buildStrategyFamilies(base, {
         grids: OPTIMIZER_GRIDS,
         irmaaFamily: true,
-        // ACA cliff arms are nerdknob-only (item 12): the ACA cliff model is rough. They are also
-        // skipped once both people are on Medicare at start, when an income cap protects nothing.
-        acaFamily: NERD_KNOBS && !acaDisabled,
+        // ACA cliff arms are swept for everyone now; the age gate is the only thing that removes
+        // them, and it removes them for a reason that is about the plan rather than the audience —
+        // once both people are on Medicare at start an income cap protects nothing.
+        acaFamily: !acaDisabled,
         // A Fill Bracket row must not inherit a sidebar IRMAA-tier selection; the tiers are swept
         // as their own family.
         bracketResetsIRMAATier: true,
@@ -1471,7 +1486,7 @@ function renderOptimizerTable(results) {
             ? (r._isACAUntenable
                 ? ((r._acaBreachYears ?? 0) > 0
                     ? `ACA subsidy cliff: spending cannot be met within the FPL cap in ${r._acaBreachYears} year(s) — plan untenable at this spend (strict ACA never breaches the cap)`
-                    : 'ACA not applicable — a spouse is already on Medicare at the start, so the household cannot hold income to an ACA subsidy cap')
+                    : `ACA not applicable — everyone is already on Medicare (age ${TAXData.IRMAA.ELIGIBILITY_AGE}+) at the start, so there is no premium subsidy for a cap to protect. This row simulates as Proportional 0%.`)
                 : 'Bracket target exceeded in >50% of years — income sources already push MAGI above this ceiling')
             : 'Click to load this strategy';
         const cells = columns.map(col => {
@@ -4652,15 +4667,17 @@ function refreshStratRateOptions() {
  * - Exactly one person ≥65                → advisory warning, options still active.
  * Called from updateProfileAgeDisplay(), refreshStratRateOptions(), and startAge oninput.
  */
-// bothOnMedicareAtStart() moved to optimizer_core.js beside its eitherOnMedicareAtStart twin when
-// the strategy enumeration moved there and needed it. Pure, and still used by the warning below.
+// bothOnMedicareAtStart() lives in optimizer_core.js — it moved there when the strategy enumeration
+// did and needed it. Pure, and still used by the warning below.
 
 function updateACAWarning() {
     const sel     = document.getElementById('stratRate');
     const warnEl  = document.getElementById('aca-age-warn');
     if (!sel || !warnEl) return;
 
-    // No ACA options present (nerdknob off, item 12) → nothing to warn about.
+    // No ACA options present → nothing to warn about. Kept as a guard rather than removed with the
+    // nerdknob gate: refreshStratRateOptions() rebuilds this dropdown, and a warning about options
+    // that are not in it would be worse than silence.
     if (![...sel.options].some(o => o.value.startsWith('aca'))) { warnEl.style.display = 'none'; return; }
 
     const by1       = +val('birthyear1') || 0;
@@ -4689,12 +4706,32 @@ function updateACAWarning() {
         if (first) { sel.value = first.value; updateBracketFeedback(); }
     }
 
+    // EVERY MESSAGE BELOW NAMES THE START YEAR AND THE AGES IN IT, and that is the whole point of
+    // this block rather than a flourish. The age readouts beside the birth-year fields show ages
+    // TODAY and never move when Retirement Start Age changes, while this gate is about ages at
+    // retirement start. A user who sets a 1966 birth year sees "Age 59" next to it and is then told
+    // they are on Medicare — two true statements about two different years, one of which the page
+    // never showed. It reads as a stale control, and it was reported as one.
+    const p1AgeAtStart = startAge;
+    const p2AgeAtStart = startYear - by2;
+    const you  = `you will be ${p1AgeAtStart}`;
+    const them = `your spouse ${p2AgeAtStart}`;
+
     if (bothMedicare) {
-        warnEl.textContent = `⚠ Both persons will be on Medicare at retirement start (age ${medAge}+) — ACA options are unavailable.`;
+        warnEl.textContent = hasSpouse
+            ? `⚠ At retirement start in ${startYear}, ${you} and ${them} — both on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`
+            : `⚠ At retirement start in ${startYear} ${you}, already on Medicare (age ${medAge}+), so there is no premium subsidy for an income cap to protect. ACA options are unavailable. Lower Retirement Start Age to model pre-Medicare years.`;
         warnEl.style.display = 'block';
     } else if (oneMedicare) {
-        const who = p1Medicare ? 'You' : 'Spouse';
-        warnEl.textContent = `⚠ ${who} will already be on Medicare at retirement start — ACA income limits apply only to the other person.`;
+        // Was "ACA income limits apply only to the other person", which was wrong in both
+        // directions: the FPL cap is tested against HOUSEHOLD MAGI, so the Medicare spouse's
+        // RMDs and Social Security count against it, and the cap does not lift for anyone until
+        // the younger spouse reaches Medicare age too (P35 PR 3c, yr.acaLapsed).
+        const onName  = p1Medicare ? 'You'  : 'Your spouse';
+        const onPoss  = p1Medicare ? 'your' : 'their';
+        const offName = p1Medicare ? 'your spouse' : 'you';
+        const offVerb = p1Medicare ? 'stays' : 'stay';
+        warnEl.textContent = `⚠ At retirement start in ${startYear}, ${you} and ${them}. ${onName} will already be on Medicare (age ${medAge}+). The FPL cap is measured against HOUSEHOLD income, so ${onPoss} RMDs and Social Security count against it while ${offName} ${offVerb} on an ACA plan. The cap lifts once both of you reach ${medAge}, after which this strategy simulates as Proportional 0%.`;
         warnEl.style.display = 'block';
     } else {
         warnEl.style.display = 'none';
@@ -4760,18 +4797,27 @@ function generateStratRateOptions() {
     }
 
     // ── ACA FPL cliffs ────────────────────────────────────────────────────────
-    // Nerdknob only (item 12): the ACA cliff model is rough, so these options are hidden from the
-    // bracket dropdown unless ?nerdknob is on (or the hidden runtime toggle is enabled).
+    // Available to everyone. These were nerdknob-only ("the ACA cliff model is rough"), which is
+    // still true and is now said plainly in the strategy's documentation instead of being enforced
+    // by hiding the control. The age gate below is the only thing that removes them.
+    //
+    // The 400% entry used to carry a hardcoded ⚠️ and no other entry did. Nothing computed it: it
+    // was a string literal, so it fired on every scenario including ones where 400% was the only
+    // FEASIBLE arm, and stayed silent on a 200% cap that could not fund a single year. PF13 saw it
+    // ("not just the hardcoded 400% label") and worked around it in the results table rather than
+    // removing it. Feasibility cannot be known without simulating, which the dropdown does not do —
+    // the Optimizer's ⚠️ row flag is computed from acaBreachYears and is the honest signal.
+    //
     // FPL base (2025): 2-person $20,440; 1-person $15,060. CPI-approx for future years.
     const FPL_BASE_YEAR = 2025;
     const fplBase = isMFJ ? 20440 : 15060;
     const fplCpiAdj = Math.pow(1 + cpi, Math.max(0, currentYear - FPL_BASE_YEAR + 1));
-    const acaEntries = NERD_KNOBS ? [
+    const acaEntries = [
         { pct: 200, label: 'ACA 200% FPL' },
         { pct: 250, label: 'ACA 250% FPL' },
         { pct: 300, label: 'ACA 300% FPL' },
-        { pct: 400, label: 'ACA 400% FPL ⚠️' },
-    ] : [];
+        { pct: 400, label: 'ACA 400% FPL' },
+    ];
     for (const { pct, label } of acaEntries) {
         const limit = Math.round(fplBase * pct / 100 * fplCpiAdj);
         options.push({ value: `aca${pct}`, label: `${label}  ·  $${limit.toLocaleString()}`, limit });

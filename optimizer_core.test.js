@@ -49,7 +49,6 @@ const optimizeConversionAmount = core.optimizeConversionAmount;
 const baselineScoreOf = core.baselineScoreOf;
 const selectConversionCandidates = core.selectConversionCandidates;
 const rankRowsByObjective = core.rankRowsByObjective;
-const eitherOnMedicareAtStart = core.eitherOnMedicareAtStart;
 const taxCreepFactor = core.taxCreepFactor;
 const breakEvenHeirsRate = core.breakEvenHeirsRate;
 const lowestBreakEvenHeirsRate = core.lowestBreakEvenHeirsRate;
@@ -818,11 +817,142 @@ test('soft cap (fixedpct): capped % with spend over cap still funds spending fro
     assert(_sumAbsShortfall(r.log) < 100, `expected ~0 total shortfall, got ${Math.round(_sumAbsShortfall(r.log))}`);
 });
 
-test('strict ACA: cap is never breached — shortfall persists and is flagged untenable', () => {
-    const r = simulate({ ...CAP_BASE, strategy: 'aca', stratRate: 0, stratACAMultiple: 400 });
+// CAP_BASE's people are 66 and 67 in year 0, so an ACA cap on it lapses before the first row is
+// written (P35 PR 3c) and the strategy runs as Proportional 0% for all 30 years. That made it the
+// wrong fixture for strict-cap behavior — it passed the three assertions below by enforcing a cap
+// that had ended decades earlier. ACA_LIVE moves both birth years under Medicare eligibility and
+// changes nothing else, so the cap is genuinely in force for the early years.
+const ACA_LIVE = { ...CAP_BASE, birthyear1: 1968, birthyear2: 1967 };
+const ACA_ARM  = { strategy: 'aca', stratRate: 0, stratACAMultiple: 400 };
+
+test('strict ACA (cap in force): cap is never breached — shortfall persists and is flagged untenable', () => {
+    const r = simulate({ ...ACA_LIVE, ...ACA_ARM });
     assert(_sumForcedIRA(r.log) === 0, `ACA must not force IRA above the FPL cap, got ${Math.round(_sumForcedIRA(r.log))}`);
     assert(_sumAbsShortfall(r.log) > 1000, 'ACA at 400% FPL with $160k spend should leave a real shortfall');
     assert((r.totals.acaBreachYears ?? 0) > 0, 'expected acaBreachYears > 0 (untenable flag)');
+});
+
+// ── ACA cap lapses at Medicare eligibility (P35 PR 3c) ────────────────────────
+// Premium subsidies end when Medicare begins, so the FPL cap has nothing left to protect. The
+// successor is Proportional 0% — deliberately NOT "release the ceiling", which would collapse
+// IRAwd = min(curIRA, room) to curIRA and drain the whole above-goal IRA in the crossing year.
+
+// loopMs is wall-clock and differs between two runs of identical inputs; nothing else in the row is
+// nondeterministic, so it is the only exclusion.
+const _logSansTiming = log => JSON.stringify(log.map(({ loopMs, ...rest }) => rest));
+
+test('ACA lapse: an already-Medicare household simulates identically to Proportional 0%', () => {
+    // Not "similar" — the lapsed branch chain falls through to the same baseline `else` that
+    // propwd 0% reaches, so every logged year must match key for key. A near-miss here means the
+    // fall-through picked up some other branch on the way down.
+    const lapsed = simulate({ ...CAP_BASE, ...ACA_ARM });
+    const prop   = simulate({ ...CAP_BASE, strategy: 'propwd', propWithdraw: 0, stratRate: 0, stratACAMultiple: 0 });
+    const a = _logSansTiming(lapsed.log), b = _logSansTiming(prop.log);
+    if (a !== b) {
+        const ra = lapsed.log.find((r, i) => JSON.stringify({ ...r, loopMs: 0 }) !== JSON.stringify({ ...prop.log[i], loopMs: 0 }));
+        const diff = ra ? Object.keys(ra).filter(k => k !== 'loopMs'
+            && JSON.stringify(ra[k]) !== JSON.stringify(prop.log[lapsed.log.indexOf(ra)][k])) : [];
+        assert(false, `lapsed ACA must match Proportional 0%; first divergence year ${ra && ra.year} in [${diff}]`);
+    }
+    assert((lapsed.totals.acaBreachYears ?? 0) === 0,
+        `a lapsed cap cannot be breached, got ${lapsed.totals.acaBreachYears}`);
+    // NOT asserted: that the shortfall goes to zero. It does not, and expecting it to was wrong —
+    // Proportional 0% strands $304k of its own on this fixture, identically before and after this
+    // change. The lapse inherits its successor's behavior, warts included; that is the point.
+});
+
+test('ACA lapse: the cap is what changed, not the fixture — CAP_BASE breached before this', () => {
+    // Guards the reverse mistake: someone "fixes" a future failure by making CAP_BASE unable to
+    // breach at all, and this whole area starts passing vacuously. Move eligibility past the
+    // household's ages and the identical inputs must go back to breaching.
+    const revived = withEligibilityAge(80, () => simulate({ ...CAP_BASE, ...ACA_ARM }));
+    const lapsed  = simulate({ ...CAP_BASE, ...ACA_ARM });
+    assert((revived.totals.acaBreachYears ?? 0) > 0,
+        'with eligibility at 80 the 66/67 household is pre-Medicare and the cap must bind again');
+    // The size of the change, not just its sign. A cap enforced for 30 years past Medicare strands
+    // strictly more spending than one that ends on time, and the plan spends strictly less under
+    // it. Terminal wealth moves the OTHER way and is not asserted here: enforcing a dead cap leaves
+    // money in the IRA precisely because it refused to fund the spend goal, so "richer at the end"
+    // is the symptom, not the benefit.
+    assert(_sumAbsShortfall(revived.log) > _sumAbsShortfall(lapsed.log),
+        'enforcing a lapsed cap must strand MORE spending than lifting it');
+    assert(revived.totals.spend < lapsed.totals.spend,
+        'and must fund LESS of the spend goal over the plan');
+});
+
+// A dead person logs age as '—', so a numeric comparison on the raw column silently drops those
+// years from BOTH sides of a filter. Youngest-living age, or null when nobody is left.
+const _minLivingAge = e => {
+    const ages = [e.age1, e.age2].filter(a => typeof a === 'number');
+    return ages.length ? Math.min(...ages) : null;
+};
+
+test('ACA lapse: mid-plan crossing stops the breaches instead of releasing the ceiling', () => {
+    // ACA_LIVE opens at 58/59, so the cap binds for the first several years and lapses when the
+    // YOUNGER of the two reaches eligibility. Both halves are asserted: breaches before, none after.
+    const r = simulate({ ...ACA_LIVE, ...ACA_ARM });
+    const medAge = TAXData.IRMAA.ELIGIBILITY_AGE;
+    const pre  = r.log.filter(e => _minLivingAge(e) !== null && _minLivingAge(e) <  medAge);
+    const post = r.log.filter(e => _minLivingAge(e) !== null && _minLivingAge(e) >= medAge);
+    assert(pre.length > 0 && post.length > 0, 'fixture must span the crossing');
+    assert(pre.some(e => e['-acaBreach']), 'the cap must actually bind while both are pre-Medicare');
+    assert(!post.some(e => e['-acaBreach']), 'no year may breach a cap that has lapsed');
+    // The rejected alternative shows up here. Releasing the ceiling collapses
+    // IRAwd = min(curIRA, room) to curIRA, so the crossing year drains the whole above-goal IRA at
+    // once. Proportional 0% draws for spending, so the crossing year must stay in the same league
+    // as the year after it.
+    const cross = post[0], next = post[1];
+    assert(next && cross.IRAwd <= Math.max(4 * next.IRAwd, 100000),
+        `crossing-year IRA draw ${Math.round(cross.IRAwd)} looks like a one-year drain vs ${Math.round(next.IRAwd)} the year after`);
+});
+
+test('ACA untenable flag is monotonic: a lower FPL multiple is a STRICTER cap', () => {
+    // Asked directly by a user who saw one of four ACA rows flagged ⚠️ and reasonably wondered
+    // whether the flagging was arbitrary. It is not, and the invariant is worth pinning because it
+    // is the thing that makes the flag readable: 200% FPL is a TIGHTER income limit than 400%, so
+    // the set of flagged arms must be downward-closed. If 400% breaches, 200/250/300 must too.
+    // The reverse — a loose cap flagged while a tighter one is clean — would be incoherent.
+    const FPLS = [200, 250, 300, 400];
+    // Spread wide enough that some scenarios flag none, some all, and some only the tightest.
+    // Social Security is swept too and is the lever that makes a PARTIAL set reachable: CAP_BASE's
+    // $72k of combined benefits already exceeds the 300% cap on its own, so every arm breaches on
+    // unavoidable income alone and the interesting middle never appears.
+    const scenarios = [];
+    for (const spendGoal of [40000, 60000, 90000])
+        for (const IRA1 of [200000, 1500000])
+            for (const [ss1, ss2] of [[0, 0], [24000, 16000]])
+                for (const STATEname of ['CA', 'TX'])
+                    scenarios.push({ spendGoal, IRA1, ss1, ss2, STATEname });
+    let sawPartial = false, sawNone = false, sawAll = false;
+    for (const s of scenarios) {
+        const base = { ...ACA_LIVE, ...s, strategy: 'aca', stratRate: 0 };
+        const flagged = FPLS.map(f => (simulate({ ...base, stratACAMultiple: f }).totals.acaBreachYears ?? 0) > 0);
+        const n = flagged.filter(Boolean).length;
+        if (n === 0) sawNone = true; else if (n === FPLS.length) sawAll = true; else sawPartial = true;
+        // downward-closed: everything at or below the loosest flagged multiple must be flagged
+        for (let i = 0; i < FPLS.length; i++)
+            for (let j = 0; j < i; j++)
+                assert(!(flagged[i] && !flagged[j]),
+                    `${JSON.stringify(s)}: ${FPLS[i]}% flagged but the stricter ${FPLS[j]}% is not`);
+    }
+    // Guard against the invariant holding only because nothing ever flagged.
+    assert(sawNone && sawPartial && sawAll,
+        `fixture must span all three shapes, got none=${sawNone} partial=${sawPartial} all=${sawAll}`);
+});
+
+test('ACA lapse: it is LIVING spouses, not both people — a survivor past 65 lapses alone', () => {
+    // Person 1 dies at 60, never Medicare-eligible; person 2 is 67 at start. Under a "both people
+    // reached 65" reading the cap would run to the end of the plan. Under "every living spouse" it
+    // lapses the year person 1 dies — and the survivor years are exactly where a widow's halved
+    // bracket would otherwise strand spending under a cap protecting nothing.
+    const r = simulate({ ...ACA_LIVE, ...ACA_ARM, birthyear1: 1968, die1: 60, birthyear2: 1959, die2: 90 });
+    const married = r.log.filter(e => typeof e.age1 === 'number');
+    const widowed = r.log.filter(e => e.age1 === '—');
+    assert(married.length > 0 && widowed.length > 0, 'fixture must span the death');
+    assert(widowed.every(e => !e['-acaBreach']),
+        'once the only pre-Medicare spouse is gone the cap must lapse for the survivor');
+    assert(married.some(e => e['-acaBreach']),
+        'and it must have been binding while the younger spouse was alive (else the test proves nothing)');
 });
 
 test('regression: ample buffers cover the gap → no forced IRA break', () => {
@@ -1686,20 +1816,6 @@ test('rankRowsByObjective: Tax Flexibility cutoff handles negative after-tax NW'
     assert(order[0] === 'best', `negative-NW cutoff must keep the best row eligible, got ${order.join(',')}`);
 });
 
-test('eitherOnMedicareAtStart: OR semantics, single-filer, and guard', () => {
-    // both under 65 → false
-    assert(eitherOnMedicareAtStart(1965, 60, true, 1963) === false, 'both <65 → false');
-    // self <65 but spouse (older) 65+ at start → true  (self born 1965 start age 60 → startYear 2025; spouse 1955 → 70)
-    assert(eitherOnMedicareAtStart(1965, 60, true, 1955) === true, 'spouse already on Medicare → true');
-    // self 65+ → true regardless of spouse
-    assert(eitherOnMedicareAtStart(1958, 66, true, 1970) === true, 'self 65+ → true');
-    // single filer 65+ → true; single filer <65 → false
-    assert(eitherOnMedicareAtStart(1958, 66, false, 0) === true, 'single 65+ → true');
-    assert(eitherOnMedicareAtStart(1965, 60, false, 0) === false, 'single <65 → false');
-    // missing inputs → false (matches bothOnMedicareAtStart guard)
-    assert(eitherOnMedicareAtStart(0, 66, true, 1950) === false, 'missing birthyear → false');
-});
-
 // ── Medicare eligibility age is DATA, not a literal (P35 PR 3b) ────────────────
 // Every "is this person on Medicare" gate reads TAXData.IRMAA.ELIGIBILITY_AGE. Asserting the gates
 // fire at 65 proves nothing — a hardcoded 65 passes that too. So each test below MOVES the constant
@@ -1719,17 +1835,24 @@ test('ELIGIBILITY_AGE: the constant exists and ships at 65', () => {
         'the federal std-deduction age bump is a separate 65 and must stay separate');
 });
 
-test('ELIGIBILITY_AGE: both at-start helpers follow the constant', () => {
+test('ELIGIBILITY_AGE: the at-start Medicare helper follows the constant', () => {
+    // Covered two helpers until eitherOnMedicareAtStart was deleted, dead after P35 PR 3c.
     // Today a 66-year-old is already on Medicare when the plan opens.
-    assert(eitherOnMedicareAtStart(1960, 66, false, 0) === true, 'age 66 vs 65 → on Medicare');
+    assert(bothOnMedicareAtStart(1960, 66, false, 0) === true,  'single at 66 vs 65 → on Medicare');
+    // startYear = 1960 + 66 = 2026; spouse born 1958 is 68, so both are past 65 today.
+    assert(bothOnMedicareAtStart(1960, 66, true, 1958) === true, 'couple 66/68 vs 65 → both on Medicare');
     withEligibilityAge(67, () => {
-        assert(eitherOnMedicareAtStart(1960, 66, false, 0) === false, 'age 66 vs 67 → not yet');
-        // startYear = 1960 + 66 = 2026; spouse born 1958 is 68 — one qualifies, one does not.
-        assert(eitherOnMedicareAtStart(1960, 66, true, 1958) === true,  'OR: older spouse qualifies');
-        assert(bothOnMedicareAtStart(1960, 66, true, 1958)  === false, 'AND: younger spouse does not');
+        assert(bothOnMedicareAtStart(1960, 66, false, 0) === false, 'single at 66 vs 67 → not yet');
+        // Same couple, one on each side of the moved constant: the 68-year-old qualifies and the
+        // 66-year-old does not. This is the assertion that catches an AND silently becoming an OR
+        // — it used to be carried by contrast with the deleted twin, so it is made directly now.
+        assert(bothOnMedicareAtStart(1960, 66, true, 1958) === false,
+            'AND: the younger spouse does not qualify at 67, so the couple does not either');
         // startYear = 1960 + 68 = 2028; spouse born 1956 is 72 — both past 67.
-        assert(bothOnMedicareAtStart(1960, 68, true, 1956)  === true,  'AND: both past the new age');
+        assert(bothOnMedicareAtStart(1960, 68, true, 1956) === true, 'AND: both past the new age');
     });
+    assert(TAXData.IRMAA.ELIGIBILITY_AGE === 65,
+        'the constant must be restored on the way out, or every later test runs on a moved gate');
 });
 
 test('ELIGIBILITY_AGE: the Medicare base premium starts at the constant, not at 65', () => {
@@ -2134,7 +2257,7 @@ test('buildVariations: the declared divergences from the Optimizer sweep are pin
     assert(!rows.some(r => (r.stratIRMAATier ?? -1) >= 0),
         'MC must not sweep the IRMAA-ceiling family (the Optimizer does, tiers 0-4)');
     assert(!rows.some(r => (r.stratACAMultiple ?? 0) > 0),
-        'MC must not sweep the ACA family (the Optimizer does, nerdknob-gated)');
+        'MC must not sweep the ACA family (the Optimizer does, for everyone, subject to the age gate)');
 });
 
 // ── P35 PR 1: the Optimizer enumeration golden ────────────────────────────────
@@ -2222,7 +2345,11 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
         const rows = buildStrategyFamilies(g.base, {
             grids: OPTIMIZER_GRIDS,
             irmaaFamily: true,
-            acaFamily: nerd && !bothOnMedicareAtStart(g.base.birthyear1, g.base.startAge,
+            // No `nerd &&` any more: the ACA family is swept for everyone, and only the age gate
+            // removes it. The four captures still reproduce because the one recorded with the
+            // nerdknob OFF (`default`) has both people on Medicare at start, so its ACA rows were
+            // suppressed by age rather than by the flag. Checked before the gate was dropped.
+            acaFamily: !bothOnMedicareAtStart(g.base.birthyear1, g.base.startAge,
                 !!g.base.hasSpouse, g.base.hasSpouse ? (g.base.birthyear2 || 0) : 0),
             bracketResetsIRMAATier: true,
             markCashFunding: nerd,
@@ -2277,14 +2404,15 @@ test('buildStrategyFamilies: the options are what separate the two sweeps, nothi
     assert(early.length === late.length, 'and it is the same row either way, only moved');
 });
 
-test('bothOnMedicareAtStart: the stricter twin of eitherOnMedicareAtStart', () => {
-    // Moved out of optimizer_ui.js in P35 PR 2 and never covered there. The pair differ only in
-    // AND vs OR, and the ACA family hangs off which one is used.
-    const both = bothOnMedicareAtStart, either = eitherOnMedicareAtStart;
+test('bothOnMedicareAtStart: AND semantics, single filer, and the missing-input guard', () => {
+    // Moved out of optimizer_ui.js in P35 PR 2 and never covered there. It had an OR twin,
+    // eitherOnMedicareAtStart, deleted once P35 PR 3c left it without a caller. The one-of-two row
+    // below is the case the twin used to contrast against, so it is asserted on its own terms.
+    const both = bothOnMedicareAtStart;
     assert(both(1960, 65, true, 1952) === true,  'both 65+ at start');
     assert(both(1960, 60, true, 1962) === false, 'neither 65 at start');
-    assert(both(1960, 65, true, 1975) === false, 'one 65+, one not: AND is false');
-    assert(either(1960, 65, true, 1975) === true, '...but OR is true, which is the whole difference');
+    assert(both(1960, 65, true, 1975) === false,
+        'one 65+, one not: AND is false, and this is the row an OR would get wrong');
     assert(both(1960, 65, false, 0) === true,    'a single filer needs only themselves');
     assert(both(0, 65, true, 1952) === false,    'missing inputs are not an assertion of anything');
 });

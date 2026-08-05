@@ -1313,3 +1313,155 @@ User feedback on the baseline-accounting UI:
 - VERIFIED: node optimizer_core 185/185, taxPaymentPlanner 32/32, doclinks 22/22. Browser on localhost:8770 — in-page suite 242/242, console at the known 4-fixture baseline, all three `?v=` tokens confirmed `111448` in the live DOM, and `Retirement_Projection.html` / `standalone/IncomeTaxPlanner.html` / `standalone/irmaa_and_rmds.html` all load clean on the new engine.
 - No title bump and no changelog entry, following PR 1+2: output is provably identical, so there is nothing to tell a user. Found in passing: `standalone/IncomeTaxPlanner.html` was pinned at `optimizer_core.js?v=1111f3`, many versions stale, and is now current.
 - Port note: 8767 from `launch.json` was held by a python process that answered nothing (`curl` returned `000`), so a second config on 8770 was added rather than killing someone else's server. `.claude/` is gitignored, so that config is worktree-local.
+
+## Session: 2026-08-04 (worktree readme-review-updates-c9df11, branch worktrees/planning-with-files-1492fc) — context restore, plan reconciled with merged PRs
+
+- `/plan` invoked on an existing plan, so this was a restore, not an init. All three planning files
+  already live in `.planning/retirement-optimizer/`; `.active_plan` = `retirement-optimizer`.
+- RECONCILED THE PLAN AGAINST GIT AND GITHUB rather than trusting the file: `main` = `494ed43`, the
+  merge of [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149) (P35 PR 3b + the doc
+  file-reference gaps). The plan header still read "PR 3b built here (uncommitted)". Fixed in four
+  places — header, the PR 3a-3d table row, the PR 3b status line, and the P35 checklist.
+- The duplicate PR #148 is CLOSED (verified via `gh`, not assumed), so the standing "close it rather
+  than merging both" instruction is discharged. `gh pr list --state open` returns nothing: no open PRs.
+- Working tree clean; branch is level with `main` (0 ahead, 0 behind).
+- `session-catchup.py` ran clean with no unsynced context to report (exit 0, no output).
+- NEXT REVIEW POINT: **P35 PR 3c** — the ACA cap lapses at Medicare age and falls back to Proportional
+  0% rather than releasing outright. Unblocked by 3a and 3b, both merged.
+
+
+## Session: 2026-08-05 (worktree readme-review-updates-c9df11, branch worktrees/planning-with-files-1492fc) — P35 PR 3c, the ACA cap that never ended
+
+- PREDICTED BEFORE MEASURING, because the plan required it, and it paid for itself twice: **two of
+  the four predictions were wrong** and both are recorded in `findings.md` rather than quietly
+  fixed. (1) "shortfall -> ~0" — no, $304,331, because Proportional 0% has that shortfall of its own
+  on the fixture, identically on `HEAD`. (2) "final net worth up" — no, DOWN $1,888,543 -> $684,010,
+  and down is CORRECT: the old behavior looked $1.2M richer because it refused to fund the spend
+  goal. Terminal wealth ranks starvation as success; the honest directions are funded **spend**
+  ($3,832,599 -> $4,263,278) and **breach years** (24 -> 0).
+- THE FIXTURE WAS INSIDE THE DEFECT. `CAP_BASE` is 66 and 67 in year 0, so the one `strict ACA` test
+  in the suite was asserting the behavior of a cap enforced from 66 to 96 — it passed *because* of
+  the bug. Retargeted to a new `ACA_LIVE` (birth years moved under eligibility, nothing else), and a
+  separate test now pins the lapse at the original ages.
+- A SECOND SITE NEEDED THE GATE AND WAS NOT IN THE PLAN. `beginYear`'s `_stratImpliesConversion`
+  named `'aca'` literally, so a lapsed plan still took January ("conversion year") withdrawal timing
+  while its Proportional twin took December — 34 log columns diverged in year 0. Found ONLY because
+  the equivalence test compares the whole log; a totals-only test would have shipped the wrong
+  withdrawal month. Gate extracted to a shared pure `acaCapLapsed()`.
+- THE TRAP I DID NOT WALK INTO: putting the age test inside `computeBracketCeiling` next to the IRMAA
+  one. It cannot degrade in place — every ACA row carries `stratRate: 0`, so falling through to the
+  federal branch returns the **10% bracket, tighter than the cap it lifted**. The successor to a
+  lapsed cap is "no ceiling strategy at all", which only a caller can express. Documented at the
+  branch so the next caller does not re-enforce it.
+- NO LOOKBACK, ON PURPOSE. The IRMAA gates use `ELIGIBILITY_AGE + LOOKBACK` because IRMAA charges
+  this year's premium against MAGI from two years ago. ACA eligibility is a current-year test. Same
+  constant, different gate, and they now say so in place.
+- `acaBreach` had been passed into `buildSimYearLogRecord` since the strict-ACA strategy shipped and
+  never emitted — a breach year was only ever visible as a total. Now `'-acaBreach'` (leading `-` =
+  no table column). Verified live: 87 headers, none leaked.
+- `_isACAUntenable` narrowed from `eitherOnMedicareAtStart` to `bothOnMedicareAtStart`. The either-
+  case is now measured through `acaBreachYears` instead of assumed, which stops a 66/62 couple's four
+  real ACA years being erased on day one. `eitherOnMedicareAtStart` is dead in production as a
+  result; left in place deliberately — it is half of PR 3b's constant-mobility pin from one PR ago,
+  and deleting it is a byte-neutral PR of its own, not a rider on a behavior change.
+- BOTH GATES MUTATION-CHECKED IN ISOLATION (the first attempt botched the restore and ran with both
+  mutations applied, which proved nothing — redone one at a time): reverting `isACAStrategy` fails
+  exactly the 4 lapse tests; reverting only the `beginYear` timing gate fails exactly the equivalence
+  test.
+- SCOPE PROVEN BY MEASUREMENT, NOT BY READING THE DIFF: `propwd` 0% and `bracket` 22% controls run
+  against the `HEAD` engine and the working tree in separate processes are byte-identical. Only `aca`
+  arms move. The lapsed arm equals the `propwd` control to the dollar on all four metrics.
+- VERIFIED: node optimizer_core 189/189 (was 185), taxPaymentPlanner 32/32, doclinks 22/22. Browser
+  on localhost:8771 — in-page suite 242/242, console at the known 4-fixture baseline, title/version
+  stat/amber BEHAVIOR CHANGE banner all `11.1462`, `standalone/IncomeTaxPlanner.html` clean on the
+  new core. Live data-drivenness: at `ELIGIBILITY_AGE = 80` a 66/59 couple loses the ACA warning
+  entirely and an 86/87 couple gains one reading "(age 80+)"; the engine's breach count and terminal
+  wealth return to the `HEAD` numbers.
+- `?v=` bumped to `111462` on `optimizer_core.js` and `optimizer_ui.js` only, in both pages that load
+  them. `taxengine.js` did not change this time and stays at `111448`.
+- FOUND, NOT FIXED, NOT CAUSED HERE: Proportional 0% strands $304,331 on `CAP_BASE` with $894k still
+  in the IRA and reports `success: false`. Byte-identical on `HEAD`. It only became visible because
+  the lapsed ACA arm now inherits it.
+- Port note: 8767 from `launch.json` was again held by a python process answering nothing
+  (`curl` -> `000`), so a second config on 8771 was added rather than killing someone else's server.
+
+
+## Session: 2026-08-05 (cont.) — `eitherOnMedicareAtStart` deleted, the follow-up PR 3c refused to carry
+
+- Dead in production the moment PR 3c narrowed `_isACAUntenable` to `bothOnMedicareAtStart`. Grep
+  first, delete second: zero production call sites, only the definition, the `module.exports` entry
+  and two comments.
+- THE PART THAT WAS NOT MECHANICAL. Two surviving tests referenced the deleted twin, and both used
+  it the same way — as the OR side of an AND-vs-OR contrast. Deleting the reference would have left
+  `bothOnMedicareAtStart` with no test that fails if it silently becomes an OR, which is the exact
+  regression the twin made visible. Each now asserts the one-of-two case (66/68 against a moved
+  `ELIGIBILITY_AGE = 67`) directly. PR 3b's move-the-constant pin survives, retargeted to one helper.
+- The surviving helper's header comment now records why the twin is gone and says not to bring it
+  back: the either-case is MEASURED through `totals.acaBreachYears`, which is strictly better
+  evidence than a predicate applied on day one.
+- BYTE-IDENTITY PROVEN RATHER THAN ARGUED, even though the change is a deletion of unreachable code:
+  528 scenarios (8 states x 3 age configs x 11 strategy arms x single/couple, 20 years each) run
+  against `HEAD` and the working tree in separate node processes — **34,057,133 bytes each, identical
+  SHA-256**. `buildVariations` 144 rows and `buildStrategyFamilies` 192 rows identical. Export
+  surface differs by exactly one key, the deleted one.
+- NO `?v=` BUMP, and the reason is the version scheme rather than laziness: the minor is
+  `hex(dayOfYear*24 + hour)` and the clock is still inside the hour that produced 11.1462, so this
+  IS that build. A stale cache is harmless here in a way it was not for PR 3b, because the output is
+  proven identical rather than expected to be. No title bump, no changelog entry.
+- VERIFIED: node optimizer_core 188/188 (189 minus the deleted OR-semantics test), taxPaymentPlanner
+  32/32, doclinks 22/22. Browser on localhost:8771 — in-page suite 242/242, console at the known
+  4-fixture baseline, `eitherOnMedicareAtStart` confirmed absent from global scope,
+  `bothOnMedicareAtStart` still resolves and still returns false for a 66/68 couple at
+  `ELIGIBILITY_AGE = 67`, and a live sweep enumerates 192 rows with all 16 ACA arms present.
+
+- SHIPPED as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150), two commits kept
+  separate at the user's request: the behavior change, then the deletion it made possible. The
+  intermediate `docs(plan): name the real PR 3c commit hash` commit was squashed away and the
+  self-referential hash removed from the plan file entirely — it had already gone stale twice (once
+  from an amend, once from this rewrite). PR number is the stable reference; hashes are not.
+- Both commits verified INDEPENDENTLY green so a bisect lands on a working tree either way: commit 1
+  node 189/189, commit 2 node 188/188. Code tree after the rewrite diffed against the pre-rewrite
+  branch: empty outside `.planning/`.
+
+## Session: 2026-08-05 (cont.) — user bug report on the ACA age gate: three findings, only one of them the reported one (v11.1464)
+
+- REPORTED: ACA options stay disabled after changing birth years; suspected the gate is evaluated
+  only at load. DISPROVEN by driving real input events across 9 transitions — `startAge`,
+  `birthyear1` and `birthyear2` all re-run the gate live. `birthyear1` was isolated deliberately
+  (hold the other two so only it moves the verdict) because the first attempt changed it without
+  flipping the outcome, which proves nothing.
+- THE REAL CAUSE was `startAge`, still at its default 65 in the reported URL: person 1 starts
+  retirement AT Medicare age whatever their birth year, and the spouse is 79 in the 2031 start year.
+  Correct behavior, invisible reasoning.
+- AND THE REASON IT LOOKED BROKEN is a two-age-bases collision on one screen. `#age-display-1/2`
+  show ages TODAY and never move when Retirement Start Age changes (verified by moving startAge
+  65 -> 55 and watching them sit still); the gate is about ages at retirement START. The page showed
+  59/73 and the warning talked about 65/79 without naming a year. Warning now names the start year
+  and both ages in it, and says which field to change.
+- THE ⚠️ THE USER WAS LOOKING AT WAS A STRING LITERAL. `{ pct: 400, label: 'ACA 400% FPL ⚠️' }` —
+  only that entry, computed from nothing, so it fired even when 400% was the only feasible arm and
+  stayed silent on a 200% cap that could fund nothing. PF13 saw it ("not just the hardcoded 400%
+  label") and worked around it in the results table rather than removing it. Removed now.
+- THE FLAG THAT IS COMPUTED WAS CHECKED, NOT ASSUMED: 1008 scenarios, zero cases where a looser cap
+  is flagged while a tighter one is clean. Every partial set is downward-closed and a lone flag is
+  always 200%. Pinned by a new test. Getting that test to reach the partial case needed Social
+  Security in the sweep — `CAP_BASE`'s $72k of benefits already exceeds the 300% cap alone, so every
+  arm breaches on unavoidable income and the middle never appears.
+- ACA UN-GATED from the nerdknob: dropdown options, the sweep family, and the documentation
+  paragraph (its inline `display:none` removed from the markup rather than switched off in JS, so it
+  survives even if the bootstrap does not run). Golden safety CHECKED BEFORE the gate came out: of
+  the four captures only `default` was recorded with the nerdknob off, and its base has both people
+  on Medicare, so its ACA rows were suppressed by age anyway. All four still reproduce.
+- ONE OF MY OWN TESTS FAILED FOR A GOOD REASON: the in-page "four ACA options offered" assertion
+  failed while a live DOM read showed all four. `runTests?.()` is called at top level in
+  `retirement_optimizer.html` and runs BEFORE the `DOMContentLoaded` handler that builds the
+  dropdown — the test was asserting on bootstrap timing, not on the builder. It now calls
+  `refreshStratRateOptions()` itself.
+- VERIFIED: node optimizer_core 189/189, taxPaymentPlanner 32/32, doclinks 22/22. Browser on
+  localhost:8771 WITHOUT `?nerdknob` (the state that used to hide everything) — in-page suite
+  245/245, console at the known 4-fixture baseline, all four ACA options present and none carrying a
+  triangle, doc paragraph visible, sweep enumerates 16 ACA rows where it previously enumerated zero,
+  and all five warning branches read correctly including the singular/plural verb agreement.
+- v11.1464, changelog entry added and the sixth-oldest dropped. `?v=` bumped on `optimizer_ui.js`,
+  `optimizer_core.js` and `optimizer_tests.js`; `optimizer_tests.js` had been stale at `1111f3`.
+

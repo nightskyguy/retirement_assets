@@ -1,5 +1,150 @@
 # Findings & Decisions
 
+## A hardcoded ⚠️, a gate nobody could see, and two age bases side by side (2026-08-05, v11.1464)
+
+A user reported the ACA options staying disabled after changing birth years, and suspected the age
+gate was only evaluated at load. Three separate things turned out to be involved and only one of
+them was the thing reported.
+
+**The reported bug does not exist.** Driving `startAge`, `birthyear1` and `birthyear2` with real
+input events across 9 transitions, the gate re-ran correctly every time. `birthyear1` was checked in
+isolation (hold `startAge` at 60 and `birthyear2` at 1990, so only `birthyear1` moves the verdict)
+because a first attempt changed it without flipping the outcome, which proves nothing.
+
+**What actually happened is a two-age-bases collision.** `#age-display-1` and `#age-display-2` show
+ages **today** and never move when Retirement Start Age changes — verified by moving `startAge` from
+65 to 55 and watching them sit still. The ACA gate is about ages at **retirement start**. On the
+reported scenario those are 59/73 and 65/79, in 2026 and 2031. The page showed the first pair and
+the warning talked about the second without naming a year. Being told you are on Medicare beside a
+field reading "Age 59" is indistinguishable from a stale control. The warning now names the start
+year and both ages in it.
+
+**The ⚠️ the user was actually looking at was a string literal.** `optimizer_ui.js` built the ACA
+dropdown entries as `{ pct: 400, label: 'ACA 400% FPL ⚠️' }` — only the 400% entry, computed from
+nothing. So it fired on every scenario, including ones where 400% was the only feasible arm, and
+stayed silent on a 200% cap that could not fund a single year. PF13 noticed it ("not just the
+hardcoded 400% label") and worked around it in the results table instead of removing it. Removed.
+
+**The flag that IS computed was checked and is correct.** The question asked was whether the ⚠️ on
+Optimizer rows is arbitrary. Measured over **1008 scenarios** (7 spend goals x 4 IRA sizes x 2 cash
+levels x 3 states x 3 age pairs x single/couple), flagging FPL 200/250/300/400 by
+`totals.acaBreachYears > 0`:
+
+| flagged set | scenarios |
+|---|---|
+| none | 460 |
+| `{200}` | 44 |
+| `{200,250}` | 12 |
+| `{200,250,300}` | 94 |
+| all four | 398 |
+| **a looser cap flagged while a tighter one is not** | **0** |
+
+Every partial set is downward-closed, and when exactly one arm is flagged it is **always 200%** —
+the tightest cap. That is the invariant that makes the flag readable, and it is now pinned by a test
+rather than left as an emergent property. Getting the test to exercise the partial case needed
+Social Security in the sweep: `CAP_BASE`'s $72k of combined benefits already exceeds the 300% cap on
+its own, so every arm breaches on unavoidable income and the interesting middle never appears.
+
+**Un-gating the ACA family from the nerdknob was safe for the goldens, and that was checked before
+the gate came out, not after.** Of the four `OPT_GOLDEN` captures only `default` was recorded with
+`nerdKnobs: false`, and its base has both people on Medicare at start — so its ACA rows were
+suppressed by age, not by the flag. All four still reproduce.
+
+**One test I wrote failed for a reason worth recording.** The in-page assertion that four ACA
+options are offered failed while a live DOM read showed all four present. `retirement_optimizer.html`
+calls `runTests?.()` at top level, which runs BEFORE the `DOMContentLoaded` handler that builds the
+dropdown. The test was asserting on bootstrap timing rather than on the builder; it now calls
+`refreshStratRateOptions()` itself.
+
+---
+
+## PR 3c: the ACA cap that never ended — prediction, then measurement (2026-08-05, v11.1462)
+
+The plan requires the direction to be predicted first, because the only ACA fixture in the suite is
+one whose ages make the bug invisible-by-passing. Recorded here so the measurement can contradict it.
+
+**The fixture is inside the defect.** `CAP_BASE` (`optimizer_core.test.js:783`) has
+`birthyear1: 1960`, `birthyear2: 1959`, `startYear: 2026` — ages **66 and 67 in year 0**, and it runs
+30 years. Both people are past Medicare eligibility before the simulation's first row. The
+`strict ACA` test at `:821` therefore asserts the behavior of an FPL cap being enforced from age 66
+to age 96, which is exactly what PR 3c removes.
+
+**Predicted, per assertion:**
+
+| assertion | now | after | why |
+|---|---|---|---|
+| `_sumForcedIRA === 0` | passes | **still passes** | `forcedIRA` is written only by the soft-cap loop at `:1651`, gated `isBracketStrategy && !isACAStrategy`. With the lapse, `isACAStrategy` goes false, and `isBracketStrategy` is `bracket\|minlimit\|fixedpct\|isACAStrategy` — `'aca'` is in none of those, so it goes false too. The loop still never runs. Passing for a **different reason** than before. |
+| `_sumAbsShortfall > 1000` | passes | **FAILS** | the lapsed year takes the baseline `else`, which draws proportionally from IRA/Brokerage/Cash to meet spend. $2.1M of IRA against a $160k goal funds it. Shortfall -> ~0. |
+| `acaBreachYears > 0` | passes | **FAILS -> 0** | `yr.acaBreach` is set only under `yr.isACAStrategy` (`:1630`, `:1696`). Never true in this fixture after the change. |
+
+Two of the three assertions are predicted to break, and **breaking is the correct outcome** — they
+pin the defect. The fix is not to relax them: it is to move the strict-ACA fixture to birth years
+where ACA is actually live, and add a separate test that pins the lapse at these ages.
+
+**Predicted direction of the `aca` arm overall:** final net worth **up**, shortfall **to zero**,
+`acaBreachYears` **to zero**, for any scenario whose people are already 65+. An ACA row that was
+ranked untenable on a 66/67 household will now rank as an ordinary Proportional 0% row — which is
+what it always was in reality.
+
+**Predicted to NOT move:** every scenario where at least one living spouse is under 65. The lapse
+requires **all** living spouses past the age, so a 66/62 couple keeps the cap for four more years,
+and the older spouse's RMDs/SS still push household MAGI through it. Those rows should stay
+untenable, and now by measurement (`acaBreachYears`) rather than by the
+`eitherOnMedicareAtStart` assumption.
+
+**Not predicted, deliberately:** whether any ACA row starts *winning* a sweep. It cannot be read as
+a recommendation either way — item 3 of the engine survey stands. The tool prices the cap's cost and
+zero dollars of the subsidy it buys.
+
+### MEASURED (2026-08-05, v11.1462). Two of the predictions above were WRONG.
+
+Per-assertion, the prediction held: `forcedIRA` stayed 0, and both the shortfall and breach
+assertions failed exactly as called. The two directional claims did not.
+
+**Wrong #1: "shortfall -> ~0".** It went to **$304,331**, not zero. The reason is the thing the
+prediction did not check: **Proportional 0% has a $304,331 shortfall of its own on this fixture**,
+and it is byte-identical on `HEAD` and on the working tree. The lapse does not fund the plan; it
+hands the plan to its successor, warts included. Confirmed by running the same three arms against
+both engines in separate processes:
+
+| arm | HEAD | v11.1462 |
+|---|---|---|
+| `propwd` 0% @66/67 (control) | 304,331 short / $4,263,278 spend / $684,010 NW | **identical** |
+| `bracket` 22% @66/67 (control) | 1 short / $4,567,608 spend / $196,871 NW | **identical** |
+| `aca` 400% @66/67 | 24 breach yrs / 735,010 short / $3,832,599 spend / $1,888,543 NW | 0 breach / 304,331 / $4,263,278 / $684,010 |
+| `aca` 400% @58/59 | 32 breach yrs / 1,463,587 short / $5,019,726 spend / $1,929,570 NW | 7 breach / 790,504 / $5,692,809 / $117,427 |
+
+**Only the `aca` arms move.** That is the scope proof, and it is a measurement rather than a reading
+of the diff. The lapsed arm's four numbers are the propwd control's four numbers exactly.
+
+**Wrong #2, and this one was a reasoning error rather than a missing fact: "final net worth up".**
+It went **DOWN**, $1,888,543 -> $684,010. Predicting terminal wealth as the success direction was
+backwards. The old behavior looked $1.2M richer *because* it refused to fund the spend goal and left
+the money in the IRA — the wealth was the symptom of the defect, not a benefit being lost. The
+direction that actually says the fix worked is **spend**, which rose $3,832,599 -> $4,263,278, and
+**breach years**, 24 -> 0. Any future "did this help?" question on a strategy that can decline to
+spend has to be asked about funded spending first; terminal wealth alone will rank starvation as
+success. That is the same trap as the survey's item 3 in a different coat.
+
+**The @58/59 arm is the one that proves the gate is a gate and not a switch.** 7 breach years, and
+7 is exactly the count of pre-Medicare years (born 1968, plan opens 2026 at 58, crosses at 2033).
+Every pre-lapse year breaches; no post-lapse year does.
+
+**Found while building this, not predicted at all: a SECOND site needed the gate.** `beginYear` picks
+the year-0 withdrawal month from `_stratImpliesConversion`, which named `'aca'` literally
+(`optimizer_core.js:957`). A lapsed ACA plan was still taking January timing — the "this is a
+conversion year" schedule — while its Proportional twin took December, so the two diverged in year 0
+on 34 log columns. Caught only because the equivalence test compared the whole log rather than a few
+totals. A totals-only test would have passed with the wrong withdrawal month shipped. The gate is now
+a shared pure helper, `acaCapLapsed(age1, age2, alive1, alive2)`, called from both sites.
+
+**Also found: `acaBreach` was passed into `buildSimYearLogRecord` and never emitted**, so the year a
+cap actually bound had never been observable per-year — only as `totals.acaBreachYears`. Now logged
+as `'-acaBreach'` (leading `-` = no table column, same convention as `'-iraG'`). Verified in the live
+page that it does not leak a column: 87 headers, none matching.
+
+---
+
 ## A lookup that returned 0 for "no limit" made the flagship strategy inert in 21 states (2026-08-04, v11.1447)
 
 Found while checking a different question — whether flipping `isBracketStrategy` off would clip

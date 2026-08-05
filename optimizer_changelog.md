@@ -11,6 +11,61 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1462"></a>
+
+## 11.1462 (behavior change)
+
+**The ACA income cap now ends when Medicare begins, instead of being enforced for the rest of your
+life.**
+
+ACA premium subsidies stop being available once you are eligible for Medicare. The tool was not
+checking ages at all: pick an ACA Cliff strategy and it held your income under the Federal Poverty
+Level multiple you chose at 65, at 80, at 95, protecting a subsidy that had ended decades earlier.
+On a plan that opens after 65 the cap was being enforced for every single year of the plan.
+
+What happens now: from the first year in which **every living person in the plan** is old enough for
+Medicare, the cap is dropped and the strategy behaves as **Proportional 0%**, drawing across your
+accounts to fund your spending goal.
+
+Two details worth knowing, because both change what you should expect to see:
+
++ It is **every living person**, not every person. If one spouse dies before reaching Medicare age
+  and the survivor is already past it, the cap ends that year. Those survivor years are exactly where
+  a single filer's narrower tax brackets used to strand spending under a cap that was protecting
+  nothing.
++ Until then the cap is measured against **household** income. If one spouse is already on Medicare
+  and the other is not, the older spouse's required distributions and Social Security still count
+  against the younger spouse's limit. The tool now says this in the warning under the strategy
+  selector, which previously claimed the limits applied only to the younger person.
+
+**Who this changes.** Only plans using an ACA Cliff strategy. Nothing else moves: Fill Bracket,
+Minimize IRMAA, Proportional, Reduce, IRA Draw, Ordered, Guyton-Klinger and the baseline were all
+confirmed identical to the previous release.
+
+On a couple aged 66 and 67 at the start with a $2.1M IRA and a $160,000 spending goal, the ACA 400%
+arm changes like this:
+
+| | before | now |
+|---|---|---|
+| years the cap blocked spending | 24 of 24 | 0 |
+| spending left unfunded | $735,010 | $304,331 |
+| total spending funded | $3,832,599 | $4,263,278 |
+| ending net worth | $1,888,543 | $684,010 |
+
+Ending net worth **falls**, and that is the point rather than a side effect. The old behavior looked
+wealthier only because it refused to fund the spending goal and left the money in the IRA. The
+remaining $304,331 of unfunded spending is not an ACA effect at all; it is what Proportional 0%
+already did on that plan, unchanged by this release.
+
+An ACA row is still worth reading as a constraint study rather than a recommendation. The tool
+models the income cap and none of the premium subsidy it buys, so it can show you what staying under
+the cap costs you and not what it saves you.
+
+Also in this release: the year a cap actually blocked spending is now recorded per year internally
+rather than only as a total, which is what made the above measurable.
+
+---
+
 <a id="11.1447"></a>
 
 ## 11.1447 (behavior change)

@@ -818,11 +818,108 @@ test('soft cap (fixedpct): capped % with spend over cap still funds spending fro
     assert(_sumAbsShortfall(r.log) < 100, `expected ~0 total shortfall, got ${Math.round(_sumAbsShortfall(r.log))}`);
 });
 
-test('strict ACA: cap is never breached — shortfall persists and is flagged untenable', () => {
-    const r = simulate({ ...CAP_BASE, strategy: 'aca', stratRate: 0, stratACAMultiple: 400 });
+// CAP_BASE's people are 66 and 67 in year 0, so an ACA cap on it lapses before the first row is
+// written (P35 PR 3c) and the strategy runs as Proportional 0% for all 30 years. That made it the
+// wrong fixture for strict-cap behavior — it passed the three assertions below by enforcing a cap
+// that had ended decades earlier. ACA_LIVE moves both birth years under Medicare eligibility and
+// changes nothing else, so the cap is genuinely in force for the early years.
+const ACA_LIVE = { ...CAP_BASE, birthyear1: 1968, birthyear2: 1967 };
+const ACA_ARM  = { strategy: 'aca', stratRate: 0, stratACAMultiple: 400 };
+
+test('strict ACA (cap in force): cap is never breached — shortfall persists and is flagged untenable', () => {
+    const r = simulate({ ...ACA_LIVE, ...ACA_ARM });
     assert(_sumForcedIRA(r.log) === 0, `ACA must not force IRA above the FPL cap, got ${Math.round(_sumForcedIRA(r.log))}`);
     assert(_sumAbsShortfall(r.log) > 1000, 'ACA at 400% FPL with $160k spend should leave a real shortfall');
     assert((r.totals.acaBreachYears ?? 0) > 0, 'expected acaBreachYears > 0 (untenable flag)');
+});
+
+// ── ACA cap lapses at Medicare eligibility (P35 PR 3c) ────────────────────────
+// Premium subsidies end when Medicare begins, so the FPL cap has nothing left to protect. The
+// successor is Proportional 0% — deliberately NOT "release the ceiling", which would collapse
+// IRAwd = min(curIRA, room) to curIRA and drain the whole above-goal IRA in the crossing year.
+
+// loopMs is wall-clock and differs between two runs of identical inputs; nothing else in the row is
+// nondeterministic, so it is the only exclusion.
+const _logSansTiming = log => JSON.stringify(log.map(({ loopMs, ...rest }) => rest));
+
+test('ACA lapse: an already-Medicare household simulates identically to Proportional 0%', () => {
+    // Not "similar" — the lapsed branch chain falls through to the same baseline `else` that
+    // propwd 0% reaches, so every logged year must match key for key. A near-miss here means the
+    // fall-through picked up some other branch on the way down.
+    const lapsed = simulate({ ...CAP_BASE, ...ACA_ARM });
+    const prop   = simulate({ ...CAP_BASE, strategy: 'propwd', propWithdraw: 0, stratRate: 0, stratACAMultiple: 0 });
+    const a = _logSansTiming(lapsed.log), b = _logSansTiming(prop.log);
+    if (a !== b) {
+        const ra = lapsed.log.find((r, i) => JSON.stringify({ ...r, loopMs: 0 }) !== JSON.stringify({ ...prop.log[i], loopMs: 0 }));
+        const diff = ra ? Object.keys(ra).filter(k => k !== 'loopMs'
+            && JSON.stringify(ra[k]) !== JSON.stringify(prop.log[lapsed.log.indexOf(ra)][k])) : [];
+        assert(false, `lapsed ACA must match Proportional 0%; first divergence year ${ra && ra.year} in [${diff}]`);
+    }
+    assert((lapsed.totals.acaBreachYears ?? 0) === 0,
+        `a lapsed cap cannot be breached, got ${lapsed.totals.acaBreachYears}`);
+    // NOT asserted: that the shortfall goes to zero. It does not, and expecting it to was wrong —
+    // Proportional 0% strands $304k of its own on this fixture, identically before and after this
+    // change. The lapse inherits its successor's behavior, warts included; that is the point.
+});
+
+test('ACA lapse: the cap is what changed, not the fixture — CAP_BASE breached before this', () => {
+    // Guards the reverse mistake: someone "fixes" a future failure by making CAP_BASE unable to
+    // breach at all, and this whole area starts passing vacuously. Move eligibility past the
+    // household's ages and the identical inputs must go back to breaching.
+    const revived = withEligibilityAge(80, () => simulate({ ...CAP_BASE, ...ACA_ARM }));
+    const lapsed  = simulate({ ...CAP_BASE, ...ACA_ARM });
+    assert((revived.totals.acaBreachYears ?? 0) > 0,
+        'with eligibility at 80 the 66/67 household is pre-Medicare and the cap must bind again');
+    // The size of the change, not just its sign. A cap enforced for 30 years past Medicare strands
+    // strictly more spending than one that ends on time, and the plan spends strictly less under
+    // it. Terminal wealth moves the OTHER way and is not asserted here: enforcing a dead cap leaves
+    // money in the IRA precisely because it refused to fund the spend goal, so "richer at the end"
+    // is the symptom, not the benefit.
+    assert(_sumAbsShortfall(revived.log) > _sumAbsShortfall(lapsed.log),
+        'enforcing a lapsed cap must strand MORE spending than lifting it');
+    assert(revived.totals.spend < lapsed.totals.spend,
+        'and must fund LESS of the spend goal over the plan');
+});
+
+// A dead person logs age as '—', so a numeric comparison on the raw column silently drops those
+// years from BOTH sides of a filter. Youngest-living age, or null when nobody is left.
+const _minLivingAge = e => {
+    const ages = [e.age1, e.age2].filter(a => typeof a === 'number');
+    return ages.length ? Math.min(...ages) : null;
+};
+
+test('ACA lapse: mid-plan crossing stops the breaches instead of releasing the ceiling', () => {
+    // ACA_LIVE opens at 58/59, so the cap binds for the first several years and lapses when the
+    // YOUNGER of the two reaches eligibility. Both halves are asserted: breaches before, none after.
+    const r = simulate({ ...ACA_LIVE, ...ACA_ARM });
+    const medAge = TAXData.IRMAA.ELIGIBILITY_AGE;
+    const pre  = r.log.filter(e => _minLivingAge(e) !== null && _minLivingAge(e) <  medAge);
+    const post = r.log.filter(e => _minLivingAge(e) !== null && _minLivingAge(e) >= medAge);
+    assert(pre.length > 0 && post.length > 0, 'fixture must span the crossing');
+    assert(pre.some(e => e['-acaBreach']), 'the cap must actually bind while both are pre-Medicare');
+    assert(!post.some(e => e['-acaBreach']), 'no year may breach a cap that has lapsed');
+    // The rejected alternative shows up here. Releasing the ceiling collapses
+    // IRAwd = min(curIRA, room) to curIRA, so the crossing year drains the whole above-goal IRA at
+    // once. Proportional 0% draws for spending, so the crossing year must stay in the same league
+    // as the year after it.
+    const cross = post[0], next = post[1];
+    assert(next && cross.IRAwd <= Math.max(4 * next.IRAwd, 100000),
+        `crossing-year IRA draw ${Math.round(cross.IRAwd)} looks like a one-year drain vs ${Math.round(next.IRAwd)} the year after`);
+});
+
+test('ACA lapse: it is LIVING spouses, not both people — a survivor past 65 lapses alone', () => {
+    // Person 1 dies at 60, never Medicare-eligible; person 2 is 67 at start. Under a "both people
+    // reached 65" reading the cap would run to the end of the plan. Under "every living spouse" it
+    // lapses the year person 1 dies — and the survivor years are exactly where a widow's halved
+    // bracket would otherwise strand spending under a cap protecting nothing.
+    const r = simulate({ ...ACA_LIVE, ...ACA_ARM, birthyear1: 1968, die1: 60, birthyear2: 1959, die2: 90 });
+    const married = r.log.filter(e => typeof e.age1 === 'number');
+    const widowed = r.log.filter(e => e.age1 === '—');
+    assert(married.length > 0 && widowed.length > 0, 'fixture must span the death');
+    assert(widowed.every(e => !e['-acaBreach']),
+        'once the only pre-Medicare spouse is gone the cap must lapse for the survivor');
+    assert(married.some(e => e['-acaBreach']),
+        'and it must have been binding while the younger spouse was alive (else the test proves nothing)');
 });
 
 test('regression: ample buffers cover the gap → no forced IRA break', () => {

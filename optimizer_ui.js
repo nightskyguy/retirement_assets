@@ -731,14 +731,25 @@ function _runOptimizerNow() {
         const bracketOveragePct = totalYears > 0 ? ovYears / totalYears : 0;
         const isBracketInfeasible = overrides.strategy === 'bracket' && bracketOveragePct > 0.5;
         // ACA is strict: any year its FPL cap can't fund spending makes the plan untenable (the
-        // subsidy is forfeited rather than the cap being broken). PF13 item 3: it is ALSO untenable
-        // whenever either spouse is already on Medicare at start — their RMDs/SS push household MAGI
-        // past any FPL cap, so an ACA-limit strategy is impractical for the whole household. This
-        // flags all four ACA rows consistently (not just the hardcoded 400% label) in that case.
+        // subsidy is forfeited rather than the cap being broken).
+        //
+        // NARROWED from eitherOnMedicareAtStart to bothOnMedicareAtStart (P35 PR 3c). PF13 item 3
+        // flagged the row whenever EITHER spouse was already on Medicare, on the reasoning that the
+        // older spouse's RMDs/SS push household MAGI past any FPL cap. That reasoning is still
+        // right, but it is now MEASURED instead of assumed: those years breach the cap and land in
+        // acaBreachYears, so the row is flagged by evidence from its own simulation. What the
+        // assumption got wrong was the other side — a 66/62 couple has four real ACA years, and
+        // declaring the whole plan untenable on day one erased them.
+        //
+        // The remaining case is not a proxy for anything: when BOTH are past Medicare age at start,
+        // yr.acaLapsed is true in every year, the engine runs Proportional 0% throughout, and the
+        // row's ACA label describes nothing it did. The sweep already omits the family here
+        // (acaDisabled, below); this still catches a plan loaded from a URL or restored as the
+        // CURRENT PLAN row, which bypass that gate.
         const acaBreachYears = res.totals?.acaBreachYears ?? 0;
-        const acaMedicareIrrelevant = eitherOnMedicareAtStart(
+        const acaNeverApplies = bothOnMedicareAtStart(
             base.birthyear1, base.startAge, !!base.hasSpouse, base.hasSpouse ? (base.birthyear2 || 0) : 0);
-        const isACAUntenable = overrides.strategy === 'aca' && (acaBreachYears > 0 || acaMedicareIrrelevant);
+        const isACAUntenable = overrides.strategy === 'aca' && (acaBreachYears > 0 || acaNeverApplies);
         const row = {
             _id: results.length,
             _isNoConv: noConv,
@@ -1471,7 +1482,7 @@ function renderOptimizerTable(results) {
             ? (r._isACAUntenable
                 ? ((r._acaBreachYears ?? 0) > 0
                     ? `ACA subsidy cliff: spending cannot be met within the FPL cap in ${r._acaBreachYears} year(s) — plan untenable at this spend (strict ACA never breaches the cap)`
-                    : 'ACA not applicable — a spouse is already on Medicare at the start, so the household cannot hold income to an ACA subsidy cap')
+                    : `ACA not applicable — everyone is already on Medicare (age ${TAXData.IRMAA.ELIGIBILITY_AGE}+) at the start, so there is no premium subsidy for a cap to protect. This row simulates as Proportional 0%.`)
                 : 'Bracket target exceeded in >50% of years — income sources already push MAGI above this ceiling')
             : 'Click to load this strategy';
         const cells = columns.map(col => {
@@ -4693,8 +4704,13 @@ function updateACAWarning() {
         warnEl.textContent = `⚠ Both persons will be on Medicare at retirement start (age ${medAge}+) — ACA options are unavailable.`;
         warnEl.style.display = 'block';
     } else if (oneMedicare) {
+        // Was "ACA income limits apply only to the other person", which was wrong in both
+        // directions: the FPL cap is tested against HOUSEHOLD MAGI, so the Medicare spouse's
+        // RMDs and Social Security count against it, and the cap does not lift for anyone until
+        // the younger spouse reaches Medicare age too (P35 PR 3c, yr.acaLapsed).
         const who = p1Medicare ? 'You' : 'Spouse';
-        warnEl.textContent = `⚠ ${who} will already be on Medicare at retirement start — ACA income limits apply only to the other person.`;
+        const other = p1Medicare ? 'your spouse' : 'you';
+        warnEl.textContent = `⚠ ${who} will already be on Medicare at retirement start. The FPL cap is measured against HOUSEHOLD income, so ${who === 'You' ? 'your' : 'their'} RMDs and Social Security count against it while ${other} remain${other === 'you' ? '' : 's'} on an ACA plan. The cap lifts once both of you reach age ${medAge}, after which this strategy simulates as Proportional 0%.`;
         warnEl.style.display = 'block';
     } else {
         warnEl.style.display = 'none';

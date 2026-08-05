@@ -1,5 +1,92 @@
 # Findings & Decisions
 
+## PR 3c: the ACA cap that never ended — prediction, then measurement (2026-08-05, v11.1462)
+
+The plan requires the direction to be predicted first, because the only ACA fixture in the suite is
+one whose ages make the bug invisible-by-passing. Recorded here so the measurement can contradict it.
+
+**The fixture is inside the defect.** `CAP_BASE` (`optimizer_core.test.js:783`) has
+`birthyear1: 1960`, `birthyear2: 1959`, `startYear: 2026` — ages **66 and 67 in year 0**, and it runs
+30 years. Both people are past Medicare eligibility before the simulation's first row. The
+`strict ACA` test at `:821` therefore asserts the behavior of an FPL cap being enforced from age 66
+to age 96, which is exactly what PR 3c removes.
+
+**Predicted, per assertion:**
+
+| assertion | now | after | why |
+|---|---|---|---|
+| `_sumForcedIRA === 0` | passes | **still passes** | `forcedIRA` is written only by the soft-cap loop at `:1651`, gated `isBracketStrategy && !isACAStrategy`. With the lapse, `isACAStrategy` goes false, and `isBracketStrategy` is `bracket\|minlimit\|fixedpct\|isACAStrategy` — `'aca'` is in none of those, so it goes false too. The loop still never runs. Passing for a **different reason** than before. |
+| `_sumAbsShortfall > 1000` | passes | **FAILS** | the lapsed year takes the baseline `else`, which draws proportionally from IRA/Brokerage/Cash to meet spend. $2.1M of IRA against a $160k goal funds it. Shortfall -> ~0. |
+| `acaBreachYears > 0` | passes | **FAILS -> 0** | `yr.acaBreach` is set only under `yr.isACAStrategy` (`:1630`, `:1696`). Never true in this fixture after the change. |
+
+Two of the three assertions are predicted to break, and **breaking is the correct outcome** — they
+pin the defect. The fix is not to relax them: it is to move the strict-ACA fixture to birth years
+where ACA is actually live, and add a separate test that pins the lapse at these ages.
+
+**Predicted direction of the `aca` arm overall:** final net worth **up**, shortfall **to zero**,
+`acaBreachYears` **to zero**, for any scenario whose people are already 65+. An ACA row that was
+ranked untenable on a 66/67 household will now rank as an ordinary Proportional 0% row — which is
+what it always was in reality.
+
+**Predicted to NOT move:** every scenario where at least one living spouse is under 65. The lapse
+requires **all** living spouses past the age, so a 66/62 couple keeps the cap for four more years,
+and the older spouse's RMDs/SS still push household MAGI through it. Those rows should stay
+untenable, and now by measurement (`acaBreachYears`) rather than by the
+`eitherOnMedicareAtStart` assumption.
+
+**Not predicted, deliberately:** whether any ACA row starts *winning* a sweep. It cannot be read as
+a recommendation either way — item 3 of the engine survey stands. The tool prices the cap's cost and
+zero dollars of the subsidy it buys.
+
+### MEASURED (2026-08-05, v11.1462). Two of the predictions above were WRONG.
+
+Per-assertion, the prediction held: `forcedIRA` stayed 0, and both the shortfall and breach
+assertions failed exactly as called. The two directional claims did not.
+
+**Wrong #1: "shortfall -> ~0".** It went to **$304,331**, not zero. The reason is the thing the
+prediction did not check: **Proportional 0% has a $304,331 shortfall of its own on this fixture**,
+and it is byte-identical on `HEAD` and on the working tree. The lapse does not fund the plan; it
+hands the plan to its successor, warts included. Confirmed by running the same three arms against
+both engines in separate processes:
+
+| arm | HEAD | v11.1462 |
+|---|---|---|
+| `propwd` 0% @66/67 (control) | 304,331 short / $4,263,278 spend / $684,010 NW | **identical** |
+| `bracket` 22% @66/67 (control) | 1 short / $4,567,608 spend / $196,871 NW | **identical** |
+| `aca` 400% @66/67 | 24 breach yrs / 735,010 short / $3,832,599 spend / $1,888,543 NW | 0 breach / 304,331 / $4,263,278 / $684,010 |
+| `aca` 400% @58/59 | 32 breach yrs / 1,463,587 short / $5,019,726 spend / $1,929,570 NW | 7 breach / 790,504 / $5,692,809 / $117,427 |
+
+**Only the `aca` arms move.** That is the scope proof, and it is a measurement rather than a reading
+of the diff. The lapsed arm's four numbers are the propwd control's four numbers exactly.
+
+**Wrong #2, and this one was a reasoning error rather than a missing fact: "final net worth up".**
+It went **DOWN**, $1,888,543 -> $684,010. Predicting terminal wealth as the success direction was
+backwards. The old behavior looked $1.2M richer *because* it refused to fund the spend goal and left
+the money in the IRA — the wealth was the symptom of the defect, not a benefit being lost. The
+direction that actually says the fix worked is **spend**, which rose $3,832,599 -> $4,263,278, and
+**breach years**, 24 -> 0. Any future "did this help?" question on a strategy that can decline to
+spend has to be asked about funded spending first; terminal wealth alone will rank starvation as
+success. That is the same trap as the survey's item 3 in a different coat.
+
+**The @58/59 arm is the one that proves the gate is a gate and not a switch.** 7 breach years, and
+7 is exactly the count of pre-Medicare years (born 1968, plan opens 2026 at 58, crosses at 2033).
+Every pre-lapse year breaches; no post-lapse year does.
+
+**Found while building this, not predicted at all: a SECOND site needed the gate.** `beginYear` picks
+the year-0 withdrawal month from `_stratImpliesConversion`, which named `'aca'` literally
+(`optimizer_core.js:957`). A lapsed ACA plan was still taking January timing — the "this is a
+conversion year" schedule — while its Proportional twin took December, so the two diverged in year 0
+on 34 log columns. Caught only because the equivalence test compared the whole log rather than a few
+totals. A totals-only test would have passed with the wrong withdrawal month shipped. The gate is now
+a shared pure helper, `acaCapLapsed(age1, age2, alive1, alive2)`, called from both sites.
+
+**Also found: `acaBreach` was passed into `buildSimYearLogRecord` and never emitted**, so the year a
+cap actually bound had never been observable per-year — only as `totals.acaBreachYears`. Now logged
+as `'-acaBreach'` (leading `-` = no table column, same convention as `'-iraG'`). Verified in the live
+page that it does not leak a column: 87 headers, none matching.
+
+---
+
 ## A lookup that returned 0 for "no limit" made the flagship strategy inert in 21 states (2026-08-04, v11.1447)
 
 Found while checking a different question — whether flipping `isBracketStrategy` off would clip

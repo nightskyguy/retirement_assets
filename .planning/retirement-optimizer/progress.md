@@ -1313,3 +1313,75 @@ User feedback on the baseline-accounting UI:
 - VERIFIED: node optimizer_core 185/185, taxPaymentPlanner 32/32, doclinks 22/22. Browser on localhost:8770 — in-page suite 242/242, console at the known 4-fixture baseline, all three `?v=` tokens confirmed `111448` in the live DOM, and `Retirement_Projection.html` / `standalone/IncomeTaxPlanner.html` / `standalone/irmaa_and_rmds.html` all load clean on the new engine.
 - No title bump and no changelog entry, following PR 1+2: output is provably identical, so there is nothing to tell a user. Found in passing: `standalone/IncomeTaxPlanner.html` was pinned at `optimizer_core.js?v=1111f3`, many versions stale, and is now current.
 - Port note: 8767 from `launch.json` was held by a python process that answered nothing (`curl` returned `000`), so a second config on 8770 was added rather than killing someone else's server. `.claude/` is gitignored, so that config is worktree-local.
+
+## Session: 2026-08-04 (worktree readme-review-updates-c9df11, branch worktrees/planning-with-files-1492fc) — context restore, plan reconciled with merged PRs
+
+- `/plan` invoked on an existing plan, so this was a restore, not an init. All three planning files
+  already live in `.planning/retirement-optimizer/`; `.active_plan` = `retirement-optimizer`.
+- RECONCILED THE PLAN AGAINST GIT AND GITHUB rather than trusting the file: `main` = `494ed43`, the
+  merge of [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149) (P35 PR 3b + the doc
+  file-reference gaps). The plan header still read "PR 3b built here (uncommitted)". Fixed in four
+  places — header, the PR 3a-3d table row, the PR 3b status line, and the P35 checklist.
+- The duplicate PR #148 is CLOSED (verified via `gh`, not assumed), so the standing "close it rather
+  than merging both" instruction is discharged. `gh pr list --state open` returns nothing: no open PRs.
+- Working tree clean; branch is level with `main` (0 ahead, 0 behind).
+- `session-catchup.py` ran clean with no unsynced context to report (exit 0, no output).
+- NEXT REVIEW POINT: **P35 PR 3c** — the ACA cap lapses at Medicare age and falls back to Proportional
+  0% rather than releasing outright. Unblocked by 3a and 3b, both merged.
+
+
+## Session: 2026-08-05 (worktree readme-review-updates-c9df11, branch worktrees/planning-with-files-1492fc) — P35 PR 3c, the ACA cap that never ended
+
+- PREDICTED BEFORE MEASURING, because the plan required it, and it paid for itself twice: **two of
+  the four predictions were wrong** and both are recorded in `findings.md` rather than quietly
+  fixed. (1) "shortfall -> ~0" — no, $304,331, because Proportional 0% has that shortfall of its own
+  on the fixture, identically on `HEAD`. (2) "final net worth up" — no, DOWN $1,888,543 -> $684,010,
+  and down is CORRECT: the old behavior looked $1.2M richer because it refused to fund the spend
+  goal. Terminal wealth ranks starvation as success; the honest directions are funded **spend**
+  ($3,832,599 -> $4,263,278) and **breach years** (24 -> 0).
+- THE FIXTURE WAS INSIDE THE DEFECT. `CAP_BASE` is 66 and 67 in year 0, so the one `strict ACA` test
+  in the suite was asserting the behavior of a cap enforced from 66 to 96 — it passed *because* of
+  the bug. Retargeted to a new `ACA_LIVE` (birth years moved under eligibility, nothing else), and a
+  separate test now pins the lapse at the original ages.
+- A SECOND SITE NEEDED THE GATE AND WAS NOT IN THE PLAN. `beginYear`'s `_stratImpliesConversion`
+  named `'aca'` literally, so a lapsed plan still took January ("conversion year") withdrawal timing
+  while its Proportional twin took December — 34 log columns diverged in year 0. Found ONLY because
+  the equivalence test compares the whole log; a totals-only test would have shipped the wrong
+  withdrawal month. Gate extracted to a shared pure `acaCapLapsed()`.
+- THE TRAP I DID NOT WALK INTO: putting the age test inside `computeBracketCeiling` next to the IRMAA
+  one. It cannot degrade in place — every ACA row carries `stratRate: 0`, so falling through to the
+  federal branch returns the **10% bracket, tighter than the cap it lifted**. The successor to a
+  lapsed cap is "no ceiling strategy at all", which only a caller can express. Documented at the
+  branch so the next caller does not re-enforce it.
+- NO LOOKBACK, ON PURPOSE. The IRMAA gates use `ELIGIBILITY_AGE + LOOKBACK` because IRMAA charges
+  this year's premium against MAGI from two years ago. ACA eligibility is a current-year test. Same
+  constant, different gate, and they now say so in place.
+- `acaBreach` had been passed into `buildSimYearLogRecord` since the strict-ACA strategy shipped and
+  never emitted — a breach year was only ever visible as a total. Now `'-acaBreach'` (leading `-` =
+  no table column). Verified live: 87 headers, none leaked.
+- `_isACAUntenable` narrowed from `eitherOnMedicareAtStart` to `bothOnMedicareAtStart`. The either-
+  case is now measured through `acaBreachYears` instead of assumed, which stops a 66/62 couple's four
+  real ACA years being erased on day one. `eitherOnMedicareAtStart` is dead in production as a
+  result; left in place deliberately — it is half of PR 3b's constant-mobility pin from one PR ago,
+  and deleting it is a byte-neutral PR of its own, not a rider on a behavior change.
+- BOTH GATES MUTATION-CHECKED IN ISOLATION (the first attempt botched the restore and ran with both
+  mutations applied, which proved nothing — redone one at a time): reverting `isACAStrategy` fails
+  exactly the 4 lapse tests; reverting only the `beginYear` timing gate fails exactly the equivalence
+  test.
+- SCOPE PROVEN BY MEASUREMENT, NOT BY READING THE DIFF: `propwd` 0% and `bracket` 22% controls run
+  against the `HEAD` engine and the working tree in separate processes are byte-identical. Only `aca`
+  arms move. The lapsed arm equals the `propwd` control to the dollar on all four metrics.
+- VERIFIED: node optimizer_core 189/189 (was 185), taxPaymentPlanner 32/32, doclinks 22/22. Browser
+  on localhost:8771 — in-page suite 242/242, console at the known 4-fixture baseline, title/version
+  stat/amber BEHAVIOR CHANGE banner all `11.1462`, `standalone/IncomeTaxPlanner.html` clean on the
+  new core. Live data-drivenness: at `ELIGIBILITY_AGE = 80` a 66/59 couple loses the ACA warning
+  entirely and an 86/87 couple gains one reading "(age 80+)"; the engine's breach count and terminal
+  wealth return to the `HEAD` numbers.
+- `?v=` bumped to `111462` on `optimizer_core.js` and `optimizer_ui.js` only, in both pages that load
+  them. `taxengine.js` did not change this time and stays at `111448`.
+- FOUND, NOT FIXED, NOT CAUSED HERE: Proportional 0% strands $304,331 on `CAP_BASE` with $894k still
+  in the IRA and reports `success: false`. Byte-identical on `HEAD`. It only became visible because
+  the lapsed ACA arm now inherits it.
+- Port note: 8767 from `launch.json` was again held by a python process answering nothing
+  (`curl` -> `000`), so a second config on 8771 was added rather than killing someone else's server.
+

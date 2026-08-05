@@ -970,6 +970,167 @@ test('true ruin: all accounts incl. IRA exhausted → shortfall still reported',
     assert(!r.totals.success, 'an underfunded plan must not report success');
 });
 
+// ── P38: the funding invariant ────────────────────────────────────────────────
+// THE INVARIANT: no year may report a shortfall while the IRA still holds a drawable balance.
+// A shortfall is a claim that the household could not be funded. That claim is false while a
+// seven-figure IRA sits untouched, whatever the strategy's preferences are — spending is a hard
+// requirement and every strategy's ceiling is a preference.
+//
+// This block is a CHARACTERIZATION RECORDING first and an invariant second, the same pattern
+// sweep_golden.js uses. The counts below are what the engine does TODAY, defect included, so the
+// fix shows up as a diff on these lines instead of as a test appearing from nowhere. Every count
+// that is currently non-zero is a bug being pinned, not behavior being blessed.
+//
+// Why the whole suite stayed green with this live: 189 tests passed while Proportional 0% stranded
+// $304k. Every non-bracket fixture had buffers deep enough to hide the gap. So a fixture that does
+// not DRAIN proves nothing here, which is what the companion test below enforces.
+//
+// SCOPE — this measures the IRA leg only, deliberately. Probing every strategy turned up two
+// independent defects wearing the same symptom:
+//   (a) shortfall while the IRA still has money  → P38. No IRA leg in the correction passes.
+//   (b) shortfall, IRA empty, Brokerage still has money → P32. Brokerage is deliberately excluded
+//       from the third pass (optimizer_core.js:1649-1653, the cap-gains spiral). Only `minlimit`
+//       exhibits it on this fixture, and no part of P38 fixes it.
+// Folding both into one assertion would leave this test permanently red for a reason P38 is not
+// allowed to address. (b) gets its own pinned tripwire at the bottom of the block.
+const _shortYear = e => Math.abs(e.shortfall || 0) > 1;
+const _iraStranded  = log => log.filter(e => _shortYear(e) && (e.TotalIRA  || 0) > 1);
+const _brokStranded = log => log.filter(e => _shortYear(e) && (e.TotalIRA || 0) <= 1 && (e.Brokerage || 0) > 1);
+const _worst = rows => rows.length ? Math.max(...rows.map(e => Math.abs(e.shortfall))) : 0;
+
+// One row per strategy the dispatch in planPrimaryWithdrawals can reach, so a strategy added later
+// is one line here rather than a new test. `__unrecognized__` is not a typo: it exercises the
+// baseline `else` (optimizer_core.js:1451), which is also where `gk` and a lapsed `aca` land.
+//   iraStranded  — years reporting a shortfall with IRA left. THE DEFECT. Target for all of these
+//                  is 0; the non-zero values are pinned bugs.
+//   worst        — largest single-year unfunded amount among them, so a shrinking count that hides
+//                  a growing gap cannot pass.
+//   convergence  — `ordered` is a different failure class and is flagged so the exhaustion checks
+//                  below skip it. Its own sequence already reaches every account, so its residual
+//                  is not "we ran out", it is "we stopped one iteration early": the third pass
+//                  (optimizer_core.js:1645-1647) funds the gap, recomputes tax, and nothing loops
+//                  back for the tax that recompute just created. RIBC makes it unmissable — it
+//                  strands $73 while holding $58,597 of Cash, because Cash is last in its order
+//                  and the pass that would have reached it never runs a second time.
+const FUNDING_ARMS = [
+    { name: 'bracket 22%',    over: { strategy: 'bracket',  stratRate: 0.22 },                              iraStranded:  0, worst:      0 },
+    { name: 'minlimit tier1', over: { strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1 },              iraStranded:  0, worst:      0 },
+    { name: 'fixedpct 2%',    over: { strategy: 'fixedpct', iraWithdrawPct: 0.02 },                         iraStranded:  0, worst:      0 },
+    { name: 'propwd 0%',      over: { strategy: 'propwd',   propWithdraw: 0,    stratRate: 0 },             iraStranded: 13, worst: 28400 },
+    { name: 'propwd 10%',     over: { strategy: 'propwd',   propWithdraw: 0.10, stratRate: 0 },             iraStranded:  7, worst:   964 },
+    { name: 'propwd 50%',     over: { strategy: 'propwd',   propWithdraw: 0.50, stratRate: 0 },             iraStranded:  0, worst:      0 },
+    { name: 'fixed',          over: { strategy: 'fixed' },                                                  iraStranded: 14, worst: 45827 },
+    { name: 'ordered CBIR',   over: { strategy: 'ordered',  orderedSeq: 'CBIR' },                           iraStranded:  2, worst:    93, convergence: true },
+    { name: 'ordered RIBC',   over: { strategy: 'ordered',  orderedSeq: 'RIBC' },                           iraStranded:  2, worst:    73, convergence: true },
+    { name: 'gk',             over: { strategy: 'gk',       gkGuard: 0.20, gkAdjPct: 0.10 },                iraStranded:  6, worst: 15540 },
+    { name: 'baseline else',  over: { strategy: '__unrecognized__' },                                       iraStranded: 13, worst: 28400 },
+    { name: 'aca lapsed',     over: { strategy: 'aca',      stratRate: 0, stratACAMultiple: 400 },          iraStranded: 13, worst: 28400 },
+];
+
+for (const arm of FUNDING_ARMS) {
+    test(`funding invariant [${arm.name}]: shortfall years with IRA still funded`, () => {
+        const log = simulate({ ...CAP_BASE, stratACAMultiple: 0, ...arm.over }).log;
+        const stranded = _iraStranded(log);
+        assert(stranded.length === arm.iraStranded,
+            `expected ${arm.iraStranded} year(s) reporting a shortfall with IRA left, got ${stranded.length}` +
+            (stranded.length ? ` [${stranded.map(e => `${e.year}:${Math.round(e.shortfall)}`).join(' ')}]` : '') +
+            ' — if this DROPPED, the defect was fixed: update the pin and say so in the changelog');
+        assertNear(_worst(stranded), arm.worst,
+            `worst single-year unfunded amount for ${arm.name}`, 1);
+        // Every stranded year must have spent the tax-free buffers first. Without this a future
+        // change could satisfy the pin by stranding money for some entirely different reason.
+        // Skipped for the convergence class, where money demonstrably IS still reachable — that is
+        // the finding, not a flaw in the check.
+        if (!arm.convergence) {
+            const lazy = stranded.filter(e => (e.Cash || 0) > 1 || (e.Roth || 0) > 1);
+            assert(lazy.length === 0,
+                `${lazy.length} stranded year(s) still held Cash or Roth, so the gap fill was not exhausted ` +
+                `[${lazy.slice(0, 3).map(e => `${e.year} cash=${Math.round(e.Cash)} roth=${Math.round(e.Roth)}`).join('; ')}]`);
+        }
+    });
+}
+
+test('funding invariant: the fixture actually drains (guards a vacuous green)', () => {
+    // The whole reason this defect shipped is that buffered fixtures hide it: 189 tests passed
+    // while Proportional 0% stranded $304k. An arm that never exhausts a tax-free buffer never
+    // reaches the correction passes, so its zero would mean "not tested", not "correct".
+    //
+    // The bar is Cash specifically, not "every account". Two arms legitimately end with money in
+    // other places and still exercise the path fully: `minlimit` drains its IRA and leaves
+    // Brokerage (that is the P32 case pinned below), and `propwd 10%` over-draws IRA so hard that
+    // the after-tax surplus keeps Brokerage alive. Both empty Cash, which is what proves the gap
+    // fill ran dry.
+    for (const arm of FUNDING_ARMS.filter(a => !a.convergence)) {
+        const log = simulate({ ...CAP_BASE, stratACAMultiple: 0, ...arm.over }).log;
+        assert(log.some(e => (e.Cash || 0) <= 1),
+            `${arm.name} never empties Cash — it cannot exercise the funding path, so its pin proves nothing`);
+    }
+    // The convergence arms are exercised by a different fact: they strand money they could still
+    // reach. Assert that directly so they are not simply unchecked.
+    for (const arm of FUNDING_ARMS.filter(a => a.convergence)) {
+        const log = simulate({ ...CAP_BASE, stratACAMultiple: 0, ...arm.over }).log;
+        const stranded = _iraStranded(log);
+        assert(stranded.length > 0 && stranded.every(e => (e.TotalIRA || 0) > 1),
+            `${arm.name} should strand spending while the IRA is still funded — that is the convergence gap`);
+    }
+});
+
+// ── The one exception: a live ACA cap ─────────────────────────────────────────
+// Under a cap that is still in force, a shortfall is the CORRECT answer and it means exactly one
+// thing: the spending goal could not be met from non-taxable sources. Cash and Roth carry no
+// income, so the strategy spends them to zero. An IRA dollar carries income, and going over the
+// FPL cap forfeits the whole premium subsidy — a cliff, not a tax bump. So the engine stops.
+// Written as a POSITIVE assertion, not an exemption: it is not enough that the strategy declined
+// to force IRA, it must also have genuinely run out of non-taxable money first. An exemption
+// alone would be satisfied by a future change that stops early for entirely the wrong reason.
+test('ACA exception: a live cap strands spending only after non-taxable sources are gone', () => {
+    const r = simulate({ ...ACA_LIVE, ...ACA_ARM });
+    const short = r.log.filter(_shortYear);
+    assert(short.length > 0, 'ACA_LIVE at 400% FPL with $160k spend must strand something, else this proves nothing');
+    assert(_sumForcedIRA(r.log) === 0,
+        `a live cap must never force IRA, got ${Math.round(_sumForcedIRA(r.log))}`);
+    const withMoneyLeft = short.filter(e => (e.Cash || 0) > 1 || (e.Roth || 0) > 1);
+    assert(withMoneyLeft.length === 0,
+        `${withMoneyLeft.length} shortfall year(s) still held Cash or Roth — the cap is not what stopped them ` +
+        `[${withMoneyLeft.slice(0, 3).map(e => `${e.year} cash=${Math.round(e.Cash)} roth=${Math.round(e.Roth)}`).join('; ')}]`);
+    assert(short.some(e => (e.TotalIRA || 0) > 1),
+        'and the IRA must still hold money — otherwise this is ordinary ruin, not the cap binding');
+});
+
+test('ACA exception: give it enough non-taxable money and the cap strands nothing', () => {
+    // The other side of the same claim. If the shortfall really is "no non-taxable means left",
+    // then supplying non-taxable means must remove it — without ever forcing IRA or lifting the cap.
+    const r = simulate({ ...ACA_LIVE, ...ACA_ARM, Roth: 400000, Cash: 200000 });
+    assert(r.log.filter(_shortYear).length === 0,
+        `funded with Roth+Cash, a live cap should strand nothing, got ${r.log.filter(_shortYear).length} year(s)`);
+    assert(_sumForcedIRA(r.log) === 0, 'and it still must not force IRA');
+    assert((r.totals.acaBreachYears ?? 0) > 0,
+        'the cap must still be binding on unavoidable income (RMDs/SS), else the fixture stopped testing the cap');
+});
+
+// ── P32 tripwire, pinned but NOT owned by P38 ─────────────────────────────────
+// Cause (b) from the scope note: IRA fully drained, spending still unfunded, and a large Brokerage
+// balance sitting there. `minlimit` is the only arm on this fixture that reaches it, and it is not
+// a rounding artifact — nine consecutive years, 2041 through 2049, $71,382 stranded in total, the
+// first of them with $945,376 of Brokerage untouched and draining only to fund taxes and growth.
+// Nothing in P38 fixes this: widening the forced-IRA gate cannot help a year whose IRA is already
+// at zero. Pinned so P32 starts from a measured number rather than a fresh investigation, and so
+// that a change in the meantime has to announce itself.
+test('P32 (not fixed here): minlimit strands spending with Brokerage still funded', () => {
+    const log = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1, stratACAMultiple: 0 }).log;
+    const stranded = _brokStranded(log);
+    assert(stranded.length === 9,
+        `expected the known 9 Brokerage-stranded years, got ${stranded.length}`);
+    assertNear(_worst(stranded), 9468, 'worst single-year unfunded amount with Brokerage left', 1);
+    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 71382,
+        'total stranded across the nine years', 1);
+    // The headline number: how much was sitting in Brokerage the first year it gave up.
+    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 945376,
+        'Brokerage balance in the first year minlimit reported an unfunded shortfall', 1);
+    assert(stranded.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
+        'every stranded year must have Cash, Roth and IRA at zero — Brokerage is the only source left');
+});
+
 // ── State retirement-income exclusion (IL/PA full exemption) ────────────────────
 test('IL exempts IRA/pension distributions from state tax', () => {
     const common = { filingStatus: 'MFJ', ages: [70, 70], state: 'IL',

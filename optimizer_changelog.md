@@ -11,6 +11,39 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1464"></a>
+
+## 11.1464
+
+**The ACA Cliff strategies are now available to everyone, and the warning about them tells you which
+year it is talking about.**
+
+Three changes, all to what you can see and select. No plan's numbers move.
+
+**1. ACA Cliff is no longer an advanced-only option.** The four Federal Poverty Level ceilings
+(200/250/300/400%) now appear in the ceiling dropdown for everyone, the Optimizer sweeps those rows
+for everyone, and the paragraph explaining the strategy is no longer hidden. It was gated because
+the ACA model is rough, which is still true, so the documentation now says so plainly rather than
+the option being hidden. In particular the tool models the income cap and **none** of the premium
+subsidy that cap buys, so an ACA row shows you what staying under the limit costs and not what it
+saves. The options still disappear once both people are on Medicare at the start of the plan.
+
+**2. The 400% option no longer carries a warning triangle.** Nothing computed it. It was fixed text
+attached to that one entry, so it appeared even when 400% was the only workable choice, and stayed
+silent on a 200% cap that could not fund a single year. Whether a cap is achievable cannot be known
+without running the plan, which the dropdown does not do. The ⚠️ that **is** computed is the one on
+Optimizer rows, from the number of years the cap actually blocked spending. Because a lower
+percentage is a stricter limit, if one ACA row is flagged there, every lower one is flagged too.
+
+**3. The Medicare warning now names the year and your ages in it.** It used to say only that you
+would be on Medicare "at retirement start", while the age shown next to your birth year is your age
+**today**. If your plan starts years from now those are two different numbers, and being told you
+are on Medicare while the field beside it reads "Age 59" looked like the tool had stopped paying
+attention. It now reads, for example, "At retirement start in 2031, you will be 65 and your spouse
+79", and tells you that lowering **Retirement Start Age** is what brings the ACA years back.
+
+---
+
 <a id="11.1462"></a>
 
 ## 11.1462 (behavior change)

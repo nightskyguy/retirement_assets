@@ -906,6 +906,40 @@ test('ACA lapse: mid-plan crossing stops the breaches instead of releasing the c
         `crossing-year IRA draw ${Math.round(cross.IRAwd)} looks like a one-year drain vs ${Math.round(next.IRAwd)} the year after`);
 });
 
+test('ACA untenable flag is monotonic: a lower FPL multiple is a STRICTER cap', () => {
+    // Asked directly by a user who saw one of four ACA rows flagged ⚠️ and reasonably wondered
+    // whether the flagging was arbitrary. It is not, and the invariant is worth pinning because it
+    // is the thing that makes the flag readable: 200% FPL is a TIGHTER income limit than 400%, so
+    // the set of flagged arms must be downward-closed. If 400% breaches, 200/250/300 must too.
+    // The reverse — a loose cap flagged while a tighter one is clean — would be incoherent.
+    const FPLS = [200, 250, 300, 400];
+    // Spread wide enough that some scenarios flag none, some all, and some only the tightest.
+    // Social Security is swept too and is the lever that makes a PARTIAL set reachable: CAP_BASE's
+    // $72k of combined benefits already exceeds the 300% cap on its own, so every arm breaches on
+    // unavoidable income alone and the interesting middle never appears.
+    const scenarios = [];
+    for (const spendGoal of [40000, 60000, 90000])
+        for (const IRA1 of [200000, 1500000])
+            for (const [ss1, ss2] of [[0, 0], [24000, 16000]])
+                for (const STATEname of ['CA', 'TX'])
+                    scenarios.push({ spendGoal, IRA1, ss1, ss2, STATEname });
+    let sawPartial = false, sawNone = false, sawAll = false;
+    for (const s of scenarios) {
+        const base = { ...ACA_LIVE, ...s, strategy: 'aca', stratRate: 0 };
+        const flagged = FPLS.map(f => (simulate({ ...base, stratACAMultiple: f }).totals.acaBreachYears ?? 0) > 0);
+        const n = flagged.filter(Boolean).length;
+        if (n === 0) sawNone = true; else if (n === FPLS.length) sawAll = true; else sawPartial = true;
+        // downward-closed: everything at or below the loosest flagged multiple must be flagged
+        for (let i = 0; i < FPLS.length; i++)
+            for (let j = 0; j < i; j++)
+                assert(!(flagged[i] && !flagged[j]),
+                    `${JSON.stringify(s)}: ${FPLS[i]}% flagged but the stricter ${FPLS[j]}% is not`);
+    }
+    // Guard against the invariant holding only because nothing ever flagged.
+    assert(sawNone && sawPartial && sawAll,
+        `fixture must span all three shapes, got none=${sawNone} partial=${sawPartial} all=${sawAll}`);
+});
+
 test('ACA lapse: it is LIVING spouses, not both people — a survivor past 65 lapses alone', () => {
     // Person 1 dies at 60, never Medicare-eligible; person 2 is 67 at start. Under a "both people
     // reached 65" reading the cap would run to the end of the plan. Under "every living spouse" it
@@ -2223,7 +2257,7 @@ test('buildVariations: the declared divergences from the Optimizer sweep are pin
     assert(!rows.some(r => (r.stratIRMAATier ?? -1) >= 0),
         'MC must not sweep the IRMAA-ceiling family (the Optimizer does, tiers 0-4)');
     assert(!rows.some(r => (r.stratACAMultiple ?? 0) > 0),
-        'MC must not sweep the ACA family (the Optimizer does, nerdknob-gated)');
+        'MC must not sweep the ACA family (the Optimizer does, for everyone, subject to the age gate)');
 });
 
 // ── P35 PR 1: the Optimizer enumeration golden ────────────────────────────────
@@ -2311,7 +2345,11 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
         const rows = buildStrategyFamilies(g.base, {
             grids: OPTIMIZER_GRIDS,
             irmaaFamily: true,
-            acaFamily: nerd && !bothOnMedicareAtStart(g.base.birthyear1, g.base.startAge,
+            // No `nerd &&` any more: the ACA family is swept for everyone, and only the age gate
+            // removes it. The four captures still reproduce because the one recorded with the
+            // nerdknob OFF (`default`) has both people on Medicare at start, so its ACA rows were
+            // suppressed by age rather than by the flag. Checked before the gate was dropped.
+            acaFamily: !bothOnMedicareAtStart(g.base.birthyear1, g.base.startAge,
                 !!g.base.hasSpouse, g.base.hasSpouse ? (g.base.birthyear2 || 0) : 0),
             bracketResetsIRMAATier: true,
             markCashFunding: nerd,

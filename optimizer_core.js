@@ -3352,8 +3352,9 @@ const MODIFIER_PREFIX = {
  * site exactly what that sweep does and does not cover:
  *   grids            OPTIMIZER_GRIDS or MC_GRIDS
  *   irmaaFamily      sweep the 5 IRMAA ceiling tiers as their own family
- *   acaFamily        sweep the 4 ACA FPL cliffs. The CALLER applies its own gates (nerdknob, and
- *                    bothOnMedicareAtStart — an ACA cap is pointless once both are on Medicare)
+ *   acaFamily        sweep the 4 ACA FPL cliffs. The CALLER applies its own gate — the Optimizer
+ *                    passes bothOnMedicareAtStart, since an ACA cap is pointless once both are on
+ *                    Medicare. MC does not sweep this family at all.
  *   bracketResetsIRMAATier  write stratIRMAATier:-1 onto Fill Bracket rows so a sidebar tier
  *                    selection cannot leak into them
  *   markCashFunding  write fundConversionWithCash:false onto every un-cloned row, so a user who

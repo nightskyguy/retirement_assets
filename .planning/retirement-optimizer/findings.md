@@ -1,5 +1,63 @@
 # Findings & Decisions
 
+## A hardcoded ⚠️, a gate nobody could see, and two age bases side by side (2026-08-05, v11.1464)
+
+A user reported the ACA options staying disabled after changing birth years, and suspected the age
+gate was only evaluated at load. Three separate things turned out to be involved and only one of
+them was the thing reported.
+
+**The reported bug does not exist.** Driving `startAge`, `birthyear1` and `birthyear2` with real
+input events across 9 transitions, the gate re-ran correctly every time. `birthyear1` was checked in
+isolation (hold `startAge` at 60 and `birthyear2` at 1990, so only `birthyear1` moves the verdict)
+because a first attempt changed it without flipping the outcome, which proves nothing.
+
+**What actually happened is a two-age-bases collision.** `#age-display-1` and `#age-display-2` show
+ages **today** and never move when Retirement Start Age changes — verified by moving `startAge` from
+65 to 55 and watching them sit still. The ACA gate is about ages at **retirement start**. On the
+reported scenario those are 59/73 and 65/79, in 2026 and 2031. The page showed the first pair and
+the warning talked about the second without naming a year. Being told you are on Medicare beside a
+field reading "Age 59" is indistinguishable from a stale control. The warning now names the start
+year and both ages in it.
+
+**The ⚠️ the user was actually looking at was a string literal.** `optimizer_ui.js` built the ACA
+dropdown entries as `{ pct: 400, label: 'ACA 400% FPL ⚠️' }` — only the 400% entry, computed from
+nothing. So it fired on every scenario, including ones where 400% was the only feasible arm, and
+stayed silent on a 200% cap that could not fund a single year. PF13 noticed it ("not just the
+hardcoded 400% label") and worked around it in the results table instead of removing it. Removed.
+
+**The flag that IS computed was checked and is correct.** The question asked was whether the ⚠️ on
+Optimizer rows is arbitrary. Measured over **1008 scenarios** (7 spend goals x 4 IRA sizes x 2 cash
+levels x 3 states x 3 age pairs x single/couple), flagging FPL 200/250/300/400 by
+`totals.acaBreachYears > 0`:
+
+| flagged set | scenarios |
+|---|---|
+| none | 460 |
+| `{200}` | 44 |
+| `{200,250}` | 12 |
+| `{200,250,300}` | 94 |
+| all four | 398 |
+| **a looser cap flagged while a tighter one is not** | **0** |
+
+Every partial set is downward-closed, and when exactly one arm is flagged it is **always 200%** —
+the tightest cap. That is the invariant that makes the flag readable, and it is now pinned by a test
+rather than left as an emergent property. Getting the test to exercise the partial case needed
+Social Security in the sweep: `CAP_BASE`'s $72k of combined benefits already exceeds the 300% cap on
+its own, so every arm breaches on unavoidable income and the interesting middle never appears.
+
+**Un-gating the ACA family from the nerdknob was safe for the goldens, and that was checked before
+the gate came out, not after.** Of the four `OPT_GOLDEN` captures only `default` was recorded with
+`nerdKnobs: false`, and its base has both people on Medicare at start — so its ACA rows were
+suppressed by age, not by the flag. All four still reproduce.
+
+**One test I wrote failed for a reason worth recording.** The in-page assertion that four ACA
+options are offered failed while a live DOM read showed all four present. `retirement_optimizer.html`
+calls `runTests?.()` at top level, which runs BEFORE the `DOMContentLoaded` handler that builds the
+dropdown. The test was asserting on bootstrap timing rather than on the builder; it now calls
+`refreshStratRateOptions()` itself.
+
+---
+
 ## PR 3c: the ACA cap that never ended — prediction, then measurement (2026-08-05, v11.1462)
 
 The plan requires the direction to be predicted first, because the only ACA fixture in the suite is

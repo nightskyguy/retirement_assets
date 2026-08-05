@@ -1422,3 +1422,46 @@ User feedback on the baseline-accounting UI:
 - Both commits verified INDEPENDENTLY green so a bisect lands on a working tree either way: commit 1
   node 189/189, commit 2 node 188/188. Code tree after the rewrite diffed against the pre-rewrite
   branch: empty outside `.planning/`.
+
+## Session: 2026-08-05 (cont.) — user bug report on the ACA age gate: three findings, only one of them the reported one (v11.1464)
+
+- REPORTED: ACA options stay disabled after changing birth years; suspected the gate is evaluated
+  only at load. DISPROVEN by driving real input events across 9 transitions — `startAge`,
+  `birthyear1` and `birthyear2` all re-run the gate live. `birthyear1` was isolated deliberately
+  (hold the other two so only it moves the verdict) because the first attempt changed it without
+  flipping the outcome, which proves nothing.
+- THE REAL CAUSE was `startAge`, still at its default 65 in the reported URL: person 1 starts
+  retirement AT Medicare age whatever their birth year, and the spouse is 79 in the 2031 start year.
+  Correct behavior, invisible reasoning.
+- AND THE REASON IT LOOKED BROKEN is a two-age-bases collision on one screen. `#age-display-1/2`
+  show ages TODAY and never move when Retirement Start Age changes (verified by moving startAge
+  65 -> 55 and watching them sit still); the gate is about ages at retirement START. The page showed
+  59/73 and the warning talked about 65/79 without naming a year. Warning now names the start year
+  and both ages in it, and says which field to change.
+- THE ⚠️ THE USER WAS LOOKING AT WAS A STRING LITERAL. `{ pct: 400, label: 'ACA 400% FPL ⚠️' }` —
+  only that entry, computed from nothing, so it fired even when 400% was the only feasible arm and
+  stayed silent on a 200% cap that could fund nothing. PF13 saw it ("not just the hardcoded 400%
+  label") and worked around it in the results table rather than removing it. Removed now.
+- THE FLAG THAT IS COMPUTED WAS CHECKED, NOT ASSUMED: 1008 scenarios, zero cases where a looser cap
+  is flagged while a tighter one is clean. Every partial set is downward-closed and a lone flag is
+  always 200%. Pinned by a new test. Getting that test to reach the partial case needed Social
+  Security in the sweep — `CAP_BASE`'s $72k of benefits already exceeds the 300% cap alone, so every
+  arm breaches on unavoidable income and the middle never appears.
+- ACA UN-GATED from the nerdknob: dropdown options, the sweep family, and the documentation
+  paragraph (its inline `display:none` removed from the markup rather than switched off in JS, so it
+  survives even if the bootstrap does not run). Golden safety CHECKED BEFORE the gate came out: of
+  the four captures only `default` was recorded with the nerdknob off, and its base has both people
+  on Medicare, so its ACA rows were suppressed by age anyway. All four still reproduce.
+- ONE OF MY OWN TESTS FAILED FOR A GOOD REASON: the in-page "four ACA options offered" assertion
+  failed while a live DOM read showed all four. `runTests?.()` is called at top level in
+  `retirement_optimizer.html` and runs BEFORE the `DOMContentLoaded` handler that builds the
+  dropdown — the test was asserting on bootstrap timing, not on the builder. It now calls
+  `refreshStratRateOptions()` itself.
+- VERIFIED: node optimizer_core 189/189, taxPaymentPlanner 32/32, doclinks 22/22. Browser on
+  localhost:8771 WITHOUT `?nerdknob` (the state that used to hide everything) — in-page suite
+  245/245, console at the known 4-fixture baseline, all four ACA options present and none carrying a
+  triangle, doc paragraph visible, sweep enumerates 16 ACA rows where it previously enumerated zero,
+  and all five warning branches read correctly including the singular/plural verb agreement.
+- v11.1464, changelog entry added and the sixth-oldest dropped. `?v=` bumped on `optimizer_ui.js`,
+  `optimizer_core.js` and `optimizer_tests.js`; `optimizer_tests.js` had been stale at `1111f3`.
+

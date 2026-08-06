@@ -1228,7 +1228,7 @@ function computeIncome(sim, yr) {
 
 // Strategy flags, Guyton-Klinger spend adjustment, target spend, marginal-rate seeds, and the working balance snapshot.
 function resolveSpendTarget(sim, yr) {
-    const { inputs, balance } = sim;
+    const { inputs, balance, birthyear1, birthyear2 } = sim;
     const y = yr.y;
     // 4. Determine Target Spending amount based on Strategy
     // ACA is a STRICT-cap strategy: it shares the bracket strategy's ceiling math and
@@ -1278,7 +1278,29 @@ function resolveSpendTarget(sim, yr) {
     // GK bypasses goalLimit (bracket ceiling) - spend is dynamically set by GK rules
     const isGKStrategy = inputs.strategy === 'gk';
     yr.targetSpend = (yr.isBracketStrategy || yr.isOrderedStrategy || isGKStrategy) ? sim.spendGoal : Math.min(sim.spendGoal, yr.goalLimit);
-    yr.additionalSpendNeeded = Math.max(0, yr.targetSpend + yr.IRMAA - yr.possibleIncome);
+
+    // P38: size the primary draw against income the household can actually SPEND. yr.possibleIncome
+    // (:1226) is GROSS - Social Security, pension and the taxable RMD before any tax is paid - so
+    // subtracting it whole sized the draw as if that income arrived tax free, and the tax on it went
+    // unfunded every year of the run. The later passes correct the draw's own tax, never this.
+    //
+    // The tax is COMPUTED, not estimated with a rate. possibleIncome mixes three things taxed
+    // differently: Social Security (0-85% included), ordinary pension/RMD, and qualified dividends
+    // (0/15/20%). Multiplying the whole by sim.nominalTaxRate overstates the tax on the SS and
+    // qualified-dividend parts and over-draws, which is a plausible wrong answer rather than an
+    // error. So calculateTaxes runs on the guaranteed-income base ALONE, with no discretionary IRA
+    // draw and no capital gains, mirroring the argument shape used in the forced-IRA loop.
+    // yr.IRMAA is added separately below and tax.totalTax excludes it, so there is no double count.
+    yr.guaranteedIncomeTax = yr.possibleIncome > 0 ? calculateTaxes({
+        filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
+        totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
+        earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest, inflation: sim.cpiRate,
+        pensionIncome: yr.pension, iraIncome: yr.taxableRMD,
+        qualifiedDiv: yr.taxableDividends, capGains: 0, hsaContrib: 0,
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+    }).totalTax : 0;
+
+    yr.additionalSpendNeeded = Math.max(0, yr.targetSpend + yr.IRMAA - (yr.possibleIncome - yr.guaranteedIncomeTax));
 
     // INCOMPLETE: marginalFedTaxRate and marginalStateTaxRate are set to the rates AT the
     // spendGoal bracket, not refined to the next lower IRMAA/state limit. To fix: after

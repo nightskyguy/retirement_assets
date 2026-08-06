@@ -466,6 +466,15 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // 7,969,501.955988 -> 7,935,798.156794, tax 2,154,586.451134 -> 2,140,785.745597, final NW
     // 9,955,429.693910 -> 9,920,517.469072. The guardrail-adjustment count is unchanged at 4, which
     // is what this test is actually guarding.
+    //
+    // Re-derived again for P38 PR 3. GK runs through the baseline `else` branch, which sizes its
+    // primary draw from yr.additionalSpendNeeded, and that is now net of the tax on guaranteed
+    // income. Measured against the values pinned below, not the ones in the paragraph above (those
+    // two drifted apart at some point): spend 7,935,798.156165 -> 7,935,798.157290 (the goal is met
+    // either way, so this is rounding), tax 2,141,499.763082 -> 2,169,137.836607, final NW
+    // 9,924,288.129575 -> 9,913,213.043789. Higher tax and lower ending wealth is the expected
+    // direction: the draw is now large enough to actually pay the tax on Social Security and the
+    // RMDs, money the old sizing left unfunded. The adjustment count is still 4.
     const gk = simulate({
         ...BASE, strategy: 'gk', nYears: 30,
         birthyear1: 1960, die1: 92, birthyear2: 1962, birthmonth2: 6, die2: 94, hasSpouse: true,
@@ -475,9 +484,9 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
         spendGoal: 140000, inflation: 0.025, cpi: 0.025, growth: 0.06,
         cashYield: 0.02, dividendRate: 0.02,
     });
-    assertNear(gk.totals.spend, 7935798.156165, 'GK total spend', 0.01);
-    assertNear(gk.totals.tax, 2141499.763082, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 9924288.129575, 'GK final net worth', 0.01);
+    assertNear(gk.totals.spend, 7935798.157290, 'GK total spend', 0.01);
+    assertNear(gk.totals.tax, 2169137.836607, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 9913213.043789, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 4,
         `Expected the same 4 guardrail adjustments as the pre-merge run, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
@@ -1090,15 +1099,26 @@ test('funding invariant: the fixture actually drains (guards a vacuous green)', 
     // while Proportional 0% stranded $304k. An arm that never exhausts a tax-free buffer never
     // reaches the correction passes, so its zero would mean "not tested", not "correct".
     //
-    // The bar is Cash specifically, not "every account". Two arms legitimately end with money in
+    // The bar is Cash specifically, not "every account". Some arms legitimately end with money in
     // other places and still exercise the path fully: `minlimit` drains its IRA and leaves
-    // Brokerage (that is the P32 case pinned below), and `propwd 10%` over-draws IRA so hard that
-    // the after-tax surplus keeps Brokerage alive. Both empty Cash, which is what proves the gap
-    // fill ran dry.
+    // Brokerage (that is the P32 case pinned below).
+    //
+    // An arm that never empties Cash has to clear a DIFFERENT bar, not be waved through: it must
+    // have funded the whole plan, every year, with nothing stranded. Then its zero means "nothing
+    // needed stranding", which is a real statement, rather than "the path was never reached".
+    // P38 PR 3 moved two arms into that class - `propwd 10%` and `gk`. Sizing the primary draw net
+    // of the tax on guaranteed income stopped the under-draw those two were papering over with
+    // surplus, so on this fixture they now finish solvent with Cash to spare (min Cash 51,002 and
+    // 27,263) instead of scraping Cash to zero. Naming them here instead would rebuild exactly the
+    // stale exemption list that caused P38 in the first place.
     for (const arm of FUNDING_ARMS.filter(a => !a.convergence)) {
-        const log = simulate({ ...CAP_BASE, stratACAMultiple: 0, ...arm.over }).log;
-        assert(log.some(e => (e.Cash || 0) <= 1),
-            `${arm.name} never empties Cash — it cannot exercise the funding path, so its pin proves nothing`);
+        const r = simulate({ ...CAP_BASE, stratACAMultiple: 0, ...arm.over });
+        if (r.log.some(e => (e.Cash || 0) <= 1)) continue;          // drained: the pin is earned
+        const short = r.log.filter(e => Math.abs(e.shortfall || 0) > 1);
+        assert(r.totals.success && short.length === 0,
+            `${arm.name} never empties Cash AND does not fully fund the plan ` +
+            `(success=${r.totals.success}, ${short.length} shortfall year(s)) — it cannot exercise ` +
+            `the funding path, so its pin proves nothing`);
     }
     // The convergence arms are exercised by a different fact: they strand money they could still
     // reach. Assert that directly so they are not simply unchecked.
@@ -1108,6 +1128,39 @@ test('funding invariant: the fixture actually drains (guards a vacuous green)', 
         assert(stranded.length > 0 && stranded.every(e => (e.TotalIRA || 0) > 1),
             `${arm.name} should strand spending while the IRA is still funded — that is the convergence gap`);
     }
+});
+
+// ── P38 PR 3: the primary draw is sized net of the tax on guaranteed income ───
+// PR 2 widened the forced-IRA backstop so the shortfall stopped stranding. That treated the
+// symptom: the backstop was making up, year after year, for a first-pass draw that was too small
+// by construction. PR 3 fixes the sizing itself (optimizer_core.js:1303), so the backstop goes
+// back to being what its name says.
+test('P38: the primary draw funds the tax on guaranteed income, not the backstop', () => {
+    const r = simulate({ ...CAP_BASE, stratACAMultiple: 0, strategy: 'propwd', propWithdraw: 0, stratRate: 0 });
+    assert(r.totals.success && _sumAbsShortfall(r.log) < 100,
+        `the plan must still fund fully, got success=${r.totals.success} shortfall=${Math.round(_sumAbsShortfall(r.log))}`);
+    // Pinned, not bounded: 395,109 before this change, 43,816 after. The drop is the measurement —
+    // that money was the tax on Social Security and the RMDs, which the first-pass draw now covers
+    // directly instead of leaving for the backstop to discover.
+    assertNear(_sumForcedIRA(r.log), 43816, 'forced-IRA total once the draw is sized correctly', 1);
+});
+
+test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household', () => {
+    // The trap this fix had to avoid. yr.possibleIncome mixes Social Security (0-85% included),
+    // ordinary pension/RMD, and qualified dividends (0/15/20%), so multiplying the whole thing by
+    // sim.nominalTaxRate is not an approximation of the tax on it — it is several times the real
+    // number, and it would have over-drawn the IRA every year while looking perfectly plausible.
+    // That is why optimizer_core.js calls calculateTaxes on the guaranteed base instead.
+    const guaranteed = { filingStatus: 'MFJ', ages: [72, 70], birthyears: [1954, 1956],
+        totalSS: 80000, IRMAAAnnualCost: 0, earnedIncome: 30000, inflation: 1,
+        pensionIncome: 0, iraIncome: 30000, qualifiedDiv: 12000, capGains: 0,
+        hsaContrib: 0, taxExemptInterest: 0, state: 'CA', fedRateCreep: 1, stateRateCreep: 1 };
+    const t = calculateTaxes(guaranteed);
+    const possibleIncome = 80000 + 30000 + 12000;
+    const flat = possibleIncome * t.nominalRate;
+    assert(t.totalTax > 0, 'the fixture must owe some tax, or the comparison is vacuous');
+    assert(flat > t.totalTax * 2,
+        `flat-rate sizing should be wildly high here; computed ${t.totalTax.toFixed(2)} vs flat ${flat.toFixed(2)}`);
 });
 
 // ── The one exception: a live ACA cap ─────────────────────────────────────────
@@ -1932,6 +1985,13 @@ test('selectConversionCandidates: caps at maxPool and returns champions in desce
 // T6 scenario: converting HURTS raw ending wealth (finalNW picks $0) but HELPS the after-tax +
 // spendable measure (baselineScore picks $50k/yr). Directly encodes the reported defect: the old
 // metric told the user "no benefit" while the honest measure finds a real conversion.
+//
+// spendGoal was 90,000 and was raised to 92,000 for P38 PR 3. Sizing the primary draw net of the
+// tax on guaranteed income cost the no-conversion run 15,146 of final net worth while costing the
+// $50k run only 240, so at 90,000 the two metrics both landed on $50k and the fixture stopped
+// separating them - it would have asserted "the metrics agree", the opposite of the point. The
+// separation is a property of the scenario, not of the dollar figure: 92,000 (and 95,000, and
+// Cash 80,000, and ss1 38,000) all restore finalNW $0 vs baselineScore $50k.
 const PF11_BASE = {
     STATEname: 'CA', strategy: 'propwd', propWithdraw: 0, nYears: 25,
     birthyear1: 1958, birthmonth1: 1, die1: 90,
@@ -1940,7 +2000,7 @@ const PF11_BASE = {
     Brokerage: 300000, BrokerageBasis: 200000, Cash: 100000,
     ss1: 40000, ss1Age: 67, ss2: 25000, ss2Age: 67,
     pensionAnnual: 0, survivorPct: 0, pensionCola: false,
-    spendGoal: 90000, spendChange: 0, iraBaseGoal: 0,
+    spendGoal: 92000, spendChange: 0, iraBaseGoal: 0,
     inflation: 0.025, cpi: 0.025, growth: 0.04, cashYield: 0.02, dividendRate: 0.015,
     ssFailYear: 2099, ssFailPct: 1.0,
     convertExcessToRoth: true, iraWithdrawPct: 0.05,

@@ -1,5 +1,85 @@
 # Findings & Decisions
 
+## Dividends are counted twice, and that is why Brokerage looks under-drawn (2026-08-06, v11.146e)
+
+**P32 asked "why is Brokerage barely drawn, and is the third-pass exclusion to blame". The premise
+is wrong on both halves.** Brokerage is drawn constantly, and the reason it looks otherwise is an
+accounting defect three passes upstream of the exclusion the phase suspected. Found by the
+accounting audit the phase itself mandated **before** running any behavior arm; that instruction is
+what stopped a wasted measurement.
+
+**The defect.** `yr.taxableDividends` (`optimizer_core.js:1191`) is `balance.Brokerage x dividendRate`.
+It is then used in both of these places and never reconciled:
+
+- as **income** - it sits in `yr.possibleIncome` (`:1226`, `:1543`) and in every later income sum
+  (`:1662`, `:1750`, `:1778`, `:1800`), so it reduces the withdrawal the plan needs to make; and
+- as **balance** - `growAndSettle` credits it to Cash (`:2243`) or, under DRIP, to Brokerage
+  (`:2239-2240`).
+
+Nothing debits it back out. The only Cash debits in the file are the Cash Reserve hide (`:1328`) and
+conversion-tax funding (`:2065`, `:2157`). **The same dollar funds spending and stays on the balance
+sheet.**
+
+**Proof that does not depend on reading the code.** Hold TOTAL return fixed and move it between
+growth and dividends. Dividends are taxed annually and unrealized growth is not, so the
+dividend-bearing plan must finish BEHIND. Brokerage-only $1M, basis = value so capital gains cannot
+interfere, 20 years:
+
+| spendGoal | A: growth 8% / div 0% | B: growth 6% / div 2% | B - A | A tax | B tax |
+|---|---|---|---|---|---|
+| $0 | $4,703,357 | $4,764,613 | **+$61,256** | $0 | $16,153 |
+| $40,000 | $2,835,288 | $3,603,293 | **+$768,005** | $4,367 | $13,767 |
+| $80,000 | $956,925 | $1,530,603 | **+$573,678** | $20,228 | $20,564 |
+
+B wins by 27% at $40k of spending while paying three times the tax. The year-by-year trace shows the
+mechanism with no inference required: the dividend lands in Cash, `CashWD` stays **$0 forever**, and
+Cash climbs $21,100 -> $746,286 over the 20 years while Brokerage draws fall to zero by year 14. The
+plan is spending money it never removes from any account.
+
+**This is the reported symptom.** Holding total return at 5% on a $600k Brokerage and moving the
+split:
+
+| dividend | growth | lifetime Brokerage withdrawals | finalNW |
+|---|---|---|---|
+| 0% | 5.0% | $1,108,006 | $1,649,844 |
+| **0.5% (shipped default)** | 4.5% | **$896,765** (-19%) | **$1,895,840** (+$245,996) |
+| 1% | 4.0% | $597,763 (-46%) | $2,143,248 (+$493,404) |
+| 2% | 3.0% | $27,004 (-98%) | $2,570,484 (+$920,640) |
+
+A higher dividend share at identical total return suppresses Brokerage withdrawals and inflates net
+worth. **`retirement_optimizer.html:380` ships `dividendRate` defaulting to 0.5**, so this is not an
+edge case, it is every plan that has not zeroed the field.
+
+**Consequences for the phase.** Q2 (does a third-pass Brokerage leg spiral) is **moot until this is
+fixed**: it would measure whether an extra Brokerage draw helps, on an engine where dividends already
+remove the need to sell Brokerage at all. The phase's own note anticipated exactly this - "a
+systematic understatement here would suppress Brokerage draws everywhere with no strategy logic
+being wrong, which would make Q2 moot". The direction is the only thing it got wrong: this is an
+**over**-credit, not an understatement.
+
+**Q1, measured, on shipped behavior** (5 scenarios x 11 arms, 55 rows): **zero rows never draw
+Brokerage.** By gap-fill family, share of years drawing Brokerage: baseline 90.4% starting in year 0,
+bracket 61.1% starting year 5.1, cyclic 57.5%, ordered 44.7%. Lifetime draws routinely exceed the
+starting balance several times over (`minlimit` on CAP_BASE: 1,422%), because surplus routing keeps
+refilling it. "Brokerage is barely drawn" is false as a general claim.
+
+Predictions scored: **P1 right** (baseline highest and earliest, proportional gap fill touches it in
+year 0), **P2 right** (bracket later, Cash comes first in its chain), **P3 WRONG** - predicted
+BIRC > CBIR > RIBC by sequence position, measured CBIR 49.2% > BIRC 45.8% > RIBC 39.2%. BIRC drains
+Brokerage first and therefore has none left to draw later, so "Brokerage first" produces *fewer*
+drawing years, not more. **P4 understated** - predicted never-drawing rows would be rare, they are
+absent entirely.
+
+**Also settled, and it removes a worry from the phase list.** `capGainsPercentage` is computed once
+from the start-of-year balance (`:1330`) and the phase flagged it as a hazard for a second draw in
+the same year. It is not: basis is consumed **proportionally**
+(`calculateBrokerageWithdrawal`, `:165-183`), so the gain fraction is invariant under withdrawal -
+$1M/$500k basis is 50% before a $400k draw and 50% after. The frozen value is correct under this
+basis model. It would only be wrong under lot selection, which the engine does not model, and that
+modeling ceiling (no HIFO, no specific-ID) still bounds every P32 conclusion.
+
+Harness: `.test_harnesses/brokerage_harness.js` (node), reproduces all of the above.
+
 ## A hardcoded ⚠️, a gate nobody could see, and two age bases side by side (2026-08-05, v11.1464)
 
 A user reported the ACA options staying disabled after changing birth years, and suspected the age

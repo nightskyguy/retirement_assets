@@ -14,6 +14,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `betr_harness.js` | **node** | Is the Break-Even Tax Rate (BETR) signal trustworthy? |
 | `stopyear_harness.js` | **browser console** | When should a plan stop Roth conversions? |
 | `unifiedconv_harness.js` | **node** | Does modeling every voluntary IRA withdrawal as a Roth conversion change anything? |
+| `brokerage_harness.js` | **node** | Why is Brokerage barely drawn, and is the third-pass exclusion to blame? |
 
 ## betr_harness.js  (node)
 

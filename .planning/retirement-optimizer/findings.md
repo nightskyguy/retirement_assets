@@ -135,6 +135,41 @@ rather than tuned until the old gap reappeared. The consequence is recorded in t
 defect those two tests documented currently has **no regression guard**. `baselineScore` may still
 be the better metric on other grounds, but the scenario that motivated it no longer reproduces.
 
+## Two OBBBA provisions were implemented, tested, and never switched on (2026-08-06, `c9e356a`)
+
+**Found while verifying a user report** that federal tax looked too low on a brokerage-only Alaska
+plan. That tax was correct; checking it surfaced this. **No plan phase covers it** - it is recorded
+here because it is the second instance of one failure mode in a single week.
+
+`taxengine.js` implements both OBBBA provisions (P.L. 119-21) and `optimizer_tests.js` unit-tests
+both. **The tests pass `obbaOn: true` themselves, and no call site in `optimizer_core.js` ever did.**
+Both flags default to `false`, so the senior deduction never reached a single simulated year and the
+SALT cap always used the $10k TCJA floor. Federal tax was too **HIGH** for anyone 65+ in 2025-2028,
+and for itemizers in high-tax states in 2025-2029.
+
+- **The caller has to own the gate.** `calculateTaxes` cannot decide this itself: it receives
+  `inflation` but never a tax year, and the `sunsetYear` values in `TAXData.OBBBA` are declarative,
+  referenced by no code. `yr.obbaOn` / `yr.saltHigh` are now computed once per year in
+  `resolveHousehold` and passed to all **10** `calculateTaxes` call sites.
+- **Sizes.** Senior deduction $6,000 per filer 65+, phasing out above $150k MFJ / $75k single,
+  2025-2028. SALT $40k cap, 2025-2029, phasing down above $500k MAGI. Both revert the year after
+  sunset. Measured on the reported scenario (MFJ, both 65+, Alaska): federal tax 2026-2028 drops to
+  $0 (was $144/$106/$63). **The SALT half is real but narrow** - it only bites between roughly $465k
+  and $515k of MAGI in a high-tax state, worth up to ~$959 there and nothing outside it.
+- **Second-order effect worth remembering:** lowering the tax bill lengthened the forced-IRA
+  convergence path. `fixedpct` 2% began finishing 2027 with **$21 unfunded while the IRA held
+  $2.16M** - the 4th iteration was one short. Cap raised 4 -> 6; 8 is identical, so it converged
+  rather than being papered over. Costs nothing when already converged (the loop breaks under $1).
+- `ordered` CBIR went 2 -> 3 stranded years and RIBC 1 -> 2, amounts $10-$161. Known class: `ordered`
+  is the one family excluded from the forced-IRA loop, so it gets no second chance and any tax-path
+  change reshuffles which years end a few dollars short.
+
+**The generalizable lesson, same as the dividend double-credit above:** this suite tests functions
+directly and does not test that the engine *calls them correctly*. The guard added here is
+accordingly a use-site guard, not another unit test - spy on the global the engine resolves and
+assert every `calculateTaxes` call in a run is handed both flags, and that the gate actually varies
+with the year.
+
 ## A hardcoded ⚠️, a gate nobody could see, and two age bases side by side (2026-08-05, v11.1464)
 
 A user reported the ACA options staying disabled after changing birth years, and suspected the age

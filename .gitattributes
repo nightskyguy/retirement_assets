@@ -1,0 +1,8 @@
+# Scoped deliberately. `core.autocrlf` is true on this machine and there is no repo-wide EOL
+# policy here on purpose - do not add `* text=auto` without a separate, measured pass, because
+# it renormalises every tracked file at once.
+#
+# The git hooks are the one place where line endings are load-bearing: sh cannot execute a
+# script whose shebang ends in CR, so a CRLF checkout of .githooks/pre-commit breaks committing
+# for anyone who clones this repo on Windows.
+.githooks/** text eol=lf

@@ -1513,3 +1513,79 @@ User feedback on the baseline-accounting UI:
   even when the content is unchanged. Check with `git diff --ignore-cr-at-eol` before believing it.
 - GOTCHA: `orderedSeq` accepts only `CBIR` / `RIBC` / `BIRC`. Anything else silently falls back to
   CBIR, so two "different" ordered arms can produce identical output and look like a bug.
+
+## Session: 2026-08-06 (worktree context-ab498f, branch worktrees/planning-with-files-f85b48) — context restore, plan reconciled with three merged PRs
+
+Planning files were **stale against git**: `task_plan.md` still read "As of 2026-08-05, evening" with
+P38 PR 3 described as an unmerged branch and P32 marked "not started", while `main` had moved to
+`10f6f2a` with three PRs merged on top. `progress.md` had no 2026-08-06 entry at all. `findings.md`
+was the only file current, and even it had no record of the OBBBA fix. No code touched this session.
+
+**Reconciled from `git log`, not from memory:**
+
+- **PR #153** — P38 PR 3, size the primary draw net of tax on guaranteed income (`018baa9`,
+  v11.146a). P38 is now COMPLETE end to end.
+- **PR #155** — P32 PR 1, third-pass state tax.
+- **PR #156** — P32 PR 2, brokerage research (`52be831`) plus two engine correctness fixes and the
+  changelog consolidation.
+
+**Two shipped fixes had no plan section between them.** The dividend/interest double-credit
+(`e9a3c8b`, v11.146f) was recorded in `findings.md` but its consequences never propagated to P32's
+status; the OBBBA gate fix (`c9e356a`) was recorded **nowhere** — it arrived out of band, from
+verifying a user report about low federal tax on an Alaska plan. Both are the same failure mode: a
+tax/accounting function unit-tested directly while its *use* went untested. Written up in
+`findings.md` as "Two OBBBA provisions were implemented, tested, and never switched on".
+
+**P32's own instruction is what earned the phase.** It mandated auditing the two accounting facts
+*before* running any behavior arm; that audit found the double-credit and refuted the phase premise
+(Q1: zero rows never draw Brokerage; baseline touches it in 90.4% of years). Q2 was moot before the
+fix and is now unblocked — but Q1's percentages were measured on the double-crediting engine and
+should be re-run before anything is concluded from them.
+
+**Files updated:** `task_plan.md` (header rewritten to 2026-08-06 state, duplicated P35 paragraph
+removed, P32 status and task checkboxes reconciled), `findings.md` (OBBBA section added),
+`progress.md` (this entry).
+
+**Open queue after the sync:** P32 Q2-Q5 + build tail; P39 (node-only tests invisible in the
+browser, not started, pre-commit hook is the cheap first slice); P36; the long P1-P28 backlog.
+
+## 2026-08-06 (cont.) — P39 work item 1: the pre-commit gate
+
+User picked P39 off the reconciled queue, scoped to **work item 1 only, then review**, and chose the
+committed-hooks-directory mechanism. The mechanism had to change; the intent did not.
+
+**Files:** `.githooks/pre-commit` (the logic), `.githooks/install` (one-time, per clone),
+`.githooks/README.md`, `.gitattributes` (new file), plus `ARCHITECTURE.md` and
+`.planning/FILE_DIRECTORY.md`. **No product code touched, so no version bump and no changelog
+entry** — same precedent as P35 PR 1 + PR 2.
+
+**The plan's two premises about hooks were both false, and checking beat assuming:**
+
+1. "The repo has no hook convention yet." It has one. `core.hooksPath` is pinned to the absolute
+   path `...\.git\hooks` in `.git/config` **and**, because `extensions.worktreeConfig` is on, again
+   in each of the three worktrees' `config.worktree` — which outranks the repo config. The planned
+   `git config core.hooksPath .githooks` would have been **silently ignored in every worktree**.
+   It would have looked installed and done nothing, which is the exact defect class P39 exists to
+   remove. Fixed by writing a delegating shim at the already-pinned path: one install, and it covers
+   the main checkout plus every present and future worktree, because the worktree tooling writes the
+   same absolute pin each time.
+2. Unstated but load-bearing: `core.autocrlf` is true system-wide and the repo had **no**
+   `.gitattributes`. A fresh clone would have checked the hook out with CRLF, and `sh` cannot run a
+   shebang ending in CR. Added `.gitattributes` with `.githooks/** text eol=lf` only — deliberately
+   **not** `* text=auto`, which would renormalise every tracked file in one unmeasured sweep.
+
+**Beyond spec:** the hook blocks on a *missing* suite as well as a failing one. A renamed or deleted
+suite would otherwise print nothing and read as green.
+
+**Count drift caught on pickup:** the phase's measured table says `optimizer_core.test.js` has 206
+tests; OBBBA and the dividend fix added 8, so it is **214**. Recorded in the phase. The staleness
+guard (work item 5) must measure its expected count, never copy that table.
+
+**Verification, each a separate run:** green tree exit 0, 214/32/22 in ~3.5 s; genuine failed
+assertion blocks (exit 1, names the suite); crashing suite blocks; missing suite blocks with its own
+message; `git commit` really fires the hook — proved with an empty commit message, which aborts
+*after* pre-commit runs, so nothing was committed; `rm` + `git checkout` round-trips the hook with
+zero CR bytes.
+
+**Still open in P39:** items 2-6 (slow tags, dual-mode port, idle runner + three-state badge,
+staleness guard, `?runtests=all`). The hook is the guarantee; those restore confidence in the badge.

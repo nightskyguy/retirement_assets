@@ -68,6 +68,9 @@ same stub pattern, just within `standalone/` rather than at root.)
 | `optimizer_tests.js` | Older/legacy in-browser unit test runner for the Optimizer. |
 | `doclinks.test.js` | `node`-run test suite for `doclinks.js` (run with `node doclinks.test.js`) — the `docHref()` mapping table. |
 | `taxPaymentPlanner.js` / `taxPaymentPlanner.test.js` | Standalone tax-payment-strategy engine (dual-IRA withholding optimizer) behind `RetirementTaxPlanner.html`, plus its `node` test suite. |
+| `.githooks/pre-commit` | Version-controlled `pre-commit` hook (P39 item 1) — runs all three `node` suites and blocks the commit on a failure, or on a **missing** suite. The three suites never run in the browser, so this is the only automatic gate on them. `git commit --no-verify` is the deliberate escape. |
+| `.githooks/install` | One-time per clone: `sh .githooks/install`. Writes a delegating shim at the already-pinned `core.hooksPath` (absolute, and re-pinned per worktree by `extensions.worktreeConfig`, so a relative `hooksPath` would be silently ignored in every worktree). One install covers the main checkout and all worktrees. |
+| `.githooks/README.md` | Why the shim rather than `core.hooksPath .githooks`, the timing table, and the `eol=lf` requirement. |
 | `.test_harnesses/betr_harness.js` | `node` investigative script — checks whether the displayed Break-Even Tax Rate (BETR) is trustworthy vs. an empirically-derived break-even rate. Not part of the regular suite; kept so the finding can be re-derived on demand. See `.test_harnesses/README.md`. |
 | `.test_harnesses/stopyear_harness.js` | Browser-console investigative script — the research harness behind the Stop-Year feature (`bestConversionStopYear()` in `optimizer_core.js` is the production version). |
 | `.test_harnesses/unifiedconv_harness.js` | `node` investigative script for P28 — models every voluntary IRA withdrawal as a Roth conversion across a 630-simulation grid. Findings live in `P28_RESULTS.md`. |

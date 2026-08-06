@@ -2,14 +2,33 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-08-05, evening. **P38 is COMPLETE.** PR 1 + PR 2 (the funding invariant and the gate
-widening, v11.1468) **MERGED as [PR #152](https://github.com/nightskyguy/retirement_assets/pull/152)**
-(`f524105`), together with the cash-rate/em-dash cleanup (`6771bb2`) and the P39 write-up
-(`ace9e7c`). **P38 PR 3, the sizing fix, is on branch `p38-pr3-size-draw-net-of-tax` off that merge,
-v11.146a, behavior change** — node 208/32/22, in-page 245/245, golden content-identical. See the P38
-section below for the measured deltas and the three test decisions. Earlier state: branch
-`p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464, P38's diagnosis-only planning files
-merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry). Earlier state: branch `p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464, P38's diagnosis-only planning files merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
+**As of:** 2026-08-06, midday. **Working tree clean, `main` = `10f6f2a`, shipped version v11.1478.**
+Everything below is merged; nothing is in flight.
+
+- **P38 is COMPLETE**, all three PRs merged: PR 1 + PR 2 (funding invariant + gate widening,
+  v11.1468) as [PR #152](https://github.com/nightskyguy/retirement_assets/pull/152) (`f524105`), and
+  PR 3 (size the draw net of tax on guaranteed income, v11.146a, `018baa9`) as
+  [PR #153](https://github.com/nightskyguy/retirement_assets/pull/153).
+- **P32 is PARTIALLY DONE**, research half landed as
+  [PR #155](https://github.com/nightskyguy/retirement_assets/pull/155) and
+  [PR #156](https://github.com/nightskyguy/retirement_assets/pull/156). Q1 measured, the mandated
+  accounting audit found a real defect, and **the phase premise is refuted**: Brokerage is drawn
+  constantly. See the P32 section and findings.md (2026-08-06) for what is now open.
+- **Two engine correctness fixes shipped in that batch**, both of the same class - a function that
+  was unit-tested directly while its *use* was not:
+  1. **Dividends and interest were credited twice** (`e9a3c8b`, v11.146f). The dollar both reduced
+     the needed withdrawal and stayed on the balance sheet. Moves everyone's numbers, downward.
+  2. **The OBBBA senior deduction and elevated SALT cap were never switched on** (`c9e356a`). Both
+     flags default false and no call site in `optimizer_core.js` ever passed them, so federal tax
+     was too HIGH for anyone 65+ in 2025-2028 and for high-tax-state itemizers in 2025-2029. Gate is
+     now resolved once per year in `resolveHousehold` and passed to all 10 `calculateTaxes` sites.
+     Forced-IRA iteration cap 4 -> 6 (the lower tax bill lengthened the convergence path).
+     **This fix had no plan phase of its own**; it was found while verifying a user report.
+- Changelog consolidated: 11.146b/146e/146f + OBBBA merged into one **v11.1478** release entry
+  (`05350e0`), and 11.1462/11.1468 folded into their neighbours (`912fd13`).
+- Test counts at `main`: **node 214/32/22, in-page 245/245**, `sweep_golden` content-identical.
+
+Earlier state, kept for the trail: **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry); P38's diagnosis-only planning files merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151) off `main` = `fe72bef`, v11.1464.
 **P35 PR 3a MERGED as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change). **P35 PR 3b MERGED as [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149)** (v11.1448 tokens, byte-identical, plus the doc file-reference gaps); the duplicate attempt PR #148 on branch `worktrees/medicare-age-data-7b2e91` is **CLOSED, not merged** — verified, nothing to do about it.
 **P35 PR 3c MERGED as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150)** (v11.1462 -> v11.1464 on merge, behavior change confined to `aca` rows, proven against `propwd`/`bracket` controls), four commits: the behavior change, the `eitherOnMedicareAtStart` deletion it made possible, the plan record, and the ACA Cliff un-gating. Next review point after it is **PR 3d** (`Basis <= Brokerage` invariant).
 Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
@@ -209,7 +228,13 @@ purpose. Do the fix as its own PR against a clean tree.
 
 ---
 
-## Phase P39: Make the node-only tests visible in the browser (2026-08-05) — not started
+## Phase P39: Make the node-only tests visible in the browser (2026-08-05) — IN PROGRESS (2026-08-06)
+
+**Count drift, noticed on pickup 2026-08-06.** The measured table below says `optimizer_core.test.js`
+= 206 tests; the OBBBA fix and the dividend fix added 8, so node is **214/32/22** at `main` =
+`10f6f2a`. The 2466 ms / 1792 ms timing split is still directionally right (nothing added was a
+binary search), but **the staleness guard's expected count must be measured fresh, never copied from
+this table.** That is the phase's own lesson arriving early.
 
 **The problem, in the user's words.** Release gating relies on the **Red X**: load the page, see
 `#testsFailed` render `🟢` or `❌ tests failed` (`optimizer_tests.js:2187-2194`), and do not publish
@@ -281,10 +306,35 @@ everything added later.
 
 ### Work items
 
-1. **Pre-commit hook first, on its own.** Runs `optimizer_core.test.js`, `taxPaymentPlanner.test.js`
-   and `doclinks.test.js`; non-zero exit blocks the commit. Must be installable (hooks are not
-   version-controlled) — either a `core.hooksPath` directory committed to the repo, or a documented
-   one-line install. Decide which; the repo has no hook convention yet.
+1. **Pre-commit hook first, on its own.** — **DONE 2026-08-06, uncommitted.** `.githooks/pre-commit`
+   (committed, real logic) + `.githooks/install` (writes a delegating shim) + `.githooks/README.md`,
+   documented in `ARCHITECTURE.md` and `FILE_DIRECTORY.md`. Nothing user-visible, so **no version
+   bump and no changelog entry**, same precedent as P35 PR 1 + PR 2.
+
+   **The chosen mechanism did not survive contact and the reason is worth keeping.** The plan said
+   "a `core.hooksPath` directory committed to the repo", and the repo was believed to have "no hook
+   convention yet". Both were wrong: `core.hooksPath` is **already** set, to the absolute path
+   `C:\Users\starc\source\retirement_assets\.git\hooks`, in `.git/config` **and** — because
+   `extensions.worktreeConfig` is on — separately in **every** worktree's `config.worktree`, which
+   **outranks** the repo config. `git config core.hooksPath .githooks` would therefore have been
+   silently ignored inside every worktree, i.e. a no-op in the place most work happens, while
+   looking installed. **That is this phase's own failure mode, one tier up.** The installer writes
+   one shim at the pinned path instead; every worktree already points there, including future ones.
+
+   Second trap, same class: `core.autocrlf` is true system-wide and the repo had **no**
+   `.gitattributes`, so a fresh clone would have materialised the hook with CRLF and `sh` cannot
+   execute a shebang ending in CR. Added `.gitattributes` pinning `.githooks/** text eol=lf`,
+   **scoped to that directory on purpose** — a repo-wide `* text=auto` would renormalise every
+   tracked file and is a separate, measured pass if it is ever wanted.
+
+   Also added beyond the spec: the hook blocks on a **missing** suite, not only a failing one. A
+   renamed or deleted suite would otherwise produce output indistinguishable from a green run.
+
+   Verified, each as its own run: green tree exits 0 (214/32/22 in ~3.5 s); a genuine failed
+   assertion blocks with exit 1 and names the suite; a crashing suite blocks; a missing suite blocks
+   with a different message; `git commit` really fires it (proved via an empty commit message, which
+   aborts *after* the hook runs, so no commit was created); and `rm` + `git checkout` round-trips the
+   hook with zero CR bytes.
 2. **Tag the 3 slow tests.** A `test.slow(name, fn)` variant, or a `SLOW` prefix the browser runner
    filters. Keep them running in node unconditionally.
 3. **Dual-mode the two portable test files.** Mechanical: replace the `require()` header with a
@@ -2311,15 +2361,25 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
 - Whether Roth belongs before Cash — P28.
 
 **Tasks:**
-- [ ] Q1 scan FIRST — it may reframe everything that follows
-- [ ] Audit the two accounting facts (`:743` dividend-rate exclusion, `:1152` pre-withdrawal accrual) before running any behavior arm
+- [x] Q1 scan FIRST — it may reframe everything that follows. **DONE, and it did.** 5 scenarios x 11
+  arms, 55 rows, **zero rows never draw Brokerage**; baseline 90.4% of years from year 0, bracket
+  61.1%, cyclic 57.5%, ordered 44.7%. Prediction P3 scored WRONG (BIRC draws Brokerage first and so
+  has none left later). **"Brokerage is barely drawn" is false as a general claim.**
+- [x] Audit the two accounting facts before running any behavior arm. **DONE, and it paid for the
+  whole phase.** Not an understatement, an **over**-credit: `yr.taxableDividends` counted as income
+  *and* credited to the balance with nothing debiting it back. Fixed in `e9a3c8b` (v11.146f).
 - [ ] Research inputs, default off, P28 pattern: `thirdPassBrokerage` ('off'|'bounded'), `forcedIRAAllowBrokerage`, `cycleHarvestMode` ('maxbracket'|'spendonly')
-- [ ] Q2 with an explicit iteration counter, so "spiral" becomes a measured claim either way
+- [ ] Q2 with an explicit iteration counter, so "spiral" becomes a measured claim either way.
+  **Was moot pre-fix; now unblocked and worth re-asking on a corrected engine** — but re-run Q1's
+  numbers first, since they were measured on the double-crediting engine.
 - [ ] Q3/Q4 as scans over existing sweep output
+- [ ] Q5 (max-the-bracket harvest vs spend-only) A/B
 - [ ] Record the aggregate-basis modeling ceiling as a README limitation regardless of outcome
 - [ ] Decision: re-scope the third-pass exclusion, un-gate `cycleLTCGTarget`, or record and keep
-- **Status:** not started, research-first with a likely build tail. **Harness:**
-  `.test_harnesses/brokerage_harness.js` (node), results to a sibling `.md` if large
+- **Status:** **research half DONE and merged** (PR #155 third-pass state tax, PR #156 brokerage
+  research + the dividend fix). Q1 answered, premise refuted, accounting defect found and shipped.
+  **Open: Q2-Q5 and the build/decision tail.** **Harness:** `.test_harnesses/brokerage_harness.js`
+  (node), results to a sibling `.md` if large
 - **Depends on:** shares the gap-fill path with P30. Sequencing preference, not a hard dependency: run
   P30 first so the `[40,60]` question is settled before the third-pass arms move the same numbers.
 

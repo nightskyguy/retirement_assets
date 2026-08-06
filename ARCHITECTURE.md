@@ -300,6 +300,7 @@ refreshed worker can pull a stale `optimizer_core.js`.
 | `optimizer_changelog.md` | docs | full release history; the 5 newest entries are duplicated inline in the HTML |
 | `_includes/head-custom.html` | docs | Jekyll theme hook: CSS + `doclinks.js` for rendered `.md` pages |
 | `.test_harnesses/` | research | investigative scripts that are **not** part of any suite - see the note below and that directory's `README.md` |
+| `.githooks/pre-commit` | test gate | runs all three `node` suites, blocks the commit on a failure or a missing suite. Install once with `sh .githooks/install` - see below |
 
 ### Where a test file belongs
 
@@ -319,6 +320,30 @@ Two directories, one rule, because the distinction has been asked about:
 
 The test that decides it: **would the suite fail without this file?** Yes goes at root; no goes in
 `.test_harnesses/`.
+
+### The pre-commit gate, and what it is compensating for
+
+```sh
+sh .githooks/install
+```
+
+Run once per clone. Release gating relies on the Red X that `optimizer_tests.js` renders at page
+load, and **that badge covers only the 245 in-page tests**. The 268 tests in `optimizer_core.test.js`,
+`taxPaymentPlanner.test.js` and `doclinks.test.js` never run in the browser at all, so breaking one
+is invisible at the moment of release. The hook runs all three (~3.5 s) and blocks the commit on a
+failure - or on a **missing** suite, since a renamed one would otherwise look identical to a green
+run. `git commit --no-verify` is the deliberate escape hatch.
+
+Two mechanics worth knowing before touching it, both discovered the hard way:
+
+- **`core.hooksPath` is already pinned to an absolute path**, and `extensions.worktreeConfig` is on,
+  so every worktree re-pins it in its own `config.worktree`, which outranks the repo config.
+  `git config core.hooksPath .githooks` would therefore be silently ignored inside every worktree.
+  `install` writes a shim at the pinned location instead; the shim execs the `.githooks/pre-commit`
+  of whichever working tree is committing.
+- **`.gitattributes` pins `.githooks/**` to `eol=lf`.** `core.autocrlf` is true on Windows and `sh`
+  cannot execute a script whose shebang ends in CR. That pin is scoped to `.githooks/` on purpose -
+  this repo has no repo-wide EOL policy, and adding one would renormalise every tracked file.
 
 ### Shared globals crossing file boundaries
 

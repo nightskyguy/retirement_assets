@@ -1,0 +1,65 @@
+#!/bin/sh
+#
+# install - point this clone's git hooks at the version-controlled .githooks/ directory.
+#
+#   sh .githooks/install
+#
+# Run once per clone. Safe to re-run; it overwrites only the shim it wrote.
+#
+# WHY A SHIM RATHER THAN `git config core.hooksPath .githooks`.
+# That is the usual advice and it does NOT work in this repo. `core.hooksPath` is already set to
+# an ABSOLUTE path in .git/config, and `extensions.worktreeConfig` is on, so every worktree
+# carries the same absolute pin in its own config.worktree - which OUTRANKS the repo config.
+# Setting a relative hooksPath would therefore be silently ignored inside every worktree, which
+# is where most work here happens, and a hook that silently does not run is worse than no hook.
+#
+# So: install one shim at the pinned location. Every worktree already points there, including
+# worktrees created later, and the shim runs the .githooks/pre-commit belonging to whichever
+# working tree is being committed.
+
+set -u
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+	echo "install: not inside a git work tree." >&2
+	exit 1
+}
+
+# Effective hooks directory: the configured pin if there is one, else git's default. Backslashes
+# are normalised because git reports Windows paths with them and sh treats them as escapes.
+hooks=$(git config --get core.hooksPath 2>/dev/null | tr '\\' '/')
+if [ -z "$hooks" ]; then
+	hooks="$(git rev-parse --git-common-dir)/hooks"
+fi
+
+case "$hooks" in
+	/*|?:/*) ;;                       # already absolute
+	*) hooks="$root/$hooks" ;;        # relative pins resolve against the work tree root
+esac
+
+mkdir -p "$hooks" || exit 1
+target="$hooks/pre-commit"
+
+if [ -f "$target" ] && ! grep -q 'githooks/pre-commit' "$target" 2>/dev/null; then
+	echo "install: $target already exists and is not our shim." >&2
+	echo "         Move it aside and re-run, or merge the two by hand." >&2
+	exit 1
+fi
+
+cat > "$target" <<'SHIM'
+#!/bin/sh
+# Installed by .githooks/install - do not edit. The real hook is version-controlled at
+# .githooks/pre-commit in the working tree being committed; this only forwards to it.
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+if [ -f "$root/.githooks/pre-commit" ]; then
+	exec sh "$root/.githooks/pre-commit" "$@"
+fi
+# Older commits predate the hook. Say so rather than failing, but do not pass in silence.
+echo "pre-commit: no .githooks/pre-commit in this working tree, tests not run." >&2
+exit 0
+SHIM
+
+chmod +x "$target" 2>/dev/null
+
+echo "install: shim written to $target"
+echo "install: it runs .githooks/pre-commit from whichever working tree is committing,"
+echo "         so this one install covers the main checkout and every worktree."

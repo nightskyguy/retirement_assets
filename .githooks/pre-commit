@@ -1,0 +1,77 @@
+#!/bin/sh
+#
+# pre-commit - run the three node-only test suites, block the commit on any failure.
+#
+# WHY THIS EXISTS (P39, work item 1). Release gating relies on the Red X badge that
+# `optimizer_tests.js` renders at page load, and that badge covers only the 245 in-page tests.
+# The 268 tests in the three suites below never run in the browser at all, so a change that
+# breaks one of them is invisible at the moment of release and can be published by accident.
+# This hook moves the check to the moment the breakage would enter history instead.
+#
+# INSTALL: sh .githooks/install
+# This file is NOT the file git runs. `core.hooksPath` is pinned to an absolute path in this
+# repo (and separately in every worktree's own config.worktree, which outranks the repo config),
+# so the installer drops a one-line shim there that execs this file from whichever working tree
+# is committing. See .githooks/README.md.
+#
+# ESCAPE HATCH: `git commit --no-verify` skips this deliberately. Use it for a commit you know
+# does not touch code; do not use it to get past a red suite.
+
+set -u
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+	echo "pre-commit: not inside a work tree, skipping tests." >&2
+	exit 0
+}
+cd "$root" || exit 1
+
+if ! command -v node >/dev/null 2>&1; then
+	echo "pre-commit: BLOCKED - node is not on PATH, so the test suites cannot be verified." >&2
+	echo "            Install node, or commit with --no-verify if you accept the risk." >&2
+	exit 1
+fi
+
+# Every suite here sets process.exitCode = 1 on failure, so exit status is the signal.
+# Listed slowest first: a broken engine is the likeliest failure and should surface first.
+suites="optimizer_core.test.js taxPaymentPlanner.test.js doclinks.test.js"
+
+failed=""
+missing=""
+started=$(date +%s)
+
+for suite in $suites; do
+	if [ ! -f "$suite" ]; then
+		missing="$missing $suite"
+		continue
+	fi
+	printf 'pre-commit: %-28s ' "$suite"
+	# Tested as the `if` condition rather than via $? so the status cannot be clobbered.
+	if output=$(node "$suite" 2>&1); then
+		# Suites print "Results: N passed, M failed" as their last summary line.
+		echo "$output" | grep -m1 '^Results:' || echo "ok"
+	else
+		echo "FAILED"
+		failed="$failed $suite"
+		echo "$output" | tail -25
+	fi
+done
+
+elapsed=$(( $(date +%s) - started ))
+
+# A suite that has been renamed or deleted must not pass silently - that is the exact failure
+# mode P39 exists to remove, and it would look identical to a green run.
+if [ -n "$missing" ]; then
+	echo "pre-commit: BLOCKED - expected suite(s) not found:$missing" >&2
+	echo "            If a suite was renamed or removed on purpose, update .githooks/pre-commit" >&2
+	echo "            in the same commit." >&2
+	exit 1
+fi
+
+if [ -n "$failed" ]; then
+	echo "pre-commit: BLOCKED after ${elapsed}s - failing suite(s):$failed" >&2
+	echo "            Re-run one directly for the full output, e.g. node$failed" >&2
+	exit 1
+fi
+
+echo "pre-commit: all three node suites passed in ${elapsed}s."
+exit 0

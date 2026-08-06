@@ -68,6 +68,14 @@ const { SWEEP_BASES, MC_GOLDEN, OPT_GOLDEN } = require('./sweep_golden.js');
 // ── Test harness ──────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
 
+// Tests tagged slow are the ones the browser tier is allowed to skip. They ALWAYS run in node,
+// unconditionally - the tag is a hint to the browser runner, never a way to stop testing something.
+//
+// Only three tests are tagged, and they are tagged on measurement, not on suspicion: the
+// breakEvenHeirsRate binary searches account for 1792 ms of this suite's ~2.9 s. The remaining 179
+// finish in well under a second, which is what makes an after-paint browser run affordable at all.
+const SLOW = new Set();
+
 function test(name, fn) {
     try {
         fn();
@@ -79,6 +87,11 @@ function test(name, fn) {
         failed++;
     }
 }
+
+test.slow = function (name, fn) {
+    SLOW.add(name);
+    test(name, fn);
+};
 
 function assert(cond, msg) {
     if (!cond) throw new Error(msg || 'assertion failed');
@@ -2577,7 +2590,7 @@ test('breakEvenHeirsRate: returns null when no rate up to the ceiling pays', () 
         'a ceiling below the true threshold must report null rather than guessing');
 });
 
-test('breakEvenHeirsRate: the rate/amount pair it reports is self-consistent', () => {
+test.slow('breakEvenHeirsRate: the rate/amount pair it reports is self-consistent', () => {
     const r = breakEvenHeirsRate(CONV_BASE, FIXEDPCT_OV, {});
     assert(r !== null, 'this fixture does have a threshold');
     assertNear(r.rate, 0.57, 'break-even heirs rate for the fixedpct fixture', 0.011);
@@ -2587,7 +2600,7 @@ test('breakEvenHeirsRate: the rate/amount pair it reports is self-consistent', (
     assert(r.gain > 0, 'and a positive gain');
 });
 
-test('breakEvenHeirsRate: the predicate is monotonic in the rate (binary search precondition)', () => {
+test.slow('breakEvenHeirsRate: the predicate is monotonic in the rate (binary search precondition)', () => {
     // The search is a binary search, which is only valid because "conversions pay" never turns
     // back off as the assumed future rate rises. nominalTaxRate is a bracket STEP function, so
     // this is a measured property, not an obvious one -- if a change breaks it the search starts
@@ -2601,7 +2614,7 @@ test('breakEvenHeirsRate: the predicate is monotonic in the rate (binary search 
         `once conversions start paying they must keep paying as the rate rises; got ${seq.join('')}`);
 });
 
-test('lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidate does not have', () => {
+test.slow('lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidate does not have', () => {
     // The whole reason this searches the pool: the top-ranked strategy is often the one LEAST
     // willing to convert, so asking only it would report "never" while another candidate pays.
     assert(breakEvenHeirsRate(CONV_BASE, FIXED_OV, {}) === null,

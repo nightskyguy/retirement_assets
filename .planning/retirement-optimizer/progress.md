@@ -1684,3 +1684,53 @@ not end in `.tests.js`. Its comment now says so.
 Verified as separate runs: green passes (214/32/22); an unlisted `sneaky.tests.js` blocks with both
 sets printed, exit 1; a deleted suite blocks; and the glob provably matches only the three suites,
 never `optimizer_tests.js`.
+
+## 2026-08-06 (cont.) — P39 items 2-6 COMPLETE, plus critical-guard marking
+
+All five remaining items landed as separate commits on `p39-pr4-hook-completeness`, in
+[PR #157](https://github.com/nightskyguy/retirement_assets/pull/157). Version **v11.147c**; changelog
+entry deliberately one paragraph, per user direction that improving the self-tests is not a
+user-facing feature.
+
+**Item 2 (`4d76d51`) - slow tags.** `test.slow()` records the name; node runs everything
+regardless. Re-measured rather than trusting the 08-05 figure: **211 tests in 818 ms without the
+three, 214 in 2797 ms with** - they cost 1979 ms, 71% of the suite. The tiering premise holds.
+
+**Item 3 (`bc2e063`) - dual mode.** Three things the plan called "mechanical" were not, and each
+would have failed *silently*:
+1. The node stubs were hostile to a real page - `document.getElementById` returning null, a
+   `performance.now()` frozen at 0, installed unguarded at load. Now behind `IS_NODE`.
+2. **Half the engine is invisible to a global lookup.** `function simulate` lands on globalThis;
+   `const MC_GRIDS` / `OPTIMIZER_GRIDS` / `RMD_TABLE` do not. Verified live:
+   `typeof globalThis.MC_GRIDS === 'undefined'`. Hence explicit `window.TaxEngine` /
+   `OptimizerCore` / `SweepGolden` namespaces mirroring the existing `module.exports`.
+3. **The engine records wall clock into its own output** (`optimizer_core.js:928` `yr.loopStart`,
+   `:2381` loopMs, `:1739` totals.thirdPassTime) and several tests assert byte-identical logs.
+   **Six tests failed in the browser while passing in node**, all on the clock. The runner now
+   stubs `performance.now` for the duration of the run and restores it in a `finally`.
+
+**Item 4 (`4983e7a`) - after-paint runner + three-state badge.** Measured, not asserted:
+`loadEventEnd` 760 ms, tier-2 requests start 3661-3988 ms. Badge is ⏳ / 🟢 / 🟢⚠ / ❌. Opt-in via
+`window.TIER2_PENDING` so `standalone/IncomeTaxPlanner.html`, which also loads `optimizer_tests.js`,
+keeps its old two-state badge instead of hanging on an hourglass.
+
+**Critical guards (`dedc944`) - user request.** `test.critical()` marks the ten guards for defects
+that actually shipped, inline as `✓ ★ CRITICAL <name>` plus a dedicated end-of-run block. Two
+families: the three dividend/interest conservation tests, and seven state-tax tests (IL/PA
+exemption, third-pass exclusion, the two *complement* tests that fail if a fix over-applies the
+exemption, and the two no-income-tax-state tests). Badge tooltip reports the guard count separately
+from the bulk count.
+
+**Item 6 (`e4949a4`) - `?runtests`.** Bare or `=all` runs everything synchronously (513 = 245 + 268);
+`=fast` skips the slow three. Matches RetirementTaxPlanner's existing bare `?runtests`.
+
+**Item 5 (`238f5ef`) - staleness guard.** `TestTiers.EXPECTED` pins 214/32/22 + 3 slow. Catches a
+suite growing, an unregistered suite, a suite that failed to load, and slow-tag drift. Verified end
+to end, not by poking the function: a real test appended to `doclinks.tests.js` turned the live badge
+red with "doclinks: 23 tests on disk, 22 expected"; removing it returned 🟢 510.
+
+**GOTCHA worth keeping:** during verification the page kept loading `taxengine.js?v=111448` from
+cache while the file on disk had the new namespace, producing "Cannot read properties of undefined
+(reading 'calculateTaxes')" a long way from the cause. Cache tokens must move with any engine file
+the test tier depends on. Stale *HTML* is the harder half - a warm tab keeps requesting the old
+token regardless.

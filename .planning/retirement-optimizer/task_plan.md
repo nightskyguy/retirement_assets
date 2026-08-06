@@ -228,7 +228,7 @@ purpose. Do the fix as its own PR against a clean tree.
 
 ---
 
-## Phase P39: Make the node-only tests visible in the browser (2026-08-05) — IN PROGRESS (2026-08-06)
+## Phase P39: Make the node-only tests visible in the browser (2026-08-05) — COMPLETE (2026-08-06)
 
 **Count drift, noticed on pickup 2026-08-06.** The measured table below says `optimizer_core.tests.js`
 = 206 tests; the OBBBA fix and the dividend fix added 8, so node is **214/32/22** at `main` =

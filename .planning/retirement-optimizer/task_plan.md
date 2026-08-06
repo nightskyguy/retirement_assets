@@ -257,9 +257,13 @@ Both constraints are satisfiable, and the measurements say so clearly.
 **The finding that makes this cheap: 3 tests are 1792 ms of that 2466 ms — 73%.** All three are
 `breakEvenHeirsRate` binary searches:
 
-- `optimizer_core.tests.js:2290` `breakEvenHeirsRate: the predicate is monotonic...` — **1438 ms**
-- `optimizer_core.tests.js:2304` `lowestBreakEvenHeirsRate: finds a threshold...` — **195 ms**
-- `optimizer_core.tests.js:2280` `breakEvenHeirsRate: the rate/amount pair...` — **159 ms**
+- `optimizer_core.tests.js:2590` `breakEvenHeirsRate: the predicate is monotonic...` — **1438 ms**
+- `optimizer_core.tests.js:2604` `lowestBreakEvenHeirsRate: finds a threshold...` — **195 ms**
+- `optimizer_core.tests.js:2580` `breakEvenHeirsRate: the rate/amount pair...` — **159 ms**
+
+  Line numbers re-measured 2026-08-06 (was `:2290`/`:2304`/`:2280` on 2026-08-05). The OBBBA and
+  dividend fixes inserted ~300 lines above them. **Locate these by test NAME, not by line** — the
+  names have been stable, the offsets have not.
 
 The remaining **203 tests run in 674 ms combined**; 193 of them in 243 ms. So "multiple seconds of
 tests" is really three tests, and excluding them changes the picture entirely.
@@ -344,9 +348,12 @@ everything added later.
    hook with zero CR bytes.
 2. **Tag the 3 slow tests.** A `test.slow(name, fn)` variant, or a `SLOW` prefix the browser runner
    filters. Keep them running in node unconditionally.
-3. **Dual-mode the two portable test files.** Mechanical: replace the `require()` header with a
-   node/browser branch resolving the same symbols off `globalThis` in the browser. Roughly 60 lines
-   at the top of `optimizer_core.tests.js`; the 174 `test(...)` bodies do not change.
+3. **Dual-mode the ~~two~~ THREE portable test files.** Mechanical: replace the `require()` header
+   with a node/browser branch resolving the same symbols off `globalThis` in the browser. Roughly 60
+   lines at the top of `optimizer_core.tests.js`; the ~~174~~ **182** `test(...)` bodies do not
+   change (re-counted 2026-08-06). **Scope grew on 2026-08-06:** `doclinks.tests.js` was excluded on
+   the false premise that it reads the filesystem — it does not, so all three node suites are
+   portable and it is the cheapest of them.
 4. **Idle runner + badge protocol.** Extend `#testsFailed` to a three-state badge (pending / pass /
    fail) so a deferred failure is distinguishable from "still running". Do not let a pending state
    look like a pass — that is the same false-green this phase exists to remove.

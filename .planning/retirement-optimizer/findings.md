@@ -147,7 +147,26 @@ page that it does not leak a column: 87 headers, none matching.
 
 ## The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry (2026-08-05, diagnosed at v11.1447, re-verified at v11.1464)
 
-**Verdict: a defect, not the strategy working as designed.** Pre-existing and byte-identical before
+**FIXED. PR 2 (v11.1468, merged as #152) widened the backstop gate; PR 3 (v11.146a) fixed the sizing
+itself.** `yr.additionalSpendNeeded` is now net of a `calculateTaxes` call on the guaranteed-income
+base, so the primary draw stops under-sizing by the tax on Social Security, pensions and RMDs. Three
+results worth keeping, because each one contradicts something this entry or the build plan assumed:
+
+1. **The bracket family never used this code path at all.** `additionalSpendNeeded` has exactly
+   three consumers (cyclic harvest, `propwd`, baseline `else`). `bracket`, `minlimit`, `fixedpct`,
+   `fixed` and `ordered` set their draw by their own rule, so they are byte-identical. The plan
+   predicted "every strategy including bracket moves"; 46 of 76 probed cases did not move.
+2. **The flat-rate shortcut would have been a disaster, and now there is a number for it.** On an
+   SS-heavy MFJ household (80k SS, 30k RMD, 12k qualified dividends) the real tax is $3,831 while
+   `possibleIncome * nominalRate` is $14,042 - **3.67x** too high. Pinned as a test so the extra
+   `calculateTaxes` call cannot be "simplified" back into a rate multiply.
+3. **The 4th tax call costs 3.9%** (0.398 -> 0.413 ms/simulate). The feared cost was not real.
+
+PR 3 also showed that PR 2's backstop had been doing ordinary work: on `CAP_BASE` `propwd` 0% the
+`ForcedIRA` total falls from 395,109 to 43,816 with spending unchanged. Fixing a symptom made the
+plan succeed; fixing the cause made the withdrawals right.
+
+**Original verdict, retained: a defect, not the strategy working as designed.** Pre-existing and byte-identical before
 P35 PR 3c (`d68d27f`, landed on `main` as `f71e0bf`); that PR only made it visible, because a lapsed
 ACA plan now falls through to this code path. Recorded here only. **No engine change made in this
 pass** — `propwd`, `fixed` and `gk` are shipped strategies and any fix moves numbers on every saved

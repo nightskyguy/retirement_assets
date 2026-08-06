@@ -11,6 +11,49 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.146a"></a>
+
+## 11.146a (behavior change)
+
+**The same strategies now work the withdrawal out correctly the first time, instead of drawing too
+little and then patching the difference. The tax on your guaranteed income is part of the
+calculation rather than an afterthought.**
+
+**What was wrong.** The previous release fixed the symptom. When Proportional, Reduce,
+Guyton-Klinger or the default strategy came up short, they could finally go back to the IRA for the
+difference. But the reason they came up short every year was still there: the first withdrawal was
+worked out by subtracting your guaranteed income from your spending goal at its full pre-tax value,
+so it was always too small by about the tax owed on your Social Security, pension and required
+distributions. The plan then spent the year discovering that and correcting it. The end result was
+usually right, but the withdrawal amounts and the tax that followed from them were not, and every
+plan leaned on an emergency backstop to do ordinary work.
+
+**What changed.** The first withdrawal is now sized against what your guaranteed income is actually
+worth after tax. The tax is computed, not estimated with a single rate, because your guaranteed
+income is not taxed at one rate: Social Security is between 0% and 85% taxable depending on your
+other income, qualified dividends have their own 0/15/20% schedule, and pensions and required
+distributions are ordinary income. Applying one blended rate to the whole amount would have
+overstated the tax by several times on a Social Security heavy household and drawn far too much.
+
+**What this does to your numbers.** On the same test plan used in the previous entry, Proportional
+0% spends the same $4,567,609 and the backstop draw shown in the `ForcedIRA` column falls from
+$395,109 to $43,816. The withdrawals are now where they belong, and the backstop is back to being a
+backstop. Ending wealth moves a little, from $202,859 to $195,000. On other plans the effect is
+larger and can go either way, because a differently sized withdrawal lands in different tax
+brackets: one Guyton-Klinger test plan pays $29,575 less tax and ends with $89,827 more, while a
+Proportional plan with a large IRA pays $17,677 more tax and ends with $8,648 less. Guyton-Klinger
+plans can also change their spending path, since that strategy sets spending from the portfolio
+balance and the balance now follows a different track.
+
+**Which strategies change.** Proportional, Reduce, Guyton-Klinger, the default strategy, an ACA
+Cliff plan after its cap ends at Medicare, and the Cyclic Brokerage option. Fill Bracket, IRMAA
+Tier, IRA Draw %, Fixed and Ordered set their withdrawal by their own rule and never used this
+calculation, so they produce identical results to before. ACA Cliff while its cap is in force is
+unchanged and still reports a shortfall rather than crossing the cap, for the reasons in the
+previous entry.
+
+---
+
 <a id="11.1468"></a>
 
 ## 11.1468 (behavior change)

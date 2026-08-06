@@ -2,7 +2,14 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-08-05, later in the day. P38 PR 1 (`e8d28d6`, tests only) and PR 2 (`f592c31`, the gate widening, **v11.1468, behavior change**) are PUSHED and OPEN AS A PR on branch `p38-pr2-widen-forced-ira-gate`, off `53e8ccf`, together with the cash-rate/em-dash cleanup (`6771bb2`) and the P39 write-up (`ace9e7c`). PR 1 and PR 2 were developed as separate branches but ship as one PR at the user's request. Working tree clean. **P38 PR 3 (the sizing fix at `:1281`) is still open and NOT in that PR.** See the P38 section below for measured results. Earlier state: branch `p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464, P38's diagnosis-only planning files merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
+**As of:** 2026-08-05, evening. **P38 is COMPLETE.** PR 1 + PR 2 (the funding invariant and the gate
+widening, v11.1468) **MERGED as [PR #152](https://github.com/nightskyguy/retirement_assets/pull/152)**
+(`f524105`), together with the cash-rate/em-dash cleanup (`6771bb2`) and the P39 write-up
+(`ace9e7c`). **P38 PR 3, the sizing fix, is on branch `p38-pr3-size-draw-net-of-tax` off that merge,
+v11.146a, behavior change** — node 208/32/22, in-page 245/245, golden content-identical. See the P38
+section below for the measured deltas and the three test decisions. Earlier state: branch
+`p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464, P38's diagnosis-only planning files
+merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry). Earlier state: branch `p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464, P38's diagnosis-only planning files merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
 **P35 PR 3a MERGED as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change). **P35 PR 3b MERGED as [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149)** (v11.1448 tokens, byte-identical, plus the doc file-reference gaps); the duplicate attempt PR #148 on branch `worktrees/medicare-age-data-7b2e91` is **CLOSED, not merged** — verified, nothing to do about it.
 **P35 PR 3c MERGED as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150)** (v11.1462 -> v11.1464 on merge, behavior change confined to `aca` rows, proven against `propwd`/`bracket` controls), four commits: the behavior change, the `eitherOnMedicareAtStart` deletion it made possible, the plan record, and the ACA Cliff un-gating. Next review point after it is **PR 3d** (`Basis <= Brokerage` invariant).
 Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
@@ -21,7 +28,51 @@ MAINTENANCE NOTE: this heading and the per-phase status lines are injected into 
 
 ---
 
-## Phase P38: The baseline/proportional strategies cannot fund their own tax bill (2026-08-05) — PR 1 + PR 2 DONE (committed, unpushed), PR 3 remaining
+## Phase P38: The baseline/proportional strategies cannot fund their own tax bill (2026-08-05) — COMPLETE
+
+**PR 3 `p38-pr3-size-draw-net-of-tax`, v11.146a, behavior change. The sizing fix.**
+`yr.additionalSpendNeeded` (`optimizer_core.js:1303`) is now
+`targetSpend + IRMAA - (possibleIncome - guaranteedIncomeTax)`, where `guaranteedIncomeTax` is a
+`calculateTaxes` call on the guaranteed-income base alone (no discretionary IRA draw, no cap gains).
+Computed, not rate-multiplied: the flat-rate shortcut overstates the tax **3.67x** on an SS-heavy
+MFJ household ($3,831 computed vs $14,042 at `nominalRate`), so it would have over-drawn every year
+while looking plausible.
+
+- **Scope is narrower than this plan predicted.** `additionalSpendNeeded` has only three consumers:
+  the cyclic Brokerage-harvest branch (`:1371`/`:1377`/`:1394`), `propwd` (`:1460`), and the
+  baseline `else` (`:1480`, which is also `gk`, lapsed `aca`, and any unrecognized strategy).
+  `bracket`, `minlimit`, `fixedpct`, `fixed` and `ordered` size their draw by their own rule and
+  never read it, so they are **byte-identical**. The prediction that "every strategy including
+  bracket moves" was wrong. 46 of 76 probed fixture x strategy cases unchanged.
+- **The backstop went back to being a backstop.** `CAP_BASE` `propwd` 0%: spend unchanged at
+  4,567,609, `ForcedIRA` **395,109 -> 43,816**, terminal wealth 202,859 -> 195,000. PR 2 was
+  treating the symptom; that 351k was the tax on SS and RMDs being rediscovered every year.
+- **Direction of the tax/wealth move is plan-dependent**, because a differently sized draw lands in
+  different brackets. `CAP_BASE` gk: tax **-29,575**, terminal **+89,827**, spend -16,143 (GK sets
+  spending from the portfolio, so its spending path moves too). `CREEP_BASE` propwd 0%: tax
+  **+17,677**, terminal **-8,648**.
+- **Cost measured, not estimated.** The 4th `calculateTaxes` per year costs **+3.9%**
+  (0.398 -> 0.413 ms/simulate, best of 5 over 108 strategy rows). Not material; the
+  reuse-last-year's-tax fallback was not needed.
+- **Three test decisions, all made with the user rather than re-pinned sight-unseen:**
+  - GK totals (`:487-489`) re-pinned: spend 7,935,798.156165 -> .157290, tax 2,141,499.763082 ->
+    **2,169,137.836607**, finalNW 9,924,288.129575 -> **9,913,213.043789**. Adjustment count still 4.
+  - The drain guard's bar changed rather than its arm list. `propwd 10%` and `gk` now finish solvent
+    with Cash to spare (min Cash 51,002 and 27,263) instead of scraping to zero, so an arm that does
+    not drain Cash must now be asserted **fully funded** instead. Naming those two would have
+    rebuilt the same stale exemption list that caused P38.
+  - `PF11_BASE` `spendGoal` 90,000 -> **92,000**. The fix cost the no-conversion run 15,146 of
+    finalNW and the $50k run only 240, so both metrics landed on $50k and the T6 fixture stopped
+    separating them. 92k (also 95k, Cash 80k, ss1 38k) restores finalNW $0 vs baselineScore $50k.
+- Two new tests: the backstop-is-idle pin, and the flat-rate trap as an explicit `calculateTaxes`
+  comparison so the reason for the extra call cannot be optimized away by someone who reads only the
+  code.
+- Verified: node **208**/32/22, `sweep_golden.gen.js` content-identical, in-page **245/245** without
+  `?nerdknob`, and the browser reproduces the node numbers to the dollar.
+
+---
+
+### PR 1 + PR 2 (merged as PR #152)
 
 **STATUS 2026-08-05, branch `p38-pr2-widen-forced-ira-gate` (stacked on `p38-pr1-shortfall-invariant`):**
 
@@ -60,12 +111,7 @@ MAINTENANCE NOTE: this heading and the per-phase status lines are injected into 
   `sweep_golden.gen.js` regenerates content byte-identical (line endings only).
 - Verified: node 206/32/22, in-page 245/245 without `?nerdknob`.
 
-**REMAINING — PR 3, the sizing fix.** Make `additionalSpendNeeded` net of tax on guaranteed income
-at `:1281`, so the first-pass draw stops under-sizing for **every** strategy including `bracket`.
-The trap is unchanged and is the reason this is its own PR: `possibleIncome` mixes SS (0-85%
-taxable), ordinary pension/RMD, and qualified dividends, so a flat `sim.nominalTaxRate` overstates
-the tax and over-draws. Call `calculateTaxes` on the guaranteed-income base alone and subtract its
-`totalTax`; watch the cost of a 4th tax call per year.
+**PR 3 is DONE** and is written up at the top of this section.
 
 ---
 
@@ -857,7 +903,7 @@ Found by the user testing Round 1 on `?mc=1&fcc=1&nerdknob`. Round 1's four PRs 
 
 | # | Phase | Description | Status | Blocked by |
 |---|-------|-------------|--------|-----------|
-| **!** | **P38** | **Baseline/proportional strategies cannot fund their own tax bill — shipped defect** | **not started, HIGH — jumps the queue** | — |
+| — | **P38** | **Baseline/proportional strategies cannot fund their own tax bill — shipped defect** | **complete** (PR 1 + PR 2 merged as #152, PR 3 = v11.146a) | — |
 | — | **PF** | UX Polish Batch (9 items, IRMAA fix + MC restructure) | **complete*** | — |
 | — | **PF2** | Item 6 round 2 — bar-chart legend hover/click | **complete** | — |
 | — | **PF3** | MC Stress pass should run current strategy only, not all variations | **complete** | — |

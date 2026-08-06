@@ -93,6 +93,14 @@ let passed = 0, failed = 0;
 // finish in well under a second, which is what makes an after-paint browser run affordable at all.
 const SLOW = new Set();
 
+// Tests tagged critical are the regression guards for defects that actually SHIPPED and silently
+// changed everyone's numbers. They are marked in the console output and given their own summary
+// block at the end, so that "did the guard for <that> bug still pass" is answerable at a glance
+// instead of by reading 214 lines of ✓.
+//
+// A test earns this tag by having a shipped defect behind it, not by being important-sounding.
+const CRITICAL = new Set();
+
 // test() REGISTERS rather than runs. Everything below is top-level, and running on registration
 // would mean the browser could only ever get results as a side effect of loading the file, with no
 // way to filter the slow tests or to defer the run past first paint. Registering instead lets
@@ -106,6 +114,11 @@ function test(name, fn) {
 
 test.slow = function (name, fn) {
     SLOW.add(name);
+    TESTS.push([name, fn]);
+};
+
+test.critical = function (name, fn) {
+    CRITICAL.add(name);
     TESTS.push([name, fn]);
 };
 
@@ -1371,7 +1384,7 @@ test('P32 (not fixed here): minlimit strands spending with Brokerage still funde
 });
 
 // ── State retirement-income exclusion (IL/PA full exemption) ────────────────────
-test('IL exempts IRA/pension distributions from state tax', () => {
+test.critical('IL exempts IRA/pension distributions from state tax', () => {
     const common = { filingStatus: 'MFJ', ages: [70, 70], state: 'IL',
                      earnedIncome: 40000 + 80000, qualifiedDiv: 0, capGains: 0 };
     const noExcl = calculateTaxes({ ...common });                                  // no split → all taxed
@@ -1380,7 +1393,7 @@ test('IL exempts IRA/pension distributions from state tax', () => {
     assertNear(withExcl.stateTax, 0, 'IL state tax should be ~0 once retirement income is fully excluded', 1);
 });
 
-test('PA exempts IRA/pension distributions from state tax', () => {
+test.critical('PA exempts IRA/pension distributions from state tax', () => {
     const common = { filingStatus: 'MFJ', ages: [70, 70], state: 'PA',
                      earnedIncome: 90000, qualifiedDiv: 0, capGains: 0 };
     const noExcl = calculateTaxes({ ...common });
@@ -1405,7 +1418,7 @@ test('PA exempts IRA/pension distributions from state tax', () => {
 // or dividends), no cash yield (so no interest) - leaving only Social Security, pension and IRA
 // distributions. PA exempts all three, so the correct answer is a hard zero and any state tax at
 // all is the bug.
-test('third pass keeps the state retirement-income exclusion (PA, Ordered)', () => {
+test.critical('third pass keeps the state retirement-income exclusion (PA, Ordered)', () => {
     const r = simulate({
         ...CAP_BASE, STATEname: 'PA', strategy: 'ordered', orderedSeq: 'CBIR',
         stratRate: 0, stratACAMultiple: 0,
@@ -1421,7 +1434,7 @@ test('third pass keeps the state retirement-income exclusion (PA, Ordered)', () 
         `(it was 28,054.65 before the third pass was given pensionIncome/iraIncome).`);
 });
 
-test('IL still taxes non-retirement income (interest/dividends not exempt)', () => {
+test.critical('IL still taxes non-retirement income (interest/dividends not exempt)', () => {
     // $80k IRA (exempt) + $30k ordinary dividends (NOT exempt) → state tax on the $30k only.
     const r = calculateTaxes({ filingStatus: 'MFJ', ages: [70, 70], state: 'IL',
                                earnedIncome: 80000 + 30000, ordDivInterest: 30000,
@@ -1429,7 +1442,7 @@ test('IL still taxes non-retirement income (interest/dividends not exempt)', () 
     assert(r.stateTax > 0, 'IL should still tax the non-retirement (dividend/interest) portion');
 });
 
-test('regression: exclusion params are inert for a non-exclusion state (CA)', () => {
+test.critical('regression: exclusion params are inert for a non-exclusion state (CA)', () => {
     const common = { filingStatus: 'MFJ', ages: [70, 70], state: 'CA',
                      earnedIncome: 120000, qualifiedDiv: 0, capGains: 0 };
     const base = calculateTaxes({ ...common });
@@ -2043,7 +2056,7 @@ test('accounting: withdrawal columns include conversions, decompose correctly, a
 // inconsistent. The defect was on the income statement: the dividend legitimately entered Cash, and
 // separately shrank the withdrawal the plan needed to make. Only an economic or flow invariant sees
 // that, so that is what these assert. A balance reconciliation here would be vacuous.
-test('no free money: a dividend cannot create wealth (same total return, split two ways)', () => {
+test.critical('no free money: a dividend cannot create wealth (same total return, split two ways)', () => {
     // Identical 8% total return. A takes it all as growth; B takes 6% growth + 2% dividend with DRIP
     // on, so B reinvests every dividend and compounds the same way. The ONLY real difference is that
     // B pays tax on the dividend every year and A defers it entirely. B must therefore never finish
@@ -2070,7 +2083,7 @@ test('no free money: a dividend cannot create wealth (same total return, split t
         `fixed this ran +21.7%.`);
 });
 
-test('no free money: interest leaves Cash only by being spent or taxed', () => {
+test.critical('no free money: interest leaves Cash only by being spent or taxed', () => {
     // A Cash-only plan. Every dollar that leaves Cash is either spending or tax, so lifetime CashWD
     // must equal lifetime spend + lifetime tax exactly. While interest was double-credited the plan
     // funded $800,000 of spending while withdrawing $2,449, because the interest paid for the
@@ -2092,7 +2105,7 @@ test('no free money: interest leaves Cash only by being spent or taxed', () => {
         'lifetime Cash withdrawals must equal lifetime spending plus lifetime tax', 1);
 });
 
-test('no free money: interest cannot compound faster than the yield it is paid at', () => {
+test.critical('no free money: interest cannot compound faster than the yield it is paid at', () => {
     // Hard upper bound, no spending: Cash cannot exceed simple compounding at cashYield, and must
     // land BELOW it because the interest is taxed every year and the tax is paid out of Cash.
     // Double-crediting made it compound at roughly twice the rate: $4,254,946 against a $2,191,123
@@ -3273,7 +3286,7 @@ test('single-row bracket tables: the affected jurisdictions are pinned', () => {
         `single-row tables changed:\n         expected ${JSON.stringify(expected)}\n         actual   ${JSON.stringify(single)}`);
 });
 
-test('Fill Bracket converts in a no-tax state, not just in a graduated one', () => {
+test.critical('Fill Bracket converts in a no-tax state, not just in a graduated one', () => {
     const base = { ...BASE, strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1,
                    stratACAMultiple: 0, convertExcessToRoth: true, iraBaseGoal: 0 };
     const conv = st => simulate({ ...base, STATEname: st }).log.reduce((a, e) => a + (e.rothConv || 0), 0);
@@ -3301,7 +3314,7 @@ test('minlimit: the IRMAA ceiling is a real limit below the first tier, not zero
     assert(run('NV') > 0, `and in a no-tax state too, got ${Math.round(run('NV'))}`);
 });
 
-test('a no-tax state reports honest spend and honest failure', () => {
+test.critical('a no-tax state reports honest spend and honest failure', () => {
     // With goalLimit zeroed, targetSpend went to 0 for every strategy outside the bracket/ordered/GK
     // exempt set. totals.spend then accumulated `0 + Shortfall` (negative), while the success test
     // `netIncome < targetSpend * 0.99` could never fail against a zero target.
@@ -3340,29 +3353,56 @@ function runOptimizerCoreTests(opts) {
     const realNow = globalThis.performance && globalThis.performance.now;
     if (globalThis.performance) globalThis.performance.now = () => 0;
 
+    const criticalResults = [];
+
     try {
         TESTS.forEach(([name, fn]) => {
             if (skipSlow && SLOW.has(name)) { skipped++; return; }
+            const isCritical = CRITICAL.has(name);
+            const tag = isCritical ? '★ CRITICAL  ' : '';
             try {
                 fn();
-                console.log(`  ✓  ${name}`);
+                console.log(`  ✓  ${tag}${name}`);
                 passed++;
+                if (isCritical) criticalResults.push([true, name]);
             } catch (e) {
-                console.log(`  ✗  ${name}`);
+                console.log(`  ✗  ${tag}${name}`);
                 console.log(`       ${e.message}`);
                 failures.push(`${name}: ${e.message}`);
                 failed++;
+                if (isCritical) criticalResults.push([false, name]);
             }
         });
     } finally {
         if (globalThis.performance && realNow) globalThis.performance.now = realNow;
     }
 
+    // ── Critical-guard summary ───────────────────────────────────────────────
+    // Repeated deliberately. These guard defects that shipped to real users and quietly changed
+    // their numbers, so their status must be readable without scrolling through everything else.
+    const critFailed = criticalResults.filter(([ok]) => !ok);
+    console.log('');
+    console.log('★ CRITICAL REGRESSION GUARDS ' + '─'.repeat(40));
+    criticalResults.forEach(([ok, name]) => console.log(`  ${ok ? '✓' : '✗'}  ${name}`));
+    if (critFailed.length) {
+        console.log('');
+        console.log(`*** ${critFailed.length} CRITICAL GUARD${critFailed.length !== 1 ? 'S' : ''} FAILED - a defect that already shipped once has come back ***`);
+    } else {
+        console.log(`  ${criticalResults.length}/${criticalResults.length} critical guards passed.`);
+    }
+
     console.log('');
     console.log(`Results: ${passed} passed, ${failed} failed`);
     if (skipped) console.log(`(${skipped} slow test${skipped !== 1 ? 's' : ''} skipped)`);
     console.log(failed > 0 ? '\n*** SOME TESTS FAILED ***' : 'All tests passed.');
-    return { passed, failed, skipped, total: TESTS.length, failures };
+    return {
+        passed, failed, skipped, total: TESTS.length, failures,
+        critical: {
+            passed: criticalResults.filter(([ok]) => ok).length,
+            failed: critFailed.length,
+            failedNames: critFailed.map(([, name]) => name)
+        }
+    };
 }
 
 if (IS_NODE) {

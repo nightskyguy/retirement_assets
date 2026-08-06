@@ -1,7 +1,7 @@
 'use strict';
 /**
- * taxPaymentPlanner.test.js
- * Run with: node taxPaymentPlanner.test.js
+ * taxPaymentPlanner.tests.js
+ * Run with: node taxPaymentPlanner.tests.js
  *
  * Covers:
  *   1. No IRA operations — all quarterly
@@ -875,7 +875,7 @@ test('withholdingCoversSchedule is cumulative, not a total-versus-total test', (
 function runTaxPlannerTests() {
   passed = 0;
   failed = 0;
-  console.log('\ntaxPaymentPlanner.test.js\n' + '─'.repeat(60));
+  console.log('\ntaxPaymentPlanner.tests.js\n' + '─'.repeat(60));
   const failures = [];
   TESTS.forEach(([name, fn]) => {
     try {

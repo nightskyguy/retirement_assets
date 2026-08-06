@@ -15,9 +15,9 @@ Runs the three `node`-only suites and blocks the commit if any of them fails:
 
 | suite | tests | approx |
 |---|---|---|
-| `optimizer_core.test.js` | 214 | 2.9 s |
-| `taxPaymentPlanner.test.js` | 32 | 0.4 s |
-| `doclinks.test.js` | 22 | 0.1 s |
+| `optimizer_core.tests.js` | 214 | 2.9 s |
+| `taxPaymentPlanner.tests.js` | 32 | 0.4 s |
+| `doclinks.tests.js` | 22 | 0.1 s |
 
 About 3.5 s total. It also blocks if a suite is **missing**, because a renamed or deleted suite
 would otherwise pass in silence and look identical to a green run.

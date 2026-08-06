@@ -1,11 +1,11 @@
 # Test harnesses
 
 Investigative / audit scripts for the retirement optimizer engine. These are **not** part of the
-regular unit-test suite (`optimizer_core.test.js`); they are kept here so a finding can be
+regular unit-test suite (`optimizer_core.tests.js`); they are kept here so a finding can be
 re-derived on demand.
 
 **What does not belong here:** anything the suite needs in order to pass. `sweep_golden.js` and its
-two regenerators live at the repo root next to `optimizer_core.test.js`, which `require`s the golden
+two regenerators live at the repo root next to `optimizer_core.tests.js`, which `require`s the golden
 at load time — they are fixtures, not studies. The rule and the reasoning are in
 [`ARCHITECTURE.md`](../ARCHITECTURE.md#where-a-test-file-belongs).
 
@@ -23,7 +23,7 @@ node .test_harnesses/betr_harness.js
 ```
 
 Self-contained: stubs the DOM globals and `require()`s `taxengine.js` + `optimizer_core.js` the
-same way `optimizer_core.test.js` does. Compares, for several legacy scenarios, the tool's shown
+same way `optimizer_core.tests.js` does. Compares, for several legacy scenarios, the tool's shown
 BETR (`totals.betrAvg`) against (a) the Kitces closed form recomputed at years-to-RMD vs the full
 horizon, and (b) the **empirical** break-even heirs rate `t*` derived from two full simulations
 (convert vs a plain no-conversion run). Also prints the concrete after-tax gain from converting at

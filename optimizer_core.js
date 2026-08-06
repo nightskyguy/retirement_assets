@@ -5,7 +5,7 @@
 // Loaded three ways, all as a plain classic script sharing global scope:
 //   1. retirement_optimizer.html (before optimizer_ui.js, after taxengine.js)
 //   2. montecarlo/worker.js via importScripts (no DOM available there)
-//   3. optimizer_core.test.js via vm.runInContext (no DOM stubs needed)
+//   3. optimizer_core.tests.js via vm.runInContext (no DOM stubs needed)
 // Depends on taxengine.js (calculateTaxes, calcIRMAA, TAXData, RMD_TABLE, ...).
 //
 // Shared globals owned by this file (optimizer_ui.js reads/writes cross-file):

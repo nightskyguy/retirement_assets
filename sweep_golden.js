@@ -20,7 +20,7 @@
  * of what the code emitted, not a restatement of what it ought to emit; regenerate rather than
  * hand-edit (see "Regenerating" below).
  *
- * Loaded by `optimizer_core.test.js` (node). Dual-mode export, the repo's classic-script contract.
+ * Loaded by `optimizer_core.tests.js` (node). Dual-mode export, the repo's classic-script contract.
  *
  * Regenerating
  *   MC half:  node sweep_golden.gen.js            (writes the MC_GOLDEN block below)

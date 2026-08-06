@@ -49,10 +49,10 @@ flowchart TD
     end
 
     subgraph node["Node - no browser"]
-        CORETEST["optimizer_core.test.js<br/>node optimizer_core.test.js<br/>require() + globalThis stubs"]
+        CORETEST["optimizer_core.tests.js<br/>node optimizer_core.tests.js<br/>require() + globalThis stubs"]
         GOLDEN["sweep_golden.js<br/>strategy-enumeration goldens<br/>data only - required by the suite"]
-        TPPTEST["taxPaymentPlanner.test.js"]
-        DOCTEST["doclinks.test.js"]
+        TPPTEST["taxPaymentPlanner.tests.js"]
+        DOCTEST["doclinks.tests.js"]
     end
 
     HTML --> CSS
@@ -86,8 +86,8 @@ flowchart TD
     WORKER -->|importScripts| PRNG
     WORKER -->|importScripts| STATS
     WORKER -->|importScripts| HRET
-    CORETEST -->|vm.runInContext| CORE
-    CORETEST -->|vm.runInContext| TAX
+    CORETEST -->|require| CORE
+    CORETEST -->|require| TAX
     CORETEST -->|require| GOLDEN
 
     classDef pure fill:#0d3b2e,stroke:#2f9e79,color:#e6fff5
@@ -98,7 +98,7 @@ flowchart TD
 
 **The contract that matters:** `optimizer_core.js` and `taxengine.js` touch no DOM, no
 `localStorage`, no `location` - at load time or runtime. That is what lets the same engine run in
-three places: the page, the Monte Carlo worker via `importScripts`, and Node via `vm.runInContext`.
+three places: the page, the Monte Carlo worker via `importScripts`, and Node via `require()`.
 Break it and the worker and the test suite both die.
 
 `getInputs()` in `optimizer_ui.js` is the single DOM-to-params bridge. Nothing else reads inputs.
@@ -289,12 +289,12 @@ refreshed worker can pull a stale `optimizer_core.js`.
 | `montecarlo/prng.js` | MC | `mulberry32`, `boxMuller`, `bootstrapScenarioBank`, `buildStressBank`, `applyBearStartOverlay` |
 | `montecarlo/stats.js` | MC | `computePercentiles`, `computeInputFan` |
 | `montecarlo/historical_returns.js` | MC | `HISTORICAL_RETURNS` |
-| `optimizer_core.test.js` | test | `node optimizer_core.test.js` - loads the engine via `require()` against the dual-mode export guards, with `window`/`document`/`performance` stubbed on `globalThis` first (`:23-25`). It has not used `vm.runInContext` since `86e26fa`; the stub comment at `:21` still refers to "the old vm-based harness" |
-| `sweep_golden.js` | test data | `SWEEP_BASES`, `MC_GOLDEN`, `OPT_GOLDEN` - the recorded strategy enumerations both sweeps must keep emitting. Data only, dual-mode export, `require`d by `optimizer_core.test.js` on every run |
+| `optimizer_core.tests.js` | test | `node optimizer_core.tests.js` - loads the engine via `require()` against the dual-mode export guards, with `window`/`document`/`performance` stubbed on `globalThis` first (`:23-25`). It has not used `vm.runInContext` since `86e26fa`; the stub comment at `:21` still refers to "the old vm-based harness" |
+| `sweep_golden.js` | test data | `SWEEP_BASES`, `MC_GOLDEN`, `OPT_GOLDEN` - the recorded strategy enumerations both sweeps must keep emitting. Data only, dual-mode export, `require`d by `optimizer_core.tests.js` on every run |
 | `sweep_golden.gen.js` | test tool | `node sweep_golden.gen.js` - rewrites the `MC_GOLDEN` block of `sweep_golden.js` from source. Run only for a deliberate `buildVariations()` change, then read the diff |
 | `sweep_golden.import.js` | test tool | `node sweep_golden.import.js <dir>` - folds a browser capture into `OPT_GOLDEN`. That half cannot be generated: the Optimizer's enumeration needs a live `getInputs()`. Capture recipe is in the file header |
-| `doclinks.test.js` | test | `node doclinks.test.js` - `docHref()` mapping table |
-| `taxPaymentPlanner.test.js` | test | `node taxPaymentPlanner.test.js` - covers `taxPaymentPlanner.js`, which the optimizer does not load |
+| `doclinks.tests.js` | test | `node doclinks.tests.js` - `docHref()` mapping table |
+| `taxPaymentPlanner.tests.js` | test | `node taxPaymentPlanner.tests.js` - covers `taxPaymentPlanner.js`, which the optimizer does not load |
 | `RetirementTaxPlanner.html` | sibling page | handoff target of `openTaxPlanner()`; the only page that loads `taxPaymentPlanner.js` |
 | `taxPaymentPlanner.js` | engine | `TaxPaymentPlanner.computePaymentPlan`, `getStateInfo`, `dueDateFor`, `restoreDateFor`, holiday/business-day helpers. Same no-DOM contract as the other two engine files |
 | `optimizer_changelog.md` | docs | full release history; the 5 newest entries are duplicated inline in the HTML |
@@ -307,7 +307,7 @@ refreshed worker can pull a stale `optimizer_core.js`.
 Two directories, one rule, because the distinction has been asked about:
 
 - **Repo root, beside the suite it serves** - anything `node <x>.test.js` needs in order to pass.
-  `sweep_golden.js` is a *fixture*, not a study: `optimizer_core.test.js:66` `require`s it and
+  `sweep_golden.js` is a *fixture*, not a study: `optimizer_core.tests.js:66` `require`s it and
   asserts against it every run, so a drift in either enumeration fails the build. `sweep_golden.gen.js`
   and `sweep_golden.import.js` are the two ways that fixture is refreshed, and `gen` rewrites
   `sweep_golden.js` in place by `__dirname`, so they stay next to it. None of the three is interim,
@@ -328,8 +328,8 @@ sh .githooks/install
 ```
 
 Run once per clone. Release gating relies on the Red X that `optimizer_tests.js` renders at page
-load, and **that badge covers only the 245 in-page tests**. The 268 tests in `optimizer_core.test.js`,
-`taxPaymentPlanner.test.js` and `doclinks.test.js` never run in the browser at all, so breaking one
+load, and **that badge covers only the 245 in-page tests**. The 268 tests in `optimizer_core.tests.js`,
+`taxPaymentPlanner.tests.js` and `doclinks.tests.js` never run in the browser at all, so breaking one
 is invisible at the moment of release. The hook runs all three (~3.5 s) and blocks the commit on a
 failure - or on a **missing** suite, since a renamed one would otherwise look identical to a green
 run. `git commit --no-verify` is the deliberate escape hatch.

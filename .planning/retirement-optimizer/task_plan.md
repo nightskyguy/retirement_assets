@@ -230,7 +230,7 @@ purpose. Do the fix as its own PR against a clean tree.
 
 ## Phase P39: Make the node-only tests visible in the browser (2026-08-05) — IN PROGRESS (2026-08-06)
 
-**Count drift, noticed on pickup 2026-08-06.** The measured table below says `optimizer_core.test.js`
+**Count drift, noticed on pickup 2026-08-06.** The measured table below says `optimizer_core.tests.js`
 = 206 tests; the OBBBA fix and the dividend fix added 8, so node is **214/32/22** at `main` =
 `10f6f2a`. The 2466 ms / 1792 ms timing split is still directionally right (nothing added was a
 binary search), but **the staleness guard's expected count must be measured fresh, never copied from
@@ -250,16 +250,16 @@ Both constraints are satisfiable, and the measurements say so clearly.
 | suite | tests | wall time | browser today |
 |---|---|---|---|
 | `optimizer_tests.js` (in-page) | 245 | **55 ms** | yes, blocking at load |
-| `optimizer_core.test.js` | 206 | 2466 ms | **no** |
-| `taxPaymentPlanner.test.js` | 32 | ~320 ms | **no** |
-| `doclinks.test.js` | 22 | ~10 ms | **no** |
+| `optimizer_core.tests.js` | 206 | 2466 ms | **no** |
+| `taxPaymentPlanner.tests.js` | 32 | ~320 ms | **no** |
+| `doclinks.tests.js` | 22 | ~10 ms | **no** |
 
 **The finding that makes this cheap: 3 tests are 1792 ms of that 2466 ms — 73%.** All three are
 `breakEvenHeirsRate` binary searches:
 
-- `optimizer_core.test.js:2290` `breakEvenHeirsRate: the predicate is monotonic...` — **1438 ms**
-- `optimizer_core.test.js:2304` `lowestBreakEvenHeirsRate: finds a threshold...` — **195 ms**
-- `optimizer_core.test.js:2280` `breakEvenHeirsRate: the rate/amount pair...` — **159 ms**
+- `optimizer_core.tests.js:2290` `breakEvenHeirsRate: the predicate is monotonic...` — **1438 ms**
+- `optimizer_core.tests.js:2304` `lowestBreakEvenHeirsRate: finds a threshold...` — **195 ms**
+- `optimizer_core.tests.js:2280` `breakEvenHeirsRate: the rate/amount pair...` — **159 ms**
 
 The remaining **203 tests run in 674 ms combined**; 193 of them in 243 ms. So "multiple seconds of
 tests" is really three tests, and excluding them changes the picture entirely.
@@ -267,7 +267,7 @@ tests" is really three tests, and excluding them changes the picture entirely.
 Second enabling fact: `optimizer_core.js`, `taxengine.js`, `taxPaymentPlanner.js` and `doclinks.js`
 **already carry dual-mode export guards** (`typeof module !== 'undefined' && module.exports`). The
 sources already load in a browser. Only the four **test** files are node-bound, and only through
-their `require()` headers — **4** calls in `optimizer_core.test.js` (`:29`, `:32`, `:35`, `:66`), 1
+their `require()` headers — **4** calls in `optimizer_core.tests.js` (`:29`, `:32`, `:35`, `:66`), 1
 each in the others. (An earlier count of 5 here came from a `grep -c 'require('` that also matched
 the comment at `:18`.)
 
@@ -279,13 +279,13 @@ Also confirmed: `requestIdleCallback` and `Worker` are both available in the tar
 **Tier 1 — blocking, at load. Unchanged.** `optimizer_tests.js`, 245 tests, 55 ms. The Red X behaves
 exactly as it does today. Nothing is added to the critical path.
 
-**Tier 2 — deferred, after first paint.** Port `optimizer_core.test.js` and
-`taxPaymentPlanner.test.js` to dual mode and run their fast subsets (203 + 32 tests, ~1 s) from
+**Tier 2 — deferred, after first paint.** Port `optimizer_core.tests.js` and
+`taxPaymentPlanner.tests.js` to dual mode and run their fast subsets (203 + 32 tests, ~1 s) from
 `requestIdleCallback`. The badge starts neutral, then resolves to 🟢 or ❌ about a second in. Load
 time is unaffected because the work happens after paint. **This tier is what closes the gap.**
 
 **Tier 3 — node and pre-commit only.** The 3 heavy searches above, tagged `slow`, plus
-`doclinks.test.js`. **CORRECTED 2026-08-06:** the stated reason — that it reads files from disk and
+`doclinks.tests.js`. **CORRECTED 2026-08-06:** the stated reason — that it reads files from disk and
 would need a fetch shim — is **false**. Verified: its only I/O is `require('./doclinks.js')` at
 `:21`; zero `fs`, zero `__dirname`, zero `readFileSync`. The `.md` paths inside it are assertion
 data, never opened. It is the **cheapest** of the three to dual-mode, not the impossible one, so
@@ -344,7 +344,7 @@ everything added later.
    filters. Keep them running in node unconditionally.
 3. **Dual-mode the two portable test files.** Mechanical: replace the `require()` header with a
    node/browser branch resolving the same symbols off `globalThis` in the browser. Roughly 60 lines
-   at the top of `optimizer_core.test.js`; the 174 `test(...)` bodies do not change.
+   at the top of `optimizer_core.tests.js`; the 174 `test(...)` bodies do not change.
 4. **Idle runner + badge protocol.** Extend `#testsFailed` to a three-state badge (pending / pass /
    fail) so a deferred failure is distinguishable from "still running". Do not let a pending state
    look like a pass — that is the same false-green this phase exists to remove.
@@ -357,7 +357,7 @@ everything added later.
 - **Do not let Tier 2 block paint.** The point is coverage without load cost; a synchronous port
   would trade one problem for the other.
 - **A pending badge must not read as green.** Neutral, visibly distinct from 🟢.
-- ~~**`doclinks.test.js` stays in node.** Its filesystem reads are the thing it tests.~~
+- ~~**`doclinks.tests.js` stays in node.** Its filesystem reads are the thing it tests.~~
   **WITHDRAWN 2026-08-06 — the premise was false.** It performs no filesystem reads at all. This
   constraint was load-bearing for item 3's scope and is now removed; decide the port on its merits.
 - **Test count is load-bearing** once the staleness guard exists: adding a test now means updating
@@ -416,7 +416,7 @@ The `*.tests.js` suffix is safe precisely because `_tests.js` does not match it.
 
 - **DONE (PR 3 of this batch):** rename the three node suites `.test.js` -> `.tests.js`.
 - **DEFERRED until after P39 items 2-6:** the `tests/` move. P39 item 3 dual-modes
-  `optimizer_core.test.js` into the browser, so moving first would commit to served paths for files
+  `optimizer_core.tests.js` into the browser, so moving first would commit to served paths for files
   that are about to gain browser exposure — two new-path risks stacked in one window — and would
   rewrite `require()` headers that item 3 then restructures anyway.
 - **REJECTED:** `.tests/`, and renaming `optimizer_tests.js`.

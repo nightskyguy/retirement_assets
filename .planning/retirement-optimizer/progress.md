@@ -1632,3 +1632,33 @@ context" that has not existed since `86e26fa`.
 **shipped** phase records (PF5 v11.11dc, PF v11.11c1) where the names were correct when written —
 rewriting them would falsify the record. Only live, forward-looking instructions were corrected.
 Mechanical name churn across the remaining ~80 `.planning/` mentions stays out of scope.
+
+## 2026-08-06 (cont.) — PR 3: the three node suites renamed to `.tests.js`
+
+`optimizer_core.test.js` -> `optimizer_core.tests.js`, `taxPaymentPlanner.test.js` ->
+`taxPaymentPlanner.tests.js`, `doclinks.test.js` -> `doclinks.tests.js`, per the user's P40 decision.
+`optimizer_tests.js` deliberately untouched. `git mv` throughout; git scored all three R100.
+
+**The requires did not move.** They point at *source* files (`taxengine.js`, `optimizer_core.js`,
+`displayhelpers.js`, `sweep_golden.js`, `doclinks.js`, `taxPaymentPlanner.js`), none of which were
+renamed. The plan had flagged the six `./` requires as an edit site for the *move*, not the rename;
+for a rename they are inert. The `sweep_golden` marker strings are likewise untouched, since only a
+rename of the *generators* would break those.
+
+**One browser fetch:** `RetirementTaxPlanner.html:1083`, plus the two UI strings at `:1081`/`:1094`.
+`?v=13c3` left as-is on purpose: the token busts a cached copy of the *same* URL, and the URL just
+changed, so there is no stale entry under the new name. Bumping it would buy nothing and would imply
+a release that did not happen.
+
+**Three more instances of the PR 2 `vm.runInContext` defect surfaced during the sweep** and are
+fixed here: the two mermaid edge labels `CORETEST -->|vm.runInContext|` and the prose "Node via
+`vm.runInContext`" in the module-contract paragraph. PR 2 caught the table row and the node label
+but not these.
+
+**`.planning/` rule, unchanged from PR 2:** live forward-looking instructions updated (the whole P39
+and P40 sections, 14 occurrences); the 28 occurrences in shipped phase records left alone, because
+the names were correct when written. `optimizer_changelog.md` never referenced these files at all.
+
+Verified: all three suites green by their new names (214/32/22), the hook green with the updated
+`suites=` list, and zero old-name references anywhere outside dated `.planning` records.
+Nothing user-visible, so no version bump and no changelog entry.

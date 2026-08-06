@@ -1078,9 +1078,9 @@
     if (!new URLSearchParams(window.location.search).has('runtests')) return;
     const badge = document.getElementById('testsFailed');
     badge.textContent = '⏳';
-    badge.title = 'Loading taxPaymentPlanner.test.js…';
+    badge.title = 'Loading taxPaymentPlanner.tests.js…';
     const s = document.createElement('script');
-    s.src = 'taxPaymentPlanner.test.js?v=13c3';
+    s.src = 'taxPaymentPlanner.tests.js?v=13c3';
     s.onload = () => {
       const r = window.runTaxPlannerTests();
       badge.textContent = r.failed === 0 ? `🟢 ${r.passed}/${r.total}` : `❌ ${r.failed} failed`;
@@ -1091,7 +1091,7 @@
     };
     s.onerror = () => {
       badge.textContent = '❌ test file not loaded';
-      badge.title = 'taxPaymentPlanner.test.js could not be fetched. On file:// URLs the browser '
+      badge.title = 'taxPaymentPlanner.tests.js could not be fetched. On file:// URLs the browser '
                   + 'blocks it; serve the page over http instead.';
       badge.style.color = '#C00000';
     };

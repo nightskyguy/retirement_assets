@@ -40,7 +40,7 @@
  * users NOT to convert in cases where converting clearly wins -- understating the benefit.
  */
 
-// ── Bootstrap the engine exactly like optimizer_core.test.js ────────────────────────────────
+// ── Bootstrap the engine exactly like optimizer_core.tests.js ────────────────────────────────
 globalThis.performance = { now: () => 0 };
 globalThis.window = {};
 globalThis.document = { getElementById: () => null, addEventListener: () => {} };

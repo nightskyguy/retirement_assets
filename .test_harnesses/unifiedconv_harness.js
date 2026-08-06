@@ -36,7 +36,7 @@
  * from the shipped defaults (Brokerage-poor) to balanced thirds (Brokerage-rich).
  */
 
-// ── Bootstrap the engine exactly like betr_harness.js / optimizer_core.test.js ───────────────
+// ── Bootstrap the engine exactly like betr_harness.js / optimizer_core.tests.js ───────────────
 globalThis.performance = { now: () => 0 };
 globalThis.window = {};
 globalThis.document = { getElementById: () => null, addEventListener: () => {} };

@@ -1,7 +1,7 @@
 'use strict';
 /**
- * doclinks.test.js
- * Run with: node doclinks.test.js
+ * doclinks.tests.js
+ * Run with: node doclinks.tests.js
  *
  * Covers the pure half of doclinks.js: docHref(), the map from a .md href on disk to the
  * .html page Jekyll publishes on GitHub Pages, and docLabel(), which keeps a link whose

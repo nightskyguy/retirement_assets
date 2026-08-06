@@ -33,7 +33,7 @@ fi
 
 # Every suite here sets process.exitCode = 1 on failure, so exit status is the signal.
 # Listed slowest first: a broken engine is the likeliest failure and should surface first.
-suites="optimizer_core.test.js taxPaymentPlanner.test.js doclinks.test.js"
+suites="optimizer_core.tests.js taxPaymentPlanner.tests.js doclinks.tests.js"
 
 failed=""
 missing=""

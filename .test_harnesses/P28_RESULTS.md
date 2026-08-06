@@ -333,8 +333,8 @@ Four of five broke. The broken ones are the output.
 ## 14. Verification
 
 - `node .test_harnesses/unifiedconv_harness.js` — 630 simulations, ~1.2s, all sections.
-- Regression suites unaffected (all flags default off): `optimizer_core.test.js` 148/148,
-  `taxPaymentPlanner.test.js` 32/32, `doclinks.test.js` 22/22.
+- Regression suites unaffected (all flags default off): `optimizer_core.tests.js` 148/148,
+  `taxPaymentPlanner.tests.js` 32/32, `doclinks.tests.js` 22/22.
 - Browser in-page suite 242/242, `#testsFailed` 🟢, console clean apart from the 4 known TEST
   fixtures. Browser reproduces the node figures exactly.
 - The engine is deterministic: two identical browser runs differ only in `loopMs`, a wall-clock

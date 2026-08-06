@@ -1,7 +1,7 @@
 'use strict';
 /**
- * optimizer_core.test.js
- * Run with: node optimizer_core.test.js
+ * optimizer_core.tests.js
+ * Run with: node optimizer_core.tests.js
  *
  * Phase 24: Cyclic Withdrawal Modifier tests
  *

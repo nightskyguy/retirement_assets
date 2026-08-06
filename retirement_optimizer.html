@@ -1148,7 +1148,11 @@ runSimulation?.();
 // about this is on the critical path: the scripts are not <script> tags, they are injected from
 // requestIdleCallback after the page has painted and the first simulation has rendered.
 //
+// ?runtests forces the whole thing SYNCHRONOUSLY, slow tests included, for a deliberate full check
+// before a release. ?runtests=fast opts back out of the slow tests while still skipping the wait.
 (() => {
+    const RT = new URLSearchParams(location.search).get('runtests');
+    const ALL = RT !== null && RT !== 'fast';
     const V = '?v=11147c';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
@@ -1176,7 +1180,7 @@ runSimulation?.();
         const results = [];
         try {
             results.push(Object.assign({ name: 'optimizer_core' },
-                window.runOptimizerCoreTests({ skipSlow: true })));
+                window.runOptimizerCoreTests({ skipSlow: !ALL })));
             results.push(Object.assign({ name: 'taxPaymentPlanner' }, window.runTaxPlannerTests()));
             results.push(Object.assign({ name: 'doclinks' }, window.runDocLinksTests()));
         } catch (e) {
@@ -1188,7 +1192,9 @@ runSimulation?.();
         window.TestTiers.finish(results);
     }
 
-    if (typeof requestIdleCallback === 'function') {
+    if (RT !== null) {
+        runTier2();                     // asked for explicitly: run now, do not wait for idle
+    } else if (typeof requestIdleCallback === 'function') {
         requestIdleCallback(() => runTier2(), { timeout: 3000 });
     } else {
         setTimeout(runTier2, 0);

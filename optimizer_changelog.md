@@ -11,123 +11,97 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.146f"></a>
+<a id="11.1478"></a>
 
-## 11.146f (behavior change)
+## 11.1478 (behavior change)
 
-**Dividends and interest were being counted twice: once as income that paid for your spending, and
-again as money added to your account. Plans have been showing more money than they should. This
-corrects it, and ending balances go down.**
+**Four tax and accounting corrections. The big one: dividends and interest were counted twice, so
+plans have been showing more money than they should. Ending balances go down. Please read this even
+if you skip the rest.**
 
-Please read this one even if you skip the others. It changes almost every plan, and it changes them
-in the unwelcome direction.
+### 1. Dividends and interest were credited twice
 
-**What was wrong.** When your brokerage pays a dividend, or your cash earns interest, two things
-were happening to the same dollar. It was added to your balance, which is right. It was also treated
-as income available to spend, which meant the tool withdrew that much less from your accounts to
-cover your spending. So the dollar paid for your groceries and stayed in your account at the same
-time. Nothing ever took it back out.
+When your brokerage paid a dividend, or your cash earned interest, the same dollar was doing two
+jobs. It was added to your balance, which is right. It was also treated as income available to
+spend, so the tool withdrew that much less from your accounts to cover your spending. The dollar
+bought your groceries and stayed in your account. Nothing ever took it back out.
 
 The longer the plan and the higher the rates, the more money this invented. A cash account earning
-4% grew at closer to 8%. In one test, a plan spent $800,000 over twenty years while taking only
+4% grew at closer to 8%. In one test a plan spent $800,000 over twenty years while taking only
 $2,449 out of the cash account that was supposedly paying for it.
 
-**How you can tell it was wrong, without taking our word for it.** Take a portfolio returning 8% a
-year. Have it earn that as 8% growth and no dividend, then again as 6% growth and a 2% dividend that
-is automatically reinvested. Same total return, same reinvestment, but the dividend version pays tax
-every year that the growth version does not. It must end up behind. It was ending up **21.7% ahead**.
-Now it correctly ends slightly behind.
+You can check the old behavior yourself. Take a portfolio returning 8% a year. Have it earn that as
+8% growth with no dividend, then again as 6% growth plus a 2% dividend that is automatically
+reinvested. Same total return, same reinvestment, but the dividend version pays tax every year that
+the growth version does not, so it must end up **behind**. It was ending up **21.7% ahead**.
 
-**What changed.** Dividends and interest are still income and are still taxed exactly as before,
-and they still land in your account. They are simply no longer counted a second time as spending
-money. The money is all still there, in Cash or reinvested in your brokerage, and your withdrawal
-strategy draws on it like any other balance. That also means your strategy now decides whether a
-dividend gets spent or banked, and how the tax on it is paid, instead of that being assumed.
+Dividends and interest are still income, still taxed exactly as before, and still land in your
+account. They are simply no longer counted a second time as spending money. The money is all still
+there, in Cash or reinvested in your brokerage, and your withdrawal strategy draws on it like any
+other balance. That also means your strategy now decides whether a dividend is spent or banked, and
+how the tax on it is paid, instead of that being assumed.
 
-**What this does to your numbers.** Ending balances fall, typically between 4% and 23% on a plan
-using the default 3% cash yield and 0.5% dividend rate. Your spending goal is still funded in the
-same years it was before. Tax goes up slightly, because the invented money had been quietly
-absorbing some of it. A Guyton-Klinger plan can also shift its spending path, since that strategy
-sets spending from your portfolio balance and that balance was overstated.
+**Expect ending balances to fall, typically between 4% and 23%** on a plan using the default 3% cash
+yield and 0.5% dividend rate. Your spending goal is still funded in the same years it was before.
+Tax goes up slightly, because the invented money had been quietly absorbing some of it. A
+Guyton-Klinger plan can also shift its spending path, since that strategy sets spending from your
+portfolio balance and that balance was overstated.
 
 **Nothing about your inputs was wrong.** Your balances, rates and goals meant what you thought they
 meant. The tool was mishandling them. A plan that looked like it worked may now need a lower
-spending goal, a later start, or a different strategy, and that is information worth having now
-rather than later.
+spending goal, a later start, or a different strategy, and that is worth knowing now rather than
+later.
 
-**Also fixed by the same change.** One of the Ordered strategies (Roth, IRA, Brokerage, Cash) was
-leaving a small amount of spending unfunded in two years; it is now one year, and a smaller amount.
+### 2. Two 2025 tax-law provisions were implemented but never switched on
 
----
+The senior deduction and the higher SALT cap from the 2025 tax act were both built into the tax
+engine and then never actually applied to any plan. The result was federal tax that was too **high**.
 
-<a id="11.146e"></a>
+The **senior deduction** is an extra $6,000 for each filer aged 65 or over, for tax years 2025
+through 2028, phasing out above $150,000 of income for a couple. On a plan with two filers over 65
+this is $12,000 a year of additional deduction. Both provisions now switch themselves off in the
+year the law says they expire.
 
-## 11.146e (behavior change)
+The **SALT cap** rise, to $40,000 through 2029, only matters if your state and local taxes are large
+enough to make itemizing worthwhile, which for most retirees they are not. It is worth up to about
+$950, in a narrow band of high income in a high-tax state, and nothing outside it.
 
-**States that exempt retirement income were charging tax on it anyway, in the years the plan had to
-make a late correction. Ordered strategies were hit hardest, and many plans that reported failure in
-those states actually succeed.**
+### 3. States that exempt retirement income were taxing it anyway, in some years
 
-**Where it went wrong.** 16 of the 38 states the tool models exempt some or all of your pension and
-IRA income: Connecticut, Georgia, Illinois, Mississippi, Iowa, Maryland, Michigan, New York,
-Pennsylvania, Virginia, Alabama, Colorado, Kentucky, Maine, Ohio and Wisconsin. To apply that
-exemption the tax calculation has to be told which part of your income is retirement income. The
-tool works out your tax up to four times in a year as it settles the final withdrawal amounts, and
-one of those four passes was not passing that information along. Any year that reached that pass was
-taxed as though your state had no exemption at all.
+16 of the 38 states the tool models exempt some or all of your pension and IRA income: Connecticut,
+Georgia, Illinois, Mississippi, Iowa, Maryland, Michigan, New York, Pennsylvania, Virginia, Alabama,
+Colorado, Kentucky, Maine, Ohio and Wisconsin. The tool works your tax out up to four times in a
+year as it settles the final withdrawal amounts, and one of those passes was not being told which
+part of your income was retirement income. Any year that reached that pass was taxed as though your
+state had no exemption at all.
 
-**Why Ordered strategies took the worst of it.** For most strategies a later pass runs after the
-faulty one and works the tax out again, correctly, which hid the problem most of the time. Ordered
-strategies (CBIR, RIBC, BIRC) do not run that later pass, because they follow the account sequence
-you chose rather than reaching for more IRA. So for Ordered the faulty figure was the final answer.
+**Ordered** strategies took the worst of it, because for other strategies a later pass works the tax
+out again correctly and hid the problem. Ordered strategies do not run that later pass, so the
+faulty figure was the final answer. Across a 16-state test sweep the correction removed **$732,133**
+of state tax that was never owed, **$685,487** of it on Ordered rows, and **23 of 36 Ordered plans
+went from reporting failure to funding the whole plan**. On one Pennsylvania test plan whose only
+income was Social Security, a pension and IRA withdrawals, all three of which Pennsylvania exempts,
+lifetime state tax fell from **$28,055 to $9**. Plans in the other 22 states are unchanged.
 
-**What this does to your numbers.** Only plans in those 16 states change, and the change is in your
-favor: less state tax, so more of your money is spendable. Across a 16-state test sweep the
-correction removed **$732,133** of state tax that was never owed, **$685,487** of it on Ordered
-rows. On one Pennsylvania test plan whose only income was Social Security, a pension and IRA
-withdrawals, all three of which Pennsylvania exempts, lifetime state tax fell from **$28,055 to
-$9**. **23 of the 36 Ordered plans in the sweep went from reporting failure to funding the whole
-plan.** Plans in the other 22 states are unchanged to the dollar.
+### 4. Documentation that no longer matched the tool
 
-A small number of plans show lifetime state tax a few hundred dollars **higher** even though every
-individual year is now taxed correctly. That is the knock-on effect of paying less tax earlier: more
-money stays invested, it grows, and a larger balance produces slightly more taxable income later.
-Those same plans end with more money than before.
+The funding backstop was still described as a Fill Bracket / IRMAA feature. It has not been one
+since 11.1468: once Cash, Brokerage and Roth are exhausted, nearly every strategy now draws the
+extra IRA needed. What is specific to those two ceilings is that their draw goes *above* the
+ceiling, which is what makes them soft.
 
----
+**Ordered's exclusion was documented nowhere.** Like ACA Cliff, it reports a shortfall by design,
+because the account sequence is the one you picked and it will not step outside it. A small
+remaining shortfall on a CBIR, RIBC or BIRC row is the answer, not a bug. That is now said in the
+README, in the strategy description, on the Annual Details legend and in the shortfall column
+tooltip. The shortfall tooltip also used to say a shortfall was "likely due to errors in the
+calculation", which was backwards.
 
-<a id="11.146b"></a>
+### Also
 
-## 11.146b
-
-**The documentation now matches how spending is actually funded, and says plainly which two
-strategies leave a shortfall on purpose.** No plan's numbers change.
-
-The last two releases changed which strategies draw extra IRA to fund spending and how the first
-withdrawal is sized, but the README, several tooltips and the Annual Details legend still described
-the old behavior. Three things were wrong or missing.
-
-**1. The funding backstop was described as a Fill Bracket / IRMAA feature.** It has not been one
-since 11.1468. Once Cash, Brokerage and Roth are exhausted, nearly every strategy now draws the
-extra IRA needed. What is specific to Fill Bracket and IRMAA Tier is that their draw goes *above*
-the chosen ceiling, which is what makes those ceilings soft.
-
-**2. Ordered's exclusion was documented nowhere.** ACA Cliff has always been explained as a strategy
-that reports a shortfall on purpose. Ordered does the same thing for its own reason, that the
-account sequence is the one you picked, and it will not step outside it even when a later account in
-your sequence still holds money. Until now nothing told you that, so a small residual shortfall on a
-CBIR, RIBC or BIRC row looked like a bug. It is not. That is now stated in the README, in the
-strategy description, on the Annual Details legend, and in the shortfall column tooltip.
-
-**3. The shortfall tooltip blamed the tool.** It said a shortfall was "likely due to errors in the
-calculation", which was misleading even before these changes and is now backwards. A shortfall
-normally means the plan ran out of money; the two exceptions above are deliberate.
-
-Also corrected: the IRA Draw % tooltip in the sidebar stopped its fill chain at Roth while the
-Documentation tab's description of the same strategy already mentioned the last-resort draw, so the
-two disagreed. The Cash Reserve depletion order now notes the two strategies that stop before the
-forced-IRA step. The README gained an entry for both of the last two releases, which it was missing
-entirely.
+One of the Ordered strategies was leaving a small amount of spending unfunded in two years; the
+amounts moved and now sit between $10 and $161 across three years on the test plan. These are
+rounding-scale residuals from the order in which tax is recomputed, not stranded capital.
 
 ---
 

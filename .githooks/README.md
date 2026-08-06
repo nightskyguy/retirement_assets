@@ -40,13 +40,19 @@ not touch code. It is not the way past a red suite.
 
 ## Why this exists
 
-Release gating relies on the Red X badge that `optimizer_tests.js` renders at page load, and that
-badge covers only the 245 in-page tests. The 268 tests above **never run in the browser at all**, so
-a change that breaks one is invisible at the moment of release and can be published by accident.
-The hook moves the check to the moment the breakage would enter history.
+Release gating relies on the Red X badge that `optimizer_tests.js` renders at page load. That badge
+used to cover only the 245 in-page tests, so a change breaking one of the 268 node tests was
+invisible at the moment of release. Both now cover the same 513 tests.
 
-This is work item 1 of P39. The remaining items make the node suites visible in the browser too;
-the hook is the guarantee, the badge is the convenience.
+They are still worth having separately, and the hook came first on purpose:
+
+- The **hook** catches breakage when it would enter history, on every commit, whether or not anyone
+  opens a browser. It is the guarantee.
+- The **badge** catches it at the moment of release, and reports the counts. It is the convenience,
+  and it only helps when someone is looking at it.
+
+The hook also covers what the badge cannot: on a `file://` URL the browser blocks the node suites
+from loading at all, and the badge honestly reports `🟢⚠` rather than a full green.
 
 ## Why a shim, and not `git config core.hooksPath .githooks`
 

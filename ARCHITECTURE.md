@@ -327,12 +327,14 @@ The test that decides it: **would the suite fail without this file?** Yes goes a
 sh .githooks/install
 ```
 
-Run once per clone. Release gating relies on the Red X that `optimizer_tests.js` renders at page
-load, and **that badge covers only the 245 in-page tests**. The 268 tests in `optimizer_core.tests.js`,
-`taxPaymentPlanner.tests.js` and `doclinks.tests.js` never run in the browser at all, so breaking one
-is invisible at the moment of release. The hook runs all three (~3.5 s) and blocks the commit on a
-failure - or on a **missing** suite, since a renamed one would otherwise look identical to a green
-run. `git commit --no-verify` is the deliberate escape hatch.
+Run once per clone. The hook runs all three node suites (~3.5 s) and blocks the commit on a failure,
+on a **missing** suite, or on a `*.tests.js` file that exists but is not in its `suites=` list - a
+renamed, deleted or unlisted suite would otherwise look identical to a green run.
+`git commit --no-verify` is the deliberate escape hatch.
+
+The hook is the guarantee; the badge is the convenience. Both now cover the same 513 tests, and they
+fail independently, which is the point: the hook catches breakage at the commit, the badge catches
+it at the release.
 
 Two mechanics worth knowing before touching it, both discovered the hard way:
 
@@ -344,6 +346,48 @@ Two mechanics worth knowing before touching it, both discovered the hard way:
 - **`.gitattributes` pins `.githooks/**` to `eol=lf`.** `core.autocrlf` is true on Windows and `sh`
   cannot execute a script whose shebang ends in CR. That pin is scoped to `.githooks/` on purpose -
   this repo has no repo-wide EOL policy, and adding one would renormalise every tracked file.
+
+### The three test tiers, and the badge that reports them
+
+| tier | what | when |
+|---|---|---|
+| 1 | `optimizer_tests.js`, 245 tests, ~55 ms | blocking, at page load |
+| 2 | the three node suites, 265 fast tests | injected from `requestIdleCallback` **after** first paint |
+| 3 | 3 slow tests tagged `test.slow` | node always; browser only on `?runtests` |
+
+Tier 2 is not on the critical path and that is measured: `loadEventEnd` lands around 760 ms while the
+tier-2 script requests start around 3.7 s. They are injected scripts, not `<script>` tags.
+
+**Badge states.** `⏳` tier 1 passed, tier 2 still running · `🟢` everything passed · `🟢⚠` tier 1
+passed but tier 2 could not be fetched (`file://` blocks it) · `❌` something failed ·
+`❌ test counts changed` the staleness guard fired. A pending badge must never read as green - green
+is a claim that everything passed, and rendering it early is the false-green this whole phase exists
+to remove. Tier 2 is **opt-in per page** via `window.TIER2_PENDING`; `standalone/IncomeTaxPlanner.html`
+loads the same file and does not opt in, so it keeps the original two-state badge.
+
+**`?runtests`** forces tier 2 synchronously with the slow tests included (513 total);
+**`?runtests=fast`** runs it now but keeps skipping them.
+
+**Three things to know before adding a test:**
+
+- **Adding a test means editing `TestTiers.EXPECTED` in `optimizer_tests.js` in the same commit.**
+  The staleness guard compares the counts on disk against that object and turns the badge red on any
+  drift, naming it. That friction is deliberate - it is what stops a suite being added and silently
+  never run.
+- **`test.critical(name, fn)`** marks a regression guard for a defect that actually shipped. Those
+  are printed as `✓ ★ CRITICAL <name>` and repeated in their own end-of-run block, so their status is
+  readable without scrolling. Ten exist today: dividend/interest double-counting, and the state
+  retirement-income exemptions including no-income-tax states.
+- **`test.slow(name, fn)`** exempts a test from the browser tier only. Node always runs it. Use it on
+  measurement, not suspicion - the three tagged today are 71% of the suite's runtime.
+
+**Trap, seen for real.** The suites resolve the engine through `window.TaxEngine` / `OptimizerCore` /
+`SweepGolden` rather than bare globals, because a classic script puts `function` declarations on
+`globalThis` but leaves top-level `const` (`MC_GRIDS`, `OPTIMIZER_GRIDS`, `RMD_TABLE`) as global
+*lexical* bindings a property lookup cannot see. Related: the engine writes wall clock into its own
+output (`optimizer_core.js:928`, `:2381`, `:1739`), so the browser runner stubs `performance.now()`
+for the duration of a run and restores it afterwards - without that, six byte-identity tests fail in
+the browser while passing in node, on the clock rather than the engine.
 
 ### Shared globals crossing file boundaries
 

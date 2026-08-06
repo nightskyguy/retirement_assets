@@ -2209,11 +2209,52 @@ assertEqual(
 // Only pages that set window.TIER2_PENDING before calling runTests() use any of this. Pages that
 // do not - standalone/IncomeTaxPlanner.html, for one - keep the two-state badge they always had.
 window.TestTiers = {
-    // results: array of {name, passed, failed, skipped} from the node suites' browser runners.
+    // ── Staleness guard ──────────────────────────────────────────────────────
+    // The tier that runs outside this file is the tier that rots. These are the counts this page
+    // believes exist; if the suites on disk disagree, the badge goes RED and names the difference.
+    //
+    // Yes, this means adding a test requires editing this line in the same commit. That friction is
+    // the feature: without it, a whole suite could be added, or the slow tags could drift, and the
+    // page would keep reporting green over a number it no longer understands. Measure, do not guess:
+    // run `node <suite>` and use the printed total.
+    EXPECTED: { optimizer_core: 214, taxPaymentPlanner: 32, doclinks: 22, slowInCore: 3 },
+
+    checkCounts(results) {
+        const drift = [];
+        results.forEach(r => {
+            const want = this.EXPECTED[r.name];
+            if (want === undefined) drift.push(`${r.name}: suite is not in EXPECTED at all`);
+            else if (r.total !== want) drift.push(`${r.name}: ${r.total} tests on disk, ${want} expected`);
+        });
+        Object.keys(this.EXPECTED).forEach(name => {
+            if (name !== 'slowInCore' && !results.some(r => r.name === name)) {
+                drift.push(`${name}: expected but never reported - did the suite fail to load?`);
+            }
+        });
+        const slow = window.OPTIMIZER_CORE_SLOW_COUNT;
+        if (slow !== undefined && slow !== this.EXPECTED.slowInCore) {
+            drift.push(`optimizer_core: ${slow} slow-tagged tests, ${this.EXPECTED.slowInCore} expected`);
+        }
+        return drift;
+    },
+
+    // results: array of {name, passed, failed, skipped, total} from the node suites' browser runners.
     finish(results) {
         const el = document.getElementById('testsFailed');
         if (!el) return;
         const t1 = window.TIER1_RESULT || { passed: 0, failed: 0 };
+
+        // Count drift is reported as a failure, not a footnote. A page that has lost track of how
+        // many tests exist cannot honestly render a green dot about them.
+        const drift = this.checkCounts(results);
+        if (drift.length) {
+            el.textContent = '❌ test counts changed';
+            el.title = 'The suites on disk no longer match what this page expects:\n'
+                     + drift.join('\n')
+                     + '\n\nIf this was deliberate, update TestTiers.EXPECTED in optimizer_tests.js.';
+            console.error('[staleness guard] ' + drift.join(' | '));
+            return;
+        }
         const passed = t1.passed + results.reduce((n, r) => n + r.passed, 0);
         const failed = t1.failed + results.reduce((n, r) => n + r.failed, 0);
         const skipped = results.reduce((n, r) => n + (r.skipped || 0), 0);

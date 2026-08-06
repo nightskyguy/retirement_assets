@@ -297,7 +297,9 @@ function audit() {
             money(endWealth(B)).padStart(16) + money(endWealth(B) - endWealth(A)).padStart(12) +
             money(A.totals.tax).padStart(11) + money(B.totals.tax).padStart(10));
     }
-    console.log('\n    Year-by-year, plan B: the dividend lands in Cash and CashWD stays 0 forever.');
+    console.log('\n    Year-by-year, plan B. BEFORE the fix the dividend landed in Cash, CashWD stayed');
+    console.log('    $0 forever, Cash climbed to $746,286 and Brokerage- fell to $0 by year 14. After');
+    console.log('    the fix Brokerage- carries the spending and Cash is drawn for the dividend tax.');
     const trace = simulate({ ...dseed, growth: 0.06, dividendRate: 0.02, spendGoal: 40000 });
     console.log('    yr   cashDividends      CashWD        Cash   Brokerage-');
     [0, 1, 5, 10, 14, 19].forEach(i => { const e = trace.log[i]; if (!e) return;

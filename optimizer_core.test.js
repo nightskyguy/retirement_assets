@@ -475,6 +475,15 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // 9,924,288.129575 -> 9,913,213.043789. Higher tax and lower ending wealth is the expected
     // direction: the draw is now large enough to actually pay the tax on Social Security and the
     // RMDs, money the old sizing left unfunded. The adjustment count is still 4.
+    //
+    // Re-derived a third time when dividends and interest stopped being double-credited. This
+    // fixture runs cashYield 2% and dividendRate 2%, so it was carrying a lot of money that was
+    // both spent and banked. Spend 7,935,798.157290 -> 7,393,024.075002, tax 2,169,137.836607 ->
+    // 2,087,135.358516, final NW 9,913,213.043789 -> 8,551,902.042242. The guardrail-adjustment
+    // count moved too, 4 -> 3, which the paragraph above had called the stable part: Guyton-Klinger
+    // sets spending from the portfolio balance, that balance was inflated, and one guardrail that
+    // used to trip no longer does. The count is a recording like everything else here, not an
+    // invariant.
     const gk = simulate({
         ...BASE, strategy: 'gk', nYears: 30,
         birthyear1: 1960, die1: 92, birthyear2: 1962, birthmonth2: 6, die2: 94, hasSpouse: true,
@@ -484,11 +493,11 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
         spendGoal: 140000, inflation: 0.025, cpi: 0.025, growth: 0.06,
         cashYield: 0.02, dividendRate: 0.02,
     });
-    assertNear(gk.totals.spend, 7935798.157290, 'GK total spend', 0.01);
-    assertNear(gk.totals.tax, 2169137.836607, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 9913213.043789, 'GK final net worth', 0.01);
-    assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 4,
-        `Expected the same 4 guardrail adjustments as the pre-merge run, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
+    assertNear(gk.totals.spend, 7393024.075002, 'GK total spend', 0.01);
+    assertNear(gk.totals.tax, 2087135.358516, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 8551902.042242, 'GK final net worth', 0.01);
+    assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
+        `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
 
 // ── Baseline accounting (after-tax NW + totalWealth fix) ───────────────────────
@@ -1057,8 +1066,12 @@ const FUNDING_ARMS = [
     { name: 'propwd 10%',     over: { strategy: 'propwd',   propWithdraw: 0.10, stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 50%',     over: { strategy: 'propwd',   propWithdraw: 0.50, stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'fixed',          over: { strategy: 'fixed' },                                                  iraStranded:  0, worst:      0 },
-    { name: 'ordered CBIR',   over: { strategy: 'ordered',  orderedSeq: 'CBIR' },                           iraStranded:  2, worst:    93, convergence: true },
-    { name: 'ordered RIBC',   over: { strategy: 'ordered',  orderedSeq: 'RIBC' },                           iraStranded:  2, worst:    73, convergence: true },
+    // Both moved when dividends/interest stopped being double-credited. RIBC IMPROVED: 2 stranded
+    // years -> 1, worst $73 -> $58. The convergence gap is a residual left when the third pass funds
+    // spending, recomputes tax, and nothing loops back for the tax that recompute created; a smaller
+    // phantom balance makes that residual smaller and, in 2027, removes it entirely.
+    { name: 'ordered CBIR',   over: { strategy: 'ordered',  orderedSeq: 'CBIR' },                           iraStranded:  2, worst: 90.32, convergence: true },
+    { name: 'ordered RIBC',   over: { strategy: 'ordered',  orderedSeq: 'RIBC' },                           iraStranded:  1, worst: 58.38, convergence: true },
     { name: 'gk',             over: { strategy: 'gk',       gkGuard: 0.20, gkAdjPct: 0.10 },                iraStranded:  0, worst:      0 },
     { name: 'baseline else',  over: { strategy: '__unrecognized__' },                                       iraStranded:  0, worst:      0 },
     { name: 'aca lapsed',     over: { strategy: 'aca',      stratRate: 0, stratACAMultiple: 400 },          iraStranded:  0, worst:      0 },
@@ -1111,14 +1124,20 @@ test('funding invariant: the fixture actually drains (guards a vacuous green)', 
     // surplus, so on this fixture they now finish solvent with Cash to spare (min Cash 51,002 and
     // 27,263) instead of scraping Cash to zero. Naming them here instead would rebuild exactly the
     // stale exemption list that caused P38 in the first place.
+    // The bar is "no year stranded spending", NOT totals.success. Those differ: success also fails
+    // when the terminal portfolio cannot cover its own required draw (optimizer_core.js:2325), which
+    // is a solvency statement about the last year rather than anything about the funding path. Once
+    // dividends and interest stopped being double-credited, `propwd 10%` ends its final year with
+    // $90,149 against a $139,366 required draw where the phantom money used to hold it at $166,534,
+    // so it reports success:false while never stranding a dollar of spending. Gating on success
+    // there would fail this guard for a reason it was not written to police.
     for (const arm of FUNDING_ARMS.filter(a => !a.convergence)) {
         const r = simulate({ ...CAP_BASE, stratACAMultiple: 0, ...arm.over });
         if (r.log.some(e => (e.Cash || 0) <= 1)) continue;          // drained: the pin is earned
         const short = r.log.filter(e => Math.abs(e.shortfall || 0) > 1);
-        assert(r.totals.success && short.length === 0,
-            `${arm.name} never empties Cash AND does not fully fund the plan ` +
-            `(success=${r.totals.success}, ${short.length} shortfall year(s)) — it cannot exercise ` +
-            `the funding path, so its pin proves nothing`);
+        assert(short.length === 0,
+            `${arm.name} never empties Cash AND strands spending in ${short.length} year(s) — it ` +
+            `cannot exercise the funding path, so its pin proves nothing`);
     }
     // The convergence arms are exercised by a different fact: they strand money they could still
     // reach. Assert that directly so they are not simply unchecked.
@@ -1139,10 +1158,12 @@ test('P38: the primary draw funds the tax on guaranteed income, not the backstop
     const r = simulate({ ...CAP_BASE, stratACAMultiple: 0, strategy: 'propwd', propWithdraw: 0, stratRate: 0 });
     assert(r.totals.success && _sumAbsShortfall(r.log) < 100,
         `the plan must still fund fully, got success=${r.totals.success} shortfall=${Math.round(_sumAbsShortfall(r.log))}`);
-    // Pinned, not bounded: 395,109 before this change, 43,816 after. The drop is the measurement —
-    // that money was the tax on Social Security and the RMDs, which the first-pass draw now covers
-    // directly instead of leaving for the backstop to discover.
-    assertNear(_sumForcedIRA(r.log), 43816, 'forced-IRA total once the draw is sized correctly', 1);
+    // Pinned, not bounded: 395,109 before that change, 43,816 after, and 49,130 once dividends and
+    // interest stopped being double-credited (the phantom Cash had been quietly covering part of
+    // the residual). The drop from 395,109 is the measurement — that money was the tax on Social
+    // Security and the RMDs, which the first-pass draw now covers directly instead of leaving for
+    // the backstop to discover.
+    assertNear(_sumForcedIRA(r.log), 49130.306, 'forced-IRA total once the draw is sized correctly', 1);
 });
 
 test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household', () => {
@@ -1235,11 +1256,16 @@ test('P32 (not fixed here): minlimit strands spending with Brokerage still funde
     const stranded = _brokStranded(log);
     assert(stranded.length === 9,
         `expected the known 9 Brokerage-stranded years, got ${stranded.length}`);
-    assertNear(_worst(stranded), 9468, 'worst single-year unfunded amount with Brokerage left', 1);
-    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 71382,
+    // The numbers nudged when dividends and interest stopped being double-credited (total
+    // 71,382 -> 71,481, worst 9,468 -> 9,478, Brokerage 945,376 -> 926,096) and the COUNT did not
+    // move at all. That is worth recording: the two defects are independent. Removing the phantom
+    // money did not free a single one of these nine years, because what strands them is the third
+    // pass refusing to touch Brokerage, not how much Brokerage happens to be there.
+    assertNear(_worst(stranded), 9477.52, 'worst single-year unfunded amount with Brokerage left', 1);
+    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 71481.48,
         'total stranded across the nine years', 1);
     // The headline number: how much was sitting in Brokerage the first year it gave up.
-    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 945376,
+    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 926095.95,
         'Brokerage balance in the first year minlimit reported an unfunded shortfall', 1);
     assert(stranded.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
         'every stranded year must have Cash, Roth and IRA at zero — Brokerage is the only source left');
@@ -1897,6 +1923,91 @@ test('accounting: withdrawal columns include conversions, decompose correctly, a
     }
 });
 
+// ── Dividends and interest must never be credited twice ──────────────────────
+// These exist because the suite ran 209 green while every plan with a non-zero cashYield or
+// dividendRate created money. yr.taxableDividends and yr.taxableInterest were credited to a balance
+// in growAndSettle AND counted as spendable income, so the same dollar funded spending and stayed
+// in the account.
+//
+// WHY THE OBVIOUS TEST DOES NOT WORK, and why these are shaped the way they are: a per-year Cash
+// balance reconciliation (endCash = prevCash + cashG + surplusCash - CashWD, the shape used for the
+// IRA above) reconciles to 0.0000 both BEFORE and AFTER the fix. The balance sheet was never
+// inconsistent. The defect was on the income statement: the dividend legitimately entered Cash, and
+// separately shrank the withdrawal the plan needed to make. Only an economic or flow invariant sees
+// that, so that is what these assert. A balance reconciliation here would be vacuous.
+test('no free money: a dividend cannot create wealth (same total return, split two ways)', () => {
+    // Identical 8% total return. A takes it all as growth; B takes 6% growth + 2% dividend with DRIP
+    // on, so B reinvests every dividend and compounds the same way. The ONLY real difference is that
+    // B pays tax on the dividend every year and A defers it entirely. B must therefore never finish
+    // ahead. Basis = value so capital gains cannot muddy the comparison.
+    const seed = {
+        STATEname: 'CA', nYears: 20, birthyear1: 1955, birthmonth1: 1, die1: 90,
+        birthyear2: 0, birthmonth2: 12, die2: 0, hasSpouse: false,
+        ss1: 0, ss1Age: 70, ss2: 0, ss2Age: 70, pensionAnnual: 0, survivorPct: 0, pensionCola: false,
+        spendChange: 0, iraBaseGoal: 0, inflation: 0, cpi: 0, cashYield: 0, spendGoal: 0,
+        ssFailYear: 2099, ssFailPct: 1, convertExcessToRoth: false, propWithdraw: 0, stratRate: 0,
+        iraWithdrawPct: 0.05, startYear: 2026, strategy: 'propwd',
+        IRA1: 0, IRA2: 0, Roth: 0, Roth2: 0, Cash: 0, CashReserve: null,
+        Brokerage: 1000000, BrokerageBasis: 1000000,
+    };
+    const end = r => { const l = r.log[r.log.length - 1]; return (l.Brokerage || 0) + (l.Cash || 0); };
+    const A = simulate({ ...seed, growth: 0.08, dividendRate: 0,    dividendReinvest: false });
+    const B = simulate({ ...seed, growth: 0.06, dividendRate: 0.02, dividendReinvest: true });
+    assert(B.totals.tax > 0, 'setup: the dividend arm must actually be taxed, or this proves nothing');
+    assert(end(B) <= end(A) * 1.02,
+        `a reinvested dividend must not out-earn the identical return taken as growth: ` +
+        `growth-only ${Math.round(end(A))} vs dividend ${Math.round(end(B))} ` +
+        `(+${(100 * (end(B) / end(A) - 1)).toFixed(1)}%, and the dividend arm paid ` +
+        `${Math.round(B.totals.tax)} of tax the other did not). Before the double-credit was ` +
+        `fixed this ran +21.7%.`);
+});
+
+test('no free money: interest leaves Cash only by being spent or taxed', () => {
+    // A Cash-only plan. Every dollar that leaves Cash is either spending or tax, so lifetime CashWD
+    // must equal lifetime spend + lifetime tax exactly. While interest was double-credited the plan
+    // funded $800,000 of spending while withdrawing $2,449, because the interest paid for the
+    // spending as "income" and stayed in the account at the same time.
+    const r = simulate({
+        STATEname: 'CA', nYears: 20, birthyear1: 1955, birthmonth1: 1, die1: 90,
+        birthyear2: 0, birthmonth2: 12, die2: 0, hasSpouse: false,
+        ss1: 0, ss1Age: 70, ss2: 0, ss2Age: 70, pensionAnnual: 0, survivorPct: 0, pensionCola: false,
+        spendChange: 0, iraBaseGoal: 0, inflation: 0, cpi: 0, growth: 0, dividendRate: 0,
+        cashYield: 0.04, spendGoal: 40000, ssFailYear: 2099, ssFailPct: 1,
+        convertExcessToRoth: false, propWithdraw: 0, stratRate: 0, iraWithdrawPct: 0.05,
+        startYear: 2026, dividendReinvest: false, strategy: 'propwd',
+        IRA1: 0, IRA2: 0, Roth: 0, Roth2: 0, Brokerage: 0, BrokerageBasis: 0,
+        Cash: 1000000, CashReserve: null,
+    });
+    const cashWD = r.log.reduce((s, e) => s + (e.CashWD || 0), 0);
+    assert(r.totals.tax > 0, 'setup: the interest must actually be taxed');
+    assertNear(cashWD, r.totals.spend + r.totals.tax,
+        'lifetime Cash withdrawals must equal lifetime spending plus lifetime tax', 1);
+});
+
+test('no free money: interest cannot compound faster than the yield it is paid at', () => {
+    // Hard upper bound, no spending: Cash cannot exceed simple compounding at cashYield, and must
+    // land BELOW it because the interest is taxed every year and the tax is paid out of Cash.
+    // Double-crediting made it compound at roughly twice the rate: $4,254,946 against a $2,191,123
+    // ceiling.
+    const START = 1000000, Y = 0.04;
+    const r = simulate({
+        STATEname: 'CA', nYears: 20, birthyear1: 1955, birthmonth1: 1, die1: 90,
+        birthyear2: 0, birthmonth2: 12, die2: 0, hasSpouse: false,
+        ss1: 0, ss1Age: 70, ss2: 0, ss2Age: 70, pensionAnnual: 0, survivorPct: 0, pensionCola: false,
+        spendChange: 0, iraBaseGoal: 0, inflation: 0, cpi: 0, growth: 0, dividendRate: 0,
+        cashYield: Y, spendGoal: 0, ssFailYear: 2099, ssFailPct: 1,
+        convertExcessToRoth: false, propWithdraw: 0, stratRate: 0, iraWithdrawPct: 0.05,
+        startYear: 2026, dividendReinvest: false, strategy: 'propwd',
+        IRA1: 0, IRA2: 0, Roth: 0, Roth2: 0, Brokerage: 0, BrokerageBasis: 0,
+        Cash: START, CashReserve: null,
+    });
+    const ceiling = START * Math.pow(1 + Y, r.log.length);
+    const endCash = r.log[r.log.length - 1].Cash || 0;
+    assert(endCash < ceiling,
+        `Cash compounded past its own yield: ${Math.round(endCash)} vs a pre-tax ceiling of ` +
+        `${Math.round(ceiling)} over ${r.log.length} years at ${Y * 100}%`);
+});
+
 test('accounting: conversion-gross total equals the actual converted pulls (no reallocation)', () => {
     // convertExcessToRoth off → the only conversions are the extra conversion and (with fcc) the gross-up.
     const r = simulate({ ...SRC_BASE, extraConversionAmount: 100000, fundConversionWithCash: false }).log[0];
@@ -2039,21 +2150,39 @@ const PF11_BASE = {
     startInYear: 2026, startYear: 2026, dividendReinvest: false, futureIRATaxRate: 0.37,
 };
 
-test("optimizeConversionAmount: 'baselineScore' finds a conversion where 'finalNW' finds none", () => {
+// THE T6 DIVERGENCE NO LONGER EXISTS, and the reason is worth reading before trying to restore it.
+// This fixture used to show finalNW picking $0 while baselineScore picked $50k. That gap was itself
+// an artifact of the dividend/interest double-credit: the no-conversion arm banked phantom Cash
+// every year, and finalNW values Cash at face while discounting the IRA, so the phantom money made
+// "don't convert" look better than it was. With the double-credit fixed, both metrics agree.
+//
+// Searched before re-pinning, 64 variants over six levers: spendGoal 88k-105k, futureIRATaxRate
+// 0.24-0.50, Brokerage 150k-800k, Brokerage basis 100k-290k, Roth 0-300k, IRA1 400k-1.5M, plus a
+// combined IRA x rate x Brokerage x spend pass. Zero divergent. Tuning the fixture until the gap
+// reappeared would be manufacturing a property the engine no longer has.
+//
+// What this costs: the reported defect these two tests documented (the old metric telling a user
+// "no benefit" while the honest measure finds a real conversion) now has no regression guard. That
+// is a real gap, recorded rather than papered over. If a divergent scenario is found later it
+// belongs here.
+test("optimizeConversionAmount: 'baselineScore' and 'finalNW' agree on this scenario", () => {
     const ov = { strategy: 'propwd', propWithdraw: 0 };
     assert(simulate({ ...PF11_BASE }).totals.success, 'test setup: base scenario must succeed');
     const fn = optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv;
     const bl = optimizeConversionAmount(PF11_BASE, ov, 'baselineScore', { futureIRARate: 0.37 }).optConv;
-    assert(fn === 0, `finalNW should pick $0 for this scenario, got ${fn}`);
-    assertNear(bl, 50000, 'baselineScore should pick $50k/yr', 1);
+    assertNear(fn, 50000, 'finalNW picks $50k/yr', 1);
+    assertNear(bl, 50000, 'baselineScore picks $50k/yr', 1);
 });
 
-test('optimizeConversionAmount: legacy metric modes and the 3-arg signature are unchanged', () => {
+test('optimizeConversionAmount: legacy metric modes and the 3-arg signature agree', () => {
     const ov = { strategy: 'propwd', propWithdraw: 0 };
-    // 4-arg finalNW, 3-arg finalNW, and default-metric must all agree at the pre-change value ($0).
-    assert(optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv === 0, "4-arg 'finalNW' unchanged");
-    assert(optimizeConversionAmount(PF11_BASE, ov, 'finalNW', {}).optConv === 0, "explicit empty opts unchanged");
-    assert(optimizeConversionAmount(PF11_BASE, ov).optConv === 0, 'default metric (no 3rd/4th arg) unchanged');
+    // What this actually guards is the SIGNATURE, not the value: 4-arg, explicit-empty-opts and
+    // 3-arg must all route to the same metric and return the same answer. The shared value moved
+    // from $0 to $50k with the double-credit fix (see the note above); the agreement is the point.
+    const fourArg = optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv;
+    assertNear(fourArg, 50000, "4-arg 'finalNW'", 1);
+    assert(optimizeConversionAmount(PF11_BASE, ov, 'finalNW', {}).optConv === fourArg, 'explicit empty opts must match');
+    assert(optimizeConversionAmount(PF11_BASE, ov).optConv === fourArg, 'default metric (no 3rd/4th arg) must match');
 });
 
 // ── PF13: objective ranking + Medicare helper ───────────────────────────────────────────────

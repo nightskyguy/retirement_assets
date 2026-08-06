@@ -80,6 +80,61 @@ modeling ceiling (no HIFO, no specific-ID) still bounds every P32 conclusion.
 
 Harness: `.test_harnesses/brokerage_harness.js` (node), reproduces all of the above.
 
+### Why 209 tests did not catch it (asked for explicitly, 2026-08-06)
+
+**Not an input-coverage gap.** The code path ran constantly: `CAP_BASE` carries `cashYield: 0.02`,
+and other fixtures run `0.03`/`0.02` and `0.02`/`0.015`. Plenty of tests executed the defect.
+
+**Three things had to line up, and they did:**
+
+1. **Dividends and interest have no assertion anywhere.**
+   `grep -c "cashDividends\|taxableInterest\|CashWD" optimizer_core.test.js` returns **0**. Not one
+   test in the suite ever looked at either quantity, in any form.
+2. **The reconciliation tests that exist are all IRA-shaped.** The suite does have good balance
+   reconciliation - `optimizer_core.test.js:1881` rebuilds the IRA balance from its withdrawal
+   columns each year, and there are sibling reconciliations for the tax columns and the conversion
+   gross-up. Every one of them is about the IRA or about tax. **Cash and Brokerage have none.**
+3. **Characterization pins recorded the inflated numbers as correct.** GK totals, `OC_BASE`,
+   `PF11_BASE` and the funding-invariant arms all pinned values produced by the double-credit, so
+   the defect was not merely unnoticed, it was *enshrined* - and every later change was measured for
+   byte-identity against it.
+
+**The trap worth remembering: the obvious test would have been vacuous.** The natural fix-test is a
+per-year Cash reconciliation in the shape of the IRA one:
+`endCash = prevCash + cashG + surplusCash - CashWD`. That identity holds to **0.0000 both before and
+after the fix**. The balance sheet was never inconsistent. The defect lived on the income statement -
+the dividend legitimately entered Cash *and* separately shrank the withdrawal the plan needed. In
+year 0 of one fixture `CashWD` is 1,829 before and 3,222 after; both reconcile perfectly.
+
+So the guard has to be an **economic or flow invariant**, not an accounting one. The three added:
+
+- *a dividend cannot create wealth* - same total return split as growth vs dividend+DRIP; the
+  dividend arm pays tax the other does not, so it can never finish ahead. Fails at **+21.7%** unfixed.
+- *interest leaves Cash only by being spent or taxed* - lifetime `CashWD` must equal lifetime spend
+  plus lifetime tax. Unfixed: expected $972,167, got **$2,449**.
+- *interest cannot compound faster than its own yield* - hard ceiling at `start x (1+y)^n`.
+  Unfixed: $4,254,946 against a $2,191,123 ceiling.
+
+**Generalizable lesson:** this engine's tests check that money is *accounted for* but not that it is
+*conserved*. A dollar can be recorded correctly in two places at once and every reconciliation still
+passes. Conservation needs same-total-return equivalence tests, and there is currently no such test
+for the Roth or IRA growth paths either - a natural follow-up for P6.
+
+### A side effect: the PF11 / T6 metric divergence was itself an artifact
+
+`optimizeConversionAmount` had a pinned scenario where `finalNW` picked $0 while `baselineScore`
+picked $50k/yr - the case that justified adding `baselineScore` at all. That gap **disappears** once
+the double-credit is fixed, and the mechanism is clear: the no-conversion arm banked phantom Cash
+every year, and `finalNW` values Cash at face while discounting the IRA, so phantom money made "do
+not convert" look better than it was.
+
+Searched before re-pinning: **64 variants over six levers** (spendGoal 88k-105k, futureIRATaxRate
+0.24-0.50, Brokerage 150k-800k, basis 100k-290k, Roth 0-300k, IRA1 400k-1.5M, plus a combined
+IRA x rate x Brokerage x spend pass). **Zero divergent.** The tests were re-pinned to agreement
+rather than tuned until the old gap reappeared. The consequence is recorded in the test file: the
+defect those two tests documented currently has **no regression guard**. `baselineScore` may still
+be the better metric on other grounds, but the scenario that motivated it no longer reproduces.
+
 ## A hardcoded ⚠️, a gate nobody could see, and two age bases side by side (2026-08-05, v11.1464)
 
 A user reported the ACA options staying disabled after changing birth years, and suspected the age

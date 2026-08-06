@@ -11,6 +11,55 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.146f"></a>
+
+## 11.146f (behavior change)
+
+**Dividends and interest were being counted twice: once as income that paid for your spending, and
+again as money added to your account. Plans have been showing more money than they should. This
+corrects it, and ending balances go down.**
+
+Please read this one even if you skip the others. It changes almost every plan, and it changes them
+in the unwelcome direction.
+
+**What was wrong.** When your brokerage pays a dividend, or your cash earns interest, two things
+were happening to the same dollar. It was added to your balance, which is right. It was also treated
+as income available to spend, which meant the tool withdrew that much less from your accounts to
+cover your spending. So the dollar paid for your groceries and stayed in your account at the same
+time. Nothing ever took it back out.
+
+The longer the plan and the higher the rates, the more money this invented. A cash account earning
+4% grew at closer to 8%. In one test, a plan spent $800,000 over twenty years while taking only
+$2,449 out of the cash account that was supposedly paying for it.
+
+**How you can tell it was wrong, without taking our word for it.** Take a portfolio returning 8% a
+year. Have it earn that as 8% growth and no dividend, then again as 6% growth and a 2% dividend that
+is automatically reinvested. Same total return, same reinvestment, but the dividend version pays tax
+every year that the growth version does not. It must end up behind. It was ending up **21.7% ahead**.
+Now it correctly ends slightly behind.
+
+**What changed.** Dividends and interest are still income and are still taxed exactly as before,
+and they still land in your account. They are simply no longer counted a second time as spending
+money. The money is all still there, in Cash or reinvested in your brokerage, and your withdrawal
+strategy draws on it like any other balance. That also means your strategy now decides whether a
+dividend gets spent or banked, and how the tax on it is paid, instead of that being assumed.
+
+**What this does to your numbers.** Ending balances fall, typically between 4% and 23% on a plan
+using the default 3% cash yield and 0.5% dividend rate. Your spending goal is still funded in the
+same years it was before. Tax goes up slightly, because the invented money had been quietly
+absorbing some of it. A Guyton-Klinger plan can also shift its spending path, since that strategy
+sets spending from your portfolio balance and that balance was overstated.
+
+**Nothing about your inputs was wrong.** Your balances, rates and goals meant what you thought they
+meant. The tool was mishandling them. A plan that looked like it worked may now need a lower
+spending goal, a later start, or a different strategy, and that is information worth having now
+rather than later.
+
+**Also fixed by the same change.** One of the Ordered strategies (Roth, IRA, Brokerage, Cash) was
+leaving a small amount of spending unfunded in two years; it is now one year, and a smaller amount.
+
+---
+
 <a id="11.146e"></a>
 
 ## 11.146e (behavior change)

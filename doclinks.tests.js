@@ -18,21 +18,28 @@
  *      descriptive label ("Details", "Improve this page") alone
  */
 
-const DocLinks = require('./doclinks.js');
+// Wrapped in an IIFE so the top-level `const DocLinks`, `test`, `assert` and friends do not
+// collide with the page's own global lexical scope once this file is loaded by a <script> tag.
+(() => {
+
+const IS_NODE = (typeof module !== 'undefined' && module.exports);
+
+// Dual-mode. doclinks.js is an IIFE that sets window.DocLinks and additionally exports it for node.
+//
+// This file was excluded from the browser tier on the stated grounds that it "reads files from
+// disk, which is the thing it is testing". That was never true: the line below is its ONLY I/O,
+// and every .md path further down is assertion data that is never opened. It is in fact the
+// cheapest of the three suites to run in a browser.
+const DocLinks = IS_NODE ? require('./doclinks.js') : window.DocLinks;
 const docHref = DocLinks.docHref;
 
 let passed = 0, failed = 0;
 
+// Registers rather than runs — see the note in optimizer_core.tests.js.
+const TESTS = [];
+
 function test(name, fn) {
-  try {
-    fn();
-    console.log(`  ✓  ${name}`);
-    passed++;
-  } catch (e) {
-    console.log(`  ✗  ${name}`);
-    console.log(`       ${e.message}`);
-    failed++;
-  }
+  TESTS.push([name, fn]);
 }
 
 function assert(cond, msg) {
@@ -202,12 +209,37 @@ test('the DOM half of the module is exported', () => {
   });
 });
 
-// ── Summary ───────────────────────────────────────────────────────────────
-console.log('');
-console.log(`Results: ${passed} passed, ${failed} failed`);
-if (failed > 0) {
-  console.log('\n*** SOME TESTS FAILED ***');
-  process.exitCode = 1;
-} else {
-  console.log('All tests passed.');
+// ── Runner ────────────────────────────────────────────────────────────────
+// Returns the counts instead of setting process.exitCode, so the browser can render them.
+function runDocLinksTests() {
+  passed = 0;
+  failed = 0;
+  const failures = [];
+  TESTS.forEach(([name, fn]) => {
+    try {
+      fn();
+      console.log(`  ✓  ${name}`);
+      passed++;
+    } catch (e) {
+      console.log(`  ✗  ${name}`);
+      console.log(`       ${e.message}`);
+      failures.push(`${name}: ${e.message}`);
+      failed++;
+    }
+  });
+  console.log('');
+  console.log(`Results: ${passed} passed, ${failed} failed`);
+  console.log(failed > 0 ? '\n*** SOME TESTS FAILED ***' : 'All tests passed.');
+  return { passed, failed, skipped: 0, total: TESTS.length, failures };
 }
+
+if (IS_NODE) {
+  const r = runDocLinksTests();
+  if (r.failed > 0) process.exitCode = 1;
+  module.exports = { runDocLinksTests, TEST_COUNT: TESTS.length };
+} else {
+  window.runDocLinksTests = runDocLinksTests;
+  window.DOCLINKS_TEST_COUNT = TESTS.length;
+}
+
+})();

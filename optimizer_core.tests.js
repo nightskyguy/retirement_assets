@@ -15,24 +15,41 @@
  *   7. cyclicEnabled=false → identical output to non-cyclic run (regression)
  */
 
-// Load the source files via require() using their dual-mode export guards.
-// Stubs must exist BEFORE the requires: displayhelpers.js touches window/document
-// at load time, and performance.now() is stubbed so timing fields stay
-// deterministic (0), matching the old vm-based harness.
-globalThis.performance = { now: () => 0 };
-globalThis.window = {};                         // stub for displayhelpers.js (window.DisplayHelpers)
-globalThis.document = { getElementById: () => null, addEventListener: () => {} };
+// Everything below is wrapped in an IIFE for the browser's sake. Two classic scripts cannot both
+// declare a top-level `const BASE` — that is one global lexical scope and a duplicate declaration
+// there is a SyntaxError, so without the wrapper this file would fail to PARSE once loaded onto a
+// page that already has the engine. This file declares dozens of such names. Same reasoning, and
+// the same shape, as taxPaymentPlanner.tests.js.
+(() => {
 
-// optimizer_core.js resolves calculateTaxes etc. as bare globals (the
-// classic-script contract shared with the browser and the MC worker), so the
-// taxengine exports are mirrored onto globalThis before the engine loads.
-const taxengine = require('./taxengine.js');
-Object.assign(globalThis, taxengine);
+const IS_NODE = (typeof module !== 'undefined' && module.exports);
 
-const core = require('./optimizer_core.js');
+// NODE ONLY, and the guard is load-bearing. In a browser all three of these already exist, and
+// installing these stubs over them would destroy the live page: `document.getElementById` returning
+// null takes out every render path, and a `performance.now()` frozen at 0 corrupts the timing the
+// page reports. The old unguarded version was safe only because this file never reached a browser.
+if (IS_NODE) {
+    globalThis.performance = { now: () => 0 };
+    globalThis.window = {};                     // stub for displayhelpers.js (window.DisplayHelpers)
+    globalThis.document = { getElementById: () => null, addEventListener: () => {} };
+}
+
+// Both modes resolve ONE namespace object rather than reaching for bare globals. In the browser
+// that is deliberate: `function` declarations in the engine land on globalThis but its top-level
+// `const`s (MC_GRIDS, OPTIMIZER_GRIDS, RMD_TABLE) do not, so a per-symbol global lookup would
+// silently yield undefined for some of them. See the export guards in taxengine.js/optimizer_core.js.
+const taxengine = IS_NODE ? require('./taxengine.js') : window.TaxEngine;
+
+// optimizer_core.js resolves calculateTaxes etc. as bare globals (the classic-script contract
+// shared with the browser and the MC worker), so in node the taxengine exports are mirrored onto
+// globalThis before the engine loads. In the browser they are already there.
+if (IS_NODE) Object.assign(globalThis, taxengine);
+
+const core = IS_NODE ? require('./optimizer_core.js') : window.OptimizerCore;
 // displayhelpers.js is an IIFE that sets window.DisplayHelpers — load it so the share-URL
-// round-trip tests can exercise the REAL parseShorthand decoder against compactNum.
-require('./displayhelpers.js');
+// round-trip tests can exercise the REAL parseShorthand decoder against compactNum. Already
+// loaded by the page in the browser.
+if (IS_NODE) require('./displayhelpers.js');
 
 const simulate = core.simulate;
 const optimizeSpend = core.optimizeSpend;
@@ -63,7 +80,7 @@ const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 // P35 PR 1 characterization goldens — a RECORDING of what the two strategy enumerations emit,
 // captured before PR 2 extracts the Optimizer's copy into core. See sweep_golden.js.
-const { SWEEP_BASES, MC_GOLDEN, OPT_GOLDEN } = require('./sweep_golden.js');
+const { SWEEP_BASES, MC_GOLDEN, OPT_GOLDEN } = IS_NODE ? require('./sweep_golden.js') : window.SweepGolden;
 
 // ── Test harness ──────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
@@ -76,21 +93,20 @@ let passed = 0, failed = 0;
 // finish in well under a second, which is what makes an after-paint browser run affordable at all.
 const SLOW = new Set();
 
+// test() REGISTERS rather than runs. Everything below is top-level, and running on registration
+// would mean the browser could only ever get results as a side effect of loading the file, with no
+// way to filter the slow tests or to defer the run past first paint. Registering instead lets
+// runOptimizerCoreTests() be called on demand and keeps the 182 test bodies untouched.
+// Same shape as taxPaymentPlanner.tests.js.
+const TESTS = [];
+
 function test(name, fn) {
-    try {
-        fn();
-        console.log(`  ✓  ${name}`);
-        passed++;
-    } catch (e) {
-        console.log(`  ✗  ${name}`);
-        console.log(`       ${e.message}`);
-        failed++;
-    }
+    TESTS.push([name, fn]);
 }
 
 test.slow = function (name, fn) {
     SLOW.add(name);
-    test(name, fn);
+    TESTS.push([name, fn]);
 };
 
 function assert(cond, msg) {
@@ -3299,12 +3315,64 @@ test('a no-tax state reports honest spend and honest failure', () => {
     }
 });
 
-// ── Summary ───────────────────────────────────────────────────────────────────
-console.log('');
-console.log(`Results: ${passed} passed, ${failed} failed`);
-if (failed > 0) {
-    console.log('\n*** SOME TESTS FAILED ***');
-    process.exitCode = 1;
-} else {
-    console.log('All tests passed.');
+// ── Runner ────────────────────────────────────────────────────────────────────
+// Returns the counts instead of setting process.exitCode, so the browser can render them. The node
+// entry point below is what still sets the exit code.
+//
+// `skipSlow` is honoured ONLY by the browser tier. Node always passes false: a tag must never be
+// able to stop a test from running in the place that gates commits.
+function runOptimizerCoreTests(opts) {
+    const skipSlow = !!(opts && opts.skipSlow);
+    passed = 0;
+    failed = 0;
+    let skipped = 0;
+    const failures = [];
+
+    // The engine records WALL CLOCK into its own output: optimizer_core.js:928 sets
+    // `yr.loopStart = performance.now()`, :2381 derives loopMs from it, and :1739 accumulates
+    // totals.thirdPassTime. Several tests here assert that two simulation logs are byte-identical,
+    // and a live clock makes those two logs differ by construction.
+    //
+    // Node neutralises this with a load-time stub. The browser must NOT stub at load - that would
+    // freeze the real page's timing - so it is stubbed for the duration of the run and restored
+    // afterwards. This is measured, not hypothesised: without it exactly six byte-identity tests
+    // fail in the browser while passing in node, and they fail on the clock, not on the engine.
+    const realNow = globalThis.performance && globalThis.performance.now;
+    if (globalThis.performance) globalThis.performance.now = () => 0;
+
+    try {
+        TESTS.forEach(([name, fn]) => {
+            if (skipSlow && SLOW.has(name)) { skipped++; return; }
+            try {
+                fn();
+                console.log(`  ✓  ${name}`);
+                passed++;
+            } catch (e) {
+                console.log(`  ✗  ${name}`);
+                console.log(`       ${e.message}`);
+                failures.push(`${name}: ${e.message}`);
+                failed++;
+            }
+        });
+    } finally {
+        if (globalThis.performance && realNow) globalThis.performance.now = realNow;
+    }
+
+    console.log('');
+    console.log(`Results: ${passed} passed, ${failed} failed`);
+    if (skipped) console.log(`(${skipped} slow test${skipped !== 1 ? 's' : ''} skipped)`);
+    console.log(failed > 0 ? '\n*** SOME TESTS FAILED ***' : 'All tests passed.');
+    return { passed, failed, skipped, total: TESTS.length, failures };
 }
+
+if (IS_NODE) {
+    const r = runOptimizerCoreTests();
+    if (r.failed > 0) process.exitCode = 1;
+    module.exports = { runOptimizerCoreTests, SLOW_COUNT: SLOW.size, TEST_COUNT: TESTS.length };
+} else {
+    window.runOptimizerCoreTests = runOptimizerCoreTests;
+    window.OPTIMIZER_CORE_TEST_COUNT = TESTS.length;
+    window.OPTIMIZER_CORE_SLOW_COUNT = SLOW.size;
+}
+
+})();

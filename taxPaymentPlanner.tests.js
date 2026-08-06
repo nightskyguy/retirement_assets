@@ -898,9 +898,12 @@ function runTaxPlannerTests() {
 if (typeof module !== 'undefined' && module.exports) {
   const r = runTaxPlannerTests();
   if (r.failed > 0) process.exitCode = 1;
-  module.exports = { runTaxPlannerTests };
+  module.exports = { runTaxPlannerTests, TEST_COUNT: TESTS.length };
 } else {
   window.runTaxPlannerTests = runTaxPlannerTests;
+  // Published for the staleness guard in optimizer_tests.js, which asserts that the number of
+  // node-side tests it knows about still matches what is actually on disk.
+  window.TAXPLANNER_TEST_COUNT = TESTS.length;
 }
 
 })();

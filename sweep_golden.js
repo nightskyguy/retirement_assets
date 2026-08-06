@@ -1751,4 +1751,9 @@ const OPT_GOLDEN = {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { SWEEP_BASES, MC_GOLDEN, OPT_GOLDEN };
+} else if (typeof window !== 'undefined') {
+    // For the browser tier of the test suite. All three are top-level `const`, so they are global
+    // lexical bindings and NOT properties of globalThis - reachable by bare name, invisible to a
+    // property lookup. This makes the contract explicit instead.
+    window.SweepGolden = { SWEEP_BASES, MC_GOLDEN, OPT_GOLDEN };
 }

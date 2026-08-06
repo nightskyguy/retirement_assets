@@ -1,5 +1,140 @@
 # Findings & Decisions
 
+## Dividends are counted twice, and that is why Brokerage looks under-drawn (2026-08-06, v11.146e)
+
+**P32 asked "why is Brokerage barely drawn, and is the third-pass exclusion to blame". The premise
+is wrong on both halves.** Brokerage is drawn constantly, and the reason it looks otherwise is an
+accounting defect three passes upstream of the exclusion the phase suspected. Found by the
+accounting audit the phase itself mandated **before** running any behavior arm; that instruction is
+what stopped a wasted measurement.
+
+**The defect.** `yr.taxableDividends` (`optimizer_core.js:1191`) is `balance.Brokerage x dividendRate`.
+It is then used in both of these places and never reconciled:
+
+- as **income** - it sits in `yr.possibleIncome` (`:1226`, `:1543`) and in every later income sum
+  (`:1662`, `:1750`, `:1778`, `:1800`), so it reduces the withdrawal the plan needs to make; and
+- as **balance** - `growAndSettle` credits it to Cash (`:2243`) or, under DRIP, to Brokerage
+  (`:2239-2240`).
+
+Nothing debits it back out. The only Cash debits in the file are the Cash Reserve hide (`:1328`) and
+conversion-tax funding (`:2065`, `:2157`). **The same dollar funds spending and stays on the balance
+sheet.**
+
+**Proof that does not depend on reading the code.** Hold TOTAL return fixed and move it between
+growth and dividends. Dividends are taxed annually and unrealized growth is not, so the
+dividend-bearing plan must finish BEHIND. Brokerage-only $1M, basis = value so capital gains cannot
+interfere, 20 years:
+
+| spendGoal | A: growth 8% / div 0% | B: growth 6% / div 2% | B - A | A tax | B tax |
+|---|---|---|---|---|---|
+| $0 | $4,703,357 | $4,764,613 | **+$61,256** | $0 | $16,153 |
+| $40,000 | $2,835,288 | $3,603,293 | **+$768,005** | $4,367 | $13,767 |
+| $80,000 | $956,925 | $1,530,603 | **+$573,678** | $20,228 | $20,564 |
+
+B wins by 27% at $40k of spending while paying three times the tax. The year-by-year trace shows the
+mechanism with no inference required: the dividend lands in Cash, `CashWD` stays **$0 forever**, and
+Cash climbs $21,100 -> $746,286 over the 20 years while Brokerage draws fall to zero by year 14. The
+plan is spending money it never removes from any account.
+
+**This is the reported symptom.** Holding total return at 5% on a $600k Brokerage and moving the
+split:
+
+| dividend | growth | lifetime Brokerage withdrawals | finalNW |
+|---|---|---|---|
+| 0% | 5.0% | $1,108,006 | $1,649,844 |
+| **0.5% (shipped default)** | 4.5% | **$896,765** (-19%) | **$1,895,840** (+$245,996) |
+| 1% | 4.0% | $597,763 (-46%) | $2,143,248 (+$493,404) |
+| 2% | 3.0% | $27,004 (-98%) | $2,570,484 (+$920,640) |
+
+A higher dividend share at identical total return suppresses Brokerage withdrawals and inflates net
+worth. **`retirement_optimizer.html:380` ships `dividendRate` defaulting to 0.5**, so this is not an
+edge case, it is every plan that has not zeroed the field.
+
+**Consequences for the phase.** Q2 (does a third-pass Brokerage leg spiral) is **moot until this is
+fixed**: it would measure whether an extra Brokerage draw helps, on an engine where dividends already
+remove the need to sell Brokerage at all. The phase's own note anticipated exactly this - "a
+systematic understatement here would suppress Brokerage draws everywhere with no strategy logic
+being wrong, which would make Q2 moot". The direction is the only thing it got wrong: this is an
+**over**-credit, not an understatement.
+
+**Q1, measured, on shipped behavior** (5 scenarios x 11 arms, 55 rows): **zero rows never draw
+Brokerage.** By gap-fill family, share of years drawing Brokerage: baseline 90.4% starting in year 0,
+bracket 61.1% starting year 5.1, cyclic 57.5%, ordered 44.7%. Lifetime draws routinely exceed the
+starting balance several times over (`minlimit` on CAP_BASE: 1,422%), because surplus routing keeps
+refilling it. "Brokerage is barely drawn" is false as a general claim.
+
+Predictions scored: **P1 right** (baseline highest and earliest, proportional gap fill touches it in
+year 0), **P2 right** (bracket later, Cash comes first in its chain), **P3 WRONG** - predicted
+BIRC > CBIR > RIBC by sequence position, measured CBIR 49.2% > BIRC 45.8% > RIBC 39.2%. BIRC drains
+Brokerage first and therefore has none left to draw later, so "Brokerage first" produces *fewer*
+drawing years, not more. **P4 understated** - predicted never-drawing rows would be rare, they are
+absent entirely.
+
+**Also settled, and it removes a worry from the phase list.** `capGainsPercentage` is computed once
+from the start-of-year balance (`:1330`) and the phase flagged it as a hazard for a second draw in
+the same year. It is not: basis is consumed **proportionally**
+(`calculateBrokerageWithdrawal`, `:165-183`), so the gain fraction is invariant under withdrawal -
+$1M/$500k basis is 50% before a $400k draw and 50% after. The frozen value is correct under this
+basis model. It would only be wrong under lot selection, which the engine does not model, and that
+modeling ceiling (no HIFO, no specific-ID) still bounds every P32 conclusion.
+
+Harness: `.test_harnesses/brokerage_harness.js` (node), reproduces all of the above.
+
+### Why 209 tests did not catch it (asked for explicitly, 2026-08-06)
+
+**Not an input-coverage gap.** The code path ran constantly: `CAP_BASE` carries `cashYield: 0.02`,
+and other fixtures run `0.03`/`0.02` and `0.02`/`0.015`. Plenty of tests executed the defect.
+
+**Three things had to line up, and they did:**
+
+1. **Dividends and interest have no assertion anywhere.**
+   `grep -c "cashDividends\|taxableInterest\|CashWD" optimizer_core.test.js` returns **0**. Not one
+   test in the suite ever looked at either quantity, in any form.
+2. **The reconciliation tests that exist are all IRA-shaped.** The suite does have good balance
+   reconciliation - `optimizer_core.test.js:1881` rebuilds the IRA balance from its withdrawal
+   columns each year, and there are sibling reconciliations for the tax columns and the conversion
+   gross-up. Every one of them is about the IRA or about tax. **Cash and Brokerage have none.**
+3. **Characterization pins recorded the inflated numbers as correct.** GK totals, `OC_BASE`,
+   `PF11_BASE` and the funding-invariant arms all pinned values produced by the double-credit, so
+   the defect was not merely unnoticed, it was *enshrined* - and every later change was measured for
+   byte-identity against it.
+
+**The trap worth remembering: the obvious test would have been vacuous.** The natural fix-test is a
+per-year Cash reconciliation in the shape of the IRA one:
+`endCash = prevCash + cashG + surplusCash - CashWD`. That identity holds to **0.0000 both before and
+after the fix**. The balance sheet was never inconsistent. The defect lived on the income statement -
+the dividend legitimately entered Cash *and* separately shrank the withdrawal the plan needed. In
+year 0 of one fixture `CashWD` is 1,829 before and 3,222 after; both reconcile perfectly.
+
+So the guard has to be an **economic or flow invariant**, not an accounting one. The three added:
+
+- *a dividend cannot create wealth* - same total return split as growth vs dividend+DRIP; the
+  dividend arm pays tax the other does not, so it can never finish ahead. Fails at **+21.7%** unfixed.
+- *interest leaves Cash only by being spent or taxed* - lifetime `CashWD` must equal lifetime spend
+  plus lifetime tax. Unfixed: expected $972,167, got **$2,449**.
+- *interest cannot compound faster than its own yield* - hard ceiling at `start x (1+y)^n`.
+  Unfixed: $4,254,946 against a $2,191,123 ceiling.
+
+**Generalizable lesson:** this engine's tests check that money is *accounted for* but not that it is
+*conserved*. A dollar can be recorded correctly in two places at once and every reconciliation still
+passes. Conservation needs same-total-return equivalence tests, and there is currently no such test
+for the Roth or IRA growth paths either - a natural follow-up for P6.
+
+### A side effect: the PF11 / T6 metric divergence was itself an artifact
+
+`optimizeConversionAmount` had a pinned scenario where `finalNW` picked $0 while `baselineScore`
+picked $50k/yr - the case that justified adding `baselineScore` at all. That gap **disappears** once
+the double-credit is fixed, and the mechanism is clear: the no-conversion arm banked phantom Cash
+every year, and `finalNW` values Cash at face while discounting the IRA, so phantom money made "do
+not convert" look better than it was.
+
+Searched before re-pinning: **64 variants over six levers** (spendGoal 88k-105k, futureIRATaxRate
+0.24-0.50, Brokerage 150k-800k, basis 100k-290k, Roth 0-300k, IRA1 400k-1.5M, plus a combined
+IRA x rate x Brokerage x spend pass). **Zero divergent.** The tests were re-pinned to agreement
+rather than tuned until the old gap reappeared. The consequence is recorded in the test file: the
+defect those two tests documented currently has **no regression guard**. `baselineScore` may still
+be the better metric on other grounds, but the scenario that motivated it no longer reproduces.
+
 ## A hardcoded ⚠️, a gate nobody could see, and two age bases side by side (2026-08-05, v11.1464)
 
 A user reported the ACA options staying disabled after changing birth years, and suspected the age

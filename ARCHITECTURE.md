@@ -49,10 +49,10 @@ flowchart TD
     end
 
     subgraph node["Node - no browser"]
-        CORETEST["optimizer_core.test.js<br/>node optimizer_core.test.js<br/>vm.runInContext, no DOM stubs"]
+        CORETEST["optimizer_core.tests.js<br/>node optimizer_core.tests.js<br/>require() + globalThis stubs"]
         GOLDEN["sweep_golden.js<br/>strategy-enumeration goldens<br/>data only - required by the suite"]
-        TPPTEST["taxPaymentPlanner.test.js"]
-        DOCTEST["doclinks.test.js"]
+        TPPTEST["taxPaymentPlanner.tests.js"]
+        DOCTEST["doclinks.tests.js"]
     end
 
     HTML --> CSS
@@ -86,8 +86,8 @@ flowchart TD
     WORKER -->|importScripts| PRNG
     WORKER -->|importScripts| STATS
     WORKER -->|importScripts| HRET
-    CORETEST -->|vm.runInContext| CORE
-    CORETEST -->|vm.runInContext| TAX
+    CORETEST -->|require| CORE
+    CORETEST -->|require| TAX
     CORETEST -->|require| GOLDEN
 
     classDef pure fill:#0d3b2e,stroke:#2f9e79,color:#e6fff5
@@ -98,7 +98,7 @@ flowchart TD
 
 **The contract that matters:** `optimizer_core.js` and `taxengine.js` touch no DOM, no
 `localStorage`, no `location` - at load time or runtime. That is what lets the same engine run in
-three places: the page, the Monte Carlo worker via `importScripts`, and Node via `vm.runInContext`.
+three places: the page, the Monte Carlo worker via `importScripts`, and Node via `require()`.
 Break it and the worker and the test suite both die.
 
 `getInputs()` in `optimizer_ui.js` is the single DOM-to-params bridge. Nothing else reads inputs.
@@ -289,24 +289,25 @@ refreshed worker can pull a stale `optimizer_core.js`.
 | `montecarlo/prng.js` | MC | `mulberry32`, `boxMuller`, `bootstrapScenarioBank`, `buildStressBank`, `applyBearStartOverlay` |
 | `montecarlo/stats.js` | MC | `computePercentiles`, `computeInputFan` |
 | `montecarlo/historical_returns.js` | MC | `HISTORICAL_RETURNS` |
-| `optimizer_core.test.js` | test | `node optimizer_core.test.js` - loads engine via `vm.runInContext` |
-| `sweep_golden.js` | test data | `SWEEP_BASES`, `MC_GOLDEN`, `OPT_GOLDEN` - the recorded strategy enumerations both sweeps must keep emitting. Data only, dual-mode export, `require`d by `optimizer_core.test.js` on every run |
+| `optimizer_core.tests.js` | test | `node optimizer_core.tests.js` - loads the engine via `require()` against the dual-mode export guards, with `window`/`document`/`performance` stubbed on `globalThis` first (`:23-25`). It has not used `vm.runInContext` since `86e26fa`; the stub comment at `:21` still refers to "the old vm-based harness" |
+| `sweep_golden.js` | test data | `SWEEP_BASES`, `MC_GOLDEN`, `OPT_GOLDEN` - the recorded strategy enumerations both sweeps must keep emitting. Data only, dual-mode export, `require`d by `optimizer_core.tests.js` on every run |
 | `sweep_golden.gen.js` | test tool | `node sweep_golden.gen.js` - rewrites the `MC_GOLDEN` block of `sweep_golden.js` from source. Run only for a deliberate `buildVariations()` change, then read the diff |
 | `sweep_golden.import.js` | test tool | `node sweep_golden.import.js <dir>` - folds a browser capture into `OPT_GOLDEN`. That half cannot be generated: the Optimizer's enumeration needs a live `getInputs()`. Capture recipe is in the file header |
-| `doclinks.test.js` | test | `node doclinks.test.js` - `docHref()` mapping table |
-| `taxPaymentPlanner.test.js` | test | `node taxPaymentPlanner.test.js` - covers `taxPaymentPlanner.js`, which the optimizer does not load |
+| `doclinks.tests.js` | test | `node doclinks.tests.js` - `docHref()` mapping table |
+| `taxPaymentPlanner.tests.js` | test | `node taxPaymentPlanner.tests.js` - covers `taxPaymentPlanner.js`, which the optimizer does not load |
 | `RetirementTaxPlanner.html` | sibling page | handoff target of `openTaxPlanner()`; the only page that loads `taxPaymentPlanner.js` |
 | `taxPaymentPlanner.js` | engine | `TaxPaymentPlanner.computePaymentPlan`, `getStateInfo`, `dueDateFor`, `restoreDateFor`, holiday/business-day helpers. Same no-DOM contract as the other two engine files |
 | `optimizer_changelog.md` | docs | full release history; the 5 newest entries are duplicated inline in the HTML |
 | `_includes/head-custom.html` | docs | Jekyll theme hook: CSS + `doclinks.js` for rendered `.md` pages |
 | `.test_harnesses/` | research | investigative scripts that are **not** part of any suite - see the note below and that directory's `README.md` |
+| `.githooks/pre-commit` | test gate | runs all three `node` suites, blocks the commit on a failure or a missing suite. Install once with `sh .githooks/install` - see below |
 
 ### Where a test file belongs
 
 Two directories, one rule, because the distinction has been asked about:
 
 - **Repo root, beside the suite it serves** - anything `node <x>.test.js` needs in order to pass.
-  `sweep_golden.js` is a *fixture*, not a study: `optimizer_core.test.js:67` `require`s it and
+  `sweep_golden.js` is a *fixture*, not a study: `optimizer_core.tests.js:66` `require`s it and
   asserts against it every run, so a drift in either enumeration fails the build. `sweep_golden.gen.js`
   and `sweep_golden.import.js` are the two ways that fixture is refreshed, and `gen` rewrites
   `sweep_golden.js` in place by `__dirname`, so they stay next to it. None of the three is interim,
@@ -319,6 +320,74 @@ Two directories, one rule, because the distinction has been asked about:
 
 The test that decides it: **would the suite fail without this file?** Yes goes at root; no goes in
 `.test_harnesses/`.
+
+### The pre-commit gate, and what it is compensating for
+
+```sh
+sh .githooks/install
+```
+
+Run once per clone. The hook runs all three node suites (~3.5 s) and blocks the commit on a failure,
+on a **missing** suite, or on a `*.tests.js` file that exists but is not in its `suites=` list - a
+renamed, deleted or unlisted suite would otherwise look identical to a green run.
+`git commit --no-verify` is the deliberate escape hatch.
+
+The hook is the guarantee; the badge is the convenience. Both now cover the same 513 tests, and they
+fail independently, which is the point: the hook catches breakage at the commit, the badge catches
+it at the release.
+
+Two mechanics worth knowing before touching it, both discovered the hard way:
+
+- **`core.hooksPath` is already pinned to an absolute path**, and `extensions.worktreeConfig` is on,
+  so every worktree re-pins it in its own `config.worktree`, which outranks the repo config.
+  `git config core.hooksPath .githooks` would therefore be silently ignored inside every worktree.
+  `install` writes a shim at the pinned location instead; the shim execs the `.githooks/pre-commit`
+  of whichever working tree is committing.
+- **`.gitattributes` pins `.githooks/**` to `eol=lf`.** `core.autocrlf` is true on Windows and `sh`
+  cannot execute a script whose shebang ends in CR. That pin is scoped to `.githooks/` on purpose -
+  this repo has no repo-wide EOL policy, and adding one would renormalise every tracked file.
+
+### The three test tiers, and the badge that reports them
+
+| tier | what | when |
+|---|---|---|
+| 1 | `optimizer_tests.js`, 245 tests, ~55 ms | blocking, at page load |
+| 2 | the three node suites, 265 fast tests | injected from `requestIdleCallback` **after** first paint |
+| 3 | 3 slow tests tagged `test.slow` | node always; browser only on `?runtests` |
+
+Tier 2 is not on the critical path and that is measured: `loadEventEnd` lands around 760 ms while the
+tier-2 script requests start around 3.7 s. They are injected scripts, not `<script>` tags.
+
+**Badge states.** `⏳` tier 1 passed, tier 2 still running · `🟢` everything passed · `🟢⚠` tier 1
+passed but tier 2 could not be fetched (`file://` blocks it) · `❌` something failed ·
+`❌ test counts changed` the staleness guard fired. A pending badge must never read as green - green
+is a claim that everything passed, and rendering it early is the false-green this whole phase exists
+to remove. Tier 2 is **opt-in per page** via `window.TIER2_PENDING`; `standalone/IncomeTaxPlanner.html`
+loads the same file and does not opt in, so it keeps the original two-state badge.
+
+**`?runtests`** forces tier 2 synchronously with the slow tests included (513 total);
+**`?runtests=fast`** runs it now but keeps skipping them.
+
+**Three things to know before adding a test:**
+
+- **Adding a test means editing `TestTiers.EXPECTED` in `optimizer_tests.js` in the same commit.**
+  The staleness guard compares the counts on disk against that object and turns the badge red on any
+  drift, naming it. That friction is deliberate - it is what stops a suite being added and silently
+  never run.
+- **`test.critical(name, fn)`** marks a regression guard for a defect that actually shipped. Those
+  are printed as `✓ ★ CRITICAL <name>` and repeated in their own end-of-run block, so their status is
+  readable without scrolling. Ten exist today: dividend/interest double-counting, and the state
+  retirement-income exemptions including no-income-tax states.
+- **`test.slow(name, fn)`** exempts a test from the browser tier only. Node always runs it. Use it on
+  measurement, not suspicion - the three tagged today are 71% of the suite's runtime.
+
+**Trap, seen for real.** The suites resolve the engine through `window.TaxEngine` / `OptimizerCore` /
+`SweepGolden` rather than bare globals, because a classic script puts `function` declarations on
+`globalThis` but leaves top-level `const` (`MC_GRIDS`, `OPTIMIZER_GRIDS`, `RMD_TABLE`) as global
+*lexical* bindings a property lookup cannot see. Related: the engine writes wall clock into its own
+output (`optimizer_core.js:928`, `:2381`, `:1739`), so the browser runner stubs `performance.now()`
+for the duration of a run and restores it afterwards - without that, six byte-identity tests fail in
+the browser while passing in node, on the clock rather than the engine.
 
 ### Shared globals crossing file boundaries
 

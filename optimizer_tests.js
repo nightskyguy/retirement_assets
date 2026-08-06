@@ -2184,14 +2184,113 @@ assertEqual(
 	console.log(`   chart.js version ${Chart.version}`);
     console.log('========================================');
 	
+    // Tier 1 result is published so the deferred tier can combine with it rather than overwrite it.
+    window.TIER1_RESULT = { passed, failed };
+
     const statusElement = document.getElementById('testsFailed');
-    if (failed === 0) {
-        statusElement.textContent = '🟢';
-		statusElement.title = `All ${failed+passed} tests passed`;
-    } else {
+    if (failed > 0) {
         statusElement.textContent = '❌ tests failed';
 		statusElement.title = `${failed} test${failed !== 1 ? 's' : ''} failed out of ${failed+passed}.`;
+    } else if (window.TIER2_PENDING) {
+        // A page that opted into the deferred node suites gets a NEUTRAL badge here, never green.
+        // Green at this point would be a false green: it would mean "the 245 in-page tests passed"
+        // while claiming to mean "the tests passed", which is the exact gap P39 exists to close.
+        // TestTiers.finish() below resolves it once the node suites report.
+        statusElement.textContent = '⏳';
+		statusElement.title = `In-page: all ${passed} passed. Node suites still running...`;
+    } else {
+        statusElement.textContent = '🟢';
+		statusElement.title = `All ${failed+passed} tests passed`;
     }
     return failed === 0;
 }
+
+// ── Deferred (tier 2) badge protocol ─────────────────────────────────────────
+// Only pages that set window.TIER2_PENDING before calling runTests() use any of this. Pages that
+// do not - standalone/IncomeTaxPlanner.html, for one - keep the two-state badge they always had.
+window.TestTiers = {
+    // ── Staleness guard ──────────────────────────────────────────────────────
+    // The tier that runs outside this file is the tier that rots. These are the counts this page
+    // believes exist; if the suites on disk disagree, the badge goes RED and names the difference.
+    //
+    // Yes, this means adding a test requires editing this line in the same commit. That friction is
+    // the feature: without it, a whole suite could be added, or the slow tags could drift, and the
+    // page would keep reporting green over a number it no longer understands. Measure, do not guess:
+    // run `node <suite>` and use the printed total.
+    EXPECTED: { optimizer_core: 214, taxPaymentPlanner: 32, doclinks: 22, slowInCore: 3 },
+
+    checkCounts(results) {
+        const drift = [];
+        results.forEach(r => {
+            const want = this.EXPECTED[r.name];
+            if (want === undefined) drift.push(`${r.name}: suite is not in EXPECTED at all`);
+            else if (r.total !== want) drift.push(`${r.name}: ${r.total} tests on disk, ${want} expected`);
+        });
+        Object.keys(this.EXPECTED).forEach(name => {
+            if (name !== 'slowInCore' && !results.some(r => r.name === name)) {
+                drift.push(`${name}: expected but never reported - did the suite fail to load?`);
+            }
+        });
+        const slow = window.OPTIMIZER_CORE_SLOW_COUNT;
+        if (slow !== undefined && slow !== this.EXPECTED.slowInCore) {
+            drift.push(`optimizer_core: ${slow} slow-tagged tests, ${this.EXPECTED.slowInCore} expected`);
+        }
+        return drift;
+    },
+
+    // results: array of {name, passed, failed, skipped, total} from the node suites' browser runners.
+    finish(results) {
+        const el = document.getElementById('testsFailed');
+        if (!el) return;
+        const t1 = window.TIER1_RESULT || { passed: 0, failed: 0 };
+
+        // Count drift is reported as a failure, not a footnote. A page that has lost track of how
+        // many tests exist cannot honestly render a green dot about them.
+        const drift = this.checkCounts(results);
+        if (drift.length) {
+            el.textContent = '❌ test counts changed';
+            el.title = 'The suites on disk no longer match what this page expects:\n'
+                     + drift.join('\n')
+                     + '\n\nIf this was deliberate, update TestTiers.EXPECTED in optimizer_tests.js.';
+            console.error('[staleness guard] ' + drift.join(' | '));
+            return;
+        }
+        const passed = t1.passed + results.reduce((n, r) => n + r.passed, 0);
+        const failed = t1.failed + results.reduce((n, r) => n + r.failed, 0);
+        const skipped = results.reduce((n, r) => n + (r.skipped || 0), 0);
+        // Critical guards protect defects that already shipped once. Report them separately from
+        // the bulk count, so "everything passed" and "the guards for the known bugs passed" are
+        // two visible statements rather than one aggregate that hides the second.
+        const crit = results.reduce((a, r) => ({
+            passed: a.passed + (r.critical ? r.critical.passed : 0),
+            failed: a.failed + (r.critical ? r.critical.failed : 0),
+            names: a.names.concat(r.critical ? r.critical.failedNames : [])
+        }), { passed: 0, failed: 0, names: [] });
+
+        if (failed > 0) {
+            el.textContent = '❌ tests failed';
+            el.title = `${failed} test${failed !== 1 ? 's' : ''} failed out of ${failed + passed}.\n`
+                     + results.filter(r => r.failed).map(r => `${r.name}: ${r.failed} failed`).join('\n')
+                     + (crit.failed ? `\n\n★ ${crit.failed} CRITICAL guard${crit.failed !== 1 ? 's' : ''} failed - a defect that already shipped once has come back:\n`
+                                      + crit.names.join('\n') : '');
+        } else {
+            el.textContent = '🟢';
+            el.title = `All ${passed} tests passed (${t1.passed} in-page + ${passed - t1.passed} node)`
+                     + (skipped ? `.\n${skipped} slow test${skipped !== 1 ? 's' : ''} skipped - add ?runtests=all to include them.` : '.')
+                     + (crit.passed ? `\n★ ${crit.passed} critical regression guards passed (dividend/interest double-count, state retirement-income exemptions, no-tax states).` : '');
+        }
+    },
+
+    // The node suites could not be fetched at all. Never render a plain green here: the in-page
+    // tests really did pass, but claiming a full green would assert something unverified.
+    unavailable(why) {
+        const el = document.getElementById('testsFailed');
+        if (!el) return;
+        const t1 = window.TIER1_RESULT || { passed: 0, failed: 0 };
+        if (t1.failed > 0) return;                       // already red, leave it
+        el.textContent = '🟢⚠';
+        el.title = `In-page: all ${t1.passed} passed. The node suites did NOT run: ${why}\n`
+                 + 'Serve the page over http to run them. The pre-commit hook covers them either way.';
+    }
+};
 

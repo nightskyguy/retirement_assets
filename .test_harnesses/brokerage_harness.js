@@ -6,7 +6,7 @@
  * Run:  node .test_harnesses/brokerage_harness.js
  *
  * THE DEFECT THAT PROMPTED THIS
- * `optimizer_core.test.js` pins it: on CAP_BASE, `minlimit` strands $71,382 across nine consecutive
+ * `optimizer_core.tests.js` pins it: on CAP_BASE, `minlimit` strands $71,382 across nine consecutive
  * years (2041-2049), the first with $945,376 of Brokerage untouched, and in every one of those
  * years Cash, Roth and the IRA are all at zero. Brokerage is the only money left and the engine
  * will not touch it. P38 could not fix this -- widening the forced-IRA gate cannot help a year
@@ -47,7 +47,7 @@
  * Scoring of these predictions is printed at the end, and the ones that were WRONG are called out.
  */
 
-// ── Bootstrap the engine exactly like unifiedconv_harness.js / optimizer_core.test.js ───────────
+// ── Bootstrap the engine exactly like unifiedconv_harness.js / optimizer_core.tests.js ───────────
 globalThis.performance = { now: () => 0 };
 globalThis.window = {};
 globalThis.document = { getElementById: () => null, addEventListener: () => {} };

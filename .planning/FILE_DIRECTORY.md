@@ -64,16 +64,19 @@ same stub pattern, just within `standalone/` rather than at root.)
 
 | File | What it is |
 |---|---|
-| `optimizer_core.test.js` | Main `node`-run test suite for `optimizer_core.js` (run with `node optimizer_core.test.js`). |
-| `optimizer_tests.js` | Older/legacy in-browser unit test runner for the Optimizer. |
-| `doclinks.test.js` | `node`-run test suite for `doclinks.js` (run with `node doclinks.test.js`) — the `docHref()` mapping table. |
-| `taxPaymentPlanner.js` / `taxPaymentPlanner.test.js` | Standalone tax-payment-strategy engine (dual-IRA withholding optimizer) behind `RetirementTaxPlanner.html`, plus its `node` test suite. |
+| `optimizer_core.tests.js` | Main `node`-run test suite for `optimizer_core.js` (run with `node optimizer_core.tests.js`). |
+| `optimizer_tests.js` | **The release gate**, not a legacy runner. 245 in-page tests, ~55 ms, blocking at page load; it paints the badge that publishing is checked against. Browser-only by design: it declares `runTests()` and never calls it, has no `module.exports`, and touches DOM globals — so **`node optimizer_tests.js` exits 0 having run nothing**. Keep it out of any filename glob that feeds a test runner. Also holds `TestTiers`, the deferred-tier badge protocol and the staleness guard: **`TestTiers.EXPECTED` must be updated in the same commit as any added test**, or the badge goes red naming the drift. |
+| `doclinks.tests.js` | `node`-run test suite for `doclinks.js` (run with `node doclinks.tests.js`) — the `docHref()` mapping table. |
+| `taxPaymentPlanner.js` / `taxPaymentPlanner.tests.js` | Standalone tax-payment-strategy engine (dual-IRA withholding optimizer) behind `RetirementTaxPlanner.html`, plus its `node` test suite. |
+| `.githooks/pre-commit` | Version-controlled `pre-commit` hook (P39 item 1) — runs all three `node` suites and blocks the commit on a failure, or on a **missing** suite. The three suites never run in the browser, so this is the only automatic gate on them. `git commit --no-verify` is the deliberate escape. |
+| `.githooks/install` | One-time per clone: `sh .githooks/install`. Writes a delegating shim at the already-pinned `core.hooksPath` (absolute, and re-pinned per worktree by `extensions.worktreeConfig`, so a relative `hooksPath` would be silently ignored in every worktree). One install covers the main checkout and all worktrees. |
+| `.githooks/README.md` | Why the shim rather than `core.hooksPath .githooks`, the timing table, and the `eol=lf` requirement. |
 | `.test_harnesses/betr_harness.js` | `node` investigative script — checks whether the displayed Break-Even Tax Rate (BETR) is trustworthy vs. an empirically-derived break-even rate. Not part of the regular suite; kept so the finding can be re-derived on demand. See `.test_harnesses/README.md`. |
 | `.test_harnesses/stopyear_harness.js` | Browser-console investigative script — the research harness behind the Stop-Year feature (`bestConversionStopYear()` in `optimizer_core.js` is the production version). |
 | `.test_harnesses/unifiedconv_harness.js` | `node` investigative script for P28 — models every voluntary IRA withdrawal as a Roth conversion across a 630-simulation grid. Findings live in `P28_RESULTS.md`. |
 | `.test_harnesses/P28_RESULTS.md` | The P28 reference write-up: tables, reasoning, and the seven headline findings the harness produced. |
 | `.test_harnesses/README.md` | Index for the harness directory, plus the rule for what belongs there vs. at the repo root (fixtures the suite needs stay at root). |
-| `sweep_golden.js` | Characterization goldens for the **two** strategy enumerations — Monte Carlo's `buildVariations()` and the Optimizer's sweep in `_runOptimizerNow()`. Both now call the shared `buildStrategyFamilies()` in `optimizer_core.js`; the golden is what proved that extraction byte-identical. Data only, dual-mode export, read by `optimizer_core.test.js`. Recorded before the P35 PR 2 extraction so it can be shown to preserve behavior. |
+| `sweep_golden.js` | Characterization goldens for the **two** strategy enumerations — Monte Carlo's `buildVariations()` and the Optimizer's sweep in `_runOptimizerNow()`. Both now call the shared `buildStrategyFamilies()` in `optimizer_core.js`; the golden is what proved that extraction byte-identical. Data only, dual-mode export, read by `optimizer_core.tests.js`. Recorded before the P35 PR 2 extraction so it can be shown to preserve behavior. |
 | `sweep_golden.gen.js` | Regenerates the `MC_GOLDEN` half from source (`node sweep_golden.gen.js`). Run only for a **deliberate** `buildVariations()` change, then read the diff. |
 | `sweep_golden.import.js` | Folds a browser capture into the `OPT_GOLDEN` half. The Optimizer's enumeration only runs in a live page, so that half is recorded, not generated — the capture recipe is in this file's header. |
 

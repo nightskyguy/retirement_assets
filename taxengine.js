@@ -1563,4 +1563,17 @@ if (typeof module !== 'undefined' && module.exports) {
         calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
         getQCDLimit, isQCDEligible
     };
+} else if (typeof window !== 'undefined') {
+    // Same list, for the browser. The page itself does NOT need this - every name above is
+    // already reachable as a bare global. It exists so the test suites can resolve one object
+    // in both modes instead of guessing per symbol, and that guessing is a real hazard here:
+    // `function` declarations land on globalThis but `const RMD_TABLE` does not, so a browser
+    // test reading RMD_TABLE off globalThis would get undefined and fail somewhere unrelated
+    // rather than at the point of the mistake.
+    window.TaxEngine = {
+        TAXData, RMD_TABLE, getRateBracket,
+        findLimitByRate, findUpperLimitByAmount, calculateProgressive,
+        calculateTaxes, calcIRMAA, getIRMAATier, getIRMAATierTargetMAGI,
+        getQCDLimit, isQCDEligible
+    };
 }

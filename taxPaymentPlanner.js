@@ -2585,7 +2585,7 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof window !== 'undefined') {
   // A top-level `const` in a classic script lives in the global LEXICAL scope, which is not the
   // same thing as a property of window. The page itself reads the bare identifier and works
-  // either way, but taxPaymentPlanner.test.js has to resolve the engine without knowing how it
+  // either way, but taxPaymentPlanner.tests.js has to resolve the engine without knowing how it
   // was loaded, so publish it explicitly.
   window.TaxPaymentPlanner = TaxPaymentPlanner;
 }

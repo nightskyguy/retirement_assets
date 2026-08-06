@@ -2,14 +2,33 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-08-05, evening. **P38 is COMPLETE.** PR 1 + PR 2 (the funding invariant and the gate
-widening, v11.1468) **MERGED as [PR #152](https://github.com/nightskyguy/retirement_assets/pull/152)**
-(`f524105`), together with the cash-rate/em-dash cleanup (`6771bb2`) and the P39 write-up
-(`ace9e7c`). **P38 PR 3, the sizing fix, is on branch `p38-pr3-size-draw-net-of-tax` off that merge,
-v11.146a, behavior change** — node 208/32/22, in-page 245/245, golden content-identical. See the P38
-section below for the measured deltas and the three test decisions. Earlier state: branch
-`p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464, P38's diagnosis-only planning files
-merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry). Earlier state: branch `p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464, P38's diagnosis-only planning files merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
+**As of:** 2026-08-06, midday. **Working tree clean, `main` = `10f6f2a`, shipped version v11.1478.**
+Everything below is merged; nothing is in flight.
+
+- **P38 is COMPLETE**, all three PRs merged: PR 1 + PR 2 (funding invariant + gate widening,
+  v11.1468) as [PR #152](https://github.com/nightskyguy/retirement_assets/pull/152) (`f524105`), and
+  PR 3 (size the draw net of tax on guaranteed income, v11.146a, `018baa9`) as
+  [PR #153](https://github.com/nightskyguy/retirement_assets/pull/153).
+- **P32 is PARTIALLY DONE**, research half landed as
+  [PR #155](https://github.com/nightskyguy/retirement_assets/pull/155) and
+  [PR #156](https://github.com/nightskyguy/retirement_assets/pull/156). Q1 measured, the mandated
+  accounting audit found a real defect, and **the phase premise is refuted**: Brokerage is drawn
+  constantly. See the P32 section and findings.md (2026-08-06) for what is now open.
+- **Two engine correctness fixes shipped in that batch**, both of the same class - a function that
+  was unit-tested directly while its *use* was not:
+  1. **Dividends and interest were credited twice** (`e9a3c8b`, v11.146f). The dollar both reduced
+     the needed withdrawal and stayed on the balance sheet. Moves everyone's numbers, downward.
+  2. **The OBBBA senior deduction and elevated SALT cap were never switched on** (`c9e356a`). Both
+     flags default false and no call site in `optimizer_core.js` ever passed them, so federal tax
+     was too HIGH for anyone 65+ in 2025-2028 and for high-tax-state itemizers in 2025-2029. Gate is
+     now resolved once per year in `resolveHousehold` and passed to all 10 `calculateTaxes` sites.
+     Forced-IRA iteration cap 4 -> 6 (the lower tax bill lengthened the convergence path).
+     **This fix had no plan phase of its own**; it was found while verifying a user report.
+- Changelog consolidated: 11.146b/146e/146f + OBBBA merged into one **v11.1478** release entry
+  (`05350e0`), and 11.1462/11.1468 folded into their neighbours (`912fd13`).
+- Test counts at `main`: **node 214/32/22, in-page 245/245**, `sweep_golden` content-identical.
+
+Earlier state, kept for the trail: **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry); P38's diagnosis-only planning files merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151) off `main` = `fe72bef`, v11.1464.
 **P35 PR 3a MERGED as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change). **P35 PR 3b MERGED as [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149)** (v11.1448 tokens, byte-identical, plus the doc file-reference gaps); the duplicate attempt PR #148 on branch `worktrees/medicare-age-data-7b2e91` is **CLOSED, not merged** — verified, nothing to do about it.
 **P35 PR 3c MERGED as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150)** (v11.1462 -> v11.1464 on merge, behavior change confined to `aca` rows, proven against `propwd`/`bracket` controls), four commits: the behavior change, the `eitherOnMedicareAtStart` deletion it made possible, the plan record, and the ACA Cliff un-gating. Next review point after it is **PR 3d** (`Basis <= Brokerage` invariant).
 Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
@@ -22,7 +41,7 @@ VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + h
 
 **Added 2026-08-05:** **P38, a shipped correctness defect, is now the top-priority item and jumps the queue.** `propwd`, `fixed`, `gk` and the baseline `else` branch report `success: false` with hundreds of thousands of dollars of unfunded spending while the IRA still holds seven figures. Pre-existing and byte-identical before P35 PR 3c (`d68d27f`, landed as `f71e0bf`); that PR only made it visible, because a lapsed ACA plan now falls through to the same path. Diagnosis is complete and measured — see findings.md, "The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry" (2026-08-05). Re-verified to the dollar after PR #150 merged (v11.1464), so it is orthogonal to the whole ACA batch. Its section sits at the top of this file rather than in the P29-P37 block, on purpose. It overlaps P30 and P32 and must be settled before either.
 
-**Added 2026-08-05 (later):** **P39, make the node-only tests visible in the browser.** Release gating relies on the Red X badge at page load, and that badge covers only the 245 in-page tests; **260 tests in three node-only suites never run in the browser**, so breaking them is invisible at release time. Measured, not estimated: 3 tests account for 1792 ms of the core suite's 2466 ms, and the other 203 run in 674 ms, so the "tests are too slow for page load" objection dissolves once those three are tagged. Section sits after P38. Independent of every other phase; its first work item (a pre-commit hook) delivers most of the value on its own and can land any time.
+**Added 2026-08-05 (later):** **P39, make the node-only tests visible in the browser.** Release gating relies on the Red X badge at page load, and that badge covers only the 245 in-page tests; **268 tests in three node-only suites never run in the browser**, so breaking them is invisible at release time. Measured, not estimated: 3 tests account for 1792 ms of the core suite's 2466 ms, and the other 203 run in 674 ms, so the "tests are too slow for page load" objection dissolves once those three are tagged. Section sits after P38. Independent of every other phase; its first work item (a pre-commit hook) delivers most of the value on its own and can land any time.
 
 MAINTENANCE NOTE: this heading and the per-phase status lines are injected into every turn by the planning hook, so a stale "uncommitted" here reads as a live claim about the working tree. Update them in the same turn you commit, not later.
 
@@ -209,11 +228,17 @@ purpose. Do the fix as its own PR against a clean tree.
 
 ---
 
-## Phase P39: Make the node-only tests visible in the browser (2026-08-05) — not started
+## Phase P39: Make the node-only tests visible in the browser (2026-08-05) — COMPLETE (2026-08-06)
+
+**Count drift, noticed on pickup 2026-08-06.** The measured table below says `optimizer_core.tests.js`
+= 206 tests; the OBBBA fix and the dividend fix added 8, so node is **214/32/22** at `main` =
+`10f6f2a`. The 2466 ms / 1792 ms timing split is still directionally right (nothing added was a
+binary search), but **the staleness guard's expected count must be measured fresh, never copied from
+this table.** That is the phase's own lesson arriving early.
 
 **The problem, in the user's words.** Release gating relies on the **Red X**: load the page, see
 `#testsFailed` render `🟢` or `❌ tests failed` (`optimizer_tests.js:2187-2194`), and do not publish
-on a red. That badge only covers `optimizer_tests.js`. **260 tests in three node-only suites never
+on a red. That badge only covers `optimizer_tests.js`. **268 tests in three node-only suites never
 run in the browser at all**, so a change that breaks them is invisible at the moment of release and
 can be published by accident. The competing constraint is equally real: browser load must not grow
 by seconds.
@@ -225,16 +250,20 @@ Both constraints are satisfiable, and the measurements say so clearly.
 | suite | tests | wall time | browser today |
 |---|---|---|---|
 | `optimizer_tests.js` (in-page) | 245 | **55 ms** | yes, blocking at load |
-| `optimizer_core.test.js` | 206 | 2466 ms | **no** |
-| `taxPaymentPlanner.test.js` | 32 | ~320 ms | **no** |
-| `doclinks.test.js` | 22 | ~10 ms | **no** |
+| `optimizer_core.tests.js` | 206 | 2466 ms | **no** |
+| `taxPaymentPlanner.tests.js` | 32 | ~320 ms | **no** |
+| `doclinks.tests.js` | 22 | ~10 ms | **no** |
 
 **The finding that makes this cheap: 3 tests are 1792 ms of that 2466 ms — 73%.** All three are
 `breakEvenHeirsRate` binary searches:
 
-- `optimizer_core.test.js:2290` `breakEvenHeirsRate: the predicate is monotonic...` — **1438 ms**
-- `optimizer_core.test.js:2304` `lowestBreakEvenHeirsRate: finds a threshold...` — **195 ms**
-- `optimizer_core.test.js:2280` `breakEvenHeirsRate: the rate/amount pair...` — **159 ms**
+- `optimizer_core.tests.js:2590` `breakEvenHeirsRate: the predicate is monotonic...` — **1438 ms**
+- `optimizer_core.tests.js:2604` `lowestBreakEvenHeirsRate: finds a threshold...` — **195 ms**
+- `optimizer_core.tests.js:2580` `breakEvenHeirsRate: the rate/amount pair...` — **159 ms**
+
+  Line numbers re-measured 2026-08-06 (was `:2290`/`:2304`/`:2280` on 2026-08-05). The OBBBA and
+  dividend fixes inserted ~300 lines above them. **Locate these by test NAME, not by line** — the
+  names have been stable, the offsets have not.
 
 The remaining **203 tests run in 674 ms combined**; 193 of them in 243 ms. So "multiple seconds of
 tests" is really three tests, and excluding them changes the picture entirely.
@@ -242,7 +271,9 @@ tests" is really three tests, and excluding them changes the picture entirely.
 Second enabling fact: `optimizer_core.js`, `taxengine.js`, `taxPaymentPlanner.js` and `doclinks.js`
 **already carry dual-mode export guards** (`typeof module !== 'undefined' && module.exports`). The
 sources already load in a browser. Only the four **test** files are node-bound, and only through
-their `require()` headers — 5 calls in `optimizer_core.test.js`, 1 each in the others.
+their `require()` headers — **4** calls in `optimizer_core.tests.js` (`:29`, `:32`, `:35`, `:66`), 1
+each in the others. (An earlier count of 5 here came from a `grep -c 'require('` that also matched
+the comment at `:18`.)
 
 Also confirmed: `requestIdleCallback` and `Worker` are both available in the target browser, and
 **no git hooks are currently installed** (`.git/hooks` has only samples).
@@ -252,14 +283,17 @@ Also confirmed: `requestIdleCallback` and `Worker` are both available in the tar
 **Tier 1 — blocking, at load. Unchanged.** `optimizer_tests.js`, 245 tests, 55 ms. The Red X behaves
 exactly as it does today. Nothing is added to the critical path.
 
-**Tier 2 — deferred, after first paint.** Port `optimizer_core.test.js` and
-`taxPaymentPlanner.test.js` to dual mode and run their fast subsets (203 + 32 tests, ~1 s) from
+**Tier 2 — deferred, after first paint.** Port `optimizer_core.tests.js` and
+`taxPaymentPlanner.tests.js` to dual mode and run their fast subsets (203 + 32 tests, ~1 s) from
 `requestIdleCallback`. The badge starts neutral, then resolves to 🟢 or ❌ about a second in. Load
 time is unaffected because the work happens after paint. **This tier is what closes the gap.**
 
 **Tier 3 — node and pre-commit only.** The 3 heavy searches above, tagged `slow`, plus
-`doclinks.test.js`, which reads files from disk and cannot run in a browser without a fetch shim
-that would be testing the shim rather than the code.
+`doclinks.tests.js`. **CORRECTED 2026-08-06:** the stated reason — that it reads files from disk and
+would need a fetch shim — is **false**. Verified: its only I/O is `require('./doclinks.js')` at
+`:21`; zero `fs`, zero `__dirname`, zero `readFileSync`. The `.md` paths inside it are assertion
+data, never opened. It is the **cheapest** of the three to dual-mode, not the impossible one, so
+item 3 should port it too unless a different reason is found.
 
 ### The part that actually prevents the accident
 
@@ -281,15 +315,45 @@ everything added later.
 
 ### Work items
 
-1. **Pre-commit hook first, on its own.** Runs `optimizer_core.test.js`, `taxPaymentPlanner.test.js`
-   and `doclinks.test.js`; non-zero exit blocks the commit. Must be installable (hooks are not
-   version-controlled) — either a `core.hooksPath` directory committed to the repo, or a documented
-   one-line install. Decide which; the repo has no hook convention yet.
+1. **Pre-commit hook first, on its own.** — **DONE 2026-08-06, committed `ad9529f`** on branch
+   `p39-pr1-precommit-hook`; the completeness check followed in `475a2c4` on
+   `p39-pr4-hook-completeness`. `.githooks/pre-commit`
+   (committed, real logic) + `.githooks/install` (writes a delegating shim) + `.githooks/README.md`,
+   documented in `ARCHITECTURE.md` and `FILE_DIRECTORY.md`. Nothing user-visible, so **no version
+   bump and no changelog entry**, same precedent as P35 PR 1 + PR 2.
+
+   **The chosen mechanism did not survive contact and the reason is worth keeping.** The plan said
+   "a `core.hooksPath` directory committed to the repo", and the repo was believed to have "no hook
+   convention yet". Both were wrong: `core.hooksPath` is **already** set, to the absolute path
+   `C:\Users\starc\source\retirement_assets\.git\hooks`, in `.git/config` **and** — because
+   `extensions.worktreeConfig` is on — separately in **every** worktree's `config.worktree`, which
+   **outranks** the repo config. `git config core.hooksPath .githooks` would therefore have been
+   silently ignored inside every worktree, i.e. a no-op in the place most work happens, while
+   looking installed. **That is this phase's own failure mode, one tier up.** The installer writes
+   one shim at the pinned path instead; every worktree already points there, including future ones.
+
+   Second trap, same class: `core.autocrlf` is true system-wide and the repo had **no**
+   `.gitattributes`, so a fresh clone would have materialised the hook with CRLF and `sh` cannot
+   execute a shebang ending in CR. Added `.gitattributes` pinning `.githooks/** text eol=lf`,
+   **scoped to that directory on purpose** — a repo-wide `* text=auto` would renormalise every
+   tracked file and is a separate, measured pass if it is ever wanted.
+
+   Also added beyond the spec: the hook blocks on a **missing** suite, not only a failing one. A
+   renamed or deleted suite would otherwise produce output indistinguishable from a green run.
+
+   Verified, each as its own run: green tree exits 0 (214/32/22 in ~3.5 s); a genuine failed
+   assertion blocks with exit 1 and names the suite; a crashing suite blocks; a missing suite blocks
+   with a different message; `git commit` really fires it (proved via an empty commit message, which
+   aborts *after* the hook runs, so no commit was created); and `rm` + `git checkout` round-trips the
+   hook with zero CR bytes.
 2. **Tag the 3 slow tests.** A `test.slow(name, fn)` variant, or a `SLOW` prefix the browser runner
    filters. Keep them running in node unconditionally.
-3. **Dual-mode the two portable test files.** Mechanical: replace the `require()` header with a
-   node/browser branch resolving the same symbols off `globalThis` in the browser. Roughly 60 lines
-   at the top of `optimizer_core.test.js`; the 174 `test(...)` bodies do not change.
+3. **Dual-mode the ~~two~~ THREE portable test files.** Mechanical: replace the `require()` header
+   with a node/browser branch resolving the same symbols off `globalThis` in the browser. Roughly 60
+   lines at the top of `optimizer_core.tests.js`; the ~~174~~ **182** `test(...)` bodies do not
+   change (re-counted 2026-08-06). **Scope grew on 2026-08-06:** `doclinks.tests.js` was excluded on
+   the false premise that it reads the filesystem — it does not, so all three node suites are
+   portable and it is the cheapest of them.
 4. **Idle runner + badge protocol.** Extend `#testsFailed` to a three-state badge (pending / pass /
    fail) so a deferred failure is distinguishable from "still running". Do not let a pending state
    look like a pass — that is the same false-green this phase exists to remove.
@@ -302,7 +366,9 @@ everything added later.
 - **Do not let Tier 2 block paint.** The point is coverage without load cost; a synchronous port
   would trade one problem for the other.
 - **A pending badge must not read as green.** Neutral, visibly distinct from 🟢.
-- **`doclinks.test.js` stays in node.** Its filesystem reads are the thing it tests.
+- ~~**`doclinks.tests.js` stays in node.** Its filesystem reads are the thing it tests.~~
+  **WITHDRAWN 2026-08-06 — the premise was false.** It performs no filesystem reads at all. This
+  constraint was load-bearing for item 3's scope and is now removed; decide the port on its merits.
 - **Test count is load-bearing** once the staleness guard exists: adding a test now means updating
   the expected count, deliberately. That friction is the feature.
 - Watch the `'—'` sentinels if any test-harness text is touched; 31 of them are functional
@@ -312,6 +378,72 @@ everything added later.
 
 Independent of P38 and of everything in P29-P37. Should **not** ride a behavior-change PR. Work item
 1 alone delivers most of the value and could land at any time.
+
+---
+
+## Phase P40: Test-file layout — naming convention and a `tests/` subfolder (2026-08-06)
+
+Raised by the user as two proposals before continuing P39: enforce a test naming convention
+(`XXXX.tests.js`), and move tests into `tests/` or `.tests/`. Costed against a reference inventory of
+**189 occurrences across 25 files** and against this repo's own last rename, `d0f4a00` (5 files:
+**11 files changed, 20 insertions, 18 deletions**).
+
+| option | edits outside `.planning/` | files | judgment lines | silent-failure sites |
+|---|---|---|---|---|
+| rename 3 node suites `.test.js` -> `.tests.js` | ~29 | ~10 | 0 | 0 |
+| also rename `optimizer_tests.js` | +10 | +2 | 0 | **2** |
+| move all 7 files to `tests/` | ~55 | ~13 | ~18 | **2** |
+| both at once | ~75 | ~15 | ~20 | **2** |
+
+### `.tests/` is REJECTED PERMANENTLY — do not re-propose it
+
+Not because it 404s, but because **the 404 is invisible to every check runnable before merge.**
+
+- Jekyll excludes dot-directories. This repo deliberately has **no `_config.yml`**
+  (`_includes/head-custom.html:6`), so no `include:` directive can exist to re-add one. Already
+  proven empirically for `.planning/` (`progress.md:1208`, both `.md` and `.html` return 404).
+- The one escape hatch is forbidden three times over: **never add `.nojekyll`**
+  (`ARCHITECTURE.md:376`) — it would 404 every rendered docs URL on the site.
+- **`python -m http.server` (`.claude/launch.json`) and `file://` both serve dot-directories.** So
+  `.tests/` is green in 100% of local checks and red only on `main`, in production, on the flagship
+  page.
+- What then breaks is silent: `retirement_optimizer.html:1136` is `runTests?.();`, and optional-call
+  does **not** guard an *undeclared* identifier — a 404 throws `ReferenceError`, aborting the inline
+  block so `runSimulation?.()` at `:1138` never runs.
+
+`tests/` (no dot) is fine on all of the above; `montecarlo/` is the working precedent in this repo.
+
+### `optimizer_tests.js` is NOT renamed, and must stay out of any filename glob
+
+Verified 2026-08-06: 2197 lines, a lone `function runTests()` at `:3`, **no top-level call, no
+`module.exports`**. So **`node optimizer_tests.js` exits 0 having run nothing.** The pre-commit hook
+prints `ok` for anything that exits 0 (`.githooks/pre-commit:49-52`), so pulling the release gate
+into a `*test*` glob manufactures a permanent false green on the one file that cannot afford one.
+The `*.tests.js` suffix is safe precisely because `_tests.js` does not match it.
+
+### Decisions
+
+- **DONE (PR 3 of this batch):** rename the three node suites `.test.js` -> `.tests.js`.
+- **DEFERRED until after P39 items 2-6:** the `tests/` move. P39 item 3 dual-modes
+  `optimizer_core.tests.js` into the browser, so moving first would commit to served paths for files
+  that are about to gain browser exposure — two new-path risks stacked in one window — and would
+  rewrite `require()` headers that item 3 then restructures anyway.
+- **REJECTED:** `.tests/`, and renaming `optimizer_tests.js`.
+
+### If the `tests/` move is later taken up
+
+- Move **all seven** files together (the three suites + `sweep_golden.js` + its two generators +
+  nothing else). A split along "node-only vs browser-loaded" is defined by a property P39 is about
+  to invert.
+- `sweep_golden.gen.js:24-25` are the only `path.join(here, ...)` calls that reach out to repo root;
+  `:26`/`:56` and `import.js:95` keep working because `sweep_golden.js` moves alongside.
+- The GENERATED/IMPORTED marker strings (`gen.js:53` vs `sweep_golden.js:118`, `import.js:74` vs
+  `:792`) are a **rename** hazard only — a move preserves filenames.
+- `ARCHITECTURE.md:305-318` and `.test_harnesses/README.md:7-10` both state a "where a test file
+  belongs" rule that the move would repeal. Budget those ~18 lines as design work, not `sed`.
+- Manual browser pass is irreducible: three pages, over both `http://localhost:8767` and `file://`,
+  and specifically re-test Escape-closes-modal (`standalone/IncomeTaxPlanner.html:1194`) and the
+  click handler (`:1276`), which die silently.
 
 ---
 
@@ -1277,7 +1409,7 @@ For each year t from retirement to max(RMD ages):
 ## Phase P6: Simulation Sanity-Check Tests (was Phase 25)
 **Why:** Complex simulation accumulates subtle math errors. Deterministic edge cases with known exact answers expose regressions.
 
-Tests go in `retirement_optimizer_core.test.js`. Helper: `makeZeroBaseInputs()` — zeroed growth/inflation/taxes, single account.
+Tests go in `optimizer_core.test.js` (renamed from `retirement_optimizer_core.test.js` in `d0f4a00`). Helper: `makeZeroBaseInputs()` — zeroed growth/inflation/taxes, single account.
 
 | Test | Setup | Expected |
 |------|-------|----------|
@@ -1718,8 +1850,8 @@ function calibrateMCMs(cfg) {
 - [ ] Update stale UI copy that will become incorrect: retirement_optimizer.html:456 ("Synthetic: ... inflation is fixed") and mc_tab.js:282 ("Inflation ... (fixed)") — both need to describe the new AR(1) behavior; also mc_tab.js:276 label "(geometric)" → "(arithmetic)" since `medianAnnualReturn` now equals `mu` directly
 - [ ] Optional/stretch: compute `inflationStats` (min/CAGR/max, same shape as bootstrap's, worker.js:66) from `gbmInflationBank` so the existing Input Distribution chart (mc_tab.js:792-810, `_inputInflationChart`) can render GBM's realized inflation spread instead of just the flat target — not required for correctness, only for parity with bootstrap's richer display
 - [ ] Note (footnote only, not in scope): the GBM formula is duplicated across 3 sites (worker.js, mc_controller.js×2); a shared helper would reduce future duplication-drift risk but is a larger refactor — do not restructure as part of this phase
-- [ ] Add node unit tests in retirement_optimizer_core.test.js (or a new small test file) for `computeNextInflation()`: reversion behavior (large deviation from target decays toward target over repeated calls with shock=0), floor enforcement (`INFLATION_FLOOR`), a statistical check that many draws of `mu + sigma*boxMuller(rng)` have sample mean/stddev close to `mu`/`sigma`, and a `RETURN_FLOOR` clamp test — load montecarlo/prng.js into the existing vm test context alongside taxengine.js/core.js (retirement_optimizer_core.test.js:38-40)
-- **Test:** In the browser, enable nerd knobs, run GBM-mode MC, confirm `msg.medianAnnualReturn` ≈ `mu` and the per-path `inflationSequence` passed into `simulate()` actually varies year-to-year (not constant) — spot-check via `console.log` in a manual run or a new browser-test-suite case in retirement_optimizer_tests.js
+- [ ] Add node unit tests in `optimizer_core.test.js` (or a new small test file) for `computeNextInflation()`: reversion behavior (large deviation from target decays toward target over repeated calls with shock=0), floor enforcement (`INFLATION_FLOOR`), a statistical check that many draws of `mu + sigma*boxMuller(rng)` have sample mean/stddev close to `mu`/`sigma`, and a `RETURN_FLOOR` clamp test — `require` montecarlo/prng.js alongside taxengine.js/core.js in the header (`optimizer_core.test.js:29-35`). **Two stale details corrected 2026-08-06:** the file is no longer `retirement_optimizer_core.test.js` (renamed in `d0f4a00`), and there is no "vm test context" — the suite has loaded via `require()` since `86e26fa`.
+- **Test:** In the browser, enable nerd knobs, run GBM-mode MC, confirm `msg.medianAnnualReturn` ≈ `mu` and the per-path `inflationSequence` passed into `simulate()` actually varies year-to-year (not constant) — spot-check via `console.log` in a manual run or a new browser-test-suite case in `optimizer_tests.js`
 - **Test:** Confirm bootstrap/stress mode output is byte-identical before/after this change (their code paths are untouched)
 - **Status:** pending
 - **Independent:** no phase dependencies
@@ -2311,15 +2443,25 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
 - Whether Roth belongs before Cash — P28.
 
 **Tasks:**
-- [ ] Q1 scan FIRST — it may reframe everything that follows
-- [ ] Audit the two accounting facts (`:743` dividend-rate exclusion, `:1152` pre-withdrawal accrual) before running any behavior arm
+- [x] Q1 scan FIRST — it may reframe everything that follows. **DONE, and it did.** 5 scenarios x 11
+  arms, 55 rows, **zero rows never draw Brokerage**; baseline 90.4% of years from year 0, bracket
+  61.1%, cyclic 57.5%, ordered 44.7%. Prediction P3 scored WRONG (BIRC draws Brokerage first and so
+  has none left later). **"Brokerage is barely drawn" is false as a general claim.**
+- [x] Audit the two accounting facts before running any behavior arm. **DONE, and it paid for the
+  whole phase.** Not an understatement, an **over**-credit: `yr.taxableDividends` counted as income
+  *and* credited to the balance with nothing debiting it back. Fixed in `e9a3c8b` (v11.146f).
 - [ ] Research inputs, default off, P28 pattern: `thirdPassBrokerage` ('off'|'bounded'), `forcedIRAAllowBrokerage`, `cycleHarvestMode` ('maxbracket'|'spendonly')
-- [ ] Q2 with an explicit iteration counter, so "spiral" becomes a measured claim either way
+- [ ] Q2 with an explicit iteration counter, so "spiral" becomes a measured claim either way.
+  **Was moot pre-fix; now unblocked and worth re-asking on a corrected engine** — but re-run Q1's
+  numbers first, since they were measured on the double-crediting engine.
 - [ ] Q3/Q4 as scans over existing sweep output
+- [ ] Q5 (max-the-bracket harvest vs spend-only) A/B
 - [ ] Record the aggregate-basis modeling ceiling as a README limitation regardless of outcome
 - [ ] Decision: re-scope the third-pass exclusion, un-gate `cycleLTCGTarget`, or record and keep
-- **Status:** not started, research-first with a likely build tail. **Harness:**
-  `.test_harnesses/brokerage_harness.js` (node), results to a sibling `.md` if large
+- **Status:** **research half DONE and merged** (PR #155 third-pass state tax, PR #156 brokerage
+  research + the dividend fix). Q1 answered, premise refuted, accounting defect found and shipped.
+  **Open: Q2-Q5 and the build/decision tail.** **Harness:** `.test_harnesses/brokerage_harness.js`
+  (node), results to a sibling `.md` if large
 - **Depends on:** shares the gap-fill path with P30. Sequencing preference, not a hard dependency: run
   P30 first so the `[40,60]` question is settled before the third-pass arms move the same numbers.
 

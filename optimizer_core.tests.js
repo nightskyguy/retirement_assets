@@ -1,7 +1,7 @@
 'use strict';
 /**
- * optimizer_core.test.js
- * Run with: node optimizer_core.test.js
+ * optimizer_core.tests.js
+ * Run with: node optimizer_core.tests.js
  *
  * Phase 24: Cyclic Withdrawal Modifier tests
  *
@@ -15,24 +15,41 @@
  *   7. cyclicEnabled=false → identical output to non-cyclic run (regression)
  */
 
-// Load the source files via require() using their dual-mode export guards.
-// Stubs must exist BEFORE the requires: displayhelpers.js touches window/document
-// at load time, and performance.now() is stubbed so timing fields stay
-// deterministic (0), matching the old vm-based harness.
-globalThis.performance = { now: () => 0 };
-globalThis.window = {};                         // stub for displayhelpers.js (window.DisplayHelpers)
-globalThis.document = { getElementById: () => null, addEventListener: () => {} };
+// Everything below is wrapped in an IIFE for the browser's sake. Two classic scripts cannot both
+// declare a top-level `const BASE` — that is one global lexical scope and a duplicate declaration
+// there is a SyntaxError, so without the wrapper this file would fail to PARSE once loaded onto a
+// page that already has the engine. This file declares dozens of such names. Same reasoning, and
+// the same shape, as taxPaymentPlanner.tests.js.
+(() => {
 
-// optimizer_core.js resolves calculateTaxes etc. as bare globals (the
-// classic-script contract shared with the browser and the MC worker), so the
-// taxengine exports are mirrored onto globalThis before the engine loads.
-const taxengine = require('./taxengine.js');
-Object.assign(globalThis, taxengine);
+const IS_NODE = (typeof module !== 'undefined' && module.exports);
 
-const core = require('./optimizer_core.js');
+// NODE ONLY, and the guard is load-bearing. In a browser all three of these already exist, and
+// installing these stubs over them would destroy the live page: `document.getElementById` returning
+// null takes out every render path, and a `performance.now()` frozen at 0 corrupts the timing the
+// page reports. The old unguarded version was safe only because this file never reached a browser.
+if (IS_NODE) {
+    globalThis.performance = { now: () => 0 };
+    globalThis.window = {};                     // stub for displayhelpers.js (window.DisplayHelpers)
+    globalThis.document = { getElementById: () => null, addEventListener: () => {} };
+}
+
+// Both modes resolve ONE namespace object rather than reaching for bare globals. In the browser
+// that is deliberate: `function` declarations in the engine land on globalThis but its top-level
+// `const`s (MC_GRIDS, OPTIMIZER_GRIDS, RMD_TABLE) do not, so a per-symbol global lookup would
+// silently yield undefined for some of them. See the export guards in taxengine.js/optimizer_core.js.
+const taxengine = IS_NODE ? require('./taxengine.js') : window.TaxEngine;
+
+// optimizer_core.js resolves calculateTaxes etc. as bare globals (the classic-script contract
+// shared with the browser and the MC worker), so in node the taxengine exports are mirrored onto
+// globalThis before the engine loads. In the browser they are already there.
+if (IS_NODE) Object.assign(globalThis, taxengine);
+
+const core = IS_NODE ? require('./optimizer_core.js') : window.OptimizerCore;
 // displayhelpers.js is an IIFE that sets window.DisplayHelpers — load it so the share-URL
-// round-trip tests can exercise the REAL parseShorthand decoder against compactNum.
-require('./displayhelpers.js');
+// round-trip tests can exercise the REAL parseShorthand decoder against compactNum. Already
+// loaded by the page in the browser.
+if (IS_NODE) require('./displayhelpers.js');
 
 const simulate = core.simulate;
 const optimizeSpend = core.optimizeSpend;
@@ -63,22 +80,47 @@ const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 // P35 PR 1 characterization goldens — a RECORDING of what the two strategy enumerations emit,
 // captured before PR 2 extracts the Optimizer's copy into core. See sweep_golden.js.
-const { SWEEP_BASES, MC_GOLDEN, OPT_GOLDEN } = require('./sweep_golden.js');
+const { SWEEP_BASES, MC_GOLDEN, OPT_GOLDEN } = IS_NODE ? require('./sweep_golden.js') : window.SweepGolden;
 
 // ── Test harness ──────────────────────────────────────────────────────────────
 let passed = 0, failed = 0;
 
+// Tests tagged slow are the ones the browser tier is allowed to skip. They ALWAYS run in node,
+// unconditionally - the tag is a hint to the browser runner, never a way to stop testing something.
+//
+// Only three tests are tagged, and they are tagged on measurement, not on suspicion: the
+// breakEvenHeirsRate binary searches account for 1792 ms of this suite's ~2.9 s. The remaining 179
+// finish in well under a second, which is what makes an after-paint browser run affordable at all.
+const SLOW = new Set();
+
+// Tests tagged critical are the regression guards for defects that actually SHIPPED and silently
+// changed everyone's numbers. They are marked in the console output and given their own summary
+// block at the end, so that "did the guard for <that> bug still pass" is answerable at a glance
+// instead of by reading 214 lines of ✓.
+//
+// A test earns this tag by having a shipped defect behind it, not by being important-sounding.
+const CRITICAL = new Set();
+
+// test() REGISTERS rather than runs. Everything below is top-level, and running on registration
+// would mean the browser could only ever get results as a side effect of loading the file, with no
+// way to filter the slow tests or to defer the run past first paint. Registering instead lets
+// runOptimizerCoreTests() be called on demand and keeps the 182 test bodies untouched.
+// Same shape as taxPaymentPlanner.tests.js.
+const TESTS = [];
+
 function test(name, fn) {
-    try {
-        fn();
-        console.log(`  ✓  ${name}`);
-        passed++;
-    } catch (e) {
-        console.log(`  ✗  ${name}`);
-        console.log(`       ${e.message}`);
-        failed++;
-    }
+    TESTS.push([name, fn]);
 }
+
+test.slow = function (name, fn) {
+    SLOW.add(name);
+    TESTS.push([name, fn]);
+};
+
+test.critical = function (name, fn) {
+    CRITICAL.add(name);
+    TESTS.push([name, fn]);
+};
 
 function assert(cond, msg) {
     if (!cond) throw new Error(msg || 'assertion failed');
@@ -1342,7 +1384,7 @@ test('P32 (not fixed here): minlimit strands spending with Brokerage still funde
 });
 
 // ── State retirement-income exclusion (IL/PA full exemption) ────────────────────
-test('IL exempts IRA/pension distributions from state tax', () => {
+test.critical('IL exempts IRA/pension distributions from state tax', () => {
     const common = { filingStatus: 'MFJ', ages: [70, 70], state: 'IL',
                      earnedIncome: 40000 + 80000, qualifiedDiv: 0, capGains: 0 };
     const noExcl = calculateTaxes({ ...common });                                  // no split → all taxed
@@ -1351,7 +1393,7 @@ test('IL exempts IRA/pension distributions from state tax', () => {
     assertNear(withExcl.stateTax, 0, 'IL state tax should be ~0 once retirement income is fully excluded', 1);
 });
 
-test('PA exempts IRA/pension distributions from state tax', () => {
+test.critical('PA exempts IRA/pension distributions from state tax', () => {
     const common = { filingStatus: 'MFJ', ages: [70, 70], state: 'PA',
                      earnedIncome: 90000, qualifiedDiv: 0, capGains: 0 };
     const noExcl = calculateTaxes({ ...common });
@@ -1376,7 +1418,7 @@ test('PA exempts IRA/pension distributions from state tax', () => {
 // or dividends), no cash yield (so no interest) - leaving only Social Security, pension and IRA
 // distributions. PA exempts all three, so the correct answer is a hard zero and any state tax at
 // all is the bug.
-test('third pass keeps the state retirement-income exclusion (PA, Ordered)', () => {
+test.critical('third pass keeps the state retirement-income exclusion (PA, Ordered)', () => {
     const r = simulate({
         ...CAP_BASE, STATEname: 'PA', strategy: 'ordered', orderedSeq: 'CBIR',
         stratRate: 0, stratACAMultiple: 0,
@@ -1392,7 +1434,7 @@ test('third pass keeps the state retirement-income exclusion (PA, Ordered)', () 
         `(it was 28,054.65 before the third pass was given pensionIncome/iraIncome).`);
 });
 
-test('IL still taxes non-retirement income (interest/dividends not exempt)', () => {
+test.critical('IL still taxes non-retirement income (interest/dividends not exempt)', () => {
     // $80k IRA (exempt) + $30k ordinary dividends (NOT exempt) → state tax on the $30k only.
     const r = calculateTaxes({ filingStatus: 'MFJ', ages: [70, 70], state: 'IL',
                                earnedIncome: 80000 + 30000, ordDivInterest: 30000,
@@ -1400,7 +1442,7 @@ test('IL still taxes non-retirement income (interest/dividends not exempt)', () 
     assert(r.stateTax > 0, 'IL should still tax the non-retirement (dividend/interest) portion');
 });
 
-test('regression: exclusion params are inert for a non-exclusion state (CA)', () => {
+test.critical('regression: exclusion params are inert for a non-exclusion state (CA)', () => {
     const common = { filingStatus: 'MFJ', ages: [70, 70], state: 'CA',
                      earnedIncome: 120000, qualifiedDiv: 0, capGains: 0 };
     const base = calculateTaxes({ ...common });
@@ -2014,7 +2056,7 @@ test('accounting: withdrawal columns include conversions, decompose correctly, a
 // inconsistent. The defect was on the income statement: the dividend legitimately entered Cash, and
 // separately shrank the withdrawal the plan needed to make. Only an economic or flow invariant sees
 // that, so that is what these assert. A balance reconciliation here would be vacuous.
-test('no free money: a dividend cannot create wealth (same total return, split two ways)', () => {
+test.critical('no free money: a dividend cannot create wealth (same total return, split two ways)', () => {
     // Identical 8% total return. A takes it all as growth; B takes 6% growth + 2% dividend with DRIP
     // on, so B reinvests every dividend and compounds the same way. The ONLY real difference is that
     // B pays tax on the dividend every year and A defers it entirely. B must therefore never finish
@@ -2041,7 +2083,7 @@ test('no free money: a dividend cannot create wealth (same total return, split t
         `fixed this ran +21.7%.`);
 });
 
-test('no free money: interest leaves Cash only by being spent or taxed', () => {
+test.critical('no free money: interest leaves Cash only by being spent or taxed', () => {
     // A Cash-only plan. Every dollar that leaves Cash is either spending or tax, so lifetime CashWD
     // must equal lifetime spend + lifetime tax exactly. While interest was double-credited the plan
     // funded $800,000 of spending while withdrawing $2,449, because the interest paid for the
@@ -2063,7 +2105,7 @@ test('no free money: interest leaves Cash only by being spent or taxed', () => {
         'lifetime Cash withdrawals must equal lifetime spending plus lifetime tax', 1);
 });
 
-test('no free money: interest cannot compound faster than the yield it is paid at', () => {
+test.critical('no free money: interest cannot compound faster than the yield it is paid at', () => {
     // Hard upper bound, no spending: Cash cannot exceed simple compounding at cashYield, and must
     // land BELOW it because the interest is taxed every year and the tax is paid out of Cash.
     // Double-crediting made it compound at roughly twice the rate: $4,254,946 against a $2,191,123
@@ -2577,7 +2619,7 @@ test('breakEvenHeirsRate: returns null when no rate up to the ceiling pays', () 
         'a ceiling below the true threshold must report null rather than guessing');
 });
 
-test('breakEvenHeirsRate: the rate/amount pair it reports is self-consistent', () => {
+test.slow('breakEvenHeirsRate: the rate/amount pair it reports is self-consistent', () => {
     const r = breakEvenHeirsRate(CONV_BASE, FIXEDPCT_OV, {});
     assert(r !== null, 'this fixture does have a threshold');
     assertNear(r.rate, 0.57, 'break-even heirs rate for the fixedpct fixture', 0.011);
@@ -2587,7 +2629,7 @@ test('breakEvenHeirsRate: the rate/amount pair it reports is self-consistent', (
     assert(r.gain > 0, 'and a positive gain');
 });
 
-test('breakEvenHeirsRate: the predicate is monotonic in the rate (binary search precondition)', () => {
+test.slow('breakEvenHeirsRate: the predicate is monotonic in the rate (binary search precondition)', () => {
     // The search is a binary search, which is only valid because "conversions pay" never turns
     // back off as the assumed future rate rises. nominalTaxRate is a bracket STEP function, so
     // this is a measured property, not an obvious one -- if a change breaks it the search starts
@@ -2601,7 +2643,7 @@ test('breakEvenHeirsRate: the predicate is monotonic in the rate (binary search 
         `once conversions start paying they must keep paying as the rate rises; got ${seq.join('')}`);
 });
 
-test('lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidate does not have', () => {
+test.slow('lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidate does not have', () => {
     // The whole reason this searches the pool: the top-ranked strategy is often the one LEAST
     // willing to convert, so asking only it would report "never" while another candidate pays.
     assert(breakEvenHeirsRate(CONV_BASE, FIXED_OV, {}) === null,
@@ -3244,7 +3286,7 @@ test('single-row bracket tables: the affected jurisdictions are pinned', () => {
         `single-row tables changed:\n         expected ${JSON.stringify(expected)}\n         actual   ${JSON.stringify(single)}`);
 });
 
-test('Fill Bracket converts in a no-tax state, not just in a graduated one', () => {
+test.critical('Fill Bracket converts in a no-tax state, not just in a graduated one', () => {
     const base = { ...BASE, strategy: 'bracket', stratRate: 0.22, stratIRMAATier: -1,
                    stratACAMultiple: 0, convertExcessToRoth: true, iraBaseGoal: 0 };
     const conv = st => simulate({ ...base, STATEname: st }).log.reduce((a, e) => a + (e.rothConv || 0), 0);
@@ -3272,7 +3314,7 @@ test('minlimit: the IRMAA ceiling is a real limit below the first tier, not zero
     assert(run('NV') > 0, `and in a no-tax state too, got ${Math.round(run('NV'))}`);
 });
 
-test('a no-tax state reports honest spend and honest failure', () => {
+test.critical('a no-tax state reports honest spend and honest failure', () => {
     // With goalLimit zeroed, targetSpend went to 0 for every strategy outside the bracket/ordered/GK
     // exempt set. totals.spend then accumulated `0 + Shortfall` (negative), while the success test
     // `netIncome < targetSpend * 0.99` could never fail against a zero target.
@@ -3286,12 +3328,91 @@ test('a no-tax state reports honest spend and honest failure', () => {
     }
 });
 
-// ── Summary ───────────────────────────────────────────────────────────────────
-console.log('');
-console.log(`Results: ${passed} passed, ${failed} failed`);
-if (failed > 0) {
-    console.log('\n*** SOME TESTS FAILED ***');
-    process.exitCode = 1;
-} else {
-    console.log('All tests passed.');
+// ── Runner ────────────────────────────────────────────────────────────────────
+// Returns the counts instead of setting process.exitCode, so the browser can render them. The node
+// entry point below is what still sets the exit code.
+//
+// `skipSlow` is honoured ONLY by the browser tier. Node always passes false: a tag must never be
+// able to stop a test from running in the place that gates commits.
+function runOptimizerCoreTests(opts) {
+    const skipSlow = !!(opts && opts.skipSlow);
+    passed = 0;
+    failed = 0;
+    let skipped = 0;
+    const failures = [];
+
+    // The engine records WALL CLOCK into its own output: optimizer_core.js:928 sets
+    // `yr.loopStart = performance.now()`, :2381 derives loopMs from it, and :1739 accumulates
+    // totals.thirdPassTime. Several tests here assert that two simulation logs are byte-identical,
+    // and a live clock makes those two logs differ by construction.
+    //
+    // Node neutralises this with a load-time stub. The browser must NOT stub at load - that would
+    // freeze the real page's timing - so it is stubbed for the duration of the run and restored
+    // afterwards. This is measured, not hypothesised: without it exactly six byte-identity tests
+    // fail in the browser while passing in node, and they fail on the clock, not on the engine.
+    const realNow = globalThis.performance && globalThis.performance.now;
+    if (globalThis.performance) globalThis.performance.now = () => 0;
+
+    const criticalResults = [];
+
+    try {
+        TESTS.forEach(([name, fn]) => {
+            if (skipSlow && SLOW.has(name)) { skipped++; return; }
+            const isCritical = CRITICAL.has(name);
+            const tag = isCritical ? '★ CRITICAL  ' : '';
+            try {
+                fn();
+                console.log(`  ✓  ${tag}${name}`);
+                passed++;
+                if (isCritical) criticalResults.push([true, name]);
+            } catch (e) {
+                console.log(`  ✗  ${tag}${name}`);
+                console.log(`       ${e.message}`);
+                failures.push(`${name}: ${e.message}`);
+                failed++;
+                if (isCritical) criticalResults.push([false, name]);
+            }
+        });
+    } finally {
+        if (globalThis.performance && realNow) globalThis.performance.now = realNow;
+    }
+
+    // ── Critical-guard summary ───────────────────────────────────────────────
+    // Repeated deliberately. These guard defects that shipped to real users and quietly changed
+    // their numbers, so their status must be readable without scrolling through everything else.
+    const critFailed = criticalResults.filter(([ok]) => !ok);
+    console.log('');
+    console.log('★ CRITICAL REGRESSION GUARDS ' + '─'.repeat(40));
+    criticalResults.forEach(([ok, name]) => console.log(`  ${ok ? '✓' : '✗'}  ${name}`));
+    if (critFailed.length) {
+        console.log('');
+        console.log(`*** ${critFailed.length} CRITICAL GUARD${critFailed.length !== 1 ? 'S' : ''} FAILED - a defect that already shipped once has come back ***`);
+    } else {
+        console.log(`  ${criticalResults.length}/${criticalResults.length} critical guards passed.`);
+    }
+
+    console.log('');
+    console.log(`Results: ${passed} passed, ${failed} failed`);
+    if (skipped) console.log(`(${skipped} slow test${skipped !== 1 ? 's' : ''} skipped)`);
+    console.log(failed > 0 ? '\n*** SOME TESTS FAILED ***' : 'All tests passed.');
+    return {
+        passed, failed, skipped, total: TESTS.length, failures,
+        critical: {
+            passed: criticalResults.filter(([ok]) => ok).length,
+            failed: critFailed.length,
+            failedNames: critFailed.map(([, name]) => name)
+        }
+    };
 }
+
+if (IS_NODE) {
+    const r = runOptimizerCoreTests();
+    if (r.failed > 0) process.exitCode = 1;
+    module.exports = { runOptimizerCoreTests, SLOW_COUNT: SLOW.size, TEST_COUNT: TESTS.length };
+} else {
+    window.runOptimizerCoreTests = runOptimizerCoreTests;
+    window.OPTIMIZER_CORE_TEST_COUNT = TESTS.length;
+    window.OPTIMIZER_CORE_SLOW_COUNT = SLOW.size;
+}
+
+})();

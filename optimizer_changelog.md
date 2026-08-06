@@ -11,6 +11,17 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.147c"></a>
+
+## 11.147c
+
+**Self-tests improved.** No change to your plan or its numbers. The self-check that runs at page
+load now covers 510 tests instead of 245; hover the indicator for the count. A brief hourglass
+before the green dot is normal, and a green dot with a small warning mark means the page was opened
+as a local file, which blocks part of the check from loading.
+
+---
+
 <a id="11.1478"></a>
 
 ## 11.1478 (behavior change)

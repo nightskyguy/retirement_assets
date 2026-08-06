@@ -1,7 +1,7 @@
 'use strict';
 /**
- * taxPaymentPlanner.test.js
- * Run with: node taxPaymentPlanner.test.js
+ * taxPaymentPlanner.tests.js
+ * Run with: node taxPaymentPlanner.tests.js
  *
  * Covers:
  *   1. No IRA operations — all quarterly
@@ -875,7 +875,7 @@ test('withholdingCoversSchedule is cumulative, not a total-versus-total test', (
 function runTaxPlannerTests() {
   passed = 0;
   failed = 0;
-  console.log('\ntaxPaymentPlanner.test.js\n' + '─'.repeat(60));
+  console.log('\ntaxPaymentPlanner.tests.js\n' + '─'.repeat(60));
   const failures = [];
   TESTS.forEach(([name, fn]) => {
     try {
@@ -898,9 +898,12 @@ function runTaxPlannerTests() {
 if (typeof module !== 'undefined' && module.exports) {
   const r = runTaxPlannerTests();
   if (r.failed > 0) process.exitCode = 1;
-  module.exports = { runTaxPlannerTests };
+  module.exports = { runTaxPlannerTests, TEST_COUNT: TESTS.length };
 } else {
   window.runTaxPlannerTests = runTaxPlannerTests;
+  // Published for the staleness guard in optimizer_tests.js, which asserts that the number of
+  // node-side tests it knows about still matches what is actually on disk.
+  window.TAXPLANNER_TEST_COUNT = TESTS.length;
 }
 
 })();

@@ -1513,3 +1513,224 @@ User feedback on the baseline-accounting UI:
   even when the content is unchanged. Check with `git diff --ignore-cr-at-eol` before believing it.
 - GOTCHA: `orderedSeq` accepts only `CBIR` / `RIBC` / `BIRC`. Anything else silently falls back to
   CBIR, so two "different" ordered arms can produce identical output and look like a bug.
+
+## Session: 2026-08-06 (worktree context-ab498f, branch worktrees/planning-with-files-f85b48) — context restore, plan reconciled with three merged PRs
+
+Planning files were **stale against git**: `task_plan.md` still read "As of 2026-08-05, evening" with
+P38 PR 3 described as an unmerged branch and P32 marked "not started", while `main` had moved to
+`10f6f2a` with three PRs merged on top. `progress.md` had no 2026-08-06 entry at all. `findings.md`
+was the only file current, and even it had no record of the OBBBA fix. No code touched this session.
+
+**Reconciled from `git log`, not from memory:**
+
+- **PR #153** — P38 PR 3, size the primary draw net of tax on guaranteed income (`018baa9`,
+  v11.146a). P38 is now COMPLETE end to end.
+- **PR #155** — P32 PR 1, third-pass state tax.
+- **PR #156** — P32 PR 2, brokerage research (`52be831`) plus two engine correctness fixes and the
+  changelog consolidation.
+
+**Two shipped fixes had no plan section between them.** The dividend/interest double-credit
+(`e9a3c8b`, v11.146f) was recorded in `findings.md` but its consequences never propagated to P32's
+status; the OBBBA gate fix (`c9e356a`) was recorded **nowhere** — it arrived out of band, from
+verifying a user report about low federal tax on an Alaska plan. Both are the same failure mode: a
+tax/accounting function unit-tested directly while its *use* went untested. Written up in
+`findings.md` as "Two OBBBA provisions were implemented, tested, and never switched on".
+
+**P32's own instruction is what earned the phase.** It mandated auditing the two accounting facts
+*before* running any behavior arm; that audit found the double-credit and refuted the phase premise
+(Q1: zero rows never draw Brokerage; baseline touches it in 90.4% of years). Q2 was moot before the
+fix and is now unblocked — but Q1's percentages were measured on the double-crediting engine and
+should be re-run before anything is concluded from them.
+
+**Files updated:** `task_plan.md` (header rewritten to 2026-08-06 state, duplicated P35 paragraph
+removed, P32 status and task checkboxes reconciled), `findings.md` (OBBBA section added),
+`progress.md` (this entry).
+
+**Open queue after the sync:** P32 Q2-Q5 + build tail; P39 (node-only tests invisible in the
+browser, not started, pre-commit hook is the cheap first slice); P36; the long P1-P28 backlog.
+
+## 2026-08-06 (cont.) — P39 work item 1: the pre-commit gate
+
+User picked P39 off the reconciled queue, scoped to **work item 1 only, then review**, and chose the
+committed-hooks-directory mechanism. The mechanism had to change; the intent did not.
+
+**Files:** `.githooks/pre-commit` (the logic), `.githooks/install` (one-time, per clone),
+`.githooks/README.md`, `.gitattributes` (new file), plus `ARCHITECTURE.md` and
+`.planning/FILE_DIRECTORY.md`. **No product code touched, so no version bump and no changelog
+entry** — same precedent as P35 PR 1 + PR 2.
+
+**The plan's two premises about hooks were both false, and checking beat assuming:**
+
+1. "The repo has no hook convention yet." It has one. `core.hooksPath` is pinned to the absolute
+   path `...\.git\hooks` in `.git/config` **and**, because `extensions.worktreeConfig` is on, again
+   in each of the three worktrees' `config.worktree` — which outranks the repo config. The planned
+   `git config core.hooksPath .githooks` would have been **silently ignored in every worktree**.
+   It would have looked installed and done nothing, which is the exact defect class P39 exists to
+   remove. Fixed by writing a delegating shim at the already-pinned path: one install, and it covers
+   the main checkout plus every present and future worktree, because the worktree tooling writes the
+   same absolute pin each time.
+2. Unstated but load-bearing: `core.autocrlf` is true system-wide and the repo had **no**
+   `.gitattributes`. A fresh clone would have checked the hook out with CRLF, and `sh` cannot run a
+   shebang ending in CR. Added `.gitattributes` with `.githooks/** text eol=lf` only — deliberately
+   **not** `* text=auto`, which would renormalise every tracked file in one unmeasured sweep.
+
+**Beyond spec:** the hook blocks on a *missing* suite as well as a failing one. A renamed or deleted
+suite would otherwise print nothing and read as green.
+
+**Count drift caught on pickup:** the phase's measured table says `optimizer_core.test.js` has 206
+tests; OBBBA and the dividend fix added 8, so it is **214**. Recorded in the phase. The staleness
+guard (work item 5) must measure its expected count, never copy that table.
+
+**Verification, each a separate run:** green tree exit 0, 214/32/22 in ~3.5 s; genuine failed
+assertion blocks (exit 1, names the suite); crashing suite blocks; missing suite blocks with its own
+message; `git commit` really fires the hook — proved with an empty commit message, which aborts
+*after* pre-commit runs, so nothing was committed; `rm` + `git checkout` round-trips the hook with
+zero CR bytes.
+
+**Still open in P39:** items 2-6 (slow tags, dual-mode port, idle runner + three-state badge,
+staleness guard, `?runtests=all`). The hook is the guarantee; those restore confidence in the badge.
+
+## 2026-08-06 (cont.) — P40 costing, and nine doc defects fixed
+
+User proposed two repo-wide changes before P39 continued: a test naming convention (`XXXX.tests.js`)
+and a `tests/` or `.tests/` subfolder. Costed against a 189-occurrence / 25-file reference inventory
+and against `d0f4a00`, this repo's own last rename (11 files, 20 insertions, 18 deletions).
+
+**Three findings decided the shape of the answer, all measured:**
+
+1. **`.tests/` is disqualified, and not for the obvious reason.** Jekyll skips dot-directories and
+   `.nojekyll` is forbidden here — but the decisive fact is that `python -m http.server` and
+   `file://` **both serve dot-directories**, so `.tests/` passes every pre-merge check and fails only
+   in production. What then breaks is silent, not loud: `runTests?.()` at
+   `retirement_optimizer.html:1136` throws `ReferenceError` on an *undeclared* identifier, killing
+   `runSimulation?.()` at `:1138`.
+2. **`node optimizer_tests.js` exits 0 having run nothing** — 2197 lines, `function runTests()` at
+   `:3`, never called, no `module.exports`. The hook prints `ok` for anything exiting 0, so any glob
+   that swallows the release gate manufactures a permanent false green. `*.tests.js` is safe only
+   because `_tests.js` does not match it.
+3. **The cheap win was never the rename.** Proposal 1's real intent is a *completeness* check —
+   assert the on-disk suite set equals the hook's list — which catches a newly added suite being
+   omitted. A naming rule catches nothing; there is no CI here at all (no `.github/`, no
+   `package.json`), so "enforcement" means one opt-in, `--no-verify`-bypassable hook.
+
+**User decisions:** rename the three node suites only (`optimizer_tests.js` untouched); defer the
+`tests/` move until after P39 items 2-6; reject `.tests/` permanently. Recorded as **Phase P40**.
+
+**PR 1 committed** (`5f98207`): the P39 hook, `.gitattributes`, docs. Hook fired on its own commit.
+
+**PR 2, this commit — nine doc defects, all verified against source, zero runtime risk:**
+`FILE_DIRECTORY.md:68` called the release gate "Older/legacy" · `ARCHITECTURE.md:292` and the mermaid
+label at `:52` both claimed `vm.runInContext` **and** "no DOM stubs" (0 hits for `vm`; `window` and
+`document` are stubbed at `:23-25`) · `ARCHITECTURE.md:310` cited `:67` for a require at `:66` ·
+the "`doclinks.test.js` reads files from disk" claim was **false** in three places and was P39 item
+3's stated reason for excluding it · "5 requires" was 4 (the 5th grep hit is a comment at `:18`) ·
+"260 tests" was 268 · two open phases (P6, P23) still instructed work in
+`retirement_optimizer_core.test.js`, renamed away in `d0f4a00`, and P23 also referenced a "vm test
+context" that has not existed since `86e26fa`.
+
+**Deliberately NOT fixed:** the same stale filenames at `task_plan.md:938` and `:1052`. Those sit in
+**shipped** phase records (PF5 v11.11dc, PF v11.11c1) where the names were correct when written —
+rewriting them would falsify the record. Only live, forward-looking instructions were corrected.
+Mechanical name churn across the remaining ~80 `.planning/` mentions stays out of scope.
+
+## 2026-08-06 (cont.) — PR 3: the three node suites renamed to `.tests.js`
+
+`optimizer_core.test.js` -> `optimizer_core.tests.js`, `taxPaymentPlanner.test.js` ->
+`taxPaymentPlanner.tests.js`, `doclinks.test.js` -> `doclinks.tests.js`, per the user's P40 decision.
+`optimizer_tests.js` deliberately untouched. `git mv` throughout; git scored all three R100.
+
+**The requires did not move.** They point at *source* files (`taxengine.js`, `optimizer_core.js`,
+`displayhelpers.js`, `sweep_golden.js`, `doclinks.js`, `taxPaymentPlanner.js`), none of which were
+renamed. The plan had flagged the six `./` requires as an edit site for the *move*, not the rename;
+for a rename they are inert. The `sweep_golden` marker strings are likewise untouched, since only a
+rename of the *generators* would break those.
+
+**One browser fetch:** `RetirementTaxPlanner.html:1083`, plus the two UI strings at `:1081`/`:1094`.
+`?v=13c3` left as-is on purpose: the token busts a cached copy of the *same* URL, and the URL just
+changed, so there is no stale entry under the new name. Bumping it would buy nothing and would imply
+a release that did not happen.
+
+**Three more instances of the PR 2 `vm.runInContext` defect surfaced during the sweep** and are
+fixed here: the two mermaid edge labels `CORETEST -->|vm.runInContext|` and the prose "Node via
+`vm.runInContext`" in the module-contract paragraph. PR 2 caught the table row and the node label
+but not these.
+
+**`.planning/` rule, unchanged from PR 2:** live forward-looking instructions updated (the whole P39
+and P40 sections, 14 occurrences); the 28 occurrences in shipped phase records left alone, because
+the names were correct when written. `optimizer_changelog.md` never referenced these files at all.
+
+Verified: all three suites green by their new names (214/32/22), the hook green with the updated
+`suites=` list, and zero old-name references anywhere outside dated `.planning` records.
+Nothing user-visible, so no version bump and no changelog entry.
+
+## 2026-08-06 (cont.) — PR 4: the hook now catches an UNLISTED suite
+
+Proposal 1's real intent, extracted. A naming convention catches nothing on its own; what actually
+prevents a suite from being silently skipped is asserting that the set of `*.tests.js` files on disk
+equals the `suites=` list. ~20 lines including the comment that keeps it safe.
+
+**The comment is the load-bearing part.** The glob must never widen to `*test*`. `optimizer_tests.js`
+declares `runTests()` and never calls it, so `node optimizer_tests.js` exits 0 having run nothing,
+and the hook reports success for anything exiting 0 — sweeping the release gate in would print a
+permanent green for zero tests run. `_tests.js` not matching `*.tests.js` is exactly why that suffix
+was safe to adopt.
+
+**Interaction found while testing, and made explicit rather than left dead:** the completeness check
+runs before the missing-suite check, so a deleted or renamed suite now trips the new message
+("list is out of date", with both sets printed) rather than the old one. The old check survives as a
+backstop for the single case the new one cannot see — a suite listed in `suites=` whose name does
+not end in `.tests.js`. Its comment now says so.
+
+Verified as separate runs: green passes (214/32/22); an unlisted `sneaky.tests.js` blocks with both
+sets printed, exit 1; a deleted suite blocks; and the glob provably matches only the three suites,
+never `optimizer_tests.js`.
+
+## 2026-08-06 (cont.) — P39 items 2-6 COMPLETE, plus critical-guard marking
+
+All five remaining items landed as separate commits on `p39-pr4-hook-completeness`, in
+[PR #157](https://github.com/nightskyguy/retirement_assets/pull/157). Version **v11.147c**; changelog
+entry deliberately one paragraph, per user direction that improving the self-tests is not a
+user-facing feature.
+
+**Item 2 (`4d76d51`) - slow tags.** `test.slow()` records the name; node runs everything
+regardless. Re-measured rather than trusting the 08-05 figure: **211 tests in 818 ms without the
+three, 214 in 2797 ms with** - they cost 1979 ms, 71% of the suite. The tiering premise holds.
+
+**Item 3 (`bc2e063`) - dual mode.** Three things the plan called "mechanical" were not, and each
+would have failed *silently*:
+1. The node stubs were hostile to a real page - `document.getElementById` returning null, a
+   `performance.now()` frozen at 0, installed unguarded at load. Now behind `IS_NODE`.
+2. **Half the engine is invisible to a global lookup.** `function simulate` lands on globalThis;
+   `const MC_GRIDS` / `OPTIMIZER_GRIDS` / `RMD_TABLE` do not. Verified live:
+   `typeof globalThis.MC_GRIDS === 'undefined'`. Hence explicit `window.TaxEngine` /
+   `OptimizerCore` / `SweepGolden` namespaces mirroring the existing `module.exports`.
+3. **The engine records wall clock into its own output** (`optimizer_core.js:928` `yr.loopStart`,
+   `:2381` loopMs, `:1739` totals.thirdPassTime) and several tests assert byte-identical logs.
+   **Six tests failed in the browser while passing in node**, all on the clock. The runner now
+   stubs `performance.now` for the duration of the run and restores it in a `finally`.
+
+**Item 4 (`4983e7a`) - after-paint runner + three-state badge.** Measured, not asserted:
+`loadEventEnd` 760 ms, tier-2 requests start 3661-3988 ms. Badge is ⏳ / 🟢 / 🟢⚠ / ❌. Opt-in via
+`window.TIER2_PENDING` so `standalone/IncomeTaxPlanner.html`, which also loads `optimizer_tests.js`,
+keeps its old two-state badge instead of hanging on an hourglass.
+
+**Critical guards (`dedc944`) - user request.** `test.critical()` marks the ten guards for defects
+that actually shipped, inline as `✓ ★ CRITICAL <name>` plus a dedicated end-of-run block. Two
+families: the three dividend/interest conservation tests, and seven state-tax tests (IL/PA
+exemption, third-pass exclusion, the two *complement* tests that fail if a fix over-applies the
+exemption, and the two no-income-tax-state tests). Badge tooltip reports the guard count separately
+from the bulk count.
+
+**Item 6 (`e4949a4`) - `?runtests`.** Bare or `=all` runs everything synchronously (513 = 245 + 268);
+`=fast` skips the slow three. Matches RetirementTaxPlanner's existing bare `?runtests`.
+
+**Item 5 (`238f5ef`) - staleness guard.** `TestTiers.EXPECTED` pins 214/32/22 + 3 slow. Catches a
+suite growing, an unregistered suite, a suite that failed to load, and slow-tag drift. Verified end
+to end, not by poking the function: a real test appended to `doclinks.tests.js` turned the live badge
+red with "doclinks: 23 tests on disk, 22 expected"; removing it returned 🟢 510.
+
+**GOTCHA worth keeping:** during verification the page kept loading `taxengine.js?v=111448` from
+cache while the file on disk had the new namespace, producing "Cannot read properties of undefined
+(reading 'calculateTaxes')" a long way from the cause. Cache tokens must move with any engine file
+the test tier depends on. Stale *HTML* is the harder half - a warm tab keeps requesting the old
+token regardless.

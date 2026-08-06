@@ -1017,6 +1017,20 @@ function resolveHousehold(sim, yr) {
     yr.fedRateCreep   = taxCreepFactor(inputs.taxRateCreep,      sim.currentYear, sim.creepStartYear);
     yr.stateRateCreep = taxCreepFactor(inputs.taxRateCreepState, sim.currentYear, sim.creepStartYear);
 
+    // OBBBA (P.L. 119-21) provisions, gated per calendar year. calculateTaxes defaults BOTH of these
+    // to false and cannot gate them itself: it is handed `inflation` but never a tax year, and the
+    // sunsetYear values in TAXData.OBBBA are declarative only, referenced by no code. So the caller
+    // owns the gate, and until now no caller passed either flag - the senior deduction was
+    // implemented and unit-tested but never reached a single simulated year, and the SALT cap always
+    // used the $10k TCJA floor. Both made federal tax too HIGH for anyone 65+ (or itemizing in a
+    // high-tax state) in 2025-2029.
+    //   Senior deduction: $6,000 per filer aged 65+, phasing out above $150k MFJ / $75k single,
+    //   tax years 2025-2028. SALT: the elevated $40k cap, 2025-2029, phasing down above $500k MAGI.
+    // Both revert automatically the year after their sunset, which is what makes this safe to leave
+    // on permanently rather than expose as a switch.
+    yr.obbaOn   = sim.currentYear <= TAXData.OBBBA.SENIOR_DED.sunsetYear;
+    yr.saltHigh = sim.currentYear <= TAXData.OBBBA.SALT.sunsetYear;
+
     totals.yearstested += 1;
 
     yr.status = (yr.alive1 && yr.alive2) ? 'MFJ' : 'SGL';
@@ -1300,7 +1314,7 @@ function resolveSpendTarget(sim, yr) {
         earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD,
         qualifiedDiv: yr.taxableDividends, capGains: 0, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
     }).totalTax : 0;
 
     yr.additionalSpendNeeded = Math.max(0, yr.targetSpend + yr.IRMAA - (yr.possibleIncome - yr.guaranteedIncomeTax));
@@ -1510,7 +1524,7 @@ function applyPrimaryAndTaxPass1(sim, yr) {
         earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
         qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
     })
     inspectForErrors(yr.tax)  // See if any numbers look fishy.
 
@@ -1644,7 +1658,7 @@ function fillSpendingGap(sim, yr) {
         earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
         qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
     })
     inspectForErrors(yr.tax)  // See if any numbers look fishy.
 
@@ -1718,7 +1732,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
             earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
         });
         yr.totalTax = yr.tax.totalTax + yr.IRMAA;
         totals.thirdPassCount += 1;
@@ -1749,7 +1763,13 @@ function resolveResidualAndForcedIRA(sim, yr) {
     //     falls through to the baseline branch, and it is backstopped like any other.
     //   - Ordered, which has its own user-chosen sequence and runs it in the third pass above.
     if (!yr.isACAStrategy && !yr.isOrderedStrategy) {
-        for (let _i = 0; _i < 4; _i++) {
+        // Iteration cap raised 4 -> 6 when OBBBA was switched on. Lowering the tax bill changes the
+        // convergence path, and `fixedpct` 2% started finishing 2027 with $21 still unfunded while
+        // the IRA held $2.16M - the 4th iteration was simply one short. 6 clears it; 8 is identical,
+        // so it has converged rather than merely been papered over. Costs nothing in the common
+        // case: the loop breaks the moment the residual drops under $1, so the extra iterations only
+        // run in the years that actually need them.
+        for (let _i = 0; _i < 6; _i++) {
             const _inc = yr.fixedInc + yr.netWithdrawals.IRA + yr.pension +
                 yr.netWithdrawals.Roth + yr.netWithdrawals.Cash + yr.netWithdrawals.Brokerage + yr.taxableRMD;
             const _res = yr.targetSpend - (_inc - yr.totalTax);
@@ -1765,7 +1785,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
                 earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
                 pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
                 qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
             });
             yr.totalTax = yr.tax.totalTax + yr.IRMAA;
             yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
@@ -2022,7 +2042,7 @@ function cfRefundIRA(sim, yr, netTarget) {
             earnedIncome: yr.pension + yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G) + yr.taxableInterest, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G),
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
         });
         dT = Math.max(0, (yr.totalTax - yr.IRMAA) - t2.totalTax);
         const Gnext = Math.min(netTarget + dT, _cap);
@@ -2074,7 +2094,7 @@ function applyExtraConversion(sim, yr) {
                 IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: sim.cpiRate,
                 pensionIncome: yr.pension, iraIncome: yr.taxableRMD + _priorIRAInc + _gross,
                 qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-                hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+                hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
             });
             incrementalExtraConvTax = Math.max(0, _exTaxCalc.totalTax - (yr.totalTax - yr.IRMAA));
             yr.extraConvGross = _gross;
@@ -2157,7 +2177,7 @@ function applyConversionGrossUp(sim, yr) {
         IRMAAAnnualCost: 0, earnedIncome: baseEI + shadowIRA, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD + shadowIRA,
         qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-        hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+        hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
     });
     const dT = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowCalc.totalTax);
     const t = Math.min(0.6, dT / conversion);   // 0.6 is a numeric safety guard, not a business rate
@@ -2218,7 +2238,7 @@ function attributeIncrementalTaxes(sim, yr) {
             IRMAAAnnualCost: 0, earnedIncome: convShadowEI, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - yr.totalConverted),
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
         });
         yr.incrementalConvTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowConvCalc.totalTax);
     }
@@ -2233,7 +2253,7 @@ function attributeIncrementalTaxes(sim, yr) {
             IRMAAAnnualCost: 0, earnedIncome: excessShadowEI, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - excessCashOC),
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
+            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
         });
         yr.incrementalExcessTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowExcessCalc.totalTax);
     }

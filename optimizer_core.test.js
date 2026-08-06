@@ -494,8 +494,8 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
         cashYield: 0.02, dividendRate: 0.02,
     });
     assertNear(gk.totals.spend, 7393024.075002, 'GK total spend', 0.01);
-    assertNear(gk.totals.tax, 2087135.358516, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 8551902.042242, 'GK final net worth', 0.01);
+    assertNear(gk.totals.tax, 2082405.443748, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 8576168.460619, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
@@ -1066,12 +1066,16 @@ const FUNDING_ARMS = [
     { name: 'propwd 10%',     over: { strategy: 'propwd',   propWithdraw: 0.10, stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'propwd 50%',     over: { strategy: 'propwd',   propWithdraw: 0.50, stratRate: 0 },             iraStranded:  0, worst:      0 },
     { name: 'fixed',          over: { strategy: 'fixed' },                                                  iraStranded:  0, worst:      0 },
-    // Both moved when dividends/interest stopped being double-credited. RIBC IMPROVED: 2 stranded
-    // years -> 1, worst $73 -> $58. The convergence gap is a residual left when the third pass funds
-    // spending, recomputes tax, and nothing loops back for the tax that recompute created; a smaller
-    // phantom balance makes that residual smaller and, in 2027, removes it entirely.
-    { name: 'ordered CBIR',   over: { strategy: 'ordered',  orderedSeq: 'CBIR' },                           iraStranded:  2, worst: 90.32, convergence: true },
-    { name: 'ordered RIBC',   over: { strategy: 'ordered',  orderedSeq: 'RIBC' },                           iraStranded:  1, worst: 58.38, convergence: true },
+    // These moved twice. Fixing the dividend/interest double-credit took RIBC from 2 stranded years
+    // to 1; switching OBBBA on moved both again, CBIR to 3 and RIBC back to 2. The direction is not
+    // meaningful and the amounts are tiny ($10-$161). This is the convergence class: the third pass
+    // funds spending, recomputes tax, and nothing loops back for the tax that recompute just
+    // created. `ordered` is the one family excluded from the forced-IRA loop (optimizer_core.js
+    // gate), so unlike every other arm it has no second chance, and any change to the tax path
+    // reshuffles which years end a few dollars short. Raising the forced-IRA iteration cap does not
+    // help here for exactly that reason - ordered never enters that loop.
+    { name: 'ordered CBIR',   over: { strategy: 'ordered',  orderedSeq: 'CBIR' },                           iraStranded:  3, worst: 161.27, convergence: true },
+    { name: 'ordered RIBC',   over: { strategy: 'ordered',  orderedSeq: 'RIBC' },                           iraStranded:  2, worst: 58.38, convergence: true },
     { name: 'gk',             over: { strategy: 'gk',       gkGuard: 0.20, gkAdjPct: 0.10 },                iraStranded:  0, worst:      0 },
     { name: 'baseline else',  over: { strategy: '__unrecognized__' },                                       iraStranded:  0, worst:      0 },
     { name: 'aca lapsed',     over: { strategy: 'aca',      stratRate: 0, stratACAMultiple: 400 },          iraStranded:  0, worst:      0 },
@@ -1163,7 +1167,7 @@ test('P38: the primary draw funds the tax on guaranteed income, not the backstop
     // the residual). The drop from 395,109 is the measurement — that money was the tax on Social
     // Security and the RMDs, which the first-pass draw now covers directly instead of leaving for
     // the backstop to discover.
-    assertNear(_sumForcedIRA(r.log), 49130.306, 'forced-IRA total once the draw is sized correctly', 1);
+    assertNear(_sumForcedIRA(r.log), 41116.444, 'forced-IRA total once the draw is sized correctly', 1);
 });
 
 test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household', () => {
@@ -1182,6 +1186,72 @@ test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy house
     assert(t.totalTax > 0, 'the fixture must owe some tax, or the comparison is vacuous');
     assert(flat > t.totalTax * 2,
         `flat-rate sizing should be wildly high here; computed ${t.totalTax.toFixed(2)} vs flat ${flat.toFixed(2)}`);
+});
+
+// ── OBBBA reaches the simulation, and sunsets ────────────────────────────────
+// The senior deduction and the elevated SALT cap were implemented in taxengine.js AND unit-tested
+// in optimizer_tests.js - but those unit tests pass `obbaOn: true` themselves, and no call site in
+// optimizer_core.js ever did. Both flags default to false, so every simulated year ran without
+// them: federal tax too HIGH for anyone 65+ in 2025-2028. Exactly the shape of blind spot that hid
+// the dividend double-credit - the tax function was tested directly, its USE was not.
+//
+// calculateTaxes cannot gate these itself: it receives `inflation` but never a tax year, and the
+// sunsetYear values in TAXData.OBBBA are declarative, referenced by no code. The caller owns the
+// gate, so the caller is what has to be tested.
+const OBBBA_BASE = {
+    STATEname: 'AK', strategy: 'propwd', propWithdraw: 0, stratRate: 0,
+    stratIRMAATier: -1, stratACAMultiple: 0, nYears: 8,
+    birthyear1: 1950, birthmonth1: 1, die1: 95, birthyear2: 1950, birthmonth2: 1, die2: 95,
+    hasSpouse: true,
+    IRA1: 0, IRA2: 0, Roth: 0, Roth2: 0,
+    Brokerage: 2000000, BrokerageBasis: 2000000, Cash: 100000, CashReserve: null,
+    ss1: 0, ss1Age: 70, ss2: 0, ss2Age: 70,
+    pensionAnnual: 50000, pensionStartAge: 0, survivorPct: 75, pensionCola: false,
+    spendGoal: 70000, spendChange: 0, iraBaseGoal: 0,
+    inflation: 0, cpi: 0, growth: 0, cashYield: 0, dividendRate: 0,
+    ssFailYear: 2099, ssFailPct: 1, convertExcessToRoth: false, iraWithdrawPct: 0.05,
+    startYear: 2026, dividendReinvest: false,
+};
+
+test('OBBBA: the senior deduction reaches a simulated year, and expires after 2028', () => {
+    // Everything is frozen - zero inflation, zero growth, no gains (basis = value), no Social
+    // Security - so the ONLY thing that changes from year to year is the OBBBA gate. Both filers are
+    // 76, well past 65, and AGI is far below the $150k MFJ phase-out, so the full $12,000 applies.
+    const log = simulate({ ...OBBBA_BASE }).log;
+    const fed = y => log.find(e => e.year === y).FedTax;
+    for (const y of [2026, 2027, 2028]) {
+        assertNear(fed(y), 250, `federal tax in ${y} with the senior deduction`, 1);
+    }
+    for (const y of [2029, 2030]) {
+        assertNear(fed(y), 1450, `federal tax in ${y} after the deduction sunsets`, 1);
+    }
+    // The step is the deduction itself: $12,000 of income moving out of the 10% bracket.
+    assertNear(fed(2029) - fed(2028), 1200, 'the sunset step equals 12,000 x 10%', 1);
+});
+
+test('OBBBA: every tax call in a simulation is handed the year-gated flags', () => {
+    // Guards the defect directly. It was not that the flags were computed wrongly - they were never
+    // passed at all, so calculateTaxes silently used its `false` defaults. Spy on the global the
+    // engine resolves (optimizer_core.js calls calculateTaxes as a bare global, the classic-script
+    // contract it shares with the browser) and inspect what it actually receives.
+    const seen = [];
+    const real = globalThis.calculateTaxes;
+    globalThis.calculateTaxes = function (p) { seen.push({ obbaOn: p.obbaOn, saltHigh: p.saltHigh }); return real(p); };
+    try {
+        simulate({ ...OBBBA_BASE, nYears: 10 });   // 2026-2035, spans both sunsets
+    } finally {
+        globalThis.calculateTaxes = real;          // restore even if simulate throws
+    }
+    assert(seen.length > 0, 'setup: the simulation must actually call calculateTaxes');
+    const missing = seen.filter(s => s.obbaOn === undefined || s.saltHigh === undefined);
+    assert(missing.length === 0,
+        `${missing.length} of ${seen.length} calculateTaxes calls were not given obbaOn/saltHigh, ` +
+        `so they silently fell back to the false defaults`);
+    // And the gate must actually vary with the year, or it is hardcoded rather than gated.
+    assert(seen.some(s => s.obbaOn === true) && seen.some(s => s.obbaOn === false),
+        'obbaOn must be true before its 2028 sunset and false after, across a run that spans it');
+    assert(seen.some(s => s.saltHigh === true) && seen.some(s => s.saltHigh === false),
+        'saltHigh must be true before its 2029 sunset and false after');
 });
 
 // ── The one exception: a live ACA cap ─────────────────────────────────────────
@@ -1261,11 +1331,11 @@ test('P32 (not fixed here): minlimit strands spending with Brokerage still funde
     // move at all. That is worth recording: the two defects are independent. Removing the phantom
     // money did not free a single one of these nine years, because what strands them is the third
     // pass refusing to touch Brokerage, not how much Brokerage happens to be there.
-    assertNear(_worst(stranded), 9477.52, 'worst single-year unfunded amount with Brokerage left', 1);
-    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 71481.48,
+    assertNear(_worst(stranded), 9479.15, 'worst single-year unfunded amount with Brokerage left', 1);
+    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 71498.24,
         'total stranded across the nine years', 1);
     // The headline number: how much was sitting in Brokerage the first year it gave up.
-    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 926095.95,
+    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 932472.52,
         'Brokerage balance in the first year minlimit reported an unfunded shortfall', 1);
     assert(stranded.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
         'every stranded year must have Cash, Roth and IRA at zero — Brokerage is the only source left');
@@ -1433,8 +1503,13 @@ test('OC: brief positive blip then sustained negative through plan end → convB
     // non-negative for exactly the first year, then stays negative for every remaining year
     // (never recovers). The old first-touch .find() reported the year-0 blip as Break Even; the
     // correct answer is null (no sustained crossing exists).
-    const inputs = { ...OC_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.10,
-                     convertExcessToRoth: true, futureIRATaxRate: 0.34, die1: 80 };
+    // Retuned when OBBBA was switched on: the senior deduction lowers tax in 2026-2028, which
+    // shifted the year-0 blip from +$0.4k to -$77 and destroyed the shape the test needs. The
+    // PROPERTY is what matters (one non-negative year, then negative forever, so no sustained
+    // crossing exists), not the particular knobs. futureIRATaxRate 0.34 -> 0.35, die1 80 -> 78,
+    // iraWithdrawPct 0.10 -> 0.12 restores it with room to spare (year-0 convOC ~ +$365).
+    const inputs = { ...OC_BASE, strategy: 'fixedpct', iraWithdrawPct: 0.12,
+                     convertExcessToRoth: true, futureIRATaxRate: 0.35, die1: 78 };
     const r = simulate(inputs);
     const totalConv = r.log.reduce((s, x) => s + (x.rothConv ?? 0), 0);
     assert(totalConv > 100000, `expected substantial conversions, got ${totalConv}`);
@@ -1753,8 +1828,12 @@ test('P2 CashReserve: a healthy plan with a buffer never breaches', () => {
 // optimizeSpendDown.
 
 test('optimizeConversionAmount: GK sweep rejects a higher-scoring but spend-unstable conversion amount', () => {
+    // spendGoal 75,000 -> 80,000 when OBBBA was switched on: at 75k the $425k candidate stopped
+    // out-scoring $175k, so the setup assertion below (which exists to keep this test meaningful)
+    // no longer held. The test is about the stability GATE rejecting a higher-scoring candidate, so
+    // it needs a scenario where the unstable one really does score higher.
     const gkBase = { ...OC_BASE, strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10,
-                     IRA1: 1000000, spendGoal: 75000, growth: 0.05 };
+                     IRA1: 1000000, spendGoal: 80000, growth: 0.05 };
     // Without a stability gate, $425k/yr out-scores $175k/yr on raw finalNW alone...
     const unconstrained = simulate({ ...gkBase, extraConversionAmount: 425000 });
     const stableCandidate = simulate({ ...gkBase, extraConversionAmount: 175000 });
@@ -1764,7 +1843,7 @@ test('optimizeConversionAmount: GK sweep rejects a higher-scoring but spend-unst
     // its own guard band on future spend.
     const gated = optimizeConversionAmount(gkBase, { strategy: 'gk' }, 'finalNW');
     assert(gated.optConv < 425000, `gated sweep must not pick the unstable $425k candidate, got ${gated.optConv}`);
-    assertNear(gated.optConv, 175000, 'gated sweep should land on the largest still-stable candidate', 1);
+    assertNear(gated.optConv, 150000, 'gated sweep should land on the largest still-stable candidate', 1);
 });
 
 test('optimizeConversionAmount: non-GK strategies are unaffected by the stability gate', () => {

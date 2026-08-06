@@ -689,7 +689,7 @@ assertEqual(
     assertEqual(findUpperLimitByAmount('TEST', 'SGL', 998, 1), {"limit": 999,"rate": 0.1, "nominalRate": 0.1}, 
                 'findUpperLimitByAmount: TEST SGL 998 finds limit: 999, rate: 0.1');
 				
-	// getInputs() requires live DOM — test manually in retirement_optimizer.html or in a future Playwright/DOM test suite
+	// getInputs() requires live DOM - test manually in retirement_optimizer.html or in a future Playwright/DOM test suite
 	// assertEqual(getInputs(), { ... }, 'getInputs()')
 		
 
@@ -793,22 +793,22 @@ assertEqual(
   "error": "Invalid entity (TEST) or status (NONEXISTENT)"},
 		'calculateProgressive(TEST,NONEXISTENT,...) ok')
 
-	// INFLATION_INDEXED: false — MT/ND/AL/OH/SC brackets must NOT inflate regardless of passed inflation value.
+	// INFLATION_INDEXED: false - MT/ND/AL/OH/SC brackets must NOT inflate regardless of passed inflation value.
 	const mtBase     = calculateProgressive('MT', 'MFJ', 50000, 1.0);
 	const mtInflated = calculateProgressive('MT', 'MFJ', 50000, 1.1);
 	assertEqual(mtBase.total, mtInflated.total,
-		'MT (INFLATION_INDEXED:false) — bracket inflation ignored, tax same at inflation=1.1 vs 1.0')
+		'MT (INFLATION_INDEXED:false) - bracket inflation ignored, tax same at inflation=1.1 vs 1.0')
 	assertEqual(mtBase.marginal, mtInflated.marginal,
 		'MT marginal rate unchanged with inflation=1.1')
 	const ndBase     = calculateProgressive('ND', 'SGL', 60000, 1.0);
 	const ndInflated = calculateProgressive('ND', 'SGL', 60000, 1.1);
 	assertEqual(ndBase.total, ndInflated.total,
-		'ND (INFLATION_INDEXED:false) — bracket inflation ignored')
-	// CA IS indexed — inflation=1.1 widens brackets → less tax at same income
+		'ND (INFLATION_INDEXED:false) - bracket inflation ignored')
+	// CA IS indexed - inflation=1.1 widens brackets → less tax at same income
 	const caBase     = calculateProgressive('CA', 'MFJ', 200000, 1.0);
 	const caInflated = calculateProgressive('CA', 'MFJ', 200000, 1.1);
 	assertEqual(caBase.total > caInflated.total, true,
-		'CA (indexed) — inflation=1.1 widens brackets, lowers tax vs inflation=1.0')
+		'CA (indexed) - inflation=1.1 widens brackets, lowers tax vs inflation=1.0')
 
 	assertEqual(Math.round(calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30),0), 57830,
 		'calculateInflationAdjustedWithdrawal(1000000, 0.07, 0.03, 30) (growth > inflation)')
@@ -1150,7 +1150,7 @@ assertEqual(
 			capGains: 0,
 			taxExemptInterest: 0,
 			hsaContrib: 0,
-			inflation: 1.5,  // 50% inflation — old code would inflate thresholds
+			inflation: 1.5,  // 50% inflation - old code would inflate thresholds
 			state: 'TESTTAXATION'
 		});
 
@@ -1165,7 +1165,7 @@ assertEqual(
 	} // testCase9_SSThresholdsNotInflated()
 
 	// ============================================================================
-	// TEST CASE 10: OBBBA senior deduction — full (below phase-out)
+	// TEST CASE 10: OBBBA senior deduction - full (below phase-out)
 	// ============================================================================
 	function testCase10_OBBASeniorDeductionFull() {
 		console.log('\n=== Test Case 10: OBBBA Senior Deduction Full (below phase-out) ===');
@@ -1195,7 +1195,7 @@ assertEqual(
 	} // testCase10_OBBASeniorDeductionFull()
 
 	// ============================================================================
-	// TEST CASE 11: OBBBA senior deduction — partial phase-out
+	// TEST CASE 11: OBBBA senior deduction - partial phase-out
 	// ============================================================================
 	function testCase11_OBBASeniorDeductionPartial() {
 		console.log('\n=== Test Case 11: OBBBA Senior Deduction Partial Phase-Out ===');
@@ -1222,7 +1222,7 @@ assertEqual(
 	} // testCase11_OBBASeniorDeductionPartial()
 
 	// ============================================================================
-	// TEST CASE 12: OBBBA senior deduction — fully phased out
+	// TEST CASE 12: OBBBA senior deduction - fully phased out
 	// ============================================================================
 	function testCase12_OBBASeniorDeductionZero() {
 		console.log('\n=== Test Case 12: OBBBA Senior Deduction Fully Phased Out ===');
@@ -1426,7 +1426,7 @@ assertEqual(
 
 	// ============================================================================
 	// TEST CASE 19: IL / PA full retirement exclusion regression (unchanged by the
-	// generalized RETIREMENT_EXCLUSION evaluator — mode:'full' behavior is untouched)
+	// generalized RETIREMENT_EXCLUSION evaluator - mode:'full' behavior is untouched)
 	// ============================================================================
 	function testCase19_ILPARetirementExclusionRegression() {
 		console.log('\n=== Test Case 19: IL/PA Full Retirement Exclusion (regression) ===');
@@ -1455,7 +1455,7 @@ assertEqual(
 	} // testCase19_ILPARetirementExclusionRegression()
 
 	// ============================================================================
-	// TEST CASE 20: GA cap mode — per-person age-tiered cap (ageGateTiers)
+	// TEST CASE 20: GA cap mode - per-person age-tiered cap (ageGateTiers)
 	// ============================================================================
 	function testCase20_GAAgeTieredCap() {
 		console.log('\n=== Test Case 20: Georgia Age-Tiered Retirement Cap ===');
@@ -1474,7 +1474,7 @@ assertEqual(
 	} // testCase20_GAAgeTieredCap()
 
 	// ============================================================================
-	// TEST CASE 21: CT phaseout mode — graduated % exclusion by federal AGI
+	// TEST CASE 21: CT phaseout mode - graduated % exclusion by federal AGI
 	// ============================================================================
 	function testCase21_CTPhaseoutMode() {
 		console.log('\n=== Test Case 21: Connecticut Retirement Income Phaseout ===');
@@ -1493,7 +1493,7 @@ assertEqual(
 	} // testCase21_CTPhaseoutMode()
 
 	// ============================================================================
-	// TEST CASE 22: OH credit mode — post-tax dollar credit, tiered + MAGI-gated
+	// TEST CASE 22: OH credit mode - post-tax dollar credit, tiered + MAGI-gated
 	// ============================================================================
 	function testCase22_OHRetirementCredit() {
 		console.log('\n=== Test Case 22: Ohio Retirement Income Credit ===');
@@ -1520,7 +1520,7 @@ assertEqual(
 	} // testCase22_OHRetirementCredit()
 
 	// ============================================================================
-	// TEST CASE 23: AL array-of-rules — disjoint types, pension full-exempt + IRA capped
+	// TEST CASE 23: AL array-of-rules - disjoint types, pension full-exempt + IRA capped
 	// ============================================================================
 	function testCase23_ALArrayOfRules() {
 		console.log('\n=== Test Case 23: Alabama Array-of-Rules (pension full + IRA cap) ===');
@@ -1563,7 +1563,7 @@ assertEqual(
 		assertEqual(bal.Cash, 12300, 'Brokerage dividends (not reinvested) flow to Cash');
 	}
 
-	// Brokerage: dividend reinvestment — dividends add to Brokerage and Basis
+	// Brokerage: dividend reinvestment - dividends add to Brokerage and Basis
 	{
 		const bal = { Brokerage: 100000, BrokerageBasis: 60000, Cash: 10000 };
 		const rates = { Brokerage: 0.06, BrokerageBasis: 0.06, Cash: 0.03 };
@@ -1617,12 +1617,12 @@ assertEqual(
 		assertEqual(bal.Roth, 84800, 'Roth: balance after 6% growth');
 	}
 
-	// (d) Roth: grows independently — dividends do NOT flow to Roth externally (no entry in growthRates for dividends)
+	// (d) Roth: grows independently - dividends do NOT flow to Roth externally (no entry in growthRates for dividends)
 	{
 		const bal = { Roth: 80000, Cash: 10000 };
 		const rates = { Roth: 0.06, Cash: 0.03 };
 		applyGrowth(bal, rates, 12);
-		// Brokerage dividends go to Cash, not Roth — Roth only grows via its own rate
+		// Brokerage dividends go to Cash, not Roth - Roth only grows via its own rate
 		assertEqual(bal.Roth, 84800, 'Roth: does not receive external dividends');
 	}
 
@@ -1638,7 +1638,7 @@ assertEqual(
 	}
 
 	// ============================================================================
-	// FIXED STRATEGY TESTS  (a) — "Convert in N Years" shortfall investigation
+	// FIXED STRATEGY TESTS  (a) - "Convert in N Years" shortfall investigation
 	// ============================================================================
 	console.log('\n=== Fixed Strategy (Convert in N Years) Tests ===');
 
@@ -1676,7 +1676,7 @@ assertEqual(
 		assertEqual(afterNYears.TotalIRA < 250000, true, 'Fixed strategy: IRA balance reduces over N years');
 	}
 
-	// (a-3) Very small IRA — fallback to Brokerage/Cash covers spending
+	// (a-3) Very small IRA - fallback to Brokerage/Cash covers spending
 	{
 		const smallIRAInputs = { ...baseInputs, IRA1: 30000, IRA2: 0, nYears: 3 };
 		const result = simulate(smallIRAInputs);
@@ -1694,7 +1694,7 @@ assertEqual(
 		assertEqual(result.totals.success, true, 'Fixed strategy: adequate portfolio reports success');
 	}
 
-	// (a-5) RMD tracking works correctly — totals.rmd accumulates
+	// (a-5) RMD tracking works correctly - totals.rmd accumulates
 	{
 		// Use an older birth year so RMDs kick in
 		const rmdInputs = { ...baseInputs, birthyear1: 1945, die1: 90, IRA1: 500000 };
@@ -1706,7 +1706,7 @@ assertEqual(
 
 	// (a-6) IRA Goal is interpreted in TODAY'S dollars and inflated (CPI) to each year,
 	//        so the drawdown target rises over time and the IRA lands near the CPI-inflated
-	//        goal at year N — clearly above the flat-nominal entry. gapYears is 0 here
+	//        goal at year N - clearly above the flat-nominal entry. gapYears is 0 here
 	//        (startYear <= current year), so the inflation factor is (1+cpi)^(N-1).
 	{
 		const goalToday = 150000;
@@ -1744,7 +1744,7 @@ assertEqual(
 	}
 
 	// ============================================================================
-	// INFLATION SEQUENCE TESTS  (Phase 7 — inflationSequence per-path sampling)
+	// INFLATION SEQUENCE TESTS  (Phase 7 - inflationSequence per-path sampling)
 	// ============================================================================
 	console.log('\n=== inflationSequence (Phase 7) Tests ===');
 
@@ -1804,7 +1804,7 @@ assertEqual(
 		  overrides: { strategy: 'fixed',   nYears: 5,          convertExcessToRoth: false } },
 	];
 
-	// Wealthy scenario — large portfolio, conservative spend — forward optimizer should find higher spend
+	// Wealthy scenario - large portfolio, conservative spend - forward optimizer should find higher spend
 	const wealthyInputs = {
 		...baseInputs,
 		IRA1: 1500000, IRA2: 0, Roth: 300000,
@@ -1813,7 +1813,7 @@ assertEqual(
 		birthyear1: 1960, die1: 90
 	};
 
-	// Strained scenario — decent portfolio, high spend — all strategies fail at baseline, but lower spend works
+	// Strained scenario - decent portfolio, high spend - all strategies fail at baseline, but lower spend works
 	const strainedInputs = {
 		...baseInputs,
 		IRA1: 800000, IRA2: 0, Roth: 0,
@@ -1822,7 +1822,7 @@ assertEqual(
 		birthyear1: 1960, die1: 90
 	};
 
-	// Impossible scenario — tiny portfolio, even 10% of spendGoal is unsustainable
+	// Impossible scenario - tiny portfolio, even 10% of spendGoal is unsustainable
 	const impossibleInputs = {
 		...baseInputs,
 		IRA1: 3000, IRA2: 0, Roth: 0,
@@ -1867,7 +1867,7 @@ assertEqual(
 
 	// (opt-5) Reverse optimizer: converges near the true ceiling, not just any passing value.
 	// strainedInputs: IRA1=800k, spendGoal=300k. MIN_SPEND=6k. Sustainable ceiling is ~30-40k
-	// (≈4% of 800k). Verify the result is at least 4x MIN_SPEND (24k) — well above the floor
+	// (≈4% of 800k). Verify the result is at least 4x MIN_SPEND (24k) - well above the floor
 	// but safely below the expected ceiling, so this catches regressions where the search
 	// short-circuits at MIN_SPEND.
 	{
@@ -1981,7 +1981,7 @@ assertEqual(
 	}
 
 	// ============================================================================
-	// IRMAA MEDICARE AGE GATE — surcharge/tier/base-premium only for spouses 65+
+	// IRMAA MEDICARE AGE GATE - surcharge/tier/base-premium only for spouses 65+
 	// ============================================================================
 	console.log('\n=== IRMAA Medicare Age Gate Tests ===');
 
@@ -2035,7 +2035,7 @@ assertEqual(
 	console.log('\n=== Brokerage Gap-Fill Spiral Regression Tests ===');
 
 	// (gap-1) No spurious shortfall when brokerage has high unrealized gains and a gap
-	// requires withdrawal — non-bracket strategy, status stays MFJ throughout.
+	// requires withdrawal - non-bracket strategy, status stays MFJ throughout.
 	// The 3rd-pass fix prevents: brokerage withdrawal → higher cap gains → higher SS taxation
 	// → residual gap → more brokerage → spiral.
 	{
@@ -2084,7 +2084,7 @@ assertEqual(
 		}
 	}
 
-	// (gap-3) Genuine shortfall (truly exhausted portfolio) still fires — fix must not suppress real shortfalls.
+	// (gap-3) Genuine shortfall (truly exhausted portfolio) still fires - fix must not suppress real shortfalls.
 	{
 		const r = simulate({
 			...baseInputs,
@@ -2172,7 +2172,7 @@ assertEqual(
 		refreshStratRateOptions();
 		const aca = [...sel.options].filter(o => o.value.startsWith('aca'));
 		assertEqual(aca.length, 4, 'all four ACA FPL options are offered without nerdknob');
-		// The 400% entry carried a hardcoded ⚠️ that nothing computed — it fired even when 400% was
+		// The 400% entry carried a hardcoded ⚠️ that nothing computed - it fired even when 400% was
 		// the only feasible arm and stayed silent on a 200% cap that could fund nothing. Feasibility
 		// needs a simulation, so the honest signal is the Optimizer's computed row flag.
 		assertEqual(aca.some(o => /⚠/.test(o.textContent)), false,

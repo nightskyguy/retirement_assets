@@ -441,10 +441,10 @@ The list of click bait presenters would be very long.
 #### Papers by Edward McQuarrie 
 Edward McQuarrie is a former professor at Santa Clara University School of Business, in California. He has tackled several topics, including the "payout" of *Roth Conversions* and the Widow's Tax *penalty*. His conclusion is that generally for the mass affluent, Roth conversions do not pay off.  He has three papers on the topic, and a fourth that is thought provoking. I would call him a *responsible contrarian* - meaning he doesn't just espouse opinions, he backs them with math and facts.
 
-1. [Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN)
-2. [When and For Whom Are Roth Conversions - 2021](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3860359) - download the paper from there. This is his original paper on the subject.
-3. [Widow Tax Hit Debunked - 2023](https://www.financialplanningassociation.org/learning/publications/journal/DEC23-widow-tax-hit-debunked-OPEN) - McQuarrie illustrates that the "widows tax" is overstated. I think he errs in saying it's **debunked** because his numbers illustrate the reality of the survivor penalty - and worse numbers can be had.
-4. [Charts you Never Saw - 2025](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3050736) - McQuarrie shows an even longer market timeframe which illuminates the reality that "the market always returns value in the long term" is a bit illusory.
+1. [2024 Net Present Value Analysis of Roth Conversions](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN). This is his latest, and perhaps most concise paper on the topic.
+2. [2021 When and For Whom Are Roth Conversions](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3860359) - download the paper from there. This is his original paper on the subject.
+3. [2023 Widow Tax Hit Debunked](https://www.financialplanningassociation.org/learning/publications/journal/DEC23-widow-tax-hit-debunked-OPEN) - McQuarrie illustrates that the "widows tax" is overstated. I think he errs in saying it's **debunked** because his numbers illustrate the reality of the survivor penalty - and worse numbers can be had.
+4. [2025 Charts you Never Saw](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3050736) - McQuarrie shows an even longer market timeframe which illuminates the reality that "the market always returns value in the long term" is a bit illusory.
 
 I notice that he is releasing a book with Bill Bernstein (a prolific author of financial books) in March 2027 called "[Retirement: How to save enough, invest it well, and make your money last](https://www.amazon.com/Retirement-save-enough-invest-money-ebook/dp/B0GQWCS15F)"
 
@@ -464,12 +464,12 @@ You CANNOT solve the timeliness problem by plunking down your tax debt when you 
 
 The easiest solution to the "when were taxes paid" problem is to have taxes withheld from withdrawals or conversions. The IRS and most state goverments treat withholding as if you paid the amounts quarterly. BUT, most custodians will NOT allow you to withhold taxes from an Roth withdrawal.  This means you have three ways to solve the "timely payment" problem: 
 A. Estimate your taxes and pay them quarterly.  (But if you miss a payment, expect late penalties!)
-B. Have the appropriate amount of taxes **withheld** from a taxable distribution to cover the years worth of taxes (or at least enought to reach "Safe Harbor").
+B. Have the appropriate amount of taxes **withheld** from a taxable distribution to cover the years worth of taxes (or at least enough to reach "Safe Harbor").
 C. File a form with the IRS (Form 2210, Schedule A) that explains why your income was "lumpy" and you didn't meet the expected timely payment requirement.
 
 Option B allows another workaround: Suppose you convert 10k from your IRA to your Roth. You can have taxes withheld from the conversion, and WITHIN 60 days, make your Roth whole by adding cash into the Roth.
 
-An earlier version of this README said that maneuver was limited to **once every 365 days**. That was wrong, and it *overstated* the restriction. The once-per-12-months limit is [IRC 408(d)(3)(B)](https://www.law.cornell.edu/uscode/text/26/408), and it applies to **IRA-to-IRA** 60-day rollovers. The IRS lists the transactions that are excluded from it, and "rollovers from traditional IRAs to Roth IRAs (conversions)" is one of them ([IRS, Rollovers of retirement plan and IRA distributions](https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions)). The IRS says elsewhere that Roth conversions "are not subject to the one-per-year limit and are disregarded in applying the limit to other rollovers" ([IR-2014-107 / Announcement 2014-32](https://www.irs.gov/uac/newsroom/irs-clarifies-application-of-one-per-year-limit-on-ira-rollovers-allows-owners-of-multiple-iras-a-fresh-start-in-2015)). So you can withhold-and-replace on every conversion you do, in the same year, in both spouses' IRAs, and doing so does not use up your one ordinary IRA-to-IRA rollover.
+An earlier version claimed that maneuver was limited to *once every 365 days*. That was wrong, and it *overstated* the restriction. The once-per-12-months limit is [IRC 408(d)(3)(B)](https://www.law.cornell.edu/uscode/text/26/408), and it applies to **IRA-to-IRA** 60-day rollovers. The IRS lists the transactions that are excluded from it, and "rollovers from traditional IRAs to Roth IRAs (conversions)" is one of them ([IRS, Rollovers of retirement plan and IRA distributions](https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions)). The IRS says elsewhere that Roth conversions "are not subject to the one-per-year limit and are disregarded in applying the limit to other rollovers" ([IR-2014-107 / Announcement 2014-32](https://www.irs.gov/uac/newsroom/irs-clarifies-application-of-one-per-year-limit-on-ira-rollovers-allows-owners-of-multiple-iras-a-fresh-start-in-2015)). So you can withhold-and-replace on every conversion you do, in the same year, in both spouses' IRAs, and doing so does not use up your one ordinary IRA-to-IRA rollover.
 
 Two things about the maneuver are still real limits. First, the exclusion covers the *conversion*. If you withhold from an RMD or from a plain IRA withdrawal and then try to replace that money, you are doing an ordinary IRA-to-IRA rollover, which really is once per 12 months, and RMD dollars cannot be rolled over at all. Second, it only makes sense if you are at least 59.5 years old. Under 59.5, any withheld dollars you fail to replace inside the 60 days are a distribution you did not convert, so they are ordinary income **plus** a 10% early-distribution penalty. That penalty, not a 365-day clock, is the actual trap.
 
@@ -479,9 +479,71 @@ Safe Harbor is another "gotcha" in the tax code. If you "timely" pay 90% of your
 
 More on Option C: [Form 2210, Schedule AI](https://www.irs.gov/forms-pubs/about-form-2210) is the annualized income installment method. It recomputes each quarter's required payment from the income you actually had by that point, so a conversion done in Q3 or Q4 is charged to the quarter it arose in instead of being spread back across the whole year. It can erase an early-quarter penalty with no withholding at all. The cost is an extra form plus quarter-by-quarter records of income, deductions, and withholding. It changes the penalty computation only, never the tax you owe. The Tax Payment Planner names Schedule AI when your conversion lands late in the year and a shortfall remains, but it does not compute the result.
 
+#### Roth Conversion Tax Withholding and Repayment
+
+Because you can "withdraw" 30k from your IRA, have 10k withheld for taxes (or any amount?) and within 60 days repay that withheld taxes, it made me wonder how that works. That is, what paper trail does the IRS use to determine whether you've done a "$10k CONTRIBUTION" (which requires income and exceeds current limits) vs a "conversion". The IRS doesn't distinguish these by watching the transaction happen - it relies on two separate information returns from your custodian(s), then matches them via a form you file.
+
+Your IRA custodian sends a 1099-R reporting a $30k gross distribution from the traditional IRA (with a distribution code indicating IRA money, e.g. code 2 or 7). It flags $30k as having left the IRA - it does not know or care where it ended up. Your Roth custodian sends a 5498 reporting what it actually received as a "conversion contribution" - in this example, $20k (the amount that actually landed in the Roth).
+
+On your tax return, you file Form 8606, Part II, where you report the conversion amount. The IRS's matching system essentially reconciles the 1099-R (money out) against the 5498s (money in) and your 8606. If only $20k shows up as converted while $30k left the IRA, the other $10k is just a taxable distribution - subject to ordinary income tax and, if you're under 59½, the 10% early-withdrawal penalty (conversions are exempt from that penalty, plain distributions aren't).
+
+If you then make up the withheld $10k out of pocket and deposit it into the Roth within 60 days, that deposit generates its own 5498 as a 60-day rollover contribution. Now the two 5498s together show $30k converted, matching the $30k on the 1099-R, and you report the full $30k as converted on Form 8606 - no penalty, though the withheld amount was still paid to the IRS as tax (that's separate from the taxability of the conversion itself, since conversions are fully taxable either way).
+
+So there's no ambiguity resolved after the fact by IRS guesswork - it's a paper trail (1099-R + 5498s + your 8606) that either reconciles to $30k converted or leaves a $10k gap taxed as a straight distribution - or if under 59.5 invokes a penalty.
+
+My understanding of this implies something else: even if you are **under 59.5 you can have taxes withheld from the conversion** and make them up within 60 days. The conventional wisdom is that withholding taxes counts as a distribution and the 10% penalty will apply. But not if you timely repay! Note that missing the 60 day replacement WILL result in a penalty which may be waived if you show good cause. "I forgot" will not be acceptable, but "I was in a coma in the hospital" might work. Check with your tax attorney before you try this, laws change and I am not a tax attorney!
+
+
+##### Scenario 1: $30k moved, no withholding
+
+You convert $30k directly from the traditional IRA to the Roth. No 1099-R withholding involved. The Roth custodian's 5498 shows a $30k conversion contribution, matching the $30k distribution, and the full $30k is taxable ordinary income for the year.
+
+##### Scenario 2: $30k withdrawn, $10k moved, $20k withheld and replaced
+
+The IRA distributes $30k. $10k goes straight to the Roth as a conversion contribution. $20k is withheld for taxes. Within 60 days, you deposit $20k of outside funds into the Roth. The 5498s show $10k as a conversion contribution plus $20k as a rollover contribution, totaling $30k, which matches the 1099-R. Form 8606 reports the full $30k as converted, and it's fully taxable, same as scenario 1.  A more dramatic scenario: $30k withdrawn/withheld and all of it replaced.
+
+
+Each produces an identical tax result: $30k converted, $30k taxable, no penalty (since you're over 59½ regardless). The only real-world differences are cash flow (how much outside money you need on hand to make the replacement deposit) and the 60-day deadline for scenarios 2 and 3.
+
+##### Likely custodian friction
+
+Fidelity's online tools generally don't let you attach withholding to a Roth conversion request done through the website. According to Fidelity's own one-time IRA withdrawal form, you can elect withholding up to 100% for a one-time distribution, but that's on the distribution form, not the conversion tool, and doing a heavily-withheld conversion (like scenarios 2 or 3) often requires calling Fidelity or using paper forms to process it as a distribution paired with a separate rollover contribution into the Roth, rather than a single "convert" action.
+
+Schwab has a similar pattern: its standard online Roth conversion flow is built for a clean, no-withholding conversion, and getting withholding attached, especially at high percentages, typically means going through a distribution request rather than the conversion tool, and may require a phone call or paper form as well.
+
+In both cases, the practical friction isn't a tax-law limit (the IRS is fine with any of these three outcomes), it's that the custodians' online systems are optimized for straightforward conversions and aren't well set up for "distribute with heavy withholding, then separately roll over cash into the Roth." Expect to talk to a rep or file paper forms for scenarios 2 and 3, especially scenario 3 with 100% withholding.
+
+**Sources:**
+- [Fidelity IRA one-time withdrawal form](https://www.fidelity.com/bin-public/060_www_fidelity_com/documents/customer-service/withdrawals-ira-one-time.pdf)
+- [Bogleheads: Fidelity, must call them to have withholding for Roth conversion](https://www.bogleheads.org/forum/viewtopic.php?t=455838)
+- [Bogleheads: Roth conversion, tax payment options](https://www.bogleheads.org/forum/viewtopic.php?t=457507)
+
+---
+
+##### Proposed "friction reduction"
+
+If your custodian doesn't allow withholding from a conversion, you can perform the scenarios as follows:
+
+- **Scenario 1:** Just a conversion. No extra work.
+
+- **Scenario 2:** Direct convert the $20k; withdraw and withhold 100% of $10k; replace $10k before 60 days using available funds.  Or more extreme: withdraw+withhold $30k and replace with available funds.
+
+
+**Scenario 2 (revised):** This works, and it's arguably better than the original mechanics for exactly the friction reason identified - it splits one messy transaction into three clean ones. A $20k "plain" conversion (no withholding attached) is precisely what Fidelity's/Schwab's online conversion tools are built for. A $10k "plain" distribution with 100% withholding, paid to yourself rather than routed to the Roth, is precisely what the one-time withdrawal form is built for (Fidelity's own form allows up to 100% withholding). Neither leg asks the custodian's software to do the thing it doesn't support (attach withholding to a conversion). For the replacement ($10k with outside cash), deposited into the Roth within 60 days. The custodian will report it as a rollover contribution on the 5498; combined with the $20k conversion contribution, the two 5498s total $30k, matching the $30k across your two 1099-Rs, and Form 8606 aggregates it into $30k converted/taxable - same result as the original scenario 2, just assembled from two ordinary transactions instead of one hybrid one.
+
+One mechanical point worth flagging: since this produces two separate 1099-Rs and two separate 5498s instead of one of each, whoever preps the return needs to make sure both get aggregated correctly on Form 8606 rather than one being overlooked.
+
+**Sources:**
+- [Rollovers of retirement plan and IRA distributions | IRS](https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions)
+- [Publication 590-A (2025), Contributions to IRAs | IRS](https://www.irs.gov/publications/p590a)
+
+---
+
+*Not tax or legal advice - consult a CPA or tax advisor before executing any of these scenarios.*
+
 #### Moldy Brackets
 
-While the Social Security payments are adjusted annually by the CPI (Consumer Price Index), the rate at which Social Security is taxed is based on thresholds have NEVER been adjusted for inflation since they were established (1983 for 50%, and 1993 for 85%). This is no doubt why congress has churned and churned on trying to make Social Security non taxable.
+While the Social Security payments are adjusted annually according to the CPI (Consumer Price Index), the rate at which Social Security is taxed is based on thresholds have NEVER been adjusted for inflation. When taxation of Social Security began (1983 for 50%, and 1993 for 85%) the thresholds were established and have not changed since. Each "fix" to the Social Security system to prevent bankruptcy is anchored in the time that Social Security became increasingly taxed.
 
 #### IRMAA Escalation
 
@@ -591,7 +653,7 @@ The **Cash Reserve** setting and **Dividend Reinvestment (DRIP)** are independen
 
 **Dividend Reinvestment** separately controls where annual dividends go:
 - If DRIP is **ON**: Dividends stay in the **Brokerage** account, reinvested at market growth rates. The basis steps up, so future capital gains are smaller.
-- If DRIP is **OFF**: Dividends flow to the **Cash** account, growing at the cash yield rate (usually 4–5%, vs. 7–10%+ market returns).
+- If DRIP is **OFF**: Dividends flow to the **Cash** account, growing at the cash yield rate (up to about 3%, vs. 7-10%+ market returns).
 
 **The interaction:** Turning off DRIP diverts dividends from Brokerage to Cash, which fills your reserve faster but sacrifices market-rate compounding. Conversely, DRIP ON keeps dividends invested at higher returns, leaving your regular surplus to fill the buffer.
 
@@ -623,9 +685,9 @@ Note: the *High spending year* and *Healthcare crisis* scenarios below are not m
 **Cash interest always stays in the Cash account.** It doesn't move to Brokerage or anywhere else.
 
 Here's what happens each year:
-- Your Cash balance grows by the cash yield rate (e.g., 4.5% on $50,000 = $2,250 interest)
+- Your Cash balance grows by the cash yield rate (e.g., 3% on $50,000 = $1,500 interest)
 - That interest accrues directly in Cash and is reinvested there
-- It's taxed as **ordinary income** (not the lower qualified dividend rate)—meaning your full marginal tax rate applies
+- It's taxed as **ordinary income** (not the lower qualified dividend rate) - meaning your full marginal tax rate applies
 
 **Contrast with dividends:**
 - Dividends (with DRIP ON) move to Brokerage, reinvest at market rates, taxed at qualified rates
@@ -633,11 +695,11 @@ Here's what happens each year:
 - Interest has no qualified treatment; it's always ordinary income
 - Dividends from some sources may be tax free or only taxable to the Federal or State government.
 
-**Why it matters:** If you maintain a large Cash Reserve, the interest compounds annually, but the after-tax return is lower due to ordinary income taxation. This is one reason the tool recommends enabling DRIP—to capture market-rate growth in Brokerage rather than letting cash balances idle at low yields. On the other hand, if you regularly will spend the cash, then having it available in the cash account is more convenient.
+**Why it matters:** If you maintain a large Cash Reserve, the interest compounds annually, but the after-tax return is lower due to ordinary income taxation. This is one reason the tool recommends enabling DRIP - to capture market-rate growth in Brokerage rather than letting cash balances idle at low yields. On the other hand, if you regularly will spend the cash, then having it available in the cash account is more convenient.
 
 ### Does the brokerage account for "cash"?
 
-No—**Cash** and **Brokerage** are two separate accounts in the model.
+No - **Cash** and **Brokerage** are two separate accounts in the model.
 
 **Brokerage** holds stocks, bonds, and investments. It:
 - Grows at your specified market growth rate
@@ -646,7 +708,7 @@ No—**Cash** and **Brokerage** are two separate accounts in the model.
 - Can receive dividend reinvestments (if DRIP ON), which step up the basis
 
 **Cash** is your high-yield savings or money market fund. It:
-- Grows at the cash yield rate (typically 4–5%, not market rates)
+- Grows at the cash yield rate (up to about 3%, not market rates)
 - Never has capital gains (interest is ordinary income)
 - Serves as your spending pool and reserve buffer
 - Can receive dividends if DRIP is OFF
@@ -666,7 +728,7 @@ The tool provides a built-in diagnostic called **Stop-Year** that identifies the
 2. **Look for the "Break Even ⓘ" diagnostic**
    - It shows the first year your plan's after-tax wealth permanently overtakes a no-conversion scenario
    - This is a milestone, but *not* always the best stopping point
-3. **The Stop-Year suggestion** appears as: *"Stop after 2031 — gain $125k vs converting through 2040, gain $340k vs never converting"*
+3. **The Stop-Year suggestion** appears as: *"Stop after 2031 - gain $125k vs converting through 2040, gain $340k vs never converting"*
    - This is the year that *maximizes* your after-tax wealth
    - Click **"Stop after YYYY ▸"** to apply it one-click
    - It often differs from Break-Even by significant amounts ($662k+ in some scenarios)

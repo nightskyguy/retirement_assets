@@ -311,7 +311,9 @@ everything added later.
 
 ### Work items
 
-1. **Pre-commit hook first, on its own.** — **DONE 2026-08-06, uncommitted.** `.githooks/pre-commit`
+1. **Pre-commit hook first, on its own.** — **DONE 2026-08-06, committed `ad9529f`** on branch
+   `p39-pr1-precommit-hook`; the completeness check followed in `475a2c4` on
+   `p39-pr4-hook-completeness`. `.githooks/pre-commit`
    (committed, real logic) + `.githooks/install` (writes a delegating shim) + `.githooks/README.md`,
    documented in `ARCHITECTURE.md` and `FILE_DIRECTORY.md`. Nothing user-visible, so **no version
    bump and no changelog entry**, same precedent as P35 PR 1 + PR 2.

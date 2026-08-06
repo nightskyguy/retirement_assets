@@ -1589,3 +1589,46 @@ zero CR bytes.
 
 **Still open in P39:** items 2-6 (slow tags, dual-mode port, idle runner + three-state badge,
 staleness guard, `?runtests=all`). The hook is the guarantee; those restore confidence in the badge.
+
+## 2026-08-06 (cont.) — P40 costing, and nine doc defects fixed
+
+User proposed two repo-wide changes before P39 continued: a test naming convention (`XXXX.tests.js`)
+and a `tests/` or `.tests/` subfolder. Costed against a 189-occurrence / 25-file reference inventory
+and against `d0f4a00`, this repo's own last rename (11 files, 20 insertions, 18 deletions).
+
+**Three findings decided the shape of the answer, all measured:**
+
+1. **`.tests/` is disqualified, and not for the obvious reason.** Jekyll skips dot-directories and
+   `.nojekyll` is forbidden here — but the decisive fact is that `python -m http.server` and
+   `file://` **both serve dot-directories**, so `.tests/` passes every pre-merge check and fails only
+   in production. What then breaks is silent, not loud: `runTests?.()` at
+   `retirement_optimizer.html:1136` throws `ReferenceError` on an *undeclared* identifier, killing
+   `runSimulation?.()` at `:1138`.
+2. **`node optimizer_tests.js` exits 0 having run nothing** — 2197 lines, `function runTests()` at
+   `:3`, never called, no `module.exports`. The hook prints `ok` for anything exiting 0, so any glob
+   that swallows the release gate manufactures a permanent false green. `*.tests.js` is safe only
+   because `_tests.js` does not match it.
+3. **The cheap win was never the rename.** Proposal 1's real intent is a *completeness* check —
+   assert the on-disk suite set equals the hook's list — which catches a newly added suite being
+   omitted. A naming rule catches nothing; there is no CI here at all (no `.github/`, no
+   `package.json`), so "enforcement" means one opt-in, `--no-verify`-bypassable hook.
+
+**User decisions:** rename the three node suites only (`optimizer_tests.js` untouched); defer the
+`tests/` move until after P39 items 2-6; reject `.tests/` permanently. Recorded as **Phase P40**.
+
+**PR 1 committed** (`5f98207`): the P39 hook, `.gitattributes`, docs. Hook fired on its own commit.
+
+**PR 2, this commit — nine doc defects, all verified against source, zero runtime risk:**
+`FILE_DIRECTORY.md:68` called the release gate "Older/legacy" · `ARCHITECTURE.md:292` and the mermaid
+label at `:52` both claimed `vm.runInContext` **and** "no DOM stubs" (0 hits for `vm`; `window` and
+`document` are stubbed at `:23-25`) · `ARCHITECTURE.md:310` cited `:67` for a require at `:66` ·
+the "`doclinks.test.js` reads files from disk" claim was **false** in three places and was P39 item
+3's stated reason for excluding it · "5 requires" was 4 (the 5th grep hit is a comment at `:18`) ·
+"260 tests" was 268 · two open phases (P6, P23) still instructed work in
+`retirement_optimizer_core.test.js`, renamed away in `d0f4a00`, and P23 also referenced a "vm test
+context" that has not existed since `86e26fa`.
+
+**Deliberately NOT fixed:** the same stale filenames at `task_plan.md:938` and `:1052`. Those sit in
+**shipped** phase records (PF5 v11.11dc, PF v11.11c1) where the names were correct when written —
+rewriting them would falsify the record. Only live, forward-looking instructions were corrected.
+Mechanical name churn across the remaining ~80 `.planning/` mentions stays out of scope.

@@ -65,7 +65,7 @@ same stub pattern, just within `standalone/` rather than at root.)
 | File | What it is |
 |---|---|
 | `optimizer_core.test.js` | Main `node`-run test suite for `optimizer_core.js` (run with `node optimizer_core.test.js`). |
-| `optimizer_tests.js` | Older/legacy in-browser unit test runner for the Optimizer. |
+| `optimizer_tests.js` | **The release gate**, not a legacy runner. 245 in-page tests, ~55 ms, blocking at page load; it is what paints the Red X badge (`:2187-2194`) that publishing is checked against. Browser-only by design: it declares `runTests()` and never calls it, has no `module.exports`, and touches DOM globals — so **`node optimizer_tests.js` exits 0 having run nothing**. Keep it out of any filename glob that feeds a test runner. |
 | `doclinks.test.js` | `node`-run test suite for `doclinks.js` (run with `node doclinks.test.js`) — the `docHref()` mapping table. |
 | `taxPaymentPlanner.js` / `taxPaymentPlanner.test.js` | Standalone tax-payment-strategy engine (dual-IRA withholding optimizer) behind `RetirementTaxPlanner.html`, plus its `node` test suite. |
 | `.githooks/pre-commit` | Version-controlled `pre-commit` hook (P39 item 1) — runs all three `node` suites and blocks the commit on a failure, or on a **missing** suite. The three suites never run in the browser, so this is the only automatic gate on them. `git commit --no-verify` is the deliberate escape. |

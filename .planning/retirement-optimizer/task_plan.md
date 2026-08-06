@@ -41,7 +41,7 @@ VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + h
 
 **Added 2026-08-05:** **P38, a shipped correctness defect, is now the top-priority item and jumps the queue.** `propwd`, `fixed`, `gk` and the baseline `else` branch report `success: false` with hundreds of thousands of dollars of unfunded spending while the IRA still holds seven figures. Pre-existing and byte-identical before P35 PR 3c (`d68d27f`, landed as `f71e0bf`); that PR only made it visible, because a lapsed ACA plan now falls through to the same path. Diagnosis is complete and measured — see findings.md, "The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry" (2026-08-05). Re-verified to the dollar after PR #150 merged (v11.1464), so it is orthogonal to the whole ACA batch. Its section sits at the top of this file rather than in the P29-P37 block, on purpose. It overlaps P30 and P32 and must be settled before either.
 
-**Added 2026-08-05 (later):** **P39, make the node-only tests visible in the browser.** Release gating relies on the Red X badge at page load, and that badge covers only the 245 in-page tests; **260 tests in three node-only suites never run in the browser**, so breaking them is invisible at release time. Measured, not estimated: 3 tests account for 1792 ms of the core suite's 2466 ms, and the other 203 run in 674 ms, so the "tests are too slow for page load" objection dissolves once those three are tagged. Section sits after P38. Independent of every other phase; its first work item (a pre-commit hook) delivers most of the value on its own and can land any time.
+**Added 2026-08-05 (later):** **P39, make the node-only tests visible in the browser.** Release gating relies on the Red X badge at page load, and that badge covers only the 245 in-page tests; **268 tests in three node-only suites never run in the browser**, so breaking them is invisible at release time. Measured, not estimated: 3 tests account for 1792 ms of the core suite's 2466 ms, and the other 203 run in 674 ms, so the "tests are too slow for page load" objection dissolves once those three are tagged. Section sits after P38. Independent of every other phase; its first work item (a pre-commit hook) delivers most of the value on its own and can land any time.
 
 MAINTENANCE NOTE: this heading and the per-phase status lines are injected into every turn by the planning hook, so a stale "uncommitted" here reads as a live claim about the working tree. Update them in the same turn you commit, not later.
 
@@ -238,7 +238,7 @@ this table.** That is the phase's own lesson arriving early.
 
 **The problem, in the user's words.** Release gating relies on the **Red X**: load the page, see
 `#testsFailed` render `🟢` or `❌ tests failed` (`optimizer_tests.js:2187-2194`), and do not publish
-on a red. That badge only covers `optimizer_tests.js`. **260 tests in three node-only suites never
+on a red. That badge only covers `optimizer_tests.js`. **268 tests in three node-only suites never
 run in the browser at all**, so a change that breaks them is invisible at the moment of release and
 can be published by accident. The competing constraint is equally real: browser load must not grow
 by seconds.
@@ -267,7 +267,9 @@ tests" is really three tests, and excluding them changes the picture entirely.
 Second enabling fact: `optimizer_core.js`, `taxengine.js`, `taxPaymentPlanner.js` and `doclinks.js`
 **already carry dual-mode export guards** (`typeof module !== 'undefined' && module.exports`). The
 sources already load in a browser. Only the four **test** files are node-bound, and only through
-their `require()` headers — 5 calls in `optimizer_core.test.js`, 1 each in the others.
+their `require()` headers — **4** calls in `optimizer_core.test.js` (`:29`, `:32`, `:35`, `:66`), 1
+each in the others. (An earlier count of 5 here came from a `grep -c 'require('` that also matched
+the comment at `:18`.)
 
 Also confirmed: `requestIdleCallback` and `Worker` are both available in the target browser, and
 **no git hooks are currently installed** (`.git/hooks` has only samples).
@@ -283,8 +285,11 @@ exactly as it does today. Nothing is added to the critical path.
 time is unaffected because the work happens after paint. **This tier is what closes the gap.**
 
 **Tier 3 — node and pre-commit only.** The 3 heavy searches above, tagged `slow`, plus
-`doclinks.test.js`, which reads files from disk and cannot run in a browser without a fetch shim
-that would be testing the shim rather than the code.
+`doclinks.test.js`. **CORRECTED 2026-08-06:** the stated reason — that it reads files from disk and
+would need a fetch shim — is **false**. Verified: its only I/O is `require('./doclinks.js')` at
+`:21`; zero `fs`, zero `__dirname`, zero `readFileSync`. The `.md` paths inside it are assertion
+data, never opened. It is the **cheapest** of the three to dual-mode, not the impossible one, so
+item 3 should port it too unless a different reason is found.
 
 ### The part that actually prevents the accident
 
@@ -352,7 +357,9 @@ everything added later.
 - **Do not let Tier 2 block paint.** The point is coverage without load cost; a synchronous port
   would trade one problem for the other.
 - **A pending badge must not read as green.** Neutral, visibly distinct from 🟢.
-- **`doclinks.test.js` stays in node.** Its filesystem reads are the thing it tests.
+- ~~**`doclinks.test.js` stays in node.** Its filesystem reads are the thing it tests.~~
+  **WITHDRAWN 2026-08-06 — the premise was false.** It performs no filesystem reads at all. This
+  constraint was load-bearing for item 3's scope and is now removed; decide the port on its merits.
 - **Test count is load-bearing** once the staleness guard exists: adding a test now means updating
   the expected count, deliberately. That friction is the feature.
 - Watch the `'—'` sentinels if any test-harness text is touched; 31 of them are functional
@@ -362,6 +369,72 @@ everything added later.
 
 Independent of P38 and of everything in P29-P37. Should **not** ride a behavior-change PR. Work item
 1 alone delivers most of the value and could land at any time.
+
+---
+
+## Phase P40: Test-file layout — naming convention and a `tests/` subfolder (2026-08-06)
+
+Raised by the user as two proposals before continuing P39: enforce a test naming convention
+(`XXXX.tests.js`), and move tests into `tests/` or `.tests/`. Costed against a reference inventory of
+**189 occurrences across 25 files** and against this repo's own last rename, `d0f4a00` (5 files:
+**11 files changed, 20 insertions, 18 deletions**).
+
+| option | edits outside `.planning/` | files | judgment lines | silent-failure sites |
+|---|---|---|---|---|
+| rename 3 node suites `.test.js` -> `.tests.js` | ~29 | ~10 | 0 | 0 |
+| also rename `optimizer_tests.js` | +10 | +2 | 0 | **2** |
+| move all 7 files to `tests/` | ~55 | ~13 | ~18 | **2** |
+| both at once | ~75 | ~15 | ~20 | **2** |
+
+### `.tests/` is REJECTED PERMANENTLY — do not re-propose it
+
+Not because it 404s, but because **the 404 is invisible to every check runnable before merge.**
+
+- Jekyll excludes dot-directories. This repo deliberately has **no `_config.yml`**
+  (`_includes/head-custom.html:6`), so no `include:` directive can exist to re-add one. Already
+  proven empirically for `.planning/` (`progress.md:1208`, both `.md` and `.html` return 404).
+- The one escape hatch is forbidden three times over: **never add `.nojekyll`**
+  (`ARCHITECTURE.md:376`) — it would 404 every rendered docs URL on the site.
+- **`python -m http.server` (`.claude/launch.json`) and `file://` both serve dot-directories.** So
+  `.tests/` is green in 100% of local checks and red only on `main`, in production, on the flagship
+  page.
+- What then breaks is silent: `retirement_optimizer.html:1136` is `runTests?.();`, and optional-call
+  does **not** guard an *undeclared* identifier — a 404 throws `ReferenceError`, aborting the inline
+  block so `runSimulation?.()` at `:1138` never runs.
+
+`tests/` (no dot) is fine on all of the above; `montecarlo/` is the working precedent in this repo.
+
+### `optimizer_tests.js` is NOT renamed, and must stay out of any filename glob
+
+Verified 2026-08-06: 2197 lines, a lone `function runTests()` at `:3`, **no top-level call, no
+`module.exports`**. So **`node optimizer_tests.js` exits 0 having run nothing.** The pre-commit hook
+prints `ok` for anything that exits 0 (`.githooks/pre-commit:49-52`), so pulling the release gate
+into a `*test*` glob manufactures a permanent false green on the one file that cannot afford one.
+The `*.tests.js` suffix is safe precisely because `_tests.js` does not match it.
+
+### Decisions
+
+- **DONE (PR 3 of this batch):** rename the three node suites `.test.js` -> `.tests.js`.
+- **DEFERRED until after P39 items 2-6:** the `tests/` move. P39 item 3 dual-modes
+  `optimizer_core.test.js` into the browser, so moving first would commit to served paths for files
+  that are about to gain browser exposure — two new-path risks stacked in one window — and would
+  rewrite `require()` headers that item 3 then restructures anyway.
+- **REJECTED:** `.tests/`, and renaming `optimizer_tests.js`.
+
+### If the `tests/` move is later taken up
+
+- Move **all seven** files together (the three suites + `sweep_golden.js` + its two generators +
+  nothing else). A split along "node-only vs browser-loaded" is defined by a property P39 is about
+  to invert.
+- `sweep_golden.gen.js:24-25` are the only `path.join(here, ...)` calls that reach out to repo root;
+  `:26`/`:56` and `import.js:95` keep working because `sweep_golden.js` moves alongside.
+- The GENERATED/IMPORTED marker strings (`gen.js:53` vs `sweep_golden.js:118`, `import.js:74` vs
+  `:792`) are a **rename** hazard only — a move preserves filenames.
+- `ARCHITECTURE.md:305-318` and `.test_harnesses/README.md:7-10` both state a "where a test file
+  belongs" rule that the move would repeal. Budget those ~18 lines as design work, not `sed`.
+- Manual browser pass is irreducible: three pages, over both `http://localhost:8767` and `file://`,
+  and specifically re-test Escape-closes-modal (`standalone/IncomeTaxPlanner.html:1194`) and the
+  click handler (`:1276`), which die silently.
 
 ---
 
@@ -1327,7 +1400,7 @@ For each year t from retirement to max(RMD ages):
 ## Phase P6: Simulation Sanity-Check Tests (was Phase 25)
 **Why:** Complex simulation accumulates subtle math errors. Deterministic edge cases with known exact answers expose regressions.
 
-Tests go in `retirement_optimizer_core.test.js`. Helper: `makeZeroBaseInputs()` — zeroed growth/inflation/taxes, single account.
+Tests go in `optimizer_core.test.js` (renamed from `retirement_optimizer_core.test.js` in `d0f4a00`). Helper: `makeZeroBaseInputs()` — zeroed growth/inflation/taxes, single account.
 
 | Test | Setup | Expected |
 |------|-------|----------|
@@ -1768,8 +1841,8 @@ function calibrateMCMs(cfg) {
 - [ ] Update stale UI copy that will become incorrect: retirement_optimizer.html:456 ("Synthetic: ... inflation is fixed") and mc_tab.js:282 ("Inflation ... (fixed)") — both need to describe the new AR(1) behavior; also mc_tab.js:276 label "(geometric)" → "(arithmetic)" since `medianAnnualReturn` now equals `mu` directly
 - [ ] Optional/stretch: compute `inflationStats` (min/CAGR/max, same shape as bootstrap's, worker.js:66) from `gbmInflationBank` so the existing Input Distribution chart (mc_tab.js:792-810, `_inputInflationChart`) can render GBM's realized inflation spread instead of just the flat target — not required for correctness, only for parity with bootstrap's richer display
 - [ ] Note (footnote only, not in scope): the GBM formula is duplicated across 3 sites (worker.js, mc_controller.js×2); a shared helper would reduce future duplication-drift risk but is a larger refactor — do not restructure as part of this phase
-- [ ] Add node unit tests in retirement_optimizer_core.test.js (or a new small test file) for `computeNextInflation()`: reversion behavior (large deviation from target decays toward target over repeated calls with shock=0), floor enforcement (`INFLATION_FLOOR`), a statistical check that many draws of `mu + sigma*boxMuller(rng)` have sample mean/stddev close to `mu`/`sigma`, and a `RETURN_FLOOR` clamp test — load montecarlo/prng.js into the existing vm test context alongside taxengine.js/core.js (retirement_optimizer_core.test.js:38-40)
-- **Test:** In the browser, enable nerd knobs, run GBM-mode MC, confirm `msg.medianAnnualReturn` ≈ `mu` and the per-path `inflationSequence` passed into `simulate()` actually varies year-to-year (not constant) — spot-check via `console.log` in a manual run or a new browser-test-suite case in retirement_optimizer_tests.js
+- [ ] Add node unit tests in `optimizer_core.test.js` (or a new small test file) for `computeNextInflation()`: reversion behavior (large deviation from target decays toward target over repeated calls with shock=0), floor enforcement (`INFLATION_FLOOR`), a statistical check that many draws of `mu + sigma*boxMuller(rng)` have sample mean/stddev close to `mu`/`sigma`, and a `RETURN_FLOOR` clamp test — `require` montecarlo/prng.js alongside taxengine.js/core.js in the header (`optimizer_core.test.js:29-35`). **Two stale details corrected 2026-08-06:** the file is no longer `retirement_optimizer_core.test.js` (renamed in `d0f4a00`), and there is no "vm test context" — the suite has loaded via `require()` since `86e26fa`.
+- **Test:** In the browser, enable nerd knobs, run GBM-mode MC, confirm `msg.medianAnnualReturn` ≈ `mu` and the per-path `inflationSequence` passed into `simulate()` actually varies year-to-year (not constant) — spot-check via `console.log` in a manual run or a new browser-test-suite case in `optimizer_tests.js`
 - **Test:** Confirm bootstrap/stress mode output is byte-identical before/after this change (their code paths are untouched)
 - **Status:** pending
 - **Independent:** no phase dependencies

@@ -49,7 +49,7 @@ flowchart TD
     end
 
     subgraph node["Node - no browser"]
-        CORETEST["optimizer_core.test.js<br/>node optimizer_core.test.js<br/>vm.runInContext, no DOM stubs"]
+        CORETEST["optimizer_core.test.js<br/>node optimizer_core.test.js<br/>require() + globalThis stubs"]
         GOLDEN["sweep_golden.js<br/>strategy-enumeration goldens<br/>data only - required by the suite"]
         TPPTEST["taxPaymentPlanner.test.js"]
         DOCTEST["doclinks.test.js"]
@@ -289,7 +289,7 @@ refreshed worker can pull a stale `optimizer_core.js`.
 | `montecarlo/prng.js` | MC | `mulberry32`, `boxMuller`, `bootstrapScenarioBank`, `buildStressBank`, `applyBearStartOverlay` |
 | `montecarlo/stats.js` | MC | `computePercentiles`, `computeInputFan` |
 | `montecarlo/historical_returns.js` | MC | `HISTORICAL_RETURNS` |
-| `optimizer_core.test.js` | test | `node optimizer_core.test.js` - loads engine via `vm.runInContext` |
+| `optimizer_core.test.js` | test | `node optimizer_core.test.js` - loads the engine via `require()` against the dual-mode export guards, with `window`/`document`/`performance` stubbed on `globalThis` first (`:23-25`). It has not used `vm.runInContext` since `86e26fa`; the stub comment at `:21` still refers to "the old vm-based harness" |
 | `sweep_golden.js` | test data | `SWEEP_BASES`, `MC_GOLDEN`, `OPT_GOLDEN` - the recorded strategy enumerations both sweeps must keep emitting. Data only, dual-mode export, `require`d by `optimizer_core.test.js` on every run |
 | `sweep_golden.gen.js` | test tool | `node sweep_golden.gen.js` - rewrites the `MC_GOLDEN` block of `sweep_golden.js` from source. Run only for a deliberate `buildVariations()` change, then read the diff |
 | `sweep_golden.import.js` | test tool | `node sweep_golden.import.js <dir>` - folds a browser capture into `OPT_GOLDEN`. That half cannot be generated: the Optimizer's enumeration needs a live `getInputs()`. Capture recipe is in the file header |
@@ -307,7 +307,7 @@ refreshed worker can pull a stale `optimizer_core.js`.
 Two directories, one rule, because the distinction has been asked about:
 
 - **Repo root, beside the suite it serves** - anything `node <x>.test.js` needs in order to pass.
-  `sweep_golden.js` is a *fixture*, not a study: `optimizer_core.test.js:67` `require`s it and
+  `sweep_golden.js` is a *fixture*, not a study: `optimizer_core.test.js:66` `require`s it and
   asserts against it every run, so a drift in either enumeration fails the build. `sweep_golden.gen.js`
   and `sweep_golden.import.js` are the two ways that fixture is refreshed, and `gen` rewrites
   `sweep_golden.js` in place by `__dirname`, so they stay next to it. None of the three is interim,

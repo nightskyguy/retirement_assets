@@ -1,5 +1,47 @@
 # Findings & Decisions
 
+## The release gate exits 0 under node, and dot-directories cannot hold anything a page fetches (2026-08-06)
+
+Two durable facts about this repo's test layout, both measured while costing a proposed
+`tests/` move. Recorded because each one silently inverts an obvious-looking decision.
+
+**1. `node optimizer_tests.js` exits 0 having run nothing.** The file is 2197 lines, declares
+`function runTests()` at `:3`, and **never calls it**; there is no `module.exports`, and it touches
+DOM globals. The browser pages call `runTests()` themselves
+(`retirement_optimizer.html:1136`, `standalone/IncomeTaxPlanner.html:1189`).
+
+Why it matters: the pre-commit hook reports success for anything that exits 0
+(`.githooks/pre-commit:49-52`). So **any filename glob that sweeps the release gate into a node test
+runner produces a permanent, cheerful green on the one file publishing is checked against.** The
+gate's odd name (`optimizer_tests.js`, not `optimizer_core.test.js`) is load-bearing information,
+not an inconsistency to tidy away. A `*.tests.js` glob is safe only because `_tests.js` does not
+match it.
+
+Related doc defect fixed the same day: `.planning/FILE_DIRECTORY.md:68` described this file as an
+"Older/legacy in-browser unit test runner", which invites exactly the rename that would break it.
+
+**2. A dot-directory cannot hold anything a served page fetches, and the failure is unobservable
+locally.** Jekyll excludes dot-directories; this repo deliberately has no `_config.yml`
+(`_includes/head-custom.html:6`) so no `include:` can re-add one, and `.nojekyll` is forbidden
+(`ARCHITECTURE.md:376`) because it would 404 every rendered docs URL.
+
+The part that is easy to miss: **`python -m http.server` and `file://` both serve dot-directories.**
+So a `.tests/` layout passes every pre-merge check and fails only in production. `.test_harnesses/`
+works as a dot-directory *only* because nothing fetches it — every harness is node-run or
+console-pasted. The rule is "dot-directory is fine for code nothing fetches", not "dot-directory is
+fine".
+
+What a 404 there actually does is silent, not loud: `retirement_optimizer.html:1136` is
+`runTests?.();`, and optional-call does **not** guard an *undeclared* identifier, so the missing
+script throws `ReferenceError`, aborting the inline block and skipping `runSimulation?.()` at
+`:1138`. On `standalone/IncomeTaxPlanner.html` the unguarded `runTests()` at `:1189` skips the
+Escape-closes-modal listener at `:1194` and a document click handler at `:1276`. Nothing on screen
+says why.
+
+**Also worth keeping: `?v=` cache-busting cannot protect a rename or a move.** It guards stale JS
+under fresh HTML; a moved script is the opposite case — fresh JS under stale HTML. A warm tab
+requests the old URL until reload. This repo already has a recorded incident of that cache class.
+
 ## Dividends are counted twice, and that is why Brokerage looks under-drawn (2026-08-06, v11.146e)
 
 **P32 asked "why is Brokerage barely drawn, and is the third-pass exclusion to blame". The premise
@@ -1810,16 +1852,23 @@ All three heavy tests are binary searches over a rate, which is why they dominat
 
 **The port is cheaper than it looks.** `optimizer_core.js`, `taxengine.js`, `taxPaymentPlanner.js`
 and `doclinks.js` **already have dual-mode export guards**, so the sources load in a browser today.
-Only the test files are node-bound, through `require()` alone: 5 calls in `optimizer_core.test.js`,
+Only the test files are node-bound, through `require()` alone: 4 calls in `optimizer_core.test.js`,
 1 in each of the others. The 174 `test(...)` bodies in the core suite need no change.
 
-`doclinks.test.js` is the exception and should stay in node: it reads files from disk, which is the
-thing it is testing.
+~~`doclinks.test.js` is the exception and should stay in node: it reads files from disk, which is the
+thing it is testing.~~ **FALSE, corrected 2026-08-06.** It reads nothing from disk. Its only I/O is
+`require('./doclinks.js')` at `:21`; zero `fs`, zero `__dirname`, zero `readFileSync`. The `.md`
+paths inside it are assertion data, never opened. It is the cheapest of the three to port.
 
 **Environment checks:** `requestIdleCallback` and `Worker` are both available, so a deferred
-after-paint run is possible without a worker if desired. **No git hooks are installed** - the repo's
-`.git/hooks` contains only samples, so there is no existing convention to follow and one must be
-chosen (committed `core.hooksPath` directory, or a documented install step).
+after-paint run is possible without a worker if desired. ~~**No git hooks are installed** - the
+repo's `.git/hooks` contains only samples, so there is no existing convention to follow and one must
+be chosen (committed `core.hooksPath` directory, or a documented install step).~~ **HALF FALSE,
+corrected 2026-08-06.** No hook *files* are installed, true — but a hook *convention* very much
+exists: `core.hooksPath` is pinned to an absolute path in `.git/config` and again in every
+worktree's `config.worktree` (`extensions.worktreeConfig` is on), and the worktree scope outranks
+the repo scope. A committed `core.hooksPath` directory was therefore **not** an available choice; it
+would have been silently ignored in every worktree. See the P39 item 1 record in `task_plan.md`.
 
 **The conclusion worth keeping.** The browser badge only helps when someone is looking at it; a
 pre-commit hook is what actually stops a breaking change entering history. The badge work is a

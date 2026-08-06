@@ -720,6 +720,35 @@ No - **Cash** and **Brokerage** are two separate accounts in the model.
 
 **Gotcha:** The tool tracks basis separately. When dividends reinvest to Brokerage (DRIP ON), the basis steps up by the dividend amount, reducing your future capital gains tax. If dividends route to Cash (DRIP OFF), there's no basis step-up, and you pay ordinary income tax on the interest later.
 
+### How does the ACA limit work?
+
+The **ACA Cliff** strategies hold your income under a chosen multiple of the Federal Poverty Level (200%, 250%, 300% or 400%) so that you stay eligible for a premium tax credit on a Marketplace health plan. It is the only strategy in the tool with a **hard** ceiling. Every other ceiling is soft.
+
+**Why it is hard, and what that looks like.** Going over a bracket boundary costs you a slightly higher rate on the dollars above it. Going one dollar over the ACA limit can cost you the entire premium subsidy for the year. That is a cliff, not a bump, so the strategy will not step over it, ever. If Cash and Roth run out and the only money left is in an IRA, the tool **reports an unfunded shortfall rather than drawing from the IRA**, because that withdrawal is taxable income and would breach the cap.
+
+So a shortfall on an ACA row is not a bug and not a failure to find a solution. It is the answer to the question the strategy asks: *can this plan be funded without breaching the cap?* When you see one, the answer is no. Every other strategy will draw the IRA instead and fund the goal.
+
+**What the tool models, and what it does not.** This matters more than anything else on this page:
+
+- It models the income **cap**. It does **not** model the premium **subsidy** the cap buys.
+- So an ACA row shows you what staying under the limit **costs** you, and nothing about what it **saves** you. The strategy therefore looks worse than it is, and by an amount the tool never calculates. You have to price the subsidy yourself and weigh it against the cost shown.
+- Compare the ACA row's ending wealth against your own estimate of the credit over those years. The tool cannot make that comparison for you.
+
+**The cap ends at Medicare.** Premium subsidies stop once you are eligible for Medicare, so from the first year in which **every living person in the plan** is old enough, the cap is dropped and the strategy funds spending like any other. Two consequences worth knowing:
+
+- It is every **living** person, not every person. If one spouse dies before reaching Medicare age and the survivor is already past it, the cap ends that year.
+- Until then the limit is measured against **household** income. If one spouse is on Medicare and the other is not, the older spouse's required distributions and Social Security still count against the younger spouse's limit.
+
+**A lower percentage is a stricter limit.** 200% FPL is harder to stay under than 400%. So if the Optimizer flags one ACA row as untenable, every lower one is flagged too. That is an invariant, not a coincidence.
+
+**Known limitations, stated plainly:**
+
+- The poverty level is the 2025 figure ($15,060 single, $20,440 for a couple) inflated forward by your CPI assumption. Real FPL figures are published annually and will not track your CPI exactly.
+- Only one-person and two-person households are modeled. If anyone else is in your tax household, your real FPL is higher than the tool's, so the tool's limit is **too strict** and it will understate what you can withdraw.
+- The 400% cliff assumes current law. The enhanced subsidies in effect from 2021 through 2025 removed that cliff and replaced it with a gradual phase-out. If those are restored, a 400% row in this tool will be **more pessimistic** than reality.
+- Alaska and Hawaii have higher poverty guidelines and are not modeled, so for those states the limit is again **too strict**.
+- The tool does not model Medicaid eligibility at the low end, cost-sharing reductions below 250% FPL, or the difference between MAGI for ACA purposes and the MAGI it computes for IRMAA.
+
 ### How do I find the most efficient Roth conversions?
 
 The tool provides a built-in diagnostic called **Stop-Year** that identifies the optimal conversion cutoff. Here's how to use it:

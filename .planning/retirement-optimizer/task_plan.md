@@ -15,6 +15,8 @@ VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + h
 
 **Added 2026-08-05:** **P38, a shipped correctness defect, is now the top-priority item and jumps the queue.** `propwd`, `fixed`, `gk` and the baseline `else` branch report `success: false` with hundreds of thousands of dollars of unfunded spending while the IRA still holds seven figures. Pre-existing and byte-identical before P35 PR 3c (`d68d27f`, landed as `f71e0bf`); that PR only made it visible, because a lapsed ACA plan now falls through to the same path. Diagnosis is complete and measured — see findings.md, "The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry" (2026-08-05). Re-verified to the dollar after PR #150 merged (v11.1464), so it is orthogonal to the whole ACA batch. Its section sits at the top of this file rather than in the P29-P37 block, on purpose. It overlaps P30 and P32 and must be settled before either.
 
+**Added 2026-08-05 (later):** **P39, make the node-only tests visible in the browser.** Release gating relies on the Red X badge at page load, and that badge covers only the 245 in-page tests; **260 tests in three node-only suites never run in the browser**, so breaking them is invisible at release time. Measured, not estimated: 3 tests account for 1792 ms of the core suite's 2466 ms, and the other 203 run in 674 ms, so the "tests are too slow for page load" objection dissolves once those three are tagged. Section sits after P38. Independent of every other phase; its first work item (a pre-commit hook) delivers most of the value on its own and can land any time.
+
 MAINTENANCE NOTE: this heading and the per-phase status lines are injected into every turn by the planning hook, so a stale "uncommitted" here reads as a live claim about the working tree. Update them in the same turn you commit, not later.
 
 ---
@@ -158,6 +160,112 @@ spent instead of stranded.
 
 **Constraint carried from the diagnosis pass:** no engine change was made while diagnosing, on
 purpose. Do the fix as its own PR against a clean tree.
+
+---
+
+## Phase P39: Make the node-only tests visible in the browser (2026-08-05) — not started
+
+**The problem, in the user's words.** Release gating relies on the **Red X**: load the page, see
+`#testsFailed` render `🟢` or `❌ tests failed` (`optimizer_tests.js:2187-2194`), and do not publish
+on a red. That badge only covers `optimizer_tests.js`. **260 tests in three node-only suites never
+run in the browser at all**, so a change that breaks them is invisible at the moment of release and
+can be published by accident. The competing constraint is equally real: browser load must not grow
+by seconds.
+
+Both constraints are satisfiable, and the measurements say so clearly.
+
+### Measured 2026-08-05 (do not re-derive)
+
+| suite | tests | wall time | browser today |
+|---|---|---|---|
+| `optimizer_tests.js` (in-page) | 245 | **55 ms** | yes, blocking at load |
+| `optimizer_core.test.js` | 206 | 2466 ms | **no** |
+| `taxPaymentPlanner.test.js` | 32 | ~320 ms | **no** |
+| `doclinks.test.js` | 22 | ~10 ms | **no** |
+
+**The finding that makes this cheap: 3 tests are 1792 ms of that 2466 ms — 73%.** All three are
+`breakEvenHeirsRate` binary searches:
+
+- `optimizer_core.test.js:2290` `breakEvenHeirsRate: the predicate is monotonic...` — **1438 ms**
+- `optimizer_core.test.js:2304` `lowestBreakEvenHeirsRate: finds a threshold...` — **195 ms**
+- `optimizer_core.test.js:2280` `breakEvenHeirsRate: the rate/amount pair...` — **159 ms**
+
+The remaining **203 tests run in 674 ms combined**; 193 of them in 243 ms. So "multiple seconds of
+tests" is really three tests, and excluding them changes the picture entirely.
+
+Second enabling fact: `optimizer_core.js`, `taxengine.js`, `taxPaymentPlanner.js` and `doclinks.js`
+**already carry dual-mode export guards** (`typeof module !== 'undefined' && module.exports`). The
+sources already load in a browser. Only the four **test** files are node-bound, and only through
+their `require()` headers — 5 calls in `optimizer_core.test.js`, 1 each in the others.
+
+Also confirmed: `requestIdleCallback` and `Worker` are both available in the target browser, and
+**no git hooks are currently installed** (`.git/hooks` has only samples).
+
+### Design: three tiers
+
+**Tier 1 — blocking, at load. Unchanged.** `optimizer_tests.js`, 245 tests, 55 ms. The Red X behaves
+exactly as it does today. Nothing is added to the critical path.
+
+**Tier 2 — deferred, after first paint.** Port `optimizer_core.test.js` and
+`taxPaymentPlanner.test.js` to dual mode and run their fast subsets (203 + 32 tests, ~1 s) from
+`requestIdleCallback`. The badge starts neutral, then resolves to 🟢 or ❌ about a second in. Load
+time is unaffected because the work happens after paint. **This tier is what closes the gap.**
+
+**Tier 3 — node and pre-commit only.** The 3 heavy searches above, tagged `slow`, plus
+`doclinks.test.js`, which reads files from disk and cannot run in a browser without a fetch shim
+that would be testing the shim rather than the code.
+
+### The part that actually prevents the accident
+
+The browser badge only helps when someone is looking at it. **A `pre-commit` hook running all three
+node suites is the real safety net** and should land first — it is a few lines, has no page cost,
+and blocks the failure mode the user described (introducing a breaking change by accident) at the
+moment it would enter history rather than at the moment of release.
+
+Tier 2 is then a convenience that restores confidence in the badge; the hook is the guarantee.
+
+### Staleness guard, so Tier 3 cannot rot
+
+Tier 3 is the dangerous tier: tests that live outside the badge tend to be forgotten. The in-page
+suite must therefore assert **the count of node-only tests it knows it is skipping**. Add a slow
+test without tagging it, or add a whole node suite, and the in-page suite goes red with a message
+naming the discrepancy. Without this, P39 recreates the exact problem it is fixing, one tier down.
+Note the parallel with P38's own lesson: a gate that names what it *serves* silently excludes
+everything added later.
+
+### Work items
+
+1. **Pre-commit hook first, on its own.** Runs `optimizer_core.test.js`, `taxPaymentPlanner.test.js`
+   and `doclinks.test.js`; non-zero exit blocks the commit. Must be installable (hooks are not
+   version-controlled) — either a `core.hooksPath` directory committed to the repo, or a documented
+   one-line install. Decide which; the repo has no hook convention yet.
+2. **Tag the 3 slow tests.** A `test.slow(name, fn)` variant, or a `SLOW` prefix the browser runner
+   filters. Keep them running in node unconditionally.
+3. **Dual-mode the two portable test files.** Mechanical: replace the `require()` header with a
+   node/browser branch resolving the same symbols off `globalThis` in the browser. Roughly 60 lines
+   at the top of `optimizer_core.test.js`; the 174 `test(...)` bodies do not change.
+4. **Idle runner + badge protocol.** Extend `#testsFailed` to a three-state badge (pending / pass /
+   fail) so a deferred failure is distinguishable from "still running". Do not let a pending state
+   look like a pass — that is the same false-green this phase exists to remove.
+5. **Staleness guard** as described above.
+6. **`?runtests=all`** to force everything synchronously, including slow tests, for a deliberate
+   full check.
+
+### Constraints and traps
+
+- **Do not let Tier 2 block paint.** The point is coverage without load cost; a synchronous port
+  would trade one problem for the other.
+- **A pending badge must not read as green.** Neutral, visibly distinct from 🟢.
+- **`doclinks.test.js` stays in node.** Its filesystem reads are the thing it tests.
+- **Test count is load-bearing** once the staleness guard exists: adding a test now means updating
+  the expected count, deliberately. That friction is the feature.
+- Watch the `'—'` sentinels if any test-harness text is touched; 31 of them are functional
+  (see the em-dash sweep, `6771bb2`).
+
+### Sequencing
+
+Independent of P38 and of everything in P29-P37. Should **not** ride a behavior-change PR. Work item
+1 alone delivers most of the value and could land at any time.
 
 ---
 

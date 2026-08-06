@@ -19,8 +19,21 @@ Runs the three `node`-only suites and blocks the commit if any of them fails:
 | `taxPaymentPlanner.tests.js` | 32 | 0.4 s |
 | `doclinks.tests.js` | 22 | 0.1 s |
 
-About 3.5 s total. It also blocks if a suite is **missing**, because a renamed or deleted suite
-would otherwise pass in silence and look identical to a green run.
+About 3.5 s total.
+
+It also blocks in two cases that would otherwise pass in silence:
+
+- **A suite is missing.** A renamed or deleted suite would look identical to a green run.
+- **A suite exists but is not listed.** Every `*.tests.js` file in the repo root must appear in the
+  `suites=` line; a new suite committed without being added there would simply never run. The check
+  reports the on-disk set against the listed set and names the difference.
+
+**The glob is `*.tests.js` and must never be widened to `*test*`.** `optimizer_tests.js` is the
+browser-only release gate: it declares `runTests()` without ever calling it, so
+`node optimizer_tests.js` exits 0 having run nothing, and this hook reports success for anything
+that exits 0. Sweeping it in would print a permanent green for zero tests run, on the one file
+publishing is checked against. `_tests.js` does not match `*.tests.js`, which is what keeps the two
+sets disjoint - and is the reason that suffix was chosen.
 
 `git commit --no-verify` skips it. That is the deliberate escape hatch for a commit you know does
 not touch code. It is not the way past a red suite.

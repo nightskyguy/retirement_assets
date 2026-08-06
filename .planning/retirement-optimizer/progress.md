@@ -1662,3 +1662,25 @@ the names were correct when written. `optimizer_changelog.md` never referenced t
 Verified: all three suites green by their new names (214/32/22), the hook green with the updated
 `suites=` list, and zero old-name references anywhere outside dated `.planning` records.
 Nothing user-visible, so no version bump and no changelog entry.
+
+## 2026-08-06 (cont.) — PR 4: the hook now catches an UNLISTED suite
+
+Proposal 1's real intent, extracted. A naming convention catches nothing on its own; what actually
+prevents a suite from being silently skipped is asserting that the set of `*.tests.js` files on disk
+equals the `suites=` list. ~20 lines including the comment that keeps it safe.
+
+**The comment is the load-bearing part.** The glob must never widen to `*test*`. `optimizer_tests.js`
+declares `runTests()` and never calls it, so `node optimizer_tests.js` exits 0 having run nothing,
+and the hook reports success for anything exiting 0 — sweeping the release gate in would print a
+permanent green for zero tests run. `_tests.js` not matching `*.tests.js` is exactly why that suffix
+was safe to adopt.
+
+**Interaction found while testing, and made explicit rather than left dead:** the completeness check
+runs before the missing-suite check, so a deleted or renamed suite now trips the new message
+("list is out of date", with both sets printed) rather than the old one. The old check survives as a
+backstop for the single case the new one cannot see — a suite listed in `suites=` whose name does
+not end in `.tests.js`. Its comment now says so.
+
+Verified as separate runs: green passes (214/32/22); an unlisted `sneaky.tests.js` blocks with both
+sets printed, exit 1; a deleted suite blocks; and the glob provably matches only the three suites,
+never `optimizer_tests.js`.

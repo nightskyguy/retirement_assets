@@ -35,6 +35,26 @@ fi
 # Listed slowest first: a broken engine is the likeliest failure and should surface first.
 suites="optimizer_core.tests.js taxPaymentPlanner.tests.js doclinks.tests.js"
 
+# Completeness. The missing-suite check further down catches a LISTED suite that vanished; this
+# catches the opposite and likelier case - a NEW suite committed to the repo and never added to the
+# line above, which would simply never run while everything looked green.
+#
+# THE GLOB IS `*.tests.js` AND MUST NEVER BE WIDENED TO `*test*`. optimizer_tests.js is the
+# browser-only release gate: it declares runTests() and never calls it, so `node optimizer_tests.js`
+# exits 0 having run nothing - and this hook reports success for anything that exits 0. Sweeping it
+# in here would print a permanent, cheerful green for zero tests actually run, on the one file
+# publishing is checked against. `_tests.js` does not match `*.tests.js`, which is what keeps the
+# browser gate and the node suites disjoint. That is the whole reason the suffix was chosen.
+ondisk=$(for f in *.tests.js; do [ -f "$f" ] && echo "$f"; done | sort | tr '\n' ' ')
+listed=$(printf '%s\n' $suites | sort | tr '\n' ' ')
+if [ "$ondisk" != "$listed" ]; then
+	echo "pre-commit: BLOCKED - the suites list in .githooks/pre-commit is out of date." >&2
+	echo "            on disk: $ondisk" >&2
+	echo "            listed:  $listed" >&2
+	echo "            Add the new suite to suites= (or drop the stale entry) in this same commit." >&2
+	exit 1
+fi
+
 failed=""
 missing=""
 started=$(date +%s)
@@ -60,6 +80,11 @@ elapsed=$(( $(date +%s) - started ))
 
 # A suite that has been renamed or deleted must not pass silently - that is the exact failure
 # mode P39 exists to remove, and it would look identical to a green run.
+#
+# Now a BACKSTOP, not the primary path: the completeness check above catches a deleted or renamed
+# *.tests.js first, and says the same thing in more detail. This still fires for the one case that
+# check cannot see - a suite listed in suites= whose name does not end in .tests.js. Kept because
+# the cost is three lines and the failure it guards is silent.
 if [ -n "$missing" ]; then
 	echo "pre-commit: BLOCKED - expected suite(s) not found:$missing" >&2
 	echo "            If a suite was renamed or removed on purpose, update .githooks/pre-commit" >&2

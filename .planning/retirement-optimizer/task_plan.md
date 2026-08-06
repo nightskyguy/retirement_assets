@@ -2,7 +2,7 @@
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
 
-**As of:** 2026-08-05 (branch `p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464; the only uncommitted work is P38's two planning files, in [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151), docs only, no engine change). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
+**As of:** 2026-08-05, later in the day. P38 PR 1 (`e8d28d6`, tests only) and PR 2 (`f592c31`, the gate widening, **v11.1468, behavior change**) are PUSHED and OPEN AS A PR on branch `p38-pr2-widen-forced-ira-gate`, off `53e8ccf`, together with the cash-rate/em-dash cleanup (`6771bb2`) and the P39 write-up (`ace9e7c`). PR 1 and PR 2 were developed as separate branches but ship as one PR at the user's request. Working tree clean. **P38 PR 3 (the sizing fix at `:1281`) is still open and NOT in that PR.** See the P38 section below for measured results. Earlier state: branch `p38-baseline-funding-defect`, at `main` = `fe72bef`, v11.1464, P38's diagnosis-only planning files merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151). **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry).
 **P35 PR 3a MERGED as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change). **P35 PR 3b MERGED as [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149)** (v11.1448 tokens, byte-identical, plus the doc file-reference gaps); the duplicate attempt PR #148 on branch `worktrees/medicare-age-data-7b2e91` is **CLOSED, not merged** — verified, nothing to do about it.
 **P35 PR 3c MERGED as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150)** (v11.1462 -> v11.1464 on merge, behavior change confined to `aca` rows, proven against `propwd`/`bracket` controls), four commits: the behavior change, the `eitherOnMedicareAtStart` deletion it made possible, the plan record, and the ACA Cliff un-gating. Next review point after it is **PR 3d** (`Basis <= Brokerage` invariant).
 Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
@@ -15,11 +15,61 @@ VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + h
 
 **Added 2026-08-05:** **P38, a shipped correctness defect, is now the top-priority item and jumps the queue.** `propwd`, `fixed`, `gk` and the baseline `else` branch report `success: false` with hundreds of thousands of dollars of unfunded spending while the IRA still holds seven figures. Pre-existing and byte-identical before P35 PR 3c (`d68d27f`, landed as `f71e0bf`); that PR only made it visible, because a lapsed ACA plan now falls through to the same path. Diagnosis is complete and measured — see findings.md, "The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry" (2026-08-05). Re-verified to the dollar after PR #150 merged (v11.1464), so it is orthogonal to the whole ACA batch. Its section sits at the top of this file rather than in the P29-P37 block, on purpose. It overlaps P30 and P32 and must be settled before either.
 
+**Added 2026-08-05 (later):** **P39, make the node-only tests visible in the browser.** Release gating relies on the Red X badge at page load, and that badge covers only the 245 in-page tests; **260 tests in three node-only suites never run in the browser**, so breaking them is invisible at release time. Measured, not estimated: 3 tests account for 1792 ms of the core suite's 2466 ms, and the other 203 run in 674 ms, so the "tests are too slow for page load" objection dissolves once those three are tagged. Section sits after P38. Independent of every other phase; its first work item (a pre-commit hook) delivers most of the value on its own and can land any time.
+
 MAINTENANCE NOTE: this heading and the per-phase status lines are injected into every turn by the planning hook, so a stale "uncommitted" here reads as a live claim about the working tree. Update them in the same turn you commit, not later.
 
 ---
 
-## Phase P38: The baseline/proportional strategies cannot fund their own tax bill (2026-08-05) — HIGH PRIORITY, not started
+## Phase P38: The baseline/proportional strategies cannot fund their own tax bill (2026-08-05) — PR 1 + PR 2 DONE (committed, unpushed), PR 3 remaining
+
+**STATUS 2026-08-05, branch `p38-pr2-widen-forced-ira-gate` (stacked on `p38-pr1-shortfall-invariant`):**
+
+- **PR 1 `e8d28d6` — the funding invariant, pinned as a characterization recording.** Test-only, no
+  version bump. 189 -> 205 tests. Probing all 12 strategy arms separated **three** failure classes
+  where the diagnosis had assumed one, so the invariant is scoped to the IRA leg:
+  - **P38** shortfall with the IRA still funded: `propwd` 0% (13 yrs / worst $28,400), `fixed`
+    (14 / $45,827), `gk` (6 / $15,540), baseline `else` (13), lapsed `aca` (13), `propwd` 10%
+    (7 / $964).
+  - **P32** IRA empty, Brokerage funded: **`minlimit` only**, and NOT fixed by anything in P38 -
+    nine consecutive years 2041-2049, **$71,382** total, the first with **$945,376** of Brokerage
+    untouched. Pinned as its own tripwire so P32 starts from measurement.
+  - **convergence** money still reachable: `ordered` CBIR (2 / $93) and RIBC (2 / $73). RIBC strands
+    $73 while holding **$58,597 of Cash** because Cash is last in its order and the third pass never
+    runs a second time. Tagged, not fixed.
+- **PR 2 `f592c31` — the gate widened, v11.1468, behavior change.** Gate is now
+  `!yr.isACAStrategy && !yr.isOrderedStrategy`. All six P38 pins drop to 0. Byte-identical:
+  `bracket`, `minlimit`, `fixedpct`, `propwd` 50%, both `ordered`, **and both pinned-number fixtures
+  (GK totals at `:444`, `OC_BASE` at `:1138`/`:1422`)** - the plan expected those two to move and
+  they do not, their fixtures never reach the backstop, so no re-derivation was needed.
+- **Two tests moved for stale fixtures, not engine faults.** `avgWdRate`'s 4-15% band only held
+  while the engine under-withdrew (`BASE` has $850k against $1.2M of spending; it now depletes fully
+  and the mean is ~22.9%). `CREEP_BASE` had $1.45M against $1.8M, so once the IRA is actually spent
+  `optimizeSpend` correctly returns null at its baseline gate; fixture made solvent.
+- **ACA verified end to end.** Live cap: 7 years, `ForcedIRA` **0** in every one, all 7 flagged,
+  shortfall stands. Lapse at 2033: 21 funded years. 2054-2057: honest ruin, all accounts at 0.
+  Two whole-log assertions rescoped to live-cap years via a new `_capLiveRows` helper, and a new
+  test pins the lapsed tail directly so the decision is asserted rather than merely permitted.
+  **Total spend DROPS $144,193 on `aca live 400%`** - fully funding 21 lapsed years burns the IRA by
+  2054 where the old code limped along partially funded for 25. Greedy year-by-year funding is the
+  engine's existing contract (identical to `bracket`), but it is a visible number change.
+- **`BracketOverage` confirmed 0** across all 13 forced-IRA years, in node and in the browser. That
+  was work item 2's "verify, do not assume"; `forcedIRA` is reused, no new counter, and `fixedpct`
+  was already precedent for `ForcedIRA > 0` with `bracketTarget === 0`.
+- **Golden captures untouched**, as predicted - they record enumeration, never `simulate()`.
+  `sweep_golden.gen.js` regenerates content byte-identical (line endings only).
+- Verified: node 206/32/22, in-page 245/245 without `?nerdknob`.
+
+**REMAINING — PR 3, the sizing fix.** Make `additionalSpendNeeded` net of tax on guaranteed income
+at `:1281`, so the first-pass draw stops under-sizing for **every** strategy including `bracket`.
+The trap is unchanged and is the reason this is its own PR: `possibleIncome` mixes SS (0-85%
+taxable), ordinary pension/RMD, and qualified dividends, so a flat `sim.nominalTaxRate` overstates
+the tax and over-draws. Call `calculateTaxes` on the guaranteed-income base alone and subtract its
+`totalTax`; watch the cost of a 4th tax call per year.
+
+---
+
+### Original diagnosis (retained; superseded above where they disagree)
 
 **This is a shipped correctness defect, not a research phase.** Diagnosis is done, mechanism traced,
 numbers measured, counterfactual fix measured. What remains is a build-and-ship decision. Read the
@@ -110,6 +160,112 @@ spent instead of stranded.
 
 **Constraint carried from the diagnosis pass:** no engine change was made while diagnosing, on
 purpose. Do the fix as its own PR against a clean tree.
+
+---
+
+## Phase P39: Make the node-only tests visible in the browser (2026-08-05) — not started
+
+**The problem, in the user's words.** Release gating relies on the **Red X**: load the page, see
+`#testsFailed` render `🟢` or `❌ tests failed` (`optimizer_tests.js:2187-2194`), and do not publish
+on a red. That badge only covers `optimizer_tests.js`. **260 tests in three node-only suites never
+run in the browser at all**, so a change that breaks them is invisible at the moment of release and
+can be published by accident. The competing constraint is equally real: browser load must not grow
+by seconds.
+
+Both constraints are satisfiable, and the measurements say so clearly.
+
+### Measured 2026-08-05 (do not re-derive)
+
+| suite | tests | wall time | browser today |
+|---|---|---|---|
+| `optimizer_tests.js` (in-page) | 245 | **55 ms** | yes, blocking at load |
+| `optimizer_core.test.js` | 206 | 2466 ms | **no** |
+| `taxPaymentPlanner.test.js` | 32 | ~320 ms | **no** |
+| `doclinks.test.js` | 22 | ~10 ms | **no** |
+
+**The finding that makes this cheap: 3 tests are 1792 ms of that 2466 ms — 73%.** All three are
+`breakEvenHeirsRate` binary searches:
+
+- `optimizer_core.test.js:2290` `breakEvenHeirsRate: the predicate is monotonic...` — **1438 ms**
+- `optimizer_core.test.js:2304` `lowestBreakEvenHeirsRate: finds a threshold...` — **195 ms**
+- `optimizer_core.test.js:2280` `breakEvenHeirsRate: the rate/amount pair...` — **159 ms**
+
+The remaining **203 tests run in 674 ms combined**; 193 of them in 243 ms. So "multiple seconds of
+tests" is really three tests, and excluding them changes the picture entirely.
+
+Second enabling fact: `optimizer_core.js`, `taxengine.js`, `taxPaymentPlanner.js` and `doclinks.js`
+**already carry dual-mode export guards** (`typeof module !== 'undefined' && module.exports`). The
+sources already load in a browser. Only the four **test** files are node-bound, and only through
+their `require()` headers — 5 calls in `optimizer_core.test.js`, 1 each in the others.
+
+Also confirmed: `requestIdleCallback` and `Worker` are both available in the target browser, and
+**no git hooks are currently installed** (`.git/hooks` has only samples).
+
+### Design: three tiers
+
+**Tier 1 — blocking, at load. Unchanged.** `optimizer_tests.js`, 245 tests, 55 ms. The Red X behaves
+exactly as it does today. Nothing is added to the critical path.
+
+**Tier 2 — deferred, after first paint.** Port `optimizer_core.test.js` and
+`taxPaymentPlanner.test.js` to dual mode and run their fast subsets (203 + 32 tests, ~1 s) from
+`requestIdleCallback`. The badge starts neutral, then resolves to 🟢 or ❌ about a second in. Load
+time is unaffected because the work happens after paint. **This tier is what closes the gap.**
+
+**Tier 3 — node and pre-commit only.** The 3 heavy searches above, tagged `slow`, plus
+`doclinks.test.js`, which reads files from disk and cannot run in a browser without a fetch shim
+that would be testing the shim rather than the code.
+
+### The part that actually prevents the accident
+
+The browser badge only helps when someone is looking at it. **A `pre-commit` hook running all three
+node suites is the real safety net** and should land first — it is a few lines, has no page cost,
+and blocks the failure mode the user described (introducing a breaking change by accident) at the
+moment it would enter history rather than at the moment of release.
+
+Tier 2 is then a convenience that restores confidence in the badge; the hook is the guarantee.
+
+### Staleness guard, so Tier 3 cannot rot
+
+Tier 3 is the dangerous tier: tests that live outside the badge tend to be forgotten. The in-page
+suite must therefore assert **the count of node-only tests it knows it is skipping**. Add a slow
+test without tagging it, or add a whole node suite, and the in-page suite goes red with a message
+naming the discrepancy. Without this, P39 recreates the exact problem it is fixing, one tier down.
+Note the parallel with P38's own lesson: a gate that names what it *serves* silently excludes
+everything added later.
+
+### Work items
+
+1. **Pre-commit hook first, on its own.** Runs `optimizer_core.test.js`, `taxPaymentPlanner.test.js`
+   and `doclinks.test.js`; non-zero exit blocks the commit. Must be installable (hooks are not
+   version-controlled) — either a `core.hooksPath` directory committed to the repo, or a documented
+   one-line install. Decide which; the repo has no hook convention yet.
+2. **Tag the 3 slow tests.** A `test.slow(name, fn)` variant, or a `SLOW` prefix the browser runner
+   filters. Keep them running in node unconditionally.
+3. **Dual-mode the two portable test files.** Mechanical: replace the `require()` header with a
+   node/browser branch resolving the same symbols off `globalThis` in the browser. Roughly 60 lines
+   at the top of `optimizer_core.test.js`; the 174 `test(...)` bodies do not change.
+4. **Idle runner + badge protocol.** Extend `#testsFailed` to a three-state badge (pending / pass /
+   fail) so a deferred failure is distinguishable from "still running". Do not let a pending state
+   look like a pass — that is the same false-green this phase exists to remove.
+5. **Staleness guard** as described above.
+6. **`?runtests=all`** to force everything synchronously, including slow tests, for a deliberate
+   full check.
+
+### Constraints and traps
+
+- **Do not let Tier 2 block paint.** The point is coverage without load cost; a synchronous port
+  would trade one problem for the other.
+- **A pending badge must not read as green.** Neutral, visibly distinct from 🟢.
+- **`doclinks.test.js` stays in node.** Its filesystem reads are the thing it tests.
+- **Test count is load-bearing** once the staleness guard exists: adding a test now means updating
+  the expected count, deliberately. That friction is the feature.
+- Watch the `'—'` sentinels if any test-harness text is touched; 31 of them are functional
+  (see the em-dash sweep, `6771bb2`).
+
+### Sequencing
+
+Independent of P38 and of everything in P29-P37. Should **not** ride a behavior-change PR. Work item
+1 alone delivers most of the value and could land at any time.
 
 ---
 

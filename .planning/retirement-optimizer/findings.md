@@ -1586,3 +1586,55 @@ concentrate in Fill Bracket at high Brokerage share, which is the Cash-buffer me
 Method note worth repeating: this is the second time in P28 that a conclusion drawn from a single
 slice of a parameter space was overturned by sweeping that parameter (the first was round 1's
 one-scenario sign flip). Both times the fix was cheap - the whole grid runs in about a second.
+
+---
+
+## The Red X covers 245 tests and misses 260, and three tests are why nobody moved them (2026-08-05, v11.1468)
+
+Measured while answering a user concern: releases are gated on the in-page Red X, so any test that
+does not run at page load can be broken and published without anyone noticing. Recorded here so P39
+starts from numbers.
+
+**Coverage today.** `optimizer_tests.js` runs at load and drives `#testsFailed`
+(`optimizer_tests.js:2187-2194`, `🟢` or `❌ tests failed`). Three suites do not run in the browser
+at all: `optimizer_core.test.js` (206), `taxPaymentPlanner.test.js` (32), `doclinks.test.js` (22).
+
+| suite | tests | wall time |
+|---|---|---|
+| `optimizer_tests.js` | 245 | **55 ms** |
+| `optimizer_core.test.js` | 206 | 2466 ms |
+| `taxPaymentPlanner.test.js` | 32 | ~320 ms |
+| `doclinks.test.js` | 22 | ~10 ms |
+
+**The whole objection rests on three tests.** Per-test instrumentation of the core suite:
+
+| ms | test |
+|---|---|
+| 1438 | `:2290` `breakEvenHeirsRate: the predicate is monotonic in the rate` |
+| 195 | `:2304` `lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidate does not have` |
+| 159 | `:2280` `breakEvenHeirsRate: the rate/amount pair it reports is self-consistent` |
+
+That is **1792 ms of 2466, or 73%, in 3 of 206 tests**. Cut at 20 ms: 13 slow tests hold 2223 ms
+while **193 tests share 243 ms**. Cut at 100 ms: 3 slow tests hold 1792 ms, **203 share 674 ms**.
+All three heavy tests are binary searches over a rate, which is why they dominate. So the framing
+"the node suite is too slow to run at page load" is false of the suite and true of three tests.
+
+**The port is cheaper than it looks.** `optimizer_core.js`, `taxengine.js`, `taxPaymentPlanner.js`
+and `doclinks.js` **already have dual-mode export guards**, so the sources load in a browser today.
+Only the test files are node-bound, through `require()` alone: 5 calls in `optimizer_core.test.js`,
+1 in each of the others. The 174 `test(...)` bodies in the core suite need no change.
+
+`doclinks.test.js` is the exception and should stay in node: it reads files from disk, which is the
+thing it is testing.
+
+**Environment checks:** `requestIdleCallback` and `Worker` are both available, so a deferred
+after-paint run is possible without a worker if desired. **No git hooks are installed** - the repo's
+`.git/hooks` contains only samples, so there is no existing convention to follow and one must be
+chosen (committed `core.hooksPath` directory, or a documented install step).
+
+**The conclusion worth keeping.** The browser badge only helps when someone is looking at it; a
+pre-commit hook is what actually stops a breaking change entering history. The badge work is a
+confidence restoration, the hook is the guarantee, and they should be judged on that basis rather
+than as one task. And whatever stays outside the badge needs a **count assertion** inside it, or
+P39 recreates its own problem one tier down - the same shape as P38's lesson, where a gate naming
+the strategies it served silently excluded everything added later.

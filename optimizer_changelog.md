@@ -11,6 +11,51 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1468"></a>
+
+## 11.1468 (behavior change)
+
+**Proportional, Reduce, Guyton-Klinger and the default strategy were sizing withdrawals as if
+Social Security, pensions and RMDs arrived tax free. They now draw the IRA needed to cover the
+whole spending goal, so plans that used to report a shortfall next to a large IRA are funded.**
+
+**What was wrong.** These strategies worked out the withdrawal by subtracting your guaranteed
+income from your spending goal, using the full pre-tax value of that income. The tax owed on the
+Social Security, pension and RMD money was never included, so every year came up short by roughly
+the amount of that tax bill. While there was money in Cash or Brokerage the gap was quietly covered
+and nothing looked wrong. Once those accounts ran dry the gap had nowhere to go, and the plan
+reported unfunded spending while the IRA still held a large balance. On one test plan, Proportional
+0% left $304,331 of spending unfunded across 13 years while holding $893,920 in the IRA. Reduce
+left $234,643 unfunded, and Guyton-Klinger $34,050. Which of these plans happened to survive
+depended on details that have nothing to do with funding: Proportional at a 10% boost passed only
+because over-drawing the IRA left a cash surplus that got spent later.
+
+**What changed.** When Cash, Brokerage and Roth are exhausted and spending is still unfunded, these
+strategies now draw the additional IRA needed, the same backstop Fill Bracket and IRMAA Tier have
+always had. The amount appears in the `ForcedIRA` column.
+
+**What this does to your numbers.** If you have a saved Proportional, Reduce or Guyton-Klinger plan,
+or a shared link to one, it can now report different results. A plan that reported a shortfall may
+now succeed. Spending goes up, tax goes up because the extra withdrawal is taxable, and ending
+wealth goes down. On the test plan above, Proportional 0% went from $4,263,278 spent and $684,010
+left over, to $4,567,608 spent and $202,859 left over. The drop in ending wealth is the money being
+spent on your goal instead of sitting unspent in the IRA. Fill Bracket, IRMAA Tier, IRA Draw % and
+Ordered produce identical results to before.
+
+**ACA Cliff is deliberately excluded, and that is not an oversight.** While the cap is in force it
+will still report a shortfall rather than draw more from an IRA. An IRA withdrawal is taxable
+income, and going a single dollar over the cap forfeits the entire premium subsidy, so drawing more
+would cost far more than the spending it funds. A shortfall on ACA Cliff means the spending goal
+could not be met from non-taxable sources, which is the answer that strategy exists to give. Once
+the cap ends at Medicare there is no subsidy left to protect, and from that year the plan is funded
+like any other. On a plan whose cap runs to age 65, that shows up as seven capped years that still
+report a shortfall, followed by twenty-one funded years.
+
+**Also.** A plan that genuinely runs out of money still reports a shortfall. The change only affects
+spending that could have been funded from an IRA that was sitting there.
+
+---
+
 <a id="11.1464"></a>
 
 ## 11.1464
@@ -483,7 +528,7 @@ The Roth Conv column in Annual Details had silently lost its explanatory tooltip
 
 **Three fixes from testing the Extra Conversion field and Break Even.**
 
-(1) The Optimizer's conversion-amount search could recommend a Guyton-Klinger conversion so large that GK could only "afford" it by continuously cutting your future spend behind the scenes -- the search now rejects any amount that isn't actually sustainable for GK, the same stability check already used elsewhere in the optimizer. (2) The "Extra Annual Roth Conversion $" tooltip now says plainly that it is capped only by the remaining IRA balance, not by your IRA Goal -- a conversion moves money IRA-to-Roth rather than out of the household, so it is allowed to draw the IRA below that goal on purpose. (3) When Break Even shows “—”, a new ⓘ next to the stat identifies the specific conversion year that erases an otherwise-sustained lead, instead of leaving you to guess why.
+(1) The Optimizer's conversion-amount search could recommend a Guyton-Klinger conversion so large that GK could only "afford" it by continuously cutting your future spend behind the scenes -- the search now rejects any amount that isn't actually sustainable for GK, the same stability check already used elsewhere in the optimizer. (2) The "Extra Annual Roth Conversion $" tooltip now says plainly that it is capped only by the remaining IRA balance, not by your IRA Goal -- a conversion moves money IRA-to-Roth rather than out of the household, so it is allowed to draw the IRA below that goal on purpose. (3) When Break Even shows “ - ”, a new ⓘ next to the stat identifies the specific conversion year that erases an otherwise-sustained lead, instead of leaving you to guess why.
 
 <a id="11.1253"></a>
 
@@ -499,7 +544,7 @@ Clicking a "⇌ Optimize Conversions" row to load it previously dropped the extr
 
 **Optimizer: Break Even now shown for Optimize Conversions strategies.**
 
-When the Optimize Conversions checkbox is on, the top 5 strategy rows now report a Break Even year (same permanent-crossover definition as the single-scenario stat) in a new column, and a new "Earliest Break Even" objective ranks strategies by how soon their conversions permanently pull ahead. Strategies that never sustain a lead show “—”.
+When the Optimize Conversions checkbox is on, the top 5 strategy rows now report a Break Even year (same permanent-crossover definition as the single-scenario stat) in a new column, and a new "Earliest Break Even" objective ranks strategies by how soon their conversions permanently pull ahead. Strategies that never sustain a lead show “ - ”.
 
 <a id="11.1240"></a>
 
@@ -507,7 +552,7 @@ When the Optimize Conversions checkbox is on, the top 5 strategy rows now report
 
 **Break Even now requires the lead to hold for the rest of the plan.**
 
-A rare scenario could report Break Even off a single year where the converting (or excess-withdrawal) plan brushed even before falling behind again, sometimes for good. Break Even is now the earliest year the plan pulls ahead and stays ahead through the end of the simulation, showing “—” if that lead is never sustained. Same fix applies to excessOC. See “What is Break Even?” below.
+A rare scenario could report Break Even off a single year where the converting (or excess-withdrawal) plan brushed even before falling behind again, sometimes for good. Break Even is now the earliest year the plan pulls ahead and stays ahead through the end of the simulation, showing “ - ” if that lead is never sustained. Same fix applies to excessOC. See “What is Break Even?” below.
 
 <a id="11.11ff"></a>
 
@@ -567,13 +612,13 @@ Added Spending to Annual Details to focus on spending.
 
 **IRMAA now respects Medicare age.**
 
-- **Age-65 gate, per spouse.** The IRMAA surcharge is charged only for spouses who are 65+ (actually on Medicare) — a couple aged 61/59 no longer pays IRMAA no matter how large a Roth conversion is. With one spouse 65+ and one younger, only the older spouse's half is charged.
+- **Age-65 gate, per spouse.** The IRMAA surcharge is charged only for spouses who are 65+ (actually on Medicare) - a couple aged 61/59 no longer pays IRMAA no matter how large a Roth conversion is. With one spouse 65+ and one younger, only the older spouse's half is charged.
 
 - **Tier display fix.** The IRMAA Tier column (and chart milestone) previously appeared one year before the surcharge was actually charged; both now use the same 2-year MAGI lookback as the dollar amount, and show -none- before age 65.
 
-- **IRMAA Ceil strategies unlocked pre-63.** Before any spouse is 63 (the earliest year income can affect a premium, given the 2-year lookback), the IRMAA-tier conversion ceiling relaxes to the top of the federal bracket containing it — no more pointlessly capped conversions in your early 60s. Same for “Lesser of IRMAA or Bracket.”
+- **IRMAA Ceil strategies unlocked pre-63.** Before any spouse is 63 (the earliest year income can affect a premium, given the 2-year lookback), the IRMAA-tier conversion ceiling relaxes to the top of the federal bracket containing it - no more pointlessly capped conversions in your early 60s. Same for “Lesser of IRMAA or Bracket.”
 
-- **Medicare Parts B+D base cost** now shown on charts and table for spouses 65+ — illustration only, not deducted from spendable.
+- **Medicare Parts B+D base cost** now shown on charts and table for spouses 65+ - illustration only, not deducted from spendable.
 
 - **Distinct chart colors.** IRMAA is now deep pink and Medicare teal on all charts (they previously shared nearly identical pinks); the IRMAA milestone marker matches the pink.
 
@@ -603,7 +648,7 @@ IRA/401k/pension distributions are no longer taxed by states that exempt them. I
 
 - **Optimizer symbol legend.** A new legend explains the symbols shown on strategy names (✓ ✦ ▼ 🗘 🔄 ⇌ ⚠️ 🟢 🚨 ⚓).
 
-- **Guyton-Klinger sustainable-spend fix.** When no strategy can fund your spend goal, the suggested fallback spend no longer reports a Guyton-Klinger value that only “works” by cutting spending every year — and the suggested strategy is now clickable to load.
+- **Guyton-Klinger sustainable-spend fix.** When no strategy can fund your spend goal, the suggested fallback spend no longer reports a Guyton-Klinger value that only “works” by cutting spending every year - and the suggested strategy is now clickable to load.
 
 <a id="11.10cf"></a>
 
@@ -657,7 +702,7 @@ real CAGR = (1 + equity) / (1 + inflation) − 1. High-inflation decades like th
 
 **Best "Baseline" is used for strategy comparison:**
 
-- **Honest baseline.** The optimizer now also runs every strategy family with no Roth conversions and no cyclic brokerage maneuvering, no QCDs, and pins the strongest of those as a ⚓ BASELINE reference row at the top of the results. Every other strategy is measured against it — because "strategy A beats strategy B" only means something relative to the best you can do without conversion/brokerage tricks.
+- **Honest baseline.** The optimizer now also runs every strategy family with no Roth conversions and no cyclic brokerage maneuvering, no QCDs, and pins the strongest of those as a ⚓ BASELINE reference row at the top of the results. Every other strategy is measured against it - because "strategy A beats strategy B" only means something relative to the best you can do without conversion/brokerage tricks.
 
 <a id="11.1048"></a>
 
@@ -681,7 +726,7 @@ real CAGR = (1 + equity) / (1 + inflation) − 1. High-inflation decades like th
 
 **Δ columns honor Future/Current $; tax tooltips clarified:**
 
-- **Cleaner table.** Infeasible (bracket-unreachable) rows are hidden by default — click the Infeasible legend to reveal or hide them. Failed plans always sort below successful ones. Every column header now has an explanatory tooltip.
+- **Cleaner table.** Infeasible (bracket-unreachable) rows are hidden by default - click the Infeasible legend to reveal or hide them. Failed plans always sort below successful ones. Every column header now has an explanatory tooltip.
 
 <a id="11.fed"></a>
 
@@ -689,7 +734,7 @@ real CAGR = (1 + equity) / (1 + inflation) − 1. High-inflation decades like th
 
 **Charitable Giving (QCDs) & UX Improvements:**
 
-- **Qualified Charitable Distributions (QCDs):** New Charitable Giving (QCD) section in the sidebar. Enter an annual household QCD maximum — the simulation transfers that amount directly from the larger eligible IRA to charity each year (age 70½+ per person). QCDs satisfy the RMD requirement without adding to taxable income, reducing IRMAA exposure.
+- **Qualified Charitable Distributions (QCDs):** New Charitable Giving (QCD) section in the sidebar. Enter an annual household QCD maximum - the simulation transfers that amount directly from the larger eligible IRA to charity each year (age 70½+ per person). QCDs satisfy the RMD requirement without adding to taxable income, reducing IRMAA exposure.
 Two modes: Always donates the full amount every eligible year; As Needed applies only enough to drop two IRMAA tiers (or escape the surcharge entirely, whichever requires fewer dollars). The per-person limit is $111,000 for 2026 (CPI-indexed annually per SECURE 2.0). QCDs appear as a gray bar in the Income & Expenses chart.
 
 - **Dollar display toggle:** The Future $ / Current $ toggle has moved to the left of the tab bar (always visible). Future $ shows nominal amounts as they will actually appear; Current $ restates everything in today's purchasing power for easy year-to-year comparison.
@@ -710,7 +755,7 @@ Corrected Portfolio Withdrawal percent calculations. Added netOutflow, grossOutf
 
 **Withdrawal Timing:**
 
-Each simulation year now auto-selects Early (January) or Late (December) withdrawal timing. Conversion years use Early — maximizing Roth compounding duration. Spending-only years use Late — the full portfolio compounds before the withdrawal exits, gaining D×r per year (~$3,500/yr on a $50k draw at 7%). No manual toggle; the algorithm tracks prior-year conversion activity. A new Timing column in Annual Details shows Early(Conv) or Late(Spend) for each year.
+Each simulation year now auto-selects Early (January) or Late (December) withdrawal timing. Conversion years use Early - maximizing Roth compounding duration. Spending-only years use Late - the full portfolio compounds before the withdrawal exits, gaining D×r per year (~$3,500/yr on a $50k draw at 7%). No manual toggle; the algorithm tracks prior-year conversion activity. A new Timing column in Annual Details shows Early(Conv) or Late(Spend) for each year.
 
 <a id="11.eca"></a>
 
@@ -726,7 +771,7 @@ In Historical mode, the bottom 25% of paths begin with a randomly-sampled worst-
 
 **Stress Mode:**
 
-Monte Carlo "Stress (worst sequences)" runs the worst historical retirement-start sequences scored by first-decade real (inflation-adjusted) CAGR. Shows sequence-of-returns risk directly — each line is a real historical scenario. Chart labels show nominal equity CAGR, inflation CAGR, and real CAGR for each scenario. Clicking on a legend hides all other plots. Will your retirement withdrawal strategy survive the stagflation of the 1960s–70s? The tech bubble of 2000? This will tell you.
+Monte Carlo "Stress (worst sequences)" runs the worst historical retirement-start sequences scored by first-decade real (inflation-adjusted) CAGR. Shows sequence-of-returns risk directly - each line is a real historical scenario. Chart labels show nominal equity CAGR, inflation CAGR, and real CAGR for each scenario. Clicking on a legend hides all other plots. Will your retirement withdrawal strategy survive the stagflation of the 1960s–70s? The tech bubble of 2000? This will tell you.
 
 <a id="11.ec8"></a>
 
@@ -772,7 +817,7 @@ Avg BETR summary stat shows the average across all conversion years. "Conv Optim
 
 ## 11.e52
 
-URL compression: all share URLs now use short parameter names (57% shorter). Share button opens a copyable popup panel on all tools matching Income Tax Planner style. Income Tax Planner gets an "Open in Tax Planner →" button that pre-fills Retirement Tax Planner with state, SS income, and capital gains. Backward compatible — existing long-key bookmarks still load.
+URL compression: all share URLs now use short parameter names (57% shorter). Share button opens a copyable popup panel on all tools matching Income Tax Planner style. Income Tax Planner gets an "Open in Tax Planner →" button that pre-fills Retirement Tax Planner with state, SS income, and capital gains. Backward compatible - existing long-key bookmarks still load.
 
 <a id="11.e4f"></a>
 
@@ -820,4 +865,4 @@ Ages (current age and RMD start age, live-updating) added; optimizer always runs
 
 ## 11.da6
 
-Bug fixes: survivor SS benefit was ~2× correct (delayed credits were accruing past claiming age — fixed); dividends now correctly compound inside IRA and Roth accounts (previously only Brokerage received the dividend growth component). New feature: Retirement Start Age — enter the age you plan to retire; the simulation inflates brackets, SS COLA, and spend goal forward to that year automatically. Start age defaults to your current real-world age (birth-month aware). You may have retired already, but this tool starts where you are. Monte Carlo: click any result row to load that strategy. Annual Details: Roth1/Roth2 per-person balance columns now available under Roth Δ. Minor Version numbering changed: lowercase hex((day-of-year × 24) + hour).
+Bug fixes: survivor SS benefit was ~2× correct (delayed credits were accruing past claiming age - fixed); dividends now correctly compound inside IRA and Roth accounts (previously only Brokerage received the dividend growth component). New feature: Retirement Start Age - enter the age you plan to retire; the simulation inflates brackets, SS COLA, and spend goal forward to that year automatically. Start age defaults to your current real-world age (birth-month aware). You may have retired already, but this tool starts where you are. Monte Carlo: click any result row to load that strategy. Annual Details: Roth1/Roth2 per-person balance columns now available under Roth Δ. Minor Version numbering changed: lowercase hex((day-of-year × 24) + hour).

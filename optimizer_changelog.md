@@ -11,6 +11,77 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.146e"></a>
+
+## 11.146e (behavior change)
+
+**States that exempt retirement income were charging tax on it anyway, in the years the plan had to
+make a late correction. Ordered strategies were hit hardest, and many plans that reported failure in
+those states actually succeed.**
+
+**Where it went wrong.** 16 of the 38 states the tool models exempt some or all of your pension and
+IRA income: Connecticut, Georgia, Illinois, Mississippi, Iowa, Maryland, Michigan, New York,
+Pennsylvania, Virginia, Alabama, Colorado, Kentucky, Maine, Ohio and Wisconsin. To apply that
+exemption the tax calculation has to be told which part of your income is retirement income. The
+tool works out your tax up to four times in a year as it settles the final withdrawal amounts, and
+one of those four passes was not passing that information along. Any year that reached that pass was
+taxed as though your state had no exemption at all.
+
+**Why Ordered strategies took the worst of it.** For most strategies a later pass runs after the
+faulty one and works the tax out again, correctly, which hid the problem most of the time. Ordered
+strategies (CBIR, RIBC, BIRC) do not run that later pass, because they follow the account sequence
+you chose rather than reaching for more IRA. So for Ordered the faulty figure was the final answer.
+
+**What this does to your numbers.** Only plans in those 16 states change, and the change is in your
+favor: less state tax, so more of your money is spendable. Across a 16-state test sweep the
+correction removed **$732,133** of state tax that was never owed, **$685,487** of it on Ordered
+rows. On one Pennsylvania test plan whose only income was Social Security, a pension and IRA
+withdrawals, all three of which Pennsylvania exempts, lifetime state tax fell from **$28,055 to
+$9**. **23 of the 36 Ordered plans in the sweep went from reporting failure to funding the whole
+plan.** Plans in the other 22 states are unchanged to the dollar.
+
+A small number of plans show lifetime state tax a few hundred dollars **higher** even though every
+individual year is now taxed correctly. That is the knock-on effect of paying less tax earlier: more
+money stays invested, it grows, and a larger balance produces slightly more taxable income later.
+Those same plans end with more money than before.
+
+---
+
+<a id="11.146b"></a>
+
+## 11.146b
+
+**The documentation now matches how spending is actually funded, and says plainly which two
+strategies leave a shortfall on purpose.** No plan's numbers change.
+
+The last two releases changed which strategies draw extra IRA to fund spending and how the first
+withdrawal is sized, but the README, several tooltips and the Annual Details legend still described
+the old behavior. Three things were wrong or missing.
+
+**1. The funding backstop was described as a Fill Bracket / IRMAA feature.** It has not been one
+since 11.1468. Once Cash, Brokerage and Roth are exhausted, nearly every strategy now draws the
+extra IRA needed. What is specific to Fill Bracket and IRMAA Tier is that their draw goes *above*
+the chosen ceiling, which is what makes those ceilings soft.
+
+**2. Ordered's exclusion was documented nowhere.** ACA Cliff has always been explained as a strategy
+that reports a shortfall on purpose. Ordered does the same thing for its own reason, that the
+account sequence is the one you picked, and it will not step outside it even when a later account in
+your sequence still holds money. Until now nothing told you that, so a small residual shortfall on a
+CBIR, RIBC or BIRC row looked like a bug. It is not. That is now stated in the README, in the
+strategy description, on the Annual Details legend, and in the shortfall column tooltip.
+
+**3. The shortfall tooltip blamed the tool.** It said a shortfall was "likely due to errors in the
+calculation", which was misleading even before these changes and is now backwards. A shortfall
+normally means the plan ran out of money; the two exceptions above are deliberate.
+
+Also corrected: the IRA Draw % tooltip in the sidebar stopped its fill chain at Roth while the
+Documentation tab's description of the same strategy already mentioned the last-resort draw, so the
+two disagreed. The Cash Reserve depletion order now notes the two strategies that stop before the
+forced-IRA step. The README gained an entry for both of the last two releases, which it was missing
+entirely.
+
+---
+
 <a id="11.146a"></a>
 
 ## 11.146a (behavior change)

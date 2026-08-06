@@ -1481,7 +1481,7 @@ function renderOptimizerTable(results) {
         const isFailed = !r.totals.success;
         const isInfeasible = (r._isBracketInfeasible || r._isACAUntenable) && !isWinner;
         const rowTitle = isFailed
-            ? 'Failed - the portfolio ran out of money before the end of the plan (a real shortfall)'
+            ? 'Failed - the portfolio ran out of money before the end of the plan (a real shortfall). ACA Cliff and Ordered rows can fail with money still in an account, by design: neither will breach its own constraint to spend it.'
             : isInfeasible
             ? (r._isACAUntenable
                 ? ((r._acaBreachYears ?? 0) > 0
@@ -1595,7 +1595,7 @@ function renderOptimizerTable(results) {
         const swatch = '<span style="display:inline-block;width:14px;height:14px;background:#fde0e0;opacity:0.9;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>';
         if (failedCount > 0) {
             const action = showFailed ? `click to hide ${failedCount}` : `click to show ${failedCount} hidden`;
-            const tip = `Failed = the portfolio ran out of money before the end of the plan (a real shortfall, 🚨). Hidden by default - ${showFailed ? 'click to hide them again' : 'click to reveal them'}.`;
+            const tip = `Failed = the portfolio ran out of money before the end of the plan (a real shortfall, 🚨). ACA Cliff and Ordered rows can fail with money still in an account, by design. Hidden by default - ${showFailed ? 'click to hide them again' : 'click to reveal them'}.`;
             legendFailedEl.innerHTML = `<span onclick="toggleFailedRows()" title="${tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${swatch}🚨 Failed - ${action}</span>`;
         } else {
             legendFailedEl.innerHTML = `${swatch}🚨 Failed - none in this run`;
@@ -2161,7 +2161,7 @@ function updateTable(log) {
         'MAGI': 'Modified Adjusted Gross Income - determines future IRMAA',
         'totalTax': 'Federal, State, IRMAA, NIIT, and CapGains taxes - in total.',
         'SumTaxes': 'Running total of Federal, State, IRMAA, NIIT, and CapGains taxes.',
-        'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Likely due to errors in the calculation or unexpected bracket changes - or running out of assets.',
+        'shortfall': 'How much income is missing, that is: spendGoal - (totalIncome - totalTax). Normally it means the plan ran out of money: every other account was spent and the IRA could not cover the rest. Two strategies report it by design instead. ACA Cliff will not cross its income cap while that cap is in force, because crossing it forfeits the premium subsidy. Ordered will not step outside the account sequence you chose, so it can leave a small residual while a later account still holds money.',
         'totalIncome': 'Funds from all sources, taxable and tax-free.',
         'NominalRate%': 'TotalTax/TotalGrossIncome for all taxes - Fed, State, IRMAA',
         'convOC': 'Roth Conversion Opportunity Cost: this plan\'s after-tax total wealth minus the same plan re-simulated with no conversions (the dollars stay in the IRA, no conversion tax is paid, and the bigger IRA pays its own larger RMD taxes and IRMAA later). Positive = the conversions have paid off by this year. The Break Even stat is the year the plan permanently pulls ahead and stays ahead for the rest of the plan, not just the first year that happens to touch non-negative.',

@@ -1264,6 +1264,38 @@ test('PA exempts IRA/pension distributions from state tax', () => {
     assertNear(withExcl.stateTax, 0, 'PA state tax should be ~0 once retirement income is excluded', 1);
 });
 
+// The two tests above call calculateTaxes DIRECTLY, which is why they stayed green for as long as
+// the engine forgot to hand it pensionIncome/iraIncome. The third pass (resolveResidualAndForcedIRA)
+// omitted both while the other three passes passed them, so a year that reached the third pass was
+// taxed as if its state had no retirement exclusion at all. This test drives the whole engine
+// instead, so the arguments have to survive the trip.
+//
+// `ordered` is the arm that exposes it, and not by luck: it is excluded from the forced-IRA loop
+// (optimizer_core.js:1741), and that loop is what recomputes tax after the third pass for every
+// other strategy. For Ordered the third pass IS the final word, so a wrong argument list there is
+// never corrected. Measured across 16 exclusion states x 6 arms, Ordered carried $685,487 of the
+// $732,133 total state-tax correction and flipped 23 of its 36 cases from failure to success.
+//
+// The fixture strips out every income source PA actually taxes - no Brokerage (so no capital gains
+// or dividends), no cash yield (so no interest) - leaving only Social Security, pension and IRA
+// distributions. PA exempts all three, so the correct answer is a hard zero and any state tax at
+// all is the bug.
+test('third pass keeps the state retirement-income exclusion (PA, Ordered)', () => {
+    const r = simulate({
+        ...CAP_BASE, STATEname: 'PA', strategy: 'ordered', orderedSeq: 'CBIR',
+        stratRate: 0, stratACAMultiple: 0,
+        Brokerage: 0, BrokerageBasis: 0, cashYield: 0, dividendRate: 0,
+        pensionAnnual: 40000, pensionStartAge: 65,
+    });
+    assert(r.totals.thirdPassCount > 0,
+        'fixture must actually reach the third pass, or it proves nothing about that code path');
+    const stateTax = r.log.reduce((s, e) => s + (e.StateTax || 0), 0);
+    assert(stateTax < 100,
+        `PA exempts Social Security, pension and IRA distributions, and this plan has no other ` +
+        `income, so lifetime state tax should be ~0. Got ${stateTax.toFixed(2)} ` +
+        `(it was 28,054.65 before the third pass was given pensionIncome/iraIncome).`);
+});
+
 test('IL still taxes non-retirement income (interest/dividends not exempt)', () => {
     // $80k IRA (exempt) + $30k ordinary dividends (NOT exempt) → state tax on the $30k only.
     const r = calculateTaxes({ filingStatus: 'MFJ', ages: [70, 70], state: 'IL',

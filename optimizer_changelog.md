@@ -3,7 +3,7 @@
 Full write-ups of what changed in each release, newest first.
 
 The Documentation tab inside [retirement_optimizer.html](retirement_optimizer.html) carries a short
-summary of the five most recent releases and links here for the detail. Entries marked **behavior
+summary of the most recent releases and links here for the detail. Entries marked **behavior
 change** alter the numbers an existing plan produces, so a saved scenario or a shared link can give a
 different answer than it did before that release.
 
@@ -86,7 +86,7 @@ lifetime state tax fell from **$28,055 to $9**. Plans in the other 22 states are
 ### 4. Documentation that no longer matched the tool
 
 The funding backstop was still described as a Fill Bracket / IRMAA feature. It has not been one
-since 11.1468: once Cash, Brokerage and Roth are exhausted, nearly every strategy now draws the
+since 11.146a: once Cash, Brokerage and Roth are exhausted, nearly every strategy now draws the
 extra IRA needed. What is specific to those two ceilings is that their draw goes *above* the
 ceiling, which is what makes them soft.
 
@@ -109,84 +109,64 @@ rounding-scale residuals from the order in which tax is recomputed, not stranded
 
 ## 11.146a (behavior change)
 
-**The same strategies now work the withdrawal out correctly the first time, instead of drawing too
-little and then patching the difference. The tax on your guaranteed income is part of the
-calculation rather than an afterthought.**
+**Proportional, Reduce, Guyton-Klinger and the default strategy were sizing withdrawals as if Social
+Security, pensions and RMDs arrived tax free. They now work the withdrawal out correctly, and they
+draw the IRA needed to cover the whole spending goal, so plans that used to report a shortfall next
+to a large IRA are funded.**
 
-**What was wrong.** The previous release fixed the symptom. When Proportional, Reduce,
-Guyton-Klinger or the default strategy came up short, they could finally go back to the IRA for the
-difference. But the reason they came up short every year was still there: the first withdrawal was
-worked out by subtracting your guaranteed income from your spending goal at its full pre-tax value,
-so it was always too small by about the tax owed on your Social Security, pension and required
-distributions. The plan then spent the year discovering that and correcting it. The end result was
-usually right, but the withdrawal amounts and the tax that followed from them were not, and every
-plan leaned on an emergency backstop to do ordinary work.
+**What was wrong.** These strategies worked out the withdrawal by subtracting your guaranteed income
+from your spending goal, using the full **pre-tax** value of that income. The tax owed on the Social
+Security, pension and RMD money was never included, so every year came up short by roughly the
+amount of that tax bill. While there was money in Cash or Brokerage the gap was quietly covered and
+nothing looked wrong. Once those accounts ran dry the gap had nowhere to go, and the plan reported
+unfunded spending while the IRA still held a large balance.
 
-**What changed.** The first withdrawal is now sized against what your guaranteed income is actually
-worth after tax. The tax is computed, not estimated with a single rate, because your guaranteed
-income is not taxed at one rate: Social Security is between 0% and 85% taxable depending on your
-other income, qualified dividends have their own 0/15/20% schedule, and pensions and required
-distributions are ordinary income. Applying one blended rate to the whole amount would have
-overstated the tax by several times on a Social Security heavy household and drawn far too much.
+On one test plan, Proportional 0% left **$304,331** of spending unfunded across 13 years while
+holding **$893,920** in the IRA. Reduce left $234,643 unfunded, and Guyton-Klinger $34,050. Which of
+these plans happened to survive depended on details that have nothing to do with funding:
+Proportional at a 10% boost passed only because over-drawing the IRA left a cash surplus that got
+spent later.
 
-**What this does to your numbers.** On the same test plan used in the previous entry, Proportional
-0% spends the same $4,567,609 and the backstop draw shown in the `ForcedIRA` column falls from
-$395,109 to $43,816. The withdrawals are now where they belong, and the backstop is back to being a
-backstop. Ending wealth moves a little, from $202,859 to $195,000. On other plans the effect is
-larger and can go either way, because a differently sized withdrawal lands in different tax
-brackets: one Guyton-Klinger test plan pays $29,575 less tax and ends with $89,827 more, while a
-Proportional plan with a large IRA pays $17,677 more tax and ends with $8,648 less. Guyton-Klinger
-plans can also change their spending path, since that strategy sets spending from the portfolio
-balance and the balance now follows a different track.
+**What changed, part one: the plan can reach the money.** When Cash, Brokerage and Roth are
+exhausted and spending is still unfunded, these strategies now draw the additional IRA needed, the
+same backstop Fill Bracket and IRMAA Tier have always had. The amount appears in the `ForcedIRA`
+column.
 
-**Which strategies change.** Proportional, Guyton-Klinger, the default strategy, an ACA Cliff plan
-after its cap ends at Medicare, and the Cyclic Brokerage option. Fill Bracket, IRMAA Tier, IRA
-Draw %, Reduce IRA in N Years and Ordered set their withdrawal by their own rule and never used this
-calculation, so they produce identical results to before. ACA Cliff while its cap is in force is
-unchanged and still reports a shortfall rather than crossing the cap, for the reasons in the
-previous entry.
+**What changed, part two: the first withdrawal is the right size.** Part one fixed the symptom, but
+the reason the plan came up short every year was still there. The first withdrawal is now sized
+against what your guaranteed income is actually worth **after** tax. That tax is computed, not
+estimated with a single rate, because your guaranteed income is not taxed at one rate: Social
+Security is between 0% and 85% taxable depending on your other income, qualified dividends have
+their own 0/15/20% schedule, and pensions and required distributions are ordinary income. Applying
+one blended rate to the whole amount would have overstated the tax by several times on a Social
+Security heavy household and drawn far too much.
 
----
+**What this does to your numbers.** A plan that reported a shortfall may now succeed. On the test
+plan above, Proportional 0% went from $4,263,278 spent and $684,010 left over, to **$4,567,609 spent
+and $195,000 left over**. The drop in ending wealth is the money being spent on your goal instead of
+sitting unspent in the IRA. The backstop is also back to being a backstop rather than doing ordinary
+work: the `ForcedIRA` draw on that plan fell from $395,109 to $43,816 once the first withdrawal was
+sized correctly.
 
-<a id="11.1468"></a>
+On other plans the effect is larger and can go either way, because a differently sized withdrawal
+lands in different tax brackets: one Guyton-Klinger test plan pays $29,575 less tax and ends with
+$89,827 more, while a Proportional plan with a large IRA pays $17,677 more tax and ends with $8,648
+less. Guyton-Klinger plans can also shift their spending path, since that strategy sets spending
+from the portfolio balance and the balance now follows a different track.
 
-## 11.1468 (behavior change)
-
-**Proportional, Reduce, Guyton-Klinger and the default strategy were sizing withdrawals as if
-Social Security, pensions and RMDs arrived tax free. They now draw the IRA needed to cover the
-whole spending goal, so plans that used to report a shortfall next to a large IRA are funded.**
-
-**What was wrong.** These strategies worked out the withdrawal by subtracting your guaranteed
-income from your spending goal, using the full pre-tax value of that income. The tax owed on the
-Social Security, pension and RMD money was never included, so every year came up short by roughly
-the amount of that tax bill. While there was money in Cash or Brokerage the gap was quietly covered
-and nothing looked wrong. Once those accounts ran dry the gap had nowhere to go, and the plan
-reported unfunded spending while the IRA still held a large balance. On one test plan, Proportional
-0% left $304,331 of spending unfunded across 13 years while holding $893,920 in the IRA. Reduce
-left $234,643 unfunded, and Guyton-Klinger $34,050. Which of these plans happened to survive
-depended on details that have nothing to do with funding: Proportional at a 10% boost passed only
-because over-drawing the IRA left a cash surplus that got spent later.
-
-**What changed.** When Cash, Brokerage and Roth are exhausted and spending is still unfunded, these
-strategies now draw the additional IRA needed, the same backstop Fill Bracket and IRMAA Tier have
-always had. The amount appears in the `ForcedIRA` column.
-
-**What this does to your numbers.** If you have a saved Proportional, Reduce or Guyton-Klinger plan,
-or a shared link to one, it can now report different results. A plan that reported a shortfall may
-now succeed. Spending goes up, tax goes up because the extra withdrawal is taxable, and ending
-wealth goes down. On the test plan above, Proportional 0% went from $4,263,278 spent and $684,010
-left over, to $4,567,608 spent and $202,859 left over. The drop in ending wealth is the money being
-spent on your goal instead of sitting unspent in the IRA. Fill Bracket, IRMAA Tier, IRA Draw % and
-Ordered produce identical results to before.
+**Which strategies change.** Proportional, Reduce, Guyton-Klinger, the default strategy, an ACA
+Cliff plan after its cap ends at Medicare, and the Cyclic Brokerage option. Fill Bracket, IRMAA Tier,
+IRA Draw % and Ordered set their withdrawal by their own rule, so they produce identical results to
+before.
 
 **ACA Cliff is deliberately excluded, and that is not an oversight.** While the cap is in force it
-will still report a shortfall rather than draw more from an IRA. An IRA withdrawal is taxable
-income, and going a single dollar over the cap forfeits the entire premium subsidy, so drawing more
-would cost far more than the spending it funds. A shortfall on ACA Cliff means the spending goal
-could not be met from non-taxable sources, which is the answer that strategy exists to give. Once
-the cap ends at Medicare there is no subsidy left to protect, and from that year the plan is funded
-like any other. On a plan whose cap runs to age 65, that shows up as seven capped years that still
-report a shortfall, followed by twenty-one funded years.
+will still report a shortfall rather than draw more from an IRA. An IRA withdrawal is taxable income,
+and going a single dollar over the cap forfeits the entire premium subsidy, so drawing more would
+cost far more than the spending it funds. A shortfall on ACA Cliff means the spending goal could not
+be met from non-taxable sources, which is the answer that strategy exists to give. Once the cap ends
+at Medicare there is no subsidy left to protect, and from that year the plan is funded like any
+other. On a plan whose cap runs to age 65, that shows up as seven capped years that still report a
+shortfall, followed by twenty-one funded years.
 
 **Also.** A plan that genuinely runs out of money still reports a shortfall. The change only affects
 spending that could have been funded from an IRA that was sitting there.
@@ -195,54 +175,24 @@ spending that could have been funded from an IRA that was sitting there.
 
 <a id="11.1464"></a>
 
-## 11.1464
+## 11.1464 (behavior change)
 
-**The ACA Cliff strategies are now available to everyone, and the warning about them tells you which
-year it is talking about.**
+**The ACA Cliff strategies are now available to everyone, the income cap ends when Medicare begins
+instead of being enforced for the rest of your life, and the warnings tell you which year they are
+talking about.**
 
-Three changes, all to what you can see and select. No plan's numbers move.
+Only plans using an ACA Cliff strategy change their numbers. Everything else is about what you can
+see and select.
 
-**1. ACA Cliff is no longer an advanced-only option.** The four Federal Poverty Level ceilings
-(200/250/300/400%) now appear in the ceiling dropdown for everyone, the Optimizer sweeps those rows
-for everyone, and the paragraph explaining the strategy is no longer hidden. It was gated because
-the ACA model is rough, which is still true, so the documentation now says so plainly rather than
-the option being hidden. In particular the tool models the income cap and **none** of the premium
-subsidy that cap buys, so an ACA row shows you what staying under the limit costs and not what it
-saves. The options still disappear once both people are on Medicare at the start of the plan.
+**1. The cap now ends at Medicare.** ACA premium subsidies stop being available once you are
+eligible for Medicare. The tool was not checking ages at all: pick an ACA Cliff strategy and it held
+your income under the Federal Poverty Level multiple you chose at 65, at 80, at 95, protecting a
+subsidy that had ended decades earlier. On a plan that opens after 65 the cap was being enforced for
+every single year.
 
-**2. The 400% option no longer carries a warning triangle.** Nothing computed it. It was fixed text
-attached to that one entry, so it appeared even when 400% was the only workable choice, and stayed
-silent on a 200% cap that could not fund a single year. Whether a cap is achievable cannot be known
-without running the plan, which the dropdown does not do. The ⚠️ that **is** computed is the one on
-Optimizer rows, from the number of years the cap actually blocked spending. Because a lower
-percentage is a stricter limit, if one ACA row is flagged there, every lower one is flagged too.
-
-**3. The Medicare warning now names the year and your ages in it.** It used to say only that you
-would be on Medicare "at retirement start", while the age shown next to your birth year is your age
-**today**. If your plan starts years from now those are two different numbers, and being told you
-are on Medicare while the field beside it reads "Age 59" looked like the tool had stopped paying
-attention. It now reads, for example, "At retirement start in 2031, you will be 65 and your spouse
-79", and tells you that lowering **Retirement Start Age** is what brings the ACA years back.
-
----
-
-<a id="11.1462"></a>
-
-## 11.1462 (behavior change)
-
-**The ACA income cap now ends when Medicare begins, instead of being enforced for the rest of your
-life.**
-
-ACA premium subsidies stop being available once you are eligible for Medicare. The tool was not
-checking ages at all: pick an ACA Cliff strategy and it held your income under the Federal Poverty
-Level multiple you chose at 65, at 80, at 95, protecting a subsidy that had ended decades earlier.
-On a plan that opens after 65 the cap was being enforced for every single year of the plan.
-
-What happens now: from the first year in which **every living person in the plan** is old enough for
-Medicare, the cap is dropped and the strategy behaves as **Proportional 0%**, drawing across your
-accounts to fund your spending goal.
-
-Two details worth knowing, because both change what you should expect to see:
+From the first year in which **every living person in the plan** is old enough for Medicare, the cap
+is dropped and the strategy behaves as **Proportional 0%**, drawing across your accounts to fund
+your spending goal. Two details worth knowing:
 
 + It is **every living person**, not every person. If one spouse dies before reaching Medicare age
   and the survivor is already past it, the cap ends that year. Those survivor years are exactly where
@@ -250,12 +200,8 @@ Two details worth knowing, because both change what you should expect to see:
   nothing.
 + Until then the cap is measured against **household** income. If one spouse is already on Medicare
   and the other is not, the older spouse's required distributions and Social Security still count
-  against the younger spouse's limit. The tool now says this in the warning under the strategy
-  selector, which previously claimed the limits applied only to the younger person.
-
-**Who this changes.** Only plans using an ACA Cliff strategy. Nothing else moves: Fill Bracket,
-Minimize IRMAA, Proportional, Reduce, IRA Draw, Ordered, Guyton-Klinger and the baseline were all
-confirmed identical to the previous release.
+  against the younger spouse's limit. The warning under the strategy selector now says this; it
+  previously claimed the limits applied only to the younger person.
 
 On a couple aged 66 and 67 at the start with a $2.1M IRA and a $160,000 spending goal, the ACA 400%
 arm changes like this:
@@ -268,16 +214,30 @@ arm changes like this:
 | ending net worth | $1,888,543 | $684,010 |
 
 Ending net worth **falls**, and that is the point rather than a side effect. The old behavior looked
-wealthier only because it refused to fund the spending goal and left the money in the IRA. The
-remaining $304,331 of unfunded spending is not an ACA effect at all; it is what Proportional 0%
-already did on that plan, unchanged by this release.
+wealthier only because it refused to fund the spending goal and left the money in the IRA.
 
-An ACA row is still worth reading as a constraint study rather than a recommendation. The tool
-models the income cap and none of the premium subsidy it buys, so it can show you what staying under
-the cap costs you and not what it saves you.
+**2. ACA Cliff is no longer an advanced-only option.** The four Federal Poverty Level ceilings
+(200/250/300/400%) now appear in the ceiling dropdown for everyone, the Optimizer sweeps those rows
+for everyone, and the paragraph explaining the strategy is no longer hidden. It was gated because the
+ACA model is rough, which is still true, so the documentation now says so plainly rather than the
+option being hidden. In particular the tool models the income cap and **none** of the premium subsidy
+that cap buys, so an ACA row shows you what staying under the limit costs and not what it saves. Read
+one as a constraint study, never as a recommendation. The options still disappear once both people
+are on Medicare at the start of the plan.
 
-Also in this release: the year a cap actually blocked spending is now recorded per year internally
-rather than only as a total, which is what made the above measurable.
+**3. The 400% option no longer carries a warning triangle.** Nothing computed it. It was fixed text
+attached to that one entry, so it appeared even when 400% was the only workable choice, and stayed
+silent on a 200% cap that could not fund a single year. Whether a cap is achievable cannot be known
+without running the plan, which the dropdown does not do. The ⚠️ that **is** computed is the one on
+Optimizer rows, from the number of years the cap actually blocked spending. Because a lower
+percentage is a stricter limit, if one ACA row is flagged there, every lower one is flagged too.
+
+**4. The Medicare warning now names the year and your ages in it.** It used to say only that you
+would be on Medicare "at retirement start", while the age shown next to your birth year is your age
+**today**. If your plan starts years from now those are two different numbers, and being told you are
+on Medicare while the field beside it reads "Age 59" looked like the tool had stopped paying
+attention. It now reads, for example, "At retirement start in 2031, you will be 65 and your spouse
+79", and tells you that lowering **Retirement Start Age** is what brings the ACA years back.
 
 ---
 

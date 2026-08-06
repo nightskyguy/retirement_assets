@@ -45,9 +45,9 @@ Proportional plan with a large IRA pays $17,677 more tax and ends with $8,648 le
 plans can also change their spending path, since that strategy sets spending from the portfolio
 balance and the balance now follows a different track.
 
-**Which strategies change.** Proportional, Reduce, Guyton-Klinger, the default strategy, an ACA
-Cliff plan after its cap ends at Medicare, and the Cyclic Brokerage option. Fill Bracket, IRMAA
-Tier, IRA Draw %, Fixed and Ordered set their withdrawal by their own rule and never used this
+**Which strategies change.** Proportional, Guyton-Klinger, the default strategy, an ACA Cliff plan
+after its cap ends at Medicare, and the Cyclic Brokerage option. Fill Bracket, IRMAA Tier, IRA
+Draw %, Reduce IRA in N Years and Ordered set their withdrawal by their own rule and never used this
 calculation, so they produce identical results to before. ACA Cliff while its cap is in force is
 unchanged and still reports a shortfall rather than crossing the cap, for the reasons in the
 previous entry.

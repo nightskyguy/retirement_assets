@@ -1703,10 +1703,17 @@ function resolveResidualAndForcedIRA(sim, yr) {
             if (_remShort > 1 && yr.isACAStrategy) yr.acaBreach = true;
         }
         yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
+        // pensionIncome/iraIncome split out the retirement-income share of earnedIncome. 16 of the
+        // 38 modeled states exempt some or all of it (taxengine.js evaluateRetirementExclusion /
+        // evaluateRetirementCredit), and without the split every dollar reads as ordinary wages.
+        // This call used to omit both while the other three passes (:1504, :1638, :1753) passed
+        // them, so any year that reached the third pass was taxed as though its state had no
+        // exclusion at all - state tax overstated, spendable income understated.
         yr.tax = calculateTaxes({
             filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
             totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
             earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
+            pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
             taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep
         });

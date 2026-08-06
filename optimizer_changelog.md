@@ -11,6 +11,42 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.146e"></a>
+
+## 11.146e (behavior change)
+
+**States that exempt retirement income were charging tax on it anyway, in the years the plan had to
+make a late correction. Ordered strategies were hit hardest, and many plans that reported failure in
+those states actually succeed.**
+
+**Where it went wrong.** 16 of the 38 states the tool models exempt some or all of your pension and
+IRA income: Connecticut, Georgia, Illinois, Mississippi, Iowa, Maryland, Michigan, New York,
+Pennsylvania, Virginia, Alabama, Colorado, Kentucky, Maine, Ohio and Wisconsin. To apply that
+exemption the tax calculation has to be told which part of your income is retirement income. The
+tool works out your tax up to four times in a year as it settles the final withdrawal amounts, and
+one of those four passes was not passing that information along. Any year that reached that pass was
+taxed as though your state had no exemption at all.
+
+**Why Ordered strategies took the worst of it.** For most strategies a later pass runs after the
+faulty one and works the tax out again, correctly, which hid the problem most of the time. Ordered
+strategies (CBIR, RIBC, BIRC) do not run that later pass, because they follow the account sequence
+you chose rather than reaching for more IRA. So for Ordered the faulty figure was the final answer.
+
+**What this does to your numbers.** Only plans in those 16 states change, and the change is in your
+favor: less state tax, so more of your money is spendable. Across a 16-state test sweep the
+correction removed **$732,133** of state tax that was never owed, **$685,487** of it on Ordered
+rows. On one Pennsylvania test plan whose only income was Social Security, a pension and IRA
+withdrawals, all three of which Pennsylvania exempts, lifetime state tax fell from **$28,055 to
+$9**. **23 of the 36 Ordered plans in the sweep went from reporting failure to funding the whole
+plan.** Plans in the other 22 states are unchanged to the dollar.
+
+A small number of plans show lifetime state tax a few hundred dollars **higher** even though every
+individual year is now taxed correctly. That is the knock-on effect of paying less tax earlier: more
+money stays invested, it grows, and a larger balance produces slightly more taxable income later.
+Those same plans end with more money than before.
+
+---
+
 <a id="11.146b"></a>
 
 ## 11.146b

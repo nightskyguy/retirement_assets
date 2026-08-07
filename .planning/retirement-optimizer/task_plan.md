@@ -2696,7 +2696,32 @@ defect larger than any of them, so the single "PR 3" in the table below became f
 | 3b | Medicare age -> `TAXData.IRMAA.ELIGIBILITY_AGE` | Yes — proven over 144 scenarios | **DONE 2026-08-04**, tokens `111448`, merged PR #149 |
 | 3c | ACA cap lapses at 65 -> Proportional 0% | No — `aca` rows only, proven by control | **DONE 2026-08-05, v11.1462** |
 | 3d | `Basis <= Brokerage` invariant | Yes for non-negative brokerage returns; no for MC | not started |
-| 4 | `deathBasisStepUp: 'auto'` + `COMMUNITY_PROPERTY` + `survivorSpendPct` | **No, by decision** | blocked on 3d |
+| 4 | `deathBasisStepUp: 'auto'` + `COMMUNITY_PROPERTY` + `survivorSpendPct` | **No, by decision** | blocked on 3d; **README caveat shipped ahead of it 2026-08-07** |
+
+**Absence validated against a live run, 2026-08-07** (user report on `?bk=2e5`), so do not re-derive
+it. Reproduced at the page defaults (`birthyear1=1960`/`die1=88` -> first death 2049;
+`birthyear2=1952`/`die2=98`): `status` flips `MFJ` -> `SGL` in 2049 and `Basis` keeps falling
+monotonically straight through it - 2048 $148,013/$9,630, 2049 $128,542/$7,888, 2050
+$106,082/$6,139. Confirmed by grep as well: `balance.BrokerageBasis` is mutated in exactly three
+places, none death-related - proportional reduction on withdrawal (`optimizer_core.js:292`), surplus
+reinvestment (`:2018`), DRIP (`:2282`). `computeIncome`'s death block (`:1088-1089`) moves the **IRA
+only**. The user's own figures are self-consistent with pro-rata reduction and no reset:
+$8,419/$13,920 = 0.6048 against $72,739/($113,423 x 1.06) = 0.6050.
+
+**IN SCOPE FOR PR 4 AND NOT PREVIOUSLY LISTED - the terminal valuation.** The recorded PR 4 spec
+below covers only the first-death `resolveHousehold` hook. But `afterTaxNetWorth`
+(`optimizer_core.js:3626-3627`) and `_afterTaxBuckets` (`:3001`) both value terminal brokerage as
+`basis + max(0, brokerage - basis) * (1 - capGainsRate)`, i.e. they tax the heirs on gains §1014
+steps up in full. **This is the larger of the two distortions** because it feeds Break Even, the
+"Optimize for" ranking, and every cross-strategy comparison, and it is one-sided: Roth and Cash are
+unaffected, so the bias runs consistently in favor of Roth conversions. Note it is NOT simply
+"drop the discount" - the second death is the plan's end for a couple, but a single filer's terminal
+row is also a death, so the same reasoning applies there and the change is not confined to MFJ runs.
+
+**`'auto'` re-confirmed by the user 2026-08-07.** `'full'` in a `COMMUNITY_PROPERTY` state, `'half'`
+elsewhere. No `COMMUNITY_PROPERTY` constant exists in `taxengine.js` yet; PR 4 adds one following the
+`TAXData.IRMAA.ELIGIBILITY_AGE` precedent from PR 3b (single source, interpolated into any
+user-facing copy so the two cannot drift).
 
 **The user's four corrections, and what each changed:**
 
@@ -3034,8 +3059,12 @@ per-row memo next.
 - [ ] PR 3d — `Basis <= Brokerage` invariant
 - [ ] PR 4 — `deathBasisStepUp` enum defaulting `'half'`; `survivorSpendPct` at 100;
       `yr.isLastMFJYear` + `yr.isFirstSingleYear` (hoisted); `sim.prevIRAGain`/`prevBaseReturn`
-- [ ] PR 4 — README: **add** a step-up entry to the uncovered-tax-situations section (there is no
-      existing "no step-up" caveat to edit), and note the second death is still unmodelled
+- [x] PR 4 — README caveat. **DONE 2026-08-07, ahead of the code**, doc-only, no version bump.
+      Correction to the item as written: there is no "uncovered-tax-situations section". The caveat
+      landed in `### Limitations and Restrictions` (README:294), plus a cross-reference from the
+      brokerage FAQ's DRIP "Gotcha" (README:723), which is where a reader chasing "why didn't my
+      basis step up" actually lands and which used "step up" only in the sense that DOES happen.
+      Both deaths covered, each with its direction of error named
 - [ ] PR 5 — `yr.phase` resolver; additive flags; `planPrimaryWithdrawals` branch; `fillSpendingGap` arm
 - [ ] PR 5 — test that Phased never draws more than `Fill Bracket` at the same ceiling
 - [ ] PR 6 — all 12 identity sites; URL keys `pcp`/`pam`/`dsu`/`ssp`

@@ -298,6 +298,7 @@ More inputs and knobs and conditions make the tool less simple. If you've got th
 0. There is no "Accumulation phase" and no plan to add one.  I.e. no way to say "stash X dollars per year" in an IRA or Roth, Brokerage or Cash. The goal is to keep the inputs simple.  However, you CAN calculate your expected assets as of your retirement age, and use the *Retirement Start Age* to delay retirement into the future. This will result in properly adjusted tax brackets.
 0. There is no plan to add "Part Time income", Annuities (can model those as "pension"), windfalls, lumpy spending (well, we are thinking about that last one) ...
 0. Social Security Survivor benefits are roughly calculated. The month of death is required for exactness, but we are not sure anybody knows that, let alone the exact year of demise ;-) 
+0. **There is no basis step-up at death**, at either death, and this one is worth understanding because it moves numbers in a consistent direction rather than randomly. Under IRC §1014 a taxable account is re-based to its date-of-death value, so the gain that accrued during the decedent's life is never taxed. *At the first death*, the tool carries Brokerage Basis forward untouched. Real life steps up half of it in the 41 common-law states, and **all** of it in a community-property state (AZ, CA, ID, NV, TX, WA, WI - the tool defaults to CA). So the tool **overstates** the capital gains tax on every brokerage sale the survivor makes, and therefore **understates** survivor spending power and terminal wealth. *At the second death*, the terminal Brokerage balance is reported net of capital gains tax on the appreciation, but heirs receive a full step-up and owe nothing on it, so the after-tax figures used for the Break Even rate and for the "Optimize for" ranking are **too low** for Brokerage specifically. Because Roth and Cash are unaffected, the net effect is a systematic bias **in favor of** Roth conversions. If you want to see the size of the first-death effect today, raise the **Brokerage Basis** input by hand and compare the two runs.
 
 ---
 
@@ -721,6 +722,8 @@ No - **Cash** and **Brokerage** are two separate accounts in the model.
 - The **Cash Reserve** setting controls how much to keep in Cash; surplus overflows to Brokerage for better growth
 
 **Gotcha:** The tool tracks basis separately. When dividends reinvest to Brokerage (DRIP ON), the basis steps up by the dividend amount, reducing your future capital gains tax. If dividends route to Cash (DRIP OFF), there's no basis step-up, and you pay ordinary income tax on the interest later.
+
+**A different "step up":** the dividend step-up above is the only one the tool performs. The step-up *at death* under IRC §1014 is not modeled, so watching the Basis column through the year a spouse dies will show it falling right past the death rather than resetting. See [Limitations and Restrictions](#limitations-and-restrictions) for which way that skews the results.
 
 ### How does the ACA limit work?
 

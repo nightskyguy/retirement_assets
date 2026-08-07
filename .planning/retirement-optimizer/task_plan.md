@@ -1,76 +1,33 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
+**As of 2026-08-07:** `main` = `28a3395`, v11.147c, tree clean, nothing in flight.
+Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
+the recency trail are below, in that order.
 
-**As of:** 2026-08-07, morning. **Working tree clean, `main` = `28a3395`, shipped version v11.147c.**
-Everything below is merged; nothing is in flight.
+## NOW — P0 and P1 only
 
-- **P39 is COMPLETE.** All six items shipped, plus the hook-completeness follow-up as
-  [PR #157](https://github.com/nightskyguy/retirement_assets/pull/157). The three node suites now
-  run in the browser after paint behind a three-state badge (`4983e7a`, `bc2e063`), the three slow
-  tests are tagged (`4d76d51`), `?runtests` forces a full synchronous 513-test check (`e4949a4`), a
-  staleness guard pins the per-suite counts (`238f5ef`), and ten shipped-defect regression guards
-  are marked `★ CRITICAL` in the console (`dedc944`). Pre-commit hook blocks a failing suite
-  (`ad9529f`) and an unlisted `*.tests.js` suite (`475a2c4`).
-- **P40 is HALF DONE and its second half is now UNBLOCKED.** The rename `.test.js` -> `.tests.js`
-  landed (`db363ba`). The `tests/` subfolder move was deferred **until after P39 items 2-6**, and
-  those are now merged, so the stated blocker no longer exists. The move is a decision waiting to be
-  made, not a blocked item. `.tests/` and renaming `optimizer_tests.js` stay REJECTED.
-- **README / docs, [PR #158](https://github.com/nightskyguy/retirement_assets/pull/158):** there is
-  no basis step-up at death, at either death, and the terminal valuation taxes heirs who in reality
-  owe nothing (`99fc632`, `8d47e3e`). Documented in **Limitations and Restrictions** with the
-  direction of the bias stated (overstates survivor capital gains tax, understates survivor spending
-  power and terminal wealth, net effect systematically **favors** Roth conversions) plus a
-  cross-reference from the DRIP basis FAQ. Not a code change; the README itself says the code fix is
-  planned.
-- **ARCHITECTURE.md corrected twice:** nine measured defects (`a03d353`), and the claim that the
-  node suites never run in the browser, which P39 items 3-6 made false (`f9352a5`).
-- Test counts at `main`: **node 214/32/22** (pinned in `TestTiers.EXPECTED`, `optimizer_tests.js:2220`),
-  **in-page 245**, **513 total in the browser**, `sweep_golden` content-identical.
+| Pri | ID | Task | Next item |
+|---|---|---|---|
+| **P0** | P35 | Phased strategy + **brokerage basis step-up at death** | `P35f`, then `P35g` |
+| **P0** | P32 | Brokerage draws: audit defect open, premise refuted | `P32c` |
+| **P1** | P36 | Do any strategies never win? Round 1 runs today | `P36a` |
+| **P1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
+| **P1** | P28 | Voluntary IRA withdrawal = conversion, ship decision | `P28f` |
+| **P1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
+| **P1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
+| **P1** | P40 | `tests/` subfolder move | decision first |
 
-Prior state, 2026-08-06 (`main` = `10f6f2a`, v11.1478), kept for the trail:
+**P35 leads because `P35g` is a correction, not a feature:** the terminal valuation taxes
+heirs on gains IRC §1014 steps up in full. Roth and Cash are unaffected, so the error runs
+one way, in favour of Roth conversions, through Break Even and every "Optimize for" ranking.
+Nothing measured on top of it is trustworthy until it lands. `P35f` (`Basis <= Brokerage`)
+has a one-line spec and sits in front of it.
 
-- **P38 is COMPLETE**, all three PRs merged: PR 1 + PR 2 (funding invariant + gate widening,
-  v11.1468) as [PR #152](https://github.com/nightskyguy/retirement_assets/pull/152) (`f524105`), and
-  PR 3 (size the draw net of tax on guaranteed income, v11.146a, `018baa9`) as
-  [PR #153](https://github.com/nightskyguy/retirement_assets/pull/153).
-- **P32 is PARTIALLY DONE**, research half landed as
-  [PR #155](https://github.com/nightskyguy/retirement_assets/pull/155) and
-  [PR #156](https://github.com/nightskyguy/retirement_assets/pull/156). Q1 measured, the mandated
-  accounting audit found a real defect, and **the phase premise is refuted**: Brokerage is drawn
-  constantly. See the P32 section and findings.md (2026-08-06) for what is now open.
-- **Two engine correctness fixes shipped in that batch**, both of the same class - a function that
-  was unit-tested directly while its *use* was not:
-  1. **Dividends and interest were credited twice** (`e9a3c8b`, v11.146f). The dollar both reduced
-     the needed withdrawal and stayed on the balance sheet. Moves everyone's numbers, downward.
-  2. **The OBBBA senior deduction and elevated SALT cap were never switched on** (`c9e356a`). Both
-     flags default false and no call site in `optimizer_core.js` ever passed them, so federal tax
-     was too HIGH for anyone 65+ in 2025-2028 and for high-tax-state itemizers in 2025-2029. Gate is
-     now resolved once per year in `resolveHousehold` and passed to all 10 `calculateTaxes` sites.
-     Forced-IRA iteration cap 4 -> 6 (the lower tax bill lengthened the convergence path).
-     **This fix had no plan phase of its own**; it was found while verifying a user report.
-- Changelog consolidated: 11.146b/146e/146f + OBBBA merged into one **v11.1478** release entry
-  (`05350e0`), and 11.1462/11.1468 folded into their neighbours (`912fd13`).
-- Test counts at `main`: **node 214/32/22, in-page 245/245**, `sweep_golden` content-identical.
+P2/P3 and the User Priority column you edit: next section.
 
-Earlier state, kept for the trail: **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry); P38's diagnosis-only planning files merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151) off `main` = `fe72bef`, v11.1464.
-**P35 PR 3a MERGED as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change). **P35 PR 3b MERGED as [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149)** (v11.1448 tokens, byte-identical, plus the doc file-reference gaps); the duplicate attempt PR #148 on branch `worktrees/medicare-age-data-7b2e91` is **CLOSED, not merged** — verified, nothing to do about it.
-**P35 PR 3c MERGED as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150)** (v11.1462 -> v11.1464 on merge, behavior change confined to `aca` rows, proven against `propwd`/`bracket` controls), four commits: the behavior change, the `eitherOnMedicareAtStart` deletion it made possible, the plan record, and the ACA Cliff un-gating. Next review point after it is **PR 3d** (`Basis <= Brokerage` invariant).
-Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
-
-**Current batch (added 2026-08-01):** six new phases P29-P34 from a user punch-list — Hebeler Autopilot, withdrawal policy, asset-mix reverse mapping, brokerage draws, an Insights statistics panel, and conversion-search cost. Four of the six touch questions this repo has ALREADY partly answered, two of them answered NO, so every one of those phases carries an explicit "already ruled out, do not re-derive" block. Read that block before designing anything in the phase; it is there to stop a re-derivation of P24 and P28.
-
-**Added 2026-08-03:** three phases P35/P36/P37 from a user design proposal — a new **"Phased"** withdrawal strategy that switches behavior by life phase, its efficiency study, and a deferred LEGACY heir-drawdown phase. P35 is an alternative answer to the long-pending **P13**, and it carries a ten-item engine survey in `findings.md` ("P35 engine survey", 2026-08-03) that must be read before any code is written: several of its items are traps where the natural implementation produces a plausible wrong answer rather than an error. **Work is to be performed in stages**, PR by PR, with a review point between each.
-
-VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + hour)`, so two branches worked on in the same afternoon produce ADJACENT numbers, and whichever merges first is not necessarily the lower one. P25 was built as v11.13c2 (hour 18) but PR #138 merged v11.13c3 (hour 19) ahead of it, so P25 was renumbered to v11.13c5 on merge. When resolving a version conflict, recompute from the clock rather than taking either side.
-
-**P38 and P39 both SHIPPED and are archived** (`.planning/task_completed.md`). P38 was the shipped correctness defect where `propwd`, `fixed`, `gk` and the baseline `else` branch reported `success: false` with hundreds of thousands of dollars of unfunded spending while the IRA still held seven figures; its diagnosis is in findings.md, "The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry" (2026-08-05). It overlapped P30 and P32, so read it before starting either.
-
-**P39** made the 268 node-only tests visible in the browser, so a broken node suite is no longer invisible at release time. Its GOTCHA is still live: cache tokens must move with any engine file the test tier depends on, and a warm tab keeps requesting the old token regardless. That cost is now part of P40's `tests/` move.
-
-MAINTENANCE NOTE: this heading and the per-phase status lines are injected into every turn by the planning hook, so a stale "uncommitted" here reads as a live claim about the working tree. Update them in the same turn you commit, not later.
-
----
+<!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
+     and `head -50` on every prompt. A line added above here silently drops a table row out
+     of that window, with no error. Keep this marker on line 30. -->
 
 ---
 
@@ -153,6 +110,80 @@ refuted, so the section is currently half true.
 | `PF11` (two headings) | — | the DONE one and its SUPERSEDED original, both archived |
 
 ---
+
+---
+
+## Recent state and trail
+
+Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
+
+**As of:** 2026-08-07, morning. **Working tree clean, `main` = `28a3395`, shipped version v11.147c.**
+Everything below is merged; nothing is in flight.
+
+- **P39 is COMPLETE.** All six items shipped, plus the hook-completeness follow-up as
+  [PR #157](https://github.com/nightskyguy/retirement_assets/pull/157). The three node suites now
+  run in the browser after paint behind a three-state badge (`4983e7a`, `bc2e063`), the three slow
+  tests are tagged (`4d76d51`), `?runtests` forces a full synchronous 513-test check (`e4949a4`), a
+  staleness guard pins the per-suite counts (`238f5ef`), and ten shipped-defect regression guards
+  are marked `★ CRITICAL` in the console (`dedc944`). Pre-commit hook blocks a failing suite
+  (`ad9529f`) and an unlisted `*.tests.js` suite (`475a2c4`).
+- **P40 is HALF DONE and its second half is now UNBLOCKED.** The rename `.test.js` -> `.tests.js`
+  landed (`db363ba`). The `tests/` subfolder move was deferred **until after P39 items 2-6**, and
+  those are now merged, so the stated blocker no longer exists. The move is a decision waiting to be
+  made, not a blocked item. `.tests/` and renaming `optimizer_tests.js` stay REJECTED.
+- **README / docs, [PR #158](https://github.com/nightskyguy/retirement_assets/pull/158):** there is
+  no basis step-up at death, at either death, and the terminal valuation taxes heirs who in reality
+  owe nothing (`99fc632`, `8d47e3e`). Documented in **Limitations and Restrictions** with the
+  direction of the bias stated (overstates survivor capital gains tax, understates survivor spending
+  power and terminal wealth, net effect systematically **favors** Roth conversions) plus a
+  cross-reference from the DRIP basis FAQ. Not a code change; the README itself says the code fix is
+  planned.
+- **ARCHITECTURE.md corrected twice:** nine measured defects (`a03d353`), and the claim that the
+  node suites never run in the browser, which P39 items 3-6 made false (`f9352a5`).
+- Test counts at `main`: **node 214/32/22** (pinned in `TestTiers.EXPECTED`, `optimizer_tests.js:2220`),
+  **in-page 245**, **513 total in the browser**, `sweep_golden` content-identical.
+
+Prior state, 2026-08-06 (`main` = `10f6f2a`, v11.1478), kept for the trail:
+
+- **P38 is COMPLETE**, all three PRs merged: PR 1 + PR 2 (funding invariant + gate widening,
+  v11.1468) as [PR #152](https://github.com/nightskyguy/retirement_assets/pull/152) (`f524105`), and
+  PR 3 (size the draw net of tax on guaranteed income, v11.146a, `018baa9`) as
+  [PR #153](https://github.com/nightskyguy/retirement_assets/pull/153).
+- **P32 is PARTIALLY DONE**, research half landed as
+  [PR #155](https://github.com/nightskyguy/retirement_assets/pull/155) and
+  [PR #156](https://github.com/nightskyguy/retirement_assets/pull/156). Q1 measured, the mandated
+  accounting audit found a real defect, and **the phase premise is refuted**: Brokerage is drawn
+  constantly. See the P32 section and findings.md (2026-08-06) for what is now open.
+- **Two engine correctness fixes shipped in that batch**, both of the same class - a function that
+  was unit-tested directly while its *use* was not:
+  1. **Dividends and interest were credited twice** (`e9a3c8b`, v11.146f). The dollar both reduced
+     the needed withdrawal and stayed on the balance sheet. Moves everyone's numbers, downward.
+  2. **The OBBBA senior deduction and elevated SALT cap were never switched on** (`c9e356a`). Both
+     flags default false and no call site in `optimizer_core.js` ever passed them, so federal tax
+     was too HIGH for anyone 65+ in 2025-2028 and for high-tax-state itemizers in 2025-2029. Gate is
+     now resolved once per year in `resolveHousehold` and passed to all 10 `calculateTaxes` sites.
+     Forced-IRA iteration cap 4 -> 6 (the lower tax bill lengthened the convergence path).
+     **This fix had no plan phase of its own**; it was found while verifying a user report.
+- Changelog consolidated: 11.146b/146e/146f + OBBBA merged into one **v11.1478** release entry
+  (`05350e0`), and 11.1462/11.1468 folded into their neighbours (`912fd13`).
+- Test counts at `main`: **node 214/32/22, in-page 245/245**, `sweep_golden` content-identical.
+
+Earlier state, kept for the trail: **P35 PR 1 + PR 2 MERGED as [PR #146](https://github.com/nightskyguy/retirement_assets/pull/146)** (nothing user-visible, so no version or changelog entry); P38's diagnosis-only planning files merged as [PR #151](https://github.com/nightskyguy/retirement_assets/pull/151) off `main` = `fe72bef`, v11.1464.
+**P35 PR 3a MERGED as [PR #147](https://github.com/nightskyguy/retirement_assets/pull/147)** (v11.1447, behavior change). **P35 PR 3b MERGED as [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149)** (v11.1448 tokens, byte-identical, plus the doc file-reference gaps); the duplicate attempt PR #148 on branch `worktrees/medicare-age-data-7b2e91` is **CLOSED, not merged** — verified, nothing to do about it.
+**P35 PR 3c MERGED as [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150)** (v11.1462 -> v11.1464 on merge, behavior change confined to `aca` rows, proven against `propwd`/`bracket` controls), four commits: the behavior change, the `eitherOnMedicareAtStart` deletion it made possible, the plan record, and the ACA Cliff un-gating. Next review point after it is **PR 3d** (`Basis <= Brokerage` invariant).
+Everything through PR #146 is merged: #135 (PR-A..PR-G, v11.13a1), #136 (planner rollover math), #137 (nerdknob graduation, v11.13bd), #138 (TPP-3/4/5 + brokerage handoff, v11.13c3 / planner v1.13be), #139 (P25 docs rendering, v11.13c5), #140 (README audit round 3 + doc-link labels, v11.13d0), #141 (P28 unified-conversion harness + P27 assumption-sweep scoping), #142 (README caveats for uncovered tax situations, BETR/conversion-order revisions, Stonewood/ThunderHarbor reviews), #143 (P29-P34 phases added to this file), #144 (`assertUngated` no longer fails on pages without the control), #145 (P35/P36/P37 phases added to this file, `6f94c82`). Next work starts from a clean base.
+
+**Current batch (added 2026-08-01):** six new phases P29-P34 from a user punch-list — Hebeler Autopilot, withdrawal policy, asset-mix reverse mapping, brokerage draws, an Insights statistics panel, and conversion-search cost. Four of the six touch questions this repo has ALREADY partly answered, two of them answered NO, so every one of those phases carries an explicit "already ruled out, do not re-derive" block. Read that block before designing anything in the phase; it is there to stop a re-derivation of P24 and P28.
+
+**Added 2026-08-03:** three phases P35/P36/P37 from a user design proposal — a new **"Phased"** withdrawal strategy that switches behavior by life phase, its efficiency study, and a deferred LEGACY heir-drawdown phase. P35 is an alternative answer to the long-pending **P13**, and it carries a ten-item engine survey in `findings.md` ("P35 engine survey", 2026-08-03) that must be read before any code is written: several of its items are traps where the natural implementation produces a plausible wrong answer rather than an error. **Work is to be performed in stages**, PR by PR, with a review point between each.
+
+VERSION COLLISION HAZARD, seen for real here: the minor is `hex(dayOfYear*24 + hour)`, so two branches worked on in the same afternoon produce ADJACENT numbers, and whichever merges first is not necessarily the lower one. P25 was built as v11.13c2 (hour 18) but PR #138 merged v11.13c3 (hour 19) ahead of it, so P25 was renumbered to v11.13c5 on merge. When resolving a version conflict, recompute from the clock rather than taking either side.
+
+**P38 and P39 both SHIPPED and are archived** (`.planning/task_completed.md`). P38 was the shipped correctness defect where `propwd`, `fixed`, `gk` and the baseline `else` branch reported `success: false` with hundreds of thousands of dollars of unfunded spending while the IRA still held seven figures; its diagnosis is in findings.md, "The baseline/proportional strategy family cannot fund its own tax bill once the taxable accounts run dry" (2026-08-05). It overlapped P30 and P32, so read it before starting either.
+
+**P39** made the 268 node-only tests visible in the browser, so a broken node suite is no longer invisible at release time. Its GOTCHA is still live: cache tokens must move with any engine file the test tier depends on, and a warm tab keeps requesting the old token regardless. That cost is now part of P40's `tests/` move.
+
+MAINTENANCE NOTE: a stale "uncommitted" in this trail reads as a live claim about the working tree, so update it in the same turn you commit, not later. **This section is no longer what the hook injects** - measured 2026-08-07, the hook is `head -50` of this file on UserPromptSubmit and `head -30` on *every* PreToolUse, so the injected window is now the **NOW** block at the top and nothing here. That is the point of the reordering: the per-tool-call window carries the live queue instead of finished-work narrative.
 
 ## P4: Creeping Tax Rate Model (was Phase 29)
 **Why:** Tool assumes today's brackets persist forever. Future rate increases plausible. TCJA is now permanent but Congress can change rates. Default: off.

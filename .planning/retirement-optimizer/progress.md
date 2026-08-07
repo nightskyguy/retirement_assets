@@ -1852,3 +1852,32 @@ the only thing between the current state and the step-up.
 - Phase P25: Markdown docs render in a browser (2026-07-29, v11.13c5) — COMPLETE, premise was wrong
 - Phase P25 (original spec, superseded 2026-07-29) — kept for the reasoning, do not build
 - P35 PR 3 replan (2026-08-04) — per-PR write-ups for P35c/P35d/P35e
+
+---
+
+## Session 2026-08-07 (third) — plan reordered for the injection window
+
+User asked whether moving the priority list nearer the top would cost planning efficiency. It does
+the opposite, and the numbers are read out of the hook rather than guessed.
+
+**The hook, measured.** `skills/planning-with-files/SKILL.md` frontmatter, plugin cache 2.43.0:
+UserPromptSubmit runs `head -50 "$PLAN_FILE"`, PreToolUse runs `head -30 "$PLAN_FILE"`. Line counts,
+not character budgets. PreToolUse fires on **every tool call**, so lines 1-30 are the most re-read
+text in the whole project.
+
+**What was wrong.** After this morning's restructure the Open Task Index sat at **lines 77-133** -
+outside both windows. So the priority table cost a `Read` every time it was needed, while lines 1-30
+spent 2,348 chars re-injecting P39/P40/PR #158 narrative about work that is finished and archived.
+
+**Fix.** Two-tier head. Lines 1-30 are now a **NOW** block: title, one-line as-of, the eight P0/P1
+rows with their next sub-item IDs, and the one paragraph explaining why P35 leads. It ends on line 30
+with an HTML comment marking the boundary, because the window is a hard line count and inserting a
+line above it silently drops the last P1 row with no error. The full 38-row index, the ID migration
+table, then the recency trail follow in that order.
+
+**Cost of the change:** lines 1-30 went 2,348 -> 1,701 chars, and what they carry changed from
+finished-work history to the live queue. The trail did not shrink, it moved below the index.
+
+Integrity re-checked after the move, not assumed: 222 sub-item IDs, no duplicates, 192 open items,
+46 `##` sections (44 before, plus the two new headings). The old MAINTENANCE NOTE claimed the header
+is what gets injected; that is now false and the note says so.

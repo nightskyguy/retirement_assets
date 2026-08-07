@@ -4,18 +4,18 @@
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
-## NOW — P0 and P1 only
+## NOW — O0 and O1 only
+
+Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which all start `P`.
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **P0** | P35 | Phased strategy + **brokerage basis step-up at death** | `P35f`, then `P35g` |
-| **P0** | P32 | Brokerage draws: audit defect open, premise refuted | `P32c` |
-| **P1** | P36 | Do any strategies never win? Round 1 runs today | `P36a` |
-| **P1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
-| **P1** | P28 | Voluntary IRA withdrawal = conversion, ship decision | `P28f` |
-| **P1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **P1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
-| **P1** | P40 | `tests/` subfolder move | decision first |
+| **O0** | P35 | Phased strategy + **brokerage basis step-up at death** | `P35f`, then `P35g` |
+| **O0** | P32 | Brokerage draws: audit defect open, premise refuted | `P32c` |
+| **O1** | P36 | Do any strategies never win? Round 1 runs today | `P36a` |
+| **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
+| **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
+| **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
 **P35 leads because `P35g` is a correction, not a feature:** the terminal valuation taxes
 heirs on gains IRC §1014 steps up in full. Roth and Cash are unaffected, so the error runs
@@ -23,7 +23,7 @@ one way, in favour of Roth conversions, through Break Even and every "Optimize f
 Nothing measured on top of it is trustworthy until it lands. `P35f` (`Basis <= Brokerage`)
 has a one-line spec and sits in front of it.
 
-P2/P3 and the User Priority column you edit: next section.
+User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 
 <!-- LINE-30 BOUNDARY. The planning hook injects `head -30` of this file on EVERY tool call
      and `head -50` on every prompt. A line added above here silently drops a table row out
@@ -33,7 +33,8 @@ P2/P3 and the User Priority column you edit: next section.
 
 ## Open Task Index — edit the **User Priority** column
 
-Buckets: **P0** do next, **P1** soon, **P2** queued, **P3** someday. Ties inside a bucket are broken
+Buckets: **O0** do next, **O1** soon, **O2** queued, **O3** someday. Lettered `O`, not `P`,
+because every phase ID starts with `P` and a bare `P2` would be ambiguous. Ties inside a bucket are broken
 by the order of the rows. This table is the only place priority is recorded; the phase sections below
 stay in numeric order so links do not move when you re-prioritise.
 
@@ -42,49 +43,49 @@ first task. Every open item in the file now carries one.
 
 | User Priority | ID | Phase | Next open item | Blocked by |
 |---|---|---|---|---|
-| **P0** | P35 | Phased strategy **+ brokerage basis step-up at death** | `P35f`, then `P35g` (the step-up itself) | nothing hard |
-| **P0** | P32 | Brokerage draws — premise refuted, accounting-audit defect open | `P32c` | nothing |
-| **P1** | P36 | Phased efficiency study, do any strategies never win? | `P36a` (round 1 runs today) | round 2 needs `P35g`+`P35i` |
-| **P1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
-| **P1** | P28 | "Every voluntary IRA withdrawal is a conversion" — ship decision | `P28f` | nothing |
-| **P1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
-| **P1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
-| **P1** | P40 | Test-file layout — the `tests/` subfolder move | decision, then the move | nothing |
-| **P2** | P33 | Insights panel — where the money came from | `P33a` | nothing |
-| **P2** | P29 | Hebeler Autopilot — worth a strategy slot? | `P29a` | nothing |
-| **P2** | P31 | Asset mix is an OUTPUT — the reverse mapping | `P31a` | nothing |
-| **P2** | P24 | Conversion stop-year as an Optimizer sweep dimension | `P24g` | P34 cost work |
-| **P2** | P27 | Assumption sensitivity, a tornado over the guesses | `P27a` | nothing |
-| **P2** | P4 | Creeping tax rate — Annual Details column + state-creep UI | `P4e` | nothing |
-| **P2** | P22 | Export Annual Details to CSV | `P22a` | nothing |
-| **P2** | P12 | Retire Optimizer tab -> MC strategy comparison | `P12a` | nothing |
-| **P2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
-| **P2** | P23 | MC arithmetic-mean returns + AR(1) variable inflation | `P23a` | nothing |
-| **P3** | P5 | Greedy DP conversion schedule | `P5a` | nothing |
-| **P3** | P6 | Simulation sanity-check tests | `P6a` | nothing |
-| **P3** | P8 | Annual-table view presets | `P8a` | design after P22 |
-| **P3** | P9 | ACA refinement remainder | `P9a` | nothing |
-| **P3** | P10 | Equity data -> Fama-French total market | `P10a` | nothing |
-| **P3** | P11 | RealReturns — intl asset + annual-returns mode | `P11a` | nothing |
-| **P3** | P14 | Regime-switching MC | `P14a` | P23 |
-| **P3** | P16 | Responsive layout, all tools | `P16a` | nothing |
-| **P3** | P17 | Retirement_Projection simple mode | `P17a` | nothing |
-| **P3** | P18 | Retirement_Projection -> RetirementTaxPlanner link | `P18a` | nothing |
-| **P3** | P26 | README/FAQ cross-references from tooltips | — | nothing |
-| **P3** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
-| **P3** | P41 | Pension start age *(was PA)* | `P41a` | nothing |
-| **P3** | P42 | Lumpy spending, no URL encoding *(was PB)* | `P42a` | nothing |
-| **P3** | P43 | Auto-persist + restore offer *(was PC)* | `P43a` | nothing |
-| **P3** | P44 | Onboarding interview *(was PD)* | `P44a` | nothing |
-| **P3** | P45 | Insights / feedback panel *(was PE)* | `P45a` | nothing |
-| **P3** | P46 | Tax Payment Planner backlog, TPP-1 + TPP-2 *(was TPP-1..5)* | TPP-1 (prose, no checklist yet) | nothing |
-| **P3** | P48 | README caveats backlog | — | **deferred by you** |
+| **O0** | P35 | Phased strategy **+ brokerage basis step-up at death** | `P35f`, then `P35g` (the step-up itself) | nothing hard |
+| **O0** | P32 | Brokerage draws — premise refuted, accounting-audit defect open | `P32c` | nothing |
+| **O1** | P36 | Phased efficiency study, do any strategies never win? | `P36a` (round 1 runs today) | round 2 needs `P35g`+`P35i` |
+| **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
+| **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
+| **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
+| **O2** | P33 | Insights panel — where the money came from | `P33a` | nothing |
+| **O2** | P29 | Hebeler Autopilot — worth a strategy slot? | `P29a` | nothing |
+| **O2** | P31 | Asset mix is an OUTPUT — the reverse mapping | `P31a` | nothing |
+| **O2** | P24 | Conversion stop-year as an Optimizer sweep dimension | `P24g` | P34 cost work |
+| **O2** | P27 | Assumption sensitivity, a tornado over the guesses | `P27a` | nothing |
+| **O2** | P4 | Creeping tax rate — Annual Details column + state-creep UI | `P4e` | nothing |
+| **O2** | P22 | Export Annual Details to CSV | `P22a` | nothing |
+| **O2** | P12 | Retire Optimizer tab -> MC strategy comparison | `P12a` | nothing |
+| **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
+| **O2** | P23 | MC arithmetic-mean returns + AR(1) variable inflation | `P23a` | nothing |
+| **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
+| **O2** | P48 | README caveats backlog | — | **deferred by you** |
+| **O3** | P28 | "Every voluntary IRA withdrawal is a conversion" — ship decision | `P28f` | nothing |
+| **O3** | P40 | Test-file layout — the `tests/` subfolder move | decision, then the move | nothing |
+| **O3** | P5 | Greedy DP conversion schedule | `P5a` | nothing |
+| **O3** | P6 | Simulation sanity-check tests | `P6a` | nothing |
+| **O3** | P8 | Annual-table view presets | `P8a` | design after P22 |
+| **O3** | P9 | ACA refinement remainder | `P9a` | nothing |
+| **O3** | P10 | Equity data -> Fama-French total market | `P10a` | nothing |
+| **O3** | P11 | RealReturns — intl asset + annual-returns mode | `P11a` | nothing |
+| **O3** | P14 | Regime-switching MC | `P14a` | P23 |
+| **O3** | P16 | Responsive layout, all tools | `P16a` | nothing |
+| **O3** | P17 | Retirement_Projection simple mode | `P17a` | nothing |
+| **O3** | P18 | Retirement_Projection -> RetirementTaxPlanner link | `P18a` | nothing |
+| **O3** | P26 | README/FAQ cross-references from tooltips | — | nothing |
+| **O3** | P41 | Pension start age *(was PA)* | `P41a` | nothing |
+| **O3** | P42 | Lumpy spending, no URL encoding *(was PB)* | `P42a` | nothing |
+| **O3** | P43 | Auto-persist + restore offer *(was PC)* | `P43a` | nothing |
+| **O3** | P44 | Onboarding interview *(was PD)* | `P44a` | nothing |
+| **O3** | P45 | Insights / feedback panel *(was PE)* | `P45a` | nothing |
+| **O3** | P46 | Tax Payment Planner backlog, TPP-1 + TPP-2 *(was TPP-1..5)* | TPP-1 (prose, no checklist yet) | nothing |
 
-**Why P35 and P32 are the two P0s.** P35 carries the brokerage basis step-up, which is not a feature
+**Why P35 and P32 are the two O0s.** P35 carries the brokerage basis step-up, which is not a feature
 but a correction: the terminal valuation taxes heirs on gains §1014 steps up in full, and because Roth
 and Cash are unaffected the error runs one way, **in favor of Roth conversions**, through Break Even
 and every "Optimize for" ranking. Nothing measured on top of it is trustworthy until it lands. P32 is
-P0 for the same reason at smaller scale — its audit found a real defect and its own premise was
+O0 for the same reason at smaller scale — its audit found a real defect and its own premise was
 refuted, so the section is currently half true.
 
 ---

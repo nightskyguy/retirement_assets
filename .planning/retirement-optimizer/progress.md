@@ -1872,7 +1872,7 @@ spent 2,348 chars re-injecting P39/P40/PR #158 narrative about work that is fini
 **Fix.** Two-tier head. Lines 1-30 are now a **NOW** block: title, one-line as-of, the eight P0/P1
 rows with their next sub-item IDs, and the one paragraph explaining why P35 leads. It ends on line 30
 with an HTML comment marking the boundary, because the window is a hard line count and inserting a
-line above it silently drops the last P1 row with no error. The full 38-row index, the ID migration
+line above it silently drops the last P1 row with no error. The full 37-row index, the ID migration
 table, then the recency trail follow in that order.
 
 **Cost of the change:** lines 1-30 went 2,348 -> 1,701 chars, and what they carry changed from
@@ -1881,3 +1881,23 @@ finished-work history to the live queue. The trail did not shrink, it moved belo
 Integrity re-checked after the move, not assumed: 222 sub-item IDs, no duplicates, 192 open items,
 46 `##` sections (44 before, plus the two new headings). The old MAINTENANCE NOTE claimed the header
 is what gets injected; that is now false and the note says so.
+
+---
+
+## Session 2026-08-07 (fourth) — priority buckets renamed O0..O3, four re-bucketings
+
+User: the buckets and the phase IDs both started with `P`, so a bare "P2" was ambiguous - bucket or
+phase. Buckets are now **O0..O3**. Phase IDs keep `P`. Nothing else about the scheme changed.
+
+**Re-bucketed by the user:** P28 and P40 O1 -> **O3**; P37 and P48 O3 -> **O2**. Index re-sorted, so
+the O2 block now ends P37/P48 and the O3 block now starts P28/P40.
+
+**Knock-on the user did not have to ask for:** demoting P28 and P40 emptied two rows out of the NOW
+block, which has to stay exactly 30 lines or the PreToolUse `head -30` clips it. The head was re-cut
+at 30 with six rows, a line naming the O-bucket convention, and a line recording this re-bucketing.
+Verified by assertion in the edit script, not by eye.
+
+**Correction to the previous entry:** the index has **37 rows, not 38**. The earlier count was wrong
+and had propagated into progress.md, the commit message and the PR body. Fixed here; the phase
+coverage check itself was right both times, index and file sections still match exactly with nothing
+on either side unaccounted for.

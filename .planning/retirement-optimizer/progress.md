@@ -1734,3 +1734,121 @@ cache while the file on disk had the new namespace, producing "Cannot read prope
 (reading 'calculateTaxes')" a long way from the cause. Cache tokens must move with any engine file
 the test tier depends on. Stale *HTML* is the harder half - a warm tab keeps requesting the old
 token regardless.
+
+---
+
+## Session 2026-08-07 — plan resync, no code change
+
+Invoked `/plan` in worktree `readme-review-updates-c9df11` (branch
+`worktrees/planning-with-files-e27396`). Planning files were already present and committed; nothing
+to initialize. Chosen scope: resync the planning files to `main`, add no new phase.
+
+**What was stale.** The `As of` header pinned `main` = `10f6f2a` / v11.1478 / 2026-08-06 midday.
+`main` is `28a3395` / v11.147c, **18 commits ahead**, and `progress.md` stopped mid-P39.
+
+**Folded in.**
+
+1. **P39 COMPLETE**, items 2-6 plus [PR #157](https://github.com/nightskyguy/retirement_assets/pull/157)
+   (hook completeness). The narrative for items 2-6 was already the tail of this file; the header
+   just never learned they had merged.
+2. **P40 half done.** `db363ba` renamed the three suites. The `tests/` move was deferred *until
+   after P39 items 2-6* — that condition is now satisfied, so it is **unblocked, not blocked**, and
+   the phase heading and Decisions block now say so. Recorded one new cost the original costing did
+   not have: the suites are now `<script>`-loaded, so the move has to carry `?v=` cache tokens too.
+3. **[PR #158](https://github.com/nightskyguy/retirement_assets/pull/158)** — no basis step-up at
+   death, documented in README **Limitations and Restrictions** plus a cross-reference from the DRIP
+   basis FAQ (`99fc632`, `8d47e3e`). Docs only; the README states the code fix is planned.
+4. **ARCHITECTURE.md** corrected twice: `a03d353` (nine measured defects) and `f9352a5` (the
+   "node suites never run in the browser" claim, which items 3-6 made false).
+
+**Verified rather than assumed:** test counts are unchanged at 214/32/22, read from
+`TestTiers.EXPECTED` (`optimizer_tests.js:2220`), not from the older header line; version read from
+`<title>` (`retirement_optimizer.html:22`) and confirmed against the changelog's top entry `11.147c`.
+
+**Open, unchanged:** P40 `tests/` move (decision), P32 second half, P29-P34 punch-list, P35/P36
+Phased strategy, P37 deferred, and the P1-P28 backlog.
+
+
+---
+
+## Session 2026-08-07 (later) — task_plan.md restructured
+
+User asked for three things: archive everything fully complete, make the naming consistent and
+unique, add a **User Priority** column. Decisions taken with the user first: bodies go to
+`.planning/task_completed.md` with a one-line stub here; P35 keeps `PR n` as an alias alongside its
+new IDs; legacy letter phases fold into the P-series; priority is buckets P0/P1/P2/P3.
+
+**Size.** `task_plan.md` 3,220 -> 2,062 lines. 83 `##` sections -> 42. `task_completed.md` 174 ->
+1,430 lines.
+
+**Naming.** Four schemes collapsed to one. Every open item now carries `<phase><letter>`, assigned in
+document order. `PA`-`PE` -> `P41`-`P45`, `TPP-1..5` -> `P46`, README Caveats Audit -> `P48`. An ID
+migration table sits at the top of `task_plan.md`; the old names are still cited by merged PR bodies
+and by `findings.md`, so nothing was renamed without an alias.
+
+**Duplicates removed.** The double `PR 4` in P35 was a real defect in the checklist — one open (the
+`deathBasisStepUp` code) and one closed (the README caveat) sharing a number, which made the phase
+read as half-done. They are now `P35g` and `P35h`. Also gone: two `PF11` headings, two `P25`,
+`P20` + a stray `Table of Contents`, and the informal `P36a`/`P36b` in the PR 3 replan, which
+collided with the new sub-item letters and are now "P36 round 1 / round 2".
+
+**Superseded, not shipped — archived anyway, and this is the judgment call worth checking.** The old
+`P3` (Lumpy Spending) says its spec is replaced by `PB`, and the old `P7` (Onboarding Stepper) says
+the same of `PD`. Both were archived and their successors kept as `P42` and `P44`. If either old spec
+still holds anything the successor does not, it is in `task_completed.md`, not lost.
+
+**Priorities assigned, for the user to edit.** Two P0s: `P35` and `P32`. `P35` because it carries the
+brokerage basis step-up (`P35g`), which is a correction rather than a feature — the terminal
+valuation taxes heirs on gains §1014 steps up in full, Roth and Cash are unaffected, so the error runs
+one way, in favor of Roth conversions, through Break Even and every "Optimize for" ranking. Nothing
+measured on top of it is trustworthy until it lands. `P32` because its audit found a real defect and
+its own premise was refuted.
+
+**Found while restructuring, not fixed:** `P35f` (`Basis <= Brokerage` invariant) has a one-line
+spec and sits in front of `P35g` in the sequence. It needs writing before it can be built, and it is
+the only thing between the current state and the step-up.
+
+**Archived sections (bodies in `.planning/task_completed.md`):**
+
+- Phase P38: The baseline/proportional strategies cannot fund their own tax bill (2026-08-05) — COMPLETE
+- Phase P39: Make the node-only tests visible in the browser (2026-08-05) — COMPLETE (2026-08-06)
+- README Audit Round 3 (2026-07-30) — COMPLETE, committed `838a870`, PR #140 MERGED
+- Link labels follow the href (2026-07-30, v11.13d0) — COMPLETE, committed `838a870`, PR #140 MERGED
+- Nerdknob graduation: Stop-Year + Tax Creep (2026-07-29, v11.13bd) — COMPLETE, PR #137 MERGED
+- PR-E/F/G Round 2: user-testing fixes (2026-07-28, v11.13a1) — COMPLETE
+- PR-D ⚖ head-to-head strategy compare (2026-07-27, v11.1391 -> shipped as v11.13a1) — COMPLETE
+- PR-C Full Retirement Age from birth year (2026-07-27) — COMPLETE, merged in PR #135 as v11.13a1
+- PR-B Social Security claim-year proration + start milestones (2026-07-27) — COMPLETE, merged in PR #135 as v11.13a1
+- PR-A MC stress auto-run + Stress Failure tile + dead-code delete (2026-07-27) — COMPLETE, merged in PR #135 as v11.13a1
+- PR3 CURRENT PLAN row in the Optimizer + Earliest Break Even winner (2026-07-27, v11.1387) — COMPLETE, merged PR #133 (`5ceda24`)
+- PR2 Conversion-schedule representation divergence (2026-07-26, v11.137f) — COMPLETE, merged PR #133 (`a2fb3f8`)
+- PR1 Roth Conversion Diagnostics (2026-07-26, v11.1370) — COMPLETE, merged PR #132
+- README Audit Round 2 + AiRA Tool Review (2026-07-25): PR #131 — COMPLETE
+- Documentation Polish (2026-07-24/25, v11.1340): Post-P2 clarifications, FAQ, changelog refactor, Cash Reserve "Off"
+- Phase PF13 (DONE, v11.12ea): Optimizer ranking rework + Annual Details / feasibility fixes
+- Phase PF12 (DONE, v11.129d): Accurate IRA-withdrawal accounting + prefer-larger conversion sourcing
+- Phase PF11 (DONE, v11.12e5): Optimize Conversions candidate pool — family-diversified, _baselineScore-ranked
+- Phase PF11 (SUPERSEDED — original OPEN writeup, kept for context): Optimize Conversions candidate pool — top-5-by-finalNW misses the families that benefit
+- Phase PF10: Cash-funded conversions + Maximize Conversions restructuring (v11.1287)
+- Phase PF9: GK conversion-sweep stability gate + Break Even diagnostic + orphaned RealReturns gold commit (v11.1271)
+- Phase PF8: Round 3 fixes -- optimizer load-strategy gap + Conv Savings doc (v11.1253)
+- Phase PF7: Break Even in the Optimizer (Optimize Conversions rows) (v11.1247)
+- Phase PF6: Break Even sustained-crossing fix (v11.1240)
+- Phase PF5: Break Even rework (dual-sim counterfactual) + small-screen UX (v11.11dc)
+- Architecture review findings (2026-07-09) — for P15
+- Phase PF4: Changelog consolidation + docs polish (v11.11c8)
+- Priority Order (rough)
+- Phase PF: UX Polish Batch (v11.11c1)
+- Phase PF2: Item 6 round 2 — bar-chart hover still broken + click-to-isolate
+- Phase PF3: MC Stress pass should run current strategy only, not all variations
+- Phase P1: Suggest After-Tax Spend Goal (was 38#10)
+- Phase P2: Cash Reserve — surplus routing + reserve floor (DONE, v11.1340, was 38#9)
+- Phase P3: Lumpy Spending (Priority H)
+- Phase P7: Onboarding Stepper (was 38#5)
+- Phase P15: Structural Refactoring Remainder (was Phase R)
+- Phase P20: README Table of Contents
+- Table of Contents
+- Phase P21: Annual Spending-by-Account View
+- Phase P25: Markdown docs render in a browser (2026-07-29, v11.13c5) — COMPLETE, premise was wrong
+- Phase P25 (original spec, superseded 2026-07-29) — kept for the reasoning, do not build
+- P35 PR 3 replan (2026-08-04) — per-PR write-ups for P35c/P35d/P35e

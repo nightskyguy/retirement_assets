@@ -118,7 +118,7 @@
 			</div>
 
 			<div id="ui-ordered" class="input-group hidden">
-				<label style="display:block;" title="Account draw order for the Ordered strategy - accounts are emptied left to right to fund each year's spending (RMDs are always taken first regardless of order)."><select id="orderedSeq" style="width:100%;">
+				<label style="display:block;" title="Account draw order for the Ordered strategy - accounts are emptied left to right to fund each year's spending (RMDs are always taken first regardless of order)."><select id="orderedSeq" style="width:100%;max-width:none;">
 					<option value="CBIR">Cash→Brok→IRA→Roth</option>
 					<option value="RIBC">Roth→IRA→Brok→Cash</option>
 					<option value="BIRC">Brok→IRA→Roth→Cash</option>
@@ -364,8 +364,7 @@
         <details class="section" open>
         <summary>4. Assumptions</summary>
         <div class="row">
-						<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation
-            <select id="STATEname" onchange="updateStateNote()">
+						<div><label title="Pick the state that you live in or plan to live in through retirement" style="display:block;"><STRONG>State</STRONG> Taxation<select id="STATEname" onchange="updateStateNote()" style="width:100%;max-width:none;">
                 <option   value="CA" selected>California</option>
             </select></label>
 			</div>

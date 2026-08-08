@@ -526,6 +526,15 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
     // sets spending from the portfolio balance, that balance was inflated, and one guardrail that
     // used to trip no longer does. The count is a recording like everything else here, not an
     // invariant.
+    //
+    // Re-derived a fourth time for the IRC 1014 basis step-up (P35g). This fixture is a couple with
+    // the first death inside the plan, so BOTH step-ups fire: the survivor's basis rises at the
+    // first death (less capital-gains tax on every later brokerage draw) and the heirs take the
+    // remainder at market. Tax 2,087,135.358516 -> 2,027,748.557723, final NW 8,576,168.460619 ->
+    // 9,021,151.610458. Lower lifetime tax and higher ending wealth is the whole point of the
+    // change. Total SPEND did not move by a cent (7,393,024.075002) and the guardrail-adjustment
+    // count is still 3 - the plan funds the same spending out of a cheaper tax bill, which is the
+    // signature of a valuation fix rather than a behavior change in the withdrawal engine.
     const gk = simulate({
         ...BASE, strategy: 'gk', nYears: 30,
         birthyear1: 1960, die1: 92, birthyear2: 1962, birthmonth2: 6, die2: 94, hasSpouse: true,
@@ -536,8 +545,8 @@ test('GK: guardrail rate reads the same prevPortfolio the withdrawal rate uses',
         cashYield: 0.02, dividendRate: 0.02,
     });
     assertNear(gk.totals.spend, 7393024.075002, 'GK total spend', 0.01);
-    assertNear(gk.totals.tax, 2082405.443748, 'GK total tax', 0.01);
-    assertNear(gk.finalNW, 8576168.460619, 'GK final net worth', 0.01);
+    assertNear(gk.totals.tax, 2027748.557723, 'GK total tax', 0.01);
+    assertNear(gk.finalNW, 9021151.610458, 'GK final net worth', 0.01);
     assert(gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length === 3,
         `Expected 3 guardrail adjustments, got ${gk.log.filter(r => (r.gkAdj ?? '—') !== '—').length}`);
 });
@@ -576,27 +585,197 @@ test('simulate: exposes totals.terminal breakdown + totals.capGainsRate', () => 
     assertNear(res.totals.terminal.basis, last.Basis, 'terminal.basis vs log', 1);
 });
 
-test('totalWealth fix: IRA discounted by ordinary rate, brokerage gains by cap-gains rate', () => {
-    // Scenario where terminal brokerage retains gains and ordinary ≠ cap-gains rate.
+test('totalWealth: IRA discounted by ordinary rate, terminal brokerage at face after the 1014 step-up', () => {
+    // Single filer (BASE has no spouse), so the ONLY step-up in play is the terminal one.
     const inp = { ...BASE, IRA1: 100000, Brokerage: 500000, BrokerageBasis: 100000,
                   Cash: 200000, spendGoal: 30000, die1: 78 };
     const res = simulate(inp);
     const last = res.log[res.log.length - 1];
     const nominal = last['NominalRate%'];
     const capG = res.totals.capGainsRate;
-    const brokGain = Math.max(0, last.Brokerage - last.Basis);
-    assert(brokGain > 1000, `Test needs terminal brokerage gains, got ${brokGain}`);
-    // Reconstruct finalNW with the CORRECT per-asset rates.
+    // The terminal row IS a death year, so basis has already been reset to market here and
+    // `last.Brokerage - last.Basis` is 0 by construction. Assert against the gain the account
+    // actually carried, preserved on the diagnostic key, or this test is a vacuous 0 === 0.
+    const brokGainPreStepUp = Math.max(0, last.Brokerage - last['-basisPreStepUp']);
+    assert(brokGainPreStepUp > 1000, `Test needs terminal brokerage gains, got ${brokGainPreStepUp}`);
+    assert(last.Basis === last.Brokerage, 'terminal basis must be stepped all the way to market');
+    // finalNW: IRA at the ordinary rate, everything else at face. No capital-gains haircut,
+    // because the heirs inherit at market and never owe that tax.
     const expected = (last.IRA1 + last.IRA2) * (1 - nominal)
-        + brokGain * (1 - capG)
-        + last.Roth1 + last.Roth2 + last.Cash + last.Basis;
-    assertNear(res.finalNW, expected, 'finalNW uses correct per-asset rates', 1);
-    // And confirm it is NOT the old (wrong) all-ordinary formula when rates differ.
-    if (Math.abs(nominal - capG) > 0.001) {
-        const oldWrong = (last.IRA1 + last.IRA2 + brokGain) * (1 - nominal)
-            + last.Roth1 + last.Roth2 + last.Cash + last.Basis;
-        assert(Math.abs(res.finalNW - oldWrong) > 1,
-            'finalNW still matches the old all-ordinary formula — cap-gains rate not applied');
+        + last.Roth1 + last.Roth2 + last.Cash + last.Brokerage;
+    assertNear(res.finalNW, expected, 'finalNW discounts the IRA only', 1);
+    // And pin the SIZE of the correction, not just its presence: the difference from the old
+    // liquidation valuation must be exactly the capital-gains tax that no longer applies.
+    if (capG > 0.001) {
+        const oldLiquidation = (last.IRA1 + last.IRA2) * (1 - nominal)
+            + brokGainPreStepUp * (1 - capG)
+            + last.Roth1 + last.Roth2 + last.Cash + last['-basisPreStepUp'];
+        assertNear(res.finalNW - oldLiquidation, brokGainPreStepUp * capG,
+            'the step-up is worth exactly the cap-gains tax it removes', 1);
+        assertNear(last['-totalWealthPreStepUp'], oldLiquidation,
+            'the preserved liquidation value must match the pre-step-up formula', 1);
+    }
+});
+
+// ── IRC 1014 basis step-up at death (P35g) + the Basis <= Brokerage invariant (P35f) ──────────
+// Two separate events share one concept and must not be conflated. At the FIRST death the
+// surviving spouse's basis steps up by the decedent's share - the whole account in a
+// community-property state, half of it in a common-law one - which changes the capital-gains tax
+// on every later brokerage withdrawal. At the SECOND (final) death the heirs take whatever is
+// left at market: always a full reset, regardless of state, applied to the terminal valuation.
+// A single filer gets only the second.
+// Three properties this fixture has to hold, none of them free:
+//   1. A first death well inside the plan, so both step-ups fire in one run.
+//   2. A TERMINAL year with real income. sim.capitalGainsRate is the final year's LTCG bracket,
+//      and the step-up is worth gain x that rate - so a plan that drains itself and lands the
+//      survivor in the 0% bracket makes the whole correction worth exactly $0. That is correct
+//      behavior (the old code applied the same 0% haircut), but it makes for a vacuous test.
+//   3. Spending high enough that brokerage is actually SOLD between the first death and the end.
+//      At a lower spend the plan never touches brokerage after the death, so the mid-plan step-up
+//      never gets realized and community-property and common-law runs finish identical.
+const STEPUP_BASE = {
+    ...BASE,
+    STATEname: 'CT',                                 // common law, BasisStepUp 0.50
+    strategy: 'bracket', stratRate: 0.22, nYears: 30,
+    hasSpouse: true,
+    birthyear1: 1958, birthmonth1: 1, die1: 84,      // first death at index 17 of 29
+    birthyear2: 1960, birthmonth2: 12, die2: 94,     // survivor carries it to the end
+    IRA1: 1200000, IRA2: 400000, Roth: 100000, Roth2: 50000,
+    Brokerage: 900000, BrokerageBasis: 300000,       // a large unrealized gain to step up
+    Cash: 150000, spendGoal: 180000,
+    ss1: 40000, ss1Age: 67, ss2: 20000, ss2Age: 67, survivorPct: 75,
+    growth: 0.06, inflation: 0.025, cpi: 0.025,
+    cashYield: 0.02, dividendRate: 0.02,
+    dividendReinvest: false,                         // DRIP would raise basis every year and mask
+    futureIRATaxRate: 0.28,                          // the two step-ups this section is testing
+};
+
+test('P35g: every TAXData jurisdiction declares a BasisStepUp of 0.50 or 1.00', () => {
+    // The anti-drift guard. The alternative design was a single COMMUNITY_PROPERTY list, which is
+    // a second place to forget: a jurisdiction added under P19 would keep the list looking right
+    // while being wrong. Putting the fraction ON the state means it cannot be added silently, and
+    // this test is what makes that true.
+    // Two-character keys, which is exactly how generateStateOptions() decides what a user can
+    // select (optimizer_ui.js). Filtering on the presence of a STATE field instead would also
+    // catch TAXData.TESTTAXATION, the synthetic state the in-page suite injects - a difference
+    // that shows up only in the browser, where that suite has run, and not under node.
+    const jurisdictions = Object.keys(TAXData).filter(k => k.length === 2 && TAXData[k] && TAXData[k].STATE);
+    assert(jurisdictions.length >= 38, `expected at least 38 jurisdictions, got ${jurisdictions.length}`);
+    const bad = jurisdictions.filter(k => TAXData[k].BasisStepUp !== 0.50 && TAXData[k].BasisStepUp !== 1.00);
+    assert(bad.length === 0,
+        `every jurisdiction needs BasisStepUp (0.50 common law / 1.00 community property); missing or invalid: ${bad.join(', ')}`);
+    const cp = jurisdictions.filter(k => TAXData[k].BasisStepUp === 1.00).sort().join(' ');
+    assert(cp === 'AZ CA ID NV TX WA WI', `community-property set drifted: got "${cp}"`);
+    // AK is community property only by opt-in written agreement, never by default.
+    assert(TAXData.AK.BasisStepUp === 0.50, 'AK is opt-in community property and must default to 0.50');
+});
+
+test('P35g: first death steps basis up by half in a common-law state', () => {
+    const log = simulate({ ...STEPUP_BASE }).log;
+    const i = log.findIndex(r => r.status === 'SGL');
+    assert(i > 1, 'fixture must put the first death inside the plan');
+    const before = log[i - 1], at = log[i];
+    // The step-up lands at the top of the first SINGLE year, not the last MFJ year. Both years
+    // exist and both produce numbers, which is why this is pinned rather than assumed.
+    assert(before.status === 'MFJ', 'the row before the first SGL year must still be MFJ');
+    assert(before.Basis < before.Brokerage, 'fixture must carry an unrealized gain into the death');
+    // Basis otherwise only ever falls here (withdrawals consume it proportionally). It jumps.
+    assert(at.Basis > before.Basis + 1, 'basis must rise at the first death instead of continuing to fall');
+    assert(at.Basis < at.Brokerage - 1, 'common law steps up only the decedent half, so a gain remains');
+});
+
+test('P35g: community property steps the whole account up at the first death', () => {
+    // CA is an inline TAXData entry. TX comes from NO_TAX_SHELL with its override written AFTER
+    // the spread - the path that silently reverts to the shell's 0.50 if the order is ever flipped.
+    // Compared as a RATIO, not for equality. The step-up is applied at the top of the first single
+    // year but the log row records year-END balances, so post-withdrawal growth reopens a small gap
+    // that basis does not share: 1/(1 + growth x postMonths/12), about 0.995 at 6%. Asserting
+    // equality here would be asserting that the account does not grow in the year someone dies.
+    for (const st of ['CA', 'TX']) {
+        const log = simulate({ ...STEPUP_BASE, STATEname: st }).log;
+        const at = log[log.findIndex(r => r.status === 'SGL')];
+        assert(at.Basis / at.Brokerage > 0.99,
+            `${st}: a full step-up must leave basis at market apart from that year's growth, got ${(at.Basis / at.Brokerage).toFixed(4)}`);
+    }
+    // Controlled comparison: TX and FL are both no-income-tax states, so BasisStepUp is the ONLY
+    // thing that differs between these two runs. Without it the assertions above could pass while
+    // the fraction was being ignored entirely.
+    const tx = simulate({ ...STEPUP_BASE, STATEname: 'TX' });
+    const fl = simulate({ ...STEPUP_BASE, STATEname: 'FL' });
+    const k = tx.log.findIndex(r => r.status === 'SGL');
+    assert(tx.log[k].Basis > fl.log[k].Basis + 1, 'TX (community property) must step up more than FL (common law)');
+    assert(fl.log[k].Basis / fl.log[k].Brokerage < 0.75, 'and FL must be a genuine half step-up, not a full one');
+    // The larger step-up has to have a real downstream consequence, not just a bigger number in
+    // one row: less capital gain to realize on every later brokerage sale, so less lifetime tax
+    // and more left at the end.
+    assert(tx.totals.tax < fl.totals.tax, 'community property must pay less lifetime capital-gains tax');
+    assert(tx.finalNW > fl.finalNW, 'and finish with more');
+});
+
+test('P35g: a single filer gets the terminal step-up but never a mid-plan one', () => {
+    const res = simulate({ ...BASE, Brokerage: 400000, BrokerageBasis: 100000, growth: 0.04 });
+    const log = res.log;
+    assert(log.every(r => r.status === 'SGL'), 'BASE is a single filer');
+    for (let i = 1; i < log.length - 1; i++) {
+        assert(log[i].Basis <= log[i - 1].Basis + 1,
+            `basis rose in ${log[i].year} - a single filer has no first-death step-up`);
+    }
+    const last = log[log.length - 1];
+    assertNear(last.Basis, last.Brokerage, 'the terminal row must still be stepped to market', 1);
+    assert(last['-basisPreStepUp'] < last.Basis, 'the preserved pre-step-up basis must be lower');
+});
+
+test('P35g: basis rises exactly twice - once per death, never per year', () => {
+    const log = simulate({ ...STEPUP_BASE }).log;
+    const rises = [];
+    for (let j = 1; j < log.length; j++) if (log[j].Basis > log[j - 1].Basis + 1) rises.push(j);
+    assert(rises.length === 2, `basis must rise exactly twice (first death, terminal), got ${rises.length}`);
+    assert(log[rises[0]].status === 'SGL' && log[rises[0] - 1].status === 'MFJ',
+        'the first rise must be the first single year');
+    assert(rises[1] === log.length - 1, 'the second rise must be the terminal row');
+});
+
+test('P35g: terminal valuation is stepped up and both pre-step-up bases are preserved', () => {
+    const res = simulate({ ...STEPUP_BASE });
+    const last = res.log[res.log.length - 1];
+    assertNear(res.totals.terminal.basis, res.totals.terminal.brokerage,
+        'totals.terminal must carry the stepped-up basis', 1);
+    assert(last['-basisPreStepUp'] !== undefined, 'the pre-step-up basis must be preserved');
+    assert(last['-totalWealthPreStepUp'] !== undefined, 'the liquidation value must be preserved');
+    assert(res.finalNW > last['-totalWealthPreStepUp'], 'the step-up can only raise terminal wealth');
+    // The step-up is a terminal event, not a per-year one: no other row may carry these keys.
+    const others = res.log.slice(0, -1).filter(r => r['-basisPreStepUp'] !== undefined);
+    assert(others.length === 0, `only the terminal row may be stepped up, got ${others.length} others`);
+    // Once basis === brokerage, afterTaxNetWorth's capital-gains term cannot contribute.
+    assertNear(afterTaxNetWorth(res.totals.terminal, 0.30, 0.0),
+               afterTaxNetWorth(res.totals.terminal, 0.30, 0.30),
+               'capGainsRate must not change a stepped-up terminal valuation', 0.01);
+});
+
+test('P35g: the correction favors NOT converting - the one-sided bias it removes', () => {
+    // The argument the whole phase rests on. Brokerage gains were taxed at death while Roth was
+    // not, so every conversion comparison leaned toward converting. Removing that lean has to help
+    // the arm that KEEPS its brokerage; a converting plan spends brokerage on conversion tax and
+    // so has less unrealized gain left for 1014 to reach.
+    const base = { ...STEPUP_BASE, convertExcessToRoth: false };
+    const stepUpValue = res => res.finalNW - res.log[res.log.length - 1]['-totalWealthPreStepUp'];
+    const noConv   = simulate({ ...base, extraConversionAmount: 0 });
+    const withConv = simulate({ ...base, extraConversionAmount: 40000 });
+    assert(stepUpValue(noConv) > 0, 'the no-conversion arm must hold gains worth stepping up');
+    assert(stepUpValue(noConv) > stepUpValue(withConv),
+        'the step-up must be worth more to the arm that did not spend its brokerage on conversion tax');
+});
+
+test('P35f: BrokerageBasis never exceeds Brokerage, including through a market crash', () => {
+    // returnSequence drives per-year returns (the Monte Carlo bootstrap path). Sustained negative
+    // years shrink the account while basis stands still, which is the only way this invariant can
+    // break - every ordinary path moves value and basis together.
+    const res = simulate({ ...BASE, Brokerage: 300000, BrokerageBasis: 300000,
+                           spendGoal: 20000, returnSequence: new Array(40).fill(-0.25) });
+    for (const r of res.log) {
+        assert(r.Basis <= r.Brokerage + 0.01,
+            `basis ${r.Basis} exceeded brokerage ${r.Brokerage} in ${r.year}`);
+        assert(r.Basis >= -0.01, `basis went negative in ${r.year}`);
     }
 });
 
@@ -1208,8 +1387,10 @@ test('P38: the primary draw funds the tax on guaranteed income, not the backstop
     // interest stopped being double-credited (the phantom Cash had been quietly covering part of
     // the residual). The drop from 395,109 is the measurement — that money was the tax on Social
     // Security and the RMDs, which the first-pass draw now covers directly instead of leaving for
-    // the backstop to discover.
-    assertNear(_sumForcedIRA(r.log), 41116.444, 'forced-IRA total once the draw is sized correctly', 1);
+    // the backstop to discover. Then 20,381 with the IRC 1014 basis step-up (P35g): the first
+    // death raises the survivor's basis, so the same brokerage draw realizes less capital gain and
+    // costs less tax, and less spending has to be forced out of the IRA above the ceiling.
+    assertNear(_sumForcedIRA(r.log), 20381.208, 'forced-IRA total once the draw is sized correctly', 1);
 });
 
 test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household', () => {
@@ -1373,11 +1554,17 @@ test('P32 (not fixed here): minlimit strands spending with Brokerage still funde
     // move at all. That is worth recording: the two defects are independent. Removing the phantom
     // money did not free a single one of these nine years, because what strands them is the third
     // pass refusing to touch Brokerage, not how much Brokerage happens to be there.
-    assertNear(_worst(stranded), 9479.15, 'worst single-year unfunded amount with Brokerage left', 1);
-    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 71498.24,
+    // The IRC 1014 basis step-up (P35g) moved the amounts again and AGAIN left the count at 9:
+    // total 71,481 -> 27,510, worst 9,478 -> 6,593, Brokerage 926,096 -> 960,183. The stranded
+    // years got cheaper (the survivor's stepped-up basis makes each brokerage draw cost less tax)
+    // and there is MORE brokerage sitting there unused, which sharpens the defect rather than
+    // softening it. Three independent changes now, none of which freed a single one of these nine
+    // years, because what strands them is the third pass refusing to touch Brokerage at all.
+    assertNear(_worst(stranded), 6593.023132, 'worst single-year unfunded amount with Brokerage left', 1);
+    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 27509.710277,
         'total stranded across the nine years', 1);
     // The headline number: how much was sitting in Brokerage the first year it gave up.
-    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 932472.52,
+    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 960182.995197,
         'Brokerage balance in the first year minlimit reported an unfunded shortfall', 1);
     assert(stranded.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
         'every stranded year must have Cash, Roth and IRA at zero — Brokerage is the only source left');
@@ -1503,9 +1690,22 @@ test('OC: counterfactual pays the RMD counter-effect (bigger IRA → bigger RMDs
         `counterfactual RMDs (${Math.round(cf.totals.rmd)}) must exceed actual (${Math.round(actual.totals.rmd)})`);
     assert(cf.totals.tax > actual.totals.tax,
         `counterfactual lifetime tax (${Math.round(cf.totals.tax)}) must exceed actual (${Math.round(actual.totals.tax)}) — RMD taxes priced`);
-    // Identity: last convOC equals the finalNW difference (same valuation both sides).
-    const lastOC = actual.log[actual.log.length - 1].convOC;
-    assertNear(lastOC, actual.finalNW - cf.finalNW, 'convOC identity vs counterfactual finalNW', 1);
+    // Identity: last convOC equals the finalNW difference - but the two sides are now on DIFFERENT
+    // valuation bases and the identity has to name which one it uses. Break Even is deliberately
+    // still computed on the liquidation basis (P35g decision 4), while finalNW carries the IRC
+    // 1014 step-up. The counterfactual is a _cfRun, which skips the step-up precisely so both arms
+    // reach the Break Even block on the same footing, so cf.finalNW is already liquidation-basis
+    // and only the actual run needs its pre-step-up value.
+    const lastRow = actual.log[actual.log.length - 1];
+    const lastOC = lastRow.convOC;
+    const actualLiquidation = lastRow['-totalWealthPreStepUp'] ?? actual.finalNW;
+    assertNear(lastOC, actualLiquidation - cf.finalNW, 'convOC identity vs counterfactual finalNW', 1);
+    // And pin the relationship between the bases, so a change that quietly puts Break Even onto
+    // the step-up basis fails here instead of silently moving every reported break-even year.
+    assert(actual.finalNW > actualLiquidation,
+        'the terminal step-up must lift finalNW above the liquidation value Break Even scores on');
+    assert(cf.log[cf.log.length - 1]['-totalWealthPreStepUp'] === undefined,
+        'a _cfRun must NOT be stepped up, or convOC differences two different valuations');
     // Refund really shrank the counterfactual's year-0 IRA draw (over-withdrawal not taken).
     assert(cf.log[0].IRAwd < actual.log[0].IRAwd - 1000,
         `CF year-0 IRA draw (${Math.round(cf.log[0].IRAwd)}) must be below actual (${Math.round(actual.log[0].IRAwd)})`);
@@ -2271,37 +2471,46 @@ const PF11_BASE = {
     startInYear: 2026, startYear: 2026, dividendReinvest: false, futureIRATaxRate: 0.37,
 };
 
-// THE T6 DIVERGENCE NO LONGER EXISTS, and the reason is worth reading before trying to restore it.
-// This fixture used to show finalNW picking $0 while baselineScore picked $50k. That gap was itself
-// an artifact of the dividend/interest double-credit: the no-conversion arm banked phantom Cash
-// every year, and finalNW values Cash at face while discounting the IRA, so the phantom money made
-// "don't convert" look better than it was. With the double-credit fixed, both metrics agree.
+// THE T6 DIVERGENCE IS BACK, restored by a modeling fix rather than by tuning this fixture.
 //
-// Searched before re-pinning, 64 variants over six levers: spendGoal 88k-105k, futureIRATaxRate
-// 0.24-0.50, Brokerage 150k-800k, Brokerage basis 100k-290k, Roth 0-300k, IRA1 400k-1.5M, plus a
-// combined IRA x rate x Brokerage x spend pass. Zero divergent. Tuning the fixture until the gap
-// reappeared would be manufacturing a property the engine no longer has.
+// History, because the direction has now reversed twice. finalNW once picked $0 here while
+// baselineScore picked $50k. That gap turned out to be an artifact of the dividend/interest
+// double-credit: the no-conversion arm banked phantom Cash every year, and finalNW values Cash at
+// face while discounting the IRA, so phantom money made "don't convert" look better than it was.
+// Fixing the double-credit made both metrics agree, and a 64-variant search over six levers
+// (spendGoal 88k-105k, futureIRATaxRate 0.24-0.50, Brokerage 150k-800k, basis 100k-290k, Roth
+// 0-300k, IRA1 400k-1.5M, plus a combined pass) found nothing divergent. The lost regression guard
+// was recorded here as a real gap.
 //
-// What this costs: the reported defect these two tests documented (the old metric telling a user
-// "no benefit" while the honest measure finds a real conversion) now has no regression guard. That
-// is a real gap, recorded rather than papered over. If a divergent scenario is found later it
-// belongs here.
-test("optimizeConversionAmount: 'baselineScore' and 'finalNW' agree on this scenario", () => {
+// The IRC 1014 basis step-up (P35g) restores it - same SHAPE of mechanism, but a real asset this
+// time instead of a phantom one. Terminal brokerage gains are no longer haircut by capital-gains
+// tax, and the no-conversion arm is precisely the arm that still holds those gains, because a
+// converting plan spends its brokerage paying the conversion tax. So "don't convert" gains value
+// that "convert" does not. finalNW, which discounts the IRA at the run's OWN terminal nominal
+// rate, tips to $0; baselineScore, which discounts at the user's stated heirs rate, still finds
+// $50k.
+//
+// baselineScore is the honest measure of the two here: the question is what the heirs net, so the
+// heirs' rate is the right discount. finalNW reporting "no benefit" where a real conversion exists
+// is exactly the defect T6 documented, so these are a divergence guard again, not an agreement one.
+test("optimizeConversionAmount: 'finalNW' and 'baselineScore' diverge (the T6 defect, restored)", () => {
     const ov = { strategy: 'propwd', propWithdraw: 0 };
     assert(simulate({ ...PF11_BASE }).totals.success, 'test setup: base scenario must succeed');
     const fn = optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv;
     const bl = optimizeConversionAmount(PF11_BASE, ov, 'baselineScore', { futureIRARate: 0.37 }).optConv;
-    assertNear(fn, 50000, 'finalNW picks $50k/yr', 1);
-    assertNear(bl, 50000, 'baselineScore picks $50k/yr', 1);
+    assertNear(fn, 0, 'finalNW reports no worthwhile conversion', 1);
+    assertNear(bl, 50000, 'baselineScore still finds $50k/yr at the heirs rate', 1);
+    assert(bl > fn, 'the honest measure must find a conversion that the finalNW metric misses');
 });
 
 test('optimizeConversionAmount: legacy metric modes and the 3-arg signature agree', () => {
     const ov = { strategy: 'propwd', propWithdraw: 0 };
     // What this actually guards is the SIGNATURE, not the value: 4-arg, explicit-empty-opts and
-    // 3-arg must all route to the same metric and return the same answer. The shared value moved
-    // from $0 to $50k with the double-credit fix (see the note above); the agreement is the point.
+    // 3-arg must all route to the same metric and return the same answer. The shared value has now
+    // moved twice - $0 to $50k with the double-credit fix, $50k back to $0 with the IRC 1014
+    // step-up (see the note above) - which is exactly why the agreement is the point, not the number.
     const fourArg = optimizeConversionAmount(PF11_BASE, ov, 'finalNW').optConv;
-    assertNear(fourArg, 50000, "4-arg 'finalNW'", 1);
+    assertNear(fourArg, 0, "4-arg 'finalNW'", 1);
     assert(optimizeConversionAmount(PF11_BASE, ov, 'finalNW', {}).optConv === fourArg, 'explicit empty opts must match');
     assert(optimizeConversionAmount(PF11_BASE, ov).optConv === fourArg, 'default metric (no 3rd/4th arg) must match');
 });
@@ -2657,12 +2866,27 @@ test.slow('lowestBreakEvenHeirsRate: finds a threshold the best-scoring candidat
     assert(best.label === 'fixedpct', `expected the fixedpct candidate to win, got ${best.label}`);
 });
 
+// CONV_BASE itself no longer has a paying time-limited conversion, and that is a finding rather
+// than a fixture problem. Its conversion advantage was worth $1,221 at a 0.24 heirs rate and
+// $5,587 at 0.50, while the IRC 1014 step-up it was missing is worth $28,551 to the arm that does
+// NOT convert (the converting arm spends its brokerage on conversion tax, so it has no unrealized
+// gain left for the step-up to reach). The reported benefit was smaller than the modeling error,
+// so the honest answer for CONV_BASE is now null.
+//
+// These two tests guard the MECHANISM - that a convert-then-stop plan is found and reported in
+// calendar years - so they need a fixture whose conversion still pays once 1014 is modeled
+// correctly. A bigger IRA does it, and deliberately NOT a fully-basis brokerage: leaving the
+// unrealized gain in place keeps the step-up active, so the test clears the correction rather
+// than dodging it. The gain is now ~$158k against that ~$29k, an order of magnitude of headroom
+// instead of the old razor-thin margin, and the window is 5 years rather than the degenerate 1.
+const TL_BASE = { ...CONV_BASE, IRA1: 3000000 };
+
 test('bestTimeLimitedConversion: finds a convert-then-stop plan and reports it in calendar years', () => {
-    const tl = bestTimeLimitedConversion(CONV_BASE, FIXED_OV, { futureIRARate: 0.24 });
+    const tl = bestTimeLimitedConversion(TL_BASE, FIXED_OV, { futureIRARate: 0.24 });
     assert(tl !== null, 'this fixture has a paying time-limited conversion');
-    assert(tl.amount === 93750, `expected $93,750/yr, got ${tl.amount}`);
-    assert(tl.stopIndex === 1, `expected a 1-year conversion window, got ${tl.stopIndex}`);
-    assert(tl.stopYearCalendar === 2026,
+    assert(tl.amount === 250000, `expected $250,000/yr, got ${tl.amount}`);
+    assert(tl.stopIndex === 5, `expected a 5-year conversion window, got ${tl.stopIndex}`);
+    assert(tl.stopYearCalendar === 2030,
         `stop year must be a calendar year the sidebar can hold, got ${tl.stopYearCalendar}`);
     assert(tl.gain > 0, 'and it must actually beat converting nothing');
 });
@@ -2671,10 +2895,10 @@ test('bestTimeLimitedConversion: its answer survives being replayed through the 
     // The PF8 failure mode: the optimizer scoring one plan while clicking the row runs another.
     // A per-year extraConversionAmount ARRAY and the equivalent scalar + convEndYear are NOT
     // interchangeable in this engine, so the search scores the loadable form and this pins it.
-    const tl = bestTimeLimitedConversion(CONV_BASE, FIXED_OV, { futureIRARate: 0.24 });
-    const asLoaded = simulate({ ...CONV_BASE, ...FIXED_OV, extraConversionAmount: tl.amount,
+    const tl = bestTimeLimitedConversion(TL_BASE, FIXED_OV, { futureIRARate: 0.24 });
+    const asLoaded = simulate({ ...TL_BASE, ...FIXED_OV, extraConversionAmount: tl.amount,
                                 convEndYear: tl.stopYearCalendar, convEndMode: 'extra' });
-    const noConv = simulate({ ...CONV_BASE, ...FIXED_OV, extraConversionAmount: 0 });
+    const noConv = simulate({ ...TL_BASE, ...FIXED_OV, extraConversionAmount: 0 });
     const gain = baselineScoreOf(asLoaded, 0.24) - baselineScoreOf(noConv, 0.24);
     assertNear(gain, tl.gain, 'gain reproduced from the loadable inputs', 1);
 });

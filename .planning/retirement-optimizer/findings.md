@@ -1,5 +1,50 @@
 # Findings & Decisions
 
+## Five things about the basis step-up that will mislead the next reader (2026-08-07)
+
+Measured while building P35f/P35g. Each one inverts an obvious-looking conclusion.
+
+**1. The terminal step-up is worth $0 whenever the final year sits in the 0% capital-gains bracket.**
+Its value is `gain x sim.capitalGainsRate`, and `sim.capitalGainsRate` is the LAST YEAR'S LTCG
+bracket rate (assigned from `yr.tax.capitalGainsRate` in `optimizer_core.js`). A plan that drains its
+IRA and leaves a low-income survivor lands in the 0% bracket, so the correction buys nothing. This is
+CORRECT - the old code applied that same 0% haircut - but it means a fixture chosen for "has a big
+terminal brokerage" can still measure a zero effect. Anything measuring this needs terminal INCOME,
+not just terminal assets. Two fixtures were discarded on this before one worked.
+
+**2. Conversions consume the brokerage, so the step-up accrues almost entirely to the arm that does
+NOT convert.** This is the mechanism behind the "one-sided bias" the whole phase rests on, and it is
+sharper than expected. On `CONV_BASE` the entire `baselineScoreOf` curve was bit-identical for every
+non-zero conversion amount and ONLY the amt=0 point moved, by +$28,551. A converting plan has spent
+its brokerage paying conversion tax, so there is no unrealized gain left for IRC 1014 to reach.
+
+**3. The T6 divergence is back, and it was not recoverable by fixture tuning.** `optimizer_core.tests.js`
+recorded that the finalNW-vs-baselineScore divergence vanished with the dividend double-credit fix,
+that a 64-variant search over six levers failed to reproduce it, and that its regression guard was
+therefore lost. The step-up restores it exactly: same shape of mechanism (an asset the no-conversion
+arm holds more of, valued at face), a real one this time instead of phantom cash. `finalNW` discounts
+the IRA at the run's OWN terminal nominal rate and picks $0; `baselineScore` discounts at the stated
+heirs rate and picks $50k. `baselineScore` is the honest measure - the question is what the heirs
+net, so the heirs' rate is the right discount. The lost guard is a guard again.
+
+**4. A `_cfRun` completes fully, including anything appended after the loop.** So a post-loop step
+added to `simulate()` still runs on the counterfactual, whose `.log` the Break Even block then
+differences against the main log - which has NOT reached that code yet. Any future post-loop mutation
+must both sit after the BE block AND skip on `inputs._cfRun`, or it silently corrupts the final year
+of `convOC` while every test that checks only `convBEYear` keeps passing. Verify by isolation: build
+the variant with the step disabled and diff the whole series. Do not verify by reading the code.
+
+**5. Unicode has no same-size half/full circle pair.** At `600 10px sans-serif`, U+25D0 half-circle
+inks 9x7 while U+25CF black-circle inks 6x4 - so "full" renders a third SMALLER than "half" and reads
+backwards. U+25C9 (fisheye) and U+25D5 (three-quarter) match the half circle at 9x7 but mean the
+wrong thing, and the U+25D0..U+25D7 family has no fully-black member. There is nothing to switch to:
+glyphs like this must be DRAWN from a shared radius. Measured while at it: a 0.75 outline leaves 42%
+less ink on the discriminating side than a 1.25 one, because the outline itself fills the empty half.
+
+Related, found in the same file: the milestone label stagger was `row = i % 3`, indexed by position
+in the list rather than position on the axis. Two markers one year apart could collide while two
+twenty years apart shared a row harmlessly. Replaced with real pixel-extent testing.
+
 ## The release gate exits 0 under node, and dot-directories cannot hold anything a page fetches (2026-08-06)
 
 Two durable facts about this repo's test layout, both measured while costing a proposed

@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-07:** `main` = `a5098e7`, v11.1499 in flight on `worktrees/caveman-mode-dd6363`.
+**As of 2026-08-07:** `main` = `a5098e7`, v11.1499 in flight as [PR #160](https://github.com/nightskyguy/retirement_assets/pull/160).
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 

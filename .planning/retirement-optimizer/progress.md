@@ -1907,7 +1907,7 @@ on either side unaccounted for.
 ## Session 2026-08-07 (fifth) — P35f + P35g shipped: IRC §1014 basis step-up, v11.1499
 
 Planned `P35g` in plan mode, built it with `P35f` folded in. **222 node tests (was 214), 518 in the
-browser, all green.** Not committed to `main` yet; PR open from `worktrees/caveman-mode-dd6363`.
+browser, all green.** Merged to `main` via [PR #160](https://github.com/nightskyguy/retirement_assets/pull/160) (commit `15396c0`).
 
 **Four user decisions rewrote the recorded spec before any code was written.** No `deathBasisStepUp`
 enum, no knob, no `'none'` - step-up is law, not preference, so goldens get rebaselined rather than

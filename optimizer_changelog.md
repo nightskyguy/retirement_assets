@@ -11,6 +11,72 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1499"></a>
+
+## 11.1499 (behavior change)
+
+**Money left to your heirs was being taxed for capital gains nobody ever owes, so ending balances
+were too low and Roth conversions looked better than they are.**
+
+When someone dies, the cost basis of a taxable brokerage account resets to what the account is
+worth that day. The gain that built up during their lifetime is never taxed, to them or to their
+heirs. The tool was ignoring this in two separate places:
+
+1. **At the first spouse's death.** The survivor's cost basis carried straight on as if nothing had
+   happened, so every later sale from that account realized more gain than it really would, and
+   paid tax on it.
+2. **At the end of the plan.** The final year valued whatever brokerage was left over as if it had
+   been sold and the capital-gains tax paid. It is not sold, it is inherited, and that tax is never
+   owed.
+
+Both are now modeled. The size of the first one depends on where you live, because the underlying
+property law does. In a community-property state the whole account resets; everywhere else only the
+share that belonged to the person who died, which the tool treats as half. This is not a setting
+and there is no switch for it: it follows the State Tax selection, because it is a matter of law
+rather than preference. The seven community-property states this tool models are AZ, CA, ID, NV,
+TX, WA and WI. Louisiana and New Mexico are community-property states too, but they are not among
+the 38 jurisdictions the tool models at all, so they cannot be selected. Alaska is deliberately
+treated as common law, because community property there is something spouses have to opt into by
+written agreement rather than the default.
+
+**What to expect.** Ending balances rise, lifetime tax falls, and the spending goal is funded in
+exactly the same years as before. The demonstration plan the tool opens with goes from $625,885 to
+$637,024 and pays $10,513 less tax over its life, with spending identical to the dollar. That plan
+happens to spend its brokerage account down to nothing, so all of its gain comes from the first
+death; a plan that still holds a large taxable account at the end can gain considerably more. One
+test plan holding $900,000 of brokerage gained $398,712 in the final year alone.
+
+**Why this matters most for Roth conversions.** The error only ever ran one way. It penalized money
+kept in a taxable brokerage account and left Roth and cash untouched, so every comparison between
+converting and not converting was tilted toward converting. Correcting it makes conversions look
+worse than they used to, and some plans that previously reported a conversion benefit no longer
+report one. In one internal test case the conversion advantage being reported was worth between
+$1,221 and $5,587, while the step-up it was ignoring was worth $28,551 to the plan that did not
+convert. The reported benefit was smaller than the mistake.
+
+**Break Even is deliberately unchanged.** It still measures the year conversions pull permanently
+ahead, valued as though the account were sold rather than inherited. Break Even during your
+lifetime and break-even measured against what your heirs receive are different questions, and the
+second one is being left for its own release rather than folded in silently here. Break-even years
+reported today are the same ones reported before this change, on the same basis.
+
+**On the chart.** Every death now carries a marker, and the marker carries a small circle showing
+which step-up applied: half filled for a half step-up, solid for a full one. A legend under the
+chart says which is which, and it only describes the marks your plan actually has. A half step-up
+cannot happen in a community-property state, or to a single person whose estate goes straight to
+their heirs, so those plans get the solid circle explained and nothing about halves. Two things
+changed beyond the new circle. The last
+death is marked at all now, which is where the second step-up happens, and a single person gets a
+death marker for the first time, since previously only the first death of a couple was marked. The
+markers are also labelled "You" and "Spouse" rather than "Your Passing" and "Spouse Passing",
+because the shorter labels stop the ones near the end of the plan from overlapping each other.
+
+Also in this release: a cost basis larger than the account holding it is now corrected rather than
+carried, which could previously happen after a market decline. This has no effect on an ordinary
+projection and shows up only in Monte Carlo, where losing years are the point.
+
+---
+
 <a id="11.147c"></a>
 
 ## 11.147c

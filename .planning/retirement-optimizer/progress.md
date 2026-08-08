@@ -1901,3 +1901,80 @@ Verified by assertion in the edit script, not by eye.
 and had propagated into progress.md, the commit message and the PR body. Fixed here; the phase
 coverage check itself was right both times, index and file sections still match exactly with nothing
 on either side unaccounted for.
+
+---
+
+## Session 2026-08-07 (fifth) — P35f + P35g shipped: IRC §1014 basis step-up, v11.1499
+
+Planned `P35g` in plan mode, built it with `P35f` folded in. **222 node tests (was 214), 518 in the
+browser, all green.** Not on `main` yet: open as [PR #160](https://github.com/nightskyguy/retirement_assets/pull/160), commit `15396c0`.
+
+**Four user decisions rewrote the recorded spec before any code was written.** No `deathBasisStepUp`
+enum, no knob, no `'none'` - step-up is law, not preference, so goldens get rebaselined rather than
+kept green behind a switch. Not a `COMMUNITY_PROPERTY` list either: the user rejected it as "a second
+place to forget", so all 38 jurisdictions carry their own `BasisStepUp` (0.50/1.00) with a test
+asserting every one declares it. Terminal row only, not every year, because "wealth at death is not
+wealth now". Scope cut to the step-up; `survivorSpendPct` deferred to `P35i`.
+
+**Two planned steps turned out to be unnecessary.** Writing the terminal fix as `Basis := Brokerage`
+on the log row instead of "stop subtracting the haircut" made `max(0, Brokerage - Basis)` zero for
+every downstream consumer, so `bestConversionStopYear` needed no `atDeath` parameter and
+`afterTaxNetWorth`/`_afterTaxBuckets` needed no arithmetic change. Removing their term anyway would
+have broken a legitimate test of the general helper. Documented as inert instead of deleted.
+
+**One trap caught before it shipped.** A `_cfRun` completes fully, so without a guard its last row
+arrives at the Break Even block already stepped up while the main log's has not, and the final
+year's `convOC` differences two different valuations. Requires BOTH the post-pass sitting after the
+BE block AND an `inputs._cfRun` skip. Verified by isolation - a build with the terminal step-up
+disabled produces a bit-identical `convOC` series - not by reading the code and believing it.
+
+**A second regression caught the same way.** Renaming the death markers from "Your Passing" to "You"
+silently broke the Monte Carlo chart's milestone filter, which matched on `/Passing|.../`. Now
+filtered on the structural `stepUp` flag, which a rename cannot break.
+
+**Measured effect.** Default plan $625,885 -> $637,024 ending wealth, $10,513 less lifetime tax,
+spending identical to the dollar. Brokerage-heavy plans move ~11.6%. Single filer: wealth up, tax
+**unchanged** - proof the two step-ups are correctly separated. TX vs FL (both no-tax, differing
+only in `BasisStepUp`): +$184,854 wealth, -$127,539 tax.
+
+**Nine existing tests moved, and two of them were findings rather than rebaselines.** The T6
+divergence that `optimizer_core.tests.js` recorded as permanently lost is back (see findings), and
+`CONV_BASE`'s time-limited conversion turned out to be an artifact of the bug - worth $1,221-$5,587
+against a $28,551 modeling error. Moved those tests to a `TL_BASE` with a larger IRA, deliberately
+keeping the brokerage gain so the test clears the correction instead of dodging it.
+
+**Chart markers, four rounds of user iteration.** Ended at: labels "You"/"Spouse"/"Both", a drawn
+half/full circle glyph, a second-death marker (single filers previously got **none**), and a legend
+that describes only the marks the plan actually has - no half swatch in a community-property state
+or for a single filer, where a half step-up cannot occur. Along the way the index-based `i % 3`
+label stagger had to be replaced with real overlap testing: it put the default plan's two death
+markers, one year apart, on the same row. Overlapping label pairs went 1 -> 0 on the default plan
+and on the reported scenario, and 0 on a 17-marker shortfall plan.
+
+**Docs.** README's "there is no basis step-up" limitation replaced with four named residual limits
+(LA/NM unmodelled, aggregate basis with no per-spouse attribution, AK opt-in, no loss carryforward),
+each with its direction of error. `P35h`'s caveat is now obsolete and was rewritten, not deleted.
+
+---
+
+## Session 2026-08-07 (sixth) — P41 audit: shipped, but not completely
+
+User asked whether P41 (Pension Start Age) was complete, since v11.10ee's changelog announces
+"Pension start age". Audited all seven sub-items against the code rather than against the changelog.
+
+**Five shipped and were never checked off** (`P41a` input, `P41b` `getInputs()`, `P41c` engine age
+gate, `P41e` URL alias `psa`, `P41f` survivor logic needs nothing). The checklist showed all seven
+open, which understated the work as badly as calling the phase done would have overstated it.
+
+**`P41d` is a real remaining defect**, not bookkeeping. `computeSuggestedSpend()` lives in
+`optimizer_ui.js:4712`, not core.js where the plan recorded it, and counts the pension
+unconditionally in three places while never reading `pensionStartAge`. Confirmed live: start age 75
+against retirement age 65 is read correctly as 75 and the suggested spend does not move. So the
+After-Tax Spend ⓘ credits a deferred pension for years before it arrives - wrong for precisely the
+"retire at 60, pension starts at 65" case the input's own tooltip advertises.
+
+**`P41g` has no test.** The `pensionStartAge: 65` in `optimizer_core.tests.js:1613` belongs to a PA
+retirement-income-exclusion test that only sets the field; reverting `P41c` would fail nothing.
+
+**Not fixed, by the user's instruction** - it is unrelated to the basis step-up and would have
+muddied PR #160. Left as `P41d` + `P41g`, both small, both in `optimizer_ui.js`.

@@ -183,6 +183,25 @@ function calculateBrokerageWithdrawal(withdrawal, brokerageBalance, brokerageBas
 }
 
 /**
+ * Enforces the invariant BrokerageBasis <= Brokerage (P35f). You cannot hold more cost basis
+ * than the account is worth; above it, `basis` is a paper loss, not basis.
+ *
+ * Every ordinary path already preserves this - surplus reinvestment and reinvested dividends
+ * add the same dollars to value and to basis, and withdrawals reduce basis proportionally, so
+ * the ratio is invariant. Only a NEGATIVE brokerage return can break it, by shrinking value
+ * while basis stands still. That makes this a no-op for any run with non-negative brokerage
+ * returns and a real correction under Monte Carlo, where down years are the point.
+ *
+ * @note Writes the unrealized loss down immediately. The engine models no capital-loss
+ *       carryforward, so the loss is dropped rather than banked against a later gain; a plan
+ *       that dips and recovers is taxed on the recovery. Understates nothing in the user's
+ *       favor - it can only overstate the tax owed, never understate it.
+ */
+function clampBrokerageBasis(balance) {
+    balance.BrokerageBasis = Math.min(balance.BrokerageBasis, Math.max(0, balance.Brokerage));
+}
+
+/**
  * Calculates withdrawal amounts from multiple accounts based on strategy, accounting for taxes
  * @param {Object} balances - Balances
  * @param {number} balances.IRA - IRA balance
@@ -995,6 +1014,7 @@ function beginYear(sim, yr) {
 
     // Pre-withdrawal growth: portfolio earns for preMonths before withdrawal exits.
     yr.preGains = applyGrowth(balance, yr.growthRates, preMonths);
+    clampBrokerageBasis(balance);   // P35f: a down half-year can leave basis above value
 
     yr.withdrawals = { IRA: 0, IRA1: 0, IRA2: 0, Roth: 0, Brokerage: 0, BrokerageBasis: 0, Cash: 0 };
     yr.netWithdrawals = yr.withdrawals;
@@ -1034,6 +1054,36 @@ function resolveHousehold(sim, yr) {
     totals.yearstested += 1;
 
     yr.status = (yr.alive1 && yr.alive2) ? 'MFJ' : 'SGL';
+
+    // The two death-adjacent years, named apart because they are ONE YEAR APART and both exist.
+    // yr.alive* is `age <= die`, so both spouses are alive through the whole year age === die:
+    // that year is still MFJ and is the LAST one. The first SGL year is the year AFTER the death,
+    // which is what the existing isDeathYear local (~line 1110) tests. Reusing isDeathYear for
+    // "the last married year" inverts a feature silently, because both years produce numbers.
+    yr.isLastMFJYear = yr.status === 'MFJ'
+        && (yr.age1 === inputs.die1 || (birthyear2 > 0 && yr.age2 === inputs.die2));
+    yr.isFirstSingleYear = yr.status === 'SGL' && birthyear2 > 0
+        && (yr.age1 === inputs.die1 + 1 || yr.age2 === inputs.die2 + 1);
+
+    // IRC 1014 basis step-up at the FIRST death. The brokerage cost basis resets to fair market
+    // value - fully in a community-property state, on the decedent's half in a common-law one -
+    // so the survivor owes capital-gains tax on far less of the same account. Applied at the top
+    // of the first SINGLE year, before any of this year's brokerage draws, so those draws price
+    // off the stepped-up basis.
+    //   Basis is a single aggregate scalar with no owner attribution (balance.BrokerageBasis) and
+    // that is sufficient here: 0.50 vs 1.00 IS the ownership model - common-law joint tenancy vs
+    // community property - so no per-person brokerage split is needed to get the right answer.
+    // The fraction is a per-jurisdiction field so a state cannot be added without declaring it;
+    // see the BASIS STEP-UP AT DEATH block in taxengine.js.
+    //   The SECOND death is not handled here: it is always a full reset regardless of state, and
+    // it lands on the terminal row, applied in simulate()'s terminal block.
+    if (yr.isFirstSingleYear && !sim.firstDeathStepUpDone) {
+        sim.firstDeathStepUpDone = true;
+        const stepFraction = TAXData[STATEname]?.BasisStepUp ?? 0.50;
+        const unrealizedGain = Math.max(0, balance.Brokerage - balance.BrokerageBasis);
+        balance.BrokerageBasis += stepFraction * unrealizedGain;
+    }
+
     // IRMAA is already known since it is based on income from 2 years ago (MAGI lookback),
     // compared against thresholds inflated to THIS payment year (matches SSA indexing).
     // Only spouses actually on Medicare (living, at TAXData.IRMAA.ELIGIBILITY_AGE or older) pay
@@ -2284,6 +2334,9 @@ function growAndSettle(sim, yr) {
         yr.gains.Cash += yr.taxableDividends;
         balance.Cash += yr.taxableDividends;
     }
+    // P35f: last point in the year that either brokerage value or basis moves, so the invariant
+    // is re-established here before the balances are snapshotted into the log row.
+    clampBrokerageBasis(balance);
     balance.magiHistory.push(yr.tax.MAGI);
     totals.tax += yr.totalTax;
     totals.medicare = (totals.medicare || 0) + yr.medicareBase;
@@ -2668,10 +2721,54 @@ function simulate(inputs) {
     totals.avgWdRateWeighted = _wdDen > 0 ? _wdNum / _wdDen : null;
     totals.avgNetDepletion   = _wdN > 0 ? _depSum / _wdN : null;
 
+    // IRC 1014 basis step-up at the SECOND (final) death. The simulation ends AT the last death
+    // year, so the final log row is always a death - for a couple and for a single filer alike -
+    // and the heirs take the brokerage account at fair market value. The unrealized gain sitting
+    // in it is never taxed to anyone. Valuing it net of capital-gains tax charged heirs for a
+    // liquidation that does not happen, and did so ONE-SIDEDLY: Roth and Cash are unaffected, so
+    // the error ran consistently in favor of Roth conversions everywhere terminal wealth is
+    // compared.
+    //   Expressed as `Basis := Brokerage` rather than "drop the discount" because that is what
+    // 1014 actually does, and it is correct in BOTH directions: basis steps DOWN to market too,
+    // so an account under water hands its heirs no deductible loss.
+    //
+    // TWO PLACEMENT CONSTRAINTS, both load-bearing, both covered by tests:
+    //   1. This must run AFTER the Break Even block above, which by decision still values every
+    //      row - including this one - on the un-stepped-up liquidation basis. Moving it earlier
+    //      silently changes convBEYear.
+    //   2. It must be SKIPPED on counterfactual runs. A _cfRun completes fully, so without this
+    //      guard its last row would arrive at the Break Even block already stepped up while the
+    //      main log's row is not, and convOC's final year would be differencing two different
+    //      valuations. Nothing outside that block reads a _cfRun's finalNW or totals.terminal,
+    //      so leaving those un-stepped on a counterfactual costs nothing.
+    if (!inputs._cfRun) {
+        const _last = log[log.length - 1];
+        const _gainAtDeath = Math.max(0, _last.Brokerage - _last.Basis);
+        // Exactly inverts the cap-gains haircut in the totalWealth formula (evaluateYearOutcome):
+        // old contribution was gain*(1-capG) + basis, new is basis + gain, so the difference is
+        // gain*capG. Adding the delta rather than restating the whole formula keeps the IRA half
+        // in one place, where it cannot drift from this.
+        // Both pre-step-up values are kept. '-totalWealthPreStepUp' is the terminal row's
+        // LIQUIDATION value - what the estate would net by selling instead of inheriting - and it
+        // is the basis the Break Even series above is computed on. Keeping it makes the two bases
+        // recoverable from a finished run rather than implicit, which is what lets the convOC
+        // identity still be asserted and what a legacy-basis Break Even would build on.
+        _last['-basisPreStepUp'] = _last.Basis;              // leading '-' -> no table column
+        _last['-totalWealthPreStepUp'] = _last.totalWealth;
+        _last.totalWealth += _gainAtDeath * sim.capitalGainsRate;
+        _last.Basis = _last.Brokerage;
+    }
+
     // Baseline accounting: expose the terminal capital-gains rate + terminal balance
     // breakdown so the optimizer's after-tax net-worth helper can value every strategy
     // on a comparable footing (IRA at future rate, brokerage gains at cap-gains rate).
     totals.capGainsRate = sim.capitalGainsRate;
+    // The step-up fraction this run actually used, plus the state it came from, so the chart's
+    // death markers and their legend can report it without re-deriving it from the inputs. Read
+    // from totals rather than from the State dropdown on purpose: the dropdown can be changed
+    // after a run, and the marker has to describe the run it belongs to.
+    totals.basisStepUpFraction = TAXData[STATEname]?.BasisStepUp ?? 0.50;
+    totals.stateName = STATEname;
     const _lastLog = log[log.length - 1];
     totals.terminal = {
         ira:       _lastLog.IRA1 + _lastLog.IRA2,
@@ -2993,6 +3090,9 @@ function selectConversionCandidates(rows, maxPool = 12) {
 // The three after-tax buckets at end of plan (used by Tax Flexibility):
 //   pre-tax IRA net = terminal.ira * (1 - rate); Roth = terminal.roth (face);
 //   taxable net = cash + basis + max(0, brokerage - basis) * (1 - capGainsRate).
+// As of the IRC 1014 step-up, the last term is always zero here: terminal.basis === terminal.
+// brokerage because the final row is a death year, so the taxable bucket is simply cash +
+// brokerage at face. The expression is left intact so it matches afterTaxNetWorth line for line.
 function _afterTaxBuckets(r, rate) {
     const t = (r.totals && r.totals.terminal) || {};
     const capG = r.totals?.capGainsRate ?? 0.15;
@@ -3620,6 +3720,13 @@ function buildVariations(base) {
  * @param {number} futureIRARate expected future tax rate on IRA distributions (decimal)
  * @param {number} capGainsRate terminal capital-gains rate (decimal)
  * @returns {number} after-tax net worth
+ * @note The capital-gains term is INERT for any `t` produced by simulate(). The final log row is
+ *       always a death year, so IRC 1014 has already stepped basis to market there (see the
+ *       terminal block in simulate()) and totals.terminal arrives with basis === brokerage,
+ *       making max(0, brokerage - basis) exactly zero. The term is kept because this is a
+ *       general valuation helper that also serves hand-built inputs in tests and harnesses,
+ *       where a genuine unrealized gain can exist. If it ever contributes on a simulate()
+ *       result, the step-up did not run - that is what the terminal-basis test guards.
  */
 function afterTaxNetWorth(t, futureIRARate, capGainsRate) {
     if (!t) return 0;

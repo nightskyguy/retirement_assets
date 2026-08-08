@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.147c</title>
+    <title>Retirement Optimizer 11.1499</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -58,13 +58,13 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=11147c"></script>
-	<script src="optimizer_core.js?v=11147c"></script>
+	<script src="taxengine.js?v=111494"></script>
+	<script src="optimizer_core.js?v=111498"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=11146b"></script>
-	<script src="optimizer_tests.js?v=11147c"></script>
+	<script src="optimizer_ui.js?v=111499"></script>
+	<script src="optimizer_tests.js?v=111494"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -118,7 +118,7 @@
 			</div>
 
 			<div id="ui-ordered" class="input-group hidden">
-				<label style="display:block;" title="Account draw order for the Ordered strategy - accounts are emptied left to right to fund each year's spending (RMDs are always taken first regardless of order)."><select id="orderedSeq" style="width:100%;">
+				<label style="display:block;" title="Account draw order for the Ordered strategy - accounts are emptied left to right to fund each year's spending (RMDs are always taken first regardless of order)."><select id="orderedSeq" style="width:100%;max-width:none;">
 					<option value="CBIR">Cash→Brok→IRA→Roth</option>
 					<option value="RIBC">Roth→IRA→Brok→Cash</option>
 					<option value="BIRC">Brok→IRA→Roth→Cash</option>
@@ -364,8 +364,7 @@
         <details class="section" open>
         <summary>4. Assumptions</summary>
         <div class="row">
-						<div><label title="Pick the state that you live in or plan to live in through retirement"><STRONG>State</STRONG> Taxation
-            <select id="STATEname" onchange="updateStateNote()">
+						<div><label title="Pick the state that you live in or plan to live in through retirement" style="display:block;"><STRONG>State</STRONG> Taxation<select id="STATEname" onchange="updateStateNote()" style="width:100%;max-width:none;">
                 <option   value="CA" selected>California</option>
             </select></label>
 			</div>
@@ -651,6 +650,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.1499</b> <strong>Money left to your heirs was being taxed for capital gains nobody ever owes, so ending balances were too low and Roth conversions looked better than they are.</strong> When someone dies, the cost basis of a taxable brokerage account resets to what the account is worth that day, and the gain built up during their lifetime is never taxed to anyone. The tool ignored this in two places: a surviving spouse's basis never changed when the first spouse died, and the final year still subtracted capital-gains tax from whatever was left over. Both are now modeled, and the first death steps up the full account in a community-property state or half of the gain elsewhere, which is how the law works. Expect ending balances to rise and lifetime tax to fall, with your spending goal funded in exactly the same years: the demonstration plan moves from $625,885 to $637,024 and pays $10,513 less tax, and a plan still holding a large taxable account at the end can gain far more. It matters most if you were weighing a Roth conversion. The missing step-up only ever penalized money kept in a brokerage account, never Roth or cash, so every conversion comparison leaned the same way, and some plans that used to show a conversion benefit no longer do. <i>Break Even is deliberately left alone for now</i> and still answers the question it always did. On the chart, every death now carries a marker with a small circle showing which step-up applied, half filled or solid, with a legend that explains only the marks your own plan has. <a href="optimizer_changelog.md#11.1499" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.147c</b> <strong>Self-tests improved.</strong> No change to your plan or its numbers. The self-check that runs at page load now covers 510 tests instead of 245; hover the indicator for the count. A brief hourglass before the green dot is normal, and a green dot with a small warning mark means the page was opened as a local file, which blocks part of the check from loading. <a href="optimizer_changelog.md#11.147c" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.1478</b> <strong>Four tax and accounting corrections. The big one: dividends and interest were counted twice, so plans have been showing more money than they should, and ending balances now go down.</strong> The same dollar was added to your account <i>and</i> treated as income available to spend, so the tool withdrew that much less to cover your spending while the money stayed put. A cash account earning 3% grew closer to 6%. Check it yourself: a portfolio returning 8% as pure growth versus 6% growth plus a 2% reinvested dividend has the same total return, but the dividend version pays tax every year and so must end up <i>behind</i> - it was ending up 21.7% <i>ahead</i>. Expect ending balances to fall, typically 4% to 23% at the default rates, with your spending goal still funded in the same years; your inputs were never wrong, the tool was mishandling them. Also: the 2025 senior deduction and higher SALT cap were built in but never actually applied, so federal tax was too <i>high</i> for filers 65+; 16 states that exempt retirement income were taxing it anyway in some years, worst on <b>Ordered</b> strategies, where 23 of 36 test plans went from failing to fully funded; and the documentation now matches what the tool does, including that Ordered leaves a shortfall by design. <a href="optimizer_changelog.md#11.1478" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.146a</b> <strong>Proportional, Reduce, Guyton-Klinger and the default strategy were sizing withdrawals as if Social Security, pensions and RMDs arrived tax free, and now work the withdrawal out correctly and draw the IRA needed to cover the whole spending goal.</strong> The tax owed on your guaranteed income was never funded, so those strategies came up short by roughly that tax bill every year. Cash and Brokerage hid it until they ran dry, then the plan reported unfunded spending while the IRA still held a large balance - one test plan left $304,331 unfunded next to an $893,920 IRA. Two things changed: the plan can now reach that IRA when everything else is exhausted, and the first withdrawal is sized against what your guaranteed income is worth <i>after</i> tax, computed rather than estimated with a single rate. Saved plans and shared links using these strategies can now report different numbers: more spending funded, more tax, and less left over at the end. <i>ACA Cliff is deliberately excluded while its cap is in force</i> - crossing the cap forfeits the whole premium subsidy, so a shortfall there means the goal could not be met from non-taxable sources, which is the answer that strategy exists to give. <a href="optimizer_changelog.md#11.146a" target="_blank" rel="noopener">Details</a></li>
@@ -878,9 +878,14 @@
                 <button id="chartPerson_mine"   class="tog"        onclick="setChartPersonView('mine')">Mine</button>
                 <button id="chartPerson_spouse" class="tog"        onclick="setChartPersonView('spouse')">Spouse</button>
               </span>
-              <label style="margin-left:auto;font-size:0.8em;color:#555;display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Overlay vertical markers for key plan events: the year each person's RMDs begin, the first death, each year income falls more than 10% short of your spending goal, each Guyton-Klinger spending cut, each year IRMAA moves to a higher tier, and the Roth conversion break-even year. Applies to both charts.">
+              <label style="margin-left:auto;font-size:0.8em;color:#555;display:inline-flex;align-items:center;gap:4px;cursor:pointer;" title="Overlay vertical markers for key plan events: the year each person's RMDs begin, each death, each year income falls more than 10% short of your spending goal, each Guyton-Klinger spending cut, each year IRMAA moves to a higher tier, and the Roth conversion break-even year. Applies to both charts.">
                 <input type="checkbox" id="chk-milestones" onchange="toggleMilestones(this)" checked> Show milestones
               </label>
+            </div>
+            <div id="milestone-stepup-legend" style="font-size:0.75em;color:#555;display:flex;align-items:center;gap:3px;margin:3px 0 2px 2px;" title="At death the cost basis of a taxable brokerage account resets to its value on that day, so the gain built up beforehand is never taxed (IRC section 1014). How much resets at the FIRST death depends on state property law: the whole account in a community-property state (AZ, CA, ID, NV, TX, WA, WI), and the deceased spouse's half everywhere else. The LAST death is always a full reset, wherever you live, because the account passes to your heirs.">
+              <span id="milestone-stepup-half" style="display:flex;align-items:center;gap:3px;"><svg width="10" height="10" viewBox="0 0 24 24" style="color:#7b1fa2;flex:none;" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 3 A9 9 0 0 0 12 21 Z" fill="currentColor"/></svg>,</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" style="color:#7b1fa2;flex:none;" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="currentColor"/></svg>
+              <span id="milestone-stepup-text">indicate passing with half or full basis step up based on state law.</span>
             </div>
             <canvas id="chartAssets" style="max-height:403px;"></canvas>
             <hr>
@@ -1153,7 +1158,7 @@ runSimulation?.();
 (() => {
     const RT = new URLSearchParams(location.search).get('runtests');
     const ALL = RT !== null && RT !== 'fast';
-    const V = '?v=11147c';
+    const V = '?v=111494';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

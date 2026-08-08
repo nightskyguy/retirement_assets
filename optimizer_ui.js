@@ -285,7 +285,10 @@ function getInputs() {
     }
     let Brokerage = +val('Brokerage');
     let BrokerageBasis = +val('BrokerageBasis');
-    if (Brokerage <= 0.01) basis = 0;
+    // P35f: `if (Brokerage <= 0.01) basis = 0;` used to sit here. It assigned an undeclared global
+    // named `basis`, never BrokerageBasis, so it had no effect from the day it was written. Removed
+    // rather than repaired: the clamp below already covers a zero balance (basis > 0 === Brokerage,
+    // so it is clamped to 0) and it tells the user, which the silent version did not.
     if (BrokerageBasis > Brokerage) {
         showMessage('BrokerageBasis (' + BrokerageBasis + ') was greater than the Brokerage balance. BrokerageBasis in input is being ignored. Using ' + Brokerage + ' instead.', 'warning');
         BrokerageBasis = Brokerage;
@@ -2670,6 +2673,30 @@ let _chartMilestones = [];
 // On by default.
 let showTaxThresholds = true;
 
+// Half / full basis step-up mark for a death milestone, DRAWN rather than typed. The obvious
+// approach is to append a character to the label, but the Unicode geometric shapes will not
+// cooperate: at the chart's 10px, U+25D0 (half) inks 9x7 while U+25CF (full) inks 6x4, so "full"
+// would render a third SMALLER than "half" and read backwards. Its family (U+25D0..U+25D7) has no
+// fully-black member to pair with, so no same-size pair exists to switch to. Drawing both from one
+// radius makes them identical by construction, matches the marker's own colour exactly, and does
+// not depend on what `sans-serif` resolves to on the reader's machine.
+// The outline is deliberately THIN. It is drawn on both so the two glyphs share an outer diameter,
+// but it also lays ink on the empty side of the half glyph, which is the only side the eye can use
+// to tell them apart. Measured at r=4: a 0.75 outline leaves 42% less ink on the right-hand side
+// for the half than for the full, against 36% at 1.0 and 33% at 1.25. Thinner is clearer here.
+function drawStepUpGlyph(ctx, x, y, r, full, color) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.75;
+    ctx.stroke();                        // outline on both, so the half reads as a circle
+    ctx.beginPath();
+    if (full) ctx.arc(x, y, r, 0, Math.PI * 2);
+    else ctx.arc(x, y, r, Math.PI / 2, Math.PI * 1.5);   // canvas y is down: this is the LEFT half
+    ctx.fillStyle = color;
+    ctx.fill();
+}
+
 const milestonePlugin = {
     id: 'milestones',
     afterDatasetsDraw(chart) {
@@ -2682,7 +2709,10 @@ const milestonePlugin = {
         // All other charts (MC input fans, etc.) get none.
         const canvasId = chart.canvas?.id || '';
         let milestones = _chartMilestones;
-        if (canvasId === 'mc-chart') milestones = milestones.filter(m => /Passing|RMDs begin|SS begins/.test(m.label));
+        // Deaths are matched on the stepUp flag, not on the label. They used to read "Your Passing"
+        // and be caught by the regex; the labels are now "You"/"Spouse"/"Both", which no word test
+        // can distinguish from a future marker without one. The flag is set on death markers only.
+        if (canvasId === 'mc-chart') milestones = milestones.filter(m => m.stepUp || /RMDs begin|SS begins/.test(m.label));
         else if (canvasId !== 'chartAssets' && canvasId !== 'chartIncomeSources') return;
         if (!milestones.length) return;
         const xScale = chart.scales.x;
@@ -2692,9 +2722,29 @@ const milestonePlugin = {
         const ctx = chart.ctx;
         ctx.save();
         ctx.font = '600 10px sans-serif';
-        milestones.forEach((m, i) => {
+        const GLYPH_R = 4, MAX_ROWS = 4, ROW_H = 12;
+        // Assign label rows BEFORE drawing any of them. The rule used to be row = i % 3, which is
+        // blind to where the labels actually sit: two markers twenty years apart could share a row
+        // harmlessly while two adjacent ones landed on top of each other. That is what happened to
+        // the two death markers in the default plan - list positions 2 and 5, so the same row, but
+        // only one year apart on the axis. Rows are now taken by measuring real pixel extents, so a
+        // row is reused only when it is genuinely clear.
+        const rowEnds = [];
+        const placed = milestones.map(m => {
             const px = xScale.getPixelForValue(m.x);
-            if (px == null || isNaN(px)) return;
+            if (px == null || isNaN(px)) return null;
+            const onRight = px > mid;
+            const w = ctx.measureText(m.label).width + (m.stepUp ? GLYPH_R * 2 + 3 : 0);
+            const x0 = onRight ? px - 3 - w : px + 3;
+            let row = 0;
+            while (row < MAX_ROWS && rowEnds[row] != null && x0 < rowEnds[row] + 4) row++;
+            if (row >= MAX_ROWS) row = MAX_ROWS - 1;   // out of rows: stack on the last and accept it
+            rowEnds[row] = Math.max(rowEnds[row] ?? -Infinity, x0 + w);
+            return { m, px, onRight, row };
+        });
+        placed.forEach(p => {
+            if (!p) return;
+            const { m, px, onRight, row } = p;
             ctx.beginPath();
             ctx.moveTo(px, top);
             ctx.lineTo(px, bottom);
@@ -2702,12 +2752,21 @@ const milestonePlugin = {
             ctx.strokeStyle = m.color;
             ctx.setLineDash([5, 3]);
             ctx.stroke();
-            // Label hugs the line, flipping side near the right edge; staggered to limit overlap.
+            // Label hugs the line, flipping side near the right edge so it stays inside the chart.
             ctx.setLineDash([]);
             ctx.fillStyle = m.color;
-            const onRight = px > mid;
             ctx.textAlign = onRight ? 'right' : 'left';
-            ctx.fillText(m.label, px + (onRight ? -3 : 3), top + 10 + (i % 3) * 12);
+            const tx = px + (onRight ? -3 : 3);
+            const ty = top + 10 + row * ROW_H;
+            ctx.fillText(m.label, tx, ty);
+            // Death markers carry a step-up glyph, placed on the far side of the label from the
+            // line so it never sits on top of it. Right-aligned text occupies [tx - w, tx].
+            if (m.stepUp) {
+                const w = ctx.measureText(m.label).width;
+                const gx = onRight ? tx - w - 3 - GLYPH_R : tx + w + 3 + GLYPH_R;
+                drawStepUpGlyph(ctx, gx, ty - 3.5, GLYPH_R, m.stepUp === 'full', m.color);
+                ctx.fillStyle = m.color;   // drawStepUpGlyph leaves its own fill/stroke set
+            }
         });
         ctx.restore();
     }
@@ -2846,8 +2905,10 @@ function makeChartLegendInteraction(groupSize = 1) {
 }
 
 // Compute milestone markers from the simulation log:
-//  1. First death - labelled "Your Passing" / "Spouse Passing" (filing status flips; the deceased's
-//     age becomes '—').
+//  1. First death - labelled "You" / "Spouse" (filing status flips; the deceased's age becomes
+//     '—'), carrying a half or full basis step-up glyph per the state's property law.
+//  8. Last death - the final row, always someone's death since the plan ends at one. Labelled the
+//     same way, always a FULL step-up (heirs), and it is the only death marker a single filer gets.
 //  2. Every Guyton-Klinger guardrail spending CUT (gkAdj contains a "cap" adjustment).
 //  3. Every year the IRMAA tier INCREASES over the prior year (e.g. Tier 1→Tier 2), labelled with
 //     the new tier ("IRMAA Tier 2"). Same-or-lower tiers are not marked.
@@ -2862,6 +2923,11 @@ function computeMilestones(log) {
     // Numeric IRMAA tier from the string field ("-none-"/"-"→0, "Tier 3 (TOP)"→3).
     const tierNum = t => { const m = String(t ?? '').match(/(\d+)/); return m ? +m[1] : 0; };
     const beYear = (typeof lastTotals !== 'undefined' && lastTotals) ? lastTotals.convBEYear : null;
+    // Basis step-up fraction the RUN used (0.50 common law / 1.00 community property), same
+    // lastTotals channel as beYear above. Only the first death of a couple can be a half step-up;
+    // the last death is always full, because the heirs take the account at market wherever they live.
+    const stepUpFraction = (typeof lastTotals !== 'undefined' && lastTotals && lastTotals.basisStepUpFraction != null)
+        ? lastTotals.basisStepUpFraction : 0.50;
     // RMD start age from the log alone: the engine sets age = year − birthyear exactly
     // (optimizer_core.js resolveHousehold), so the birth year is recoverable from any row with a
     // numeric age, and the start age follows the same rule as getRMDPercentage() - 75 for anyone
@@ -2879,10 +2945,14 @@ function computeMilestones(log) {
     for (let i = 0; i < log.length; i++) {
         const r = log[i];
         const status = r.status;
-        // 1. Death - first filing-status flip; name who passed (their age shows '—').
+        // 1. First death - first filing-status flip; name who passed (their age shows '—'). The
+        // word "Passing" is carried by the legend rather than the label: these markers sit at the
+        // right-hand end of the chart where a long label is drawn right-aligned and sweeps left
+        // across its neighbours. The step-up glyph replaces it at a fraction of the width.
         if (!deathDone && prevStatus && status && status !== prevStatus) {
             const youGone = (r.age1 == null || r.age1 === '—');
-            ms.push({ x: i, label: youGone ? 'Your Passing' : 'Spouse Passing', color: '#7b1fa2' });
+            ms.push({ x: i, label: youGone ? 'You' : 'Spouse', color: '#7b1fa2',
+                      stepUp: stepUpFraction >= 1 ? 'full' : 'half' });
             deathDone = true;
         }
         if (status) prevStatus = status;
@@ -2933,12 +3003,60 @@ function computeMilestones(log) {
         if (a1 != null) prevAge1 = a1;
         if (a2 != null) prevAge2 = a2;
     }
+    // 8. The LAST death. The simulation ends at it, so the final row is always someone's death -
+    // for a couple and for a single filer alike - and until now it was the one life event on the
+    // chart that went unmarked. A single filer got no death marker at all, because marker 1 above
+    // fires on an MFJ -> SGL flip that never happens without a spouse.
+    //   Always a FULL step-up, whatever the state: this is the transfer to heirs, and IRC 1014
+    // re-bases the whole account. It is drawn whether or not it is worth anything, because the
+    // marker is recording a death, and the glyph records the rule that applied to it. A plan that
+    // spent its brokerage down gets the same mark as one that did not.
+    const _lastIdx = log.length - 1;
+    const _lastRow = _lastIdx >= 0 ? log[_lastIdx] : null;
+    if (_lastRow) {
+        // Whoever is still alive on the final row is the one it belongs to; the other shows '—'.
+        // Both alive means both life expectancies land on the same year, so there was no first
+        // death to flip the filing status and this is the only death marker the plan gets.
+        const _you = !(_lastRow.age1 == null || _lastRow.age1 === '—');
+        const _spouse = !(_lastRow.age2 == null || _lastRow.age2 === '—');
+        const _label = (_you && _spouse) ? 'Both' : (_you ? 'You' : 'Spouse');
+        ms.push({ x: _lastIdx, label: _label, color: '#7b1fa2', stepUp: 'full' });
+    }
     _chartMilestones = ms;
+}
+
+// Keeps the step-up legend under the asset chart in step with the run, and describes only what is
+// actually ON the chart. The half glyph cannot occur in a community-property state, where the whole
+// account resets at the first death, nor for a single filer, whose one death goes straight to heirs
+// and is always full. Explaining a half step-up to those users is describing something they will
+// never see, so the half swatch and its half of the sentence are dropped when no half marker exists.
+// The state is named only when it is what decided the answer: with two deaths and no half, the
+// state IS the reason both are full. A single filer's full step-up is the heirs' rule, not their
+// state's, so naming their state there would credit the wrong cause.
+function updateStepUpLegend() {
+    const el = document.getElementById('milestone-stepup-legend');
+    if (!el) return;
+    el.style.display = showMilestones ? 'flex' : 'none';
+    const deaths = _chartMilestones.filter(m => m.stepUp);
+    const anyHalf = deaths.some(m => m.stepUp === 'half');
+    const name = (typeof lastTotals !== 'undefined' && lastTotals) ? lastTotals.stateName : null;
+    const halfSwatch = document.getElementById('milestone-stepup-half');
+    if (halfSwatch) halfSwatch.style.display = anyHalf ? 'flex' : 'none';
+    const text = document.getElementById('milestone-stepup-text');
+    if (!text) return;
+    if (anyHalf) {
+        text.textContent = `indicate passing with half or full basis step up based on ${name ? '(' + name + ') ' : ''}state law.`;
+    } else if (deaths.length > 1) {
+        text.textContent = `indicates passing with full basis step up${name ? ' (' + name + ' is a community property state)' : ''}.`;
+    } else {
+        text.textContent = 'indicates passing with full basis step up to heirs.';
+    }
 }
 
 // Toggle handler for the "Show milestones" checkbox; redraws both charts in place.
 function toggleMilestones(cb) {
     showMilestones = !!cb.checked;
+    updateStepUpLegend();
     assetChart?.update('none');
     incomeChart?.update('none');
 }
@@ -3256,6 +3374,7 @@ function updateCharts(log) {
     const inCurrentDollars = document.getElementById('show-current-dollars')?.checked;
     const adj = r => inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1;
     computeMilestones(log);   // #7 - markers drawn by milestonePlugin when the toggle is on
+    updateStepUpLegend();     // names the state behind the half/full step-up glyphs
 
     const sharedTooltip = {
         interaction: { mode: 'index', intersect: false },

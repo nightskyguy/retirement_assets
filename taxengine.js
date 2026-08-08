@@ -149,6 +149,18 @@ var TAXData = {
 	//   AL, MT, ND, OH, SC  (flagged INFLATION_INDEXED: false)
 	//   Of the 11 missing graduated states, only RI and VT are CPI-indexed; rest are statutory.
 	//
+	// BASIS STEP-UP AT DEATH (BasisStepUp, per jurisdiction - IRC 1014):
+	//   Fraction of unrealized brokerage gain whose cost basis resets at the FIRST spouse's
+	//   death. 1.00 = community property (the whole account resets); 0.50 = common law (the
+	//   decedent's half only). At the SECOND death the reset is always 100% for everyone, so
+	//   that one is applied in the engine's terminal valuation and is not driven by this field.
+	//   1.00 - 7 included:  AZ, CA, ID, NV, TX, WA, WI
+	//   0.50 - the other 31 included jurisdictions.
+	//   AK is 0.50 deliberately: community property there is opt-in by written agreement, not
+	//   the default marital regime.
+	//   LA and NM are community-property states but are not coded at all (they appear in the
+	//   'Not yet coded' lists above), so they cannot be selected and need no designation.
+	//
 	// RETIREMENT_EXCLUSION coded (data-driven, see evaluator functions above calculateTaxes()):
 	//   full: CO(55+), IA(55+), IL, MS, PA   cap: GA, KY, MD, MI, NY, WI   phaseout: CT, ME, VA
 	//   credit: OH   array-of-rules: AL
@@ -160,6 +172,7 @@ var TAXData = {
 
     CA: {
 		STATE: 'California',
+		BasisStepUp: 1.00,
 		YEAR: 2026,
 		Default: true,
 		NOTE: 'Excludes CA SDI and CA personal exemption credits. Because those credits are not applied, the California tax shown here is slightly over-calculated — your actual California tax would be a bit lower.',
@@ -190,6 +203,7 @@ var TAXData = {
 	// CONNECTICUT - 2025/2026
 	CT: {
 		STATE: 'Connecticut',
+		BasisStepUp: 0.50,
 		YEAR: 2026,  // No rate or bracket changes for 2026
 		NOTE: 'Retirement income: Connecticut exempts pension/IRA income on a graduated scale by income (100% exempt below $75,000 Single/$100,000 MFJ federal AGI, phasing down to fully taxable by $100,000/$150,000). Uses personal exemptions ($24,000 MFJ / $15,000 Single) instead of a standard deduction; those exemptions also phase out at higher incomes, which this calculator does not apply, so tax may be understated for higher-income filers. Social Security is taxed above these same income thresholds in real CT law; this calculator applies a flat 25% instead, which may overstate SS tax for filers below the threshold.',
 		SSTaxation: 0.25,  // Taxes SS benefits above 75k or 100k (MFJ) at 25%
@@ -239,6 +253,7 @@ var TAXData = {
 	// GEORGIA - HB 463 (Georgia Economic Growth and Tax Relief Act of 2026)
 	GA: {
 		STATE: 'Georgia',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Retirement income: Georgia exempts up to $65,000 of pension/IRA income per person age 65+ ($35,000 for ages 62–64). Georgia law also lets this exclusion cover interest, dividends, and capital gains up to the cap — this calculator only applies it to pension/IRA income, so tax may be slightly overstated for retirees with other investment income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -267,6 +282,7 @@ var TAXData = {
 	// IDAHO - flat 5.3% (HB 40, enacted March 2025, retroactive to Jan 1 2025); SS fully exempt
 	ID: {
 		STATE: 'Idaho',
+		BasisStepUp: 1.00,
 		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
@@ -288,6 +304,7 @@ var TAXData = {
 	// ILLINOIS -
 	IL: {
 		STATE: 'Illinois',
+		BasisStepUp: 0.50,
 		YEAR: 2026,  // Flat tax, rate unchanged; personal exemption increased to $2,925/person
 		NOTE: 'Retirement-account distributions (IRA/401k/pension) are exempt from Illinois tax; interest, dividends, and capital gains remain taxable. Personal exemptions ($5,850 MFJ / $2,925 Single) phase out above $500k AGI (MFJ) or $250k AGI (Single); this calculator always applies the full exemption, so tax may be understated for filers above those income levels.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -315,6 +332,7 @@ var TAXData = {
 	// MISSISSIPPI - full retirement-income exemption, no age/income limit
 	MS: {
 		STATE: 'Mississippi',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Mississippi fully exempts all retirement income (Social Security, pension, IRA/401k/403b, annuity, disability, military) — no age or income limit. Non-retirement income is taxed at a flat 4.3% above a $10,000 exemption.',
 		SSTaxation: 0.00,
@@ -338,6 +356,7 @@ var TAXData = {
 	// IOWA - age 55+ full retirement-income exemption, flat 3.8% on remaining income
 	IA: {
 		STATE: 'Iowa',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Iowa fully exempts pension, IRA, 401(k), and other retirement-plan income for filers 55+ (Social Security is already separately exempt).',
 		SSTaxation: 0.00,
@@ -360,6 +379,7 @@ var TAXData = {
 	// MASSACHUSETTS -
 	MA: {
 		STATE: 'Massachusetts',
+		BasisStepUp: 0.50,
 		YEAR: 2026,  // Flat 5% rate; personal exemption $4,400/person
 		NOTE: 'Retirement income: Massachusetts fully exempts pensions from federal, state, and municipal government employers (private pensions, IRA, and 401(k) distributions remain taxable at the flat 5% rate). This calculator does not apply that exclusion, so tax may be overstated for retirees with a government pension.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -383,6 +403,7 @@ var TAXData = {
 	// MARYLAND - 2025/2026
 	MD: {
 		STATE: 'Maryland',
+		BasisStepUp: 0.50,
 		YEAR: 2026,  // Brackets effective July 1, 2025 remain in effect; std deductions COLA-indexed (may be slightly higher)
 		NOTE: 'Retirement income: Maryland excludes up to $40,600 (2026) of qualified pension income for filers 65+ or disabled, reduced dollar-for-dollar by Social Security/Railroad Retirement received (traditional IRA distributions do not qualify). Maryland county/local income taxes (2.25%–3.3% depending on county) are levied on top of state tax; this calculator does not include them, so total tax is understated by that amount.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -429,6 +450,7 @@ var TAXData = {
 
 	MI: {
 		STATE: 'Michigan',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Retirement income: 2026 is the final phase-in year of Michigan\'s retirement-income tax relief — pension/IRA/401(k) income is exempt up to $67,610/person ($135,220 for a married couple). Filers born before 1946 have unlimited exemption, but only for government pensions; this calculator can\'t tell government from private pensions, so it only grants the unlimited exemption when both spouses were born before 1946, and applies the standard per-person cap otherwise. Tax may be overstated for a household born before 1946 with a private pension and only one qualifying spouse.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -451,6 +473,7 @@ var TAXData = {
 	
 	NY: {
 		STATE: 'New York',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Retirement income: New York fully exempts government and military pensions and excludes up to $20,000/person of private pension/IRA income (age 59½+). This calculator can\'t tell government from private pensions, so it applies the $20,000/person private-pension cap to all pension/IRA income — actual NY tax may be overstated for filers with a government pension.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -477,6 +500,7 @@ var TAXData = {
 
 	NC: {
 		STATE: 'North Carolina',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Retirement income: North Carolina fully exempts government and military pension income for retirees with 5+ years of service credit as of August 12, 1989 (the Bailey settlement); other retirement income is fully taxable. This calculator does not apply that exclusion, so tax may be overstated for qualifying retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -497,6 +521,7 @@ var TAXData = {
 
 	OR: {
 		STATE: 'Oregon',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		// Lower bracket thresholds indexed for inflation annually; rates unchanged
@@ -518,6 +543,7 @@ var TAXData = {
 
 	PA: {
 		STATE: 'Pennsylvania',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Retirement-account distributions (IRA/401k/pension) after age 59½/retirement are exempt from Pennsylvania tax; interest, dividends, and capital gains remain taxable. Assumes retirees are 59½+.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -541,6 +567,7 @@ var TAXData = {
 	// VIRGINIA - HB1754 signed May 2025; effective TY2025+
 	VA: {
 		STATE: 'Virginia',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Retirement income: Virginia offers a $12,000/person age deduction for filers 65+, phased out dollar-for-dollar above $75,000 AGI (MFJ, zero at $99,000) / $50,000 AGI (Single). This calculator approximates that phase-out in steps rather than a smooth dollar-for-dollar reduction, so tax may be slightly over- or understated depending on exactly where your income falls within the phase-out range; it also applies the deduction only to pension/IRA income rather than all income, which understates the deduction (overstates tax) for filers with other income sources. Elevated standard deduction ($24,000 MFJ / $12,000 Single) sunsets after TY2026 unless extended by the legislature.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -578,6 +605,7 @@ var TAXData = {
 
 	DC: {
 		STATE: 'District of Columbia',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		MFJ: {
@@ -601,6 +629,7 @@ var TAXData = {
 	// NEBRASKA - LB754 phase-down: flat 4.55% in 2026 (was 5.20% in 2025, 5.84% in 2024); SS exempt per LB873
 	NE: {
 		STATE: 'Nebraska',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Brackets are approximate based on the LB754 phase-down schedule; confirm with NE DOR for your specific year. Retirement income: Nebraska also offers a retirement-income exclusion for qualifying IRA/401(k) and pension distributions, which this calculator does not apply, so tax may be overstated for retirees who qualify.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits (LB873, eff. 2024)
@@ -621,6 +650,7 @@ var TAXData = {
 	// ALABAMA - brackets/rates unchanged since 2006; federal income tax deduction not modeled
 	AL: {
 		STATE: 'Alabama',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
 		NOTE: 'Retirement income: Alabama fully exempts defined-benefit pension income (public or private); IRA/401(k) distributions are taxable but get a $6,000 exclusion for filers 65+. Alabama also allows a deduction for federal income taxes paid, which this calculator does not apply, so tax is overstated. Brackets unchanged since 2006 (not inflation-adjusted).',
@@ -650,6 +680,7 @@ var TAXData = {
 	// ARIZONA - flat 2.5% (Prop 208 struck down; rate locked via HB 2900, 2022; unchanged through 2026)
 	AZ: {
 		STATE: 'Arizona',
+		BasisStepUp: 1.00,
 		YEAR: 2026,
 		NOTE: 'Retirement income: Arizona exempts up to $2,500/person of government pension income (Arizona, other states, or the U.S. government), and fully exempts military retirement pay. Private pension, IRA, and 401(k) income remain fully taxable. This calculator does not apply the government-pension exclusion, so tax may be overstated for qualifying retirees.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -671,6 +702,7 @@ var TAXData = {
 	// COLORADO - flat 4.4% (rate cut eff. 2022; unchanged 2026; std = federal)
 	CO: {
 		STATE: 'Colorado',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Retirement income: as of 2026, Colorado removed all dollar caps on the pension/annuity/IRA subtraction for filers 55+ (the prior $20,000 age 55–64 / $24,000 age 65+ caps no longer apply). Fully exempt once at least one spouse is 55 or older.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -693,6 +725,7 @@ var TAXData = {
 	// INDIANA - flat 3.05% (HEA 1002/1001 phase-down; 2026 rate confirmed 3.05%; county taxes not modeled)
 	IN: {
 		STATE: 'Indiana',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Indiana county income taxes (typically 0.5%–2.9% depending on county) are levied in addition to the state rate; this calculator does not include them, so total tax is understated by that amount.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -714,6 +747,7 @@ var TAXData = {
 	// KENTUCKY - flat 4.0% (phased down from 5.0%; revenue trigger not met for 2026 reduction)
 	KY: {
 		STATE: 'Kentucky',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Retirement income: Kentucky exempts up to $31,110/person of pension/IRA/401(k) income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -736,6 +770,7 @@ var TAXData = {
 	// MAINE - 2025 (brackets inflation-adjusted annually by Maine Revenue Services)
 	ME: {
 		STATE: 'Maine',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Retirement income: Maine deducts up to $48,216 of pension/IRA income, reduced dollar-for-dollar by Social Security/Railroad Retirement received. The deduction phases out above $125,000 AGI (Single)/$250,000 (MFJ); this calculator applies the phase-out as a single step at the threshold rather than Maine\'s actual gradual reduction, so tax may be overstated for filers just above the threshold. Brackets reflect 2026 values (inflation-adjusted by Maine Revenue Services); rates unchanged.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -768,6 +803,7 @@ var TAXData = {
 	// SSTaxation 0.85: MN includes SS in state income for filers above ~$105k MFJ — no subtraction available
 	MN: {
 		STATE: 'Minnesota',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		NOTE: 'Brackets reflect 2026 values (inflation-adjusted +2.369% from 2025; rates unchanged). Minnesota taxes Social Security — 85% of SS is included in state taxable income at moderate-to-high incomes. Lower-income filers may qualify for a Social Security subtraction that this calculator does not apply, so tax may be overstated for those filers.',
 		SSTaxation: 0.85,
@@ -795,6 +831,7 @@ var TAXData = {
 	// SSTaxation 0.85: MT exempts SS for low income; at moderate-high income, 85% is taxable (matching federal)
 	MT: {
 		STATE: 'Montana',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
 		NOTE: 'Retirement income: Montana allows a small income-tested retirement subtraction (being phased out) that this calculator does not apply, so tax may be overstated for lower-income retirees. Separately, the standard deduction (20% of AGI, capped at $10,160 MFJ / $5,080 Single) is approximated using the cap, which may understate tax at lower incomes where the true 20%-of-AGI amount would be smaller than the cap. Bracket thresholds are not inflation-adjusted.',
@@ -818,6 +855,7 @@ var TAXData = {
 	// NORTH DAKOTA - HB 1158 rate cuts eff. 2024; brackets NOT inflation-indexed — unchanged through 2026
 	ND: {
 		STATE: 'North Dakota',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -842,6 +880,7 @@ var TAXData = {
 	// Bracket thresholds are statutory fixed values; Ohio does not CPI-index income brackets.
 	OH: {
 		STATE: 'Ohio',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
 		NOTE: 'Retirement income: Ohio provides a retirement-income tax credit of up to $200 (not a deduction), scaled by the amount of retirement income received, for filers with income under $100,000. 2026: Ohio moved to a flat 2.75% rate on non-business income above $26,050 (the prior 3.5% top bracket was repealed). Thresholds are not inflation-adjusted.',
@@ -873,6 +912,7 @@ var TAXData = {
 	// Bracket thresholds are statutory fixed values; not CPI-indexed.
 	SC: {
 		STATE: 'South Carolina',
+		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
 		NOTE: 'Retirement income: South Carolina allows a deduction of up to $10,000 of retirement income (401(k), IRA, or pension) for filers 65+, plus a separate age-based deduction of up to $15,000 (the two are coordinated, not additive). This calculator does not apply either deduction, so tax is overstated for retirees 65 and older.',
@@ -905,6 +945,7 @@ var TAXData = {
 	// Std deduction phases out at higher income — using base amount
 	WI: {
 		STATE: 'Wisconsin',
+		BasisStepUp: 1.00,
 		YEAR: 2025,
 		NOTE: 'Retirement income: starting with the 2025 tax year (filed 2026), Wisconsin exempts up to $24,000/person ($48,000 for a married couple) of pension/IRA income for filers 67+, with no income limit. Brackets reflect 2025 values. Standard deduction phases out at higher incomes — base amounts are used here, so results may understate tax for high-income filers.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -946,18 +987,19 @@ const NO_TAX_SHELL = {
     YEAR: 2026,
     FLAT_RATE: 0.0,
     SSTaxation: 0.00,  // no tax on Social Security benefits
+    BasisStepUp: 0.50, // common law; the 3 community-property no-tax states override below
     MFJ: { std: 0, brackets: [ { l: Infinity, r: 0 } ] },
     SGL: { std: 0, brackets: [ { l: Infinity, r: 0 } ] }
 };
 TAXData.AK = { STATE: 'Alaska', ...NO_TAX_SHELL };
 TAXData.FL = { STATE: 'Florida', ...NO_TAX_SHELL };
-TAXData.NV = { STATE: 'Nevada', ...NO_TAX_SHELL };
+TAXData.NV = { STATE: 'Nevada', ...NO_TAX_SHELL, BasisStepUp: 1.00 };
 TAXData.NH = { STATE: 'New Hampshire', ...NO_TAX_SHELL,
     NOTE: 'New Hampshire fully repealed its tax on interest and dividends effective January 1, 2025.' };
 TAXData.SD = { STATE: 'South Dakota', ...NO_TAX_SHELL };
 TAXData.TN = { STATE: 'Tennessee', ...NO_TAX_SHELL };
-TAXData.TX = { STATE: 'Texas', ...NO_TAX_SHELL };
-TAXData.WA = { STATE: 'Washington', ...NO_TAX_SHELL };
+TAXData.TX = { STATE: 'Texas', ...NO_TAX_SHELL, BasisStepUp: 1.00 };
+TAXData.WA = { STATE: 'Washington', ...NO_TAX_SHELL, BasisStepUp: 1.00 };
 TAXData.WY = { STATE: 'Wyoming', ...NO_TAX_SHELL };
 
 // OBBBA provisions — P.L. 119-21, signed July 4, 2025. Update this block if IRS issues amended guidance.

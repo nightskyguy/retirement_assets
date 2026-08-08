@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-07:** `main` = `28a3395`, v11.147c, tree clean, nothing in flight.
+**As of 2026-08-07:** `main` = `a5098e7`, v11.1499 in flight as [PR #160](https://github.com/nightskyguy/retirement_assets/pull/160).
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -10,18 +10,18 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P35 | Phased strategy + **brokerage basis step-up at death** | `P35f`, then `P35g` |
+| **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O0** | P32 | Brokerage draws: audit defect open, premise refuted | `P32c` |
-| **O1** | P36 | Do any strategies never win? Round 1 runs today | `P36a` |
+| **O1** | P36 | Do any strategies never win? Round 2 now unblocked | `P36a` |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P35 leads because `P35g` is a correction, not a feature:** the terminal valuation taxes
-heirs on gains IRC §1014 steps up in full. Roth and Cash are unaffected, so the error runs
-one way, in favour of Roth conversions, through Break Even and every "Optimize for" ranking.
-Nothing measured on top of it is trustworthy until it lands. `P35f` (`Basis <= Brokerage`)
-has a one-line spec and sits in front of it.
+**`P35f` and `P35g` are DONE (v11.1499).** IRC §1014 now fires at both deaths, so terminal
+wealth and every "Optimize for" ranking have stopped leaning toward Roth conversions. Break
+Even was deliberately left on the old basis and did not move. **P35's O0 was earned by that
+correction and is now spent** - re-bucket it if the remaining Phased engine work (`P35i`) is
+not what you want next. P36 round 2 now waits on `P35i` alone.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 
@@ -43,9 +43,9 @@ first task. Every open item in the file now carries one.
 
 | User Priority | ID | Phase | Next open item | Blocked by |
 |---|---|---|---|---|
-| **O0** | P35 | Phased strategy **+ brokerage basis step-up at death** | `P35f`, then `P35g` (the step-up itself) | nothing hard |
+| **O0** | P35 | Phased strategy; **basis step-up shipped v11.1499** | `P35i` (the Phased engine) | nothing hard |
 | **O0** | P32 | Brokerage draws — premise refuted, accounting-audit defect open | `P32c` | nothing |
-| **O1** | P36 | Phased efficiency study, do any strategies never win? | `P36a` (round 1 runs today) | round 2 needs `P35g`+`P35i` |
+| **O1** | P36 | Phased efficiency study, do any strategies never win? | `P36a` (round 1 runs today) | round 2 needs `P35i` only |
 | **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
 | **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
@@ -74,7 +74,7 @@ first task. Every open item in the file now carries one.
 | **O3** | P17 | Retirement_Projection simple mode | `P17a` | nothing |
 | **O3** | P18 | Retirement_Projection -> RetirementTaxPlanner link | `P18a` | nothing |
 | **O3** | P26 | README/FAQ cross-references from tooltips | — | nothing |
-| **O3** | P41 | Pension start age *(was PA)* | `P41a` | nothing |
+| **O3** | P41 | Pension start age *(was PA)* — 5 of 7 shipped in v11.10ee | `P41d` (suggested-spend gate) | nothing |
 | **O3** | P42 | Lumpy spending, no URL encoding *(was PB)* | `P42a` | nothing |
 | **O3** | P43 | Auto-persist + restore offer *(was PC)* | `P43a` | nothing |
 | **O3** | P44 | Onboarding interview *(was PD)* | `P44a` | nothing |
@@ -1330,7 +1330,7 @@ satisfies both rules and is the smallest thing that can be swept. **`sim.prevIRA
 | Phase 1/2 | **Merged** — per-year split on `yr.curIRA`, no hysteresis |
 | ACA ceiling after 65 | ~~**None.** The constraint lifts outright~~ **REVERSED 2026-08-04** — it falls back to Proportional 0%. See the PR 3a-3d replan above |
 | FIRST_DEATH ceiling | **None** — convert everything above the IRA Goal. No `phasedDeathBracket` input |
-| `deathBasisStepUp` default | ~~**`'half'`**~~ **REPLACED 2026-08-04** by `'auto'` (state-driven: `'full'` in a `COMMUNITY_PROPERTY` state, `'half'` elsewhere). Still moves numbers. See the replan above |
+| `deathBasisStepUp` default | ~~`'half'`~~ ~~`'auto'`~~ **THE INPUT DOES NOT EXIST, 2026-08-07.** No enum, no URL key, no `'none'`: step-up follows state law, so it is derived from a per-state `BasisStepUp` field, not chosen. See `P35g` |
 | `survivorSpendPct` default | Ships at `100`; real default decided by P36 (80% flagged reasonable) |
 | Sweep arm count | Decided by P36's evidence, not up front |
 | Enumeration | **Extract** to `optimizer_core.js`, shared with `buildVariations()` |
@@ -1434,17 +1434,41 @@ bodies, `findings.md` and `progress.md` cite them; see the ID migration table at
 - [x] **P35e** *(PR 3c)* — ACA age gate falling back to Proportional 0%. **DONE**, v11.1462, merged
       [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150); only `aca` rows move.
       Two of the three predictions were wrong; both corrections are in `findings.md`
-- [ ] **P35f** *(PR 3d)* — `Basis <= Brokerage` invariant. **Spec is one line and needs writing
-      before it is built** — byte-identical for non-negative brokerage returns, not for MC
-- [ ] **P35g** *(PR 4, code)* — **THE BROKERAGE BASIS STEP-UP.** `deathBasisStepUp` enum defaulting
-      `'auto'` (`'full'` in a `COMMUNITY_PROPERTY` state, `'half'` elsewhere — the `'half'` default
-      recorded in the decision table below is SUPERSEDED); new `COMMUNITY_PROPERTY` constant in
-      `taxengine.js`; the **terminal valuation** in `afterTaxNetWorth` (`optimizer_core.js:3626-3627`)
-      and `_afterTaxBuckets` (`:3001`), which is the larger of the two distortions because it feeds
-      Break Even and every "Optimize for" ranking; `survivorSpendPct` at 100; `yr.isLastMFJYear` +
-      `yr.isFirstSingleYear`; `sim.prevIRAGain`/`prevBaseReturn`; `yr.capGainsPercentage` as a hidden
-      log key, observability only. **Not byte-identical, by decision.** Full spec in the P35 PR 3
-      replan section below
+- [x] **P35f** *(PR 3d)* — `Basis <= Brokerage` invariant. **DONE 2026-08-07, v11.1499.** Spec
+      written at last: basis may never exceed the account, at input and in every simulated year.
+      New `clampBrokerageBasis()` called after both `applyGrowth` points. Byte-identical for
+      non-negative brokerage returns (every ordinary path moves value and basis together); a real
+      correction under MC, where a down year shrinks value while basis stands still. The input-side
+      half was a **dead line**: `optimizer_ui.js:288` read `if (Brokerage <= 0.01) basis = 0;` and
+      assigned an undeclared global named `basis`, never `BrokerageBasis`, so it had never once
+      fired. Deleted rather than repaired - the clamp below it already handles a zero balance and
+      warns, which the silent version did not. **Limitation recorded, not fixed:** the clamp writes
+      the unrealized loss down immediately; there is no capital-loss carryforward, so a dip-then-
+      recover plan is taxed on the recovery. That can only overstate tax, never understate it
+- [x] **P35g** *(PR 4, code)* — **THE BROKERAGE BASIS STEP-UP. DONE 2026-08-07, v11.1499.** Four
+      decisions from the user reshaped the recorded spec before it was built:
+      1. **No enum, no knob, no `'none'`.** Step-up is a function of state and federal law, not a
+         preference, so `deathBasisStepUp` was dropped entirely. Modeling correct behavior outranks
+         preserving past numbers; goldens were rebaselined rather than kept green behind a switch.
+      2. **Not a `COMMUNITY_PROPERTY` list** either - that is a second place to forget when P19 adds
+         a jurisdiction. Every one of the 38 modelled jurisdictions carries its own numeric
+         `BasisStepUp` (0.50 / 1.00) in `taxengine.js`, with a test asserting all 38 declare one.
+         `NO_TAX_SHELL` holds 0.50 and `NV`/`TX`/`WA` override AFTER the spread (the `NH` `NOTE`
+         precedent); `AK` needs no special case, opt-in CP falls out of the shell default.
+      3. **Terminal row only**, not every year: wealth at death is not wealth now. The chart kink
+         is explained by a milestone rather than smoothed away.
+      4. **Scope cut to the step-up.** `survivorSpendPct` deferred (new input + UI + URL key,
+         orthogonal); `sim.prevIRAGain` deferred with it. Both belong to `P35i`.
+      **Two plan steps dissolved.** Writing the terminal fix as `Basis := Brokerage` on the log row
+      rather than "drop the haircut" made `max(0, Brokerage - Basis)` zero for every downstream
+      consumer, so `bestConversionStopYear` needed no `atDeath` flag and `afterTaxNetWorth` /
+      `_afterTaxBuckets` needed no arithmetic change. Removing their term anyway would have broken
+      a legitimate test of the general helper. Both are documented as inert instead.
+      **The trap.** A counterfactual run completes fully, so without a guard its last row reaches
+      the Break Even block already stepped up while the main log's has not, and the final year's
+      `convOC` differences two valuations. Needs BOTH the post-pass sitting after the BE block and
+      an `inputs._cfRun` skip. Proved by isolation, not argument: a build with the terminal step-up
+      disabled produces a bit-identical `convOC` series
 - [x] **P35h** *(PR 4, docs half)* — README caveat, shipped **ahead of the code** 2026-08-07,
       doc-only, no version bump. Landed in `### Limitations and Restrictions` (README:294) plus a
       cross-reference from the brokerage FAQ's DRIP "Gotcha" (README:723). Both deaths covered, each
@@ -1462,8 +1486,10 @@ bodies, `findings.md` and `progress.md` cite them; see the ID migration table at
   numbers**, superseding the old "PR 3 is the first one that moves numbers" note; `P35d` as
   [PR #149](https://github.com/nightskyguy/retirement_assets/pull/149) (byte-identical); `P35e` as
   [PR #150](https://github.com/nightskyguy/retirement_assets/pull/150). `P35h` shipped 2026-08-07
-  ahead of its code half. **Next: `P35f`, then `P35g`.** **Depends on:** nothing hard. `P35b`
-  unblocked P36 and helps P29/P30/P31/P32. `P35m`'s budget problem is P34's argument.
+  ahead of its code half; `P35f`+`P35g` landed together as v11.1499, closing the gap `P35h` had
+  documented. **Next: `P35i`.** **Depends on:** nothing hard. `P35b` unblocked P36 and helps
+  P29/P30/P31/P32. `P35m`'s budget problem is P34's argument. P36 round 2 now waits on `P35i`
+  alone, `P35g` having landed.
 - **Touches the same gap-fill code as:** P28's open ship decision (`rothGapFill`) and P30's `[40,60]`
   question. Settling P28 and P30 first would mean `P35i`'s new arm is written against a settled
   ordering rather than one about to change.
@@ -1479,8 +1505,8 @@ defect larger than any of them, so the single "PR 3" in the table below became f
 | 3a | `findUpperLimitByAmount` below the first bracket | **No** — 21 states + `minlimit` everywhere | **DONE 2026-08-04, v11.1447**, merged PR #147 |
 | 3b | Medicare age -> `TAXData.IRMAA.ELIGIBILITY_AGE` | Yes — proven over 144 scenarios | **DONE 2026-08-04**, tokens `111448`, merged PR #149 |
 | 3c | ACA cap lapses at 65 -> Proportional 0% | No — `aca` rows only, proven by control | **DONE 2026-08-05, v11.1462** |
-| 3d | `Basis <= Brokerage` invariant | Yes for non-negative brokerage returns; no for MC | not started |
-| 4 | `deathBasisStepUp: 'auto'` + `COMMUNITY_PROPERTY` + `survivorSpendPct` | **No, by decision** | blocked on 3d; **README caveat shipped ahead of it 2026-08-07** |
+| 3d | `Basis <= Brokerage` invariant | Yes for non-negative brokerage returns; no for MC | **DONE 2026-08-07, v11.1499** |
+| 4 | ~~`deathBasisStepUp: 'auto'` + `COMMUNITY_PROPERTY`~~ per-state `BasisStepUp`, no enum, no `survivorSpendPct` | **No, by decision** | **DONE 2026-08-07, v11.1499** |
 
 **Absence validated against a live run, 2026-08-07** (user report on `?bk=2e5`), so do not re-derive
 it. Reproduced at the page defaults (`birthyear1=1960`/`die1=88` -> first death 2049;
@@ -1727,14 +1753,32 @@ let pension = (age1 >= inputs.pensionStartAge)
     : 0;
 ```
 
-- [ ] **P41a** — Add `#pensionStartAge` input (number, default blank = startAge) near `#pensionAnnual` in HTML
-- [ ] **P41b** — `readInputs()`: `pensionStartAge: +val('pensionStartAge') || inputs.startAge`
-- [ ] **P41c** — `simulate()` ~line 1000: apply age gate as above
-- [ ] **P41d** — `computeSuggestedSpend()` (core.js:5453): only include pension in guarantee income if `currentAge >= pensionStartAge`
-- [ ] **P41e** — URL alias: add `psa` → `pensionStartAge` in `OPT_SHORT_TO_LONG` map (~line 4571)
-- [ ] **P41f** — Survivor logic at line 1011 applies after age gate — no change needed
-- [ ] **P41g** — Test: `pensionStartAge=65`, `startAge=60` → pension=0 years 60–64, full pension from 65
-- **Status:** pending
+**Five of the seven items shipped in v11.10ee and were never checked off here.** Audited against
+the code 2026-08-07; the two that remain are real, not bookkeeping.
+
+- [x] **P41a** — `#pensionStartAge` input. **DONE v11.10ee**, `retirement_optimizer.html:339`
+      (number, `value="0"`, `placeholder="ret."`)
+- [x] **P41b** — `getInputs()` reads it. **DONE v11.10ee**, `optimizer_ui.js:350`. Shipped as
+      `+val('pensionStartAge') || 0`, not the `|| inputs.startAge` written above: 0 means "no gate",
+      which reaches the same behaviour by a different route since `age1 >= 0` is always true
+- [x] **P41c** — engine age gate. **DONE v11.10ee**, `optimizer_core.js:1154`
+- [ ] **P41d** — `computeSuggestedSpend()` gate. **STILL OPEN — this is the whole remaining defect.**
+      The function is in `optimizer_ui.js:4712`, not core.js as recorded above, and it counts the
+      pension unconditionally in THREE places: `gross` (`:4716`), `earnedIncome` (`:4727`) and
+      `pensionIncome` (`:4728`). `pensionStartAge` appears nowhere in it. Verified live: set the
+      start age to 75 against a retirement age of 65 and `getInputs()` reads 75 correctly while the
+      suggested spend does not move at all. **Effect:** the After-Tax Spend ⓘ suggestion hands a
+      deferred-pension user the full annual pension for every year before it starts, plus its tax
+      effect, so the suggestion is too high for exactly the case the feature's own tooltip
+      advertises ("retire at 60, pension starts at 65")
+- [x] **P41e** — URL alias `psa`. **DONE v11.10ee**, `optimizer_ui.js:3777`
+- [x] **P41f** — survivor logic needs no change. **CONFIRMED**, still true
+- [ ] **P41g** — no test exists. The `pensionStartAge: 65` at `optimizer_core.tests.js:1613` is a PA
+      retirement-income-exclusion test that merely sets the field; nothing asserts the gate, so
+      reverting `P41c` would not fail a single test. Fix with `P41d` and cover both: a pension
+      deferred past retirement is excluded from the suggestion, one starting at retirement is included
+- **Status:** IN PROGRESS, 5 of 7 done. `P41d` + `P41g` remain, both small and both in
+  `optimizer_ui.js`. Deliberately NOT bundled into the P35g PR - unrelated to the basis step-up
 - **Independent:** no phase dependencies
 
 ---

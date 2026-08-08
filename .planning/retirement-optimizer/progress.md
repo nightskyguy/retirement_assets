@@ -1954,3 +1954,27 @@ and on the reported scenario, and 0 on a 17-marker shortfall plan.
 **Docs.** README's "there is no basis step-up" limitation replaced with four named residual limits
 (LA/NM unmodelled, aggregate basis with no per-spouse attribution, AK opt-in, no loss carryforward),
 each with its direction of error. `P35h`'s caveat is now obsolete and was rewritten, not deleted.
+
+---
+
+## Session 2026-08-07 (sixth) — P41 audit: shipped, but not completely
+
+User asked whether P41 (Pension Start Age) was complete, since v11.10ee's changelog announces
+"Pension start age". Audited all seven sub-items against the code rather than against the changelog.
+
+**Five shipped and were never checked off** (`P41a` input, `P41b` `getInputs()`, `P41c` engine age
+gate, `P41e` URL alias `psa`, `P41f` survivor logic needs nothing). The checklist showed all seven
+open, which understated the work as badly as calling the phase done would have overstated it.
+
+**`P41d` is a real remaining defect**, not bookkeeping. `computeSuggestedSpend()` lives in
+`optimizer_ui.js:4712`, not core.js where the plan recorded it, and counts the pension
+unconditionally in three places while never reading `pensionStartAge`. Confirmed live: start age 75
+against retirement age 65 is read correctly as 75 and the suggested spend does not move. So the
+After-Tax Spend ⓘ credits a deferred pension for years before it arrives - wrong for precisely the
+"retire at 60, pension starts at 65" case the input's own tooltip advertises.
+
+**`P41g` has no test.** The `pensionStartAge: 65` in `optimizer_core.tests.js:1613` belongs to a PA
+retirement-income-exclusion test that only sets the field; reverting `P41c` would fail nothing.
+
+**Not fixed, by the user's instruction** - it is unrelated to the basis step-up and would have
+muddied PR #160. Left as `P41d` + `P41g`, both small, both in `optimizer_ui.js`.

@@ -74,7 +74,7 @@ first task. Every open item in the file now carries one.
 | **O3** | P17 | Retirement_Projection simple mode | `P17a` | nothing |
 | **O3** | P18 | Retirement_Projection -> RetirementTaxPlanner link | `P18a` | nothing |
 | **O3** | P26 | README/FAQ cross-references from tooltips | — | nothing |
-| **O3** | P41 | Pension start age *(was PA)* | `P41a` | nothing |
+| **O3** | P41 | Pension start age *(was PA)* — 5 of 7 shipped in v11.10ee | `P41d` (suggested-spend gate) | nothing |
 | **O3** | P42 | Lumpy spending, no URL encoding *(was PB)* | `P42a` | nothing |
 | **O3** | P43 | Auto-persist + restore offer *(was PC)* | `P43a` | nothing |
 | **O3** | P44 | Onboarding interview *(was PD)* | `P44a` | nothing |
@@ -1753,14 +1753,32 @@ let pension = (age1 >= inputs.pensionStartAge)
     : 0;
 ```
 
-- [ ] **P41a** — Add `#pensionStartAge` input (number, default blank = startAge) near `#pensionAnnual` in HTML
-- [ ] **P41b** — `readInputs()`: `pensionStartAge: +val('pensionStartAge') || inputs.startAge`
-- [ ] **P41c** — `simulate()` ~line 1000: apply age gate as above
-- [ ] **P41d** — `computeSuggestedSpend()` (core.js:5453): only include pension in guarantee income if `currentAge >= pensionStartAge`
-- [ ] **P41e** — URL alias: add `psa` → `pensionStartAge` in `OPT_SHORT_TO_LONG` map (~line 4571)
-- [ ] **P41f** — Survivor logic at line 1011 applies after age gate — no change needed
-- [ ] **P41g** — Test: `pensionStartAge=65`, `startAge=60` → pension=0 years 60–64, full pension from 65
-- **Status:** pending
+**Five of the seven items shipped in v11.10ee and were never checked off here.** Audited against
+the code 2026-08-07; the two that remain are real, not bookkeeping.
+
+- [x] **P41a** — `#pensionStartAge` input. **DONE v11.10ee**, `retirement_optimizer.html:339`
+      (number, `value="0"`, `placeholder="ret."`)
+- [x] **P41b** — `getInputs()` reads it. **DONE v11.10ee**, `optimizer_ui.js:350`. Shipped as
+      `+val('pensionStartAge') || 0`, not the `|| inputs.startAge` written above: 0 means "no gate",
+      which reaches the same behaviour by a different route since `age1 >= 0` is always true
+- [x] **P41c** — engine age gate. **DONE v11.10ee**, `optimizer_core.js:1154`
+- [ ] **P41d** — `computeSuggestedSpend()` gate. **STILL OPEN — this is the whole remaining defect.**
+      The function is in `optimizer_ui.js:4712`, not core.js as recorded above, and it counts the
+      pension unconditionally in THREE places: `gross` (`:4716`), `earnedIncome` (`:4727`) and
+      `pensionIncome` (`:4728`). `pensionStartAge` appears nowhere in it. Verified live: set the
+      start age to 75 against a retirement age of 65 and `getInputs()` reads 75 correctly while the
+      suggested spend does not move at all. **Effect:** the After-Tax Spend ⓘ suggestion hands a
+      deferred-pension user the full annual pension for every year before it starts, plus its tax
+      effect, so the suggestion is too high for exactly the case the feature's own tooltip
+      advertises ("retire at 60, pension starts at 65")
+- [x] **P41e** — URL alias `psa`. **DONE v11.10ee**, `optimizer_ui.js:3777`
+- [x] **P41f** — survivor logic needs no change. **CONFIRMED**, still true
+- [ ] **P41g** — no test exists. The `pensionStartAge: 65` at `optimizer_core.tests.js:1613` is a PA
+      retirement-income-exclusion test that merely sets the field; nothing asserts the gate, so
+      reverting `P41c` would not fail a single test. Fix with `P41d` and cover both: a pension
+      deferred past retirement is excluded from the suggestion, one starting at retirement is included
+- **Status:** IN PROGRESS, 5 of 7 done. `P41d` + `P41g` remain, both small and both in
+  `optimizer_ui.js`. Deliberately NOT bundled into the P35g PR - unrelated to the basis step-up
 - **Independent:** no phase dependencies
 
 ---

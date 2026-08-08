@@ -88,10 +88,12 @@ A California resident built these with [Google gemini](https://gemini.google.com
   - [Why does the Optimizer say converting never helps?](#why-does-the-optimizer-say-converting-never-helps)
   - [What about Doing all Conversions rather than withdrawals?](#what-about-doing-all-conversions-rather-than-withdrawals)
   - [Is the Break-Even Tax Rate Trustworthy?](#is-the-break-even-tax-rate-trustworthy)
+  - [How Do I Evaluate Tools for Privacy and Security?](#how-do-i-evaluate-tools-for-privacy-and-security)
+  - [What Should I Look for in Retirement Tools?](#what-should-i-look-for-in-retirement-tools)
 
 --- 
 
-First, **NOTE this** I use the term "**IRA**" for any account that is "Pre-Tax". And "**Roth**" for any tax free account.  **IRA** in this context could be any number of actual account types: IRA, Traditional IRA, Solo IRA, SEP-IRA, Simple IRA, 401(k), 403(b), 457(b), Keogh plans, and probably more.  **Roth** includes Roth IRA, IRA 401(k), HSA, TFRAs. HSAs are a bit of a different animal, actually.
+First, **NOTE this** I use the term "**IRA**" for any account that is "Pre-Tax". And "**Roth**" for any tax free account.  **IRA** in this context could be any number of actual account types: IRA, Traditional IRA, Solo IRA, SEP-IRA, Simple IRA, 401(k), 403(b), 457(b), Keogh plans, and probably more. Some literature uses the acronym TDA for Tax Deferred Accounts.  **Roth** includes Roth IRA, IRA 401(k), HSA, TFRAs. HSAs are a bit of a different animal, actually.
 
 Trivia for fun: _IRA_ stands for "Individual Retirement *ARRANGEMENT*", not account. Yeah, weird. And it's not ROTH but Roth. It's named after Senator William *Roth* who introduced it.  Oh, and the "(k)" in 401(k) does NOT refer to Eugene Keogh, it's a reference to the Internal Revenue Code. 
 
@@ -833,3 +835,72 @@ And BETR misses the other side of the issue:
 - Let the plan's actual after-tax ending balances guide your conversion decisions
 
 Professor Emeritus Edward McQuarrie pretty forcefully proves in [Net Present Value Analysis of Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN) that Roth Conversions are unlikely to break even. Despite the conventional wisdom that the gains are driven by differences in tax rates - that is **not** the primary factor. The hurdle to overcome with early tax payments is that the lost value of early taxes requires enough growth time in the Roth to overcome the opportunity cost.  Opportunity cost, briefly, is what you surrender when you pay taxes out of funds that would otherwise have remained invested and growing. Also consider that paying $10k in taxes this year is worth more than the same (or larger) figure paid in 5 or 10 years due to inflation. Future (or present) tax avoidance is not the whole picture.
+
+### How Do I Evaluate Tools for Privacy and Security?
+
+This tool, and many of the tools in the [reviews above](#what-about-other-tools), have been reviewed for malware, privacy leaks, and in some cases for accuracy.  Evaluation is easy to do with modern AI tools if the source code is available. It is much harder if the tool is commercial, since those tools typically do not expose their source code.
+
+Here is the AI command I provide to Claude Code when evaluating tools. I vary it a bit depending on what the tool is stated to do - for example, if it doesn't claim "Roth Break Even" calculations, I omit that section. As written, it requires the source code locally, but you can point it at a website.
+
+```
+Analyze this code for the following potential problems. List the problem and where possible the suspected cause in "FlawsToFix.md"
+
+A. Any user exploitable flaws in the code that might expose the code creator to increased costs, denial of service attacks, hijacks, or failure to validate arguments, and failure to halt.
+
+B. Any leaks, or probable leaks of PII (Personally Identifiable Information) that exist or may be created by use of the program or through exploiting flaws.
+
+C. Validate to within a dollar accuracy of the following flows:
+
+State and Federal Tax calculations for single AND married filing jointly filers. Test border cases like IRMAA brackets, NIIT, capital gains.
+
+For Roth Conversion "Break Even". Does the analysis use reliable financial accounting techniques?
+
+Proper inflation (at CPI) of Federal and applicable state tax brackets, IRMAA.
+
+Improper inflation of tax thresholds (like NIIT, unindexed state brackets, SS taxation thresholds)
+
+Ability to adjust/forecast Consumer Price Index (CPI)
+
+Any obvious misses in the code.
+
+First spouse death handling: do TDAs get rolled over? Does the tax bracket change appropriately? Is SS survivor benefit properly calculated?
+
+Validate that all tracked accounts are properly accounted for - that is they reflect earnings, withdrawals, and contributions accurately.
+
+D. Document any missing taxation related issues in priority order in "MissingFeatures.md".
+
+E. Identify any architectural issues/problems and document them in "ARCHITECTUREIssues.md" including missing test cases, useless/orphaned test cases and organizational issues (duplication of code rather than reuse). Also note any hard coded conditions or constants that are likely to change when there are changes in the tax laws of the federal or state(s) supported.
+
+F. Identify any usability issues that may apply to the current implementation in a large browser window, and or using a smaller real-estate device (like a tablet or smart phone). Summarize usability findings in "UsabilityFlaws.md"
+
+Provide a two paragraph standalone summary of the top 5 most important issues/flaws/problems from among the findings. Save this summary in "IssueSummary.md"
+
+Create a PDF that includes all the created documents in one document. "[todays date] findings.pdf"
+```
+
+PDF is easy for you to read. MD files are more digestible by AI tools.
+
+### What Should I Look for in Retirement Tools?
+
+This is up to you, of course. Some red flags are tools that ask for inputs that are unclear. For example, "growth rate" can mean "market growth rate", or it can mean "real growth rate", which is adjusted for inflation.  A tool that only uses a real growth rate cannot make accurate RMD calculations - RMDs scale with the account balance, not with the current dollar value of that balance.  While most taxation does scale with inflation, several things in law do not, so a real growth rate tool can't get them right.
+
+A tool that doesn't have a way to vary inflation is immediately suspect.
+
+> Inflation is the greatest killer of retirement portfolios.
+>
+> ~ Bill Bengen (father of the 4% rule)
+
+A tool that doesn't separately account for healthcare inflation (Medicare) will miss on calculating IRMAA and health care costs.
+
+A tool that models states with a "flat tax" concept can miss very badly. State tax laws are [hideously complex](#some-of-the-things-i-learned-about-taxation): some states have no tax (easy to model), some have a flat tax, some with flat taxes also tax retirement income, and some do not.  As your income sources and asset balances change, your income will likely vary too, so modeling a state with graduated brackets as a flat tax will be wrong.
+
+Accurately calculating "break even" for Social Security claiming or Roth conversions is rarely done in a fiscally responsible manner. What is responsible? Calculate using current dollars, and future dollars adjusted to current dollars. Calculate lost opportunity cost (if the dollars had stayed invested where they were - i.e. no tax paid - what would the outcome likely have been?).  And when calculating opportunity cost, use a like-for-like comparison. Paying $1k in taxes from cash has a different consequence from paying $1k by liquidating more IRA or selling an appreciated asset.
+
+Monte Carlo and "Chance of Success" calculations should always be suspect. Monte Carlo is a *technique*, not a specific algorithm. Results are not comparable across tools because there is no "prescriptive method". By contrast, a Federal Tax calculation is well described and, if properly implemented, will be EXACT.
+
+To the extent that the Monte Carlo simulations are unlike past and possible future market/economic behavior, inaccuracy cannot be overcome by increasing the number of iterations.
+
+More iterations fix imprecision, not a broken sampling method. Weighing yourself a thousand times on a scale that's off by five pounds will falsely increase your confidence, but it will be just as wrong as 2 or 10 weighings.
+
+One major flaw with most Monte Carlo methods is that they vary "returns" by asset volatility. That is consistent with the market, but by itself it is insufficient. Inflation destroys the value of non-volatile assets just as efficiently as it does the volatile ones. Volatile assets have the ability to recover from a 20% loss. However, Cash/Bonds/Money Market funds have no savior.  Your Big Mac is never going to cost less 10 years from now. Some of the worst periods in US history had market gains, but [staggeringly high inflation erased all of them](standalone/RealReturns.html?yr=1969&ny=10&xi=0).
+

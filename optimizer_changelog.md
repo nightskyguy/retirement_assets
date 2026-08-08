@@ -15,9 +15,6 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ## 11.1499 (behavior change)
 
-**Money left to your heirs was being taxed for capital gains nobody ever owes, so ending balances
-were too low and Roth conversions looked better than they are.**
-
 When someone dies, the cost basis of a taxable brokerage account resets to what the account is
 worth that day. The gain that built up during their lifetime is never taxed, to them or to their
 heirs. The tool was ignoring this in two separate places:
@@ -31,8 +28,7 @@ heirs. The tool was ignoring this in two separate places:
 
 Both are now modeled. The size of the first one depends on where you live, because the underlying
 property law does. In a community-property state the whole account resets; everywhere else only the
-share that belonged to the person who died, which the tool treats as half. This is not a setting
-and there is no switch for it: it follows the State Tax selection, because it is a matter of law
+share that belonged to the person who died, which the tool treats as half. This follows the State Tax selection, because it is a matter of law
 rather than preference. The seven community-property states this tool models are AZ, CA, ID, NV,
 TX, WA and WI. Louisiana and New Mexico are community-property states too, but they are not among
 the 38 jurisdictions the tool models at all, so they cannot be selected. Alaska is deliberately
@@ -46,7 +42,7 @@ happens to spend its brokerage account down to nothing, so all of its gain comes
 death; a plan that still holds a large taxable account at the end can gain considerably more. One
 test plan holding $900,000 of brokerage gained $398,712 in the final year alone.
 
-**Why this matters most for Roth conversions.** The error only ever ran one way. It penalized money
+**Why this matters for Roth conversions.** The error only ever ran one way. It penalized money
 kept in a taxable brokerage account and left Roth and cash untouched, so every comparison between
 converting and not converting was tilted toward converting. Correcting it makes conversions look
 worse than they used to, and some plans that previously reported a conversion benefit no longer
@@ -66,14 +62,11 @@ chart says which is which, and it only describes the marks your plan actually ha
 cannot happen in a community-property state, or to a single person whose estate goes straight to
 their heirs, so those plans get the solid circle explained and nothing about halves. Two things
 changed beyond the new circle. The last
-death is marked at all now, which is where the second step-up happens, and a single person gets a
-death marker for the first time, since previously only the first death of a couple was marked. The
-markers are also labelled "You" and "Spouse" rather than "Your Passing" and "Spouse Passing",
-because the shorter labels stop the ones near the end of the plan from overlapping each other.
+death is marked which is where the final step-up happens.
 
-Also in this release: a cost basis larger than the account holding it is now corrected rather than
-carried, which could previously happen after a market decline. This has no effect on an ordinary
-projection and shows up only in Monte Carlo, where losing years are the point.
+Also in this release: a brokerage cost basis larger than the brokerage account value is now corrected rather than
+carried. A market decline can cause a declining basis - as would be observed in Monte Carlo Stress Cases. Ordinary
+projection will not see a basis decline due to declining account value unless you put a [negative growth rate in place purposely](https://tools.netcitizen.us/retirement_optimizer.html?str=ordered&os=RIBC&bb=90k&g=-1.0). The place you would observe the declining basis is in the "Annual Details" -> "Brokerage" column "Basis".
 
 ---
 
@@ -83,8 +76,7 @@ projection and shows up only in Monte Carlo, where losing years are the point.
 
 **Self-tests improved.** No change to your plan or its numbers. The self-check that runs at page
 load now covers 510 tests instead of 245; hover the indicator for the count. A brief hourglass
-before the green dot is normal, and a green dot with a small warning mark means the page was opened
-as a local file, which blocks part of the check from loading.
+before the green dot is normal.
 
 ---
 
@@ -108,26 +100,21 @@ The longer the plan and the higher the rates, the more money this invented. A ca
 $2,449 out of the cash account that was supposedly paying for it.
 
 You can check the old behavior yourself. Take a portfolio returning 8% a year. Have it earn that as
-8% growth with no dividend, then again as 6% growth plus a 2% dividend that is automatically
+[8% growth with no dividend](https://tools.netcitizen.us/retirement_optimizer.html?str=ordered&os=RIBC&bb=90k&g=8&div=0), then again as [6% growth plus a 2% dividend](https://tools.netcitizen.us/retirement_optimizer.html?str=ordered&os=RIBC&bb=90k&g=6&div=2&dr=1) that is automatically
 reinvested. Same total return, same reinvestment, but the dividend version pays tax every year that
 the growth version does not, so it must end up **behind**. It was ending up **21.7% ahead**.
 
 Dividends and interest are still income, still taxed exactly as before, and still land in your
-account. They are simply no longer counted a second time as spending money. The money is all still
-there, in Cash or reinvested in your brokerage, and your withdrawal strategy draws on it like any
-other balance. That also means your strategy now decides whether a dividend is spent or banked, and
-how the tax on it is paid, instead of that being assumed.
+account. The withdrawal strategy decides whether a dividend is spent or banked, and how the tax on it is paid (e.g. you can earn interest and pay the tax on that interest from an IRA, or from cash).
 
 **Expect ending balances to fall, typically between 4% and 23%** on a plan using the default 3% cash
 yield and 0.5% dividend rate. Your spending goal is still funded in the same years it was before.
 Tax goes up slightly, because the invented money had been quietly absorbing some of it. A
-Guyton-Klinger plan can also shift its spending path, since that strategy sets spending from your
-portfolio balance and that balance was overstated.
+Guyton-Klinger plan can also shift its spending path, since that strategy sets spending from what was an overstated portfolio balance.
 
 **Nothing about your inputs was wrong.** Your balances, rates and goals meant what you thought they
 meant. The tool was mishandling them. A plan that looked like it worked may now need a lower
-spending goal, a later start, or a different strategy, and that is worth knowing now rather than
-later.
+spending goal, a later start, or a different strategy.
 
 ### 2. Two 2025 tax-law provisions were implemented but never switched on
 

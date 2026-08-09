@@ -19,7 +19,6 @@ For what the tool does and how to use it, see [README.md](README.md).
 solved by the plan itself, and for the first time it accounts for how long the retirement is, and when any pension 
 is planned to start.
 
-
 The old suggestion used 5% of every account, plus Social Security and pension,
 taxed once. It ignored the length of the plan entirely, so a 12-year retirement and a 40-year
 retirement got the same 5%. That is contrary to what the withdrawal-rate research (Bengen, the

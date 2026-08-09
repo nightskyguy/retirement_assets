@@ -2022,3 +2022,47 @@ plain (no `data-flag="behavior"`). Files touched: `displayhelpers.js`, `optimize
 `optimizer_core.tests.js`, `optimizer_tests.js`, `retirement_optimizer.html` (title +
 `optimizer_ui.js`/`displayhelpers.js`/`optimizer_tests.js` `?v=` bumps + changelog `<li>`,
 dropped the 11.1464 `<li>` to keep five), `optimizer_changelog.md`.
+
+---
+
+## Session 2026-08-09 (eighth) — P49: horizon-aware suggested spend (v11.14c6)
+
+The suggested After-Tax Spend was a flat 5% of every account plus SS+pension, taxed once, ignoring
+plan length entirely - backwards to the whole withdrawal-rate literature (Bengen/Trinity), where the
+safe rate is chiefly a function of horizon. Replaced it with an engine-calibrated solver.
+
+**Design (user-driven).** Discussed the options; user chose to build Option B (PMT over the invested
+portfolio) as the SEED, with the haircut found by a **live per-plan engine search** rather than a
+baked constant, success = the last modeled year still holding **3 years (embedded
+`SUGGEST_BUFFER_YEARS`) of portfolio-funded need** (`spend − guaranteedIncome`), on the deterministic
+path. Two `AskUserQuestion` forks settled: (1) live-per-plan vs global constant → live; (2) buffer
+basis → portfolio-funded need vs full spend → portfolio-funded.
+
+**Realization worth recording.** An engine-calibrated haircut makes this Option C (engine solve) with
+a B-shaped seed: the reported number comes from `simulate()`, not the PMT. The PMT still earns its
+keep as the search-bracket seed and as the "% of naive amortization" the tooltip reports.
+
+**Reuse found by exploration** (two Explore agents): the repo already had `calculateAmortizedWithdrawal`
+(PMT primitive, `optimizer_core.js:116`) and `optimizeSpend` (binary search on spendGoal whose
+`passes` is the 1-year terminal-buffer test). `suggestSustainableSpend` generalizes that buffer from
+1 to K years and seeds with the PMT. `simulate()` is synchronous ~0.5ms/call, so ~25 calls per solve
+is a few ms - fine on recalc. **spendGoal IS after-tax**, so the solved number is the suggestion
+directly (no separate tax math). Horizon is death-driven (`r.log.length`), not `nYears`.
+
+**Build.** `suggestSustainableSpend` in core (coarse-scan-then-bisect, never breaks early on a fail -
+the ACA/IRMAA-cliff non-monotonicity the `bestConversionStopYear` header warns about). UI: deleted
+the flat-5% `computeSuggestedSpend`; `refreshSuggestedSpend()` caches the solve, called once per
+recalc from `runSimulation()` (the solve is spendGoal-independent, so the per-keystroke tooltip path
+stays cheap). Tooltip surfaces horizon + haircut + the deterministic-path caveat.
+
+**Verified.** node 227/227 (3 new: boundary, buffer-monotone, horizon-monotone). Browser (served,
+v11.14c6): default scenario suggests $146,475 over a 25-yr horizon (71% of naive PMT); apply/restore
+toggle 140000 -> 146475 -> 140000; badge green; only console error the unrelated Cloudflare CORS.
+Eyeball horizon monotonicity: 9yr->$67k, 17yr->$41k, 27yr->$27k. SS is now gated by the engine, so
+the SS-not-gated asymmetry the old snapshot had (flagged earlier this session) is gone for free.
+
+**Loose ends.** `DisplayHelpers.pensionAtAge` (shipped P41 for the old snapshot) is now unused by
+production, retained as a tested utility. `gkSpendStable` deliberately left out of the predicate
+(strategy-agnostic). MC-percentile calibration is the future SoRR-aware upgrade. Files: `optimizer_core.js`,
+`optimizer_ui.js`, `optimizer_core.tests.js`, `optimizer_tests.js`, `retirement_optimizer.html`
+(title + core/ui/tests `?v=` + changelog `<li>`, dropped 11.146a to keep five), `optimizer_changelog.md`.

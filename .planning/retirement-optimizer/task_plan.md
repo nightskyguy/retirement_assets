@@ -80,6 +80,7 @@ first task. Every open item in the file now carries one.
 | **O3** | P44 | Onboarding interview *(was PD)* | `P44a` | nothing |
 | **O3** | P45 | Insights / feedback panel *(was PE)* | `P45a` | nothing |
 | **O3** | P46 | Tax Payment Planner backlog, TPP-1 + TPP-2 *(was TPP-1..5)* | TPP-1 (prose, no checklist yet) | nothing |
+| ~~DONE~~ | ~~P49~~ | ~~Horizon-aware suggested spend~~ — **SHIPPED v11.14c6** | — | — |
 
 **Why P35 and P32 are the two O0s.** P35 carries the brokerage basis step-up, which is not a feature
 but a correction: the terminal valuation taxes heirs on gains §1014 steps up in full, and because Roth
@@ -2078,6 +2079,47 @@ Deferred, in three clusters:
    input-distribution charts, the Tax Planner handoff mechanics, share URLs omitting defaults.
 
 ---
+
+---
+
+## P49: Horizon-aware suggested spend  *(SHIPPED v11.14c6, 2026-08-09)*
+**Why:** the suggested After-Tax Spend was a flat 5% of every account plus SS+pension, taxed once,
+with **no regard for plan length**. That contradicts the whole withdrawal-rate literature (Bengen,
+Trinity): the safe starting rate is chiefly a function of horizon. The tool already models the
+horizon (death-driven, `= r.log.length`), so a horizon-blind suggestion was leaving its own best
+input on the floor. Sibling to [[P30]] — same "constants nobody chose" theme, different constant
+(the `0.05` in the UI vs the engine's gap-fill order).
+
+**User decisions (2026-08-09):** built Option B (PMT over the invested portfolio) as the *seed*, with
+the haircut found by **live per-plan engine search** (not a baked constant), success defined as the
+last modeled year holding **≥ `SUGGEST_BUFFER_YEARS` (3, embedded)** years of **portfolio-funded
+need** (`spend − guaranteedIncome`), against the **deterministic** path (SoRR stays on Monte Carlo).
+
+- [x] **P49a** — `suggestSustainableSpend(baseInputs, opts)` in `optimizer_core.js` (before
+      `optimizeSpend`). PMT seed via the existing `calculateAmortizedWithdrawal` over invested =
+      IRA+Roth+Brokerage (Cash excluded as a buffer); coarse scan (`SUGGEST_SCAN_STEPS`, never breaks
+      early — same non-unimodal hazard `bestConversionStopYear` documents) then bisect on the existing
+      `SPEND_SEARCH_TOLERANCE`. Predicate = `totals.success && last.portfolioBalance ≥ K·need`, i.e.
+      `optimizeSpend`'s 1-year terminal test generalized to K years. Returns `{spend, horizon,
+      naivePMT, haircut}`. Exported in both lists.
+- [x] **P49b** — UI rewire in `optimizer_ui.js`: deleted the flat-5% `computeSuggestedSpend`; added
+      `refreshSuggestedSpend()` (caches the solve) called once per recalc from `runSimulation()`;
+      `updateSuggestSpendTooltip`/`applySuggestSpend` now read the cache. The solve is
+      spendGoal-independent, so the per-keystroke path stays cheap. Tooltip surfaces the horizon and
+      the haircut and names the deterministic-path caveat.
+- [x] **P49c** — 3 tests in `optimizer_core.tests.js` (boundary: its spend passes, +15% fails;
+      buffer monotone; horizon monotone — shorter horizon suggests more). Count 224 → 227;
+      `optimizer_tests.js` `EXPECTED.optimizer_core` bumped.
+- **Verified:** node 227/227; browser default scenario suggests $146,475 over a 25-yr horizon (71% of
+  the naive amortization), apply/restore toggle works, badge green. Horizon monotone in eyeball runs
+  (9yr→$67k, 17yr→$41k, 27yr→$27k); SS now gated by the engine, so the old SS-not-gated asymmetry in
+  the snapshot is gone.
+- **Deferred / notes:** `DisplayHelpers.pensionAtAge` (shipped [[P41]] for the old snapshot) is now
+  unused by production but retained as a tested pure utility — the engine is the live gate.
+  `gkSpendStable` is NOT in the predicate (kept strategy-agnostic); revisit if a GK suggestion looks
+  too high. MC-percentile calibration (SoRR-aware) is the future upgrade if the deterministic buffer
+  proves too optimistic.
+- **Independent:** no phase dependencies.
 
 ---
 

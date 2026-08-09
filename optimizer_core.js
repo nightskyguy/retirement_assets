@@ -17,6 +17,13 @@
 const SPEND_SEARCH_CEILING   = 1.50;  // Binary search upper bound: 150% above baseline spend (2.5× input)
 const SPEND_SEARCH_TOLERANCE = 0.005; // Stop binary search when bounds are within 0.5%
 const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase spending" banner
+// Suggested-spend solver (suggestSustainableSpend). BUFFER_YEARS is the terminal cushion: the plan
+// must end its last modeled year still holding at least this many years of portfolio-funded spend.
+// Change it to make the suggestion more (higher) or less (lower) conservative.
+const SUGGEST_BUFFER_YEARS = 3;
+const SUGGEST_SCAN_STEPS   = 12;  // Coarse scan before the bisection refine. Never break early on a
+                                  // fail: the pass/fail curve can dip across an ACA/IRMAA cliff, the
+                                  // same non-unimodal hazard the bestConversionStopYear header documents.
 
 // Baseline ranking weight: a dollar the household actually spends outranks a dollar bequeathed
 // by 10%. Single source of truth shared by the optimizer table's _baselineScore (optimizer_ui.js)
@@ -2986,6 +2993,73 @@ function gkSpendStable(res, overrides, baseInputs) {
 // its required draw (spendGoal minus guaranteed income) in the final year.
 // baseInputs: full inputs object at baseline spendGoal
 // overrides:  strategy overrides (same object passed to addResult for this row)
+// ── Suggested sustainable spend (horizon-aware, engine-calibrated) ───────────────────────────
+// Answers "what after-tax annual spend can this plan sustain?" by running the engine itself, so
+// the horizon (death-driven, = r.log.length), taxes, RMDs and SS/pension timing all fall out of
+// the model rather than a borrowed SWR constant. A closed-form PMT over the INVESTED portfolio
+// (Option B) seeds the search ceiling; the engine sets the answer (Option C).
+//
+// A spend PASSES when the plan funds every modeled year AND the last year still holds a cushion:
+//     res.totals.success === true
+//     AND last.portfolioBalance >= bufferYears * max(0, spend - last.guaranteedIncome)
+// i.e. the same terminal test optimizeSpend uses, generalized from 1 year to `bufferYears`.
+//
+// DETERMINISTIC single path at the plan's fixed growth: the cushion protects against the horizon
+// and the drawdown/tax mechanics, NOT against a bad return sequence (that lives on the Monte Carlo
+// tab). Because SS and pension are gated by the engine, a deferred pension or an unclaimed SS is
+// handled here for free. Returns { spend, horizon, naivePMT, haircut } in start-year (≈ today's)
+// after-tax dollars, or null if even zero spend cannot be funded.
+function suggestSustainableSpend(baseInputs, opts) {
+    const bufferYears = (opts && opts.bufferYears != null) ? opts.bufferYears : SUGGEST_BUFFER_YEARS;
+    const run = (spend) => simulate(Object.assign({}, baseInputs, { spendGoal: spend, computeOC: false }));
+
+    const passes = (res, spend) => {
+        if (!res || !res.totals || !res.totals.success) return false;
+        const last = res.log[res.log.length - 1];
+        const need = Math.max(0, spend - (last.guaranteedIncome || 0));
+        return (last.portfolioBalance || 0) >= bufferYears * need;
+    };
+
+    // Probe once for the horizon and a naive amortization ceiling from the INVESTED portfolio
+    // (everything except Cash, which is a buffer, not an asset invested at the growth rate).
+    const probe = run(baseInputs.spendGoal || 0);
+    if (!probe || !probe.log || probe.log.length === 0) return null;
+    const horizon   = probe.log.length;
+    const finalGuar = probe.log[probe.log.length - 1].guaranteedIncome || 0;
+    const invested  = (baseInputs.IRA1 || 0) + (baseInputs.IRA2 || 0) + (baseInputs.Roth || 0)
+                    + (baseInputs.Roth2 || 0) + (baseInputs.Brokerage || 0);
+    const realReturn = (1 + (baseInputs.growth || 0)) / (1 + (baseInputs.inflation || 0)) - 1;
+    const naivePMT   = calculateAmortizedWithdrawal(invested, 0, horizon, realReturn);
+
+    // A plan that cannot even fund zero discretionary spend has nothing to suggest.
+    if (!passes(run(0), 0)) return null;
+
+    // Ceiling generous enough to fail; expand a few times for a rich plan, then cap.
+    let hi = finalGuar + naivePMT * 1.5 + 1;
+    for (let g = 0; g < 5 && passes(run(hi), hi); g++) hi *= 1.6;
+
+    // Coarse scan for the HIGHEST passing step (never break early - see SUGGEST_SCAN_STEPS), then
+    // bisect between it and the next step. lo is 0.
+    const step = (i) => hi * i / SUGGEST_SCAN_STEPS;
+    let bestI = 0;
+    for (let i = 1; i <= SUGGEST_SCAN_STEPS; i++) {
+        const s = step(i);
+        if (passes(run(s), s)) bestI = i;
+    }
+    let a = step(bestI);
+    let b = (bestI < SUGGEST_SCAN_STEPS) ? step(bestI + 1) : hi;
+    while (hi > 0 && (b - a) / hi > SPEND_SEARCH_TOLERANCE) {
+        const mid = (a + b) / 2;
+        if (passes(run(mid), mid)) a = mid; else b = mid;
+    }
+    return {
+        spend: a,
+        horizon,
+        naivePMT,
+        haircut: naivePMT > 0 ? Math.max(0, a - finalGuar) / naivePMT : null,
+    };
+}
+
 function optimizeSpend(baseInputs, overrides) {
     function passes(res) {
         const last = res.log[res.log.length - 1];
@@ -3783,7 +3857,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, SUGGEST_BUFFER_YEARS, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -3791,7 +3865,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, SUGGEST_BUFFER_YEARS, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

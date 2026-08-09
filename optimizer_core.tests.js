@@ -53,6 +53,8 @@ if (IS_NODE) require('./displayhelpers.js');
 
 const simulate = core.simulate;
 const optimizeSpend = core.optimizeSpend;
+const suggestSustainableSpend = core.suggestSustainableSpend;
+const SUGGEST_BUFFER_YEARS = core.SUGGEST_BUFFER_YEARS;
 const calculateTaxes = taxengine.calculateTaxes;
 const findUpperLimitByAmount = taxengine.findUpperLimitByAmount;
 const getRateBracket = taxengine.getRateBracket;
@@ -1661,6 +1663,49 @@ test.critical('regression: exclusion params are inert for a non-exclusion state 
     const base = calculateTaxes({ ...common });
     const withParams = calculateTaxes({ ...common, pensionIncome: 40000, iraIncome: 80000 });
     assertNear(withParams.stateTax, base.stateTax, 'CA state tax must be identical with/without the new params', 0.01);
+});
+
+// ── P49: suggestSustainableSpend (horizon-aware, engine-calibrated suggested spend) ──────────
+// Re-implements the definition inside the solver so the tests bind to the CONTRACT, not the code:
+// a spend "passes" when every year is funded AND the last year still holds bufferYears of
+// portfolio-funded need. If the solver's predicate drifts from this, these fail.
+function suggestPassesAt(base, spend, K) {
+    const res = simulate({ ...base, spendGoal: spend, computeOC: false });
+    if (!res.totals.success) return false;
+    const last = res.log[res.log.length - 1];
+    const need = Math.max(0, spend - (last.guaranteedIncome || 0));
+    return (last.portfolioBalance || 0) >= K * need;
+}
+
+test('suggestSustainableSpend sits on the boundary: its spend passes, 15% more fails', () => {
+    const K = SUGGEST_BUFFER_YEARS;
+    const r = suggestSustainableSpend(BASE, {});
+    assert(r && r.spend > 0, 'expected a positive suggestion');
+    assert(r.horizon === simulate(BASE).log.length, 'reported horizon must equal the modeled year count');
+    assert(suggestPassesAt(BASE, r.spend, K), 'the suggested spend must itself pass the buffer test');
+    assert(!suggestPassesAt(BASE, r.spend * 1.15, K),
+        `a spend 15% above the suggestion must fail the ${K}-year buffer (got a still-passing ` +
+        `${Math.round(r.spend * 1.15)} vs suggestion ${Math.round(r.spend)})`);
+});
+
+test('suggestSustainableSpend: a bigger terminal buffer never raises the suggested spend', () => {
+    const s0 = suggestSustainableSpend(BASE, { bufferYears: 0 });
+    const s3 = suggestSustainableSpend(BASE, { bufferYears: 3 });
+    const s6 = suggestSustainableSpend(BASE, { bufferYears: 6 });
+    assert(s0 && s3 && s6, 'all three buffer settings should resolve');
+    assert(s0.spend >= s3.spend - 1 && s3.spend >= s6.spend - 1,
+        `more buffer must not raise spend: 0->${Math.round(s0.spend)} 3->${Math.round(s3.spend)} 6->${Math.round(s6.spend)}`);
+    assert(s0.spend > s6.spend, 'buffer 0 vs 6 should differ, not collapse to the same number');
+});
+
+test('suggestSustainableSpend: a shorter horizon raises the suggested spend', () => {
+    const shortH = suggestSustainableSpend({ ...BASE, die1: 82 }, {});   // ~9-year horizon
+    const longH  = suggestSustainableSpend({ ...BASE, die1: 100 }, {});  // ~27-year horizon
+    assert(shortH && longH, 'both horizons should resolve');
+    assert(shortH.horizon < longH.horizon, 'horizon field should track the death age');
+    assert(shortH.spend > longH.spend,
+        `a shorter retirement must sustain more spend: die82->${Math.round(shortH.spend)} ` +
+        `vs die100->${Math.round(longH.spend)}`);
 });
 
 // ── Break Even / Opp. Cost — dual-simulation counterfactual ──────────────────

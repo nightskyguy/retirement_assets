@@ -15,25 +15,26 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ## 11.14c6
 
-The suggested spending goal (the one-click figure behind the ⓘ next to the spending goal) is now
-solved by the plan itself, and for the first time it accounts for how long the retirement is.
+**The suggested spending goal** (the one-click figure behind the ⓘ next to the spending goal) is now
+solved by the plan itself, and for the first time it accounts for how long the retirement is, and when any pension 
+is planned to start.
 
-The old suggestion was a rule of thumb: 5% of every account, plus Social Security and pension,
+
+The old suggestion used 5% of every account, plus Social Security and pension,
 taxed once. It ignored the length of the plan entirely, so a 12-year retirement and a 40-year
-retirement got the same 5%. That is backwards to what the withdrawal-rate research (Bengen, the
+retirement got the same 5%. That is contrary to what the withdrawal-rate research (Bengen, the
 Trinity study) has said for decades: the safe starting rate is mostly a function of how many years
 the money must last. A shorter horizon can support a meaningfully higher rate; a longer one needs a
 lower one.
 
-The suggestion now runs your actual plan at many spending levels and reports the highest one that
+The suggestion now runs your current strategy at many spending levels and reports the highest one that
 still leaves a cushion in the portfolio at the end. "Cushion" means the last modeled year still
 holds at least a few years (three by default, an embedded constant) of the spending the portfolio
 itself has to cover after Social Security and pension. Because it runs the real engine rather than a
 formula, taxes, required minimum distributions, and the timing of a deferred pension or an
-unclaimed Social Security benefit are all handled correctly - the previous rule of thumb credited a
-pension or Social Security that had not started yet.
+unclaimed Social Security benefit are all handled correctly - the previous method did not.
 
-A closed-form amortization of the invested portfolio (Option B, using your own growth and inflation
+A closed-form amortization of the invested portfolio (using your own growth and inflation
 assumptions) seeds the search, and the tooltip reports the result as a percentage of that naive
 amortization so you can see how much the taxes and the end-of-plan cushion shaved off.
 
@@ -42,31 +43,6 @@ more realistic; a shorter retirement will suggest more and a longer one less. No
 plan or a shared link changes - only the one-click suggestion. One limitation to keep in mind: this
 is a single deterministic projection at your fixed growth rate, so it does not price the risk of a
 bad run of returns early in retirement. That risk is what the Monte Carlo tab exists to show.
-
----
-
-<a id="11.14bf"></a>
-
-## 11.14bf
-
-The suggested After-Tax Spend (the one-click figure behind the ⓘ next to the spending goal) now
-respects the pension start age.
-
-The plan engine already defers a pension until its start age: if you retire at 60 and your pension
-begins at 65, the simulation pays nothing from that pension for the first five years. The
-suggested-spend helper, which estimates a sustainable first-year spend, was not doing the same. It
-folded the full annual pension into both the income it suggests you can spend and the tax on that
-income, for every year including the ones before the pension starts, so for a deferred pension the
-suggested figure came out too high.
-
-The suggestion now excludes a pension that has not started by your retirement age, using the same
-rule the engine uses. Nothing about a simulated plan changes: saved scenarios and shared links
-produce the same year-by-year numbers as before. Only the starting suggestion moves, and only for a
-pension deferred past retirement; a pension that starts at or before retirement is unaffected.
-
-Under the hood the age gate is now a single shared helper (`DisplayHelpers.pensionAtAge`) with its
-own test, and the engine's own start-age gate, which had shipped without one, gained a regression
-test as well.
 
 ---
 

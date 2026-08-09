@@ -15,9 +15,6 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ## 11.1499 (behavior change)
 
-**Money left to your heirs was being taxed for capital gains nobody ever owes, so ending balances
-were too low and Roth conversions looked better than they are.**
-
 When someone dies, the cost basis of a taxable brokerage account resets to what the account is
 worth that day. The gain that built up during their lifetime is never taxed, to them or to their
 heirs. The tool was ignoring this in two separate places:
@@ -29,15 +26,14 @@ heirs. The tool was ignoring this in two separate places:
    been sold and the capital-gains tax paid. It is not sold, it is inherited, and that tax is never
    owed.
 
-Both are now modeled. The size of the first one depends on where you live, because the underlying
-property law does. In a community-property state the whole account resets; everywhere else only the
-share that belonged to the person who died, which the tool treats as half. This is not a setting
-and there is no switch for it: it follows the State Tax selection, because it is a matter of law
+Both are now modeled. The size of the first basis adjustment depends on where you live - the underlying
+property law of the state dictates what happens. In a community-property state the whole account resets; everywhere else only the
+share that belonged to the person who died, which the tool treats as half. This follows the State Tax selection, because it is a matter of law
 rather than preference. The seven community-property states this tool models are AZ, CA, ID, NV,
 TX, WA and WI. Louisiana and New Mexico are community-property states too, but they are not among
 the 38 jurisdictions the tool models at all, so they cannot be selected. Alaska is deliberately
 treated as common law, because community property there is something spouses have to opt into by
-written agreement rather than the default.
+written agreement.
 
 **What to expect.** Ending balances rise, lifetime tax falls, and the spending goal is funded in
 exactly the same years as before. The demonstration plan the tool opens with goes from $625,885 to
@@ -46,13 +42,12 @@ happens to spend its brokerage account down to nothing, so all of its gain comes
 death; a plan that still holds a large taxable account at the end can gain considerably more. One
 test plan holding $900,000 of brokerage gained $398,712 in the final year alone.
 
-**Why this matters most for Roth conversions.** The error only ever ran one way. It penalized money
+**Why this matters for Roth conversions.** The error only ever ran one way. It penalized money
 kept in a taxable brokerage account and left Roth and cash untouched, so every comparison between
 converting and not converting was tilted toward converting. Correcting it makes conversions look
 worse than they used to, and some plans that previously reported a conversion benefit no longer
-report one. In one internal test case the conversion advantage being reported was worth between
-$1,221 and $5,587, while the step-up it was ignoring was worth $28,551 to the plan that did not
-convert. The reported benefit was smaller than the mistake.
+report one. In one test case the conversion advantage reported was worth less than what was gained 
+by the step-up in basis. 
 
 **Break Even is deliberately unchanged.** It still measures the year conversions pull permanently
 ahead, valued as though the account were sold rather than inherited. Break Even during your
@@ -64,16 +59,14 @@ reported today are the same ones reported before this change, on the same basis.
 which step-up applied: half filled for a half step-up, solid for a full one. A legend under the
 chart says which is which, and it only describes the marks your plan actually has. A half step-up
 cannot happen in a community-property state, or to a single person whose estate goes straight to
-their heirs, so those plans get the solid circle explained and nothing about halves. Two things
-changed beyond the new circle. The last
-death is marked at all now, which is where the second step-up happens, and a single person gets a
-death marker for the first time, since previously only the first death of a couple was marked. The
-markers are also labelled "You" and "Spouse" rather than "Your Passing" and "Spouse Passing",
-because the shorter labels stop the ones near the end of the plan from overlapping each other.
+their heirs, so those plans get the solid circle explained and nothing about halves. The last
+death is marked which is where the final step-up happens.
 
-Also in this release: a cost basis larger than the account holding it is now corrected rather than
-carried, which could previously happen after a market decline. This has no effect on an ordinary
-projection and shows up only in Monte Carlo, where losing years are the point.
+Also in this release: a brokerage cost basis larger than the brokerage account value is now corrected rather than
+carried. A market decline can cause a declining basis - as would be observed in Monte Carlo Stress Cases. 
+Ordinary projection will not see a basis decline due to declining account value unless you put a 
+[negative growth rate in place purposely](https://tools.netcitizen.us/retirement_optimizer.html?str=ordered&os=RIBC&bb=90k&g=-1.0). 
+The place you would observe the declining basis is in the "Annual Details" -> "Brokerage" column "Basis".
 
 ---
 
@@ -83,8 +76,7 @@ projection and shows up only in Monte Carlo, where losing years are the point.
 
 **Self-tests improved.** No change to your plan or its numbers. The self-check that runs at page
 load now covers 510 tests instead of 245; hover the indicator for the count. A brief hourglass
-before the green dot is normal, and a green dot with a small warning mark means the page was opened
-as a local file, which blocks part of the check from loading.
+before the green dot is normal.
 
 ---
 
@@ -105,29 +97,21 @@ bought your groceries and stayed in your account. Nothing ever took it back out.
 
 The longer the plan and the higher the rates, the more money this invented. A cash account earning
 4% grew at closer to 8%. In one test a plan spent $800,000 over twenty years while taking only
-$2,449 out of the cash account that was supposedly paying for it.
+$2,449 out of the cash account. That money tree - unfortunately - does not exist so the modeling now matches reality.
 
 You can check the old behavior yourself. Take a portfolio returning 8% a year. Have it earn that as
-8% growth with no dividend, then again as 6% growth plus a 2% dividend that is automatically
+[8% growth with no dividend](https://tools.netcitizen.us/retirement_optimizer.html?str=ordered&os=RIBC&bb=90k&dr=1&g=6&div=2), then again as [6% growth plus a 2% dividend]() that is automatically
 reinvested. Same total return, same reinvestment, but the dividend version pays tax every year that
-the growth version does not, so it must end up **behind**. It was ending up **21.7% ahead**.
-
+the growth version does not, so it must end up **behind**. After the fix, the 6%+2% example lands at 1,231,249, vs 1,250,627 net wealth (current dollars) for the 8% DRIP.
 Dividends and interest are still income, still taxed exactly as before, and still land in your
-account. They are simply no longer counted a second time as spending money. The money is all still
-there, in Cash or reinvested in your brokerage, and your withdrawal strategy draws on it like any
-other balance. That also means your strategy now decides whether a dividend is spent or banked, and
-how the tax on it is paid, instead of that being assumed.
+account. The withdrawal strategy decides whether a dividend is spent or banked, and how the tax on it is paid (e.g. you can earn interest and pay the tax on that interest from an IRA, or from cash).
 
 **Expect ending balances to fall, typically between 4% and 23%** on a plan using the default 3% cash
 yield and 0.5% dividend rate. Your spending goal is still funded in the same years it was before.
 Tax goes up slightly, because the invented money had been quietly absorbing some of it. A
-Guyton-Klinger plan can also shift its spending path, since that strategy sets spending from your
-portfolio balance and that balance was overstated.
+Guyton-Klinger plan can also shift its spending path, since that strategy sets spending from what was an overstated - now correct - portfolio balance.
 
-**Nothing about your inputs was wrong.** Your balances, rates and goals meant what you thought they
-meant. The tool was mishandling them. A plan that looked like it worked may now need a lower
-spending goal, a later start, or a different strategy, and that is worth knowing now rather than
-later.
+A plan that looked like it worked may now need a lower spending goal, a later start, or a different strategy.
 
 ### 2. Two 2025 tax-law provisions were implemented but never switched on
 
@@ -174,8 +158,6 @@ README, in the strategy description, on the Annual Details legend and in the sho
 tooltip. The shortfall tooltip also used to say a shortfall was "likely due to errors in the
 calculation", which was backwards.
 
-### Also
-
 One of the Ordered strategies was leaving a small amount of spending unfunded in two years; the
 amounts moved and now sit between $10 and $161 across three years on the test plan. These are
 rounding-scale residuals from the order in which tax is recomputed, not stranded capital.
@@ -198,12 +180,6 @@ amount of that tax bill. While there was money in Cash or Brokerage the gap was 
 nothing looked wrong. Once those accounts ran dry the gap had nowhere to go, and the plan reported
 unfunded spending while the IRA still held a large balance.
 
-On one test plan, Proportional 0% left **$304,331** of spending unfunded across 13 years while
-holding **$893,920** in the IRA. Reduce left $234,643 unfunded, and Guyton-Klinger $34,050. Which of
-these plans happened to survive depended on details that have nothing to do with funding:
-Proportional at a 10% boost passed only because over-drawing the IRA left a cash surplus that got
-spent later.
-
 **What changed, part one: the plan can reach the money.** When Cash, Brokerage and Roth are
 exhausted and spending is still unfunded, these strategies now draw the additional IRA needed, the
 same backstop Fill Bracket and IRMAA Tier have always had. The amount appears in the `ForcedIRA`
@@ -215,21 +191,10 @@ against what your guaranteed income is actually worth **after** tax. That tax is
 estimated with a single rate, because your guaranteed income is not taxed at one rate: Social
 Security is between 0% and 85% taxable depending on your other income, qualified dividends have
 their own 0/15/20% schedule, and pensions and required distributions are ordinary income. Applying
-one blended rate to the whole amount would have overstated the tax by several times on a Social
-Security heavy household and drawn far too much.
+one blended rate to the whole amount overstated the tax by several times on a Social
+Security heavy household and drew far too much.
 
-**What this does to your numbers.** A plan that reported a shortfall may now succeed. On the test
-plan above, Proportional 0% went from $4,263,278 spent and $684,010 left over, to **$4,567,609 spent
-and $195,000 left over**. The drop in ending wealth is the money being spent on your goal instead of
-sitting unspent in the IRA. The backstop is also back to being a backstop rather than doing ordinary
-work: the `ForcedIRA` draw on that plan fell from $395,109 to $43,816 once the first withdrawal was
-sized correctly.
-
-On other plans the effect is larger and can go either way, because a differently sized withdrawal
-lands in different tax brackets: one Guyton-Klinger test plan pays $29,575 less tax and ends with
-$89,827 more, while a Proportional plan with a large IRA pays $17,677 more tax and ends with $8,648
-less. Guyton-Klinger plans can also shift their spending path, since that strategy sets spending
-from the portfolio balance and the balance now follows a different track.
+**What this does to your numbers.** A plan that reported a shortfall in one or more years may now succeed.
 
 **Which strategies change.** Proportional, Reduce, Guyton-Klinger, the default strategy, an ACA
 Cliff plan after its cap ends at Medicare, and the Cyclic Brokerage option. Fill Bracket, IRMAA Tier,
@@ -259,7 +224,9 @@ instead of being enforced for the rest of your life, and the warnings tell you w
 talking about.**
 
 Only plans using an ACA Cliff strategy change their numbers. Everything else is about what you can
-see and select.
+see and select.  As for what "Spend Goal" you should enter: enter your AFTER ACA spend goal. While ACA limits are in in 
+place, your spending is capped by to meet ACA goals. If you have lots of cash or Roth, or a high basis Brokerage,
+you may be able to meet your spend goals in the first years of ACA by consuming those resources.
 
 **1. The cap now ends at Medicare.** ACA premium subsidies stop being available once you are
 eligible for Medicare. The tool was not checking ages at all: pick an ACA Cliff strategy and it held
@@ -293,21 +260,15 @@ arm changes like this:
 Ending net worth **falls**, and that is the point rather than a side effect. The old behavior looked
 wealthier only because it refused to fund the spending goal and left the money in the IRA.
 
-**2. ACA Cliff is no longer an advanced-only option.** The four Federal Poverty Level ceilings
-(200/250/300/400%) now appear in the ceiling dropdown for everyone, the Optimizer sweeps those rows
-for everyone, and the paragraph explaining the strategy is no longer hidden. It was gated because the
-ACA model is rough, which is still true, so the documentation now says so plainly rather than the
-option being hidden. In particular the tool models the income cap and **none** of the premium subsidy
+**2. ACA Cliffs: the four Federal Poverty Level ceilings
+(200/250/300/400%) now appear for everyone**.  The Optimizer sweeps those rows
+for everyone. The tool models the income cap and **none** of the premium subsidy
 that cap buys, so an ACA row shows you what staying under the limit costs and not what it saves. Read
-one as a constraint study, never as a recommendation. The options still disappear once both people
+one as a constraint study, never as a recommendation. The options disappear once both people
 are on Medicare at the start of the plan.
 
-**3. The 400% option no longer carries a warning triangle.** Nothing computed it. It was fixed text
-attached to that one entry, so it appeared even when 400% was the only workable choice, and stayed
-silent on a 200% cap that could not fund a single year. Whether a cap is achievable cannot be known
-without running the plan, which the dropdown does not do. The ⚠️ that **is** computed is the one on
-Optimizer rows, from the number of years the cap actually blocked spending. Because a lower
-percentage is a stricter limit, if one ACA row is flagged there, every lower one is flagged too.
+**3. On Optimizer rows a ⚠️ indicates that the spend goal is infeasible.**
+If one ACA row is flagged every lower one is flagged too.
 
 **4. The Medicare warning now names the year and your ages in it.** It used to say only that you
 would be on Medicare "at retirement start", while the age shown next to your birth year is your age
@@ -351,19 +312,17 @@ Two further problems came from the same cause:
 
 - **Spending was reported wrongly in those 21 states.** For any strategy that is not bracket based,
   the plan's yearly spending target was set to zero. The Summary then reported the plan as successful
-  while it funded no spending at all, and total spending could come out negative. In the run above,
-  a Proportional plan in Nevada reported success with total spending of -$649,857; it now reports
-  $810,921 and correctly reports failure, because a $400,000 goal on that portfolio genuinely fails.
-- **"Minimize IRMAA" converted little or nothing in every state, not just those 21.** That strategy
+  while it funded no spending at all, and total spending could come out negative. 
+- **"Below IRMAA" converted little or nothing in every state, not just those 21.** That strategy
   stops at the first IRMAA surcharge tier, and the same missing boundary applied whenever your
   spending goal sat below that tier, which is most plans. The same single filer above now converts
   $13,698 in California and $163,686 in Nevada, against $0 and $465 before.
 
-**What this means for a saved plan.** If your state is one of the 21, or if you use Minimize IRMAA
-anywhere, your saved scenarios and shared links will produce different numbers than before. In every
+**What this means for a saved plan.** If your state is one of the 21, or if you use the "Below IRMAA" bracket  
+your saved scenarios and shared links will produce different numbers than before. In every
 case measured the new numbers are the correct ones and the old ones understated what the strategy
 would do. The 17 states the tool models with graduated brackets are unaffected for every strategy
-except Minimize IRMAA, and that was verified state by state rather than assumed.
+except *Below IRMAA*, and that was verified state by state rather than assumed.
 
 ---
 
@@ -419,7 +378,7 @@ link to a page that draws them.
 
 **The Tax Payment Planner now receives your brokerage position, so it stops guessing at it.**
 
-Clicking a year in Annual Details opens the Tax Payment Planner with that year's figures. Three of
+Clicking a year in Annual Details of the Retirement Optimizer opens the Tax Payment Planner with that year's figures. Three of
 them were never being sent, and the planner quietly fell back to its own built-in assumptions
 instead:
 
@@ -445,7 +404,7 @@ genuine rates and was widely read as one. Shared links using the old field still
 
 **Two controls are now available to everyone: "Stop conversions after (year or age)" in the sidebar and "Fed Tax Creep %/yr" in Assumptions.**
 
-Both are plain inputs like any other now. Neither does anything until you fill it in, so no existing
+Neither does anything until you fill it in, so no existing
 plan, saved scenario or shared link produces a different number because of this release.
 
 **Stop conversions after (year or age)** sits just under Extra Annual Roth Conversion. Enter a
@@ -462,10 +421,12 @@ than never converting at all, so the year that maximizes after-tax wealth is wor
 
 **Fed Tax Creep %/yr**, with **Creep Starts** beside it, sits in Assumptions under the growth row. It
 multiplies the federal ordinary-income bracket rates by a little more each year from the start year
-onward, so a 22% bracket becomes roughly 26.8% after twenty years at 1%/yr. Bracket thresholds still
-track CPI as before, and state tax, capital gains, the NIIT surtax and IRMAA are unaffected. It is a
-stress test for a higher-tax future, not a forecast. Leave it at 0 to keep today's rates for the
-whole plan.
+onward, so a 1% creep turns a 22% bracket into a 26.8% bracket in 20 years. Bracket thresholds still
+track CPI as before, and state tax, capital gains, the NIIT surtax and IRMAA are unaffected. Why is tax creep here at all? 
+Many think a higher-tax future is likely, so this is a simple way to model increasing taxes. We are not forecasting that 
+tax rate increases will come - after all taxation on changes at the speed of congress and that's to say... slowly. 
+Leave tax creep % at 0 to keep today's rates for the whole plan.  There is no model for State tax increases, and no plan to 
+add them, so if you think your state taxes will be creeping up, you can make the creep rate a little higher to compensate.
 
 ---
 
@@ -547,10 +508,6 @@ to be Historical: it builds its own set of worst-case sequences from the real re
 in both modes. Choosing synthetic returns for the projection is not a reason to hide the question of
 whether the plan would have survived the worst of what actually happened.
 
-The stress chart also failed to draw for anyone who reached a stress result without running a full
-Monte Carlo sweep first, which is the normal path with advanced controls turned on: the headline
-count appeared with an empty chart beneath it.
-
 The Optimizer blocks the page for a second or more while it tests every strategy, which looked like
 a freeze with the previous run still on screen. It now shows a "Calculating strategies" banner
 first. The comparison feature also gained a permanent one-line explanation above the table, and the
@@ -571,21 +528,15 @@ place. If a change removes that strategy from the table entirely, the comparison
 baseline. Clicking ⚖ does not load the strategy into the sidebar; clicking anywhere else on the row
 still does.
 
-Your plan is now marked in exactly one place when there is nothing else to say. It was possible to
-see three 📍 markers at once: the pinned row, the same row repeated in the ranked body, and the swept
-strategy that matches your settings. The body copy is gone, since the pinned row already carries the
-Rank column, and the swept row is only marked when it is genuinely a different plan from yours,
-which happens when your conversion switch, Extra Annual Conversion or stop year differ from what the
-sweep runs. When the swept row simply is your plan, only the pinned row is marked.
+Your current plan is now marked (📍) in exactly one place when there is nothing else to say. If another 📍 
+appears it indicates a slightly DIFFERENT variation from your plan.
 
-The pinned rows read ⚓ BASELINE and 📍 CURRENT, marker first in both cases, and a row that wins a
+The pinned rows read ⚓ BASELINE and 📍 CURRENT, marker first all cases, and a row that wins a
 metric in the Best table keeps its marker there too, so it is recognisable as the same row without
 repeating the words.
 
 The ⚖ control has its own column at the start of each row, and the outcome marker beside it is part
-of the same control, with a gap separating both from the rest of the row. It began as a small glyph
-inside the Strategy cell, where a near miss loaded that strategy into the sidebar instead: a
-destructive, surprising result for a click aimed at a comparison. The highlighted ⚖ always marks
+of the same control, with a gap separating both from the rest of the row. The highlighted ⚖ always marks
 whichever row the columns are currently measured against, which is the ⚓ baseline until you pick
 something else, so the table shows where the comparison point is from the moment it opens. Clicking
 the highlighted one puts everything back, exactly like the Stop comparing button.

@@ -1621,6 +1621,32 @@ test.critical('third pass keeps the state retirement-income exclusion (PA, Order
         `(it was 28,054.65 before the third pass was given pensionIncome/iraIncome).`);
 });
 
+// P41 pension start-age gate. Two coverage holes closed at once: the pure gate helper that the
+// After-Tax Spend suggestion calls (P41d/P41g), and the engine gate itself (P41c), which shipped
+// with no test — reverting optimizer_core.js:1154 to the ungated line previously failed nothing.
+test('pensionAtAge helper gates the pension at the start age', () => {
+    const p = globalThis.window.DisplayHelpers.pensionAtAge;
+    assert(p(40000, 75, 74) === 0,            'deferred: age below start age -> 0');
+    assert(p(40000, 75, 75) === 40000,        'at the start age -> full');
+    assert(p(40000, 75, 80) === 40000,        'past the start age -> full');
+    assert(p(40000, 0,  60) === 40000,        'start age 0 -> no gate, always on');
+    assert(p(40000, undefined, 60) === 40000, 'blank start age -> no gate, always on');
+    assert(p(undefined, 75, 80) === 0,        'blank amount -> 0');
+});
+
+test.critical('engine defers the pension until pensionStartAge (P41c)', () => {
+    // BASE person 1 is 74 in 2026 and runs to 90, so age1 straddles a start age of 80.
+    // Flat pension (no COLA, zero inflation) so pre-start rows are a hard zero.
+    const r = simulate({ ...BASE, pensionAnnual: 40000, pensionStartAge: 80, pensionCola: false });
+    const pre  = r.log.filter(e => typeof e.age1 === 'number' && e.age1 < 80);
+    const post = r.log.filter(e => typeof e.age1 === 'number' && e.age1 >= 80);
+    assert(pre.length > 0 && post.length > 0, 'fixture must straddle the start age or it proves nothing');
+    assert(pre.every(e => (e.pension || 0) === 0),
+        `pension must be 0 before pensionStartAge; a row before age 80 paid it (gate at ` +
+        `optimizer_core.js:1154 reverted?)`);
+    assert(post.some(e => (e.pension || 0) > 0), 'pension must flow at/after pensionStartAge');
+});
+
 test.critical('IL still taxes non-retirement income (interest/dividends not exempt)', () => {
     // $80k IRA (exempt) + $30k ordinary dividends (NOT exempt) → state tax on the $30k only.
     const r = calculateTaxes({ filingStatus: 'MFJ', ages: [70, 70], state: 'IL',

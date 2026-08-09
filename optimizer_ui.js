@@ -4713,10 +4713,12 @@ function computeSuggestedSpend() {
     const inp = getInputs();
     const totalAssets = (inp.IRA1||0) + (inp.IRA2||0) + (inp.Roth||0) + (inp.Roth2||0) + (inp.Brokerage||0) + (inp.Cash||0);
     const portfolioWd  = 0.05 * totalAssets;
-    const gross        = (inp.ss1||0) + (inp.ss2||0) + (inp.pensionAnnual||0) + portfolioWd;
-
     const status    = inp.hasSpouse ? 'MFJ' : 'SGL';
     const retireAge = inp.startAge || (new Date().getFullYear() - (inp.birthyear1||1960));
+    // Pension counts only once the holder reaches the start age; one deferred past retirement
+    // is excluded from this snapshot. startAge 0/blank means "starts at retirement" (always on).
+    const pension   = DisplayHelpers.pensionAtAge(inp.pensionAnnual, inp.pensionStartAge, retireAge);
+    const gross     = (inp.ss1||0) + (inp.ss2||0) + pension + portfolioWd;
     const spAge     = inp.hasSpouse ? (retireAge + (inp.birthyear1||1960) - (inp.birthyear2||1960)) : 0;
     const ages      = inp.hasSpouse ? [retireAge, spAge] : [retireAge];
     const birthyears = inp.hasSpouse ? [inp.birthyear1||0, inp.birthyear2||0] : [inp.birthyear1||0];
@@ -4724,8 +4726,8 @@ function computeSuggestedSpend() {
     const taxes = calculateTaxes({
         filingStatus: status,
         totalSS:      (inp.ss1||0) + (inp.ss2||0),
-        earnedIncome: (inp.pensionAnnual||0) + portfolioWd,
-        pensionIncome:(inp.pensionAnnual||0), iraIncome: portfolioWd,
+        earnedIncome: pension + portfolioWd,
+        pensionIncome: pension, iraIncome: portfolioWd,
         state:        inp.STATEname || 'CA',
         ages,
         birthyears,

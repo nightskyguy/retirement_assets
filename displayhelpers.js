@@ -149,6 +149,13 @@
     el.value = formatDollar(num);
   }
 
+  // Pension gate: the annual pension counts only once the holder has reached the start
+  // age. startAge 0/blank means "starts at retirement" -> always on. Mirrors the engine
+  // gate in optimizer_core.js (which additionally applies COLA + survivor pct).
+  function pensionAtAge(amount, startAge, age) {
+    return age >= (startAge || 0) ? (amount || 0) : 0;
+  }
+
   // ── Public API ────────────────────────────────────────────────────────────
 
   window.DisplayHelpers = {
@@ -157,7 +164,8 @@
     attachNumericDollarInput: attachNumericDollarInput,
     setDollarValue: setDollarValue,
     registerChartDismissal: registerChartDismissal,
-    initTouchTooltips: initTouchTooltips
+    initTouchTooltips: initTouchTooltips,
+    pensionAtAge: pensionAtAge
   };
 
   // Dual-mode export: inert in browser (classic script); lets Node tests require() this file.

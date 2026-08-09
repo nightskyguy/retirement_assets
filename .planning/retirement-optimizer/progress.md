@@ -1978,3 +1978,47 @@ retirement-income-exclusion test that only sets the field; reverting `P41c` woul
 
 **Not fixed, by the user's instruction** - it is unrelated to the basis step-up and would have
 muddied PR #160. Left as `P41d` + `P41g`, both small, both in `optimizer_ui.js`.
+
+---
+
+## Session 2026-08-09 (seventh) — P41 completed: `P41d` + `P41g` shipped (v11.14bf)
+
+Closed the two remaining P41 items from the sixth session. P41 is now 7 of 7, shipped separately
+from the P35 basis-step-up work as planned.
+
+**`P41d` — suggested spend now respects the gate.** `computeSuggestedSpend()`
+(`optimizer_ui.js:4712`) is a single-year snapshot at `retireAge`, not a per-year loop, so it
+counted `inp.pensionAnnual` in three spots unconditionally. Replaced all three with one `pension`
+local gated at retirement age. The gate itself was extracted to a pure, node-testable helper
+`DisplayHelpers.pensionAtAge(amount, startAge, age)` in `displayhelpers.js` (user chose the
+"refactor testable helper" option over an engine-only test). `startAge` 0/blank keeps the old
+behaviour (`age >= 0` always true), so existing plans are unchanged; a pension deferred past
+retirement is excluded.
+
+**Why a helper and not a direct test.** `computeSuggestedSpend()` lives in `optimizer_ui.js`,
+which the test harness never loads (DOM-bound `val()`/`getInputs()`, not exported). Only
+core/taxengine/displayhelpers are `require()`d. `displayhelpers.js` was already node-loadable and
+UI-used, so it is the natural home. The **engine gate stays inline** at `optimizer_core.js:1154` —
+core is deliberately self-contained (its own `:3761` comment) and its gate also applies COLA +
+survivor pct, which the pure helper does not.
+
+**`P41g` — two tests, one of which bites the engine gap the audit named.** In
+`optimizer_core.tests.js` after the PA test: a `pensionAtAge` unit test, and a `test.critical`
+that runs `simulate()` with a pension deferred to 80 and asserts `pension === 0` before the start
+age. Reverting `optimizer_core.js:1154` to the ungated line was verified to fail exactly that
+critical guard (1 failed), and restoring it returns 224/224. This is the first test that would
+catch a P41c regression — before today, reverting the engine gate failed nothing.
+
+**Verification.** node 224/224, 11/11 critical guards. Browser (served via `serve.py` on 8767):
+title/stat v11.14bf, `DisplayHelpers.pensionAtAge` a function, deferred pension (start 75 vs
+retire 65) drops suggested gross $168,000 -> $153,000 (exactly the $15,000 pension), after-tax
+$149,589 -> $138,565; self-test badge green; the `[staleness guard]` console error was fixed by
+bumping `optimizer_tests.js` `EXPECTED.optimizer_core` 222 -> 224. Only remaining console error is
+the Cloudflare-analytics CORS block, present on any local serve and unrelated.
+
+**Not a behavior-change release.** No saved scenario or shared link changes its numbers — only the
+one-click suggestion moves, and only for a pension deferred past retirement. Changelog entry is
+plain (no `data-flag="behavior"`). Files touched: `displayhelpers.js`, `optimizer_ui.js`,
+`optimizer_core.tests.js`, `optimizer_tests.js`, `retirement_optimizer.html` (title +
+`optimizer_ui.js`/`displayhelpers.js`/`optimizer_tests.js` `?v=` bumps + changelog `<li>`,
+dropped the 11.1464 `<li>` to keep five), `optimizer_changelog.md`.

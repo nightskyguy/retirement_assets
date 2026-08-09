@@ -11,6 +11,31 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.14bf"></a>
+
+## 11.14bf
+
+The suggested After-Tax Spend (the one-click figure behind the ⓘ next to the spending goal) now
+respects the pension start age.
+
+The plan engine already defers a pension until its start age: if you retire at 60 and your pension
+begins at 65, the simulation pays nothing from that pension for the first five years. The
+suggested-spend helper, which estimates a sustainable first-year spend, was not doing the same. It
+folded the full annual pension into both the income it suggests you can spend and the tax on that
+income, for every year including the ones before the pension starts, so for a deferred pension the
+suggested figure came out too high.
+
+The suggestion now excludes a pension that has not started by your retirement age, using the same
+rule the engine uses. Nothing about a simulated plan changes: saved scenarios and shared links
+produce the same year-by-year numbers as before. Only the starting suggestion moves, and only for a
+pension deferred past retirement; a pension that starts at or before retirement is unaffected.
+
+Under the hood the age gate is now a single shared helper (`DisplayHelpers.pensionAtAge`) with its
+own test, and the engine's own start-age gate, which had shipped without one, gained a regression
+test as well.
+
+---
+
 <a id="11.1499"></a>
 
 ## 11.1499 (behavior change)

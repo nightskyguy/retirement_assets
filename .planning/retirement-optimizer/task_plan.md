@@ -74,7 +74,7 @@ first task. Every open item in the file now carries one.
 | **O3** | P17 | Retirement_Projection simple mode | `P17a` | nothing |
 | **O3** | P18 | Retirement_Projection -> RetirementTaxPlanner link | `P18a` | nothing |
 | **O3** | P26 | README/FAQ cross-references from tooltips | — | nothing |
-| **O3** | P41 | Pension start age *(was PA)* — 5 of 7 shipped in v11.10ee | `P41d` (suggested-spend gate) | nothing |
+| ~~DONE~~ | ~~P41~~ | ~~Pension start age *(was PA)*~~ — **7 of 7 done, v11.14bf** | — | — |
 | **O3** | P42 | Lumpy spending, no URL encoding *(was PB)* | `P42a` | nothing |
 | **O3** | P43 | Auto-persist + restore offer *(was PC)* | `P43a` | nothing |
 | **O3** | P44 | Onboarding interview *(was PD)* | `P44a` | nothing |
@@ -1762,23 +1762,25 @@ the code 2026-08-07; the two that remain are real, not bookkeeping.
       `+val('pensionStartAge') || 0`, not the `|| inputs.startAge` written above: 0 means "no gate",
       which reaches the same behaviour by a different route since `age1 >= 0` is always true
 - [x] **P41c** — engine age gate. **DONE v11.10ee**, `optimizer_core.js:1154`
-- [ ] **P41d** — `computeSuggestedSpend()` gate. **STILL OPEN — this is the whole remaining defect.**
-      The function is in `optimizer_ui.js:4712`, not core.js as recorded above, and it counts the
-      pension unconditionally in THREE places: `gross` (`:4716`), `earnedIncome` (`:4727`) and
-      `pensionIncome` (`:4728`). `pensionStartAge` appears nowhere in it. Verified live: set the
-      start age to 75 against a retirement age of 65 and `getInputs()` reads 75 correctly while the
-      suggested spend does not move at all. **Effect:** the After-Tax Spend ⓘ suggestion hands a
-      deferred-pension user the full annual pension for every year before it starts, plus its tax
-      effect, so the suggestion is too high for exactly the case the feature's own tooltip
-      advertises ("retire at 60, pension starts at 65")
+- [x] **P41d** — `computeSuggestedSpend()` gate. **DONE v11.14bf.** The three unconditional
+      pension counts (`gross` `:4716`, `earnedIncome` `:4727`, `pensionIncome` `:4728`) now read one
+      `pension` local gated by a shared helper `DisplayHelpers.pensionAtAge(amount, startAge, age)`
+      (in `displayhelpers.js`), evaluated at `retireAge`. `startAge` 0/blank = no gate, so existing
+      plans are byte-identical; a pension deferred past retirement is now excluded. Browser-verified:
+      start age 75 vs retirement 65 drops suggested gross from $168k to $153k (the $15k pension),
+      after-tax falls in step. The engine (`optimizer_core.js:1154`) stays inline and self-contained,
+      as designed
 - [x] **P41e** — URL alias `psa`. **DONE v11.10ee**, `optimizer_ui.js:3777`
 - [x] **P41f** — survivor logic needs no change. **CONFIRMED**, still true
-- [ ] **P41g** — no test exists. The `pensionStartAge: 65` at `optimizer_core.tests.js:1613` is a PA
-      retirement-income-exclusion test that merely sets the field; nothing asserts the gate, so
-      reverting `P41c` would not fail a single test. Fix with `P41d` and cover both: a pension
-      deferred past retirement is excluded from the suggestion, one starting at retirement is included
-- **Status:** IN PROGRESS, 5 of 7 done. `P41d` + `P41g` remain, both small and both in
-  `optimizer_ui.js`. Deliberately NOT bundled into the P35g PR - unrelated to the basis step-up
+- [x] **P41g** — tests added. **DONE v11.14bf**, both in `optimizer_core.tests.js` (after the PA
+      test at `:1622`): (1) a `pensionAtAge` helper unit test (below/at/after start age, `startAge`
+      0/blank = no gate, blank amount = 0); (2) `test.critical` engine test that runs `simulate()`
+      with a pension deferred to age 80 and asserts `yr.pension === 0` before the start age, `> 0`
+      after — this closes the exact gap the audit named: reverting `optimizer_core.js:1154` now fails
+      that guard (proven: temporarily ungated → 1 critical guard failed, restored → 224/224).
+      Suite count 222 → 224; `optimizer_tests.js` `EXPECTED.optimizer_core` bumped to 224
+- **Status:** DONE, 7 of 7. Shipped in v11.14bf, separate from the P35g basis-step-up PR as planned.
+  node 224/224 (11/11 critical guards); browser-verified on the served page
 - **Independent:** no phase dependencies
 
 ---

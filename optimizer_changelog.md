@@ -11,6 +11,39 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.14dd"></a>
+
+## 11.14dd
+
+**Behavior change** (Ordered strategy, RIBC and BIRC sequences only).
+
+The Ordered strategy draws your accounts in a strict sequence you choose (CBIR, RIBC, or BIRC). Any
+year your guaranteed income and required withdrawals come to more than you spend, the leftover has to be
+banked somewhere. Until now it always went to Cash, regardless of the sequence. For the two sequences
+that draw Cash last (RIBC and BIRC), that stranded the surplus in the one account the strategy would not
+touch again until everything else was gone: it earned the cash yield instead of the market return, and
+it was not spent until far too late.
+
+Now the fill follows the same order as the draw. The surplus is banked in the first account your
+sequence would draw that can actually receive a deposit, which is Cash or Brokerage. Roth and the IRA
+are contribution-limited and cannot take an arbitrary after-tax deposit, so they are never fill targets.
+That resolves to:
+
+- **CBIR** (Cash first): Cash, exactly as before. No change to any CBIR plan.
+- **RIBC** (Roth, IRA, Brokerage, Cash): Brokerage, because Brokerage is drawn before Cash.
+- **BIRC** (Brokerage, IRA, Roth, Cash): Brokerage, because Brokerage is drawn first.
+
+An explicit Cash Reserve target, or Cycle Brokerage, still takes precedence over this rule where set.
+
+Effect: RIBC and BIRC plans that ran a surplus now end with more wealth, because the banked money grows
+at the investment return rather than the cash yield and is drawn back sooner. On one 30-year test the
+gain was roughly 4% of ending wealth for RIBC and 7% for BIRC. CBIR plans are byte-for-byte unchanged, as
+are all other strategies. The withdrawal sequence itself was already correct: it restarts from the top
+every year and uses whatever balances exist that year, so a refilled account is drawn again in its
+proper position.
+
+---
+
 <a id="11.14c6"></a>
 
 ## 11.14c6

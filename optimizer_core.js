@@ -2068,6 +2068,19 @@ function routeSurplusAndConvert(sim, yr) {
         const _reserveNominal = inputs.CashReserve * sim.inflation;
         _toCash = Math.max(0, Math.min(yr.surplus.Total, _reserveNominal - balance.Cash));
         _toBrokerage = yr.surplus.Total - _toCash;
+    } else if (yr.isOrderedStrategy) {
+        // Ordered: the fill follows the draw order. Bank surplus in whichever FUNDABLE account (Cash
+        // or Brokerage) the chosen sequence draws FIRST, so next year's ordered pass pulls it back
+        // first instead of stranding it in an account the sequence won't reach until everything else
+        // is gone. Roth and the IRA are contribution-limited and cannot receive an arbitrary after-
+        // tax surplus, so only Cash and Brokerage are candidates. CBIR (Cash first) is unchanged
+        // from the legacy all-to-cash default; RIBC and BIRC (Cash last) now route to Brokerage.
+        // Only the account ORDER from resolveOrderedSeq is used here, so its tax-rate args are
+        // placeholders. Brokerage deposits step up basis, the same convention as the Cyclic and
+        // Cash-Reserve-overflow paths above.
+        const _seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage: 0, capitalGainsRate: 0, nominalStateTaxAtLimit: 0, nominalTaxRate: 0, marginalFedTaxRate: 0, marginalStateTaxRate: 0 });
+        const _fundFirst = (_seq.find(([a]) => a === 'Cash' || a === 'Brokerage') || ['Cash'])[0];
+        if (_fundFirst === 'Brokerage') { _toBrokerage = yr.surplus.Total; _toCash = 0; }
     }
     balance.Cash += _toCash;
     if (_toBrokerage > 0) {

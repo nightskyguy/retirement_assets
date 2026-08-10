@@ -514,6 +514,7 @@ function runSimulation() {
     updateStats(res.totals, res.finalNW, lastFinalNWCurrentDollars);
     updateCharts(res.log);
     updateIRAGoalHint();
+    refreshSuggestedSpend();   // re-solve the engine-calibrated suggested spend for the ⓘ icon
     // Show computed marginal rate in the auto label when futureIRATaxRate is blank
     const _autoRateEl = document.getElementById('future-ira-tax-auto');
     if (_autoRateEl) {
@@ -4708,43 +4709,41 @@ function federalBracketRateAt(income) {
 
 // Prior spendGoal value before user clicked the suggest icon (null = not in suggest mode).
 let _priorSpendGoal = null;
+// Cached engine-solved suggestion { spend, horizon, naivePMT, haircut } | null. The solve runs
+// ~two dozen simulate() calls, so it is refreshed once per recalc from runSimulation() rather than
+// on every spendGoal keystroke. It does NOT depend on the current spendGoal, so the keystroke path
+// (updateBracketFeedback -> updateSuggestSpendTooltip) just reads this cache.
+let _suggestedSpend = null;
 
-function computeSuggestedSpend() {
-    const inp = getInputs();
-    const totalAssets = (inp.IRA1||0) + (inp.IRA2||0) + (inp.Roth||0) + (inp.Roth2||0) + (inp.Brokerage||0) + (inp.Cash||0);
-    const portfolioWd  = 0.05 * totalAssets;
-    const gross        = (inp.ss1||0) + (inp.ss2||0) + (inp.pensionAnnual||0) + portfolioWd;
-
-    const status    = inp.hasSpouse ? 'MFJ' : 'SGL';
-    const retireAge = inp.startAge || (new Date().getFullYear() - (inp.birthyear1||1960));
-    const spAge     = inp.hasSpouse ? (retireAge + (inp.birthyear1||1960) - (inp.birthyear2||1960)) : 0;
-    const ages      = inp.hasSpouse ? [retireAge, spAge] : [retireAge];
-    const birthyears = inp.hasSpouse ? [inp.birthyear1||0, inp.birthyear2||0] : [inp.birthyear1||0];
-
-    const taxes = calculateTaxes({
-        filingStatus: status,
-        totalSS:      (inp.ss1||0) + (inp.ss2||0),
-        earnedIncome: (inp.pensionAnnual||0) + portfolioWd,
-        pensionIncome:(inp.pensionAnnual||0), iraIncome: portfolioWd,
-        state:        inp.STATEname || 'CA',
-        ages,
-        birthyears,
-        inflation:    1.0,
-    });
-
-    const afterTax = Math.max(0, gross - (taxes.totalTax || 0));
-    return { gross, afterTax };
+// Re-solve the suggested spend against the current inputs and refresh the tooltip. Called from
+// runSimulation() (whose scheduleRecalc triggers are exactly the inputs the suggestion depends on).
+function refreshSuggestedSpend() {
+    try {
+        _suggestedSpend = (typeof suggestSustainableSpend === 'function')
+            ? suggestSustainableSpend(getInputs(), {})
+            : null;
+    } catch (e) {
+        _suggestedSpend = null;
+    }
+    updateSuggestSpendTooltip();
 }
 
 function updateSuggestSpendTooltip() {
     const icon = document.getElementById('suggest-spend-icon');
     if (!icon) return;
-    const { afterTax } = computeSuggestedSpend();
-    icon.style.display = afterTax > 0 ? '' : 'none';
+    const have = _suggestedSpend && _suggestedSpend.spend > 0;
+    icon.style.display = have ? '' : 'none';
+    if (!have) return;
     if (_priorSpendGoal !== null) {
         icon.title = `Restore: $${Math.round(_priorSpendGoal).toLocaleString()}`;
     } else {
-        icon.title = `Suggested goal: $${Math.round(afterTax).toLocaleString()}`;
+        const s = _suggestedSpend;
+        const K = (typeof SUGGEST_BUFFER_YEARS !== 'undefined') ? SUGGEST_BUFFER_YEARS : 3;
+        const hair = (s.haircut != null) ? `, ${Math.round(s.haircut * 100)}% of a naive amortization` : '';
+        icon.title = `Suggested goal: $${Math.round(s.spend).toLocaleString()} - the highest after-tax `
+            + `spend this plan sustains while still holding ${K}+ years of portfolio-funded spending at `
+            + `the end of its ${s.horizon}-year horizon${hair}. Deterministic path - see Monte Carlo `
+            + `for return-sequence risk. Click to apply.`;
     }
 }
 
@@ -4753,11 +4752,11 @@ function applySuggestSpend() {
         DisplayHelpers.setDollarValue('spendGoal', Math.round(_priorSpendGoal));
         _priorSpendGoal = null;
     } else {
+        if (!_suggestedSpend) refreshSuggestedSpend();
+        if (!_suggestedSpend || !(_suggestedSpend.spend > 0)) return;
         const el = document.getElementById('spendGoal');
-        const raw = parseFloat((el?.dataset?.numVal) || (el?.value || '').replace(/[^\d.-]/g, '') || '0');
-        _priorSpendGoal = raw;
-        const { afterTax } = computeSuggestedSpend();
-        DisplayHelpers.setDollarValue('spendGoal', Math.round(afterTax));
+        _priorSpendGoal = parseFloat((el?.dataset?.numVal) || (el?.value || '').replace(/[^\d.-]/g, '') || '0');
+        DisplayHelpers.setDollarValue('spendGoal', Math.round(_suggestedSpend.spend));
     }
     updateSuggestSpendTooltip();
     updateBracketFeedback();

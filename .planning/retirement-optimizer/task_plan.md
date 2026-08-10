@@ -74,12 +74,13 @@ first task. Every open item in the file now carries one.
 | **O3** | P17 | Retirement_Projection simple mode | `P17a` | nothing |
 | **O3** | P18 | Retirement_Projection -> RetirementTaxPlanner link | `P18a` | nothing |
 | **O3** | P26 | README/FAQ cross-references from tooltips | — | nothing |
-| **O3** | P41 | Pension start age *(was PA)* — 5 of 7 shipped in v11.10ee | `P41d` (suggested-spend gate) | nothing |
+| ~~DONE~~ | ~~P41~~ | ~~Pension start age *(was PA)*~~ — **7 of 7 done, v11.14bf** | — | — |
 | **O3** | P42 | Lumpy spending, no URL encoding *(was PB)* | `P42a` | nothing |
 | **O3** | P43 | Auto-persist + restore offer *(was PC)* | `P43a` | nothing |
 | **O3** | P44 | Onboarding interview *(was PD)* | `P44a` | nothing |
 | **O3** | P45 | Insights / feedback panel *(was PE)* | `P45a` | nothing |
 | **O3** | P46 | Tax Payment Planner backlog, TPP-1 + TPP-2 *(was TPP-1..5)* | TPP-1 (prose, no checklist yet) | nothing |
+| ~~DONE~~ | ~~P49~~ | ~~Horizon-aware suggested spend~~ — **SHIPPED v11.14c6** | — | — |
 
 **Why P35 and P32 are the two O0s.** P35 carries the brokerage basis step-up, which is not a feature
 but a correction: the terminal valuation taxes heirs on gains §1014 steps up in full, and because Roth
@@ -1762,23 +1763,25 @@ the code 2026-08-07; the two that remain are real, not bookkeeping.
       `+val('pensionStartAge') || 0`, not the `|| inputs.startAge` written above: 0 means "no gate",
       which reaches the same behaviour by a different route since `age1 >= 0` is always true
 - [x] **P41c** — engine age gate. **DONE v11.10ee**, `optimizer_core.js:1154`
-- [ ] **P41d** — `computeSuggestedSpend()` gate. **STILL OPEN — this is the whole remaining defect.**
-      The function is in `optimizer_ui.js:4712`, not core.js as recorded above, and it counts the
-      pension unconditionally in THREE places: `gross` (`:4716`), `earnedIncome` (`:4727`) and
-      `pensionIncome` (`:4728`). `pensionStartAge` appears nowhere in it. Verified live: set the
-      start age to 75 against a retirement age of 65 and `getInputs()` reads 75 correctly while the
-      suggested spend does not move at all. **Effect:** the After-Tax Spend ⓘ suggestion hands a
-      deferred-pension user the full annual pension for every year before it starts, plus its tax
-      effect, so the suggestion is too high for exactly the case the feature's own tooltip
-      advertises ("retire at 60, pension starts at 65")
+- [x] **P41d** — `computeSuggestedSpend()` gate. **DONE v11.14bf.** The three unconditional
+      pension counts (`gross` `:4716`, `earnedIncome` `:4727`, `pensionIncome` `:4728`) now read one
+      `pension` local gated by a shared helper `DisplayHelpers.pensionAtAge(amount, startAge, age)`
+      (in `displayhelpers.js`), evaluated at `retireAge`. `startAge` 0/blank = no gate, so existing
+      plans are byte-identical; a pension deferred past retirement is now excluded. Browser-verified:
+      start age 75 vs retirement 65 drops suggested gross from $168k to $153k (the $15k pension),
+      after-tax falls in step. The engine (`optimizer_core.js:1154`) stays inline and self-contained,
+      as designed
 - [x] **P41e** — URL alias `psa`. **DONE v11.10ee**, `optimizer_ui.js:3777`
 - [x] **P41f** — survivor logic needs no change. **CONFIRMED**, still true
-- [ ] **P41g** — no test exists. The `pensionStartAge: 65` at `optimizer_core.tests.js:1613` is a PA
-      retirement-income-exclusion test that merely sets the field; nothing asserts the gate, so
-      reverting `P41c` would not fail a single test. Fix with `P41d` and cover both: a pension
-      deferred past retirement is excluded from the suggestion, one starting at retirement is included
-- **Status:** IN PROGRESS, 5 of 7 done. `P41d` + `P41g` remain, both small and both in
-  `optimizer_ui.js`. Deliberately NOT bundled into the P35g PR - unrelated to the basis step-up
+- [x] **P41g** — tests added. **DONE v11.14bf**, both in `optimizer_core.tests.js` (after the PA
+      test at `:1622`): (1) a `pensionAtAge` helper unit test (below/at/after start age, `startAge`
+      0/blank = no gate, blank amount = 0); (2) `test.critical` engine test that runs `simulate()`
+      with a pension deferred to age 80 and asserts `yr.pension === 0` before the start age, `> 0`
+      after — this closes the exact gap the audit named: reverting `optimizer_core.js:1154` now fails
+      that guard (proven: temporarily ungated → 1 critical guard failed, restored → 224/224).
+      Suite count 222 → 224; `optimizer_tests.js` `EXPECTED.optimizer_core` bumped to 224
+- **Status:** DONE, 7 of 7. Shipped in v11.14bf, separate from the P35g basis-step-up PR as planned.
+  node 224/224 (11/11 critical guards); browser-verified on the served page
 - **Independent:** no phase dependencies
 
 ---
@@ -2076,6 +2079,84 @@ Deferred, in three clusters:
    input-distribution charts, the Tax Planner handoff mechanics, share URLs omitting defaults.
 
 ---
+
+---
+
+## P49: Horizon-aware suggested spend  *(SHIPPED v11.14c6, 2026-08-09)*
+**Why:** the suggested After-Tax Spend was a flat 5% of every account plus SS+pension, taxed once,
+with **no regard for plan length**. That contradicts the whole withdrawal-rate literature (Bengen,
+Trinity): the safe starting rate is chiefly a function of horizon. The tool already models the
+horizon (death-driven, `= r.log.length`), so a horizon-blind suggestion was leaving its own best
+input on the floor. Sibling to [[P30]] — same "constants nobody chose" theme, different constant
+(the `0.05` in the UI vs the engine's gap-fill order).
+
+**User decisions (2026-08-09):** built Option B (PMT over the invested portfolio) as the *seed*, with
+the haircut found by **live per-plan engine search** (not a baked constant), success defined as the
+last modeled year holding **≥ `SUGGEST_BUFFER_YEARS` (3, embedded)** years of **portfolio-funded
+need** (`spend − guaranteedIncome`), against the **deterministic** path (SoRR stays on Monte Carlo).
+
+- [x] **P49a** — `suggestSustainableSpend(baseInputs, opts)` in `optimizer_core.js` (before
+      `optimizeSpend`). PMT seed via the existing `calculateAmortizedWithdrawal` over invested =
+      IRA+Roth+Brokerage (Cash excluded as a buffer); coarse scan (`SUGGEST_SCAN_STEPS`, never breaks
+      early — same non-unimodal hazard `bestConversionStopYear` documents) then bisect on the existing
+      `SPEND_SEARCH_TOLERANCE`. Predicate = `totals.success && last.portfolioBalance ≥ K·need`, i.e.
+      `optimizeSpend`'s 1-year terminal test generalized to K years. Returns `{spend, horizon,
+      naivePMT, haircut}`. Exported in both lists.
+- [x] **P49b** — UI rewire in `optimizer_ui.js`: deleted the flat-5% `computeSuggestedSpend`; added
+      `refreshSuggestedSpend()` (caches the solve) called once per recalc from `runSimulation()`;
+      `updateSuggestSpendTooltip`/`applySuggestSpend` now read the cache. The solve is
+      spendGoal-independent, so the per-keystroke path stays cheap. Tooltip surfaces the horizon and
+      the haircut and names the deterministic-path caveat.
+- [x] **P49c** — 3 tests in `optimizer_core.tests.js` (boundary: its spend passes, +15% fails;
+      buffer monotone; horizon monotone — shorter horizon suggests more). Count 224 → 227;
+      `optimizer_tests.js` `EXPECTED.optimizer_core` bumped.
+- **Verified:** node 227/227; browser default scenario suggests $146,475 over a 25-yr horizon (71% of
+  the naive amortization), apply/restore toggle works, badge green. Horizon monotone in eyeball runs
+  (9yr→$67k, 17yr→$41k, 27yr→$27k); SS now gated by the engine, so the old SS-not-gated asymmetry in
+  the snapshot is gone.
+- **Deferred / notes:** `DisplayHelpers.pensionAtAge` (shipped [[P41]] for the old snapshot) is now
+  unused by production but retained as a tested pure utility — the engine is the live gate.
+  `gkSpendStable` is NOT in the predicate (kept strategy-agnostic); revisit if a GK suggestion looks
+  too high. MC-percentile calibration (SoRR-aware) is the future upgrade if the deterministic buffer
+  proves too optimistic.
+- **Independent:** no phase dependencies.
+
+---
+
+## P50: Suggested-spend menu (3 strategy-independent goals)  *(CORE COMMITTED but DORMANT, UI DEFERRED — 2026-08-09)*
+**Why:** P49's single suggestion (a) depended on the selected strategy — it moved as the user explored
+strategies, when a spend goal should be a stable INPUT — and (b) produced an alarming withdrawal rate
+(12.8% on the default), which exposed a units bug AND the deeper fact that "spend down to a K-year
+buffer" is a spend-down posture, not a Bengen-style sustainable rate. User asked for a small MENU of
+goals instead of one number. **Full research + the open decisions are in findings.md (P50 section);
+read it before resuming.**
+
+- [x] **P50a** — units bug in `suggestSustainableSpend` fixed (today's-vs-inflated dollar mix in the
+      terminal buffer; now `last.spendGoal - last.guaranteedIncome`). **COMMITTED.** Also raised the live
+      buffer `SUGGEST_BUFFER_YEARS` 3 -> **5** at the user's request (the ⓘ now requires 5 years of
+      support at the end). The user's consolidated 11.14c6 changelog describes exactly this.
+- [x] **P50b** — core built + **COMMITTED but DORMANT**: `solveMaxSpend`, `bengenRate`, `suggestSpendMenu`
+      (A Bengen rate / D leave 50% real principal / B end with 5 full years), all against a FIXED `propwd`
+      reference so the numbers are strategy-independent (`★ CRITICAL` test guards it). node 233/233.
+      Nothing in the UI calls `suggestSpendMenu` yet.
+- [ ] **P50c** — **BLOCKED on a user decision (finding 3):** the rate-based (A) and target-based (D,B)
+      options have no fixed rank — they cross with horizon (35yr: A<D<B; 17yr: D<B<A). Pick the menu
+      presentation: (a) keep the mix, label by method, sort the popover by dollar amount; or (b) all
+      keep-fraction targets for a guaranteed gradient with Bengen as a reference note. User did not choose.
+- [ ] **P50d** — UI NOT built. `suggestSpendMenu` is dormant; the ⓘ still calls `suggestSustainableSpend`
+      (single value). Needs a small popover listing the goals, each one-click into `#spendGoal`.
+- [x] **P50e** — **Version desync RESOLVED.** The user consolidated everything under **11.14c6** and
+      rewrote that changelog entry (combined the P41 + P49 entries, describes the 5-year buffer and the
+      fixed cushion). Rolled the stray `<title>`/`?v=` c8 bump back to c6 so title = changelog. Version
+      stays 11.14c6.
+- [ ] **P50f** — confirm "5 full years" (B menu option) = 5x FULL spend [implemented] vs 5x the
+      portfolio-funded gap. (Separate from the live buffer, which is now 5 years of portfolio-funded need.)
+- [ ] **P50g** — (stretch) SoRR-aware conservative option calibrated against a Monte Carlo percentile,
+      the only way this deterministic engine can carry a genuinely Bengen-faithful "safe" number.
+- **State:** units fix + live buffer=5 + P50 dormant core all **COMMITTED** to
+  `worktrees/planning-with-files-0cb454` (PR #162), after rebasing onto the user's 4 changelog commits.
+  `suggestSpendMenu` is dormant (no caller). Resume points: P50c (menu presentation decision), P50d (UI).
+- **Independent:** no phase dependencies.
 
 ---
 

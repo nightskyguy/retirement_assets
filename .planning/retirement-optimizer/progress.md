@@ -1978,3 +1978,140 @@ retirement-income-exclusion test that only sets the field; reverting `P41c` woul
 
 **Not fixed, by the user's instruction** - it is unrelated to the basis step-up and would have
 muddied PR #160. Left as `P41d` + `P41g`, both small, both in `optimizer_ui.js`.
+
+---
+
+## Session 2026-08-09 (seventh) — P41 completed: `P41d` + `P41g` shipped (v11.14bf)
+
+Closed the two remaining P41 items from the sixth session. P41 is now 7 of 7, shipped separately
+from the P35 basis-step-up work as planned.
+
+**`P41d` — suggested spend now respects the gate.** `computeSuggestedSpend()`
+(`optimizer_ui.js:4712`) is a single-year snapshot at `retireAge`, not a per-year loop, so it
+counted `inp.pensionAnnual` in three spots unconditionally. Replaced all three with one `pension`
+local gated at retirement age. The gate itself was extracted to a pure, node-testable helper
+`DisplayHelpers.pensionAtAge(amount, startAge, age)` in `displayhelpers.js` (user chose the
+"refactor testable helper" option over an engine-only test). `startAge` 0/blank keeps the old
+behaviour (`age >= 0` always true), so existing plans are unchanged; a pension deferred past
+retirement is excluded.
+
+**Why a helper and not a direct test.** `computeSuggestedSpend()` lives in `optimizer_ui.js`,
+which the test harness never loads (DOM-bound `val()`/`getInputs()`, not exported). Only
+core/taxengine/displayhelpers are `require()`d. `displayhelpers.js` was already node-loadable and
+UI-used, so it is the natural home. The **engine gate stays inline** at `optimizer_core.js:1154` —
+core is deliberately self-contained (its own `:3761` comment) and its gate also applies COLA +
+survivor pct, which the pure helper does not.
+
+**`P41g` — two tests, one of which bites the engine gap the audit named.** In
+`optimizer_core.tests.js` after the PA test: a `pensionAtAge` unit test, and a `test.critical`
+that runs `simulate()` with a pension deferred to 80 and asserts `pension === 0` before the start
+age. Reverting `optimizer_core.js:1154` to the ungated line was verified to fail exactly that
+critical guard (1 failed), and restoring it returns 224/224. This is the first test that would
+catch a P41c regression — before today, reverting the engine gate failed nothing.
+
+**Verification.** node 224/224, 11/11 critical guards. Browser (served via `serve.py` on 8767):
+title/stat v11.14bf, `DisplayHelpers.pensionAtAge` a function, deferred pension (start 75 vs
+retire 65) drops suggested gross $168,000 -> $153,000 (exactly the $15,000 pension), after-tax
+$149,589 -> $138,565; self-test badge green; the `[staleness guard]` console error was fixed by
+bumping `optimizer_tests.js` `EXPECTED.optimizer_core` 222 -> 224. Only remaining console error is
+the Cloudflare-analytics CORS block, present on any local serve and unrelated.
+
+**Not a behavior-change release.** No saved scenario or shared link changes its numbers — only the
+one-click suggestion moves, and only for a pension deferred past retirement. Changelog entry is
+plain (no `data-flag="behavior"`). Files touched: `displayhelpers.js`, `optimizer_ui.js`,
+`optimizer_core.tests.js`, `optimizer_tests.js`, `retirement_optimizer.html` (title +
+`optimizer_ui.js`/`displayhelpers.js`/`optimizer_tests.js` `?v=` bumps + changelog `<li>`,
+dropped the 11.1464 `<li>` to keep five), `optimizer_changelog.md`.
+
+---
+
+## Session 2026-08-09 (eighth) — P49: horizon-aware suggested spend (v11.14c6)
+
+The suggested After-Tax Spend was a flat 5% of every account plus SS+pension, taxed once, ignoring
+plan length entirely - backwards to the whole withdrawal-rate literature (Bengen/Trinity), where the
+safe rate is chiefly a function of horizon. Replaced it with an engine-calibrated solver.
+
+**Design (user-driven).** Discussed the options; user chose to build Option B (PMT over the invested
+portfolio) as the SEED, with the haircut found by a **live per-plan engine search** rather than a
+baked constant, success = the last modeled year still holding **3 years (embedded
+`SUGGEST_BUFFER_YEARS`) of portfolio-funded need** (`spend − guaranteedIncome`), on the deterministic
+path. Two `AskUserQuestion` forks settled: (1) live-per-plan vs global constant → live; (2) buffer
+basis → portfolio-funded need vs full spend → portfolio-funded.
+
+**Realization worth recording.** An engine-calibrated haircut makes this Option C (engine solve) with
+a B-shaped seed: the reported number comes from `simulate()`, not the PMT. The PMT still earns its
+keep as the search-bracket seed and as the "% of naive amortization" the tooltip reports.
+
+**Reuse found by exploration** (two Explore agents): the repo already had `calculateAmortizedWithdrawal`
+(PMT primitive, `optimizer_core.js:116`) and `optimizeSpend` (binary search on spendGoal whose
+`passes` is the 1-year terminal-buffer test). `suggestSustainableSpend` generalizes that buffer from
+1 to K years and seeds with the PMT. `simulate()` is synchronous ~0.5ms/call, so ~25 calls per solve
+is a few ms - fine on recalc. **spendGoal IS after-tax**, so the solved number is the suggestion
+directly (no separate tax math). Horizon is death-driven (`r.log.length`), not `nYears`.
+
+**Build.** `suggestSustainableSpend` in core (coarse-scan-then-bisect, never breaks early on a fail -
+the ACA/IRMAA-cliff non-monotonicity the `bestConversionStopYear` header warns about). UI: deleted
+the flat-5% `computeSuggestedSpend`; `refreshSuggestedSpend()` caches the solve, called once per
+recalc from `runSimulation()` (the solve is spendGoal-independent, so the per-keystroke tooltip path
+stays cheap). Tooltip surfaces horizon + haircut + the deterministic-path caveat.
+
+**Verified.** node 227/227 (3 new: boundary, buffer-monotone, horizon-monotone). Browser (served,
+v11.14c6): default scenario suggests $146,475 over a 25-yr horizon (71% of naive PMT); apply/restore
+toggle 140000 -> 146475 -> 140000; badge green; only console error the unrelated Cloudflare CORS.
+Eyeball horizon monotonicity: 9yr->$67k, 17yr->$41k, 27yr->$27k. SS is now gated by the engine, so
+the SS-not-gated asymmetry the old snapshot had (flagged earlier this session) is gone for free.
+
+**Loose ends.** `DisplayHelpers.pensionAtAge` (shipped P41 for the old snapshot) is now unused by
+production, retained as a tested utility. `gkSpendStable` deliberately left out of the predicate
+(strategy-agnostic). MC-percentile calibration is the future SoRR-aware upgrade. Files: `optimizer_core.js`,
+`optimizer_ui.js`, `optimizer_core.tests.js`, `optimizer_tests.js`, `retirement_optimizer.html`
+(title + core/ui/tests `?v=` + changelog `<li>`, dropped 11.146a to keep five), `optimizer_changelog.md`.
+
+---
+
+## Session 2026-08-09 (ninth) — suggested-spend: units bug found + P50 menu core (PAUSED, uncommitted)
+
+User noticed the P49 suggestion ($146,475 default) made the "Withdrawal Rate" tile read 12.8%, all
+years >7%. Investigated - three findings, a half-built P50 menu, then the user paused: "do not
+proceed/change more code. Record these findings." Full detail in findings.md (P50 section) and the
+task_plan P50 section. Short version:
+
+1. **Real units bug (fixed in tree):** P49's terminal buffer subtracted the inflated terminal
+   guaranteed income from the today's-dollars search spend, understating need by ~$87k. $146,475
+   actually FAILED its own buffer (port $226k vs required $452k). Fixed to `last.spendGoal -
+   last.guaranteedIncome`; default now $143,082, buffer holds. Added an inflation units-guard test
+   (BASE's inflation:0 hid it). Keep this fix regardless of the menu.
+2. **The high rate is the definition, not a bug:** "spend down to a K-year buffer" is a spend-down
+   posture; the portfolio-relative rate rises as the account drains (6.5% -> 32.8% on the default).
+   Not comparable to Bengen's non-depleting 4.7%.
+3. **P50 menu core built + tested (233/233), UI NOT wired:** `suggestSpendMenu` returns A (Bengen
+   rate) / D (leave 50% real principal) / B (5 full years left), all against a FIXED propwd reference
+   so they are strategy-independent (a ★ CRITICAL test guards it - this resolves the user's
+   strategy-dependence complaint). But A (rate) and D/B (targets) CROSS by horizon (35yr: A<D<B;
+   17yr: D<B<A), so the Conservative<Middle<Aggressive ladder is not monotone. User was asked to pick
+   the presentation (method-labels+sort vs keep-fraction gradient) and instead paused.
+
+**State:** all uncommitted on `worktrees/planning-with-files-0cb454`, stacked on open PR #162 (P41 +
+P49). Also a version desync: title/`?v=` bumped to 11.14c8 with no matching changelog entry. Next
+session: decide commit-WIP vs revert-P50-keep-units-fix, then the P50c presentation decision. Preview
+server (serve.py on 8767) kept dying with exit 127 on cleanup but served correctly while up.
+
+---
+
+## Session 2026-08-09 (tenth) — reconcile: units fix + buffer=5 committed, P50 kept dormant
+
+User updated the changelog directly on the branch (4 commits: combined the P41 + P49 entries into one
+consolidated **11.14c6** entry, describing a 5-year cushion). That made the changelog describe behavior
+the committed code did NOT have: the branch still shipped `SUGGEST_BUFFER_YEARS = 3` and the units bug.
+
+Reconciled: raised `SUGGEST_BUFFER_YEARS` 3 -> 5 (user request), stashed local WIP, `git pull --rebase`
+onto the user's 4 changelog commits (fast-forward, no conflict - they touched only optimizer_changelog.md
++ the in-page `<li>`), popped the stash, and rolled back the stray 11.14c8 `<title>`/`?v=` bump to
+**11.14c6** so title = changelog (user consolidated everything under c6, no new version). Committed the
+units fix + buffer=5 + the P50 menu core (`solveMaxSpend`/`bengenRate`/`suggestSpendMenu`) as **dormant**
+(committed, tested 233/233, but NO UI caller) per the user's "keep P50, remain dormant". Verified the
+changelog's claims now match the code: engine-solved, current-strategy, 5-year cushion, units-correct.
+
+Left for a later session: P50c (menu presentation - the rate/target options cross by horizon, user has
+not chosen a layout), P50d (build the popover), P50f/g. Two grammar nits in the user's changelog left
+untouched (their file): "at least a five years" and "differ from the Optimizer calculates".

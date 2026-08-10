@@ -1921,3 +1921,75 @@ confidence restoration, the hook is the guarantee, and they should be judged on 
 than as one task. And whatever stays outside the badge needs a **count assertion** inside it, or
 P39 recreates its own problem one tier down - the same shape as P38's lesson, where a gate naming
 the strategies it served silently excluded everything added later.
+
+---
+
+## P50 suggested-spend menu — engine-calibrated, but rate-based and target-based options cross by horizon (2026-08-09, WIP uncommitted)
+
+Context: after P49 shipped a single engine-solved suggested spend, the user found the default plan's
+"Withdrawal Rate" tile reading 12.8% at the suggested $146,475. Investigating produced three findings
+and a half-built P50 (a three-option menu). **The user paused work here** to record findings before
+building the UI. All code below is UNCOMMITTED in the worktree.
+
+### 1. A real units bug in P49's `suggestSustainableSpend` (fixed in the working tree)
+
+The terminal buffer test computed `need = searchSpend - last.guaranteedIncome`, mixing **today's-dollars**
+`searchSpend` with the **inflated** terminal-row `guaranteedIncome`. On the default plan that understated
+need by ~$87k, so the solver returned $146,475 even though that spend's own terminal buffer FAILS
+(port $226,101 vs required $452,104). Fixed to `need = last.spendGoal - last.guaranteedIncome` (both
+inflated) - exactly `optimizeSpend`'s terminal test. Default suggestion dropped to $143,082, buffer now
+holds. BASE's `inflation:0` hid it (today's == terminal dollars); added an inflation-bearing units-guard
+test. This fix is correct regardless of the P50 menu decision and should be kept.
+
+### 2. "Terminal buffer" is a spend-DOWN posture -> high, rising withdrawal rate (by design, not a bug)
+
+Even corrected, the default suggestion's withdrawal rate climbs 6.5% (age 66) -> 7.9% (bridge to SS at
+70) -> 6.4% (SS relieves it) -> 32.8% (final year), averaging 10.5%. This is inherent: "spend down to a
+K-year cushion" plans to nearly empty the account, and the rate is portfolio-relative, so it rises as the
+balance drains. It is NOT comparable to Bengen's 4.7%, which is a NON-depleting initial rate (portfolio
+meant to last/grow). The tile and the solver answer different questions.
+
+### 3. Rate-based and target-based options have NO fixed rank - they cross with horizon
+
+P50 built a 3-option menu: A = Bengen rate on invested portfolio (research benchmark, closed form
+`guar1 + bengenRate(horizon)*invested`); D = engine-solve leaving >=50% real principal; B = engine-solve
+ending with 5 full years of spending. Observed:
+- 35yr couple: A $80,940 < D $112,323 < B $115,222  (A lowest, expected)
+- 17yr single: D $63,155 < B $66,894 < **A $72,400** (A HIGHEST)
+The Bengen rate hedges a bad return SEQUENCE over ~30yr; on this DETERMINISTIC average-return engine that
+rate is not especially safe, and a short horizon makes "leave 50%" a stricter (lower-spend) target than
+the Bengen rate. So a Conservative/Middle/Aggressive ladder that mixes a rate option with target options
+is not monotone. **Open decision (unresolved):** (a) keep the mix, drop rank words, label by method, sort
+the popover by dollar amount; or (b) make all three keep-fraction targets (e.g. 80%/50%/5yr) for a
+guaranteed gradient with Bengen shown as a reference note. User did not choose.
+
+### 4. Deeper: a deterministic engine cannot express Bengen's real meaning
+
+Bengen's safety margin exists precisely for sequence-of-returns risk, which the single deterministic path
+does not model. A Bengen-FAITHFUL conservative option would calibrate against a low percentile of the
+**Monte Carlo tab** (SoRR-aware), not the deterministic path. That is the real follow-up if the menu is to
+carry a genuinely "safe" number rather than a rate-times-portfolio benchmark.
+
+### What shipped into the working tree (uncommitted, tests green 233/233)
+
+- `optimizer_core.js`: `solveMaxSpend(baseInputs, {strategy, terminalOk})` (generalized scan+bisect);
+  `bengenRate(years)` (horizon table, interpolated); `suggestSpendMenu(baseInputs)` (returns A/D/B against a
+  FIXED `propwd` reference so the numbers are strategy-independent - a `★ CRITICAL` test guards this);
+  `suggestSustainableSpend` refactored onto `solveMaxSpend` (+ the units fix). Constants
+  `SUGGEST_REFERENCE_STRATEGY='propwd'`, `SUGGEST_MIDDLE_KEEP_REAL=0.5`, `SUGGEST_RISKY_BUFFER_YEARS=5`.
+  Exports updated.
+- `optimizer_core.tests.js`: +6 over P49 (units guard; menu strategy-independence [critical]; A=Bengen rate;
+  B=5yr terminal; D=50% terminal; bengenRate monotone). `optimizer_tests.js` EXPECTED 222 -> 233.
+- **NOT wired to the UI**: the ⓘ still calls `suggestSustainableSpend` (single value), NOT `suggestSpendMenu`.
+  No popover built. The strategy-dependence concern is only resolved for the menu path, which is dormant.
+- **Version desync to clean up**: `<title>` and core/ui/tests `?v=` were bumped to 11.14c8, but NO changelog
+  entry (in-page `<li>` or optimizer_changelog.md) was added for c8, so the title does not match the first
+  changelog entry (still 11.14bf/c6 content). PR #162 is open on this branch (P41 + P49); this WIP sits on
+  top of it, uncommitted.
+
+### Decisions still open for a future session
+- The ordering/presentation question in finding 3 (user to pick a or b).
+- Whether to wire `suggestSpendMenu` to a popover UI, or ship only the P49 units fix and defer the menu.
+- Whether "5 full years of remaining assets" (B) means 5x full spend [implemented] vs 5x portfolio-funded
+  gap - user's wording implied full spend; confirm.
+- MC-percentile calibration for a genuinely SoRR-aware conservative option (finding 4).

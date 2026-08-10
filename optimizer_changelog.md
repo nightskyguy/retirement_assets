@@ -27,7 +27,7 @@ lower one.
 
 The suggestion now runs your current strategy at many spending levels and reports the highest one that
 still leaves a cushion in the portfolio at the end. "Cushion" means the last modeled year still
-holds at least a five years of the spending the portfolio
+holds at least five years of the spending the portfolio
 must cover after Social Security and pension. Because it runs the real engine rather than a
 formula, taxes, required minimum distributions, and the timing of a deferred pension or an
 unclaimed Social Security benefit are all handled correctly - the previous method did not.
@@ -36,7 +36,7 @@ A closed-form amortization of the invested portfolio (using your own growth and 
 assumptions) seeds the search, and the tooltip reports the result as a percentage of that naive
 amortization so you can see how much the taxes and the end-of-plan cushion shaved off.
 
-What to expect: the calculation will vary with the withdrawal strategy, and may differ from the 
+What to expect: the calculation will vary with the withdrawal strategy, and may differ from what the 
 Optimizer calculates under "Maximize Spend".  Do remember that the proposed spend is a THEORETICAL, not 
 a "best" option - and does not properly account for Sequence of Returns Risk (SoRR). 
 Anything suggested should be vetted first against the Monte Carlo (especially the stress test) 

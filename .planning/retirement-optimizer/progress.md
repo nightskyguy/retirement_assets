@@ -2115,3 +2115,58 @@ changelog's claims now match the code: engine-solved, current-strategy, 5-year c
 Left for a later session: P50c (menu presentation - the rate/target options cross by horizon, user has
 not chosen a layout), P50d (build the popover), P50f/g. Two grammar nits in the user's changelog left
 untouched (their file): "at least a five years" and "differ from the Optimizer calculates".
+
+---
+
+## Session 2026-08-10 (eleventh) — bug: suggest-spend ⓘ shows stale "Restore" after loading a scenario
+
+User report: loading a saved scenario left the After-Tax Spend ⓘ offering to reset to the DEFAULT spend
+goal instead of recalculating and offering to restore the goal loaded from the file.
+
+Root cause: `applyScenario()` (optimizer_ui.js ~4143) sets `spendGoal` via
+`DisplayHelpers.setDollarValue` (programmatic), which does NOT fire the field's
+`oninput="_priorSpendGoal=null"`. So the module var `_priorSpendGoal` survived the load. If the user had
+clicked the ⓘ before loading (which stashes the pre-suggestion value, e.g. the 140000 default, into
+`_priorSpendGoal` and flips the icon to "Restore: $X" mode), the icon kept showing that stale default
+after the load. `_suggestedSpend` itself already recomputes via runSimulation→refreshSuggestedSpend, so
+the ONLY defect was the un-cleared `_priorSpendGoal`.
+
+Fix: one line - `_priorSpendGoal = null;` in `applyScenario`, just before the
+`updateSuggestSpendTooltip()` call in the derived-field refresh block (with a comment). Same file-level
+scope, so the assignment binds the outer `let`.
+
+Verified in browser (serve.py autoPort, port 3000) by exercising the real functions:
+  1. load default → ⓘ = "Suggested goal: $139,087 ... Click to apply"
+  2. click ⓘ → spendGoal 139,087, ⓘ = "Restore: $140,000" (pre-load stale state)
+  3. applyScenario({spendGoal:200000,...}) → ⓘ = "Suggested goal: ..." (recalculated, NOT Restore) ✓
+  4. click ⓘ again → Restore target = **$200,000** (the loaded goal, not the default) ✓
+Console clean (only unrelated cloudflareinsights CORS beacon). node optimizer_core.tests.js 233/233.
+
+Also switched `.claude/launch.json` from fixed `python -m http.server 8767` to `serve.py` + autoPort
+(the blessed preview config, avoids leaked-port collisions).
+
+SHIPPED as PR #163 (branch fix/spend-goal-restore-after-load, commit 558efc8) - user asked to commit +
+PR with NO version bump and NO changelog. Only optimizer_ui.js committed (+6); the .claude/launch.json
+serve.py change stayed local since .claude is gitignored. Pre-commit hooks green (core 233, TPP 32,
+doclinks 22).
+
+## Session 2026-08-10 (eleventh, cont.) — Ordered strategy: confirm restart + (b) surplus-fill + (c) harness
+
+User asked to confirm the Ordered strategy re-funds in sequence every year (not stuck past an exhausted
+account). CONFIRMED correct: runOrderedWithdrawal (optimizer_core.js:754) is stateless, reads live
+balances each call, no persistent pointer; called fresh per year on yr.curBalances at gap-fill (:1687)
+and third pass (:1743). "CIBR" the user named is not an offered seq (the three are CBIR/RIBC/BIRC).
+
+User then chose (b)+(c):
+ (c) New harness .test_harnesses/ordered_fill_harness.js proves restart (CBIR: Cash emptied 2026 ->
+     refilled to ~$487k in the SS/RMD window -> re-drawn 2052-53) and shows the fill before/after.
+ (b) Added `else if (yr.isOrderedStrategy)` in routeSurplusAndConvert (~2071): surplus banks in the
+     first FUNDABLE account (Cash/Brokerage) the sequence draws. CBIR->Cash (unchanged), RIBC/BIRC->
+     Brokerage. Precedence Cyclic > CashReserve > ordered-fill > legacy. CBIR byte-identical; RIBC
+     +~4% / BIRC +~7% terminal wealth on the 30yr fixture.
+
+Shipped full (user: "PR + docs + changelog") as PR #164 (branch fix/ordered-surplus-fill off main,
+commit 9e5ad6f, v11.14dd): engine + harness + title/?v=1114dd + in-page changelog li + changelog.md +
+Ordered help text. node core 233/233, TPP 32, doclinks 22; browser self-test 529/529 (12 critical
+guards) with the new version loaded. GOTCHA re-confirmed: serve.py preview process died mid-session
+(preview_list empty, chrome-error page); preview_start reused/relaunched on port 3000 fine.

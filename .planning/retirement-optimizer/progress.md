@@ -2066,3 +2066,52 @@ production, retained as a tested utility. `gkSpendStable` deliberately left out 
 (strategy-agnostic). MC-percentile calibration is the future SoRR-aware upgrade. Files: `optimizer_core.js`,
 `optimizer_ui.js`, `optimizer_core.tests.js`, `optimizer_tests.js`, `retirement_optimizer.html`
 (title + core/ui/tests `?v=` + changelog `<li>`, dropped 11.146a to keep five), `optimizer_changelog.md`.
+
+---
+
+## Session 2026-08-09 (ninth) — suggested-spend: units bug found + P50 menu core (PAUSED, uncommitted)
+
+User noticed the P49 suggestion ($146,475 default) made the "Withdrawal Rate" tile read 12.8%, all
+years >7%. Investigated - three findings, a half-built P50 menu, then the user paused: "do not
+proceed/change more code. Record these findings." Full detail in findings.md (P50 section) and the
+task_plan P50 section. Short version:
+
+1. **Real units bug (fixed in tree):** P49's terminal buffer subtracted the inflated terminal
+   guaranteed income from the today's-dollars search spend, understating need by ~$87k. $146,475
+   actually FAILED its own buffer (port $226k vs required $452k). Fixed to `last.spendGoal -
+   last.guaranteedIncome`; default now $143,082, buffer holds. Added an inflation units-guard test
+   (BASE's inflation:0 hid it). Keep this fix regardless of the menu.
+2. **The high rate is the definition, not a bug:** "spend down to a K-year buffer" is a spend-down
+   posture; the portfolio-relative rate rises as the account drains (6.5% -> 32.8% on the default).
+   Not comparable to Bengen's non-depleting 4.7%.
+3. **P50 menu core built + tested (233/233), UI NOT wired:** `suggestSpendMenu` returns A (Bengen
+   rate) / D (leave 50% real principal) / B (5 full years left), all against a FIXED propwd reference
+   so they are strategy-independent (a ★ CRITICAL test guards it - this resolves the user's
+   strategy-dependence complaint). But A (rate) and D/B (targets) CROSS by horizon (35yr: A<D<B;
+   17yr: D<B<A), so the Conservative<Middle<Aggressive ladder is not monotone. User was asked to pick
+   the presentation (method-labels+sort vs keep-fraction gradient) and instead paused.
+
+**State:** all uncommitted on `worktrees/planning-with-files-0cb454`, stacked on open PR #162 (P41 +
+P49). Also a version desync: title/`?v=` bumped to 11.14c8 with no matching changelog entry. Next
+session: decide commit-WIP vs revert-P50-keep-units-fix, then the P50c presentation decision. Preview
+server (serve.py on 8767) kept dying with exit 127 on cleanup but served correctly while up.
+
+---
+
+## Session 2026-08-09 (tenth) — reconcile: units fix + buffer=5 committed, P50 kept dormant
+
+User updated the changelog directly on the branch (4 commits: combined the P41 + P49 entries into one
+consolidated **11.14c6** entry, describing a 5-year cushion). That made the changelog describe behavior
+the committed code did NOT have: the branch still shipped `SUGGEST_BUFFER_YEARS = 3` and the units bug.
+
+Reconciled: raised `SUGGEST_BUFFER_YEARS` 3 -> 5 (user request), stashed local WIP, `git pull --rebase`
+onto the user's 4 changelog commits (fast-forward, no conflict - they touched only optimizer_changelog.md
++ the in-page `<li>`), popped the stash, and rolled back the stray 11.14c8 `<title>`/`?v=` bump to
+**11.14c6** so title = changelog (user consolidated everything under c6, no new version). Committed the
+units fix + buffer=5 + the P50 menu core (`solveMaxSpend`/`bengenRate`/`suggestSpendMenu`) as **dormant**
+(committed, tested 233/233, but NO UI caller) per the user's "keep P50, remain dormant". Verified the
+changelog's claims now match the code: engine-solved, current-strategy, 5-year cushion, units-correct.
+
+Left for a later session: P50c (menu presentation - the rate/target options cross by horizon, user has
+not chosen a layout), P50d (build the popover), P50f/g. Two grammar nits in the user's changelog left
+untouched (their file): "at least a five years" and "differ from the Optimizer calculates".

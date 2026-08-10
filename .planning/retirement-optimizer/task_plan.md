@@ -2123,6 +2123,43 @@ need** (`spend − guaranteedIncome`), against the **deterministic** path (SoRR 
 
 ---
 
+## P50: Suggested-spend menu (3 strategy-independent goals)  *(CORE COMMITTED but DORMANT, UI DEFERRED — 2026-08-09)*
+**Why:** P49's single suggestion (a) depended on the selected strategy — it moved as the user explored
+strategies, when a spend goal should be a stable INPUT — and (b) produced an alarming withdrawal rate
+(12.8% on the default), which exposed a units bug AND the deeper fact that "spend down to a K-year
+buffer" is a spend-down posture, not a Bengen-style sustainable rate. User asked for a small MENU of
+goals instead of one number. **Full research + the open decisions are in findings.md (P50 section);
+read it before resuming.**
+
+- [x] **P50a** — units bug in `suggestSustainableSpend` fixed (today's-vs-inflated dollar mix in the
+      terminal buffer; now `last.spendGoal - last.guaranteedIncome`). **COMMITTED.** Also raised the live
+      buffer `SUGGEST_BUFFER_YEARS` 3 -> **5** at the user's request (the ⓘ now requires 5 years of
+      support at the end). The user's consolidated 11.14c6 changelog describes exactly this.
+- [x] **P50b** — core built + **COMMITTED but DORMANT**: `solveMaxSpend`, `bengenRate`, `suggestSpendMenu`
+      (A Bengen rate / D leave 50% real principal / B end with 5 full years), all against a FIXED `propwd`
+      reference so the numbers are strategy-independent (`★ CRITICAL` test guards it). node 233/233.
+      Nothing in the UI calls `suggestSpendMenu` yet.
+- [ ] **P50c** — **BLOCKED on a user decision (finding 3):** the rate-based (A) and target-based (D,B)
+      options have no fixed rank — they cross with horizon (35yr: A<D<B; 17yr: D<B<A). Pick the menu
+      presentation: (a) keep the mix, label by method, sort the popover by dollar amount; or (b) all
+      keep-fraction targets for a guaranteed gradient with Bengen as a reference note. User did not choose.
+- [ ] **P50d** — UI NOT built. `suggestSpendMenu` is dormant; the ⓘ still calls `suggestSustainableSpend`
+      (single value). Needs a small popover listing the goals, each one-click into `#spendGoal`.
+- [x] **P50e** — **Version desync RESOLVED.** The user consolidated everything under **11.14c6** and
+      rewrote that changelog entry (combined the P41 + P49 entries, describes the 5-year buffer and the
+      fixed cushion). Rolled the stray `<title>`/`?v=` c8 bump back to c6 so title = changelog. Version
+      stays 11.14c6.
+- [ ] **P50f** — confirm "5 full years" (B menu option) = 5x FULL spend [implemented] vs 5x the
+      portfolio-funded gap. (Separate from the live buffer, which is now 5 years of portfolio-funded need.)
+- [ ] **P50g** — (stretch) SoRR-aware conservative option calibrated against a Monte Carlo percentile,
+      the only way this deterministic engine can carry a genuinely Bengen-faithful "safe" number.
+- **State:** units fix + live buffer=5 + P50 dormant core all **COMMITTED** to
+  `worktrees/planning-with-files-0cb454` (PR #162), after rebasing onto the user's 4 changelog commits.
+  `suggestSpendMenu` is dormant (no caller). Resume points: P50c (menu presentation decision), P50d (UI).
+- **Independent:** no phase dependencies.
+
+---
+
 ## Dependency Graph (remaining)
 
 ```

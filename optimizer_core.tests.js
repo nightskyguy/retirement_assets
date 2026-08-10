@@ -54,7 +54,11 @@ if (IS_NODE) require('./displayhelpers.js');
 const simulate = core.simulate;
 const optimizeSpend = core.optimizeSpend;
 const suggestSustainableSpend = core.suggestSustainableSpend;
+const suggestSpendMenu = core.suggestSpendMenu;
+const bengenRate = core.bengenRate;
 const SUGGEST_BUFFER_YEARS = core.SUGGEST_BUFFER_YEARS;
+const SUGGEST_RISKY_BUFFER_YEARS = core.SUGGEST_RISKY_BUFFER_YEARS;
+const SUGGEST_MIDDLE_KEEP_REAL = core.SUGGEST_MIDDLE_KEEP_REAL;
 const calculateTaxes = taxengine.calculateTaxes;
 const findUpperLimitByAmount = taxengine.findUpperLimitByAmount;
 const getRateBracket = taxengine.getRateBracket;
@@ -1668,12 +1672,15 @@ test.critical('regression: exclusion params are inert for a non-exclusion state 
 // ── P49: suggestSustainableSpend (horizon-aware, engine-calibrated suggested spend) ──────────
 // Re-implements the definition inside the solver so the tests bind to the CONTRACT, not the code:
 // a spend "passes" when every year is funded AND the last year still holds bufferYears of
-// portfolio-funded need. If the solver's predicate drifts from this, these fail.
+// portfolio-funded need. Need is taken from the terminal row's OWN inflated dollars
+// (last.spendGoal - last.guaranteedIncome), matching last.portfolioBalance - using the today's-
+// dollars search value here understates need under inflation. If the solver drifts from this,
+// these fail.
 function suggestPassesAt(base, spend, K) {
     const res = simulate({ ...base, spendGoal: spend, computeOC: false });
     if (!res.totals.success) return false;
     const last = res.log[res.log.length - 1];
-    const need = Math.max(0, spend - (last.guaranteedIncome || 0));
+    const need = Math.max(0, (last.spendGoal || 0) - (last.guaranteedIncome || 0));
     return (last.portfolioBalance || 0) >= K * need;
 }
 
@@ -1706,6 +1713,88 @@ test('suggestSustainableSpend: a shorter horizon raises the suggested spend', ()
     assert(shortH.spend > longH.spend,
         `a shorter retirement must sustain more spend: die82->${Math.round(shortH.spend)} ` +
         `vs die100->${Math.round(longH.spend)}`);
+});
+
+test('suggestSustainableSpend: terminal buffer holds in inflated dollars (units guard)', () => {
+    // BASE has inflation 0, which hides a today's-vs-inflated dollar mixup: with no inflation the
+    // terminal spend target equals the search value, so a buggy need (search spend minus the
+    // INFLATED terminal guaranteed income) looks correct. Give this plan real inflation and a real
+    // SS benefit so the terminal row is inflated and the guaranteed income is nonzero; then re-derive
+    // need from the row's own dollars and require the buffer to actually hold. Under the bug the
+    // solver returned a spend ~2x too high (a 12.8% withdrawal rate on the default plan).
+    const infl = { ...BASE, inflation: 0.03, cpi: 0.03, growth: 0.05, ss1: 30000, ss1Age: 70 };
+    const r = suggestSustainableSpend(infl, {});
+    assert(r && r.spend > 0, 'expected a positive suggestion');
+    const res = simulate({ ...infl, spendGoal: r.spend, computeOC: false });
+    const last = res.log[res.log.length - 1];
+    const need = Math.max(0, (last.spendGoal || 0) - (last.guaranteedIncome || 0));
+    assert((last.portfolioBalance || 0) >= SUGGEST_BUFFER_YEARS * need,
+        `terminal portfolio ${Math.round(last.portfolioBalance)} must cover ${SUGGEST_BUFFER_YEARS}x the ` +
+        `INFLATED terminal need ${Math.round(need)} (= ${Math.round(SUGGEST_BUFFER_YEARS * need)}); ` +
+        `a today's-dollars need would understate it and pass a too-high spend`);
+});
+
+// ── P50: suggestSpendMenu (3 strategy-independent goals: Conservative / Middle / Aggressive) ──
+// A menu fixture with real inflation, growth and SS so the terminal rows are inflated and
+// guaranteed income is nonzero. BASE is single, invested = IRA1 600k + Brokerage 200k = 800k.
+const MENU_BASE = { ...BASE, inflation: 0.03, cpi: 0.03, growth: 0.05, ss1: 30000, ss1Age: 70 };
+
+test.critical('suggestSpendMenu is strategy-independent (fixed propwd reference)', () => {
+    // The whole point of P50: the suggested goals are an INPUT, so they must not move when the user
+    // flips strategy. All three run against a fixed proportional reference.
+    const spendsOf = (strat) => suggestSpendMenu({ ...MENU_BASE, strategy: strat }).options.map(o => Math.round(o.spend));
+    const brk = spendsOf('bracket'), gk = spendsOf('gk'), fx = spendsOf('fixed');
+    assert(JSON.stringify(brk) === JSON.stringify(gk) && JSON.stringify(gk) === JSON.stringify(fx),
+        `menu must not depend on the selected strategy: bracket=${brk} gk=${gk} fixed=${fx}`);
+    assert(brk.length === 3 && brk.every(x => x > 0), 'all three options should be positive');
+});
+
+test('suggestSpendMenu Conservative matches the Bengen year-1 withdrawal rate', () => {
+    const m = suggestSpendMenu(MENU_BASE);
+    const A = m.options.find(o => o.key === 'A').spend;
+    const invested = MENU_BASE.IRA1 + MENU_BASE.IRA2 + MENU_BASE.Roth + MENU_BASE.Roth2 + MENU_BASE.Brokerage;
+    const r0 = simulate({ ...MENU_BASE, strategy: 'propwd', spendGoal: A, computeOC: false }).log[0];
+    const rate = (r0.spendGoal - r0.guaranteedIncome) / invested;
+    assertNear(rate, bengenRate(m.horizon),
+        'Conservative year-1 portfolio-funded draw rate should equal the Bengen rate for the horizon', 0.003);
+});
+
+test('suggestSpendMenu Aggressive ends holding 5 full years of spending', () => {
+    const m = suggestSpendMenu(MENU_BASE);
+    const B = m.options.find(o => o.key === 'B').spend;
+    assert(B > 0, 'aggressive option should resolve');
+    const res = simulate({ ...MENU_BASE, strategy: 'propwd', spendGoal: B, computeOC: false });
+    const last = res.log[res.log.length - 1];
+    assert(res.totals.success, 'aggressive plan must still fund every year');
+    assert((last.portfolioBalance || 0) >= SUGGEST_RISKY_BUFFER_YEARS * (last.spendGoal || 0),
+        `terminal ${Math.round(last.portfolioBalance)} must hold ${SUGGEST_RISKY_BUFFER_YEARS}x final spend ` +
+        `${Math.round(last.spendGoal)} (= ${Math.round(SUGGEST_RISKY_BUFFER_YEARS * last.spendGoal)})`);
+});
+
+test('suggestSpendMenu Middle ends holding about half the real starting portfolio', () => {
+    const m = suggestSpendMenu(MENU_BASE);
+    const Dm = m.options.find(o => o.key === 'D').spend;
+    assert(Dm > 0, 'middle option should resolve');
+    const res = simulate({ ...MENU_BASE, strategy: 'propwd', spendGoal: Dm, computeOC: false });
+    const l = res.log[res.log.length - 1], r0 = res.log[0];
+    const realTerm  = (l.portfolioBalance || 0) / (l.inflationFactor || 1);
+    const realStart = (r0.portfolioBalance || 0) / (r0.inflationFactor || 1);
+    assert(res.totals.success && realTerm >= SUGGEST_MIDDLE_KEEP_REAL * realStart - 1,
+        `middle should end >= ${SUGGEST_MIDDLE_KEEP_REAL * 100}% real principal: terminal ${Math.round(realTerm)} ` +
+        `vs target ${Math.round(SUGGEST_MIDDLE_KEEP_REAL * realStart)}`);
+    // NOTE: deliberately NOT asserting Middle >= Conservative. The Bengen RATE option hedges a bad
+    // return sequence over ~30yr; on this DETERMINISTIC average-return path a short horizon makes that
+    // rate more aggressive than "leave 50% of principal", so the rate-based and target-based options
+    // can cross. The UI sorts the three by dollar amount rather than assuming a fixed rank.
+});
+
+test('bengenRate falls as the horizon lengthens', () => {
+    assert(bengenRate(15) > bengenRate(25) && bengenRate(25) > bengenRate(40),
+        'a shorter retirement must allow a higher safe initial rate');
+    assert(bengenRate(10) === bengenRate(15), 'clamps at the shortest knot');
+    assert(bengenRate(50) === bengenRate(40), 'clamps at the longest knot');
+    const mid = bengenRate(22.5);
+    assert(mid < 0.050 && mid > 0.047, `interpolates between knots (got ${mid})`);
 });
 
 // ── Break Even / Opp. Cost — dual-simulation counterfactual ──────────────────

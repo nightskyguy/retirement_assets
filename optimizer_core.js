@@ -20,7 +20,7 @@ const SPEND_SEARCH_MIN_DELTA = 0.03;  // Minimum improvement to show "increase s
 // Suggested-spend solver (suggestSustainableSpend). BUFFER_YEARS is the terminal cushion: the plan
 // must end its last modeled year still holding at least this many years of portfolio-funded spend.
 // Change it to make the suggestion more (higher) or less (lower) conservative.
-const SUGGEST_BUFFER_YEARS = 3;
+const SUGGEST_BUFFER_YEARS = 5;
 const SUGGEST_SCAN_STEPS   = 12;  // Coarse scan before the bisection refine. Never break early on a
                                   // fail: the pass/fail curve can dip across an ACA/IRMAA cliff, the
                                   // same non-unimodal hazard the bestConversionStopYear header documents.
@@ -2993,70 +2993,157 @@ function gkSpendStable(res, overrides, baseInputs) {
 // its required draw (spendGoal minus guaranteed income) in the final year.
 // baseInputs: full inputs object at baseline spendGoal
 // overrides:  strategy overrides (same object passed to addResult for this row)
-// ── Suggested sustainable spend (horizon-aware, engine-calibrated) ───────────────────────────
-// Answers "what after-tax annual spend can this plan sustain?" by running the engine itself, so
-// the horizon (death-driven, = r.log.length), taxes, RMDs and SS/pension timing all fall out of
-// the model rather than a borrowed SWR constant. A closed-form PMT over the INVESTED portfolio
-// (Option B) seeds the search ceiling; the engine sets the answer (Option C).
+// ── Suggested spend: engine-calibrated, strategy-independent menu (P50) ───────────────────────
+// The suggested spend goal is an INPUT the user sets before optimizing strategy, so it must not
+// move when they flip strategies. Every engine-solved option runs against a FIXED reference
+// strategy (proportional withdrawal), making the numbers stable and comparable. The research
+// benchmark (Bengen) is a rate on the portfolio and is strategy-independent by construction.
 //
-// A spend PASSES when the plan funds every modeled year AND the last year still holds a cushion:
-//     res.totals.success === true
-//     AND last.portfolioBalance >= bufferYears * max(0, spend - last.guaranteedIncome)
-// i.e. the same terminal test optimizeSpend uses, generalized from 1 year to `bufferYears`.
-//
-// DETERMINISTIC single path at the plan's fixed growth: the cushion protects against the horizon
-// and the drawdown/tax mechanics, NOT against a bad return sequence (that lives on the Monte Carlo
-// tab). Because SS and pension are gated by the engine, a deferred pension or an unclaimed SS is
-// handled here for free. Returns { spend, horizon, naivePMT, haircut } in start-year (≈ today's)
-// after-tax dollars, or null if even zero spend cannot be funded.
-function suggestSustainableSpend(baseInputs, opts) {
-    const bufferYears = (opts && opts.bufferYears != null) ? opts.bufferYears : SUGGEST_BUFFER_YEARS;
-    const run = (spend) => simulate(Object.assign({}, baseInputs, { spendGoal: spend, computeOC: false }));
+// DETERMINISTIC single path at the plan's fixed growth. On average returns a genuine Bengen rate
+// leaves a large balance (its safety margin exists to survive a BAD sequence, which this path does
+// not simulate), so the Conservative option is a research BENCHMARK, not an engine-verified floor.
+// Real sequence-of-returns safety lives on the Monte Carlo tab.
+const SUGGEST_REFERENCE_STRATEGY = 'propwd';  // neutral drawdown the engine-solved options assume
+const SUGGEST_MIDDLE_KEEP_REAL   = 0.50;      // Middle: end holding >= this share of REAL start portfolio
+const SUGGEST_RISKY_BUFFER_YEARS = 5;         // Aggressive: end holding this many years of FULL spend
 
-    const passes = (res, spend) => {
-        if (!res || !res.totals || !res.totals.success) return false;
-        const last = res.log[res.log.length - 1];
-        const need = Math.max(0, spend - (last.guaranteedIncome || 0));
-        return (last.portfolioBalance || 0) >= bufferYears * need;
-    };
+// Horizon-aware Bengen-family SAFEMAX (revised, multi-asset, ~50-75% equity, US historical). The
+// safe INITIAL withdrawal rate falls as the horizon lengthens. Linearly interpolated between knots.
+function bengenRate(years) {
+    const K = [[15, 0.055], [20, 0.050], [25, 0.047], [30, 0.045], [35, 0.042], [40, 0.040]];
+    if (years <= K[0][0]) return K[0][1];
+    if (years >= K[K.length - 1][0]) return K[K.length - 1][1];
+    for (let i = 1; i < K.length; i++) {
+        if (years <= K[i][0]) {
+            const [y0, r0] = K[i - 1], [y1, r1] = K[i];
+            return r0 + (r1 - r0) * (years - y0) / (y1 - y0);
+        }
+    }
+    return 0.045;
+}
 
-    // Probe once for the horizon and a naive amortization ceiling from the INVESTED portfolio
-    // (everything except Cash, which is a buffer, not an asset invested at the growth rate).
+// Largest after-tax spendGoal (start-year dollars) under a fixed reference strategy for which the
+// plan funds every year AND terminalOk(result) holds at the last modeled year. PMT-seeded coarse
+// scan then bisect, never breaking early on a fail (the pass/fail curve can dip across an ACA/IRMAA
+// cliff - the non-unimodal hazard the bestConversionStopYear header documents). Returns
+// { spend, probe } or null if the plan is infeasible even at zero spend.
+function solveMaxSpend(baseInputs, opts) {
+    const strategy   = (opts && opts.strategy) || baseInputs.strategy;
+    const terminalOk = opts.terminalOk;
+    const run = (spend) => simulate(Object.assign({}, baseInputs, { strategy, spendGoal: spend, computeOC: false }));
+    const passes = (res) => !!(res && res.totals && res.totals.success && terminalOk(res));
+
     const probe = run(baseInputs.spendGoal || 0);
     if (!probe || !probe.log || probe.log.length === 0) return null;
-    const horizon   = probe.log.length;
-    const finalGuar = probe.log[probe.log.length - 1].guaranteedIncome || 0;
-    const invested  = (baseInputs.IRA1 || 0) + (baseInputs.IRA2 || 0) + (baseInputs.Roth || 0)
-                    + (baseInputs.Roth2 || 0) + (baseInputs.Brokerage || 0);
-    const realReturn = (1 + (baseInputs.growth || 0)) / (1 + (baseInputs.inflation || 0)) - 1;
-    const naivePMT   = calculateAmortizedWithdrawal(invested, 0, horizon, realReturn);
+    if (!passes(run(0))) return null;
 
-    // A plan that cannot even fund zero discretionary spend has nothing to suggest.
-    if (!passes(run(0), 0)) return null;
+    const invested = (baseInputs.IRA1 || 0) + (baseInputs.IRA2 || 0) + (baseInputs.Roth || 0)
+                   + (baseInputs.Roth2 || 0) + (baseInputs.Brokerage || 0);
+    const realReturn = (1 + (baseInputs.growth || 0)) / (1 + (baseInputs.inflation || 0)) - 1;
+    const naivePMT   = calculateAmortizedWithdrawal(invested, 0, probe.log.length, realReturn);
+    const finalGuar  = probe.log[probe.log.length - 1].guaranteedIncome || 0;
 
     // Ceiling generous enough to fail; expand a few times for a rich plan, then cap.
-    let hi = finalGuar + naivePMT * 1.5 + 1;
-    for (let g = 0; g < 5 && passes(run(hi), hi); g++) hi *= 1.6;
+    let hi = finalGuar + naivePMT * 2 + 1;
+    for (let g = 0; g < 6 && passes(run(hi)); g++) hi *= 1.6;
 
     // Coarse scan for the HIGHEST passing step (never break early - see SUGGEST_SCAN_STEPS), then
     // bisect between it and the next step. lo is 0.
     const step = (i) => hi * i / SUGGEST_SCAN_STEPS;
     let bestI = 0;
     for (let i = 1; i <= SUGGEST_SCAN_STEPS; i++) {
-        const s = step(i);
-        if (passes(run(s), s)) bestI = i;
+        if (passes(run(step(i)))) bestI = i;
     }
     let a = step(bestI);
     let b = (bestI < SUGGEST_SCAN_STEPS) ? step(bestI + 1) : hi;
     while (hi > 0 && (b - a) / hi > SPEND_SEARCH_TOLERANCE) {
         const mid = (a + b) / 2;
-        if (passes(run(mid), mid)) a = mid; else b = mid;
+        if (passes(run(mid))) a = mid; else b = mid;
     }
+    return { spend: a, probe };
+}
+
+// P49 primitive, kept for its tests: max spend leaving `bufferYears` of terminal portfolio-funded
+// need, against the SELECTED strategy. Terminal need is in the last year's own (inflated) dollars
+// (last.spendGoal - last.guaranteedIncome), matching last.portfolioBalance - the today's-dollars
+// search value would understate it under inflation. Returns { spend, horizon, naivePMT, haircut }.
+function suggestSustainableSpend(baseInputs, opts) {
+    const bufferYears = (opts && opts.bufferYears != null) ? opts.bufferYears : SUGGEST_BUFFER_YEARS;
+    const r = solveMaxSpend(baseInputs, {
+        terminalOk: (res) => {
+            const last = res.log[res.log.length - 1];
+            const need = Math.max(0, (last.spendGoal || 0) - (last.guaranteedIncome || 0));
+            return (last.portfolioBalance || 0) >= bufferYears * need;
+        },
+    });
+    if (!r) return null;
+    const invested = (baseInputs.IRA1 || 0) + (baseInputs.IRA2 || 0) + (baseInputs.Roth || 0)
+                   + (baseInputs.Roth2 || 0) + (baseInputs.Brokerage || 0);
+    const realReturn = (1 + (baseInputs.growth || 0)) / (1 + (baseInputs.inflation || 0)) - 1;
+    const horizon  = r.probe.log.length;
+    const guarNow  = r.probe.log[0].guaranteedIncome || 0;
+    const naivePMT = calculateAmortizedWithdrawal(invested, 0, horizon, realReturn);
     return {
-        spend: a,
+        spend: r.spend,
         horizon,
         naivePMT,
-        haircut: naivePMT > 0 ? Math.max(0, a - finalGuar) / naivePMT : null,
+        haircut: naivePMT > 0 ? Math.max(0, r.spend - guarNow) / naivePMT : null,
+    };
+}
+
+// The suggested-spend menu: three after-tax goals from conservative to aggressive, all computed
+// against the FIXED reference strategy so they do not move when the user changes strategy.
+//   A Conservative - a horizon-aware Bengen rate on the invested portfolio (research benchmark;
+//     the year-1 portfolio-funded draw is ~this rate of the portfolio). Strategy-independent.
+//   D Middle       - engine-solved to end holding >= 50% of the REAL starting portfolio.
+//   B Aggressive   - engine-solved to end holding 5 full years of (inflated) spending.
+// Returns { horizon, referenceStrategy, options: [{key,label,spend,note}] } - spend may be null if
+// a solve is infeasible - or null if the plan cannot be simulated at all.
+function suggestSpendMenu(baseInputs) {
+    const base  = Object.assign({}, baseInputs, { strategy: SUGGEST_REFERENCE_STRATEGY });
+    const probe = simulate(Object.assign({}, base, { spendGoal: baseInputs.spendGoal || 0, computeOC: false }));
+    if (!probe || !probe.log || probe.log.length === 0) return null;
+
+    const horizon   = probe.log.length;
+    const row0      = probe.log[0];
+    const guar1     = row0.guaranteedIncome || 0;
+    const realStart = (row0.portfolioBalance || 0) / (row0.inflationFactor || 1);
+    const invested  = (baseInputs.IRA1 || 0) + (baseInputs.IRA2 || 0) + (baseInputs.Roth || 0)
+                    + (baseInputs.Roth2 || 0) + (baseInputs.Brokerage || 0);
+
+    // A - Conservative (Bengen). Year-1 portfolio-funded draw = swr x invested, plus year-1
+    // guaranteed income. Strategy-independent; a research benchmark, not engine-verified.
+    const swr    = bengenRate(horizon);
+    const aSpend = guar1 + swr * invested;
+
+    // D - Middle: leave >= 50% of the real starting portfolio at the end.
+    const dRes = solveMaxSpend(base, {
+        terminalOk: (res) => {
+            const last = res.log[res.log.length - 1];
+            const realTerm = (last.portfolioBalance || 0) / (last.inflationFactor || 1);
+            return realTerm >= SUGGEST_MIDDLE_KEEP_REAL * realStart;
+        },
+    });
+
+    // B - Aggressive: end holding SUGGEST_RISKY_BUFFER_YEARS full years of (inflated) spending.
+    const bRes = solveMaxSpend(base, {
+        terminalOk: (res) => {
+            const last = res.log[res.log.length - 1];
+            return (last.portfolioBalance || 0) >= SUGGEST_RISKY_BUFFER_YEARS * (last.spendGoal || 0);
+        },
+    });
+
+    return {
+        horizon,
+        referenceStrategy: SUGGEST_REFERENCE_STRATEGY,
+        options: [
+            { key: 'A', label: 'Conservative', spend: aSpend,
+              note: `Bengen ${(swr * 100).toFixed(1)}% rate over ${horizon} years - keeps the portfolio largely intact` },
+            { key: 'D', label: 'Middle', spend: dRes ? dRes.spend : null,
+              note: `ends holding about half your starting portfolio in today's dollars` },
+            { key: 'B', label: 'Aggressive', spend: bRes ? bRes.spend : null,
+              note: `ends with ${SUGGEST_RISKY_BUFFER_YEARS} years of spending left - spends the rest down` },
+        ],
     };
 }
 
@@ -3857,7 +3944,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, SUGGEST_BUFFER_YEARS, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -3865,7 +3952,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, SUGGEST_BUFFER_YEARS, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

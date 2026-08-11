@@ -11,6 +11,31 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.14e1"></a>
+
+## 11.14e1
+
+**Research groundwork. No change to any plan or its numbers.** Nothing on the page behaves
+differently: every addition in this release is a research switch that no control sets, off by
+default, and proven inert when off by byte-identical regression tests.
+
+What was added, and why:
+
+- **Four engine research inputs**, used only by the offline study harnesses in
+  `.test_harnesses/`: `cycleHarvestMode` and `cycleCoexist` (variants of the Cycle Brokerage
+  harvest year), and `oracleWithdrawalPlan` with its `seq` and `prop` entry forms (a per-year
+  withdrawal-ordering override for the perfect-foresight studies). The self-test suite grows
+  from 233 to 244 checks, including tests that each switch is byte-identical to today's
+  behavior when absent.
+- **Five research studies were run and recorded** (results live beside the harnesses). The
+  highlights that will shape future releases: the flat Roth conversion search cannot see
+  per-year conversion timing worth up to a million dollars in some plans; the Cycle Brokerage
+  habit of maxing the capital gains bracket now costs money because the inherited basis step-up
+  erases the gains it pays tax on; and once an IRA has been drawn down to its target, the best
+  order to spend from is Cash first, then Roth, then Brokerage, which will become part of the
+  planned Phased strategy. None of these change the tool yet; each will arrive as its own
+  release with its own entry when it does.
+
 <a id="11.14c6"></a>
 
 ## 11.14c6

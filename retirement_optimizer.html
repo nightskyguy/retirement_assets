@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.14c6</title>
+    <title>Retirement Optimizer 11.14e1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,7 +59,7 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111494"></script>
-	<script src="optimizer_core.js?v=1114c6"></script>
+	<script src="optimizer_core.js?v=1114e1"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
@@ -650,6 +650,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li><b>11.14e1</b> <strong>Research groundwork only. No change to your plan or its numbers.</strong> The engine gains four switches used by offline studies of withdrawal ordering and Roth conversion timing, all off by default and set by no control on this page, and the self-test suite grows from 233 to 244 checks. The studies picked a clear winner for what to spend once the IRA reaches its goal, which will shape the upcoming Phased strategy. <a href="optimizer_changelog.md#11.14e1" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.14c6</b> <strong>The suggested spending goal is now solved by the plan itself and accounts for how long your retirement is.</strong> The old suggestion was a flat 5% of every account and did not account for your pension start age or longevity of the plan. <a href="optimizer_changelog.md#11.14c6" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.1499</b> <strong>Money left to your heirs was being taxed for capital gains nobody ever owes, so ending balances were too low and Roth conversions looked better than they are.</strong> The missing step-up penalized money kept in a brokerage account, never Roth or cash, so every conversion comparison leaned the same way, and some plans that used to show a conversion benefit no longer do. <i>Break Even is deliberately left alone </i> and still answers the question it always did. On the chart, every death now carries a marker with a small circle showing which step-up applied, half filled or solid, with a legend that explains only the marks your own plan has. <a href="optimizer_changelog.md#11.1499" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.147c</b> <strong>Self-tests improved.</strong> No change to your plan or its numbers. The self-check that runs at page load now covers 510 tests instead of 245; hover the indicator for the count. A brief hourglass before the green dot is normal, and a green dot with a small warning mark means the page was opened as a local file, which blocks part of the check from loading. <a href="optimizer_changelog.md#11.147c" target="_blank" rel="noopener">Details</a></li>

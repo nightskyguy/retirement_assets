@@ -294,6 +294,167 @@ test('cyclicEnabled: surplus reinvested into Brokerage (not Cash) in IRA years',
         `Expected some IRA years with surplusCash=0 (surplus reinvested to brokerage), none found`);
 });
 
+// ── P32c: cycleHarvestMode / cycleCoexist research inputs (default off, no UI) ─
+// The P28 pattern: absent ≡ off must be BYTE-identical, and the input must be inert
+// without cyclicEnabled (leak guard).
+
+test('P32c: cycleHarvestMode/cycleCoexist absent ≡ off → byte-identical log (two scenarios)', () => {
+    const scen1 = { ...BASE, cyclicEnabled: true };
+    const scen2 = { ...BASE, cyclicEnabled: true, strategy: 'bracket', stratRate: 0.22,
+                    IRA1: 500000, Brokerage: 900000, BrokerageBasis: 400000, growth: 0.04,
+                    dividendRate: 0.005, convertExcessToRoth: true };
+    for (const scen of [scen1, scen2]) {
+        const plain = simulate({ ...scen });
+        const withOff = simulate({ ...scen, cycleCoexist: 'off', cycleHarvestMode: 'maxbracket' });
+        assert(JSON.stringify(plain.log) === JSON.stringify(withOff.log),
+            'cycleCoexist:off + cycleHarvestMode:maxbracket must not perturb the year-by-year log');
+    }
+});
+
+test('P32c: cycleCoexist without cyclicEnabled is inert (leak guard)', () => {
+    const plain = simulate({ ...BASE, strategy: 'bracket', stratRate: 0.22 });
+    const leaked = simulate({ ...BASE, strategy: 'bracket', stratRate: 0.22,
+                              cycleCoexist: 'bracketfill', cycleHarvestMode: 'spendonly' });
+    assert(JSON.stringify(plain.log) === JSON.stringify(leaked.log),
+        'both inputs live inside the isBrokerageYear branch and must do nothing without cyclic');
+});
+
+test('P32c: cycleCoexist bracketfill — harvest years regain the IRA draw and conversions', () => {
+    const scen = { ...BASE, cyclicEnabled: true, strategy: 'bracket', stratRate: 0.22,
+                   convertExcessToRoth: true };
+    const off = simulate({ ...scen });
+    const on = simulate({ ...scen, cycleCoexist: 'bracketfill' });
+    const hv = r => r.log.filter(e => e.subCycle === 'Brok' || e.subCycle === '⚠Brok');
+    const offHv = hv(off), onHv = hv(on);
+    assert(offHv.length > 0 && onHv.length > 0, 'both runs need harvest years');
+    const offIRAwd = offHv.reduce((s, e) => s + (e.IRAwd || 0), 0);
+    const onIRAwd = onHv.reduce((s, e) => s + (e.IRAwd || 0), 0);
+    assert(offIRAwd < 1, `off: harvest-year voluntary IRA draw must be zero, got ${Math.round(offIRAwd)}`);
+    assert(onIRAwd > 10000, `bracketfill: harvest years must carry a real IRA draw, got ${Math.round(onIRAwd)}`);
+    const onConv = onHv.reduce((s, e) => s + (e.rothConv || 0), 0);
+    assert(onConv > 1000,
+        `bracketfill + convertExcessToRoth: harvest-year conversions must un-zero, got ${Math.round(onConv)}`);
+    // Invariant: no balance driven negative anywhere.
+    for (const e of on.log) {
+        for (const k of ['Cash', 'Brokerage', 'TotalIRA', 'Roth']) {
+            assert((e[k] ?? 0) > -1, `bracketfill drove ${k} negative in year ${e.year}: ${e[k]}`);
+        }
+    }
+});
+
+test('P32c: cycleCoexist MAGI ceiling (IRMAA tier) — coexist must not push a harvest year into a higher tier', () => {
+    // minlimit tier 1: the family ceiling is MAGI-shaped, so the IRA room subtracts the planned
+    // harvest LTCG (two-pass fixed point). The observable contract: the coexist harvest year's
+    // IRMAA tier never exceeds the same year's tier with coexist off.
+    const scen = { ...BASE, cyclicEnabled: true, strategy: 'minlimit', stratRate: 0,
+                   stratIRMAATier: 1, birthyear1: 1958, IRA1: 900000, Brokerage: 600000,
+                   BrokerageBasis: 200000 };
+    const off = simulate({ ...scen });
+    const on = simulate({ ...scen, cycleCoexist: 'bracketfill' });
+    const tierRank = t => t === '-none-' || t == null ? 0 : (parseInt(String(t).replace(/\D/g, ''), 10) || 0);
+    assert(off.log.length === on.log.length, 'same horizon');
+    for (let i = 0; i < on.log.length; i++) {
+        const e = on.log[i];
+        if (!(e.subCycle === 'Brok' || e.subCycle === '⚠Brok')) continue;
+        assert(tierRank(e.IRMAATier) <= tierRank(off.log[i].IRMAATier),
+            `year ${e.year}: coexist pushed IRMAA tier ${off.log[i].IRMAATier} -> ${e.IRMAATier}`);
+    }
+});
+
+test('P32c: cycleHarvestMode spendonly harvests no more than maxbracket', () => {
+    const scen = { ...BASE, cyclicEnabled: true, spendGoal: 15000 };
+    const maxb = simulate({ ...scen });   // absent = maxbracket
+    const spendonly = simulate({ ...scen, cycleHarvestMode: 'spendonly' });
+    const brokLife = r => r.log.reduce((s, e) => s + (e['Brokerage-'] || 0), 0);
+    assert(brokLife(spendonly) < brokLife(maxb),
+        `spendonly must draw less Brokerage than maxbracket over the plan: ` +
+        `${Math.round(brokLife(spendonly))} vs ${Math.round(brokLife(maxb))}`);
+    // And a small-spend harvest year draws ~need, not the bracket.
+    const hRow = spendonly.log.find(r => r.subCycle === 'Brok' || r.subCycle === '⚠Brok');
+    assert(hRow && (hRow['Brokerage-'] ?? 0) < 20000,
+        `spendonly harvest year should be need-sized, got ${hRow && hRow['Brokerage-']}`);
+});
+
+// ── P51b: oracleWithdrawalPlan research input (node-only, no UI, default off) ─
+
+test('P51b: oracleWithdrawalPlan absent / null entries / all-zero entries → byte-identical log', () => {
+    const plain = simulate({ ...BASE });
+    const withNull = simulate({ ...BASE, oracleWithdrawalPlan: null });
+    assert(JSON.stringify(plain.log) === JSON.stringify(withNull.log),
+        'null plan must not perturb the log');
+    const zeros = new Array(40).fill(null).map((_, i) => i % 2 ? null : { IRA: 0, Brokerage: 0, Cash: 0, Roth: 0 });
+    const withZeros = simulate({ ...BASE, oracleWithdrawalPlan: zeros });
+    assert(JSON.stringify(plain.log) === JSON.stringify(withZeros.log),
+        'null / all-zero entries mean "no override this year" and must be inert');
+});
+
+test('P51b: oracleWithdrawalPlan + cyclicEnabled is an explicit error, not a precedence rule', () => {
+    let threw = false;
+    try {
+        simulate({ ...BASE, cyclicEnabled: true,
+                   oracleWithdrawalPlan: [{ IRA: 1, Brokerage: 0, Cash: 0, Roth: 0 }] });
+    } catch (e) { threw = true; }
+    assert(threw, 'composing the two preempting override branches must throw');
+});
+
+test('P51b: an IRA-only year draws IRA, not Brokerage; spill covers the rest of the horizon', () => {
+    // Year 0 override: everything from IRA. Later years: no override (strategy runs).
+    const plan = [{ IRA: 1, Brokerage: 0, Cash: 0, Roth: 0 }];
+    const plain = simulate({ ...BASE });
+    const r = simulate({ ...BASE, oracleWithdrawalPlan: plan });
+    const y0 = r.log[0];
+    assert((y0.IRAwd ?? 0) > 0, `year 0 must draw IRA under an IRA-only plan, got ${y0.IRAwd}`);
+    assert((y0['Brokerage-'] ?? 0) < 1,
+        `year 0 must not draw Brokerage under an IRA-only plan, got ${y0['Brokerage-']}`);
+    // BASE itself depletes on this horizon; the override must not make feasibility WORSE.
+    assert(r.totals.success === plain.totals.success,
+        `one overridden year must not change feasibility (plain ${plain.totals.success} vs ${r.totals.success})`);
+    assert((r.totals.shortfall ?? 0) <= (plain.totals.shortfall ?? 0) + 1,
+        `override year must not add shortfall: ${r.totals.shortfall} vs ${plain.totals.shortfall}`);
+});
+
+test('P35n: oracleWithdrawalPlan {seq} entry — strict sequence, IRA-last is a true backstop', () => {
+    // BASE year 0: Cash $50k < spend need, so a Cash-first sequence must drain Cash, cascade to
+    // Brokerage, and leave the IRA untouched (it is last in the sequence).
+    const plan = [{ seq: ['Cash', 'Brokerage', 'Roth', 'IRA'] }];
+    const r = simulate({ ...BASE, oracleWithdrawalPlan: plan });
+    const y0 = r.log[0];
+    assert((y0.CashWD ?? 0) > 10000, `seq must drain Cash first, got CashWD ${y0.CashWD}`);
+    assert((y0['Brokerage-'] ?? 0) > 0, `shortfall must cascade to Brokerage, got ${y0['Brokerage-']}`);
+    assert((y0.IRAwd ?? 0) < 1, `IRA is last in the sequence and must be untouched, got ${y0.IRAwd}`);
+});
+
+test('P35n: oracleWithdrawalPlan {prop} entry — balance-proportional over Brok/Cash/Roth, IRA excluded', () => {
+    const plan = [{ prop: true }];
+    const r = simulate({ ...BASE, oracleWithdrawalPlan: plan });
+    const y0 = r.log[0];
+    assert((y0.IRAwd ?? 0) < 1, `prop excludes the IRA (PR-5 BALANCED spec), got IRAwd ${y0.IRAwd}`);
+    assert((y0['Brokerage-'] ?? 0) > 0 && (y0.CashWD ?? 0) > 0,
+        `prop draws Brokerage and Cash together, got Brok ${y0['Brokerage-']} Cash ${y0.CashWD}`);
+    // Proportionality: BASE holds Brok 200k / Cash 50k -> the Brokerage draw should dominate.
+    assert((y0['Brokerage-'] ?? 0) > (y0.CashWD ?? 0),
+        'draws should be balance-weighted (Brokerage 4x Cash)');
+});
+
+test('P51b: fidelity — replaying a run\'s own realized draw fractions lands near its score', () => {
+    // The hook must be able to EXPRESS existing behavior: extract propwd-0's per-year draw mix,
+    // replay it through the override, and land within tolerance on finalNW. Not exact — the
+    // stage-2 gap fill and rounding differ — but a hook that cannot approximate the strategy it
+    // replaces would make every oracle gap unreadable.
+    const base = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0 });
+    const plan = base.log.map(e => {
+        const w = { IRA: e.IRAwd ?? 0, Brokerage: e['Brokerage-'] ?? 0,
+                    Cash: e.CashWD ?? 0, Roth: e.RothWD ?? 0 };
+        return (w.IRA + w.Brokerage + w.Cash + w.Roth) > 0 ? w : null;
+    });
+    const replay = simulate({ ...BASE, strategy: 'propwd', propWithdraw: 0,
+                              oracleWithdrawalPlan: plan });
+    assert(replay.totals.success === base.totals.success, 'replay must not change feasibility');
+    const rel = Math.abs(replay.finalNW - base.finalNW) / Math.max(1, Math.abs(base.finalNW));
+    assert(rel < 0.02,
+        `replayed fractions should land within 2% of the source run, got ${(100 * rel).toFixed(2)}%`);
+});
+
 // ── Phase 12: Withdrawal Timing ───────────────────────────────────────────────
 test('Phase 12: bracket strategy year 0 → Early(Conv)', () => {
     const result = simulate({ ...BASE, strategy: 'bracket', stratRate: 0.22 });

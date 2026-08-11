@@ -12,7 +12,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 |---|---|---|---|
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O0** | P32 | Brokerage draws: audit defect open, premise refuted | `P32c` |
-| **O1** | P36 | Do any strategies never win? Round 2 now unblocked | `P36a` |
+| **O1** | P51 | Oracle a-c,e-g DONE 08-10; propwd refuted | `P51d` |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
@@ -45,7 +45,8 @@ first task. Every open item in the file now carries one.
 |---|---|---|---|---|
 | **O0** | P35 | Phased strategy; **basis step-up shipped v11.1499** | `P35i` (the Phased engine) | nothing hard |
 | **O0** | P32 | Brokerage draws — premise refuted, accounting-audit defect open | `P32c` | nothing |
-| **O1** | P36 | Phased efficiency study, do any strategies never win? | `P36a` (round 1 runs today) | round 2 needs `P35i` only |
+| **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
+| **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
 | **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
 | **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
@@ -1057,14 +1058,31 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
 - [x] **P32b** — Audit the two accounting facts before running any behavior arm. **DONE, and it paid for the
   whole phase.** Not an understatement, an **over**-credit: `yr.taxableDividends` counted as income
   *and* credited to the balance with nothing debiting it back. Fixed in `e9a3c8b` (v11.146f).
-- [ ] **P32c** — Research inputs, default off, P28 pattern: `thirdPassBrokerage` ('off'|'bounded'), `forcedIRAAllowBrokerage`, `cycleHarvestMode` ('maxbracket'|'spendonly')
+- [ ] **P32c** — Research inputs, default off, P28 pattern. **HALF DONE 2026-08-10:**
+  `cycleHarvestMode` ('maxbracket'|'spendonly') and `cycleCoexist` ('off'|'bracketfill') SHIPPED
+  in the `:1432` branch with absent≡off byte-identical tests + leak guard + MAGI-tier invariant
+  (suite 238/238). STILL OPEN: `thirdPassBrokerage` ('off'|'bounded') and `forcedIRAAllowBrokerage`
+  — those serve P32d's Q2, orthogonal to the cyclic pair.
 - [ ] **P32d** — Q2 with an explicit iteration counter, so "spiral" becomes a measured claim either way.
   **Was moot pre-fix; now unblocked and worth re-asking on a corrected engine** — but re-run Q1's
   numbers first, since they were measured on the double-crediting engine.
-- [ ] **P32e** — Q3/Q4 as scans over existing sweep output
-- [ ] **P32f** — Q5 (max-the-bracket harvest vs spend-only) A/B
+- [x] **P32e** — Q3/Q4 DONE 2026-08-10 (`.test_harnesses/P32_RESULTS.md`). Q3: cyclic wins 26/45
+  cells as shipped but HALF is the surplus-routing confound — a `CashReserve: 0` control still wins
+  23/45 at half the magnitude ($891k max). Q4 INVERTED: `cycleLTCGTarget 0.20` moves 898/2,576
+  pairs and wins 53 — the nerdknob gate is protecting users, not hiding a lever; 0.15 confirmed.
+  Q1 re-run post-fix: three families UP, cyclic −0.8pt, never-draw still 0/55.
+- [x] **P32f** — Q5 DONE 2026-08-10 (q5, `P32_RESULTS.md`). **INVERTED**: maxbracket wins only
+  108/2,514 pairs (4%); spendonly gains to +$396k. Post-§1014 (v11.1499) a held-to-death harvest
+  has no terminal payoff, only MAGI costs — the top-off is a pre-step-up design.
 - [ ] **P32g** — Record the aggregate-basis modeling ceiling as a README limitation regardless of outcome
-- [ ] **P32h** — Decision: re-scope the third-pass exclusion, un-gate `cycleLTCGTarget`, or record and keep
+- [ ] **P32h** — Decision: re-scope the third-pass exclusion, un-gate `cycleLTCGTarget`, or record and keep.
+  Evidence now in: Q4 says keep the gate + keep 0.15; Q5 says the harvest top-off itself is suspect
+  post-step-up (a `spendonly` default flip would be a behavior change needing its own ship decision);
+  Q6 says coexist must stay research-only absent arm-aware gating. P32d (Q2) still missing.
+- [x] **P32i** — Q6 DONE 2026-08-10 (q6, `P32_RESULTS.md`). Median NEGATIVE (−0.73%): the harvest
+  skip was accidentally protective for aggressive ceilings (Fill Bracket 35% −$2.1M) while measured
+  arms genuinely gain (IRA Draw 5-8% up to +$808k). The money-on-the-table is real but reclaiming
+  it blindly loses; shipping would need arm-aware gating (axis-property + pinned-test bar applies).
 - **Status:** **research half DONE and merged** (PR #155 third-pass state tax, PR #156 brokerage
   research + the dividend fix). Q1 answered, premise refuted, accounting defect found and shipped.
   **Open: Q2-Q5 and the build/decision tail.** **Harness:** `.test_harnesses/brokerage_harness.js`
@@ -1402,6 +1420,34 @@ does not catch Phased.
 cut visible** in the `#opt-perf` readout. This is the concrete argument for doing P34's worker and
 per-row memo next.
 
+### Tail-policy question (user, 2026-08-10) — settle BEFORE or WITH `P35i`, evidence exists
+
+The PR-5 spec's BALANCED fill (`['Brokerage','Cash','Roth']` weighted by balance) is
+**proportional over the non-IRA accounts, and the 2026-08-10 program produced evidence against
+that shape**: (a) P28 (settled, 630 sims) — Roth pays only when it displaces a BROKERAGE draw
+and LOSES when it displaces Cash, while a balance-proportional fill draws Roth alongside Cash
+every year; (b) the P51 oracle's recurring end-game is a Roth-spending TAIL with appreciated
+Brokerage ridden to the §1014 step-up — i.e. the best ordering is PHASE-DEPENDENT
+(Cash→Brokerage→Roth mid-plan, Roth-before-Brokerage late when the gain fraction is high);
+(c) proportional-as-strategy was refuted twice (never top-3 in 135 cells; gap-to-oracle >2% at
+every basis). Candidate tail policies for a bake-off: specced balance-proportional /
+Cash→Brok(spend-only)→Roth sequenced / gain-aware late flip (flip condition = measurable state,
+gain fraction x heirs rate — a LEGAL rule if the axis property is measured then test-pinned,
+unlike oracle foresight). An "endgame grid" (scenarios STARTING at IRA=goal, RMD age, varying
+Brok/Roth/Cash mix x basis 20/50/80 x spend) can measure this TODAY without `P35i`, using the
+existing ordered arms + the oracle for the ceiling. → new sub-item `P35n`.
+
+- [x] **P35n** — DONE 2026-08-10 (`.test_harnesses/ENDGAME_RESULTS.md`, endgame_harness.js,
+      144 cells). **The PR-5 BALANCED fill spec is refuted: balance-proportional is the WORST
+      arm (median −$223k, wins 1/108). Winner: the SEQUENCE Cash → Roth → Brokerage with IRA as
+      last-resort backstop (88/108 cells; conversions-insensitive 36/36).** Mechanism: §1014
+      makes held Brokerage nearly free to heirs while drawing it realizes taxed gains — P28's
+      "Roth pays when it displaces a Brokerage draw", live from endgame year 0. Below ~$1.3M
+      totals the 0% LTCG bracket erases the CRB-vs-CBR difference (16/15 tie) but proportional
+      still wins zero. **`P35i`'s PR-5 gap-fill arm should ship the sequence, not the
+      balance-weighted order** — with the taxflex caveat (CRB empties Roth; a flexibility
+      objective may disagree with the wealth verdict) and the no-SECURE-heirs ceiling stated.
+
 ### Already ruled out — do not re-derive
 
 - **Gain harvesting.** It already exists as the Cyclic modifier, which maxes the LTCG bracket on
@@ -1636,12 +1682,19 @@ as a default.
 **Artifact of the design to call out, not misread:** `totals.spend` accumulates `yr.targetSpend`
 (`:2149`), so a `survivorSpendPct: 80` run scores lower on `maxspend` **by construction**.
 
-- [ ] **P36a** — Harness `.test_harnesses/phased_harness.js` (node), calling `buildStrategyFamilies` from P35 PR 2
-- [ ] **P36b** — 90-cell crossed grid; predictions written and scored first
-- [ ] **P36c** — The three reporting tables; `conveffect` exclusion stated with its reason
-- [ ] **P36d** — `.test_harnesses/PHASED_RESULTS.md` + a row in `.test_harnesses/README.md`
+- [x] **P36a** — Harness `.test_harnesses/phased_harness.js` (node) BUILT 2026-08-10, calling
+  `buildStrategyFamilies` — round 1 runs the sweep's own 192-arm enumeration, not the hand-picked
+  incumbent list, so question B is answered against the real table.
+- [ ] **P36b** — Round 1 DONE on a 45-cell grid (mix x wealth x spend; predictions scored, S1-P1a
+  WRONG — propwd never top-3 anywhere). The FULL 90-cell grid with the death-timing axis,
+  `deathBasisStepUp` cross and `survivorSpendPct` factor is ROUND 2 and waits on `P35i`.
+- [x] **P36c** — The three reporting tables produced; `conveffect` exclusion stated with its reason.
+  GK caveat mandatory when reading them: survivorship (eligible arms 160→37 across spend rates) +
+  spend drift (+38%/−12%) inflate every GK number.
+- [x] **P36d** — `.test_harnesses/PHASED_RESULTS.md` + a row in `.test_harnesses/README.md`
 - [ ] **P36e** — Decide P35's shipped arm count and `survivorSpendPct` default from the output
-- **Status:** not started. **Depends on:** P35 PR 2. Runs as P35's PR 7.
+  (needs round 2)
+- **Status:** round 1 DONE (2026-08-10); round 2 waits on `P35i`. Runs as P35's PR 7.
 
 ---
 
@@ -2157,6 +2210,55 @@ read it before resuming.**
   `worktrees/planning-with-files-0cb454` (PR #162), after rebasing onto the user's 4 changelog commits.
   `suggestSpendMenu` is dormant (no caller). Resume points: P50c (menu presentation decision), P50d (UI).
 - **Independent:** no phase dependencies.
+
+---
+
+## P51: Perfect-foresight trajectory oracle (research, node-only)  *(NEW 2026-08-10, user-approved, O1)*
+
+**Why:** the user asked (A) how hard whole-horizon optimization of asset utilization would be on
+this engine, and (C) whether Proportional's optimality can be proven robustly. Full DP over the
+state (7 balances + IRMAA 2-yr lookback + rothConv timing bool) is infeasible; a perfect-foresight
+trajectory search on the deterministic sim is the feasible substitute and an UPPER-BOUND
+DIAGNOSTIC — it overfits the known return path and is never a shippable policy. Design annex with
+grids/predictions/insertion lines:
+`~/.claude/plans/let-s-reason-around-brokerage-agile-stearns-agent-af918cff5b7ea950f.md`.
+Relationship to P5: P51a subsumes P5a's search as research; P5 stays the shipping phase if a
+schedule column is ever productized.
+
+- [x] **P51a** — DONE 2026-08-10: conversions-only oracle in `.test_harnesses/oracle_harness.js`.
+      **Result: 0-2.87% over the champion row (max +$241k), 15/15 cells under 3% (S3-P1 RIGHT).**
+      Flat scalar found $0 in 15/15 cells while per-year timing found up to $241k — per-year
+      shapes ARE inexpressible to the flat sweep. Two-fix history worth keeping: (1) champion
+      selection must use baselineScore, not wealth-only, or GK buys the slot by cutting spend;
+      (2) candidates must pin delivered spend to the base row within $1 — without the pin a GK
+      base showed a fake +81% that was pure spend-shifting.
+- [x] **P51b** — DONE 2026-08-10: `oracleWithdrawalPlan` research input (per-year weights
+      {IRA,Brokerage,Cash,Roth}, normalized by `calculateWithdrawals`; null/all-zero entry = no
+      override), first branch of the `planPrimaryWithdrawals` chain + mirror in `fillSpendingGap`;
+      composing with `cyclicEnabled` throws. Tests: absent/null/all-zero byte-identical, IRA-only
+      year honors the split, fidelity replay within 2%. Suite 242/242.
+- [x] **P51c** — DONE 2026-08-10: 10-archetype coordinate descent, conversion coordinate
+      interleaved, non-cyclic base per cell (the hook refuses to compose with cyclic). ~10s/cell.
+- [ ] **P51d** — independent-search cross-check, now SHARPENED by the run: cyclic rows BEAT the
+      oracle in defaults @6% (menu cannot express surplus routing), so the descent+menu result
+      is a lower bound on the true ceiling — the cross-check should bound how far below it sits.
+      Also open: GK-base cells at 6-8% spend need a survivable fixed-spend base for family gaps.
+- [x] **P51e** — DONE 2026-08-10 → `.test_harnesses/ORACLE_RESULTS.md`. **"propwd
+      default-optimal" REFUTED on the absolute half too**: gap-to-oracle 2.3-11.6% where
+      measurable (pre-declared bar was <1%), IRA Draw ahead in every cell. Attribution:
+      conversion timing >> withdrawal split (defaults3x @4%: +$1.08M conv vs +$36k split); flat
+      scalar found $0 in 15/15 cells, so per-year shapes are inexpressible to the shipped sweep.
+- [x] **P51f** — DONE (observation): NO harvest-like alternation (1/6 cells); recurring shape =
+      IRA-led mid-plan then a Roth-spending tail with Brokerage ridden to the §1014 step-up.
+      Backstops silent 15/15 (S3-P4 RIGHT). Recorded, nothing ships.
+- [x] **P51g** — DONE: defaults @6% gain $183k→$254k as heirs rate 0.15→0.35 (converts MORE at
+      higher rates, correct direction); thirds @6% gain ~$700k nearly rate-insensitive (its gain
+      is the Roth-tail split, not conversions).
+- **Rules:** spend pinned (candidates with shortfall > $1 discarded), objective = shared-rate real
+  after-tax NW, backstops instrumented not bypassed (acceptance gate: forcedIRA < $1/yr in >=95%
+  of years), sequential node only, results never enter the UI sweep, no oracle pattern ships
+  without the axis-property + pinned-test bar.
+- **Depends on:** Stage-1 champions (DONE 2026-08-10) for the comparison rows.
 
 ---
 

@@ -1,5 +1,178 @@
 # Findings & Decisions
 
+## P35n endgame: the Phased tail should be a SEQUENCE, Cash -> Roth -> Brokerage - the PR-5 proportional spec is refuted (2026-08-10)
+
+The endgame bake-off (`.test_harnesses/ENDGAME_RESULTS.md`, 144 cells starting AT the
+IRA-target state, couple 75/73, RMDs live) answers the user's tail question, and the answer
+inverted the pre-registered expectation (E-P3 decisively WRONG - the wrong prediction is the
+output):
+
+**1. Cash -> Roth -> Brokerage (`seq-CRB`, IRA dead-last backstop) wins 88/108 cells; the PR-5
+"BALANCED = ['Brokerage','Cash','Roth'] weighted by balance" spec is the WORST candidate**
+(median -$222,745 vs CRB, wins 1 cell). Winner is stable on every axis slice (deaths, IRA
+level, mix, basis, spend) and conversions-insensitive (36/36 sensitivity cells).
+
+**2. Roth-early is P28 + §1014 composed, not a contradiction of either.** Cash still drains
+first (P28's "never displace Cash with Roth" honored). Second position is Roth-vs-Brokerage,
+and P28's other half - "Roth pays when it displaces a BROKERAGE draw" - now applies every year
+because §1014 (v11.1499) makes HELD brokerage nearly free to heirs while DRAWING it realizes
+taxed gains. Draw-cost dominates holding-cost. The P51 oracle's whole-life "Roth tail" was this
+same logic gated by mid-life IRA management; the endgame has no IRA lever, so it fires from
+year 0. My E-P3 misread the tail shape as "Roth last".
+
+**3. Wealth boundary mapped**: below ~$1.3M endgame totals the 0% LTCG bracket swallows the
+Brokerage draw, drawing it is free, and CRB/CBR tie (16/15) - but proportional STILL wins zero.
+Robust statement: **sequenced beats proportional at every wealth level; WHICH sequence matters
+only above ~$2M**, where realized LTCG is actually taxed.
+
+**4. Per-year cleverness buys little in the tail**: the light oracle beats the best static
+sequence by only ~$27k median. A fixed CRB order captures nearly everything expressible. The
+gain-aware "flip" arm just imitates CRB (flips land at the scan's earliest allowed k).
+
+**5. Ship-decision caveats recorded with the verdict**: wealth-maximizing at a shared heirs
+rate - `taxflex` disagrees by construction (CRB empties Roth); no SECURE 10-yr heir modeling;
+one path, CA, aggregate basis. Feeds `P35i` PR 5: the `phasedBalancedFill` arm should be the
+sequence, not balance-weights.
+
+## Basis axis (20%/80%): every brokerage conclusion is basis-STABLE in sign, basis-SCALED in size (2026-08-10)
+
+User asked whether the 43-56% basis-fraction band was too narrow to trust. All three grids
+rebuilt at basis 20% (highly appreciated) and 80% (mostly contributions); five predictions
+pre-registered (B-P1..B-P5), **all five RIGHT** - the first clean sweep of predictions in this
+program, which itself says the mechanism is now understood. Numbers in the three results files;
+the transferable rules:
+
+**1. Sign is basis-stable, magnitude scales with gain fraction.** Q4's anti-lever verdict
+strengthens at b20 (0.20 wins 9/2,467, worst -$540k) and softens-but-holds at b80 (83/2,643,
+-$232k). Q5's spendonly advantage: max +$561k at b20 -> +$237k at b80, win share flat
+(58/58/56%) - basis bites through MAGNITUDE, not frequency. Rankings (P36): same leader, ACA
+still zero-vote, propwd still never top-3, at both extremes (B-P5).
+
+**2. Coexist's best case moves AGAINST intuition: largest gains at HIGH basis** (IRA Draw
++$980k at b80 vs +$649k at b20) - the reclaimed IRA draw is cheapest when the harvest it
+displaces carries little gain. Median still negative at every basis (-$39k/-$27k/-$4.8k).
+
+**3. Oracle gap grows with embedded gain** (median best-family gap 4.47% b20 / 4.35% default /
+1.83% b80) and conv-only alpha grows OFF the default basis in both directions (max 2.87%
+default -> 9.0% b20, 6.45% b80). Propwd min gap stays >2% everywhere - refutation basis-stable.
+
+**4. Coverage now: basis 20-80% swept for the 45-cell grid analyses and the oracle; Q1 ladder
+deliberately stays at 50%** (comparability with the pre-fix record). Remaining single-point
+axes: household shape/survivor years, state (CA), return path, pension.
+
+## Stage 3 oracle: conversion timing is the real lever, proportional is refuted twice, and cyclic's edge is ROUTING (2026-08-10)
+
+P51 ran end-to-end (`.test_harnesses/ORACLE_RESULTS.md`; harness `oracle_harness.js`, engine
+hook `oracleWithdrawalPlan` default-off, suite 242/242, 165k sims / 196s). Five conclusions:
+
+**1. The flat conversion sweep leaves per-year money on the table, and only per-year timing can
+reach it.** Core's own `optimizeConversionAmount` found $0 on the champion arm in 15 of 15
+cells; the per-year oracle found up to +$241k (conv-only) and up to **+$1.08M** on a non-cyclic
+base (defaults3x @4%). Conversion timing dominates the withdrawal split everywhere IRA-heavy;
+the split's best contribution is +$461k in a GK cell, usually far less.
+
+**2. "Proportional is default-optimal" is now refuted on BOTH halves.** Comparative (Stage 1):
+never top-3 in 45 cells. Absolute (Stage 3): gap-to-oracle 2.3-11.6% where measurable, IRA Draw
+ahead of it in every cell.
+
+**3. The oracle is a ceiling only over what it controls — and cyclic rows BEAT it in
+defaults @6% (gaps −0.31%, −0.19%).** The withdrawal menu cannot express cyclic's
+surplus-to-Brokerage routing (and the hook refuses to compose with cyclic by design). So:
+treat every oracle number as a lower bound on the true ceiling (P51d cross-check sharpened,
+still open), and read the negative gaps as attribution — **cyclic's residual edge is surplus
+routing, not draw order**, converging with Stage 1's confound finding from the opposite side.
+
+**4. The oracle does NOT rediscover harvest alternation** (S3-P3 WRONG, 1/6 cells). Its
+recurring shape is IRA-led mid-plan then a **Roth-spending tail** (last ~5-10 years) with
+Brokerage ridden to the §1014 step-up. Perfect-foresight artifact to notice, not a rule to
+ship. Backstops silent in 15/15 accepted solutions (forced-IRA years = 0).
+
+**5. Methodology rules that made the numbers honest, worth reusing:** champion selection must
+use `baselineScore` (wealth-only let GK buy the slot by cutting spend), and every oracle
+candidate must pin delivered spend to its base row within $1 — before the pin a GK base showed
+a fake +81% that was pure spend-shifting. GK-base cells at 6-8% spend exclude every fixed-spend
+row from their gap tables; those cells need a survivable fixed-spend base in a follow-up.
+
+Question A's answer, as measured: whole-horizon optimization on this engine costs one ~40-line
+default-off hook + a minutes-long node harness. It is cheap enough to be a standard research
+instrument; only its POLICY use is out of bounds.
+
+## Stage 2 cyclic A/Bs: the harvest top-off is a pre-step-up design, and "money on the table" cuts both ways (2026-08-10)
+
+Two research inputs shipped in the `:1432` harvest branch (`cycleHarvestMode`, `cycleCoexist`),
+default off, absent≡off byte-identical + leak-guard + MAGI-tier tests, suite 238/238. A/Bs in
+`.test_harnesses/P32_RESULTS.md` (q5/q6). All three S2 predictions WRONG:
+
+**1. "Max the bracket anyway" LOSES post-§1014.** `cycleHarvestMode: 'spendonly'` beats the
+shipped maxbracket top-off in the overwhelming majority of 2,514 cyclic pairs (maxbracket wins
+4%), gains to +$396k. Since v11.1499 the step-up erases held-to-death gains anyway, so a
+0%-bracket harvest buys nothing at death while paying MAGI costs (SS taxation, IRMAA) today. The
+top-off was designed before the step-up correction; its rationale no longer holds in-model. Any
+default flip is a ship decision for P32h, not this research.
+
+**2. Harvest-year coexist is net-NEGATIVE on median (−0.73%) — the skip was protective.**
+`cycleCoexist: 'bracketfill'` makes an arm more itself: aggressive ceilings (Fill Bracket 35%,
+IRMAA Tier 4) lose up to −$2.1M because the reclaimed draw-and-convert was the arm's own
+value-destroying behavior, and skipping 1-in-N years dampened it. Measured arms (IRA Draw 5-8%)
+genuinely gain, up to +$808k. So question B's answer: the table money is real, but blind
+reclamation loses; shipping needs arm-aware gating and therefore the axis-property + pinned-test
+bar. Frequency (harvest cadence) scales the effect's magnitude in BOTH directions, not its sign.
+
+**3. Mechanism note pinned by test:** with a harvest-year IRA draw > 0, the surplus-conversion
+cap (`netWithdrawals.IRA`, :1984-1988) un-zeroes automatically — no second edit was needed to
+give harvest years conversions back.
+
+## Stage 1 brokerage scans: the cyclic advantage is half confound, and the nerdknob points the wrong way (2026-08-10)
+
+Full tables: `.test_harnesses/PHASED_RESULTS.md` (P36 round 1) and `.test_harnesses/P32_RESULTS.md`
+(Q1 re-run, Q3, Q4). Both run the Optimizer's own 192-arm enumeration over a 45-cell grid (P28
+mix ladder x wealth x0.5/1/3 x spend 4/6/8%), UI scoring recipe, shared per-cell heirs rate.
+Eight results, several inverting the obvious reading:
+
+**1. "Does cyclic ever win" is YES — but the shipped A/B overstates it two-fold.** Cyclic beats
+its own non-cyclic family twin (spend equal within $1) in 26/45 cells with deltas to +$1.9M. A
+`CashReserve: 0` control — putting the NON-cyclic arm on reinvest-surplus-to-Brokerage too —
+still wins 23/45 but the max delta halves to $891k, and the winner geography flips from IRA-heavy
+4% cells to brokerage-heavy x3 cells, mostly [brokerage-first]. Half the headline is the
+surplus-cash-drag P2 documented, not harvest value. **Any future cyclic A/B must equalize surplus
+routing or it measures the bundle.**
+
+**2. `cycleLTCGTarget: 0.20` is a live ANTI-lever.** It moves 898 of 2,576 cyclic pairs, up to
+6.1% of real after-tax NW — and wins only 53. Worst cells lose $380k. Mechanism: harvesting into
+the 15% LTCG bracket pays tax today that the terminal IRC 1014 step-up erases at death. P32 Q4's
+hypothesis ("a nerdknob is hiding a real lever") is inverted: the gate is protecting users from a
+footgun. Default 0.15 confirmed; feeds P32h.
+
+**3. GK's ranking dominance is survivorship + spend drift, not efficiency.** In P36 round 1 GK
+famKeys take 178/360 winner votes — but vote-eligible arms fall 160 -> 37 as spend goes 4% -> 8%
+(GK cuts spend and survives; fixed-spend arms fail and are ineligible), and GK's delivered spend
+drifts +38%/-12% vs a fixed-spend twin. At 4% strain GK takes zero leading votes. Also: on a
+smooth deterministic path GK never triggers a guardrail and is bit-identical to the engine
+fallback (`propwd 0%`) — several control cells post the same delta for both.
+
+**4. Proportional is never top-3 on `networth`/`balanced` in ANY of 45 cells** (S1-P1a predicted
+>=60%, scored WRONG). Overall mean rank 15.9 of 24 famKeys; its one strength is `maxspend` (11.8).
+The comparative half of "proportional may be default-optimal" is refuted inside the current menu;
+the absolute half waits on P51's gap-to-oracle.
+
+**5. Harvest years leave measurable money on the table** (question B, descriptive): pooled over
+successful cyclic rows, 28,390 harvest years drew $4.1M of IRA total while the same arms' IRA-year
+mean implies ~$111,700 forgone per harvest year; median row forgoes 57% of its lifetime voluntary
+IRA draws. Conversions in harvest years: $8.7k across all 28,390 — empirically confirming the
+:1984-1988 cap-to-zero reading. Causal value of reclaiming this = Stage 2's `cycleCoexist` q6().
+
+**6. Q1 re-run on the corrected engine:** baseline 90.4->92.7%, bracket 61.1->62.2%, ordered
+44.7->45.8%, cyclic 57.5->56.7%. Never-draw rows still 0/55. Premise refutation stands.
+
+**7. Zero test over the real sweep:** exactly two always-identical pairs — `Fill Bracket 10%` ==
+its 💵 clone and `Ordered CBIR` == its 💵 clone (45/45 cells). 118/192 arms never win anywhere,
+recorded as a frequency observation, not deletion evidence.
+
+**8. ACA Cliff never wins any objective — by construction** (one-sided ACA pricing prices the cap's
+cost, never the subsidy). Do not read it as an efficiency result.
+
+Predictions S1-P1..P4 all scored; three of five sub-claims WRONG — the wrong ones are the output.
+
 ## Five things about the basis step-up that will mislead the next reader (2026-08-07)
 
 Measured while building P35f/P35g. Each one inverts an obvious-looking conclusion.

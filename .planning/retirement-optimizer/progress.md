@@ -2118,6 +2118,94 @@ untouched (their file): "at least a five years" and "differ from the Optimizer c
 
 ---
 
+## Session 2026-08-10 (eleventh) — Stage 1 of the brokerage program: P36 round 1 + P32e, both landed
+
+User asked three questions: (A) how hard is whole-horizon asset-utilization optimization on this
+engine, (B) does Cyclic leave money on the table in harvest years, (C) can Proportional's optimality
+be proven. Planned a 3-stage program (all approved; plan file
+`~/.claude/plans/let-s-reason-around-brokerage-agile-stearns.md`, design annex alongside it):
+Stage 1 scans (done this session), Stage 2 `cycleHarvestMode`/`cycleCoexist` research inputs +
+A/Bs, Stage 3 = NEW PHASE P51 perfect-foresight oracle (allocated, O1).
+
+Stage 1 shipped: NEW `.test_harnesses/phased_harness.js` (P36 round 1 — 45-cell grid x the sweep's
+own 192-arm enumeration, UI scoring recipe, three tables → PHASED_RESULTS.md) and
+`brokerage_harness.js` +q3/q4 (P32e → P32_RESULTS.md). Q1 re-run post-dividend-fix folded in.
+Headlines (full detail findings.md 2026-08-10): cyclic wins 26/45 cells but HALF is the
+surplus-routing confound (CashReserve:0 control still wins 23/45 at half magnitude — future cyclic
+A/Bs must equalize routing); cycleLTCGTarget 0.20 is an ANTI-lever (wins 53/2,576, worst −$380k,
+§1014 erases what the harvest taxed) so the nerdknob gate is protective; GK's ranking dominance is
+survivorship + spend drift; propwd never top-3 anywhere (S1-P1a WRONG); harvest years forgo
+~$111,700/year of IRA draws (median row 57% of lifetime voluntary draws) — question B alive,
+causal number = Stage 2's q6(). Predictions S1-P1..P4 scored; most WRONG, which is the output.
+
+Bookkeeping: P32e checked off (+P32i added, feeds P32h — Q4 evidence says keep the gate, keep
+0.15); P36a/c/d checked, P36b annotated round-1-done/round-2-waits-P35i; P51 section + O1 index
+row added; NOW-table P36 row swapped for P51 (line-30 boundary preserved, no net line adds above
+it). No engine edits yet — Stage 2 opens with the default-off inputs + bit-identical tests.
+
+---
+
+## Session 2026-08-10 (eleventh, continued) — Stages 2 + 3: engine research inputs + the oracle
+
+**Stage 2 (P32c half, P32f, P32i):** `cycleHarvestMode` ('maxbracket'|'spendonly') and
+`cycleCoexist` ('off'|'bracketfill') shipped in the `:1432` harvest branch, default off, harvest
+sizing refactored into a `_sizeHarvest(ordFloor)` closure (byte-identical math when off), MAGI
+ceilings via a documented two-pass fixed point, coexist IRA draw un-zeroes surplus conversions
+automatically. Tests: absent≡off deep-equal x2 scenarios, leak guard, IRMAA-tier invariant,
+spendonly<=maxbracket. A/Bs q5/q6 in brokerage_harness -> P32_RESULTS.md. ALL THREE S2 predictions
+WRONG: maxbracket wins only 4% of 2,514 pairs (the top-off is a pre-§1014 design); coexist is
+median-NEGATIVE (-0.73%) because the skip was protective for aggressive ceilings (FB35 -$2.1M)
+while measured arms gain (IRA Draw 5-8% up to +$808k). thirdPassBrokerage/forcedIRAAllowBrokerage
+(P32d's flags) still open.
+
+**Stage 3 (P51a-c,e-g):** oracle_harness.js + `oracleWithdrawalPlan` engine hook (default off,
+throws on cyclic composition, absent≡off + fidelity-replay tests, suite 242/242). P51a:
+conv-only oracle beats champions by 0-2.87%; flat scalar $0 in 15/15 (S3-P1 RIGHT). Full oracle
+(non-cyclic base after the compose-throw surfaced mid-run): conversion timing >> split
+(defaults3x@4%: +$1.08M vs +$36k), propwd gap-to-oracle 2.3-11.6% -> **default-optimal REFUTED
+both halves**, oracle does NOT rediscover harvest alternation (Roth-tail shape instead), cyclic
+rows BEAT the oracle in defaults@6% (surplus routing outside the menu = cyclic's true edge),
+backstops silent 15/15. P51g: converts more at higher heirs rates. P51d left open, sharpened.
+Two methodology traps recorded in findings: baselineScore for champion picks, spend-pin for all
+candidates (a GK base faked +81% without it).
+
+**State:** engine + tests + 3 harnesses + 3 results .md all UNCOMMITTED on this worktree branch.
+No version bump yet (research inputs are engine-visible -> bump when committing). Next: P51d, or
+P32d's two remaining flags, or the P32h decision write-up.
+
+---
+
+## Session 2026-08-10 (eleventh, continued 2) — basis axis closes the coverage gap
+
+User flagged extrapolation risk; coverage sections added to all three results .md with exact
+ranges (assets $810k-$14.58M, IRA 22-86%, Brok 6-62%, spend $32.4k-$1.17M) and the held-fixed
+list. Then, at the user's request, a basis-fraction axis (20%/80% vs the mixes' 43-56%) was
+added to phased_harness (basis-sensitivity summary), brokerage_harness (q3-control/q4/q5/q6 at
+both arms), and oracle_harness (45 cells, 511k sims). Predictions B-P1..B-P5 pre-registered,
+ALL FIVE RIGHT: every conclusion basis-stable in sign, scaled in magnitude (findings.md
+2026-08-10 basis entry). Notable: coexist's IRA Draw gains peak at HIGH basis (+$980k);
+conv-only oracle alpha grows off-default-basis in both directions (to 9.0%). Q1 ladder stays at
+50% deliberately. Remaining single-point axes named: household/survivor shape, state, path,
+pension. All still uncommitted.
+
+---
+
+## Session 2026-08-10 (eleventh, continued 3) — P35n endgame tail study: PR-5 spec refuted
+
+User approved the endgame study with three choices (IRA axis both, death axis 2 profiles,
+conversions off+sensitivity). Built: `{prop}`/`{seq}` entry forms added to the P51b
+oracleWithdrawalPlan hook (+2 tests, suite 244/244), NEW endgame_harness.js (144 cells starting
+AT the IRA-target state, 32k sims/13s), ENDGAME_RESULTS.md. RESULT: **Cash -> Roth -> Brokerage
+wins 88/108; the P35 PR-5 balance-proportional BALANCED spec is the worst arm (median -$223k,
+wins 1 cell)**. Mechanism = P28 + §1014 composed (Roth displacing the BROKERAGE draw, brokerage
+ridden to step-up). E-P3 decisively WRONG (predicted Roth-early loses; it won 100/108). Boundary
+mapped: below ~$1.3M totals CRB/CBR tie (0% LTCG bracket), proportional still zero. Light
+oracle adds only ~$27k median over static CRB. P35n checked off with the PR-5 amendment note:
+`P35i`'s gap-fill arm should ship the sequence. Caveats recorded: taxflex disagrees (CRB
+empties Roth), no SECURE heirs, one path/CA. All uncommitted.
+
+---
+
 ## Session 2026-08-10 (eleventh) — bug: suggest-spend ⓘ shows stale "Restore" after loading a scenario
 
 User report: loading a saved scenario left the After-Tax Spend ⓘ offering to reset to the DEFAULT spend

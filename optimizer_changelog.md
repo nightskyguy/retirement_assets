@@ -11,6 +11,20 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.14e1"></a>
+
+## 11.14e1
+
+**Research groundwork. No change to any plan or its numbers.** Nothing on the page behaves
+differently.
+
+What was added, and why:
+
+- **Four engine research inputs**, used only by the offline study harnesses.
+- **Five research studies were run and recorded** (results live beside the harnesses). The
+  highlights that will shape future releases.  [Brokerage Research](.test_harnesses/P32_RESULTS.md), 
+  [Proportional Draw Research](.test_harnesses/PHASED_RESULTS.md) (it's not as optimal as thought), 
+  ["EndGame" Research](.test_harnesses/ENDGAME_RESULTS.md) - what is the best strategy once the IRA is under control. 
 <a id="11.14dd"></a>
 
 ## 11.14dd

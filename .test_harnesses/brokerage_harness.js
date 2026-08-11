@@ -55,6 +55,9 @@ const taxengine = require('../taxengine.js');
 Object.assign(globalThis, taxengine);
 const core = require('../optimizer_core.js');
 const simulate = core.simulate;
+// q3/q4 (P32e) additionally use the sweep's own enumeration + the UI's scoring recipe.
+const { afterTaxNetWorth, SPENDABLE_WEIGHT, buildStrategyFamilies, OPTIMIZER_GRIDS,
+        bothOnMedicareAtStart } = core;
 
 const money = n => (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString();
 const pct = (a, b) => b === 0 ? '  n/a' : (100 * a / b).toFixed(1).padStart(5) + '%';
@@ -345,6 +348,297 @@ function audit() {
     console.log('    without raising gains -- cannot be modeled. Any P32 conclusion is bounded by this.');
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// Q3/Q4 (P32e) -- does cyclic ever WIN, and does the cycleLTCGTarget nerdknob hide a real lever?
+// Runs the Optimizer's own enumeration (buildStrategyFamilies, nerdknob configuration) over the
+// Stage-1 45-cell grid, scored with the UI's recipe (shared per-cell heirs rate, baselineScore).
+// Grid copied from phased_harness.js, which copied P28's ladder -- copy, do not import.
+//
+// PREDICTIONS (S1-P2..P4), recorded before the numbers were looked at:
+//   S1-P2. Cyclic beats its own non-cyclic family twin (family-level best-vs-best, spend equal
+//          within $1) in <15% of cells; wins concentrate in the brokerage-heavy mixes
+//          (thirds / brokheavy).
+//   S1-P3. cycleLTCGTarget 0.20 moves the (spend, wealth) pair by <1% of real after-tax NW
+//          except in 8%-spend cells, where spend already forces past the 0% LTCG bracket.
+//   S1-P4. Q1 re-run on the corrected engine: every family's draw frequency RISES vs the
+//          pre-fix numbers (baseline 90.4%, bracket 61.1%, cyclic 57.5%, ordered 44.7% -- the
+//          double-credited dividend was suppressing draws); never-draw rows stay at zero.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+const S1_COMMON = {
+    STATEname: 'CA', nYears: 20,
+    birthyear1: 1962, birthmonth1: 6, die1: 92,
+    birthyear2: 1964, birthmonth2: 3, die2: 94, hasSpouse: true,
+    ss1: 45000, ss1Age: 70, ss2: 24000, ss2Age: 67,
+    pensionAnnual: 0, pensionStartAge: 0, survivorPct: 0, pensionCola: false,
+    spendChange: 0, iraBaseGoal: 0,
+    inflation: 0.025, cpi: 0.025, growth: 0.06,
+    cashYield: 0.03, dividendRate: 0.02,
+    ssFailYear: 2099, ssFailPct: 1.0,
+    convertExcessToRoth: true, propWithdraw: 0.10, iraWithdrawPct: 0.06,
+    extraConversionAmount: 0, fundConversionWithCash: false,
+    startAge: 64, startInYear: 2026, dividendReinvest: true,
+    gkGuard: 0.20, gkAdjPct: 0.10, cycleLTCGTarget: 0.15,
+    qcdHHMax: 0, qcdMode: 'asneeded', computeOC: false,
+};
+const S1_MIXES = [
+    { key: 'defaults',   over: { IRA1: 1000000, IRA2: 400000, Roth: 50000, Roth2: 20000,
+                                 Brokerage: 100000, BrokerageBasis: 50000, Cash: 50000 } },
+    { key: 'defaults3x', over: { IRA1: 3000000, IRA2: 1200000, Roth: 150000, Roth2: 60000,
+                                 Brokerage: 300000, BrokerageBasis: 150000, Cash: 150000 } },
+    { key: 'round1',     over: { IRA1: 1800000, IRA2: 700000, Roth: 250000, Roth2: 100000,
+                                 Brokerage: 900000, BrokerageBasis: 500000, Cash: 150000 } },
+    { key: 'thirds',     over: { IRA1: 1000000, IRA2: 400000, Roth: 1000000, Roth2: 400000,
+                                 Brokerage: 1400000, BrokerageBasis: 700000, Cash: 150000 } },
+    { key: 'brokheavy',  over: { IRA1: 700000, IRA2: 300000, Roth: 400000, Roth2: 200000,
+                                 Brokerage: 2800000, BrokerageBasis: 1200000, Cash: 150000 } },
+];
+const S1_WEALTH = [0.5, 1, 3];
+const S1_RATES = [0.04, 0.06, 0.08];
+const S1_ACCTS = ['IRA1', 'IRA2', 'Roth', 'Roth2', 'Brokerage', 'BrokerageBasis', 'Cash'];
+const s1Total = o => o.IRA1 + o.IRA2 + o.Roth + o.Roth2 + o.Brokerage + o.Cash;
+
+function s1MkRow(f, res) {
+    const last = res.log[res.log.length - 1];
+    const row = {
+        family: f.family, modifier: f.modifier, param: f.paramLabel,
+        cyclic: !!(f.overrides.cyclicEnabled), overrides: f.overrides,
+        totals: res.totals, finalNW: res.finalNW,
+        finalNWCurrentDollars: last.totalWealth / (last.inflationFactor || 1),
+    };
+    if (row.cyclic) {
+        const hv = res.log.filter(e => e.subCycle && String(e.subCycle).includes('Brok'));
+        const iv = res.log.filter(e => e.subCycle === 'IRA');
+        row.harvest = {
+            n: hv.length,
+            iraWdHarvest: hv.reduce((s, e) => s + (e.IRAwd || 0), 0),
+            convHarvest: hv.reduce((s, e) => s + (e.rothConv || 0), 0),
+            meanIraWdIRAyrs: iv.length ? iv.reduce((s, e) => s + (e.IRAwd || 0), 0) / iv.length : 0,
+            iraWdLife: res.log.reduce((s, e) => s + (e.IRAwd || 0), 0),
+        };
+    }
+    return row;
+}
+function s1Score(r, sharedRate) {
+    if (!r.totals?.terminal) return;
+    r.afterTaxNW = afterTaxNetWorth(r.totals.terminal, sharedRate, r.totals.capGainsRate);
+    const defl = (r.finalNW && r.finalNW !== 0) ? (r.finalNWCurrentDollars / r.finalNW) : 1;
+    r.afterTaxNWCurrentDollars = r.afterTaxNW * defl;
+    r._baselineScore = (r.afterTaxNWCurrentDollars ?? 0)
+        + SPENDABLE_WEIGHT * (r.totals.spendCurrentDollars ?? 0);
+}
+function s1Cells(extra = {}, basisFrac = null) {
+    const cells = [];
+    for (const mix of S1_MIXES) for (const w of S1_WEALTH) {
+        const scaled = {};
+        for (const a of S1_ACCTS) scaled[a] = Math.round(mix.over[a] * w);
+        // Basis-axis arm (2026-08-10): override the mix's basis fraction (defaults 43-56%).
+        if (basisFrac != null) scaled.BrokerageBasis = Math.round(scaled.Brokerage * basisFrac);
+        for (const sr of S1_RATES) {
+            const cellBase = { ...S1_COMMON, ...scaled, ...extra,
+                               spendGoal: Math.round(s1Total(scaled) * sr) };
+            const acaDisabled = bothOnMedicareAtStart(cellBase.birthyear1, cellBase.startAge,
+                !!cellBase.hasSpouse, cellBase.hasSpouse ? (cellBase.birthyear2 || 0) : 0);
+            const fams = buildStrategyFamilies(cellBase, {
+                grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: !acaDisabled,
+                bracketResetsIRMAATier: true, markCashFunding: true,
+                cashClones: cellBase.Cash > 0, offGridLast: true,
+            });
+            const rows = [];
+            for (const f of fams) {
+                let res; try { res = simulate({ ...cellBase, ...f.overrides }); } catch (e) { continue; }
+                rows.push(s1MkRow(f, res));
+            }
+            const sharedRate = rows[0]?.totals?.futureIRARate ?? 0;
+            for (const r of rows) s1Score(r, sharedRate);
+            cells.push({ label: mix.key + ' x' + w + ' @' + (sr * 100) + '%',
+                         mix: mix.key, w, sr, cellBase, rows, sharedRate });
+            process.stdout.write('.');
+        }
+    }
+    console.log('');
+    return cells;
+}
+
+function q3(cells, label = 'shipped (legacy CashReserve: surplus parks in Cash)') {
+    console.log('\n' + '='.repeat(100));
+    console.log('Q3  Does cyclic ever WIN?  (family-level best cyclic clone vs best non-cyclic row,');
+    console.log('    success required, spend equal within $1; scored on shared-rate baselineScore)');
+    console.log('    Arm: ' + label);
+    console.log('='.repeat(100));
+    const famWins = {};             // family -> cells won
+    const byMix = {};               // mix -> cells where ANY family's cyclic won
+    let cellsAnyWin = 0, spendMoved = 0, pairs = 0;
+    const topDeltas = [];
+    for (const cell of cells) {
+        const ok = r => r.totals?.success;
+        const families = [...new Set(cell.rows.map(r => r.family))];
+        let anyWin = false;
+        for (const fam of families) {
+            // 💵 cash clones excluded: they are a different modifier, not the cyclic A/B.
+            const lin = cell.rows.filter(r => r.family === fam && !r.cyclic && r.modifier !== 'cash' && ok(r));
+            const cyc = cell.rows.filter(r => r.family === fam && r.cyclic && ok(r));
+            if (!lin.length || !cyc.length) continue;
+            pairs++;
+            const best = rs => rs.reduce((a, b) => (b._baselineScore ?? -Infinity) > (a._baselineScore ?? -Infinity) ? b : a);
+            const bl = best(lin), bc = best(cyc);
+            const dSpend = (bc.totals.spendCurrentDollars ?? 0) - (bl.totals.spendCurrentDollars ?? 0);
+            const dNW = (bc.afterTaxNWCurrentDollars ?? 0) - (bl.afterTaxNWCurrentDollars ?? 0);
+            if (Math.abs(dSpend) > 1) { spendMoved++; continue; }
+            if (dNW > 1) {
+                anyWin = true;
+                famWins[fam] = (famWins[fam] || 0) + 1;
+                topDeltas.push({ cell: cell.label, fam, dNW, dSpend,
+                    cycArm: bc.param + ' [' + bc.modifier + ']', linArm: bl.param });
+            }
+        }
+        if (anyWin) { cellsAnyWin++; byMix[cell.mix] = (byMix[cell.mix] || 0) + 1; }
+    }
+    console.log('\nCells where at least one family\'s cyclic beats its non-cyclic twin: ' +
+        cellsAnyWin + '/' + cells.length + '   (family-pairs compared: ' + pairs +
+        ', pairs skipped for spend moving: ' + spendMoved + ')');
+    console.log('By mix: ' + S1_MIXES.map(m => m.key + ' ' + (byMix[m.key] || 0) + '/9').join(', '));
+    console.log('By family (cells won): ' + Object.entries(famWins).sort((a, b) => b[1] - a[1])
+        .map(([f, n]) => f + ' ' + n).join(', ') || 'none');
+    topDeltas.sort((a, b) => b.dNW - a.dNW);
+    console.log('\nLargest cyclic wins (Δ real after-tax NW at equal spend):');
+    for (const t of topDeltas.slice(0, 8)) {
+        console.log('  ' + t.cell.padEnd(22) + t.fam.padEnd(16) + money(t.dNW).padStart(12) +
+            '   (' + t.cycArm + ' vs ' + t.linArm + ')');
+    }
+    // Harvest-year money-on-the-table, descriptive (question B; Stage 2 measures it causally):
+    // in harvest years the discretionary IRA draw is zeroed by the branch preemption, so the
+    // forgone draw is approximated by the same arm's mean draw in its IRA years.
+    let hvYears = 0, hvIraWd = 0, hvConv = 0, forgone = 0, lifeWd = 0;
+    const rowShare = [];
+    for (const cell of cells) for (const r of cell.rows) {
+        if (!r.harvest || !r.totals?.success) continue;
+        hvYears += r.harvest.n;
+        hvIraWd += r.harvest.iraWdHarvest;
+        hvConv += r.harvest.convHarvest;
+        const f = r.harvest.n * r.harvest.meanIraWdIRAyrs;
+        forgone += f;
+        lifeWd += r.harvest.iraWdLife;
+        if (r.harvest.iraWdLife > 0) rowShare.push(f / r.harvest.iraWdLife);
+    }
+    rowShare.sort((a, b) => a - b);
+    const medShare = rowShare.length ? rowShare[Math.floor(rowShare.length / 2)] : 0;
+    console.log('\nHarvest-year descriptive stat (successful cyclic rows, all cells pooled):');
+    console.log('  harvest years: ' + hvYears + ';  IRAwd in them: ' + money(hvIraWd) +
+        ';  conversions in them: ' + money(hvConv));
+    console.log('  forgone IRA draw per harvest year (arm\'s own IRA-year mean): ~' +
+        money(hvYears ? forgone / hvYears : 0));
+    console.log('  median per-row forgone as share of the row\'s lifetime IRAwd: ' +
+        (100 * medShare).toFixed(1) + '%  [descriptive only -- the causal number is Stage 2\'s q6()]');
+    return { cellsAnyWin, byMix, famWins, nCells: cells.length };
+}
+
+function q4(cells) {
+    console.log('\n' + '='.repeat(100));
+    console.log('Q4  cycleLTCGTarget 0.15 vs 0.20 -- is the nerdknob hiding a real lever?');
+    console.log('='.repeat(100));
+    let moved = 0, pairs = 0, spendMoved = 0;
+    const deltas = [];             // { cell, sr, arm, dNW, dPct, dSpend }
+    for (const cell of cells) {
+        for (const r of cell.rows) {
+            if (!r.cyclic || !r.totals?.success) continue;
+            let res20;
+            try { res20 = simulate({ ...cell.cellBase, ...r.overrides, cycleLTCGTarget: 0.20 }); }
+            catch (e) { continue; }
+            const r20 = s1MkRow({ family: r.family, modifier: r.modifier, paramLabel: r.param,
+                                  overrides: r.overrides }, res20);
+            s1Score(r20, cell.sharedRate);
+            if (!r20.totals?.success) continue;
+            pairs++;
+            const dSpend = (r20.totals.spendCurrentDollars ?? 0) - (r.totals.spendCurrentDollars ?? 0);
+            const dNW = (r20.afterTaxNWCurrentDollars ?? 0) - (r.afterTaxNWCurrentDollars ?? 0);
+            const dPct = Math.abs(dNW) / Math.max(1, Math.abs(r.afterTaxNWCurrentDollars ?? 1));
+            if (Math.abs(dSpend) > 1) spendMoved++;
+            if (Math.abs(dNW) > 1) { moved++; deltas.push({ cell: cell.label, sr: cell.sr,
+                arm: r.family + ' ' + r.param + ' [' + r.modifier + ']', dNW, dPct, dSpend }); }
+        }
+        process.stdout.write('.');
+    }
+    console.log('\n\nPairs compared: ' + pairs + ';  pairs where 0.20 moved anything > $1: ' + moved +
+        ';  pairs where spend moved: ' + spendMoved);
+    deltas.sort((a, b) => Math.abs(b.dNW) - Math.abs(a.dNW));
+    console.log('Largest |Δ| (0.20 minus 0.15, real after-tax NW):');
+    for (const d of deltas.slice(0, 10)) {
+        console.log('  ' + d.cell.padEnd(22) + d.arm.padEnd(34) + money(d.dNW).padStart(12) +
+            ('(' + (100 * d.dPct).toFixed(2) + '%)').padStart(9) +
+            (Math.abs(d.dSpend) > 1 ? '  spend ' + money(d.dSpend) : ''));
+    }
+    const nonHigh = deltas.filter(d => d.sr < 0.08);
+    const maxPctNonHigh = nonHigh.length ? Math.max(...nonHigh.map(d => d.dPct)) : 0;
+    const winners20 = deltas.filter(d => d.dNW > 1).length;
+    console.log('Pairs where 0.20 WINS: ' + winners20 + ' of ' + pairs +
+        ';  max |Δ%| in 4/6%-spend cells: ' + (100 * maxPctNonHigh).toFixed(2) + '%');
+    return { pairs, moved, deltas, maxPctNonHigh };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// Q5/Q6 (P32f / P32i) -- the cycleHarvestMode and cycleCoexist A/Bs. Both sides of each pair are
+// CYCLIC, so the q3 surplus-routing confound cancels: the only difference is the research input.
+//
+// PREDICTIONS (S2-P1..P3), recorded before the numbers were looked at:
+//   S2-P1. bracketfill >= off in >=80% of successful cyclic pairs at equal spend; median gain
+//          < 2% of final real after-tax NW (harvest years are 1-in-N of the horizon).
+//   S2-P2. Coexist gains scale with harvest frequency: largest in thirds/brokheavy (N~1),
+//          negligible in the defaults mixes (N~14, rare harvests).
+//   S2-P3. maxbracket beats spendonly in >=70% of pairs (0%-LTCG step-up is nearly free);
+//          spendonly wins concentrate where the MAGI side (IRMAA / SS phase-in) bites.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+function runAB(cells, name, extraOver, armFilter) {
+    console.log('\n' + '='.repeat(100));
+    console.log(name);
+    console.log('='.repeat(100));
+    const perMix = {};   // mix -> { pairs, wins, losses, deltas[] }
+    const all = [];
+    for (const cell of cells) {
+        for (const r of cell.rows) {
+            if (!r.cyclic || !r.totals?.success) continue;
+            if (armFilter && !armFilter(r)) continue;
+            let resB;
+            try { resB = simulate({ ...cell.cellBase, ...r.overrides, ...extraOver }); }
+            catch (e) { continue; }
+            const b = s1MkRow({ family: r.family, modifier: r.modifier, paramLabel: r.param,
+                                overrides: r.overrides }, resB);
+            s1Score(b, cell.sharedRate);
+            if (!b.totals?.success) continue;
+            const dSpend = (b.totals.spendCurrentDollars ?? 0) - (r.totals.spendCurrentDollars ?? 0);
+            if (Math.abs(dSpend) > 1) continue;   // (spend, wealth) pair rule: equal spend only
+            const dNW = (b.afterTaxNWCurrentDollars ?? 0) - (r.afterTaxNWCurrentDollars ?? 0);
+            const dPct = dNW / Math.max(1, Math.abs(r.afterTaxNWCurrentDollars ?? 1));
+            const m = perMix[cell.mix] = perMix[cell.mix] || { pairs: 0, wins: 0, losses: 0, deltas: [] };
+            m.pairs++; m.deltas.push(dNW);
+            if (dNW > 1) m.wins++; else if (dNW < -1) m.losses++;
+            all.push({ cell: cell.label, mix: cell.mix, sr: cell.sr,
+                       arm: r.family + ' ' + r.param + ' [' + r.modifier + ']', dNW, dPct });
+        }
+        process.stdout.write('.');
+    }
+    console.log('\n\nmix          pairs   B wins   B loses   median Δ       max Δ        min Δ');
+    for (const mix of S1_MIXES.map(m => m.key)) {
+        const m = perMix[mix]; if (!m) continue;
+        const ds = m.deltas.slice().sort((a, b) => a - b);
+        const med = ds.length ? ds[Math.floor(ds.length / 2)] : 0;
+        console.log(mix.padEnd(13) + String(m.pairs).padStart(5) + String(m.wins).padStart(9) +
+            String(m.losses).padStart(10) + money(med).padStart(11) +
+            money(ds[ds.length - 1] ?? 0).padStart(13) + money(ds[0] ?? 0).padStart(13));
+    }
+    all.sort((a, b) => b.dNW - a.dNW);
+    console.log('Largest B-side wins:');
+    for (const t of all.slice(0, 6)) {
+        console.log('  ' + t.cell.padEnd(22) + t.arm.padEnd(36) + money(t.dNW).padStart(12) +
+            ('(' + (100 * t.dPct).toFixed(2) + '%)').padStart(9));
+    }
+    console.log('Largest B-side losses:');
+    for (const t of all.slice(-3).reverse()) {
+        console.log('  ' + t.cell.padEnd(22) + t.arm.padEnd(36) + money(t.dNW).padStart(12) +
+            ('(' + (100 * t.dPct).toFixed(2) + '%)').padStart(9));
+    }
+    return { perMix, all };
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────────────────────────
 console.log('P32 brokerage harness');
 console.log('Engine: optimizer_core.js  |  scenarios: ' + SCENARIOS.length + '  arms: ' + ARMS.length);
@@ -381,4 +675,157 @@ if (q2r) {
 } else {
     console.log('P5/P6                        : not yet testable (research flags not wired)');
 }
+console.log('');
+
+// ── Q3/Q4 over the Stage-1 grid ─────────────────────────────────────────────────────────────────
+console.log('Building the 45-cell Stage-1 grid (Optimizer enumeration per cell)...');
+const s1cells = s1Cells();
+const q3r = q3(s1cells);
+
+// CONFOUND CONTROL. A cyclic clone differs from its twin in THREE ways: harvest-year branch
+// preemption, surplus reinvested into Brokerage instead of Cash (:2065), and forced DRIP (:2499 --
+// inert here, S1_COMMON already sets dividendReinvest true). Under legacy CashReserve the
+// non-cyclic arm parks every surplus dollar in Cash at cashYield while cyclic compounds it at
+// growth -- the exact surplus-cash-drag P2's Cash Reserve documented. CashReserve: 0 puts the
+// NON-cyclic arms on reinvest-all-surplus-to-Brokerage too, so this run isolates the harvest
+// mechanics from the routing side effect. (Cash Reserve floor is disabled under cyclic (:1399),
+// so the cyclic arms are unchanged between the two runs.)
+console.log('\nRebuilding the grid with CashReserve: 0 (surplus-routing confound removed)...');
+const s1cellsR0 = s1Cells({ CashReserve: 0 });
+const q3r0 = q3(s1cellsR0, 'CashReserve: 0 control (both arms reinvest surplus into Brokerage)');
+
+const q4r = q4(s1cells);
+
+// Q5: spendonly vs maxbracket, every cyclic arm. Q6: coexist off vs bracketfill, v1 families only.
+const V1_FAMILIES = new Set(['Fill Bracket', 'IRMAA Ceil', 'ACA Cliff', 'IRA Draw']);
+const q5r = runAB(s1cells,
+    'Q5  cycleHarvestMode: maxbracket (A, shipped) vs spendonly (B) -- does maxing the bracket pay?',
+    { cycleHarvestMode: 'spendonly' }, null);
+const q6r = runAB(s1cells,
+    'Q6  cycleCoexist: off (A, shipped) vs bracketfill (B) -- what do harvest-year IRA draws reclaim?',
+    { cycleCoexist: 'bracketfill' }, r => V1_FAMILIES.has(r.family));
+
+console.log('\n' + '='.repeat(100));
+console.log('PREDICTION SCORING  (S2-P1..P3, recorded before the numbers were looked at)');
+console.log('='.repeat(100));
+{
+    const q6all = q6r.all;
+    const noHarm = q6all.filter(t => t.dNW >= -1).length;
+    const ds = q6all.map(t => t.dPct).slice().sort((a, b) => a - b);
+    const medPct = ds.length ? ds[Math.floor(ds.length / 2)] : 0;
+    console.log('S2-P1 bracketfill no-harm >=80%, median gain <2%: no-harm ' + noHarm + '/' +
+        q6all.length + ' (' + (q6all.length ? (100 * noHarm / q6all.length).toFixed(0) : 0) +
+        '%), median Δ ' + (100 * medPct).toFixed(2) + '% -> ' +
+        ((q6all.length && noHarm / q6all.length >= 0.8 && Math.abs(medPct) < 0.02) ? 'RIGHT' : 'WRONG'));
+    const mixMean = mix => {
+        const xs = q6all.filter(t => t.mix === mix).map(t => t.dNW);
+        return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+    };
+    const heavy = (mixMean('thirds') + mixMean('brokheavy')) / 2;
+    const light = (mixMean('defaults') + mixMean('defaults3x')) / 2;
+    console.log('S2-P2 gains scale with harvest frequency: mean Δ thirds/brokheavy ' +
+        money(heavy) + ' vs defaults mixes ' + money(light) + ' -> ' +
+        (heavy > light ? 'RIGHT' : 'WRONG'));
+    const q5all = q5r.all;
+    const maxbWins = q5all.filter(t => t.dNW < -1).length;   // B=spendonly loses => maxbracket wins
+    console.log('S2-P3 maxbracket beats spendonly >=70%: maxbracket wins ' + maxbWins + '/' +
+        q5all.length + ' (' + (q5all.length ? (100 * maxbWins / q5all.length).toFixed(0) : 0) +
+        '%) -> ' + ((q5all.length && maxbWins / q5all.length >= 0.7) ? 'RIGHT' : 'WRONG'));
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// BASIS-AXIS EXTENSION (2026-08-10, user request). The Stage-1 grid's basis fraction never left
+// 43-56%; rebuild at 20% (highly appreciated) and 80% (mostly contributions) and re-run the
+// basis-sensitive A/Bs. q3 runs on its CashReserve:0 CONTROL form only (the legacy form is the
+// known routing confound; no reason to propagate it to new arms). Q1 ladder deliberately stays
+// at 50% basis - its role is comparability with the pre-fix record.
+//
+// PREDICTIONS (B-P1..B-P3), recorded before the numbers were looked at:
+//   B-P1. q4: the 0.20-target losses GROW at 20% basis (more gain per harvested dollar, all of
+//         it erased by the terminal step-up) and shrink toward inert at 80% basis.
+//   B-P2. q6: coexist's median is MORE negative at 20% basis; the IRA Draw 5-8% gains persist
+//         at both extremes.
+//   B-P3. q5: spendonly's win share grows at 20% basis and falls toward parity at 80% (the
+//         top-off is nearly free when there is little gain to realize).
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+console.log('\nBASIS AXIS: rebuilding the grid at basis 20% and 80%...');
+const cellsB20 = s1Cells({}, 0.2);
+const cellsB80 = s1Cells({}, 0.8);
+console.log('q3 control at each basis arm:');
+const cellsB20R0 = s1Cells({ CashReserve: 0 }, 0.2);
+const q3b20 = q3(cellsB20R0, 'basis 20%, CashReserve: 0 control');
+const cellsB80R0 = s1Cells({ CashReserve: 0 }, 0.8);
+const q3b80 = q3(cellsB80R0, 'basis 80%, CashReserve: 0 control');
+const q4b20 = q4(cellsB20);
+const q4b80 = q4(cellsB80);
+const q5b20 = runAB(cellsB20, 'Q5 @ basis 20%: maxbracket (A) vs spendonly (B)',
+    { cycleHarvestMode: 'spendonly' }, null);
+const q5b80 = runAB(cellsB80, 'Q5 @ basis 80%: maxbracket (A) vs spendonly (B)',
+    { cycleHarvestMode: 'spendonly' }, null);
+const q6b20 = runAB(cellsB20, 'Q6 @ basis 20%: coexist off (A) vs bracketfill (B)',
+    { cycleCoexist: 'bracketfill' }, r => V1_FAMILIES.has(r.family));
+const q6b80 = runAB(cellsB80, 'Q6 @ basis 80%: coexist off (A) vs bracketfill (B)',
+    { cycleCoexist: 'bracketfill' }, r => V1_FAMILIES.has(r.family));
+
+console.log('\n' + '='.repeat(100));
+console.log('PREDICTION SCORING  (B-P1..B-P3, recorded before the numbers were looked at)');
+console.log('='.repeat(100));
+{
+    const maxLoss = q => q.deltas.length ? Math.max(...q.deltas.map(d => -d.dNW)) : 0;
+    console.log('B-P1 q4 losses grow at 20%, shrink at 80%: max loss b20 ' + money(maxLoss(q4b20)) +
+        ' vs b50ish ' + money(maxLoss(q4r)) + ' vs b80 ' + money(maxLoss(q4b80)) +
+        ';  moved pairs ' + q4b20.moved + ' / ' + q4r.moved + ' / ' + q4b80.moved + ' -> ' +
+        ((maxLoss(q4b20) > maxLoss(q4r) && maxLoss(q4b80) < maxLoss(q4r)) ? 'RIGHT' : 'WRONG'));
+    const med = ab => {
+        const ds = ab.all.map(t => t.dNW).sort((a, b) => a - b);
+        return ds.length ? ds[Math.floor(ds.length / 2)] : 0;
+    };
+    const q6med = med(q6r), q6med20 = med(q6b20), q6med80 = med(q6b80);
+    const iraDrawGain = ab => Math.max(0, ...ab.all.filter(t => t.arm.startsWith('IRA Draw')).map(t => t.dNW));
+    console.log('B-P2 q6 median more negative at 20%: ' + money(q6med20) + ' vs ' + money(q6med) +
+        ' vs b80 ' + money(q6med80) + ';  IRA Draw best gain b20 ' + money(iraDrawGain(q6b20)) +
+        ' b80 ' + money(iraDrawGain(q6b80)) + ' -> ' +
+        ((q6med20 < q6med && iraDrawGain(q6b20) > 1 && iraDrawGain(q6b80) > 1) ? 'RIGHT' : 'WRONG'));
+    const winShare = ab => {
+        const w = ab.all.filter(t => t.dNW > 1).length;
+        return ab.all.length ? w / ab.all.length : 0;
+    };
+    console.log('B-P3 q5 spendonly win share b20 > default > b80: ' +
+        (100 * winShare(q5b20)).toFixed(0) + '% / ' + (100 * winShare(q5r)).toFixed(0) + '% / ' +
+        (100 * winShare(q5b80)).toFixed(0) + '% -> ' +
+        ((winShare(q5b20) > winShare(q5r) && winShare(q5b80) < winShare(q5r)) ? 'RIGHT' : 'WRONG'));
+    console.log('q3-control cyclic wins by basis: b20 ' + q3b20.cellsAnyWin + '/45, default ' +
+        q3r0.cellsAnyWin + '/45, b80 ' + q3b80.cellsAnyWin + '/45');
+}
+
+console.log('\n' + '='.repeat(100));
+console.log('PREDICTION SCORING  (S1-P2..P4, recorded before the numbers were looked at)');
+console.log('='.repeat(100));
+const winFrac = q3r.cellsAnyWin / q3r.nCells;
+const heavyMixWins = (q3r.byMix['thirds'] || 0) + (q3r.byMix['brokheavy'] || 0);
+const allMixWins = Object.values(q3r.byMix).reduce((a, b) => a + b, 0);
+console.log('S1-P2 cyclic wins <15% of cells : ' + q3r.cellsAnyWin + '/' + q3r.nCells + ' (' +
+    (100 * winFrac).toFixed(0) + '%) -> ' + (winFrac < 0.15 ? 'RIGHT' : 'WRONG') +
+    ';  concentration in thirds/brokheavy: ' + heavyMixWins + '/' + (allMixWins || 1) + ' of wins');
+console.log('      confound check           : with CashReserve:0 removing the surplus-routing ' +
+    'side effect, cyclic wins ' + q3r0.cellsAnyWin + '/' + q3r0.nCells + ' cells (vs ' +
+    q3r.cellsAnyWin + ' under legacy routing)');
+console.log('S1-P3 0.20 inert off 8% spend   : max |Δ%| in 4/6% cells = ' +
+    (100 * q4r.maxPctNonHigh).toFixed(2) + '% -> ' + (q4r.maxPctNonHigh < 0.01 ? 'RIGHT' : 'WRONG'));
+// S1-P4: Q1 on the corrected engine vs the pre-fix record (2026-08-06 run, double-crediting engine).
+const PREFIX_Q1 = { baseline: 90.4, bracket: 61.1, cyclic: 57.5, ordered: 44.7 };
+console.log('S1-P4 draw frequency rises vs pre-fix engine, never-draw stays 0:');
+let p4Right = true;
+for (const [f, prev] of Object.entries(PREFIX_Q1)) {
+    const v = fam[f]; if (!v) continue;
+    const now = 100 * v.drawYrs / v.yrs;
+    const up = now > prev;
+    if (!up) p4Right = false;
+    console.log('   ' + f.padEnd(10) + prev.toFixed(1) + '% -> ' + now.toFixed(1) + '%  ' +
+        (up ? 'UP' : 'DOWN/FLAT'));
+}
+const neverNow = q1r.rows.filter(r => r.neverDrew).length;
+if (neverNow !== 0) p4Right = false;
+console.log('   never-draw rows now: ' + neverNow + '  ->  S1-P4 overall ' +
+    (p4Right ? 'RIGHT' : 'WRONG'));
 console.log('');

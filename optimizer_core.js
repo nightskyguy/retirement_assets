@@ -1406,6 +1406,43 @@ function resolveSpendTarget(sim, yr) {
         : 0;
 }
 
+// P51b research input (node-only, no UI, default off): a per-year withdrawal-split override for
+// the perfect-foresight oracle. inputs.oracleWithdrawalPlan is an array indexed by plan year;
+// each entry is { IRA, Brokerage, Cash, Roth } weights (any non-negative scale — they are
+// normalized by calculateWithdrawals). Entry null/undefined or an all-zero entry = no override
+// that year (the strategy's own branch runs). Fractions, not dollars: dollar plans desync from
+// endogenous taxes/growth; weights are always feasible and reuse the existing target + shortfall
+// cascade unchanged. Conversions ride extraConversionAmount[] — no second conversion mechanism.
+// Three entry forms (P35n added the last two for the endgame tail bake-off):
+//   { IRA, Brokerage, Cash, Roth }  weights, fixed order [IRA,Brokerage,Cash,Roth]
+//   { prop: true }                  balance-proportional over [Brokerage,Cash,Roth] with the
+//                                   IRA excluded — exactly the P35 PR-5 BALANCED fill spec
+//   { seq: ['Cash','Roth',...] }    strict sequence: all from the first account, shortfall
+//                                   cascades through the given order (weight [1,0,...]), so
+//                                   'IRA' placed last is a true emergency backstop
+// Returns a { order, weight } withdrawal-strategy fragment, or null for "no override".
+function _oracleWithdrawalPlanFor(inputs, y) {
+    if (!Array.isArray(inputs.oracleWithdrawalPlan)) return null;
+    const e = inputs.oracleWithdrawalPlan[y];
+    if (!e) return null;
+    if (e.prop === true) {
+        return { order: ['Brokerage', 'Cash', 'Roth'], weight: [] };   // [] = derive from balances
+    }
+    if (Array.isArray(e.seq) && e.seq.length > 0) {
+        return { order: e.seq.slice(), weight: e.seq.map((_, i) => i === 0 ? 1 : 0) };
+    }
+    const w = [e.IRA || 0, e.Brokerage || 0, e.Cash || 0, e.Roth || 0];
+    if (!(w[0] + w[1] + w[2] + w[3] > 0)) return null;
+    return { order: ['IRA', 'Brokerage', 'Cash', 'Roth'], weight: w };
+}
+// Per-account tax rates for an oracle order, matching the conventions the family branches use.
+function _oracleTaxratesFor(order, sim, yr) {
+    return order.map(acct =>
+        acct === 'IRA' ? sim.nominalTaxRate
+        : acct === 'Brokerage' ? yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit)
+        : 0);
+}
+
 // Cyclic harvest-year decision plus the per-strategy primary withdrawal plan.
 function planPrimaryWithdrawals(sim, yr) {
     const { inputs, balance } = sim;
@@ -1429,7 +1466,18 @@ function planPrimaryWithdrawals(sim, yr) {
         yr.subCycleLabel = yr.isBrokerageYear ? 'Brok' : 'IRA';
     }
 
-    if (yr.isBrokerageYear) {
+    // P51b: the oracle override preempts every strategy branch (the same preemption shape as the
+    // cyclic harvest branch). Composition with cyclic is an explicit error, not a precedence rule.
+    const _oracleW = _oracleWithdrawalPlanFor(inputs, y);
+    if (_oracleW && inputs.cyclicEnabled) {
+        throw new Error('oracleWithdrawalPlan cannot compose with cyclicEnabled (research inputs, pick one)');
+    }
+    if (_oracleW) {
+        yr.withdrawStrategy.order = _oracleW.order;
+        yr.withdrawStrategy.weight = _oracleW.weight;
+        yr.withdrawStrategy.taxrate = _oracleTaxratesFor(_oracleW.order, sim, yr);
+        yr.withdrawals = calculateWithdrawals(yr.curBalances, yr.additionalSpendNeeded, yr.withdrawStrategy);
+    } else if (yr.isBrokerageYear) {
         // Brokerage harvest year: draw from Brokerage instead of IRA. Always max out the
         // nerdknob-selected LTCG bracket (0% or 15% top) rather than only drawing to meet
         // spend - this realizes gains + steps up basis even when spend doesn't need it.
@@ -1437,23 +1485,45 @@ function planPrimaryWithdrawals(sim, yr) {
         // the forced amount actually lands in (capture the room in the bracket you're already
         // paying for) - but never past the active bracket/minlimit/aca strategy's own MAGI
         // ceiling (`limit`), if one is in effect this year.
+        //
+        // P32c research inputs, BOTH default off / today's behavior, no UI sets either:
+        //   cycleHarvestMode  'maxbracket' (default, today) | 'spendonly' - spendonly draws only
+        //                     what spending needs, skipping the bracket top-off entirely (Q5).
+        //   cycleCoexist      'off' (default, today) | 'bracketfill' - the harvest year ALSO runs
+        //                     the family's own IRA sizing (v1: bracket/minlimit/aca + fixedpct).
+        //                     The IRA draw is sized FIRST, then the harvest is sized against the
+        //                     raised ordinary floor, so the draw's LTCG push-up is respected by
+        //                     construction. For MAGI-shaped ceilings (IRMAA tier / ACA / minlimit)
+        //                     the room subtracts the planned harvest's realized LTCG via a
+        //                     one-iteration two-pass fixed point (pass 1 sizes the harvest at
+        //                     IRAwd=0; pass 2 re-sizes it against the final floor). A pure
+        //                     federal-bracket-rate ceiling is ordinary-income-shaped - LTCG stacks
+        //                     ABOVE it and does not occupy it - so no subtraction there.
+        //                     With IRAwd > 0, convertExcessToRoth's cap (netWithdrawals.IRA)
+        //                     un-zeroes automatically: harvest years regain surplus conversions
+        //                     with no second edit.
         const _baseOrdinaryInc = yr.taxableInc + yr.fixedInc + yr.taxableInterest + yr.taxableDividends;
         const _cycleTargetRate = inputs.cycleLTCGTarget ?? 0.15;   // nerdknob: 0.15=target 0% bracket (default), 0.20=target 15% bracket
-        const _targetRoom = getLTCGBracketRoom(_baseOrdinaryInc, yr.status, _cycleTargetRate, sim.cpiRate);
-        const _targetNetRoom = _targetRoom * (1 - yr.capGainsPercentage * sim.capitalGainsRate);
-        let _brokerageNetTarget;
-        if (yr.additionalSpendNeeded <= _targetNetRoom) {
-            // Spend fits inside the target bracket - max it out anyway.
-            _brokerageNetTarget = _targetNetRoom;
-        } else {
+        const _harvestMode = inputs.cycleHarvestMode ?? 'maxbracket';
+        // Harvest sizing as a function of the ordinary-income floor. With ordFloor =
+        // _baseOrdinaryInc this is byte-for-byte today's logic; cycleCoexist calls it with the
+        // floor raised by the IRA draw.
+        const _sizeHarvest = (ordFloor) => {
+            if (_harvestMode === 'spendonly') return yr.additionalSpendNeeded;
+            const _targetRoom = getLTCGBracketRoom(ordFloor, yr.status, _cycleTargetRate, sim.cpiRate);
+            const _targetNetRoom = _targetRoom * (1 - yr.capGainsPercentage * sim.capitalGainsRate);
+            if (yr.additionalSpendNeeded <= _targetNetRoom) {
+                // Spend fits inside the target bracket - max it out anyway.
+                return _targetNetRoom;
+            }
             // Spend forces gains beyond the target bracket. Find which LTCG bracket the
             // forced realization lands in and top off to that bracket's own ceiling.
             const _spendGrossNeeded = yr.additionalSpendNeeded / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
-            const _landedRate = getLTCGBracketTopRate(_baseOrdinaryInc, _spendGrossNeeded, yr.status, sim.cpiRate);
+            const _landedRate = getLTCGBracketTopRate(ordFloor, _spendGrossNeeded, yr.status, sim.cpiRate);
             const _ltcgRates = (TAXData.FEDERAL.CAPITAL_GAINS[yr.status]?.brackets ?? []).map(b => b.r);
             const _nextRate = _ltcgRates.find(r => r > _landedRate);
             let _room = (_nextRate !== undefined)
-                ? getLTCGBracketRoom(_baseOrdinaryInc, yr.status, _nextRate, sim.cpiRate)
+                ? getLTCGBracketRoom(ordFloor, yr.status, _nextRate, sim.cpiRate)
                 : _spendGrossNeeded;   // already in the top LTCG bracket - no higher ceiling to top off to
             if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
                 // Don't let the LTCG top-off push total realized income past the active
@@ -1463,10 +1533,40 @@ function planPrimaryWithdrawals(sim, yr) {
                 // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
                 // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
                 const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep).limit;
-                _room = Math.min(_room, Math.max(0, _ceil - _baseOrdinaryInc));
+                _room = Math.min(_room, Math.max(0, _ceil - ordFloor));
             }
-            _brokerageNetTarget = Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
+            return Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
+        };
+        // cycleCoexist: size the family's IRA draw FIRST (v1 families only), then harvest above it.
+        let _coexistIRAwd = 0;
+        if ((inputs.cycleCoexist ?? 'off') === 'bracketfill') {
+            if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
+                // Same ceiling call and field assignments as the family's own branch below, so a
+                // coexist harvest year looks to downstream passes like the family branch ran.
+                ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
+                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep));
+                yr.bracketTarget = yr.limit;
+                let _iraRoom = Math.max(0, yr.limit - _baseOrdinaryInc);
+                const _magiShaped = (inputs.stratIRMAATier ?? -1) >= 0
+                    || inputs.strategy === 'minlimit' || yr.isACAStrategy;
+                if (_magiShaped) {
+                    // Pass 1 of the fixed point: harvest sized at IRAwd=0; its realized LTCG
+                    // occupies MAGI room the IRA draw must not double-book.
+                    const _net1 = _sizeHarvest(_baseOrdinaryInc);
+                    const _gross1 = _net1 / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
+                    _iraRoom = Math.max(0, yr.limit - _baseOrdinaryInc - _gross1 * yr.capGainsPercentage);
+                }
+                _coexistIRAwd = Math.max(0, Math.min(yr.curIRA, _iraRoom));
+            } else if (inputs.strategy === 'fixedpct') {
+                // The 3-line target from the fixedpct branch below, verbatim.
+                const pct = inputs.iraWithdrawPct ?? 0.05;
+                const originalIRA = balance.IRA1 + balance.IRA2 + yr.totalIRAForcedWithdrawals;
+                const targetTotal = originalIRA * pct;
+                _coexistIRAwd = Math.max(0, Math.min(yr.curIRA, targetTotal - yr.totalIRAForcedWithdrawals));
+            }
+            // Other families (propwd/fixed/gk/ordered/baseline): deferred until v1 shows a win.
         }
+        const _brokerageNetTarget = _sizeHarvest(_baseOrdinaryInc + _coexistIRAwd);
         if (_brokerageNetTarget > 1 && yr.curBalances.Brokerage > 0) {
             // Depletion check: warn if Brokerage < 50% of what we need
             const _grossNeeded = _brokerageNetTarget / Math.max(0.01, 1 - yr.capGainsPercentage * sim.capitalGainsRate);
@@ -1477,6 +1577,12 @@ function planPrimaryWithdrawals(sim, yr) {
                 { order: ['Brokerage'], weight: [1], taxrate: [yr.capGainsPercentage * sim.capitalGainsRate] });
         } else {
             yr.withdrawals = {};
+        }
+        if (_coexistIRAwd > 0) {
+            // Same face-value convention as the family branches ({ IRA: IRAwd, netAmount: IRAwd });
+            // the tax passes and residual resolution price it exactly as they do for those branches.
+            yr.withdrawals.IRA = (yr.withdrawals.IRA || 0) + _coexistIRAwd;
+            yr.withdrawals.netAmount = (yr.withdrawals.netAmount || 0) + _coexistIRAwd;
         }
     } else if (inputs.strategy === 'fixed') {
         // In this strategy, we confine withdrawals to the IRA for the first round. 
@@ -1662,8 +1768,20 @@ function fillSpendingGap(sim, yr) {
         gap = _preDraw('Roth', gap);
     }
 
+    // P51b mirror: the oracle's year weights govern the SECOND pass too, so the plan's split is
+    // in force for the whole spending need, not just the primary draw. Phase-2 spill inside
+    // calculateWithdrawals (IRA -> Brokerage -> Cash -> Roth) is the shortfall cascade.
+    const _oracleWGap = _oracleWithdrawalPlanFor(inputs, yr.y);
     if (gap > 1.00) {
-        if (yr.isBracketStrategy) {
+        if (_oracleWGap) {
+            const wd = calculateWithdrawals(yr.curBalances, gap, {
+                order: _oracleWGap.order,
+                weight: _oracleWGap.weight,
+                taxrate: _oracleTaxratesFor(_oracleWGap.order, sim, yr),
+            });
+            yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, wd]);
+            applyWithdrawals(yr.curBalances, wd);
+        } else if (yr.isBracketStrategy) {
             // Bracket/IRMAA strategies: supplement spending from Cash first, then Brokerage, then Roth.
             // This keeps supplemental draws out of taxable income as much as possible.
             const cashWd = calculateWithdrawals(yr.curBalances, gap, { order: ['Cash'], weight: [1], taxrate: [0] });

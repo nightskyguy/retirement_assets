@@ -70,6 +70,9 @@ A California resident built these with [Google gemini](https://gemini.google.com
     - [Miscellaneous](#miscellaneous)
   - [Some of the Things I Learned About Taxation](#some-of-the-things-i-learned-about-taxation)
     - [Late Payment Penalties](#late-payment-penalties)
+      - [End of Year vs Quarterly Tax Payments](#why-end-of-year-vs-quarterly)
+      - [Roth Conversion Withholding and Replacement](#roth-conversion-tax-withholding-and-repayment)
+      - [Reconciling IRS Forms/Custodian Notes](#reconciliation-and-notes)
     - [Moldy Brackets](#moldy-brackets)
     - [IRMAA Escalation](#irmaa-escalation)
     - [The Tax Torpedo](#the-tax-torpedo)
@@ -353,7 +356,7 @@ There are some interesting ideas in the tool: for example "Health Care Spending 
 #### ThunderHarbor.net by yanyan80
 Free to try, $3.99 for a one week trial then $49 or $79 year. 
 
-Frankly two things dissuaded me from trying this tool. The first was the "Free to Try" banner with no pricing, and the second is the  requirement to provide an email. Pricing is now present. The $49 vs $79 is for those who "start before the 50 low-price slots are gone."  I get the idea behind the pricing, but it feels a bit like the many scammy sites that pretend the pricing is going to expire soon. It also allows $3.99 for a week trial.  When I've created throw away email address, I will evaluate the tool for the week.
+Frankly two things dissuaded me from trying this tool. The first was the "Free to Try" banner with no pricing, and the second is the requirement to provide an email. Pricing is now present. The $49 vs $79 is for those who "start before the 50 low-price slots are gone."  I get the idea behind the pricing, but it feels a bit like the many scammy sites that pretend the pricing is going to expire soon. It also allows $3.99 for a week trial.  When I've created throw away email address, I will evaluate the tool for the week.
 
 @[yanyan80](https://www.reddit.com/user/yanyan80/) is the author on Reddit. 
 
@@ -467,84 +470,83 @@ One of the biggest bugaboos in retirement is managing your tax payments.  Unlike
 
 You CANNOT solve the timeliness problem by plunking down your tax debt when you file your taxes by the April 15 deadline!
 
-The easiest solution to the "when were taxes paid" problem is to have taxes withheld from withdrawals or conversions. The IRS and most state goverments treat withholding as if you paid the amounts quarterly. BUT, most custodians will NOT allow you to withhold taxes from an Roth withdrawal.  This means you have three ways to solve the "timely payment" problem: 
+The easiest solution to the "when were taxes paid" problem is to have taxes withheld from withdrawals or conversions. The IRS and most state governments treat withholding as if you paid the amounts quarterly. BUT, most custodians will NOT allow you to withhold taxes from an Roth withdrawal.  This means you have three ways to solve the "timely payment" problem: 
 A. Estimate your taxes and pay them quarterly.  (But if you miss a payment, expect late penalties!)
 B. Have the appropriate amount of taxes **withheld** from a taxable distribution to cover the years worth of taxes (or at least enough to reach "Safe Harbor").
 C. File a form with the IRS (Form 2210, Schedule A) that explains why your income was "lumpy" and you didn't meet the expected timely payment requirement.
 
-Option B allows another workaround: Suppose you convert 10k from your IRA to your Roth. You can have taxes withheld from the conversion, and WITHIN 60 days, make your Roth whole by adding cash into the Roth.
+Option B allows another workaround: Suppose you convert 10k from your IRA to your Roth. You can have taxes withheld from the conversion, and WITHIN 60 days, make your Roth whole by adding cash into the Roth. We call this "*the maneuver*" and detail it later.
 
-An earlier version claimed that maneuver was limited to *once every 365 days*. That was wrong, and it *overstated* the restriction. The once-per-12-months limit is [IRC 408(d)(3)(B)](https://www.law.cornell.edu/uscode/text/26/408), and it applies to **IRA-to-IRA** 60-day rollovers. The IRS lists the transactions that are excluded from it, and "rollovers from traditional IRAs to Roth IRAs (conversions)" is one of them ([IRS, Rollovers of retirement plan and IRA distributions](https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions)). The IRS says elsewhere that Roth conversions "are not subject to the one-per-year limit and are disregarded in applying the limit to other rollovers" ([IR-2014-107 / Announcement 2014-32](https://www.irs.gov/uac/newsroom/irs-clarifies-application-of-one-per-year-limit-on-ira-rollovers-allows-owners-of-multiple-iras-a-fresh-start-in-2015)). So you can withhold-and-replace on every conversion you do, in the same year, in both spouses' IRAs, and doing so does not use up your one ordinary IRA-to-IRA rollover.
+There is a once-per-12-months limit [IRC 408(d)(3)(B)](https://www.law.cornell.edu/uscode/text/26/408) that applies to **IRA-to-IRA** 60-day rollovers. Transactions that are excluded from the once per year include "rollovers from traditional IRAs to Roth IRAs (conversions)" (see [IRS, Rollovers of retirement plan and IRA distributions](https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions)). The IRS says elsewhere that Roth conversions "are not subject to the one-per-year limit and are disregarded in applying the limit to other rollovers" ([IR-2014-107 / Announcement 2014-32](https://www.irs.gov/uac/newsroom/irs-clarifies-application-of-one-per-year-limit-on-ira-rollovers-allows-owners-of-multiple-iras-a-fresh-start-in-2015)). So you **can** *withhold-and-replace* on every conversion you do, in the same year, in each  spouses' IRAs, and doing so does not use up your one ordinary IRA-to-IRA rollover.
 
-Two things about the maneuver are still real limits. First, the exclusion covers the *conversion*. If you withhold from an RMD or from a plain IRA withdrawal and then try to replace that money, you are doing an ordinary IRA-to-IRA rollover, which really is once per 12 months, and RMD dollars cannot be rolled over at all. Second, it only makes sense if you are at least 59.5 years old. Under 59.5, any withheld dollars you fail to replace inside the 60 days are a distribution you did not convert, so they are ordinary income **plus** a 10% early-distribution penalty. That penalty, not a 365-day clock, is the actual trap.
+##### Why End of Year vs Quarterly?
+Perhaps the main reason why you would want to withhold at the end of the year instead of quarterly are two fold: 
+1. You have time to earn more growth! and 
+2. You have greater tax certainty. 
+
+If you pay $X quarterly, that means the first 3 months you get growth on the full amount $X, but the next 3 months you get interest on 3/4 of X, ... and so on. The net is you gain 62.5% of the growth you could have gained had you kept the total payment in your account.  On a total tax bill of 30k, in a HYSA at 4% you could make $1,200, but by paying quarterly you only gain $750.  But don't forget to pay the tax on the interest.
+
+Two things about *the maneuver* are still real limits. First, the exclusion covers the *conversion*. If you withhold from a plain (non-RMD) IRA withdrawal and then try to replace that money into a traditional IRA, you are doing an ordinary IRA-to-IRA rollover, which really is capped at once per 12 months, aggregated across all your IRAs. RMD dollars are a separate and harder problem: they are not eligible for rollover treatment at all, so "replacing" withheld RMD money doesn't complete a rollover, it's a new contribution, and if it exceeds your contribution limit it becomes an excess contribution subject to a 6% excise tax until fixed. Second, if under 59.5, any withheld dollars you fail to replace inside the 60 days are a distribution you did not convert, so they are ordinary income **plus** a 10% early-distribution penalty. That penalty, not a 365-day clock, is the actual trap for the conversion maneuver itself.
 
 The reason withholding fixes timeliness at all is [IRC 6654(g)(1)](https://www.law.cornell.edu/uscode/text/26/6654): withholding is credited as if an equal part were paid on each of the four due dates, whenever it actually happened. A December withholding therefore repairs a Q1 shortfall. A December estimated *payment* does not.
 
 Safe Harbor is another "gotcha" in the tax code. If you "timely" pay 90% of your current year taxes and 100% or 110% of your prior taxes (depending on income), you will not get an underpayment/late payment penalty. See [IRS Publication 505](https://www.irs.gov/publications/p505).
 
-More on Option C: [Form 2210, Schedule AI](https://www.irs.gov/forms-pubs/about-form-2210) is the annualized income installment method. It recomputes each quarter's required payment from the income you actually had by that point, so a conversion done in Q3 or Q4 is charged to the quarter it arose in instead of being spread back across the whole year. It can erase an early-quarter penalty with no withholding at all. The cost is an extra form plus quarter-by-quarter records of income, deductions, and withholding. It changes the penalty computation only, never the tax you owe. The Tax Payment Planner names Schedule AI when your conversion lands late in the year and a shortfall remains, but it does not compute the result.
+More on Option C: [Form 2210, Schedule AI](https://www.irs.gov/forms-pubs/about-form-2210) is the annualized income installment method. It recomputes each quarter's required payment from the income you actually had by that point, so a conversion done in Q3 or Q4 is charged to the quarter it arose in instead of being spread back across the whole year. It can erase an early-quarter penalty with no withholding at all. The cost is an extra form plus quarter-by-quarter records of income, deductions, and withholding. It changes the penalty computation only, never the tax you owe. The [Tax Payment Planner](https://tools.netcitizen.us/RetirementTaxPlanner.html) names Schedule AI when your conversion lands late in the year and a shortfall remains, but it does not compute the result.
 
 #### Roth Conversion Tax Withholding and Repayment
 
-Because you can "withdraw" 30k from your IRA, have 10k withheld for taxes (or any amount?) and within 60 days repay that withheld taxes, it made me wonder how that works. That is, what paper trail does the IRS use to determine whether you've done a "$10k CONTRIBUTION" (which requires income and exceeds current limits) vs a "conversion". The IRS doesn't distinguish these by watching the transaction happen - it relies on two separate information returns from your custodian(s), then matches them via a form you file.
+Because you can remove $30k from your IRA and have some moved to a Roth and some withheld for taxes, move  some into another IRA or a Roth AND repay some or all of the withdrawn funds in 60 days, it made me wonder how that works. That is, what paper trail does the IRS use to determine whether you've done a withdrawal, a conversion, a roll-over or a contribution (which requires income and exceeds current limits). The IRS doesn't distinguish these by watching the transaction happen - it relies on two separate information returns from your custodian(s), then matches them via a form you file.
 
-Your IRA custodian sends a 1099-R reporting a $30k gross distribution from the traditional IRA (with a distribution code indicating IRA money, e.g. code 2 or 7). It flags $30k as having left the IRA - it does not know or care where it ended up. Your Roth custodian sends a 5498 reporting what it actually received as a "conversion contribution" - in this example, $20k (the amount that actually landed in the Roth).
+Your IRA custodian sends a 1099-R reporting a $30k gross distribution from the traditional IRA (with a distribution code indicating IRA money, e.g. code 2 or 7). It flags $30k as having left the IRA - it does not know or care where it ended up. Your Roth custodian sends a 5498 reporting what it actually received as a "conversion contribution" - say $20k or whatever amount actually landed in the Roth.
 
-On your tax return, you file Form 8606, Part II, where you report the conversion amount. The IRS's matching system essentially reconciles the 1099-R (money out) against the 5498s (money in) and your 8606. If only $20k shows up as converted while $30k left the IRA, the other $10k is just a taxable distribution - subject to ordinary income tax and, if you're under 59½, the 10% early-withdrawal penalty (conversions are exempt from that penalty, plain distributions aren't).
+On your tax return, you file Form 8606, Part II, where you report the conversion amount. The IRS's matching system essentially reconciles the 1099-R (money out) against the 5498s (money in) and your 8606. If only $20k shows up as converted while $30k left the IRA, the other $10k is a taxable distribution - subject to ordinary income tax and, if you're under 59½, the 10% early-withdrawal penalty (conversions are exempt from that penalty, plain distributions aren't).  Of course the whole withdrawal is subject to income tax UNLESS, some of the IRA withdrawal landed in another IRA in which case the portion that moved from one IRA to another is a rollover.
 
-If you then make up the withheld $10k out of pocket and deposit it into the Roth within 60 days, that deposit generates its own 5498 as a 60-day rollover contribution. Now the two 5498s together show $30k converted, matching the $30k on the 1099-R, and you report the full $30k as converted on Form 8606 - no penalty, though the withheld amount was still paid to the IRS as tax (that's separate from the taxability of the conversion itself, since conversions are fully taxable either way).
+If you make up the withheld $10k out of pocket and deposit it into the Roth within 60 days, that deposit generates its own 5498 as a 60-day Roth rollover contribution. Now the two 5498s together show $30k converted, matching the $30k on the 1099-R, and you report the full $30k as converted on Form 8606 - no penalty, though the withheld amount was still paid to the IRS as tax (that's separate from the taxability of the conversion itself, since conversions are fully taxable either way).
 
 So there's no ambiguity resolved after the fact by IRS guesswork - it's a paper trail (1099-R + 5498s + your 8606) that either reconciles to $30k converted or leaves a $10k gap taxed as a straight distribution - or if under 59.5 invokes a penalty.
 
-My understanding of this implies something else: even if you are **under 59.5 you can have taxes withheld from the conversion** and make them up within 60 days. The conventional wisdom is that withholding taxes counts as a distribution and the 10% penalty will apply. But not if you timely repay! Note that missing the 60 day replacement WILL result in a penalty which may be waived if you show good cause. "I forgot" will not be acceptable, but "I was in a coma in the hospital" might work. Check with your tax attorney before you try this, laws change and I am not a tax attorney!
+My understanding of this implies something else: even if you are **under 59.5 you can have taxes withheld from the conversion** and make them up within 60 days. The conventional wisdom is that withholding taxes counts as a distribution and the 10% penalty will apply. But not if you timely repay! Note that missing the 60 day replacement WILL result in a penalty which may be waived if you show good cause. "I forgot" will not be acceptable, but "I was in a coma in the hospital" might work. Check with your tax attorney before you try this, laws change and I am not a tax attorney!  One gotcha here: many custodians do not well support the "obvious" paths below, so pay attention to the "friction reduction" noted.
 
+The following are 3 ways to convert $30k from an IRA to a Roth.
 
 ##### Scenario 1: $30k moved, no withholding
 
-You convert $30k directly from the traditional IRA to the Roth. No 1099-R withholding involved. The Roth custodian's 5498 shows a $30k conversion contribution, matching the $30k distribution, and the full $30k is taxable ordinary income for the year.
+You convert $30k directly from the traditional IRA to the Roth. No 1099-R withholding involved. The Roth custodian's 5498 shows a $30k conversion contribution, matching the $30k distribution (on 1099-R), and the full $30k is taxable ordinary income for the year.
+
+**Friction** - most custodians support this directly so it is low friction. For example at Fidelity a Roth conversion is simply a transfer from an IRA to a Roth. It's dangerously easy.
 
 ##### Scenario 2: $30k withdrawn, $10k moved, $20k withheld and replaced
 
-The IRA distributes $30k. $10k goes straight to the Roth as a conversion contribution. $20k is withheld for taxes. Within 60 days, you deposit $20k of outside funds into the Roth. The 5498s show $10k as a conversion contribution plus $20k as a rollover contribution, totaling $30k, which matches the 1099-R. Form 8606 reports the full $30k as converted, and it's fully taxable, same as scenario 1.  A more dramatic scenario: $30k withdrawn/withheld and all of it replaced.
+The IRA distributes $30k. $10k goes straight to the Roth as a conversion (same mechanism as scenario 1). $20k is withheld for taxes. Within 60 days, you deposit $20k of outside funds into the Roth. The 5498s show $10k as a conversion contribution plus $20k as a rollover contribution, totaling $30k, which matches the 1099-R. Form 8606 reports the full $30k as converted, and it's fully taxable, same as scenario 1.
+
+The lowest friction way to do this at a custodian is as follows:
+
+Change the "withdraw" and "convert" operations from one messy operation into 3 clean ones.
+
+1. Use the "distribution with withholding" option. This is a very normal distribution and most custodians directly support it. One possible gotcha is that you may not be able to withhold 100% of the distribution at some custodians. The withdrawal is reported on form 1099R.
+2. Do a Roth conversion (transfer from IRA to Roth) of the direct portion. This is reported on the 5498 form.
+3. For replacement deposit into the Roth within 60 days. The custodian will report it as a rollover contribution on form 5498.
+
+In each scenario, the 5498(s) total $30k, and the 1099R(s) total $30k.  If all transactions are at one custodian, it may come out as only two forms even if you do multiple transactions.  Note if under 59.5 and some is not repaid, it pops out on form 5329.
+
+##### Scenario 3: $30k withheld and replaced.
+Scenario 3 is the same as scenario 2 with one less step: there is no "conversion" (no step 2).
 
 
-Each produces an identical tax result: $30k converted, $30k taxable, no penalty (since you're over 59½ regardless). The only real-world differences are cash flow (how much outside money you need on hand to make the replacement deposit) and the 60-day deadline for scenarios 2 and 3.
+##### Reconciliation and Notes
+*Not tax or legal advice - consult a CPA or tax advisor before executing any of these scenarios.*
 
-##### Likely custodian friction
+Since the multi-step - lower friction - procedure may produce multiple 1099-Rs and multiple 5498s instead of one of each, whoever prepares the tax return needs to make sure they are aggregated correctly on Form 8606 rather than one being overlooked.
 
-Fidelity's online tools generally don't let you attach withholding to a Roth conversion request done through the website. According to Fidelity's own one-time IRA withdrawal form, you can elect withholding up to 100% for a one-time distribution, but that's on the distribution form, not the conversion tool, and doing a heavily-withheld conversion (like scenarios 2 or 3) often requires calling Fidelity or using paper forms to process it as a distribution paired with a separate rollover contribution into the Roth, rather than a single "convert" action.
-
-Schwab has a similar pattern: its standard online Roth conversion flow is built for a clean, no-withholding conversion, and getting withholding attached, especially at high percentages, typically means going through a distribution request rather than the conversion tool, and may require a phone call or paper form as well.
-
-In both cases, the practical friction isn't a tax-law limit (the IRS is fine with any of these three outcomes), it's that the custodians' online systems are optimized for straightforward conversions and aren't well set up for "distribute with heavy withholding, then separately roll over cash into the Roth." Expect to talk to a rep or file paper forms for scenarios 2 and 3, especially scenario 3 with 100% withholding.
+Each scenario (1-3) produces an identical tax result: $30k converted, $30k taxable, no penalty (since you're over 59½). The real-world differences are cash flow - how much outside money you need on hand to make the replacement deposit - and the 60-day deadline for scenarios 2 and 3.
 
 **Sources:**
 - [Fidelity IRA one-time withdrawal form](https://www.fidelity.com/bin-public/060_www_fidelity_com/documents/customer-service/withdrawals-ira-one-time.pdf)
 - [Bogleheads: Fidelity, must call them to have withholding for Roth conversion](https://www.bogleheads.org/forum/viewtopic.php?t=455838)
 - [Bogleheads: Roth conversion, tax payment options](https://www.bogleheads.org/forum/viewtopic.php?t=457507)
-
----
-
-##### Proposed "friction reduction"
-
-If your custodian doesn't allow withholding from a conversion, you can perform the scenarios as follows:
-
-- **Scenario 1:** Just a conversion. No extra work.
-
-- **Scenario 2:** Direct convert the $20k; withdraw and withhold 100% of $10k; replace $10k before 60 days using available funds.  Or more extreme: withdraw+withhold $30k and replace with available funds.
-
-
-**Scenario 2 (revised):** This works, and it's arguably better than the original mechanics for exactly the friction reason identified - it splits one messy transaction into three clean ones. A $20k "plain" conversion (no withholding attached) is precisely what Fidelity's/Schwab's online conversion tools are built for. A $10k "plain" distribution with 100% withholding, paid to yourself rather than routed to the Roth, is precisely what the one-time withdrawal form is built for (Fidelity's own form allows up to 100% withholding). Neither leg asks the custodian's software to do the thing it doesn't support (attach withholding to a conversion). For the replacement ($10k with outside cash), deposited into the Roth within 60 days. The custodian will report it as a rollover contribution on the 5498; combined with the $20k conversion contribution, the two 5498s total $30k, matching the $30k across your two 1099-Rs, and Form 8606 aggregates it into $30k converted/taxable - same result as the original scenario 2, just assembled from two ordinary transactions instead of one hybrid one.
-
-One mechanical point worth flagging: since this produces two separate 1099-Rs and two separate 5498s instead of one of each, whoever preps the return needs to make sure both get aggregated correctly on Form 8606 rather than one being overlooked.
-
-**Sources:**
 - [Rollovers of retirement plan and IRA distributions | IRS](https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions)
 - [Publication 590-A (2025), Contributions to IRAs | IRS](https://www.irs.gov/publications/p590a)
-
----
-
-*Not tax or legal advice - consult a CPA or tax advisor before executing any of these scenarios.*
 
 #### Moldy Brackets
 

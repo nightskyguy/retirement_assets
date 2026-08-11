@@ -4234,6 +4234,12 @@ function applyScenario(data) {
     if (typeof updateProfileAgeDisplay === 'function') updateProfileAgeDisplay(); // ages / RMD start / projected RMD
     if (typeof refreshStratRateOptions === 'function') refreshStratRateOptions(); // bracket/IRMAA labels (CPI + filing status)
     if (typeof updateBracketFeedback === 'function') updateBracketFeedback();
+    // The loaded scenario is the new restore baseline. spendGoal was set programmatically via
+    // setDollarValue, which does NOT fire the field's oninput="_priorSpendGoal=null", so a stale
+    // pre-load "Restore: $X" (often the original default) would otherwise cling to the ⓘ icon.
+    // Clear it: the icon now recalculates a fresh suggestion for the loaded inputs, and once the
+    // user applies it, restore targets the goal loaded from the file - not the default.
+    _priorSpendGoal = null;
     if (typeof updateSuggestSpendTooltip === 'function') updateSuggestSpendTooltip();
     if (typeof updateIRAGoalHint === 'function') updateIRAGoalHint();
     if (typeof updateCompAdvisory === 'function') updateCompAdvisory();

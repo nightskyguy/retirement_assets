@@ -2166,3 +2166,87 @@ carry a genuinely "safe" number rather than a rate-times-portfolio benchmark.
 - Whether "5 full years of remaining assets" (B) means 5x full spend [implemented] vs 5x portfolio-funded
   gap - user's wording implied full spend; confirm.
 - MC-percentile calibration for a genuinely SoRR-aware conservative option (finding 4).
+
+---
+
+## 2026-08-10 — Ordered strategy: does each year restart the sequence? (investigation, no edit)
+
+**User question:** for an Ordered sequence (e.g. Cash→IRA→Brokerage), confirm that every year re-funds
+from the TOP of the sequence — if Cash refills and IRA has a small remainder next year, it draws Cash
+then IRA first again — rather than getting "stuck" past exhausted accounts.
+
+**Verdict: CONFIRMED correct on the draw side. No stuck-pointer defect.**
+
+Evidence (optimizer_core.js):
+- `runOrderedWithdrawal(balances, need, seq, ...)` @754 is **stateless**: `for (const [acct] of seq)`
+  with `if (rem <= 1 || (balances[acct] ?? 0) <= 0) continue;`. The skip test reads the LIVE balance
+  each call — no persistent "exhausted" flag. A refilled account (balance > 0) is drawn again.
+- Called fresh each simulated year against `yr.curBalances` (the running portfolio) at two points:
+  gap-fill @1687 and residual third pass @1743. Both iterate the seq from the top. So within a year,
+  and across years, the fill always restarts at position 1 and reads current balances.
+- Main withdrawal block sets `yr.withdrawals = {}` for ordered (@1542-1545): all spend is handled in
+  the ordered gap-fill passes, nothing pre-drawn.
+- The IRA funding backstop (@1822 `if (!yr.isACAStrategy && !yr.isOrderedStrategy)`) is deliberately
+  SKIPPED for ordered — so ordered never draws IRA outside its own sequence. Matches the help text
+  ("Ordered is the only strategy that will not draw extra IRA outside it, so it can leave a small
+  residual shortfall"). This is by design, not the reported defect.
+- RMDs are forced from the IRA first every year regardless of sequence (legally required; tooltip
+  already says so). Not a defect.
+
+**Naming caveat:** the offered sequences are **CBIR / RIBC / BIRC** (optimizer_core.js:747-749, and the
+dropdown grid @3667). "CIBR" (Cash→IRA→Brokerage→Roth) as the user described is NOT selectable. CBIR is
+Cash→**Brokerage**→**IRA**→Roth. So the mechanism is correct, but the exact order the user wants may not
+be on the menu.
+
+**The "order dictates fill" half is genuinely NOT implemented (separate enhancement, not a bug):**
+surplus routing @2055-2078 ignores the Ordered sequence entirely — surplus always lands in **Cash**
+(default / Cash-Reserve-off), or **Brokerage** (Cyclic, or Cash-Reserve overflow). It never fills the
+first-in-sequence account. Consequences:
+- CBIR (Cash first): surplus→Cash is already consistent — banked surplus is the first thing drawn next
+  year. No issue.
+- RIBC / BIRC (Cash drawn LAST): surplus piles into Cash, which the sequence then won't touch until
+  Brokerage/IRA/Roth are exhausted. Mild inconsistency with "fill in priority order," but it does NOT
+  break the per-year restart-in-order draw the user asked about — next year still reads balances and
+  draws in sequence.
+
+**Bottom line:** the behavior the user wanted (yearly restart in sequence, using whatever Cash/IRA
+exist that year) IS what occurs. If they want surplus to also refill the top-priority account, that is a
+new feature, and only matters for non-Cash-first sequences. A node harness could demonstrate numerically
+if desired (runOrderedWithdrawal is requireable like the tests).
+
+### 2026-08-10 follow-up — user asked for (b) surplus-fill + (c) harness. Both DONE.
+
+**(c) Harness:** `.test_harnesses/ordered_fill_harness.js` (`node .test_harnesses/ordered_fill_harness.js`).
+Q_C proves the restart: on a deficit-early / surplus-later fixture, CBIR drains Cash to $552 in 2026,
+skips it while empty 2027-2036, refills it to ~$487k during the SS+RMD window, then RE-DRAWS it in
+2052-2053. Since `runOrderedWithdrawal` is one shared stateless function, that proves the yearly restart
+for all three sequences (RIBC/BIRC draw Cash last so it doesn't oscillate there - expected, not a gap).
+`runOrderedWithdrawal`/`resolveOrderedSeq` are NOT exported, so the proof runs through full `simulate()`
+rather than a unit call - deliberately did not widen the public surface for a demo.
+
+**(b) Surplus fill follows draw order** - added an `else if (yr.isOrderedStrategy)` branch in
+`routeSurplusAndConvert` (optimizer_core.js, the surplus-landing block ~2063). Banks surplus in whichever
+FUNDABLE account (Cash or Brokerage) the sequence draws first; Roth/IRA are contribution-limited so they
+are never fill targets. Resolves to: CBIR->Cash (unchanged), RIBC->Brokerage, BIRC->Brokerage. Precedence
+is Cyclic > CashReserve > ordered-fill > legacy-all-to-cash, so an explicit Cash Reserve still wins.
+
+Harness before -> after (30yr fixture, TX, deferred SS, rising real spend):
+| seq | surplus->Cash | surplus->Brok | totalWealth |
+|---|---|---|---|
+| CBIR | 368,408 -> 368,408 | 0 -> 0 | 2,534,286 -> 2,534,286 (IDENTICAL) |
+| RIBC | 144,368 -> 0 | 0 -> 151,483 | 2,614,172 -> 2,710,331 (+96,159) |
+| BIRC | 282,874 -> 0 | 0 -> 322,353 | 2,452,970 -> 2,626,189 (+173,219) |
+
+CBIR byte-identical is the safety signal: anything pinned to the default ordered seq is untouched.
+RIBC/BIRC gain because surplus in Brokerage grows at market (5%) not cashYield (3%) AND is drawn earlier.
+
+Verification: node optimizer_core.tests.js 233/233 (incl. the RIBC stranded-IRA characterization @1305
+and the buildVariations MC_GOLDEN enumeration - golden pins the row inventory, not dollar amounts, so a
+surplus-routing change cannot touch it), TPP 32/32, doclinks 22/22. Browser engine (default UI scenario)
+confirms same direction: CBIR toCash>0/toBrok=0, RIBC+BIRC toCash=0/toBrok>0. Console clean.
+
+SHIPPED as PR #164 (branch fix/ordered-surplus-fill off main, commit 9e5ad6f, v11.14dd). User chose
+"PR + docs + changelog". Included: engine change, new harness, title/?v= bump to 11.14dd, in-page
+changelog `<li>` (data-flag=behavior), optimizer_changelog.md write-up, and the Ordered help text
+(retirement_optimizer.html ~L722) now describing the surplus-fill rule. Browser self-test 529/529 green
+with ?v=1114dd loaded. .planning/* changes deliberately left out of the code PR.

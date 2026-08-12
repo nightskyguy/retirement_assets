@@ -93,6 +93,7 @@ A California resident built these with [Google gemini](https://gemini.google.com
   - [Is the Break-Even Tax Rate Trustworthy?](#is-the-break-even-tax-rate-trustworthy)
   - [How Do I Evaluate Tools for Privacy and Security?](#how-do-i-evaluate-tools-for-privacy-and-security)
   - [What Should I Look for in Retirement Tools?](#what-should-i-look-for-in-retirement-tools)
+  	- [Monte Carlo and Chance of Success - How accurate?](#monte-carlo-and-chance-of-success-accuracy)
 
 --- 
 
@@ -471,10 +472,12 @@ One of the biggest bugaboos in retirement is managing your tax payments.  Unlike
 You CANNOT solve the timeliness problem by plunking down your tax debt when you file your taxes by the April 15 deadline!
 
 The easiest solution to the "when were taxes paid" problem is to have taxes withheld from withdrawals or conversions. The IRS and most state governments treat withholding as if you paid the amounts quarterly. BUT, most custodians will NOT allow you to withhold taxes from a Roth withdrawal.  This means you have three ways to solve the "timely payment" problem: 
-A. Estimate your taxes and pay them quarterly.  (But if you miss a payment, expect late penalties!)
-B. Have the appropriate amount of taxes **withheld** from a taxable distribution to cover the years worth of taxes (or at least enough to reach "Safe Harbor").
-C. File a form with the IRS (Form 2210, Schedule A) that explains why your income was "lumpy" and you didn't meet the expected timely payment requirement.
 
+- A. Estimate your taxes and pay them quarterly.  (But if you miss a payment, expect late penalties!)
+- B. Have the appropriate amount of taxes **withheld** from a taxable distribution to cover the years worth of taxes (or at least enough to reach "Safe Harbor").
+- C. File a form with the IRS (Form 2210, Schedule A) that explains why your income was "lumpy" and you didn't meet the expected timely payment requirement.
+
+##### The Maneuver
 Option B allows another workaround: Suppose you convert 10k from your IRA to your Roth. You can have taxes withheld from the conversion, and WITHIN 60 days, make your Roth whole by adding cash into the Roth. We call this "*the maneuver*" and detail it later.
 
 There is a once-per-12-months limit [IRC 408(d)(3)(B)](https://www.law.cornell.edu/uscode/text/26/408) that applies to **IRA-to-IRA** 60-day rollovers. Transactions that are excluded from the once per year include "rollovers from traditional IRAs to Roth IRAs (conversions)" (see [IRS, Rollovers of retirement plan and IRA distributions](https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions)). The IRS says elsewhere that Roth conversions "are not subject to the one-per-year limit and are disregarded in applying the limit to other rollovers" ([IR-2014-107 / Announcement 2014-32](https://www.irs.gov/uac/newsroom/irs-clarifies-application-of-one-per-year-limit-on-ira-rollovers-allows-owners-of-multiple-iras-a-fresh-start-in-2015)). So you **can** *withhold-and-replace* on every conversion you do, in the same year, in each spouse's IRA, and doing so does not use up your one ordinary IRA-to-IRA rollover.
@@ -488,8 +491,7 @@ If you pay $X quarterly, that means the first 3 months you get growth on the ful
 
 Two things about *the maneuver* are still real limits. First, the exclusion covers the *conversion*. If you withhold from a plain (non-RMD) IRA withdrawal and then try to replace that money into a traditional IRA, you are doing an ordinary IRA-to-IRA rollover, which really is capped at once per 12 months, aggregated across all your IRAs. RMD dollars are a separate and harder problem: they are not eligible for rollover treatment at all, so "replacing" withheld RMD money doesn't complete a rollover, it's a new contribution, and if it exceeds your contribution limit it becomes an excess contribution subject to a 6% excise tax until fixed. Second, if under 59.5, any withheld dollars you fail to replace inside the 60 days are a distribution you did not convert, so they are ordinary income **plus** a 10% early-distribution penalty. That penalty, not a 365-day clock, is the actual trap for the conversion maneuver itself.
 
-
-**The *other* maneuver**
+#### The Other Maneuver
 You can use the once per year method to pay taxes by withholding from an IRA to IRA rollover with repayment! The problem, of course, is needing the cash to pay taxes doesn't go away, and if you try the IRA-IRA rollover and do NOT repay into the target IRA, you owe additional tax on the withdrawn funds. One way that might work in your favor other than satisfying the timely withdrawal through withholding is if, for example, you expect a CD or bond to mature. You can gain up to 60 days for that to happen.
 
 How it might work:

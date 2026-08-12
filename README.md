@@ -93,6 +93,7 @@ A California resident built these with [Google gemini](https://gemini.google.com
   - [Is the Break-Even Tax Rate Trustworthy?](#is-the-break-even-tax-rate-trustworthy)
   - [How Do I Evaluate Tools for Privacy and Security?](#how-do-i-evaluate-tools-for-privacy-and-security)
   - [What Should I Look for in Retirement Tools?](#what-should-i-look-for-in-retirement-tools)
+  	- [Monte Carlo and Chance of Success - How accurate?](#monte-carlo-and-chance-of-success-accuracy)
 
 --- 
 
@@ -471,10 +472,12 @@ One of the biggest bugaboos in retirement is managing your tax payments.  Unlike
 You CANNOT solve the timeliness problem by plunking down your tax debt when you file your taxes by the April 15 deadline!
 
 The easiest solution to the "when were taxes paid" problem is to have taxes withheld from withdrawals or conversions. The IRS and most state governments treat withholding as if you paid the amounts quarterly. BUT, most custodians will NOT allow you to withhold taxes from a Roth withdrawal.  This means you have three ways to solve the "timely payment" problem: 
-A. Estimate your taxes and pay them quarterly.  (But if you miss a payment, expect late penalties!)
-B. Have the appropriate amount of taxes **withheld** from a taxable distribution to cover the years worth of taxes (or at least enough to reach "Safe Harbor").
-C. File a form with the IRS (Form 2210, Schedule A) that explains why your income was "lumpy" and you didn't meet the expected timely payment requirement.
 
+- A. Estimate your taxes and pay them quarterly.  (But if you miss a payment, expect late penalties!)
+- B. Have the appropriate amount of taxes **withheld** from a taxable distribution to cover the years worth of taxes (or at least enough to reach "Safe Harbor").
+- C. File a form with the IRS (Form 2210, Schedule A) that explains why your income was "lumpy" and you didn't meet the expected timely payment requirement.
+
+##### The Maneuver
 Option B allows another workaround: Suppose you convert 10k from your IRA to your Roth. You can have taxes withheld from the conversion, and WITHIN 60 days, make your Roth whole by adding cash into the Roth. We call this "*the maneuver*" and detail it later.
 
 There is a once-per-12-months limit [IRC 408(d)(3)(B)](https://www.law.cornell.edu/uscode/text/26/408) that applies to **IRA-to-IRA** 60-day rollovers. Transactions that are excluded from the once per year include "rollovers from traditional IRAs to Roth IRAs (conversions)" (see [IRS, Rollovers of retirement plan and IRA distributions](https://www.irs.gov/retirement-plans/plan-participant-employee/rollovers-of-retirement-plan-and-ira-distributions)). The IRS says elsewhere that Roth conversions "are not subject to the one-per-year limit and are disregarded in applying the limit to other rollovers" ([IR-2014-107 / Announcement 2014-32](https://www.irs.gov/uac/newsroom/irs-clarifies-application-of-one-per-year-limit-on-ira-rollovers-allows-owners-of-multiple-iras-a-fresh-start-in-2015)). So you **can** *withhold-and-replace* on every conversion you do, in the same year, in each spouse's IRA, and doing so does not use up your one ordinary IRA-to-IRA rollover.
@@ -487,6 +490,25 @@ Perhaps the main reasons why you would want to withhold at the end of the year i
 If you pay $X quarterly, that means the first 3 months you get growth on the full amount $X, but the next 3 months you get interest on 3/4 of X, ... and so on. The net is you gain 62.5% of the growth you could have gained had you kept the total payment in your account.  On a total tax bill of 30k, in a HYSA at 4% you could make $1,200, but by paying quarterly you only gain $750.  But don't forget to pay the tax on the interest.
 
 Two things about *the maneuver* are still real limits. First, the exclusion covers the *conversion*. If you withhold from a plain (non-RMD) IRA withdrawal and then try to replace that money into a traditional IRA, you are doing an ordinary IRA-to-IRA rollover, which really is capped at once per 12 months, aggregated across all your IRAs. RMD dollars are a separate and harder problem: they are not eligible for rollover treatment at all, so "replacing" withheld RMD money doesn't complete a rollover, it's a new contribution, and if it exceeds your contribution limit it becomes an excess contribution subject to a 6% excise tax until fixed. Second, if under 59.5, any withheld dollars you fail to replace inside the 60 days are a distribution you did not convert, so they are ordinary income **plus** a 10% early-distribution penalty. That penalty, not a 365-day clock, is the actual trap for the conversion maneuver itself.
+
+#### The Other Maneuver
+You can use the once per year method to pay taxes by withholding from an IRA to IRA rollover with repayment! The problem, of course, is needing the cash to pay taxes doesn't go away, and if you try the IRA-IRA rollover and do NOT repay into the target IRA, you owe additional tax on the withdrawn funds. One way that might work in your favor other than satisfying the timely withdrawal through withholding is if, for example, you expect a CD or bond to mature. You can gain up to 60 days for that to happen.
+
+How it might work:
+
+Withhold in December, replenish by early-to-mid February, and it's still a timely completed rollover, well inside the window. Because the 1099-R reports the distribution (and the withholding) in the year it happened, the withholding still counts as paid ratably throughout that December's tax year even though you don't actually replenish until the following year. You cure a current-year underpayment problem regardless of which calendar year the replenishment lands in.
+
+It's genuinely two transactions serving five functions:
+
+A. Timely tax payment. The withheld amount is sent to the IRS and credited as if paid evenly across the year, curing an underpayment penalty for the year of distribution regardless of when you replenish.
+
+B. Partial withdrawal, on demand. Whatever portion of the distribution you don't roll back within 60 days simply stays a taxable distribution. You don't have to decide this upfront, you can distribute $X, and by day 60 decide you only want to replace $Y of it, keeping $X-Y as a real, permanent withdrawal, taxed as ordinary income.  (But note that extra income may result in an underpayment of taxes!)
+
+C. Sixty days of float. Until the deadline, nothing is locked in, you can gather funds, watch the market, or just change your mind about how much to keep versus replace.
+
+D. If you will be RMD age next year, the December withdrawal reduces the IRA balance and thus the RMD you pay in the next year.
+
+E. Since you must liquidate assets to withhold, when you replenish you can invest in different assets. That is, you can rebalance your portfolio. In a IRA there are no consequences to rebalancing at any time, so this is a very minor extra.  We don't recommend trying to "time the market" but this *other maneuver* can take you out of the market for up to 60 days.  
 
 The reason withholding fixes timeliness at all is [IRC 6654(g)(1)](https://www.law.cornell.edu/uscode/text/26/6654): withholding is credited as if an equal part were paid on each of the four due dates, whenever it actually happened. A December withholding therefore repairs a Q1 shortfall. A December estimated *payment* does not.
 
@@ -898,11 +920,29 @@ A tool that models states with a "flat tax" concept can miss very badly. State t
 
 Accurately calculating "break even" for Social Security claiming or Roth conversions is rarely done in a fiscally responsible manner. What is responsible? Calculate using current dollars, and future dollars adjusted to current dollars. Calculate lost opportunity cost (if the dollars had stayed invested where they were - i.e. no tax paid - what would the outcome likely have been?).  And when calculating opportunity cost, use a like-for-like comparison. Paying $1k in taxes from cash has a different consequence from paying $1k by liquidating more IRA or selling an appreciated asset.
 
-Monte Carlo and "Chance of Success" calculations should always be suspect. Monte Carlo is a *technique*, not a specific algorithm. Results are not comparable across tools because there is no "prescriptive method". By contrast, a Federal Tax calculation is well described and, if properly implemented, will be EXACT.
+#### Monte Carlo and Chance of Success Accuracy
 
-To the extent that the Monte Carlo simulations are unlike past and possible future market/economic behavior, inaccuracy cannot be overcome by increasing the number of iterations.
+Monte Carlo and "Chance of Success" calculations should always be suspect. Monte Carlo is a *technique*, not a specific algorithm. Results are not comparable across tools because there is no prescriptive method to run Monte Carlo. By contrast, a Federal Tax calculation is well described and, if properly implemented, will be EXACT.
 
-More iterations fix imprecision, not a broken sampling method. Weighing yourself a thousand times on a scale that's off by five pounds will falsely increase your confidence, but it will be just as wrong as 2 or 10 weighings.
+A primitive way to describe Monte Carlo is to imagine throwing a 20-sided die.  The outcomes can land anywhere from -30% (if you roll a 1) to +50% (if you roll a 20). You can see already why this won't be that much like the real market. A -90% and a +100% are also possible outcomes in a real market - very unlikely outcomes, but possible.  Moreover rolling two (or three) 1s or 20s in a row can, of course, happen but we've never seen those two outcomes in successive years - ever - so far.  Monte Carlo, simplified then works like this:
+For a retirement of 30 years, roll the die 30 times. Each year's returns are determined from the roll of the die, needed distributions are made from the assets each year. If the portfolio balance ever hits zero (becomes bankrupt), the "outcome" is a *fail*. If after the 30 years of ups, downs, and withdrawals assets end with a $1 or more, it's a *success*.  Now repeat the same process 100, 500, 1000, or 10,000 times. Total up the number of successes, divided by the number of trials and you get a percentage chance of success.
 
-One major flaw with most Monte Carlo methods is that they vary "returns" by asset volatility. That is consistent with the market, but by itself it is insufficient. Inflation destroys the value of non-volatile assets just as efficiently as it does the volatile ones. Volatile assets have the ability to recover from a 20% loss. However, Cash/Bonds/Money Market funds have no savior.  Your Big Mac is never going to cost less 10 years from now. Some of the worst periods in US history had market gains, but [staggeringly high inflation erased all of them](standalone/RealReturns.html?yr=1969&ny=10&xi=0).
+To the extent that the Monte Carlo simulations are unlike past and *possible* future market/economic behavior, inaccuracy cannot be overcome by increasing the number of iterations. More iterations fix imprecision, not a broken sampling method. Weighing yourself a thousand times on a scale that's off by five pounds will falsely increase your confidence, but it will be just as wrong as 2 or 10 weighings.
 
+One major flaw with most Monte Carlo methods is that they generally vary "returns" by asset volatility. That is consistent with the market, but by itself it is insufficient. Inflation destroys the value of non-volatile assets just as efficiently as it does the volatile ones. Volatile assets have the ability to recover from a 20% loss. However, Cash/Bonds/Money Market funds have no savior. There is zero chance that your cash that got eaten by 13% inflation over the last several years is going to earn that loss back - ever. Some of the worst periods in US history had market gains, but [staggeringly high inflation erased all the gains](standalone/RealReturns.html?yr=1969&ny=10&xi=0).
+
+[Boldin](#boldin), for example models their Chance of Success (Monte Carlo) on a [FIXED inflation number](https://help.boldin.com/en/articles/11708904-faq-on-monte-carlo-updates) while [ProjectionLab](#projection-lab), and the [Retirement Optimizer](#the-retirement-optimizer) model inflation variation. We assert that a model that doesn't vary inflation is not close enough to be real as to be useful. Moreover, Monte Carlo is typically implemented using "Geometric Brownian Motion". A strategy sometimes called "drunk mans walk". The "throwing a die" model earlier reveals that a throw of 1 and 20 can occur one after the other - that would be true "randomness" - not unlike a drunk man lurching from gains to losses and back. But in the real world one segment of the economy spills over into another resulting not in "random drunk walk" but in a sustained directional stagger. Upward and downward trends tend to last for more than one period. This is often called "momentum". Bad news begets bad news and declines stack on declines. Improving conditions can halt the downward momentum and result in a hopefully longer period of upward momentum.
+
+This observation also gives rise to another: prices and rates change quarterly, monthly, daily, and even hourly.  It might seem that modeling on a more frequent basis would cover more ground, but if the model isn't realistic, more frequency - like more trials - doesn't improve the accuracy.
+
+There is another gotcha built into Monte Carlo that is only well understood by people who have "been there". Randomness is surprisingly hard to do well. If you were able to achieve true randomness in rolling the die: no two complete Monte Carlo simulations could ever be the same. That is, every time you run the simulation you can get different results with the same starting conditions. Some shipped software suffers from this problem with people asking "I didn't change anything, why did my chance of success move from 78% to 76%?"  You can see this for yourself as follows: [Select the Monte Carlo Tab](https://tools.netcitizen.us/retirement_optimizer?nerdknob). Then select Simulation Mode -> "Synthetic". You'll see a value called "seed" which is currently set to 42. Set the number of paths to something small (10) and "*Run Monte Carlo*. Look at *Equity range* (e.g. -28.9% to 41.1%). Run again. You will get the same values. If you change the seed to anything else (72, for example) and *Run Monte Carlo*, you get a different set of values (-17.3% to 43.6%). Random numbers here are intentionally forced by the seed to use the same sequence so that the results are repeatable. Software that doesn't do that will have different results every run even though there are no changes.
+
+Over the last 100 years, the US has observed declines about 23% of the time. Some declines have been sustained for a few months, some for a decade or more. That means the market has been neutral or positive the other 77% of the time.  A Monte Carlo model that doesn't have the ability to mimic that behavior at least some of the time can completely miss creating conditions like those that have already been observed. And a model that doesn't stray outside the bounds of what has been seen is also not as helpful, because a more volatile future is also a possibility.
+
+Conclusions:
+
+- **No single tool can be "completely right"**
+- **No two tools are likely to be comparable because the implementations are different**
+- **Monte Carlo is useful, but should not be considered an accurate forecast** for the reasons we've already given.
+- **Actual humans** behave differently when the market is topsy turvy - and that also affects outcomes. Nervous humans may try to time the market by selling when they *shouldn't* or cutting spending.
+- **Changing landscapes may cause changes in not just taxation, but in what assets are better kept vs spent**. 

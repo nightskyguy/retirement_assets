@@ -11,6 +11,40 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1508"></a>
+
+## 11.1508
+
+**Self-check fix and documentation. No change to any plan or its numbers.**
+
+The page runs its full test suite at load and shows the result in the indicator at the top. That
+indicator has a staleness guard: the page is told how many tests each suite on disk is supposed to
+contain, and if the real number differs it refuses to report green, because a page that has lost
+count of its own tests cannot honestly claim they all passed.
+
+Release 11.14e1 added 11 tests to the engine suite and did not update that expected count, so the
+guard fired as designed and the indicator read "test counts changed" with the console
+detail `optimizer_core: 244 tests on disk, 233 expected`. Nothing was failing. The expected count
+is now 244, which is the number `node optimizer_core.tests.js` actually reports, and the indicator
+is green again.
+
+Also in this release:
+
+- [Monte Carlo/Chance of Success Accuracy](#monte-carlo-and-chance-of-success-accuracy)
+
+- **[README.md](README.md) now explains [Monte Carlo and "Chance of Success"](README.md#monte-carlo-and-chance-of-success-accuracy) properly.** 
+  Walks through what a Monte Carlo simulation is doing, why results from two different
+  tools are not comparable, why more iterations cannot repair a sampling method that does not
+  resemble the real world, why a model that holds inflation fixed is not good enough, why real
+  markets trend rather than lurch randomly year to year, and why a seeded (repeatable) random
+  sequence matters. It ends with what you can and cannot conclude from any tool's success
+  percentage.
+- **The [tax-withholding maneuver](#why-end-of-year-vs-quarterly)** section gains "the *other* maneuver"**: using the once-per-year
+  IRA-to-IRA rollover, with repayment, to pay taxes through withholding, and the five separate
+  jobs that one pair of transactions can do.
+
+---
+
 <a id="11.14e1"></a>
 
 ## 11.14e1

@@ -1195,6 +1195,97 @@ test('stress scoring: 1999 ranks worse than 1929 by real CAGR', () => {
         `1999 (${(real1999*100).toFixed(2)}%) should rank worse than 1929 (${(real1929*100).toFixed(2)}%) under real CAGR scoring`);
 });
 
+// ── Stress bank: selection window, wrap, determinism ─────────────────────────
+// The tests above verify the scoring math inline. These load the real prng.js and the real
+// HISTORICAL_RETURNS and assert against the actual bank the Monte Carlo stress pass builds.
+
+const _mcPrng = IS_NODE ? require('./montecarlo/prng.js') : window.MCPrng;
+const _histRet = IS_NODE ? require('./montecarlo/historical_returns.js') : window.HISTORICAL_RETURNS;
+
+test('stress bank: default 10yr window picks the documented worst starts', () => {
+    const bank = _mcPrng.buildStressBank(10, 40, 10);
+    assert(bank.startYears.length === 10, `expected 10 sequences, got ${bank.startYears.length}`);
+    const expected = [1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970, 1929];
+    assert(JSON.stringify(bank.startYears) === JSON.stringify(expected),
+        `worst-10 start years drifted: got ${JSON.stringify(bank.startYears)}`);
+    assert(bank.scoreYears === 10, `bank should report the window it used, got ${bank.scoreYears}`);
+});
+
+test('stress bank: a longer window selects a different set of start years', () => {
+    const w10 = _mcPrng.buildStressBank(10, 40, 10).startYears;
+    const w20 = _mcPrng.buildStressBank(10, 40, 20).startYears;
+    assert(JSON.stringify(w10) !== JSON.stringify(w20),
+        'a 20-year scoring window should not pick the same worst-10 as a 10-year window');
+    assert(_mcPrng.buildStressBank(10, 40, 20).scoreYears === 20, 'bank should report scoreYears 20');
+});
+
+test('stress bank: window is clamped to the plan horizon', () => {
+    // A 30-year window on a 12-year plan would otherwise rank start years on a stretch the plan
+    // never lives through.
+    const bank = _mcPrng.buildStressBank(5, 12, 30);
+    assert(bank.scoreYears === 12, `window should clamp to the 12-year plan, got ${bank.scoreYears}`);
+});
+
+test('stress bank: the tail is real history wrapping to 1928, not a random draw', () => {
+    // This is the behavior the UI documents: the window only RANKS start years. After it, each
+    // scenario keeps walking the record, wrapping past the end of data.
+    const years = 40;
+    const bank  = _mcPrng.buildStressBank(10, years, 10);
+    const eq    = _histRet.equity;
+    const n     = eq.length;
+    const si    = bank.startYears[0] - _histRet.equityStartYear;
+    for (let y = 0; y < years; y++) {
+        const want = eq[(si + y) % n];
+        const got  = bank.equity[y];
+        assert(Math.abs(got - want) < 1e-12,
+            `year ${y} of the first scenario should be history index ${(si + y) % n}: want ${want}, got ${got}`);
+    }
+    assert(si + years > n, 'this fixture is only meaningful if the horizon actually wraps');
+});
+
+test('stress bank: identical arguments give identical banks (no RNG involved)', () => {
+    const a = _mcPrng.buildStressBank(10, 40, 10);
+    const b = _mcPrng.buildStressBank(10, 40, 10);
+    assert(JSON.stringify(a.startYears) === JSON.stringify(b.startYears), 'start years must be stable');
+    for (let i = 0; i < a.equity.length; i++) {
+        assert(a.equity[i] === b.equity[i], `equity bank diverged at ${i} — stress must not consume the seed`);
+    }
+});
+
+test('stress bank: reports bond and intl CAGR over the same window as equity', () => {
+    const win  = 10;
+    const bank = _mcPrng.buildStressBank(10, 40, win);
+    assert(bank.decadeBondCAGRs.length === 10, 'one bond CAGR per sequence');
+    assert(bank.decadeIntlCAGRs.length === 10, 'one intl CAGR per sequence');
+
+    // Recompute the first scenario's bond CAGR straight from the source data.
+    const si = bank.startYears[0] - _histRet.equityStartYear;
+    let logSum = 0;
+    for (let y = 0; y < win; y++) logSum += Math.log1p(_histRet.bonds[si + y]);
+    const want = Math.exp(logSum / win) - 1;
+    assert(Math.abs(bank.decadeBondCAGRs[0] - want) < 1e-12,
+        `bond CAGR mismatch: want ${want}, got ${bank.decadeBondCAGRs[0]}`);
+
+    // 1929 predates the intl series (starts 1970), so intl falls back to the domestic proxy and
+    // must equal the equity CAGR exactly for that scenario.
+    const i1929 = bank.startYears.indexOf(1929);
+    assert(i1929 >= 0, 'the 1929 scenario should be in the worst-10 at a 10-year window');
+    assert(Math.abs(bank.decadeIntlCAGRs[i1929] - bank.decadeCAGRs[i1929]) < 1e-12,
+        'pre-1970 intl must fall back to domestic equity, so the two CAGRs match');
+});
+
+test('stressOutcomeBand: window boundary is exclusive at the far end', () => {
+    const band = _mcPrng.stressOutcomeBand;
+    // First argument is the PLAN's start year (2026), not the historical year the sequence comes
+    // from. Window covers planStartYear .. planStartYear + 9 for a 10-year window.
+    assert(band(2026, 2026, 10) === 'ruin-early', 'ruin in the first year is early');
+    assert(band(2026, 2035, 10) === 'ruin-early', 'ruin in the last year of the window is early');
+    assert(band(2026, 2036, 10) === 'ruin-late',  'ruin one year past the window is late');
+    assert(band(2026, 2036, 15) === 'ruin-early', 'a wider window pulls that same failure back to early');
+    assert(band(2026, 0, 10)    === 'survive',    'ruin year 0 means the path never failed');
+    assert(band(2026, null, 10) === 'survive',    'a null ruin year means the path never failed');
+});
+
 // ── Soft vs strict withdrawal caps (shortfall fix) ─────────────────────────────
 // Repro: bracket 22%, single after early death, abundant IRA, no Roth, modest buffers.
 // Person 1 dies at 74 → MFJ→single halves the 22% ceiling; old code stranded a growing

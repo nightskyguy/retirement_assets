@@ -11,6 +11,120 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.150b"></a>
+
+## 11.150b
+
+**The Monte Carlo tab now shows you your own plan, says how big the run really is, and the Stress
+Test is readable. No change to any plan or its numbers.**
+
+**Your plan is pinned and its chance of success is stated outright.**
+
+The survival table ranks every withdrawal strategy against every other, which answers "what is best"
+but never answered "how did mine do". Your own plan was a row somewhere in a table of about 144,
+sorted by somebody else's metric, with nothing marking it. It is now pinned with a 📍 to the top of
+the table and stays there whatever column you sort by, it is drawn as the thick line on the chart,
+and a sentence above the chart names it and gives its chance of success directly: how many of the
+simulated paths it survived, and the median balance it ended with. If your exact settings are not
+among the strategies the sweep covers, the page says that plainly instead of pinning a near miss.
+
+**"500 paths" was never 500 simulations.**
+
+The Paths box is the number of paths run per strategy, and the sweep runs every strategy it knows
+how to build so it can rank them. On a typical plan that is about 144 of them, so the default 500
+paths is about 72,000 simulations. Nothing in the tool said so, which made a run that takes half a
+minute look like it should have been instant. The box is now labelled "Paths (per strategy)" and the
+full arithmetic, "500 paths x 144 strategies = 72,000 simulations", appears beside the Run button and
+under the survival table.
+
+**The Stress Test chart is legible.**
+
+Every line used to be labelled "1966 (eq: +6.0% inf: +7.0% real: -1.0%)". Ten of those made the
+legend wider than the plot it was explaining. Each line is now labelled by its start year and what
+happened to the money, for example "1966 ✗2041" or "1999 ✓", and every statistic that used to be in
+the label has a sortable column in a new table under the chart: start year, outcome, ruin year, years
+to ruin, equity CAGR, inflation CAGR, real CAGR and final balance. Click a row to isolate its line,
+the same as clicking the legend.
+
+The colours changed meaning. They used to run dark red to amber by how bad the starting decade was,
+which is the reason a sequence was picked, not what became of your plan in it, so a scenario your
+plan sailed through could still be drawn in alarm red. Red now means the money ran out inside the
+opening window, amber means it ran out later, and green means it never ran out. Sequences are listed
+worst first: earliest failure at the top, survivors at the bottom.
+
+**The ten-year window is now adjustable, and what it does is documented.**
+
+Under nerdknob there is a new Stress window control offering 10, 15, 20 or 30 years. It changes two
+things at once, on purpose: which historical start years count as the worst, since they are ranked by
+real return over that stretch, and where the line falls between an early failure and a late one. A
+window longer than your plan is trimmed to the length of the plan, and the caption under the chart
+always names the window actually in use.
+
+Two long-standing behaviours are now written down in
+[README.md](README.md#monte-carlo-and-chance-of-success-accuracy), because both surprise people. The
+window only *ranks* start years, it is not a splice point: after it, each scenario keeps following
+the real historical record for the whole length of your plan, wrapping back to 1928 when it runs past
+the end of the data. And the seed does not move the Stress Test, because there is no random number
+drawn anywhere in it. The seed tooltip now says so.
+
+**Inflation is coloured by whether it hurts you, not by its sign.**
+
+Every figure in these summaries was green when positive and red when negative, which is right for a
+return and backwards for inflation: 8.7% inflation was drawn in the same green as a good year for
+equities. Inflation now reads red when it is above zero and green when it is at or below zero,
+everywhere it appears. The other series are unchanged.
+
+**Both banners are now the control that folds their section.**
+
+The Stress Test had a plain "Stress Test" heading to click and a coloured result banner underneath
+it, so the one thing worth reading while the section was collapsed was not the thing you clicked to
+collapse it. They are now the same element: the banner carries the heading, the count and a chevron,
+and clicking anywhere on it opens or closes the section. The main Monte Carlo block works the same
+way, with the Chance of Success banner moved up above the strategy table it introduces, folding the
+table and the chart together. Both start open.
+
+**The run size now says how many years it is simulating.**
+
+The readout gains a third figure: "500 paths x 144 strategies = 72,000 simulations, 1,800,000
+simulated years". Each of those simulations is a full plan run with a tax return computed in every
+year, so the year count, not the simulation count, is what the running time is actually proportional
+to. It is the number that explains the wait.
+
+**The Historical summary line reads like the Synthetic one.**
+
+Synthetic mode described itself in a sentence, while Historical rendered a four-row Min/CAGR/Max grid
+wedged into the same line, leading with the least useful figure. Historical now uses the same
+"·"-separated sentence, per asset, in CAGR then worst year then best year order, with the same red
+and green colouring so a negative number is visible without reading it. Both modes now put the CAGR
+first. The stress panel's own summary line changed with it.
+
+**Reordering and two additions in the Stress Test.**
+
+The survival table sat between the Stress Test and the chart that goes with it; it now sits after
+the Stress Test, next to its chart. The scenario table gains Bonds CAGR and Intl CAGR columns, so a
+sequence where equities and bonds both fell is distinguishable from one where bonds held up. Those
+two figures were never computed before, only equity and inflation were. International data begins in
+1970, so scenarios starting earlier show domestic equity as the proxy, which is the same substitution
+the simulation itself makes. The Outcome column now says "Ruin" for both early and late failures: the
+colour already carries that distinction and the Ruin Year and Yrs to Ruin columns give the exact
+answer.
+
+**The historical record label said 1928-2024 and had not been true for a while.**
+
+The embedded data runs through 2025 for equities, bonds and international, and the code has always
+used all of it. Only the labels were stale. They now say 1928-2025.
+
+**Three fixes came out of the same work.**
+
+Toggling Current Dollars re-drew the main chart but not the Stress Test chart, which silently stayed
+in nominal dollars underneath it. Both now switch together, along with the new table. Sorting a
+column whose blanks are stored as "no value", such as Exhausted or Total Taxes, compared two blanks
+by subtracting them, which produces a meaningless result and left those rows in arbitrary order; the
+comparison is now done properly. And the "paths" readout beside the Cancel button described the
+previous run rather than the one in flight.
+
+---
+
 <a id="11.1508"></a>
 
 ## 11.1508

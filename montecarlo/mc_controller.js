@@ -155,7 +155,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             inflationStats = { min: infMin, cagr: infCAGR, max: infMax };
         } else if (mode === 'stress') {
             const stressCount = cfg.stressCount ?? 10;
-            multiAssetBank = buildStressBank(stressCount, years);
+            multiAssetBank = buildStressBank(stressCount, years, cfg.stressWindow ?? 10);
             numPaths = multiAssetBank.labels.length;
             scenarioBank = multiAssetBank.equity;
             let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity,
@@ -325,6 +325,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
                     p95: Array.from(percentiles.p95),
                 },
                 stressPaths,
+                ruinYearsPerPath: mode === 'stress' ? Array.from(ruinYears) : null,
             });
 
             if ((vi + 1) % 5 === 0 || vi === varsToUse.length - 1) {
@@ -353,6 +354,10 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             stressStartYears:     mode === 'stress' ? multiAssetBank.startYears      : null,
             stressDecadeCAGRs:    mode === 'stress' ? multiAssetBank.decadeCAGRs     : null,
             stressInflationCAGRs: mode === 'stress' ? multiAssetBank.decadeInflCAGRs : null,
+            stressRealCAGRs:      mode === 'stress' ? multiAssetBank.decadeRealCAGRs : null,
+            stressBondCAGRs:      mode === 'stress' ? multiAssetBank.decadeBondCAGRs : null,
+            stressIntlCAGRs:      mode === 'stress' ? multiAssetBank.decadeIntlCAGRs : null,
+            stressWindow:         mode === 'stress' ? multiAssetBank.scoreYears      : null,
         };
     }
 
@@ -415,5 +420,9 @@ function _buildStressMsg(stress) {
         startYears:    stress.stressStartYears,
         decadeCAGRs:   stress.stressDecadeCAGRs,
         decadeInflationCAGRs: stress.stressInflationCAGRs,
+        realCAGRs:     stress.stressRealCAGRs,
+        bondCAGRs:     stress.stressBondCAGRs,
+        intlCAGRs:     stress.stressIntlCAGRs,
+        window:        stress.stressWindow,
     } : null;
 }

@@ -352,3 +352,15 @@ const HISTORICAL_RETURNS = {
     ],
 
 };
+
+// prng.js reads this as a free variable, which works under importScripts()/<script> because the
+// engine resolves it up the scope chain. Reaching it as a PROPERTY is a different matter: `const`
+// at the top level of a classic script is a global LEXICAL binding, so window.HISTORICAL_RETURNS is
+// undefined even though the bare name resolves. The browser tier of the test suite looks it up by
+// property, so publish it explicitly. Same trap, and the same fix, as optimizer_core.js's tail.
+if (typeof module !== 'undefined' && module.exports) {
+    globalThis.HISTORICAL_RETURNS = HISTORICAL_RETURNS;   // node: prng.js resolves it from here
+    module.exports = HISTORICAL_RETURNS;
+} else if (typeof window !== 'undefined') {
+    window.HISTORICAL_RETURNS = HISTORICAL_RETURNS;
+}

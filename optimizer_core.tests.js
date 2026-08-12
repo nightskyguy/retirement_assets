@@ -3376,6 +3376,41 @@ test('sameStrategySelection: finds GK and Ordered users in buildVariations outpu
         'a strategy absent from the sweep must report no match');
 });
 
+// ── Monte Carlo run scope: plan-of-record vs compare-all (P52) ───────────────
+// The 'plan' scope hands the worker a ONE-element variations array built the same way the stress
+// pass has always built its own. These pin the selection that array depends on; the scope plumbing
+// itself lives in montecarlo/mc_tab.js, which needs a DOM and is covered in the browser tier.
+
+test('plan scope: the sidebar plan resolves to exactly one swept variation', () => {
+    // Ambiguity here would be a real defect: a second match means the pinned row, the stress pass
+    // and a plan-scope run could each pick a different "your plan".
+    [
+        { ...BASE, strategy: 'propwd', propWithdraw: 0.05 },
+        { ...BASE, strategy: 'fixed',  nYears: 20 },
+        { ...BASE, strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 },
+        { ...BASE, strategy: 'ordered', orderedSeq: 'RIBC' },
+    ].forEach(base => {
+        const hits = buildVariations(base).filter(v => sameStrategySelection(v, base));
+        assert(hits.length === 1,
+            `${base.strategy}: expected exactly one matching variation, got ${hits.length}`);
+    });
+});
+
+test('plan scope: a plan absent from the sweep yields no match, so the caller must substitute', () => {
+    // This is the case that forces the synthetic { _label: 'Current Plan' } fallback in
+    // planOnlyVariations(); without it a plan-scope run would send an empty array.
+    const absent = { ...BASE, strategy: 'nosuchstrategy' };
+    const hits = buildVariations(absent).filter(v => sameStrategySelection(v, absent));
+    assert(hits.length === 0, 'an unswept strategy must report no match');
+});
+
+test('plan scope: compare really is the expensive one — the sweep is far more than one arm', () => {
+    // Guards the premise of the whole feature. If buildVariations ever collapsed to a handful of
+    // rows, the second button would be pointless and this should fail loudly rather than quietly.
+    const n = buildVariations({ ...BASE, strategy: 'propwd', propWithdraw: 0.05 }).length;
+    assert(n > 50, `expected a large sweep for compare scope, got ${n} variations`);
+});
+
 test('offGridParamFor: returns the user parameter only when it is off the grid', () => {
     const grids = { propwd: [0, 5, 10, 20, 50], fixed: [2, 5, 10, 20, 25],
                     bracket: [0.10, 0.12, 0.22, 0.24], fixedpct: [5, 6, 7, 8, 10] };

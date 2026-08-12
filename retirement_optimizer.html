@@ -500,10 +500,18 @@
 						<input type="number" id="mc-bear-fraction" value="25" min="0" max="50" step="5" style="width:50px;margin-left:4px;">
 					</label>
 				</div>
-				<div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
-					<button id="mc-run-btn" onclick="runMonteCarlo()" style="padding:6px 18px;font-size:0.95em;">Run Monte Carlo</button>
+				<!-- Two scopes. "Run Monte Carlo" is unchanged and stays the default everywhere,
+				     including the auto-run non-nerdknob users get on tab activation, so nobody
+				     loses the strategy comparison. "Run My Plan Only" is the cheap path: one
+				     variation instead of ~144, which is the same shape the stress pass has always
+				     run. Both buttons live inside #mc-nerd-panel, so the extra choice is already
+				     nerdknob-gated by the panel itself. -->
+				<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+					<button id="mc-run-btn" onclick="runMonteCarlo('compare')" style="padding:6px 18px;font-size:0.95em;" title="Run every withdrawal strategy and rank them against each other. This is what the tab has always done, and what runs automatically when you open it.">Run Monte Carlo</button>
+					<button id="mc-run-plan-btn" onclick="runMonteCarlo('plan')" style="padding:6px 18px;font-size:0.95em;" title="Run only the plan currently in the sidebar. About 144 times less work, so it finishes almost instantly. You get your own chance of success and the percentile chart, but no strategy comparison table.">Run My Plan Only</button>
 					<span id="mc-time-est" style="font-size:0.8em;color:#888;"></span>
-					<!-- Paths are per strategy. Without this the run looks ~144x smaller than it is. -->
+					<!-- Paths are per strategy. Without this the Compare run looks ~144x smaller
+					     than it is. Describes the Compare button, which is the expensive one. -->
 					<span id="mc-sim-total" style="font-size:0.8em;color:#555;"></span>
 				</div>
 				<div style="margin-top:6px;font-size:0.78em;color:#888;">Historical: returns and inflation are block-sampled from 1928–2025 data; each path sees a different sequence. Synthetic: parametric model using the μ and σ inputs; inflation is fixed.</div>

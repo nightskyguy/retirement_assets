@@ -114,6 +114,37 @@ answer.
 The embedded data runs through 2025 for equities, bonds and international, and the code has always
 used all of it. Only the labels were stale. They now say 1928-2025.
 
+**You can now run Monte Carlo against your own plan alone (nerdknob).**
+
+*This part is deliberately absent from the short changelog inside the page. It adds a control
+without changing what anyone gets by default, so it is recorded here for the record rather than
+announced on the Documentation tab.*
+
+The tab has only ever had one kind of run: simulate every withdrawal strategy and rank them. That is
+about 144 strategy arms, and it is why a run takes half a minute. Most of that work answers "which
+strategy is best", not "will my plan hold up", and the second question needs 500 simulations rather
+than 72,000.
+
+Under nerdknob there is now a second button, **Run My Plan Only**, which runs just the plan in the
+sidebar. On the default scenario it finishes in under two seconds instead of around thirty-seven, and
+it produces the same answer: the same 66.6%, the same 333 of 500 paths that the pinned row reports
+after a full comparison run. You get your chance of success, the percentile chart and the Stress
+Test; you do not get the strategy comparison table, because a one-row ranking is not a ranking, so
+that table is hidden in this mode.
+
+**Nothing changes unless you press the new button.** "Run Monte Carlo" still means compare every
+strategy, and that is still what runs automatically when you open the tab, which is what people
+without nerdknob get. Switching between the two marks the previous result out of date rather than
+leaving the other mode's answer on screen.
+
+This was cheap to add because it required no engine change at all: a single-variation run is exactly
+the shape the Stress Test pass has used since it was introduced, so the worker was already able to do
+it.
+
+**A fourth fix, from the pinning work.** Hoisting your plan to the front of the chart's drawing
+order left the tooltip's dataset lookup reading the old order, so hovering a line could name a
+different strategy than its legend entry. Both now read the same order.
+
 **Three fixes came out of the same work.**
 
 Toggling Current Dollars re-drew the main chart but not the Stress Test chart, which silently stayed

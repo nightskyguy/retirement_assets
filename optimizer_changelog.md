@@ -32,10 +32,11 @@ among the strategies the sweep covers, the page says that plainly instead of pin
 
 The Paths box is the number of paths run per strategy, and the sweep runs every strategy it knows
 how to build so it can rank them. On a typical plan that is about 144 of them, so the default 500
-paths is about 72,000 simulations. Nothing in the tool said so, which made a run that takes half a
-minute look like it should have been instant. The box is now labeled "Paths (per strategy)" and the
-full arithmetic, "500 paths x 144 strategies = 72,000 simulations", appears beside the Run button and
-under the survival table.
+paths is 72,000 simulations covering 1.8 million years for a 25 year long retirement. Nothing in the
+tool said so, which made a run that takes half a minute look like it should have been instant. The
+box is now labeled "Paths (per strategy)" and the full arithmetic, "500 paths x 144 strategies =
+72,000 simulations, 1,800,000 simulated years", appears beside the Run button and under the survival
+table. 72,000 retirements simulating about 1,800,000 years is why the wait is what it is.
 
 **The Stress Test chart is legible.**
 
@@ -46,22 +47,25 @@ the label has a sortable column in a new table under the chart: start year, outc
 to ruin, equity CAGR, inflation CAGR, real CAGR and final balance. Click a row to isolate its line,
 the same as clicking the legend.
 
-The colors changed meaning. They used to run dark red to amber by how bad the starting decade was,
-which is the reason a sequence was picked, not what became of your plan in it, so a scenario your
-plan sailed through could still be drawn in alarm red. Red now means the money ran out inside the
-opening window, amber means it ran out later, and green means it never ran out. Sequences are listed
+The colors changed meaning. They used to run dark red to amber by how bad the opening stretch was -
+ten years by default, but it may instead be 5, 15, 20 or 30 - which is the reason a sequence was
+picked, not what became of your plan in it, so a scenario your plan sailed through could still be
+drawn in alarm red. Red now means the money ran out inside that opening window, amber means it ran
+out later, and green means it never ran out. Sequences are listed
 worst first: earliest failure at the top, survivors at the bottom.
 
 **The ten-year window is now adjustable, and what it does is documented.**
 
-Under nerdknob there is a new Stress window control offering 10, 15, 20 or 30 years. It changes two
+Under nerdknob there is a new Stress window control offering 5, 15, 20 or 30 years instead of the
+default 10. It changes two
 things at once, on purpose: which historical start years count as the worst, since they are ranked by
 real return over that stretch, and where the line falls between an early failure and a late one. A
 window longer than your plan is trimmed to the length of the plan, and the caption under the chart
 always names the window actually in use.
 
 Two long-standing behaviors are now written down in
-[README.md](README.md#monte-carlo-and-chance-of-success-accuracy), because both surprise people. The
+[Stress Test vs Monte Carlo Analysis](README.md#stress-test-vs-monte-carlo-analysis), because both
+surprise people. The
 window only *ranks* start years, it is not a splice point: after it, each scenario keeps following
 the real historical record for the whole length of your plan, wrapping back to 1928 when it runs past
 the end of the data. And the seed does not move the Stress Test, because there is no random number
@@ -145,32 +149,10 @@ This was cheap to add because it required no engine change at all: a single-vari
 the shape the Stress Test pass has used since it was introduced, so the worker was already able to do
 it.
 
-**A page-freeze that the new plan-only run exposed.**
-
-The `file://` copy of the tool cannot use a Web Worker, so it falls back to running the simulation
-on the page's own thread in chunks, pausing between them to let the display keep up. Those pauses
-were taken once every five strategies, which was fine while every run swept about 144 of them. A
-plan-only run sweeps one. That left a single pause at the very start and then one unbroken block of
-work: at 10,000 paths, five solid seconds with a frozen progress bar reading 3%, and the browser
-offering to kill the page.
-
-Pauses are now taken on a clock rather than on a strategy count, roughly once per frame, and progress
-is reported from inside the run instead of only at the end of each strategy. The same 10,000 path
-run now reports 160 progress updates from 0% to 100%, with no block longer than about a tenth of a
-second. Cancel also works during a run now; a strategy used to be the smallest thing it could
-interrupt. Only the `file://` copy was ever affected: served over http the work happens on a
-background thread, which cannot freeze the page.
-
-Two smaller faults in the same area. A plan-only run was being used to calibrate the "may take
-approximately N seconds" estimate, but almost all of its elapsed time is fixed startup cost spread
-over far fewer simulations, so it threw that estimate off by roughly four orders of magnitude; only
-full comparison runs calibrate it now. And starting a run while a Stress Test refresh was still in
-flight left a flag set that quietly stopped every later refresh, so the Stress Test would sit on the
-previous plan indefinitely.
-
-**A fourth fix, from the pinning work.** Hoisting your plan to the front of the chart's drawing
-order left the tooltip's dataset lookup reading the old order, so hovering a line could name a
-different strategy than its legend entry. Both now read the same order.
+**Fixed a potential freeze when running Monte Carlo,** along with a progress bar that could sit at
+the same number for a whole run and a Cancel button that would not take effect until the run ended
+on its own. Only the downloaded copy of the tool, opened directly as a file, could freeze; the
+version served from the web was never affected.
 
 **Three fixes came out of the same work.**
 
@@ -179,7 +161,8 @@ in nominal dollars underneath it. Both now switch together, along with the new t
 column whose blanks are stored as "no value", such as Exhausted or Total Taxes, compared two blanks
 by subtracting them, which produces a meaningless result and left those rows in arbitrary order; the
 comparison is now done properly. And the "paths" readout beside the Cancel button described the
-previous run rather than the one in flight.
+previous run rather than the one in flight. Hovering a line on the main chart could also name a
+different strategy than the one its legend entry named.
 
 ---
 

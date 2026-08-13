@@ -33,20 +33,20 @@ among the strategies the sweep covers, the page says that plainly instead of pin
 The Paths box is the number of paths run per strategy, and the sweep runs every strategy it knows
 how to build so it can rank them. On a typical plan that is about 144 of them, so the default 500
 paths is about 72,000 simulations. Nothing in the tool said so, which made a run that takes half a
-minute look like it should have been instant. The box is now labelled "Paths (per strategy)" and the
+minute look like it should have been instant. The box is now labeled "Paths (per strategy)" and the
 full arithmetic, "500 paths x 144 strategies = 72,000 simulations", appears beside the Run button and
 under the survival table.
 
 **The Stress Test chart is legible.**
 
-Every line used to be labelled "1966 (eq: +6.0% inf: +7.0% real: -1.0%)". Ten of those made the
-legend wider than the plot it was explaining. Each line is now labelled by its start year and what
+Every line used to be labeled "1966 (eq: +6.0% inf: +7.0% real: -1.0%)". Ten of those made the
+legend wider than the plot it was explaining. Each line is now labeled by its start year and what
 happened to the money, for example "1966 ✗2041" or "1999 ✓", and every statistic that used to be in
 the label has a sortable column in a new table under the chart: start year, outcome, ruin year, years
 to ruin, equity CAGR, inflation CAGR, real CAGR and final balance. Click a row to isolate its line,
 the same as clicking the legend.
 
-The colours changed meaning. They used to run dark red to amber by how bad the starting decade was,
+The colors changed meaning. They used to run dark red to amber by how bad the starting decade was,
 which is the reason a sequence was picked, not what became of your plan in it, so a scenario your
 plan sailed through could still be drawn in alarm red. Red now means the money ran out inside the
 opening window, amber means it ran out later, and green means it never ran out. Sequences are listed
@@ -60,14 +60,14 @@ real return over that stretch, and where the line falls between an early failure
 window longer than your plan is trimmed to the length of the plan, and the caption under the chart
 always names the window actually in use.
 
-Two long-standing behaviours are now written down in
+Two long-standing behaviors are now written down in
 [README.md](README.md#monte-carlo-and-chance-of-success-accuracy), because both surprise people. The
 window only *ranks* start years, it is not a splice point: after it, each scenario keeps following
 the real historical record for the whole length of your plan, wrapping back to 1928 when it runs past
 the end of the data. And the seed does not move the Stress Test, because there is no random number
 drawn anywhere in it. The seed tooltip now says so.
 
-**Inflation is coloured by whether it hurts you, not by its sign.**
+**Inflation is colored by whether it hurts you, not by its sign.**
 
 Every figure in these summaries was green when positive and red when negative, which is right for a
 return and backwards for inflation: 8.7% inflation was drawn in the same green as a good year for
@@ -76,7 +76,11 @@ everywhere it appears. The other series are unchanged.
 
 **Both banners are now the control that folds their section.**
 
-The Stress Test had a plain "Stress Test" heading to click and a coloured result banner underneath
+The Stress Test starts folded, since its banner already carries the result and the chart plus
+scenario table underneath are a lot of page to open unasked. The Chance of Success section starts
+open.
+
+The Stress Test had a plain "Stress Test" heading to click and a colored result banner underneath
 it, so the one thing worth reading while the section was collapsed was not the thing you clicked to
 collapse it. They are now the same element: the banner carries the heading, the count and a chevron,
 and clicking anywhere on it opens or closes the section. The main Monte Carlo block works the same
@@ -95,7 +99,7 @@ to. It is the number that explains the wait.
 Synthetic mode described itself in a sentence, while Historical rendered a four-row Min/CAGR/Max grid
 wedged into the same line, leading with the least useful figure. Historical now uses the same
 "·"-separated sentence, per asset, in CAGR then worst year then best year order, with the same red
-and green colouring so a negative number is visible without reading it. Both modes now put the CAGR
+and green coloring so a negative number is visible without reading it. Both modes now put the CAGR
 first. The stress panel's own summary line changed with it.
 
 **Reordering and two additions in the Stress Test.**
@@ -106,7 +110,7 @@ sequence where equities and bonds both fell is distinguishable from one where bo
 two figures were never computed before, only equity and inflation were. International data begins in
 1970, so scenarios starting earlier show domestic equity as the proxy, which is the same substitution
 the simulation itself makes. The Outcome column now says "Ruin" for both early and late failures: the
-colour already carries that distinction and the Ruin Year and Yrs to Ruin columns give the exact
+color already carries that distinction and the Ruin Year and Yrs to Ruin columns give the exact
 answer.
 
 **The historical record label said 1928-2024 and had not been true for a while.**
@@ -140,6 +144,29 @@ leaving the other mode's answer on screen.
 This was cheap to add because it required no engine change at all: a single-variation run is exactly
 the shape the Stress Test pass has used since it was introduced, so the worker was already able to do
 it.
+
+**A page-freeze that the new plan-only run exposed.**
+
+The `file://` copy of the tool cannot use a Web Worker, so it falls back to running the simulation
+on the page's own thread in chunks, pausing between them to let the display keep up. Those pauses
+were taken once every five strategies, which was fine while every run swept about 144 of them. A
+plan-only run sweeps one. That left a single pause at the very start and then one unbroken block of
+work: at 10,000 paths, five solid seconds with a frozen progress bar reading 3%, and the browser
+offering to kill the page.
+
+Pauses are now taken on a clock rather than on a strategy count, roughly once per frame, and progress
+is reported from inside the run instead of only at the end of each strategy. The same 10,000 path
+run now reports 160 progress updates from 0% to 100%, with no block longer than about a tenth of a
+second. Cancel also works during a run now; a strategy used to be the smallest thing it could
+interrupt. Only the `file://` copy was ever affected: served over http the work happens on a
+background thread, which cannot freeze the page.
+
+Two smaller faults in the same area. A plan-only run was being used to calibrate the "may take
+approximately N seconds" estimate, but almost all of its elapsed time is fixed startup cost spread
+over far fewer simulations, so it threw that estimate off by roughly four orders of magnitude; only
+full comparison runs calibrate it now. And starting a run while a Stress Test refresh was still in
+flight left a flag set that quietly stopped every later refresh, so the Stress Test would sit on the
+previous plan indefinitely.
 
 **A fourth fix, from the pinning work.** Hoisting your plan to the front of the chart's drawing
 order left the tooltip's dataset lookup reading the old order, so hovering a line could name a
@@ -591,7 +618,7 @@ except *Below IRMAA*, and that was verified state by state rather than assumed.
 
 ## 11.13d0
 
-**A link labelled with a file name now shows the page it actually opens.**
+**A link labeled with a file name now shows the page it actually opens.**
 
 The previous release pointed the Change Log's "Details" links, and the link to the full change log
 itself, at the formatted page the site publishes. It changed where those links went but not what they

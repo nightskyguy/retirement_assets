@@ -135,7 +135,7 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
              decadeBondCAGRs, decadeIntlCAGRs, scoreYears: sLen };
 }
 
-// Outcome class for one stress scenario, used for both the chart line colour and the row shading
+// Outcome class for one stress scenario, used for both the chart line color and the row shading
 // in the per-scenario table. Pure so the boundary cases are testable in node.
 //   'ruin-early'  ruin inside the scoring window - the plan did not survive the bad opening stretch
 //   'ruin-late'   ruin after the window - the plan absorbed the opening but ran out later

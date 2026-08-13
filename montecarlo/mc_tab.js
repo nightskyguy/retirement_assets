@@ -37,6 +37,20 @@ function initMCTab() {
     }
     const inputDist = document.getElementById('mc-input-dist');
     if (inputDist) inputDist.style.display = _mcNerdMode() ? '' : 'none';
+
+    // A canvas first laid out inside a CLOSED <details> has no box to measure, so the chart can end
+    // up sized against a fallback. Chart.js watches for resizes and usually recovers on its own, but
+    // going from "no layout at all" to visible is the case that observer is least reliable for, and
+    // the Stress Test now starts folded. Re-measuring on open costs nothing and removes the doubt.
+    document.querySelectorAll('.mc-fold').forEach(fold => {
+        if (fold._mcResizeBound) return;      // initMCTab re-runs whenever nerdknob is toggled
+        fold._mcResizeBound = true;
+        fold.addEventListener('toggle', () => {
+            if (!fold.open) return;
+            _mcStressChart?.resize();
+            _mcChart?.resize();
+        });
+    });
 }
 
 // Returns true when NERD_KNOBS is active.
@@ -199,6 +213,11 @@ let _mcScope = 'compare';
 function runMonteCarlo(scope) {
     _mcScope = (scope === 'plan') ? 'plan' : 'compare';
     _lastMCHash = _buildMCHash();
+    // runMCWorker terminates whatever is in flight, so a stress-only refresh started moments ago
+    // (a sidebar edit is debounced 400ms, which is easily overtaken by a click on Run) will never
+    // deliver its callback. Without this the flag stays true forever and every later stress refresh
+    // returns at its own guard, silently freezing the Stress Test on the previous plan.
+    _mcStressRefreshing = false;
 
     const base = getInputs();
 
@@ -273,7 +292,7 @@ let _mcStress = null;
 // Re-running everything is not an option: the main sweep is numPaths × variations simulations
 // (measured 27.4s / 72,000 sims on the default scenario), so an edit-triggered full run would burn
 // half a minute of CPU per keystroke-and-blur. Instead the cheap pass runs and the expensive one is
-// labelled: the stress pass is stressCount × 1 sims, so it refreshes silently, and the sweep gets
+// labeled: the stress pass is stressCount × 1 sims, so it refreshes silently, and the sweep gets
 // the #mc-stale-banner with a Re-run button.
 function mcInputsChanged() {
     if (_buildMCHash() === _lastMCHash) return;
@@ -362,7 +381,7 @@ function renderMCResults(msg) {
     // Resolve the pinned row FIRST: the survival table renders it on top and the chart draws it
     // emphasized, so both have to be looking at the same index. In plan scope the sole variation IS
     // the plan by construction, including the synthetic fallback that sameStrategySelection would
-    // not recognise, so pin it directly rather than searching for it.
+    // not recognize, so pin it directly rather than searching for it.
     _mcPinIdx = planOnly ? 0 : findCurrentStrategyIdx(msg.variations, _mcBase);
     // A one-row survival table is not a ranking. Hide it and let the headline and chart carry the
     // result; the table comes back with a Compare run.
@@ -437,9 +456,9 @@ function finishMCRender(msg) {
 
 // --- Metrics bar ----------------------------------------------------------
 
-// Signed percent, coloured by whether the number is GOOD FOR YOU, not by its sign. For returns that
+// Signed percent, colored by whether the number is GOOD FOR YOU, not by its sign. For returns that
 // means green at or above zero. For inflation it means the opposite: rising prices erode the plan, so
-// pass invert = true and a positive number turns red. Colouring inflation on sign would have painted
+// pass invert = true and a positive number turns red. Coloring inflation on sign would have painted
 // every realistic inflation figure the same green as a strong equity year.
 function _mcPct(v, invert = false) {
     const s = (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
@@ -598,7 +617,7 @@ function renderStressHeadline(stress) {
 // Headline for the user's OWN plan, above the percentile chart. The survival table ranks every
 // strategy against every other, which answers "what is best" but never answered "how did MINE do" --
 // the plan's own chance of success was a row you had to hunt for. This states it outright, using the
-// same three colour bands as the table so the number reads on a scale the page has already taught.
+// same three color bands as the table so the number reads on a scale the page has already taught.
 function renderPlanHeadline(msg) {
     const el = document.getElementById('mc-plan-headline');
     if (!el) return;
@@ -625,6 +644,12 @@ function renderPlanHeadline(msg) {
     const pct      = (v.survivalRate * 100).toFixed(1);
     const survived = Math.round(v.survivalRate * total);
     const finalBal = v.percentiles.p50[v.percentiles.p50.length - 1] ?? 0;
+    // Which simulation produced this number. The two modes are not comparable with each other, so a
+    // survival rate quoted without naming its mode is a number you cannot check against anything.
+    // assetRanges is present only for the bootstrap pass, the same test the table title uses.
+    const modeTxt  = msg.assetRanges
+        ? 'Historical returns (1928–2025)'
+        : 'Synthetic returns (parametric μ/σ)';
     // The synthetic plan-scope fallback carries no family or param, so name it in plain words
     // rather than rendering an empty "(📍 )".
     const name     = (_stripHtml(v.strategyFamily) + (v.paramLabel ? ' ' + v.paramLabel : '')).trim()
@@ -639,7 +664,8 @@ function renderPlanHeadline(msg) {
         + `<div style="font-size:1.9em;font-weight:700;line-height:1;color:${band.fg};white-space:nowrap;">${pct}%</div>`
         + `<div style="font-size:0.92em;color:#333;">Chance of success for <strong>your plan</strong> `
         + `(📍 ${escapeHtml(name)}): it survives ${survived.toLocaleString()} of ${total.toLocaleString()} paths. `
-        + `Median ending balance $${fmt(Math.round(finalBal))}.</div></div>`;
+        + `Median ending balance $${fmt(Math.round(finalBal))}. `
+        + `<span style="color:#666;">${modeTxt}.</span></div></div>`;
     el.style.display = '';
 }
 
@@ -910,13 +936,13 @@ function colorFor(familyName, fallbackIdx) {
         ?? FALLBACK_PALETTE[fallbackIdx % FALLBACK_PALETTE.length];
 }
 
-// Stress colours encode the OUTCOME, not the ranking. The old gradient ran dark red to amber by how
+// Stress colors encode the OUTCOME, not the ranking. The old gradient ran dark red to amber by how
 // bad the starting stretch was, which is the reason a sequence was chosen, not what happened to the
 // plan in it -- a scenario that survived comfortably could still be drawn in alarm red.
 //   red    ran out of money inside the scoring window (the bad opening stretch)
 //   amber  ran out later, after absorbing the opening
 //   green  never ran out
-// Both failure bands say plainly "Ruin". Early versus late is what the colour is for, and the Ruin
+// Both failure bands say plainly "Ruin". Early versus late is what the color is for, and the Ruin
 // Year and Yrs to Ruin columns give the precise answer, so spelling it out a third time in the
 // Outcome cell added width without adding information.
 const STRESS_OUTCOME_COLORS = {
@@ -1200,7 +1226,7 @@ function renderStressChart(stress) {
     const win = stressWindowOf(stress);
     const descEl = document.getElementById('mc-stress-chart-desc');
     if (descEl) {
-        descEl.textContent = `For your current plan. Each line is one historical starting sequence, labelled by its start year. `
+        descEl.textContent = `For your current plan. Each line is one historical starting sequence, labeled by its start year. `
             + `Red ran out of money within the first ${win} years, amber ran out later, green never ran out. `
             + `The table below gives the numbers behind each line. Click a legend item or a table row to isolate it; click again to restore all.`;
     }
@@ -1246,7 +1272,7 @@ function buildStressRows(stress, deflateOne = (v) => v) {
 
     const sorted = sortStressRows(rows);
 
-    // Position within the colour group, for the lightness ramp that keeps same-colour lines apart.
+    // Position within the color group, for the lightness ramp that keeps same-color lines apart.
     const counts = {};
     sorted.forEach(r => { counts[r.band] = (counts[r.band] ?? 0) + 1; });
     const seen = {};
@@ -1340,11 +1366,13 @@ function renderStressTable(stress, rows) {
     if (thead) {
         const hCellStyle = 'position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;'
                          + 'white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;cursor:pointer;user-select:none;';
-        thead.innerHTML = columns.map(c => {
+        thead.innerHTML = columns.map((c, i) => {
             const active = stressSortState.colKey === c.key;
             const arrow  = active ? (stressSortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
             const tip    = c.title ? ` title="${c.title.replace(/"/g, '&quot;')}"` : '';
-            return `<div style="${hCellStyle}"${tip} onclick="sortStressTableBy('${c.key}')">${c.label}${arrow}</div>`;
+            // Start Year matches the indent of its cells so the column reads as one unit.
+            const css    = i === 0 ? hCellStyle + 'padding-left:18px;text-align:left;' : hCellStyle;
+            return `<div style="${css}"${tip} onclick="sortStressTableBy('${c.key}')">${c.label}${arrow}</div>`;
         }).join('');
     }
 
@@ -1354,7 +1382,7 @@ function renderStressTable(stress, rows) {
         const row = document.createElement('div');
         row.style.display = 'contents';
 
-        // Colour chip in the leading cell, drawn in this line's exact colour, so a line on the chart
+        // Color chip in the leading cell, drawn in this line's exact color, so a line on the chart
         // and its row here are paired without counting legend entries.
         const swatch = document.createElement('div');
         swatch.style.cssText = `padding:2px 6px 2px 8px;background:${oc.row};border-right:2px solid #dee2e6;cursor:pointer;`;
@@ -1363,20 +1391,23 @@ function renderStressTable(stress, rows) {
         row.appendChild(swatch);
 
         const cellCss = `padding:2px 8px;text-align:right;background:${oc.row};cursor:pointer;white-space:nowrap;`;
+        // The start year is indented so it reads as hanging off the swatch, tying the row to the
+        // line of that color in the chart above rather than looking like a free-standing column.
+        const yearCss = cellCss + 'padding-left:18px;text-align:left;font-weight:600;';
         [
-            String(r.startYear ?? '—'),
-            oc.text,
-            r.ruinYear ? String(r.ruinYear) : '—',
-            r.yearsToRuin != null ? String(r.yearsToRuin) : '—',
-            r.eqCAGR   != null ? _mcPct(r.eqCAGR)   : '—',
-            r.bdCAGR   != null ? _mcPct(r.bdCAGR)   : '—',
-            r.itCAGR   != null ? _mcPct(r.itCAGR)   : '—',
-            r.infCAGR  != null ? _mcPct(r.infCAGR, true) : '—',
-            r.realCAGR != null ? _mcPct(r.realCAGR) : '—',
-            '$' + fmt(Math.round(r.finalBalance ?? 0)),
-        ].forEach(html => {
+            { html: String(r.startYear ?? '—'), css: yearCss },
+            { html: oc.text },
+            { html: r.ruinYear ? String(r.ruinYear) : '—' },
+            { html: r.yearsToRuin != null ? String(r.yearsToRuin) : '—' },
+            { html: r.eqCAGR   != null ? _mcPct(r.eqCAGR)   : '—' },
+            { html: r.bdCAGR   != null ? _mcPct(r.bdCAGR)   : '—' },
+            { html: r.itCAGR   != null ? _mcPct(r.itCAGR)   : '—' },
+            { html: r.infCAGR  != null ? _mcPct(r.infCAGR, true) : '—' },
+            { html: r.realCAGR != null ? _mcPct(r.realCAGR) : '—' },
+            { html: '$' + fmt(Math.round(r.finalBalance ?? 0)) },
+        ].forEach(({ html, css }) => {
             const cell = document.createElement('div');
-            cell.style.cssText = cellCss;
+            cell.style.cssText = css ?? cellCss;
             cell.innerHTML = html;
             row.appendChild(cell);
         });

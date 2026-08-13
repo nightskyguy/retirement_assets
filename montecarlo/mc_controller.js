@@ -29,8 +29,11 @@ function runMCWorker(cfg, onProgress, onComplete) {
         } else if (msg.type === 'results') {
             _mcWorker = null;
             // A stress-only refresh runs a handful of sims; using it to calibrate would wreck the
-            // ms-per-sim estimate the full run's time display depends on.
-            if (!msg.stressOnly && msg.totalMs && msg.numPaths && cfg.variations?.length) {
+            // ms-per-sim estimate the full run's time display depends on. A single-variation run is
+            // excluded for the same reason: its wall time is mostly fixed overhead (worker startup,
+            // the stress pass, the input fan) divided by only numPaths sims, which came out roughly
+            // four orders of magnitude too high and made every later estimate nonsense.
+            if (!msg.stressOnly && msg.totalMs && msg.numPaths && cfg.variations?.length > 1) {
                 _mcMsPerSim = msg.totalMs / (msg.numPaths * cfg.variations.length);
             }
             onComplete?.(msg);
@@ -103,6 +106,18 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
     const { years, variations } = cfg;
     const simulationMode = cfg.simulationMode;
     const rng = mulberry32(cfg.seed ?? 42);
+
+    // Yield on a TIME budget, not on a loop counter. This used to yield once every 5 variations,
+    // which was fine while every run swept ~144 of them but blocks the page solid for a run with a
+    // single variation and a large path count (plan scope at 10,000 paths): one yield, then the
+    // whole inner path loop with nothing giving the UI a turn. Chrome puts up "Page unresponsive".
+    // 16ms is one frame, so the progress bar keeps moving and Cancel stays clickable.
+    let _lastYield = performance.now();
+    async function yieldIfDue() {
+        if (performance.now() - _lastYield < 16) return;
+        await new Promise(r => setTimeout(r, 0));
+        _lastYield = performance.now();
+    }
 
     // Mirrors worker.js's runPass exactly (see that file for the fold-Stress-into-Historical
     // rationale). progressOffset/progressWeight let two passes share one progress bar.
@@ -200,9 +215,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
         for (let vi = 0; vi < varsToUse.length; vi++) {
             if (_mcCancelled) return null;
-
-            // Yield to the UI every 5 variations so the progress bar can update.
-            if (vi % 5 === 0) await new Promise(r => setTimeout(r, 0));
+            await yieldIfDue();
 
             const baseInputs = varsToUse[vi];
             const paths      = new Float64Array(numPaths * years);
@@ -212,6 +225,17 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             let ruinCount    = 0;
 
             for (let p = 0; p < numPaths; p++) {
+                // Check every 64 paths rather than every path: performance.now() in the hot loop is
+                // itself measurable. Also lets Cancel take effect mid-variation, which it could not
+                // do before when a variation was the smallest interruptible unit.
+                if ((p & 63) === 0) {
+                    await yieldIfDue();
+                    if (_mcCancelled) return null;
+                    // Progress within the variation, so a one-variation run has a moving bar
+                    // instead of sitting at its starting percentage until the whole run finishes.
+                    onProgress?.(progressOffset
+                        + ((vi + p / numPaths) / varsToUse.length) * progressWeight);
+                }
                 const returnSeq = new Float64Array(years);
                 for (let y = 0; y < years; y++) {
                     const raw = scenarioBank[p * years + y];

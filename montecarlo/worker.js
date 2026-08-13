@@ -75,7 +75,7 @@ self.onmessage = function ({ data: cfg }) {
             // Deterministic SoRR stress: N worst historical starting sequences.
             const stressCount = cfg.stressCount ?? 10;
             // cfg.stressWindow is the "bad opening stretch" length: it selects WHICH start years
-            // count as worst, and the UI colours a failure inside it differently from a later one.
+            // count as worst, and the UI colors a failure inside it differently from a later one.
             // It is not a splice point - see buildStressBank's header.
             multiAssetBank = buildStressBank(stressCount, years, cfg.stressWindow ?? 10);
             numPaths = multiAssetBank.labels.length;   // override: one path per stress scenario
@@ -267,7 +267,7 @@ self.onmessage = function ({ data: cfg }) {
                 stressPaths,
                 // Per-scenario ruin years, stress only. The array is built for every mode but was
                 // previously collapsed to medianRuinYear and discarded; the stress table needs the
-                // individual years to colour and sort by. At <= 20 entries the transfer is free.
+                // individual years to color and sort by. At <= 20 entries the transfer is free.
                 ruinYearsPerPath: mode === 'stress' ? Array.from(ruinYears) : null,
             });
 

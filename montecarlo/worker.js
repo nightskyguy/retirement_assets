@@ -44,7 +44,7 @@ function runMonteCarloJob(cfg) {
             // Multi-asset block bootstrap: synchronized draws from equity, bonds, intl, inflation (1970–2025 window).
             multiAssetBank = bootstrapMultiAssetBank(rng, numPaths, years);
             const bearFraction = (cfg.bearFraction ?? 25) / 100;
-            if (bearFraction > 0) applyBearStartOverlay(multiAssetBank, rng, numPaths, years, bearFraction, cfg.stressCount ?? 10);
+            if (bearFraction > 0) applyBearStartOverlay(multiAssetBank, rng, numPaths, years, bearFraction);
             scenarioBank = multiAssetBank.equity;  // used for equity min/max/median reporting
             // Single scan: collect min/max for all asset classes and inflation simultaneously.
             let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity,
@@ -87,11 +87,11 @@ function runMonteCarloJob(cfg) {
             inflationStats = { min: infMin, cagr: infCAGR, max: infMax };
         } else if (mode === 'stress') {
             // Deterministic SoRR stress: N worst historical starting sequences.
-            const stressCount = cfg.stressCount ?? 10;
+            const stressCount = cfg.stressCount ?? 20;
             // cfg.stressWindow selects WHICH start years count as worst: a number ranks on that one
             // window, 'combined' unions the worst of every window, 'all' takes the whole record. It
             // is not a splice point, and it no longer decides early vs late - see buildStressBank.
-            multiAssetBank = buildStressBank(stressCount, years, cfg.stressWindow ?? 10);
+            multiAssetBank = buildStressBank(stressCount, years, cfg.stressWindow ?? 'combined');
             numPaths = multiAssetBank.labels.length;   // override: one path per stress scenario
             scenarioBank = multiAssetBank.equity;
             let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity,
@@ -324,7 +324,7 @@ function runMonteCarloJob(cfg) {
     // only ever gated that way by association. Choosing Synthetic returns for the projection is not
     // a reason to hide the question "would this plan have survived the worst of the real record".
     const willRunStress = true;
-    const stressCountEstimate = cfg.stressCount ?? 10;
+    const stressCountEstimate = cfg.stressCount ?? 20;
     // cfg.stressOnly: refresh just the stress pass against the edited plan and leave the main sweep
     // to the caller. The main pass is ~numPaths × variations sims (measured 27s / 72,000 sims on the
     // default scenario); stress is stressCount × 1, so this is the only pass cheap enough to re-run

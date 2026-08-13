@@ -311,19 +311,32 @@ function stressOutcomeBand(planStartYear, ruinYear, planYears) {
     return (ruinYear - planStartYear) < planYears / 2 ? 'ruin-early' : 'ruin-late';
 }
 
+// How many worst decades the bear-start overlay samples from. Deliberately a CONSTANT and not the
+// user's "Stress sequences" input, which is what it used to read.
+//
+// That reuse was an accident of convenience and it coupled two unrelated things. The overlay runs in
+// the MAIN bootstrap pass, so a change to a Stress Test display setting silently moved every
+// Historical result and put up the "Out of date" banner -- for a reason no reader could have guessed
+// from a control labelled "how many worst sequences the Stress Test chart shows". It also meant the
+// default could not be changed without perturbing the main pass for everyone.
+//
+// 10 keeps the overlay byte-identical to what it has always drawn. The value is not otherwise
+// special; it is the pool of worst opening decades, and widening it would dilute the overlay.
+const BEAR_OVERLAY_POOL = 10;
+
 // Bear-start overlay: overwrites the first 10 years of the bottom bearFraction of bootstrap paths
 // with a randomly-sampled worst-decade historical sequence. Modifies bank in-place.
 // Called immediately after bootstrapMultiAssetBank, before stats scanning.
-function applyBearStartOverlay(bank, rng, numPaths, years, bearFraction, stressCount = 10) {
+function applyBearStartOverlay(bank, rng, numPaths, years, bearFraction) {
     if (bearFraction <= 0) return;
     const bearCount = Math.floor(numPaths * bearFraction);
     if (bearCount === 0) return;
     const bearYears  = 10;
-    const stressBank = buildStressBank(stressCount, bearYears);
-    // Draw from what the bank ACTUALLY holds, not from what was asked for. A 10-year window leaves
-    // 89 candidate start years, so a stressCount above that comes back short and an index drawn
-    // against the requested count would read past the end and write NaN returns into the bootstrap
-    // paths -- silently, since NaN propagates through the whole simulation without throwing.
+    const stressBank = buildStressBank(BEAR_OVERLAY_POOL, bearYears);
+    // Draw from what the bank ACTUALLY holds, not from what was asked for: buildStressBank caps at
+    // the number of candidate start years the window leaves, and an index drawn against the
+    // requested count would read past the end and write NaN returns into the bootstrap paths --
+    // silently, since NaN propagates through a whole simulation without throwing.
     const nSeq = stressBank.startYears.length;
     if (nSeq === 0) return;
     for (let p = 0; p < bearCount; p++) {

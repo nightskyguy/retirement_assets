@@ -1345,6 +1345,31 @@ test("stress bank: 'combined' is the union of every window's worst, deduped", ()
         'windows must clamp to the plan horizon and dedupe');
 });
 
+test('bear-start overlay does not read the Stress Test sequence count', () => {
+    // The overlay used to size its sample pool from cfg.stressCount, which put a Stress Test DISPLAY
+    // setting into the main bootstrap pass: changing it silently moved every Historical result and
+    // raised the "Out of date" banner for a reason no reader could have guessed. It is pinned to
+    // BEAR_OVERLAY_POOL now, which is what lets the stale banner ignore the stress controls.
+    const overlayed = (extraArg) => {
+        const rng  = _mcPrng.mulberry32(42);
+        const bank = _mcPrng.bootstrapMultiAssetBank(rng, 120, 30);
+        _mcPrng.applyBearStartOverlay(bank, rng, 120, 30, 0.25, extraArg);
+        return Array.from(bank.equity.slice(0, 120 * 10));   // the overlaid opening decade
+    };
+    const base = overlayed(undefined);
+    for (const stale of [10, 20, 98, 3]) {
+        assert(JSON.stringify(overlayed(stale)) === JSON.stringify(base),
+            `the overlay changed when passed a stress count of ${stale}; it must ignore the argument`);
+    }
+    // And it still actually overlays something, or the test above would pass on two empty banks.
+    const rng  = _mcPrng.mulberry32(42);
+    const bank = _mcPrng.bootstrapMultiAssetBank(rng, 120, 30);
+    const before = Array.from(bank.equity.slice(0, 120 * 10));
+    _mcPrng.applyBearStartOverlay(bank, rng, 120, 30, 0.25);
+    assert(JSON.stringify(Array.from(bank.equity.slice(0, 120 * 10))) !== JSON.stringify(before),
+        'a 25% bear fraction must actually rewrite the opening decade of some paths');
+});
+
 test("stress bank: 'all' runs every start year and marks where the record runs out", () => {
     const years = 35;
     const all   = _mcPrng.buildStressBank(10, years, 'all');

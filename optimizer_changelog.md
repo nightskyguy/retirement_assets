@@ -11,14 +11,38 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1521a"></a>
+<a id="11.1521b"></a>
 
-## 11.1521a
+## 11.1521b
 
-**The Stress Test can combine every window at once, or run every start year in the record, and it
-now grades failures against the length of your plan. No change to any plan or its numbers.**
+**A Stress Test release: two crashes fixed, the ranking windows can now be combined or skipped
+entirely, and failures are graded against the length of your plan. No change to any plan or its
+numbers.**
 
-**One window at a time was hiding most of the bad years.**
+### Asking for 85 or more stress sequences froze the tab
+
+The Stress Test ranks historical retirement start years and runs the worst of them. How many there
+are to rank depends on the window, because a start year has to have the full window of real data
+after it to be scored at all: a 5 year window leaves 94 candidates and a 30 year window leaves only
+69. Asking for more sequences than the record can supply used to run off the end of the ranked list.
+
+That threw, and the error was then lost. The background worker's failure handler responded by
+re-running the identical job on the main thread, where it threw again, this time with nobody left to
+catch it. The result was not an error message but a freeze: the Cancel bar stayed up and the Stress
+Test stopped responding to any later edit for the rest of the visit.
+
+The count is now capped at what the chosen window can supply, so a request for 200 returns the 69 to
+94 that exist rather than failing. Both failure paths report an error instead of losing it, and the
+tab stays usable either way.
+
+### Clearing the Paths box printed "NaN"
+
+The run size line under the Run button updates as you type. Emptying the box left it reading
+"NaN paths x 144 strategies = NaN simulations" until you typed a digit. Every numeric box on the tab
+now falls back to its default when empty and is held inside its stated range, so a half-typed value
+cannot reach the run, the time estimate or the out-of-date check.
+
+### One window at a time was hiding most of the bad years
 
 The Stress window ranks historical starting years by their real, inflation-adjusted return over its
 own length, and runs the worst of them. The trouble is that the five windows overlap: the worst ten
@@ -28,19 +52,22 @@ threw away everything the other four would have caught.
 
 Two new choices in the Stress window selector:
 
-- **Combined (5/10/15/20/30)** scores every window and keeps the union of what each one flags.
-  Because the windows overlap it is far fewer than five times the count, about 23 distinct start
-  years at the default of 10 rather than 50. Hovering a row says which windows flagged that year.
+- **Combined (5/10/15/20/30)**, now the default, scores every window and keeps the union of what
+  each one flags. The count you set is per window, and because the windows overlap the union is far
+  smaller than the sum: the new default of 20 gives about 40 distinct start years rather than 100.
+  Hovering a row says which windows flagged that year.
 - **All start years** skips ranking and runs every start year the record holds, currently 98. At
-  that density the individual lines stop being readable, so survivors fade back and the failures
-  are drawn solid and on top: the shape you are looking for is how much of history breaks the plan,
-  not which line is 1966.
+  that density the individual lines stop being readable, so survivors fade back and the failures are
+  drawn solid and on top. The shape you are looking for is how much of history breaks the plan, not
+  which line is 1966.
 
-Everything the ranking picks is still a real historical sequence run straight through, not a
-splice. A window longer than your plan is still trimmed to the length of the plan, so a 12 year plan
-combines 5, 10 and 12 rather than pretending to score a 30 year stretch.
+Everything the ranking picks is still a real historical sequence run straight through, not a splice.
+A window longer than your plan is still trimmed to the length of the plan, so a 12 year plan combines
+5, 10 and 12 rather than pretending to score a 30 year stretch.
 
-**Red and amber now mean early and late in YOUR plan.**
+The defaults are now 20 sequences and the Combined window, up from 10 and a single 10 year window.
+
+### Red and amber now mean early and late in YOUR plan
 
 A failure used to be red if it landed inside the stress window and amber if it landed outside. That
 worked only while there was exactly one window; Combined has five and All has none. It was also the
@@ -49,7 +76,7 @@ running dry in year 29 the same thing. Red now means the money ran out in the fi
 plan and amber means the second half. The window has one job left, which is deciding which start
 years run.
 
-**The scenario table reports the whole plan, and the worst stretch inside it.**
+### The scenario table reports the whole plan, and the worst stretch inside it
 
 The per-asset CAGR columns were measured over the ranking window, so they had the same problem. In
 their place: Real CAGR over your whole plan, on the sequence that scenario actually lived through,
@@ -58,7 +85,7 @@ calmly and still contain the decade that breaks the plan, and the old columns co
 The equity, bond, international and inflation rates are still there, on the row hover, along with
 which windows flagged that year.
 
-**Sequences that run past the end of the record now say so.**
+### Sequences that run past the end of the record now say so
 
 A plan longer than the record has left after its start year wraps around and replays history from
 1928. A 2015 start on a 30 year plan gets 11 real years and then 19 of replay. That has always been
@@ -66,55 +93,33 @@ the behaviour, and the ranking has always excluded start years without a full wi
 after them, so a wrapped stretch never gets a vote in which years are worst. It is now visible: the
 wrapped part of the line is dashed, and the row hover names the year the record runs out.
 
----
+### Changing a Stress Test setting no longer marks the whole run out of date
 
-<a id="11.1521"></a>
+"Out of date. The chart and survival table below were run before your latest changes" appeared when
+the only thing edited was the Stress window or the sequence count, and its Re-run button re-runs
+everything. So the offer was to spend half a minute on the roughly 144 strategy sweep in order to
+refresh a chart that had already refreshed itself by the time the banner appeared.
 
-## 11.1521
+It was not quite a false alarm, which is why it survived this long. The sequence count really did
+feed the main run, through the pool of worst decades the bear-start overlay samples from, so
+changing it really did invalidate the sweep. That was an accident of one setting being reused for
+two unrelated jobs, and there was no way to guess it from a control labelled "how many worst
+sequences the Stress Test chart shows". The overlay now uses a fixed pool of its own, which leaves
+the two Stress Test controls affecting only the Stress Test. The banner is keyed to what the sweep
+actually reads, so it no longer appears for either of them. The overlay itself is unchanged: the
+fixed pool is the same 10 it was always given by default.
 
-**Five Stress Test fixes, one of which was locking up the whole Monte Carlo tab. No change to any
-plan or its numbers.**
+### Smaller things
 
-**Asking for 85 or more stress sequences froze the tab.**
-
-The Stress Test ranks historical retirement start years and runs the worst of them. How many start
-years there are to rank depends on the window: a sequence has to have the full window of real data
-after it to be scored at all, so a 5 year window leaves 94 candidates and a 30 year window leaves
-only 69. Asking for more sequences than the record can supply used to run off the end of the ranked
-list. That threw, and the error was then lost: the background worker's failure handler responded by
-re-running the identical job on the main thread, where it threw again, this time with nobody left to
-catch it. The result was not an error message but a freeze. The Cancel bar stayed up and the Stress
-Test stopped responding to any later edit for the rest of the visit.
-
-The count is now capped at what the chosen window can actually supply, so a request for 200 returns
-the 69 to 94 that exist rather than failing. Both failure paths now report an error instead of
-losing it, and the tab stays usable either way.
-
-**Clearing the Paths box printed "NaN".**
-
-The run size line under the Run button updates as you type. Emptying the box left it reading
-"NaN paths x 144 strategies = NaN simulations" until you typed a digit. Every numeric box on the tab
-now falls back to its default when it is empty and is held inside its stated range, so a half-typed
-value cannot reach the run, the time estimate or the out-of-date check.
-
-**The Stress Test chart has dropped its legend.**
-
-The table under the chart already names every line, carries every number the legend did, sorts, and
-shows each line's color in its first column. The legend was a second copy of that, competing with
-the plot for width. It is gone, and the table is now the key.
-
-**The hover readout waits until you pick a line.**
-
-Hovering the chart used to list every scenario's balance for that year at once. It now appears only
-after you click a table row to isolate a single line, and reports just that line. Click the row
-again to bring the rest back.
-
-**Inflation CAGR no longer carries a "+".**
-
-A leading plus sign reads as a gain. Rising prices are not one, and inflation was the one figure on
-the page shown that way. A negative rate still shows its own minus sign.
-
----
+- The Stress Test chart has dropped its legend. The table underneath already names every line,
+  carries every number, sorts, and shows each line's color in its first column; the legend was a
+  second copy of that competing with the plot for width. The table is now the key.
+- The hover readout waits until you pick a line. Hovering used to list every scenario's balance for
+  that year at once. It now appears only after you click a table row to isolate a single line, and
+  reports just that line. Click the row again to bring the rest back.
+- Inflation CAGR no longer carries a "+". A leading plus sign reads as a gain, rising prices are not
+  one, and inflation was the one figure on the page shown that way. A negative rate still shows its
+  own minus sign.
 
 <a id="11.150b"></a>
 

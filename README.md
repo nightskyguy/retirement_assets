@@ -872,18 +872,18 @@ Your own plan is called out separately from that ranking. It is pinned with a ðŸ
 
 It runs your plan against the worst *actual* retirement start years in the historical record, one simulation each, and it is entirely deterministic.
 
-The scoring window, 10 years by default, is a **ranking device, not a splice point**. Every start year in the record is scored by its real (inflation-adjusted) equity CAGR over that many years, using the Fisher equation, and the worst handful are chosen. At a 10-year window those are 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970 and 1929.
+The scoring window is a **ranking device, not a splice point**. Every start year in the record is scored by its real (inflation-adjusted) equity CAGR over that many years, using the Fisher equation, and the worst handful are chosen. At a 10-year window those are 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970 and 1929.
 
 What happens *after* the window is the part people expect to be randomized, and it is not. Each chosen scenario simply keeps walking the real record, year by year, for the entire length of your plan. A 35-year plan on the 1999 scenario gets the actual 1999 through 2025, and then, having run out of history, wraps around and continues with the actual 1928 onward. Nothing is bootstrapped, resampled, or set to an assumed return. This is why the seed cannot change the result: there is no random number drawn anywhere in the stress pass, so the same plan produces the same ten outcomes every time, on any machine.
 
-Under nerdknob you can set the window to 5, 15, 20 or 30 years instead, which re-scores every start year over the new stretch and brings a different set of years forward. A window longer than your plan is trimmed to the length of the plan.
+Under nerdknob you can set the window to a single 5, 10, 15, 20 or 30 years, which re-scores every start year over that stretch and brings a different set of years forward. A window longer than your plan is trimmed to the length of the plan.
 
-Two further choices sit below the plain windows, because any single window hides what the others would have caught. The five overlap heavily, and a short sharp crash and a long grinding one flag different years:
+The default is neither of those but **Combined**, one of two choices that sit below the plain windows, because any single window hides what the others would have caught. The five overlap heavily, and a short sharp crash and a long grinding one flag different years:
 
-- **Combined (5/10/15/20/30)** scores every window and runs the union of what each one flags. Because they overlap it is far fewer than five times the count, about 23 distinct start years at the default of 10 rather than 50. Hovering a row says which windows flagged that year.
+- **Combined (5/10/15/20/30)**, the default, scores every window and runs the union of what each one flags. The count is per window, and because they overlap the union is far smaller than the sum: the default of 20 gives about 40 distinct start years rather than 100. Hovering a row says which windows flagged that year.
 - **All start years** skips ranking entirely and runs every start year in the record, currently 98. At that density individual lines stop being readable, so survivors fade into the background and failures are drawn solid and on top. The question at that point is not which line is 1966, which the table answers, but how much of the record this plan does not survive.
 
-How many sequences the count asks for is per window in Combined, and in All it only decides which years get flagged as worst in the hover text, since every year runs regardless. Only start years with a full window of real record after them can be scored at all, so the number available depends on the window: 94 at five years down to 69 at thirty. Ask for more than exist and you get all of them.
+In All the count only decides which years get flagged as worst in the hover text, since every year runs regardless. Only start years with a full window of real record after them can be scored at all, so the number available depends on the window: 94 at five years down to 69 at thirty. Ask for more than exist and you get all of them.
 
 The chart colors each line by what happened to your money, and by when: red ran out in the first half of your plan, amber in the second half, green never ran out. That line used to be drawn at the edge of the stress window, which worked only while there was exactly one window and which called running dry in year 12 and in year 29 of a 30 year plan the same thing. The window now has one job, deciding which start years run.
 

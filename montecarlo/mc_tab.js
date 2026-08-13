@@ -11,6 +11,9 @@ let _legendIsolatedKeyStress = null; // same, for the stress chart (separate —
 let _mcSelected          = new Set(); // indices of variations currently on chart
 let _mcStartYear         = 2026;      // cached from getInputs() at run time
 let _lastMCHash          = null;
+// The sweep-only half of that hash, captured at the same moment. The stale banner keys off this one
+// so the two Stress Test controls, which the sweep no longer depends on, cannot raise it.
+let _lastSweepHash       = null;
 let _mcBase              = null;      // getInputs() snapshot captured at run time
 // Index into _mcResults.variations of the row that IS the sidebar plan, or -1 when the exact plan
 // is not among the swept strategies. Set once per run by renderMCResults; the survival table, the
@@ -39,8 +42,9 @@ const MC_PARAMS = {
     'mc-sigma':         { dflt: 12,  min: 1,   max: 40, int: false },
     'mc-seed':          { dflt: 42,  min: 0,   max: Number.MAX_SAFE_INTEGER },
     // Upper bound is the whole historical record; buildStressBank caps it again at the number of
-    // start years the chosen window actually leaves available.
-    'mc-stress-count':  { dflt: 10,  min: 3,   max: 98 },
+    // start years the chosen window actually leaves available. On the default Combined window this
+    // is per window, so 20 produces a union of roughly 40 distinct start years.
+    'mc-stress-count':  { dflt: 20,  min: 3,   max: 98 },
     'mc-bear-fraction': { dflt: 25,  min: 0,   max: 50, int: false },
 };
 
@@ -139,6 +143,7 @@ function updateMCModeUI() {
 function onMCModeChange() {
     updateMCModeUI();
     _lastMCHash = null;   // force re-run regardless of other inputs
+    _lastSweepHash = null;
     if (!_mcNerdMode() && !document.getElementById('tab-mc')?.classList.contains('hidden')) {
         runMonteCarlo();
     }
@@ -170,28 +175,47 @@ function mcTabActivated() {
         runMonteCarlo();
         return;
     }
-    if (_mcResults) markMCStale(true);
+    // Same sweep-only test as mcInputsChanged(): coming back to the tab after changing nothing but
+    // a Stress Test control must not announce that the sweep is out of date.
+    if (_mcResults && _buildSweepHash() !== _lastSweepHash) markMCStale(true);
     refreshMCStressOnly();
 }
 
-function _buildMCHash() {
-    const base = getInputs();
+// Two hashes, because the tab has two passes with different costs and different inputs.
+//
+// _buildSweepHash covers everything the expensive main sweep depends on. It is what the "Out of
+// date" banner is keyed to, and it deliberately does NOT include the two Stress Test controls: the
+// stress pass re-runs itself on every edit, so flagging the ~30-second sweep as stale over a change
+// only the stress chart consumed offered a Re-run button that re-ran the whole thing for nothing.
+// (The Stress sequences count genuinely did feed the main pass until now, through the bear-start
+// overlay's sample pool. That coupling is gone - see BEAR_OVERLAY_POOL in prng.js - which is what
+// makes leaving it out correct rather than merely convenient.)
+//
+// _buildMCHash adds the stress controls on top. It answers "did anything change at all", which is
+// what decides whether the stress pass needs re-running.
+function _buildSweepHash() {
     // Clamped values, not raw .value strings: a half-typed or cleared box would otherwise change the
     // hash and flag the sweep out of date over an edit the run never sees.
     return JSON.stringify({
-        inputs:      base,
+        inputs:      getInputs(),
         numPaths:    _mcNum('mc-num-paths'),
         mu:          _mcNum('mc-mu'),
         sigma:       _mcNum('mc-sigma'),
         seed:        _mcNum('mc-seed'),
-        simMode:     document.getElementById('mc-sim-mode')?.value      ?? 'gbm',
-        stressCount:  _mcNum('mc-stress-count'),
-        stressWindow: stressWindowMode(),
+        simMode:     document.getElementById('mc-sim-mode')?.value ?? 'gbm',
         bearFraction: _mcNum('mc-bear-fraction'),
         // Scope is part of the identity of a run: switching between "your plan" and "every
         // strategy" has to invalidate what is on screen, or the stale banner never appears and the
         // page keeps showing the other scope's answer.
         scope:        _mcScope,
+    });
+}
+
+function _buildMCHash() {
+    return JSON.stringify({
+        sweep:        _buildSweepHash(),
+        stressCount:  _mcNum('mc-stress-count'),
+        stressWindow: stressWindowMode(),
     });
 }
 
@@ -269,6 +293,7 @@ let _mcScope = 'compare';
 function runMonteCarlo(scope) {
     _mcScope = (scope === 'plan') ? 'plan' : 'compare';
     _lastMCHash = _buildMCHash();
+    _lastSweepHash = _buildSweepHash();
     // runMCWorker terminates whatever is in flight, so a stress-only refresh started moments ago
     // (a sidebar edit is debounced 400ms, which is easily overtaken by a click on Run) will never
     // deliver its callback. Without this the flag stays true forever and every later stress refresh
@@ -356,11 +381,16 @@ let _mcStress = null;
 // the #mc-stale-banner with a Re-run button.
 function mcInputsChanged() {
     if (_buildMCHash() === _lastMCHash) return;
+    // Only a change the SWEEP would have seen makes the sweep out of date, and _mcResults null means
+    // there is nothing on screen to go stale. Editing Stress sequences or Stress window used to raise
+    // the banner too, and its Re-run button re-runs everything, so the offer was to spend half a
+    // minute on the ~144-strategy sweep to refresh a chart that had already refreshed itself by the
+    // time the banner appeared.
+    if (_mcResults && _buildSweepHash() !== _lastSweepHash) markMCStale(true);
     // No nerd-mode guard here on purpose. Nerd mode controls when the expensive SWEEP runs, and
     // nothing in this function runs it. Marking the sweep out of date and refreshing the ~10-sim
     // stress pass have to happen in both modes, or a nerdknob user silently reads the previous
     // plan's numbers -- which is exactly what the first version of this shipped with.
-    if (_mcResults) markMCStale(true);   // nothing on screen yet means nothing to go stale
     refreshMCStressOnly();
 }
 

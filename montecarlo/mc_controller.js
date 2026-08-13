@@ -147,7 +147,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         if (mode === 'bootstrap') {
             multiAssetBank = bootstrapMultiAssetBank(rng, numPaths, years);
             const bearFraction = (cfg.bearFraction ?? 25) / 100;
-            if (bearFraction > 0) applyBearStartOverlay(multiAssetBank, rng, numPaths, years, bearFraction, cfg.stressCount ?? 10);
+            if (bearFraction > 0) applyBearStartOverlay(multiAssetBank, rng, numPaths, years, bearFraction);
             scenarioBank = multiAssetBank.equity;  // used for equity min/max/median reporting
             let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity,
                 itMin = Infinity, itMax = -Infinity, infMin = Infinity, infMax = -Infinity;
@@ -183,8 +183,8 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             };
             inflationStats = { min: infMin, cagr: infCAGR, max: infMax };
         } else if (mode === 'stress') {
-            const stressCount = cfg.stressCount ?? 10;
-            multiAssetBank = buildStressBank(stressCount, years, cfg.stressWindow ?? 10);
+            const stressCount = cfg.stressCount ?? 20;
+            multiAssetBank = buildStressBank(stressCount, years, cfg.stressWindow ?? 'combined');
             numPaths = multiAssetBank.labels.length;
             scenarioBank = multiAssetBank.equity;
             let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity,
@@ -398,7 +398,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
     // Stress runs in BOTH modes -- see worker.js for why. It builds its own bank from the worst
     // historical decades and never needed the main pass to be Historical.
     const willRunStress = true;
-    const stressCountEstimate = cfg.stressCount ?? 10;
+    const stressCountEstimate = cfg.stressCount ?? 20;
     // See worker.js for why cfg.stressOnly exists: the main pass is ~numPaths × variations sims and
     // is far too expensive to re-run on every input change; the stress pass is stressCount × 1.
     const stressOnly = !!cfg.stressOnly && willRunStress;

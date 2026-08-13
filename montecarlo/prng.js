@@ -44,16 +44,24 @@ function bootstrapScenarioBank(rng, numPaths, years, blockSize = 3) {
 // Deterministic SoRR stress bank: the `count` worst historical retirement-start sequences,
 // scored by first `scoreYears` equity CAGR.  Sequences wrap at end of history for plans
 // longer than remaining history (e.g., a 40-yr plan starting 1998 continues from 1928).
-// Returns { equity, bonds, intl, inflation, labels, startYears, decadeCAGRs }
+// Returns { equity, bonds, intl, inflation, labels, startYears, decadeCAGRs, scoreYears }
 // where numPaths == count (deterministic, no RNG needed).
+//
+// scoreYears is a RANKING window, not a splice point. It decides WHICH start years qualify as
+// "worst"; it does not change what happens after it. Every scenario then walks the real record
+// straight through for the full `years` horizon (see the `% n` wrap below), so there is no
+// randomized, bootstrapped or assumed-return tail. That is also why this function takes no rng:
+// the stress pass is a deterministic enumeration of history and the seed cannot move it.
 function buildStressBank(count = 10, years, scoreYears = 10) {
     const eq      = HISTORICAL_RETURNS.equity;
     const bd      = HISTORICAL_RETURNS.bonds;
     const infSrc  = HISTORICAL_RETURNS.inflation;
     const intlSrc = HISTORICAL_RETURNS.intl;
-    const n       = eq.length;   // 97
+    const n       = eq.length;   // 98 (1928-2025)
     const intlOff = HISTORICAL_RETURNS.intlStartYear - HISTORICAL_RETURNS.equityStartYear;  // 42
-    const sLen    = Math.min(scoreYears, n);
+    // Clamp to the record AND to the plan: a 30-year window on a 25-year plan would otherwise
+    // rank start years on a stretch the plan never lives through.
+    const sLen    = Math.max(1, Math.min(scoreYears, n, years || scoreYears));
 
     // Score all starting indices that have at least sLen real years remaining.
     // Score by real CAGR (Fisher equation) to account for inflation erosion.
@@ -83,9 +91,27 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
     const decadeCAGRs    = [];
     const decadeInflCAGRs = [];
     const decadeRealCAGRs = [];
+    const decadeBondCAGRs = [];
+    const decadeIntlCAGRs = [];
+
+    // Same intl proxy rule as the bank fill below: before 1970, and past the end of the intl
+    // series, domestic equity stands in.
+    const intlAt = (idx) =>
+        (idx >= intlOff && idx - intlOff < intlSrc.length) ? intlSrc[idx - intlOff] : eq[idx];
 
     for (let p = 0; p < count; p++) {
         const { i: si, year, eqCagr, infCagr, realCagr } = worst[p];
+        // Bonds and intl are not part of the SCORING (start years are ranked on real equity return),
+        // but the plan is funded by all three, so the per-scenario table reports them. Computed only
+        // for the handful of selected sequences rather than for every candidate start year.
+        let bdLogSum = 0, itLogSum = 0;
+        for (let y = 0; y < sLen; y++) {
+            const idx = (si + y) % n;
+            bdLogSum += Math.log1p(bd[idx]);
+            itLogSum += Math.log1p(intlAt(idx));
+        }
+        decadeBondCAGRs.push(Math.exp(bdLogSum / sLen) - 1);
+        decadeIntlCAGRs.push(Math.exp(itLogSum / sLen) - 1);
         // Label format: "1970 (eq: +6.0% inf: +7.0% real: -1.0%)"
         const eqFmt = (eqCagr * 100).toFixed(1);
         const infFmt = (infCagr * 100).toFixed(1);
@@ -100,12 +126,28 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
             eqBank [p * years + y] = eq[idx];
             bdBank [p * years + y] = bd[idx];
             infBank[p * years + y] = Math.max(INFLATION_FLOOR, infSrc[idx]);
-            itBank [p * years + y] = (idx >= intlOff && idx - intlOff < intlSrc.length) ? intlSrc[idx - intlOff] : eq[idx];
+            itBank [p * years + y] = intlAt(idx);
         }
     }
 
     return { equity: eqBank, bonds: bdBank, intl: itBank, inflation: infBank,
-             labels, startYears, decadeCAGRs, decadeInflCAGRs, decadeRealCAGRs };
+             labels, startYears, decadeCAGRs, decadeInflCAGRs, decadeRealCAGRs,
+             decadeBondCAGRs, decadeIntlCAGRs, scoreYears: sLen };
+}
+
+// Outcome class for one stress scenario, used for both the chart line color and the row shading
+// in the per-scenario table. Pure so the boundary cases are testable in node.
+//   'ruin-early'  ruin inside the scoring window - the plan did not survive the bad opening stretch
+//   'ruin-late'   ruin after the window - the plan absorbed the opening but ran out later
+//   'survive'     never ruined
+// planStartYear is the plan's FIRST CALENDAR YEAR (2026), not the historical year the return
+// sequence is drawn from (1973). The money runs out on the plan's clock.
+// ruinYear is 0/null for a path that survived (worker.js leaves the slot at 0).
+// A ruin landing exactly on planStartYear + windowYears is LATE: the window covers years
+// planStartYear .. planStartYear + windowYears - 1.
+function stressOutcomeBand(planStartYear, ruinYear, windowYears) {
+    if (!ruinYear) return 'survive';
+    return (ruinYear - planStartYear) < windowYears ? 'ruin-early' : 'ruin-late';
 }
 
 // Bear-start overlay: overwrites the first 10 years of the bottom bearFraction of bootstrap paths
@@ -131,7 +173,7 @@ function applyBearStartOverlay(bank, rng, numPaths, years, bearFraction, stressC
 }
 
 // Multi-asset block bootstrap: synchronized draws from equity, bonds, intl, and inflation.
-// Sampling range: full equity/bonds/inflation history (1928–2024, 97 years).
+// Sampling range: full equity/bonds/inflation history (1928-2025, 98 years).
 // For years before 1970, intl data does not exist — domestic equity return is used as a proxy
 // (pre-1970 international markets were not separately investable and were highly correlated
 // with US equity; this is a minor distortion since intl is typically ≤10% of total portfolio).
@@ -140,7 +182,7 @@ function applyBearStartOverlay(bank, rng, numPaths, years, bearFraction, stressC
 // Returns { equity, bonds, intl, inflation } — each Float64Array of length numPaths × years.
 function bootstrapMultiAssetBank(rng, numPaths, years, blockSize = 3) {
     const eqSrc   = HISTORICAL_RETURNS.equity;
-    const n       = eqSrc.length;   // 97 (1928-2024) — full history
+    const n       = eqSrc.length;   // 98 (1928-2025) - full history
     const intlOff = HISTORICAL_RETURNS.intlStartYear - HISTORICAL_RETURNS.equityStartYear;  // 42
     const intlSrc = HISTORICAL_RETURNS.intl;
     const eqBank  = new Float64Array(numPaths * years);
@@ -170,4 +212,20 @@ function bootstrapMultiAssetBank(rng, numPaths, years, blockSize = 3) {
         }
     }
     return { equity: eqBank, bonds: bdBank, intl: itBank, inflation: infBank };
+}
+
+// The worker loads this file with importScripts() and calls everything as bare globals; this tail
+// only adds a namespace so optimizer_core.tests.js can assert against the REAL stress selection
+// instead of reimplementing the scoring math inline.
+if (typeof module !== 'undefined' && module.exports) {
+    // HISTORICAL_RETURNS is a bare global under importScripts. In node it is a module-scoped const,
+    // so it has to be pulled onto globalThis before buildStressBank() can read it.
+    if (typeof globalThis.HISTORICAL_RETURNS === 'undefined') require('./historical_returns.js');
+    module.exports = { mulberry32, boxMuller, bootstrapScenarioBank, buildStressBank,
+                       stressOutcomeBand, applyBearStartOverlay, bootstrapMultiAssetBank,
+                       INFLATION_FLOOR };
+} else if (typeof window !== 'undefined') {
+    window.MCPrng = { mulberry32, boxMuller, bootstrapScenarioBank, buildStressBank,
+                      stressOutcomeBand, applyBearStartOverlay, bootstrapMultiAssetBank,
+                      INFLATION_FLOOR };
 }

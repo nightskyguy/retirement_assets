@@ -434,7 +434,7 @@ th[title] {
 }
 
 /* Small inline toggle buttons (Mine/Spouse/Both, Me/Spouse, All/Fed/State…).
-   Intentionally smaller and a different active colour from .tab-btn so they
+   Intentionally smaller and a different active color from .tab-btn so they
    are not confused with the main navigation tabs. */
 .tog {
     background: #e9ecef;
@@ -1016,3 +1016,28 @@ table th.empty-column {
         padding: 10px;
     }
 }
+/* ---------------------------------------------------------------------------
+   Monte Carlo foldable sections (Stress Test, and the main Chance of Success block).
+
+   The colored result banner is the <summary>, so the number worth reading while
+   the section is collapsed is also the control that collapses it. The default
+   disclosure triangle is suppressed because the banner draws its own chevron
+   (renderStressHeadline/renderPlanHeadline in montecarlo/mc_tab.js write .mc-fold-chev); a marker
+   sitting outside the colored strip would read as a second, separate control.
+
+   These are the only Monte Carlo rules in this file - everything else on that tab
+   is styled inline - because [open] cannot be expressed as an inline style.
+   --------------------------------------------------------------------------- */
+.mc-fold > summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+}
+.mc-fold > summary::-webkit-details-marker { display: none; }
+.mc-fold > summary::marker { content: ''; }
+
+.mc-fold-chev {
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+.mc-fold[open] > summary .mc-fold-chev { transform: rotate(90deg); }

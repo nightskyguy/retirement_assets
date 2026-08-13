@@ -3,7 +3,6 @@
 > [!WARNING]
 > **Disclaimer:** There is no SUPPORT for these tools and no guarantee of accuracy, or appropriateness of use. No warranty of suitability for any purpose. There is also *no charge*. **USE AT YOUR OWN RISK**
 
-
 ## Who Are These Tools For?  What Can They Do? 
 
 You can DIRECTLY invoke these tools:
@@ -17,7 +16,6 @@ You can DIRECTLY invoke these tools:
 + **[IRMAA and RMDs](https://tools.netcitizen.us/standalone/irmaa_and_rmds.html)** What IRA balance gets me in trouble with IRMAA at a given age?
 + **[After Tax REAL Growth](https://tools.netcitizen.us/standalone/AfterTaxRealGrowth.html)**  What growth rate do I need to stay ahead of inflation?
 + **[HYSA Real Returns](https://tools.netcitizen.us/standalone/HYSA.html)** Does my "safe" high-yield savings account actually grow after taxes and inflation? Annual and cumulative views in one tool.
-
 
 All tools are "open source". Nothing is hidden.
 
@@ -91,6 +89,7 @@ A California resident built these with [Google gemini](https://gemini.google.com
   - [Why does the Optimizer say converting never helps?](#why-does-the-optimizer-say-converting-never-helps)
   - [What about Doing all Conversions rather than withdrawals?](#what-about-doing-all-conversions-rather-than-withdrawals)
   - [Is the Break-Even Tax Rate Trustworthy?](#is-the-break-even-tax-rate-trustworthy)
+  - [Stress Test vs Monte Carlo Analysis](#stress-test-vs-monte-carlo-analysis)
   - [How Do I Evaluate Tools for Privacy and Security?](#how-do-i-evaluate-tools-for-privacy-and-security)
   - [What Should I Look for in Retirement Tools?](#what-should-i-look-for-in-retirement-tools)
   	- [Monte Carlo and Chance of Success - How accurate?](#monte-carlo-and-chance-of-success-accuracy)
@@ -253,6 +252,7 @@ individual).
 + **Cycle Brokerage** layers on top of *any* withdrawal strategy: it alternates several IRA draw years with a brokerage long-term-capital-gains harvest year, which can keep ordinary income low in the off years. The Optimizer runs every strategy three ways - plain, cyclic IRA-first (🗘), and cyclic brokerage-first (🔄) - so you can see whether the maneuver is worth it for your plan before you turn it on. Watch the caveats: harvest years spike income, which can cost you at an IRMAA or ACA threshold, and the basis does eventually deplete.
 + An **"Optimize for"** selector at the top of the Optimizer re-orders the entire table by the goal you actually care about, and moves the ⚓ baseline to match. Nine goals are offered, from Tax Flexibility (the default) to Minimum Lifetime Taxes, Maximum Spending, and Earliest Break Even. The full list is in [How do I find the most efficient Roth conversions?](#how-do-i-find-the-most-efficient-roth-conversions) in the FAQ.
 + **Monte Carlo 🎲** - despite the name, this has nothing to do with gambling. "Monte Carlo" is a mathematical technique that asks: *what if we ran your retirement plan five hundred times, each time with a different sequence of good years and bad years drawn from the same statistical range?* Some runs get lucky (strong markets early), some get unlucky (a crash right after you retire). The result is a survival rate - "97% of scenarios still had money at age 90" - plus a chart showing the spread from best-case to worst-case portfolios over time. This is far more informative than a single projected growth rate, because the *order* of good and bad years matters enormously in retirement: a crash in year two is far more damaging than the same crash in year twenty. The tab compares all withdrawal strategies side by side under identical market conditions so you can see which ones are merely good on average and which ones are resilient across bad luck.  The growth and inflation sequences are chosen from historical data. My analysis of many tools has lead me to believe that most of them are seriously flawed. Failing to model inflation variability is often what is lacking.
++ **Stress Test** - separate from the Monte Carlo, and not a random sample of anything. It replays your plan through the worst retirement *start years* that actually happened, one run each, and reports how many of them your plan survived. Because the sequences are fixed history, the result is identical on every machine and does not move when you change the seed. Each line is colored by what became of your money - ran out early, ran out later, never ran out - with a sortable table of the numbers behind every sequence. See [Stress Test vs Monte Carlo Analysis](#stress-test-vs-monte-carlo-analysis).
 + Many state tax tables are present (including "No Tax" states). California tax table is the default. 33 of the US states tax IRA withdrawals the same way - albeit at different tax rates.  Also, those same 33 states treat all capital gains as taxable income - and that can matter quite a lot. WARNING: only California calculations are done using the correct model. Other states may be off. Best to double check. Moreover, most states do NOT tax Social Security. Those that do may not be modeled correctly. The Federal government taxation of Social Security should be very accurate.
 + Modeling will show the true cost of the widow penalty (when one spouse predeceases another) and the IRMAA penalty.
 + Can model different spending rates (goals) in retirement via a declining (spending smile) or a flat spending rate.
@@ -265,7 +265,6 @@ individual).
 + On the Annual Details page, click either the year column or the "totalTax" column and it will generate up to 3 different tax payment plans - showing which is the most effective.
 + By default dividends from the Brokerage and interest on cash are accumulated into the Cash account. The "Reinvest Brokerage Dividends" changes this behavior and dividends are reinvested (meaning your cost basis grows over time).
 + If you do Roth Conversions (even a $1), the tool will determine when you "break even" - if ever. Break Even means the value of your total assets becomes the same or greater than the value of your assets had you done NO Roth conversions (and paid no taxes on those conversions), and stays that way for the rest of the plan - a one-year blip that later falls behind again does not count.
-
 
 ### What the Tool IGNORES (No Plans to Implement)
 
@@ -295,7 +294,6 @@ individual).
 Why are these permanent?
 
 More inputs and knobs and conditions make the tool less simple. If you've got those situations, you can do some modeling here, but maybe a better tool will be MaxiFi, EMoney, Empower, Projection Labs, Pralana, Boldin, or similar.
-
 
 ### Limitations and Restrictions
 
@@ -404,7 +402,6 @@ It is definitely more "geeky" than say Boldin, but I already know it does two th
 2. It has INFLATION built in to its Monte Carlo engine
 
 More later.
-
 
 ---
 #### Roth Done Right (Stonewood)
@@ -554,7 +551,6 @@ In each scenario, the 5498(s) total $30k, and the 1099-R(s) total $30k.  If all 
 
 ##### Scenario 3: $30k withheld and replaced.
 Scenario 3 is the same as scenario 2 with one less step: there is no "conversion" (no step 2).
-
 
 ##### Reconciliation and Notes
 *Not tax or legal advice - consult a CPA or tax advisor before executing any of these scenarios.*
@@ -860,6 +856,32 @@ And BETR misses the other side of the issue:
 
 Professor Emeritus Edward McQuarrie pretty forcefully proves in [Net Present Value Analysis of Roth Conversions - 2024](https://www.financialplanningassociation.org/learning/publications/journal/SEP24-net-present-value-analysis-roth-conversions-OPEN) that Roth Conversions are unlikely to break even. Despite the conventional wisdom that the gains are driven by differences in tax rates - that is **not** the primary factor. The hurdle to overcome with early tax payments is that the lost value of early taxes requires enough growth time in the Roth to overcome the opportunity cost.  Opportunity cost, briefly, is what you surrender when you pay taxes out of funds that would otherwise have remained invested and growing. Also consider that paying $10k in taxes this year is worth more than the same (or larger) figure paid in 5 or 10 years due to inflation. Future (or present) tax avoidance is not the whole picture.
 
+### Stress Test vs Monte Carlo Analysis
+
+The Monte Carlo tab runs two different things and it is easy to read one as the other. The main projection is a Monte Carlo: many randomized paths, scored as a survival rate. The Stress Test is not Monte Carlo at all: it is a fixed, deterministic replay of the worst starting years that actually happened. One asks "how does this plan do across a range of possible futures", the other asks "would this plan have survived the worst of the real past". A plan can look fine on one and poor on the other, and neither number is a forecast.
+
+For how accurate any of this can be, and why two tools rarely agree, see [Monte Carlo and Chance of Success - How accurate?](#monte-carlo-and-chance-of-success-accuracy).
+
+#### How many simulations is "500 paths"?
+
+The Paths box in Advanced Parameters is the number of paths run **per withdrawal strategy**, not the size of the whole run. The Monte Carlo tab does not simulate one plan, it simulates every strategy the Optimizer knows how to build, so it can rank them against each other. On a typical plan that is about 144 strategies, which makes the default 500 paths roughly 72,000 simulations. The readout beside the Run button and under the survival table both spell the arithmetic out, and it is why the run takes tens of seconds rather than an instant.
+
+Your own plan is called out separately from that ranking. It is pinned with a 📍 to the top of the survival table whatever you sort by, drawn as the thick line on the chart, and its chance of success is stated in a sentence above the chart. If your exact settings are not among the strategies swept, the page says so rather than pinning something that is merely close.
+
+#### What the Stress Test actually does
+
+It runs your plan against the worst *actual* retirement start years in the historical record, one simulation each, and it is entirely deterministic.
+
+The scoring window, 10 years by default, is a **ranking device, not a splice point**. Every start year in the record is scored by its real (inflation-adjusted) equity CAGR over that many years, using the Fisher equation, and the worst handful are chosen. At a 10-year window those are 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970 and 1929.
+
+What happens *after* the window is the part people expect to be randomized, and it is not. Each chosen scenario simply keeps walking the real record, year by year, for the entire length of your plan. A 35-year plan on the 1999 scenario gets the actual 1999 through 2025, and then, having run out of history, wraps around and continues with the actual 1928 onward. Nothing is bootstrapped, resampled, or set to an assumed return. This is why the seed cannot change the result: there is no random number drawn anywhere in the stress pass, so the same plan produces the same ten outcomes every time, on any machine.
+
+Under nerdknob you can set the window to 5, 15, 20 or 30 years instead. That changes two things together, deliberately: which start years qualify as the worst (they are re-scored over the new stretch, which brings a different set of years forward), and where the line falls between a plan that failed early and one that failed later. A window longer than your plan is trimmed to the length of the plan.
+
+The chart colors each line by what happened to your money, not by how bad its opening stretch was: red ran out inside the window, amber ran out after it, green never ran out. The table under the chart carries the numbers for each sequence, sorted worst first: start year, ruin year, years to ruin, the equity, bond, international and inflation CAGRs over the window, the real CAGR the ranking is based on, and the final balance. Bonds and international are reported but not ranked on; the choice of worst start years is made on real equity return alone. International data begins in 1970, so a scenario starting earlier shows domestic equity in its place, which is the same substitution the simulation itself makes.
+
+Because these sequences are chosen to be the worst on record, failing some of them is not a prediction. It is a durability test.
+
 ### How Do I Evaluate Tools for Privacy and Security?
 
 This tool, and many of the tools in the [reviews above](#what-about-other-tools), have been reviewed for malware, privacy leaks, and in some cases for accuracy.  Evaluation is easy to do with modern AI tools if the source code is available. It is much harder if the tool is commercial, since those tools typically do not expose their source code.
@@ -936,6 +958,8 @@ One major flaw with most Monte Carlo methods is that they generally vary "return
 This observation also gives rise to another: prices and rates change quarterly, monthly, daily, and even hourly.  It might seem that modeling on a more frequent basis would cover more ground, but if the model isn't realistic, more frequency - like more trials - doesn't improve the accuracy.
 
 There is another gotcha built into Monte Carlo that is only well understood by people who have "been there". Randomness is surprisingly hard to do well. If you were able to achieve true randomness in rolling the die: no two complete Monte Carlo simulations could ever be the same. That is, every time you run the simulation you can get different results with the same starting conditions. Some shipped software suffers from this problem with people asking "I didn't change anything, why did my chance of success move from 78% to 76%?"  You can see this for yourself as follows: [Select the Monte Carlo Tab](https://tools.netcitizen.us/retirement_optimizer?nerdknob). Then select Simulation Mode -> "Synthetic". You'll see a value called "seed" which is currently set to 42. Set the number of paths to something small (10) and "*Run Monte Carlo*. Look at *Equity range* (e.g. -28.9% to 41.1%). Run again. You will get the same values. If you change the seed to anything else (72, for example) and *Run Monte Carlo*, you get a different set of values (-17.3% to 43.6%). Random numbers here are intentionally forced by the seed to use the same sequence so that the results are repeatable. Software that doesn't do that will have different results every run even though there are no changes.
+
+Note that the seed governs the *main projection* only, in both Historical and Synthetic mode. The Stress Test does not move when you change it, and it should not: it is not a random sample of anything. See [Stress Test vs Monte Carlo Analysis](#stress-test-vs-monte-carlo-analysis).
 
 Over the last 100 years, the US has observed declines about 23% of the time. Some declines have been sustained for a few months, some for a decade or more. That means the market has been neutral or positive the other 77% of the time.  A Monte Carlo model that doesn't have the ability to mimic that behavior at least some of the time can completely miss creating conditions like those that have already been observed. And a model that doesn't stray outside the bounds of what has been seen is also not as helpful, because a more volatile future is also a possibility.
 

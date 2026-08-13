@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1508</title>
+    <title>Retirement Optimizer 11.150b</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -45,7 +45,7 @@
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1113d0" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1112fd">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=11150b">
 	<style>
     .toggle { display: flex !important; }
     .share-panel { display:none; position:fixed; top:60px; right:1.5rem; z-index:800; background:#fff; border:1px solid #27ae60; border-radius:8px; padding:.85rem 1rem; width:min(520px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.2); }
@@ -63,8 +63,8 @@
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1114c6"></script>
-	<script src="optimizer_tests.js?v=111508"></script>
+	<script src="optimizer_ui.js?v=11150b"></script>
+	<script src="optimizer_tests.js?v=11150b"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -249,7 +249,7 @@
               <th style="padding:2px 3px;">Account</th>
               <th style="padding:2px 3px;">Eq/Bond</th>
               <th style="padding:2px 3px;" title="International equity as % of total equity. Bounded by the equity allocation chosen.">Intl%</th>
-              <th style="padding:2px 3px;text-align:right;" title="Weighted geometric median annual return before inflation, using historical data (S&P 500 1928–2024, Bonds 1928–2024, Intl 1970–2024). Advisory only.">Est.Rtn</th>
+              <th style="padding:2px 3px;text-align:right;" title="Weighted geometric median annual return before inflation, using historical data (S&P 500 1928–2025, Bonds 1928–2025, Intl 1970–2025). Advisory only.">Est.Rtn</th>
             </tr>
           </thead>
           <tbody>
@@ -457,9 +457,9 @@
 		<div id="tab-mc" class="card hidden">
 			<!-- Mode selector - always visible; changing it triggers an immediate re-run. -->
 			<div id="mc-mode-panel" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2024). Synthetic: parametric model using μ and σ (advanced, nerdknob only).">Simulation Mode
+				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2025). Synthetic: parametric model using μ and σ (advanced, nerdknob only).">Simulation Mode
 					<select id="mc-sim-mode" style="margin-left:6px;font-size:0.95em;" onchange="onMCModeChange()">
-						<option value="bootstrap" selected>Historical (1928–2024)</option>
+						<option value="bootstrap" selected>Historical (1928–2025)</option>
 						<option value="gbm">Synthetic (parametric)</option>
 					</select>
 				</label>
@@ -471,7 +471,7 @@
 				<strong style="font-size:0.9em;color:#555;">Advanced Parameters</strong>
 				<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;align-items:center;">
 					<label style="font-size:0.85em;color:#888;">(Mode selector above)</label>
-					<label style="font-size:0.85em;" title="Number of simulated market scenarios. More paths = more stable results, slower run.">Paths
+					<label style="font-size:0.85em;" title="Number of simulated market scenarios PER STRATEGY. The sweep runs this many paths against every withdrawal strategy it compares (about 144 of them on a typical plan), so 500 here is about 72,000 simulations. The running total is shown next to the Run button. More paths = more stable results, slower run.">Paths (per strategy)
 						<input type="number" id="mc-num-paths" value="500" min="100" max="5000" step="100" style="width:70px;margin-left:4px;" oninput="updateMCTimeEstimate()">
 					</label>
 					<label style="font-size:0.85em;" title="Expected annual nominal return for Synthetic paths. Defaults to (and stays in sync with) the Assumptions Growth % - override here to test a different MC growth assumption. Not used in Historical mode.">Synthetic Return μ %
@@ -482,21 +482,40 @@
 					<label style="font-size:0.85em;" title="Annual return volatility (standard deviation). Not used in Historical mode.">Volatility σ %
 						<input type="number" id="mc-sigma" value="12" min="1" max="40" step="0.5" style="width:55px;margin-left:4px;">
 					</label>
-					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results.">Seed
+					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results. It affects the main projection only. The Stress Test does not move when you change it, and should not: it is a deterministic walk through real history, not a random sample.">Seed
 						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
 					</label>
-					<label style="font-size:0.85em;" title="Number of worst historical starting sequences shown in the Stress-Test chart, auto-computed alongside Historical mode. Scored by first-decade real (inflation-adjusted) CAGR via Fisher equation. Worst 10: 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970, 1929.">Stress sequences
+					<label style="font-size:0.85em;" title="How many worst historical starting sequences the Stress Test chart shows. Scored by real (inflation-adjusted) CAGR over the opening window set below, via the Fisher equation. At the default 10-year window the worst 10 are 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970, 1929; a different window picks a different set.">Stress sequences
 						<input type="number" id="mc-stress-count" value="10" min="3" max="20" step="1" style="width:50px;margin-left:4px;">
+					</label>
+					<label style="font-size:0.85em;" title="Length of the bad opening stretch. It does two things: it decides WHICH historical start years count as the worst (they are ranked by real CAGR over this many years), and it sets the line where a failure stops being early. Red = ran out of money inside this window, amber = ran out later, green = never ran out. It is not a splice point: after the window each scenario keeps following the real historical record, so nothing is randomized. A window longer than your plan is trimmed to the length of the plan, and the caption under the chart names the window actually used.">Stress window
+						<select id="mc-stress-window" style="margin-left:4px;font-size:0.95em;" onchange="mcInputsChanged()">
+							<option value="5">5 years</option>
+							<option value="10" selected>10 years</option>
+							<option value="15">15 years</option>
+							<option value="20">20 years</option>
+							<option value="30">30 years</option>
+						</select>
 					</label>
 					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical paths that begin with a worst-decade historical sequence before continuing with random draws. 0 = no overlay; 25% ≈ historical frequency of below-inflation first decades. Increases SoRR realism without discarding probabilistic paths. Only applies in Historical mode.">Bear-start %
 						<input type="number" id="mc-bear-fraction" value="25" min="0" max="50" step="5" style="width:50px;margin-left:4px;">
 					</label>
 				</div>
-				<div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
-					<button id="mc-run-btn" onclick="runMonteCarlo()" style="padding:6px 18px;font-size:0.95em;">Run Monte Carlo</button>
+				<!-- Two scopes. "Run Monte Carlo" is unchanged and stays the default everywhere,
+				     including the auto-run non-nerdknob users get on tab activation, so nobody
+				     loses the strategy comparison. "Run My Plan Only" is the cheap path: one
+				     variation instead of ~144, which is the same shape the stress pass has always
+				     run. Both buttons live inside #mc-nerd-panel, so the extra choice is already
+				     nerdknob-gated by the panel itself. -->
+				<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+					<button id="mc-run-btn" onclick="runMonteCarlo('compare')" style="padding:6px 18px;font-size:0.95em;" title="Run every withdrawal strategy and rank them against each other. This is what the tab has always done, and what runs automatically when you open it.">Run Monte Carlo</button>
+					<button id="mc-run-plan-btn" onclick="runMonteCarlo('plan')" style="padding:6px 18px;font-size:0.95em;" title="Run only the plan currently in the sidebar. About 144 times less work, so it finishes almost instantly. You get your own chance of success and the percentile chart, but no strategy comparison table.">Run My Plan Only</button>
 					<span id="mc-time-est" style="font-size:0.8em;color:#888;"></span>
+					<!-- Paths are per strategy. Without this the Compare run looks ~144x smaller
+					     than it is. Describes the Compare button, which is the expensive one. -->
+					<span id="mc-sim-total" style="font-size:0.8em;color:#555;"></span>
 				</div>
-				<div style="margin-top:6px;font-size:0.78em;color:#888;">Historical: returns and inflation are block-sampled from 1928–2024 data; each path sees a different sequence. Synthetic: parametric model using the μ and σ inputs; inflation is fixed.</div>
+				<div style="margin-top:6px;font-size:0.78em;color:#888;">Historical: returns and inflation are block-sampled from 1928–2025 data; each path sees a different sequence. Synthetic: parametric model using the μ and σ inputs; inflation is fixed.</div>
 			</div>
 
 			<!-- Cancel button + path count - visible during any run (nerdknob or auto-run) -->
@@ -527,11 +546,61 @@
 				<button onclick="runMonteCarlo()" style="margin-left:8px;padding:3px 12px;font-size:0.9em;cursor:pointer;">Re-run</button>
 			</div>
 
+			<!-- Stress test comes FIRST: it is the part that recomputes on every input change, so it
+			     is the only section here guaranteed to describe the plan currently in the sidebar.
+			     The coloured result banner IS the fold control - it is the <summary>, so the one
+			     thing worth reading while collapsed is the thing you click to collapse. Written by
+			     renderStressHeadline() in montecarlo/mc_tab.js; the chevron is rotated by the
+			     #mc-stress-fold[open] rule in optimizer_styles_responsive.css. -->
+			<div id="mc-stress-chart-wrap" style="display:none;">
+				<!-- Folded by default: the banner alone carries the headline result, and the chart
+				     plus scenario table below it are a lot of page for something most readers only
+				     open when the count worries them. -->
+				<details id="mc-stress-fold" class="mc-fold">
+					<summary><div id="mc-stress-headline"></div></summary>
+					<div id="mc-stress-metrics" style="margin-bottom:8px;font-size:0.82em;color:#444;"></div>
+					<div id="mc-stress-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;"></div>
+					<div style="position:relative;height:420px;">
+						<canvas id="mc-stress-chart"></canvas>
+					</div>
+					<!-- Per-scenario statistics. These used to be crammed into the chart legend, one
+					     long "1966 (eq: … inf: … real: …)" string per line, which made the legend
+					     wider than the plot. Same grid idiom as the survival table above.
+					     The whole block is INDENTED so it reads as belonging to the chart directly
+					     above it rather than as a second, independent table on the page. -->
+					<div id="mc-stress-table-wrap" style="display:none;margin-top:10px;margin-left:32px;border-left:3px solid #e9ecef;padding-left:14px;">
+						<div style="font-size:0.8em;color:#555;margin-bottom:4px;">
+							One row per sequence, matching the chart line color. Click a row to isolate its line; click again to restore all. Click a column heading to sort.
+						</div>
+						<div style="max-height:260px;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;border:1px solid #dee2e6;border-radius:4px;width:fit-content;max-width:100%;">
+							<!-- 11 columns: color swatch + the 10 in getStressColumns(). -->
+							<div style="display:grid;grid-template-columns:repeat(11,max-content);font-size:0.85em;width:fit-content;">
+								<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;border-right:2px solid #dee2e6;border-bottom:1px solid #dee2e6;"></div>
+								<div id="mc-stress-table-header" style="display:contents;"></div>
+								<div id="mc-stress-table-body" style="display:contents;"></div>
+							</div>
+						</div>
+					</div>
+				</details>
+			</div>
+
+			<!-- Rule between the two sections. With the Stress Test expanded, the last row of its
+			     scenario table used to butt straight up against the Your Plan banner, which read as
+			     one continuous block. -->
+			<hr style="border:0;border-top:1px solid #dee2e6;margin:18px 0 14px;">
+
+			<!-- The main Monte Carlo block: your plan's chance of success, then the ranking of
+			     every strategy, then the percentile chart. Same idiom as the Stress Test above -
+			     the colored banner IS the <summary>, so the headline number stays readable when
+			     the section is folded away. Open by default. Written by renderPlanHeadline(). -->
+			<details id="mc-plan-fold" class="mc-fold" open>
+				<summary><div id="mc-plan-headline"></div></summary>
+
 			<!-- Survival rate table -->
 			<div id="mc-table-wrap" style="display:none;margin-bottom:16px;">
 				<div id="mc-table-title" style="font-size:0.9em;font-weight:600;color:#333;margin-bottom:3px;"></div>
 				<div style="font-size:0.85em;color:#555;margin-bottom:4px;">
-					Check rows to add/remove from chart. Sorted: survival ↓, final balance ↓, taxes ↑. <span id="mc-path-count-tbl"></span>
+					Check rows to add/remove from chart. Click a column heading to sort; the 📍 row is your own plan and stays on top whatever the sort. <span id="mc-path-count-tbl"></span>
 				</div>
 				<div style="font-size:0.8em;margin-bottom:6px;">
 					Row shading:
@@ -548,23 +617,6 @@
 				</div>
 			</div>
 
-			<!-- Stress test comes FIRST: it is the part that recomputes on every input change, so it
-			     is the only section here guaranteed to describe the plan currently in the sidebar.
-			     Foldable (same <details> idiom as Input Distributions below) for readers who only
-			     want the 500-path view; the headline count is mirrored into the <summary> so the
-			     number stays readable while collapsed. Hidden entirely in Synthetic mode. -->
-			<div id="mc-stress-chart-wrap" style="display:none;">
-				<details open>
-					<summary style="font-size:0.95em;color:#333;cursor:pointer;user-select:none;font-weight:600;margin-bottom:8px;">Stress Test <span id="mc-stress-fold-label" style="font-weight:400;color:#666;"></span></summary>
-					<div id="mc-stress-headline"></div>
-					<div id="mc-stress-metrics" style="margin-bottom:8px;font-size:0.82em;color:#444;"></div>
-					<div id="mc-stress-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;"></div>
-					<div style="position:relative;height:420px;">
-						<canvas id="mc-stress-chart"></canvas>
-					</div>
-				</details>
-			</div>
-
 			<!-- Percentile band chart -->
 			<div id="mc-chart-wrap" style="display:none;margin-top:16px;">
 				<div id="mc-chart-desc" style="font-size:0.8em;color:#888;margin-bottom:4px;">
@@ -574,6 +626,7 @@
 					<canvas id="mc-chart"></canvas>
 				</div>
 			</div>
+			</details>
 
 			<div id="mc-input-dist" style="display:none;margin-top:14px;">
 				<details>
@@ -650,11 +703,11 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li><b>11.150b</b> <strong>The Monte Carlo tab now pins your own plan to the top and states its chance of success, and the Stress Test is readable. No change to your plan or its numbers.</strong> Your plan was previously one unmarked row among about 144; it is now marked 📍, stays on top whatever you sort by, and is drawn as the thick line. The Paths box turns out to be paths <i>per strategy</i>, so 500 is really about 72,000 retirements simulating roughly 1,800,000 years, which the page now says out loud. Stress Test lines are labeled just by start year and outcome, colored by whether the money ran out early, late or never, with all the numbers moved into a sortable table below that now also reports Bonds and Intl. Both colored banners are now the fold control for their own section, Historical summarizes its returns in the same sentence style Synthetic already used (CAGR first, then worst and best year), inflation is colored red when it is above zero instead of green, the run size now also reports how many plan years it is simulating. The Stress Test starts folded, with its result banner still visible. <a href="optimizer_changelog.md#11.150b" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1508</b> <strong>The self-check indicator was reporting red for the wrong reason. No change to your plan or its numbers.</strong> The README also gains a much fuller explanation of how <a  target="_blank" rel="noopener" href="README.md#monte-carlo-and-chance-of-success-accuracy">Monte Carlo and "Chance of Success"</a> numbers should be read. <a href="optimizer_changelog.md#11.1508" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.14e1</b> <strong>Research groundwork only. No change to your plan or its numbers.</strong>  <a href="optimizer_changelog.md#11.14e1" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.14dd</b> <strong>The Ordered strategy now banks leftover money in the account it will spend first, not always in cash.</strong> Before, any year income exceeded spending the extra went to cash, which the Roth-first (RIBC) and Brokerage-first (BIRC) orders draw last, so it sat idle. Now it goes to whichever of cash or brokerage your sequence draws first, so it stays invested and is spent sooner. Cash-first (CBIR) is unchanged. <a href="optimizer_changelog.md#11.14dd" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.14c6</b> <strong>The suggested spending goal is now solved by the plan itself and accounts for how long your retirement is.</strong> The old suggestion was a flat 5% of every account and did not account for your pension start age or longevity of the plan. <a href="optimizer_changelog.md#11.14c6" target="_blank" rel="noopener">Details</a></li>
-				<li data-flag="behavior"><b>11.1499</b> <strong>Money left to your heirs was being taxed for capital gains nobody ever owes, so ending balances were too low and Roth conversions looked better than they are.</strong> The missing step-up penalized money kept in a brokerage account, never Roth or cash, so every conversion comparison leaned the same way, and some plans that used to show a conversion benefit no longer do. <i>Break Even is deliberately left alone </i> and still answers the question it always did. On the chart, every death now carries a marker with a small circle showing which step-up applied, half filled or solid, with a legend that explains only the marks your own plan has. <a href="optimizer_changelog.md#11.1499" target="_blank" rel="noopener">Details</a></li>
 				</ul>
 				<script>
 					/* The Version stat reads the number back out of the <title> tag rather than
@@ -1214,11 +1267,11 @@ runSimulation?.();
   // Dollar input attachment moved to main DOMContentLoaded handler (before captureDefaults).
 </script>
 <script src="other_tools.js"></script>
-<script src="montecarlo/historical_returns.js"></script>
-<script src="montecarlo/prng.js?v=111091"></script>
+<script src="montecarlo/historical_returns.js?v=11150b"></script>
+<script src="montecarlo/prng.js?v=11150b"></script>
 <script src="montecarlo/stats.js?v=111091"></script>
-<script src="montecarlo/mc_controller.js?v=1113a1b"></script>
-<script src="montecarlo/mc_tab.js?v=1113a1b"></script>
+<script src="montecarlo/mc_controller.js?v=11150b"></script>
+<script src="montecarlo/mc_tab.js?v=11150b"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

@@ -538,10 +538,17 @@ function updateCurrentDollarsView() {
         updateStats(lastTotals, lastFinalNW, lastFinalNWCurrentDollars);
     }
     if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
-    // Re-render MC chart so current-dollar deflation is applied (or removed).
+    // Re-render the MC charts so current-dollar deflation is applied (or removed). The stress chart
+    // reads the same checkbox but was never re-rendered here, so it silently stayed in nominal
+    // dollars while the chart above it switched. It also has its own results object, which exists
+    // even when no full sweep has run.
+    const _stress = (typeof _mcResults !== 'undefined' && _mcResults?.stress)
+        ? _mcResults.stress
+        : (typeof _mcStress !== 'undefined' ? _mcStress : null);
     if (typeof _mcResults !== 'undefined' && _mcResults) {
         if (typeof renderMCChart === 'function') renderMCChart(_mcResults);
     }
+    if (_stress && typeof renderStressChart === 'function') renderStressChart(_stress);
 }
 // //////////////////////////////////////////////////////////////////
 

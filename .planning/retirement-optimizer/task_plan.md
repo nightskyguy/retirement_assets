@@ -50,6 +50,7 @@ first task. Every open item in the file now carries one.
 | **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
 | **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
+| **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only"; compare stays default | shipped v11.150b | - |
 | **O2** | P33 | Insights panel — where the money came from | `P33a` | nothing |
 | **O2** | P29 | Hebeler Autopilot — worth a strategy slot? | `P29a` | nothing |
 | **O2** | P31 | Asset mix is an OUTPUT — the reverse mapping | `P31a` | nothing |
@@ -2318,3 +2319,63 @@ P28 (Unified conversion routing) — independent; research done, does NOT gate P
 | (none yet) | — | — |
 
 ---
+
+---
+
+## P52: Monte Carlo run scope, plan-of-record vs compare-all  *(DONE 2026-08-12, shipped in v11.150b)*
+
+**Why:** the Monte Carlo tab runs `numPaths x buildVariations(base).length` simulations - about 144
+strategy arms - every single time, because its purpose has always been to RANK strategies. On the
+default scenario that is 72,000 simulations and roughly 1.8 million simulated years, measured at
+27-42s. Almost none of that answers the question most people arrive with, which is "will MY plan hold
+up". That answer needs 500 simulations, not 72,000. Making the sweep opt-in turns a 30 second wait
+into roughly a fifth of a second for the common case, and it turns the tab's auto-run on activation
+(normal mode) from a page-freezing event into something instant.
+
+**Shape:** the primary Run button runs the plan of record alone. A second control, nerdknob-gated,
+runs the full cross-strategy sweep exactly as today. Everything downstream already handles a single
+variation, because the stress pass has always been a one-variation run.
+
+- [x] **P52a** DONE. - Give `runMonteCarlo()` a scope argument (`'plan' | 'compare'`). In `'plan'` scope
+      pass a one-element `variations` array built exactly the way `stressVariations` already is
+      (`findCurrentStrategyIdx` with the synthetic `_label: 'Current Plan'` fallback), so the worker
+      contract, `mc_controller.js` and `worker.js` are untouched. Add the scope to `_buildMCHash()`
+      so switching scope re-runs rather than showing the other scope's results.
+- [x] **P52b** DONE. - UI: keep "Run Monte Carlo" as the always-visible primary; add "Compare All
+      Strategies" beside it, shown only under nerdknob. The existing `#mc-nerd-panel` cannot host it
+      as-is: the primary button lives inside that panel and is therefore already hidden from normal
+      users, who reach a run only through auto-activation. Either lift both buttons out of the panel
+      or add a separate gated wrapper.
+- [x] **P52c** DONE. - Presentation in `'plan'` scope: a one-row survival table is not a ranking, so hide
+      `#mc-table-wrap` and its shading legend, keep the plan headline and the percentile chart, and
+      short-circuit the best-per-family default-selection block in `renderMCResults` (a single
+      variation is trivially the selection, `_mcPinIdx` is 0). The click-a-row-to-load and
+      "Optimize for" affordances only mean anything in `'compare'` scope.
+- [x] **P52d** DONE. - `updateMCTimeEstimate()` already takes a variation count, so pass 1 in plan scope;
+      the readout should then read "500 paths, 12,500 simulated years" rather than naming a strategy
+      multiplier of one.
+- [x] **P52e** DONE. - Tests: scope `'plan'` produces exactly one varResult whose label matches
+      `sameStrategySelection` against the sidebar; scope `'compare'` is byte-identical to today's
+      output; the hash changes with scope.
+
+**Estimated cost: about half a day, low risk.** No engine change at all - `worker.js`,
+`mc_controller.js` and `prng.js` are untouched, which is what keeps the risk down. Roughly 60-100
+lines in `mc_tab.js`, ~15 lines of markup, 4-6 assertions, plus changelog and README. It is this
+cheap because the one-variation path is already proven in production by the stress pass, which has
+run exactly this way since PF3.
+
+**DECISION (user, 2026-08-12): compare stays the default so current users lose nothing.** The
+plan-only path is the nerdknob EXTRA, not the new default. That inverted P52b's harder half: the
+two buttons both live inside `#mc-nerd-panel`, which is already hidden from normal users, so no
+gating work was needed and the auto-run on tab activation still runs the full comparison.
+
+**Measured:** plan scope 1.76s vs compare 37s on the default scenario, and plan scope reproduces
+the compare run's pinned figure exactly (66.6%, 333/500) - a useful cross-check that the
+one-variation path is the same computation.
+
+~~Original open question:~~ whether NON-nerdknob users get the fast
+plan-only path by default. That is the whole UX win, but it is a visible behavior change - today a
+normal user landing on the tab eventually sees the full 144-strategy comparison table, and after
+this they would see only their own plan unless they turn on nerdknob. The alternative, defaulting
+everyone to compare and making plan-only the nerd option, preserves today's behavior but delivers
+none of the speed benefit to the people most affected by the wait.

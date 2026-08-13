@@ -74,7 +74,10 @@ self.onmessage = function ({ data: cfg }) {
         } else if (mode === 'stress') {
             // Deterministic SoRR stress: N worst historical starting sequences.
             const stressCount = cfg.stressCount ?? 10;
-            multiAssetBank = buildStressBank(stressCount, years);
+            // cfg.stressWindow is the "bad opening stretch" length: it selects WHICH start years
+            // count as worst, and the UI colors a failure inside it differently from a later one.
+            // It is not a splice point - see buildStressBank's header.
+            multiAssetBank = buildStressBank(stressCount, years, cfg.stressWindow ?? 10);
             numPaths = multiAssetBank.labels.length;   // override: one path per stress scenario
             scenarioBank = multiAssetBank.equity;
             let eqMin = Infinity, eqMax = -Infinity, bdMin = Infinity, bdMax = -Infinity,
@@ -262,6 +265,10 @@ self.onmessage = function ({ data: cfg }) {
                     p95: Array.from(percentiles.p95),
                 },
                 stressPaths,
+                // Per-scenario ruin years, stress only. The array is built for every mode but was
+                // previously collapsed to medianRuinYear and discarded; the stress table needs the
+                // individual years to color and sort by. At <= 20 entries the transfer is free.
+                ruinYearsPerPath: mode === 'stress' ? Array.from(ruinYears) : null,
             });
 
             // Post a progress update every 5 variations and on the last one.
@@ -292,6 +299,12 @@ self.onmessage = function ({ data: cfg }) {
             stressStartYears:     mode === 'stress' ? multiAssetBank.startYears      : null,
             stressDecadeCAGRs:    mode === 'stress' ? multiAssetBank.decadeCAGRs     : null,
             stressInflationCAGRs: mode === 'stress' ? multiAssetBank.decadeInflCAGRs : null,
+            stressRealCAGRs:      mode === 'stress' ? multiAssetBank.decadeRealCAGRs : null,
+            stressBondCAGRs:      mode === 'stress' ? multiAssetBank.decadeBondCAGRs : null,
+            stressIntlCAGRs:      mode === 'stress' ? multiAssetBank.decadeIntlCAGRs : null,
+            // The window the bank actually used, after clamping to the record and the plan length.
+            // The UI labels itself from this rather than re-deriving it from the input.
+            stressWindow:         mode === 'stress' ? multiAssetBank.scoreYears      : null,
         };
     }
 
@@ -358,5 +371,9 @@ function buildStressMsg(stress) {
         startYears:    stress.stressStartYears,
         decadeCAGRs:   stress.stressDecadeCAGRs,
         decadeInflationCAGRs: stress.stressInflationCAGRs,
+        realCAGRs:     stress.stressRealCAGRs,
+        bondCAGRs:     stress.stressBondCAGRs,
+        intlCAGRs:     stress.stressIntlCAGRs,
+        window:        stress.stressWindow,
     } : null;
 }

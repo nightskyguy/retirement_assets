@@ -1373,6 +1373,61 @@ test('scoreStartYears memoizes without letting a caller corrupt the shared ranki
     assert(JSON.stringify(first) === JSON.stringify(second), 'caching must not change what a bank returns');
 });
 
+test('bear pool draws from three opening lengths, each spliced for its own window', () => {
+    const pool = _mcPrng.buildBearPool();
+    const wins = _mcPrng.BEAR_OVERLAY_WINDOWS;
+    const per  = _mcPrng.BEAR_OVERLAY_POOL;
+    assert(pool.length === wins.length * per,
+        `expected ${wins.length} x ${per} entries, got ${pool.length}`);
+
+    for (const w of wins) {
+        const forW = pool.filter(e => e.len === w);
+        assert(forW.length === per, `expected ${per} entries at length ${w}, got ${forW.length}`);
+        // Each is the worst `per` by that window's own ranking, in that order.
+        const want = _mcPrng.scoreStartYears(w).slice(0, per).map(s => s.year);
+        assert(JSON.stringify(forW.map(e => e.year)) === JSON.stringify(want),
+            `length ${w} entries are not that window's worst: ${forW.map(e => e.year)}`);
+    }
+
+    // The whole point: the short windows find crashes the decade ranking averages away. 1930 is the
+    // worst 3-year opening in the record and only the 13th worst decade, because the decade starting
+    // 1930 contains 1933's +54% rebound.
+    assert(pool.some(e => e.year === 1930 && e.len === 3), '1930 must be in the pool at 3 years');
+    assert(!_mcPrng.scoreStartYears(10).slice(0, per).some(s => s.year === 1930),
+        'this test is only meaningful while 1930 is absent from the worst-10 decades');
+
+    // A year several windows agree on appears once per window, so it is drawn proportionally more.
+    const y1929 = pool.filter(e => e.year === 1929);
+    assert(y1929.length === 3, `1929 is flagged by all three windows, expected 3 entries, got ${y1929.length}`);
+    assert(JSON.stringify(y1929.map(e => e.len).sort((a, b) => a - b)) === JSON.stringify([3, 5, 10]),
+        'and once at each length');
+});
+
+test('bear-start overlay splices only its own opening length, and never past the plan', () => {
+    const overlaidSlots = (numPaths, years, frac) => {
+        const rngA = _mcPrng.mulberry32(7);
+        const before = _mcPrng.bootstrapMultiAssetBank(rngA, numPaths, years);
+        const baseline = Array.from(before.equity);
+        const rngB = _mcPrng.mulberry32(7);
+        const after = _mcPrng.bootstrapMultiAssetBank(rngB, numPaths, years);
+        _mcPrng.applyBearStartOverlay(after, rngB, numPaths, years, frac);
+        const changed = [];
+        for (let i = 0; i < baseline.length; i++) if (after.equity[i] !== baseline[i]) changed.push(i);
+        return changed;
+    };
+
+    // A 10-year opening spliced into a 5-year plan used to write 10 slots into a 5-slot row and
+    // corrupt the following path. Nothing may change outside path 0's own five slots.
+    const short = overlaidSlots(4, 5, 0.25);   // bearCount = 1
+    assert(short.every(i => i < 5), `overlay ran past a 5-year plan's first path: slots ${short}`);
+
+    // On a long plan the overlay touches at most the longest window and never beyond it.
+    const maxLen = Math.max(..._mcPrng.BEAR_OVERLAY_WINDOWS);
+    const long = overlaidSlots(4, 40, 0.25);
+    assert(long.every(i => i < maxLen), `overlay wrote past year ${maxLen}: slots ${long}`);
+    assert(long.length > 0, 'the overlay must actually change something');
+});
+
 test('bear-start overlay does not read the Stress Test sequence count', () => {
     // The overlay used to size its sample pool from cfg.stressCount, which put a Stress Test DISPLAY
     // setting into the main bootstrap pass: changing it silently moved every Historical result and

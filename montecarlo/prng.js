@@ -59,6 +59,24 @@ function _realCagr(eqCagr, infCagr) {
     return (1 + eqCagr) / (1 + Math.max(REAL_CAGR_INFLATION_FLOOR, infCagr)) - 1;
 }
 
+// International return at a record index, with the domestic-equity proxy rule applied.
+//
+// The intl series runs 1970 to the end of its own data, which is shorter than the equity series.
+// Outside that span domestic equity stands in: before 1970 international markets were not separately
+// investable and were highly correlated with US equity, and past the end of the intl data the
+// alternative is an out-of-range undefined turning every downstream CAGR into NaN. The distortion is
+// small because intl is typically under 10% of a portfolio.
+//
+// This rule was written out three times, in the stress bank, the bootstrap bank and the bear overlay.
+// One copy, so a correction cannot land in two of the three.
+function _intlAt(idx) {
+    const off = HISTORICAL_RETURNS.intlStartYear - HISTORICAL_RETURNS.equityStartYear;   // 42
+    const j   = idx - off;
+    return (j >= 0 && j < HISTORICAL_RETURNS.intl.length)
+        ? HISTORICAL_RETURNS.intl[j]
+        : HISTORICAL_RETURNS.equity[idx];
+}
+
 // The windows actually usable for a plan of `years`. A 30-year window on a 25-year plan would rank
 // start years on a stretch the plan never lives through, so it clamps to the plan and then dedupes:
 // a 25-year plan scores against 5/10/15/20/25, not 5/10/15/20/25/25.
@@ -215,9 +233,7 @@ function buildStressBank(count = 10, years, windowMode = 10) {
     const eq      = HISTORICAL_RETURNS.equity;
     const bd      = HISTORICAL_RETURNS.bonds;
     const infSrc  = HISTORICAL_RETURNS.inflation;
-    const intlSrc = HISTORICAL_RETURNS.intl;
     const n       = eq.length;   // 98 (1928-2025)
-    const intlOff = HISTORICAL_RETURNS.intlStartYear - HISTORICAL_RETURNS.equityStartYear;  // 42
 
     const isMulti = (windowMode === 'combined' || windowMode === 'all');
     const sLen    = isMulti ? null
@@ -247,10 +263,6 @@ function buildStressBank(count = 10, years, windowMode = 10) {
     const worstRealCAGRs = {};
     for (const w of STRESS_ROLLING_WINDOWS) if (w <= years) worstRealCAGRs[w] = [];
 
-    // Before 1970, and past the end of the intl series, domestic equity stands in.
-    const intlAt = (idx) =>
-        (idx >= intlOff && idx - intlOff < intlSrc.length) ? intlSrc[idx - intlOff] : eq[idx];
-
     // Reused across scenarios; [k] is the log-sum over plan years [0, k).
     const pEq  = new Float64Array(years + 1);
     const pInf = new Float64Array(years + 1);
@@ -261,7 +273,7 @@ function buildStressBank(count = 10, years, windowMode = 10) {
         for (let y = 0; y < years; y++) {
             const idx = (si + y) % n;
             const eqY = eq[idx];
-            const itY = intlAt(idx);
+            const itY = _intlAt(idx);
             const bdY = bd[idx];
             const infY = Math.max(INFLATION_FLOOR, infSrc[idx]);
             eqBank [p * years + y] = eqY;
@@ -334,43 +346,78 @@ function stressOutcomeBand(planStartYear, ruinYear, planYears) {
     return (ruinYear - planStartYear) < planYears / 2 ? 'ruin-early' : 'ruin-late';
 }
 
-// How many worst decades the bear-start overlay samples from. Deliberately a CONSTANT and not the
-// user's "Stress sequences" input, which is what it used to read.
+// The opening lengths the bear-start overlay draws from, and how many worst start years each one
+// contributes.
 //
-// That reuse was an accident of convenience and it coupled two unrelated things. The overlay runs in
-// the MAIN bootstrap pass, so a change to a Stress Test display setting silently moved every
-// Historical result and put up the "Out of date" banner -- for a reason no reader could have guessed
-// from a control labelled "how many worst sequences the Stress Test chart shows". It also meant the
-// default could not be changed without perturbing the main pass for everyone.
+// It used to be a single 10-year window, which biased the overlay toward one shape. Averaging over a
+// decade washes a crash out: 1930 is the WORST opening in the record over three years, at -26.9%/yr
+// real, and only the 13th worst over ten, at -0.4%/yr, because the decade starting 1930 contains
+// 1933's +54% rebound. Ranked on decades the pool came out as 1999, 1965, 2000, 1969, 1968, 1966,
+// 1972, 1973, 1970 and 1929: six of ten 1960s-70s stagflation, 1930 absent, and only 1929 opening
+// worse than -15%/yr over its first three years. Worse, a 1929 draw was spliced for ten years, so the
+// crash arrived with its own 1933-1936 rebound attached -- the overlay could not produce "crash, then
+// whatever comes next", which is the sequence-risk shape people mean by a bear start.
 //
-// 10 keeps the overlay byte-identical to what it has always drawn. The value is not otherwise
-// special; it is the pool of worst opening decades, and widening it would dilute the overlay.
+// Three lengths, because they find genuinely different shapes: only 12 of the worst 20 are shared
+// between the 3-year and 10-year rankings. The short windows surface sharp crashes (1930, 1931,
+// 2006-2008), the long one surfaces the slow grind (1964-1971) that no individual 3-year stretch
+// flags. Same argument as the Stress window's Combined mode.
+const BEAR_OVERLAY_WINDOWS = [3, 5, 10];
+// Per window, not in total: the pool is 3 x this many (start year, length) pairs.
+// Deliberately a CONSTANT and not the user's "Stress sequences" input, which is what it used to read.
+// That reuse coupled two unrelated things: the overlay runs in the MAIN bootstrap pass, so a change
+// to a Stress Test display setting silently moved every Historical result and raised the "Out of
+// date" banner, for a reason no reader could have guessed from a control labelled "how many worst
+// sequences the Stress Test chart shows".
 const BEAR_OVERLAY_POOL = 10;
 
-// Bear-start overlay: overwrites the first 10 years of the bottom bearFraction of bootstrap paths
-// with a randomly-sampled worst-decade historical sequence. Modifies bank in-place.
-// Called immediately after bootstrapMultiAssetBank, before stats scanning.
+// The (start year, opening length) pairs the overlay samples. One entry per window per rank, so a
+// year several windows agree on appears several times and is drawn proportionally more often -- and
+// appears at each of the lengths that flagged it, since 1930-over-3-years and 1930-over-10-years are
+// two different stresses, not one year listed twice.
+// Returns [{ i, year, len, realCagr }].
+function buildBearPool(countPerWindow = BEAR_OVERLAY_POOL) {
+    const pool = [];
+    for (const w of BEAR_OVERLAY_WINDOWS) {
+        for (const s of scoreStartYears(w).slice(0, countPerWindow)) {
+            pool.push({ i: s.i, year: s.year, len: w, realCagr: s.realCagr });
+        }
+    }
+    return pool;
+}
+
+// Bear-start overlay: overwrites the opening of the first bearFraction of bootstrap paths with a
+// randomly-sampled worst historical opening, then lets the block bootstrap carry on from there.
+// Modifies bank in-place. Called immediately after bootstrapMultiAssetBank, before stats scanning.
+//
+// Draws exactly one rng value per overlaid path, as it always has, so the stream position after this
+// function does not depend on the pool or the opening lengths.
 function applyBearStartOverlay(bank, rng, numPaths, years, bearFraction) {
     if (bearFraction <= 0) return;
     const bearCount = Math.floor(numPaths * bearFraction);
     if (bearCount === 0) return;
-    const bearYears  = 10;
-    const stressBank = buildStressBank(BEAR_OVERLAY_POOL, bearYears);
-    // Draw from what the bank ACTUALLY holds, not from what was asked for: buildStressBank caps at
-    // the number of candidate start years the window leaves, and an index drawn against the
-    // requested count would read past the end and write NaN returns into the bootstrap paths --
-    // silently, since NaN propagates through a whole simulation without throwing.
-    const nSeq = stressBank.startYears.length;
-    if (nSeq === 0) return;
+    const pool = buildBearPool();
+    if (!pool.length) return;
+
+    const eq     = HISTORICAL_RETURNS.equity;
+    const bd     = HISTORICAL_RETURNS.bonds;
+    const infSrc = HISTORICAL_RETURNS.inflation;
+    const n      = eq.length;
+
     for (let p = 0; p < bearCount; p++) {
-        const k = Math.floor(rng() * nSeq);
-        for (let y = 0; y < bearYears; y++) {
+        const pick = pool[Math.floor(rng() * pool.length)];
+        // Cap at the plan: a 10-year opening spliced into a 5-year plan used to run off the end of
+        // this path's row and overwrite the start of the next one.
+        const len = Math.min(pick.len, years);
+        for (let y = 0; y < len; y++) {
+            // scoreStartYears only ranks start years with a full `len` years of real record after
+            // them, so this never wraps; the modulo is belt and braces.
+            const idx = (pick.i + y) % n;
             const dst = p * years + y;
-            const src = k * bearYears + y;
-            bank.equity[dst]    = stressBank.equity[src];
-            bank.bonds[dst]     = stressBank.bonds[src];
-            bank.intl[dst]      = stressBank.intl[src];
-            bank.inflation[dst] = stressBank.inflation[src];
+            bank.equity[dst]    = eq[idx];
+            bank.bonds[dst]     = bd[idx];
+            bank.intl[dst]      = _intlAt(idx);
+            bank.inflation[dst] = Math.max(INFLATION_FLOOR, infSrc[idx]);
         }
     }
 }
@@ -386,8 +433,6 @@ function applyBearStartOverlay(bank, rng, numPaths, years, bearFraction) {
 function bootstrapMultiAssetBank(rng, numPaths, years, blockSize = 3) {
     const eqSrc   = HISTORICAL_RETURNS.equity;
     const n       = eqSrc.length;   // 98 (1928-2025) - full history
-    const intlOff = HISTORICAL_RETURNS.intlStartYear - HISTORICAL_RETURNS.equityStartYear;  // 42
-    const intlSrc = HISTORICAL_RETURNS.intl;
     const eqBank  = new Float64Array(numPaths * years);
     const bdBank  = new Float64Array(numPaths * years);
     const itBank  = new Float64Array(numPaths * years);
@@ -406,10 +451,7 @@ function bootstrapMultiAssetBank(rng, numPaths, years, blockSize = 3) {
                 // proxy for years outside that window (pre-1970 AND any recent year not yet in the
                 // intl series — e.g. equity/inflation extended to 2025 before intl). Guarding the
                 // upper bound prevents an out-of-range undefined → NaN in the intl CAGR.
-                const _itIdx = idx - intlOff;
-                itBank [p * years + y + b] = (idx >= intlOff && _itIdx < intlSrc.length)
-                    ? intlSrc[_itIdx]
-                    : eqSrc[idx];
+                itBank [p * years + y + b] = _intlAt(idx);
             }
             y += len;
         }
@@ -426,13 +468,15 @@ if (typeof module !== 'undefined' && module.exports) {
     if (typeof globalThis.HISTORICAL_RETURNS === 'undefined') require('./historical_returns.js');
     module.exports = { mulberry32, boxMuller, bootstrapScenarioBank, buildStressBank,
                        stressOutcomeBand, applyBearStartOverlay, bootstrapMultiAssetBank,
-                       scoreStartYears, selectStressStarts, stressWindowsFor,
-                       STRESS_WINDOWS, STRESS_ROLLING_WINDOWS, INFLATION_FLOOR };
+                       scoreStartYears, selectStressStarts, stressWindowsFor, buildBearPool,
+                       STRESS_WINDOWS, STRESS_ROLLING_WINDOWS,
+                       BEAR_OVERLAY_WINDOWS, BEAR_OVERLAY_POOL, INFLATION_FLOOR };
 } else if (typeof window !== 'undefined') {
     // Keep this list identical to the module.exports above: optimizer_core.tests.js runs against
     // whichever one its host provides, so a name missing here fails only in the browser tier.
     window.MCPrng = { mulberry32, boxMuller, bootstrapScenarioBank, buildStressBank,
                       stressOutcomeBand, applyBearStartOverlay, bootstrapMultiAssetBank,
-                      scoreStartYears, selectStressStarts, stressWindowsFor,
-                      STRESS_WINDOWS, STRESS_ROLLING_WINDOWS, INFLATION_FLOOR };
+                      scoreStartYears, selectStressStarts, stressWindowsFor, buildBearPool,
+                      STRESS_WINDOWS, STRESS_ROLLING_WINDOWS,
+                      BEAR_OVERLAY_WINDOWS, BEAR_OVERLAY_POOL, INFLATION_FLOOR };
 }

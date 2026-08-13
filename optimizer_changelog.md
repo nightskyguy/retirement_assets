@@ -11,13 +11,16 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1521c"></a>
+<a id="11.1521d"></a>
 
-## 11.1521c
+## 11.1521d
 
 **A Stress Test release: two crashes fixed, the ranking windows can now be combined or skipped
-entirely, and failures are graded against the length of your plan. No change to any plan or its
-numbers.**
+entirely, and failures are graded against the length of your plan.**
+
+**Behavior change:** the Bear-start overlay now draws its opening from the worst 3, 5 and 10 year
+stretches rather than the worst decade only, which moves Historical Monte Carlo results. Nothing
+else here changes any plan or its numbers.
 
 ### Asking for 85 or more stress sequences froze the tab
 
@@ -92,6 +95,37 @@ A plan longer than the record has left after its start year wraps around and rep
 the behaviour, and the ranking has always excluded start years without a full window of real data
 after them, so a wrapped stretch never gets a vote in which years are worst. It is now visible: the
 wrapped part of the line is dashed, and the row hover names the year the record runs out.
+
+### Bear-start openings are no longer all the same shape
+
+**This one changes Historical numbers.** Bear-start overlays a bad historical opening onto a quarter
+of the simulated paths, on the grounds that block sampling on its own shuffles the year order and so
+under-produces the sustained bad opening that actually breaks a retirement.
+
+It drew that opening from the worst ten *decades*, and averaging over a decade washes a crash out.
+1930 is the worst opening in the whole record measured over three years, at -26.9% a year after
+inflation, and only the thirteenth worst measured over ten, at -0.4%, because the decade starting
+1930 contains 1933's +54% rebound. Ranked on decades, the pool came out as 1999, 1965, 2000, 1969,
+1968, 1966, 1972, 1973, 1970 and 1929: six of the ten being 1960s and 1970s stagflation, 1930 absent
+altogether, and only 1929 opening worse than -15% a year over its first three years. And because
+every draw was spliced for a full ten years, a 1929 draw arrived with its own 1933 to 1936 recovery
+attached. The overlay could not produce "crash, then whatever comes next", which is the shape people
+mean by a bear start.
+
+The pool is now the worst ten start years over each of three, five and ten years, and each one is
+spliced for the length that flagged it. A three-year draw gives three brutal years and then hands
+back to the random draws; a ten-year draw behaves as before. Thirty entries drawn from twenty-one
+distinct years, averaging a six-year opening. A year that several lengths agree on, like 1929,
+appears once per length and so is drawn proportionally more often.
+
+The fraction stays at 25%. Its old justification was wrong: the tooltip said 25% was roughly the
+historical frequency of below-inflation first decades, and that figure is 15.7%, not 25%. Measured
+over the three to five year openings this overlay now mostly draws, the frequency is about 22%, so
+25% is a modest and deliberate over-weighting rather than a base rate, and the tooltip now says so.
+
+Also fixed here: an opening longer than the whole plan used to write past the end of that path's row
+and corrupt the start of the next one. It is capped at the plan length now. This only affected plans
+shorter than ten years.
 
 ### Changing a Stress Test setting no longer marks the whole run out of date
 

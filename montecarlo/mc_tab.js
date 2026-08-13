@@ -22,6 +22,39 @@ let _mcDrawOrder         = [];
 let _inputEquityChart    = null;
 let _inputInflationChart = null;
 
+// --- Parameter reads ------------------------------------------------------
+
+// Every numeric parameter on this tab used to be read as `parseInt(el?.value ?? '500')`. Two holes
+// in that idiom, both of which shipped as bugs:
+//   1. An <input type="number"> reports '' when the user clears it, and `??` only catches null and
+//      undefined, so '' reached parseInt and came back NaN. updateMCTimeEstimate() runs on oninput,
+//      so the run-size line painted "NaN paths x 144 strategies = NaN simulations" on the very next
+//      keystroke, mid-edit.
+//   2. The min/max attributes on a number input are advisory. A stress count typed above the number
+//      of candidate start years used to walk off the end of the ranked list inside buildStressBank.
+// One helper closes both: a non-finite read falls back to the default, and every read is clamped.
+const MC_PARAMS = {
+    'mc-num-paths':     { dflt: 500, min: 100, max: 5000 },
+    'mc-mu':            { dflt: 7,   min: 0,   max: 20, int: false },
+    'mc-sigma':         { dflt: 12,  min: 1,   max: 40, int: false },
+    'mc-seed':          { dflt: 42,  min: 0,   max: Number.MAX_SAFE_INTEGER },
+    // Upper bound is the whole historical record; buildStressBank caps it again at the number of
+    // start years the chosen window actually leaves available.
+    'mc-stress-count':  { dflt: 10,  min: 3,   max: 98 },
+    'mc-bear-fraction': { dflt: 25,  min: 0,   max: 50, int: false },
+};
+
+// Clamped read of one MC parameter input, by element id. Ranges live in MC_PARAMS so the run, the
+// hash and the time estimate cannot disagree about what a blank or out-of-range box means.
+function _mcNum(id) {
+    const spec = MC_PARAMS[id];
+    if (!spec) return NaN;
+    const raw = document.getElementById(id)?.value;
+    const n   = (spec.int === false) ? parseFloat(raw) : parseInt(raw, 10);
+    if (!Number.isFinite(n)) return spec.dflt;
+    return Math.min(spec.max, Math.max(spec.min, n));
+}
+
 // --- Initialization -------------------------------------------------------
 
 function initMCTab() {
@@ -143,16 +176,18 @@ function mcTabActivated() {
 
 function _buildMCHash() {
     const base = getInputs();
+    // Clamped values, not raw .value strings: a half-typed or cleared box would otherwise change the
+    // hash and flag the sweep out of date over an edit the run never sees.
     return JSON.stringify({
         inputs:      base,
-        numPaths:    document.getElementById('mc-num-paths')?.value     ?? '500',
-        mu:          document.getElementById('mc-mu')?.value            ?? '7',
-        sigma:       document.getElementById('mc-sigma')?.value         ?? '12',
-        seed:        document.getElementById('mc-seed')?.value          ?? '42',
+        numPaths:    _mcNum('mc-num-paths'),
+        mu:          _mcNum('mc-mu'),
+        sigma:       _mcNum('mc-sigma'),
+        seed:        _mcNum('mc-seed'),
         simMode:     document.getElementById('mc-sim-mode')?.value      ?? 'gbm',
-        stressCount:  document.getElementById('mc-stress-count')?.value   ?? '10',
+        stressCount:  _mcNum('mc-stress-count'),
         stressWindow: document.getElementById('mc-stress-window')?.value  ?? '10',
-        bearFraction: document.getElementById('mc-bear-fraction')?.value  ?? '25',
+        bearFraction: _mcNum('mc-bear-fraction'),
         // Scope is part of the identity of a run: switching between "your plan" and "every
         // strategy" has to invalidate what is on screen, or the stale banner never appears and the
         // page keeps showing the other scope's answer.
@@ -221,14 +256,14 @@ function runMonteCarlo(scope) {
 
     const base = getInputs();
 
-    const numPaths       = parseInt(document.getElementById('mc-num-paths')?.value     ?? '500');
-    const mu             = parseFloat(document.getElementById('mc-mu')?.value         ?? '7')  / 100;
-    const sigma          = parseFloat(document.getElementById('mc-sigma')?.value      ?? '12') / 100;
-    const seed           = parseInt(document.getElementById('mc-seed')?.value         ?? '42');
+    const numPaths       = _mcNum('mc-num-paths');
+    const mu             = _mcNum('mc-mu')    / 100;
+    const sigma          = _mcNum('mc-sigma') / 100;
+    const seed           = _mcNum('mc-seed');
     const simulationMode = document.getElementById('mc-sim-mode')?.value              ?? 'gbm';
-    const stressCount    = parseInt(document.getElementById('mc-stress-count')?.value   ?? '10');
+    const stressCount    = _mcNum('mc-stress-count');
     const stressWindow   = parseInt(document.getElementById('mc-stress-window')?.value  ?? '10');
-    const bearFraction   = parseFloat(document.getElementById('mc-bear-fraction')?.value ?? '25');
+    const bearFraction   = _mcNum('mc-bear-fraction');
 
     _mcStartYear = base.startYear ?? 2026;
     _mcBase = base;
@@ -275,6 +310,10 @@ function runMonteCarlo(scope) {
 
 function cancelMC() {
     cancelMCWorker();
+    // Same reason runMonteCarlo() clears it: a cancelled run never delivers its callback, and on the
+    // file:// path a stress-only refresh can be the thing in flight. Leaving the flag set freezes
+    // every later refresh at its own guard.
+    _mcStressRefreshing = false;
     setMCRunning(false);
 }
 
@@ -329,14 +368,14 @@ function refreshMCStressOnly() {
         {
             stressOnly: true,
             variations: stressVariations, stressVariations,
-            numPaths:      parseInt(document.getElementById('mc-num-paths')?.value     ?? '500'),
-            mu:            parseFloat(document.getElementById('mc-mu')?.value          ?? '7')  / 100,
-            sigma:         parseFloat(document.getElementById('mc-sigma')?.value       ?? '12') / 100,
-            seed:          parseInt(document.getElementById('mc-seed')?.value          ?? '42'),
+            numPaths:      _mcNum('mc-num-paths'),
+            mu:            _mcNum('mc-mu')    / 100,
+            sigma:         _mcNum('mc-sigma') / 100,
+            seed:          _mcNum('mc-seed'),
             years, simulationMode,
-            stressCount:   parseInt(document.getElementById('mc-stress-count')?.value    ?? '10'),
+            stressCount:   _mcNum('mc-stress-count'),
             stressWindow:  parseInt(document.getElementById('mc-stress-window')?.value   ?? '10'),
-            bearFraction:  parseFloat(document.getElementById('mc-bear-fraction')?.value ?? '25'),
+            bearFraction:  _mcNum('mc-bear-fraction'),
             inflationRate: base.inflation,
         },
         null,
@@ -460,8 +499,10 @@ function finishMCRender(msg) {
 // means green at or above zero. For inflation it means the opposite: rising prices erode the plan, so
 // pass invert = true and a positive number turns red. Coloring inflation on sign would have painted
 // every realistic inflation figure the same green as a strong equity year.
+// No leading + on an inverted figure. "+2.4%" reads as a gain, and inflation rising is not one; the
+// sign is only informative where up means good. A negative value still prints its own -, from toFixed.
 function _mcPct(v, invert = false) {
-    const s = (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+    const s = (v >= 0 && !invert ? '+' : '') + (v * 100).toFixed(1) + '%';
     const bad = invert ? (v > 0) : (v < 0);
     return `<span style="color:${bad ? '#c0392b' : '#1a7a1a'}">${s}</span>`;
 }
@@ -695,7 +736,7 @@ function updateMCTimeEstimate() {
     const el        = document.getElementById('mc-time-est');
     const totalEl   = document.getElementById('mc-sim-total');
     if (!el && !totalEl) return;
-    const numPaths  = parseInt(document.getElementById('mc-num-paths')?.value ?? '500');
+    const numPaths  = _mcNum('mc-num-paths');
     const base      = getInputs();
     const numVar    = buildVariations(base).length;
 
@@ -969,8 +1010,8 @@ function _stripHtml(s) { return String(s ?? '').replace(/<[^>]+>/g, '').trim(); 
 // Legend onClick: click once to isolate that item, click again to restore all.
 // For normal (percentile band) mode: "item" = one strategy = 5 consecutive datasets.
 // For stress mode: "item" = one scenario dataset.
-// Isolate/restore one stress line. Split out of _makeLegendClick so a click on the scenario table
-// row does exactly what a click on the legend entry does, including the second-click restore.
+// Isolate/restore one stress line, from a click on that scenario's table row. The stress chart has
+// no legend any more, so this is the only way in; the second click restores all.
 function _isolateStressDataset(dsIdx) {
     const chart = _mcStressChart;
     if (!chart) return;
@@ -983,33 +1024,35 @@ function _isolateStressDataset(dsIdx) {
         for (let i = 0; i < total; i++) chart.setDatasetVisibility(i, i === dsIdx);
         _legendIsolatedKeyStress = key;
     }
+    // The hover tooltip is only meaningful with exactly one line showing: at interaction mode
+    // 'index' it otherwise lists every scenario's balance for the hovered year.
+    if (chart.options?.plugins?.tooltip) {
+        chart.options.plugins.tooltip.enabled = (_legendIsolatedKeyStress !== null);
+    }
     chart.update();
 }
 
-function _makeLegendClick(isStress) {
+// Legend onClick for the MAIN (percentile band) chart: one legend "item" is one strategy, which is
+// 5 consecutive datasets. Click once to isolate that strategy, click again to restore all.
+// The stress chart used to share this via an isStress flag; it has no legend now, and its isolate
+// path is _isolateStressDataset() driven by the scenario table.
+function _makeLegendClick() {
     return function (e, legendItem, legend) {
         const chart = legend.chart;
         const clickedDs = legendItem.datasetIndex;
-        if (isStress) return _isolateStressDataset(clickedDs);
         const total = chart.data.datasets.length;
-        const key = isStress ? `ds${clickedDs}` : `strat${Math.floor(clickedDs / 5)}`;
-        // Main and stress charts render simultaneously in Historical mode — each tracks its own
-        // isolated-key so isolating one chart's legend doesn't desync the other's restore toggle.
-        const current = isStress ? _legendIsolatedKeyStress : _legendIsolatedKey;
+        const key = `strat${Math.floor(clickedDs / 5)}`;
 
-        if (current === key) {
+        if (_legendIsolatedKey === key) {
             // Already isolated this item — restore all
             for (let i = 0; i < total; i++) chart.setDatasetVisibility(i, true);
-            if (isStress) _legendIsolatedKeyStress = null; else _legendIsolatedKey = null;
+            _legendIsolatedKey = null;
         } else {
             // Isolate: hide everything except the clicked item's group
             for (let i = 0; i < total; i++) {
-                const visible = isStress
-                    ? i === clickedDs
-                    : Math.floor(i / 5) === Math.floor(clickedDs / 5);
-                chart.setDatasetVisibility(i, visible);
+                chart.setDatasetVisibility(i, Math.floor(i / 5) === Math.floor(clickedDs / 5));
             }
-            if (isStress) _legendIsolatedKeyStress = key; else _legendIsolatedKey = key;
+            _legendIsolatedKey = key;
         }
         chart.update();
     };
@@ -1088,7 +1131,7 @@ function renderMCChart(msg) {
     }
 
     const legendLabels = { filter: (item) => item.datasetIndex % 5 === 4, font: { size: 12 }, usePointStyle: true, pointStyle: 'line', boxWidth: 24 };
-    const legendClick = _makeLegendClick(false);
+    const legendClick = _makeLegendClick();
 
     const tooltipCfg = {
         filter: (item) => item.datasetIndex % 5 === 4,
@@ -1188,9 +1231,16 @@ function renderStressChart(stress) {
         _mcStressChart = null;
     }
 
-    const legendLabels = { filter: () => true, font: { size: 11 }, usePointStyle: true, pointStyle: 'line', boxWidth: 20 };
-    const legendClick = _makeLegendClick(true);
+    // No legend. Every column of it is already a column of the table below, with more room and a
+    // sort, and one legend entry per scenario crowded out the plot itself. Isolating a line is what
+    // the legend was still good for; clicking the matching table row does that.
+    //
+    // The tooltip starts off. interaction.mode is 'index', so a hover with nothing isolated prints
+    // EVERY line's balance for that year -- a wall of text that grows with the scenario count and
+    // says nothing the table does not. It is switched on only while exactly one line is isolated,
+    // by _isolateStressDataset().
     const tooltipCfg = {
+        enabled: false,
         callbacks: {
             title: items => `Year ${items[0]?.label ?? ''}`,
             label: ctx => `  ${ctx.dataset.label}: $${fmt(ctx.parsed.y)}`,
@@ -1206,7 +1256,7 @@ function renderStressChart(stress) {
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: legendLabels, onClick: legendClick, ...datasetHoverHighlight(1) },
+                legend: { display: false },
                 tooltip: tooltipCfg,
             },
             scales: {
@@ -1226,9 +1276,9 @@ function renderStressChart(stress) {
     const win = stressWindowOf(stress);
     const descEl = document.getElementById('mc-stress-chart-desc');
     if (descEl) {
-        descEl.textContent = `For your current plan. Each line is one historical starting sequence, labeled by its start year. `
+        descEl.textContent = `For your current plan. Each line is one historical starting sequence. `
             + `Red ran out of money within the first ${win} years, amber ran out later, green never ran out. `
-            + `The table below gives the numbers behind each line. Click a legend item or a table row to isolate it; click again to restore all.`;
+            + `The table below names every line and gives the numbers behind it. Click a row to isolate its line and read its balances on hover; click again to restore all.`;
     }
 
     renderStressTable(stress, rows);
@@ -1432,7 +1482,7 @@ function setMCRunning(running) {
         updateMCProgress(0);
         if (runEst) runEst.textContent = '';
     } else if (runEst) {
-        const numPaths = parseInt(document.getElementById('mc-num-paths')?.value ?? '500');
+        const numPaths = _mcNum('mc-num-paths');
         const base     = getInputs();
         // A plan-scope run is one variation, so the estimate has to follow the scope in flight or a
         // 0.2s run would announce half a minute.

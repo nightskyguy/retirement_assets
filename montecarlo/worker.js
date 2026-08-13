@@ -7,7 +7,21 @@
 const _v = self.location.search || '';
 importScripts('../taxengine.js' + _v, '../optimizer_core.js' + _v, 'prng.js' + _v, 'stats.js' + _v, 'historical_returns.js' + _v);
 
-self.onmessage = function ({ data: cfg }) {
+// A throw in here used to escape as a worker `error` event, which mc_controller.js reads as "worker
+// unavailable" and answers by retrying the identical config on the main thread -- where it threw
+// again, that time as an unhandled promise rejection, so the completion callback never fired. The
+// caller's in-flight flags then stayed set and the Stress Test froze for the rest of the session.
+// Catching here turns any failure into an ordinary result message with an `error` field, which every
+// caller already knows how to display.
+self.onmessage = function (e) {
+    try {
+        runMonteCarloJob(e.data);
+    } catch (err) {
+        postMessage({ type: 'results', error: String((err && err.message) || err) });
+    }
+};
+
+function runMonteCarloJob(cfg) {
     const t0 = performance.now();
     const { years, variations } = cfg;
     const simulationMode = cfg.simulationMode;
@@ -358,7 +372,7 @@ self.onmessage = function ({ data: cfg }) {
         inputFan:          main.inputFan,
         stress: buildStressMsg(stress),
     });
-};
+}
 
 // Shared so the stress-only refresh and the full run cannot drift in shape.
 function buildStressMsg(stress) {

@@ -11,6 +11,54 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1521"></a>
+
+## 11.1521
+
+**Five Stress Test fixes, one of which was locking up the whole Monte Carlo tab. No change to any
+plan or its numbers.**
+
+**Asking for 85 or more stress sequences froze the tab.**
+
+The Stress Test ranks historical retirement start years and runs the worst of them. How many start
+years there are to rank depends on the window: a sequence has to have the full window of real data
+after it to be scored at all, so a 5 year window leaves 94 candidates and a 30 year window leaves
+only 69. Asking for more sequences than the record can supply used to run off the end of the ranked
+list. That threw, and the error was then lost: the background worker's failure handler responded by
+re-running the identical job on the main thread, where it threw again, this time with nobody left to
+catch it. The result was not an error message but a freeze. The Cancel bar stayed up and the Stress
+Test stopped responding to any later edit for the rest of the visit.
+
+The count is now capped at what the chosen window can actually supply, so a request for 200 returns
+the 69 to 94 that exist rather than failing. Both failure paths now report an error instead of
+losing it, and the tab stays usable either way.
+
+**Clearing the Paths box printed "NaN".**
+
+The run size line under the Run button updates as you type. Emptying the box left it reading
+"NaN paths x 144 strategies = NaN simulations" until you typed a digit. Every numeric box on the tab
+now falls back to its default when it is empty and is held inside its stated range, so a half-typed
+value cannot reach the run, the time estimate or the out-of-date check.
+
+**The Stress Test chart has dropped its legend.**
+
+The table under the chart already names every line, carries every number the legend did, sorts, and
+shows each line's color in its first column. The legend was a second copy of that, competing with
+the plot for width. It is gone, and the table is now the key.
+
+**The hover readout waits until you pick a line.**
+
+Hovering the chart used to list every scenario's balance for that year at once. It now appears only
+after you click a table row to isolate a single line, and reports just that line. Click the row
+again to bring the rest back.
+
+**Inflation CAGR no longer carries a "+".**
+
+A leading plus sign reads as a gain. Rising prices are not one, and inflation was the one figure on
+the page shown that way. A negative rate still shows its own minus sign.
+
+---
+
 <a id="11.150b"></a>
 
 ## 11.150b

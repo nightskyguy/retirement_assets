@@ -81,11 +81,22 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
     }
     scored.sort((a, b) => a.realCagr - b.realCagr);   // ascending: worst real returns first
 
-    const worst    = scored.slice(0, count);
-    const eqBank   = new Float64Array(count * years);
-    const bdBank   = new Float64Array(count * years);
-    const itBank   = new Float64Array(count * years);
-    const infBank  = new Float64Array(count * years);
+    // The candidate pool is only (n - sLen + 1) start years: 94 at a 5-year window, 69 at 30. Asking
+    // for more sequences than that used to slice short and then walk off the end of `worst` in the
+    // fill loop below, which threw. The throw was swallowed (worker onerror retried on the main
+    // thread, where it threw again inside an async function), so the visible symptom was the Stress
+    // Test freezing for the rest of the session rather than an error. Cap here instead, and let the
+    // caller see what it actually got: worker.js sizes numPaths off labels.length.
+    // A junk count falls back to the default rather than to zero: the parameter arrives via
+    // `cfg.stressCount ?? 10`, which lets NaN through, and an empty bank renders a blank Stress Test
+    // with no explanation at all.
+    const want     = (Number.isFinite(count) && count >= 1) ? Math.floor(count) : 10;
+    const worst    = scored.slice(0, Math.min(want, scored.length));
+    const nSeq     = worst.length;
+    const eqBank   = new Float64Array(nSeq * years);
+    const bdBank   = new Float64Array(nSeq * years);
+    const itBank   = new Float64Array(nSeq * years);
+    const infBank  = new Float64Array(nSeq * years);
     const labels         = [];
     const startYears     = [];
     const decadeCAGRs    = [];
@@ -99,7 +110,7 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
     const intlAt = (idx) =>
         (idx >= intlOff && idx - intlOff < intlSrc.length) ? intlSrc[idx - intlOff] : eq[idx];
 
-    for (let p = 0; p < count; p++) {
+    for (let p = 0; p < nSeq; p++) {
         const { i: si, year, eqCagr, infCagr, realCagr } = worst[p];
         // Bonds and intl are not part of the SCORING (start years are ranked on real equity return),
         // but the plan is funded by all three, so the per-scenario table reports them. Computed only
@@ -132,7 +143,10 @@ function buildStressBank(count = 10, years, scoreYears = 10) {
 
     return { equity: eqBank, bonds: bdBank, intl: itBank, inflation: infBank,
              labels, startYears, decadeCAGRs, decadeInflCAGRs, decadeRealCAGRs,
-             decadeBondCAGRs, decadeIntlCAGRs, scoreYears: sLen };
+             decadeBondCAGRs, decadeIntlCAGRs, scoreYears: sLen,
+             // What was asked for vs what the record could supply, so the UI can say "capped at 84
+             // of the 200 you asked for" instead of silently returning a shorter list.
+             requestedCount: want, candidatePool: scored.length };
 }
 
 // Outcome class for one stress scenario, used for both the chart line color and the row shading

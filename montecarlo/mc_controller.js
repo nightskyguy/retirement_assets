@@ -16,7 +16,7 @@ function runMCWorker(cfg, onProgress, onComplete) {
     if (window.location.protocol === 'file:') {
         // Web Workers can't load file:// scripts due to browser security policy.
         // Fall back to chunked async execution on the main thread.
-        _runMCMainThread(cfg, onProgress, onComplete);
+        _runMCFallback(cfg, onProgress, onComplete);
         return;
     }
 
@@ -44,10 +44,24 @@ function runMCWorker(cfg, onProgress, onComplete) {
         console.error('MC Worker error:', e.message, e);
         _mcWorker = null;
         // If worker fails for any reason (e.g. late-detected security issue), retry on main thread.
-        _runMCMainThread(cfg, onProgress, onComplete);
+        _runMCFallback(cfg, onProgress, onComplete);
     };
 
     _mcWorker.postMessage(cfg);
+}
+
+// _runMCMainThread is async, so anything it throws surfaces as a rejected promise nobody awaits.
+// Both call sites above used to drop it on the floor, which meant onComplete never ran: the caller's
+// "a run is in flight" flags stayed set, the Cancel bar stayed up, and every later refresh returned
+// at its own guard. The callback contract is that it ALWAYS fires, so failures come back as
+// { error } the same way the worker reports them.
+function _runMCFallback(cfg, onProgress, onComplete) {
+    Promise.resolve()
+        .then(() => _runMCMainThread(cfg, onProgress, onComplete))
+        .catch((err) => {
+            console.error('MC main-thread run failed:', err);
+            onComplete?.({ type: 'results', error: String((err && err.message) || err) });
+        });
 }
 
 // True while a worker run is in flight. Callers that want to slip a cheap extra pass in (the

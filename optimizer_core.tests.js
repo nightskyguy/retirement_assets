@@ -1274,6 +1274,37 @@ test('stress bank: reports bond and intl CAGR over the same window as equity', (
         'pre-1970 intl must fall back to domestic equity, so the two CAGRs match');
 });
 
+test('stress bank: a count above the candidate pool caps instead of throwing', () => {
+    // Repro of the ">=85 sequences stalls" report. The pool is (98 - window + 1) start years, so a
+    // count of 85 overruns the 15/20/30-year windows. The bank used to slice short and then
+    // destructure past the end of that list, and the throw surfaced as a permanent freeze rather
+    // than an error, because the worker's onerror handler retried it on the main thread where it
+    // threw again inside an async function.
+    for (const win of [5, 10, 15, 20, 30]) {
+        const pool = _histRet.equity.length - win + 1;
+        for (const count of [85, 200]) {
+            const bank = _mcPrng.buildStressBank(count, 35, win);
+            const want = Math.min(count, pool);
+            assert(bank.labels.length === want,
+                `window ${win}, count ${count}: expected ${want} sequences, got ${bank.labels.length}`);
+            assert(bank.startYears.length === want, 'startYears must match the label count');
+            assert(bank.equity.length === want * 35, 'the bank must be sized to what it actually filled');
+            assert(bank.candidatePool === pool, `candidatePool should report ${pool}, got ${bank.candidatePool}`);
+            assert(bank.requestedCount === count, 'requestedCount reports what was asked for');
+        }
+    }
+});
+
+test('stress bank: a junk count falls back to the default rather than an empty bank', () => {
+    // stressCount reaches the bank through `cfg.stressCount ?? 10`, which lets NaN through. Zero
+    // sequences renders a blank Stress Test with nothing explaining why.
+    for (const count of [NaN, undefined, 0, -5, 0.5]) {
+        const bank = _mcPrng.buildStressBank(count, 35, 10);
+        assert(bank.labels.length === 10,
+            `count ${String(count)} should fall back to 10 sequences, got ${bank.labels.length}`);
+    }
+});
+
 test('stressOutcomeBand: window boundary is exclusive at the far end', () => {
     const band = _mcPrng.stressOutcomeBand;
     // First argument is the PLAN's start year (2026), not the historical year the sequence comes

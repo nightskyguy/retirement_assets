@@ -1366,13 +1366,11 @@ function renderStressTable(stress, rows) {
     if (thead) {
         const hCellStyle = 'position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 8px;text-align:right;'
                          + 'white-space:nowrap;font-weight:600;border-bottom:1px solid #dee2e6;cursor:pointer;user-select:none;';
-        thead.innerHTML = columns.map((c, i) => {
+        thead.innerHTML = columns.map(c => {
             const active = stressSortState.colKey === c.key;
             const arrow  = active ? (stressSortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
             const tip    = c.title ? ` title="${c.title.replace(/"/g, '&quot;')}"` : '';
-            // Start Year matches the indent of its cells so the column reads as one unit.
-            const css    = i === 0 ? hCellStyle + 'padding-left:18px;text-align:left;' : hCellStyle;
-            return `<div style="${css}"${tip} onclick="sortStressTableBy('${c.key}')">${c.label}${arrow}</div>`;
+            return `<div style="${hCellStyle}"${tip} onclick="sortStressTableBy('${c.key}')">${c.label}${arrow}</div>`;
         }).join('');
     }
 
@@ -1391,11 +1389,8 @@ function renderStressTable(stress, rows) {
         row.appendChild(swatch);
 
         const cellCss = `padding:2px 8px;text-align:right;background:${oc.row};cursor:pointer;white-space:nowrap;`;
-        // The start year is indented so it reads as hanging off the swatch, tying the row to the
-        // line of that color in the chart above rather than looking like a free-standing column.
-        const yearCss = cellCss + 'padding-left:18px;text-align:left;font-weight:600;';
         [
-            { html: String(r.startYear ?? '—'), css: yearCss },
+            { html: String(r.startYear ?? '—') },
             { html: oc.text },
             { html: r.ruinYear ? String(r.ruinYear) : '—' },
             { html: r.yearsToRuin != null ? String(r.yearsToRuin) : '—' },

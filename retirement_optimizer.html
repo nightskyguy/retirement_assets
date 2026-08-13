@@ -565,13 +565,15 @@
 					</div>
 					<!-- Per-scenario statistics. These used to be crammed into the chart legend, one
 					     long "1966 (eq: … inf: … real: …)" string per line, which made the legend
-					     wider than the plot. Same grid idiom as the survival table above. -->
-					<div id="mc-stress-table-wrap" style="display:none;margin-top:10px;">
+					     wider than the plot. Same grid idiom as the survival table above.
+					     The whole block is INDENTED so it reads as belonging to the chart directly
+					     above it rather than as a second, independent table on the page. -->
+					<div id="mc-stress-table-wrap" style="display:none;margin-top:10px;margin-left:32px;border-left:3px solid #e9ecef;padding-left:14px;">
 						<div style="font-size:0.8em;color:#555;margin-bottom:4px;">
 							One row per sequence, matching the chart line color. Click a row to isolate its line; click again to restore all. Click a column heading to sort.
 						</div>
 						<div style="max-height:260px;overflow-y:auto;overflow-x:auto;scrollbar-gutter:stable;border:1px solid #dee2e6;border-radius:4px;width:fit-content;max-width:100%;">
-							<!-- 11 columns: colour swatch + the 10 in getStressColumns(). -->
+							<!-- 11 columns: color swatch + the 10 in getStressColumns(). -->
 							<div style="display:grid;grid-template-columns:repeat(11,max-content);font-size:0.85em;width:fit-content;">
 								<div style="position:sticky;top:0;background:#f1f3f5;z-index:1;padding:4px 6px;border-right:2px solid #dee2e6;border-bottom:1px solid #dee2e6;"></div>
 								<div id="mc-stress-table-header" style="display:contents;"></div>

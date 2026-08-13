@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1521b</title>
+    <title>Retirement Optimizer 11.1521c</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -64,7 +64,7 @@
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
 	<script src="optimizer_ui.js?v=11150b"></script>
-	<script src="optimizer_tests.js?v=111521b"></script>
+	<script src="optimizer_tests.js?v=111521c"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -705,7 +705,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li><b>11.1521b</b> <strong>A Stress Test release: two crashes fixed, the ranking windows can now be combined or skipped entirely, and failures are graded against the length of your plan. No change to your plan or its numbers.</strong> Asking for 85 or more stress sequences used to freeze the tab for the rest of the visit, because the record only holds between 69 and 94 usable starting years depending on the window; the count is now capped at what history can supply. Clearing the Paths box no longer prints "NaN" while you type. The five ranking windows overlap, so picking one hid the bad starting years the other four would have caught: the new default Combined runs the worst of every window at once, and All skips ranking and runs every start year in the record with survivors faded so the failures stand out. Red and amber now mean the money ran out in the first or second half of your plan, rather than inside or outside a window. The scenario table drops its four per-asset columns, which measured the ranking window, for the real CAGR over your whole plan plus the worst 5, 10, 15 and 20 year stretch found anywhere inside each scenario. Editing a Stress Test setting no longer marks the whole run out of date. The chart has dropped its legend, since the table below it names every line and sorts, and the hover readout now appears only once you have clicked a row to isolate a single line. Defaults are now 20 sequences and the Combined window. <a href="optimizer_changelog.md#11.1521b" target="_blank" rel="noopener">Details</a></li>
+				<li><b>11.1521c</b> <strong>A Stress Test release: two crashes fixed, the ranking windows can now be combined or skipped entirely, and failures are graded against the length of your plan. No change to your plan or its numbers.</strong> Asking for 85 or more stress sequences used to freeze the tab for the rest of the visit, because the record only holds between 69 and 94 usable starting years depending on the window; the count is now capped at what history can supply. Clearing the Paths box no longer prints "NaN" while you type. The five ranking windows overlap, so picking one hid the bad starting years the other four would have caught: the new default Combined runs the worst of every window at once, and All skips ranking and runs every start year in the record with survivors faded so the failures stand out. Red and amber now mean the money ran out in the first or second half of your plan, rather than inside or outside a window. The scenario table drops its four per-asset columns, which measured the ranking window, for the real CAGR over your whole plan plus the worst 5, 10, 15 and 20 year stretch found anywhere inside each scenario. Editing a Stress Test setting no longer marks the whole run out of date. The chart has dropped its legend, since the table below it names every line and sorts, and the hover readout now appears only once you have clicked a row to isolate a single line. Defaults are now 20 sequences and the Combined window. <a href="optimizer_changelog.md#11.1521c" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.150b</b> <strong>The Monte Carlo tab now pins your own plan to the top and states its chance of success, and the Stress Test is readable. No change to your plan or its numbers.</strong> Your plan was previously one unmarked row among about 144; it is now marked 📍, stays on top whatever you sort by, and is drawn as the thick line. The Paths box turns out to be paths <i>per strategy</i>, so 500 is really about 72,000 retirements simulating roughly 1,800,000 years, which the page now says out loud. Stress Test lines are labeled just by start year and outcome, colored by whether the money ran out early, late or never, with all the numbers moved into a sortable table below that now also reports Bonds and Intl. Both colored banners are now the fold control for their own section, Historical summarizes its returns in the same sentence style Synthetic already used (CAGR first, then worst and best year), inflation is colored red when it is above zero instead of green, the run size now also reports how many plan years it is simulating. The Stress Test starts folded, with its result banner still visible. <a href="optimizer_changelog.md#11.150b" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1508</b> <strong>The self-check indicator was reporting red for the wrong reason. No change to your plan or its numbers.</strong> The README also gains a much fuller explanation of how <a  target="_blank" rel="noopener" href="README.md#monte-carlo-and-chance-of-success-accuracy">Monte Carlo and "Chance of Success"</a> numbers should be read. <a href="optimizer_changelog.md#11.1508" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.14e1</b> <strong>Research groundwork only. No change to your plan or its numbers.</strong>  <a href="optimizer_changelog.md#11.14e1" target="_blank" rel="noopener">Details</a></li>
@@ -1216,7 +1216,7 @@ runSimulation?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111521b';
+    const V = '?v=111521c';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',
@@ -1273,7 +1273,7 @@ runSimulation?.();
 </script>
 <script src="other_tools.js"></script>
 <script src="montecarlo/historical_returns.js?v=11150b"></script>
-<script src="montecarlo/prng.js?v=111521b"></script>
+<script src="montecarlo/prng.js?v=111521c"></script>
 <script src="montecarlo/stats.js?v=111091"></script>
 <script src="montecarlo/mc_controller.js?v=111521b"></script>
 <script src="montecarlo/mc_tab.js?v=111521b"></script>

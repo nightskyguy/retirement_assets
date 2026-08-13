@@ -1345,6 +1345,34 @@ test("stress bank: 'combined' is the union of every window's worst, deduped", ()
         'windows must clamp to the plan horizon and dedupe');
 });
 
+test('scoreStartYears memoizes without letting a caller corrupt the shared ranking', () => {
+    // The ranking depends only on the window length and on HISTORICAL_RETURNS, which is a static data
+    // file, so it is cached per window. That means every caller for a given window gets the SAME
+    // array, and a caller that wrote to an entry would poison every later read. Frozen so it cannot.
+    const a = _mcPrng.scoreStartYears(10);
+    const b = _mcPrng.scoreStartYears(10);
+    assert(a === b, 'a repeat call for the same window must return the cached array');
+    assert(Object.isFrozen(a), 'the cached array must be frozen');
+    assert(Object.isFrozen(a[0]), 'the cached entries must be frozen');
+
+    const wasYear = a[0].year, wasCagr = a[0].realCagr;
+    try { a[0].year = 1234; a[0].realCagr = 99; } catch (e) { /* strict mode throws; both are fine */ }
+    assert(a[0].year === wasYear && a[0].realCagr === wasCagr,
+        'a write to a cached entry must not take effect');
+
+    // Different windows are cached separately and must not collide.
+    assert(_mcPrng.scoreStartYears(5) !== _mcPrng.scoreStartYears(10), 'windows must not share a cache slot');
+    assert(_mcPrng.scoreStartYears(5).length === _histRet.equity.length - 5 + 1, '5-year pool size');
+    assert(_mcPrng.scoreStartYears(10).length === _histRet.equity.length - 10 + 1, '10-year pool size');
+
+    // And the memo is transparent: repeated bank builds still agree, including after other windows
+    // have been scored in between.
+    const first = _mcPrng.buildStressBank(10, 40, 10).startYears;
+    _mcPrng.buildStressBank(20, 35, 'combined');
+    const second = _mcPrng.buildStressBank(10, 40, 10).startYears;
+    assert(JSON.stringify(first) === JSON.stringify(second), 'caching must not change what a bank returns');
+});
+
 test('bear-start overlay does not read the Stress Test sequence count', () => {
     // The overlay used to size its sample pool from cfg.stressCount, which put a Stress Test DISPLAY
     // setting into the main bootstrap pass: changing it silently moved every Historical result and

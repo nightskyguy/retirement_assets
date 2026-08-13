@@ -67,6 +67,19 @@ function stressWindowsFor(years) {
     return [...new Set(STRESS_WINDOWS.map(w => Math.max(1, Math.min(w, cap))))];
 }
 
+// Memo for scoreStartYears, keyed by window length. Cleared only by a page reload, which is the only
+// thing that can change its input.
+//
+// The ranking is a pure function of sLen and HISTORICAL_RETURNS, and that table is a static data file
+// nothing ever writes to, so the answer for a given window cannot change within a page load.
+// 'combined' asks for five windows and 'all' asks for the same five again, and a stress refresh runs
+// on every debounced sidebar edit, so the identical ranking was being re-derived indefinitely.
+//
+// Be honest about the size of this: measured at ~0.1ms out of a ~2.7s stress refresh. It is here
+// because the work is redundant, not because it was slow. Nearly all of that 2.7s is fixed worker
+// startup, which no amount of precomputation touches.
+const _scoreCache = new Map();
+
 // Score every start index that has a full `sLen` years of REAL record after it, worst real CAGR
 // first. Returns [{i, year, eqCagr, infCagr, realCagr}].
 //
@@ -75,7 +88,14 @@ function stressWindowsFor(years) {
 // replayed, and calling the result one of the worst 30-year stretches in history. The PATH fill
 // below does wrap, because a long plan leaves no choice, but a wrapped stretch never gets a vote in
 // which start years are worst.
+//
+// The array and its entries are SHARED with every other caller for the same window, and frozen to
+// keep that safe. Callers slice it and build their own objects from it; nothing may write to an
+// entry in place.
 function scoreStartYears(sLen) {
+    const cached = _scoreCache.get(sLen);
+    if (cached) return cached;
+
     const eq     = HISTORICAL_RETURNS.equity;
     const infSrc = HISTORICAL_RETURNS.inflation;
     const n      = eq.length;
@@ -88,10 +108,13 @@ function scoreStartYears(sLen) {
         }
         const eqCagr   = Math.exp(eqLogSum / sLen) - 1;
         const infFloor = Math.max(REAL_CAGR_INFLATION_FLOOR, Math.exp(infLogSum / sLen) - 1);
-        scored.push({ i, eqCagr, infCagr: infFloor, realCagr: _realCagr(eqCagr, infFloor),
-                      year: HISTORICAL_RETURNS.equityStartYear + i });
+        scored.push(Object.freeze({ i, eqCagr, infCagr: infFloor, realCagr: _realCagr(eqCagr, infFloor),
+                                    year: HISTORICAL_RETURNS.equityStartYear + i }));
     }
     scored.sort((a, b) => a.realCagr - b.realCagr);   // ascending: worst real returns first
+
+    Object.freeze(scored);
+    _scoreCache.set(sLen, scored);
     return scored;
 }
 

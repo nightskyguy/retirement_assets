@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1521b"></a>
+<a id="11.1521c"></a>
 
-## 11.1521b
+## 11.1521c
 
 **A Stress Test release: two crashes fixed, the ranking windows can now be combined or skipped
 entirely, and failures are graded against the length of your plan. No change to any plan or its
@@ -120,6 +120,12 @@ fixed pool is the same 10 it was always given by default.
 - Inflation CAGR no longer carries a "+". A leading plus sign reads as a gain, rising prices are not
   one, and inflation was the one figure on the page shown that way. A negative rate still shows its
   own minus sign.
+- Internal: the historical ranking is now computed once per window length and reused. It depends only
+  on the window and on the return data, which is a static file, so it cannot change while the page is
+  open, and Combined and All were each re-deriving the same five rankings on every edit. This is
+  worth about a tenth of a millisecond out of a roughly three second refresh, so it is tidiness
+  rather than speed: nearly all of that time is the background worker starting up, which no amount of
+  precomputation touches.
 
 <a id="11.150b"></a>
 

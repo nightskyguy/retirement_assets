@@ -239,10 +239,13 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             let ruinCount    = 0;
 
             for (let p = 0; p < numPaths; p++) {
-                // Check every 64 paths rather than every path: performance.now() in the hot loop is
+                // Check every 16 paths rather than every path: performance.now() in the hot loop is
                 // itself measurable. Also lets Cancel take effect mid-variation, which it could not
-                // do before when a variation was the smallest interruptible unit.
-                if ((p & 63) === 0) {
+                // do before when a variation was the smallest interruptible unit. 16 rather than 64
+                // because the stress pass now runs up to 98 paths, and at 64 that whole pass got two
+                // yields; the yield itself is still gated on a 16ms budget, so the extra checks are
+                // a clock read, not a task switch.
+                if ((p & 15) === 0) {
                     await yieldIfDue();
                     if (_mcCancelled) return null;
                     // Progress within the variation, so a one-variation run has a moving bar
@@ -388,14 +391,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         return {
             varResults, numPaths, medianAnnualReturn, minAnnualReturn, maxAnnualReturn,
             assetRanges, inflationStats, inputFan,
-            stressLabels:         mode === 'stress' ? multiAssetBank.labels          : null,
-            stressStartYears:     mode === 'stress' ? multiAssetBank.startYears      : null,
-            stressDecadeCAGRs:    mode === 'stress' ? multiAssetBank.decadeCAGRs     : null,
-            stressInflationCAGRs: mode === 'stress' ? multiAssetBank.decadeInflCAGRs : null,
-            stressRealCAGRs:      mode === 'stress' ? multiAssetBank.decadeRealCAGRs : null,
-            stressBondCAGRs:      mode === 'stress' ? multiAssetBank.decadeBondCAGRs : null,
-            stressIntlCAGRs:      mode === 'stress' ? multiAssetBank.decadeIntlCAGRs : null,
-            stressWindow:         mode === 'stress' ? multiAssetBank.scoreYears      : null,
+            stressBank:           mode === 'stress' ? multiAssetBank : null,
         };
     }
 
@@ -449,18 +445,27 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
 // Shared so the stress-only refresh and the full run cannot drift in shape (mirrors worker.js).
 function _buildStressMsg(stress) {
-    return stress ? {
-        variations:    stress.varResults,
-        numPaths:      stress.numPaths,
-        assetRanges:   stress.assetRanges,
+    if (!stress) return null;
+    const b = stress.stressBank;
+    return {
+        variations:     stress.varResults,
+        numPaths:       stress.numPaths,
+        assetRanges:    stress.assetRanges,
         inflationStats: stress.inflationStats,
-        labels:        stress.stressLabels,
-        startYears:    stress.stressStartYears,
-        decadeCAGRs:   stress.stressDecadeCAGRs,
-        decadeInflationCAGRs: stress.stressInflationCAGRs,
-        realCAGRs:     stress.stressRealCAGRs,
-        bondCAGRs:     stress.stressBondCAGRs,
-        intlCAGRs:     stress.stressIntlCAGRs,
-        window:        stress.stressWindow,
-    } : null;
+        labels:         b?.labels      ?? null,
+        startYears:     b?.startYears  ?? null,
+        realYears:      b?.realYears   ?? null,
+        nominatedBy:    b?.nominatedBy ?? null,
+        eqCAGRs:        b?.fullEqCAGRs   ?? null,
+        bondCAGRs:      b?.fullBondCAGRs ?? null,
+        intlCAGRs:      b?.fullIntlCAGRs ?? null,
+        inflationCAGRs: b?.fullInflCAGRs ?? null,
+        realCAGRs:      b?.fullRealCAGRs ?? null,
+        worstRealCAGRs: b?.worstRealCAGRs ?? null,
+        windowMode:     b?.windowMode  ?? null,
+        windowsUsed:    b?.windowsUsed ?? null,
+        window:         b?.scoreYears  ?? null,
+        requestedCount: b?.requestedCount ?? null,
+        candidatePool:  b?.candidatePool  ?? null,
+    };
 }

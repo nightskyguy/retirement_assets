@@ -11,6 +11,63 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1521a"></a>
+
+## 11.1521a
+
+**The Stress Test can combine every window at once, or run every start year in the record, and it
+now grades failures against the length of your plan. No change to any plan or its numbers.**
+
+**One window at a time was hiding most of the bad years.**
+
+The Stress window ranks historical starting years by their real, inflation-adjusted return over its
+own length, and runs the worst of them. The trouble is that the five windows overlap: the worst ten
+five year openings and the worst ten twenty year openings are mostly different years, because a
+short sharp crash and a long grinding one are different shapes. Picking a single window therefore
+threw away everything the other four would have caught.
+
+Two new choices in the Stress window selector:
+
+- **Combined (5/10/15/20/30)** scores every window and keeps the union of what each one flags.
+  Because the windows overlap it is far fewer than five times the count, about 23 distinct start
+  years at the default of 10 rather than 50. Hovering a row says which windows flagged that year.
+- **All start years** skips ranking and runs every start year the record holds, currently 98. At
+  that density the individual lines stop being readable, so survivors fade back and the failures
+  are drawn solid and on top: the shape you are looking for is how much of history breaks the plan,
+  not which line is 1966.
+
+Everything the ranking picks is still a real historical sequence run straight through, not a
+splice. A window longer than your plan is still trimmed to the length of the plan, so a 12 year plan
+combines 5, 10 and 12 rather than pretending to score a 30 year stretch.
+
+**Red and amber now mean early and late in YOUR plan.**
+
+A failure used to be red if it landed inside the stress window and amber if it landed outside. That
+worked only while there was exactly one window; Combined has five and All has none. It was also the
+less useful question: on a 30 year plan, a fixed 10 year line called running dry in year 12 and
+running dry in year 29 the same thing. Red now means the money ran out in the first half of your
+plan and amber means the second half. The window has one job left, which is deciding which start
+years run.
+
+**The scenario table reports the whole plan, and the worst stretch inside it.**
+
+The per-asset CAGR columns were measured over the ranking window, so they had the same problem. In
+their place: Real CAGR over your whole plan, on the sequence that scenario actually lived through,
+and then the worst 5, 10, 15 and 20 year real return found anywhere inside it. A sequence can open
+calmly and still contain the decade that breaks the plan, and the old columns could not show that.
+The equity, bond, international and inflation rates are still there, on the row hover, along with
+which windows flagged that year.
+
+**Sequences that run past the end of the record now say so.**
+
+A plan longer than the record has left after its start year wraps around and replays history from
+1928. A 2015 start on a 30 year plan gets 11 real years and then 19 of replay. That has always been
+the behaviour, and the ranking has always excluded start years without a full window of real data
+after them, so a wrapped stretch never gets a vote in which years are worst. It is now visible: the
+wrapped part of the line is dashed, and the row hover names the year the record runs out.
+
+---
+
 <a id="11.1521"></a>
 
 ## 11.1521

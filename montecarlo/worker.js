@@ -88,9 +88,9 @@ function runMonteCarloJob(cfg) {
         } else if (mode === 'stress') {
             // Deterministic SoRR stress: N worst historical starting sequences.
             const stressCount = cfg.stressCount ?? 10;
-            // cfg.stressWindow is the "bad opening stretch" length: it selects WHICH start years
-            // count as worst, and the UI colors a failure inside it differently from a later one.
-            // It is not a splice point - see buildStressBank's header.
+            // cfg.stressWindow selects WHICH start years count as worst: a number ranks on that one
+            // window, 'combined' unions the worst of every window, 'all' takes the whole record. It
+            // is not a splice point, and it no longer decides early vs late - see buildStressBank.
             multiAssetBank = buildStressBank(stressCount, years, cfg.stressWindow ?? 10);
             numPaths = multiAssetBank.labels.length;   // override: one path per stress scenario
             scenarioBank = multiAssetBank.equity;
@@ -309,16 +309,10 @@ function runMonteCarloJob(cfg) {
         return {
             varResults, numPaths, medianAnnualReturn, minAnnualReturn, maxAnnualReturn,
             assetRanges, inflationStats, inputFan,
-            stressLabels:         mode === 'stress' ? multiAssetBank.labels          : null,
-            stressStartYears:     mode === 'stress' ? multiAssetBank.startYears      : null,
-            stressDecadeCAGRs:    mode === 'stress' ? multiAssetBank.decadeCAGRs     : null,
-            stressInflationCAGRs: mode === 'stress' ? multiAssetBank.decadeInflCAGRs : null,
-            stressRealCAGRs:      mode === 'stress' ? multiAssetBank.decadeRealCAGRs : null,
-            stressBondCAGRs:      mode === 'stress' ? multiAssetBank.decadeBondCAGRs : null,
-            stressIntlCAGRs:      mode === 'stress' ? multiAssetBank.decadeIntlCAGRs : null,
-            // The window the bank actually used, after clamping to the record and the plan length.
-            // The UI labels itself from this rather than re-deriving it from the input.
-            stressWindow:         mode === 'stress' ? multiAssetBank.scoreYears      : null,
+            // Everything below is measured over the WHOLE plan horizon on the sequence each
+            // scenario actually lived through, not over the ranking window: 'combined' has five
+            // windows and 'all' has none, so a window-scoped figure has nothing to be scoped to.
+            stressBank:           mode === 'stress' ? multiAssetBank : null,
         };
     }
 
@@ -374,20 +368,31 @@ function runMonteCarloJob(cfg) {
     });
 }
 
-// Shared so the stress-only refresh and the full run cannot drift in shape.
+// Shared so the stress-only refresh and the full run cannot drift in shape. The four big return
+// banks stay in the worker: the UI never reads them, and structured-cloning 98 x years x 4 Float64
+// arrays across the boundary for nothing is the one place this pass could get expensive.
 function buildStressMsg(stress) {
-    return stress ? {
-        variations:    stress.varResults,
-        numPaths:      stress.numPaths,
-        assetRanges:   stress.assetRanges,
+    if (!stress) return null;
+    const b = stress.stressBank;
+    return {
+        variations:     stress.varResults,
+        numPaths:       stress.numPaths,
+        assetRanges:    stress.assetRanges,
         inflationStats: stress.inflationStats,
-        labels:        stress.stressLabels,
-        startYears:    stress.stressStartYears,
-        decadeCAGRs:   stress.stressDecadeCAGRs,
-        decadeInflationCAGRs: stress.stressInflationCAGRs,
-        realCAGRs:     stress.stressRealCAGRs,
-        bondCAGRs:     stress.stressBondCAGRs,
-        intlCAGRs:     stress.stressIntlCAGRs,
-        window:        stress.stressWindow,
-    } : null;
+        labels:         b?.labels      ?? null,
+        startYears:     b?.startYears  ?? null,
+        realYears:      b?.realYears   ?? null,
+        nominatedBy:    b?.nominatedBy ?? null,
+        eqCAGRs:        b?.fullEqCAGRs   ?? null,
+        bondCAGRs:      b?.fullBondCAGRs ?? null,
+        intlCAGRs:      b?.fullIntlCAGRs ?? null,
+        inflationCAGRs: b?.fullInflCAGRs ?? null,
+        realCAGRs:      b?.fullRealCAGRs ?? null,
+        worstRealCAGRs: b?.worstRealCAGRs ?? null,
+        windowMode:     b?.windowMode  ?? null,
+        windowsUsed:    b?.windowsUsed ?? null,
+        window:         b?.scoreYears  ?? null,
+        requestedCount: b?.requestedCount ?? null,
+        candidatePool:  b?.candidatePool  ?? null,
+    };
 }

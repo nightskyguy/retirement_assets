@@ -186,7 +186,7 @@ function _buildMCHash() {
         seed:        _mcNum('mc-seed'),
         simMode:     document.getElementById('mc-sim-mode')?.value      ?? 'gbm',
         stressCount:  _mcNum('mc-stress-count'),
-        stressWindow: document.getElementById('mc-stress-window')?.value  ?? '10',
+        stressWindow: stressWindowMode(),
         bearFraction: _mcNum('mc-bear-fraction'),
         // Scope is part of the identity of a run: switching between "your plan" and "every
         // strategy" has to invalidate what is on screen, or the stale banner never appears and the
@@ -221,10 +221,31 @@ function mcPlanYears(base) {
          - (base.startYear ?? 2026) + 1;
 }
 
-// Reads the window used to pick and grade the stress sequences. Prefers the value the engine
-// actually applied (it clamps to the record and the plan length) and falls back to the input.
-function stressWindowOf(stress) {
-    return stress?.window ?? parseInt(document.getElementById('mc-stress-window')?.value ?? '10');
+// The ranking mode the Stress window selector is on: a number, 'combined' or 'all'. The <select>
+// value is a string either way, so this is the one place that decides which it is.
+function stressWindowMode() {
+    const raw = document.getElementById('mc-stress-window')?.value ?? '10';
+    if (raw === 'combined' || raw === 'all') return raw;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : 10;
+}
+
+// How the sequences on screen were chosen, for labelling. Prefers what the engine actually applied
+// (it clamps windows to the record and the plan length) over the input, which may have moved on.
+// Returns { mode, windows } where windows is the list of ranking windows in play.
+function stressModeOf(stress) {
+    const mode = stress?.windowMode ?? stressWindowMode();
+    const windows = stress?.windowsUsed ?? (typeof mode === 'number' ? [mode] : []);
+    return { mode, windows };
+}
+
+// One sentence naming how the start years were picked. Used by the metrics strip and the caption.
+function stressSelectionLabel(stress) {
+    const { mode, windows } = stressModeOf(stress);
+    const n = stress?.startYears?.length ?? 0;
+    if (mode === 'all')      return `all ${n} historical start years, unranked`;
+    if (mode === 'combined') return `worst by each of the ${windows.join('/')} year windows, combined`;
+    return `worst by ${windows[0] ?? mode} year real CAGR`;
 }
 
 // The sidebar's own plan as a one-element variation list. The stress pass has always run exactly
@@ -262,7 +283,7 @@ function runMonteCarlo(scope) {
     const seed           = _mcNum('mc-seed');
     const simulationMode = document.getElementById('mc-sim-mode')?.value              ?? 'gbm';
     const stressCount    = _mcNum('mc-stress-count');
-    const stressWindow   = parseInt(document.getElementById('mc-stress-window')?.value  ?? '10');
+    const stressWindow   = stressWindowMode();
     const bearFraction   = _mcNum('mc-bear-fraction');
 
     _mcStartYear = base.startYear ?? 2026;
@@ -374,7 +395,7 @@ function refreshMCStressOnly() {
             seed:          _mcNum('mc-seed'),
             years, simulationMode,
             stressCount:   _mcNum('mc-stress-count'),
-            stressWindow:  parseInt(document.getElementById('mc-stress-window')?.value   ?? '10'),
+            stressWindow:  stressWindowMode(),
             bearFraction:  _mcNum('mc-bear-fraction'),
             inflationRate: base.inflation,
         },
@@ -575,8 +596,10 @@ function renderMCStressMetrics(stress) {
     const el = document.getElementById('mc-stress-metrics');
     if (!el) return;
     if (!stress || !stress.assetRanges) { el.innerHTML = ''; el.style.display = 'none'; renderStressHeadline(null); return; }
-    const srcLabel = `Stress: ${stress.labels?.length ?? 0} worst sequences `
-                   + `(by ${stressWindowOf(stress)}yr real CAGR, inflation-adjusted)`;
+    const n = stress.labels?.length ?? 0;
+    const capped = stress.requestedCount > n
+        ? `, capped from ${stress.requestedCount} by what the record holds` : '';
+    const srcLabel = `Stress: ${n} sequences (${stressSelectionLabel(stress)}${capped})`;
     el.innerHTML = buildAssetRangeSummary(stress.assetRanges, stress.inflationStats, srcLabel);
     el.style.display = '';
     renderStressHeadline(stress);
@@ -1004,6 +1027,20 @@ function _stressLineColor(band, posInBand, bandSize) {
     return `rgb(${lift(r)},${lift(g)},${lift(b)})`;
 }
 
+// Above this many scenarios the chart switches to the de-emphasis palette below. Ten distinguishable
+// lines is a chart; ninety-eight is a field, and the only thing worth seeing in a field is the
+// failures.
+const STRESS_DENSE_THRESHOLD = 20;
+
+// Dense mode: survivors recede, failures stay solid. The lightness ramp that keeps ten lines apart
+// does nothing useful at ninety-eight, and the question at that density is not "which line is 1966"
+// (the table answers that) but "how much of the record breaks this plan".
+const STRESS_DENSE_STYLE = {
+    'survive':    { color: 'rgba(26,127,55,0.20)',  width: 1,   z: 0 },
+    'ruin-late':  { color: 'rgba(230,149,0,0.80)',  width: 1.5, z: 1 },
+    'ruin-early': { color: 'rgba(192,57,43,1)',     width: 2,   z: 2 },
+};
+
 // Strip HTML tags from a strategy family name (may contain icon spans).
 function _stripHtml(s) { return String(s ?? '').replace(/<[^>]+>/g, '').trim(); }
 
@@ -1211,17 +1248,28 @@ function renderStressChart(stress) {
     // scenario. Legend entries are deliberately terse ("1966 ✗2041"): ten copies of the old
     // "1966 (eq: … inf: … real: …)" label crowded out the chart itself. Every statistic that used
     // to live in the label now has a column in the table under the chart.
-    const rows = buildStressRows(stress, deflateOne);
+    const rows  = buildStressRows(stress, deflateOne);
+    const dense = rows.length > STRESS_DENSE_THRESHOLD;
     rows.forEach((r, pos) => {
+        const ds = STRESS_DENSE_STYLE[r.band] ?? STRESS_DENSE_STYLE['survive'];
         datasets.push({
             label:           stressShortLabel(r),
             data:            deflate(r.path),
-            borderColor:     _stressLineColor(r.band, r.posInBand, r.bandSize),
+            borderColor:     dense ? ds.color : _stressLineColor(r.band, r.posInBand, r.bandSize),
             backgroundColor: 'transparent',
-            borderWidth:     1.8,
+            borderWidth:     dense ? ds.width : 1.8,
+            // Chart.js draws lower `order` last, i.e. on top. Failures therefore sit above the
+            // survivor haze instead of being buried under ninety-odd green lines.
+            order:           dense ? (2 - ds.z) : 0,
             pointRadius:     0,
             fill:            false,
             tension:         0.3,
+            // Where the sequence runs off the end of the record and starts replaying 1928, the line
+            // goes dashed. Only late start years reach it: a 2015 start on a 30-year plan has 11
+            // real years and then 19 of replay, and that is worth seeing rather than inferring.
+            segment: (r.realYears != null && r.realYears < r.path.length)
+                ? { borderDash: ctx => ctx.p0DataIndex >= r.realYears - 1 ? [4, 3] : undefined }
+                : undefined,
         });
         r.dsIdx = pos;   // chart dataset index, so a table row click can isolate its own line
     });
@@ -1273,11 +1321,12 @@ function renderStressChart(stress) {
         },
     });
 
-    const win = stressWindowOf(stress);
     const descEl = document.getElementById('mc-stress-chart-desc');
     if (descEl) {
-        descEl.textContent = `For your current plan. Each line is one historical starting sequence. `
-            + `Red ran out of money within the first ${win} years, amber ran out later, green never ran out. `
+        const anyWrap = rows.some(r => r.realYears != null && r.realYears < r.path.length);
+        descEl.textContent = `For your current plan. Each line is one historical starting sequence, ${stressSelectionLabel(stress)}. `
+            + `Red ran out of money in the first half of your plan, amber in the second half, green never ran out. `
+            + (anyWrap ? `A dashed tail is where that sequence runs past the end of the record and replays it from 1928. ` : '')
             + `The table below names every line and gives the numbers behind it. Click a row to isolate its line and read its balances on hover; click again to restore all.`;
     }
 
@@ -1294,9 +1343,10 @@ function renderStressChart(stress) {
 function buildStressRows(stress, deflateOne = (v) => v) {
     const v = stress?.variations?.[0];
     if (!v?.stressPaths?.length) return [];
-    const win        = stressWindowOf(stress);
     const startYears = stress.startYears ?? [];
     const ruinYears  = v.ruinYearsPerPath ?? [];
+    const planYears  = stress.years ?? _mcResults?.years ?? v.stressPaths[0].length;
+    const worst      = stress.worstRealCAGRs ?? {};
 
     const rows = v.stressPaths.map((path, rank) => {
         const startYear = startYears[rank] ?? null;
@@ -1304,19 +1354,26 @@ function buildStressRows(stress, deflateOne = (v) => v) {
         // a ruined path is pinned at $0 from the year it failed.
         const zeroAt    = path.findIndex(b => b <= 0);
         const ruinYear  = ruinYears[rank] || (zeroAt >= 0 ? _mcStartYear + zeroAt : 0);
+        const realYears = stress.realYears?.[rank] ?? null;
         return {
-            rank, startYear, ruinYear, path,
+            rank, startYear, ruinYear, path, realYears,
             // Both measured from the PLAN's first calendar year, never from startYear. startYear is
             // the historical year the return sequence is taken from (1973, 1929); the money runs out
             // on the plan's own clock, so 1973 → ruin 2037 is 11 years in, not 64.
-            band:        stressOutcomeBand(_mcStartYear, ruinYear, win),
+            band:        stressOutcomeBand(_mcStartYear, ruinYear, planYears),
             yearsToRuin: ruinYear ? ruinYear - _mcStartYear : null,
             finalBalance: deflateOne(path[path.length - 1] ?? 0, path.length - 1),
-            eqCAGR:    stress.decadeCAGRs?.[rank] ?? null,
+            // Full-horizon, on the sequence this scenario actually lived through.
+            realCAGR:  stress.realCAGRs?.[rank] ?? null,
+            eqCAGR:    stress.eqCAGRs?.[rank] ?? null,
             bdCAGR:    stress.bondCAGRs?.[rank] ?? null,
             itCAGR:    stress.intlCAGRs?.[rank] ?? null,
-            infCAGR:   stress.decadeInflationCAGRs?.[rank] ?? null,
-            realCAGR:  stress.realCAGRs?.[rank] ?? null,
+            infCAGR:   stress.inflationCAGRs?.[rank] ?? null,
+            // Worst rolling stretch of each length ANYWHERE inside this scenario, not just at its
+            // start. A sequence can open calmly and still contain the decade that breaks the plan.
+            worstReal: { 5:  worst[5]?.[rank]  ?? null, 10: worst[10]?.[rank] ?? null,
+                         15: worst[15]?.[rank] ?? null, 20: worst[20]?.[rank] ?? null },
+            nominatedBy: stress.nominatedBy?.[rank] ?? [],
         };
     });
 
@@ -1331,6 +1388,29 @@ function buildStressRows(stress, deflateOne = (v) => v) {
         r.bandSize  = counts[r.band];
     });
     return sorted;
+}
+
+// Row hover text: the per-asset rates behind the Real CAGR column, which windows flagged this start
+// year, and where the sequence leaves the real record.
+function stressRowDetail(r) {
+    const p = (v, invert) => v == null ? 'n/a'
+        : (v >= 0 && !invert ? '+' : '') + (v * 100).toFixed(1) + '%';
+    const bits = [
+        `${r.startYear ?? '?'} sequence, over the whole plan:`,
+        `  Equity ${p(r.eqCAGR)}   Bonds ${p(r.bdCAGR)}   Intl ${p(r.itCAGR)}   Inflation ${p(r.infCAGR, true)}`,
+        `  Real ${p(r.realCAGR)} after inflation`,
+    ];
+    if (r.nominatedBy?.length) {
+        bits.push(`Flagged as one of the worst by the ${r.nominatedBy.join(', ')} year window`
+                + (r.nominatedBy.length > 1 ? 's.' : '.'));
+    } else {
+        bits.push('Not among the worst by any ranking window; included because you asked for all start years.');
+    }
+    if (r.realYears != null && r.path && r.realYears < r.path.length) {
+        bits.push(`Real record runs out after ${r.realYears} years (${(r.startYear ?? 0) + r.realYears - 1}); `
+                + `the dashed tail replays the record from 1928.`);
+    }
+    return bits.join('\n');
 }
 
 function stressShortLabel(r) {
@@ -1359,21 +1439,14 @@ function getStressColumns() {
         { key: 'yrs', label: 'Yrs to Ruin',
             title: 'Years from the start of the plan to the year the money ran out.',
             getSortValue: r => r.yearsToRuin ?? Infinity },
-        { key: 'eq', label: 'Equity CAGR',
-            title: 'Nominal equity CAGR over the scoring window, the stretch used to pick this scenario.',
-            getSortValue: r => r.eqCAGR ?? 0 },
-        { key: 'bd', label: 'Bonds CAGR',
-            title: 'Nominal bond CAGR over the same window. Bonds are not part of the ranking, which is done on equity, but they fund the plan too, so a scenario with a poor equity decade and decent bonds is a different problem from one where both fell.',
-            getSortValue: r => r.bdCAGR ?? 0 },
-        { key: 'it', label: 'Intl CAGR',
-            title: 'Nominal international equity CAGR over the same window. International data begins in 1970; for earlier years domestic equity stands in as a proxy, so scenarios starting before 1970 will show Intl close to Equity.',
-            getSortValue: r => r.itCAGR ?? 0 },
-        { key: 'infl', label: 'Inflation CAGR',
-            title: 'Inflation CAGR over the same window.',
-            getSortValue: r => r.infCAGR ?? 0 },
         { key: 'real', label: 'Real CAGR',
-            title: 'Inflation-adjusted equity CAGR over the window (Fisher equation). This is what the scenarios are ranked on.',
+            title: 'Inflation-adjusted equity CAGR over your WHOLE plan, on the sequence this scenario actually lived through (Fisher equation). This used to be measured over the ranking window instead, which stopped meaning anything once the windows could be combined or skipped. Hover the row for the equity, bond, international and inflation rates behind it.',
             getSortValue: r => r.realCAGR ?? 0 },
+        ...[5, 10, 15, 20].map(w => ({
+            key: `w${w}`, label: `Worst ${w}`,
+            title: `The worst real CAGR over any ${w} consecutive years anywhere inside this scenario, not just at its start. This is the ${w}-year stretch that did the damage. Blank when your plan is shorter than ${w} years.`,
+            getSortValue: r => r.worstReal?.[w] ?? 0,
+        })),
         { key: 'final', label: 'Final Balance',
             title: 'Portfolio balance in the final plan year. $0 for a scenario that ran out.',
             getSortValue: r => r.finalBalance ?? 0 },
@@ -1434,26 +1507,38 @@ function renderStressTable(stress, rows) {
         // and its row here are paired without counting legend entries.
         const swatch = document.createElement('div');
         swatch.style.cssText = `padding:2px 6px 2px 8px;background:${oc.row};border-right:2px solid #dee2e6;cursor:pointer;`;
+        // Must match the line exactly, dense palette included, or the swatch stops being a key.
+        const lineColor = rows.length > STRESS_DENSE_THRESHOLD
+            ? (STRESS_DENSE_STYLE[r.band] ?? STRESS_DENSE_STYLE['survive']).color
+            : _stressLineColor(r.band, r.posInBand, r.bandSize);
         swatch.innerHTML = `<span style="display:inline-block;width:18px;height:3px;vertical-align:middle;`
-                         + `background:${_stressLineColor(r.band, r.posInBand, r.bandSize)};"></span>`;
+                         + `background:${lineColor};"></span>`;
         row.appendChild(swatch);
 
         const cellCss = `padding:2px 8px;text-align:right;background:${oc.row};cursor:pointer;white-space:nowrap;`;
+        const pct = (v, invert) => v != null ? _mcPct(v, invert) : '—';
+        // The asset-level detail that used to have its own columns. Four more columns of percentages
+        // pushed the table past the width of the chart it explains, and they are supporting evidence
+        // for the Real CAGR beside them rather than something you scan down. It goes on every CELL,
+        // not on the row: the row is display:contents, so it generates no box and never gets hovered.
+        const detail = stressRowDetail(r);
+        swatch.title = detail;
         [
             { html: String(r.startYear ?? '—') },
             { html: oc.text },
             { html: r.ruinYear ? String(r.ruinYear) : '—' },
             { html: r.yearsToRuin != null ? String(r.yearsToRuin) : '—' },
-            { html: r.eqCAGR   != null ? _mcPct(r.eqCAGR)   : '—' },
-            { html: r.bdCAGR   != null ? _mcPct(r.bdCAGR)   : '—' },
-            { html: r.itCAGR   != null ? _mcPct(r.itCAGR)   : '—' },
-            { html: r.infCAGR  != null ? _mcPct(r.infCAGR, true) : '—' },
-            { html: r.realCAGR != null ? _mcPct(r.realCAGR) : '—' },
+            { html: pct(r.realCAGR) },
+            { html: pct(r.worstReal?.[5])  },
+            { html: pct(r.worstReal?.[10]) },
+            { html: pct(r.worstReal?.[15]) },
+            { html: pct(r.worstReal?.[20]) },
             { html: '$' + fmt(Math.round(r.finalBalance ?? 0)) },
         ].forEach(({ html, css }) => {
             const cell = document.createElement('div');
             cell.style.cssText = css ?? cellCss;
             cell.innerHTML = html;
+            cell.title = detail;
             row.appendChild(cell);
         });
 

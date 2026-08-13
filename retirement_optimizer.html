@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1521</title>
+    <title>Retirement Optimizer 11.1521a</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -64,7 +64,7 @@
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
 	<script src="optimizer_ui.js?v=11150b"></script>
-	<script src="optimizer_tests.js?v=111521"></script>
+	<script src="optimizer_tests.js?v=111521a"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -485,16 +485,18 @@
 					<label style="font-size:0.85em;" title="Random seed for reproducibility. Same seed + same inputs = identical results. It affects the main projection only. The Stress Test does not move when you change it, and should not: it is a deterministic walk through real history, not a random sample.">Seed
 						<input type="number" id="mc-seed" value="42" min="0" style="width:65px;margin-left:4px;">
 					</label>
-					<label style="font-size:0.85em;" title="How many worst historical starting sequences the Stress Test chart shows. Scored by real (inflation-adjusted) CAGR over the opening window set below, via the Fisher equation. At the default 10-year window the worst 10 are 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970, 1929; a different window picks a different set. Only start years with a full window of real data after them can be scored, so the number available depends on the window: 94 at 5 years down to 69 at 30. Ask for more than that and you get all of them.">Stress sequences
+					<label style="font-size:0.85em;" title="How many worst historical starting sequences the Stress Test chart shows. Scored by real (inflation-adjusted) CAGR over the opening window set below, via the Fisher equation. At the default 10-year window the worst 10 are 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970, 1929; a different window picks a different set. Only start years with a full window of real data after them can be scored, so the number available depends on the window: 94 at 5 years down to 69 at 30. Ask for more than that and you get all of them. On Combined this count is per window, so the union it produces is larger. On All it only decides which years are marked as worst in the row hover, since every start year runs either way.">Stress sequences
 						<input type="number" id="mc-stress-count" value="10" min="3" max="98" step="1" style="width:50px;margin-left:4px;">
 					</label>
-					<label style="font-size:0.85em;" title="Length of the bad opening stretch. It does two things: it decides WHICH historical start years count as the worst (they are ranked by real CAGR over this many years), and it sets the line where a failure stops being early. Red = ran out of money inside this window, amber = ran out later, green = never ran out. It is not a splice point: after the window each scenario keeps following the real historical record, so nothing is randomized. A window longer than your plan is trimmed to the length of the plan, and the caption under the chart names the window actually used.">Stress window
+					<label style="font-size:0.85em;" title="Length of the bad opening stretch used to RANK history. It decides which start years count as the worst: they are scored by real, inflation-adjusted CAGR over this many opening years. It is not a splice point, so after the window each scenario keeps following the real historical record and nothing is randomized, and it does not decide the colors: red means the money ran out in the first half of your plan, amber in the second half, green means it never ran out. A window longer than your plan is trimmed to the length of the plan. Combined scores every window and keeps the union of what each one flags, since the windows overlap and any single one hides start years the others would have caught. All skips ranking and runs every start year in the record.">Stress window
 						<select id="mc-stress-window" style="margin-left:4px;font-size:0.95em;" onchange="mcInputsChanged()">
 							<option value="5">5 years</option>
 							<option value="10" selected>10 years</option>
 							<option value="15">15 years</option>
 							<option value="20">20 years</option>
 							<option value="30">30 years</option>
+							<option value="combined">Combined (5/10/15/20/30)</option>
+							<option value="all">All start years</option>
 						</select>
 					</label>
 					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical paths that begin with a worst-decade historical sequence before continuing with random draws. 0 = no overlay; 25% ≈ historical frequency of below-inflation first decades. Increases SoRR realism without discarding probabilistic paths. Only applies in Historical mode.">Bear-start %
@@ -703,6 +705,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li><b>11.1521a</b> <strong>The Stress Test can now combine every window at once, or run every start year in the record, and it grades failures against the length of your plan. No change to your plan or its numbers.</strong> The 5, 10, 15, 20 and 30 year windows overlap heavily, so picking one hid the bad starting years the other four would have caught. Combined runs the worst of every window at once, about 23 distinct start years instead of 10. All skips the ranking and runs every start year the record holds, with survivors faded so the failures stand out. Red and amber now mean the money ran out in the first or second half of your plan, rather than inside or outside a window, which is both the more useful question and the only one that still makes sense when the windows are combined. The scenario table drops its four per-asset columns, which measured the ranking window, for the real CAGR over your whole plan plus the worst 5, 10, 15 and 20 year stretch found anywhere inside each scenario. The per-asset rates moved to the row hover. <a href="optimizer_changelog.md#11.1521a" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1521</b> <strong>Five Stress Test fixes, one of which was locking the whole Monte Carlo tab. No change to your plan or its numbers.</strong> Asking for 85 or more stress sequences used to freeze the tab for the rest of the visit; the record only holds between 69 and 94 usable starting years depending on the window, so the count is now capped at what history can actually supply. Clearing the Paths box no longer prints "NaN" into the run size line while you type. The Stress Test chart has dropped its legend, since the table underneath it names every line and sorts, and the hover readout now appears only once you have clicked a row to isolate a single line, instead of listing every scenario at once. Inflation CAGR no longer carries a "+", which read as though rising prices were a gain. <a href="optimizer_changelog.md#11.1521" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.150b</b> <strong>The Monte Carlo tab now pins your own plan to the top and states its chance of success, and the Stress Test is readable. No change to your plan or its numbers.</strong> Your plan was previously one unmarked row among about 144; it is now marked 📍, stays on top whatever you sort by, and is drawn as the thick line. The Paths box turns out to be paths <i>per strategy</i>, so 500 is really about 72,000 retirements simulating roughly 1,800,000 years, which the page now says out loud. Stress Test lines are labeled just by start year and outcome, colored by whether the money ran out early, late or never, with all the numbers moved into a sortable table below that now also reports Bonds and Intl. Both colored banners are now the fold control for their own section, Historical summarizes its returns in the same sentence style Synthetic already used (CAGR first, then worst and best year), inflation is colored red when it is above zero instead of green, the run size now also reports how many plan years it is simulating. The Stress Test starts folded, with its result banner still visible. <a href="optimizer_changelog.md#11.150b" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1508</b> <strong>The self-check indicator was reporting red for the wrong reason. No change to your plan or its numbers.</strong> The README also gains a much fuller explanation of how <a  target="_blank" rel="noopener" href="README.md#monte-carlo-and-chance-of-success-accuracy">Monte Carlo and "Chance of Success"</a> numbers should be read. <a href="optimizer_changelog.md#11.1508" target="_blank" rel="noopener">Details</a></li>
@@ -1212,7 +1215,10 @@ runSimulation?.();
 (() => {
     const RT = new URLSearchParams(location.search).get('runtests');
     const ALL = RT !== null && RT !== 'fast';
-    const V = '?v=111494';
+    // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
+    // serves a cached copy of a test file that has since changed and the badge reports on code that
+    // is no longer on disk.
+    const V = '?v=111521a';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',
@@ -1269,10 +1275,10 @@ runSimulation?.();
 </script>
 <script src="other_tools.js"></script>
 <script src="montecarlo/historical_returns.js?v=11150b"></script>
-<script src="montecarlo/prng.js?v=111521"></script>
+<script src="montecarlo/prng.js?v=111521a"></script>
 <script src="montecarlo/stats.js?v=111091"></script>
-<script src="montecarlo/mc_controller.js?v=111521"></script>
-<script src="montecarlo/mc_tab.js?v=111521"></script>
+<script src="montecarlo/mc_controller.js?v=111521a"></script>
+<script src="montecarlo/mc_tab.js?v=111521a"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

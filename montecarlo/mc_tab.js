@@ -11,6 +11,9 @@ let _legendIsolatedKeyStress = null; // same, for the stress chart (separate —
 let _mcSelected          = new Set(); // indices of variations currently on chart
 let _mcStartYear         = 2026;      // cached from getInputs() at run time
 let _lastMCHash          = null;
+// The sweep-only half of that hash, captured at the same moment. The stale banner keys off this one
+// so the two Stress Test controls, which the sweep no longer depends on, cannot raise it.
+let _lastSweepHash       = null;
 let _mcBase              = null;      // getInputs() snapshot captured at run time
 // Index into _mcResults.variations of the row that IS the sidebar plan, or -1 when the exact plan
 // is not among the swept strategies. Set once per run by renderMCResults; the survival table, the
@@ -21,6 +24,40 @@ let _mcPinIdx            = -1;
 let _mcDrawOrder         = [];
 let _inputEquityChart    = null;
 let _inputInflationChart = null;
+
+// --- Parameter reads ------------------------------------------------------
+
+// Every numeric parameter on this tab used to be read as `parseInt(el?.value ?? '500')`. Two holes
+// in that idiom, both of which shipped as bugs:
+//   1. An <input type="number"> reports '' when the user clears it, and `??` only catches null and
+//      undefined, so '' reached parseInt and came back NaN. updateMCTimeEstimate() runs on oninput,
+//      so the run-size line painted "NaN paths x 144 strategies = NaN simulations" on the very next
+//      keystroke, mid-edit.
+//   2. The min/max attributes on a number input are advisory. A stress count typed above the number
+//      of candidate start years used to walk off the end of the ranked list inside buildStressBank.
+// One helper closes both: a non-finite read falls back to the default, and every read is clamped.
+const MC_PARAMS = {
+    'mc-num-paths':     { dflt: 500, min: 100, max: 5000 },
+    'mc-mu':            { dflt: 7,   min: 0,   max: 20, int: false },
+    'mc-sigma':         { dflt: 12,  min: 1,   max: 40, int: false },
+    'mc-seed':          { dflt: 42,  min: 0,   max: Number.MAX_SAFE_INTEGER },
+    // Upper bound is the whole historical record; buildStressBank caps it again at the number of
+    // start years the chosen window actually leaves available. On the default Combined window this
+    // is per window, so 20 produces a union of roughly 40 distinct start years.
+    'mc-stress-count':  { dflt: 20,  min: 3,   max: 98 },
+    'mc-bear-fraction': { dflt: 25,  min: 0,   max: 50, int: false },
+};
+
+// Clamped read of one MC parameter input, by element id. Ranges live in MC_PARAMS so the run, the
+// hash and the time estimate cannot disagree about what a blank or out-of-range box means.
+function _mcNum(id) {
+    const spec = MC_PARAMS[id];
+    if (!spec) return NaN;
+    const raw = document.getElementById(id)?.value;
+    const n   = (spec.int === false) ? parseFloat(raw) : parseInt(raw, 10);
+    if (!Number.isFinite(n)) return spec.dflt;
+    return Math.min(spec.max, Math.max(spec.min, n));
+}
 
 // --- Initialization -------------------------------------------------------
 
@@ -106,6 +143,7 @@ function updateMCModeUI() {
 function onMCModeChange() {
     updateMCModeUI();
     _lastMCHash = null;   // force re-run regardless of other inputs
+    _lastSweepHash = null;
     if (!_mcNerdMode() && !document.getElementById('tab-mc')?.classList.contains('hidden')) {
         runMonteCarlo();
     }
@@ -117,9 +155,18 @@ function mcTabActivated() {
     // Always sync mode UI — handles scenario-load case where mc-sim-mode was restored
     // but the tab wasn't visible when applyScenario() ran.
     updateMCModeUI();
-    // Fill the "N paths × M strategies" readout on arrival. It used to be written only by the
-    // paths field's oninput, so it stayed blank for anyone who never touched that field — which is
-    // everyone who just wanted to know how big the run is.
+    // Seed the timing model before the buttons are labelled, so they arrive carrying a cost rather
+    // than filling one in later. This is ~144 simulations, a fraction of the run it is describing,
+    // and it only happens until a real run has replaced it.
+    if (!mcTimingIsMeasured()) {
+        const _b = getInputs();
+        calibrateMCMs({ variations: buildVariations(_b), mu: _mcNum('mc-mu') / 100,
+                        sigma: _mcNum('mc-sigma') / 100, seed: _mcNum('mc-seed'),
+                        years: mcPlanYears(_b) });
+    }
+    // Label both run buttons with their cost, and fill the "N paths × M strategies" readout. Both
+    // used to be written only by the paths field's oninput, so they stayed blank for anyone who
+    // never touched that field — which is everyone who just wanted to know how big the run is.
     updateMCTimeEstimate();
 
     const hash = _buildMCHash();
@@ -137,26 +184,47 @@ function mcTabActivated() {
         runMonteCarlo();
         return;
     }
-    if (_mcResults) markMCStale(true);
+    // Same sweep-only test as mcInputsChanged(): coming back to the tab after changing nothing but
+    // a Stress Test control must not announce that the sweep is out of date.
+    if (_mcResults && _buildSweepHash() !== _lastSweepHash) markMCStale(true);
     refreshMCStressOnly();
 }
 
-function _buildMCHash() {
-    const base = getInputs();
+// Two hashes, because the tab has two passes with different costs and different inputs.
+//
+// _buildSweepHash covers everything the expensive main sweep depends on. It is what the "Out of
+// date" banner is keyed to, and it deliberately does NOT include the two Stress Test controls: the
+// stress pass re-runs itself on every edit, so flagging the ~30-second sweep as stale over a change
+// only the stress chart consumed offered a Re-run button that re-ran the whole thing for nothing.
+// (The Stress sequences count genuinely did feed the main pass until now, through the bear-start
+// overlay's sample pool. That coupling is gone - see BEAR_OVERLAY_POOL in prng.js - which is what
+// makes leaving it out correct rather than merely convenient.)
+//
+// _buildMCHash adds the stress controls on top. It answers "did anything change at all", which is
+// what decides whether the stress pass needs re-running.
+function _buildSweepHash() {
+    // Clamped values, not raw .value strings: a half-typed or cleared box would otherwise change the
+    // hash and flag the sweep out of date over an edit the run never sees.
     return JSON.stringify({
-        inputs:      base,
-        numPaths:    document.getElementById('mc-num-paths')?.value     ?? '500',
-        mu:          document.getElementById('mc-mu')?.value            ?? '7',
-        sigma:       document.getElementById('mc-sigma')?.value         ?? '12',
-        seed:        document.getElementById('mc-seed')?.value          ?? '42',
-        simMode:     document.getElementById('mc-sim-mode')?.value      ?? 'gbm',
-        stressCount:  document.getElementById('mc-stress-count')?.value   ?? '10',
-        stressWindow: document.getElementById('mc-stress-window')?.value  ?? '10',
-        bearFraction: document.getElementById('mc-bear-fraction')?.value  ?? '25',
+        inputs:      getInputs(),
+        numPaths:    _mcNum('mc-num-paths'),
+        mu:          _mcNum('mc-mu'),
+        sigma:       _mcNum('mc-sigma'),
+        seed:        _mcNum('mc-seed'),
+        simMode:     document.getElementById('mc-sim-mode')?.value ?? 'gbm',
+        bearFraction: _mcNum('mc-bear-fraction'),
         // Scope is part of the identity of a run: switching between "your plan" and "every
         // strategy" has to invalidate what is on screen, or the stale banner never appears and the
         // page keeps showing the other scope's answer.
         scope:        _mcScope,
+    });
+}
+
+function _buildMCHash() {
+    return JSON.stringify({
+        sweep:        _buildSweepHash(),
+        stressCount:  _mcNum('mc-stress-count'),
+        stressWindow: stressWindowMode(),
     });
 }
 
@@ -186,10 +254,33 @@ function mcPlanYears(base) {
          - (base.startYear ?? 2026) + 1;
 }
 
-// Reads the window used to pick and grade the stress sequences. Prefers the value the engine
-// actually applied (it clamps to the record and the plan length) and falls back to the input.
-function stressWindowOf(stress) {
-    return stress?.window ?? parseInt(document.getElementById('mc-stress-window')?.value ?? '10');
+// The ranking mode the Stress window selector is on: a number, 'combined' or 'all'. The <select>
+// value is a string either way, so this is the one place that decides which it is.
+function stressWindowMode() {
+    const raw = document.getElementById('mc-stress-window')?.value ?? 'combined';
+    if (raw === 'combined' || raw === 'all') return raw;
+    // The selector offers only Combined and All now, but the engine still ranks on a single window
+    // and a saved scenario or a hand-edited URL can still ask for one.
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : 'combined';
+}
+
+// How the sequences on screen were chosen, for labelling. Prefers what the engine actually applied
+// (it clamps windows to the record and the plan length) over the input, which may have moved on.
+// Returns { mode, windows } where windows is the list of ranking windows in play.
+function stressModeOf(stress) {
+    const mode = stress?.windowMode ?? stressWindowMode();
+    const windows = stress?.windowsUsed ?? (typeof mode === 'number' ? [mode] : []);
+    return { mode, windows };
+}
+
+// One sentence naming how the start years were picked. Used by the metrics strip and the caption.
+function stressSelectionLabel(stress) {
+    const { mode, windows } = stressModeOf(stress);
+    const n = stress?.startYears?.length ?? 0;
+    if (mode === 'all')      return `all ${n} historical start years, unranked`;
+    if (mode === 'combined') return `worst by each of the ${windows.join('/')} year windows, combined`;
+    return `worst by ${windows[0] ?? mode} year real CAGR`;
 }
 
 // The sidebar's own plan as a one-element variation list. The stress pass has always run exactly
@@ -206,13 +297,18 @@ function planOnlyVariations(variations, base) {
 // --- Run ------------------------------------------------------------------
 
 // 'compare' runs every strategy and ranks them; 'plan' runs only the sidebar's own plan.
-// Compare is the DEFAULT so that nothing changes for anyone who is not asking for the fast path.
-let _mcScope = 'compare';
+//
+// PLAN is the default. It answers "how did my plan do", which is the question almost everyone
+// arrives with, at about 1/144 of the cost -- roughly 1.5 seconds against 43. Compare was the
+// default while it was the only thing the tab did, which meant every reader paid for a full
+// strategy ranking on arrival whether or not they wanted one, with no warning of the price.
+let _mcScope = 'plan';
 
-// scope: 'compare' (default, every strategy) | 'plan' (the sidebar plan alone, ~144x cheaper).
+// scope: 'plan' (default, the sidebar plan alone) | 'compare' (every strategy, ~144x more work).
 function runMonteCarlo(scope) {
-    _mcScope = (scope === 'plan') ? 'plan' : 'compare';
+    _mcScope = (scope === 'compare') ? 'compare' : 'plan';
     _lastMCHash = _buildMCHash();
+    _lastSweepHash = _buildSweepHash();
     // runMCWorker terminates whatever is in flight, so a stress-only refresh started moments ago
     // (a sidebar edit is debounced 400ms, which is easily overtaken by a click on Run) will never
     // deliver its callback. Without this the flag stays true forever and every later stress refresh
@@ -221,14 +317,14 @@ function runMonteCarlo(scope) {
 
     const base = getInputs();
 
-    const numPaths       = parseInt(document.getElementById('mc-num-paths')?.value     ?? '500');
-    const mu             = parseFloat(document.getElementById('mc-mu')?.value         ?? '7')  / 100;
-    const sigma          = parseFloat(document.getElementById('mc-sigma')?.value      ?? '12') / 100;
-    const seed           = parseInt(document.getElementById('mc-seed')?.value         ?? '42');
+    const numPaths       = _mcNum('mc-num-paths');
+    const mu             = _mcNum('mc-mu')    / 100;
+    const sigma          = _mcNum('mc-sigma') / 100;
+    const seed           = _mcNum('mc-seed');
     const simulationMode = document.getElementById('mc-sim-mode')?.value              ?? 'gbm';
-    const stressCount    = parseInt(document.getElementById('mc-stress-count')?.value   ?? '10');
-    const stressWindow   = parseInt(document.getElementById('mc-stress-window')?.value  ?? '10');
-    const bearFraction   = parseFloat(document.getElementById('mc-bear-fraction')?.value ?? '25');
+    const stressCount    = _mcNum('mc-stress-count');
+    const stressWindow   = stressWindowMode();
+    const bearFraction   = _mcNum('mc-bear-fraction');
 
     _mcStartYear = base.startYear ?? 2026;
     _mcBase = base;
@@ -243,9 +339,10 @@ function runMonteCarlo(scope) {
     // numPaths simulations instead of numPaths x ~144.
     const variations = _mcScope === 'plan' ? stressVariations : allVariations;
 
-    // Calibrate timing on first run so the estimate shown during the run is meaningful. Calibration
-    // always uses the full list: a one-variation run is too small to measure throughput from.
-    if (estimateMCMs(numPaths, allVariations.length) == null) {
+    // Seed the timing model if no real run has been observed yet, so the buttons and the in-flight
+    // estimate have something to say. Calibration always uses the full variation list: one variation
+    // is too small a sample to measure throughput from.
+    if (!mcTimingIsMeasured()) {
         calibrateMCMs({ variations: allVariations, mu, sigma, seed, years });
     }
 
@@ -260,6 +357,10 @@ function runMonteCarlo(scope) {
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);
+            // This run just told the timing model what this machine actually costs, so both button
+            // labels are restated from it -- including dropping the "about" once anything real has
+            // been measured.
+            updateMCTimeEstimate();
             if (msg.error) {
                 document.getElementById('mc-error').textContent = 'Error: ' + msg.error;
                 document.getElementById('mc-error').style.display = '';
@@ -275,6 +376,10 @@ function runMonteCarlo(scope) {
 
 function cancelMC() {
     cancelMCWorker();
+    // Same reason runMonteCarlo() clears it: a cancelled run never delivers its callback, and on the
+    // file:// path a stress-only refresh can be the thing in flight. Leaving the flag set freezes
+    // every later refresh at its own guard.
+    _mcStressRefreshing = false;
     setMCRunning(false);
 }
 
@@ -296,11 +401,16 @@ let _mcStress = null;
 // the #mc-stale-banner with a Re-run button.
 function mcInputsChanged() {
     if (_buildMCHash() === _lastMCHash) return;
+    // Only a change the SWEEP would have seen makes the sweep out of date, and _mcResults null means
+    // there is nothing on screen to go stale. Editing Stress sequences or Stress window used to raise
+    // the banner too, and its Re-run button re-runs everything, so the offer was to spend half a
+    // minute on the ~144-strategy sweep to refresh a chart that had already refreshed itself by the
+    // time the banner appeared.
+    if (_mcResults && _buildSweepHash() !== _lastSweepHash) markMCStale(true);
     // No nerd-mode guard here on purpose. Nerd mode controls when the expensive SWEEP runs, and
     // nothing in this function runs it. Marking the sweep out of date and refreshing the ~10-sim
     // stress pass have to happen in both modes, or a nerdknob user silently reads the previous
     // plan's numbers -- which is exactly what the first version of this shipped with.
-    if (_mcResults) markMCStale(true);   // nothing on screen yet means nothing to go stale
     refreshMCStressOnly();
 }
 
@@ -329,14 +439,14 @@ function refreshMCStressOnly() {
         {
             stressOnly: true,
             variations: stressVariations, stressVariations,
-            numPaths:      parseInt(document.getElementById('mc-num-paths')?.value     ?? '500'),
-            mu:            parseFloat(document.getElementById('mc-mu')?.value          ?? '7')  / 100,
-            sigma:         parseFloat(document.getElementById('mc-sigma')?.value       ?? '12') / 100,
-            seed:          parseInt(document.getElementById('mc-seed')?.value          ?? '42'),
+            numPaths:      _mcNum('mc-num-paths'),
+            mu:            _mcNum('mc-mu')    / 100,
+            sigma:         _mcNum('mc-sigma') / 100,
+            seed:          _mcNum('mc-seed'),
             years, simulationMode,
-            stressCount:   parseInt(document.getElementById('mc-stress-count')?.value    ?? '10'),
-            stressWindow:  parseInt(document.getElementById('mc-stress-window')?.value   ?? '10'),
-            bearFraction:  parseFloat(document.getElementById('mc-bear-fraction')?.value ?? '25'),
+            stressCount:   _mcNum('mc-stress-count'),
+            stressWindow:  stressWindowMode(),
+            bearFraction:  _mcNum('mc-bear-fraction'),
             inflationRate: base.inflation,
         },
         null,
@@ -460,8 +570,10 @@ function finishMCRender(msg) {
 // means green at or above zero. For inflation it means the opposite: rising prices erode the plan, so
 // pass invert = true and a positive number turns red. Coloring inflation on sign would have painted
 // every realistic inflation figure the same green as a strong equity year.
+// No leading + on an inverted figure. "+2.4%" reads as a gain, and inflation rising is not one; the
+// sign is only informative where up means good. A negative value still prints its own -, from toFixed.
 function _mcPct(v, invert = false) {
-    const s = (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+    const s = (v >= 0 && !invert ? '+' : '') + (v * 100).toFixed(1) + '%';
     const bad = invert ? (v > 0) : (v < 0);
     return `<span style="color:${bad ? '#c0392b' : '#1a7a1a'}">${s}</span>`;
 }
@@ -534,8 +646,10 @@ function renderMCStressMetrics(stress) {
     const el = document.getElementById('mc-stress-metrics');
     if (!el) return;
     if (!stress || !stress.assetRanges) { el.innerHTML = ''; el.style.display = 'none'; renderStressHeadline(null); return; }
-    const srcLabel = `Stress: ${stress.labels?.length ?? 0} worst sequences `
-                   + `(by ${stressWindowOf(stress)}yr real CAGR, inflation-adjusted)`;
+    const n = stress.labels?.length ?? 0;
+    const capped = stress.requestedCount > n
+        ? `, capped from ${stress.requestedCount} by what the record holds` : '';
+    const srcLabel = `Stress: ${n} sequences (${stressSelectionLabel(stress)}${capped})`;
     el.innerHTML = buildAssetRangeSummary(stress.assetRanges, stress.inflationStats, srcLabel);
     el.style.display = '';
     renderStressHeadline(stress);
@@ -691,23 +805,39 @@ function updateStressStat(stress) {
 
 // --- Time estimate --------------------------------------------------------
 
+// Wall time as a button label reads it: "0.4 sec", "43 sec", "2 min 5 sec".
+function _mcDuration(ms) {
+    const s = ms / 1000;
+    // One decimal below 10 seconds: the difference between 1.2 and 1.9 is most of the reason to read
+    // the label at all, and rounding both to "1 sec" or "2 sec" throws that away.
+    if (s < 10) return s.toFixed(1) + ' sec';
+    if (s < 60) return Math.round(s) + ' sec';
+    const m = Math.floor(s / 60), rem = Math.round(s - m * 60);
+    return rem ? `${m} min ${rem} sec` : `${m} min`;
+}
+
+// Each run button states its own expected cost on this machine, so the expensive one announces
+// itself before it is clicked rather than after. The estimate is approximate until a real run has
+// been observed; the "about" prefix says so, and drops once the model has measured something.
 function updateMCTimeEstimate() {
-    const el        = document.getElementById('mc-time-est');
-    const totalEl   = document.getElementById('mc-sim-total');
-    if (!el && !totalEl) return;
-    const numPaths  = parseInt(document.getElementById('mc-num-paths')?.value ?? '500');
-    const base      = getInputs();
-    const numVar    = buildVariations(base).length;
+    const totalEl  = document.getElementById('mc-sim-total');
+    const planBtn  = document.getElementById('mc-run-plan-btn');
+    const cmpBtn   = document.getElementById('mc-run-btn');
+    if (!totalEl && !planBtn && !cmpBtn) return;
 
-    // Always show the real size of the run, even before the timing model has calibrated.
-    if (totalEl) totalEl.textContent = simCountText(numPaths, numVar, mcPlanYears(base));
+    const numPaths = _mcNum('mc-num-paths');
+    const base     = getInputs();
+    const numVar   = buildVariations(base).length;
 
-    if (!el) return;
-    const estMs     = estimateMCMs(numPaths, numVar);
-    if (estMs == null) { el.textContent = ''; return; }
-    el.textContent = estMs < 1000
-        ? `~${estMs} ms`
-        : `~${(estMs / 1000).toFixed(1)} s`;
+    // Describes the Compare button alone: the path count is per strategy, so without the multiplier
+    // the sweep looks ~144x smaller than it is.
+    if (totalEl) {
+        totalEl.textContent = `Compare runs ${simCountText(numPaths, numVar, mcPlanYears(base))}`;
+    }
+
+    const approx = mcTimingIsMeasured() ? '' : 'about ';
+    if (planBtn) planBtn.textContent = `My Plan Only (${approx}${_mcDuration(estimateMCMs(numPaths, 1))})`;
+    if (cmpBtn)  cmpBtn.textContent  = `Compare All Scenarios (${approx}${_mcDuration(estimateMCMs(numPaths, numVar))})`;
 }
 
 // --- Survival Table -------------------------------------------------------
@@ -963,14 +1093,28 @@ function _stressLineColor(band, posInBand, bandSize) {
     return `rgb(${lift(r)},${lift(g)},${lift(b)})`;
 }
 
+// Above this many scenarios the chart switches to the de-emphasis palette below. Ten distinguishable
+// lines is a chart; ninety-eight is a field, and the only thing worth seeing in a field is the
+// failures.
+const STRESS_DENSE_THRESHOLD = 20;
+
+// Dense mode: survivors recede, failures stay solid. The lightness ramp that keeps ten lines apart
+// does nothing useful at ninety-eight, and the question at that density is not "which line is 1966"
+// (the table answers that) but "how much of the record breaks this plan".
+const STRESS_DENSE_STYLE = {
+    'survive':    { color: 'rgba(26,127,55,0.20)',  width: 1,   z: 0 },
+    'ruin-late':  { color: 'rgba(230,149,0,0.80)',  width: 1.5, z: 1 },
+    'ruin-early': { color: 'rgba(192,57,43,1)',     width: 2,   z: 2 },
+};
+
 // Strip HTML tags from a strategy family name (may contain icon spans).
 function _stripHtml(s) { return String(s ?? '').replace(/<[^>]+>/g, '').trim(); }
 
 // Legend onClick: click once to isolate that item, click again to restore all.
 // For normal (percentile band) mode: "item" = one strategy = 5 consecutive datasets.
 // For stress mode: "item" = one scenario dataset.
-// Isolate/restore one stress line. Split out of _makeLegendClick so a click on the scenario table
-// row does exactly what a click on the legend entry does, including the second-click restore.
+// Isolate/restore one stress line, from a click on that scenario's table row. The stress chart has
+// no legend any more, so this is the only way in; the second click restores all.
 function _isolateStressDataset(dsIdx) {
     const chart = _mcStressChart;
     if (!chart) return;
@@ -983,33 +1127,35 @@ function _isolateStressDataset(dsIdx) {
         for (let i = 0; i < total; i++) chart.setDatasetVisibility(i, i === dsIdx);
         _legendIsolatedKeyStress = key;
     }
+    // The hover tooltip is only meaningful with exactly one line showing: at interaction mode
+    // 'index' it otherwise lists every scenario's balance for the hovered year.
+    if (chart.options?.plugins?.tooltip) {
+        chart.options.plugins.tooltip.enabled = (_legendIsolatedKeyStress !== null);
+    }
     chart.update();
 }
 
-function _makeLegendClick(isStress) {
+// Legend onClick for the MAIN (percentile band) chart: one legend "item" is one strategy, which is
+// 5 consecutive datasets. Click once to isolate that strategy, click again to restore all.
+// The stress chart used to share this via an isStress flag; it has no legend now, and its isolate
+// path is _isolateStressDataset() driven by the scenario table.
+function _makeLegendClick() {
     return function (e, legendItem, legend) {
         const chart = legend.chart;
         const clickedDs = legendItem.datasetIndex;
-        if (isStress) return _isolateStressDataset(clickedDs);
         const total = chart.data.datasets.length;
-        const key = isStress ? `ds${clickedDs}` : `strat${Math.floor(clickedDs / 5)}`;
-        // Main and stress charts render simultaneously in Historical mode — each tracks its own
-        // isolated-key so isolating one chart's legend doesn't desync the other's restore toggle.
-        const current = isStress ? _legendIsolatedKeyStress : _legendIsolatedKey;
+        const key = `strat${Math.floor(clickedDs / 5)}`;
 
-        if (current === key) {
+        if (_legendIsolatedKey === key) {
             // Already isolated this item — restore all
             for (let i = 0; i < total; i++) chart.setDatasetVisibility(i, true);
-            if (isStress) _legendIsolatedKeyStress = null; else _legendIsolatedKey = null;
+            _legendIsolatedKey = null;
         } else {
             // Isolate: hide everything except the clicked item's group
             for (let i = 0; i < total; i++) {
-                const visible = isStress
-                    ? i === clickedDs
-                    : Math.floor(i / 5) === Math.floor(clickedDs / 5);
-                chart.setDatasetVisibility(i, visible);
+                chart.setDatasetVisibility(i, Math.floor(i / 5) === Math.floor(clickedDs / 5));
             }
-            if (isStress) _legendIsolatedKeyStress = key; else _legendIsolatedKey = key;
+            _legendIsolatedKey = key;
         }
         chart.update();
     };
@@ -1088,7 +1234,7 @@ function renderMCChart(msg) {
     }
 
     const legendLabels = { filter: (item) => item.datasetIndex % 5 === 4, font: { size: 12 }, usePointStyle: true, pointStyle: 'line', boxWidth: 24 };
-    const legendClick = _makeLegendClick(false);
+    const legendClick = _makeLegendClick();
 
     const tooltipCfg = {
         filter: (item) => item.datasetIndex % 5 === 4,
@@ -1168,17 +1314,28 @@ function renderStressChart(stress) {
     // scenario. Legend entries are deliberately terse ("1966 ✗2041"): ten copies of the old
     // "1966 (eq: … inf: … real: …)" label crowded out the chart itself. Every statistic that used
     // to live in the label now has a column in the table under the chart.
-    const rows = buildStressRows(stress, deflateOne);
+    const rows  = buildStressRows(stress, deflateOne);
+    const dense = rows.length > STRESS_DENSE_THRESHOLD;
     rows.forEach((r, pos) => {
+        const ds = STRESS_DENSE_STYLE[r.band] ?? STRESS_DENSE_STYLE['survive'];
         datasets.push({
             label:           stressShortLabel(r),
             data:            deflate(r.path),
-            borderColor:     _stressLineColor(r.band, r.posInBand, r.bandSize),
+            borderColor:     dense ? ds.color : _stressLineColor(r.band, r.posInBand, r.bandSize),
             backgroundColor: 'transparent',
-            borderWidth:     1.8,
+            borderWidth:     dense ? ds.width : 1.8,
+            // Chart.js draws lower `order` last, i.e. on top. Failures therefore sit above the
+            // survivor haze instead of being buried under ninety-odd green lines.
+            order:           dense ? (2 - ds.z) : 0,
             pointRadius:     0,
             fill:            false,
             tension:         0.3,
+            // Where the sequence runs off the end of the record and starts replaying 1928, the line
+            // goes dashed. Only late start years reach it: a 2015 start on a 30-year plan has 11
+            // real years and then 19 of replay, and that is worth seeing rather than inferring.
+            segment: (r.realYears != null && r.realYears < r.path.length)
+                ? { borderDash: ctx => ctx.p0DataIndex >= r.realYears - 1 ? [4, 3] : undefined }
+                : undefined,
         });
         r.dsIdx = pos;   // chart dataset index, so a table row click can isolate its own line
     });
@@ -1188,9 +1345,16 @@ function renderStressChart(stress) {
         _mcStressChart = null;
     }
 
-    const legendLabels = { filter: () => true, font: { size: 11 }, usePointStyle: true, pointStyle: 'line', boxWidth: 20 };
-    const legendClick = _makeLegendClick(true);
+    // No legend. Every column of it is already a column of the table below, with more room and a
+    // sort, and one legend entry per scenario crowded out the plot itself. Isolating a line is what
+    // the legend was still good for; clicking the matching table row does that.
+    //
+    // The tooltip starts off. interaction.mode is 'index', so a hover with nothing isolated prints
+    // EVERY line's balance for that year -- a wall of text that grows with the scenario count and
+    // says nothing the table does not. It is switched on only while exactly one line is isolated,
+    // by _isolateStressDataset().
     const tooltipCfg = {
+        enabled: false,
         callbacks: {
             title: items => `Year ${items[0]?.label ?? ''}`,
             label: ctx => `  ${ctx.dataset.label}: $${fmt(ctx.parsed.y)}`,
@@ -1206,7 +1370,7 @@ function renderStressChart(stress) {
             maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: legendLabels, onClick: legendClick, ...datasetHoverHighlight(1) },
+                legend: { display: false },
                 tooltip: tooltipCfg,
             },
             scales: {
@@ -1223,12 +1387,13 @@ function renderStressChart(stress) {
         },
     });
 
-    const win = stressWindowOf(stress);
     const descEl = document.getElementById('mc-stress-chart-desc');
     if (descEl) {
-        descEl.textContent = `For your current plan. Each line is one historical starting sequence, labeled by its start year. `
-            + `Red ran out of money within the first ${win} years, amber ran out later, green never ran out. `
-            + `The table below gives the numbers behind each line. Click a legend item or a table row to isolate it; click again to restore all.`;
+        const anyWrap = rows.some(r => r.realYears != null && r.realYears < r.path.length);
+        descEl.textContent = `For your current plan. Each line is one historical starting sequence, ${stressSelectionLabel(stress)}. `
+            + `Red ran out of money in the first half of your plan, amber in the second half, green never ran out. `
+            + (anyWrap ? `A dashed tail is where that sequence runs past the end of the record and replays it from 1928. ` : '')
+            + `The table below names every line and gives the numbers behind it. Click a row to isolate its line and read its balances on hover; click again to restore all.`;
     }
 
     renderStressTable(stress, rows);
@@ -1244,9 +1409,10 @@ function renderStressChart(stress) {
 function buildStressRows(stress, deflateOne = (v) => v) {
     const v = stress?.variations?.[0];
     if (!v?.stressPaths?.length) return [];
-    const win        = stressWindowOf(stress);
     const startYears = stress.startYears ?? [];
     const ruinYears  = v.ruinYearsPerPath ?? [];
+    const planYears  = stress.years ?? _mcResults?.years ?? v.stressPaths[0].length;
+    const worst      = stress.worstRealCAGRs ?? {};
 
     const rows = v.stressPaths.map((path, rank) => {
         const startYear = startYears[rank] ?? null;
@@ -1254,19 +1420,26 @@ function buildStressRows(stress, deflateOne = (v) => v) {
         // a ruined path is pinned at $0 from the year it failed.
         const zeroAt    = path.findIndex(b => b <= 0);
         const ruinYear  = ruinYears[rank] || (zeroAt >= 0 ? _mcStartYear + zeroAt : 0);
+        const realYears = stress.realYears?.[rank] ?? null;
         return {
-            rank, startYear, ruinYear, path,
+            rank, startYear, ruinYear, path, realYears,
             // Both measured from the PLAN's first calendar year, never from startYear. startYear is
             // the historical year the return sequence is taken from (1973, 1929); the money runs out
             // on the plan's own clock, so 1973 → ruin 2037 is 11 years in, not 64.
-            band:        stressOutcomeBand(_mcStartYear, ruinYear, win),
+            band:        stressOutcomeBand(_mcStartYear, ruinYear, planYears),
             yearsToRuin: ruinYear ? ruinYear - _mcStartYear : null,
             finalBalance: deflateOne(path[path.length - 1] ?? 0, path.length - 1),
-            eqCAGR:    stress.decadeCAGRs?.[rank] ?? null,
+            // Full-horizon, on the sequence this scenario actually lived through.
+            realCAGR:  stress.realCAGRs?.[rank] ?? null,
+            eqCAGR:    stress.eqCAGRs?.[rank] ?? null,
             bdCAGR:    stress.bondCAGRs?.[rank] ?? null,
             itCAGR:    stress.intlCAGRs?.[rank] ?? null,
-            infCAGR:   stress.decadeInflationCAGRs?.[rank] ?? null,
-            realCAGR:  stress.realCAGRs?.[rank] ?? null,
+            infCAGR:   stress.inflationCAGRs?.[rank] ?? null,
+            // Worst rolling stretch of each length ANYWHERE inside this scenario, not just at its
+            // start. A sequence can open calmly and still contain the decade that breaks the plan.
+            worstReal: { 5:  worst[5]?.[rank]  ?? null, 10: worst[10]?.[rank] ?? null,
+                         15: worst[15]?.[rank] ?? null, 20: worst[20]?.[rank] ?? null },
+            nominatedBy: stress.nominatedBy?.[rank] ?? [],
         };
     });
 
@@ -1281,6 +1454,29 @@ function buildStressRows(stress, deflateOne = (v) => v) {
         r.bandSize  = counts[r.band];
     });
     return sorted;
+}
+
+// Row hover text: the per-asset rates behind the Real CAGR column, which windows flagged this start
+// year, and where the sequence leaves the real record.
+function stressRowDetail(r) {
+    const p = (v, invert) => v == null ? 'n/a'
+        : (v >= 0 && !invert ? '+' : '') + (v * 100).toFixed(1) + '%';
+    const bits = [
+        `${r.startYear ?? '?'} sequence, over the whole plan:`,
+        `  Equity ${p(r.eqCAGR)}   Bonds ${p(r.bdCAGR)}   Intl ${p(r.itCAGR)}   Inflation ${p(r.infCAGR, true)}`,
+        `  Real ${p(r.realCAGR)} after inflation`,
+    ];
+    if (r.nominatedBy?.length) {
+        bits.push(`Flagged as one of the worst by the ${r.nominatedBy.join(', ')} year window`
+                + (r.nominatedBy.length > 1 ? 's.' : '.'));
+    } else {
+        bits.push('Not among the worst by any ranking window; included because you asked for all start years.');
+    }
+    if (r.realYears != null && r.path && r.realYears < r.path.length) {
+        bits.push(`Real record runs out after ${r.realYears} years (${(r.startYear ?? 0) + r.realYears - 1}); `
+                + `the dashed tail replays the record from 1928.`);
+    }
+    return bits.join('\n');
 }
 
 function stressShortLabel(r) {
@@ -1309,21 +1505,14 @@ function getStressColumns() {
         { key: 'yrs', label: 'Yrs to Ruin',
             title: 'Years from the start of the plan to the year the money ran out.',
             getSortValue: r => r.yearsToRuin ?? Infinity },
-        { key: 'eq', label: 'Equity CAGR',
-            title: 'Nominal equity CAGR over the scoring window, the stretch used to pick this scenario.',
-            getSortValue: r => r.eqCAGR ?? 0 },
-        { key: 'bd', label: 'Bonds CAGR',
-            title: 'Nominal bond CAGR over the same window. Bonds are not part of the ranking, which is done on equity, but they fund the plan too, so a scenario with a poor equity decade and decent bonds is a different problem from one where both fell.',
-            getSortValue: r => r.bdCAGR ?? 0 },
-        { key: 'it', label: 'Intl CAGR',
-            title: 'Nominal international equity CAGR over the same window. International data begins in 1970; for earlier years domestic equity stands in as a proxy, so scenarios starting before 1970 will show Intl close to Equity.',
-            getSortValue: r => r.itCAGR ?? 0 },
-        { key: 'infl', label: 'Inflation CAGR',
-            title: 'Inflation CAGR over the same window.',
-            getSortValue: r => r.infCAGR ?? 0 },
         { key: 'real', label: 'Real CAGR',
-            title: 'Inflation-adjusted equity CAGR over the window (Fisher equation). This is what the scenarios are ranked on.',
+            title: 'Inflation-adjusted equity CAGR over your WHOLE plan, on the sequence this scenario actually lived through (Fisher equation). This used to be measured over the ranking window instead, which stopped meaning anything once the windows could be combined or skipped. Hover the row for the equity, bond, international and inflation rates behind it.',
             getSortValue: r => r.realCAGR ?? 0 },
+        ...[5, 10, 15, 20].map(w => ({
+            key: `w${w}`, label: `Worst ${w}`,
+            title: `The worst real CAGR over any ${w} consecutive years anywhere inside this scenario, not just at its start. This is the ${w}-year stretch that did the damage. Blank when your plan is shorter than ${w} years.`,
+            getSortValue: r => r.worstReal?.[w] ?? 0,
+        })),
         { key: 'final', label: 'Final Balance',
             title: 'Portfolio balance in the final plan year. $0 for a scenario that ran out.',
             getSortValue: r => r.finalBalance ?? 0 },
@@ -1384,26 +1573,38 @@ function renderStressTable(stress, rows) {
         // and its row here are paired without counting legend entries.
         const swatch = document.createElement('div');
         swatch.style.cssText = `padding:2px 6px 2px 8px;background:${oc.row};border-right:2px solid #dee2e6;cursor:pointer;`;
+        // Must match the line exactly, dense palette included, or the swatch stops being a key.
+        const lineColor = rows.length > STRESS_DENSE_THRESHOLD
+            ? (STRESS_DENSE_STYLE[r.band] ?? STRESS_DENSE_STYLE['survive']).color
+            : _stressLineColor(r.band, r.posInBand, r.bandSize);
         swatch.innerHTML = `<span style="display:inline-block;width:18px;height:3px;vertical-align:middle;`
-                         + `background:${_stressLineColor(r.band, r.posInBand, r.bandSize)};"></span>`;
+                         + `background:${lineColor};"></span>`;
         row.appendChild(swatch);
 
         const cellCss = `padding:2px 8px;text-align:right;background:${oc.row};cursor:pointer;white-space:nowrap;`;
+        const pct = (v, invert) => v != null ? _mcPct(v, invert) : '—';
+        // The asset-level detail that used to have its own columns. Four more columns of percentages
+        // pushed the table past the width of the chart it explains, and they are supporting evidence
+        // for the Real CAGR beside them rather than something you scan down. It goes on every CELL,
+        // not on the row: the row is display:contents, so it generates no box and never gets hovered.
+        const detail = stressRowDetail(r);
+        swatch.title = detail;
         [
             { html: String(r.startYear ?? '—') },
             { html: oc.text },
             { html: r.ruinYear ? String(r.ruinYear) : '—' },
             { html: r.yearsToRuin != null ? String(r.yearsToRuin) : '—' },
-            { html: r.eqCAGR   != null ? _mcPct(r.eqCAGR)   : '—' },
-            { html: r.bdCAGR   != null ? _mcPct(r.bdCAGR)   : '—' },
-            { html: r.itCAGR   != null ? _mcPct(r.itCAGR)   : '—' },
-            { html: r.infCAGR  != null ? _mcPct(r.infCAGR, true) : '—' },
-            { html: r.realCAGR != null ? _mcPct(r.realCAGR) : '—' },
+            { html: pct(r.realCAGR) },
+            { html: pct(r.worstReal?.[5])  },
+            { html: pct(r.worstReal?.[10]) },
+            { html: pct(r.worstReal?.[15]) },
+            { html: pct(r.worstReal?.[20]) },
             { html: '$' + fmt(Math.round(r.finalBalance ?? 0)) },
         ].forEach(({ html, css }) => {
             const cell = document.createElement('div');
             cell.style.cssText = css ?? cellCss;
             cell.innerHTML = html;
+            cell.title = detail;
             row.appendChild(cell);
         });
 
@@ -1417,7 +1618,7 @@ function renderStressTable(stress, rows) {
 // --- Progress / State helpers ---------------------------------------------
 
 function setMCRunning(running) {
-    const runBtn     = document.getElementById('mc-run-btn');       // inside nerd panel
+    const runBtn     = document.getElementById('mc-run-btn');       // always visible now
     const planBtn    = document.getElementById('mc-run-plan-btn');  // ditto
     const cancelWrap = document.getElementById('mc-cancel-wrap');   // always-accessible cancel
     const progWrap   = document.getElementById('mc-progress-wrap');
@@ -1432,18 +1633,12 @@ function setMCRunning(running) {
         updateMCProgress(0);
         if (runEst) runEst.textContent = '';
     } else if (runEst) {
-        const numPaths = parseInt(document.getElementById('mc-num-paths')?.value ?? '500');
+        const numPaths = _mcNum('mc-num-paths');
         const base     = getInputs();
         // A plan-scope run is one variation, so the estimate has to follow the scope in flight or a
         // 0.2s run would announce half a minute.
         const numVar   = _mcScope === 'plan' ? 1 : buildVariations(base).length;
-        const estMs    = estimateMCMs(numPaths, numVar);
-        if (estMs != null) {
-            const sec = (estMs / 1000).toFixed(1);
-            runEst.textContent = `May take approximately ${sec} seconds to complete`;
-        } else {
-            runEst.textContent = 'May take up to 20 seconds to complete';
-        }
+        runEst.textContent = `May take approximately ${_mcDuration(estimateMCMs(numPaths, numVar))} to complete`;
     }
 }
 

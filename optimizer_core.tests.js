@@ -1252,38 +1252,276 @@ test('stress bank: identical arguments give identical banks (no RNG involved)', 
     }
 });
 
-test('stress bank: reports bond and intl CAGR over the same window as equity', () => {
-    const win  = 10;
-    const bank = _mcPrng.buildStressBank(10, 40, win);
-    assert(bank.decadeBondCAGRs.length === 10, 'one bond CAGR per sequence');
-    assert(bank.decadeIntlCAGRs.length === 10, 'one intl CAGR per sequence');
+test('stress bank: reports bond and intl CAGR over the whole plan, not the ranking window', () => {
+    // These used to be measured over the scoring window. That stopped being meaningful once the
+    // window could be 'combined' (five of them) or 'all' (none), so every reported rate is now the
+    // full-horizon figure on the sequence the scenario actually lived through, wrapped tail included.
+    const years = 40;
+    const bank  = _mcPrng.buildStressBank(10, years, 10);
+    const n     = _histRet.equity.length;
+    assert(bank.fullBondCAGRs.length === 10, 'one bond CAGR per sequence');
+    assert(bank.fullIntlCAGRs.length === 10, 'one intl CAGR per sequence');
 
-    // Recompute the first scenario's bond CAGR straight from the source data.
+    // Recompute the first scenario's bond CAGR straight from the source data, including the wrap.
     const si = bank.startYears[0] - _histRet.equityStartYear;
     let logSum = 0;
-    for (let y = 0; y < win; y++) logSum += Math.log1p(_histRet.bonds[si + y]);
-    const want = Math.exp(logSum / win) - 1;
-    assert(Math.abs(bank.decadeBondCAGRs[0] - want) < 1e-12,
-        `bond CAGR mismatch: want ${want}, got ${bank.decadeBondCAGRs[0]}`);
+    for (let y = 0; y < years; y++) logSum += Math.log1p(_histRet.bonds[(si + y) % n]);
+    const want = Math.exp(logSum / years) - 1;
+    assert(Math.abs(bank.fullBondCAGRs[0] - want) < 1e-12,
+        `bond CAGR mismatch: want ${want}, got ${bank.fullBondCAGRs[0]}`);
 
-    // 1929 predates the intl series (starts 1970), so intl falls back to the domestic proxy and
-    // must equal the equity CAGR exactly for that scenario.
+    // A scenario whose whole horizon predates the intl series would fall back to the domestic proxy
+    // throughout. Over 40 wrapping years every scenario crosses 1970, so instead assert the proxy
+    // rule directly: intl equals equity in exactly the years outside 1970..end-of-intl.
     const i1929 = bank.startYears.indexOf(1929);
     assert(i1929 >= 0, 'the 1929 scenario should be in the worst-10 at a 10-year window');
-    assert(Math.abs(bank.decadeIntlCAGRs[i1929] - bank.decadeCAGRs[i1929]) < 1e-12,
-        'pre-1970 intl must fall back to domestic equity, so the two CAGRs match');
+    const short = _mcPrng.buildStressBank(10, 10, 10);   // 1929 + 10 years is entirely pre-1970
+    const j = short.startYears.indexOf(1929);
+    assert(Math.abs(short.fullIntlCAGRs[j] - short.fullEqCAGRs[j]) < 1e-12,
+        'a wholly pre-1970 horizon must fall back to domestic equity, so the two CAGRs match');
 });
 
-test('stressOutcomeBand: window boundary is exclusive at the far end', () => {
+test('stress bank: worst rolling real CAGR scans the whole horizon, not just the opening', () => {
+    const years = 35;
+    const bank  = _mcPrng.buildStressBank(10, years, 10);
+    const n     = _histRet.equity.length;
+    assert(JSON.stringify(Object.keys(bank.worstRealCAGRs)) === JSON.stringify(['5', '10', '15', '20']),
+        `unexpected rolling windows: ${Object.keys(bank.worstRealCAGRs)}`);
+
+    // Recompute the first scenario's worst 10-year stretch by brute force over its realized sequence.
+    const si = bank.startYears[0] - _histRet.equityStartYear;
+    const w  = 10;
+    let want = Infinity;
+    for (let o = 0; o + w <= years; o++) {
+        let eqLog = 0, infLog = 0;
+        for (let y = 0; y < w; y++) {
+            const idx = (si + o + y) % n;
+            eqLog  += Math.log1p(_histRet.equity[idx]);
+            infLog += Math.log1p(Math.max(_mcPrng.INFLATION_FLOOR, _histRet.inflation[idx]));
+        }
+        const eqC  = Math.exp(eqLog / w) - 1;
+        const infC = Math.max(-0.005, Math.exp(infLog / w) - 1);
+        const real = (1 + eqC) / (1 + infC) - 1;
+        if (real < want) want = real;
+    }
+    assert(Math.abs(bank.worstRealCAGRs[10][0] - want) < 1e-12,
+        `worst rolling 10yr mismatch: want ${want}, got ${bank.worstRealCAGRs[10][0]}`);
+
+    // A rolling window longer than the plan has no samples and must not be reported at all.
+    const shortPlan = _mcPrng.buildStressBank(5, 12, 10);
+    assert(shortPlan.worstRealCAGRs[15] === undefined, 'a 12-year plan has no 15-year stretch');
+    assert(shortPlan.worstRealCAGRs[10] !== undefined, 'a 12-year plan does have a 10-year stretch');
+});
+
+test("stress bank: 'combined' is the union of every window's worst, deduped", () => {
+    const years = 35;
+    const count = 10;
+    const comb  = _mcPrng.buildStressBank(count, years, 'combined');
+
+    // The union property: nothing a single window flagged may be missing from the combined set.
+    for (const w of _mcPrng.STRESS_WINDOWS) {
+        const single = _mcPrng.buildStressBank(count, years, w).startYears;
+        const missing = single.filter(y => !comb.startYears.includes(y));
+        assert(missing.length === 0,
+            `combined dropped start years the ${w}-year window flagged: ${missing}`);
+    }
+    assert(new Set(comb.startYears).size === comb.startYears.length, 'combined must not repeat a start year');
+    assert(comb.startYears.length > count, 'the windows disagree enough that the union exceeds one window');
+    assert(comb.startYears.length < count * _mcPrng.STRESS_WINDOWS.length,
+        'the windows overlap, so the union must be smaller than the sum');
+    assert(comb.scoreYears === null, 'combined has no single scoring window to report');
+    assert(JSON.stringify(comb.windowsUsed) === JSON.stringify(_mcPrng.STRESS_WINDOWS),
+        `a 35-year plan should use every window, got ${comb.windowsUsed}`);
+
+    // Deterministic, and every row records which windows nominated it.
+    const again = _mcPrng.buildStressBank(count, years, 'combined');
+    assert(JSON.stringify(comb.startYears) === JSON.stringify(again.startYears), 'combined must be stable');
+    comb.nominatedBy.forEach((noms, i) => {
+        assert(noms.length > 0, `${comb.startYears[i]} is in the combined set but nothing nominated it`);
+    });
+
+    // Windows clamp to the plan and then dedupe: a 12-year plan cannot score a 30-year stretch.
+    assert(JSON.stringify(_mcPrng.buildStressBank(5, 12, 'combined').windowsUsed) === JSON.stringify([5, 10, 12]),
+        'windows must clamp to the plan horizon and dedupe');
+});
+
+test('scoreStartYears memoizes without letting a caller corrupt the shared ranking', () => {
+    // The ranking depends only on the window length and on HISTORICAL_RETURNS, which is a static data
+    // file, so it is cached per window. That means every caller for a given window gets the SAME
+    // array, and a caller that wrote to an entry would poison every later read. Frozen so it cannot.
+    const a = _mcPrng.scoreStartYears(10);
+    const b = _mcPrng.scoreStartYears(10);
+    assert(a === b, 'a repeat call for the same window must return the cached array');
+    assert(Object.isFrozen(a), 'the cached array must be frozen');
+    assert(Object.isFrozen(a[0]), 'the cached entries must be frozen');
+
+    const wasYear = a[0].year, wasCagr = a[0].realCagr;
+    try { a[0].year = 1234; a[0].realCagr = 99; } catch (e) { /* strict mode throws; both are fine */ }
+    assert(a[0].year === wasYear && a[0].realCagr === wasCagr,
+        'a write to a cached entry must not take effect');
+
+    // Different windows are cached separately and must not collide.
+    assert(_mcPrng.scoreStartYears(5) !== _mcPrng.scoreStartYears(10), 'windows must not share a cache slot');
+    assert(_mcPrng.scoreStartYears(5).length === _histRet.equity.length - 5 + 1, '5-year pool size');
+    assert(_mcPrng.scoreStartYears(10).length === _histRet.equity.length - 10 + 1, '10-year pool size');
+
+    // And the memo is transparent: repeated bank builds still agree, including after other windows
+    // have been scored in between.
+    const first = _mcPrng.buildStressBank(10, 40, 10).startYears;
+    _mcPrng.buildStressBank(20, 35, 'combined');
+    const second = _mcPrng.buildStressBank(10, 40, 10).startYears;
+    assert(JSON.stringify(first) === JSON.stringify(second), 'caching must not change what a bank returns');
+});
+
+test('bear pool draws from three opening lengths, each spliced for its own window', () => {
+    const pool = _mcPrng.buildBearPool();
+    const wins = _mcPrng.BEAR_OVERLAY_WINDOWS;
+    const per  = _mcPrng.BEAR_OVERLAY_POOL;
+    assert(pool.length === wins.length * per,
+        `expected ${wins.length} x ${per} entries, got ${pool.length}`);
+
+    for (const w of wins) {
+        const forW = pool.filter(e => e.len === w);
+        assert(forW.length === per, `expected ${per} entries at length ${w}, got ${forW.length}`);
+        // Each is the worst `per` by that window's own ranking, in that order.
+        const want = _mcPrng.scoreStartYears(w).slice(0, per).map(s => s.year);
+        assert(JSON.stringify(forW.map(e => e.year)) === JSON.stringify(want),
+            `length ${w} entries are not that window's worst: ${forW.map(e => e.year)}`);
+    }
+
+    // The whole point: the short windows find crashes the decade ranking averages away. 1930 is the
+    // worst 3-year opening in the record and only the 13th worst decade, because the decade starting
+    // 1930 contains 1933's +54% rebound.
+    assert(pool.some(e => e.year === 1930 && e.len === 3), '1930 must be in the pool at 3 years');
+    assert(!_mcPrng.scoreStartYears(10).slice(0, per).some(s => s.year === 1930),
+        'this test is only meaningful while 1930 is absent from the worst-10 decades');
+
+    // A year several windows agree on appears once per window, so it is drawn proportionally more.
+    const y1929 = pool.filter(e => e.year === 1929);
+    assert(y1929.length === 3, `1929 is flagged by all three windows, expected 3 entries, got ${y1929.length}`);
+    assert(JSON.stringify(y1929.map(e => e.len).sort((a, b) => a - b)) === JSON.stringify([3, 5, 10]),
+        'and once at each length');
+});
+
+test('bear-start overlay splices only its own opening length, and never past the plan', () => {
+    const overlaidSlots = (numPaths, years, frac) => {
+        const rngA = _mcPrng.mulberry32(7);
+        const before = _mcPrng.bootstrapMultiAssetBank(rngA, numPaths, years);
+        const baseline = Array.from(before.equity);
+        const rngB = _mcPrng.mulberry32(7);
+        const after = _mcPrng.bootstrapMultiAssetBank(rngB, numPaths, years);
+        _mcPrng.applyBearStartOverlay(after, rngB, numPaths, years, frac);
+        const changed = [];
+        for (let i = 0; i < baseline.length; i++) if (after.equity[i] !== baseline[i]) changed.push(i);
+        return changed;
+    };
+
+    // A 10-year opening spliced into a 5-year plan used to write 10 slots into a 5-slot row and
+    // corrupt the following path. Nothing may change outside path 0's own five slots.
+    const short = overlaidSlots(4, 5, 0.25);   // bearCount = 1
+    assert(short.every(i => i < 5), `overlay ran past a 5-year plan's first path: slots ${short}`);
+
+    // On a long plan the overlay touches at most the longest window and never beyond it.
+    const maxLen = Math.max(..._mcPrng.BEAR_OVERLAY_WINDOWS);
+    const long = overlaidSlots(4, 40, 0.25);
+    assert(long.every(i => i < maxLen), `overlay wrote past year ${maxLen}: slots ${long}`);
+    assert(long.length > 0, 'the overlay must actually change something');
+});
+
+test('bear-start overlay does not read the Stress Test sequence count', () => {
+    // The overlay used to size its sample pool from cfg.stressCount, which put a Stress Test DISPLAY
+    // setting into the main bootstrap pass: changing it silently moved every Historical result and
+    // raised the "Out of date" banner for a reason no reader could have guessed. It is pinned to
+    // BEAR_OVERLAY_POOL now, which is what lets the stale banner ignore the stress controls.
+    const overlayed = (extraArg) => {
+        const rng  = _mcPrng.mulberry32(42);
+        const bank = _mcPrng.bootstrapMultiAssetBank(rng, 120, 30);
+        _mcPrng.applyBearStartOverlay(bank, rng, 120, 30, 0.25, extraArg);
+        return Array.from(bank.equity.slice(0, 120 * 10));   // the overlaid opening decade
+    };
+    const base = overlayed(undefined);
+    for (const stale of [10, 20, 98, 3]) {
+        assert(JSON.stringify(overlayed(stale)) === JSON.stringify(base),
+            `the overlay changed when passed a stress count of ${stale}; it must ignore the argument`);
+    }
+    // And it still actually overlays something, or the test above would pass on two empty banks.
+    const rng  = _mcPrng.mulberry32(42);
+    const bank = _mcPrng.bootstrapMultiAssetBank(rng, 120, 30);
+    const before = Array.from(bank.equity.slice(0, 120 * 10));
+    _mcPrng.applyBearStartOverlay(bank, rng, 120, 30, 0.25);
+    assert(JSON.stringify(Array.from(bank.equity.slice(0, 120 * 10))) !== JSON.stringify(before),
+        'a 25% bear fraction must actually rewrite the opening decade of some paths');
+});
+
+test("stress bank: 'all' runs every start year and marks where the record runs out", () => {
+    const years = 35;
+    const all   = _mcPrng.buildStressBank(10, years, 'all');
+    const n     = _histRet.equity.length;
+    assert(all.startYears.length === n, `expected all ${n} start years, got ${all.startYears.length}`);
+    assert(all.startYears[0] === _histRet.equityStartYear, 'all should start at the first year of the record');
+    assert(all.startYears[n - 1] === _histRet.equityStartYear + n - 1, 'and end at the last');
+    assert(all.scoreYears === null, 'all ranks on nothing, so there is no scoring window');
+
+    // realYears is how much of the plan follows the ACTUAL record before wrapping back to 1928.
+    const i2015 = all.startYears.indexOf(2015);
+    assert(all.realYears[i2015] === 11, `2015 has 11 real years left, got ${all.realYears[i2015]}`);
+    assert(all.realYears[0] === years, 'an early start year never wraps inside a 35-year plan');
+
+    // A start year no window flags is still present, just unnominated. That is the whole point of
+    // the mode: it does not pre-judge which stretches of history are the dangerous ones.
+    assert(all.nominatedBy[i2015].length === 0, '2015 is not among the worst by any window');
+    assert(all.nominatedBy.some(noms => noms.length > 0), 'the worst years are still marked as such');
+});
+
+test('stress bank: a count above the candidate pool caps instead of throwing', () => {
+    // Repro of the ">=85 sequences stalls" report. The pool is (98 - window + 1) start years, so a
+    // count of 85 overruns the 15/20/30-year windows. The bank used to slice short and then
+    // destructure past the end of that list, and the throw surfaced as a permanent freeze rather
+    // than an error, because the worker's onerror handler retried it on the main thread where it
+    // threw again inside an async function.
+    for (const win of [5, 10, 15, 20, 30]) {
+        const pool = _histRet.equity.length - win + 1;
+        for (const count of [85, 200]) {
+            const bank = _mcPrng.buildStressBank(count, 35, win);
+            const want = Math.min(count, pool);
+            assert(bank.labels.length === want,
+                `window ${win}, count ${count}: expected ${want} sequences, got ${bank.labels.length}`);
+            assert(bank.startYears.length === want, 'startYears must match the label count');
+            assert(bank.equity.length === want * 35, 'the bank must be sized to what it actually filled');
+            assert(bank.candidatePool === pool, `candidatePool should report ${pool}, got ${bank.candidatePool}`);
+            assert(bank.requestedCount === count, 'requestedCount reports what was asked for');
+        }
+    }
+});
+
+test('stress bank: a junk count falls back to the default rather than an empty bank', () => {
+    // stressCount reaches the bank through `cfg.stressCount ?? 10`, which lets NaN through. Zero
+    // sequences renders a blank Stress Test with nothing explaining why.
+    for (const count of [NaN, undefined, 0, -5, 0.5]) {
+        const bank = _mcPrng.buildStressBank(count, 35, 10);
+        assert(bank.labels.length === 10,
+            `count ${String(count)} should fall back to 10 sequences, got ${bank.labels.length}`);
+    }
+});
+
+test('stressOutcomeBand: the line is half the PLAN, and exactly half counts as late', () => {
     const band = _mcPrng.stressOutcomeBand;
     // First argument is the PLAN's start year (2026), not the historical year the sequence comes
-    // from. Window covers planStartYear .. planStartYear + 9 for a 10-year window.
-    assert(band(2026, 2026, 10) === 'ruin-early', 'ruin in the first year is early');
-    assert(band(2026, 2035, 10) === 'ruin-early', 'ruin in the last year of the window is early');
-    assert(band(2026, 2036, 10) === 'ruin-late',  'ruin one year past the window is late');
-    assert(band(2026, 2036, 15) === 'ruin-early', 'a wider window pulls that same failure back to early');
-    assert(band(2026, 0, 10)    === 'survive',    'ruin year 0 means the path never failed');
-    assert(band(2026, null, 10) === 'survive',    'a null ruin year means the path never failed');
+    // from. Third is the plan's length: the band used to be graded on the ranking window, which
+    // 'combined' and 'all' leave undefined, and which called year 8 of 30 and year 28 of 30 the
+    // same thing on a long plan.
+    assert(band(2026, 2026, 30) === 'ruin-early', 'ruin in the first year is early');
+    assert(band(2026, 2040, 30) === 'ruin-early', 'year 14 of 30 is still the first half');
+    assert(band(2026, 2041, 30) === 'ruin-late',  'year 15 of 30 is exactly half, which counts as late');
+    assert(band(2026, 2055, 30) === 'ruin-late',  'ruin in the final year is late');
+    // An odd plan length splits on the fraction, not on a rounded year.
+    assert(band(2026, 2038, 25) === 'ruin-early', 'year 12 of 25 is below 12.5');
+    assert(band(2026, 2039, 25) === 'ruin-late',  'year 13 of 25 is above 12.5');
+    // The same failure changes band with the PLAN length now, not with the window.
+    assert(band(2026, 2036, 40) === 'ruin-early', 'year 10 of a 40-year plan is early');
+    assert(band(2026, 2036, 15) === 'ruin-late',  'the same year 10 in a 15-year plan is late');
+    assert(band(2026, 0, 30)    === 'survive',    'ruin year 0 means the path never failed');
+    assert(band(2026, null, 30) === 'survive',    'a null ruin year means the path never failed');
 });
 
 // ── Soft vs strict withdrawal caps (shortfall fix) ─────────────────────────────

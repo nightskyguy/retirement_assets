@@ -11,6 +11,135 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.152f"></a>
+
+## 11.152f
+
+**A Stress Test release: two crashes fixed, the ranking windows can now be combined or skipped
+entirely, and failures are graded against the length of your plan.**
+
+**Behavior change:** the Bear-start overlay now draws its opening from the worst 3, 5 and 10 year
+stretches rather than the worst decade only, which moves Historical Monte Carlo results. Nothing
+else here changes any plan or its numbers.
+
+### Asking for 85 or more stress sequences froze the tab  (nerdknob mode)
+
+The Stress Test ranks historical retirement start years and runs the worst of them. How many there
+are to rank depends on the window, because a start year has to have the full window of real data
+after it to be scored at all: a 5 year window leaves 94 candidates and a 30 year window leaves only
+69. Asking for more sequences than the record can supply used to run off the end of the ranked list and freeze.
+
+The count is now capped at what the window can supply and anything above that is ignored.
+
+### Clearing the Paths box printed "NaN"
+
+The run size line under the Run button updates as you type. Emptying the box left it reading
+"NaN paths x 144 strategies = NaN simulations" until you typed a digit. Every numeric box on the tab
+now falls back to its default when empty and is held inside its stated range, so a half-typed value
+cannot reach the run, the time estimate or the out-of-date check.
+
+### One window at a time was hiding most of the bad years
+
+Windows were increased to 5/10/15/20/30 and Combined. Previously picking one (10 was the default) 
+caused the worst 5-year start, for example, to be skipped because it was only looking at 10 year combined 
+growth rates.
+
+Two new choices in the Stress window selector):
+
+- **Combined (5/10/15/20/30)**, now the default, scores every window and keeps the union of what
+  each one flags. The count you set is per window, and because the windows overlap the union is 
+  smaller than the sum: the new default of 20 gives about 40 distinct start years rather than 100.
+  Hovering a row says which windows flagged that year.
+- **All start years** skips ranking and runs every start year the record holds, currently 98. At
+  that density the individual lines stop being readable, so survivors fade back and the failures are
+  drawn solid and on top. The shape you are looking for is how much of history breaks the plan, not
+  which line is 1966.
+
+Everything the ranking picks is still a real historical sequence run straight through, not a snippet added 
+at the beginning.
+A window longer than your plan is trimmed to the length of the plan, so a 12 year plan combines
+5, 10 and 12 rather than considering 15, 20 and 30 year stretches.
+
+The defaults are now 20 sequences and the Combined window, up from 10 and a single 10 year window.
+
+### Red and amber now mean early and late in YOUR plan
+
+A failure now is marked red if it ruin occurs before the halfway point, yellow if it lands on or after the halfway point, and 
+green if the stress for that sequence ends in assets still present (success rather than ruin).  Early ruin is worse 
+because it's harder to avoid.
+
+### The scenario table reports the whole plan, and the worst stretch inside it
+
+Real CAGR is calculated over your whole plan for each sequence that scenario lived through, and it also 
+calculates the worst 5, 10, 15 and 20 year real return found anywhere inside it. A sequence can open
+calmly and still contain the decade that breaks the plan. The old stress test might not have discovered the 
+true worst scenario.  To allow space, the equity, bond, international and inflation rates are still visible from a hover.
+
+### Sequences that run past the end of the record now indicate so
+
+A plan longer than the record has left after its start year wraps around and replays history from
+1928. A 2015 start on a 30 year plan gets 11 real years and then 19 of replay. That has always been
+the behavior, and the ranking has always excluded start years without a full window of real data
+after them, so a wrapped stretch never gets a vote in which years are worst. It is now visible: the 
+graphed line becomes dashed. Hover over the row and it tells which year the record runs out.
+
+### Bear-start openings are no longer all the same shape
+
+**This one changes Historical numbers.** Bear-start overlays a bad historical opening onto a quarter
+of the simulated paths, on the grounds that block sampling on its own shuffles the year order and so
+under-produces the sustained bad opening that actually breaks a retirement.
+
+It drew that opening from the worst ten *decades*, and averaging over a decade washes a crash out.
+1930 is the worst opening in the whole record measured over three years, at -26.9% a year after
+inflation, and only the thirteenth worst measured over ten, at -0.4%, because the decade starting
+1930 contains 1933's +54% rebound. Ranked on decades, the pool came out as 1999, 1965, 2000, 1969,
+1968, 1966, 1972, 1973, 1970 and 1929: six of the ten being 1960s and 1970s stagflation, 1930 absent
+altogether, and only 1929 opening worse than -15% a year over its first three years. And because
+every draw was spliced for a full ten years, a 1929 draw arrived with its own 1933 to 1936 recovery
+attached. The overlay could not produce "crash, then whatever comes next", which is the shape people
+mean by a bear start.
+
+The pool is now the worst ten start years over each of three, five and ten years, and each one is
+spliced for the length that flagged it. A three-year draw gives three brutal years and then hands
+back to the random draws; a ten-year draw behaves as before. Thirty entries drawn from twenty-one
+distinct years, averaging a six-year opening. A year that several lengths agree on, like 1929,
+appears once per length and so is drawn proportionally more often.
+
+The fraction (only visible in nerdknob mode) stays at 25%. Measured
+over the three to five year openings this overlay now mostly draws, the frequency is about 22%, so
+25% is a modest and deliberate over-weighting rather than a base rate, and the tooltip now says so.
+
+Also fixed here: an opening longer than the whole plan used to write past the end of that path's row
+and corrupt the start of the next one. It is capped at the plan length now. This only affected plans
+shorter than ten years.
+
+### Two run buttons are now visible, and each states what it will cost
+
+The tab had one button, "Run Monte Carlo", which ran every withdrawal strategy the Optimizer knows
+how to build so it could rank them. That is about 144 strategies, and the path count is per strategy,
+so the default 500 was 72,000 simulations and about 43 seconds of work. A second button only runs your 
+own plan.
+
+- **My Plan Only** is listed first and is the new default. It answers "how did my plan do", which is the
+  question most people want to answer. It costs about one 144th of the work. You get your chance of success
+  and the percentile chart, but no strategy ranking table.
+- **Compare All Scenarios** is the old behaviour, renamed to say what it actually does.
+
+Each button carries its own expected time, measured on the machine you are running on rather than
+guessed: "My Plan Only (1.3 sec)", "Compare All Scenarios (43 sec)". The actual first time is an estimate, 
+after one run, it will display the actual calculated time.
+
+### Changing a Stress Test setting no longer marks the whole run out of date
+
+### Smaller things
+
+- The Stress Test chart legend was dropped. The table underneath already names every line,
+  carries every number, sorts, and shows each line's color in its first column. The table made the legend 
+  a waste of space so only the table remains.
+- The hover readout waits until you pick a line from the table. Click the row in the table again to bring 
+  all the graphed lines back.
+
+
 <a id="11.150b"></a>
 
 ## 11.150b

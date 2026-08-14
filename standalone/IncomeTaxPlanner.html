@@ -10,7 +10,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Income Tax Planner · 2026+ · v2.3</title>
+<title>Income Tax Planner · 2026+ · v2.5</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -48,14 +48,6 @@
   .pill-row.status button.active { background:rgba(79,156,249,.15); color:var(--blue); font-weight:500; }
   .pill-row.opt    button.active { background:rgba(25,201,157,.15); color:var(--teal); font-weight:500; }
   .pill-row button:disabled { opacity:.35; cursor:not-allowed; }
-  .toggle-row   { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:.7rem; }
-  .toggle-label { font-family:var(--mono); font-size:11px; color:var(--muted); flex:1; line-height:1.4; }
-  .switch       { position:relative; width:36px; height:20px; flex-shrink:0; }
-  .switch input { opacity:0; width:0; height:0; }
-  .slider-track { position:absolute; inset:0; background:var(--border); border-radius:20px; cursor:pointer; transition:background .2s; }
-  .slider-track::before { content:''; position:absolute; width:14px; height:14px; left:3px; top:3px; background:var(--muted); border-radius:50%; transition:transform .2s,background .2s; }
-  .switch input:checked + .slider-track { background:rgba(25,201,157,.25); }
-  .switch input:checked + .slider-track::before { transform:translateX(16px); background:var(--teal); }
   .age-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
   .age-grid.single { grid-template-columns:1fr; }
   .year-big { font-family:var(--mono); font-size:20px; font-weight:500; color:var(--teal); text-align:center; margin-bottom:.4rem; letter-spacing:.06em; }
@@ -138,6 +130,14 @@
   .range-wrap input[type=range]::-webkit-slider-thumb { pointer-events:all; }
   .range-wrap input[type=range]::-moz-range-thumb { pointer-events:all; }
   .range-track-fill { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); height:3px; border-radius:2px; pointer-events:none; }
+  /* ── pinned ordinary-income scrubber ── */
+  .pin-num { font-family:var(--mono); font-size:11px; width:7.5rem; text-align:right; background:var(--surf2); border:1px solid var(--border); border-radius:5px; color:var(--teal); padding:4px 8px; }
+  .pin-num:focus { outline:none; border-color:rgba(25,201,157,.5); }
+  .pin-num::placeholder { color:var(--muted); }
+  #sl-pin { flex:1; }
+  #sl-pin.unpinned { opacity:.45; }
+  #btn-pin-clear:disabled { opacity:.35; cursor:default; }
+  #btn-pin-clear:disabled:hover { border-color:var(--border); color:var(--muted); }
 </style>
 <!-- Shared tax modules — NOTE: these require file:// or http:// (CORS blocks in data: URLs) -->
 <script src="../displayhelpers.js"></script>
@@ -147,7 +147,7 @@
 </head>
 <body>
 <header>
-  <h1>Income Tax Planner<span class="ver">v2.3</span></h1>
+  <h1>Income Tax Planner<span class="ver">v2.5</span></h1>
   <p>Federal + State · Capital Gains · IRMAA · SS torpedo · 2026–2035 with inflation</p>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center;position:relative">
     <strong id="testsFailed" title="Unit tests status">🟢</strong>
@@ -196,9 +196,9 @@
 
     <div class="ctrl">
       <div class="ctrl-hdr"><label>Social Security Income</label><span class="val" id="ss-val">$0</span></div>
-      <input type="range" id="sl-ss" min="0" max="80000" step="1000" value="0"
+      <input type="range" id="sl-ss" min="0" max="130000" step="1000" value="0"
              oninput="sliderToNum('sl-ss','num-ss','ss-val'); run()">
-      <div class="range-ends"><span>$0</span><span>$80k</span></div>
+      <div class="range-ends"><span>$0</span><span id="ss-range-max">$130k</span></div>
       <input type="text" id="num-ss" value="0" autocomplete="off"
              style="margin-top:5px" oninput="numToSlider('num-ss','sl-ss','ss-val'); run()">
     </div>
@@ -257,25 +257,6 @@
     </div>
 
     <hr class="divider">
-    <div class="panel-title" style="margin-bottom:.6rem">OBBBA Provisions</div>
-
-    <div class="toggle-row">
-      <span class="toggle-label">OBBBA temporary deductions<br>(senior ded. + elevated SALT cap)</span>
-      <label class="switch">
-        <input type="checkbox" id="sw-obbba" checked onchange="onObbbaToggle()">
-        <span class="slider-track"></span>
-      </label>
-    </div>
-
-    <div class="ctrl">
-      <div class="ctrl-hdr" style="margin-bottom:4px"><label>SALT Deduction Cap</label></div>
-      <div class="pill-row opt" id="salt-pills">
-        <button id="salt-40k" class="active" onclick="setSalt(true)">$40k (OBBBA)</button>
-        <button id="salt-10k"               onclick="setSalt(false)">$10k (TCJA)</button>
-      </div>
-    </div>
-
-    <hr class="divider">
     <div class="summary" id="summary">–</div>
   </div>
 
@@ -308,6 +289,16 @@
                  oninput="onZoomHiInput()">
         </div>
         <span class="zoom-slider-readout" id="zoom-readout">$30k – $620k</span>
+      </div>
+      <div class="zoom-slider-row">
+        <span class="zoom-slider-lbl">Ordinary</span>
+        <input type="range" id="sl-pin" min="30000" max="620000" step="10000" value="30000"
+               class="unpinned" oninput="onPinSlider()" title="Move the pinned ordinary income">
+        <input type="text" id="num-pin" class="pin-num" value="" placeholder="none"
+               autocomplete="off" onchange="onPinNumCommit()"
+               title="Type an exact ordinary income to pin">
+        <button class="zoom-btn" id="btn-pin-clear" onclick="clearPin()" disabled
+                title="Unpin">&#10005;</button>
       </div>
       <div class="info-panel" id="info-panel">
         <div class="info-default">Click a column to pin · hover for quick summary</div>
@@ -343,6 +334,14 @@ const obbaSen  = TAXData.OBBBA.SENIOR_DED;
 // Display-only: SS torpedo thresholds (not indexed to inflation per current law)
 const SS_T = { MFJ:{t1:32_000,t2:44_000}, SGL:{t1:25_000,t2:34_000} };
 
+// SS slider travel by filing status. Max benefit at age 70 is roughly $63k/person in 2026,
+// so two maxed earners reach ~$126k. The numeric field is never capped by these.
+const SS_MAX = { MFJ: 130_000, SGL: 70_000 };
+
+// NIIT visual identity — indigo, deliberately away from the amber IRMAA family so the
+// threshold line and the NIIT bar read as the same thing and neither reads as an IRMAA tier.
+const NIIT_COLOR = '#818cf8';
+
 // IRMAA tier visual config (5 paying tiers; Tier 6/top omitted from lines)
 const TIER_CFG = [
   { label:'IRMAA T1', color:'#fbbf24', dash:[4,2] },
@@ -359,6 +358,8 @@ const cfg = {
   retirementIncome:0, retirementSwept:false,
   cgSale:0, cgBasisPct:60,
   year:2026, inflation:2.5, medicareExtra:2.5,
+  // OBBBA is current law, so it is always on and never user-switchable. The provisions still
+  // switch themselves off by year: calcAt() gates each one on its own sunsetYear.
   obbaOn:true, saltHigh:true
 };
 
@@ -414,6 +415,7 @@ function calcAt(ordInc) {
     fedDed:    r.federalStdDeduction,
     stDed:     r.stateStdDeduction,
     stMarg:    r.stateMarginalRate,
+    niit:      r.niitTax,
     cgRate:    r.capitalGainsRate + (r.MAGI > TAXData.FEDERAL.NIIT[status] ? TAXData.FEDERAL.NIIT.rate : 0),
     cgGain
   };
@@ -444,10 +446,18 @@ function pickLabelStep() {
   return 100_000;
 }
 
-function getPinnedIdx() {
+// Fractional x position of the pin. The pin carries an exact dollar value (the numeric field can
+// set anything), so it does not have to land on a sampled column.
+function getPinnedPos() {
   if (pinnedIncome === null) return null;
-  const idx = Math.round((pinnedIncome - zoomMin) / zoomStep);
-  return (idx >= 0 && idx < sweepData.length) ? idx : null;
+  const pos = (pinnedIncome - zoomMin) / zoomStep;
+  return (pos >= 0 && pos <= sweepData.length - 1) ? pos : null;
+}
+
+// Nearest sampled column — for sweepData lookups and the tooltip's "pinned" star.
+function getPinnedIdx() {
+  const pos = getPinnedPos();
+  return pos === null ? null : Math.round(pos);
 }
 
 function buildLabels() {
@@ -468,11 +478,8 @@ function zoomToIncome(income) {
 }
 
 function resetZoom() {
-  if (pinnedIncome !== null) {
-    // Snap pin to nearest full-zoom step so the highlight still shows
-    pinnedIncome = Math.max(0, Math.min(FULL_MAX,
-      Math.round(pinnedIncome / FULL_STEP) * FULL_STEP));
-  }
+  // Pin keeps its exact dollar value; it is drawn at a fractional x, so no snapping needed.
+  if (pinnedIncome !== null) pinnedIncome = Math.max(0, Math.min(FULL_MAX, pinnedIncome));
   zoomMin = 0; zoomMax = FULL_MAX; zoomStep = FULL_STEP;
   updateZoomUI();
   run();
@@ -487,6 +494,7 @@ function updateZoomUI() {
   document.getElementById('btn-autozoom').classList.toggle('active', autoZoomOn);
   document.getElementById('btn-full').classList.toggle('zoomed', !isFullZoom());
   syncRangeSlider();
+  syncPinControls();
 }
 
 function syncRangeSlider() {
@@ -537,28 +545,38 @@ const TT_BASE = {
   footerColor:'#a78bfa', footerFont:{family:'DM Mono, monospace',size:10}
 };
 
+// Derived fields shared by the sweep and by the exact (off-grid) pinned row.
+// prevFedTax === null means "no left neighbour", so no marginal rate; h is the difference width.
+function deriveRow(p, prevFedTax, h) {
+  const denom    = Math.max(p.ordInc + cfg.ssIncome + p.cgGain, 1);
+  const totalTax = p.fedTax + p.fedCGTax + p.niit + p.IRMAA + p.stTaxOrd + p.stTaxCG;
+  return {
+    ...p, totalTax,
+    fedEff:  (p.fedTax + p.fedCGTax + p.niit + p.IRMAA) / denom,
+    stEff:   (p.stTaxOrd + p.stTaxCG) / denom,
+    totEff:  totalTax / denom,
+    fedMarg: prevFedTax === null ? 0 : (p.fedTax - prevFedTax) / h
+  };
+}
+
+// Row for an arbitrary ordinary income, not necessarily a sampled column. Uses the same
+// difference width as the chart so the panel's Fed Marginal matches the purple line.
+function exactRow(income) {
+  const p = calcAt(income);
+  const prev = income - zoomStep >= 0 ? calcAt(income - zoomStep).fedTax : null;
+  return deriveRow(p, prev, zoomStep);
+}
+
+function pinnedRow() {
+  return pinnedIncome === null ? null : exactRow(pinnedIncome);
+}
+
 function sweep() {
   const n = getN();
   const pts = [];
   for (let i=0; i<n; i++) pts.push(calcAt(zoomMin + i*zoomStep));
-
   // Numerical marginal rate: federal ordinary tax only (CG rate shown separately)
-  const marg = pts.map((p,i) => {
-    if (i===0) return 0;
-    return (p.fedTax - pts[i-1].fedTax) / zoomStep;
-  });
-
-  sweepData = pts.map((p,i) => {
-    const denom = Math.max(p.ordInc + cfg.ssIncome + p.cgGain, 1);
-    const totalTax = p.fedTax + p.fedCGTax + p.IRMAA + p.stTaxOrd + p.stTaxCG;
-    return {
-      ...p, totalTax,
-      fedEff:  (p.fedTax + p.fedCGTax + p.IRMAA) / denom,
-      stEff:   (p.stTaxOrd + p.stTaxCG) / denom,
-      totEff:  totalTax / denom,
-      fedMarg: marg[i]
-    };
-  });
+  sweepData = pts.map((p,i) => deriveRow(p, i === 0 ? null : pts[i-1].fedTax, zoomStep));
   return sweepData;
 }
 
@@ -583,14 +601,15 @@ const vLinePlugin = {
     const yScale = yR?.display ? yR : yD;
     if (!yScale) return;
 
-    // Pinned column: semi-transparent fill + solid teal line
-    const pinnedIdx = getPinnedIdx();
-    if (pinnedIdx !== null) {
-      const xPx = x.getPixelForValue(pinnedIdx);
-      const bw  = x.getPixelForValue(1) - x.getPixelForValue(0);
+    // Pinned income: band over the nearest sampled column + solid teal line at the exact value
+    const pinnedPos = getPinnedPos();
+    if (pinnedPos !== null) {
+      const bandPx = x.getPixelForValue(Math.round(pinnedPos));
+      const xPx    = x.getPixelForValue(pinnedPos);
+      const bw     = x.getPixelForValue(1) - x.getPixelForValue(0);
       ctx.save();
       ctx.fillStyle = 'rgba(25,201,157,0.10)';
-      ctx.fillRect(xPx - bw/2, yScale.top, bw, yScale.bottom - yScale.top);
+      ctx.fillRect(bandPx - bw/2, yScale.top, bw, yScale.bottom - yScale.top);
       ctx.setLineDash([]);
       ctx.strokeStyle = 'rgba(25,201,157,0.85)';
       ctx.lineWidth = 2;
@@ -671,18 +690,36 @@ function makeLegendClick() {
   };
 }
 
-function niitIdx() { return Math.round((TAXData.FEDERAL.NIIT[cfg.status] - zoomMin) / zoomStep); }
+// Fractional x index where MAGI crosses a threshold; null if it never crosses in view.
+// Every threshold on this chart (NIIT, IRMAA) is a MAGI test, but the x-axis is ORDINARY income —
+// MAGI also carries taxable SS and cap gains, so the crossing must be looked up in the swept data,
+// never computed as (threshold - zoomMin)/zoomStep. Interpolating between the two bracketing
+// samples keeps the line still when the zoom step changes.
+function magiCrossIdx(data, thresh) {
+  const i = data.findIndex(d => d.magi >= thresh);
+  if (i < 0) return null;
+  if (i === 0) return 0;
+  const a = data[i-1].magi, b = data[i].magi;
+  return b > a ? (i - 1) + (thresh - a) / (b - a) : i;
+}
+
+// NIIT threshold. Not inflation-indexed (current law). Always drawn — it is a MAGI level to plan
+// around even in a year with no investment income, because any gain realized once MAGI is past it
+// is surtaxed from the first dollar.
+function niitLine(data) {
+  const idx = magiCrossIdx(data, TAXData.FEDERAL.NIIT[cfg.status]);
+  return idx === null ? [] : [{ index:idx, color:NIIT_COLOR, dash:[4,3], label:'NIIT' }];
+}
 
 function tierLines(data) {
   const brks = TAXData.IRMAA?.[cfg.status]?.brackets ?? [];
   const inf  = Math.pow(1+cfg.inflation/100, cfg.year-BASE_YEAR);
   const paying = brks.filter(b => b.r > 0).slice(0, TIER_CFG.length);
   return paying.map((b, i) => {
-    const thresh = b.l * inf;
-    const idx    = data.findIndex(d => d.magi >= thresh);
+    const idx = magiCrossIdx(data, b.l * inf);
     return { index:idx, color:TIER_CFG[i].color, dash:TIER_CFG[i].dash,
              label:`T${i+1}`, tierIdx:i };
-  }).filter(t => t.index >= 0);
+  }).filter(t => t.index !== null);
 }
 
 function fakeIRMAA() {
@@ -695,7 +732,7 @@ function fakeIRMAA() {
 }
 
 // ─── COMBINED CHART ───────────────────────────────────────────────────────────
-// Dataset slot indices: 0-5 rate lines, 6-10 dollar bars, 11 MAGI line, 12-16 fake IRMAA
+// Dataset slot indices: 0-5 rate lines, 6-11 dollar bars, 12 MAGI line, 13-17 fake IRMAA
 function renderChart(data) {
   const pct = v => parseFloat((v*100).toFixed(2));
 
@@ -711,6 +748,7 @@ function renderChart(data) {
   // Dollar datasets
   const fedOrd = data.map(d => Math.round(d.fedTax));
   const fedCG  = data.map(d => Math.round(d.fedCGTax));
+  const niitD  = data.map(d => Math.round(d.niit));
   const IRMAAD = data.map(d => Math.round(d.IRMAA));
   const stOrd  = data.map(d => Math.round(d.stTaxOrd));
   const stCG   = data.map(d => Math.round(d.stTaxCG));
@@ -721,9 +759,7 @@ function renderChart(data) {
   const maxTax  = Math.max(...data.map(d => d.totalTax));
   const yDMax   = Math.ceil(maxTax * 1.15 / 50_000) * 50_000 || 500_000;
 
-  const niit   = { index:niitIdx(), color:'#f5a623', dash:[4,3], label:'NIIT' };
-  const tLines = tierLines(data);
-  const vlines = [niit, ...tLines];
+  const vlines = [...niitLine(data), ...tierLines(data)];
 
   updateChartTitle();
 
@@ -738,10 +774,11 @@ function renderChart(data) {
     ds[5].data = cgRt;
     ds[6].data = fedOrd;
     ds[7].data = fedCG;
-    ds[8].data = IRMAAD;
-    ds[9].data = stOrd;
-    ds[10].data = stCG;
-    ds[11].data = magiD;
+    ds[8].data = niitD;
+    ds[9].data = IRMAAD;
+    ds[10].data = stOrd;
+    ds[11].data = stCG;
+    ds[12].data = magiD;
     chartMain.options.scales.yR.max = yRMax;
     chartMain.options.scales.yD.max = yDMax;
     chartMain.options.scales.y2.max = y2Max;
@@ -783,6 +820,9 @@ function renderChart(data) {
           stack:'tx', yAxisID:'yD', hidden:inD },
         { _dollarDs:true, type:'bar', label:'Federal CG Tax',
           data:fedCG, backgroundColor:'rgba(147,197,253,0.80)', borderWidth:0,
+          stack:'tx', yAxisID:'yD', hidden:inD },
+        { _dollarDs:true, type:'bar', label:'Federal NIIT (3.8%)',
+          data:niitD, backgroundColor:'rgba(129,140,248,0.80)', borderWidth:0,
           stack:'tx', yAxisID:'yD', hidden:inD },
         { _dollarDs:true, type:'bar', label:'IRMAA',
           data:IRMAAD, backgroundColor:'rgba(245,166,35,0.85)', borderWidth:0,
@@ -916,14 +956,15 @@ function renderChart(data) {
 }
 
 // ─── INFO PANEL ──────────────────────────────────────────────────────────────
-function updateInfoPanel(idx) {
-  const d = sweepData[idx];
+// Takes a derived row (from sweepData or exactRow), not an index — the pin can sit between columns.
+function updateInfoPanel(d) {
   if (!d) return;
   const $v = v => '$' + Math.round(v).toLocaleString();
   const pp = (v, denom) => denom > 1 ? (v / denom * 100).toFixed(1) + '%' : '—';
   const totalInc = Math.max(d.ordInc + cfg.ssIncome + d.cgGain, 1);
-  // Effective rate on the CG gain itself (not % of total income)
-  const cgEffRate = d.cgGain > 0 ? ` (${(d.fedCGTax / d.cgGain * 100).toFixed(1)}% on gain)` : '';
+  // Effective rate on the CG gain itself (not % of total income), NIIT included
+  const cgEffRate = d.cgGain > 0
+    ? ` (${((d.fedCGTax + d.niit) / d.cgGain * 100).toFixed(1)}% on gain, incl NIIT)` : '';
 
   document.getElementById('info-panel').innerHTML = `
     <div class="info-header">
@@ -950,6 +991,7 @@ function updateInfoPanel(idx) {
         <div class="info-col-title">Tax Dollars&ensp;<span style="font-size:9px;color:var(--muted)">(% of total income)</span></div>
         <div class="info-row"><span class="ir-lbl">Federal Ordinary</span><span><span class="ir-val">${$v(d.fedTax)}</span><span class="ir-pct">${pp(d.fedTax,totalInc)}</span></span></div>
         <div class="info-row"><span class="ir-lbl">Federal CG Tax</span><span><span class="ir-val">${$v(d.fedCGTax)}</span><span class="ir-pct">${pp(d.fedCGTax,totalInc)}<span style="color:var(--teal);margin-left:.3rem">${cgEffRate}</span></span></span></div>
+        <div class="info-row"><span class="ir-lbl">Federal NIIT (3.8%)</span><span><span class="ir-val">${$v(d.niit)}</span><span class="ir-pct">${pp(d.niit,totalInc)}</span></span></div>
         <div class="info-row"><span class="ir-lbl">IRMAA</span><span><span class="ir-val">${$v(d.IRMAA)}</span><span class="ir-pct">${pp(d.IRMAA,totalInc)}</span></span></div>
         <div class="info-row"><span class="ir-lbl">State Ordinary</span><span><span class="ir-val">${$v(d.stTaxOrd)}</span><span class="ir-pct">${pp(d.stTaxOrd,totalInc)}</span></span></div>
         <div class="info-row"><span class="ir-lbl">State CG</span><span><span class="ir-val">${$v(d.stTaxCG)}</span><span class="ir-pct">${pp(d.stTaxCG,totalInc)}</span></span></div>
@@ -985,9 +1027,7 @@ function initInfoPanel() {
         updateZoomUI();
         run();
       } else {
-        pinnedIncome = null;
-        clearInfoPanel();
-        chartMain.update('none');
+        clearPin();
       }
       return;
     }
@@ -998,10 +1038,70 @@ function initInfoPanel() {
       updateZoomUI();
       run();
     } else {
-      updateInfoPanel(getPinnedIdx());
+      syncPinControls();
+      updateInfoPanel(pinnedRow());
       chartMain.update('none');
     }
   });
+}
+
+// ─── PINNED ORDINARY INCOME CONTROLS ─────────────────────────────────────────
+// The slider scrubs within the visible window on the sweep grid; the numeric field takes any
+// exact dollar (and re-centers the view when that value falls outside the window).
+function syncPinControls() {
+  const sl  = document.getElementById('sl-pin');
+  const num = document.getElementById('num-pin');
+  if (!sl || !num) return;
+  sl.min  = zoomMin;
+  sl.max  = zoomMax;
+  sl.step = zoomStep;
+  const has = pinnedIncome !== null;
+  sl.value = has ? Math.min(Math.max(pinnedIncome, zoomMin), zoomMax) : zoomMin;
+  sl.classList.toggle('unpinned', !has);
+  if (has) {
+    DisplayHelpers.setDollarValue('num-pin', pinnedIncome);
+  } else {
+    // delete, not '' — attachNumericDollarInput's blur handler formats dataset.numVal back into
+    // the field, and parseFloat('') would render "$NaN".
+    num.value = '';
+    delete num.dataset.numVal;
+  }
+  document.getElementById('btn-pin-clear').disabled = !has;
+}
+
+// Slider positions are already sweep-grid points, so no re-sweep and no zoom change is needed.
+function onPinSlider() {
+  pinnedIncome = +document.getElementById('sl-pin').value;
+  document.getElementById('sl-pin').classList.remove('unpinned');
+  DisplayHelpers.setDollarValue('num-pin', pinnedIncome);
+  document.getElementById('btn-pin-clear').disabled = false;
+  updateInfoPanel(pinnedRow());
+  if (chartMain) chartMain.update('none');
+}
+
+// onchange (blur/Enter), not oninput — a half-typed number must not re-zoom the chart.
+function onPinNumCommit() {
+  const raw = document.getElementById('num-pin').value.trim();
+  if (!raw) { clearPin(); return; }
+  const v = DisplayHelpers.parseShorthand(raw);
+  if (!Number.isFinite(v)) { syncPinControls(); return; }
+  pinnedIncome = Math.min(Math.max(v, 0), FULL_MAX);
+  if (pinnedIncome < zoomMin || pinnedIncome > zoomMax) {
+    zoomToIncome(pinnedIncome);
+    updateZoomUI();
+    run();
+  } else {
+    syncPinControls();
+    updateInfoPanel(pinnedRow());
+    if (chartMain) chartMain.update('none');
+  }
+}
+
+function clearPin() {
+  pinnedIncome = null;
+  clearInfoPanel();
+  syncPinControls();
+  if (chartMain) chartMain.update('none');
 }
 
 // ─── SUMMARY & ASSUMPTIONS ───────────────────────────────────────────────────
@@ -1015,17 +1115,24 @@ function renderSummary(data) {
   let peakMarg=0, peakInc=0;
   data.forEach(d => { if (d.fedMarg>peakMarg){ peakMarg=d.fedMarg; peakInc=d.ordInc; }});
 
-  const effectiveSaltHigh = cfg.saltHigh && cfg.year <= obbaSalt.sunsetYear;
-  const saltCap = cfg.obbaOn ? (effectiveSaltHigh ? obbaSalt.capHigh : obbaSalt.capLow) : obbaSalt.capLow;
-  const sample  = data.find(d => d.ordInc >= 200_000) ?? data[Math.floor(data.length / 2)];
+  // Both OBBBA provisions are always applied and expire purely by tax year, so the summary
+  // reports which of them the selected year still gets.
+  const saltLive = cfg.year <= obbaSalt.sunsetYear;
+  const senLive  = cfg.year <= obbaSen.sunsetYear;
+  const saltCap  = saltLive ? obbaSalt.capHigh : obbaSalt.capLow;
+  const sample   = data.find(d => d.ordInc >= 200_000) ?? data[Math.floor(data.length / 2)];
 
   const rows = [
     `<div><strong>Year:</strong> ${cfg.year} · factor ×${inf.toFixed(3)}</div>`,
-    `<div><strong>OBBBA:</strong> ${cfg.obbaOn?'<span class="hi-teal">ON</span>':'<span class="hi-amber">OFF</span>'} · SALT cap $${saltCap.toLocaleString()}</div>`,
+    `<div><strong>SALT cap:</strong> $${saltCap.toLocaleString()} · ${saltLive
+        ? `OBBBA cap <span class="hi-teal">applies</span>, last year ${obbaSalt.sunsetYear}`
+        : `OBBBA cap <span class="hi-amber">expired</span> after ${obbaSalt.sunsetYear}, back to the TCJA floor`}</div>`,
     `<div><strong>Federal std. ded.:</strong> $${Math.round(stdF).toLocaleString()} (${nSen} bump${nSen!==1?'s':''})</div>`,
   ];
-  if (cfg.obbaOn && nSen>0 && cfg.year <= obbaSen.sunsetYear)
-    rows.push(`<div><strong>OBBBA senior ded.:</strong> up to $${(obbaSen.perSenior*nSen).toLocaleString()}, phases out above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} (expires after ${obbaSen.sunsetYear})</div>`);
+  if (nSen > 0)
+    rows.push(senLive
+      ? `<div><strong>Senior ded.:</strong> OBBBA <span class="hi-teal">applies</span>, up to $${(obbaSen.perSenior*nSen).toLocaleString()}, phases out above $${obbaSen.phaseoutAGI[cfg.status].toLocaleString()} AGI, last year ${obbaSen.sunsetYear}</div>`
+      : `<div><strong>Senior ded.:</strong> OBBBA <span class="hi-amber">expired</span> after ${obbaSen.sunsetYear}, none in ${cfg.year}</div>`);
   if (cfg.cgSale > 0)
     rows.push(`<div><strong>Capital gains:</strong> $${cgGain.toLocaleString()} taxable gain on $${cfg.cgSale.toLocaleString()} sale (${(100-cfg.cgBasisPct).toFixed(0)}% gain rate)</div>`);
   if (sample)
@@ -1083,29 +1190,27 @@ function updCgBasis(){
   document.getElementById('cg-note').textContent = `Taxable gain: $${gain.toLocaleString(undefined,{maximumFractionDigits:0})}`;
 }
 
+// Slider travel only. num-ss stays authoritative and uncapped, so a shared ?ss= link with a
+// larger benefit is never silently truncated.
+function applySsMax() {
+  const max = SS_MAX[cfg.status] ?? SS_MAX.MFJ;
+  const sl  = document.getElementById('sl-ss');
+  sl.max = max;
+  document.getElementById('ss-range-max').textContent = `$${max/1000}k`;
+  const cur = DisplayHelpers.parseShorthand(document.getElementById('num-ss').value) || 0;
+  sl.value = Math.min(cur, max);
+}
+
 function setStatus(s) {
   cfg.status = s;
   document.getElementById('btn-MFJ').classList.toggle('active', s==='MFJ');
   document.getElementById('btn-SGL').classList.toggle('active', s==='SGL');
+  applySsMax();
   const show2 = s==='MFJ';
   document.getElementById('age-grid').classList.toggle('single', !show2);
   document.getElementById('age2').style.display = show2?'':'none';
   document.getElementById('age-label').textContent = show2?'Taxpayer Ages':'Taxpayer Age';
   destroyCharts();
-  run();
-}
-
-function setSalt(high) {
-  cfg.saltHigh = high;
-  document.getElementById('salt-40k').classList.toggle('active', high);
-  document.getElementById('salt-10k').classList.toggle('active', !high);
-  run();
-}
-
-function onObbbaToggle() {
-  cfg.obbaOn = document.getElementById('sw-obbba').checked;
-  document.getElementById('salt-40k').disabled = !cfg.obbaOn;
-  document.getElementById('salt-10k').disabled = !cfg.obbaOn;
   run();
 }
 
@@ -1122,7 +1227,6 @@ function readCfg() {
   cfg.year        = +document.getElementById('sl-year').value;
   cfg.inflation   = +document.getElementById('sl-inf').value;
   cfg.medicareExtra = +document.getElementById('sl-med').value;
-  cfg.obbaOn      = document.getElementById('sw-obbba').checked;
 }
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
@@ -1130,8 +1234,8 @@ function run() {
   readCfg();
   const data = sweep();
   renderChart(data);
-  const pi = getPinnedIdx();
-  if (pi !== null) updateInfoPanel(pi);
+  syncPinControls();
+  if (pinnedIncome !== null) updateInfoPanel(pinnedRow());
   renderSummary(data);
   renderAssumptions();
   updCgBasis();
@@ -1173,16 +1277,16 @@ updYear(); updInf(); updMed(); updProp(); updCgBasis();
 document.getElementById('ss-val').textContent = '$0';
 document.getElementById('cg-sale-val').textContent = '$0';
 loadFromURL();   // apply URL params before first render
+applySsMax();
 updateZoomUI();
-run();
-const _initPi = getPinnedIdx();
-if (_initPi !== null) updateInfoPanel(_initPi);
+run();           // run() paints the info panel for a URL-restored pin
 initInfoPanel();
 
 // Attach numeric formatting to dollar inputs (after init so URL-loaded values are formatted)
-['num-ss', 'num-retinc', 'num-prop', 'num-cg-sale'].forEach(id => {
+['num-ss', 'num-retinc', 'num-prop', 'num-cg-sale', 'num-pin'].forEach(id => {
   const el = document.getElementById(id);
-  if (el) DisplayHelpers.attachNumericDollarInput(el, { min: 0 });
+  if (el) DisplayHelpers.attachNumericDollarInput(el,
+    id === 'num-pin' ? { min: 0, max: FULL_MAX } : { min: 0 });
 });
 // Register chart canvas for tap-outside-to-dismiss on mobile
 DisplayHelpers.registerChartDismissal(document.getElementById('chart-main'));
@@ -1206,9 +1310,9 @@ function buildShareParams() {
     cb: cfg.cgBasisPct,
     yr: cfg.year,
     'in': cfg.inflation,
-    me: cfg.medicareExtra,
-    ob: cfg.obbaOn  ? 1 : 0,
-    sh: cfg.saltHigh ? 1 : 0
+    me: cfg.medicareExtra
+    // ob / sh (OBBBA + SALT-cap switches) are gone; both provisions are always on and expire
+    // by year. Legacy links carrying them still load, the params are simply ignored.
   };
   if (cfg.retirementIncome) p.ri = cfg.retirementIncome;
   if (cfg.retirementSwept)  p.rw = 1;
@@ -1296,6 +1400,7 @@ function loadFromURL() {
     document.getElementById('age-grid').classList.toggle('single', !mfj);
     document.getElementById('age2').style.display = mfj ? '' : 'none';
     document.getElementById('age-label').textContent = mfj ? 'Taxpayer Ages' : 'Taxpayer Age';
+    applySsMax();   // slider travel depends on filing status
   }
   if (p.has('s'))  document.getElementById('sel-state').value = p.get('s');
   if (p.has('a1')) document.getElementById('age1').value = +p.get('a1');
@@ -1304,7 +1409,7 @@ function loadFromURL() {
   if (p.has('ss')) {
     const v = +p.get('ss');
     document.getElementById('num-ss').value = v;
-    document.getElementById('sl-ss').value  = Math.min(v, 80000);
+    document.getElementById('sl-ss').value  = Math.min(v, +document.getElementById('sl-ss').max);
     document.getElementById('ss-val').textContent = '$'+v.toLocaleString();
   }
 
@@ -1338,19 +1443,8 @@ function loadFromURL() {
     document.getElementById('sl-med').value = p.get('me');
     document.getElementById('med-val').textContent = '+'+p.get('me')+'%';
   }
-  if (p.has('ob')) {
-    const on = p.get('ob')==='1';
-    document.getElementById('sw-obbba').checked = on;
-    cfg.obbaOn = on;
-    document.getElementById('salt-40k').disabled = !on;
-    document.getElementById('salt-10k').disabled = !on;
-  }
-  if (p.has('sh')) {
-    const high = p.get('sh')==='1';
-    cfg.saltHigh = high;
-    document.getElementById('salt-40k').classList.toggle('active', high);
-    document.getElementById('salt-10k').classList.toggle('active', !high);
-  }
+  // 'ob' and 'sh' from pre-v2.5 links are intentionally ignored: OBBBA is current law and is
+  // always applied, sunsetting by tax year rather than by switch.
   if (p.has('pi')) {
     const income = +p.get('pi');
     if (income >= 0) pinnedIncome = income;
@@ -1370,7 +1464,7 @@ function loadFromURL() {
 <div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-hdr">
-      <h2>Income Tax Planner v2.3 — How to Use</h2>
+      <h2>Income Tax Planner v2.5 — How to Use</h2>
       <button class="modal-close" onclick="closeModal()">&#x2715;</button>
     </div>
 
@@ -1381,6 +1475,10 @@ function loadFromURL() {
     <div class="modal-section">
       <h3>Change Log</h3>
       <dl class="modal-kv">
+        <dt>v2.5</dt>
+        <dd>NIIT threshold line is now always shown, including years with no capital gain, since it is a MAGI level to plan around rather than a line that only matters once you sell. Removed the OBBBA switch and the SALT Cap switch: OBBBA is current law, so both provisions are always applied and now expire only by tax year. The summary in the lower left says, for the selected year, whether the OBBBA SALT cap and the senior deduction still apply or have expired.</dd>
+        <dt>v2.4</dt>
+        <dd>NIIT threshold line now marks where <strong>MAGI</strong> crosses $250k/$200k, so it moves with Social Security and capital gains instead of sitting on the $250k ordinary-income mark. NIIT dollars are now charted: new Federal NIIT bar, and NIIT is included in Total Tax and the effective rates (it was missing entirely). Social Security slider now reaches $130k for Married/Joint and $70k for Single. New Ordinary income slider and entry box below the chart move the pinned income without clicking the chart; the box takes an exact dollar amount.</dd>
         <dt>v2.3</dt>
         <dd>Added clear Net Income. Break out CG and Federal rate.</dd>
         <dt>v2.2</dt>
@@ -1423,6 +1521,7 @@ function loadFromURL() {
         <li><strong>AutoZoom button</strong> — when active (teal), clicking a column auto-zooms to a window around that income. Toggle it off to pin without zooming.</li>
         <li><strong>Full button</strong> — resets the view back to the full $0–$1.1M range.</li>
         <li><strong>View slider</strong> (below the chart) — drag either handle to set the lower or upper bound of the visible income range directly. The chart redraws and label spacing adapts immediately. The slider and AutoZoom/Full buttons all stay in sync.</li>
+        <li><strong>Ordinary slider and entry box</strong> (below the View slider) — move the pinned income without clicking the chart. The slider scrubs across the visible range in chart steps and never re-zooms, so you can sweep the pin while watching the info panel. The entry box takes an exact dollar amount for fine tuning, and its readout is computed at that exact income even when it falls between two chart columns. Type an amount outside the current view and the chart re-centers on it. The &#10005; button unpins.</li>
       </ul>
     </div>
 
@@ -1430,7 +1529,8 @@ function loadFromURL() {
       <h3>The chart</h3>
       <ul>
         <li><strong>Tax Rates view</strong> — federal effective (blue), state effective (orange), total effective (white), federal marginal on ordinary income + CG (purple dashed), and state marginal (yellow dashed).</li>
-        <li><strong>Tax Dollars view</strong> — stacked bars for Federal Ordinary, Federal CG, IRMAA, State Ordinary, and State CG. The teal line (right axis) is your MAGI — the figure used to determine next year's IRMAA tier.</li>
+        <li><strong>Tax Dollars view</strong> — stacked bars for Federal Ordinary, Federal CG, Federal NIIT, IRMAA, State Ordinary, and State CG. The teal line (right axis) is your MAGI — the figure used to determine next year's IRMAA tier.</li>
+        <li><strong>NIIT line</strong> (indigo dashed) — sits where MAGI crosses the NIIT threshold, which is left of the $250k ordinary-income mark whenever you have taxable Social Security or capital gains. It is always shown, whether or not you have a gain this year, because it is the MAGI level to stay under: once you are past it, any gain you do realize is surtaxed from the first dollar.</li>
         <li><strong>Info panel</strong> — hovering the chart shows all rates and dollar amounts for that income level simultaneously, regardless of which view is active.</li>
         <li><strong>IRMAA tier lines</strong> — click any IRMAA entry in the legend (Tax Dollars view) to toggle its vertical reference line.</li>
         <li><strong>Top axis</strong> — shows total income (ordinary + SS + CG) at each major ordinary income mark. When SS and CG are zero it matches the bottom axis.</li>
@@ -1446,9 +1546,9 @@ function loadFromURL() {
       <h3>Simplifications</h3>
       <ul>
         <li><strong>IRMAA lookback:</strong> Medicare IRMAA uses your MAGI from <em>two years prior</em>. This tool applies it to <em>current-year</em> MAGI — convenient for planning but optimistic by about two years if you've recently had a high-income year.</li>
-        <li><strong>OBBBA provisions</strong> (P.L. 119-21, signed July 4, 2025): the $6,000/person senior deduction applies through 2028 and phases out 6¢/$1 above $150k/$75k AGI. The $40,000 SALT cap (2025; +1%/yr through 2029) phases down 30¢/$1 above $500k MAGI and reverts to $10k in 2030. All parameters are sourced from <code>TAXData.OBBBA</code>.</li>
+        <li><strong>OBBBA provisions</strong> (P.L. 119-21, signed July 4, 2025) are always applied; there is no switch, because they are current law. Each one turns itself off by tax year: the $6,000/person senior deduction applies through 2028 and phases out 6¢/$1 above $150k/$75k AGI; the $40,000 SALT cap phases down 30¢/$1 above $500k MAGI and reverts to $10k in 2030. All parameters are sourced from <code>TAXData.OBBBA</code>. <span class="warn">The statute escalates both the SALT cap and its $500k phase-out threshold by 1%/yr from 2025 through 2029; this tool holds them at the 2025 amounts, so it understates the cap by about $400 in 2026 rising to roughly $1,600 by 2029.</span></li>
         <li><strong>SS provisional income thresholds</strong> ($32k/$44k MFJ, $25k/$34k Single) are intentionally <em>not</em> inflation-adjusted — that is current law, and the reason the SS torpedo worsens over time.</li>
-        <li><strong>NIIT threshold</strong> ($250k MFJ / $200k Single) is also not inflation-indexed — another orphan in the tax code, unchanged since 2013.</li>
+        <li><strong>NIIT threshold</strong> ($250k MFJ / $200k Single) is also not inflation-indexed — another orphan in the tax code, unchanged since 2013. It is tested against <em>MAGI</em>, not ordinary income, so the chart's NIIT line is placed where the swept MAGI crosses it. The surtax applies to the lesser of net investment income and the amount by which MAGI exceeds the threshold; on this page net investment income is the capital gain only.</li>
         <li><strong>Excluded:</strong> AMT, self-employment tax, qualified dividends (modeled as CG), muni bond interest.</li>
       </ul>
     </div>

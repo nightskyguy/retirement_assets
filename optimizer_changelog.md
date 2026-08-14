@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1521d"></a>
+<a id="11.152d"></a>
 
-## 11.1521d
+## 11.152d
 
 **A Stress Test release: two crashes fixed, the ranking windows can now be combined or skipped
 entirely, and failures are graded against the length of your plan.**
@@ -111,6 +111,44 @@ over the three to five year openings this overlay now mostly draws, the frequenc
 Also fixed here: an opening longer than the whole plan used to write past the end of that path's row
 and corrupt the start of the next one. It is capped at the plan length now. This only affected plans
 shorter than ten years.
+
+### Both run buttons are now visible, and each states what it will cost
+
+The tab had one button, "Run Monte Carlo", which ran every withdrawal strategy the Optimizer knows
+how to build so it could rank them. That is about 144 strategies, and the path count is per strategy,
+so the default 500 was 72,000 simulations and about 43 seconds of work. A second button that ran only
+your own plan existed but was inside the Advanced Parameters panel, so almost nobody saw it, and the
+expensive run happened automatically on arrival either way.
+
+Both buttons are now outside that panel and visible to everyone:
+
+- **My Plan Only** comes first and is the new default. It answers "how did my plan do", which is the
+  question most people arrive with, for about one 144th of the work. You get your chance of success
+  and the percentile chart, but no strategy ranking table.
+- **Compare All Scenarios** is the old behaviour, renamed to say what it actually does.
+
+Each button carries its own expected time, measured on the machine you are running on rather than
+guessed: "My Plan Only (1.3 sec)", "Compare All Scenarios (43 sec)". The first estimate is marked
+"about" and is refined by every run that completes. The run size line, "500 paths x 144 strategies =
+72,000 simulations", now says "Compare runs..." and sits with the button it describes; it used to
+follow both buttons, which read as applying to either when it only ever described the sweep.
+
+The estimate had to be rebuilt to say this honestly. It multiplied a per-simulation cost by the
+simulation count and stopped there, ignoring everything that happens outside the simulation loop.
+Starting the background worker alone, which means loading and compiling about 370KB of script, is
+nearly a second on its own. So a plan-only run would have been advertised at 0.6 seconds when it
+takes 1.5. Both terms are now measured separately from each completed run: the fixed cost as the gap
+between the wall clock and the worker's own accounting, and the per-simulation cost from the worker's
+time alone. The largest run seen wins, since a small run's per-simulation figure is inflated by the
+stress pass riding along.
+
+### The Stress window control is visible to everyone
+
+It sits beside Simulation Mode now rather than inside Advanced Parameters. It changes the headline
+result most readers act on, it recomputes in about a second, and it is a question rather than a
+tuning parameter. The single fixed windows have been retired from the selector, which now offers
+Combined and All; the ranking engine still supports a single window for a saved scenario that asks
+for one.
 
 ### Changing a Stress Test setting no longer marks the whole run out of date
 

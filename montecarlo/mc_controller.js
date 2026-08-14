@@ -20,6 +20,9 @@ function runMCWorker(cfg, onProgress, onComplete) {
         return;
     }
 
+    // Wall clock starts BEFORE the worker exists, because worker startup is the fixed term the
+    // estimate needs and nothing inside the worker can see it.
+    const _wallT0 = performance.now();
     _mcWorker = new Worker('montecarlo/worker.js?v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : Date.now()));
 
     _mcWorker.onmessage = function (e) {
@@ -28,13 +31,10 @@ function runMCWorker(cfg, onProgress, onComplete) {
             onProgress?.(msg.pct);
         } else if (msg.type === 'results') {
             _mcWorker = null;
-            // A stress-only refresh runs a handful of sims; using it to calibrate would wreck the
-            // ms-per-sim estimate the full run's time display depends on. A single-variation run is
-            // excluded for the same reason: its wall time is mostly fixed overhead (worker startup,
-            // the stress pass, the input fan) divided by only numPaths sims, which came out roughly
-            // four orders of magnitude too high and made every later estimate nonsense.
-            if (!msg.stressOnly && msg.totalMs && msg.numPaths && cfg.variations?.length > 1) {
-                _mcMsPerSim = msg.totalMs / (msg.numPaths * cfg.variations.length);
+            // A stress-only refresh is a handful of sims against a different code path; folding it
+            // into the model would drag the fixed term toward a number the run buttons never pay.
+            if (!msg.stressOnly && !msg.error) {
+                recordMCTiming(performance.now() - _wallT0, msg.totalMs, cfg.numPaths, cfg.variations?.length ?? 1);
             }
             onComplete?.(msg);
         }
@@ -79,17 +79,67 @@ function cancelMCWorker() {
 }
 
 // ---- Throughput tracking (for time estimates) ------------------------------
+//
+// The run buttons state their own cost before you click, so the model has to describe WALL time on
+// this machine, not simulation count. Two terms:
+//
+//   wall  =  fixed  +  msPerSim x paths x variations
+//
+// The fixed term is not small and used to be ignored entirely. Spawning the worker and running
+// importScripts over taxengine.js, optimizer_core.js and four more (~370KB) measured 938ms on its
+// own, and the stress pass and input fan ride along on every run whatever its size. Measured here:
+// a 500-path plan run was 1543ms wall against 390ms inside the worker, and a 72,000-sim compare run
+// was 43,283ms wall against 42,256ms. Dropping the fixed term told a plan run it would take 0.6s
+// when it takes 1.5s -- fine as a relative hint, useless as the promise a button label makes.
+//
+// Both terms are learned from real runs on the actual machine. The seeds are a mid-range desktop and
+// only ever describe the very first estimate, before any run has completed.
+let _mcMsPerSim = 0.6;    // ms per (variation x path)
+let _mcFixedMs  = 1050;   // worker startup + transfer + render: everything outside the sim loop
+let _mcTimingMeasured = false;   // true once a real run has replaced the seeds
+let _mcPerSimSims = 0;    // size of the run that produced the current msPerSim
 
-let _mcMsPerSim = null;  // ms per (variation × path), calibrated after each run
-
-// Returns estimated ms for a given number of paths and variations, or null if uncalibrated.
+// Estimated wall ms for a run of this shape. Never null: a rough number beats a blank button, and
+// mcTimingIsMeasured() lets the caller mark it as approximate until a run has been observed.
 function estimateMCMs(numPaths, numVariations) {
-    if (_mcMsPerSim == null) return null;
-    return Math.round(_mcMsPerSim * numPaths * numVariations);
+    return Math.round(_mcFixedMs + _mcMsPerSim * numPaths * numVariations);
 }
 
-// Run 1 path through all variations synchronously to calibrate _mcMsPerSim.
-// Takes ~1/numPaths of the full run time (imperceptible). Call before the first run.
+function mcTimingIsMeasured() { return _mcTimingMeasured; }
+
+// Fold one completed run into the model. wallMs is the caller's whole round trip; workerMs is what
+// the worker reports for its own work.
+//
+// The two terms are measured SEPARATELY, from two numbers that do not depend on each other. Solving
+// for both from wall time alone cannot work: one equation, two unknowns, so it just redistributes
+// the wall clock according to whatever the fixed term already was and learns nothing. That is not
+// hypothetical -- doing it that way read 0.41ms/sim off a plan run when the true figure was 0.59,
+// and told the Compare button 30 seconds for a 43 second run.
+//
+//   fixed   = wall - workerMs. Directly the part no code inside the worker can see: spawning it,
+//             importScripts over ~370KB, transferring results back, rendering.
+//   perSim  = workerMs / sims. No fixed term involved at all.
+//
+// The largest run seen wins for perSim. A small run's figure is inflated because the stress pass and
+// the input fan are amortised over few simulations -- real cost, but it does not scale, so
+// extrapolating from it over-predicts a big run by about a third.
+function recordMCTiming(wallMs, workerMs, numPaths, numVariations) {
+    const sims = numPaths * numVariations;
+    if (!(wallMs > 0) || !(sims > 0)) return;
+    if (Number.isFinite(workerMs) && workerMs >= 0) {
+        _mcFixedMs = Math.max(0, wallMs - workerMs);
+        if (sims >= 200 && workerMs > 0 && sims >= _mcPerSimSims) {
+            _mcMsPerSim   = workerMs / sims;
+            _mcPerSimSims = sims;
+        }
+    }
+    _mcTimingMeasured = true;
+}
+
+// Run 1 path through all variations synchronously to seed _mcMsPerSim before any run has happened.
+// Cold main-thread sims come out roughly 2x slower than the warmed worker (measured 1.21ms/sim here
+// against 0.59 observed), so this is a starting point that the first real run corrects, not an
+// answer. Takes ~1/numPaths of a full run.
 function calibrateMCMs(cfg) {
     const { mu, sigma, seed, years, variations } = cfg;
     const rng = mulberry32(seed ?? 42);
@@ -104,8 +154,9 @@ function calibrateMCMs(cfg) {
     for (const v of variations) {
         try { simulate({ ...v, returnSequence: returnSeq }); } catch (e) {}
     }
-    // probeMs covers 1 path × all variations; normalize to per (variation × path)
-    _mcMsPerSim = (performance.now() - t0) / variations.length;
+    // probeMs covers 1 path × all variations; normalize to per (variation × path), then halve to
+    // undo the cold-start penalty. Left as a seed: _mcTimingMeasured stays false.
+    if (variations.length) _mcMsPerSim = (performance.now() - t0) / variations.length / 2;
 }
 
 // ---- Synchronous (chunked) fallback ----------------------------------------
@@ -425,7 +476,9 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
     }
 
     const totalMs = performance.now() - t0;
-    _mcMsPerSim = totalMs / (main.numPaths * variations.length);
+    // Same model as the worker path. On file:// there is no worker to spawn, so wall and worker time
+    // are the same clock and the fixed term learns ~0 -- correct, the run really is cheaper to start.
+    recordMCTiming(totalMs, totalMs, main.numPaths, variations.length);
     onComplete?.({
         type: 'results',
         variations: main.varResults,

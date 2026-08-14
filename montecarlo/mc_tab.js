@@ -155,9 +155,18 @@ function mcTabActivated() {
     // Always sync mode UI — handles scenario-load case where mc-sim-mode was restored
     // but the tab wasn't visible when applyScenario() ran.
     updateMCModeUI();
-    // Fill the "N paths × M strategies" readout on arrival. It used to be written only by the
-    // paths field's oninput, so it stayed blank for anyone who never touched that field — which is
-    // everyone who just wanted to know how big the run is.
+    // Seed the timing model before the buttons are labelled, so they arrive carrying a cost rather
+    // than filling one in later. This is ~144 simulations, a fraction of the run it is describing,
+    // and it only happens until a real run has replaced it.
+    if (!mcTimingIsMeasured()) {
+        const _b = getInputs();
+        calibrateMCMs({ variations: buildVariations(_b), mu: _mcNum('mc-mu') / 100,
+                        sigma: _mcNum('mc-sigma') / 100, seed: _mcNum('mc-seed'),
+                        years: mcPlanYears(_b) });
+    }
+    // Label both run buttons with their cost, and fill the "N paths × M strategies" readout. Both
+    // used to be written only by the paths field's oninput, so they stayed blank for anyone who
+    // never touched that field — which is everyone who just wanted to know how big the run is.
     updateMCTimeEstimate();
 
     const hash = _buildMCHash();
@@ -248,10 +257,12 @@ function mcPlanYears(base) {
 // The ranking mode the Stress window selector is on: a number, 'combined' or 'all'. The <select>
 // value is a string either way, so this is the one place that decides which it is.
 function stressWindowMode() {
-    const raw = document.getElementById('mc-stress-window')?.value ?? '10';
+    const raw = document.getElementById('mc-stress-window')?.value ?? 'combined';
     if (raw === 'combined' || raw === 'all') return raw;
+    // The selector offers only Combined and All now, but the engine still ranks on a single window
+    // and a saved scenario or a hand-edited URL can still ask for one.
     const n = parseInt(raw, 10);
-    return Number.isFinite(n) ? n : 10;
+    return Number.isFinite(n) ? n : 'combined';
 }
 
 // How the sequences on screen were chosen, for labelling. Prefers what the engine actually applied
@@ -286,12 +297,16 @@ function planOnlyVariations(variations, base) {
 // --- Run ------------------------------------------------------------------
 
 // 'compare' runs every strategy and ranks them; 'plan' runs only the sidebar's own plan.
-// Compare is the DEFAULT so that nothing changes for anyone who is not asking for the fast path.
-let _mcScope = 'compare';
+//
+// PLAN is the default. It answers "how did my plan do", which is the question almost everyone
+// arrives with, at about 1/144 of the cost -- roughly 1.5 seconds against 43. Compare was the
+// default while it was the only thing the tab did, which meant every reader paid for a full
+// strategy ranking on arrival whether or not they wanted one, with no warning of the price.
+let _mcScope = 'plan';
 
-// scope: 'compare' (default, every strategy) | 'plan' (the sidebar plan alone, ~144x cheaper).
+// scope: 'plan' (default, the sidebar plan alone) | 'compare' (every strategy, ~144x more work).
 function runMonteCarlo(scope) {
-    _mcScope = (scope === 'plan') ? 'plan' : 'compare';
+    _mcScope = (scope === 'compare') ? 'compare' : 'plan';
     _lastMCHash = _buildMCHash();
     _lastSweepHash = _buildSweepHash();
     // runMCWorker terminates whatever is in flight, so a stress-only refresh started moments ago
@@ -324,9 +339,10 @@ function runMonteCarlo(scope) {
     // numPaths simulations instead of numPaths x ~144.
     const variations = _mcScope === 'plan' ? stressVariations : allVariations;
 
-    // Calibrate timing on first run so the estimate shown during the run is meaningful. Calibration
-    // always uses the full list: a one-variation run is too small to measure throughput from.
-    if (estimateMCMs(numPaths, allVariations.length) == null) {
+    // Seed the timing model if no real run has been observed yet, so the buttons and the in-flight
+    // estimate have something to say. Calibration always uses the full variation list: one variation
+    // is too small a sample to measure throughput from.
+    if (!mcTimingIsMeasured()) {
         calibrateMCMs({ variations: allVariations, mu, sigma, seed, years });
     }
 
@@ -341,6 +357,10 @@ function runMonteCarlo(scope) {
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);
+            // This run just told the timing model what this machine actually costs, so both button
+            // labels are restated from it -- including dropping the "about" once anything real has
+            // been measured.
+            updateMCTimeEstimate();
             if (msg.error) {
                 document.getElementById('mc-error').textContent = 'Error: ' + msg.error;
                 document.getElementById('mc-error').style.display = '';
@@ -785,23 +805,39 @@ function updateStressStat(stress) {
 
 // --- Time estimate --------------------------------------------------------
 
+// Wall time as a button label reads it: "0.4 sec", "43 sec", "2 min 5 sec".
+function _mcDuration(ms) {
+    const s = ms / 1000;
+    // One decimal below 10 seconds: the difference between 1.2 and 1.9 is most of the reason to read
+    // the label at all, and rounding both to "1 sec" or "2 sec" throws that away.
+    if (s < 10) return s.toFixed(1) + ' sec';
+    if (s < 60) return Math.round(s) + ' sec';
+    const m = Math.floor(s / 60), rem = Math.round(s - m * 60);
+    return rem ? `${m} min ${rem} sec` : `${m} min`;
+}
+
+// Each run button states its own expected cost on this machine, so the expensive one announces
+// itself before it is clicked rather than after. The estimate is approximate until a real run has
+// been observed; the "about" prefix says so, and drops once the model has measured something.
 function updateMCTimeEstimate() {
-    const el        = document.getElementById('mc-time-est');
-    const totalEl   = document.getElementById('mc-sim-total');
-    if (!el && !totalEl) return;
-    const numPaths  = _mcNum('mc-num-paths');
-    const base      = getInputs();
-    const numVar    = buildVariations(base).length;
+    const totalEl  = document.getElementById('mc-sim-total');
+    const planBtn  = document.getElementById('mc-run-plan-btn');
+    const cmpBtn   = document.getElementById('mc-run-btn');
+    if (!totalEl && !planBtn && !cmpBtn) return;
 
-    // Always show the real size of the run, even before the timing model has calibrated.
-    if (totalEl) totalEl.textContent = simCountText(numPaths, numVar, mcPlanYears(base));
+    const numPaths = _mcNum('mc-num-paths');
+    const base     = getInputs();
+    const numVar   = buildVariations(base).length;
 
-    if (!el) return;
-    const estMs     = estimateMCMs(numPaths, numVar);
-    if (estMs == null) { el.textContent = ''; return; }
-    el.textContent = estMs < 1000
-        ? `~${estMs} ms`
-        : `~${(estMs / 1000).toFixed(1)} s`;
+    // Describes the Compare button alone: the path count is per strategy, so without the multiplier
+    // the sweep looks ~144x smaller than it is.
+    if (totalEl) {
+        totalEl.textContent = `Compare runs ${simCountText(numPaths, numVar, mcPlanYears(base))}`;
+    }
+
+    const approx = mcTimingIsMeasured() ? '' : 'about ';
+    if (planBtn) planBtn.textContent = `My Plan Only (${approx}${_mcDuration(estimateMCMs(numPaths, 1))})`;
+    if (cmpBtn)  cmpBtn.textContent  = `Compare All Scenarios (${approx}${_mcDuration(estimateMCMs(numPaths, numVar))})`;
 }
 
 // --- Survival Table -------------------------------------------------------
@@ -1582,7 +1618,7 @@ function renderStressTable(stress, rows) {
 // --- Progress / State helpers ---------------------------------------------
 
 function setMCRunning(running) {
-    const runBtn     = document.getElementById('mc-run-btn');       // inside nerd panel
+    const runBtn     = document.getElementById('mc-run-btn');       // always visible now
     const planBtn    = document.getElementById('mc-run-plan-btn');  // ditto
     const cancelWrap = document.getElementById('mc-cancel-wrap');   // always-accessible cancel
     const progWrap   = document.getElementById('mc-progress-wrap');
@@ -1602,13 +1638,7 @@ function setMCRunning(running) {
         // A plan-scope run is one variation, so the estimate has to follow the scope in flight or a
         // 0.2s run would announce half a minute.
         const numVar   = _mcScope === 'plan' ? 1 : buildVariations(base).length;
-        const estMs    = estimateMCMs(numPaths, numVar);
-        if (estMs != null) {
-            const sec = (estMs / 1000).toFixed(1);
-            runEst.textContent = `May take approximately ${sec} seconds to complete`;
-        } else {
-            runEst.textContent = 'May take up to 20 seconds to complete';
-        }
+        runEst.textContent = `May take approximately ${_mcDuration(estimateMCMs(numPaths, numVar))} to complete`;
     }
 }
 

@@ -30,8 +30,27 @@ const IS_NODE = (typeof module !== 'undefined' && module.exports);
 // disk, which is the thing it is testing". That was never true: the line below is its ONLY I/O,
 // and every .md path further down is assertion data that is never opened. It is in fact the
 // cheapest of the three suites to run in a browser.
-const DocLinks = IS_NODE ? require('./doclinks.js') : window.DocLinks;
-const docHref = DocLinks.docHref;
+// Resolved LAZILY, not at module scope. In the browser this file is injected by the tier-2 loader
+// in retirement_optimizer.html, and the page's own copy of doclinks.js is a deferred tag, so the
+// two race: when the injected suite wins, a module-scope `window.DocLinks.docHref` captures
+// undefined and throws on the spot, taking the whole tier-2 runner down with it and turning the
+// self-test badge red with "doclinks: expected but never reported". Nothing here needs the module
+// until runDocLinksTests() is called, by which point the deferred tag has always run.
+//
+// Reloading doclinks.js from the tier-2 loader instead would work, but that file calls init() on
+// load and rewrites every .md link in the document; a test path should not mutate the page.
+function _docLinksModule() {
+    const d = IS_NODE ? require('./doclinks.js') : window.DocLinks;
+    if (!d) throw new Error('doclinks.js has not loaded yet');
+    return d;
+}
+// A proxy rather than a hand-listed set of getters: one test enumerates the module's whole exported
+// surface, so anything not forwarded reads as missing.
+const DocLinks = new Proxy({}, {
+    get: (_t, prop) => _docLinksModule()[prop],
+    has: (_t, prop) => prop in _docLinksModule(),
+});
+const docHref = (...args) => _docLinksModule().docHref(...args);
 
 let passed = 0, failed = 0;
 

@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1521d</title>
+    <title>Retirement Optimizer 11.152d</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -456,11 +456,20 @@
 
 		<div id="tab-mc" class="card hidden">
 			<!-- Mode selector - always visible; changing it triggers an immediate re-run. -->
-			<div id="mc-mode-panel" style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+			<div id="mc-mode-panel" style="margin-bottom:10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
 				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500/bond/intl returns (1928–2025). Synthetic: parametric model using μ and σ (advanced, nerdknob only).">Simulation Mode
 					<select id="mc-sim-mode" style="margin-left:6px;font-size:0.95em;" onchange="onMCModeChange()">
 						<option value="bootstrap" selected>Historical (1928–2025)</option>
 						<option value="gbm">Synthetic (parametric)</option>
+					</select>
+				</label>
+				<!-- Which historical start years the Stress Test runs. Always visible: it changes
+				     the headline result most readers act on, it recomputes in about a second, and
+				     it is the one Monte Carlo control that is a question rather than a parameter. -->
+				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Which historical starting years the Stress Test runs your plan against. Combined ranks every start year by its real, inflation-adjusted return over each of 5, 10, 15, 20 and 30 opening years and runs the worst of each, since the windows overlap and any single one hides start years the others would have caught. All skips the ranking and runs every start year in the record, with survivors faded on the chart so the failures stand out. Either way each scenario then follows the real historical record year by year - the Stress Test is a deterministic walk through history, not a random sample like the rest of this tab.">Stress window
+					<select id="mc-stress-window" style="margin-left:6px;font-size:0.95em;" onchange="mcInputsChanged()">
+						<option value="combined" selected>Combined (5/10/15/20/30)</option>
+						<option value="all">All start years</option>
 					</select>
 				</label>
 			</div>
@@ -488,31 +497,25 @@
 					<label style="font-size:0.85em;" title="How many worst historical starting sequences each ranking window contributes. Scored by real (inflation-adjusted) CAGR over the window set below. On the default Combined window the count is PER WINDOW and the five windows are then unioned, so 20 yields roughly 40 distinct start years rather than 20; on a single window it is simply how many you get. At a 10-year window the worst 10 are 1999, 1965, 2000, 1969, 1968, 1966, 1972, 1973, 1970 and 1929, and a different window picks a different set. On All it only decides which years are marked as worst in the row hover, since every start year runs either way. Only start years with a full window of real record after them can be scored, so the number available depends on the window: 94 at 5 years down to 69 at 30. Ask for more than that and you get all of them.">Stress sequences
 						<input type="number" id="mc-stress-count" value="20" min="3" max="98" step="1" style="width:50px;margin-left:4px;">
 					</label>
-					<label style="font-size:0.85em;" title="Length of the bad opening stretch used to RANK history. It decides which start years count as the worst: they are scored by real, inflation-adjusted CAGR over this many opening years. After the window each scenario keeps following the real historical record - stress tests are not randomized like Monte Carlo.">Stress window
-						<select id="mc-stress-window" style="margin-left:4px;font-size:0.95em;" onchange="mcInputsChanged()">
-							<option value="combined" selected>Combined (5/10/15/20/30)</option>
-							<option value="all">All start years</option>
-						</select>
-					</label>
 					<label id="mc-bear-start-wrap" style="font-size:0.85em;display:none;" title="Fraction of Historical paths that open with one of the worst real openings on record before continuing with random draws. The opening is drawn from the worst 10 start years over each of 3, 5 and 10 years, and is spliced for the length that flagged it, so a 3-year draw gives a sharp crash and then hands back to the random draws. Three lengths because they find different shapes: 1930 is the worst 3-year opening in the record but only the 13th worst decade, since the decade starting 1930 contains the 1933 rebound. 0 = no overlay. 25% is a deliberate slight over-weighting: about 22% of historical start years had a below-inflation first 3 to 5 years, and block sampling on its own under-produces sustained bad openings because it shuffles the order. Only applies in Historical mode.">Bear-start %
 						<input type="number" id="mc-bear-fraction" value="25" min="0" max="50" step="5" style="width:50px;margin-left:4px;">
 					</label>
 				</div>
-				<!-- Two scopes. "Run Monte Carlo" is unchanged and stays the default everywhere,
-				     including the auto-run non-nerdknob users get on tab activation, so nobody
-				     loses the strategy comparison. "Run My Plan Only" is the cheap path: one
-				     variation instead of ~144, which is the same shape the stress pass has always
-				     run. Both buttons live inside #mc-nerd-panel, so the extra choice is already
-				     nerdknob-gated by the panel itself. -->
-				<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-					<button id="mc-run-btn" onclick="runMonteCarlo('compare')" style="padding:6px 18px;font-size:0.95em;" title="Run every withdrawal strategy and rank them against each other. This is what the tab has always done, and what runs automatically when you open it.">Run Monte Carlo</button>
-					<button id="mc-run-plan-btn" onclick="runMonteCarlo('plan')" style="padding:6px 18px;font-size:0.95em;" title="Run only the plan currently in the sidebar. About 144 times less work, so it finishes almost instantly. You get your own chance of success and the percentile chart, but no strategy comparison table.">Run My Plan Only</button>
-					<span id="mc-time-est" style="font-size:0.8em;color:#888;"></span>
-					<!-- Paths are per strategy. Without this the Compare run looks ~144x smaller
-					     than it is. Describes the Compare button, which is the expensive one. -->
-					<span id="mc-sim-total" style="font-size:0.8em;color:#555;"></span>
-				</div>
 				<div style="margin-top:6px;font-size:0.78em;color:#888;">Historical: returns and inflation are block-sampled from 1928–2025 data; each path sees a different sequence. Synthetic: parametric model using the μ and σ inputs; inflation is fixed.</div>
+			</div>
+
+			<!-- Run controls, visible to everyone. These used to live inside #mc-nerd-panel, which
+			     hid the choice from most readers and auto-ran the expensive scope on their behalf.
+			     "My Plan Only" comes first and is the default: it answers "how did MY plan do",
+			     which is the question almost everyone arrives with, for about 1/144 of the work.
+			     Each button states its own expected wall time on THIS machine, so the cost of the
+			     expensive one is visible before it is paid rather than discovered afterwards. -->
+			<div style="margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+				<button id="mc-run-plan-btn" onclick="runMonteCarlo('plan')" style="padding:6px 18px;font-size:0.95em;font-weight:600;" title="Run only the plan currently in the sidebar. About 144 times less work than comparing every strategy. You get your own chance of success and the percentile chart, but no strategy ranking table.">My Plan Only</button>
+				<button id="mc-run-btn" onclick="runMonteCarlo('compare')" style="padding:6px 18px;font-size:0.95em;" title="Run every withdrawal strategy the Optimizer knows how to build and rank them against each other. This is the expensive one: the path count below is PER STRATEGY.">Compare All Scenarios</button>
+				<!-- Describes the Compare button only. It sat after both buttons before, which read
+				     as applying to either, and the number only ever described the sweep. -->
+				<span id="mc-sim-total" style="font-size:0.8em;color:#555;"></span>
 			</div>
 
 			<!-- Cancel button + path count - visible during any run (nerdknob or auto-run) -->
@@ -540,7 +543,10 @@
 			     expensive to re-run on every edit, so it is flagged rather than recomputed. -->
 			<div id="mc-stale-banner" style="display:none;padding:8px 12px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;color:#856404;margin-bottom:10px;font-size:0.9em;">
 				<strong>Out of date.</strong> The chart and survival table below were run before your latest changes. The Stress Test result is current.
-				<button onclick="runMonteCarlo()" style="margin-left:8px;padding:3px 12px;font-size:0.9em;cursor:pointer;">Re-run</button>
+				<!-- Re-runs whatever scope produced the stale results, so a Compare ranking is not
+				     silently replaced by a plan-only run, and a plan-only run does not quietly cost
+				     the price of a Compare. -->
+				<button onclick="runMonteCarlo(_mcScope)" style="margin-left:8px;padding:3px 12px;font-size:0.9em;cursor:pointer;">Re-run</button>
 			</div>
 
 			<!-- Stress test comes FIRST: it is the part that recomputes on every input change, so it
@@ -700,7 +706,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.1521d</b> <strong>A Stress Test release: two crashes fixed, the ranking windows can now be combined or skipped entirely, and failures are graded against the length of your plan. One behavior change: Bear-start now draws sharper openings, which moves Historical results.</strong> Asking for 85 or more stress sequences used to freeze the tab for the rest of the visit, because the record only holds between 69 and 94 usable starting years depending on the window; the count is now capped at what history can supply. Clearing the Paths box no longer prints "NaN" while you type. The five ranking windows overlap, so picking one hid the bad starting years the other four would have caught: the new default Combined runs the worst of every window at once, and All skips ranking and runs every start year in the record with survivors faded so the failures stand out. Red and amber now mean the money ran out in the first or second half of your plan, rather than inside or outside a window. The scenario table drops its four per-asset columns, which measured the ranking window, for the real CAGR over your whole plan plus the worst 5, 10, 15 and 20 year stretch found anywhere inside each scenario. Editing a Stress Test setting no longer marks the whole run out of date. The chart has dropped its legend, since the table below it names every line and sorts, and the hover readout now appears only once you have clicked a row to isolate a single line. Defaults are now 20 sequences and the Combined window. Separately, the Bear-start overlay used to draw its opening from the worst ten decades only, and averaging over a decade washes a crash out: 1930 is the worst three-year opening on record but only the thirteenth worst decade, because that decade contains the 1933 rebound. It now draws from the worst ten start years over each of three, five and ten years and splices each for the length that flagged it, so a short draw gives a sharp crash and then hands back to the random draws. This moves Historical Monte Carlo results; the 25% fraction is unchanged. <a href="optimizer_changelog.md#11.1521d" target="_blank" rel="noopener">Details</a></li>
+				<li data-flag="behavior"><b>11.152d</b> <strong>A Stress Test release: two crashes fixed, the ranking windows can now be combined or skipped entirely, and failures are graded against the length of your plan. One behavior change: Bear-start now draws sharper openings, which moves Historical results.</strong> Asking for 85 or more stress sequences used to freeze the tab for the rest of the visit, because the record only holds between 69 and 94 usable starting years depending on the window; the count is now capped at what history can supply. Clearing the Paths box no longer prints "NaN" while you type. The five ranking windows overlap, so picking one hid the bad starting years the other four would have caught: the new default Combined runs the worst of every window at once, and All skips ranking and runs every start year in the record with survivors faded so the failures stand out. Red and amber now mean the money ran out in the first or second half of your plan, rather than inside or outside a window. The scenario table drops its four per-asset columns, which measured the ranking window, for the real CAGR over your whole plan plus the worst 5, 10, 15 and 20 year stretch found anywhere inside each scenario. Editing a Stress Test setting no longer marks the whole run out of date. The chart has dropped its legend, since the table below it names every line and sorts, and the hover readout now appears only once you have clicked a row to isolate a single line. Defaults are now 20 sequences and the Combined window. Separately, the Bear-start overlay used to draw its opening from the worst ten decades only, and averaging over a decade washes a crash out: 1930 is the worst three-year opening on record but only the thirteenth worst decade, because that decade contains the 1933 rebound. It now draws from the worst ten start years over each of three, five and ten years and splices each for the length that flagged it, so a short draw gives a sharp crash and then hands back to the random draws. This moves Historical Monte Carlo results; the 25% fraction is unchanged. Finally, both run buttons are now visible to everyone instead of hidden in Advanced Parameters, and each states what it will cost on your own machine: "My Plan Only (1.3 sec)" and "Compare All Scenarios (45 sec)". My Plan Only comes first and is the new default, since it answers the question most people arrive with for about one 144th of the work. The Stress window selector has moved out of Advanced Parameters too. <a href="optimizer_changelog.md#11.152d" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.150b</b> <strong>The Monte Carlo tab now pins your own plan to the top and states its chance of success, and the Stress Test is readable. No change to your plan or its numbers.</strong> Your plan was previously one unmarked row among about 144; it is now marked 📍, stays on top whatever you sort by, and is drawn as the thick line. The Paths box turns out to be paths <i>per strategy</i>, so 500 is really about 72,000 retirements simulating roughly 1,800,000 years, which the page now says out loud. Stress Test lines are labeled just by start year and outcome, colored by whether the money ran out early, late or never, with all the numbers moved into a sortable table below that now also reports Bonds and Intl. Both colored banners are now the fold control for their own section, Historical summarizes its returns in the same sentence style Synthetic already used (CAGR first, then worst and best year), inflation is colored red when it is above zero instead of green, the run size now also reports how many plan years it is simulating. The Stress Test starts folded, with its result banner still visible. <a href="optimizer_changelog.md#11.150b" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1508</b> <strong>The self-check indicator was reporting red for the wrong reason. No change to your plan or its numbers.</strong> The README also gains a much fuller explanation of how <a  target="_blank" rel="noopener" href="README.md#monte-carlo-and-chance-of-success-accuracy">Monte Carlo and "Chance of Success"</a> numbers should be read. <a href="optimizer_changelog.md#11.1508" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.14e1</b> <strong>Research groundwork only. No change to your plan or its numbers.</strong>  <a href="optimizer_changelog.md#11.14e1" target="_blank" rel="noopener">Details</a></li>
@@ -1211,7 +1217,7 @@ runSimulation?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111521d';
+    const V = '?v=11152d';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',
@@ -1270,8 +1276,8 @@ runSimulation?.();
 <script src="montecarlo/historical_returns.js?v=11150b"></script>
 <script src="montecarlo/prng.js?v=111521d"></script>
 <script src="montecarlo/stats.js?v=111091"></script>
-<script src="montecarlo/mc_controller.js?v=111521b"></script>
-<script src="montecarlo/mc_tab.js?v=111521b"></script>
+<script src="montecarlo/mc_controller.js?v=11152d"></script>
+<script src="montecarlo/mc_tab.js?v=11152d"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.152d"></a>
+<a id="11.152e"></a>
 
-## 11.152d
+## 11.152e
 
 **A Stress Test release: two crashes fixed, the ranking windows can now be combined or skipped
 entirely, and failures are graded against the length of your plan.**
@@ -142,9 +142,11 @@ between the wall clock and the worker's own accounting, and the per-simulation c
 time alone. The largest run seen wins, since a small run's per-simulation figure is inflated by the
 stress pass riding along.
 
-### The Stress window control is visible to everyone
+### The Stress window selector is available to everyone
 
-It sits beside Simulation Mode now rather than inside Advanced Parameters. It changes the headline
+Most readers are meeting this control for the first time: it existed only inside Advanced Parameters
+before, so unless you had turned those on it was not there. It sits beside Simulation Mode now. It
+changes the headline
 result most readers act on, it recomputes in about a second, and it is a question rather than a
 tuning parameter. The single fixed windows have been retired from the selector, which now offers
 Combined and All; the ranking engine still supports a single window for a saved scenario that asks

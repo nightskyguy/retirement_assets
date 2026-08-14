@@ -44,7 +44,7 @@ Windows were increased to 5/10/15/20/30 and Combined. Previously picking one (10
 caused the worst 5-year start, for example, to be skipped because it was only looking at 10 year combined 
 growth rates.
 
-Two new choices in the Stress window selector (nerdknob on):
+Two new choices in the Stress window selector):
 
 - **Combined (5/10/15/20/30)**, now the default, scores every window and keeps the union of what
   each one flags. The count you set is per window, and because the windows overlap the union is 
@@ -55,7 +55,8 @@ Two new choices in the Stress window selector (nerdknob on):
   drawn solid and on top. The shape you are looking for is how much of history breaks the plan, not
   which line is 1966.
 
-Everything the ranking picks is still a real historical sequence run straight through, not a splice.
+Everything the ranking picks is still a real historical sequence run straight through, not a snippet added 
+at the beginning.
 A window longer than your plan is trimmed to the length of the plan, so a 12 year plan combines
 5, 10 and 12 rather than considering 15, 20 and 30 year stretches.
 
@@ -64,7 +65,8 @@ The defaults are now 20 sequences and the Combined window, up from 10 and a sing
 ### Red and amber now mean early and late in YOUR plan
 
 A failure now is marked red if it ruin occurs before the halfway point, yellow if it lands on or after the halfway point, and 
-green if the stress for that sequence ends in assets still present (success rather than ruin).
+green if the stress for that sequence ends in assets still present (success rather than ruin).  Early ruin is worse 
+because it's harder to avoid.
 
 ### The scenario table reports the whole plan, and the worst stretch inside it
 
@@ -78,8 +80,8 @@ true worst scenario.  To allow space, the equity, bond, international and inflat
 A plan longer than the record has left after its start year wraps around and replays history from
 1928. A 2015 start on a 30 year plan gets 11 real years and then 19 of replay. That has always been
 the behavior, and the ranking has always excluded start years without a full window of real data
-after them, so a wrapped stretch never gets a vote in which years are worst. It is now visible: the
-wrapped part of the line is dashed, and the row hover names the year the record runs out.
+after them, so a wrapped stretch never gets a vote in which years are worst. It is now visible: the 
+graphed line becomes dashed. Hover over the row and it tells which year the record runs out.
 
 ### Bear-start openings are no longer all the same shape
 
@@ -103,8 +105,7 @@ back to the random draws; a ten-year draw behaves as before. Thirty entries draw
 distinct years, averaging a six-year opening. A year that several lengths agree on, like 1929,
 appears once per length and so is drawn proportionally more often.
 
-The fraction stays at 25%. Its old justification was wrong: the tooltip said 25% was roughly the
-historical frequency of below-inflation first decades, and that figure is 15.7%, not 25%. Measured
+The fraction (only visible in nerdknob mode) stays at 25%. Measured
 over the three to five year openings this overlay now mostly draws, the frequency is about 22%, so
 25% is a modest and deliberate over-weighting rather than a base rate, and the tooltip now says so.
 
@@ -112,69 +113,31 @@ Also fixed here: an opening longer than the whole plan used to write past the en
 and corrupt the start of the next one. It is capped at the plan length now. This only affected plans
 shorter than ten years.
 
-### Both run buttons are now visible, and each states what it will cost
+### Two run buttons are now visible, and each states what it will cost
 
 The tab had one button, "Run Monte Carlo", which ran every withdrawal strategy the Optimizer knows
 how to build so it could rank them. That is about 144 strategies, and the path count is per strategy,
-so the default 500 was 72,000 simulations and about 43 seconds of work. A second button that ran only
-your own plan existed but was inside the Advanced Parameters panel, so almost nobody saw it, and the
-expensive run happened automatically on arrival either way.
+so the default 500 was 72,000 simulations and about 43 seconds of work. A second button only runs your 
+own plan.
 
-Both buttons are now outside that panel and visible to everyone:
-
-- **My Plan Only** comes first and is the new default. It answers "how did my plan do", which is the
-  question most people arrive with, for about one 144th of the work. You get your chance of success
+- **My Plan Only** is listed first and is the new default. It answers "how did my plan do", which is the
+  question most people want to answer. It costs about one 144th of the work. You get your chance of success
   and the percentile chart, but no strategy ranking table.
 - **Compare All Scenarios** is the old behaviour, renamed to say what it actually does.
 
 Each button carries its own expected time, measured on the machine you are running on rather than
-guessed: "My Plan Only (1.3 sec)", "Compare All Scenarios (43 sec)". The first estimate is marked
-"about" and is refined by every run that completes. The run size line, "500 paths x 144 strategies =
-72,000 simulations", now says "Compare runs..." and sits with the button it describes; it used to
-follow both buttons, which read as applying to either when it only ever described the sweep.
-
-The estimate had to be rebuilt to say this honestly. It multiplied a per-simulation cost by the
-simulation count and stopped there, ignoring everything that happens outside the simulation loop.
-Starting the background worker alone, which means loading and compiling about 370KB of script, is
-nearly a second on its own. So a plan-only run would have been advertised at 0.6 seconds when it
-takes 1.5. Both terms are now measured separately from each completed run: the fixed cost as the gap
-between the wall clock and the worker's own accounting, and the per-simulation cost from the worker's
-time alone. The largest run seen wins, since a small run's per-simulation figure is inflated by the
-stress pass riding along.
-
-### The Stress window selector is available to everyone
-
-Most readers are meeting this control for the first time: it existed only inside Advanced Parameters
-before, so unless you had turned those on it was not there. It sits beside Simulation Mode now. It
-changes the headline
-result most readers act on, it recomputes in about a second, and it is a question rather than a
-tuning parameter. The single fixed windows have been retired from the selector, which now offers
-Combined and All; the ranking engine still supports a single window for a saved scenario that asks
-for one.
+guessed: "My Plan Only (1.3 sec)", "Compare All Scenarios (43 sec)". The actual first time is an estimate, 
+after one run, it will display the actual calculated time.
 
 ### Changing a Stress Test setting no longer marks the whole run out of date
 
-"Out of date. The chart and survival table below were run before your latest changes" appeared when
-the only thing edited was the Stress window or the sequence count, and its Re-run button re-runs
-everything. So the offer was to spend half a minute on the roughly 144 strategy sweep in order to
-refresh a chart that had already refreshed itself by the time the banner appeared.
-
-It was not quite a false alarm, which is why it survived this long. The sequence count really did
-feed the main run, through the pool of worst decades the bear-start overlay samples from, so
-changing it really did invalidate the sweep. That was an accident of one setting being reused for
-two unrelated jobs. The overlay now uses a fixed pool of its own, which leaves
-the two Stress Test controls affecting only the Stress Test. The banner is keyed to what the sweep
-actually reads, so it no longer appears for either of them. The overlay itself is unchanged: the
-fixed pool is the same 10 it was always given by default.
-
 ### Smaller things
 
-- The Stress Test chart has dropped its legend. The table underneath already names every line,
-  carries every number, sorts, and shows each line's color in its first column; the legend was a
-  second copy of that competing with the plot for width. The table is now the key.
-- The hover readout waits until you pick a line. Hovering used to list every scenario's balance for
-  that year at once. It now appears only after you click a table row to isolate a single line, and
-  reports just that line. Click the row again to bring the rest back.
+- The Stress Test chart legend was dropped. The table underneath already names every line,
+  carries every number, sorts, and shows each line's color in its first column. The table made the legend 
+  a waste of space so only the table remains.
+- The hover readout waits until you pick a line from the table. Click the row in the table again to bring 
+  all the graphed lines back.
 
 
 <a id="11.150b"></a>

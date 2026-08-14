@@ -22,21 +22,14 @@ entirely, and failures are graded against the length of your plan.**
 stretches rather than the worst decade only, which moves Historical Monte Carlo results. Nothing
 else here changes any plan or its numbers.
 
-### Asking for 85 or more stress sequences froze the tab
+### Asking for 85 or more stress sequences froze the tab  (nerdknob mode)
 
 The Stress Test ranks historical retirement start years and runs the worst of them. How many there
 are to rank depends on the window, because a start year has to have the full window of real data
 after it to be scored at all: a 5 year window leaves 94 candidates and a 30 year window leaves only
-69. Asking for more sequences than the record can supply used to run off the end of the ranked list.
+69. Asking for more sequences than the record can supply used to run off the end of the ranked list and freeze.
 
-That threw, and the error was then lost. The background worker's failure handler responded by
-re-running the identical job on the main thread, where it threw again, this time with nobody left to
-catch it. The result was not an error message but a freeze: the Cancel bar stayed up and the Stress
-Test stopped responding to any later edit for the rest of the visit.
-
-The count is now capped at what the chosen window can supply, so a request for 200 returns the 69 to
-94 that exist rather than failing. Both failure paths report an error instead of losing it, and the
-tab stays usable either way.
+The count is now capped at what the window can supply and anything above that is ignored.
 
 ### Clearing the Paths box printed "NaN"
 
@@ -47,16 +40,14 @@ cannot reach the run, the time estimate or the out-of-date check.
 
 ### One window at a time was hiding most of the bad years
 
-The Stress window ranks historical starting years by their real, inflation-adjusted return over its
-own length, and runs the worst of them. The trouble is that the five windows overlap: the worst ten
-five year openings and the worst ten twenty year openings are mostly different years, because a
-short sharp crash and a long grinding one are different shapes. Picking a single window therefore
-threw away everything the other four would have caught.
+Windows were increased to 5/10/15/20/30 and Combined. Previously picking one (10 was the default) 
+caused the worst 5-year start, for example, to be skipped because it was only looking at 10 year combined 
+growth rates.
 
-Two new choices in the Stress window selector:
+Two new choices in the Stress window selector (nerdknob on):
 
 - **Combined (5/10/15/20/30)**, now the default, scores every window and keeps the union of what
-  each one flags. The count you set is per window, and because the windows overlap the union is far
+  each one flags. The count you set is per window, and because the windows overlap the union is 
   smaller than the sum: the new default of 20 gives about 40 distinct start years rather than 100.
   Hovering a row says which windows flagged that year.
 - **All start years** skips ranking and runs every start year the record holds, currently 98. At
@@ -65,34 +56,28 @@ Two new choices in the Stress window selector:
   which line is 1966.
 
 Everything the ranking picks is still a real historical sequence run straight through, not a splice.
-A window longer than your plan is still trimmed to the length of the plan, so a 12 year plan combines
-5, 10 and 12 rather than pretending to score a 30 year stretch.
+A window longer than your plan is trimmed to the length of the plan, so a 12 year plan combines
+5, 10 and 12 rather than considering 15, 20 and 30 year stretches.
 
 The defaults are now 20 sequences and the Combined window, up from 10 and a single 10 year window.
 
 ### Red and amber now mean early and late in YOUR plan
 
-A failure used to be red if it landed inside the stress window and amber if it landed outside. That
-worked only while there was exactly one window; Combined has five and All has none. It was also the
-less useful question: on a 30 year plan, a fixed 10 year line called running dry in year 12 and
-running dry in year 29 the same thing. Red now means the money ran out in the first half of your
-plan and amber means the second half. The window has one job left, which is deciding which start
-years run.
+A failure now is marked red if it ruin occurs before the halfway point, yellow if it lands on or after the halfway point, and 
+green if the stress for that sequence ends in assets still present (success rather than ruin).
 
 ### The scenario table reports the whole plan, and the worst stretch inside it
 
-The per-asset CAGR columns were measured over the ranking window, so they had the same problem. In
-their place: Real CAGR over your whole plan, on the sequence that scenario actually lived through,
-and then the worst 5, 10, 15 and 20 year real return found anywhere inside it. A sequence can open
-calmly and still contain the decade that breaks the plan, and the old columns could not show that.
-The equity, bond, international and inflation rates are still there, on the row hover, along with
-which windows flagged that year.
+Real CAGR is calculated over your whole plan for each sequence that scenario lived through, and it also 
+calculates the worst 5, 10, 15 and 20 year real return found anywhere inside it. A sequence can open
+calmly and still contain the decade that breaks the plan. The old stress test might not have discovered the 
+true worst scenario.  To allow space, the equity, bond, international and inflation rates are still visible from a hover.
 
-### Sequences that run past the end of the record now say so
+### Sequences that run past the end of the record now indicate so
 
 A plan longer than the record has left after its start year wraps around and replays history from
 1928. A 2015 start on a 30 year plan gets 11 real years and then 19 of replay. That has always been
-the behaviour, and the ranking has always excluded start years without a full window of real data
+the behavior, and the ranking has always excluded start years without a full window of real data
 after them, so a wrapped stretch never gets a vote in which years are worst. It is now visible: the
 wrapped part of the line is dashed, and the row hover names the year the record runs out.
 
@@ -137,8 +122,7 @@ refresh a chart that had already refreshed itself by the time the banner appeare
 It was not quite a false alarm, which is why it survived this long. The sequence count really did
 feed the main run, through the pool of worst decades the bear-start overlay samples from, so
 changing it really did invalidate the sweep. That was an accident of one setting being reused for
-two unrelated jobs, and there was no way to guess it from a control labelled "how many worst
-sequences the Stress Test chart shows". The overlay now uses a fixed pool of its own, which leaves
+two unrelated jobs. The overlay now uses a fixed pool of its own, which leaves
 the two Stress Test controls affecting only the Stress Test. The banner is keyed to what the sweep
 actually reads, so it no longer appears for either of them. The overlay itself is unchanged: the
 fixed pool is the same 10 it was always given by default.
@@ -151,15 +135,7 @@ fixed pool is the same 10 it was always given by default.
 - The hover readout waits until you pick a line. Hovering used to list every scenario's balance for
   that year at once. It now appears only after you click a table row to isolate a single line, and
   reports just that line. Click the row again to bring the rest back.
-- Inflation CAGR no longer carries a "+". A leading plus sign reads as a gain, rising prices are not
-  one, and inflation was the one figure on the page shown that way. A negative rate still shows its
-  own minus sign.
-- Internal: the historical ranking is now computed once per window length and reused. It depends only
-  on the window and on the return data, which is a static file, so it cannot change while the page is
-  open, and Combined and All were each re-deriving the same five rankings on every edit. This is
-  worth about a tenth of a millisecond out of a roughly three second refresh, so it is tidiness
-  rather than speed: nearly all of that time is the background worker starting up, which no amount of
-  precomputation touches.
+
 
 <a id="11.150b"></a>
 

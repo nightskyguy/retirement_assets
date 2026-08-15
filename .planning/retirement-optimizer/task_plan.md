@@ -474,6 +474,51 @@ Tests go in `optimizer_core.test.js` (renamed from `retirement_optimizer_core.te
 - [x] **P19d** — **`irmaa_and_rmds.html` duplicate bracket math:** DONE (d52ffac). Now reuses new `calculateTaxableSocialSecurity()` extracted into taxengine.js; also fixed its "Annual IRMAA Surcharge" column (was showing monthly value, understated 12x).
 - [x] **P19e** — **Script load-order normalization:** DONE (d52ffac). taxengine.js now loads before core.js in retirement_optimizer.html.
 - [ ] **P19f** — **State coverage (13 of 51 jurisdictions uncoded):** LA/UT (flat, easy). 11 graduated states (AR/DE/HI/KS/MO/NJ/NM/OK/RI/VT/WV) — MO/WV need year-keyed rate tables (active phase-downs, same pattern as GA/NE/KY); AR/DE/MO/NJ/NM/RI/VT/WV need per-state partial-SS-taxation thresholds; NJ needs a >$1M surtax bracket; VT needs a low-income exemption rule. RI/VT CPI-indexing is actually free (already the default). See the review plan file for the full per-state breakdown.
+- [x] **P19g** — **Local (county / city / school-district) income-tax disclosure NOTES:** DONE 2026-08-15.
+  The engine models **zero** sub-state income tax anywhere. Added or strengthened per-state `NOTE` flags for
+  every supported state whose local income tax reaches the income this tool computes — retirement
+  distributions **plus interest, dividends, and capital gains** (the key discriminator: earned-income-only
+  local taxes miss retirees). Full income base, effectively unavoidable: **MD** (all 23 counties + Baltimore
+  City, 2.25-3.3%; note strengthened), **IN** (all 92 counties, ~0.5-3%; note strengthened). Big-city or
+  partial base, notes new: **NY** (NYC 3.08-3.88% + Yonkers, full base), **OH** (school-district income tax,
+  "traditional"-base districts only — Ohio cities tax wages, not a retiree's investment/retirement income, so
+  they are correctly out of scope), **MI** (city tax exempts pension/SS but taxes interest/dividends/cap-gains),
+  **OR** (Portland-metro SHS + Multnomah PFA, threshold-gated; state had no NOTE at all before), **PA**
+  (Philadelphia School Income Tax on dividends + certain non-bank interest only; PA's EIT/wage taxes miss
+  retirees), **IA** (school-district + EMS surtax on the investment-income portion). **Deliberately NOT flagged**
+  (verified no gap for this tool's income types, per the state-NOTE style rule): **KY** and **AL** local
+  occupational taxes, and the **PA/OH** wage/municipal taxes, fall on **earned income only**; **CA** and **CO**
+  have no personal local income tax (CO's is a flat head tax). Scope is income tax only — property, parcel, and
+  business taxes are out of scope by design. `node optimizer_core.tests.js` 263/263; `taxengine.js` parses;
+  Oregon NOTE render verified in-browser, console clean.
+  **DECISION (user, 2026-08-15): NO version bump, NO changelog.** No taxation changed, only the information
+  shown about states. The state-tax documentation gets folded into the changelog the next time a material
+  (behavior-affecting) change ships, not on its own.
+- [ ] **P19h** — **Optional local-income-tax modeling — thumbnail plan, prioritized by expected retirees affected.**
+  Four mechanisms, each matched to how that state's local tax actually behaves. **Modeling ceiling to state up
+  front:** ~4,000 US municipalities levy some income tax; the tool will never enumerate them, so the honest
+  target is "cover the largest affected retiree populations with a preset or kicker, and disclose the rest via
+  P19g," not completeness.
+  - **A. Big city = its own jurisdiction.** When a city's rate is high, progressive, and hits the full income
+    base, add a dropdown entry parallel to the state. **NYC first** — a huge resident/retiree population pays
+    3.08-3.88% on IRA distributions and investment income; add NYC resident brackets, then **Yonkers** as a
+    surcharge on NY tax.
+  - **B. Tiered county "kicker" rate.** Where every/most counties tax the full base at similar magnitude, offer
+    2-3 presets instead of dozens of counties. **MD**: low 2.25% / median ~3.0% / high 3.2%, defaulting to a
+    population-weighted median (Montgomery, Prince George's, Baltimore County/City). **IN**: median ~1.5-2%.
+    One optional "local rate %" input with presets serves both.
+  - **C. School-district / city kicker for earned-base-exempt states.** **OH** school-district income tax
+    (traditional-base districts) and **MI** city tax (investment income only) as an opt-in add-on rate — coverage
+    is a minority of districts/cities and the base differs (OH full income; MI interest/dividends/cap-gains only).
+  - **D. Threshold-gated metro surtax.** **OR** Portland-metro (Metro SHS 1% + Multnomah PFA 1.5-3% above
+    $125k single / $200k joint) as an optional toggle; only bites higher-income Portland residents.
+  - **Note-only (lowest priority):** **PA** Philadelphia SIT (dividends only, one city) and **IA** school-district
+    surtax (small % of a shrinking base) — leave at the P19g NOTE level.
+  - **Priority order (by retirees affected):** 1) NYC own-jurisdiction, 2) MD tiered kicker, 3) IN tiered kicker,
+    4) OH SDIT kicker, 5) MI city kicker, 6) OR Portland toggle, 7) PA/IA note-only.
+  - **Engine hook:** one per-year `localRate` (+ optional `localBase` = full vs investment-only) threaded into
+    `calculateTaxes()` beside the existing state math; **UI:** a single "Local income tax" row, nerdknob-gated,
+    default off. Sweep/URL pass-through same pattern as `taxRateCreep` (P4).
 - **Status:** mostly complete. Round 1 (circular-dependency fix + 5 low-risk items): 324447f, PR #105. Round 2 (bracket-walk dedup, alias unification, IRMAA fixes, load order, plus Medicare growth now uses user CPI inputs instead of hardcoded 5.6%): d52ffac, 2026-07-07, node 51/51 + browser 240/240. Only state coverage (13 states) remains — verified 2026-07-10 (taxengine.js header still "38 of 51 jurisdictions included").
 - **Independent:** no phase dependencies for the remaining items
 

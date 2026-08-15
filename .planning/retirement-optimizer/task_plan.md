@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-07:** `main` = `a5098e7`, v11.1499 in flight as [PR #160](https://github.com/nightskyguy/retirement_assets/pull/160).
+**As of 2026-08-15:** `main` = `310b23d`, shipped **v11.1553**; through [PR #173](https://github.com/nightskyguy/retirement_assets/pull/173) merged, nothing in flight (resync 2026-08-15).
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -50,7 +50,9 @@ first task. Every open item in the file now carries one.
 | **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
 | **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
-| **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only"; compare stays default | shipped v11.150b | - |
+| **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only" *(default later flipped by P53f)* | shipped v11.150b | - |
+| **DONE** | P53 | Monte Carlo Stress Test suite (5 windows, bear-start, plan-only default) | shipped v11.1521-152f (#170) | - |
+| **DONE** | P54 | `?montecarlo` teaching demo + mode-aware paths floor | shipped v11.1553 (#173) | - |
 | **O2** | P33 | Insights panel — where the money came from | `P33a` | nothing |
 | **O2** | P29 | Hebeler Autopilot — worth a strategy slot? | `P29a` | nothing |
 | **O2** | P31 | Asset mix is an OUTPUT — the reverse mapping | `P31a` | nothing |
@@ -120,6 +122,35 @@ refuted, so the section is currently half true.
 ## Recent state and trail
 
 Goal: Complete open features from the original priority list plus deferred items from the UX batch. All completed phases archived in `task_completed.md`.
+
+**As of 2026-08-15 (resync).** `main` = `310b23d`, shipped **v11.1553**, working tree clean, nothing
+in flight. The last planning-doc update was **PR #166** (v11.14e1, 2026-08-10); **PRs #167-#173 shipped
+without touching these files**, so this block catalogues them. The open queue did **not** change: none
+of #167-#173 completed an O0/O1 item (P35/P32/P51/P30/P19/P34 all still open). Test counts moved:
+**node core 263 / TPP 32 / doclinks 22 / slowInCore 3** (`TestTiers.EXPECTED`, `optimizer_tests.js:2220`);
+**browser self-test 559** at v11.1553 (per PR #173; was 529 at v11.14dd).
+
+Shipped since the last sync, newest first:
+- **#173** (v11.1553, 08-15): fold the Experiment box, drop redundant BASELINE/CURRENT words; add
+  `?montecarlo` teaching demo + mode-aware paths floor; adopt author's updated README Monte Carlo section.
+  **Phased retroactively as P54.**
+- **#172** (08-14): GA + Cloudflare analytics on the Jekyll-rendered pages. **Un-phased.**
+- **#171** (08-14): Income Tax Planner visual bugs - NIIT line follows MAGI, chart NIIT dollars, SS cap,
+  ordinary scrubber. **Un-phased.**
+- **#170** (v11.1521-v11.152f, 08-13): Monte Carlo **Stress Test** feature batch - bear-start 3/5/10yr
+  windows, memoized start-year ranking, plan-only default run, combine-all-windows, NaN/blank-Paths
+  fixes. **Phased retroactively as P53** (note: P53f's plan-only default reversed the P52 decision).
+- **#169** (v11.150b, 08-12): **P52** MC "Run My Plan Only" nerdknob + 6 Stress Test refinements.
+  P52 is DONE - see its section (line ~2325) and the index row.
+- **#168** (v11.1508, 08-12): sync the staleness guard to the tests on disk (244 then; 263 now) + doc refs.
+- **#167** (08-11): Roth + tax info README revamp for clarity. Docs.
+- **#166** (v11.14e1, 08-10): brokerage research program - the last planning-doc update; closed
+  P32e/f/i and P35n, added the P51 oracle phase. Already reflected in the sections below.
+- **#160-#165** (v11.1499 and earlier, 08-07..08-10): P35f/g §1014 step-up (#160), tool-eval FAQ (#161),
+  P49 + P41d/g suggested-spend (#162, v11.14bf/14c6), spend-goal-restore bug (#163), Ordered surplus-fill
+  (#164, v11.14dd), and the progress log of all of it (#165). All reflected in the NOW block and index.
+
+**Prior snapshot, kept for the trail:**
 
 **As of:** 2026-08-07, morning. **Working tree clean, `main` = `28a3395`, shipped version v11.147c.**
 Everything below is merged; nothing is in flight.
@@ -2379,3 +2410,74 @@ normal user landing on the tab eventually sees the full 144-strategy comparison 
 this they would see only their own plan unless they turn on nerdknob. The alternative, defaulting
 everyone to compare and making plan-only the nerd option, preserves today's behavior but delivers
 none of the speed benefit to the people most affected by the wait.
+
+---
+
+## P53: Monte Carlo Stress Test suite  *(DONE 2026-08-13, shipped v11.1521-v11.152f, PR #170)*
+
+**Phased retroactively 2026-08-15** during the git resync - the work shipped un-phased and lived only
+in the changelog until now. Recorded here so the feature is discoverable and its one behavior-reversal
+(below) is not lost.
+
+**Why:** a single historical stress window hides what the other four would have caught - a short sharp
+crash and a long grinding one flag different start years - and the shipped panel had five reported
+defects, two of them crashes.
+
+**Tasks (all DONE, `montecarlo/{mc_controller,mc_tab,prng,worker}.js` + `retirement_optimizer.html` +
+README + `optimizer_core.tests.js`):**
+- [x] **P53a** — Fix five reported Stress Test defects, two crashes: `buildStressBank` sliced its ranked
+  candidates to `count` then looped to `count` and destructured **past the end** (the pool is only
+  `98 - window + 1` start years, so 85 sequences overran the 15/20/30yr windows); the worker's `onerror`
+  swallowed the throw; blank-Paths produced `NaN`. **v11.1521** (`733cc47`).
+- [x] **P53b** — Combine-all-windows / run-all-windows: split ranking out of bank-filling with
+  `scoreStartYears(sLen)` over the 5/10/15/20/30yr windows; grade on plan length. **v11.1521a** (`3292d11`).
+- [x] **P53c** — Stale "Out of date" banner no longer fires when the only edit was a Stress window/
+  sequence control (its Re-run swept ~144 strategies to refresh a chart that had already refreshed).
+  **v11.1521b** (`83ac77e`).
+- [x] **P53d** — Memoize `scoreStartYears` per window length; pure fn of `HISTORICAL_RETURNS` (a static
+  table), so `combined`/`all` stop re-deriving the identical ranking every debounced edit.
+  **v11.1521c** (`05b2277`).
+- [x] **P53e** — **BEHAVIOR CHANGE:** bear-start overlay draws 3/5/10yr openings, not worst-decades
+  (1930 is worst over 3yr at -26.9%/yr real but only 13th worst over 10yr at -0.4%/yr because the decade
+  contains 1933's +54% rebound). Moves Historical MC results. **v11.1521d** (`d751eb3`).
+- [x] **P53f** — **Plan-only is the default run**, both buttons priced and moved outside the Advanced
+  panel. **v11.152d** (`49d4560`). **This REVERSED the P52 decision** ("compare stays the default", user
+  2026-08-12) two days later. The P52 section above is now historical on that point; P53f is the live
+  behavior.
+- [x] **P53g** — In-page changelog trimmed to what a normal user sees; bear-start detail moved out.
+  **v11.152e / v11.152f** (`c8725d7`, `60fa0fe`).
+
+**Status:** DONE, merged as [PR #170](https://github.com/nightskyguy/retirement_assets/pull/170).
+Node-core test additions here are part of the path to the current 263.
+
+---
+
+## P54: `?montecarlo` teaching demo + mode-aware paths floor  *(DONE 2026-08-15, shipped v11.1553, PR #173)*
+
+**Phased retroactively 2026-08-15** during the git resync - shipped un-phased.
+
+**Why:** the Monte Carlo mechanism (why more paths narrow the band, what mu/sigma do) was explained only
+in prose; a reader could not watch it happen. A reported bug ("1 path still shows wide bands") turned out
+to share a root cause with that gap.
+
+**Tasks (all DONE, `montecarlo/mc_tab.js` +145, `retirement_optimizer.html`, `optimizer_ui.js`, README,
+changelog):**
+- [x] **P54a** — URL-triggered demo `?montecarlo`: lands on the Monte Carlo tab in **Synthetic** mode,
+  exposes Seed / Paths / Input Distributions, and auto-runs an **Experiment** - the sidebar plan
+  simulated with 3 random seeds at each of 4 path counts (5/10/25/100). The table shows the sampled
+  equity range jump around at 5 paths and settle by 100. Every cell reuses the same engine and payload
+  fields a normal "My Plan Only" run reports, so the numbers match by construction; the box glosses
+  mu/sigma and links the README Monte Carlo section. **v11.1553** (`52c9b03`).
+- [x] **P54b** — **Mode-aware paths floor** (root cause of the "1 path still shows wide bands" report):
+  the floor stays **100** normally so survival rate and percentile bands stay meaningful, but drops to
+  **3** under nerdknob or the demo. The value was previously clamped to 100 before the run regardless.
+  **v11.1553** (`52c9b03`).
+- [x] **P54c** — Experiment box is a `<details>` fold (open by default) so it can be collapsed; same
+  native-details mechanism as the Input Distributions / FAQ folds. Shipped alongside the optimizer-table
+  pinned-row relabel (`⚓ <label>` / `📍 <label>`, dropping redundant BASELINE/CURRENT). `8ca6d42`.
+- [x] **P54d** — README: replaced the manual nerdknob walkthrough in the "Monte Carlo and Chance of
+  Success" note with a link to the Experiment feature; fixed a broken tool URL (missing `.html`) and
+  grammar nits. `4113414` / `52c9b03`.
+
+**Status:** DONE, merged as [PR #173](https://github.com/nightskyguy/retirement_assets/pull/173).
+Tests at ship: node core **263/263**, doclinks 22, TPP 32; **browser self-test 559**.

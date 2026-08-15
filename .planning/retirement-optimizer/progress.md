@@ -2258,3 +2258,58 @@ commit 9e5ad6f, v11.14dd): engine + harness + title/?v=1114dd + in-page changelo
 Ordered help text. node core 233/233, TPP 32, doclinks 22; browser self-test 529/529 (12 critical
 guards) with the new version loaded. GOTCHA re-confirmed: serve.py preview process died mid-session
 (preview_list empty, chrome-error page); preview_start reused/relaunched on port 3000 fine.
+
+---
+
+## Session 2026-08-15 (twelfth) — Resync planning files to git (`/plan`)
+
+User invoked `/plan` and chose **"Resync plan to git"** on finding the files lagged `main` by ~5 days.
+
+State reconciled. `main` = `310b23d`, shipped **v11.1553**, working tree clean. Worktree branch
+`worktrees/planning-with-files-e0c3ab` is `0 0` vs main (identical tip); `git diff main -- .planning/`
+was empty, so these files WERE main's - the gap was real, not a worktree fork.
+
+Diagnosis: the last planning-doc update was **PR #166** (v11.14e1, 08-10). **PRs #167-#173 shipped
+without touching the planning files.** progress.md ended at #164; the index already had P52 as DONE
+(added out-of-band) and P51 at O1. Catalogue of the unlogged work, newest first:
+- **#173** v11.1553 (08-15): Experiment-box fold, `?montecarlo` teaching demo, mode-aware paths floor,
+  README MC section adopt.
+- **#172** (08-14): GA + Cloudflare analytics on Jekyll pages. Un-phased.
+- **#171** (08-14): Income Tax Planner visual bugs (NIIT follows MAGI, chart NIIT $, SS cap, ordinary
+  scrubber). Un-phased.
+- **#170** v11.1521-152f (08-13): Monte Carlo Stress Test batch (bear-start 3/5/10yr windows, memoized
+  start-year ranking, plan-only default, combine-all-windows, NaN fixes). Un-phased, large.
+- **#169** v11.150b (08-12): P52 MC "Run My Plan Only" nerdknob + 6 Stress Test refinements. **P52 DONE.**
+- **#168** v11.1508 (08-12): staleness guard synced to tests on disk (244 then) + doc refs.
+- **#167** (08-11): Roth + tax README revamp. Docs.
+
+Verified live facts: `<title>Retirement Optimizer 11.1553</title>`; `TestTiers.EXPECTED =
+{ optimizer_core: 263, taxPaymentPlanner: 32, doclinks: 22, slowInCore: 3 }` (was 214/32/22 in the
+trail - the trail line was a dated snapshot, left as history; current counts recorded in the new
+2026-08-15 trail block).
+
+Edits made (docs only, no engine/version change):
+1. task_plan.md header (line 3) - `main`/version/PR#, kept to 3 lines to preserve the LINE-30 boundary
+   (verified marker still on line 30 after the edit).
+2. task_plan.md trail - new "As of 2026-08-15 (resync)" block at the top of "Recent state and trail",
+   cataloguing #159-#173 and the new test counts; prior 08-07 snapshot kept below it.
+3. progress.md - this entry.
+
+**Open queue UNCHANGED by the resync.** None of #167-#173 completed an O0/O1 item; P35/P32/P51/P30/P19/P34
+all still open. NOW block left as-is (still accurate).
+
+**Follow-up (same session, user said yes): the two un-phased MC features were phased retroactively and
+marked DONE.**
+- **P53** — Monte Carlo Stress Test suite (#170, v11.1521-152f). Seven sub-items P53a-g: two crash fixes
+  (`buildStressBank` overran its candidate pool + swallowed worker throw), 5-window ranking with
+  memoized `scoreStartYears`, bear-start 3/5/10yr openings (behavior change), and **P53f: plan-only
+  became the default run (v11.152d)** which **reversed the P52 "compare stays default" decision** two
+  days after P52 shipped. Noted in both sections so the record is not self-contradictory.
+- **P54** — `?montecarlo` teaching demo + mode-aware paths floor (#173, v11.1553). P54a-d: URL demo
+  auto-runs an Experiment (3 seeds x 4 path counts, 5/10/25/100) reusing the "My Plan Only" engine;
+  the mode-aware floor (100 normal / 3 under nerdknob-or-demo) was the root cause of the "1 path still
+  shows wide bands" report; Experiment box is a `<details>` fold; README walkthrough replaced by a link.
+
+Index gained two **DONE** rows (P53/P54); phase sections appended after P52 in numeric order. Corrected
+the browser self-test figure to **559** at v11.1553 (the resync block had guessed 529 from v11.14dd).
+Still docs-only, no engine/version change.

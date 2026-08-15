@@ -15,7 +15,7 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ## 11.1553
 
-**A teaching demo that shows, in one table, why the number of Monte Carlo paths matters. No change
+**A teaching demo that shows, in one table, how the number of Monte Carlo paths matters. No change
 to any plan or its numbers.**
 
 ### The `?montecarlo` demo
@@ -41,11 +41,8 @@ built to display a real range automatically once Synthetic paths gain a varying 
 ### The Paths box can now go below 100 in advanced and demo modes
 
 The Paths field is normally held at a minimum of 100, because the survival rate and the percentile
-bands stop meaning much at very low path counts. That floor is why typing 1 into the box and running
-"My Plan Only" still produced wide bands: the value was quietly raised to 100 before the run. With
-the `nerdknob` controls or the `?montecarlo` demo active, the floor drops to 3, so a curious reader
-can drive the count down and see a small, unreliable sample for what it is. The default experience is
-unchanged.
+bands stop meaning much at very low path counts - but experiments are allowed down to 3 paths. 
+The default experience is unchanged.
 
 ---
 

@@ -25,6 +25,13 @@ const OLD_STORAGE_KEY = 'retirementScenarios';
 // after load. The runtime flip is NOT persisted to the URL.
 let NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
 
+// MONTE_DEMO: the ?montecarlo teaching demo. Lands the reader on the Monte Carlo tab in Synthetic
+// mode with Seed/Paths/Input Distributions exposed and auto-runs the Experiment (see
+// runMCExperiment in mc_tab.js). Deliberately NARROW: unlike NERD_KNOBS it does NOT unlock the
+// other advanced surfaces (Avg BETR stat, GK params, sweep dimensions). It only widens the MC-tab
+// panels and lowers the paths floor. Read once at load; not flipped at runtime, not in the URL twice.
+const MONTE_DEMO = new URLSearchParams(location.search).has('montecarlo');
+
 // Optimizer UI state - replaces window.optimizer* globals.
 const OptimizerState = {
     results: null,

@@ -56,7 +56,11 @@ function _mcNum(id) {
     const raw = document.getElementById(id)?.value;
     const n   = (spec.int === false) ? parseFloat(raw) : parseInt(raw, 10);
     if (!Number.isFinite(n)) return spec.dflt;
-    return Math.min(spec.max, Math.max(spec.min, n));
+    // Paths is normally floored at 100 so the survival rate and percentile bands stay meaningful.
+    // In nerdknob or the ?montecarlo demo the whole point is to SEE small samples misbehave, so the
+    // floor drops to 3 (the Experiment's smallest count is 5). Every other parameter keeps its spec.
+    const lo = (id === 'mc-num-paths' && (_mcNerdMode() || _mcDemoMode())) ? 3 : spec.min;
+    return Math.min(spec.max, Math.max(lo, n));
 }
 
 // --- Initialization -------------------------------------------------------
@@ -68,12 +72,15 @@ function initMCTab() {
 
     // Show the Simulation Parameters panel only for nerdknob users.
     // Normal users: panel stays hidden and the tab click auto-runs.
+    // The ?montecarlo demo exposes the same two panels as nerdknob (so a reader can see Seed, Paths
+    // and the Input Distributions the Experiment drives), without unlocking the rest of nerd mode.
+    const advanced = _mcNerdMode() || _mcDemoMode();
     const nerdPanel = document.getElementById('mc-nerd-panel');
     if (nerdPanel) {
-        nerdPanel.style.display = _mcNerdMode() ? '' : 'none';
+        nerdPanel.style.display = advanced ? '' : 'none';
     }
     const inputDist = document.getElementById('mc-input-dist');
-    if (inputDist) inputDist.style.display = _mcNerdMode() ? '' : 'none';
+    if (inputDist) inputDist.style.display = advanced ? '' : 'none';
 
     // A canvas first laid out inside a CLOSED <details> has no box to measure, so the chart can end
     // up sized against a fallback. Chart.js watches for resizes and usually recovers on its own, but
@@ -93,6 +100,11 @@ function initMCTab() {
 // Returns true when NERD_KNOBS is active.
 function _mcNerdMode() {
     return typeof NERD_KNOBS !== 'undefined' && NERD_KNOBS;
+}
+
+// Returns true when the ?montecarlo teaching demo is active (defined in optimizer_ui.js).
+function _mcDemoMode() {
+    return typeof MONTE_DEMO !== 'undefined' && MONTE_DEMO;
 }
 
 // Sync mc-mu from the Assumptions Growth % input (one-way: growth → mc-mu).
@@ -383,6 +395,119 @@ function cancelMC() {
     setMCRunning(false);
 }
 
+// --- ?montecarlo teaching demo (Experiment) -------------------------------
+//
+// A small fixed grid — 3 seeds x 4 path counts — run as "My Plan Only" in Synthetic mode, so a
+// reader can watch the sampled equity range jump around at 5 paths and settle by 100. Every cell
+// goes through the SAME engine and reads the SAME payload fields the metrics bar renders, so the
+// numbers here are the numbers a manual run produces; there is no parallel math to drift.
+const _DEMO_PATH_COUNTS = [5, 10, 25, 100];
+const _DEMO_FIXED_SEEDS = [42, 314, 777];   // stable first view; the button reshuffles after.
+let _demoSeeds = null;
+
+// Seeds are kept in 0..1000: a bigger seed space teaches the reader nothing, and short numbers read
+// cleanly in the table. The seed only picks which random stream is used; its magnitude is meaningless.
+function _demoRandSeed() { return Math.floor(Math.random() * 1001); }
+function _demoPct(v)     { return (v == null) ? '—' : (v * 100).toFixed(1) + '%'; }
+
+// Promise wrapper over the chunked main-thread runner. Used instead of the worker because the demo
+// fires 12 tiny runs back to back and worker startup (~1s each) would dominate. The main-thread
+// path yields the identical results payload.
+function _mcRunOnce(cfg) {
+    return new Promise((resolve) => { _runMCMainThread(cfg, null, (msg) => resolve(msg)); });
+}
+
+async function runMCExperiment() {
+    const panel = document.getElementById('mc-demo-panel');
+    if (!panel) return;
+
+    // First invocation (the auto-run on load) uses the fixed seed set for a stable first view; every
+    // later click reshuffles all three, so the reader sees a fresh random draw land in the same grid.
+    _demoSeeds = (_demoSeeds === null)
+        ? _DEMO_FIXED_SEEDS.slice()
+        : [_demoRandSeed(), _demoRandSeed(), _demoRandSeed()];
+
+    const btn = document.getElementById('mc-demo-run-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+
+    // Force Synthetic (gbm) and keep mu/sigma synced from the sidebar Growth %.
+    const modeEl = document.getElementById('mc-sim-mode');
+    if (modeEl && modeEl.value !== 'gbm') { modeEl.value = 'gbm'; updateMCModeUI(); }
+
+    const base   = getInputs();
+    const mu     = _mcNum('mc-mu')    / 100;
+    const sigma  = _mcNum('mc-sigma') / 100;
+    const years  = mcPlanYears(base);
+    const planVar = planOnlyVariations(buildVariations(base), base)[0];
+    _mcStartYear = base.startYear ?? 2026;
+
+    const rows = [];
+    let lastMsg = null;
+    // Path counts ascending, all seeds within each, so the FINAL cell is a 100-path run. Its richer
+    // inputFan is what the Input Distributions charts below then display (req 9).
+    for (const paths of _DEMO_PATH_COUNTS) {
+        for (const seed of _demoSeeds) {
+            const msg = await _mcRunOnce({
+                variations: [planVar], stressVariations: [planVar],
+                numPaths: paths, mu, sigma, seed, years,
+                simulationMode: 'gbm',
+                stressCount: 0, stressWindow: stressWindowMode(), bearFraction: 0,
+                inflationRate: base.inflation,
+            });
+            lastMsg = msg;
+            rows.push({ paths, seed, msg });
+        }
+    }
+
+    renderDemoTable(rows);
+
+    if (lastMsg && lastMsg.inputFan) {
+        const dist = document.getElementById('mc-input-dist');
+        if (dist) {
+            dist.style.display = '';
+            // Expand the fold by default in the demo. Open it BEFORE rendering: a canvas laid out
+            // inside a closed <details> has no box to measure, so the chart would size against a
+            // fallback (same reason initMCTab re-measures .mc-fold charts on open).
+            const det = dist.querySelector('details');
+            if (det) det.open = true;
+        }
+        renderInputFanCharts(lastMsg.inputFan, lastMsg.years);
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = 'Experiment ↻'; }
+}
+
+// Equity range = the empirical worst/best single-year return over the cell's numPaths x years draws
+// (msg.minAnnualReturn / .maxAnnualReturn). Inflation range is written forward-compatibly: today
+// Synthetic inflation is a single fixed rate (min == max, shown "(fixed)"), but the moment gbm gains
+// a per-path inflation distribution (msg.inflationStats), this column shows a real range with no edit.
+function renderDemoTable(rows) {
+    const body = document.getElementById('mc-demo-tbody');
+    if (!body) return;
+    let html = '';
+    let prevPaths = null;
+    for (const r of rows) {
+        const m = r.msg || {};
+        const eqLo = _demoPct(m.minAnnualReturn), eqHi = _demoPct(m.maxAnnualReturn);
+        const infLoV = m.inflationStats ? m.inflationStats.min : m.inflationRate;
+        const infHiV = m.inflationStats ? m.inflationStats.max : m.inflationRate;
+        const infLo = _demoPct(infLoV), infHi = _demoPct(infHiV);
+        const groupTop = (r.paths !== prevPaths);
+        prevPaths = r.paths;
+        const bt = groupTop ? 'border-top:2px solid #cbd5e1;' : 'border-top:1px solid #eef0f2;';
+        const infCell = (infLo === infHi)
+            ? `${infLo} <span style="color:#aaa;font-size:0.85em;">(fixed)</span>`
+            : `${infLo} <span style="color:#aaa;">to</span> ${infHi}`;
+        html += `<tr style="${bt}">`
+              + `<td style="padding:3px 12px;text-align:right;font-weight:${groupTop ? '600' : '400'};color:${groupTop ? '#222' : '#bbb'};font-variant-numeric:tabular-nums;">${groupTop ? r.paths : ''}</td>`
+              + `<td style="padding:3px 12px;text-align:right;font-variant-numeric:tabular-nums;color:#555;">${r.seed}</td>`
+              + `<td style="padding:3px 12px;text-align:center;white-space:nowrap;">${eqLo} <span style="color:#aaa;">to</span> ${eqHi}</td>`
+              + `<td style="padding:3px 12px;text-align:center;white-space:nowrap;">${infCell}</td>`
+              + `</tr>`;
+    }
+    body.innerHTML = html;
+}
+
 // --- Reacting to sidebar edits --------------------------------------------
 
 let _mcStressRefreshing = false;
@@ -560,7 +685,7 @@ function finishMCRender(msg) {
 
     renderMCChart(msg);
     renderStressChart(msg.stress);
-    if (_mcNerdMode()) renderInputFanCharts(msg.inputFan, msg.years);
+    if (_mcNerdMode() || _mcDemoMode()) renderInputFanCharts(msg.inputFan, msg.years);
     syncTableCheckboxes();
 }
 
@@ -1656,6 +1781,10 @@ function renderInputFanCharts(inputFan, years) {
     if (!inputFan) return;
     const labels = Array.from({ length: years }, (_, i) => _mcStartYear + i);
 
+    // In the ?montecarlo demo the extremes are the teaching point (the widest a single year got),
+    // so the Min/Max lines start visible. Everywhere else they stay a legend-toggle away as before.
+    const showExtremes = _mcDemoMode();
+
     function buildDatasets(fan, solidColor, bandColor) {
         return [
             // [0] p10 anchor — transparent fill target; label shown in tooltip
@@ -1668,14 +1797,14 @@ function renderInputFanCharts(inputFan, years) {
             { label: 'Median', data: fan.p50, borderColor: solidColor,
               backgroundColor: 'transparent', borderWidth: 2,
               pointRadius: 0, fill: false, tension: 0.3 },
-            // [3] Min — hidden by default; click legend to enable
+            // [3] Min — hidden by default (shown in the ?montecarlo demo); click legend to enable
             { label: 'Min', data: fan.min, borderColor: solidColor, borderDash: [4, 4],
               borderWidth: 1, backgroundColor: 'transparent',
-              pointRadius: 0, fill: false, tension: 0.3, hidden: true },
-            // [4] Max — hidden by default; click legend to enable
+              pointRadius: 0, fill: false, tension: 0.3, hidden: !showExtremes },
+            // [4] Max — hidden by default (shown in the ?montecarlo demo); click legend to enable
             { label: 'Max', data: fan.max, borderColor: solidColor, borderDash: [4, 4],
               borderWidth: 1, backgroundColor: 'transparent',
-              pointRadius: 0, fill: false, tension: 0.3, hidden: true },
+              pointRadius: 0, fill: false, tension: 0.3, hidden: !showExtremes },
         ];
     }
 

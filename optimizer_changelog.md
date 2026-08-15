@@ -11,6 +11,41 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1553"></a>
+
+## 11.1553
+
+**A teaching demo that shows, in one table, how the number of Monte Carlo paths matters. No change
+to any plan or its numbers.**
+
+### The `?montecarlo` demo
+
+Adding `?montecarlo` to the page address (for example
+`retirement_optimizer.html?montecarlo`) opens the Monte Carlo tab in Synthetic mode, exposes the
+Seed, Paths and Input Distributions controls, and automatically runs a small experiment: the plan
+currently in the sidebar, simulated with three random seeds at each of four path counts (5, 10, 25
+and 100). Every cell goes through the same engine and reports the same numbers a manual "My Plan
+Only" run would, so nothing in the table is a special demo figure.
+
+The table lists, for each seed and path count, the sampled Equity range (the worst and best single
+year across all the paths in that run) and the Inflation range. The point is visible at a glance:
+with 5 paths the equity range swings widely from one seed to the next, and by 100 paths it has
+settled. The Experiment button reshuffles the three seeds so a reader can watch a fresh random draw
+land in the same structure. The Input Distributions panel below is drawn from the last run in the
+grid (100 paths) and, in this mode, shows its worst and best sampled lines by default rather than
+hiding them behind a legend click.
+
+Synthetic inflation is still a single fixed rate today, so its column shows one value; the table is
+built to display a real range automatically once Synthetic paths gain a varying inflation series.
+
+### The Paths box can now go below 100 in advanced and demo modes
+
+The Paths field is normally held at a minimum of 100, because the survival rate and the percentile
+bands stop meaning much at very low path counts - but experiments are allowed down to 3 paths. 
+The default experience is unchanged.
+
+---
+
 <a id="11.152f"></a>
 
 ## 11.152f

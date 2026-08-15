@@ -2313,3 +2313,43 @@ marked DONE.**
 Index gained two **DONE** rows (P53/P54); phase sections appended after P52 in numeric order. Corrected
 the browser self-test figure to **559** at v11.1553 (the resync block had guessed 529 from v11.14dd).
 Still docs-only, no engine/version change.
+
+---
+
+## Session 2026-08-15 (thirteenth) — Local (county/city/school) income-tax disclosure NOTES + launch.json fix
+
+User asked which supported states have county/city/school-district income taxes the engine does not model,
+then to add disclosure NOTES for the ones that undercount **retirement + investment income** (the key
+discriminator: earned-income-only local taxes miss retirees), and to add a prioritized modeling plan to P19.
+
+Engine models **zero** sub-state income tax. Added/strengthened 8 `taxengine.js` NOTE fields:
+- Full income base: **MD** (23 counties + Baltimore City, strengthened), **IN** (92 counties, strengthened).
+- New: **NY** (NYC 3.08-3.88% + Yonkers), **OH** (school-district income tax, traditional-base districts;
+  OH cities tax wages only, out of scope), **MI** (city tax on interest/div/cap-gains, pension+SS exempt),
+  **OR** (Portland-metro SHS + Multnomah PFA, threshold-gated; state had NO note before), **PA**
+  (Philadelphia School Income Tax on dividends + certain interest; PA EIT/wage taxes miss retirees), **IA**
+  (school-district + EMS surtax on the investment-income portion).
+- **Deliberately not flagged** (verified no gap, per the state-NOTE style rule): KY/AL occupational,
+  PA/OH wage/municipal (earned income only); CA/CO no personal local income tax.
+
+Verified: `taxengine.js` parses, node core 263/263, all 8 NOTEs present in parsed `TAXData`, Oregon NOTE
+renders in a `<details>` in-browser (port 51498 via serve.py autoPort), console clean (only the unrelated
+Cloudflare analytics beacon from #172).
+
+Plan: **P19g** (DONE, the notes) + **P19h** (open — thumbnail modeling plan, prioritized by retirees:
+1) NYC own jurisdiction, 2) MD tiered kicker, 3) IN tiered kicker, 4) OH SDIT kicker, 5) MI city kicker,
+6) OR Portland toggle, 7) PA/IA note-only; ~4,000-municipality ceiling stated; engine hook = one
+`localRate`+`localBase` into `calculateTaxes()`, nerdknob-gated).
+
+**DECISION (user): NO version bump, NO changelog** — no taxation changed, only the info shown. State-tax
+docs fold into the changelog on the next material change.
+
+**launch.json fixed repo-wide.** Every session kept "discovering" a fixed-8767 `python -m http.server`
+launch.json and switching it to serve.py autoPort. Root cause: the **main checkout's** launch.json was that
+fixed-8767 template, which new worktrees copied. Rewrote main + all three worktree copies (main,
+context-ab498f, readme-review-updates-c9df11, this one) to `serve.py` + `"autoPort": true`. Updated the
+`feedback-preview-server` memory to record it is DONE so future sessions stop redoing the switch. `.claude`
+is gitignored, so none of this is committed - it is local machine config.
+
+Not committed yet: the taxengine.js NOTE edits + task_plan/progress updates are on branch
+`worktrees/planning-with-files-e0c3ab`, uncommitted, awaiting user direction (no PR requested this turn).

@@ -1539,7 +1539,7 @@ function renderOptimizerTable(results) {
         const bTitle = 'BASELINE - the strongest plan with no Roth conversions and no cyclic brokerage maneuvering. Every other row\'s Δ columns are measured against this. Click to load it.';
         baselineRowHtml = '<div style="display:contents;" id="opt-baseline-row">' + columns.map(col => {
             let v;
-            if (col.key === 'strategy')      v = BASELINE_MARK + 'BASELINE - ' + baselineRow._strategyLabel;
+            if (col.key === 'strategy')      v = BASELINE_MARK + baselineRow._strategyLabel;
             // Zero only when the baseline IS the reference. With a compare row pinned the baseline
             // has a real Δ like every other row, and printing 0 would be a lie.
             else if ((col.key === 'dNW' || col.key === 'dTax') && !OptimizerState.compareRow) v = '0';
@@ -1567,13 +1567,14 @@ function renderOptimizerTable(results) {
             + (curFailed ? ' This plan runs out of money before the end.' : '')
             + (curInfeas ? ' This plan\'s bracket/ACA target cannot actually be held.' : '');
         currentRowHtml = '<div style="display:contents;" id="opt-current-row">' + columns.map(col => {
-            // Marker first, matching '⚓ BASELINE - …' on the row above. _strategyLabel already
-            // carries the 📍 prefix (it is what marks the row everywhere else), so it is moved to
-            // the front rather than printed twice as 'CURRENT - 📍 …'.
+            // Marker first, matching '⚓ …' on the row above. _strategyLabel already carries the 📍
+            // prefix (it is what marks the row everywhere else), so it is moved to the front rather
+            // than printed twice as '📍 … 📍 …'. The words "BASELINE"/"CURRENT" are not printed: the
+            // mark, the row color and the legend already say what these two pinned rows are.
             const _curBare = currentRow._strategyLabel.startsWith(CURRENT_PLAN_MARK)
                 ? currentRow._strategyLabel.slice(CURRENT_PLAN_MARK.length)
                 : currentRow._strategyLabel;
-            const v = col.key === 'strategy' ? CURRENT_PLAN_MARK + 'CURRENT - ' + _curBare : col.getValue(currentRow);
+            const v = col.key === 'strategy' ? CURRENT_PLAN_MARK + _curBare : col.getValue(currentRow);
             return `<div style="${_cCell}${cellActionCss(col)}"${cellActionAttrs(col, currentRow, cTitle)}>${v}</div>`;
         }).join('') + '</div>';
     }

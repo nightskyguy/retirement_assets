@@ -358,7 +358,7 @@ var TAXData = {
 		STATE: 'Iowa',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Iowa fully exempts pension, IRA, 401(k), and other retirement-plan income for filers 55+ (Social Security is already separately exempt).',
+		NOTE: 'Iowa fully exempts pension, IRA, 401(k), and other retirement-plan income for filers 55+ (Social Security is already separately exempt). Most Iowa school districts also levy a surtax (a percentage of the Iowa income tax owed, up to about 20%), plus a small emergency-services surtax; because Iowa still taxes interest, dividends, and capital gains, this calculator understates tax by that surtax on the investment-income portion for residents of surtax districts.',
 		SSTaxation: 0.00,
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'], ageGate: 55 },
 		FLAT_RATE: 0.038,
@@ -405,7 +405,7 @@ var TAXData = {
 		STATE: 'Maryland',
 		BasisStepUp: 0.50,
 		YEAR: 2026,  // Brackets effective July 1, 2025 remain in effect; std deductions COLA-indexed (may be slightly higher)
-		NOTE: 'Retirement income: Maryland excludes up to $40,600 (2026) of qualified pension income for filers 65+ or disabled, reduced dollar-for-dollar by Social Security/Railroad Retirement received (traditional IRA distributions do not qualify). Maryland county/local income taxes (2.25%–3.3% depending on county) are levied on top of state tax; this calculator does not include them, so total tax is understated by that amount.',
+		NOTE: 'Retirement income: Maryland excludes up to $40,600 (2026) of qualified pension income for filers 65+ or disabled, reduced dollar-for-dollar by Social Security/Railroad Retirement received (traditional IRA distributions do not qualify). Maryland county/local income taxes (2.25% to 3.3% depending on county) apply to all Maryland taxable income, including IRA/401(k) distributions, interest, dividends, and capital gains, and every county plus Baltimore City levies one; this calculator does not include them, so total tax is understated for essentially every Maryland resident.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension'], cap: 40600, ageGate: 65, reduceBySS: true },
 		CAPITAL_GAINS: {
@@ -452,7 +452,7 @@ var TAXData = {
 		STATE: 'Michigan',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Retirement income: 2026 is the final phase-in year of Michigan\'s retirement-income tax relief — pension/IRA/401(k) income is exempt up to $67,610/person ($135,220 for a married couple). Filers born before 1946 have unlimited exemption, but only for government pensions; this calculator can\'t tell government from private pensions, so it only grants the unlimited exemption when both spouses were born before 1946, and applies the standard per-person cap otherwise. Tax may be overstated for a household born before 1946 with a private pension and only one qualifying spouse.',
+		NOTE: 'Retirement income: 2026 is the final phase-in year of Michigan\'s retirement-income tax relief — pension/IRA/401(k) income is exempt up to $67,610/person ($135,220 for a married couple). Filers born before 1946 have unlimited exemption, but only for government pensions; this calculator can\'t tell government from private pensions, so it only grants the unlimited exemption when both spouses were born before 1946, and applies the standard per-person cap otherwise. Tax may be overstated for a household born before 1946 with a private pension and only one qualifying spouse. Separately, about two dozen Michigan cities (Detroit at 2.4%, most others near 1%) levy a resident income tax that exempts pension and Social Security income but does tax interest, dividends, and capital gains; this calculator does not include it, so total tax is understated for residents of those cities who hold taxable brokerage income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 67610, birthYearFullExemptBefore: 1946 },
 		FLAT_RATE: 0.0425,  // 4.25% — general fund did not exceed inflation so no rate reduction triggered
@@ -475,7 +475,7 @@ var TAXData = {
 		STATE: 'New York',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Retirement income: New York fully exempts government and military pensions and excludes up to $20,000/person of private pension/IRA income (age 59½+). This calculator can\'t tell government from private pensions, so it applies the $20,000/person private-pension cap to all pension/IRA income — actual NY tax may be overstated for filers with a government pension.',
+		NOTE: 'Retirement income: New York fully exempts government and military pensions and excludes up to $20,000/person of private pension/IRA income (age 59½+). This calculator can\'t tell government from private pensions, so it applies the $20,000/person private-pension cap to all pension/IRA income — actual NY tax may be overstated for filers with a government pension. Separately, New York City and Yonkers residents owe a local income tax on the same base (taxable IRA and pension income, interest, dividends, and capital gains); New York City rates run about 3.08% to 3.88%. This calculator does not include the city tax, so total tax is understated for New York City and Yonkers residents.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: { mode: 'cap', types: ['pension', 'ira'], capPerPerson: 20000, ageGate: 60 },
 		// FY2026 budget (signed May 2025): first 5 brackets each cut 0.1%; top brackets unchanged.
@@ -521,6 +521,7 @@ var TAXData = {
 
 	OR: {
 		STATE: 'Oregon',
+		NOTE: 'Local income taxes: Portland-area residents owe the Metro Supportive Housing Services tax (1%) and the Multnomah County Preschool for All tax (1.5% to 3%) on taxable income above $125,000 single / $200,000 joint, including retirement distributions, interest, dividends, and capital gains; this calculator does not include them, so total tax is understated for higher-income Portland-area residents.',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
@@ -545,7 +546,7 @@ var TAXData = {
 		STATE: 'Pennsylvania',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Retirement-account distributions (IRA/401k/pension) after age 59½/retirement are exempt from Pennsylvania tax; interest, dividends, and capital gains remain taxable. Assumes retirees are 59½+.',
+		NOTE: 'Retirement-account distributions (IRA/401k/pension) after age 59½/retirement are exempt from Pennsylvania tax; interest, dividends, and capital gains remain taxable. Assumes retirees are 59½+. The Philadelphia School Income Tax (about 3.75%) applies to a Philadelphia resident\'s dividend income and certain non-bank interest (bank interest, capital gains, wages, and retirement distributions are exempt); this calculator does not include it, so total tax is understated for Philadelphia residents with dividend income. Pennsylvania\'s other local taxes (the Earned Income Tax and city wage taxes, including Philadelphia\'s) fall only on wages and business profits, so they do not affect a retiree\'s investment or retirement income.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		// PA does not tax distributions from eligible employer plans or IRAs after 59½/retirement.
 		RETIREMENT_EXCLUSION: { mode: 'full', types: ['pension', 'ira'] },
@@ -727,7 +728,7 @@ var TAXData = {
 		STATE: 'Indiana',
 		BasisStepUp: 0.50,
 		YEAR: 2026,
-		NOTE: 'Indiana county income taxes (typically 0.5%–2.9% depending on county) are levied in addition to the state rate; this calculator does not include them, so total tax is understated by that amount.',
+		NOTE: 'Indiana county income taxes (roughly 0.5% to 3% depending on county) apply to Indiana adjusted gross income, including IRA/401(k) distributions, interest, dividends, and capital gains, and all 92 counties levy one; this calculator does not include them, so total tax is understated for essentially every Indiana resident.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		FLAT_RATE: 0.0305,
 		MFJ: {
@@ -883,7 +884,7 @@ var TAXData = {
 		BasisStepUp: 0.50,
 		YEAR: 2026,
 		INFLATION_INDEXED: false,
-		NOTE: 'Retirement income: Ohio provides a retirement-income tax credit of up to $200 (not a deduction), scaled by the amount of retirement income received, for filers with income under $100,000. 2026: Ohio moved to a flat 2.75% rate on non-business income above $26,050 (the prior 3.5% top bracket was repealed). Thresholds are not inflation-adjusted.',
+		NOTE: 'Retirement income: Ohio provides a retirement-income tax credit of up to $200 (not a deduction), scaled by the amount of retirement income received, for filers with income under $100,000. 2026: Ohio moved to a flat 2.75% rate on non-business income above $26,050 (the prior 3.5% top bracket was repealed). Thresholds are not inflation-adjusted. Ohio school districts that use the "traditional" tax base also levy a school district income tax on all Ohio taxable income, including retirement distributions, interest, dividends, and capital gains (rates about 0.25% to 2%); this calculator does not include it, so total tax is understated for residents of those districts. Ohio municipal and city income taxes generally reach only wages and business profits, not a retiree\'s investment or retirement income, so they are correctly excluded here.',
 		SSTaxation: 0.00,  // Does not tax Social Security benefits
 		RETIREMENT_EXCLUSION: {
 			mode: 'credit', types: ['pension', 'ira'], magiGate: 100000,

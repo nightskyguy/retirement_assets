@@ -65,6 +65,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P23 | MC arithmetic-mean returns + AR(1) variable inflation | `P23a` | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
+| **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
 | **O3** | P28 | "Every voluntary IRA withdrawal is a conversion" — ship decision | `P28f` | nothing |
 | **O3** | P40 | Test-file layout — the `tests/` subfolder move | decision, then the move | nothing |
 | **O3** | P5 | Greedy DP conversion schedule | `P5a` | nothing |
@@ -2526,3 +2527,161 @@ changelog):**
 
 **Status:** DONE, merged as [PR #173](https://github.com/nightskyguy/retirement_assets/pull/173).
 Tests at ship: node core **263/263**, doclinks 22, TPP 32; **browser self-test 559**.
+
+---
+
+## P55: MCP server — let an AI run the engine over a customer's scenario  *(NEW 2026-08-16, priority unset)*
+
+**Why:** users asked whether Claude (or any AI) can interact with the optimizer's data. The compute
+engine is already MCP-ready; the hard part is not the engine, it is getting a *random customer's*
+scenario — which lives only in their browser's memory / `localStorage` on a static host with no
+accounts — into a headless, stateless tool. This phase scopes both.
+
+### Engine readiness (grounded, 2026-08-16)
+
+- `simulate(inputs)` at `optimizer_core.js:2624` is a **pure function**: plain params object in, result
+  object out. `optimizer_core.js` has **0** `getElementById` — the engine is fully DOM-free.
+- `optimizer_core.js` and `taxengine.js` already `module.exports = { simulate, optimizeSpend,
+  suggestSpendMenu, rankRowsByObjective, optimizeConversionAmount, calculateTaxes, calcIRMAA, ... }`.
+  The node test harness already runs the engine headless (**263/263**). An MCP server is the same trick.
+- **The seam:** `getInputs()` at `optimizer_ui.js:5` is "the single DOM-to-params bridge into the
+  engine." It reads the form, parses dollar strings, flips checkboxes to bools and derives fields like
+  `hasSpouse`, then hands the result to `simulate()`. It is DOM-coupled, so it cannot be reused
+  headless as-is. This transform is what an MCP server must replicate — the drift risk lives here.
+
+### The data-bridge problem (the crux)
+
+Customer's primary contact is the hosted static page `https://tools.netcitizen.us/retirement_optimizer.html`.
+Their scenario exists as: (1) live form state in browser memory, (2) `localStorage` saved scenarios,
+(3) URL params (partial, nerdknob-gated). No server, no account, no server-side copy. Existing bridges
+out of the browser:
+
+- **Save/Export scenario → JSON file** (`exportScenario`, `optimizer_ui.js:4480`). Shape is
+  `{ version, data: { <fieldId>: <value> } }`, keyed by DOM field IDs — the same map `applyScenario`
+  (`optimizer_ui.js:4158`) writes back into the form. This is the clean bridge.
+- **URL params** (`optimizer_ui.js:2377/3838/3899`). Partial state only; not a full scenario.
+
+### Customer-work estimate (recommended local-stdio path)
+
+What a non-developer customer must do to get their AI talking to the tool, honestly counted:
+
+1. Install Node.js runtime. *(dev-hostile barrier)*
+2. Obtain the MCP package (`npx`, or clone/download). *(softened to near-zero if shipped as `npx`)*
+3. Register the server in their MCP client config — `claude_desktop_config.json`, `claude mcp add`,
+   or another client's JSON, with an absolute path. *(dev-hostile; the .dxt one-click collapses it)*
+4. Restart the MCP client.
+5. **Bridge their data out of the browser:** on the hosted page, Save → Export → download
+   `myscenario.json`. *(existing feature; friction is "download file, find it, attach it")*
+6. Hand that JSON to the AI (attach/paste) and ask it to run the tool.
+7. AI calls `run_scenario` with the JSON's `data` map → results.
+
+Friction ranking (worst first): **(a) data bridge**, **(b) MCP client config JSON**, **(c) Node
+install**. Mitigations that shrink the list: ship as `npx @netcitizen/retirement-mcp` (kills step 2,
+softens 3); a Claude Desktop **`.dxt`** one-click extension (collapses steps 2-4 into a double-click);
+a **"Copy scenario for AI" button** on the page that puts the scenario JSON on the clipboard (kills the
+step-5 download-and-attach dance — customer clicks once, pastes into chat).
+
+### Engine-distribution decision — pick one of A / B / C (OPEN)
+
+How the engine code reaches the customer and where it runs. The engine is only **3 files** in load
+order — `displayhelpers.js` → `taxengine.js` → `optimizer_core.js` (~5.7k lines), wired by globals
+(`optimizer_core.js` reaches `calculateTaxes`/`RMD_TABLE` etc. as bare globals; no `require()` between
+them) — **not** the whole repo, the UI, or the HTML. A customer never needs a full source checkout.
+
+- **A. Published npm package + `npx` — pinned, local stdio (recommended v1).** Bundle the 3 engine
+  files into a package on npm; customer runs `npx @netcitizen/retirement-mcp`, `npx` fetches from the
+  registry on demand and caches. No git clone, no manual files, no "keep source updated" chore.
+  **Engine is pinned to the published release** — a feature, not a bug: financial analysis stays
+  reproducible, formulas cannot silently shift between two runs of the same plan. Republish → next
+  `@latest` run pulls it. Build = **P55e**.
+- **B. Runtime-fetch the live engine — always-fresh, local stdio (optional).** A tiny stub `fetch`es
+  the 3 `.js` from `tools.netcitizen.us` at startup and evaluates them in a `vm` context with an
+  injected `module`/globals (clean *because* they are classic scripts with the dual-export guard).
+  Zero staleness — always exactly matches the live site. Cost: it is remote-code-eval (same trust
+  boundary as visiting the site — identical origin, identical code the browser runs — but corporate
+  proxy/AV may block it, and it needs SRI hashes or version pinning so a compromised host cannot feed a
+  headless, CSP-less process). Build = **P55h**. Note: for a calculator you *usually want A's pinning*,
+  not B; offer B only if "must match live" is a hard requirement.
+- **C. Hosted connector — no local anything (v2, most customer-friendly, most owner work).** The engine
+  runs on owner infra; the customer adds one connector URL to their AI client — no Node, no files,
+  ~3 steps total, and it works on iPad/Chromebook where A and B cannot. Cost lands entirely on the
+  owner: the site is static today, so this is a new always-on service to build, host, secure and keep
+  in sync. Full build-out below. Build = **P55i**.
+
+**Not-MCP aside (do not build):** a browser-extension route (Claude-in-Chrome / computer-use) makes the
+data bridge *free* — the AI reads the live page the customer already has open — but it is vendor-tied,
+scrapes the DOM instead of a typed tool schema, and cannot batch headless. Note it; build none of it.
+
+### Option C (hosted connector) — what it takes
+
+The engine is pure DOM-free arithmetic, so it ports to a server cleanly; the work is transport,
+hosting, and running a public endpoint safely.
+
+1. **Transport/protocol** — MCP over **Streamable HTTP** (SSE), not stdio. Stand up the MCP server with
+   the JS SDK's HTTP transport at e.g. `https://mcp.netcitizen.us/` (or an `/mcp` path). Implement
+   `initialize` + capabilities + `tools/list` + `tools/call` for the same tool set as P55b.
+2. **Hosting** — the site is static (no server today), so this is net-new. Best fit: **Cloudflare
+   Workers** — the engine is pure JS with no filesystem, and Workers already front the domain. Confirm
+   the engine touches **no Node-only APIs** first (likely clean; it is arithmetic). Alternative: a small
+   Node service on Fly.io/Render/VPS if a Worker's CPU-time cap is too tight for the full optimizer
+   sweep (~1.3s).
+3. **Server-side engine load + version sync** — bundle the same 3 files into the worker/service from the
+   **same repo**, so a site release and the connector deploy from one source and cannot drift. Expose an
+   `engine_version` tool/field so a client can confirm it matches the customer's page (`v11.xxxx`).
+4. **Stateless by default (privacy)** — hold **no** customer data; every call carries the scenario in
+   the request (the exported `data` map). Do not persist scenarios, do not log request bodies (they
+   contain dollar amounts). HTTPS mandatory.
+5. **Auth** — public endpoint. Since it is a stateless calculator with nothing stored, **no-auth +
+   per-IP rate limiting + payload-size caps** is likely enough for v1; MCP OAuth2 / an API key is the
+   heavier option if usage must be gated. Decide before launch.
+6. **Abuse / cost controls** — the full sweep is ~1.3s of CPU; a public endpoint running sweeps is a DoS
+   and cost vector. Rate-limit per IP, cap request size, add per-call timeouts, and consider gating the
+   expensive tools (`rank_strategies` / full sweep) behind a cheaper default.
+7. **Hosted data bridge** — still needs the customer's scenario in the call; the **"Copy scenario for
+   AI"** button (P55d) covers it. *Optional advanced:* a one-time handoff token (page POSTs scenario →
+   short-lived token → AI fetches by token) removes the copy step but adds a store, PII surface, and
+   expiry logic — **defer**.
+8. **Ops** — managed TLS, a health endpoint, monitoring, and a deploy pipeline tied to the site's
+   release train so engine versions never diverge.
+9. **Client onboarding** — customer adds the URL via Claude Desktop "Add custom connector" or
+   `claude mcp add --transport http <url>`. Document it in the P55f runbook.
+10. **Disclaimer/ToS** — a public financial-calc endpoint should carry the site's "not advice"
+    disclaimer and a usage notice.
+
+### Tasks
+
+- [ ] **P55a** — Refactor `getInputs()` into a **pure `mapFieldsToInputs(fieldMap)`** (no DOM) plus a
+  thin DOM reader that gathers the field map and calls it. Single source of truth so the browser and
+  the MCP server never drift on dollar-parsing / checkbox / derived-field logic. Prereq for P55b.
+- [ ] **P55b** — `optimizer_mcp.js` (stdio server): `require('./optimizer_core.js')` +
+  `./taxengine.js` + the pure mapper. Tools: `run_scenario`, `optimize_spend`, `suggest_spend_menu`,
+  `rank_strategies` (the "Optimize for" objectives), `analyze_conversion` (break-even / stop-year /
+  optimal amount), `calculate_taxes` + `irmaa`.
+- [ ] **P55c** — Tool input schema derived from **one shared defaults object**, not hand-maintained, so
+  it cannot drift from the engine's real params.
+- [ ] **P55d** — Page affordance: **"Copy scenario for AI"** button (clipboard JSON) to remove the
+  export-file bridge friction. Nerdknob-gate first if unsure; small, high-leverage UX win.
+- [ ] **P55e** — **Option A:** publish the 3-file engine bundle to npm; `npx @netcitizen/retirement-mcp`
+  entry point and/or a Claude Desktop `.dxt` one-click extension. Pinned engine version. The v1 default.
+- [ ] **P55f** — Customer-facing runbook: "connect your AI to the retirement optimizer" (install,
+  config, export-and-run). Cover whichever of A/B/C ship. Link from README.
+- [ ] **P55g** — Parity test in the node harness: MCP `run_scenario(exportedJson.data)` output ==
+  direct `simulate(getInputs-equivalent)` output, so the tool and the page can never silently diverge.
+- [ ] **P55h** — **Option B (optional):** runtime-fetch stub — `fetch` the 3 `.js` from
+  `tools.netcitizen.us` at startup, eval in a `vm` context with injected `module`/globals, grab exports.
+  Add SRI-hash/version pinning so a compromised host cannot inject code. Ship only if "always match
+  live" is required; A's pinning is the safer default.
+- [ ] **P55i** — **Option C (v2):** hosted MCP connector — Streamable-HTTP server, Cloudflare Worker (or
+  small Node service) hosting the same engine bundle, stateless/no-stored-data, HTTPS, per-IP
+  rate-limit + payload caps + sweep timeouts, `engine_version` reporting, deploy pipeline tied to the
+  site release, "Add custom connector" onboarding, "not advice" disclaimer. See the Option C build-out
+  above. Biggest owner effort; only path that works on iPad/Chromebook.
+
+**Risks:** field-map drift between `getInputs()` and the mapper (P55a kills it); scenario `version`
+skew (importer already warns, `optimizer_ui.js:4525`); customers on iPad/Chromebook cannot run a local
+Node server at all — for them only the hosted-connector or browser-extension routes work.
+
+**Status:** OPEN, unprioritized. Engine is ready. Open decision: **distribution A / B / C** (A =
+pinned `npx` package, recommended v1; B = runtime-fetch live engine, optional; C = hosted connector,
+v2, most owner work but only path for iPad/Chromebook), and whether P55d ships with v1. A and C are not
+exclusive — A for v1, C later for no-install customers.

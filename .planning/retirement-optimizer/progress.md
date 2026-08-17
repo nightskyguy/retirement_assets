@@ -2353,3 +2353,50 @@ is gitignored, so none of this is committed - it is local machine config.
 
 Not committed yet: the taxengine.js NOTE edits + task_plan/progress updates are on branch
 `worktrees/planning-with-files-e0c3ab`, uncommitted, awaiting user direction (no PR requested this turn).
+
+---
+
+## Session 2026-08-17 (fourteenth) — Tax Payment Planner: draw-only comparison bug FIXED, then P56 specced
+
+**Bug the user reported:** a RetirementTaxPlanner link with `ira1RothConversion=0&ira2RothConversion=0`
+showed only ONE plan (early draws) and never evaluated the late/December alternative, which the user
+correctly suspected was better.
+
+**Root cause:** `taxPaymentPlanner.js:1804` gated the whole early-vs-December comparison behind
+`hasAnyConversion`, so with zero conversions the sibling plans were never computed. But the timing lever
+is not conversion-specific: any not-yet-taken draw can be deferred to December.
+
+**FIXED and verified (v1.13c3 -> v1.1580, UNCOMMITTED on worktree `context-e73361`, branch
+`worktrees/retirement-tax-planner-payment-582cdf`):** gate is now
+`hasAnyConversion || hasDeferrableDraw` (deferrable = amount > 0 AND not already taken, since a taken
+draw is locked to its actual month and offers no choice). Draw-only renders a two-plan comparison with
+the Roth-specific Plan A column, pill and growth row suppressed; the conversion path still renders all
+three. Node 32 -> **34 tests**, browser badge 34/34, console clean. On the user's scenario December wins
+by **$1,578** (early costs $1,366 withholding OC + $212 RMD deferral), matching the tool's own
+break-even readout (hysaNet 2.10% < r/2 3.00%).
+
+**GOTCHA found:** `optimizer_tests.js:2220` still says `taxPaymentPlanner: 32` while 34 are on disk, so
+the tiered browser runner shows a red count-changed badge. Rolled into P56j rather than fixed here.
+
+**Then the user pushed further** and set ten goals for the tool, the key one being that draw timing and
+tax-payment timing are **separate levers** and the plan set must cover early / hybrid / late /
+early-draws-late-payments / quarterly. Research turned up the deeper defect: the planner has **two cost
+models that never met** and can print opposite verdicts. The timing table measures portfolio deltas to
+Dec 31; the bottom "Cost Analysis" table measures HYSA-carry cost to April 15 **and prices the YE-IRA
+row at the main (early) plan's withhold month even when December wins**. Same run, same screen: timing
+table said December withholding wins, Cost Analysis said YE-IRA $1,862 vs quarterly $656. Priced at the
+month the winning plan actually uses, YE-IRA is ~$497 and does beat quarterly's ~$656.
+
+**Wrote it up as new phase P56 (O0), plan APPROVED by the user, ZERO code written.** Five-plan matrix
+A (early) / B (hybrid, omitted with a note when no conversion) / C (late) / D (early spending draws +
+December tax holdback, withheld up to 100% per Form W-4R) / Q (December draws, all quarterly estimates),
+all priced in ONE unified April-15 table computed from each plan's own action list, which is what
+structurally makes a self-contradiction impossible. Brokerage-sales demoted to a footnote row. Four user
+decisions locked in the phase text; 11 tasks P56a..P56k; sanity anchors (A 940 / C 497 star / D 567 /
+Q 656) written in so the implementation can assert against them.
+
+**DECISION (user): implementation continues in another session.** Nothing beyond the v1.1580 fix is
+coded. Start at **P56a**.
+
+Uncommitted on this worktree: the v1.1580 planner fix + 2 tests, and these task_plan/progress edits.
+No PR requested.

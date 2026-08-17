@@ -10,6 +10,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
+| **O0** | P56 | Tax Payment Planner: 5-plan matrix + one cost table | `P56a` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O0** | P32 | Brokerage draws: audit defect open, premise refuted | `P32c` |
 | **O1** | P51 | Oracle a-c,e-g DONE 08-10; propwd refuted | `P51d` |
@@ -17,11 +18,10 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**`P35f` and `P35g` are DONE (v11.1499).** IRC §1014 now fires at both deaths, so terminal
-wealth and every "Optimize for" ranking have stopped leaning toward Roth conversions. Break
-Even was deliberately left on the old basis and did not move. **P35's O0 was earned by that
-correction and is now spent** - re-bucket it if the remaining Phased engine work (`P35i`) is
-not what you want next. P36 round 2 now waits on `P35i` alone.
+**P56 is NEW (2026-08-17), plan APPROVED by user, no code written yet** - it fixes a real
+contradiction: the planner's two cost tables can disagree, and quarterly-vs-withholding was never
+compared head to head. **`P35f`/`P35g` DONE (v11.1499)**: §1014 fires at both deaths, so
+**P35's O0 was earned by that fix and is now spent** - re-bucket if `P35i` is not next.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 
@@ -45,6 +45,7 @@ first task. Every open item in the file now carries one.
 |---|---|---|---|---|
 | **O0** | P35 | Phased strategy; **basis step-up shipped v11.1499** | `P35i` (the Phased engine) | nothing hard |
 | **O0** | P32 | Brokerage draws — premise refuted, accounting-audit defect open | `P32c` | nothing |
+| **O0** | P56 | Tax Payment Planner — five-plan matrix (A/B/C/D/Q) + one unified cost table *(new 2026-08-17, plan approved)* | `P56a` | nothing |
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
 | **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
@@ -87,12 +88,14 @@ first task. Every open item in the file now carries one.
 | **O3** | P46 | Tax Payment Planner backlog, TPP-1 + TPP-2 *(was TPP-1..5)* | TPP-1 (prose, no checklist yet) | nothing |
 | ~~DONE~~ | ~~P49~~ | ~~Horizon-aware suggested spend~~ — **SHIPPED v11.14c6** | — | — |
 
-**Why P35 and P32 are the two O0s.** P35 carries the brokerage basis step-up, which is not a feature
+**Why P35, P32 and P56 are the O0s.** P35 carries the brokerage basis step-up, which is not a feature
 but a correction: the terminal valuation taxes heirs on gains §1014 steps up in full, and because Roth
 and Cash are unaffected the error runs one way, **in favor of Roth conversions**, through Break Even
 and every "Optimize for" ranking. Nothing measured on top of it is trustworthy until it lands. P32 is
 O0 for the same reason at smaller scale — its audit found a real defect and its own premise was
-refuted, so the section is currently half true.
+refuted, so the section is currently half true. P56 is the same species of problem in the Tax Payment
+Planner: two cost tables built on different clocks can print opposite verdicts for the same scenario,
+and one of them is anchored to the wrong month, so the advice on screen can be simply wrong.
 
 ---
 
@@ -2685,3 +2688,268 @@ Node server at all — for them only the hosted-connector or browser-extension r
 pinned `npx` package, recommended v1; B = runtime-fetch live engine, optional; C = hosted connector,
 v2, most owner work but only path for iPad/Chromebook), and whether P55d ships with v1. A and C are not
 exclusive — A for v1, C later for no-install customers.
+
+---
+
+## P56: Tax Payment Planner — five-plan matrix (A/B/C/D/Q) + one unified cost table  *(NEW 2026-08-17, plan APPROVED by user, O0, no code written)*
+
+**Scope:** `RetirementTaxPlanner.html` + `taxPaymentPlanner.js` only. The Optimizer engine is not
+touched. Design was researched and approved in the 2026-08-17 session; **nothing was implemented**,
+this section is the whole specification.
+
+### Starting state — READ FIRST
+
+Work sits on worktree `.claude/worktrees/context-e73361` (branch
+`worktrees/retirement-tax-planner-payment-582cdf`), which has an **UNCOMMITTED v1.1580** change that
+must be preserved or re-derived:
+
+- The early-vs-December comparison used to be gated behind `hasAnyConversion`, so a **draw-only**
+  scenario silently computed exactly ONE plan and never showed the December alternative. It is now
+  gated on `hasAnyConversion || hasDeferrableDraw`, where a draw is deferrable only if it is not
+  already taken. Draw-only renders a two-plan (early vs December) comparison with the Roth-specific
+  column, pill and growth row suppressed.
+- Test count went 32 -> **34** (node and browser both green), version 1.13c3 -> **1.1580**.
+- **`optimizer_tests.js:2220` is STALE**: `EXPECTED: { ..., taxPaymentPlanner: 32, ... }` while 34 are
+  on disk, so the browser tiered runner shows a red count-changed badge today. Fix it in the P56 commit.
+
+### Why (the defect this phase closes)
+
+The planner grew **two cost models that never met**, and they can print opposite verdicts:
+
+1. **Timing comparison** (`buildConvComparison`, ~line 1919): first-year advantage measured to
+   **Dec 31**, portfolio-rate deltas only, no cash-carry term.
+2. **Cost Analysis table** (`buildAnalysis`, ~line 1856): absolute opportunity cost to an
+   **April 15** reference, with an HYSA cash-carry term.
+
+They share no numbers, and the second one is anchored wrong: its YE-IRA row is priced at the
+**main (early) plan's** `effectiveWithholdMonth` even when the December plan wins. Reported by the
+user on this scenario (CA, tax year 2028, fed 18,286 + CA 6,545, draws 139,182 of which RMD 15,657,
+no conversions, r=6%, hysaGross=3%, ord=30%):
+
+- Timing table: **December withholding wins** (early costs 1,578 more).
+- Cost Analysis table, same run: **YE-IRA 1,862 vs All-Quarterly-Cash 656**, implying quarterly wins.
+- Priced at the month the winning plan actually uses, YE-IRA is **~497** and genuinely beats
+  quarterly's ~656. The table was contradicting itself, not the user.
+
+Two further user complaints, both fixed here: it is not discoverable **why a plan column disappears**
+when there is no conversion, and the **withholding-vs-quarterly** cost comparison is buried at the
+bottom of the page in a table nobody connects to the plan choice.
+
+### User goals this phase must satisfy (stated 2026-08-17)
+
+1. Calculate different methods to draw spending funds **and** to withhold/pay taxes.
+2. Determine relative cost of each method and present the options clearly.
+3. RMDs must be drawn before conversions in that same IRA.
+4. Every proposed plan must satisfy IRS/state payment timing.
+5. Draws for spending and withholding for taxation may be considered **separately**.
+6. Methods must include: **A** early draws+payments, **B** hybrid, **C** late draws+payments,
+   **D** early draws + late payments, and **Q** quarterly payments instead of A/B/C/D.
+7. For the current year, "early" is timed to the current date or later.
+8. Any plan should make full use of the IRA draws that are already happening; where draws are
+   insufficient, quarterly payments must be included.
+9. Inputs stay unchanged unless there is a strong reason.
+10. Output is a clear comparison of each plan with detailed steps for withdrawal, conversion, payment.
+
+### The plan matrix — user lettering REPLACES today's letters
+
+| Plan | Draws | Conversions | Tax payment | Maps to today |
+|---|---|---|---|---|
+| **A** Early | nextMonth | nextMonth | withheld at the draw | main computation (shown as "Plan B") |
+| **B** Hybrid | December | nextMonth | withheld in December | `_planC` object (shown as "Plan A") |
+| **C** Late | December | December | withheld in December | `_baseline` object (shown as "Plan C") |
+| **D** Split *(NEW)* | spending part early, tax part December | nextMonth | December tranche withheld up to 100% | none |
+| **Q** Quarterly *(NEW)* | December | December | quarterly cash estimates, zero withholding | none |
+
+B is omitted when there is no conversion (it degenerates to C) and a **one-line note explains why** -
+this is the user's "why did Plan A vanish" complaint. Q converts in December like C so it isolates
+exactly one lever against C (payment mechanism); B already isolates conversion timing.
+
+### Four decisions the user confirmed (do not re-litigate)
+
+1. **D mechanics = holdback split.** The spending portion of each input draw is taken early with **no**
+   withholding; the tax portion is held back as a **separate December draw tranche withheld up to
+   100%** (Form W-4R permits a 0-100% federal election), still credited pro-rata across all four due
+   dates under IRC 6654(g)(1). Total draws equal the input amounts exactly - it must NOT add a
+   supplemental draw, which would create taxable income the pre-calculated tax inputs do not include.
+2. **Q pairs with December draws**, isolating the payment method against C.
+3. **Unified April-15 frame** for every plan, so the timing table and the Cost Analysis table become
+   **one** table. This is what structurally kills the contradiction.
+4. **Brokerage-sales survives as a footnote row** under the merged table (a funding-source variant of
+   Q, carrying its capital-gains warning), not as a full plan with steps.
+
+### Design — engine
+
+**Variant plumbing.** Replace the `_baseline` / `_planC` booleans with a single
+`_variant: 'A'|'B'|'C'|'D'|'Q'` param (unset = parent = A semantics); `isChild = _variant != null`
+suppresses recursion, sibling computation and text/html rendering. Then:
+
+- `convTargetMonth = (v === 'C' || v === 'Q') ? 12 : nextMonth`
+- `drawTargetMonth = (v === 'A' || v === 'D') ? nextMonth : 12` - D's December tax tranche is
+  synthesized separately, so `resolveIraOrdering` still sees early months and the RMD-before-conversion
+  invariant is preserved with no extra work.
+- Fix stale letter labels now embedded in note strings (~1103, ~1309, ~1376, ~1522).
+
+**Q variant.** Force `strategy = 'all_quarterly'`; `drawWithholdCap = 0`; skip the conversion gap-fill
+and the `ira*RothWithhold === true` override blocks. **Critical trap:** the draw-action block 11d
+(~line 1450) is gated on `usesIraWithholding`, so a forced-quarterly plan with draws currently emits
+**no draw actions at all**. Widen that gate to `usesIraWithholding || (v === 'Q' && allDrawsTotal > 0)`;
+every draw then renders as a zero-withholding December action and the shortfall block builds the full
+federal + state estimate schedule through the existing `splitExact` / `dueDateFor` / IRC 7503 machinery.
+Q needs its own shortfall wording ("this plan takes draws without withholding; the full liability is
+paid as quarterly estimates") because the existing sentence reads wrong at 0% coverage.
+
+**D variant (the new algorithm), inside section 6 (~898-927) plus 11d:**
+
+1. Tax portion `TP = stateIraExempt ? min(eligibleDraws, federal remainder) : min(eligibleDraws, taxAfterConvW)`.
+2. **Eligibility** to host the December tranche: the group is not already taken (taken flags lock a
+   group to `prevMonth`), and it is **not the RMD of an IRA that has a conversion** - that RMD must
+   complete before the early conversion. Voluntary groups of any IRA, and RMDs of conversion-free
+   IRAs, qualify.
+3. Source **largest-first** (mirrors the gap-fill `convSlots` convention; month-descending is
+   meaningless here since every holdback is month 12): `dec_g = min(g.total, TP_remaining)`.
+4. `drawGroups` becomes up to 8 entries: an early part `{month: early, total: g.total - dec_g,
+   withheld: 0, tranche: 'spend'}` and a December part `{month: 12, total: dec_g, withheld: dec_g,
+   tranche: 'tax'}`, dropping zero-amount parts, and skipping the generic withholding-assignment loop.
+5. Gap-fill unchanged: if eligible draws cannot cover the tax, the early conversions pass
+   `_gapFillAllowed` and the remainder flows to quarterly estimates, exactly like A.
+6. Carry the `tranche` tag into the emitted actions. The December tax action reads "December
+   tax-holdback draw of $X from IRA n, withheld 100%" and cites the new Form W-4R rule plus the
+   existing IRC 6654(g) pro-rata note. Early spend actions state that the tax share is held back to
+   December and that net spending cash matches Plan A.
+7. **Invariants to assert:** per (IRA, tag), early + December equals the input amount exactly; early
+   net cash equals Plan A's net; December withholding never exceeds 100% of its own tranche.
+8. Parent computes D only when `hasDeferrableDraw && totalTax > 0 && TP > 0`; a degenerate D (nothing
+   eligible, e.g. a single IRA whose RMD is locked ahead of a conversion) is omitted with a note like B's.
+
+**Return shape.** Parent builds `plans = { A (self-reference), B?, C, D?, Q? }` where each entry is
+`{ actions, summary, strategy }` or null, plus `comparison`. Children return `text: ''`, `html: ''`
+(they currently waste a full render each, and child-rendered letters would be stale anyway). The old
+`planB` / `planC` / `analysis` / `convComparison` return fields are **deleted** - their only consumers
+are `RetirementTaxPlanner.html` and `taxPaymentPlanner.tests.js` (verified by grep; hits elsewhere are
+`planBtn` false positives). The current `planB` = December and `planC` = hybrid naming is exactly the
+letter soup this rename exists to kill; do not patch it, replace it.
+
+### Design — the one unified cost model
+
+Delete `buildAnalysis`, `buildConvComparison`, and `summary.opportunityCost` / `savingsVsWorst`.
+Keep `iraOcFactor` exported (the HTML live preview reads it).
+
+`buildPlanCost(planObj, ...)` walks **each plan's own action list**, so there are no month
+approximations and CA's 30/40/30, VA's May 1 and OR's Dec 15 schedules are handled with no special
+cases:
+
+- withholding action at month m: `withheld * r * (16 - m) / 12`
+- quarterly estimate at effective month m (January of year+1 counts as **13**):
+  `amount * (r - hysaNet) * (16 - m) / 12`
+- conversion at month m: benefit `conv * r * (16 - m) / 12` (keep the shipped no-tax-rate convention
+  so plan-to-plan deltas match the old calendar-frame deltas)
+- RMD portion drawn early at month m: `rmdNet * r * marginalOrdRate * (12 - m) / 12` (Dec-31 cap, an
+  RMD cannot defer past year end). Voluntary draws stay **un-costed** - they serve spending needs and
+  are not free to move; keep the existing footnote saying so. This requires exposing `rmdAmount` /
+  `volAmount` on draw actions in 11d.
+- `total = withholdOC + estimateOC + rmdDeferral - rothGrowth`; the star goes to the **minimum** total.
+
+`buildComparison(p, plans, ...)` returns
+`{ perPlan, best, labels, bNote, brokerage, hysaNet, breakeven, yeIraWins }`. The brokerage footnote
+re-prices Q's estimate schedule at full `r` and adds `extraCg(totalTax)` (lift `extraCg` out of the
+deleted `buildAnalysis`).
+
+**Sanity anchors to assert (±$5).** User scenario above, run in Aug 2026 so nextMonth = September:
+**A ≈ 940** (withhold 24,831 x 6% x 7/12 = 869, plus RMD deferral 70), **C ≈ 497** (star),
+**D ≈ 567** (December holdback 497 + early RMD deferral 70), **Q ≈ 656** (fed 18,286 x 3.9% x 8/12
+= 475, CA 6,545 x 3.9% x 8.5/12 = 181), B absent, brokerage footnote ≈ 3,169. This agrees with the
+existing `yeIraWins` test (hysaNet 2.1% < r/2 = 3.0%, so withholding beats quarterly cash).
+Reconciliation identity for every plan: withholding + estimates = tax due, within $1.
+
+### Design — output
+
+**buildText:** one comparison table (rows Roth growth / Withholding OC / Estimate carry / RMD
+deferral / Total / vs best; columns = the letters present; star on the minimum), the B-absence note,
+the brokerage footnote line, then plan sections in order A, B?, C, D?, Q with the winner marked.
+Delete the old COST ANALYSIS section. Keep safe harbor, RULE_CITES, concepts, scheduling note.
+
+**buildHtml:** header badges swap opportunity-cost/saves-vs-brokerage for `Winner: Plan X` and
+`First-year cost $N`. The comparison box becomes the unified table with up to five pills (new colors:
+D teal `#00695C`, Q orange `#E65100`), a `compRow` generalized over present letters, Total and
+vs-best rows, the B-absence note and the brokerage footnote row. Delete the old Cost Analysis table.
+Five `makePlanSection` calls with ids `plan-section-a` .. `plan-section-q`; wrap each section body in
+`<details>` with `open` on the winner only, and give the .ics/Print buttons
+`event.preventDefault(); event.stopPropagation()` so clicking them does not toggle the disclosure.
+Add a **Form W-4R** RULE_CITE (0% to 100% election on IRA distributions,
+`https://www.irs.gov/forms-pubs/about-form-w-4r`) and cite it from D's December tranche.
+
+**HTML driver:** `_planData` becomes `{ taxYear, actions: { A..Q } }` (nullable, with a fallback to
+`{ A: plan.actions }` when no comparison was built); `downloadPlanIcs` indexes that map instead of its
+A/B/C ternary; `printPlan`'s `allIds` covers a/b/c/d/q; the print-button label counts non-null plans.
+Add `beforeprint` / `afterprint` listeners that force every `#plan-html details` open and restore
+afterward, because a collapsed `<details>` otherwise prints collapsed. `updateComputed` is unchanged.
+
+### Tasks
+
+- [ ] **P56a** — Variant plumbing: `_variant` replaces `_baseline`/`_planC`; target-month selection;
+  stale letter labels in note strings fixed. No behavior change for A/B/C yet.
+- [ ] **P56b** — Q variant, including the 11d `usesIraWithholding` gate widening (without it Q renders
+  no draw actions at all) and Q-specific shortfall wording.
+- [ ] **P56c** — D variant: eligibility rule, largest-first sourcing, split draw groups, tranche-tagged
+  actions, Form W-4R RULE_CITE, degenerate-D omission note.
+- [ ] **P56d** — New return shape `plans` + `comparison`; children skip rendering; delete `planB` /
+  `planC` / `analysis` / `convComparison`.
+- [ ] **P56e** — `buildPlanCost` + `buildComparison` on the April-15 frame; delete `buildAnalysis` and
+  `buildConvComparison`; expose `rmdAmount`/`volAmount` on draw actions.
+- [ ] **P56f** — buildText restructure: unified table, B-absence note, five plan sections, COST
+  ANALYSIS section deleted.
+- [ ] **P56g** — buildHtml restructure: unified table, five pills/sections, `<details>` collapse,
+  brokerage footnote, old Cost Analysis table deleted.
+- [ ] **P56h** — HTML driver: `_planData` map, ics/print for five letters, print-button label,
+  beforeprint/afterprint `<details>` handling.
+- [ ] **P56i** — Tests. **Breaking (8):** #14 coverage invariant, #15 draw-only comparison (rewrite -
+  "Plan A" now legitimately exists under the new lettering, so its `!/Plan A/` assertion is wrong),
+  #16 already-taken, #29 pays-100% (iterate `Object.entries(plans)`, which extends the invariant to D
+  and Q for free), #30, #31, #33 brokerage. **New (8 groups):** D tranche math and invariants; D
+  ordering (an RMD locked ahead of a conversion never hosts the tranche; degenerate D omitted); D in an
+  IRA-exempt state (IL: December tranche is federal only, state rides estimates); Q variant shape
+  (all_quarterly, December zero-withholding draws, 4 federal + 3 CA estimates summing to the
+  liability); unified-comparison sanity anchors + reconciliation identity; B-absence note in text and
+  html; brokerage footnote present once and absent from the plan columns; extend the non-business-day
+  sweep (#21) across `plans.*.actions` so D's synthesized December date and Q's estimate dates are covered.
+- [ ] **P56j** — Fix the stale `optimizer_tests.js:2220` `taxPaymentPlanner` EXPECTED count (32 on
+  file, 34 on disk today, higher after P56i).
+- [ ] **P56k** — Version bump (title + all three `?v=` cache busters, `hex(dayOfYear*24 + hour)`) and an
+  `optimizer_changelog.md` entry. Lead with the correctness win: because every plan is now priced from
+  its own action list, the cost table can no longer contradict the timing verdict. Call out the
+  **BEHAVIOR CHANGE** explicitly - plan letters are remapped, so old shared links and printouts
+  re-letter (old "Plan A hybrid" is now B, old "Plan B early" is now A). **No em-dashes** in the
+  changelog prose, per the standing style rule.
+
+### Risks and edge cases
+
+- **The letter remap is user-visible.** Shared links and saved printouts re-letter. Changelog must say so.
+- **November/December runs**: nextMonth is already 12, so A, C and D collapse to the same plan and B
+  collapses to C. Star every plan within $1 and annotate ("plans are identical this late in the year");
+  do not suppress the columns, the action lists are still what the user executes.
+- **Zero tax**: D and Q are gated off; the comparison degrades to A vs C on RMD deferral alone.
+- **`ira*RothWithhold` overrides** are honored by A/B/C/D (they shrink D's `TP` through
+  `taxAfterConvW`); Q ignores them by definition, which must be stated in Q's section text. A
+  user-level `forceStrategy` propagates to all children and makes the matrix mostly degenerate;
+  acceptable, document it.
+- **IRA-exempt states** in D: state tax cannot be withheld from an IRA distribution, so the December
+  tranche covers federal only and the state portion rides quarterly estimates (existing `wStFrac` logic).
+- **State factor drift**: action-based pricing reproduces CA's 8.5 weighted months exactly but differs
+  from VA's tuned 7.875 by month granularity (7.75), so totals move a few dollars against the deleted
+  table. Use tolerances in tests.
+- **Perf**: five engine runs per compute instead of three, more than offset by children skipping the
+  text/html render they currently throw away.
+
+### Verification
+
+1. `node taxPaymentPlanner.tests.js` green (expect roughly 42+).
+2. Browser via the launch.json `retirement-optimizer` preview server, on the reported scenario
+   `RetirementTaxPlanner.html?taxYear=2028&federalTax=18286&stateTax=6545&priorYearFedTax=18188&priorYearStateTax=6566&ssIncome=25363&pensionIncome=15000&interest=2783&qualifiedDivs=527&capitalGains=3788&ira1Rmd=0&ira2Rmd=15657&ira1Voluntary=91288&ira2Voluntary=32237&ira1RothConversion=0&ira2RothConversion=0&marginalOrdRate=30.0&bv=99398&bb=41696&cgr=23.0&hi=1&state=CA&portfolioRate=6&hysaGross=3`:
+   four columns A/C/D/Q plus the B-absence note, C starred near 497, Q near 656, consistent with the
+   live preview's "YE-IRA wins" toggle. Then append `&ira1RothConversion=40000` and confirm five
+   columns with B present. `?runtests` badge green at the updated count.
+3. Print: Ctrl+P and the per-plan Print buttons - every `<details>` opens in the output.
+4. `.ics` download for D and Q - December tranche and estimate dates present.
+5. Console clean in both scenarios.
+
+**Status:** OPEN, O0, **specification complete and user-approved, zero code written.** Start at P56a.

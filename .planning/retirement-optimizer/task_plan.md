@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-15:** `main` = `310b23d`, shipped **v11.1553**; through [PR #173](https://github.com/nightskyguy/retirement_assets/pull/173) merged, nothing in flight (resync 2026-08-15).
+**As of 2026-08-17:** `main` = `1c79c29` (**v11.1581**, PR #179); this worktree is based on `b8a4dce` and is ONE MERGE BEHIND. Working tree holds P32c at **v11.1582**, uncommitted. Merge `main` before any PR: both touch the changelog head, the `EXPECTED` line and the title.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -12,7 +12,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 |---|---|---|---|
 | **O0** | P56 | Tax Payment Planner: 5-plan matrix + one cost table | `P56a` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| **O0** | P32 | Brokerage draws: audit defect open, premise refuted | `P32c` |
+| **O0** | P32 | Brokerage draws: arms shipped v11.1582, spiral unmeasured | `P32d` |
 | **O1** | P51 | Oracle a-c,e-g DONE 08-10; propwd refuted | `P51d` |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
@@ -44,7 +44,7 @@ first task. Every open item in the file now carries one.
 | User Priority | ID | Phase | Next open item | Blocked by |
 |---|---|---|---|---|
 | **O0** | P35 | Phased strategy; **basis step-up shipped v11.1499** | `P35i` (the Phased engine) | nothing hard |
-| **O0** | P32 | Brokerage draws — premise refuted, accounting-audit defect open | `P32c` | nothing |
+| **O0** | P32 | Brokerage draws — premise refuted, dividend defect fixed, Q2 arms shipped v11.1582 | `P32d` (measure Q2) | nothing |
 | **O0** | P56 | Tax Payment Planner — five-plan matrix (A/B/C/D/Q) + one unified cost table *(new 2026-08-17, plan approved)* | `P56a` | nothing |
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
@@ -1139,14 +1139,26 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
 - [x] **P32b** — Audit the two accounting facts before running any behavior arm. **DONE, and it paid for the
   whole phase.** Not an understatement, an **over**-credit: `yr.taxableDividends` counted as income
   *and* credited to the balance with nothing debiting it back. Fixed in `e9a3c8b` (v11.146f).
-- [ ] **P32c** — Research inputs, default off, P28 pattern. **HALF DONE 2026-08-10:**
-  `cycleHarvestMode` ('maxbracket'|'spendonly') and `cycleCoexist` ('off'|'bracketfill') SHIPPED
-  in the `:1432` branch with absent≡off byte-identical tests + leak guard + MAGI-tier invariant
-  (suite 238/238). STILL OPEN: `thirdPassBrokerage` ('off'|'bounded') and `forcedIRAAllowBrokerage`
-  — those serve P32d's Q2, orthogonal to the cyclic pair.
+- [x] **P32c** — Research inputs, default off, P28 pattern. **DONE.** First half 2026-08-10:
+  `cycleHarvestMode` ('maxbracket'|'spendonly') and `cycleCoexist` ('off'|'bracketfill') in the
+  `:1432` branch. Second half **2026-08-17 (v11.1582, UNCOMMITTED)**: `thirdPassBrokerage`
+  ('off'|'bounded'|'unbounded') in the third pass and `forcedIRAAllowBrokerage`
+  ('off'|'brokerageFirst') in the funding backstop, both in `resolveResidualAndForcedIRA`.
+  A third value, `'unbounded'`, was added beyond the two the task named because Q2 asks for an
+  unbounded-with-a-counter arm and P32d would otherwise have to add it itself.
+  6 new tests, suite 263 -> **269/269**, browser badge green at 570 (245 in-page + 325 node).
 - [ ] **P32d** — Q2 with an explicit iteration counter, so "spiral" becomes a measured claim either way.
-  **Was moot pre-fix; now unblocked and worth re-asking on a corrected engine** — but re-run Q1's
-  numbers first, since they were measured on the double-crediting engine.
+  **UNBLOCKED — the arms exist as of v11.1582.** Re-run Q1's numbers first, since they were
+  measured on the double-crediting engine. **Read the counter semantics before interpreting
+  anything**: `totals.thirdPassBrokerCapped` counts years that kept needing another pass, which is
+  the only spiral evidence; `totals.thirdPassBrokerStalled` counts years whose residual stopped
+  improving while Brokerage still held a balance, which is that account running out of usable money.
+  The first draft of the loop lacked the stall guard and burned the entire 200-pass cap on dust
+  balances, reading as divergence on a run whose lifetime Brokerage draw had not moved a dollar.
+  **Preliminary, 8 scenarios only, NOT the answer:** zero capped years anywhere, bounded and
+  unbounded identical. Two arms moved funded years materially (minlimit tier-1 6 -> 11 on the
+  third-pass arm), and `brokerageFirst` cut funded years 12 -> 7 in one fixture, so neither arm is
+  a free win. Details in findings.md 2026-08-17.
 - [x] **P32e** — Q3/Q4 DONE 2026-08-10 (`.test_harnesses/P32_RESULTS.md`). Q3: cyclic wins 26/45
   cells as shipped but HALF is the surplus-routing confound — a `CashReserve: 0` control still wins
   23/45 at half the magnitude ($891k max). Q4 INVERTED: `cycleLTCGTarget 0.20` moves 898/2,576
@@ -2912,8 +2924,9 @@ afterward, because a collapsed `<details>` otherwise prints collapsed. `updateCo
   liability); unified-comparison sanity anchors + reconciliation identity; B-absence note in text and
   html; brokerage footnote present once and absent from the plan columns; extend the non-business-day
   sweep (#21) across `plans.*.actions` so D's synthesized December date and Q's estimate dates are covered.
-- [ ] **P56j** — Fix the stale `optimizer_tests.js:2220` `taxPaymentPlanner` EXPECTED count (32 on
-  file, 34 on disk today, higher after P56i).
+- [x] **P56j** — Fix the stale `optimizer_tests.js:2220` `taxPaymentPlanner` EXPECTED count.
+  **DONE by someone else**: shipped on `main` as v11.1581 in [PR #179](https://github.com/nightskyguy/retirement_assets/pull/179)
+  (32 -> 34). P56i will still have to move it again when it adds its 8 test groups.
 - [ ] **P56k** — Version bump (title + all three `?v=` cache busters, `hex(dayOfYear*24 + hour)`) and an
   `optimizer_changelog.md` entry. Lead with the correctness win: because every plan is now priced from
   its own action list, the cost table can no longer contradict the timing verdict. Call out the

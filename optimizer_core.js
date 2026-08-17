@@ -1848,6 +1848,25 @@ function fillSpendingGap(sim, yr) {
 // Third tax pass for residual shortfall, soft-cap forced-IRA convergence, and the year's income/overage finalization.
 function resolveResidualAndForcedIRA(sim, yr) {
     const { inputs, totals, birthyear1, birthyear2 } = sim;
+    // P32c research inputs, BOTH default off / today's behavior, no UI sets either. They exist to
+    // make the two Brokerage exclusions in this function falsifiable (P32d / Q2) rather than
+    // asserted; nothing here fires unless a node harness passes them.
+    //   thirdPassBrokerage       'off' (default, today) | 'bounded' | 'unbounded' - allow a
+    //                            Brokerage leg in the third pass, drawn AFTER Cash and BEFORE the
+    //                            Roth fallback, then re-drawn against whatever residual the
+    //                            realized gains re-open. 'bounded' caps the re-draw at the same 6
+    //                            iterations the forced-IRA backstop below uses; 'unbounded' raises
+    //                            the cap to 200 and records the iterations actually consumed, so a
+    //                            real cap-gains spiral shows up as a run that keeps needing passes
+    //                            instead of one that converges. Ordered is excluded either way -
+    //                            it runs the user's own sequence in this pass.
+    //   forcedIRAAllowBrokerage  'off' (default, today) | 'brokerageFirst' - let the funding
+    //                            backstop spend Brokerage before it forces IRA above the ceiling.
+    //                            Forced IRA is ordinary income at the marginal rate; a Brokerage
+    //                            dollar may be LTCG at 0%.
+    const _tpBrokArm = inputs.thirdPassBrokerage ?? 'off';
+    const _fibArm = inputs.forcedIRAAllowBrokerage ?? 'off';
+    const _brokTaxRate = yr.capGainsPercentage * (sim.capitalGainsRate + (yr.nominalStateTaxAtLimit ?? 0));
     // Third pass: if second-pass taxes created a residual shortfall, withdraw more and recalc once.
     // This handles cases where the gap fill (brokerage cap gains) raised taxes above the initial estimate.
     // Compute gross income inline (totalIncome is still 0 here; it's assigned below at line 813).
@@ -1865,6 +1884,8 @@ function resolveResidualAndForcedIRA(sim, yr) {
             // The 2nd-pass gap-fill already grossed up Brokerage; the 3rd pass handles the
             // leftover tax from SS phaseout and NIIT cliffs that the gross-up couldn't predict.
             // Cash (and Roth as fallback) carry no new cap gains, so they break the cycle.
+            // The spiral is an argument, not a measurement; `thirdPassBrokerage` above is the arm
+            // that tests it. Until P32d runs it, this stays the shipped behavior.
             // P28 flag: only 'fillRothThenCash' changes the third pass. The pass is already Cash then
             // Roth, which IS the 'fillCashThenRoth' order, so that mode leaves it untouched.
             // Neither carries cap gains, so this only picks which tax-free account drains first.
@@ -1881,6 +1902,15 @@ function resolveResidualAndForcedIRA(sim, yr) {
             yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, thirdWd]);
             applyWithdrawals(yr.curBalances, thirdWd);
             let _remShort = thirdWd.shortfall ?? 0;
+            // P32c arm: Brokerage after Cash, ahead of the Roth fallback. Same gross-up convention
+            // as the second-pass gap fill (:1793), so the two passes price a Brokerage dollar alike.
+            if (_remShort > 1 && _tpBrokArm !== 'off' && (yr.curBalances.Brokerage ?? 0) > 0) {
+                const brokWd3 = calculateWithdrawals(yr.curBalances, _remShort,
+                    { order: ['Brokerage'], weight: [1], taxrate: [_brokTaxRate] });
+                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, brokWd3]);
+                applyWithdrawals(yr.curBalances, brokWd3);
+                _remShort = brokWd3.shortfall ?? 0;
+            }
             // Roth fallback if Cash ran out (still no cap gains)
             if (_remShort > 1 && yr.curBalances.Roth > 0) {
                 const rothWd3 = calculateWithdrawals(yr.curBalances, _remShort,
@@ -1910,6 +1940,46 @@ function resolveResidualAndForcedIRA(sim, yr) {
             taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
         });
         yr.totalTax = yr.tax.totalTax + yr.IRMAA;
+        // P32c arm: the spiral test itself. The recalc above just priced the Brokerage leg's
+        // realized gains; if that re-opened the residual, draw Brokerage again and reprice, and
+        // count the passes. A converging year uses one or two; a genuine spiral hits the cap.
+        // Counters are attached lazily so an 'off' run's totals object keeps today's exact shape.
+        if (_tpBrokArm !== 'off' && !yr.isOrderedStrategy) {
+            const _cap = _tpBrokArm === 'unbounded' ? 200 : 6;
+            // Exit reasons are counted separately because Q2 asks a question only one of them
+            // answers. A year that stops improving while Brokerage still holds a balance has hit
+            // the account's own arithmetic (dust, or a draw whose tax eats the draw), NOT the
+            // cap-gains spiral; without this guard those years silently consumed the whole cap and
+            // would have read as divergence. Only `Capped` years are spiral candidates.
+            let _it = 0, _stalled = false, _prevRes = Infinity;
+            for (; _it < _cap; _it++) {
+                const _inc = yr.fixedInc + yr.netWithdrawals.IRA + yr.pension +
+                    yr.netWithdrawals.Roth + yr.netWithdrawals.Cash + yr.netWithdrawals.Brokerage + yr.taxableRMD;
+                const _res = yr.targetSpend - (_inc - yr.totalTax);
+                if (_res <= 1 || (yr.curBalances.Brokerage ?? 0) <= 0) break;
+                if (_prevRes - _res < 1) { _stalled = true; break; }
+                _prevRes = _res;
+                const _bw = calculateWithdrawals(yr.curBalances, _res,
+                    { order: ['Brokerage'], weight: [1], taxrate: [_brokTaxRate] });
+                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, _bw]);
+                applyWithdrawals(yr.curBalances, _bw);
+                yr.capitalGains = Math.max(0, (yr.netWithdrawals.Brokerage ?? 0) - (yr.netWithdrawals.BrokerageBasis ?? 0));
+                yr.tax = calculateTaxes({
+                    filingStatus: yr.status, ages: [yr.age1, yr.age2], birthyears: [birthyear1, birthyear2],
+                    totalSS: yr.s1 + yr.s2, IRMAAAnnualCost: yr.IRMAA,
+                    earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
+                    pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
+                    qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
+                    taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+                });
+                yr.totalTax = yr.tax.totalTax + yr.IRMAA;
+                yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
+                yr.marginalStateTaxRate = yr.tax.stateMarginalRate;
+            }
+            if (_it > 0) totals.thirdPassBrokerIters = (totals.thirdPassBrokerIters ?? 0) + _it;
+            if (_stalled) totals.thirdPassBrokerStalled = (totals.thirdPassBrokerStalled ?? 0) + 1;
+            else if (_it >= _cap) totals.thirdPassBrokerCapped = (totals.thirdPassBrokerCapped ?? 0) + 1;
+        }
         totals.thirdPassCount += 1;
         totals.thirdPassTime += performance.now() - thirdPassStart;
     }
@@ -1948,9 +2018,15 @@ function resolveResidualAndForcedIRA(sim, yr) {
             const _inc = yr.fixedInc + yr.netWithdrawals.IRA + yr.pension +
                 yr.netWithdrawals.Roth + yr.netWithdrawals.Cash + yr.netWithdrawals.Brokerage + yr.taxableRMD;
             const _res = yr.targetSpend - (_inc - yr.totalTax);
-            if (_res <= 1 || (yr.curBalances.IRA ?? 0) <= 0) break;
-            const iraTop = calculateWithdrawals(yr.curBalances, _res,
-                { order: ['IRA'], weight: [1], taxrate: [yr.marginalFedTaxRate + yr.marginalStateTaxRate] });
+            // P32c arm: with 'brokerageFirst' the backstop spends Brokerage while it lasts, so the
+            // loop must also survive an empty IRA - today's break would end it one account early.
+            const _useBrok = _fibArm === 'brokerageFirst' && (yr.curBalances.Brokerage ?? 0) > 0;
+            if (_res <= 1 || (!_useBrok && (yr.curBalances.IRA ?? 0) <= 0)) break;
+            const iraTop = _useBrok
+                ? calculateWithdrawals(yr.curBalances, _res,
+                    { order: ['Brokerage'], weight: [1], taxrate: [_brokTaxRate] })
+                : calculateWithdrawals(yr.curBalances, _res,
+                    { order: ['IRA'], weight: [1], taxrate: [yr.marginalFedTaxRate + yr.marginalStateTaxRate] });
             yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, iraTop]);
             applyWithdrawals(yr.curBalances, iraTop);
             yr.forcedIRA += (iraTop.IRA ?? 0);

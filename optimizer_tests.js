@@ -2217,7 +2217,7 @@ window.TestTiers = {
     // the feature: without it, a whole suite could be added, or the slow tags could drift, and the
     // page would keep reporting green over a number it no longer understands. Measure, do not guess:
     // run `node <suite>` and use the printed total.
-    EXPECTED: { optimizer_core: 263, taxPaymentPlanner: 32, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 269, taxPaymentPlanner: 34, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

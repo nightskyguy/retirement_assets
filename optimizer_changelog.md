@@ -11,6 +11,38 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1582"></a>
+
+## 11.1582
+
+**Research groundwork. No change to any plan or its numbers.** Nothing on the page behaves
+differently, and the self-check proves it: both new inputs are absent from every plan the tool
+builds, and a run with them explicitly switched off produces a year-by-year result identical to one
+that never mentions them.
+
+Two more engine research inputs, used only by the offline study harnesses. Both concern the same
+question: the engine deliberately refuses to sell Brokerage in two places, and neither refusal has
+ever been measured.
+
+- **The third tax pass** funds a leftover shortfall from Cash, then Roth, and never from Brokerage.
+  The stated reason is a capital-gains spiral, where selling to pay tax raises the taxable share of
+  Social Security, which raises the shortfall, which needs another sale. The reasoning is plausible
+  and was never run. The new input allows a Brokerage sale there, re-prices the tax, and repeats,
+  with the passes counted so a spiral would show up as a year that never settles.
+- **The funding backstop** draws extra from the IRA when a plan cannot otherwise meet mandatory
+  spending, even while a Brokerage balance sits untouched. Forced IRA money is ordinary income at
+  your top rate; a Brokerage dollar can be long-term gain at 0%. The new input lets the backstop
+  spend Brokerage first.
+
+On the eight scenarios used to build this, no year hit the repeat limit, so nothing here yet supports
+or refutes the spiral. Measuring it properly is the next piece of work. Two counters separate a year
+that stops making progress, which is that account simply running out of usable money, from a year
+that keeps needing another pass, which is the only pattern that would show a real spiral.
+
+The self-check count moves from 263 to 269 for the engine suite.
+
+---
+
 <a id="11.1553"></a>
 
 ## 11.1553

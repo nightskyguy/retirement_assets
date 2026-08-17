@@ -2250,3 +2250,51 @@ SHIPPED as PR #164 (branch fix/ordered-surplus-fill off main, commit 9e5ad6f, v1
 changelog `<li>` (data-flag=behavior), optimizer_changelog.md write-up, and the Ordered help text
 (retirement_optimizer.html ~L722) now describing the surplus-fill rule. Browser self-test 529/529 green
 with ?v=1114dd loaded. .planning/* changes deliberately left out of the code PR.
+
+---
+
+## 2026-08-17 — P32c second half: the two Brokerage-exclusion arms, and a preliminary Q2 reading
+
+**Shipped (v11.1582, uncommitted).** Both live in `resolveResidualAndForcedIRA`, default off, no UI:
+
+| Input | Values | What it does |
+|---|---|---|
+| `thirdPassBrokerage` | `'off'` (default) / `'bounded'` / `'unbounded'` | Brokerage leg in the third pass, drawn after Cash and before the Roth fallback, then re-drawn against whatever residual the realized gains re-open. Cap 6 / 200. Ordered excluded. |
+| `forcedIRAAllowBrokerage` | `'off'` (default) / `'brokerageFirst'` | The funding backstop spends Brokerage before forcing IRA above the ceiling. Also widens the loop's break so an empty IRA does not end it while Brokerage remains. |
+
+Gross-up for both mirrors the second-pass gap fill: `capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit)`, guarded `?? 0` because non-bracket families never set `nominalStateTaxAtLimit`.
+
+**The counter trap, found by running it.** The first loop had a cap and no progress guard. On the plain
+fixed-strategy fixture it burned all 200 passes in 10 separate years while lifetime Brokerage drawn did
+not move a dollar and the shortfall changed by $7 over the whole plan: the account was down to dust, each
+pass drew a rounding error, and the residual never closed. Read naively that is 10 divergent years, and
+P32d would have written up a spiral that is not there. Exit reasons are now counted apart:
+
+- `totals.thirdPassBrokerCapped` — kept needing another pass. **The only spiral evidence.**
+- `totals.thirdPassBrokerStalled` — residual stopped improving while Brokerage still had a balance. That
+  is the account's own arithmetic, not a spiral.
+- `totals.thirdPassBrokerIters` — passes consumed. All three attach lazily, so an off run's `totals`
+  keeps today's exact shape and stays byte-identical.
+
+**Preliminary Q2 signal — 8 scenarios, NOT the answer, P32d still has to run properly.**
+
+| Scenario | third-pass iters | capped | stalled | funded yrs off -> tpb | forcedIRA off -> brokerageFirst |
+|---|---|---|---|---|---|
+| BASE fixed | 10 | 0 | 10 | 12 -> 12 | 253,802 -> 0 (funded 12 -> **7**) |
+| low cash / big brok / SS | 56 | 0 | 0 | 15 -> 15 | 233,295 -> 131,780 |
+| propwd 6% | 4 | 0 | 0 | 10 -> 10 | 243 -> 0 |
+| fixedpct 2% | 40 | 0 | 0 | 9 -> 10 | 118,442 -> 0 |
+| minlimit tier 1 | 34 | 0 | 0 | **6 -> 11** | 12,450 -> 0 |
+| IRA empties, brok remains | 69 | 0 | 4 | 8 -> 12 | 96,521 -> 0 |
+| ordered CBIR | 0 | 0 | 0 | inert (excluded) | inert (excluded) |
+
+Three readings, all provisional:
+
+1. **No year hit the cap anywhere, and bounded is byte-identical to unbounded.** Nothing here supports the
+   spiral. It also does not refute it: 8 hand-picked scenarios, one state, zero growth.
+2. **The third-pass arm can be worth a lot.** minlimit tier 1 funds 5 more years, IRA-empties funds 4 more.
+   That is the exclusion costing real money in exactly the years it was supposed to protect.
+3. **`brokerageFirst` is not a free win, and its failure mode is the P32a finding again.** On BASE fixed it
+   eliminates all $253,802 of forced IRA and funds **five fewer years** - spending Brokerage early leaves
+   none later, the same shape as BIRC drawing Brokerage first and having none left. Any ship decision from
+   this arm needs the funded-years column next to the forced-IRA column, never the tax saving alone.

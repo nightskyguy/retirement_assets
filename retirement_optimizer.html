@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1553</title>
+    <title>Retirement Optimizer 11.1581</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -64,7 +64,7 @@
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
 	<script src="optimizer_ui.js?v=111553"></script>
-	<script src="optimizer_tests.js?v=111521d"></script>
+	<script src="optimizer_tests.js?v=111581"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -1273,7 +1273,7 @@ runTests?.();
 runSimulation?.();
 
 // ── Tier 2: the node-only suites, after first paint ──────────────────────────
-// 268 tests in optimizer_core.tests.js, taxPaymentPlanner.tests.js and doclinks.tests.js never ran
+// 319 tests in optimizer_core.tests.js, taxPaymentPlanner.tests.js and doclinks.tests.js never ran
 // in a browser, so breaking one was invisible at release time. They run here instead, and NOTHING
 // about this is on the critical path: the scripts are not <script> tags, they are injected from
 // requestIdleCallback after the page has painted and the first simulation has rendered.
@@ -1286,7 +1286,7 @@ runSimulation?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=11152f';
+    const V = '?v=111581';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

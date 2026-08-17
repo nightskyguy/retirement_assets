@@ -15,11 +15,18 @@ Runs the three `node`-only suites and blocks the commit if any of them fails:
 
 | suite | tests | approx |
 |---|---|---|
-| `optimizer_core.tests.js` | 214 | 2.9 s |
-| `taxPaymentPlanner.tests.js` | 32 | 0.4 s |
+| `optimizer_core.tests.js` | 269 | 2.9 s |
+| `taxPaymentPlanner.tests.js` | 34 | 0.4 s |
 | `doclinks.tests.js` | 22 | 0.1 s |
 
 About 3.5 s total.
+
+**These counts are documentation, and they rot.** The enforced copy is `TestTiers.EXPECTED` in
+`optimizer_tests.js`, which pins all three suites at once plus the slow-tagged subset of
+`optimizer_core`. Adding or removing a test anywhere means updating **every** number in that object
+and then this table, in the same commit - including the suites belonging to tools you did not touch.
+`taxPaymentPlanner.tests.js` covers `RetirementTaxPlanner.html`, and leaving its count stale turns
+the **Optimizer's** self-check badge red. Measure with `node <suite>`; never guess.
 
 It also blocks in two cases that would otherwise pass in silence:
 

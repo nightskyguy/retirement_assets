@@ -3,6 +3,16 @@
  * optimizer_core.tests.js
  * Run with: node optimizer_core.tests.js
  *
+ * TEST COUNTS ARE PINNED OUTSIDE THIS FILE. Adding or removing a test here means updating, in the
+ * same commit:
+ *   1. `TestTiers.EXPECTED` in optimizer_tests.js - ONE object holding the count of EVERY node
+ *      suite, so the file you have to edit is usually not the tool you are working on. Slow-tagged
+ *      tests are counted separately there, in `slowInCore`.
+ *   2. the suite table in .githooks/README.md
+ * Measure, never guess: run this file and use the printed total. The staleness guard is page-wide,
+ * so a test added to ANY suite turns the retirement_optimizer.html self-check badge red until all
+ * of those counts match.
+ *
  * Phase 24: Cyclic Withdrawal Modifier tests
  *
  * Covers:

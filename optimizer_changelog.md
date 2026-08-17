@@ -39,7 +39,26 @@ or refutes the spiral. Measuring it properly is the next piece of work. Two coun
 that stops making progress, which is that account simply running out of usable money, from a year
 that keeps needing another pass, which is the only pattern that would show a real spiral.
 
-The self-check count moves from 263 to 269 for the engine suite.
+The self-check count moves from 263 to 269 for the engine suite, in both places release 11.1581
+pinned it: `TestTiers.EXPECTED`, and the suite table in the commit hook's README.
+
+---
+
+<a id="11.1581"></a>
+
+## 11.1581
+
+**Self-check fix. No change to any plan or its numbers.**
+
+The page runs its full test suite at load and reports the result in the indicator at the top. That
+indicator has a staleness guard: the page is told how many tests each suite on disk is supposed to
+contain, and if the real number differs it refuses to report green, because a page that has lost
+count of its own tests cannot honestly claim they all passed.
+
+Tax Payment Planner release 1.1580 added 2 tests to its own suite and did not update that expected
+count.
+
+**This file had an editing pass of its own.** Including fixing dead links, an empty link, and more.
 
 ---
 
@@ -111,12 +130,12 @@ Windows were increased to 5/10/15/20/30 and Combined. Previously picking one (10
 caused the worst 5-year start, for example, to be skipped because it was only looking at 10 year combined 
 growth rates.
 
-Two new choices in the Stress window selector):
+Two new choices in the Stress window selector:
 
 - **Combined (5/10/15/20/30)**, now the default, scores every window and keeps the union of what
   each one flags. The count you set is per window, and because the windows overlap the union is 
   smaller than the sum: the new default of 20 gives about 40 distinct start years rather than 100.
-  Hovering a row says which windows flagged that year.
+  Hovering over a row says which windows flagged that year.
 - **All start years** skips ranking and runs every start year the record holds, currently 98. At
   that density the individual lines stop being readable, so survivors fade back and the failures are
   drawn solid and on top. The shape you are looking for is how much of history breaks the plan, not
@@ -131,24 +150,24 @@ The defaults are now 20 sequences and the Combined window, up from 10 and a sing
 
 ### Red and amber now mean early and late in YOUR plan
 
-A failure now is marked red if it ruin occurs before the halfway point, yellow if it lands on or after the halfway point, and 
+A failure now is marked red if ruin occurs before the halfway point, yellow if it lands on or after the halfway point, and 
 green if the stress for that sequence ends in assets still present (success rather than ruin).  Early ruin is worse 
 because it's harder to avoid.
 
 ### The scenario table reports the whole plan, and the worst stretch inside it
 
-Real CAGR is calculated over your whole plan for each sequence that scenario lived through, and it also 
+Real CAGR is now calculated over your whole plan, for every sequence, and it also 
 calculates the worst 5, 10, 15 and 20 year real return found anywhere inside it. A sequence can open
 calmly and still contain the decade that breaks the plan. The old stress test might not have discovered the 
-true worst scenario.  To allow space, the equity, bond, international and inflation rates are still visible from a hover.
+true worst scenario.  To save space, the equity, bond, international and inflation rates moved into the hover-over data.
 
-### Sequences that run past the end of the record now indicate so
+### Sequences that run past the end of the record are now marked
 
 A plan longer than the record has left after its start year wraps around and replays history from
 1928. A 2015 start on a 30 year plan gets 11 real years and then 19 of replay. That has always been
 the behavior, and the ranking has always excluded start years without a full window of real data
 after them, so a wrapped stretch never gets a vote in which years are worst. It is now visible: the 
-graphed line becomes dashed. Hover over the row and it tells which year the record runs out.
+graphed line becomes dashed. Hover over the row to reveal the year the record runs out.
 
 ### Bear-start openings are no longer all the same shape
 
@@ -193,19 +212,26 @@ own plan.
 - **Compare All Scenarios** is the old behaviour, renamed to say what it actually does.
 
 Each button carries its own expected time, measured on the machine you are running on rather than
-guessed: "My Plan Only (1.3 sec)", "Compare All Scenarios (43 sec)". The actual first time is an estimate, 
-after one run, it will display the actual calculated time.
+guessed: "My Plan Only (1.3 sec)", "Compare All Scenarios (43 sec)". The first figure shown is an estimate; 
+after one run it reports the time actually measured.
 
 ### Changing a Stress Test setting no longer marks the whole run out of date
+
+Editing Stress sequences or the Stress window used to raise the "Out of date" banner over the whole
+Monte Carlo sweep. That banner's Re-run button re-runs everything, so it was offering half a minute
+of work on the roughly 144 strategy sweep to refresh a chart that had already refreshed itself by the
+time the banner appeared. Only a change the sweep itself would have seen marks it out of date now,
+and the stress pass keeps re-running on its own either way.
 
 ### Smaller things
 
 - The Stress Test chart legend was dropped. The table underneath already names every line,
   carries every number, sorts, and shows each line's color in its first column. The table made the legend 
   a waste of space so only the table remains.
-- The hover readout waits until you pick a line from the table. Click the row in the table again to bring 
+- The hover-over data is not shown until you pick a line from the table. Click the row in the table again to bring 
   all the graphed lines back.
 
+---
 
 <a id="11.150b"></a>
 
@@ -357,7 +383,7 @@ in nominal dollars underneath it. Both now switch together, along with the new t
 column whose blanks are stored as "no value", such as Exhausted or Total Taxes, compared two blanks
 by subtracting them, which produces a meaningless result and left those rows in arbitrary order; the
 comparison is now done properly. And the "paths" readout beside the Cancel button described the
-previous run rather than the one in flight. Hovering a line on the main chart could also name a
+previous run rather than the one in flight. Hovering over a line on the main chart could also name a
 different strategy than the one its legend entry named.
 
 ---
@@ -381,8 +407,6 @@ is green again.
 
 Also in this release:
 
-- [Monte Carlo/Chance of Success Accuracy](#monte-carlo-and-chance-of-success-accuracy)
-
 - **[README.md](README.md) now explains [Monte Carlo and "Chance of Success"](README.md#monte-carlo-and-chance-of-success-accuracy) properly.** 
   Walks through what a Monte Carlo simulation is doing, why results from two different
   tools are not comparable, why more iterations cannot repair a sampling method that does not
@@ -390,7 +414,7 @@ Also in this release:
   markets trend rather than lurch randomly year to year, and why a seeded (repeatable) random
   sequence matters. It ends with what you can and cannot conclude from any tool's success
   percentage.
-- **The [tax-withholding maneuver](#why-end-of-year-vs-quarterly)** section gains "the *other* maneuver"**: using the once-per-year
+- **The [tax-withholding maneuver](README.md#why-end-of-year-vs-quarterly) section gains "the *other* maneuver":** using the once-per-year
   IRA-to-IRA rollover, with repayment, to pay taxes through withholding, and the five separate
   jobs that one pair of transactions can do.
 
@@ -407,9 +431,15 @@ What was added, and why:
 
 - **Four engine research inputs**, used only by the offline study harnesses.
 - **Five research studies were run and recorded** (results live beside the harnesses). The
-  highlights that will shape future releases.  [Brokerage Research](.test_harnesses/P32_RESULTS.md), 
-  [Proportional Draw Research](.test_harnesses/PHASED_RESULTS.md) (it's not as optimal as thought), 
-  ["EndGame" Research](.test_harnesses/ENDGAME_RESULTS.md) - what is the best strategy once the IRA is under control. 
+  highlights below will shape future releases:
+  [Brokerage Research](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/P32_RESULTS.md), 
+  [Proportional Draw Research](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/PHASED_RESULTS.md)
+  (it's not as optimal as thought), and 
+  ["EndGame" Research](https://github.com/nightskyguy/retirement_assets/blob/main/.test_harnesses/ENDGAME_RESULTS.md) -
+  what is the best strategy once the IRA is under control. 
+
+---
+
 <a id="11.14dd"></a>
 
 ## 11.14dd
@@ -542,7 +572,7 @@ The place you would observe the declining basis is in the "Annual Details" -> "B
 ## 11.147c
 
 **Self-tests improved.** No change to your plan or its numbers. The self-check that runs at page
-load now covers 510 tests instead of 245; hover the indicator for the count. A brief hourglass
+load now covers 510 tests instead of 245; hover over the indicator for the count. A brief hourglass
 before the green dot is normal.
 
 ---
@@ -567,9 +597,9 @@ The longer the plan and the higher the rates, the more money this invented. A ca
 $2,449 out of the cash account. That money tree - unfortunately - does not exist so the modeling now matches reality.
 
 You can check the old behavior yourself. Take a portfolio returning 8% a year. Have it earn that as
-[8% growth with no dividend](https://tools.netcitizen.us/retirement_optimizer.html?str=ordered&os=RIBC&bb=90k&dr=1&g=6&div=2), then again as [6% growth plus a 2% dividend]() that is automatically
+[8% growth with no dividend](https://tools.netcitizen.us/retirement_optimizer.html?str=ordered&os=RIBC&bb=90k&dr=1&g=8&div=0), then again as [6% growth plus a 2% dividend](https://tools.netcitizen.us/retirement_optimizer.html?str=ordered&os=RIBC&bb=90k&dr=1&g=6&div=2) that is automatically
 reinvested. Same total return, same reinvestment, but the dividend version pays tax every year that
-the growth version does not, so it must end up **behind**. After the fix, the 6%+2% example lands at 1,231,249, vs 1,250,627 net wealth (current dollars) for the 8% DRIP.
+the growth version does not, so it must end up **behind**. After the fix, the 6%+2% example lands at $1,231,249 vs $1,250,627 net wealth (current dollars) for the 8% DRIP.
 Dividends and interest are still income, still taxed exactly as before, and still land in your
 account. The withdrawal strategy decides whether a dividend is spent or banked, and how the tax on it is paid (e.g. you can earn interest and pay the tax on that interest from an IRA, or from cash).
 
@@ -691,8 +721,8 @@ instead of being enforced for the rest of your life, and the warnings tell you w
 talking about.**
 
 Only plans using an ACA Cliff strategy change their numbers. Everything else is about what you can
-see and select.  As for what "Spend Goal" you should enter: enter your AFTER ACA spend goal. While ACA limits are in in 
-place, your spending is capped by to meet ACA goals. If you have lots of cash or Roth, or a high basis Brokerage,
+see and select.  As for what "Spend Goal" you should enter: enter your AFTER ACA spend goal. While ACA limits are in 
+place, your spending is capped to meet them. If you have lots of cash or Roth, or a high basis Brokerage,
 you may be able to meet your spend goals in the first years of ACA by consuming those resources.
 
 **1. The cap now ends at Medicare.** ACA premium subsidies stop being available once you are
@@ -785,7 +815,7 @@ Two further problems came from the same cause:
   spending goal sat below that tier, which is most plans. The same single filer above now converts
   $13,698 in California and $163,686 in Nevada, against $0 and $465 before.
 
-**What this means for a saved plan.** If your state is one of the 21, or if you use the "Below IRMAA" bracket  
+**What this means for a saved plan.** If your state is one of the 21, or if you use the "Below IRMAA" bracket,  
 your saved scenarios and shared links will produce different numbers than before. In every
 case measured the new numbers are the correct ones and the old ones understated what the strategy
 would do. The 17 states the tool models with graduated brackets are unaffected for every strategy
@@ -891,7 +921,7 @@ multiplies the federal ordinary-income bracket rates by a little more each year 
 onward, so a 1% creep turns a 22% bracket into a 26.8% bracket in 20 years. Bracket thresholds still
 track CPI as before, and state tax, capital gains, the NIIT surtax and IRMAA are unaffected. Why is tax creep here at all? 
 Many think a higher-tax future is likely, so this is a simple way to model increasing taxes. We are not forecasting that 
-tax rate increases will come - after all taxation on changes at the speed of congress and that's to say... slowly. 
+tax rate increases will come - after all, tax law changes at the speed of Congress and that's to say... slowly. 
 Leave tax creep % at 0 to keep today's rates for the whole plan.  There is no model for State tax increases, and no plan to 
 add them, so if you think your state taxes will be creeping up, you can make the creep rate a little higher to compensate.
 
@@ -998,7 +1028,7 @@ still does.
 Your current plan is now marked (📍) in exactly one place when there is nothing else to say. If another 📍 
 appears it indicates a slightly DIFFERENT variation from your plan.
 
-The pinned rows read ⚓ BASELINE and 📍 CURRENT, marker first all cases, and a row that wins a
+The pinned rows read ⚓ BASELINE and 📍 CURRENT, marker first in all cases, and a row that wins a
 metric in the Best table keeps its marker there too, so it is recognisable as the same row without
 repeating the words.
 
@@ -1018,6 +1048,8 @@ the highlighted one puts everything back, exactly like the Stop comparing button
 
 A pinned 📍 CURRENT row sits under the ⚓ baseline showing your sidebar settings run exactly as they are, including whether conversions are on, any Extra Annual Roth Conversion, and any stop year. That matters because every strategy the Optimizer sweeps is run with conversions turned on and your own conversion settings set aside, so until now nothing in the table was actually your plan, even when the strategy and its parameter matched. Your plan is also ranked with the others, so the Rank column tells you where it stands, and it can win a metric in the Best table if it genuinely beats everything else. The same 📍 marks the swept row that uses your strategy and parameter, which lets you see where your setting sits on that family's curve. If your parameter falls between the standard steps, for example a 7% proportional boost or an 18 year drawdown, that exact value is now swept as its own row instead of being skipped. The Break Even column is filled in for every strategy now, not just the ⇌ conversion rows, so sorting by it works and there is a new "⏱ Earliest Break Even" entry in the Best table: the strategy whose conversions pay for themselves soonest, with ties going to the one that leaves more after-tax wealth. Choosing "Earliest Break Even" under Optimize for now reorders the table, which it previously could not do because the column had no values to sort. Three fixes came out of the same work. Clicking an Ordered row now brings its account sequence with it instead of leaving whatever was in the sidebar. The Monte Carlo stress test now recognizes Guyton-Klinger and Ordered plans as your current strategy rather than falling back to a generic one. And the summary numbers at the top of the page, including Break Even, now refresh when you change a setting while the Optimizer tab is open: they used to keep showing the previous plan until you clicked over to Chart or Annual Details, which is what made a change like turning Maximize Conversions on look like it had no effect.
 
+---
+
 <a id="11.137f"></a>
 
 ## 11.137f (behavior change)
@@ -1025,6 +1057,8 @@ A pinned 📍 CURRENT row sits under the ⚓ baseline showing your sidebar setti
 **The suggested year to stop converting is now measured against the plan you would actually get.**
 
 The tool decides whether to take money out of your accounts in January or in December based on whether that year makes a Roth conversion, because a conversion year is better done early. When the Break Even ⓘ searched for the best year to stop converting, it built each trial plan in a way that failed to set that switch, so every year it compared was run with December withdrawals even where conversions were happening. It also treated "convert nothing" as a January-withdrawal year, which no plan with no conversions would ever be. The result was a suggested stop year and dollar gain measured against plans that were not quite the ones you could load, and the two "stop scope" choices could report different gains for the very same cutoff. On a large-IRA example the gain compared with never converting was overstated by about $8,900, and the two scopes disagreed by about $2,200 on a cutoff where they should have matched. All of that now lines up: click the suggested year and the plan you get is the plan that was scored. A stop year set at or before the first year of the plan is also now correctly treated as converting nothing. Plans with no stop year, including the whole strategy table, Monte Carlo and Annual Details, are unchanged to the dollar.
+
+---
 
 <a id="11.1370"></a>
 
@@ -1034,6 +1068,8 @@ The tool decides whether to take money out of your accounts in January or in Dec
 
 Optimize Conversions previously reported only that none of the strategies it examined improved by converting more, which is accurate but a dead end. It now names the future tax rate your plan is assuming, and a link works out the lowest future tax rate at which converting would start to pay, along with the amount and the gain at that rate. If no plausible rate makes conversions worthwhile, it says so plainly, because that is a real answer about your plan rather than a missing one. Separately, the search itself was too narrow: it only ever tested converting the same amount every year for the rest of the plan, so a plan that should convert heavily for a few years and then stop could only be told to convert nothing. When a flat conversion does not help, the Optimizer now also tries converting for a limited number of years, and any plan it finds this way appears as a ⇌ row tagged with the year conversions stop (⏹). Clicking it fills in both the amount and the stop year. This changes which conversion rows appear and the amounts they suggest. Two columns also changed: the Avg BETR column and its summary-bar tile were removed, because testing showed the Break-Even Tax Rate is not reliable enough to decide anything (it is still available per year in Annual Details), and "Conv Savings" is now called "Tax Paid Δ", since it only counts tax paid during the plan and can look positive on a plan that ends up worse off. Break Even remains the column to trust.
 
+---
+
 <a id="11.1340"></a>
 
 ## 11.1340 (behavior change)
@@ -1041,6 +1077,8 @@ Optimize Conversions previously reported only that none of the strategies it exa
 **Cash Reserve now controls what happens to money you withdraw beyond your spending needs.**
 
 Most retirees with a large IRA are forced to take out more than they spend once required distributions begin. Until now the tool left all of that surplus sitting in cash, earning only the cash yield, for the rest of the plan. That understated how well a plan does when those extra dollars are reinvested, and it quietly tilted the Roth conversion comparison in favor of converting. The Cash Reserve field now decides where the surplus goes. Leave it blank (or enter -1) to keep the original behavior: all surplus stays in cash. Enter 0 to reinvest every surplus dollar into your Brokerage account, where it grows at the market rate. Enter a dollar amount to keep that much as a cash cushion, in today's dollars, and reinvest only the surplus above it; spending will not draw the cushion down unless every other account is exhausted. If you load a saved plan or a shared link that already sets a Cash Reserve, a note reminds you that results now differ from older versions and that blank or -1 restores the old behavior. This one setting can meaningfully change Break Even, the suggested year to stop converting, and the final balances, so it is worth trying both ways.
+
+---
 
 <a id="11.1330"></a>
 
@@ -1050,6 +1088,8 @@ Most retirees with a large IRA are forced to take out more than they spend once 
 
 When your plan makes Roth conversions, the ⓘ next to Break Even now names the year that leaves you with the most after-tax wealth if you stop converting after it, along with how much more that keeps than converting all the way through, and how much more than never converting at all. This replaces the older note, which pointed at the year conversions first turned unprofitable; that year is usually not the best place to stop, because it ignores how much a plan can still gain by stopping earlier. The point is that converting past a certain year can leave you worse off than never converting, since the tax paid on a late conversion no longer earns its keep before the plan ends. Click the suggested year to fill in a new "Stop conversions after" control and re-run: enter a calendar year like 2031, or your own age like 71, and conversions run through that point and then stop. You can choose whether stopping applies to all conversions or only the Extra Annual Roth Conversion; stopping all of them is the stronger lever. Spending is unchanged by where you stop, so this is a pure comparison of what your heirs receive after tax.
 
+---
+
 <a id="11.12fd"></a>
 
 ## 11.12fd
@@ -1058,13 +1098,17 @@ When your plan makes Roth conversions, the ⓘ next to Break Even now names the 
 
 Two new dashed lines, "Your RMDs begin" and "Spouse RMDs begin", join the existing markers on both charts, and because the date depends only on a birth year they also appear on the Monte Carlo chart. The line is drawn for the year you reach your RMD age (73 or 75, depending on when you were born), and only when that birthday falls inside the plan, so a plan that starts after your RMDs have already begun does not get a line. It is drawn whether or not there is anything left in the IRA to withdraw, since the date itself is worth seeing. The "Show milestones" tooltip now lists every marker the charts can draw, which it had stopped doing some versions ago.
 
+---
+
 <a id="11.12fb"></a>
 
 ## 11.12fb
 
 **The Withdrawal Rate stat was reading far too low and has been corrected.**
 
-It now measures what it says: the money actually pulled out of your accounts to pay for spending and taxes, divided by what the portfolio was worth at the start of that year. Three things were wrong before. Social Security and pension income were being subtracted from the withdrawals, so a plan drawing $164,000 against $81,000 of Social Security was reported as if it had withdrawn only $19,000. The bottom of the fraction used an after-tax estimate of your wealth rather than the actual account balances, and the very first year used a different basis than every year after it. On a typical plan the stat moves from about 1.1% to about 2.4%, which is now directly comparable to the classic 4% rule and to the guardrail rate the Guyton-Klinger strategy uses internally. The tile is relabeled simply "Withdrawal Rate", and hovering it shows two extra views: a dollar-weighted average, and a net depletion figure that goes negative when your portfolio is growing faster than you draw it down. The rate itself can no longer go negative, because you cannot withdraw less than nothing. A related fix: in years when Social Security covers everything, a required distribution that gets reinvested is no longer counted as a withdrawal, since those dollars never left the portfolio. Also in the header, the summary stats are left-aligned on wide screens instead of being pushed to the right edge, and the "what you last changed" note moved to sit after the numbers alongside the save and load messages.
+It now measures what it says: the money actually pulled out of your accounts to pay for spending and taxes, divided by what the portfolio was worth at the start of that year. Three things were wrong before. Social Security and pension income were being subtracted from the withdrawals, so a plan drawing $164,000 against $81,000 of Social Security was reported as if it had withdrawn only $19,000. The bottom of the fraction used an after-tax estimate of your wealth rather than the actual account balances, and the very first year used a different basis than every year after it. On a typical plan the stat moves from about 1.1% to about 2.4%, which is now directly comparable to the classic 4% rule and to the guardrail rate the Guyton-Klinger strategy uses internally. The tile is relabeled simply "Withdrawal Rate", and hovering over it shows two extra views: a dollar-weighted average, and a net depletion figure that goes negative when your portfolio is growing faster than you draw it down. The rate itself can no longer go negative, because you cannot withdraw less than nothing. A related fix: in years when Social Security covers everything, a required distribution that gets reinvested is no longer counted as a withdrawal, since those dollars never left the portfolio. Also in the header, the summary stats are left-aligned on wide screens instead of being pushed to the right edge, and the "what you last changed" note moved to sit after the numbers alongside the save and load messages.
+
+---
 
 <a id="11.12f7"></a>
 
@@ -1074,6 +1118,8 @@ It now measures what it says: the money actually pulled out of your accounts to 
 
 Pick a goal and the table sorts to put the best plan for it on top, moves the baseline to match, and renumbers the Rank column. It changes only which plan the tool puts in front of you, never the underlying numbers, and clicking any column header still sorts by that column. The choices, in the order most people asked for them: Tax Flexibility (the default, which favors plans that end with your money spread evenly across pre-tax, Roth, and taxable accounts so you can draw from whichever is cheapest in any given year, compared only among the plans that also finish among the wealthiest); Maximum Net Wealth; Avoiding Widow and RMD Tax (favors plans that leave less in the pre-tax IRA, since that is what drives forced withdrawals and the higher single-filer tax a survivor pays); Minimum Lifetime Taxes; plus Maximum Spending, Maximum Roth, and a Balanced blend. The Documentation tab explains what each one measures, including why Minimum Lifetime Taxes and Avoiding Widow and RMD Tax can legitimately disagree. A few smaller fixes came along with it: the "Best" summary no longer lists a strategy that cannot actually be run; Annual Details shows the Roth Conversion column when you turn on the Opp. Cost view; when a spouse is already on Medicare, all of the ACA income-limit rows are marked not applicable rather than just one; and the Score column was dropped since the row order and the Rank column already show the ranking.
 
+---
+
 <a id="11.12e5"></a>
 
 ## 11.12e5
@@ -1081,6 +1127,8 @@ Pick a goal and the table sorts to put the best plan for it on top, moves the ba
 **Optimize Conversions now looks at the best plan from each family of strategies, not just the five with the highest ending wealth.**
 
 The strategies that benefit most from converting are often not the ones that finish with the most money, so the old five-highest list could be filled entirely by strategies that gain nothing from converting, leaving the ⇌ table empty even when other strategies had a real conversion to recommend. It now considers the best Proportional, Reduce, Fill Bracket, IRMAA Ceiling, IRA Draw, Ordered, and Guyton-Klinger plan (each with and without the cyclic brokerage option), so a strategy that converts well gets a seat. It also judges how much to convert by the same measure it uses to rank everything else - after-tax wealth left over plus the money you actually get to spend, in today's dollars - rather than raw ending wealth, which used to reward simply hoarding in the IRA. Because of these two changes, the recommended conversion amounts and the strategies shown may differ from before on the same plan. When no strategy benefits from converting more, the tool now says so plainly instead of showing an empty table.
+
+---
 
 <a id="11.129d"></a>
 
@@ -1090,29 +1138,37 @@ The strategies that benefit most from converting are often not the ones that fin
 
 A Roth conversion is money leaving the IRA, so the IRA WD, IRA1- and IRA2- columns now include it. Before, a year could show a large conversion with little or no IRA withdrawal, which looked wrong even though the balances were correct. RMD stays in its own columns (it is the involuntary draw and is never a conversion). The Federal and State tax columns now include the tax on conversions, so they add up to Total Tax and the Taxation chart shows the real tax. Conversions are now taken from the larger IRA first (spilling to the smaller only when the larger cannot supply the full amount) instead of being split by size, which is what you would actually do and avoids converting a token slice out of a tiny IRA. This changes each IRA's balance over time and therefore each person's future RMDs; the combined yearly tax is unchanged. Clicking a year to open the Tax Payment Planner now sends the correct per-IRA voluntary, conversion, and tax figures.
 
+---
+
 <a id="11.1287"></a>
 
-## 11.1287
+## 11.1287 - cash-funded conversion taxes
 
 **Maximize Conversions now actually maximizes: available Cash can cover conversion taxes.**
 
 Previously nothing in the tool paid a conversion's tax bill from outside funds, so a $20,000 Extra Annual Roth Conversion only landed about $13,700 in Roth - the rest went to the tax on its own withdrawal. Standard practice is to cover that tax from Cash so the full amount gets to grow tax-free, and Maximize Conversions now does exactly that, on top of its original behavior of routing leftover IRA withdrawals into Roth. It uses only the Cash you have: when Cash is short it funds what it can, and at $0 Cash nothing changes, so existing plans are unaffected until you turn it on. Two switches beneath it, "Convert Excess to Roth" and "Use Cash", let you control the two behaviors separately.
 
+---
+
 <a id="11.1287-2"></a>
 
-## 11.1287
+## 11.1287 - Optimize Spend and Optimize Conversions move to the Optimizer tab
 
 **Optimize Spend and Optimize Conversions moved to the Optimizer tab, and Optimize Conversions is now on by default.**
 
 Both only ever affected the Optimizer, but sat in the sidebar next to the strategy settings that drive every tab, which made them look like plan settings. They now live at the top of the Optimizer tab under "Search options", where they apply. Optimize Conversions starts on so the conversion-optimized ⇌ rows are found without having to know to ask for them; turn it off if you want a faster sweep. Note that ⇌ rows only appear where an extra conversion actually improves the result for one of the top-ranked strategies, so a plan whose best strategies do not benefit from converting more will correctly show none. Your saved scenarios and shared links keep working unchanged.
 
+---
+
 <a id="11.1287-3"></a>
 
-## 11.1287
+## 11.1287 - smaller fixes
 
 **Smaller fixes.**
 
-The Roth Conv column in Annual Details had silently lost its explanatory tooltip to a naming typo (as had the Roth Growth column); Roth Conv's now spells out why it can read lower than the amount you asked to convert. The Break Even explainer is a compact ⓘ next to the year instead of a standing button, and it no longer makes you click before telling you anything - hover reads the reason, click pins it open, click again closes it.
+The Roth Conv column in Annual Details had silently lost its explanatory tooltip to a naming typo (as had the Roth Growth column); Roth Conv's now spells out why it can read lower than the amount you asked to convert. The Break Even explainer is a compact ⓘ next to the year instead of a standing button, and it no longer makes you click before telling you anything - hover over it to read the reason, click pins it open, click again closes it.
+
+---
 
 <a id="11.1271"></a>
 
@@ -1122,6 +1178,8 @@ The Roth Conv column in Annual Details had silently lost its explanatory tooltip
 
 (1) The Optimizer's conversion-amount search could recommend a Guyton-Klinger conversion so large that GK could only "afford" it by continuously cutting your future spend behind the scenes -- the search now rejects any amount that isn't actually sustainable for GK, the same stability check already used elsewhere in the optimizer. (2) The "Extra Annual Roth Conversion $" tooltip now says plainly that it is capped only by the remaining IRA balance, not by your IRA Goal -- a conversion moves money IRA-to-Roth rather than out of the household, so it is allowed to draw the IRA below that goal on purpose. (3) When Break Even shows “ - ”, a new ⓘ next to the stat identifies the specific conversion year that erases an otherwise-sustained lead, instead of leaving you to guess why.
 
+---
+
 <a id="11.1253"></a>
 
 ## 11.1253
@@ -1129,6 +1187,8 @@ The Roth Conv column in Annual Details had silently lost its explanatory tooltip
 **Optimizer strategies loaded from the table now actually match what the table showed.**
 
 Clicking a "⇌ Optimize Conversions" row to load it previously dropped the extra conversion amount that made that row special, so the loaded plan's Break Even (and everything else) could disagree with the Optimizer table. A new "Extra Annual Roth Conversion $" field now holds that amount, is filled in automatically when you load a ⇌ row, and is shareable/saveable like any other input. Loading a cyclic-brokerage or IRMAA/ACA-ceiling ⇌ row now also correctly carries those settings over. Also clarified the Conv Savings tooltip: it only counts tax actually paid so far, so it can look good even when Break Even (which also counts the tax still owed on money left in the IRA) says the conversions never really paid off.
+
+---
 
 <a id="11.1247"></a>
 
@@ -1138,13 +1198,17 @@ Clicking a "⇌ Optimize Conversions" row to load it previously dropped the extr
 
 When the Optimize Conversions checkbox is on, the top 5 strategy rows now report a Break Even year (same permanent-crossover definition as the single-scenario stat) in a new column, and a new "Earliest Break Even" objective ranks strategies by how soon their conversions permanently pull ahead. Strategies that never sustain a lead show “ - ”.
 
+---
+
 <a id="11.1240"></a>
 
 ## 11.1240
 
 **Break Even now requires the lead to hold for the rest of the plan.**
 
-A rare scenario could report Break Even off a single year where the converting (or excess-withdrawal) plan brushed even before falling behind again, sometimes for good. Break Even is now the earliest year the plan pulls ahead and stays ahead through the end of the simulation, showing “ - ” if that lead is never sustained. Same fix applies to excessOC. See “What is Break Even?” below.
+A rare scenario could report Break Even off a single year where the converting (or excess-withdrawal) plan brushed even before falling behind again, sometimes for good. Break Even is now the earliest year the plan pulls ahead and stays ahead through the end of the simulation, showing “ - ” if that lead is never sustained. Same fix applies to excessOC.
+
+---
 
 <a id="11.11ff"></a>
 
@@ -1152,11 +1216,15 @@ A rare scenario could report Break Even off a single year where the converting (
 
 Refactor: No behavior changes. If the page looks stale after this update, do a hard refresh.
 
+---
+
 <a id="11.11f3"></a>
 
 ## 11.11f3
 
 Internal cleanup: source files renamed to a shorter, consistent scheme (optimizer_core.js, optimizer_ui.js, optimizer_tests.js, optimizer_text.js, optimizer_styles_responsive.css). The simulation engine and the page UI now live in separate files. No behavior changes. If the page looks broken after this update, do a hard refresh (Ctrl+Shift+R) to clear the old cached files.
+
+---
 
 <a id="11.11dc"></a>
 
@@ -1164,7 +1232,9 @@ Internal cleanup: source files renamed to a shorter, consistent scheme (optimize
 
 **Break Even and Opp. Cost are now measured with a true no-conversion re-simulation.**
 
-The tool re-runs your whole plan with the Roth conversions removed and compares after-tax wealth year by year. The no-conversion plan keeps the money in the IRA and pays its own larger RMD taxes and IRMAA surcharges later, so the benefit of avoiding those is now fully counted. The old approximation could report a Break Even year when there were no conversions at all, and could fail to report one for conversions that clearly paid off. Break Even now appears only when conversions actually happen. The same rework applies to the excess-withdrawal opportunity cost (excessOC). See "What is Break Even?" below.
+The tool re-runs your whole plan with the Roth conversions removed and compares after-tax wealth year by year. The no-conversion plan keeps the money in the IRA and pays its own larger RMD taxes and IRMAA surcharges later, so the benefit of avoiding those is now fully counted. The old approximation could report a Break Even year when there were no conversions at all, and could fail to report one for conversions that clearly paid off. Break Even now appears only when conversions actually happen. The same rework applies to the excess-withdrawal opportunity cost (excessOC).
+
+---
 
 <a id="11.11c8"></a>
 
@@ -1178,11 +1248,15 @@ Cycle Brokerage will now fill up the 0% or 15% tax bracket (whichever falls belo
 
 Other minor UI improvements also made.
 
+---
+
 <a id="11.11ae"></a>
 
 ## 11.11ae
 
 Income & Expenses chart: added a note that shown incomes are after-tax (pre-tax figures are in Annual Details).
+
+---
 
 <a id="11.11ad"></a>
 
@@ -1190,13 +1264,15 @@ Income & Expenses chart: added a note that shown incomes are after-tax (pre-tax 
 
 Added Spending to Annual Details to focus on spending.
 
+---
+
 <a id="11.1133"></a>
 
 ## 11.1133
 
-**Architectural improvements**
+**Architectural improvements.** No features changed.
 
-, no features changed.
+---
 
 <a id="11.1125"></a>
 
@@ -1214,6 +1290,8 @@ Added Spending to Annual Details to focus on spending.
 
 - **Distinct chart colors.** IRMAA is now deep pink and Medicare teal on all charts (they previously shared nearly identical pinks); the IRMAA milestone marker matches the pink.
 
+---
+
 <a id="11.1119"></a>
 
 ## 11.1119
@@ -1222,6 +1300,8 @@ Added Spending to Annual Details to focus on spending.
 
 16 states (Alabama, Colorado, Connecticut, Georgia, Illinois, Iowa, Kentucky, Maine, Maryland, Michigan, Mississippi, New York, Ohio, Pennsylvania, Virginia, Wisconsin) now apply their real pension/IRA exemptions, caps, and credits instead of taxing all retirement income as ordinary income. Several states have limitations; limitations are listed below the state once it's selected. See, e.g., CA, MA, NC, SC, NE, AZ, and MT.
 
+---
+
 <a id="11.1102"></a>
 
 ## 11.1102
@@ -1229,6 +1309,8 @@ Added Spending to Annual Details to focus on spending.
 **State retirement-income exemptions (Illinois & Pennsylvania):**
 
 IRA/401k/pension distributions are no longer taxed by states that exempt them. Illinois and Pennsylvania now correctly exempt these withdrawals (interest, dividends, and capital gains remain state-taxed). Other states are unchanged.
+
+---
 
 <a id="11.10ee"></a>
 
@@ -1242,17 +1324,23 @@ IRA/401k/pension distributions are no longer taxed by states that exempt them. I
 
 - **Guyton-Klinger sustainable-spend fix.** When no strategy can fund your spend goal, the suggested fallback spend no longer reports a Guyton-Klinger value that only “works” by cutting spending every year - and the suggested strategy is now clickable to load.
 
+---
+
 <a id="11.10cf"></a>
 
 ## 11.10cf
 
 Numerous user experience improvements: IRA Draw strategies now tested to 20%, After-Tax-Spend searches higher spend rates and a suggested value is offered. Other changes include tooltip clarity improvements, chart improvements, and showing Charts first by default.
 
+---
+
 <a id="11.10a2"></a>
 
 ## 11.10a2
 
 Added additional charts for clarity: Taxation, Income vs Net Income, Inflows vs Outflows, Earnings vs W/D.
+
+---
 
 <a id="11.1099"></a>
 
@@ -1262,13 +1350,18 @@ Added additional charts for clarity: Taxation, Income vs Net Income, Inflows vs 
 
 The pinned ⚓ baseline is the best no-conversion strategy. **Guyton-Klinger Optimize Spend no longer reports an unsustainable spend.** Optimize Spend now applies a stability floor and accepts a higher initial spend only if the guardrails never cut real delivered spending below one guard band of the initial.
 
+---
+
 <a id="11.1091"></a>
 
 ## 11.1091
 
->Fixed a NaN in a Monte Carlo.
-   **Fixed a shortfall**. Fill strategies will exceed the threshold when needed to meet the spend goal.
+Fixed a NaN in a Monte Carlo.
+
+**Fixed a shortfall**. Fill strategies will exceed the threshold when needed to meet the spend goal.
 However, the ACA Cliff ceiling is now its own strict strategy: it never breaches the cap. If spending can’t be met under the target the plan is flagged untenable (⚠️ in the Optimizer) rather than silently overspending.
+
+---
 
 <a id="11.1060"></a>
 
@@ -1277,6 +1370,8 @@ However, the ACA Cliff ceiling is now its own strict strategy: it never breaches
 **Stress mode now ranks worst decades by real inflation-adjusted Compound Annual Growth Rate (Real CAGR):**
 
 real CAGR = (1 + equity) / (1 + inflation) − 1. High-inflation decades like the 1960s–70s stagflation, and the Lost Decade (1999-2010)  correctly rank as worse for retirees than a pure equity crash with near-zero inflation. Depression-era crashes also had high deflation which is now clamped to a minimum of -1% (rather than -9%).
+
+---
 
 <a id="11.1042"></a>
 
@@ -1288,6 +1383,8 @@ real CAGR = (1 + equity) / (1 + inflation) − 1. High-inflation decades like th
 
 - **Four configurable parameters:** Upper/lower guardrail (default ±20% of IWR) and cut/raise percent (default 10%). Annual Details Income category shows gkSpend and gkAdj columns.
 
+---
+
 <a id="11.1001"></a>
 
 ## 11.1001
@@ -1296,29 +1393,35 @@ real CAGR = (1 + equity) / (1 + inflation) − 1. High-inflation decades like th
 
 - **Honest baseline.** The optimizer now also runs every strategy family with no Roth conversions and no cyclic brokerage maneuvering, no QCDs, and pins the strongest of those as a ⚓ BASELINE reference row at the top of the results. Every other strategy is measured against it - because "strategy A beats strategy B" only means something relative to the best you can do without conversion/brokerage tricks.
 
+---
+
 <a id="11.1048"></a>
 
 ## 11.1048
 
 **Shorter share URLs:**
 
-(up to 70% shorter); older/longer URLs should still load unchanged.
+Share URLs are now up to 70% shorter; older, longer URLs still load unchanged.
+
+---
 
 <a id="11.1019"></a>
 
 ## 11.1019
 
-**Cyclic-brokerage drawdown fixed:**
+**Cyclic-brokerage drawdown fixed.**
 
-
+---
 
 <a id="11.1018"></a>
 
 ## 11.1018
 
-**Δ columns honor Future/Current $; tax tooltips clarified:**
+**Δ columns honor Future/Current $; tax tooltips clarified.**
 
 - **Cleaner table.** Infeasible (bracket-unreachable) rows are hidden by default - click the Infeasible legend to reveal or hide them. Failed plans always sort below successful ones. Every column header now has an explanatory tooltip.
+
+---
 
 <a id="11.fed"></a>
 
@@ -1333,6 +1436,8 @@ Two modes: Always donates the full amount every eligible year; As Needed applies
 
 - **Strategy panel switches:** Maximize Conversions (formerly "Max Conversion"), Cycle Brokerage (formerly "Cyclic"), Optimize Spend, and Optimize Conversions (formerly "Conv Optimizer") are now all in the strategy sidebar with labels to the right of each switch. Toggle labels are positioned so that the green (on) position visually aligns with the label.
 
+---
+
 <a id="11.ecc"></a>
 
 ## 11.ecc
@@ -1340,6 +1445,8 @@ Two modes: Always donates the full amount every eligible year; As Needed applies
 **Withdrawal Rate:**
 
 Corrected Portfolio Withdrawal percent calculations. Added netOutflow, grossOutflow and inFlow columns for summary information.
+
+---
 
 <a id="11.ecb"></a>
 
@@ -1349,6 +1456,8 @@ Corrected Portfolio Withdrawal percent calculations. Added netOutflow, grossOutf
 
 Each simulation year now auto-selects Early (January) or Late (December) withdrawal timing. Conversion years use Early - maximizing Roth compounding duration. Spending-only years use Late - the full portfolio compounds before the withdrawal exits, gaining D×r per year (~$3,500/yr on a $50k draw at 7%). No manual toggle; the algorithm tracks prior-year conversion activity. A new Timing column in Annual Details shows Early(Conv) or Late(Spend) for each year.
 
+---
+
 <a id="11.eca"></a>
 
 ## 11.eca
@@ -1356,6 +1465,8 @@ Each simulation year now auto-selects Early (January) or Late (December) withdra
 **Bear-Start Overlay (Historical Monte Carlo):**
 
 In Historical mode, the bottom 25% of paths begin with a randomly-sampled worst-decade historical sequence before continuing with random draws. The likelihood of a "Bear start" market is 23%, so this adds realistic sequence of return risks (SORR).
+
+---
 
 <a id="11.ec9"></a>
 
@@ -1365,6 +1476,8 @@ In Historical mode, the bottom 25% of paths begin with a randomly-sampled worst-
 
 Monte Carlo "Stress (worst sequences)" runs the worst historical retirement-start sequences scored by first-decade real (inflation-adjusted) CAGR. Shows sequence-of-returns risk directly - each line is a real historical scenario. Chart labels show nominal equity CAGR, inflation CAGR, and real CAGR for each scenario. Clicking on a legend hides all other plots. Will your retirement withdrawal strategy survive the stagflation of the 1960s–70s? The tech bubble of 2000? This will tell you.
 
+---
+
 <a id="11.ec8"></a>
 
 ## 11.ec8
@@ -1373,6 +1486,8 @@ Monte Carlo "Stress (worst sequences)" runs the worst historical retirement-star
 
 MT, ND, AL, OH, and SC have statutory fixed income tax brackets (they were being incorrectly inflated which would understate future state taxation). Other states are unaffected. Known limitation: the standard deduction for AL, OH, and MT is fixed by statute but is being adjusted - future fix to be provided.
 
+---
+
 <a id="11.ec7"></a>
 
 ## 11.ec7
@@ -1380,6 +1495,8 @@ MT, ND, AL, OH, and SC have statutory fixed income tax brackets (they were being
 **State Tax Expansion:**
 
 Added AL, AZ, CO, IN, KY, MA, ME, MN, MT, ND, OH, SC, WI to the state income tax dropdown.  All states adjusted to latest available information.
+
+---
 
 <a id="11.ec6"></a>
 
@@ -1395,6 +1512,8 @@ leak to Cash as ordinary income. Two orderings are supported: IRA-first (🗘, r
 The Optimizer and Monte Carlo always run all three variants (baseline + IRA-first + Brokerage-first) and surface the best. The subCycle column in Annual Details shows IRA/Brok/⚠Brok per year.
 One benefit of Cycle Brokerage is earlier reduction of brokerage assets that would otherwise grow increasing later capital gains.
 
+---
+
 <a id="11.e64"></a>
 
 ## 11.e64
@@ -1403,7 +1522,9 @@ One benefit of Cycle Brokerage is earlier reduction of brokerage assets that wou
 
 Annual Details now shows the break-even future tax rate for each year's Roth conversion.
 Avg BETR summary stat shows the average across all conversion years. "Conv Optimizer" determines whether conversions realize any tax savings and are indicated with (⇌)
-**Bug fix:** eliminated shortfalls in cases invoving brokerage withdrawals.
+**Bug fix:** eliminated shortfalls in cases involving brokerage withdrawals.
+
+---
 
 <a id="11.e52"></a>
 
@@ -1411,11 +1532,15 @@ Avg BETR summary stat shows the average across all conversion years. "Conv Optim
 
 URL compression: all share URLs now use short parameter names (57% shorter). Share button opens a copyable popup panel on all tools matching Income Tax Planner style. Income Tax Planner gets an "Open in Tax Planner →" button that pre-fills Retirement Tax Planner with state, SS income, and capital gains. Backward compatible - existing long-key bookmarks still load.
 
+---
+
 <a id="11.e4f"></a>
 
 ## 11.e4f
 
 User Experience polish throughout. Roth conversion & opportunity cost tracking calculates when conversions or cash withdrawals "pay off". Break Even at the top says when that year is. New Opp. Cost category and columns added to Annual Details. Future IRA Tax % marginal rate when IRA is eventually distributed; auto defaults the last simulation year marginal rate. Choose your heirs total tax rate.
+
+---
 
 <a id="11.e4a"></a>
 
@@ -1423,11 +1548,15 @@ User Experience polish throughout. Roth conversion & opportunity cost tracking c
 
 Fixed start age bug (table now starts at retirement year on URL load). Updated withdrawal strategy descriptions in How To. Added color legend to Annual Details table.
 
+---
+
 <a id="11.e1a"></a>
 
 ## 11.e1a
 
 New feature: view input distributions in Monte Carlo.
+
+---
 
 <a id="11.df0"></a>
 
@@ -1435,23 +1564,31 @@ New feature: view input distributions in Monte Carlo.
 
 Monte Carlo uses historical inflation 1928–2024 and growth (based on S&P), that historical inflation also is used to escalate the spend-goal rather than using a fixed rate. Stats display CAGR (Compound Annual Growth Rate) instead of arithmetic median - e.g. the CAGR growth rate is the "true" rate where the median rate is the "middle" rate over the entire period. Example: -20% growth for 3 years, 10% growth for one year, then +20% growth for 3 years the CAGR is about -0.38%, but the median is 10%. CAGR gives you the real net growth.
 
+---
+
 <a id="11.dd9"></a>
 
 ## 11.dd9
 
 Monte Carlo uses Historical data from real S&P 500, bond, and international returns (1970–2024). Account Composition shows Est.Rtn advisory column (median before inflation); Monte Carlo shows per-asset-class return ranges (Eq/Bonds/Intl).
 
+---
+
 <a id="11.dd6"></a>
 
 ## 11.dd6
 
-Added ordered withdrawal strategy (CBIR/RIBC/BIRC). Fixed error where Spend Goal was inflated prematurely.Defaults bracket strategy changed to \`Below IRMAA\`. Fill provides feedback: ✓ or ⚠ status with max feasible spend estimate; clicking ⚠ sets After-Tax Spend to the bracket maximum and triggers recalculation.
+Added ordered withdrawal strategy (CBIR/RIBC/BIRC). Fixed error where Spend Goal was inflated prematurely. Default bracket strategy changed to `Below IRMAA`. Fill provides feedback: ✓ or ⚠ status with max feasible spend estimate; clicking ⚠ sets After-Tax Spend to the bracket maximum and triggers recalculation.
+
+---
 
 <a id="11.dad"></a>
 
 ## 11.dad
 
 Ages (current age and RMD start age, live-updating) added; optimizer always runs with Max Conversion on (it was almost always better); Strategy defaults were changed; other defaults changed, too.
+
+---
 
 <a id="11.da6"></a>
 

@@ -2217,6 +2217,13 @@ window.TestTiers = {
     // the feature: without it, a whole suite could be added, or the slow tags could drift, and the
     // page would keep reporting green over a number it no longer understands. Measure, do not guess:
     // run `node <suite>` and use the printed total.
+    //
+    // ALL FOUR NUMBERS, NOT JUST THE ONE FOR THE TOOL YOU ARE WORKING ON. This object is the single
+    // pin for every node suite in the repo, and the suites belong to different tools: taxPaymentPlanner
+    // covers RetirementTaxPlanner.html, which this page never even loads. On 2026-08-17 a Tax Payment
+    // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
+    // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
+    // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
     EXPECTED: { optimizer_core: 269, taxPaymentPlanner: 34, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {

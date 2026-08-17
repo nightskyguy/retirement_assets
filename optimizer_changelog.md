@@ -23,22 +23,9 @@ contain, and if the real number differs it refuses to report green, because a pa
 count of its own tests cannot honestly claim they all passed.
 
 Tax Payment Planner release 1.1580 added 2 tests to its own suite and did not update that expected
-count here, so the guard fired as designed and the indicator read "test counts changed", with the
-console detail `taxPaymentPlanner: 34 tests on disk, 32 expected`. Nothing was failing. The expected
-count is now 34, which is the number `node taxPaymentPlanner.tests.js` actually reports, and the
-indicator is green again on 564 tests: 245 run inside the page and 319 from the node suites.
+count.
 
-Fixed alongside it, the version token that cache-busts those node test files was several releases
-behind, so a returning browser could have run its self-check against a cached copy of a test file
-that had since changed on disk. The test-count table in the git hook documentation was stale for the
-same reason and now matches what the suites report.
-
-**This file had an editing pass of its own.** Two dead links, an empty link target, a pair of
-mislabeled example URLs, escaped backticks left over from an old template literal and several
-unfinished sentences are fixed, three entries that shared the version number 11.1287 now say which
-is which, and every release is separated by a rule the way the newest ones already were. Two
-headings that promised detail and then supplied none, in 11.152f and 11.1019, now either carry that
-detail or stop promising it. No release write-up changed its meaning.
+**This file had an editing pass of its own.** Including fixing dead links, an empty link, and more.
 
 ---
 
@@ -115,7 +102,7 @@ Two new choices in the Stress window selector:
 - **Combined (5/10/15/20/30)**, now the default, scores every window and keeps the union of what
   each one flags. The count you set is per window, and because the windows overlap the union is 
   smaller than the sum: the new default of 20 gives about 40 distinct start years rather than 100.
-  Hovering a row says which windows flagged that year.
+  Hovering over a row says which windows flagged that year.
 - **All start years** skips ranking and runs every start year the record holds, currently 98. At
   that density the individual lines stop being readable, so survivors fade back and the failures are
   drawn solid and on top. The shape you are looking for is how much of history breaks the plan, not
@@ -147,7 +134,7 @@ A plan longer than the record has left after its start year wraps around and rep
 1928. A 2015 start on a 30 year plan gets 11 real years and then 19 of replay. That has always been
 the behavior, and the ranking has always excluded start years without a full window of real data
 after them, so a wrapped stretch never gets a vote in which years are worst. It is now visible: the 
-graphed line becomes dashed. Hover the row and it names the year the record runs out.
+graphed line becomes dashed. Hover over the row to reveal the year the record runs out.
 
 ### Bear-start openings are no longer all the same shape
 
@@ -208,7 +195,7 @@ and the stress pass keeps re-running on its own either way.
 - The Stress Test chart legend was dropped. The table underneath already names every line,
   carries every number, sorts, and shows each line's color in its first column. The table made the legend 
   a waste of space so only the table remains.
-- The hover readout waits until you pick a line from the table. Click the row in the table again to bring 
+- The hover-over data is not shown until you pick a line from the table. Click the row in the table again to bring 
   all the graphed lines back.
 
 ---
@@ -363,7 +350,7 @@ in nominal dollars underneath it. Both now switch together, along with the new t
 column whose blanks are stored as "no value", such as Exhausted or Total Taxes, compared two blanks
 by subtracting them, which produces a meaningless result and left those rows in arbitrary order; the
 comparison is now done properly. And the "paths" readout beside the Cancel button described the
-previous run rather than the one in flight. Hovering a line on the main chart could also name a
+previous run rather than the one in flight. Hovering over a line on the main chart could also name a
 different strategy than the one its legend entry named.
 
 ---
@@ -552,7 +539,7 @@ The place you would observe the declining basis is in the "Annual Details" -> "B
 ## 11.147c
 
 **Self-tests improved.** No change to your plan or its numbers. The self-check that runs at page
-load now covers 510 tests instead of 245; hover the indicator for the count. A brief hourglass
+load now covers 510 tests instead of 245; hover over the indicator for the count. A brief hourglass
 before the green dot is normal.
 
 ---
@@ -1086,7 +1073,7 @@ Two new dashed lines, "Your RMDs begin" and "Spouse RMDs begin", join the existi
 
 **The Withdrawal Rate stat was reading far too low and has been corrected.**
 
-It now measures what it says: the money actually pulled out of your accounts to pay for spending and taxes, divided by what the portfolio was worth at the start of that year. Three things were wrong before. Social Security and pension income were being subtracted from the withdrawals, so a plan drawing $164,000 against $81,000 of Social Security was reported as if it had withdrawn only $19,000. The bottom of the fraction used an after-tax estimate of your wealth rather than the actual account balances, and the very first year used a different basis than every year after it. On a typical plan the stat moves from about 1.1% to about 2.4%, which is now directly comparable to the classic 4% rule and to the guardrail rate the Guyton-Klinger strategy uses internally. The tile is relabeled simply "Withdrawal Rate", and hovering it shows two extra views: a dollar-weighted average, and a net depletion figure that goes negative when your portfolio is growing faster than you draw it down. The rate itself can no longer go negative, because you cannot withdraw less than nothing. A related fix: in years when Social Security covers everything, a required distribution that gets reinvested is no longer counted as a withdrawal, since those dollars never left the portfolio. Also in the header, the summary stats are left-aligned on wide screens instead of being pushed to the right edge, and the "what you last changed" note moved to sit after the numbers alongside the save and load messages.
+It now measures what it says: the money actually pulled out of your accounts to pay for spending and taxes, divided by what the portfolio was worth at the start of that year. Three things were wrong before. Social Security and pension income were being subtracted from the withdrawals, so a plan drawing $164,000 against $81,000 of Social Security was reported as if it had withdrawn only $19,000. The bottom of the fraction used an after-tax estimate of your wealth rather than the actual account balances, and the very first year used a different basis than every year after it. On a typical plan the stat moves from about 1.1% to about 2.4%, which is now directly comparable to the classic 4% rule and to the guardrail rate the Guyton-Klinger strategy uses internally. The tile is relabeled simply "Withdrawal Rate", and hovering over it shows two extra views: a dollar-weighted average, and a net depletion figure that goes negative when your portfolio is growing faster than you draw it down. The rate itself can no longer go negative, because you cannot withdraw less than nothing. A related fix: in years when Social Security covers everything, a required distribution that gets reinvested is no longer counted as a withdrawal, since those dollars never left the portfolio. Also in the header, the summary stats are left-aligned on wide screens instead of being pushed to the right edge, and the "what you last changed" note moved to sit after the numbers alongside the save and load messages.
 
 ---
 
@@ -1146,7 +1133,7 @@ Both only ever affected the Optimizer, but sat in the sidebar next to the strate
 
 **Smaller fixes.**
 
-The Roth Conv column in Annual Details had silently lost its explanatory tooltip to a naming typo (as had the Roth Growth column); Roth Conv's now spells out why it can read lower than the amount you asked to convert. The Break Even explainer is a compact ⓘ next to the year instead of a standing button, and it no longer makes you click before telling you anything - hover reads the reason, click pins it open, click again closes it.
+The Roth Conv column in Annual Details had silently lost its explanatory tooltip to a naming typo (as had the Roth Growth column); Roth Conv's now spells out why it can read lower than the amount you asked to convert. The Break Even explainer is a compact ⓘ next to the year instead of a standing button, and it no longer makes you click before telling you anything - hover over it to read the reason, click pins it open, click again closes it.
 
 ---
 

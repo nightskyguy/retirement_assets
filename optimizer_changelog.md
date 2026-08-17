@@ -11,36 +11,39 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1582"></a>
+<a id="11.1585"></a>
 
-## 11.1582
+## 11.1585
 
-**Research groundwork. No change to any plan or its numbers.** Nothing on the page behaves
-differently, and the self-check proves it: both new inputs are absent from every plan the tool
-builds, and a run with them explicitly switched off produces a year-by-year result identical to one
-that never mentions them.
+**Two Stress Test fixes. No change to any plan or its numbers.**
 
-Two more engine research inputs, used only by the offline study harnesses. Both concern the same
-question: the engine deliberately refuses to sell Brokerage in two places, and neither refusal has
-ever been measured.
+### The Stress Test now updates when you load a saved scenario
 
-- **The third tax pass** funds a leftover shortfall from Cash, then Roth, and never from Brokerage.
-  The stated reason is a capital-gains spiral, where selling to pay tax raises the taxable share of
-  Social Security, which raises the shortfall, which needs another sale. The reasoning is plausible
-  and was never run. The new input allows a Brokerage sale there, re-prices the tax, and repeats,
-  with the passes counted so a spiral would show up as a year that never settles.
-- **The funding backstop** draws extra from the IRA when a plan cannot otherwise meet mandatory
-  spending, even while a Brokerage balance sits untouched. Forced IRA money is ordinary income at
-  your top rate; a Brokerage dollar can be long-term gain at 0%. The new input lets the backstop
-  spend Brokerage first.
+Loading a scenario refreshed everything in the summary bar except the Stress Test, which kept showing
+the result for whatever plan had been on screen before. It corrected itself only if you edited a field
+by hand or opened the Monte Carlo tab, so the most likely reading was that the scenario had not loaded
+at all. It now refreshes with the rest of the summary bar. The same load also raises the "out of date"
+notice on the Monte Carlo tab when a full comparison run is on screen, which it should have been doing
+and was not.
 
-On the eight scenarios used to build this, no year hit the repeat limit, so nothing here yet supports
-or refutes the spiral. Measuring it properly is the next piece of work. Two counters separate a year
-that stops making progress, which is that account simply running out of usable money, from a year
-that keeps needing another pass, which is the only pattern that would show a real spiral.
+One case is still open, and is not fixed here: if you load a scenario in the second or so while a
+Stress Test pass is already running, that pass finishes last and leaves its own, now older, numbers on
+the tile. Editing any field or opening the Monte Carlo tab corrects it.
 
-The self-check count moves from 263 to 269 for the engine suite, in both places release 11.1581
-pinned it: `TestTiers.EXPECTED`, and the suite table in the commit hook's README.
+### "All start years" no longer calls every year one of the worst
+
+The Stress window offers two selections. Combined ranks every start year over each of five lengths and
+runs the worst of each. All start years runs the entire record, good years and bad alike. The result
+sentence described both the same way, so in All mode it read "in 13 of the 98 worst historical periods
+on record" about a set that is simply every year there is. It now reads "in 13 of the 98 start years on
+record", and the tooltip on both the headline and the summary tile explains the selection actually in
+use. Combined is unchanged, where "worst" was accurate all along.
+
+The README's Stress Test section had drifted from the code and is corrected: it described six ranking
+lengths including a 25 year window that does not exist, and quoted a fixed count of 36 start years that
+moves with the Stress sequences box.
+
+Additional elements were added for P32 research.
 
 ---
 

@@ -803,21 +803,43 @@ function stressFailureSummary(stress) {
     const failures = Math.round((1 - v.survivalRate) * total);
     return {
         failures, total,
+        // How the start years were picked, carried alongside the count because the count alone
+        // cannot be described honestly: 'all' runs every start year in the record, good and bad
+        // alike, so calling them the worst N is false. From stressModeOf, which prefers what the
+        // engine actually applied over the live selector.
+        mode: stressModeOf(stress).mode,
         survivalRate: v.survivalRate,
         ruinYear: v.medianRuinYear ?? null,
         ...survivalBand(v.survivalRate),
     };
 }
 
-const STRESS_TOOLTIP_BASE =
+// NOTE for anyone editing these two strings: renderStressHeadline interpolates the finished tooltip
+// into a title="..." attribute WITHOUT escaping it, so a double quote here would truncate the
+// attribute. Keep them free of " characters.
+const STRESS_TOOLTIP_WORST =
       'Of the harshest return periods in the historical record, how many your current plan runs out '
     + 'of money in. These sequences are chosen to be the worst on record, so this is a durability '
     + 'test and not a forecast: failing some of them does not mean the plan is likely to fail.';
 
+// All start years runs the whole record rather than a ranked subset, so the durability point has to
+// be made on different grounds: it is not that the sequences were picked to be harsh, it is that
+// none were left out.
+const STRESS_TOOLTIP_ALL =
+      'Of every start year in the historical record, how many your current plan runs out of money '
+    + 'in. All start years are run, good and bad alike, rather than only the worst, so this reads as '
+    + 'how much of the record the plan survives. It is a durability test and not a forecast.';
+
+// The base sentence for the selection currently on screen. With no run to describe there is nothing
+// but the live selector to go on, which is what stressModeOf falls back to.
+function stressTooltipBase(mode) {
+    return (mode ?? stressWindowMode()) === 'all' ? STRESS_TOOLTIP_ALL : STRESS_TOOLTIP_WORST;
+}
+
 // Tooltip text shared by the summary-bar tile and the Monte Carlo headline.
 function stressTooltip(s) {
-    if (!s) return STRESS_TOOLTIP_BASE;
-    return STRESS_TOOLTIP_BASE
+    if (!s) return stressTooltipBase(null);
+    return stressTooltipBase(s.mode)
         + `\n\nYour plan survives ${s.total - s.failures} of ${s.total} and fails ${s.failures}.`
         + (s.ruinYear ? `\nIn the runs that fail, the money typically runs out around ${s.ruinYear}.` : '')
         + '\n\nSee the Monte Carlo tab for the full stress chart.';
@@ -842,10 +864,16 @@ function renderStressHeadline(stress) {
         return;
     }
 
-    const sentence = s.failures === 0
-        ? `Your plan survives all ${s.total} of the worst historical periods on record.`
-        : `Your plan runs out of money in ${s.failures} of the ${s.total} worst historical periods on record`
-          + (s.ruinYear ? `, typically around ${s.ruinYear}.` : '.');
+    // All start years is not a selection of the worst, it is the whole record, so it gets its own
+    // pair of sentences. Combined and the single-window modes DO rank, and keep the original wording.
+    const tail = s.ruinYear ? `, typically around ${s.ruinYear}.` : '.';
+    const sentence = s.mode === 'all'
+        ? (s.failures === 0
+            ? `Your plan survives every one of the ${s.total} start years on record.`
+            : `Your plan runs out of money in ${s.failures} of the ${s.total} start years on record` + tail)
+        : (s.failures === 0
+            ? `Your plan survives all ${s.total} of the worst historical periods on record.`
+            : `Your plan runs out of money in ${s.failures} of the ${s.total} worst historical periods on record` + tail);
     el.innerHTML =
         `<div title="${stressTooltip(s)}" style="display:flex;align-items:center;gap:12px;background:${s.bg};`
         + `border-radius:6px;padding:10px 14px;margin-bottom:8px;">${chev}`
@@ -920,7 +948,7 @@ function updateStressStat(stress) {
     if (!s) {
         el.textContent = '—';
         el.style.color = '';
-        if (cell) cell.title = STRESS_TOOLTIP_BASE + '\n\nStill measuring.';
+        if (cell) cell.title = stressTooltipBase(null) + '\n\nStill measuring.';
         return;
     }
     el.textContent = `${s.failures} of ${s.total} fail`;

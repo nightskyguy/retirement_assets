@@ -2489,3 +2489,50 @@ hover" rule against the new changelog prose - it does not use the word.
 `git merge-tree origin/main HEAD` now exits 0: **a PR would merge clean.** All three suites green
 (269 / 34 / 22), pre-commit hook green on both commits, browser badge green at 570 (245 in-page +
 325 node) with `EXPECTED` reading 269/34/22/3 and the newest changelog entry showing 11.1582.
+
+### Same session — issue #177 + All-start-years wording (v11.1585)
+
+Two user-reported defects, both in the Stress Test, plus the changelog rewrite the user asked for.
+Release renamed **11.1582 -> 11.1585** (11.1582 was never published, and `main` had already taken
+11.1581).
+
+**1. Issue #177, stress tile stale after a scenario load.** `applyScenario()` ended with
+`runSimulation()` and nothing else; the tile is fed by `mcInputsChanged()`, which rides the sidebar's
+blur/change listeners, and `applyScenario` sets `.value`/`.checked` programmatically so neither event
+fires. One guarded call added at the end of `applyScenario` (`optimizer_ui.js`), which covers modal
+Load, Import and the dead `loadScenario` in one edit. User chose the **minimal** fix, so the two
+silent drops in `refreshMCStressOnly` stay.
+
+**The `document.readyState === 'complete'` guard on that call is load-bearing, not defensive noise.**
+At DOMContentLoaded `applyScenario` runs BEFORE `loadFromURL`, so an unguarded call starts a stress
+pass against the pre-URL plan; if it were still in flight 600ms later the page-load prime would be
+dropped by the busy guard and a share URL would settle showing the DEFAULT scenario's numbers.
+Verified directly: with `weak` saved as the default scenario and a `strong` share URL (and the
+reverse), the tile ends on the URL plan.
+
+**2. All start years wording.** `renderStressHeadline` said "in 13 of the 98 worst historical periods
+on record" about a mode that runs every start year there is. Now branches on the existing
+`stressModeOf(stress).mode` (which prefers the engine's applied `windowMode` over the live selector),
+carried through a new `mode` field on `stressFailureSummary`. `STRESS_TOOLTIP_BASE` split into
+`STRESS_TOOLTIP_WORST` / `STRESS_TOOLTIP_ALL` behind `stressTooltipBase(mode)`, since the tile and the
+headline share it. GOTCHA recorded in the code: `renderStressHeadline` interpolates the tooltip into
+`title="..."` **without** escaping, so those constants must stay free of double quotes.
+
+**3. README.** The Stress Test section claimed six ranking lengths including a 25 year window that does
+not exist (code: `STRESS_WINDOWS = [5,10,15,20,30]`) and hardcoded 36 start years four times.
+
+**Verified in the browser**, worktree-rooted server: strong <-> weak round trip flips the tile
+13/36 <-> 36/36 with no MC tab visit and no manual edit; share-URL boot beats the saved default;
+pristine load (localStorage cleared, no params) still primes; `?montecarlo` renders its 12 rows and
+still populates the tile; All mode reads "98 of the 98 start years on record" with the All tooltip on
+both surfaces; Combined reverts to "36 ... worst historical periods on record". All five sentence
+branches driven directly through the shipped functions. Node 269/34/22, badge green at 570.
+
+**The documented limitation reproduced itself during testing**, which is worth keeping: switching the
+window and loading a scenario in the same tick left the tile on the older plan's 36/36, because the
+in-flight pass painted last. A second load with nothing in flight corrected it to 13/36. That is
+exactly the case the queued trailing re-run would close.
+
+**No test-count edits.** `mc_tab.js` is unreachable from both tiers: it loads at
+`retirement_optimizer.html:1350` while the in-page runner fires at `:1272`, and it has no
+`module.exports` for node. Zero existing coverage of `montecarlo/*` anywhere.

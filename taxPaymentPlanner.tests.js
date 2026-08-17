@@ -403,6 +403,59 @@ test('Coverage invariant: totalCovered + shortfall === totalTaxDue for both plan
     `Plan A should fully cover taxes via conversion withholding; shortfall was ${aShortfall}`);
 });
 
+// ── 11b. Draw-only timing comparison (no conversion) ──────────────────────
+// Regression guard: the Early-vs-December comparison used to be gated behind
+// `hasAnyConversion`, so a draw-only plan only ever showed the single early plan and never
+// computed the December-deferred alternative. A not-yet-taken draw is deferrable, so the
+// comparison must now appear — as a two-plan (Plan B early vs Plan C December) comparison —
+// and December must win at rates where year-end IRA beats holding cash.
+test('Draw-only — December comparison appears and wins, no phantom Plan A', () => {
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE,
+    ira1Rmd: 30000,          // covers the $20,000 federal tax with room to spare
+    federalTax: 20000,
+    todayDate: new Date(2026, 4, 21), // May → nextMonth = June (Plan B); Plan C = December
+  });
+
+  // The December baseline is computed; the hybrid is NOT (no conversion to pull early).
+  assert(plan.planB !== null, 'Draw-only plan must compute the December baseline (Plan C)');
+  assert(plan.planC === null, 'Draw-only plan must NOT compute the hybrid (Plan A)');
+
+  const cc = plan.convComparison;
+  assert(cc !== null, 'Draw-only plan must build a timing comparison');
+  assert(cc.hasConversion === false, 'Comparison should be flagged draw-only');
+  assert(cc.planA_netVsC === null, 'No Plan A net advantage in a draw-only comparison');
+  assert(cc.planB_netVsC < 0,
+    `Early draws should trail the December baseline; got netVsC ${cc.planB_netVsC}`);
+  assert(cc.bestPlan === 'C', `December (Plan C) should win; got ${cc.bestPlan}`);
+
+  // The December baseline actually schedules the draw in December, the early plan in June.
+  const cDraw = plan.planB.actions.find(a => a.type === T.RMD);
+  const bDraw = plan.actions.find(a => a.type === T.RMD);
+  assert(cDraw && cDraw.date.month === 12, `Plan C draw should be December, got ${cDraw && cDraw.date.month}`);
+  assert(bDraw && bDraw.date.month === 6, `Plan B draw should be June, got ${bDraw && bDraw.date.month}`);
+
+  // Outputs read as a draw comparison, with no Roth/Plan A framing leaking in.
+  assert(/Draw Timing — Early vs\. December/.test(plan.html), 'HTML header should say Draw Timing');
+  assert(!/Plan A/.test(plan.html), 'Draw-only HTML must not mention Plan A');
+  assert(/DRAW TIMING — EARLY vs DECEMBER/.test(plan.text), 'Text header should say DRAW TIMING');
+  assert(!/PLAN A/.test(plan.text), 'Draw-only text must not mention PLAN A');
+});
+
+// An already-taken draw is locked to its actual month and offers no timing choice, so it must
+// NOT trigger the comparison on its own.
+test('Draw-only — an already-taken draw does not trigger a comparison', () => {
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE,
+    ira1Rmd: 30000,
+    ira1RmdTaken: true,      // locked to a past month — nothing left to defer
+    federalTax: 20000,
+    todayDate: new Date(2026, 4, 21),
+  });
+  assert(plan.planB === null, 'A locked (already-taken) draw must not build a December baseline');
+  assert(plan.convComparison === null, 'A locked draw must not build a timing comparison');
+});
+
 // ── 12. Business-day helpers ──────────────────────────────────────────────
 const {
   isBusinessDay, nextBusinessDay, firstMondayAfter, dueDateFor, ORDERING_BUFFER_DAYS,

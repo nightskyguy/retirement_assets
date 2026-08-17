@@ -1799,18 +1799,32 @@ const TaxPaymentPlanner = (() => {
       coverageSummary,
     };
 
-    // 16. Plan B (December baseline) and Plan C (early conv + December draws) when conversions exist.
+    // 16. Early-vs-December timing comparison.
+    //     Plan B (December baseline) and Plan C (early conv + December draws).
     //     Guard with both _baseline and _planC to prevent infinite recursion.
     const hasAnyConversion = p.ira1RothConversion > 0 || p.ira2RothConversion > 0;
+    // The timing lever is NOT conversion-specific. Any draw that has not been taken yet can be
+    // deferred to December, keeping its net proceeds tax-deferred longer, so the Early-vs-December
+    // comparison is meaningful with zero conversions too. Already-taken draws are locked to their
+    // actual month and offer no choice, so they do not trigger the comparison on their own.
+    const hasDeferrableDraw =
+      (p.ira1Rmd       > 0 && !p.ira1RmdTaken) ||
+      (p.ira1Voluntary > 0 && !p.ira1VolTaken) ||
+      (p.ira2Rmd       > 0 && !p.ira2RmdTaken) ||
+      (p.ira2Voluntary > 0 && !p.ira2VolTaken);
     let planB = null;
     let planC = null;
     let convComparison = null;
-    if (hasAnyConversion && !p._baseline && !isPlanC) {
+    if ((hasAnyConversion || hasDeferrableDraw) && !p._baseline && !isPlanC) {
+      // December baseline — always the far end of the timing lever.
       planB = computePaymentPlan(Object.assign({}, p, { _baseline: true }));
-      planC = computePaymentPlan(Object.assign({}, p, { _planC: true }));
+      // The hybrid (early conversions, December draws) only differs from the December baseline when
+      // there are conversions to pull early. With none it is identical, so skip it rather than show
+      // a duplicate Plan A column.
+      if (hasAnyConversion) planC = computePaymentPlan(Object.assign({}, p, { _planC: true }));
       // buildConvComparison(p, ira1, ira2, ewm, totalIraWithheld, planC_obj, planA_obj, _unused)
       // planC_obj = _baseline computation → displayed as Plan C (December baseline)
-      // planA_obj = _planC computation    → displayed as Plan A (hybrid)
+      // planA_obj = _planC computation    → displayed as Plan A (hybrid), null when no conversion
       convComparison = buildConvComparison(p, ira1, ira2, effectiveWithholdMonth,
                          totalIraDrawWithheld, planB, planC, null);
     }
@@ -1978,10 +1992,17 @@ const TaxPaymentPlanner = (() => {
     const bestNet  = Math.max(...netValues.map(x => x.net));
     const bestPlan = netValues.find(x => x.net === bestNet)?.label;
 
+    const hasConv = p.ira1RothConversion > 0 || p.ira2RothConversion > 0;
+
     return {
+      hasConversion: hasConv,
       planALabel: `Plan A — Hybrid: early conversion(s) (${MONTH_NAMES[earliestConvMonth-1]}), December draws`,
-      planBLabel: `Plan B — Early everything: conversions and draws in ${MONTH_NAMES[effectiveWithholdMonth-1]}`,
-      planCLabel: `Plan C — December baseline: all draws and conversions in December`,
+      planBLabel: hasConv
+        ? `Plan B — Early everything: conversions and draws in ${MONTH_NAMES[effectiveWithholdMonth-1]}`
+        : `Plan B — Early draws: all draws in ${MONTH_NAMES[effectiveWithholdMonth-1]}`,
+      planCLabel: hasConv
+        ? `Plan C — December baseline: all draws and conversions in December`
+        : `Plan C — December: all draws deferred to December`,
       // Plan A (hybrid) components
       planA_rothGrowth,
       planA_withholdOC,
@@ -2024,26 +2045,45 @@ const TaxPaymentPlanner = (() => {
     }
 
     if (convComparison) {
-      lines.push('');
-      lines.push('ROTH CONVERSION — THREE-PLAN COMPARISON');
-      lines.push(hr);
       const cc = convComparison;
-      lines.push(`  ${cc.planALabel}`);
-      lines.push(`  ${cc.planBLabel}`);
-      lines.push(`  ${cc.planCLabel}`);
-      lines.push('');
       const fmtNetTxt = v => v === null || v === undefined ? 'n/a'
         : v === 0 ? '$0 (baseline)'
         : (v > 0 ? '+' : '−') + fmt$(Math.abs(v));
-      lines.push(`  Component             Plan A (hybrid)   Plan B (early)   Plan C (Dec)`);
-      lines.push(`  Roth growth          +${fmt$(cc.planA_rothGrowth).padStart(10)}   +${fmt$(cc.planB_rothGrowth).padStart(10)}          $0`);
-      lines.push(`  Withhold OC          -${fmt$(cc.planA_withholdOC).padStart(10)}   -${fmt$(cc.planB_withholdOC).padStart(10)}          $0`);
-      lines.push(`  Draw deferral        -${fmt$(cc.planA_drawDeferral).padStart(10)}   -${fmt$(cc.planB_drawDeferral).padStart(10)}          $0`);
-      lines.push(`  ${'─'.repeat(66)}`);
-      lines.push(`  Net adv. vs Plan C   ${fmtNetTxt(cc.planA_netVsC).padStart(14)}   ${fmtNetTxt(cc.planB_netVsC).padStart(14)}   $0 (baseline)   ← ${cc.bestPlan ? 'Plan ' + cc.bestPlan + ' WINS' : ''}`);
       lines.push('');
-      lines.push('  NOTE: First-year only. Early conversion provides compounding Roth');
-      lines.push('  growth for every subsequent year — long-term benefit grows beyond what is shown.');
+      if (cc.hasConversion) {
+        lines.push('ROTH CONVERSION — THREE-PLAN COMPARISON');
+        lines.push(hr);
+        lines.push(`  ${cc.planALabel}`);
+        lines.push(`  ${cc.planBLabel}`);
+        lines.push(`  ${cc.planCLabel}`);
+        lines.push('');
+        lines.push(`  Component             Plan A (hybrid)   Plan B (early)   Plan C (Dec)`);
+        lines.push(`  Roth growth          +${fmt$(cc.planA_rothGrowth).padStart(10)}   +${fmt$(cc.planB_rothGrowth).padStart(10)}          $0`);
+        lines.push(`  Withhold OC          -${fmt$(cc.planA_withholdOC).padStart(10)}   -${fmt$(cc.planB_withholdOC).padStart(10)}          $0`);
+        lines.push(`  Draw deferral        -${fmt$(cc.planA_drawDeferral).padStart(10)}   -${fmt$(cc.planB_drawDeferral).padStart(10)}          $0`);
+        lines.push(`  ${'─'.repeat(66)}`);
+        lines.push(`  Net adv. vs Plan C   ${fmtNetTxt(cc.planA_netVsC).padStart(14)}   ${fmtNetTxt(cc.planB_netVsC).padStart(14)}   $0 (baseline)   ← ${cc.bestPlan ? 'Plan ' + cc.bestPlan + ' WINS' : ''}`);
+        lines.push('');
+        lines.push('  NOTE: First-year only. Early conversion provides compounding Roth');
+        lines.push('  growth for every subsequent year — long-term benefit grows beyond what is shown.');
+      } else {
+        // Draw-only: no conversion to pull early, so the hybrid plan does not exist. Two plans —
+        // early draws (Plan B) vs draws deferred to December (Plan C baseline).
+        lines.push('DRAW TIMING — EARLY vs DECEMBER');
+        lines.push(hr);
+        lines.push(`  ${cc.planBLabel}`);
+        lines.push(`  ${cc.planCLabel}`);
+        lines.push('');
+        lines.push(`  Component             Plan B (early)   Plan C (Dec)`);
+        lines.push(`  Withhold OC          -${fmt$(cc.planB_withholdOC).padStart(10)}          $0`);
+        lines.push(`  Draw deferral        -${fmt$(cc.planB_drawDeferral).padStart(10)}          $0`);
+        lines.push(`  ${'─'.repeat(52)}`);
+        lines.push(`  Net adv. vs Plan C   ${fmtNetTxt(cc.planB_netVsC).padStart(14)}   $0 (baseline)   ← ${cc.bestPlan ? 'Plan ' + cc.bestPlan + ' WINS' : ''}`);
+        lines.push('');
+        lines.push('  Deferring a not-yet-taken draw to December keeps its net proceeds tax-deferred');
+        lines.push('  longer. Only draws you can freely postpone count here (an RMD is required either');
+        lines.push('  way; a voluntary draw you need for spending is not free to move).');
+      }
     }
 
     const renderActions = acts => acts.forEach(a => {
@@ -2064,18 +2104,21 @@ const TaxPaymentPlanner = (() => {
     });
 
     // Render order: Plan A (hybrid) first, Plan B (early) second, Plan C (December) third.
+    // Plan A only exists when there is a conversion to pull early (planC object present).
     if (planB || planC) {
+      const hasConv = convComparison ? convComparison.hasConversion : (planC != null);
       lines.push('');
-      lines.push('PLAN A — HYBRID (EARLY CONVERSION + DECEMBER DRAWS)');
-      lines.push(hr);
-      if (planC) renderActions(planC.actions);
-      else lines.push('  (No conversion — Plan A same as Plan B)');
+      if (planC) {
+        lines.push('PLAN A — HYBRID (EARLY CONVERSION + DECEMBER DRAWS)');
+        lines.push(hr);
+        renderActions(planC.actions);
+      }
 
-      lines.push('PLAN B — EARLY EVERYTHING');
+      lines.push(hasConv ? 'PLAN B — EARLY EVERYTHING' : 'PLAN B — EARLY DRAWS');
       lines.push(hr);
       renderActions(actions);
 
-      lines.push('PLAN C — DECEMBER BASELINE');
+      lines.push(hasConv ? 'PLAN C — DECEMBER BASELINE' : 'PLAN C — DECEMBER (DRAWS DEFERRED)');
       lines.push(hr);
       if (planB) renderActions(planB.actions);
     } else {
@@ -2151,6 +2194,10 @@ const TaxPaymentPlanner = (() => {
     const alert = txt => `<div style="background:#FFECEC;border-left:4px solid #CC0000;padding:10px 14px;margin:8px 0;font-size:0.9em;color:#8B0000;font-weight:500;">${txt}</div>`;
     const good  = txt => `<div style="background:#E8F5E9;border-left:4px solid #2E7D32;padding:8px 12px;margin:6px 0;font-size:0.88em;color:#1B5E20;">${txt}</div>`;
 
+    // Conversion present? Drives whether the timing comparison shows the Roth-specific Plan A
+    // (hybrid) and the Roth growth row, or reads as a plain Early-vs-December draw comparison.
+    const hasConv = p.ira1RothConversion > 0 || p.ira2RothConversion > 0;
+
     let h = '';
     h += `<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;color:#222;">`;
 
@@ -2187,36 +2234,49 @@ const TaxPaymentPlanner = (() => {
     }
     h += `</div>`;
 
-    // ── Three-plan comparison ──────────────────────────────────────────────
+    // ── Timing comparison ──────────────────────────────────────────────────
+    // With a conversion: three plans (A hybrid / B early / C December baseline).
+    // Draw-only: no conversion to pull early, so Plan A (hybrid) does not exist — the
+    // Plan A column, its pill, and the Roth-growth row are all dropped and it reads as a
+    // plain Early-vs-December draw comparison.
     if (convComparison) {
       const cc = convComparison;
+      const showA = !!planC;   // Plan A (hybrid) only when there is a conversion
       const planAColor = '#1565C0';   // blue  — Plan A (hybrid, often best)
       const planBColor = '#1B5E20';   // green — Plan B (early everything)
       const planCColor = '#6A1B9A';   // purple — Plan C (December baseline)
       h += `<div style="margin:12px 0;border:2px solid #1F4E79;border-radius:6px;overflow:hidden;">`;
-      h += `<div style="background:#1F4E79;color:#fff;padding:10px 16px;font-weight:700;font-size:0.95em;">⚖️ Roth Conversion Timing — Three-Plan Comparison</div>`;
+      h += `<div style="background:#1F4E79;color:#fff;padding:10px 16px;font-weight:700;font-size:0.95em;">⚖️ ${
+        hasConv ? 'Roth Conversion Timing — Three-Plan Comparison'
+                : 'Draw Timing — Early vs. December'}</div>`;
       h += `<div style="padding:12px 16px;background:#F8FAFF;">`;
 
-      // Plan label pills — A first (hybrid, often best)
+      // Plan label pills — A first (hybrid, often best), shown only when a conversion exists
       h += `<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">`;
-      h += `<div style="flex:1;min-width:180px;background:#E3F2FD;border:1px solid #90CAF9;border-radius:5px;padding:9px 12px;">`;
-      h += `<div style="font-weight:700;color:${planAColor};font-size:0.86em;margin-bottom:3px;">📅 Plan A — Hybrid (often best)</div>`;
-      h += `<div style="font-size:0.80em;color:#444;">Conversions early (${MONTH_NAMES[cc.earliestConvMonth-1]}), draws in December. Tax certainty before setting withholding.</div>`;
-      h += `</div>`;
+      if (showA) {
+        h += `<div style="flex:1;min-width:180px;background:#E3F2FD;border:1px solid #90CAF9;border-radius:5px;padding:9px 12px;">`;
+        h += `<div style="font-weight:700;color:${planAColor};font-size:0.86em;margin-bottom:3px;">📅 Plan A — Hybrid (often best)</div>`;
+        h += `<div style="font-size:0.80em;color:#444;">Conversions early (${MONTH_NAMES[cc.earliestConvMonth-1]}), draws in December. Tax certainty before setting withholding.</div>`;
+        h += `</div>`;
+      }
       h += `<div style="flex:1;min-width:180px;background:#E8F5E9;border:1px solid #A5D6A7;border-radius:5px;padding:9px 12px;">`;
-      h += `<div style="font-weight:700;color:${planBColor};font-size:0.86em;margin-bottom:3px;">📅 Plan B — Early everything</div>`;
-      h += `<div style="font-size:0.80em;color:#444;">Conversions &amp; draws in ${MONTH_NAMES[summary.effectiveWithholdMonth-1]}. Withholding from draws; no 60-day rollover.</div>`;
+      h += `<div style="font-weight:700;color:${planBColor};font-size:0.86em;margin-bottom:3px;">📅 Plan B — Early ${hasConv ? 'everything' : 'draws'}</div>`;
+      h += `<div style="font-size:0.80em;color:#444;">${
+        hasConv ? `Conversions &amp; draws in ${MONTH_NAMES[summary.effectiveWithholdMonth-1]}. Withholding from draws; no 60-day rollover.`
+                : `All draws in ${MONTH_NAMES[summary.effectiveWithholdMonth-1]}. Withholding taken from those draws.`}</div>`;
       h += `</div>`;
       h += `<div style="flex:1;min-width:180px;background:#F3E5F5;border:1px solid #CE93D8;border-radius:5px;padding:9px 12px;">`;
-      h += `<div style="font-weight:700;color:${planCColor};font-size:0.86em;margin-bottom:3px;">📅 Plan C — December baseline</div>`;
-      h += `<div style="font-size:0.80em;color:#444;">All draws &amp; conversions in December. Maximum IRA tax-deferred growth; no early Roth growth.</div>`;
+      h += `<div style="font-weight:700;color:${planCColor};font-size:0.86em;margin-bottom:3px;">📅 Plan C — December ${hasConv ? 'baseline' : ''}</div>`;
+      h += `<div style="font-size:0.80em;color:#444;">${
+        hasConv ? 'All draws &amp; conversions in December. Maximum IRA tax-deferred growth; no early Roth growth.'
+                : 'All draws deferred to December. Maximum IRA tax-deferred growth.'}</div>`;
       h += `</div></div>`;
 
-      // 4-row × 3-column table — columns: Plan A | Plan B | Plan C
+      // Comparison table — columns: [Plan A] | Plan B | Plan C. Plan A column present only with a conversion.
       const winBg = '#E8F5E9', nearBg = '#FFFDE7', loseBg = '#fff';
       // Winner = highest net advantage vs Plan C baseline (higher = better)
       const _allNets = [
-        cc.planA_netVsC !== null ? cc.planA_netVsC : -Infinity,
+        showA && cc.planA_netVsC !== null ? cc.planA_netVsC : -Infinity,
         cc.planB_netVsC,
         0,
       ];
@@ -2229,12 +2289,13 @@ const TaxPaymentPlanner = (() => {
       h += `<table style="width:100%;border-collapse:collapse;font-size:0.86em;margin-bottom:10px;">`;
       h += `<thead><tr style="background:#E3F2FD;">`;
       h += `<th style="padding:7px 10px;text-align:left;color:#1F4E79;font-weight:600;">Component (first-year advantage vs. Plan C baseline)</th>`;
-      h += `<th style="padding:7px 10px;text-align:right;color:${planAColor};font-weight:700;">Plan A</th>`;
+      if (showA) h += `<th style="padding:7px 10px;text-align:right;color:${planAColor};font-weight:700;">Plan A</th>`;
       h += `<th style="padding:7px 10px;text-align:right;color:${planBColor};font-weight:700;">Plan B</th>`;
       h += `<th style="padding:7px 10px;text-align:right;color:${planCColor};font-weight:700;">Plan C</th>`;
       h += `</tr></thead><tbody>`;
 
-      // compRow: aVal=Plan A (hybrid), bVal=Plan B (early), cVal=Plan C (Dec=0 baseline)
+      // compRow: aVal=Plan A (hybrid), bVal=Plan B (early), cVal=Plan C (Dec=0 baseline).
+      // The Plan A cell is omitted entirely when there is no conversion.
       const compRow = (label, aVal, bVal, cVal, isGood, note) => {
         const fmtCell = (v, isPos) => {
           if (v === null || v === undefined) return '—';
@@ -2244,15 +2305,18 @@ const TaxPaymentPlanner = (() => {
         };
         h += `<tr style="border-bottom:1px solid #eee;">`;
         h += `<td style="padding:6px 10px;">${label}${note ? ` <span style="color:#888;font-size:0.88em;">${note}</span>` : ''}</td>`;
-        h += `<td style="padding:6px 10px;text-align:right;">${fmtCell(aVal, true)}</td>`;
+        if (showA) h += `<td style="padding:6px 10px;text-align:right;">${fmtCell(aVal, true)}</td>`;
         h += `<td style="padding:6px 10px;text-align:right;">${fmtCell(bVal, true)}</td>`;
         h += `<td style="padding:6px 10px;text-align:right;">${fmtCell(cVal, false)}</td>`;
         h += `</tr>`;
       };
 
-      compRow('Roth tax-free growth',
-        cc.planA_rothGrowth, cc.planB_rothGrowth, 0, true,
-        `(${MONTH_NAMES[cc.earliestConvMonth-1]} conv × rate)`);
+      // Roth growth only applies when there is a conversion to grow — hidden in the draw-only case.
+      if (hasConv) {
+        compRow('Roth tax-free growth',
+          cc.planA_rothGrowth, cc.planB_rothGrowth, 0, true,
+          `(${MONTH_NAMES[cc.earliestConvMonth-1]} conv × rate)`);
+      }
       compRow('Withholding OC paid',
         cc.planA_withholdOC, cc.planB_withholdOC, 0, false,
         cc.planB_withholdOC > 0.5 ? `(${cc.monthsDrawEarly} mo. early for Plan B)` : '');
@@ -2264,9 +2328,12 @@ const TaxPaymentPlanner = (() => {
       const fmtNet = v => v === null || v === undefined ? '—'
         : v === 0 ? '$0 (baseline)'
         : (v > 0 ? '+' : '−') + fmt$(Math.abs(v));
+      const netCells = showA
+        ? [[cc.planA_netVsC, planAColor],[cc.planB_netVsC, planBColor],[0, planCColor]]
+        : [[cc.planB_netVsC, planBColor],[0, planCColor]];
       h += `<tr style="border-top:2px solid #1F4E79;">`;
       h += `<td style="padding:8px 10px;font-weight:700;">Net advantage vs Plan C <span style="font-weight:400;color:#777;font-size:0.9em;">(higher = better)</span></td>`;
-      for (const [nv, col] of [[cc.planA_netVsC, planAColor],[cc.planB_netVsC, planBColor],[0, planCColor]]) {
+      for (const [nv, col] of netCells) {
         const bg = cellBg(nv);
         h += `<td style="padding:8px 10px;text-align:right;background:${bg};font-weight:700;color:${col};">`;
         h += `${fmtNet(nv)}${winStar(nv)}</td>`;
@@ -2276,7 +2343,9 @@ const TaxPaymentPlanner = (() => {
       h += `</tbody></table>`;
 
       h += `<div style="font-size:0.81em;color:#555;border-top:1px solid #ddd;padding-top:8px;">`;
-      h += `⚠️ <strong>First-year only.</strong> Early conversion provides compounding Roth growth every subsequent year — the long-term advantage of Plans A and B over Plan C grows with time. `;
+      h += hasConv
+        ? `⚠️ <strong>First-year only.</strong> Early conversion provides compounding Roth growth every subsequent year — the long-term advantage of Plans A and B over Plan C grows with time. `
+        : `Deferring a not-yet-taken draw to December keeps its net proceeds tax-deferred longer. Only draws you can freely postpone count — an RMD is required either way, a voluntary draw you need for spending is not free to move. `;
       h += `★ = highest first-year net advantage vs Plan C baseline.`;
       h += `</div></div></div>`;
     }
@@ -2439,11 +2508,15 @@ const TaxPaymentPlanner = (() => {
           'see comparison above', planC.actions, planC.summary);
       }
       makePlanSection('plan-section-b', 'B', '#1B5E20', '#2E75B6',
-        '📅 Plan B — Early Everything: Conversion(s) + Draws in ' + MONTH_NAMES[summary.effectiveWithholdMonth - 1],
+        hasConv
+          ? '📅 Plan B — Early Everything: Conversion(s) + Draws in ' + MONTH_NAMES[summary.effectiveWithholdMonth - 1]
+          : '📅 Plan B — Early Draws: All Draws in ' + MONTH_NAMES[summary.effectiveWithholdMonth - 1],
         'see comparison above', actions, summary);
       if (planB) {
         makePlanSection('plan-section-c', 'C', '#6A1B9A', '#6A1B9A',
-          '📅 Plan C — December Baseline: All Draws and Conversions in December',
+          hasConv
+            ? '📅 Plan C — December Baseline: All Draws and Conversions in December'
+            : '📅 Plan C — December: All Draws Deferred to December',
           'see comparison above', planB.actions, planB.summary);
       }
     } else {

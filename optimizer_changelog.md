@@ -27,9 +27,6 @@ count.
 
 **This file had an editing pass of its own.** Including fixing dead links, an empty link, and more.
 
-**Wording: "hover" now always takes "over".** "Hover over the row", not "hover the row". Two Stress
-Test tooltips and two README passages were corrected to match.
-
 ---
 
 <a id="11.1553"></a>

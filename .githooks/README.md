@@ -21,6 +21,13 @@ Runs the three `node`-only suites and blocks the commit if any of them fails:
 
 About 3.5 s total.
 
+**These counts are documentation, and they rot.** The enforced copy is `TestTiers.EXPECTED` in
+`optimizer_tests.js`, which pins all three suites at once plus the slow-tagged subset of
+`optimizer_core`. Adding or removing a test anywhere means updating **every** number in that object
+and then this table, in the same commit - including the suites belonging to tools you did not touch.
+`taxPaymentPlanner.tests.js` covers `RetirementTaxPlanner.html`, and leaving its count stale turns
+the **Optimizer's** self-check badge red. Measure with `node <suite>`; never guess.
+
 It also blocks in two cases that would otherwise pass in silence:
 
 - **A suite is missing.** A renamed or deleted suite would look identical to a green run.

@@ -3,6 +3,15 @@
  * doclinks.tests.js
  * Run with: node doclinks.tests.js
  *
+ * TEST COUNTS ARE PINNED OUTSIDE THIS FILE. Adding or removing a test here means updating, in the
+ * same commit:
+ *   1. `TestTiers.EXPECTED` in optimizer_tests.js - ONE object holding the count of EVERY node
+ *      suite, so the file you have to edit is usually not the tool you are working on.
+ *   2. the suite table in .githooks/README.md
+ * Measure, never guess: run this file and use the printed total. The staleness guard is page-wide,
+ * so a test added to ANY suite turns the retirement_optimizer.html self-check badge red until all
+ * of those counts match.
+ *
  * Covers the pure half of doclinks.js: docHref(), the map from a .md href on disk to the
  * .html page Jekyll publishes on GitHub Pages, and docLabel(), which keeps a link whose
  * visible text is a filename honest about where it now points.

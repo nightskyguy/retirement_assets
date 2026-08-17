@@ -301,7 +301,7 @@
                 title="Unpin">&#10005;</button>
       </div>
       <div class="info-panel" id="info-panel">
-        <div class="info-default">Click a column to pin · hover for quick summary</div>
+        <div class="info-default">Click a column to pin · hover over one for a quick summary</div>
       </div>
     </div>
     <!-- Assumptions -->
@@ -1004,7 +1004,7 @@ function updateInfoPanel(d) {
 
 function clearInfoPanel() {
   document.getElementById('info-panel').innerHTML =
-    '<div class="info-default">Click a column to pin · hover for quick summary in tooltip</div>';
+    '<div class="info-default">Click a column to pin · hover over one for a quick summary in the tooltip</div>';
 }
 
 function initInfoPanel() {
@@ -1496,7 +1496,7 @@ function loadFromURL() {
         <dt>C · True all-in effective rate</dt>
         <dd>Federal + state + IRMAA combined, not just the marginal bracket. The white line on the Tax Rates view is the number that actually matters for planning.</dd>
         <dt>D · Withholding guidance</dt>
-        <dd>Hover your expected income on the chart. The info panel below shows every component — rates and dollars — simultaneously at that income level.</dd>
+        <dd>Hover over your expected income on the chart. The info panel below shows every component — rates and dollars — simultaneously at that income level.</dd>
         <dt>E · Filing status changes</dt>
         <dd>Switch the Filing Status control between MFJ and Single to see how marriage or becoming single shifts your brackets, standard deduction, IRMAA tiers, and effective rates — at every income level simultaneously.</dd>
         <dt>F · State changes</dt>
@@ -1531,7 +1531,7 @@ function loadFromURL() {
         <li><strong>Tax Rates view</strong> — federal effective (blue), state effective (orange), total effective (white), federal marginal on ordinary income + CG (purple dashed), and state marginal (yellow dashed).</li>
         <li><strong>Tax Dollars view</strong> — stacked bars for Federal Ordinary, Federal CG, Federal NIIT, IRMAA, State Ordinary, and State CG. The teal line (right axis) is your MAGI — the figure used to determine next year's IRMAA tier.</li>
         <li><strong>NIIT line</strong> (indigo dashed) — sits where MAGI crosses the NIIT threshold, which is left of the $250k ordinary-income mark whenever you have taxable Social Security or capital gains. It is always shown, whether or not you have a gain this year, because it is the MAGI level to stay under: once you are past it, any gain you do realize is surtaxed from the first dollar.</li>
-        <li><strong>Info panel</strong> — hovering the chart shows all rates and dollar amounts for that income level simultaneously, regardless of which view is active.</li>
+        <li><strong>Info panel</strong> — hovering over the chart shows all rates and dollar amounts for that income level simultaneously, regardless of which view is active.</li>
         <li><strong>IRMAA tier lines</strong> — click any IRMAA entry in the legend (Tax Dollars view) to toggle its vertical reference line.</li>
         <li><strong>Top axis</strong> — shows total income (ordinary + SS + CG) at each major ordinary income mark. When SS and CG are zero it matches the bottom axis.</li>
       </ul>

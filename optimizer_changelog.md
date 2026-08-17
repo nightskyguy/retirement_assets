@@ -27,6 +27,9 @@ count.
 
 **This file had an editing pass of its own.** Including fixing dead links, an empty link, and more.
 
+**Wording: "hover" now always takes "over".** "Hover over the row", not "hover the row". Two Stress
+Test tooltips and two README passages were corrected to match.
+
 ---
 
 <a id="11.1553"></a>
@@ -126,7 +129,7 @@ because it's harder to avoid.
 Real CAGR is now calculated over your whole plan, for every sequence, and it also 
 calculates the worst 5, 10, 15 and 20 year real return found anywhere inside it. A sequence can open
 calmly and still contain the decade that breaks the plan. The old stress test might not have discovered the 
-true worst scenario.  To save space, the equity, bond, international and inflation rates moved into the hover.
+true worst scenario.  To save space, the equity, bond, international and inflation rates moved into the hover-over data.
 
 ### Sequences that run past the end of the record are now marked
 

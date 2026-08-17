@@ -2460,3 +2460,32 @@ to unbounded. Not the answer, but the arms behave.
 Changed: `optimizer_core.js`, `optimizer_core.tests.js`, `optimizer_tests.js` (EXPECTED 269),
 `retirement_optimizer.html` (title + 3 cache busters + changelog li), `optimizer_changelog.md`, and the
 three planning files. Nothing committed, no PR. **Next: P32d**, which is now pure measurement.
+
+### Same session — merged `main` into the branch, conflicts resolved (merge `c4225fc`)
+
+User asked to confirm these changes can merge with `main`. Dry-run first, with no refs touched:
+`git merge-tree --write-tree $(git stash create) origin/main` reported **three conflicts** -
+`optimizer_changelog.md`, `optimizer_tests.js`, `retirement_optimizer.html`. Resolving needs a real
+merge, so committed P32c as `fc45bbf` and merged `origin/main` (`1c79c29`) as `c4225fc`. Local only,
+**nothing pushed, no PR**.
+
+Resolutions:
+
+- **`optimizer_tests.js`** - kept main's new comment block above `EXPECTED` (it explains the
+  cross-tool trap that reddened the badge) with **our** count: `optimizer_core: 269`.
+- **`retirement_optimizer.html`** - ours in all three spots (title `11.1582`, `optimizer_tests.js?v=`,
+  tier-2 loader `V`). Main shipped 11.1581 with **no** in-page `<li>`, so the newest entry in
+  `#changelog-list` is correctly ours.
+- **`optimizer_changelog.md`** - both entries kept, 11.1582 above 11.1581.
+- `optimizer_core.tests.js` auto-merged: main's new "counts are pinned outside this file" header sits
+  at the top, our tests at line ~378.
+
+**Main brought two obligations this change had to satisfy, both now done.** A new `CLAUDE.md` (and a
+matching header in the suite file) says the counts have a **second home** in the `.githooks/README.md`
+suite table: updated 263 -> 269 there too. And main had refreshed the tier-2 loader's own prose count,
+which our 6 tests made stale again: `319 tests` -> `325`. Also checked the new "hover over, never
+hover" rule against the new changelog prose - it does not use the word.
+
+`git merge-tree origin/main HEAD` now exits 0: **a PR would merge clean.** All three suites green
+(269 / 34 / 22), pre-commit hook green on both commits, browser badge green at 570 (245 in-page +
+325 node) with `EXPECTED` reading 269/34/22/3 and the newest changelog entry showing 11.1582.

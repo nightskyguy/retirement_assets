@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-17:** `main` = `1c79c29` (**v11.1581**, PR #179); this worktree is based on `b8a4dce` and is ONE MERGE BEHIND. Working tree holds P32c at **v11.1582**, uncommitted. Merge `main` before any PR: both touch the changelog head, the `EXPECTED` line and the title.
+**As of 2026-08-17:** `main` = `1c79c29` (v11.1581, PR #179), **already merged into this branch** (`c4225fc`); P32c committed as `fc45bbf`, shipping **v11.1582**. Merges clean into main, nothing pushed, no PR. New repo rule from main: test counts are pinned in `TestTiers.EXPECTED` **and** `.githooks/README.md`.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 

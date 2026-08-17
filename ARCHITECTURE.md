@@ -374,6 +374,12 @@ loads the same file and does not opt in, so it keeps the original two-state badg
   The staleness guard compares the counts on disk against that object and turns the badge red on any
   drift, naming it. That friction is deliberate - it is what stops a suite being added and silently
   never run.
+  **Reconcile every entry in that object, not just the one for the tool you are working on.** It is
+  the single pin for all three node suites, and they belong to different tools: `taxPaymentPlanner`
+  counts `RetirementTaxPlanner.html`'s suite, which the Optimizer page never loads. A Tax Payment
+  Planner release on 2026-08-17 added 2 tests, left `taxPaymentPlanner: 32` alone, and turned the
+  Optimizer's badge red without touching the Optimizer. The counts have a second home in the suite
+  table in [.githooks/README.md](.githooks/README.md) - update that in the same commit as well.
 - **`test.critical(name, fn)`** marks a regression guard for a defect that actually shipped. Those
   are printed as `✓ ★ CRITICAL <name>` and repeated in their own end-of-run block, so their status is
   readable without scrolling. Ten exist today: dividend/interest double-counting, and the state

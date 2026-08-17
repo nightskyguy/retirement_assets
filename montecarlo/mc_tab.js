@@ -1518,7 +1518,7 @@ function renderStressChart(stress) {
         descEl.textContent = `For your current plan. Each line is one historical starting sequence, ${stressSelectionLabel(stress)}. `
             + `Red ran out of money in the first half of your plan, amber in the second half, green never ran out. `
             + (anyWrap ? `A dashed tail is where that sequence runs past the end of the record and replays it from 1928. ` : '')
-            + `The table below names every line and gives the numbers behind it. Click a row to isolate its line and read its balances on hover; click again to restore all.`;
+            + `The table below names every line and gives the numbers behind it. Click a row to isolate its line and read its balances by hovering over it; click again to restore all.`;
     }
 
     renderStressTable(stress, rows);
@@ -1631,7 +1631,7 @@ function getStressColumns() {
             title: 'Years from the start of the plan to the year the money ran out.',
             getSortValue: r => r.yearsToRuin ?? Infinity },
         { key: 'real', label: 'Real CAGR',
-            title: 'Inflation-adjusted equity CAGR over your WHOLE plan, on the sequence this scenario actually lived through (Fisher equation). This used to be measured over the ranking window instead, which stopped meaning anything once the windows could be combined or skipped. Hover the row for the equity, bond, international and inflation rates behind it.',
+            title: 'Inflation-adjusted equity CAGR over your WHOLE plan, on the sequence this scenario actually lived through (Fisher equation). This used to be measured over the ranking window instead, which stopped meaning anything once the windows could be combined or skipped. Hover over the row for the equity, bond, international and inflation rates behind it.',
             getSortValue: r => r.realCAGR ?? 0 },
         ...[5, 10, 15, 20].map(w => ({
             key: `w${w}`, label: `Worst ${w}`,

@@ -11,6 +11,22 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15a2"></a>
+
+## 11.15a2
+
+**Tax Payment Planner: the star marking the cheapest plan moved to the column heading.**
+
+It used to sit in the Total first-year cost cell, sharing that cell with a right-aligned dollar
+figure. One row of the table was therefore two characters wider than every other row, and the money
+column no longer lined up down the page. The star now marks the heading, so the table reads
+`Plan C★` and every figure below it stays in its column. When two plans tie, both headings carry a
+star, which is also clearer than two marked cells on one row.
+
+No number changed.
+
+---
+
 <a id="11.15a1"></a>
 
 ## 11.15a1

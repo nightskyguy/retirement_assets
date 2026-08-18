@@ -2944,3 +2944,18 @@ states from understating-and-disclosed to overstating-and-undisclosed, with the 
 
 Suite 60 -> **61**. v1.15a1 / v11.15a1. Same-hour collision with 15a0, so incremented, matching the
 1598 -> 1599 precedent earlier today.
+
+### Same session — the star moved to the column heading (v11.15a2)
+
+User report: the star on the "Total first-year cost" line messed with the formatting. It did. The
+star shared a cell with a right-aligned dollar figure, so that one row ran two characters wider than
+every other row and the money column stopped lining up down the page.
+
+Moved to the column heading in both renderers, so the table reads `Plan C★` and every figure below it
+stays in its column. The tie case gets a star on each winning heading, which is also clearer than two
+marked cells on one row. Footnote reworded from "★ = lowest first-year cost" to "★ marks the column
+with the lowest first-year cost".
+
+No number changed. Suite stays at 61; no test pinned the star's position (the only `★` in the suite
+is inside a comment describing the old sign defect). v1.15a2 / v11.15a2, third same-hour increment of
+the day.

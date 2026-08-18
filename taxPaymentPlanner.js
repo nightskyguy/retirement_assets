@@ -2544,14 +2544,17 @@ const TaxPaymentPlanner = (() => {
       if (cc.bNote) lines.push(`  ${cc.bNote}`);
       if (cc.dNote) lines.push(`  ${cc.dNote}`);
       lines.push('');
-      lines.push('  ' + 'Component'.padEnd(24) + cc.letters.map(k => cell('Plan ' + k)).join(''));
+      // The star marks the column, not the cell. On the TOTAL row it had to share the cell with a
+      // right-aligned dollar figure, which pushed that one row out of alignment with every other.
+      lines.push('  ' + 'Component'.padEnd(24) +
+        cc.letters.map(k => cell('Plan ' + k + (cc.bestSet.includes(k) ? '★' : ''))).join(''));
       row('Withholding OC',    c => fmt$(c.withholdOC));
       row('Estimate carry',    c => fmt$(c.estimateOC));
       row('RMD proceeds held',  c => fmt$(c.rmdDeferral));
       row('Roth growth credit', c => (c.rothGrowth > 0.5 ? '-' : '') + fmt$(c.rothGrowth));
       lines.push('  ' + '─'.repeat(24 + W * cc.letters.length));
       row('TOTAL first-year cost',
-        (c, k) => (c.total < -0.5 ? '-' : '') + fmt$(c.total) + (cc.bestSet.includes(k) ? ' ★' : ''));
+        (c, k) => (c.total < -0.5 ? '-' : '') + fmt$(c.total));
       row('vs best', (c, k) => (cc.bestSet.includes(k) ? '—' : '+' + fmt$(c.total - cc.perPlan[cc.best].total)));
       lines.push('  ' + '─'.repeat(24 + W * cc.letters.length));
       // How the money actually reaches the IRS, which the cost rows above do not say.
@@ -2800,7 +2803,7 @@ const TaxPaymentPlanner = (() => {
           const win = bold && cc.bestSet.includes(k);
           h += `<td style="padding:${bold ? '8px' : '6px'} 10px;text-align:right;` +
                `${win ? 'background:#E8F5E9;' : ''}${bold ? `font-weight:700;color:${PLAN_COLOR[k]};` : ''}">` +
-               `${fn(cc.perPlan[k], k)}${win ? ' ★' : ''}</td>`;
+               `${fn(cc.perPlan[k], k)}</td>`;
         });
         h += `</tr>`;
       };
@@ -2809,7 +2812,8 @@ const TaxPaymentPlanner = (() => {
       h += `<thead><tr style="background:#E3F2FD;">`;
       h += `<th style="padding:7px 10px;text-align:left;color:#1F4E79;font-weight:600;">Component (cost to April 15, lower is better)</th>`;
       cc.letters.forEach(k => {
-        h += `<th style="padding:7px 10px;text-align:right;color:${PLAN_COLOR[k]};font-weight:700;">Plan ${k}</th>`;
+        h += `<th style="padding:7px 10px;text-align:right;color:${PLAN_COLOR[k]};font-weight:700;">` +
+             `Plan ${k}${cc.bestSet.includes(k) ? '★' : ''}</th>`;
       });
       h += `</tr></thead><tbody>`;
       compRow('Withholding opportunity cost', c => money(c.withholdOC), 'growth given up when tax leaves the IRA early');
@@ -2888,7 +2892,8 @@ const TaxPaymentPlanner = (() => {
            `year's spending, or it assumes you can cover this year's from somewhere else until it lands. Each ` +
            `plan below states what it hands you and when. Only the RMD portion carries a deferral value here, ` +
            `and only to December 31. <strong>First-year only</strong>: an early conversion keeps compounding ` +
-           `tax-free in every later year, which this table does not count. ★ = lowest first-year cost.`;
+           `tax-free in every later year, which this table does not count. ★ marks the column with the ` +
+           `lowest first-year cost.`;
       h += `</div></div></div>`;
     }
 

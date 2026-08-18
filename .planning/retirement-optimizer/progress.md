@@ -2900,3 +2900,47 @@ California $19,800 (90% of this year)`, and the inference explained from $180,00
 
 Items 3, 4 and 5 (generic state safe harbor, clickable rule citations, IncomeTaxPlanner cohesion) are
 out with a research workflow and not yet answered.
+
+### Same session — items 3, 4 and 5: research back, two shipped, one deferred
+
+A 7-agent workflow researched all three with adversarial verification. Two of the three proposals
+were marked UNSOUND by their verifier and the corrections mattered, which is the point of the pass.
+
+**Item 5, the IncomeTaxPlanner handoff. SHIPPED, and it was the worst of the three.** Verified
+myself before touching code: `standalone/RetirementTaxPlanner.html` does not exist, so the button has
+404'd since the tools moved. But the important half is that it sent **no tax figures at all**, and the
+planner takes tax as an INPUT while its page ships demo defaults. Reproduced in the browser with only
+the params the button sends: the planner filled in **$35,000 federal, $22,000 state, a $15,000 RMD
+and a $10,000 conversion** and priced a $57,000 plan with a winner. **A path-only fix would have been
+strictly worse than the dead button**, which is why both moved in one commit.
+
+Also fixed: `pinnedIncome - cfg.ssIncome` subtracted Social Security from an axis that never included
+it (`calcAt(ordInc)` takes ordinary income, `ssIncome` rides separately in `cfg`).
+
+Now sends the tax this page computed (income tax only, IRMAA excluded as a premium rather than
+withholdable tax), explicit zeros for everything the planner would otherwise invent, and empty
+prior-year fields so `readNum(...) || null` yields null and the planner says "not supplied". Verified
+end to end: $6,501 priced, RMD and conversion $0, prior-year fallback honest. Refuses with a message
+when nothing is pinned, guarded at click time because `renderSummary()` is not on every pin path.
+
+**Item 4, clickable citations. SHIPPED.** `linkifyCites` at HTML render time only, because the marker
+feeds three sinks and two of them cannot carry markup: the text tab prints notes verbatim and the
+.ics export copies them into DESCRIPTION. The verifier's correction was real - `renderActionList` has
+three branches, not one, so a naive patch would have linkified a third of the markers and left the
+rest looking broken. Nine emit sites in total. 61 links on a typical plan, every href resolving,
+`plan.text` byte-identical. Delegated listener on `#plan-html` walks ancestor `<details>` open before
+scrolling, since a browser will not open a closed disclosure to reach an anchor.
+
+**GOTCHA, again, and it cost a browser round trip:** node showed 58 links while the browser showed
+zero, because the JS changed and the `?v=` cache buster had not. Bump it in the same edit.
+
+**Item 3, generic state safe harbor. DEFERRED as P63, with two live bugs recorded.** The shape is
+~200 lines; the facts behind it are 47 jurisdictions x 8 fields, about 376 cited figures off state
+underpayment forms. 45 of 48 taxing entries currently carry the federal rule as an unresearched
+default. Two separable bugs: `withholdingCreditedProRata` is never consulted, so AL and AS return
+identical verdicts; and the state 110% gate compares a TAX amount against an AGI threshold, so it
+never fires. **The second must not be fixed alone** - applied in isolation it flips 46 unresearched
+states from understating-and-disclosed to overstating-and-undisclosed, with the suite still green.
+
+Suite 60 -> **61**. v1.15a1 / v11.15a1. Same-hour collision with 15a0, so incremented, matching the
+1598 -> 1599 precedent earlier today.

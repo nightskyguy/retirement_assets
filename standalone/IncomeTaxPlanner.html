@@ -10,7 +10,7 @@
 </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Income Tax Planner · 2026+ · v2.5</title>
+<title>Income Tax Planner · 2026+ · v2.6</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
@@ -1143,7 +1143,9 @@ function renderSummary(data) {
     rows.push(`<div class="${cls}"><strong>SS torpedo peak:</strong> ~${(peakMarg*100).toFixed(1)}% fed marginal @ $${peakInc.toLocaleString()} ordinary income</div>`);
     rows.push(`<div><strong>SS torpedo starts:</strong> ~$${Math.round(torpEntry).toLocaleString()} ordinary income</div>`);
   }
-  rows.push(`<div style="margin-top:8px;text-align:center"><button onclick="openInTaxPlanner()" class="hdr-btn" style="font-size:11px;padding:5px 14px">Open in Tax Planner →</button></div>`);
+  rows.push(`<div style="margin-top:8px;text-align:center"><button onclick="openInTaxPlanner()" class="hdr-btn" style="font-size:11px;padding:5px 14px" ` +
+    `title="Opens the Tax Payment Planner with the tax computed at your pinned income. Pin a column first.">` +
+    `Open in Tax Planner →</button></div>`);
   document.getElementById('summary').innerHTML = rows.join('');
 }
 
@@ -1365,15 +1367,65 @@ async function copyShareURL() {
 }
 
 // ─── OPEN IN RETIREMENT TAX PLANNER ─────────────────────────────────────────
+// Three things were wrong here, and two of them only bite together.
+//
+// 1. The URL was bare-relative, so from standalone/ it resolved to
+//    standalone/RetirementTaxPlanner.html, which does not exist. The button has been a 404 since
+//    the tools moved.
+// 2. It sent no tax figures at all. The Tax Payment Planner takes federal and state tax as INPUTS
+//    and its page ships demo defaults in those fields ($35,000 federal, $22,000 state, a $15,000
+//    RMD, a $10,000 conversion). loadFromUrl writes only the parameters present and then computes,
+//    so fixing the path ALONE would have opened a fully priced $57,000 plan assembled from figures
+//    the user never entered. Path and parameters have to move in the same commit.
+// 3. `pinnedIncome` is the chart's ORDINARY income axis and `cfg.ssIncome` is carried separately
+//    into calcAt, so subtracting Social Security from it removed income that was never in it.
+//
+// What crosses over: the tax this page computed, and the income facts behind it. Everything the
+// planner would otherwise fill from its own defaults is sent explicitly, including empty prior-year
+// figures so the planner reports "not supplied" rather than inventing a safe-harbor bar. The rate
+// assumptions (portfolio, HYSA, marginal, capital gains) are deliberately NOT sent: a generic rate
+// is a stated assumption the reader can change, while an invented dollar figure reads as their own
+// data.
+function buildTaxPlannerParams() {
+  const row = pinnedRow();
+  if (!row) return null;
+
+  // Income tax only. IRMAA is a Medicare premium, not tax the planner can withhold or pay by
+  // estimate, so it stays out of the figure even though this page totals it elsewhere.
+  const ft  = Math.round(row.fedTax + row.fedCGTax + row.niit);
+  const stt = Math.round(row.stTaxOrd + row.stTaxCG);
+
+  // The pinned x value IS ordinary income, with Social Security held separately.
+  const iraEst = Math.max(0, Math.round(pinnedIncome));
+  const gain   = Math.max(0, Math.round(cfg.cgSale * (1 - cfg.cgBasisPct / 100)));
+
+  const sp = new URLSearchParams({
+    yr:  cfg.year,
+    s:   cfg.state,
+    ft:  ft,
+    stt: stt,
+    // Empty, not zero. readNum(...) || null turns these into "not supplied", which is what makes
+    // the planner say its 90% fallback can only overstate the requirement.
+    pft: '',
+    pst: '',
+    ss:  Math.round(cfg.ssIncome),
+    cg:  gain,
+    i1v: iraEst,
+    // Explicit zeros for everything this page has no view of. Without them the planner's own
+    // defaults supply an RMD and a conversion nobody asked for.
+    i1r: 0, i1c: 0, i2r: 0, i2v: 0, i2c: 0, pen: 0, int: 0, qdiv: 0,
+  });
+  return sp;
+}
+
 function openInTaxPlanner() {
-  const sp = new URLSearchParams({ yr: cfg.year, s: cfg.state, ss: cfg.ssIncome });
-  const gain = cfg.cgSale * (1 - cfg.cgBasisPct / 100);
-  if (gain > 0) sp.set('cg', Math.round(gain));
-  if (pinnedIncome !== null) {
-    const iraEst = Math.max(0, Math.round(pinnedIncome - cfg.ssIncome));
-    if (iraEst > 0) sp.set('i1v', iraEst);
+  const sp = buildTaxPlannerParams();
+  if (!sp) {
+    alert('Pin an income on the chart first. The Tax Payment Planner needs the tax at a specific ' +
+          'income, and without a pinned column there is nothing to hand it.');
+    return;
   }
-  window.open('RetirementTaxPlanner.html?' + sp, '_blank');
+  window.open('../RetirementTaxPlanner.html?' + sp, '_blank');
 }
 
 // Close share panel when clicking outside it
@@ -1495,8 +1547,8 @@ function loadFromURL() {
         <dd>Where are the SS torpedo, IRMAA tier crossings, and NIIT threshold? The vertical reference lines and marginal rate curves (purple and yellow dashed) make them immediately visible.</dd>
         <dt>C · True all-in effective rate</dt>
         <dd>Federal + state + IRMAA combined, not just the marginal bracket. The white line on the Tax Rates view is the number that actually matters for planning.</dd>
-        <dt>D · Withholding guidance</dt>
-        <dd>Hover over your expected income on the chart. The info panel below shows every component — rates and dollars — simultaneously at that income level.</dd>
+        <dt>D · What the tax is at a given income</dt>
+        <dd>Hover over your expected income on the chart. The info panel below shows every component — rates and dollars — simultaneously at that income level. Pin a column and <strong>Open in Tax Planner</strong> hands that income and the tax computed here to the Tax Payment Planner, which decides when to draw and when to pay it. This page computes the tax; that one schedules it.</dd>
         <dt>E · Filing status changes</dt>
         <dd>Switch the Filing Status control between MFJ and Single to see how marriage or becoming single shifts your brackets, standard deduction, IRMAA tiers, and effective rates — at every income level simultaneously.</dd>
         <dt>F · State changes</dt>

@@ -297,6 +297,25 @@ const TaxPaymentPlanner = (() => {
     return `[see ${tag} in Rules and sources]`;
   }
 
+  // P62. seeAlso's marker has to stay PLAIN in the action objects, because three sinks consume it:
+  // the text renderer prints notes verbatim, the .ics export copies them into DESCRIPTION, and only
+  // the HTML renderer can carry markup. So the marker is linkified at HTML render time, never at
+  // creation time.
+  const citeSlug = tag => 'tpp-cite-' + String(tag).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  // Anything with an entry in either panel is linkable; a marker naming something absent is left as
+  // plain text rather than turned into a link that goes nowhere.
+  const citeTags = () => new Set([].concat(RULE_CITES.map(c => c.tag), CONCEPT_NOTES.map(c => c.tag)));
+  function linkifyCites(html) {
+    if (typeof html !== 'string' || html.indexOf('[see ') < 0) return html;
+    const known = citeTags();
+    return html.replace(/\[see ([^\]]+?) in Rules and sources\]/g, (whole, tag) => {
+      if (!known.has(tag)) return whole;
+      return `<a href="#${citeSlug(tag)}" class="tpp-cite" data-cite="${citeSlug(tag)}" ` +
+             `title="Jump to ${tag} in Rules and sources" ` +
+             `style="color:#1F4E79;text-decoration:underline dotted;cursor:pointer;">[${tag}]</a>`;
+    });
+  }
+
   // ── STATE_DB builder helpers ───────────────────────────────────────────────
   function _s(name, extra) {
     return Object.assign({
@@ -2822,7 +2841,7 @@ const TaxPaymentPlanner = (() => {
         h += `<strong>The test:</strong> federal ${fmt$(shAny.federal.required)} (${shAny.federal.rule})`;
         if (shAny.state) h += `, ${stateInfo.name} ${fmt$(shAny.state.required)} (${shAny.state.rule})`;
         h += `. The requirement is the lesser of 90% of this year and 100% of last year, or 110% for a ` +
-             `high earner. ${seeAlso('IRC 6654(g)')}`;
+             `high earner. ${linkifyCites(seeAlso('IRC 6654(g)'))}`;
         shCaveats(shAny, stateInfo.name).forEach(c => {
           h += `<div style="margin-top:4px;color:#8B6A00;">${shAny.provisional ? '* ' : ''}${c}</div>`;
         });
@@ -2858,7 +2877,7 @@ const TaxPaymentPlanner = (() => {
              `sale itself. It is a way to fund Plan Q, not a plan of its own, so it has no steps below. ` +
              `<strong>That ${fmt$(cc.brokerage.cg)} is not part of the ${fmt$(cc.totalTax)} these plans are sized ` +
              `against</strong>, because the tax figures were calculated before the sale existed, so selling lifts ` +
-             `next April's bill by roughly that much. ${seeAlso('Tax figures are inputs')}</div>`;
+             `next April's bill by roughly that much. ${linkifyCites(seeAlso('Tax figures are inputs'))}</div>`;
       }
       if (cc.anyNegative) {
         h += `<div style="margin-bottom:4px;"><strong>A negative total is a net gain</strong>, not a cost: ` +
@@ -2951,24 +2970,24 @@ const TaxPaymentPlanner = (() => {
           // STRATEGY — any plan using IRA withholding got the green treatment. That painted a
           // reassuring box around text saying the withholding falls short and a penalty accrues.
           // The action now carries `benign`, set only where the coverage was actually checked.
-          const html = `${icon} <strong>${a.benign ? 'Calendar Notice' : 'MISSED PAYMENT WARNING'}:</strong> ${a.description}`;
+          const html = `${icon} <strong>${a.benign ? 'Calendar Notice' : 'MISSED PAYMENT WARNING'}:</strong> ${linkifyCites(a.description)}`;
           h += a.benign ? good(html) : alert(html);
           if (a.notes.length > 0) {
             h += `<ul style="margin:0 0 8px 28px;padding:0;font-size:0.86em;color:#555;">`;
-            a.notes.forEach(n => { h += `<li style="margin-bottom:3px;">${n}</li>`; });
+            a.notes.forEach(n => { h += `<li style="margin-bottom:3px;">${linkifyCites(n)}</li>`; });
             h += `</ul>`;
           }
           return;
         }
         if (isNote) {
-          h += info(`<strong>Note:</strong> ${a.description}`);
+          h += info(`<strong>Note:</strong> ${linkifyCites(a.description)}`);
           // This branch used to `return` before the bullet loop that every other action type gets,
           // which meant T.NOTE was the one type whose `notes` never rendered in either output. The
           // QCD alternative had therefore never reached a reader. Styled to match the alert bullets
           // above rather than the per-step ones, since a note is not a numbered step.
           if (a.notes.length > 0) {
             h += `<ul style="margin:0 0 8px 28px;padding:0;font-size:0.86em;color:#555;">`;
-            a.notes.forEach(n => { h += `<li style="margin-bottom:3px;">${n}</li>`; });
+            a.notes.forEach(n => { h += `<li style="margin-bottom:3px;">${linkifyCites(n)}</li>`; });
             h += `</ul>`;
           }
           return;
@@ -2994,12 +3013,13 @@ const TaxPaymentPlanner = (() => {
           h += `</span>`;
         }
         h += `</div>`;
-        h += `<p style="margin:4px 0 6px;line-height:1.5;">${a.description}</p>`;
+        h += `<p style="margin:4px 0 6px;line-height:1.5;">${linkifyCites(a.description)}</p>`;
         if (a.notes.length > 0) {
           h += `<ul style="margin:2px 0 0 18px;padding:0;color:#555;font-size:0.87em;">`;
           a.notes.forEach(n => {
+            // isWarn tests the RAW note: linkifying first would let the markup match.
             const isWarn = /caution|warning|past due|missed/i.test(n);
-            h += `<li style="margin-bottom:3px;${isWarn ? 'color:#8B0000;font-weight:600;' : ''}">${n}</li>`;
+            h += `<li style="margin-bottom:3px;${isWarn ? 'color:#8B0000;font-weight:600;' : ''}">${linkifyCites(n)}</li>`;
           });
           h += `</ul>`;
         }
@@ -3102,7 +3122,7 @@ const TaxPaymentPlanner = (() => {
     h += `reduces your average cash balance, slightly lowering interest income relative to the planned amount, `;
     h += `and selling brokerage shares gives up the future dividends on those shares. Both of those are small `;
     h += `second-order effects. The capital gains tax on such a sale is not: it is priced in the funding-source `;
-    h += `footnote above, and it is not part of the tax these plans are sized against. ${seeAlso('Tax figures are inputs')}`;
+    h += `footnote above, and it is not part of the tax these plans are sized against. ${linkifyCites(seeAlso('Tax figures are inputs'))}`;
     h += `</div>`;
 
     // ── Rules and sources ──────────────────────────────────────────────────
@@ -3111,7 +3131,7 @@ const TaxPaymentPlanner = (() => {
     h += `<div style="padding:12px 16px;background:#F8FAFF;">`;
     h += `<table style="width:100%;border-collapse:collapse;font-size:0.84em;">`;
     RULE_CITES.forEach(c => {
-      h += `<tr style="border-bottom:1px solid #E3F2FD;">`;
+      h += `<tr id="${citeSlug(c.tag)}" style="border-bottom:1px solid #E3F2FD;">`;
       h += `<td style="padding:8px 10px;vertical-align:top;white-space:nowrap;color:#1F4E79;font-weight:700;">[${c.tag}]</td>`;
       h += `<td style="padding:8px 10px;vertical-align:top;">`;
       h += `<div style="font-weight:600;color:#222;">${c.label}</div>`;
@@ -3126,7 +3146,7 @@ const TaxPaymentPlanner = (() => {
     h += `<div style="font-weight:700;color:#1F4E79;margin:14px 0 4px;font-size:0.88em;">CONCEPTS</div>`;
     h += `<table style="width:100%;border-collapse:collapse;font-size:0.84em;">`;
     CONCEPT_NOTES.forEach(c => {
-      h += `<tr style="border-bottom:1px solid #E3F2FD;">`;
+      h += `<tr id="${citeSlug(c.tag)}" style="border-bottom:1px solid #E3F2FD;">`;
       h += `<td style="padding:8px 10px;vertical-align:top;white-space:nowrap;color:#1F4E79;font-weight:700;">[${c.tag}]</td>`;
       h += `<td style="padding:8px 10px;vertical-align:top;">`;
       h += `<div style="font-weight:600;color:#222;">${c.label}</div>`;

@@ -1668,6 +1668,38 @@ test('With no prior-year tax the fallback states the direction of its error', ()
   assert(/Enter last year/.test(r.text), 'and ask for the figure that settles it');
 });
 
+
+// ══ P62: citations are links in HTML and plain text everywhere else ═══════
+// seeAlso's marker feeds three sinks: the text renderer prints notes verbatim, the .ics export
+// copies them into DESCRIPTION, and only the HTML renderer can carry markup. So the marker stays
+// plain in the action objects and is linkified at HTML render time.
+test('Every citation marker becomes a link with a target, and text stays plain', () => {
+  const plan = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, state: 'CA', federalTax: 35000, stateTax: 22000,
+    priorYearFedTax: 33000, priorYearStateTax: 11500,
+    ira1Rmd: 15000, ira1Voluntary: 30000, ira1RothConversion: 10000, ira2Rmd: 5000,
+    todayDate: new Date(2026, 6, 10), taxYear: 2026,
+  });
+
+  // No marker may survive unlinked in the HTML. Half-linkified output is worse than none, because
+  // the reader reads the plain ones as broken.
+  const leftovers = plan.html.match(/\[see [^\]]+ in Rules and sources\]/g) || [];
+  assert(leftovers.length === 0, `unlinked markers in HTML: ${leftovers.slice(0, 3).join(' ')}`);
+
+  // Every link resolves to an id that exists in the same document.
+  const hrefs = [...plan.html.matchAll(/href="#(tpp-cite-[a-z0-9-]+)"/g)].map(m => m[1]);
+  const ids = new Set([...plan.html.matchAll(/id="(tpp-cite-[a-z0-9-]+)"/g)].map(m => m[1]));
+  assert(hrefs.length > 0, 'the scenario should produce citations at all');
+  const dangling = hrefs.filter(h => !ids.has(h));
+  assert(dangling.length === 0, `citation links with no target: ${dangling.join(', ')}`);
+
+  // The other two sinks must not gain markup.
+  assert(/\[see [^\]]+ in Rules and sources\]/.test(plan.text),
+    'the text renderer keeps the plain marker');
+  assert(!/<a /.test(plan.text) && !/tpp-cite/.test(plan.text),
+    'and gains no markup, since the .ics export copies these strings verbatim');
+});
+
 // ── Runner ────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
 // The node entry point below is what still sets the exit code.

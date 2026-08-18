@@ -8,7 +8,7 @@
        Example: Jul 29 08:00 -> day 210 -> (210*24)+8 = 5048 = 0x13b8 -> "1.13b8"
        Bump major manually for significant feature batches. Hardcode it here: the heading
        reads it back out of this tag at runtime rather than duplicating the number. -->
-  <title>Retirement Tax Payment Planner 1.15a0</title>
+  <title>Retirement Tax Payment Planner 1.15a1</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -542,8 +542,8 @@
 
 </div><!-- end .layout -->
 
-<script src="displayhelpers.js?v=15a0"></script>
-<script src="taxPaymentPlanner.js?v=15a0"></script>
+<script src="displayhelpers.js?v=15a1"></script>
+<script src="taxPaymentPlanner.js?v=15a1"></script>
 <script>
   // Version readout — parsed out of <title> so the number lives in exactly one place.
   (() => {
@@ -976,6 +976,27 @@
 
   document.getElementById('compute').addEventListener('click', runCompute);
 
+  // P62. Citation links. The plan HTML is replaced wholesale on every compute, so the listener is
+  // delegated from #plan-html, which is never replaced, only its innerHTML. Fragment navigation on
+  // its own will not do: the Rules and sources panel is a <details>, and a browser will not open a
+  // closed disclosure to reach an anchor inside it. So walk every ancestor <details> open first,
+  // then scroll, then flash the row so the eye lands on the right one in a long panel.
+  document.getElementById('plan-html').addEventListener('click', e => {
+    const link = e.target.closest('a.tpp-cite');
+    if (!link) return;
+    e.preventDefault();
+    const target = document.getElementById(link.dataset.cite);
+    if (!target) return;
+    for (let el = target.parentElement; el; el = el.parentElement) {
+      if (el.tagName === 'DETAILS') el.open = true;
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const prev = target.style.backgroundColor;
+    target.style.transition = 'background-color 0.4s';
+    target.style.backgroundColor = '#FFF3CD';
+    setTimeout(() => { target.style.backgroundColor = prev; }, 1600);
+  });
+
   // Plan sections are <details>, and a collapsed one prints collapsed — the reader would get a
   // page of headers. Force every section open for the print job, then restore what was open.
   let _printRestore = null;
@@ -1155,7 +1176,7 @@
     badge.textContent = '⏳';
     badge.title = 'Loading taxPaymentPlanner.tests.js…';
     const s = document.createElement('script');
-    s.src = 'taxPaymentPlanner.tests.js?v=15a0';
+    s.src = 'taxPaymentPlanner.tests.js?v=15a1';
     s.onload = () => {
       const r = window.runTaxPlannerTests();
       badge.textContent = r.failed === 0 ? `🟢 ${r.passed}/${r.total}` : `❌ ${r.failed} failed`;

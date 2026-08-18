@@ -2549,6 +2549,61 @@ California)". The field appears only once its checkbox is ticked, and it survive
 
 **Status:** COMPLETE. The 22-scenario self-review sweep is clean.
 
+---
+
+## P63: state safe harbor, generically  *(RESEARCHED 2026-08-18, DEFERRED, but it exposed two live bugs)*
+
+**The user asked for an observation, and a full plan only if it looked reasonably easy. It is not.**
+The shape is cheap; the facts behind the shape are not.
+
+### The observation
+
+`STATE_DB` has 57 entries that collapse to 8 distinct shapes. Of the 48 taxing entries, exactly
+**three** deviate from the `_s()` builder defaults on any safe-harbor knob (CA threshold, MD
+always-110, AS pro-rata) and three on schedule (CA 30/40/30, OR, VA). The other **45 carry the
+federal rule as an unresearched default**, which is a guess wearing the costume of data.
+
+A generic shape needs about six scalars per jurisdiction (`currentPct`, `priorPct`, `priorPctHigh`,
+`highIncomeThreshold`, `highIncomeMeasure`, `priorYearAvailable`), plus `estimatedTaxRegime` so "no
+regime" stops being spelled as an empty `quarterlySchedule`, and `whenPaid` so a state that does not
+credit withholding pro-rata can say so. That is roughly 180 to 200 lines across 5 files and is
+**behaviour-neutral by construction only if a characterization test pins all 48 entries first** -
+today 46 states could change their requirement and the suite would still report green.
+
+**The expensive half is the research**: 47 jurisdictions x 8 fields is about 376 cited facts, each
+read off a state underpayment form and its instructions, roughly 16 hours of primary-source reading
+before a single number improves, with a maintenance tail because states move these rules. The code
+without the research buys nothing. **DEFERRED as a research ticket**, characterization test first.
+
+### Two live bugs it exposed, both worth fixing on their own
+
+- [ ] **P63a** - **`withholdingCreditedProRata` is never consulted.** `scheduleSafeHarbor`
+  (taxPaymentPlanner.js ~642) takes no `stateInfo` and credits withholding pro-rata unconditionally,
+  so Alabama and American Samoa return byte-identical verdicts across all five plans despite the flag
+  differing. Either honour it or delete it; a flag that does nothing is worse than no flag.
+  **Not a one-line change**: `stateTimelyByWithholding` also sets `noPenalty` on emitted actions and
+  switches text between "[DATE PASSED]" and "[PAST DUE]", so honouring it changes the action plan,
+  not just a verdict. Verify the AS flag against a primary source first; it was set in a one-line
+  override with no citation.
+- [ ] **P63b** - **The state 110% gate is dimensionally wrong.** taxPaymentPlanner.js ~1125 compares
+  `p.stateTax >= safeHarborHighIncomeThreshold`, a TAX amount against an AGI threshold, so the state
+  110% bar effectively never fires. The page already discloses this in the safe-harbor NOTE with the
+  direction stated (it UNDERSTATES the requirement).
+  **Do not fix it alone.** Applied in a scratchpad copy it flipped **46 states** from
+  `required 20000 / "100% of last year"` to `22000 / "110% of last year"`, with all tests still
+  green: the failure direction moves from understating-and-disclosed to overstating-and-undisclosed,
+  because those 46 states never had their threshold researched. Fix it only once `priorPctHigh: null`
+  is the default for unresearched states, i.e. as part of P63 proper.
+
+### Also noted
+
+`0.90` appears as a literal in **seven** places (~1127, 1128, 1143, 1144, 1146, 1147, 2065), so a
+generic `currentPct` has seven call sites, not one. And a state whose `quarterlySchedule` is empty
+silently drops its liability from the coverage table rather than reporting a regime it cannot model.
+
+**Status:** DEFERRED. P63a and P63b are separable and each is worth a small commit of its own, but
+P63b must not ship before the per-state data exists.
+
 ## Dependency Graph (remaining)
 
 ```

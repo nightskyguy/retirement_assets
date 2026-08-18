@@ -11,6 +11,46 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15a1"></a>
+
+## 11.15a1
+
+**Citations are clickable, and the Income Tax Planner's handoff to this tool works again.**
+
+### Every "[see ... in Rules and sources]" is now a link
+
+The plan steps cite the rules they rest on, and the citation was a bracket of plain text asking you
+to scroll and search. Each one is now a link that opens the Rules and sources panel, scrolls to the
+entry and highlights it briefly. Sixty-one links on a typical plan, every one resolving to an entry
+that exists.
+
+The plain-text tab and the calendar export are deliberately unchanged. Both copy these strings
+verbatim, so the marker stays plain there and is turned into a link only where markup can be shown.
+
+### The Income Tax Planner button was broken in a way worth explaining
+
+"Open in Tax Planner" opened a page that does not exist at that path, so it has been a dead button
+since the tools moved. That turned out to be the lucky part.
+
+The button sent an income figure but **no tax figures at all**, and the Tax Payment Planner takes the
+tax as an INPUT. Its page ships demo defaults in those fields. Had the path been fixed on its own, the
+button would have opened a confidently priced plan built on a $35,000 federal tax, a $22,000 state
+tax, a $15,000 required distribution and a $10,000 conversion that belonged to nobody, with the input
+panel collapsed so none of it was visible. So the path and the parameters were fixed together, and
+they must never be separated.
+
+It now hands over the tax this page computed at your pinned income, with everything the other page
+would otherwise invent sent explicitly as zero, and last year's tax deliberately left empty so the
+planner reports it as not supplied rather than assuming a safe-harbor bar. The button also refuses
+politely when no income is pinned, instead of opening a plan for an income you never chose.
+
+One arithmetic fix went with it: the handoff subtracted Social Security from an income axis that
+never included it, which understated the withdrawal it passed across.
+
+Suite: 61 tests, up from 60.
+
+---
+
 <a id="11.15a0"></a>
 
 ## 11.15a0

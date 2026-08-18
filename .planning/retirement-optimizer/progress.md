@@ -2808,3 +2808,58 @@ Suite 51 -> **55**, both pinned homes plus the tier-2 prose count 342 -> 346. `?
 synchronous run green at **591 (245 in-page + 346 node)**. The 22-scenario self-review sweep reports
 NO PROBLEMS. In-page changelog list trimmed back to its documented five-entry ceiling (it had drifted
 to six before this session).
+
+## Session 2026-08-18 (continued) — PR #181 opened, then P59 from three more user questions
+
+**Network was the blocker, not GitHub.** Diagnosed it properly rather than guessing: `curl -6` to
+google returned 200 while `curl -4` returned 000 at the same moment, every working host had an AAAA
+record and every failing one was IPv4-only, raw IPv4 addresses all timed out, and the machine held
+**169.254.93.53** (APIPA) because DHCPv4 never leased. IPv6 kept working because it uses router
+advertisements, not DHCP. github.com publishes no AAAA record, so an IPv6-only host cannot reach it
+at all. `www.githubstatus.com` failing too was the tell that it was not a GitHub outage, since that
+is Atlassian on CloudFront. The user reset the adapter, DHCP handed out 192.168.1.203, and everything
+worked. **`gh auth` was fine all along** - it had been reporting a network failure as an invalid token.
+
+**PR [#181](https://github.com/nightskyguy/retirement_assets/pull/181) opened**, MERGEABLE / CLEAN,
+three commits, 9 files, +2,466 / -731. `origin/main` had not moved since #180, so none of the
+conflict-prone files collided this time.
+
+### P59: what the comparison still did not say
+
+Three questions from the user, one of which was a check on my own arithmetic.
+
+**1. Which plans need quarterly payments, and how much.** Two rows under "vs best": **Withheld from
+IRA** and **Quarterly estimates**, per plan, always summing to the liability. On the reported
+scenario: A and B are $57,000 withheld / $0 estimated, C is 50/7, D is 45/12, Q is 0/57.
+
+**2. Which plans meet safe harbor, under which rule.** This turned out to be the most valuable of the
+three, because the answer is **not the same for every plan**. New `scheduleSafeHarbor` walks each
+plan's own actions under both credit rules: withholding is credited in equal parts across every due
+date [IRC 6654(g)], an estimate counts only on the day it is paid. Run mid-year, after April and June
+have passed, the plans split: **A and B clear safe harbor, C, D and Q miss federal at Q1** by $200,
+$967 and $7,875 respectively (Q misses California by $3,450 too). The binding rule is named per
+jurisdiction, and they differ on the same run: federal is 90% of this year ($31,500) while California
+is last year in full ($11,500).
+
+**A defect in my first draft, caught before showing it.** Past-due estimates keep their statutory
+date and are marked PAST DUE, so crediting them at that date let a genuinely late plan report itself
+safe. They are now credited at the earliest date the money could actually move, which is today.
+Without that fix every plan read "met" and the feature would have been decorative.
+
+**Consequence worth stating:** ranking is by first-year cost, which does not price an underpayment
+penalty, so the cheapest plan can be the one that misses. The winner line and a header badge now say
+so. On the reported scenario Plan C wins at $1,141 **and** misses federal safe harbor by $200.
+
+**3. The user's question about the quarterly schedule was a check on my arithmetic, and it holds.**
+The cost model prices each payment from its real due date, not a uniform quarter: the four federal
+payments get 12, 10, 7 and 3 months of carry to the April 15 frame, California's three get 12, 10 and
+3. Installments are equal at 25% while the periods are 3, 2, 3 and 4 months long, which is the
+statute rather than an approximation. Their weighted averages are exactly the 8 and 8.5 months the
+old hardcoded `OC_FACTOR.Q_FED` and `ocWeightedMonths` constants carried, so the action-based model
+reproduces them from the dates. Business-day shifting applies (Jan 15 2028 is a Saturday, so the
+model prices the 17th).
+
+Suite 55 -> **58**, both pinned homes plus the tier-2 prose count 346 -> 349. v1.159f / v11.159f.
+The 22-scenario sweep still reports NO PROBLEMS. Browser-verified both branches: a future tax year
+shows every plan meeting safe harbor (nothing is past due yet), the current tax year shows
+met/met/MISSED/MISSED/MISSED with the badge and the per-plan shortfalls.

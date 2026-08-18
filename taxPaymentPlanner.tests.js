@@ -1520,6 +1520,95 @@ test('A plan forced to quarterly pays the liability once, not twice', () => {
   });
 });
 
+
+// ══ P59: how each plan pays, and whether that clears safe harbor ══════════
+// The comparison priced the plans but never said which of them needed quarterly estimates, how
+// much, or whether the resulting schedule actually satisfied the installment rules. Those are the
+// questions that decide whether the cheapest plan carries a penalty the cost table does not price.
+const P59 = {
+  taxYear: 2027, state: 'CA', federalTax: 35000, stateTax: 22000,
+  priorYearFedTax: 33000, priorYearStateTax: 11500,
+  ira1Rmd: 15000, ira1Voluntary: 30000, ira1RothConversion: 10000, ira2Rmd: 5000,
+  ssIncome: 20000, pensionIncome: 15000, interest: 5000, qualifiedDivs: 8000, capitalGains: 10000,
+  marginalOrdRate: 0.30, portfolioRate: 0.06, hysaGross: 0.03,
+};
+const p59 = extra => TaxPaymentPlanner.computePaymentPlan({ ...P59, ...extra });
+
+test('Withholding cures a passed quarter and an estimate cannot', () => {
+  // Run in July: Q1 and Q2 have gone by. Withholding is credited across every due date
+  // [IRC 6654(g)], so a December-withholding plan still clears Q1. An estimate counts on the day it
+  // is paid, so a plan that leans on estimates cannot make those quarters timely however it tries.
+  const late = p59({ todayDate: new Date(2027, 6, 10) });
+  const sh = k => late.plans[k].summary.safeHarbor;
+  assert(sh('A').federal.met, 'Plan A withholds the whole liability, so it clears the passed quarters');
+  assert(sh('B').federal.met, 'and so does Plan B');
+  assert(!sh('Q').federal.met, 'Plan Q pays entirely by estimates, which cannot be back-dated');
+  assert(sh('Q').federal.missedAt === 'Q1 (Jan–Mar)', `and it first misses at Q1: ${sh('Q').federal.missedAt}`);
+  assert(sh('Q').federal.shortBy > 1000, `by a real amount: ${sh('Q').federal.shortBy}`);
+
+  // Same plans, run before anything is due: everything clears.
+  const early = p59({ todayDate: new Date(2027, 0, 5) });
+  ['A', 'B', 'C', 'D', 'Q'].filter(k => early.plans[k]).forEach(k => {
+    assert(early.plans[k].summary.safeHarbor.met,
+      `Plan ${k} should clear safe harbor when no installment has passed`);
+  });
+});
+
+test('The safe-harbor test names the rule that actually binds', () => {
+  // 90% of this year (31,500) is less than 100% of last year (33,000), so the federal bar is the
+  // current-year test; California's prior year (11,500) is less than 90% of this year (19,800), so
+  // there the prior-year test binds. Both appear on the same run, which is the point.
+  const r = p59({ todayDate: new Date(2027, 6, 10) });
+  const sh = r.plans.A.summary.safeHarbor;
+  assert(/90% of this year/.test(sh.federal.rule), `federal rule: ${sh.federal.rule}`);
+  assertNear(sh.federal.required, 31500, 'federal requirement is 90% of this year', 1);
+  assert(/100% of last year/.test(sh.state.rule), `state rule: ${sh.state.rule}`);
+  assertNear(sh.state.required, 11500, 'California requirement is last year in full', 1);
+
+  // A high earner in a state that applies 110% to everyone gets told so.
+  const md = TaxPaymentPlanner.computePaymentPlan({
+    ...P59, state: 'MD', highIncomeFiler: true, priorYearFedTax: 20000, priorYearStateTax: 9000,
+    todayDate: new Date(2027, 0, 5),
+  });
+  assert(/110% of last year/.test(md.plans.A.summary.safeHarbor.federal.rule),
+    `a high earner whose prior year binds should see 110%: ${md.plans.A.summary.safeHarbor.federal.rule}`);
+
+  // With no prior year supplied there is only one test left, and it says so.
+  const noPrior = TaxPaymentPlanner.computePaymentPlan({
+    ...P59, priorYearFedTax: null, priorYearStateTax: null, todayDate: new Date(2027, 0, 5),
+  });
+  assert(/not supplied/.test(noPrior.plans.A.summary.safeHarbor.federal.rule),
+    'and it admits the prior-year figure is missing');
+});
+
+test('The comparison shows how each plan pays, and flags a cheapest plan that misses', () => {
+  const r = p59({ todayDate: new Date(2027, 6, 10) });
+  const cc = r.comparison;
+
+  // The split the table was missing: withheld versus scheduled as estimates, per plan.
+  cc.letters.forEach(k => {
+    const c = cc.perPlan[k];
+    assertNear(c.withheldTotal + c.estimatesTotal, 57000,
+      `plan ${k} splits the whole liability between withholding and estimates`, 2);
+  });
+  assert(cc.perPlan.Q.withheldTotal === 0 && cc.perPlan.Q.estimatesTotal > 0,
+    'Plan Q is entirely estimates');
+  assert(cc.perPlan.A.estimatesTotal === 0 && cc.perPlan.A.withheldTotal > 0,
+    'Plan A is entirely withholding');
+
+  ['Withheld from IRA', 'Quarterly estimates', 'Safe harbor'].forEach(label => {
+    assert(r.text.includes(label), `text table needs a "${label}" row`);
+    assert(r.html.includes(label), `html table needs a "${label}" row`);
+  });
+
+  // The star ranks on first-year cost, which does not price an underpayment penalty. When the
+  // cheapest plan misses, saying so is the whole point.
+  assert(!cc.safeHarbor[cc.best].met, 'this scenario is chosen because the cheapest plan misses');
+  assert(/cheapest plan MISSES safe harbor/.test(r.text), 'the text winner block must say so');
+  assert(/MISSED by the cheapest plan/.test(r.html), 'and the HTML badge must too');
+  assert(/short \$/.test(r.text) && /short \$/.test(r.html), 'and both must quantify the gap');
+});
+
 // ── Runner ────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
 // The node entry point below is what still sets the exit code.

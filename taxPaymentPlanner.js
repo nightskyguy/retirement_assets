@@ -631,6 +631,52 @@ const TaxPaymentPlanner = (() => {
   // required installment? A uniform credit against a WEIGHTED schedule can clear the annual total
   // and still miss an early date — California is 30/40/30 — which is the case a single
   // total-versus-total test gets wrong.
+  // P59. The full safe-harbor question, which withholdingCoversSchedule only half answers: it
+  // asks whether WITHHOLDING alone clears each installment, and says nothing about a plan that
+  // pays by estimates. Both credit rules apply here:
+  //   withholding is deemed paid in equal parts on every due date, whatever date it happened
+  //     [IRC 6654(g)(1)], so it is spread across the schedule;
+  //   an estimate counts on the day it is actually paid, so it clears the installments it is on
+  //     time for and nothing earlier.
+  // Returns whether the plan clears every installment, and the first one it misses if not.
+  function scheduleSafeHarbor(actions, reqAnnual, schedule, yr, estType, withheldKey, today) {
+    if (reqAnnual <= 0)      return { met: true, required: 0, missedAt: null };
+    if (schedule.length === 0) return { met: true, required: reqAnnual, missedAt: null };
+
+    const withheld = actions
+      .filter(a => a.type !== T.Q_FED && a.type !== T.Q_STATE)
+      .reduce((sum, a) => sum + (a[withheldKey] || 0), 0);
+    // An installment whose due date has already passed cannot be paid on time any more. The action
+    // keeps its statutory date and is marked PAST DUE, so crediting it at that date would let a
+    // plan that is genuinely late report itself safe. It is credited at the earliest date the money
+    // could actually move instead, which is today.
+    const estimates = actions
+      .filter(a => a.type === estType && a.date)
+      .map(a => {
+        const due = new Date(a.date.year, a.date.month - 1, a.date.day);
+        return { amount: a.amount, t: due < today ? today : due };
+      });
+
+    const n = schedule.length;
+    let cumReq = 0, missedAt = null, shortBy = 0;
+    schedule.forEach((q, i) => {
+      cumReq += reqAnnual * q.w;
+      const due = dueDateFor(q, yr).dueDate;
+      // Withholding: (i+1)/n of the year's total is credited by this due date.
+      // Estimates: only those actually paid by it.
+      const credited = withheld * (i + 1) / n
+        + estimates.filter(e => e.t <= due).reduce((sum, e) => sum + e.amount, 0);
+      if (credited + 1 < cumReq && missedAt === null) {
+        missedAt = q.label;
+        // The size of the miss decides whether this is worth acting on. A plan can miss by a few
+        // hundred dollars for one quarter and by thousands for the year, and those are not the
+        // same problem.
+        shortBy = cumReq - credited;
+      }
+    });
+    return { met: missedAt === null, required: reqAnnual, missedAt, shortBy };
+  }
+
   function withholdingCoversSchedule(withheldTotal, reqAnnual, schedule) {
     if (reqAnnual <= 0) return true;
     const n = schedule.length;
@@ -1996,6 +2042,27 @@ const TaxPaymentPlanner = (() => {
     });
     const netCashMonths = Object.keys(netCashByMonth).map(Number).sort((x, y) => x - y);
 
+    // P59. Which rule actually sets the bar, so the page can say WHICH safe harbor is being met
+    // rather than leaving the reader to guess. IRC 6654(d)(1)(B): the requirement is the LESSER of
+    // 90% of this year and 100% (110% for a high earner) of last year.
+    const bindingRule = (cur, prior, mult) => {
+      if (prior == null) return '90% of this year (last year\'s tax not supplied)';
+      return (cur * 0.90 < prior * mult)
+        ? '90% of this year'
+        : (mult >= 1.10 ? '110% of last year' : '100% of last year');
+    };
+    const safeHarbor = {
+      federal: Object.assign(
+        scheduleSafeHarbor(actions, reqAnnualFed, FED_Q, yr, T.Q_FED, 'federalWithholding', today),
+        { rule: bindingRule(p.federalTax, p.priorYearFedTax, sfFedMult) }),
+      state: stateInfo.hasIncomeTax
+        ? Object.assign(
+            scheduleSafeHarbor(actions, reqAnnualState, stateInfo.quarterlySchedule, yr, T.Q_STATE, 'stateWithholding', today),
+            { rule: bindingRule(p.stateTax, p.priorYearStateTax, sfStateMult) })
+        : null,
+    };
+    safeHarbor.met = safeHarbor.federal.met && (!safeHarbor.state || safeHarbor.state.met);
+
     // 14. Summary
     // buildAnalysis is deleted. It priced three hypothetical funding strategies on an April-15
     // frame while buildConvComparison priced the real plans on a Dec-31 frame, and the two could
@@ -2015,6 +2082,7 @@ const TaxPaymentPlanner = (() => {
       hysaNet, breakeven, yeIraWins,
       safeHarborFed:       shFed,
       safeHarborState:     shState,
+      safeHarbor,
       // P57. The box used to reuse the FEDERAL sentence for the state line, so California printed
       // "110% of prior-year (high-income filer)" over a number computed at 100%, and Maryland
       // printed "110% (MD rule, always)" over a number that was 90% of the current year. Both notes
@@ -2286,8 +2354,13 @@ const TaxPaymentPlanner = (() => {
       brokerage = { oc, cg, total: oc + cg };
     }
 
+    // The safe-harbor verdict is a property of the plan, not of the cost model, so it rides along
+    // from each plan's own summary rather than being recomputed here.
+    const safeHarbor = {};
+    letters.forEach(k => { safeHarbor[k] = plans[k].summary.safeHarbor; });
+
     return {
-      letters, perPlan, best, bestSet, allTie, anyNegative, labels, bNote, dNote, brokerage,
+      letters, perPlan, best, bestSet, allTie, anyNegative, labels, bNote, dNote, brokerage, safeHarbor,
       hasConversion: hasConv,
       hysaNet,
       breakeven: r / 2,
@@ -2347,6 +2420,10 @@ const TaxPaymentPlanner = (() => {
         ? `Winner   : Plans ${comparison.bestSet.join(', ')} tie at ${money} to April 15`
         : `Winner   : Plan ${comparison.best} — first-year ${t < -0.5 ? 'net GAIN' : 'cost'} of ${money} to April 15`);
       lines.push(`           ${comparison.labels[comparison.best]}`);
+      if (!comparison.safeHarbor[comparison.best].met) {
+        lines.push('           NOTE: the cheapest plan MISSES safe harbor. The cost above does not');
+        lines.push('           include an underpayment penalty. See the comparison below.');
+      }
     }
 
     if (summary.missedFedCount > 0 || summary.missedStateCount > 0) {
@@ -2399,6 +2476,32 @@ const TaxPaymentPlanner = (() => {
       row('TOTAL first-year cost',
         (c, k) => (c.total < -0.5 ? '-' : '') + fmt$(c.total) + (cc.bestSet.includes(k) ? ' ★' : ''));
       row('vs best', (c, k) => (cc.bestSet.includes(k) ? '—' : '+' + fmt$(c.total - cc.perPlan[cc.best].total)));
+      lines.push('  ' + '─'.repeat(24 + W * cc.letters.length));
+      // How the money actually reaches the IRS, which the cost rows above do not say.
+      row('Withheld from IRA',  c => fmt$(c.withheldTotal));
+      row('Quarterly estimates', c => fmt$(c.estimatesTotal));
+      row('Safe harbor', (c, k) => {
+        const sh = cc.safeHarbor[k];
+        return sh.met ? 'met' : 'MISSED';
+      });
+      lines.push('');
+      // Name the rule once, since it is the same test for every plan; only the outcome differs.
+      const shAny = cc.safeHarbor[cc.letters[0]];
+      lines.push(`  Safe harbor test: federal ${fmt$(shAny.federal.required)} (${shAny.federal.rule})` +
+        (shAny.state ? `, ${stateInfo.name} ${fmt$(shAny.state.required)} (${shAny.state.rule})` : ''));
+      const missing = cc.letters.filter(k => !cc.safeHarbor[k].met);
+      if (missing.length > 0) {
+        missing.forEach(k => {
+          const sh = cc.safeHarbor[k];
+          const which = [sh.federal.missedAt ? `federal at ${sh.federal.missedAt}, short ${fmt$(sh.federal.shortBy)}` : null,
+                         sh.state && sh.state.missedAt ? `${stateInfo.name} at ${sh.state.missedAt}, short ${fmt$(sh.state.shortBy)}` : null]
+                        .filter(Boolean).join('; ');
+          lines.push(`  Plan ${k} misses it: ${which}.`);
+        });
+        lines.push('  An estimate counts on the day you pay it, so an installment already past cannot be');
+        lines.push('  made timely. Withholding is credited across all four due dates, which is why a plan');
+        lines.push('  that withholds can still clear a quarter that has gone by. ' + seeAlso('IRC 6654(g)'));
+      }
       lines.push('');
       if (cc.allTie) {
         lines.push('  The timing plans are identical this late in the year: "early" is already December,');
@@ -2454,6 +2557,13 @@ const TaxPaymentPlanner = (() => {
         lines.push(`  First-year cost to April 15: ${(c.total < -0.5 ? '-' : '') + fmt$(c.total)}` +
                    `   |   tax withheld ${fmt$(c.withheldTotal)}, paid as estimates ${fmt$(c.estimatesTotal)}`);
         lines.push('  ' + cashDeliveryLine(sum));
+        const sh = sum.safeHarbor;
+        lines.push('  Safe harbor: federal ' +
+          (sh.federal.met ? 'met' : 'MISSED at ' + sh.federal.missedAt) +
+          ` (${sh.federal.rule}, ${fmt$(sh.federal.required)})` +
+          (sh.state ? `   |   ${stateInfo.name} ` +
+            (sh.state.met ? 'met' : 'MISSED at ' + sh.state.missedAt) +
+            ` (${sh.state.rule}, ${fmt$(sh.state.required)})` : ''));
         lines.push('');
         renderActions(plans[k].actions);
       });
@@ -2543,6 +2653,11 @@ const TaxPaymentPlanner = (() => {
       // as a cost here while the table twelve lines below printed it correctly as negative.
       h += badge(t < -0.5 ? 'First-year net gain' : 'First-year cost',
                  (t < -0.5 ? '' : '') + fmt$(t), '#596A2F');
+      // Ranking is by first-year cost, which does not price an underpayment penalty. If the
+      // cheapest plan misses safe harbor, that omission is exactly what a reader would act on.
+      if (!comparison.safeHarbor[comparison.best].met) {
+        h += badge('Safe harbor', 'MISSED by the cheapest plan', '#8B0000');
+      }
     }
     h += `</div>`;
 
@@ -2630,7 +2745,40 @@ const TaxPaymentPlanner = (() => {
       compRow('TOTAL first-year cost',
         c => (c.total < -0.5 ? '−' : '') + money(c.total), '', true);
       compRow('vs best', (c, k) => (cc.bestSet.includes(k) ? '—' : '+' + money(c.total - cc.perPlan[cc.best].total)), '');
+      // How the tax actually reaches the IRS, and whether that clears the installment rules.
+      compRow('Withheld from IRA',   c => money(c.withheldTotal), 'credited across all four due dates');
+      compRow('Quarterly estimates', c => money(c.estimatesTotal), 'credited on the day each is paid');
+      compRow('Safe harbor', (c, k) => {
+        const sh = cc.safeHarbor[k];
+        return sh.met
+          ? `<span style="color:#1B5E20;font-weight:700;">met</span>`
+          : `<span style="color:#8B0000;font-weight:700;">MISSED</span>`;
+      }, 'minimum needed to avoid an underpayment penalty');
       h += `</tbody></table>`;
+
+      {
+        const shAny = cc.safeHarbor[cc.letters[0]];
+        h += `<div style="font-size:0.82em;color:#444;margin:-4px 0 10px;">`;
+        h += `<strong>The test:</strong> federal ${fmt$(shAny.federal.required)} (${shAny.federal.rule})`;
+        if (shAny.state) h += `, ${stateInfo.name} ${fmt$(shAny.state.required)} (${shAny.state.rule})`;
+        h += `. The requirement is the lesser of 90% of this year and 100% of last year, or 110% for a ` +
+             `high earner. ${seeAlso('IRC 6654(g)')}`;
+        const missing = cc.letters.filter(k => !cc.safeHarbor[k].met);
+        if (missing.length > 0) {
+          h += `<div style="margin-top:4px;color:#8B0000;">`;
+          missing.forEach(k => {
+            const sh = cc.safeHarbor[k];
+            const which = [sh.federal.missedAt ? `federal at ${sh.federal.missedAt}, short ${fmt$(sh.federal.shortBy)}` : null,
+                           sh.state && sh.state.missedAt ? `${stateInfo.name} at ${sh.state.missedAt}, short ${fmt$(sh.state.shortBy)}` : null]
+                          .filter(Boolean).join('; ');
+            h += `Plan ${k} misses it: ${which}.<br>`;
+          });
+          h += `</div><div style="margin-top:3px;">An estimate counts on the day you pay it, so an ` +
+               `installment already past cannot be made timely. Withholding is credited across every due ` +
+               `date, which is why a plan that withholds can still clear a quarter that has gone by.</div>`;
+        }
+        h += `</div>`;
+      }
 
       h += `<div style="font-size:0.81em;color:#555;border-top:1px solid #ddd;padding-top:8px;">`;
       if (cc.allTie) {
@@ -2829,6 +2977,12 @@ const TaxPaymentPlanner = (() => {
              ` &nbsp;|&nbsp; tax withheld <strong>${fmt$(c.withheldTotal)}</strong>` +
              `, paid as estimates <strong>${fmt$(c.estimatesTotal)}</strong></div>`;
         h += `<div style="margin-top:3px;">${cashDeliveryLine(plan.summary)}</div>`;
+        const sh = plan.summary.safeHarbor;
+        const shBits = [
+          `federal ${sh.federal.met ? 'met' : 'MISSED at ' + sh.federal.missedAt} (${sh.federal.rule}, ${fmt$(sh.federal.required)})`,
+          sh.state ? `${stateInfo.name} ${sh.state.met ? 'met' : 'MISSED at ' + sh.state.missedAt} (${sh.state.rule}, ${fmt$(sh.state.required)})` : null,
+        ].filter(Boolean).join(' &nbsp;|&nbsp; ');
+        h += `<div style="margin-top:3px;color:${sh.met ? '#1B5E20' : '#8B0000'};">Safe harbor: ${shBits}</div>`;
         h += `</div>`;
       }
       h += coverageBlock(plan.summary);

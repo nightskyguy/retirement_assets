@@ -11,6 +11,49 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.159f"></a>
+
+## 11.159f
+
+**Tax Payment Planner: the comparison now says which plans need quarterly payments, how much, and
+whether each one actually clears safe harbor.**
+
+### How each plan pays
+
+The table priced five plans and never said how the money reaches the IRS. Two rows under "vs best"
+now do: **Withheld from IRA** and **Quarterly estimates**, per plan. On one scenario that reads
+$57,000 withheld and nothing estimated for Plan A, against nothing withheld and $57,000 estimated for
+Plan Q, with the middle plans splitting it. Those two numbers always add to the whole liability.
+
+### Whether each plan clears safe harbor, and which rule it is being measured against
+
+A third row gives the verdict, and it is not the same for every plan. Two credit rules decide it:
+
+- **Withholding is credited in equal parts across every due date**, whatever date it actually
+  happened [IRC 6654(g)], so a December draw can still satisfy a quarter that has already gone by.
+- **An estimated payment counts on the day you pay it**, so an installment already past cannot be
+  made timely at all.
+
+Run the same scenario in July, after the April and June installments have passed, and the plans split:
+the two that withhold the whole liability clear safe harbor, while the three that lean on estimates
+miss the first quarter. The page names the quarter and the amount, so a $200 miss is not presented
+like a $7,875 one.
+
+It also names the test itself. The requirement is the lesser of 90% of this year and 100% of last
+year, or 110% for a high earner, and which of those binds differs by jurisdiction: on that same run
+the federal bar is 90% of this year at $31,500 while California's is last year in full at $11,500.
+
+**One consequence is called out where it matters.** Plans are ranked by first-year cost, and an
+underpayment penalty is not part of that cost. When the cheapest plan is one that misses safe harbor,
+the winner line and a header badge now say so, because the ranking alone would hide it.
+
+Every plan section repeats its own verdict with the rule and the shortfall, so a printed plan carries
+the answer.
+
+Suite: 58 tests, up from 55.
+
+---
+
 <a id="11.159d"></a>
 
 ## 11.159d

@@ -8,7 +8,7 @@
        Example: Jul 29 08:00 -> day 210 -> (210*24)+8 = 5048 = 0x13b8 -> "1.13b8"
        Bump major manually for significant feature batches. Hardcode it here: the heading
        reads it back out of this tag at runtime rather than duplicating the number. -->
-  <title>Retirement Tax Payment Planner 1.159d</title>
+  <title>Retirement Tax Payment Planner 1.159f</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -542,8 +542,8 @@
 
 </div><!-- end .layout -->
 
-<script src="displayhelpers.js?v=159d"></script>
-<script src="taxPaymentPlanner.js?v=159d"></script>
+<script src="displayhelpers.js?v=159f"></script>
+<script src="taxPaymentPlanner.js?v=159f"></script>
 <script>
   // Version readout — parsed out of <title> so the number lives in exactly one place.
   (() => {
@@ -1155,7 +1155,7 @@
     badge.textContent = '⏳';
     badge.title = 'Loading taxPaymentPlanner.tests.js…';
     const s = document.createElement('script');
-    s.src = 'taxPaymentPlanner.tests.js?v=159d';
+    s.src = 'taxPaymentPlanner.tests.js?v=159f';
     s.onload = () => {
       const r = window.runTaxPlannerTests();
       badge.textContent = r.failed === 0 ? `🟢 ${r.passed}/${r.total}` : `❌ ${r.failed} failed`;

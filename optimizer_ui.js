@@ -4265,6 +4265,21 @@ function applyScenario(data) {
     if (typeof runSimulation === 'function') {
         runSimulation();
     }
+
+    // The Stress Test tile in the summary bar is NOT written by runSimulation(); it is fed by
+    // mcInputsChanged(), which is normally driven by the sidebar's blur/change listeners in
+    // setupAutoRecalc. This function sets .value/.checked programmatically, which fires neither, so
+    // loading a scenario left the tile showing the PREVIOUS plan's "N of M fail" until the user
+    // edited a field by hand or opened the Monte Carlo tab. That is issue #177, and the reporter
+    // read it as the scenario not having loaded at all.
+    //
+    // Guarded on readyState because BOOT is already covered by the one-shot prime in
+    // setupAutoRecalc. At DOMContentLoaded this function runs BEFORE loadFromURL, so an unguarded
+    // call would start a stress pass against the pre-URL plan; if that pass were still in flight
+    // 600ms later the prime would be dropped by refreshMCStressOnly's own busy guard, and a share
+    // URL would settle showing the DEFAULT plan's numbers. readyState is 'interactive' during
+    // DOMContentLoaded and 'complete' by the time any Load or Import button can be clicked.
+    if (document.readyState === 'complete' && typeof mcInputsChanged === 'function') mcInputsChanged();
 }
 
 // ============================================================================

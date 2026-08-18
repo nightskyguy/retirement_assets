@@ -11,6 +11,42 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1585"></a>
+
+## 11.1585
+
+**Two Stress Test fixes. No change to any plan or its numbers.**
+
+### The Stress Test now updates when you load a saved scenario
+
+Loading a scenario refreshed everything in the summary bar except the Stress Test, which kept showing
+the result for whatever plan had been on screen before. It corrected itself only if you edited a field
+by hand or opened the Monte Carlo tab, so the most likely reading was that the scenario had not loaded
+at all. It now refreshes with the rest of the summary bar. The same load also raises the "out of date"
+notice on the Monte Carlo tab when a full comparison run is on screen, which it should have been doing
+and was not.
+
+One case is still open, and is not fixed here: if you load a scenario in the second or so while a
+Stress Test pass is already running, that pass finishes last and leaves its own, now older, numbers on
+the tile. Editing any field or opening the Monte Carlo tab corrects it.
+
+### "All start years" no longer calls every year one of the worst
+
+The Stress window offers two selections. Combined ranks every start year over each of five lengths and
+runs the worst of each. All start years runs the entire record, good years and bad alike. The result
+sentence described both the same way, so in All mode it read "in 13 of the 98 worst historical periods
+on record" about a set that is simply every year there is. It now reads "in 13 of the 98 start years on
+record", and the tooltip on both the headline and the summary tile explains the selection actually in
+use. Combined is unchanged, where "worst" was accurate all along.
+
+The README's Stress Test section had drifted from the code and is corrected: it described six ranking
+lengths including a 25 year window that does not exist, and quoted a fixed count of 36 start years that
+moves with the Stress sequences box.
+
+Additional elements were added for P32 research.
+
+---
+
 <a id="11.1581"></a>
 
 ## 11.1581

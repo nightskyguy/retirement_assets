@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1581</title>
+    <title>Retirement Optimizer 11.1585</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=111494"></script>
-	<script src="optimizer_core.js?v=1114e1"></script>
+	<script src="optimizer_core.js?v=111585"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=111553"></script>
-	<script src="optimizer_tests.js?v=111581"></script>
+	<script src="optimizer_ui.js?v=111585"></script>
+	<script src="optimizer_tests.js?v=111585"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -757,6 +757,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li><b>11.1585</b> <strong>The Stress Test now updates when you load a saved scenario, and reads correctly when you ask for all start years. No change to your plan or its numbers.</strong> Loading a scenario refreshed everything in the summary bar except the Stress Test, which kept the previous plan's result until you edited a field or opened the Monte Carlo tab, so the most likely reading was that the scenario had not loaded. Separately, the Stress window offers Combined, which runs the worst start years of each ranking length, and All start years, which runs the whole record, good years and bad alike. The result sentence described both as the worst on record. In All start years it now says what it actually ran, and the tooltip explains the selection in use. <a href="optimizer_changelog.md#11.1585" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1553</b> <strong>A new teaching demo shows how the number of Monte Carlo paths changes what you see. No change to your plan or its numbers.</strong> Adding <code>?montecarlo</code> to the page address opens the Monte Carlo tab in Synthetic mode and runs a small experiment: the same plan simulated with three random seeds at each of four path counts (5, 10, 25 and 100). The resulting table makes it plain that a handful of paths gives a jumpy, unreliable equity range that steadies as the count climbs. The Input Distributions panel below now shows its worst and best sampled lines by default in this mode. Separately, the Paths box, which is normally held at a minimum of 100 so the survival rate stays meaningful, can now go as low as 3 when advanced controls or the demo are on, so you can watch small samples misbehave for yourself. <a href="optimizer_changelog.md#11.1553" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.152f</b> <strong>You now choose between running just your plan or comparing every strategy, and each button says how long it will take. One behavior change: Historical results shift slightly.</strong> "My Plan Only" is the new default and answers how your own plan did in a second or two. "Compare All Scenarios" ranks every withdrawal strategy against each other and takes closer to a minute. Both state their expected time, measured on your own machine, so the cost is visible before you click rather than after. A new Stress window selector chooses which historical starting years the Stress Test uses: Combined picks the worst openings measured over several different lengths, All runs every start year in the record. Red and amber now mean the money ran out in the first or second half of your plan. The Stress Test chart has dropped its legend, since the table below it names every line and can be sorted, and the hover-over readout now appears once you click a row to isolate a single line. <a href="optimizer_changelog.md#11.152f" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.150b</b> <strong>The Monte Carlo tab now pins your own plan to the top and states its chance of success, and the Stress Test is readable. No change to your plan or its numbers.</strong> Your plan was previously one unmarked row among about 144; it is now marked 📍, stays on top whatever you sort by, and is drawn as the thick line. The Paths box turns out to be paths <i>per strategy</i>, so 500 is really about 72,000 retirements simulating roughly 1,800,000 years, which the page now says out loud. Stress Test lines are labeled just by start year and outcome, colored by whether the money ran out early, late or never, with all the numbers moved into a sortable table below that now also reports Bonds and Intl. Both colored banners are now the fold control for their own section, Historical summarizes its returns in the same sentence style Synthetic already used (CAGR first, then worst and best year), inflation is colored red when it is above zero instead of green, the run size now also reports how many plan years it is simulating. The Stress Test starts folded, with its result banner still visible. <a href="optimizer_changelog.md#11.150b" target="_blank" rel="noopener">Details</a></li>
@@ -1273,7 +1274,7 @@ runTests?.();
 runSimulation?.();
 
 // ── Tier 2: the node-only suites, after first paint ──────────────────────────
-// 319 tests in optimizer_core.tests.js, taxPaymentPlanner.tests.js and doclinks.tests.js never ran
+// 325 tests in optimizer_core.tests.js, taxPaymentPlanner.tests.js and doclinks.tests.js never ran
 // in a browser, so breaking one was invisible at release time. They run here instead, and NOTHING
 // about this is on the critical path: the scripts are not <script> tags, they are injected from
 // requestIdleCallback after the page has painted and the first simulation has rendered.
@@ -1286,7 +1287,7 @@ runSimulation?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111581';
+    const V = '?v=111585';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',
@@ -1346,7 +1347,7 @@ runSimulation?.();
 <script src="montecarlo/prng.js?v=111521d"></script>
 <script src="montecarlo/stats.js?v=111091"></script>
 <script src="montecarlo/mc_controller.js?v=11152d"></script>
-<script src="montecarlo/mc_tab.js?v=111581"></script>
+<script src="montecarlo/mc_tab.js?v=111585"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

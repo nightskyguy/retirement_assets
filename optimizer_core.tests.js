@@ -385,6 +385,104 @@ test('P32c: cycleHarvestMode spendonly harvests no more than maxbracket', () => 
         `spendonly harvest year should be need-sized, got ${hRow && hRow['Brokerage-']}`);
 });
 
+// ── P32c: thirdPassBrokerage / forcedIRAAllowBrokerage research inputs (default off, no UI) ─
+// Same P28 pattern as the cyclic pair above. These two feed P32d (Q2): they exist so the
+// cap-gains-spiral claim in the third pass and the "forced IRA above the ceiling while Brokerage
+// sits untouched" claim in the backstop loop can be measured instead of argued.
+
+// A scenario that genuinely reaches the third pass with Cash exhausted and Brokerage left, which is
+// the only state in which either arm can do anything. Asserted, not assumed, in the tests below.
+const P32C_TP = { ...BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
+                  Cash: 1000, Brokerage: 800000, BrokerageBasis: 150000,
+                  ss1: 45000, ss1Age: 66, spendGoal: 130000 };
+const P32C_FIXED = { ...BASE, Cash: 2000, Brokerage: 900000, BrokerageBasis: 200000,
+                     ss1: 45000, ss1Age: 66, spendGoal: 120000 };
+
+test('P32c: thirdPassBrokerage/forcedIRAAllowBrokerage absent ≡ off → byte-identical log', () => {
+    for (const scen of [P32C_TP, P32C_FIXED]) {
+        const plain = simulate({ ...scen });
+        assert(plain.totals.thirdPassCount > 0,
+            'fixture must reach the third pass, or byte-identity proves nothing about these arms');
+        const withOff = simulate({ ...scen, thirdPassBrokerage: 'off', forcedIRAAllowBrokerage: 'off' });
+        assert(JSON.stringify(plain.log) === JSON.stringify(withOff.log),
+            'explicit off must not perturb the year-by-year log');
+        assert(plain.totals.thirdPassBrokerIters === undefined,
+            'an off run must not even attach the P32c counters to totals');
+    }
+});
+
+test('P32c: thirdPassBrokerage bounded draws Brokerage in the third pass, within its cap', () => {
+    const off = simulate({ ...P32C_TP });
+    const on = simulate({ ...P32C_TP, thirdPassBrokerage: 'bounded' });
+    assert(JSON.stringify(off.log) !== JSON.stringify(on.log), 'the arm must actually change the run');
+    assert((on.totals.thirdPassBrokerIters ?? 0) > 0, 'the Brokerage leg must have fired');
+    // The cap is per year, so the lifetime total cannot exceed 6 x the years that reached the pass.
+    assert(on.totals.thirdPassBrokerIters <= 6 * on.totals.thirdPassCount,
+        `bounded must respect its 6-iteration cap: ${on.totals.thirdPassBrokerIters} iterations ` +
+        `over ${on.totals.thirdPassCount} third-pass years`);
+    assert(on.totals.yearsfunded >= off.totals.yearsfunded,
+        `funding a residual from Brokerage instead of stranding it must not fund fewer years ` +
+        `(${off.totals.yearsfunded} -> ${on.totals.yearsfunded})`);
+    for (const e of on.log) {
+        for (const k of ['Cash', 'Brokerage', 'TotalIRA', 'Roth']) {
+            assert((e[k] ?? 0) > -1, `thirdPassBrokerage drove ${k} negative in year ${e.year}: ${e[k]}`);
+        }
+    }
+});
+
+test('P32c: thirdPassBrokerage — stalls are counted separately from cap hits (the Q2 signal)', () => {
+    // Only a CAPPED year is a cap-gains-spiral candidate. A year whose residual stops improving
+    // while Brokerage still holds a balance has hit that account's arithmetic, not a spiral, and
+    // must not be allowed to consume the whole cap and read as divergence.
+    const bounded = simulate({ ...P32C_TP, thirdPassBrokerage: 'bounded' });
+    const unbounded = simulate({ ...P32C_TP, thirdPassBrokerage: 'unbounded' });
+    assert((unbounded.totals.thirdPassBrokerIters ?? 0) >= (bounded.totals.thirdPassBrokerIters ?? 0),
+        'raising the cap can only add iterations, never remove them');
+    assert((bounded.totals.thirdPassBrokerCapped ?? 0) === 0 &&
+           (unbounded.totals.thirdPassBrokerCapped ?? 0) === 0,
+        `this scenario converges today: no year should hit the cap, got bounded=` +
+        `${bounded.totals.thirdPassBrokerCapped ?? 0} unbounded=${unbounded.totals.thirdPassBrokerCapped ?? 0}. ` +
+        `A failure here is a P32d FINDING to record (a real spiral appeared), not a broken test.`);
+    assert(JSON.stringify(bounded.log) === JSON.stringify(unbounded.log),
+        'with no year capped, the two arms must produce the same run');
+});
+
+test('P32c: thirdPassBrokerage is inert for Ordered (it runs the user sequence in this pass)', () => {
+    const scen = { ...BASE, strategy: 'ordered', orderedSeq: 'CBIR', Cash: 1000,
+                   ss1: 40000, ss1Age: 66, spendGoal: 110000 };
+    const off = simulate({ ...scen });
+    assert(off.totals.thirdPassCount > 0, 'fixture must reach the third pass');
+    const on = simulate({ ...scen, thirdPassBrokerage: 'unbounded', forcedIRAAllowBrokerage: 'brokerageFirst' });
+    assert(JSON.stringify(off.log) === JSON.stringify(on.log),
+        'Ordered is excluded from both the third-pass arm and the forced-IRA backstop');
+});
+
+test('P32c: forcedIRAAllowBrokerage brokerageFirst spends Brokerage before forcing IRA', () => {
+    const off = simulate({ ...P32C_FIXED });
+    const on = simulate({ ...P32C_FIXED, forcedIRAAllowBrokerage: 'brokerageFirst' });
+    assert(off.totals.forcedIRATotal > 0, 'fixture must actually force IRA above the ceiling');
+    assert(on.totals.forcedIRATotal < off.totals.forcedIRATotal,
+        `brokerageFirst must displace forced IRA: ${Math.round(off.totals.forcedIRATotal)} -> ` +
+        `${Math.round(on.totals.forcedIRATotal)}`);
+    for (const e of on.log) {
+        for (const k of ['Cash', 'Brokerage', 'TotalIRA', 'Roth']) {
+            assert((e[k] ?? 0) > -1, `brokerageFirst drove ${k} negative in year ${e.year}: ${e[k]}`);
+        }
+    }
+});
+
+test('P32c: forcedIRAAllowBrokerage keeps the backstop alive after the IRA empties', () => {
+    // The shipped loop breaks on an empty IRA. With Brokerage leading it must not end one account
+    // early, so a plan whose IRA runs dry while Brokerage remains still gets backstopped.
+    const scen = { ...BASE, IRA1: 120000, Cash: 1000, Brokerage: 1500000, BrokerageBasis: 200000,
+                   ss1: 30000, ss1Age: 66, spendGoal: 130000, nYears: 25 };
+    const off = simulate({ ...scen });
+    const on = simulate({ ...scen, forcedIRAAllowBrokerage: 'brokerageFirst' });
+    assert(JSON.stringify(off.log) !== JSON.stringify(on.log), 'the arm must change this run');
+    assert(on.totals.yearsfunded >= off.totals.yearsfunded,
+        `${off.totals.yearsfunded} -> ${on.totals.yearsfunded} funded years`);
+});
+
 // ── P51b: oracleWithdrawalPlan research input (node-only, no UI, default off) ─
 
 test('P51b: oracleWithdrawalPlan absent / null entries / all-zero entries → byte-identical log', () => {

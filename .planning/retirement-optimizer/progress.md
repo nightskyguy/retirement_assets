@@ -2400,3 +2400,139 @@ coded. Start at **P56a**.
 
 Uncommitted on this worktree: the v1.1580 planner fix + 2 tests, and these task_plan/progress edits.
 No PR requested.
+
+---
+
+## Session 2026-08-17 (later) — worktree `context-e73361`, plan re-entry
+
+Ran `/plan` in a **fresh worktree** (`.claude/worktrees/context-e73361`, branch
+`worktrees/planning-with-files-7649a2`). Restored context from `task_plan.md` / `progress.md` /
+`findings.md`; `session-catchup.py` reported nothing unsynced.
+
+**Correction to the previous entry's closing line.** It said the v1.1580 planner fix, its 2 tests and
+the planning edits were *uncommitted*. They are not: this worktree's HEAD is `b8a4dce`, the merge of
+[PR #178](https://github.com/nightskyguy/retirement_assets/pull/178), and it carries `c3bd384`
+(`fix(taxplanner): compare December timing for draw-only plans`) and `f37e587`
+(`docs(planning): add P56`). `git status` is clean, `git diff --stat` empty. Header line 3 of
+`task_plan.md` resynced to `b8a4dce` / PR #178.
+
+**State unchanged otherwise.** P56 is O0, spec complete and user-approved, **zero implementation code
+written**. Next open item is **P56a** (variant plumbing: `_variant` replaces `_baseline`/`_planC`,
+target-month selection, stale letter labels in note strings). Known trap still standing for P56b: the
+11d draw-action block is gated on `usesIraWithholding`, so Q emits no draw actions until that gate
+widens. `optimizer_tests.js:2220` still says `taxPaymentPlanner: 32` vs 34 on disk (P56j).
+
+No code touched this session.
+
+### Same session, continued — P32c second half BUILT (v11.1582, uncommitted)
+
+User picked **P32c** over P56a/P35i when asked. Implemented the two research inputs the task named,
+plus a third value it did not: `thirdPassBrokerage` takes `'unbounded'` as well as `'bounded'`, because
+Q2 explicitly wants an unbounded-with-a-counter arm and P32d would otherwise have to build it.
+
+Both arms live in `resolveResidualAndForcedIRA`, default off, no UI, Ordered excluded from both.
+**6 new tests, suite 263 -> 269/269**; taxPaymentPlanner 34/34 and doclinks 22/22 unchanged; browser
+badge green at **570 (245 in-page + 325 node)**, console clean apart from the usual Cloudflare RUM CORS
+error that localhost always throws.
+
+**Caught a defect in my own first draft by probing before writing tests.** The re-draw loop had a cap and
+no progress guard, so a year whose Brokerage was down to dust consumed all 200 passes and read as
+divergence: BASE fixed showed 2,000 iterations across 10 "capped" years while lifetime Brokerage drawn had
+not changed by a dollar. Added a stall break and split the counters, so `Capped` now means what P32d needs
+it to mean. Preliminary reading across 8 scenarios: **zero capped years anywhere**, bounded byte-identical
+to unbounded. Not the answer, but the arms behave.
+
+**Two surprises that cost the version number.**
+
+1. **`main` had moved.** This worktree is based on `b8a4dce`, but main is now `1c79c29` (PR #179), which
+   shipped **v11.1581** and, in it, already fixed the stale `taxPaymentPlanner` EXPECTED count. So **P56j
+   is DONE, by someone else**, and my first version pick collided with a released one. Renumbered to
+   **v11.1582** and deleted the now-false "corrected 32 to 34" sentence from my changelog entry.
+   **This branch must merge `main` before any PR**: both sides touch the changelog head, the `EXPECTED`
+   line and the page title.
+2. **The preview server was serving the wrong tree.** `serve.py` defaults its root to cwd, and
+   `.claude/launch.json` passed no `--root`, so `localhost:8767` served the MAIN checkout while I read the
+   badge and believed it. It reported 319 node tests and `EXPECTED.optimizer_core = 263` against a worktree
+   holding 269 - numbers that matched no state of my own files, which is what gave it away. Fixed by adding
+   `--root <worktree>` to the worktree's own (gitignored) `.claude/launch.json`. **Worth remembering: a
+   green badge from a worktree preview proves nothing until the served root is confirmed.**
+
+Changed: `optimizer_core.js`, `optimizer_core.tests.js`, `optimizer_tests.js` (EXPECTED 269),
+`retirement_optimizer.html` (title + 3 cache busters + changelog li), `optimizer_changelog.md`, and the
+three planning files. Nothing committed, no PR. **Next: P32d**, which is now pure measurement.
+
+### Same session — merged `main` into the branch, conflicts resolved (merge `c4225fc`)
+
+User asked to confirm these changes can merge with `main`. Dry-run first, with no refs touched:
+`git merge-tree --write-tree $(git stash create) origin/main` reported **three conflicts** -
+`optimizer_changelog.md`, `optimizer_tests.js`, `retirement_optimizer.html`. Resolving needs a real
+merge, so committed P32c as `fc45bbf` and merged `origin/main` (`1c79c29`) as `c4225fc`. Local only,
+**nothing pushed, no PR**.
+
+Resolutions:
+
+- **`optimizer_tests.js`** - kept main's new comment block above `EXPECTED` (it explains the
+  cross-tool trap that reddened the badge) with **our** count: `optimizer_core: 269`.
+- **`retirement_optimizer.html`** - ours in all three spots (title `11.1582`, `optimizer_tests.js?v=`,
+  tier-2 loader `V`). Main shipped 11.1581 with **no** in-page `<li>`, so the newest entry in
+  `#changelog-list` is correctly ours.
+- **`optimizer_changelog.md`** - both entries kept, 11.1582 above 11.1581.
+- `optimizer_core.tests.js` auto-merged: main's new "counts are pinned outside this file" header sits
+  at the top, our tests at line ~378.
+
+**Main brought two obligations this change had to satisfy, both now done.** A new `CLAUDE.md` (and a
+matching header in the suite file) says the counts have a **second home** in the `.githooks/README.md`
+suite table: updated 263 -> 269 there too. And main had refreshed the tier-2 loader's own prose count,
+which our 6 tests made stale again: `319 tests` -> `325`. Also checked the new "hover over, never
+hover" rule against the new changelog prose - it does not use the word.
+
+`git merge-tree origin/main HEAD` now exits 0: **a PR would merge clean.** All three suites green
+(269 / 34 / 22), pre-commit hook green on both commits, browser badge green at 570 (245 in-page +
+325 node) with `EXPECTED` reading 269/34/22/3 and the newest changelog entry showing 11.1582.
+
+### Same session — issue #177 + All-start-years wording (v11.1585)
+
+Two user-reported defects, both in the Stress Test, plus the changelog rewrite the user asked for.
+Release renamed **11.1582 -> 11.1585** (11.1582 was never published, and `main` had already taken
+11.1581).
+
+**1. Issue #177, stress tile stale after a scenario load.** `applyScenario()` ended with
+`runSimulation()` and nothing else; the tile is fed by `mcInputsChanged()`, which rides the sidebar's
+blur/change listeners, and `applyScenario` sets `.value`/`.checked` programmatically so neither event
+fires. One guarded call added at the end of `applyScenario` (`optimizer_ui.js`), which covers modal
+Load, Import and the dead `loadScenario` in one edit. User chose the **minimal** fix, so the two
+silent drops in `refreshMCStressOnly` stay.
+
+**The `document.readyState === 'complete'` guard on that call is load-bearing, not defensive noise.**
+At DOMContentLoaded `applyScenario` runs BEFORE `loadFromURL`, so an unguarded call starts a stress
+pass against the pre-URL plan; if it were still in flight 600ms later the page-load prime would be
+dropped by the busy guard and a share URL would settle showing the DEFAULT scenario's numbers.
+Verified directly: with `weak` saved as the default scenario and a `strong` share URL (and the
+reverse), the tile ends on the URL plan.
+
+**2. All start years wording.** `renderStressHeadline` said "in 13 of the 98 worst historical periods
+on record" about a mode that runs every start year there is. Now branches on the existing
+`stressModeOf(stress).mode` (which prefers the engine's applied `windowMode` over the live selector),
+carried through a new `mode` field on `stressFailureSummary`. `STRESS_TOOLTIP_BASE` split into
+`STRESS_TOOLTIP_WORST` / `STRESS_TOOLTIP_ALL` behind `stressTooltipBase(mode)`, since the tile and the
+headline share it. GOTCHA recorded in the code: `renderStressHeadline` interpolates the tooltip into
+`title="..."` **without** escaping, so those constants must stay free of double quotes.
+
+**3. README.** The Stress Test section claimed six ranking lengths including a 25 year window that does
+not exist (code: `STRESS_WINDOWS = [5,10,15,20,30]`) and hardcoded 36 start years four times.
+
+**Verified in the browser**, worktree-rooted server: strong <-> weak round trip flips the tile
+13/36 <-> 36/36 with no MC tab visit and no manual edit; share-URL boot beats the saved default;
+pristine load (localStorage cleared, no params) still primes; `?montecarlo` renders its 12 rows and
+still populates the tile; All mode reads "98 of the 98 start years on record" with the All tooltip on
+both surfaces; Combined reverts to "36 ... worst historical periods on record". All five sentence
+branches driven directly through the shipped functions. Node 269/34/22, badge green at 570.
+
+**The documented limitation reproduced itself during testing**, which is worth keeping: switching the
+window and loading a scenario in the same tick left the tile on the older plan's 36/36, because the
+in-flight pass painted last. A second load with nothing in flight corrected it to 13/36. That is
+exactly the case the queued trailing re-run would close.
+
+**No test-count edits.** `mc_tab.js` is unreachable from both tiers: it loads at
+`retirement_optimizer.html:1350` while the in-page runner fires at `:1272`, and it has no
+`module.exports` for node. Zero existing coverage of `montecarlo/*` anywhere.

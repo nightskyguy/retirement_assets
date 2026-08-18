@@ -880,13 +880,13 @@ Your own (current) plan is called out separately from the ranking of all other p
 
 #### What the Stress Test actually does
 
-It runs your plan against the worst *actual* retirement start years in the historical record, one simulation (complete path) each, and it is entirely deterministic. Before it runs anything, it goes through the historical record to choose the 20 worst 5, 10, 15, 20, 25, and 30 year sequences - in REAL returns.  Since those different lengths may start in the same year, it discards those that recur. Currently 36 of the worst years are found in those 6 timeframes.
+It runs your plan against the worst *actual* retirement start years in the historical record, one simulation (complete path) each, and it is entirely deterministic. Before it runs anything, it ranks every start year by its REAL return over each of five lengths (5, 10, 15, 20 and 30 years) and takes the worst from each. How many it takes per length is the Stress sequences box, 20 by default. Since those different lengths often flag the same year, the repeats are discarded, so the union is far smaller than the sum: 20 per length gives about 40 distinct start years rather than 100.
 
-This is DIFFERENT from the worst market downturns, by the way. How? Well, for example the 2008 Global Financial Crises where the market lost 37% is not in the top 36. 2007 is! 2007 begins the second worst 5-year stretch in the market which over those 5 years saw a net -12.3% Real Compound Annual Growth (loss) rate - of course the 2008 crash is part of the reason. There a lot of ties for 5-year stretches that had -8.4% real CAGR - the late 1950s through the early 1970s.
+This is DIFFERENT from the worst market downturns, by the way. How? Well, for example the 2008 Global Financial Crises where the market lost 37% is not among the years it picks. 2007 is! 2007 begins the second worst 5-year stretch in the market which over those 5 years saw a net -12.3% Real Compound Annual Growth (loss) rate - of course the 2008 crash is part of the reason. There a lot of ties for 5-year stretches that had -8.4% real CAGR - the late 1950s through the early 1970s.
 
-Stress Test runs your portfolio and withdrawal strategy starting in those 36 worst years in history - including inflation - and notes how many end in ruin. And it shows you the score, for example "7 of 36 Fail".
+Stress Test runs your portfolio and withdrawal strategy starting in each of those worst years in history - including inflation - and notes how many end in ruin. And it shows you the score, for example "7 of 40 Fail".
 
-It charts each of those 36 years (failing years are in yellow or red, surviving years in green) and provides a detailed table below that shows the particulars: which 5 year, 10 year periods during the plan that were the worst.  You can sort or hover over the table. Clicking it will isolate the chart to just that year. Clicking the same year again will restore all the graphs.
+It charts each of those years (failing years are in yellow or red, surviving years in green) and provides a detailed table below that shows the particulars: which 5 year, 10 year periods during the plan that were the worst.  You can sort or hover over the table. Clicking it will isolate the chart to just that year. Clicking the same year again will restore all the graphs.
 The chart colors each line by what happened to your money, and when: red ran out in the first half of your plan, amber in the second half, green never ran out. 
 
 The Stress Test doesn't randomize anything. And the one "gotcha" is that if your plan outlives the last year for which there is data, it starts over in 1928. That makes it "extra bad". A 35-year plan that starts in 1999 gets the actual 1999 through 2025 data, and then, having run out of history, wraps around and continues with the actual 1928 results onward. When the tool wraps around, it draws the graph at the wrap point with a dashed rather than solid line. But you'll probably notice because, remember 1928 began the worst crash in US history.
@@ -901,7 +901,7 @@ Notes about the table below the Stress Chart:
 
 A sequence can open calmly and still contain the decade that breaks the plan. Hovering over a row adds the equity, bond, international and inflation rates behind it, which windows flagged that year, and where the record runs out. Bonds and international are reported but not ranked on; the choice of worst start years is made on real equity return alone. International data begins in 1970, so a scenario starting earlier shows domestic equity in its place, which is the same substitution the simulation itself makes.
 
-Because these sequences are chosen to be the worst on record, failing some of them is not a prediction. It is a durability test.
+Because the Combined selection picks sequences that are the worst on record, failing some of them is not a prediction. All start years makes the same point the other way round, by leaving nothing out. Either way it is a durability test.
 
 ### How Do I Evaluate Tools for Privacy and Security?
 

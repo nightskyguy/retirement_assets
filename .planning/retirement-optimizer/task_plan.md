@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-18:** `main` = `02eaf2b`, which is [PR #180](https://github.com/nightskyguy/retirement_assets/pull/180) **merged**: v11.1585 (P32c arms, the issue #177 stress-tile fix, the All-start-years wording) is now shipped on `main`. This worktree (`context-e73361`, branch `worktrees/planning-with-files-38a21e`) started at `main` and now carries **P56 + P57 complete and UNCOMMITTED**, folded into one release: planner v1.1599 / Optimizer v11.1599, suites **269 / 51 / 22** (`slowInCore` 3), `?runtests` green at 587. The taxPaymentPlanner count moved 34 -> 51, updated in BOTH pinned homes.
+**As of 2026-08-18:** `main` = `02eaf2b`, which is [PR #180](https://github.com/nightskyguy/retirement_assets/pull/180) **merged**: v11.1585 (P32c arms, the issue #177 stress-tile fix, the All-start-years wording) is now shipped on `main`. This worktree (`context-e73361`, branch `worktrees/planning-with-files-38a21e`) started at `main` and now carries **two commits**: `6e74f1f` (P56 + P57, one release at v11.1599) and `0bc7ba0` (P58, v11.159d). Suites **269 / 55 / 22** (`slowInCore` 3), `?runtests` green at **591**. The taxPaymentPlanner count moved 34 -> 55, updated in BOTH pinned homes each time.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -17,10 +17,10 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P56 + P57 SHIPPED 2026-08-18 as v11.1599, UNCOMMITTED**: five plans priced on one clock, and
-every statement on the page now belongs to one named plan. Open call for the user, in the P56 section:
-the brokerage footnote prints an absolute cost, not the extra cost over Plan Q, and one release entry
-covers both phases because v11.1598 was never published. **`P35f`/`P35g` DONE (v11.1499)**: §1014 fires at both deaths, so
+**P56 + P57 + P58 COMMITTED 2026-08-18** (v11.1599 and v11.159d): five plans priced on one clock,
+every statement on the page belongs to one named plan, and the planner no longer credits withholding
+to money that has already moved. Open call for the user, in the P56 section: the brokerage footnote
+prints an absolute cost, not the extra cost over Plan Q. **`P35f`/`P35g` DONE (v11.1499)**: §1014 fires at both deaths, so
 **P35's O0 was earned by that fix and is now spent** - re-bucket if `P35i` is not next.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
@@ -45,8 +45,8 @@ first task. Every open item in the file now carries one.
 |---|---|---|---|---|
 | **O0** | P35 | Phased strategy; **basis step-up shipped v11.1499** | `P35i` (the Phased engine) | nothing hard |
 | **O0** | P32 | Brokerage draws — premise refuted, dividend defect fixed, Q2 arms shipped v11.1582 | `P32d` (measure Q2) | nothing |
-| ~~DONE~~ | ~~P57~~ | ~~Planner: Plan-A leakage plus unmodelled-consequence copy~~ — **COMPLETE, folded into v11.1599, uncommitted** | — | — |
-| ~~DONE~~ | ~~P56~~ | ~~Tax Payment Planner five-plan matrix + one unified cost table~~ — **COMPLETE, shipped as v11.1599 with P57, uncommitted** | — | — |
+| ~~DONE~~ | ~~P58~~ | ~~Withholding assumed on money already moved, plus the forced-quarterly double payment~~ — **COMPLETE, v11.159d (`0bc7ba0`)** | — | — |
+| ~~DONE~~ | ~~P56~~+~~P57~~ | ~~Five-plan matrix, one cost table, and every statement attributed to one plan~~ — **COMPLETE, v11.1599 (`6e74f1f`)** | — | — |
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
 | **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |

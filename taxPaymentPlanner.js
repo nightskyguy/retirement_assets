@@ -717,6 +717,21 @@ const TaxPaymentPlanner = (() => {
 
       ira1Rmd:             0,
       ira1Voluntary:       0,
+      // P58. Withholding on a draw you have ALREADY TAKEN is a past fact, not a choice the planner
+      // can make for you: you cannot elect withholding retroactively. Null means "not stated", and
+      // the planner then assumes NOTHING was withheld, which overstates what you still owe rather
+      // than understating it. Give the real figure here and it is credited exactly.
+      ira1RmdWithheld:     null,
+      ira1VolWithheld:     null,
+      ira2RmdWithheld:     null,
+      ira2VolWithheld:     null,
+      // Same rule for a conversion already completed. The gap fill used to be able to elect
+      // withholding on one, and because it sizes off the gap it could take the WHOLE conversion:
+      // a $40,000 conversion marked done was assigned $40,000 of withholding, retroactively,
+      // leaving nothing in the Roth.
+      ira1ConvWithheld:    null,
+      ira2ConvWithheld:    null,
+
       ira1RmdTaken:        false,   // RMD/draw already taken — must be true before VolTaken/ConvDone
       ira1VolTaken:        false,   // voluntary withdrawal already taken (requires ira1Rmd=0 or ira1RmdTaken)
       ira1RothConversion:  0,
@@ -912,14 +927,14 @@ const TaxPaymentPlanner = (() => {
 
     // Explicit override: ira1RothWithhold === true → pre-draw full pro-rata conversion withholding.
     // This is included in taxAfterConvW so the draw optimizer knows less remains to cover.
-    if (p.ira1RothConversion > 0 && p.ira1RothWithhold === true && !isQ) {
+    if (p.ira1RothConversion > 0 && p.ira1RothWithhold === true && !isQ && !p.ira1ConvDone) {
       const w = _estConvW(p.ira1RothConversion);
       ira1ConvFedW = w.fed;  ira1ConvStW = w.state;
       convWithholdFed += ira1ConvFedW;  convWithholdState += ira1ConvStW;
       doWithhold1 = true;
       ira1Replacement = _replacementAnalysis(p.ira1RothConversion, ira1.planAConvMonth, ira1.planAConvDay, w);
     }
-    if (p.ira2RothConversion > 0 && p.ira2RothWithhold === true && !isQ) {
+    if (p.ira2RothConversion > 0 && p.ira2RothWithhold === true && !isQ && !p.ira2ConvDone) {
       const w = _estConvW(p.ira2RothConversion);
       ira2ConvFedW = w.fed;  ira2ConvStW = w.state;
       convWithholdFed += ira2ConvFedW;  convWithholdState += ira2ConvStW;
@@ -927,14 +942,37 @@ const TaxPaymentPlanner = (() => {
       ira2Replacement = _replacementAnalysis(p.ira2RothConversion, ira2.planAConvMonth, ira2.planAConvDay, w);
     }
 
+    // A conversion already completed carries exactly what the user says it carried. Nothing else
+    // is available: the distribution happened and its election cannot be revisited.
+    [[1, p.ira1ConvDone, p.ira1RothConversion, p.ira1ConvWithheld],
+     [2, p.ira2ConvDone, p.ira2RothConversion, p.ira2ConvWithheld]].forEach(([num, isDone, amt, stated]) => {
+      if (!isDone || amt <= 0) return;
+      const total = (typeof stated === 'number' && isFinite(stated) && stated >= 0)
+        ? Math.min(stated, amt) : 0;
+      const fed = Math.round(total * (stateIraExempt ? 1.0 : fedFrac));
+      const st  = stateIraExempt ? 0 : total - fed;
+      if (num === 1) { ira1ConvFedW = fed; ira1ConvStW = st; doWithhold1 = true; }
+      else           { ira2ConvFedW = fed; ira2ConvStW = st; doWithhold2 = true; }
+      convWithholdFed   += fed;
+      convWithholdState += st;
+      const rep2 = _replacementAnalysis(amt,
+        num === 1 ? ira1.planAConvMonth : ira2.planAConvMonth,
+        num === 1 ? ira1.planAConvDay   : ira2.planAConvDay,
+        { total, fed, state: st });
+      if (num === 1) ira1Replacement = rep2; else ira2Replacement = rep2;
+    });
+
     // 6. Cross-IRA withholding optimizer
     // Tax remaining after conversion withholding that IRA draws must cover
     const taxAfterConvW = Math.max(0, totalTax - convWithholdFed - convWithholdState);
     // For IRA-exempt states, IRA draws can only cover federal portion
-    const drawWithholdCap = isQ ? 0
-      : stateIraExempt
-        ? Math.min(allDrawsTotal, Math.max(0, p.federalTax - convWithholdFed))
-        : Math.min(allDrawsTotal, taxAfterConvW);
+    // What the user says was already withheld from a draw they already took. Anything else on a
+    // taken draw is unavailable: the distribution has happened and its election cannot be changed.
+    const statedWithheld = (num, tag) => {
+      const v = num === 1 ? (tag === 'rmd' ? p.ira1RmdWithheld : p.ira1VolWithheld)
+                          : (tag === 'rmd' ? p.ira2RmdWithheld : p.ira2VolWithheld);
+      return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : null;
+    };
 
     // The input draw groups, before D splits any of them. RMD and voluntary are tracked
     // separately so a later voluntary draw (nextMonth) can carry the withholding even when the
@@ -945,6 +983,23 @@ const TaxPaymentPlanner = (() => {
       { num: 2, tag: 'rmd', month: ira2.planARmdMonth, total: p.ira2Rmd,       withheld: 0, taken: p.ira2RmdTaken },
       { num: 2, tag: 'vol', month: ira2VolMonth,       total: p.ira2Voluntary, withheld: 0, taken: p.ira2VolTaken },
     ].filter(g => g.total > 0);
+
+    // A taken group carries exactly what the user says it carried, and nothing the planner wishes
+    // it carried. The optimizer used to sort ALL groups by month and assign withholding to the
+    // latest first, which meant a plan could put thousands of dollars of withholding on a
+    // distribution received months ago, then report itself fully covered.
+    baseGroups.forEach(g => {
+      g.stated = g.taken ? statedWithheld(g.num, g.tag) : null;
+      g.locked = g.taken;                                   // not available to the optimizer
+      if (g.locked) g.fixedWithheld = Math.min(g.total, g.stated || 0);
+    });
+    const lockedWithheld = baseGroups.reduce((sum, g) => sum + (g.locked ? g.fixedWithheld : 0), 0);
+    const movableTotal   = baseGroups.reduce((sum, g) => sum + (g.locked ? 0 : g.total), 0);
+    // Draws the planner can still direct, capped by what is left to cover after the locked credits.
+    const drawWithholdCap = isQ ? 0
+      : stateIraExempt
+        ? Math.min(movableTotal, Math.max(0, p.federalTax - convWithholdFed - lockedWithheld))
+        : Math.min(movableTotal, Math.max(0, taxAfterConvW - lockedWithheld));
 
     // D takes the SPENDING part of each draw early with no withholding and holds the TAX part
     // back to a separate December tranche withheld up to 100%, which Form W-4R permits on an IRA
@@ -980,7 +1035,9 @@ const TaxPaymentPlanner = (() => {
       for (const g of baseGroups) {
         const dec   = decShare.get(g) || 0;
         const early = g.total - dec;
-        if (early > 0) drawGroups.push({ num: g.num, tag: g.tag, month: g.month, total: early, withheld: 0,
+        if (early > 0) drawGroups.push({ num: g.num, tag: g.tag, month: g.month, total: early,
+                                         withheld: g.locked ? g.fixedWithheld : 0,
+                                         taken: g.locked, stated: g.stated,
                                          tranche: dec > 0 ? 'spend' : undefined });
         if (dec   > 0) drawGroups.push({ num: g.num, tag: g.tag, month: 12,      total: dec,   withheld: dec, tranche: 'tax'   });
       }
@@ -988,10 +1045,12 @@ const TaxPaymentPlanner = (() => {
     } else {
       // Every other variant: one entry per input group, latest-month draws withheld first.
       drawGroups = baseGroups
-        .map(g => ({ num: g.num, tag: g.tag, month: g.month, total: g.total, withheld: 0 }))
+        .map(g => ({ num: g.num, tag: g.tag, month: g.month, total: g.total,
+                     withheld: g.locked ? g.fixedWithheld : 0, taken: g.locked, stated: g.stated }))
         .sort((a, b) => b.month - a.month);
       let remaining = drawWithholdCap;
       for (const g of drawGroups) {
+        if (g.taken) continue;                              // its election already happened
         g.withheld = Math.min(g.total, remaining);
         remaining -= g.withheld;
         if (remaining <= 0) break;
@@ -1051,8 +1110,13 @@ const TaxPaymentPlanner = (() => {
     // shortfall and never looked at the conversion amount, so a $5,000 conversion against a
     // $37,000 gap was told to withhold $24,851 federal (497%) and $12,149 state (243%).
     // Whatever the conversions cannot absorb belongs in quarterly estimates instead.
+    // A plan forced to all-quarterly pays the whole liability as estimates, so withholding on a
+    // conversion is money paid twice. Plan Q already skips the gap fill for exactly this reason;
+    // a caller-level forceStrategy of 'quarterly' did not, and the plan then paid $64,000 against
+    // a $57,000 bill.
+    const forcedQuarterly = isQ || p.forceStrategy === 'quarterly';
     let convWithholdCapped = false;
-    if (shortfall > 0 && !isQ) {
+    if (shortfall > 0 && !forcedQuarterly) {
       // In an IRA-exempt state no state tax can be withheld from an IRA distribution, so
       // conversion withholding can only chase the FEDERAL gap. Sizing it off the whole
       // shortfall there would over-withhold federal past the federal liability.
@@ -1192,53 +1256,55 @@ const TaxPaymentPlanner = (() => {
       }
     }
 
-    // ── 11a-w. Already-taken withholding reminder ─────────────────────────
-    if (!isChild) {
+    // ── 11a-w. What an action you have ALREADY TAKEN actually carried ──────
+    // This used to render only in the parent plan and to report the withholding the optimizer had
+    // ASSIGNED to a past distribution, as though the planner could elect it after the fact. It
+    // cannot. Every plan now carries the disclosure, because every plan depends on the answer, and
+    // it distinguishes a figure you supplied from an assumption the planner made for you.
+    {
       const items = [];
-      // RMD and voluntary are tracked independently — each gets its own withholding reminder
-      for (const [iraNum, rmdTaken, rmd, volTaken, vol] of [
-        [1, p.ira1RmdTaken, p.ira1Rmd, p.ira1VolTaken, p.ira1Voluntary],
-        [2, p.ira2RmdTaken, p.ira2Rmd, p.ira2VolTaken, p.ira2Voluntary],
+      const split = amt => {
+        const fed = Math.round(amt * wFedFrac);
+        return { fed, st: amt - fed };
+      };
+      const line = (label, gross, statedVal) => {
+        if (statedVal != null) {
+          const { fed, st } = split(Math.min(statedVal, gross));
+          return `${label} (${fmt$(gross)}) — you reported ${fmt$(Math.min(statedVal, gross))} withheld ` +
+                 `(${fmt$(fed)} federal` + (st > 0 ? ` + ${fmt$(st)} ${stateInfo.name}` : '') +
+                 `). Credited in full against this year's liability.`;
+        }
+        return `${label} (${fmt$(gross)}) — no withholding assumed. Withholding cannot be elected ` +
+               `after a distribution has been taken, so the planner credits nothing unless you say ` +
+               `what was actually withheld. If tax WAS withheld from it, enter that amount; until ` +
+               `you do, the plan below schedules estimated payments for money you may have already ` +
+               `paid, which OVERSTATES what you still owe.`;
+      };
+
+      for (const [iraNum, rmdTaken, rmd, rmdW, volTaken, vol, volW] of [
+        [1, p.ira1RmdTaken, p.ira1Rmd, p.ira1RmdWithheld, p.ira1VolTaken, p.ira1Voluntary, p.ira1VolWithheld],
+        [2, p.ira2RmdTaken, p.ira2Rmd, p.ira2RmdWithheld, p.ira2VolTaken, p.ira2Voluntary, p.ira2VolWithheld],
       ]) {
-        if (rmdTaken && rmd > 0) {
-          const g = drawGroups.find(h => h.num === iraNum && h.tag === 'rmd');
-          const wFed = Math.round((g?.withheld || 0) * wFedFrac);
-          const wSt  = Math.round((g?.withheld || 0) * wStFrac);
-          items.push(`IRA ${iraNum} RMD (${fmt$(rmd)}) — estimated withholding: ` +
-            `${fmt$(wFed)} federal` + (wSt > 0 ? ` + ${fmt$(wSt)} ${stateInfo.name}` : ''));
-        }
-        if (volTaken && vol > 0) {
-          const g = drawGroups.find(h => h.num === iraNum && h.tag === 'vol');
-          const wFed = Math.round((g?.withheld || 0) * wFedFrac);
-          const wSt  = Math.round((g?.withheld || 0) * wStFrac);
-          items.push(`IRA ${iraNum} voluntary withdrawal (${fmt$(vol)}) — estimated withholding: ` +
-            `${fmt$(wFed)} federal` + (wSt > 0 ? ` + ${fmt$(wSt)} ${stateInfo.name}` : ''));
-        }
+        if (rmdTaken && rmd > 0) items.push(line(`IRA ${iraNum} RMD`, rmd, rmdW));
+        if (volTaken && vol > 0) items.push(line(`IRA ${iraNum} voluntary withdrawal`, vol, volW));
       }
       if (p.ira1ConvDone && p.ira1RothConversion > 0) {
-        const wLabel = doWithhold1
-          ? `${fmt$(ira1ConvFedW)} federal` + (ira1ConvStW > 0 ? ` + ${fmt$(ira1ConvStW)} ${stateInfo.name}` : '')
-          : 'none (IRA draws cover all taxes)';
-        items.push(`IRA 1 Roth conversion (${fmt$(p.ira1RothConversion)}) — estimated withholding: ${wLabel}`);
+        items.push(line('IRA 1 Roth conversion', p.ira1RothConversion, p.ira1ConvWithheld));
       }
       if (p.ira2ConvDone && p.ira2RothConversion > 0) {
-        const wLabel = doWithhold2
-          ? `${fmt$(ira2ConvFedW)} federal` + (ira2ConvStW > 0 ? ` + ${fmt$(ira2ConvStW)} ${stateInfo.name}` : '')
-          : 'none (IRA draws cover all taxes)';
-        items.push(`IRA 2 Roth conversion (${fmt$(p.ira2RothConversion)}) — estimated withholding: ${wLabel}`);
+        items.push(line('IRA 2 Roth conversion', p.ira2RothConversion, p.ira2ConvWithheld));
       }
+
       if (items.length > 0) {
+        const anyAssumed = items.some(t => /no withholding assumed/.test(t));
         addAction({
-          type: T.ALERT,
-          description: `One or more distributions are marked as already taken. ` +
-            `Verify that you instructed your IRA custodian to withhold the amounts shown below. ` +
-            `If withholding was insufficient, a supplemental estimated tax payment may be needed.`,
-          notes: [
-            ...items,
-            `IRA withholding is voluntary and must be requested at the time of distribution — ` +
-            `custodians do not withhold automatically unless instructed.`,
-            `If you under-withheld, use Form 1040-ES to make a catch-up estimated payment by the next quarterly due date.`,
-          ],
+          type: T.NOTE,
+          description: anyAssumed
+            ? 'Some of this year\'s money has already moved, and the planner does not know what tax ' +
+              'was withheld from it. Read the figures below before following any plan.'
+            : 'Already completed this year, with the withholding you reported credited against the ' +
+              'liability every plan below is sized against.',
+          notes: items,
         });
       }
     }

@@ -2517,7 +2517,37 @@ page offered a "Split" plan with nothing split. That guard cannot change reachab
 LESS whatever the plan already withholds, or refuse to apply gap-fill withholding at all under a
 forced-quarterly strategy. The second is cleaner and matches Plan Q, which already skips the gap-fill.
 
-**Status:** PROPOSED, two items. Priority unset, awaiting the user.
+### Third item, found while fixing the first two: a COMPLETED conversion could be withheld on
+
+Same reasoning applied to `ira*ConvDone` turned up a worse instance. The gap fill's `convSlots`
+filter never checked whether the conversion had already happened, and because the gap fill sizes
+itself off the shortfall it could take the WHOLE conversion: measured, a $40,000 conversion marked
+done was assigned **$40,000** of withholding, which would leave nothing in the Roth at all. The
+explicit `ira*RothWithhold: true` override had the same hole.
+
+### P58 COMPLETE 2026-08-18, shipped as v1.159d / v11.159d
+
+- [x] **P58a** - taken draws are locked: an action already completed carries only what the user
+  reports. New optional inputs `ira1RmdWithheld` / `ira1VolWithheld` / `ira1ConvWithheld` and the
+  IRA 2 equivalents, blank meaning "not stated", with URL keys `i1rw`/`i1vw`/`i1cw`/`i2rw`/`i2vw`/`i2cw`.
+  Blank credits nothing, which OVERSTATES what is still owed rather than understating it, and the
+  note says so.
+- [x] **P58b** - the disclosure renders in EVERY plan, not just the parent, and distinguishes a
+  figure the user supplied from an assumption the planner made.
+- [x] **P58c** - a completed conversion is locked the same way, and the override cannot re-elect it.
+- [x] **P58d** - `forceStrategy: 'quarterly'` no longer stacks estimates on top of gap-fill
+  withholding: it pays $57,000 of $57,000, where it used to pay $64,000.
+- [x] **P58e** - 4 test groups, suite 51 -> **55**, both pinned homes plus the tier-2 prose count
+  342 -> 346, version bump, changelog entry calling the behavior change out.
+
+**Verified in the browser.** With `i1rt=1` and no figure the plan reads "no withholding assumed ...
+OVERSTATES what you still owe" and schedules the estimates; adding `i1rw=1600` flips the heading to
+"Already completed this year" and the note to "you reported $1,600 withheld ($982 federal + $618
+California)". The field appears only once its checkbox is ticked, and it survives a share link.
+**GOTCHA found doing it:** a new numeric input does not load from a URL until its id is added to the
+`NUM_FIELDS` allowlist in `loadFromUrl`; the SHORT_TO_LONG map alone is not enough.
+
+**Status:** COMPLETE. The 22-scenario self-review sweep is clean.
 
 ## Dependency Graph (remaining)
 

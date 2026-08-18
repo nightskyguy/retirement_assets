@@ -11,6 +11,53 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.159d"></a>
+
+## 11.159d
+
+**Tax Payment Planner: the planner no longer credits withholding to money that has already moved.
+BEHAVIOR CHANGE, and it can raise what a plan tells you to pay.**
+
+### What was wrong
+
+If you ticked "RMD already taken this year", the planner still treated that distribution as a place
+to put withholding. It would decide, for example, that $8,000 of your tax was covered by a draw you
+received in June, and then report the plan fully covered. You cannot elect withholding after a
+distribution has been taken, so those dollars were an assumption, not a payment.
+
+The same applied to a conversion marked already done, and there it was worse. The step that closes a
+funding gap sizes itself off the gap, and it could take the entire conversion: a $40,000 conversion
+marked done was assigned $40,000 of withholding, which would have left nothing in the Roth at all.
+
+### What happens now
+
+An action you have already completed carries exactly what you say it carried, and nothing else. Each
+"already taken" and "already done" box now has a field beside it for the tax actually withheld from
+that distribution.
+
+- **Tell the planner the figure** and it is credited in full, exactly as before but on your numbers.
+- **Leave it blank** and the planner credits nothing. It then schedules estimated payments for the
+  shortfall, which overstates what you still owe rather than understating it. That is the safer
+  direction to be wrong in, and the note on the plan says so in as many words.
+
+Every plan carries that note now, not just the first one, because every plan depended on the answer.
+
+**This changes numbers.** A saved link with an already-taken draw will now show a larger estimated
+payment schedule than it did before, until you fill in what was withheld. The three new figures ride
+in shared links, so a link you build after filling them in carries them.
+
+### Also fixed
+
+A plan whose strategy was forced to quarterly paid the tax twice over: the gap-filling step withheld
+on the conversion, and the forced strategy then scheduled the whole liability as estimates on top of
+it, $64,000 against a $57,000 bill. Forcing quarterly now skips the gap fill, which is what the
+quarterly plan itself already did. This path has no control on the page and is reachable only by a
+caller, so no shared link was affected.
+
+Suite: 55 tests, up from 51.
+
+---
+
 <a id="11.1599"></a>
 
 ## 11.1599

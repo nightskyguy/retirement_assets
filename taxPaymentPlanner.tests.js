@@ -1419,6 +1419,107 @@ test('Safe-harbor wording matches the multiplier each figure used', () => {
   assert(!/high earners/.test(mdBox), 'and a state that applies 110% to everyone has no threshold to describe');
 });
 
+
+// ══ P58: you cannot elect withholding after the fact ══════════════════════
+// The cross-IRA optimizer sorted every draw group by month and gave withholding to the latest
+// first. That set included groups flagged ALREADY TAKEN, so a plan could put thousands of dollars
+// of withholding on a distribution received months ago and then report itself fully covered. The
+// gap fill did the same to a conversion marked already done, and because it sizes off the gap it
+// could take the WHOLE conversion.
+const P58 = {
+  taxYear: 2027, state: 'CA', federalTax: 35000, stateTax: 22000,
+  priorYearFedTax: 33000, priorYearStateTax: 11500,
+  ira1Rmd: 8000, ira1RmdTaken: true, ira1Voluntary: 20000,
+  ssIncome: 20000, pensionIncome: 15000, todayDate: new Date(2027, 6, 10),
+};
+const p58 = extra => TaxPaymentPlanner.computePaymentPlan({ ...P58, ...extra });
+const paidBy58 = acts => acts.reduce((s, a) => s + (a.federalWithholding || 0) + (a.stateWithholding || 0), 0);
+
+test('A draw already taken carries only the withholding you report', () => {
+  const silent = p58();
+  const takenOf = plan => plan.actions
+    .filter(a => (a.type === T.RMD || a.type === T.IRA_VOL) && a.date.month === 6);
+
+  // Nothing stated: nothing credited, in EVERY plan, not just the one that happens to be shown.
+  Object.entries(silent.plans).filter(([, v]) => v).forEach(([k, plan]) => {
+    const w = paidBy58(takenOf(plan));
+    assert(w === 0, `plan ${k} invented ${w} of withholding on a distribution already taken`);
+    assertNear(paidBy58(plan.actions), 57000, `plan ${k} still pays the whole liability`, 2);
+  });
+
+  // Stated: credited exactly, and the rest of the liability still gets scheduled.
+  const stated = p58({ ira1RmdWithheld: 1600 });
+  Object.entries(stated.plans).filter(([, v]) => v).forEach(([k, plan]) => {
+    assertNear(paidBy58(takenOf(plan)), 1600, `plan ${k} credits the reported withholding`, 1);
+    assertNear(paidBy58(plan.actions), 57000, `plan ${k} still pays the whole liability`, 2);
+  });
+
+  // A stated amount cannot exceed the distribution it came out of.
+  const absurd = p58({ ira1RmdWithheld: 999999 });
+  assert(paidBy58(takenOf(absurd.plans.A)) <= 8000 + 0.5,
+    'withholding cannot exceed the gross of the draw it was taken from');
+});
+
+test('The already-taken disclosure appears in every plan and names the direction of the error', () => {
+  const silent = p58();
+  const noteOf = plan => plan.actions.find(a => a.type === T.NOTE && /already moved/.test(a.description));
+  silent.comparison.letters.forEach(k => {
+    const n = noteOf(silent.plans[k]);
+    assert(n, `plan ${k} relies on the assumption and must carry the disclosure`);
+    const all = n.notes.join(' ');
+    assert(/no withholding assumed/.test(all), `plan ${k}: the note must say nothing was assumed`);
+    assert(/OVERSTATES what you still owe/.test(all), `plan ${k}: and which way the error runs`);
+  });
+  // Once reported, it reads as a fact rather than a warning.
+  const stated = p58({ ira1RmdWithheld: 1600 });
+  const n = stated.plans.A.actions.find(a => a.type === T.NOTE && /Already completed/.test(a.description));
+  assert(n, 'a reported figure gets the factual heading');
+  assert(/you reported \$1,600 withheld/.test(n.notes.join(' ')), 'and states what was reported');
+});
+
+test('A conversion already done cannot have withholding elected on it either', () => {
+  const base = {
+    taxYear: 2027, state: 'CA', federalTax: 35000, stateTax: 22000,
+    priorYearFedTax: 33000, priorYearStateTax: 11500,
+    ira1Rmd: 0, ira1Voluntary: 5000, ira1RothConversion: 40000, ira1ConvDone: true,
+    ssIncome: 20000, pensionIncome: 15000, todayDate: new Date(2027, 6, 10),
+  };
+  const silent = TaxPaymentPlanner.computePaymentPlan(base);
+  const convOf = plan => plan.actions.filter(a => a.type === T.ROTH_CONV);
+  Object.entries(silent.plans).filter(([, v]) => v).forEach(([k, plan]) => {
+    const w = paidBy58(convOf(plan));
+    assert(w === 0, `plan ${k} withheld ${w} on a conversion that already happened`);
+    assertNear(paidBy58(plan.actions), 57000, `plan ${k} still pays the whole liability`, 2);
+  });
+  // The old behaviour took the entire conversion, which would have left nothing in the Roth.
+  assert(convOf(silent.plans.A).every(a => (a.federalWithholding || 0) < 40000),
+    'and certainly not the whole conversion');
+
+  const stated = TaxPaymentPlanner.computePaymentPlan({ ...base, ira1ConvWithheld: 4000 });
+  assertNear(paidBy58(convOf(stated.plans.A)), 4000, 'a reported figure is credited exactly', 1);
+
+  // An explicit ira1RothWithhold override must not resurrect the election either.
+  const overridden = TaxPaymentPlanner.computePaymentPlan({ ...base, ira1RothWithhold: true });
+  assert(paidBy58(convOf(overridden.plans.A)) === 0,
+    'an override cannot re-elect withholding on a completed conversion');
+});
+
+test('A plan forced to quarterly pays the liability once, not twice', () => {
+  // The gap fill withheld on the conversion and the forced strategy then scheduled the WHOLE
+  // liability as estimates on top of it: $64,000 against a $57,000 bill.
+  const forced = TaxPaymentPlanner.computePaymentPlan({
+    taxYear: 2027, state: 'CA', federalTax: 35000, stateTax: 22000,
+    priorYearFedTax: 33000, priorYearStateTax: 11500,
+    ira1Rmd: 15000, ira1Voluntary: 30000, ira1RothConversion: 10000, ira2Rmd: 5000,
+    ssIncome: 20000, pensionIncome: 15000, todayDate: new Date(2027, 6, 10),
+    forceStrategy: 'quarterly',
+  });
+  Object.entries(forced.plans).filter(([, v]) => v).forEach(([k, plan]) => {
+    assertNear(paidBy58(plan.actions), 57000, `plan ${k} must pay 57000 exactly`, 2);
+    assert(plan.strategy === 'all_quarterly', `plan ${k} should honour the forced strategy`);
+  });
+});
+
 // ── Runner ────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
 // The node entry point below is what still sets the exit code.

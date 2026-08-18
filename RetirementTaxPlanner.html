@@ -8,7 +8,7 @@
        Example: Jul 29 08:00 -> day 210 -> (210*24)+8 = 5048 = 0x13b8 -> "1.13b8"
        Bump major manually for significant feature batches. Hardcode it here: the heading
        reads it back out of this tag at runtime rather than duplicating the number. -->
-  <title>Retirement Tax Payment Planner 1.1599</title>
+  <title>Retirement Tax Payment Planner 1.159d</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -384,6 +384,11 @@
       <input type="checkbox" id="ira1RmdTaken" onchange="updateComputed()">
       <span>RMD already taken this year</span>
     </label>
+    <label class="withheld-field"><span>Tax withheld from it ($)</span>
+      <input type="text" id="ira1RmdWithheld" value="" autocomplete="off" placeholder="not stated"
+             title="Tax actually withheld from that distribution. Leave blank if you do not know: the planner then credits nothing, because withholding cannot be elected after the fact, and it schedules estimates instead. That overstates what you still owe rather than understating it."
+             oninput="updateComputed()">
+    </label>
     <label><span>IRA 1 Voluntary Withdrawal ($)</span>
       <input type="text" id="ira1Voluntary" value="30000" autocomplete="off" oninput="updateComputed()">
     </label>
@@ -391,12 +396,22 @@
       <input type="checkbox" id="ira1VolTaken" onchange="updateComputed()">
       <span>Voluntary draw already taken this year</span>
     </label>
+    <label class="withheld-field"><span>Tax withheld from it ($)</span>
+      <input type="text" id="ira1VolWithheld" value="" autocomplete="off" placeholder="not stated"
+             title="Tax actually withheld from that distribution. Leave blank if you do not know: the planner then credits nothing, because withholding cannot be elected after the fact, and it schedules estimates instead. That overstates what you still owe rather than understating it."
+             oninput="updateComputed()">
+    </label>
     <label><span>IRA 1 Roth Conversion ($)</span>
       <input type="text" id="ira1RothConversion" value="10000" autocomplete="off" oninput="updateComputed()">
     </label>
     <label class="checkbox-label">
       <input type="checkbox" id="ira1ConvDone" onchange="updateComputed()">
       <span>Conversion already done this year</span>
+    </label>
+    <label class="withheld-field"><span>Tax withheld from it ($)</span>
+      <input type="text" id="ira1ConvWithheld" value="" autocomplete="off" placeholder="not stated"
+             title="Tax actually withheld from that distribution. Leave blank if you do not know: the planner then credits nothing, because withholding cannot be elected after the fact, and it schedules estimates instead. That overstates what you still owe rather than understating it."
+             oninput="updateComputed()">
     </label>
     <div class="section-hdr">IRA 2 Draws and Conversions</div>
     <label><span>IRA 2 RMD ($)</span>
@@ -406,6 +421,11 @@
       <input type="checkbox" id="ira2RmdTaken" onchange="updateComputed()">
       <span>RMD already taken this year</span>
     </label>
+    <label class="withheld-field"><span>Tax withheld from it ($)</span>
+      <input type="text" id="ira2RmdWithheld" value="" autocomplete="off" placeholder="not stated"
+             title="Tax actually withheld from that distribution. Leave blank if you do not know: the planner then credits nothing, because withholding cannot be elected after the fact, and it schedules estimates instead. That overstates what you still owe rather than understating it."
+             oninput="updateComputed()">
+    </label>
     <label><span>IRA 2 Voluntary Withdrawal ($)</span>
       <input type="text" id="ira2Voluntary" value="0" autocomplete="off" oninput="updateComputed()">
     </label>
@@ -413,12 +433,22 @@
       <input type="checkbox" id="ira2VolTaken" onchange="updateComputed()">
       <span>Voluntary draw already taken this year</span>
     </label>
+    <label class="withheld-field"><span>Tax withheld from it ($)</span>
+      <input type="text" id="ira2VolWithheld" value="" autocomplete="off" placeholder="not stated"
+             title="Tax actually withheld from that distribution. Leave blank if you do not know: the planner then credits nothing, because withholding cannot be elected after the fact, and it schedules estimates instead. That overstates what you still owe rather than understating it."
+             oninput="updateComputed()">
+    </label>
     <label><span>IRA 2 Roth Conversion ($)</span>
       <input type="text" id="ira2RothConversion" value="0" autocomplete="off" oninput="updateComputed()">
     </label>
     <label class="checkbox-label">
       <input type="checkbox" id="ira2ConvDone" onchange="updateComputed()">
       <span>Conversion already done this year</span>
+    </label>
+    <label class="withheld-field"><span>Tax withheld from it ($)</span>
+      <input type="text" id="ira2ConvWithheld" value="" autocomplete="off" placeholder="not stated"
+             title="Tax actually withheld from that distribution. Leave blank if you do not know: the planner then credits nothing, because withholding cannot be elected after the fact, and it schedules estimates instead. That overstates what you still owe rather than understating it."
+             oninput="updateComputed()">
     </label>
     <div class="section-hdr">Other Income Sources</div>
     <label><span>Social Security ($)</span>
@@ -512,8 +542,8 @@
 
 </div><!-- end .layout -->
 
-<script src="displayhelpers.js?v=1599"></script>
-<script src="taxPaymentPlanner.js?v=1599"></script>
+<script src="displayhelpers.js?v=159d"></script>
+<script src="taxPaymentPlanner.js?v=159d"></script>
 <script>
   // Version readout — parsed out of <title> so the number lives in exactly one place.
   (() => {
@@ -595,13 +625,19 @@
     set('i1r',  p.ira1Rmd);
     set('i1v',  p.ira1Voluntary);
     if (p.ira1RmdTaken)      sp.set('i1rt', '1');
+    if (p.ira1RmdWithheld  != null) sp.set('i1rw', String(p.ira1RmdWithheld));
     if (p.ira1VolTaken)      sp.set('i1vt', '1');
+    if (p.ira1VolWithheld  != null) sp.set('i1vw', String(p.ira1VolWithheld));
     set('i1c',  p.ira1RothConversion);
     if (p.ira1ConvDone)      sp.set('i1cd', '1');
+    if (p.ira1ConvWithheld != null) sp.set('i1cw', String(p.ira1ConvWithheld));
 
     set('i2r',  p.ira2Rmd);
     set('i2v',  p.ira2Voluntary);
     if (p.ira2RmdTaken)      sp.set('i2rt', '1');
+    if (p.ira2RmdWithheld  != null) sp.set('i2rw', String(p.ira2RmdWithheld));
+    if (p.ira2VolWithheld  != null) sp.set('i2vw', String(p.ira2VolWithheld));
+    if (p.ira2ConvWithheld != null) sp.set('i2cw', String(p.ira2ConvWithheld));
     if (p.ira2VolTaken)      sp.set('i2vt', '1');
     set('i2c',  p.ira2RothConversion);
     if (p.ira2ConvDone)      sp.set('i2cd', '1');
@@ -674,6 +710,12 @@
 
       ira1Rmd:             readNum('ira1Rmd'),
       ira1Voluntary:       readNum('ira1Voluntary'),
+      ira1RmdWithheld:     readNumOrNull('ira1RmdWithheld'),
+      ira1VolWithheld:     readNumOrNull('ira1VolWithheld'),
+      ira1ConvWithheld:    readNumOrNull('ira1ConvWithheld'),
+      ira2RmdWithheld:     readNumOrNull('ira2RmdWithheld'),
+      ira2VolWithheld:     readNumOrNull('ira2VolWithheld'),
+      ira2ConvWithheld:    readNumOrNull('ira2ConvWithheld'),
       ira1RmdTaken:        readBool('ira1RmdTaken'),
       ira1VolTaken:        readBool('ira1VolTaken'),
       ira1RothConversion:  readNum('ira1RothConversion'),
@@ -732,6 +774,16 @@
       // Conversion done — disabled when no conversion amount, or RMD exists but not yet taken
       const convDisabled = conv === 0 || (rmd > 0 && !rmdTaken);
       convDoneEl.disabled = convDisabled;
+
+      // P58. "Tax withheld from it" only has meaning once the action is marked already done, so
+      // each field follows its own checkbox and is cleared when that checkbox goes back off.
+      [['Rmd', rmdTakenEl], ['Vol', volTakenEl], ['Conv', convDoneEl]].forEach(([kind, box]) => {
+        const f = document.getElementById(`ira${n}${kind}Withheld`);
+        if (!f) return;
+        const on = box.checked && !box.disabled;
+        f.closest('label').style.display = on ? '' : 'none';
+        if (!on) f.value = '';
+      });
       if (convDisabled) convDoneEl.checked = false;
     }
   }
@@ -958,6 +1010,12 @@
   //   ira1VolTaken      {boolean}   1 if IRA 1 voluntary withdrawal already taken (requires RMD taken or no RMD)
   //   ira1RothConversion{number}    IRA 1 Roth conversion amount (gross)
   //   ira1ConvDone      {boolean}   1 if IRA 1 conversion already done (requires RMD taken or no RMD)
+  //   i1rw / i1vw / i1cw {number}   tax ACTUALLY withheld from IRA 1's already-taken RMD, voluntary
+  //                                 draw, or completed conversion. Omitted means not stated, and the
+  //                                 planner then credits nothing: withholding cannot be elected after
+  //                                 a distribution has happened, so assuming some would overstate the
+  //                                 coverage and understate what is still owed.
+  //   i2rw / i2vw / i2cw {number}   the same three for IRA 2
   //
   //   ira2Rmd           {number}    IRA 2 RMD amount
   //   ira2Voluntary     {number}    IRA 2 voluntary withdrawal
@@ -995,6 +1053,8 @@
       pft:'priorYearFedTax', pst:'priorYearStateTax', hi:'highIncomeFiler',
       i1r:'ira1Rmd', i1v:'ira1Voluntary', i1rt:'ira1RmdTaken', i1vt:'ira1VolTaken',
       i1c:'ira1RothConversion', i1cd:'ira1ConvDone',
+      i1rw:'ira1RmdWithheld', i1vw:'ira1VolWithheld', i1cw:'ira1ConvWithheld',
+      i2rw:'ira2RmdWithheld', i2vw:'ira2VolWithheld', i2cw:'ira2ConvWithheld',
       i2r:'ira2Rmd', i2v:'ira2Voluntary', i2rt:'ira2RmdTaken', i2vt:'ira2VolTaken',
       i2c:'ira2RothConversion', i2cd:'ira2ConvDone',
       ss:'ssIncome', pen:'pensionIncome', int:'interest', qdiv:'qualifiedDivs',
@@ -1016,6 +1076,10 @@
       'ssIncome','pensionIncome','interest','qualifiedDivs','capitalGains',
       'portfolioRate','hysaGross','marginalOrdRate','cgRateBlended',
       'brokerageValue','brokerageBasis',
+      // P58. Blank stays meaningful for these six: it means "not stated", which is not the same as
+      // zero, so they are written only when the parameter is actually present.
+      'ira1RmdWithheld','ira1VolWithheld','ira1ConvWithheld',
+      'ira2RmdWithheld','ira2VolWithheld','ira2ConvWithheld',
     ];
     // Legacy ?ap=NN carried the unrealized-gain fraction, which no longer has an input of its own.
     // Convert it to the value/basis pair that produces the same fraction. $100,000 is arbitrary --
@@ -1091,7 +1155,7 @@
     badge.textContent = '⏳';
     badge.title = 'Loading taxPaymentPlanner.tests.js…';
     const s = document.createElement('script');
-    s.src = 'taxPaymentPlanner.tests.js?v=1599';
+    s.src = 'taxPaymentPlanner.tests.js?v=159d';
     s.onload = () => {
       const r = window.runTaxPlannerTests();
       badge.textContent = r.failed === 0 ? `🟢 ${r.passed}/${r.total}` : `❌ ${r.failed} failed`;

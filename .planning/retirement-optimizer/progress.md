@@ -2765,3 +2765,46 @@ badge green.
 
 Nothing committed. An adversarial review of the whole uncommitted diff was running when this was
 written.
+
+## Session 2026-08-18 (continued) — v11.1599 committed, then P58: withholding on money already moved
+
+**Committed the P56+P57 release** as `6e74f1f`, one commit for one changelog entry (the two phases
+interleave in `taxPaymentPlanner.js`, so splitting would have meant hunk surgery for no benefit).
+Pre-commit hook ran all three suites green.
+
+### P58, all four items, shipped as v1.159d / v11.159d
+
+The seed was a self-review finding: the cross-IRA optimizer sorted EVERY draw group by month and gave
+withholding to the latest first, and that set included groups flagged already taken. Measured, plans
+A and C each put **$8,000 of withholding on a June draw the user had already received**, then reported
+themselves fully covered.
+
+**A third instance turned up while fixing it, and it was worse.** The gap fill's `convSlots` filter
+never checked `ConvDone`, and because the gap fill sizes off the shortfall it could take the entire
+conversion: a **$40,000 conversion marked done was assigned $40,000 of withholding**, which would
+leave nothing in the Roth. The explicit `ira*RothWithhold: true` override had the same hole.
+
+**The model now.** An action already completed carries exactly what the user reports and nothing else.
+Six new optional inputs (`ira1RmdWithheld`, `ira1VolWithheld`, `ira1ConvWithheld` and the IRA 2
+equivalents), blank meaning not stated. Blank credits nothing and routes the difference to estimates,
+which OVERSTATES what is still owed rather than understating it, and the note says exactly that. The
+disclosure renders in every plan now, because every plan depends on the answer; it reads as a fact
+when the user supplied a figure and as a warning when it is the planner's assumption.
+
+**Fourth item.** `forceStrategy: 'quarterly'` stacked estimates on top of gap-fill withholding and
+paid $64,000 against a $57,000 bill. Forcing quarterly now skips the gap fill, which is what Plan Q
+already did. No page control reaches this path, so no shared link was affected.
+
+**Verified in the browser.** `i1rt=1` with no figure gives "no withholding assumed ... OVERSTATES what
+you still owe"; adding `i1rw=1600` flips the heading to "Already completed this year" and the note to
+"you reported $1,600 withheld ($982 federal + $618 California)". Fields appear only once their
+checkbox is ticked and survive a share link.
+
+**GOTCHA worth keeping:** a new numeric input does not load from a URL until its id is added to the
+`NUM_FIELDS` allowlist inside `loadFromUrl`. Adding it to `SHORT_TO_LONG` is not enough, and the
+symptom is silent: the parameter parses, the page ignores it.
+
+Suite 51 -> **55**, both pinned homes plus the tier-2 prose count 342 -> 346. `?runtests` full
+synchronous run green at **591 (245 in-page + 346 node)**. The 22-scenario self-review sweep reports
+NO PROBLEMS. In-page changelog list trimmed back to its documented five-entry ceiling (it had drifted
+to six before this session).

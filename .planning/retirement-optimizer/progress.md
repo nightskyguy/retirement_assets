@@ -2863,3 +2863,40 @@ Suite 55 -> **58**, both pinned homes plus the tier-2 prose count 346 -> 349. v1
 The 22-scenario sweep still reports NO PROBLEMS. Browser-verified both branches: a future tax year
 shows every plan meeting safe harbor (nothing is past due yet), the current tax year shows
 met/met/MISSED/MISSED/MISSED with the badge and the per-plan shortfalls.
+
+### Same session — P60: which safe-harbor bar was cleared (items 1 and 2 of five)
+
+**Item 1, the sad day.** "met" said nothing about which bar it cleared, and meeting 100% of last year
+when 110% was required is the expensive way to be wrong. The verdict row now names it:
+`Safe harbor (110%/90%)`, federal and state shown separately when they differ, with the per-plan
+lines and the detail block carrying the same tag.
+
+**Item 2, and it folded into item 1.** The 110% bar turns on PRIOR-year AGI over $150,000, which this
+planner is never given. It used to fall back to 100% unless the high-income box was ticked. It now
+sums the income already entered (`grossIncome`, taxPaymentPlanner.js:908, which is draws +
+conversions + SS + pension + interest + dividends + gains) and applies 110% when that clears the
+threshold. Measured: $180,000 of income with $20,000 of prior-year federal tax moves the requirement
+from $20,000 to $22,000.
+
+**Both directions are stated, per the state-NOTE style rule.** Inferring 110% from this year when
+last year was quieter overstates the requirement; resting on 100% when last year was above the
+threshold understates it, so a 100% verdict carries a `*` and a line saying the planner cannot check.
+
+**The user's "assume from this year's income" for a missing prior year is a no-op, and the honest
+answer was to say so.** The requirement is the LESSER of 90% of this year and 100% or 110% of last
+year. Substituting this year for last year gives min(0.90x, 1.00x) = 0.90x either way, so the answer
+is unchanged. What it CAN do is overstate, when last year was genuinely lower. The page now says the
+90% fallback can only be too high and asks for the real figure instead of inventing one.
+
+**Two defects in my own first draft, both caught before showing it.** The tag repeated in all five
+cells overflowed the 11-character column and ran the row together (`met 90%/100%*met 90%/100%*...`);
+it belongs in the row LABEL, since the test is the same taxpayer for every plan. And the test fixture
+I wrote to prove the inference summed to exactly $140,000, just under the threshold, so it proved
+nothing until raised to $170,000.
+
+Suite 58 -> **60**, both pinned homes plus the tier-2 prose count 349 -> 351. v1.15a0 / v11.15a0.
+Browser-verified: `Safe harbor (110%/90%)`, `The test: federal $22,000 (110% of last year),
+California $19,800 (90% of this year)`, and the inference explained from $180,000 of income.
+
+Items 3, 4 and 5 (generic state safe harbor, clickable rule citations, IncomeTaxPlanner cohesion) are
+out with a research workflow and not yet answered.

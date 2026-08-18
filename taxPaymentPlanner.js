@@ -1110,9 +1110,19 @@ const TaxPaymentPlanner = (() => {
     let shortfall    = Math.max(0, totalTax - totalCovered);
 
     // 7. Safe-harbor amounts (computed before the gap fill — the December branch needs them)
-    const sfFedMult   = p.highIncomeFiler ? 1.10 : 1.00;
+    // The 110% bar turns on PRIOR-year AGI above $150,000 [IRC 6654(d)(1)(C)], and this planner is
+    // never given AGI. It IS given this year's income components, and their sum is a usable proxy:
+    // a household comfortably above the threshold this year was very probably above it last year.
+    // So when the caller has not said, infer rather than assume the lower bar, because assuming
+    // 100% where 110% applies UNDERSTATES what is owed, and that is the expensive direction to be
+    // wrong in. Inferring the other way overstates it, which costs a refund rather than a penalty.
+    const FED_HIGH_INCOME_AGI = 150000;
+    const highIncomeStated    = p.highIncomeFiler === true;
+    const highIncomeInferred  = !highIncomeStated && grossIncome > FED_HIGH_INCOME_AGI;
+    const treatHighIncome     = highIncomeStated || highIncomeInferred;
+    const sfFedMult   = treatHighIncome ? 1.10 : 1.00;
     const sfStateMult = stateInfo.safeHarborAlways110 ? 1.10
-                      : (p.highIncomeFiler && p.stateTax >= (stateInfo.safeHarborHighIncomeThreshold || Infinity))
+                      : (treatHighIncome && p.stateTax >= (stateInfo.safeHarborHighIncomeThreshold || Infinity))
                         ? 1.10 : 1.00;
     const shFed   = p.priorYearFedTax   != null ? p.priorYearFedTax   * sfFedMult   : p.federalTax * 0.90;
     const shState = p.priorYearStateTax != null ? p.priorYearStateTax * sfStateMult : p.stateTax   * 0.90;
@@ -2045,23 +2055,43 @@ const TaxPaymentPlanner = (() => {
     // P59. Which rule actually sets the bar, so the page can say WHICH safe harbor is being met
     // rather than leaving the reader to guess. IRC 6654(d)(1)(B): the requirement is the LESSER of
     // 90% of this year and 100% (110% for a high earner) of last year.
+    // Which test sets the bar, and the short tag the comparison row prints. A verdict of "met" is
+    // worth very different amounts depending on which of these it rests on, so the row names it.
     const bindingRule = (cur, prior, mult) => {
-      if (prior == null) return '90% of this year (last year\'s tax not supplied)';
-      return (cur * 0.90 < prior * mult)
-        ? '90% of this year'
-        : (mult >= 1.10 ? '110% of last year' : '100% of last year');
+      if (prior == null) {
+        return { rule: '90% of this year, because last year\'s tax was not supplied', tag: '90%',
+                 basis: 'current-year-only' };
+      }
+      if (cur * 0.90 < prior * mult) {
+        return { rule: '90% of this year', tag: '90%', basis: 'current' };
+      }
+      return mult >= 1.10
+        ? { rule: '110% of last year', tag: '110%', basis: 'prior-110' }
+        : { rule: '100% of last year', tag: '100%', basis: 'prior-100' };
     };
     const safeHarbor = {
       federal: Object.assign(
         scheduleSafeHarbor(actions, reqAnnualFed, FED_Q, yr, T.Q_FED, 'federalWithholding', today),
-        { rule: bindingRule(p.federalTax, p.priorYearFedTax, sfFedMult) }),
+        bindingRule(p.federalTax, p.priorYearFedTax, sfFedMult)),
       state: stateInfo.hasIncomeTax
         ? Object.assign(
             scheduleSafeHarbor(actions, reqAnnualState, stateInfo.quarterlySchedule, yr, T.Q_STATE, 'stateWithholding', today),
-            { rule: bindingRule(p.stateTax, p.priorYearStateTax, sfStateMult) })
+            bindingRule(p.stateTax, p.priorYearStateTax, sfStateMult))
         : null,
     };
     safeHarbor.met = safeHarbor.federal.met && (!safeHarbor.state || safeHarbor.state.met);
+    // A verdict resting on the 100% bar is the one that can be quietly wrong: the 110% bar applies
+    // on PRIOR-year AGI, which this planner never sees. Flag it so "met" at 100% is never mistaken
+    // for "met" at the bar that actually applied.
+    safeHarbor.provisional = safeHarbor.federal.basis === 'prior-100'
+      || (safeHarbor.state && safeHarbor.state.basis === 'prior-100');
+    safeHarbor.highIncomeInferred = highIncomeInferred;
+    safeHarbor.highIncomeStated   = highIncomeStated;
+    safeHarbor.agiProxy           = grossIncome;
+    // With no prior-year figure the requirement falls back to 90% of this year. That can only be
+    // too HIGH: had last year's tax been lower, the lesser-of rule would have set a lower bar.
+    safeHarbor.priorYearMissing = p.priorYearFedTax == null
+      || (stateInfo.hasIncomeTax && p.priorYearStateTax == null);
 
     // 14. Summary
     // buildAnalysis is deleted. It priced three hypothetical funding strategies on an April-15
@@ -2377,6 +2407,34 @@ const TaxPaymentPlanner = (() => {
   // when. The comparison prices the timing of the TAX. Nothing in this tool knows when the money
   // gets SPENT, so the cash-flow consequence of pushing a draw to December cannot be priced; it is
   // stated instead, in that plan's own dollars.
+  // P60. "met" is worth different amounts depending on which bar it cleared, and the 110% bar
+  // turns on prior-year AGI that this planner never sees. These read the tags off a safe-harbor
+  // object so both renderers say the same thing.
+  function shTag(sh) {
+    const parts = [sh.federal.tag];
+    if (sh.state && sh.state.tag !== sh.federal.tag) parts.push(sh.state.tag);
+    return parts.join('/');
+  }
+  function shCaveats(sh, stateName) {
+    const out = [];
+    if (sh.highIncomeInferred) {
+      out.push(`The 110% bar was applied because the income entered here totals ${fmt$(sh.agiProxy)}, ` +
+        `over the $150,000 AGI threshold. That threshold is measured on LAST year's AGI, which this ` +
+        `planner is not given, so if last year was the quieter year the real bar is 100% and this ` +
+        `overstates what you must pay.`);
+    } else if (sh.provisional) {
+      out.push(`This rests on the 100% bar. The bar rises to 110% when LAST year's AGI was over ` +
+        `$150,000, and this planner is not given AGI, so it cannot check. If last year was above it, ` +
+        `the real requirement is 10% higher than shown and a plan marked met may not clear it.`);
+    }
+    if (sh.priorYearMissing) {
+      out.push(`Last year's tax was not supplied, so the requirement falls back to 90% of this year. ` +
+        `That can only be too HIGH: a lower prior-year tax would have set a lower bar under the ` +
+        `lesser-of rule. Enter last year's figures for the real test.`);
+    }
+    return out;
+  }
+
   function cashDeliveryLine(sum) {
     const months = sum.netCashMonths || [];
     if (months.length === 0) {
@@ -2480,15 +2538,17 @@ const TaxPaymentPlanner = (() => {
       // How the money actually reaches the IRS, which the cost rows above do not say.
       row('Withheld from IRA',  c => fmt$(c.withheldTotal));
       row('Quarterly estimates', c => fmt$(c.estimatesTotal));
-      row('Safe harbor', (c, k) => {
-        const sh = cc.safeHarbor[k];
-        return sh.met ? 'met' : 'MISSED';
-      });
+      const shLabel = `Safe harbor (${shTag(cc.safeHarbor[cc.letters[0]])}` +
+        `${cc.safeHarbor[cc.letters[0]].provisional ? '*' : ''})`;
+      row(shLabel, (c, k) => (cc.safeHarbor[k].met ? 'met' : 'MISSED'));
       lines.push('');
       // Name the rule once, since it is the same test for every plan; only the outcome differs.
       const shAny = cc.safeHarbor[cc.letters[0]];
       lines.push(`  Safe harbor test: federal ${fmt$(shAny.federal.required)} (${shAny.federal.rule})` +
         (shAny.state ? `, ${stateInfo.name} ${fmt$(shAny.state.required)} (${shAny.state.rule})` : ''));
+      shCaveats(shAny, stateInfo.name).forEach(c => {
+        lines.push('  ' + (shAny.provisional ? '* ' : '  ') + c);
+      });
       const missing = cc.letters.filter(k => !cc.safeHarbor[k].met);
       if (missing.length > 0) {
         missing.forEach(k => {
@@ -2558,7 +2618,7 @@ const TaxPaymentPlanner = (() => {
                    `   |   tax withheld ${fmt$(c.withheldTotal)}, paid as estimates ${fmt$(c.estimatesTotal)}`);
         lines.push('  ' + cashDeliveryLine(sum));
         const sh = sum.safeHarbor;
-        lines.push('  Safe harbor: federal ' +
+        lines.push(`  Safe harbor [${shTag(sh)}${sh.provisional ? '*' : ''}]: federal ` +
           (sh.federal.met ? 'met' : 'MISSED at ' + sh.federal.missedAt) +
           ` (${sh.federal.rule}, ${fmt$(sh.federal.required)})` +
           (sh.state ? `   |   ${stateInfo.name} ` +
@@ -2748,12 +2808,12 @@ const TaxPaymentPlanner = (() => {
       // How the tax actually reaches the IRS, and whether that clears the installment rules.
       compRow('Withheld from IRA',   c => money(c.withheldTotal), 'credited across all four due dates');
       compRow('Quarterly estimates', c => money(c.estimatesTotal), 'credited on the day each is paid');
-      compRow('Safe harbor', (c, k) => {
-        const sh = cc.safeHarbor[k];
-        return sh.met
+      const sh0 = cc.safeHarbor[cc.letters[0]];
+      compRow(`Safe harbor (${shTag(sh0)}${sh0.provisional ? '<span style="color:#8B6A00;">*</span>' : ''})`,
+        (c, k) => (cc.safeHarbor[k].met
           ? `<span style="color:#1B5E20;font-weight:700;">met</span>`
-          : `<span style="color:#8B0000;font-weight:700;">MISSED</span>`;
-      }, 'minimum needed to avoid an underpayment penalty');
+          : `<span style="color:#8B0000;font-weight:700;">MISSED</span>`),
+        'which bar it clears matters: 90% of this year, or 100% or 110% of last year');
       h += `</tbody></table>`;
 
       {
@@ -2763,6 +2823,9 @@ const TaxPaymentPlanner = (() => {
         if (shAny.state) h += `, ${stateInfo.name} ${fmt$(shAny.state.required)} (${shAny.state.rule})`;
         h += `. The requirement is the lesser of 90% of this year and 100% of last year, or 110% for a ` +
              `high earner. ${seeAlso('IRC 6654(g)')}`;
+        shCaveats(shAny, stateInfo.name).forEach(c => {
+          h += `<div style="margin-top:4px;color:#8B6A00;">${shAny.provisional ? '* ' : ''}${c}</div>`;
+        });
         const missing = cc.letters.filter(k => !cc.safeHarbor[k].met);
         if (missing.length > 0) {
           h += `<div style="margin-top:4px;color:#8B0000;">`;
@@ -2982,7 +3045,8 @@ const TaxPaymentPlanner = (() => {
           `federal ${sh.federal.met ? 'met' : 'MISSED at ' + sh.federal.missedAt} (${sh.federal.rule}, ${fmt$(sh.federal.required)})`,
           sh.state ? `${stateInfo.name} ${sh.state.met ? 'met' : 'MISSED at ' + sh.state.missedAt} (${sh.state.rule}, ${fmt$(sh.state.required)})` : null,
         ].filter(Boolean).join(' &nbsp;|&nbsp; ');
-        h += `<div style="margin-top:3px;color:${sh.met ? '#1B5E20' : '#8B0000'};">Safe harbor: ${shBits}</div>`;
+        h += `<div style="margin-top:3px;color:${sh.met ? '#1B5E20' : '#8B0000'};">Safe harbor ` +
+             `[${shTag(sh)}${sh.provisional ? '*' : ''}]: ${shBits}</div>`;
         h += `</div>`;
       }
       h += coverageBlock(plan.summary);

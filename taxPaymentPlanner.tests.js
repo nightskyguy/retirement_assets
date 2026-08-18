@@ -1609,6 +1609,65 @@ test('The comparison shows how each plan pays, and flags a cheapest plan that mi
   assert(/short \$/.test(r.text) && /short \$/.test(r.html), 'and both must quantify the gap');
 });
 
+
+// ══ P60: a verdict of "met" has to say which bar it cleared ═══════════════
+// Meeting 100% of last year when 110% was the real requirement is the expensive way to be wrong,
+// and the 110% bar turns on PRIOR-year AGI, which this planner is never given.
+test('The safe-harbor verdict names its multiplier and flags what it cannot verify', () => {
+  const base = {
+    taxYear: 2026, state: 'CA', federalTax: 35000, stateTax: 22000,
+    priorYearFedTax: 20000, priorYearStateTax: 38000,
+    ira1Rmd: 15000, ira2Rmd: 5000, marginalOrdRate: 0.30,
+    portfolioRate: 0.06, hysaGross: 0.03, todayDate: new Date(2026, 6, 10),
+  };
+
+  // Modest income: the 100% bar binds, and the planner says plainly that it cannot check the
+  // threshold that would raise it to 110%.
+  const modest = TaxPaymentPlanner.computePaymentPlan({ ...base, ira1Voluntary: 5000 });
+  const shM = modest.plans.A.summary.safeHarbor;
+  assert(shM.federal.tag === '100%', `federal bar should be 100%: ${shM.federal.tag}`);
+  assert(shM.provisional, 'a 100% verdict is provisional, because the AGI test cannot be checked');
+  assertNear(shM.federal.required, 20000, 'and the requirement is last year in full', 1);
+  assert(/Safe harbor \(100%/.test(modest.text), `the row must name the bar: ${modest.text.split('\n').find(l => /Safe harbor \(/.test(l))}`);
+  assert(/rests on the 100% bar/.test(modest.text) && /rests on the 100% bar/.test(modest.html),
+    'both outputs must carry the caveat');
+
+  // Income comfortably over the threshold: infer the 110% bar rather than assume the cheaper one.
+  // 15,000 RMD + 5,000 RMD + 150,000 voluntary = 170,000, clear of the $150,000 line.
+  const high = TaxPaymentPlanner.computePaymentPlan({ ...base, ira1Voluntary: 150000 });
+  const shH = high.plans.A.summary.safeHarbor;
+  assert(shH.highIncomeInferred, 'the 110% bar should be inferred from the income entered');
+  assert(shH.federal.tag === '110%', `and named: ${shH.federal.tag}`);
+  assertNear(shH.federal.required, 22000, '110% of last year, not 100%', 1);
+  assert(!shH.provisional, 'at the higher bar there is nothing left to warn about');
+  assert(/110% bar was applied because the income entered/.test(high.text),
+    'and the inference must be explained, since it rests on THIS year as a proxy');
+
+  // An explicit flag still wins, and the requirement moves with it.
+  const stated = TaxPaymentPlanner.computePaymentPlan({ ...base, ira1Voluntary: 5000, highIncomeFiler: true });
+  assert(stated.plans.A.summary.safeHarbor.highIncomeStated, 'an explicit flag is honoured');
+  assertNear(stated.plans.A.summary.safeHarbor.federal.required, 22000, 'and raises the bar', 1);
+});
+
+test('With no prior-year tax the fallback states the direction of its error', () => {
+  const r = TaxPaymentPlanner.computePaymentPlan({
+    taxYear: 2026, state: 'CA', federalTax: 35000, stateTax: 22000,
+    priorYearFedTax: null, priorYearStateTax: null,
+    ira1Rmd: 15000, ira1Voluntary: 30000, ira2Rmd: 5000,
+    marginalOrdRate: 0.30, portfolioRate: 0.06, hysaGross: 0.03, todayDate: new Date(2026, 6, 10),
+  });
+  const sh = r.plans.A.summary.safeHarbor;
+  assert(sh.priorYearMissing, 'the gap is recorded');
+  assert(sh.federal.tag === '90%', 'and the fallback is 90% of this year');
+  assertNear(sh.federal.required, 31500, 'which is 90% of the current federal tax', 1);
+  // Substituting this year for last year cannot change the answer: the lesser-of rule always
+  // picks 90% of the current year, since 90% is below both 100% and 110% of the same figure.
+  // What it CAN do is overstate, when last year was genuinely lower.
+  assert(/can only be too HIGH/.test(r.text) && /can only be too HIGH/.test(r.html),
+    'both outputs must say which way the fallback errs');
+  assert(/Enter last year/.test(r.text), 'and ask for the figure that settles it');
+});
+
 // ── Runner ────────────────────────────────────────────────────────────────
 // Returns the counts instead of setting process.exitCode, so the browser can render them.
 // The node entry point below is what still sets the exit code.

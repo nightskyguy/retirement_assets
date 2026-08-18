@@ -11,6 +11,40 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15a0"></a>
+
+## 11.15a0
+
+**Tax Payment Planner: "safe harbor met" now says WHICH bar it cleared, and stops quietly assuming
+the cheaper one.**
+
+Meeting 100% of last year's tax when 110% was the real requirement is an expensive way to be wrong,
+and nothing on the page distinguished the two. The verdict row now names the bar it rests on, as
+`Safe harbor (90%)`, `(100%)` or `(110%)`, with the federal and state tests shown separately when
+they differ. On one scenario that reads `Safe harbor (110%/90%)`: the federal bar is 110% of last
+year while California's is 90% of this year.
+
+**The 110% bar is now inferred from income instead of assumed away.** It applies when last year's AGI
+was over $150,000. This planner is never given AGI, so it used to fall back to 100% unless you ticked
+the high-income box. It now adds up the income you entered and, if that clears $150,000, applies the
+110% bar and says why. On a $170,000 income with $20,000 of prior-year federal tax, the requirement
+moves from $20,000 to $22,000.
+
+Both directions of that inference are stated on the page. Inferring 110% from this year when last
+year was quieter overstates what you must pay. Resting on 100% when last year was above the threshold
+understates it, so a verdict at 100% now carries a `*` and a line saying the planner cannot check the
+threshold and that the real requirement may be 10% higher.
+
+**When last year's tax is missing**, the requirement falls back to 90% of this year, and the page now
+says which way that errs: it can only be too HIGH, because a lower prior-year tax would have set a
+lower bar under the lesser-of rule. Substituting this year's figures for last year's cannot change
+the answer, since 90% is below both 100% and 110% of the same number, so the honest move is to ask
+for the real figure rather than invent one.
+
+Suite: 60 tests, up from 58.
+
+---
+
 <a id="11.159f"></a>
 
 ## 11.159f

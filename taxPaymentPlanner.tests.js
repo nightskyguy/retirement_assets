@@ -395,17 +395,31 @@ test('Coverage invariant: totalCovered + shortfall === totalTaxDue for both plan
   assertNear(aWithheld + aShortfall, totalTax,
     `Plan A: withholding(${aWithheld}) + shortfall(${aShortfall}) should equal tax(${totalTax})`, 2);
 
-  assert(plan.planB !== null, 'Expected Plan B to exist (conversion present)');
-  const bWithheld  = plan.planB.summary.iraWithholdingUsed;
-  const bShortfall = plan.planB.summary.shortfall;
-  assertNear(bWithheld + bShortfall, totalTax,
-    `Plan B: withholding(${bWithheld}) + shortfall(${bShortfall}) should equal tax(${totalTax})`, 2);
+  // Every plan the matrix produced, not just two: D and Q are held to the same invariant.
+  Object.entries(plan.plans).filter(([, v]) => v).forEach(([k, obj]) => {
+    const w  = obj.summary.iraWithholdingUsed;
+    const sf = obj.summary.shortfall;
+    if (obj.strategy === 'all_quarterly') {
+      // Plan Q has no withholding SHORTFALL to report: paying by estimates is the plan, not a
+      // gap in it, so summary.shortfall is 0 by construction. The decomposition that applies to
+      // it is the payment reconciliation immediately below, which every plan has to satisfy.
+      assert(w === 0, `Plan ${k} pays by estimates, so it must withhold nothing; got ${w}`);
+    } else {
+      assertNear(w + sf, totalTax,
+        `Plan ${k}: withholding(${w}) + shortfall(${sf}) should equal tax(${totalTax})`, 2);
+    }
+    // No exceptions: withholding plus scheduled estimates is the whole liability.
+    const paid = obj.actions.reduce((sum, a) => sum + a.federalWithholding + a.stateWithholding, 0);
+    assertNear(paid, totalTax, `Plan ${k} pays ${paid} of ${totalTax}`, 2);
+  });
 
-  // Plan B specifically should have a shortfall here because December conversion
-  // skips 60-day withholding (0 months of Roth growth → not worth the cost),
-  // leaving draws ($44,500) short of total tax ($47,000).
-  assert(bShortfall > 0,
-    `Plan B should show a shortfall when draws < total tax and conv withholding is skipped; got ${bShortfall}`);
+  const cShortfall = plan.plans.C.summary.shortfall;
+
+  // Plan C (everything in December) specifically should have a shortfall here because a December
+  // conversion skips 60-day withholding (0 months of Roth growth → not worth the cost), leaving
+  // draws ($44,500) short of total tax ($47,000).
+  assert(cShortfall > 0,
+    `Plan C should show a shortfall when draws < total tax and conv withholding is skipped; got ${cShortfall}`);
 
   // Plan A should have no shortfall — conversion withholding plugs the gap.
   assert(aShortfall === 0,
@@ -416,9 +430,10 @@ test('Coverage invariant: totalCovered + shortfall === totalTaxDue for both plan
 // Regression guard: the Early-vs-December comparison used to be gated behind
 // `hasAnyConversion`, so a draw-only plan only ever showed the single early plan and never
 // computed the December-deferred alternative. A not-yet-taken draw is deferrable, so the
-// comparison must now appear — as a two-plan (Plan B early vs Plan C December) comparison —
-// and December must win at rates where year-end IRA beats holding cash.
-test('Draw-only — December comparison appears and wins, no phantom Plan A', () => {
+// comparison must now appear. Under the P56 lettering the plans are A (early), C (December),
+// D (early spending draws with a December tax holdback) and Q (quarterly estimates); B is the one
+// that cannot exist without a conversion. C must win at rates where year-end IRA beats cash.
+test('Draw-only — the December plan appears and wins, and B is omitted with a reason', () => {
   const plan = TaxPaymentPlanner.computePaymentPlan({
     ...BASE,
     ira1Rmd: 30000,          // covers the $20,000 federal tax with room to spare
@@ -426,29 +441,37 @@ test('Draw-only — December comparison appears and wins, no phantom Plan A', ()
     todayDate: new Date(2026, 4, 21), // May → nextMonth = June (Plan B); Plan C = December
   });
 
-  // The December baseline is computed; the hybrid is NOT (no conversion to pull early).
-  assert(plan.planB !== null, 'Draw-only plan must compute the December baseline (Plan C)');
-  assert(plan.planC === null, 'Draw-only plan must NOT compute the hybrid (Plan A)');
+  // A (early) is the parent, C (December) is computed, and the hybrid B is NOT: there is no
+  // conversion to pull early, so it would duplicate C.
+  assert(plan.plans !== null, 'Draw-only plan must build the plan matrix');
+  assert(plan.plans.C !== null, 'Draw-only plan must compute the December plan (C)');
+  assert(plan.plans.B === null, 'Draw-only plan must NOT compute the hybrid (B)');
+  assert(plan.plans.Q !== null, 'Draw-only plan must offer the quarterly plan (Q)');
 
-  const cc = plan.convComparison;
-  assert(cc !== null, 'Draw-only plan must build a timing comparison');
+  const cc = plan.comparison;
+  assert(cc !== null, 'Draw-only plan must build a comparison');
   assert(cc.hasConversion === false, 'Comparison should be flagged draw-only');
-  assert(cc.planA_netVsC === null, 'No Plan A net advantage in a draw-only comparison');
-  assert(cc.planB_netVsC < 0,
-    `Early draws should trail the December baseline; got netVsC ${cc.planB_netVsC}`);
-  assert(cc.bestPlan === 'C', `December (Plan C) should win; got ${cc.bestPlan}`);
+  assert(!cc.letters.includes('B'), `B must not be a column; got ${cc.letters.join('')}`);
+  assert(cc.best === 'C', `December (Plan C) should win; got ${cc.best}`);
+  assert(cc.perPlan.A.total > cc.perPlan.C.total,
+    `Early draws should cost more than December; A ${cc.perPlan.A.total} vs C ${cc.perPlan.C.total}`);
+  assert(cc.perPlan.A.rothGrowth === 0 && cc.perPlan.C.rothGrowth === 0,
+    'No conversion means no Roth growth credit anywhere');
 
-  // The December baseline actually schedules the draw in December, the early plan in June.
-  const cDraw = plan.planB.actions.find(a => a.type === T.RMD);
-  const bDraw = plan.actions.find(a => a.type === T.RMD);
+  // The plans actually schedule the draw where they claim to.
+  const cDraw = plan.plans.C.actions.find(a => a.type === T.RMD);
+  const aDraw = plan.actions.find(a => a.type === T.RMD);
   assert(cDraw && cDraw.date.month === 12, `Plan C draw should be December, got ${cDraw && cDraw.date.month}`);
-  assert(bDraw && bDraw.date.month === 6, `Plan B draw should be June, got ${bDraw && bDraw.date.month}`);
+  assert(aDraw && aDraw.date.month === 6, `Plan A draw should be June, got ${aDraw && aDraw.date.month}`);
 
-  // Outputs read as a draw comparison, with no Roth/Plan A framing leaking in.
-  assert(/Draw Timing — Early vs\. December/.test(plan.html), 'HTML header should say Draw Timing');
-  assert(!/Plan A/.test(plan.html), 'Draw-only HTML must not mention Plan A');
-  assert(/DRAW TIMING — EARLY vs DECEMBER/.test(plan.text), 'Text header should say DRAW TIMING');
-  assert(!/PLAN A/.test(plan.text), 'Draw-only text must not mention PLAN A');
+  // "Plan A" is a legitimate column under the new lettering, so its ABSENCE is no longer the
+  // thing to assert. What must not happen is a column vanishing with no explanation, which is
+  // the complaint this phase exists to fix.
+  assert(/Plan B \(hybrid\) is not shown/.test(plan.text), 'Text must explain why B is absent');
+  assert(/Plan B \(hybrid\) is not shown/.test(plan.html), 'HTML must explain why B is absent');
+  assert(!/Plan B —/.test(plan.text), 'Draw-only text must not render a Plan B section');
+  assert(/Plan A — Early/.test(plan.text) && /Plan C — Late/.test(plan.text),
+    'Both surviving plans should be labelled by what they do');
 });
 
 // An already-taken draw is locked to its actual month and offers no timing choice, so it must
@@ -461,8 +484,8 @@ test('Draw-only — an already-taken draw does not trigger a comparison', () => 
     federalTax: 20000,
     todayDate: new Date(2026, 4, 21),
   });
-  assert(plan.planB === null, 'A locked (already-taken) draw must not build a December baseline');
-  assert(plan.convComparison === null, 'A locked draw must not build a timing comparison');
+  assert(plan.plans === null, 'A locked (already-taken) draw must not build the plan matrix');
+  assert(plan.comparison === null, 'A locked draw must not build a comparison');
 });
 
 // ── 12. Business-day helpers ──────────────────────────────────────────────
@@ -542,9 +565,17 @@ test('No action lands on a non-business day, tax years 2026 to 2035', () => {
         priorYearStateTax: 5000,
         todayDate: new Date(2026, 6, 29),
       });
-      plan.actions.filter(a => a.date).forEach(a => {
-        const d = new Date(a.date.year, a.date.month - 1, a.date.day);
-        if (!isBusinessDay(d)) offenders.push(`${y} ${a.type} ${d.toDateString()}`);
+      // Every plan in the matrix, not only the parent's. D synthesises a December tranche date
+      // and Q emits a full estimate schedule, and neither of those emission points existed when
+      // this sweep was written.
+      const lists = plan.plans
+        ? Object.entries(plan.plans).filter(([, v]) => v)
+        : [['A', plan]];
+      lists.forEach(([k, obj]) => {
+        obj.actions.filter(a => a.date).forEach(a => {
+          const d = new Date(a.date.year, a.date.month - 1, a.date.day);
+          if (!isBusinessDay(d)) offenders.push(`${y} Plan ${k} ${a.type} ${d.toDateString()}`);
+        });
       });
     });
   }
@@ -731,8 +762,11 @@ test('Every plan pays 100% of the tax due, to within $1', () => {
       ...inputs,
     });
     const due = plan.summary.totalTaxDue;
-    // planC is displayed as Plan A, the main object as Plan B, planB as Plan C.
-    const variants = [['A', plan.planC], ['B', plan], ['C', plan.planB]].filter(v => v[1]);
+    // Every plan the matrix produced. Iterating the map extends this invariant to D and Q for
+    // free, which is the point: a plan that does not pay the whole liability is not a plan.
+    const variants = plan.plans
+      ? Object.entries(plan.plans).filter(([, v]) => v)
+      : [['A', plan]];
     variants.forEach(([name, obj]) => {
       const paid = paidBy(obj.actions);
       if (Math.abs(paid - due) > 1) {
@@ -760,7 +794,7 @@ const REPORTED = {
 
 test('A no-withholding conversion never claims the draws cover taxes they do not', () => {
   const plan = TaxPaymentPlanner.computePaymentPlan(REPORTED);
-  const variants = [['A', plan.planC], ['B', plan], ['C', plan.planB]].filter(v => v[1]);
+  const variants = Object.entries(plan.plans).filter(([, v]) => v);
   const offenders = [];
 
   variants.forEach(([name, obj]) => {
@@ -785,8 +819,8 @@ test('A no-withholding conversion never claims the draws cover taxes they do not
   assert(offenders.length === 0, offenders.join('\n       '));
 
   // Guard the specific case, so the test fails if Plan C stops exercising this path at all.
-  assert(plan.planB.summary.shortfall === 7000,
-    `Expected Plan C to route 7000 to estimates, got ${plan.planB.summary.shortfall}`);
+  assert(plan.plans.C.summary.shortfall === 7000,
+    `Expected Plan C to route 7000 to estimates, got ${plan.plans.C.summary.shortfall}`);
 });
 
 // ── 20. Penalty-free is a claim that has to be checked ────────────────────
@@ -802,7 +836,7 @@ test('Missed-payment alert only claims penalty-free when withholding actually co
     && /installment dates have passed|installment/i.test(a.description));
 
   // Plan C: federal short, state covered.
-  const c = alertOf(plan.planB);
+  const c = alertOf(plan.plans.C);
   assert(c, 'Expected a missed-installment alert on Plan C');
   const cAll = c.description + ' ' + c.notes.join(' ');
   assert(!/No action is required/.test(c.description),
@@ -812,7 +846,7 @@ test('Missed-payment alert only claims penalty-free when withholding actually co
   assert(/California/.test(cAll), 'Alert should credit California as covered rather than lumping them together');
 
   // Plans A and B withhold the full liability, so both schedules clear and the reassurance is true.
-  [['A', plan.planC], ['B', plan]].forEach(([name, obj]) => {
+  [['A', plan.plans.A], ['B', plan.plans.B]].forEach(([name, obj]) => {
     const a = alertOf(obj);
     assert(a, `Expected a missed-installment alert on Plan ${name}`);
     assert(/No action is required/.test(a.description),
@@ -822,8 +856,8 @@ test('Missed-payment alert only claims penalty-free when withholding actually co
   });
 
   // Per-installment wording must agree with the alert, which is where the contradiction showed.
-  const qFed   = plan.planB.actions.filter(a => a.type === T.Q_FED   && a.date && new Date(a.date.year, a.date.month - 1, a.date.day) < REPORTED.todayDate);
-  const qState = plan.planB.actions.filter(a => a.type === T.Q_STATE && a.date && new Date(a.date.year, a.date.month - 1, a.date.day) < REPORTED.todayDate);
+  const qFed   = plan.plans.C.actions.filter(a => a.type === T.Q_FED   && a.date && new Date(a.date.year, a.date.month - 1, a.date.day) < REPORTED.todayDate);
+  const qState = plan.plans.C.actions.filter(a => a.type === T.Q_STATE && a.date && new Date(a.date.year, a.date.month - 1, a.date.day) < REPORTED.todayDate);
   assert(qFed.length > 0 && qState.length > 0, 'Expected elapsed installments on both schedules');
   qFed.forEach(a => assert(/PAST DUE/.test(a.description),
     'Federal is genuinely late here, so the urgent wording is correct'));
@@ -888,8 +922,7 @@ test('brokerageValue/brokerageBasis derive appreciationPct, and clamp sanely', (
   // refund against the cost of selling, so it clamps to zero rather than inverting the sign.
   assertNear(run({ brokerageValue: 100000, brokerageBasis: 150000 }).params.appreciationPct,
     0, 'basis above value clamps to 0, not negative', 1e-9);
-  assert(run({ brokerageValue: 100000, brokerageBasis: 150000 })
-    .analysis.strategies.find(s => s.id === 'all_brokerage').cg === 0,
+  assert(run({ brokerageValue: 100000, brokerageBasis: 150000 }).comparison.brokerage.cg === 0,
     'a clamped loss position must not produce a negative capital-gains cost');
 
   // Blank/absent dollars keep the documented default, and zero value cannot give a ratio.
@@ -901,7 +934,7 @@ test('brokerageValue/brokerageBasis derive appreciationPct, and clamp sanely', (
 
   // The direction that matters: a higher gain share must cost more to sell, monotonically.
   const cgOf = ap => run({ brokerageValue: 100000, brokerageBasis: 100000 * (1 - ap) })
-    .analysis.strategies.find(s => s.id === 'all_brokerage').cg;
+    .comparison.brokerage.cg;
   const costs = [0, 0.25, 0.5, 0.75, 1].map(cgOf);
   for (let i = 1; i < costs.length; i++) {
     assert(costs[i] > costs[i - 1],
@@ -929,6 +962,461 @@ test('withholdingCoversSchedule is cumulative, not a total-versus-total test', (
     '1050 across three dates delivers 700 by date 2, which is the 70% required');
   assert(covers(0, 0, even) === true,       'No requirement, nothing to miss');
   assert(covers(0, 5000, []) === true,      'No schedule means nothing to be late for');
+});
+
+
+// ══ P56: the five-plan matrix ═════════════════════════════════════════════
+// The scenario the phase was written against: California, tax year 2028, no conversions, run in
+// August OF the tax year so "early" is September and the anchors below are stable.
+const P56 = {
+  taxYear: 2028, federalTax: 18286, stateTax: 6545,
+  priorYearFedTax: 18188, priorYearStateTax: 6566,
+  ssIncome: 25363, pensionIncome: 15000, interest: 2783,
+  qualifiedDivs: 527, capitalGains: 3788,
+  ira1Rmd: 0, ira1Voluntary: 91288, ira2Rmd: 15657, ira2Voluntary: 32237,
+  marginalOrdRate: 0.30, brokerageValue: 99398, brokerageBasis: 41696, cgRateBlended: 0.23,
+  state: 'CA', portfolioRate: 0.06, hysaGross: 0.03,
+  todayDate: new Date(2028, 7, 18),
+};
+const p56 = extra => TaxPaymentPlanner.computePaymentPlan({ ...P56, ...extra });
+const drawsOf = obj => obj.actions.filter(a => a.type === T.RMD || a.type === T.IRA_VOL);
+const withheldOn = a => (a.federalWithholding || 0) + (a.stateWithholding || 0);
+
+// ── P56-1. Plan D: the tranche arithmetic ────────────────────────────────
+// D takes the SPENDING part of each draw early and holds the TAX part back to December, withheld
+// up to 100% (Form W-4R). The trap it must never fall into is funding the holdback with an extra
+// distribution: the tax inputs are pre-calculated, so a supplemental draw would create income
+// they do not include and the plan would under-pay by construction.
+test('Plan D — the December tranche is a holdback, not an extra draw', () => {
+  const plan  = p56();
+  const d     = plan.plans.D;
+  assert(d, 'Plan D should exist: there are deferrable draws and tax to hold back');
+
+  const draws = drawsOf(d);
+  const inputTotal = P56.ira1Rmd + P56.ira1Voluntary + P56.ira2Rmd + P56.ira2Voluntary;
+  assertNear(draws.reduce((s, a) => s + a.amount, 0), inputTotal,
+    'D must draw exactly the amounts entered, no more', 1);
+
+  const tax   = draws.filter(a => a.tranche === 'tax');
+  const spend = draws.filter(a => a.tranche === 'spend');
+  assert(tax.length > 0, 'D must emit a December tax tranche');
+  assert(tax.every(a => a.date.month === 12), 'the tranche is a DECEMBER holdback');
+  assert(tax.every(a => withheldOn(a) <= a.amount + 0.5),
+    'withholding cannot exceed 100% of the tranche it comes out of');
+  assertNear(tax.reduce((s, a) => s + withheldOn(a), 0), P56.federalTax + P56.stateTax,
+    'the tranche withholds the whole liability here', 2);
+  assert(spend.every(a => withheldOn(a) === 0), 'spending parts carry no withholding');
+
+  // The user gets the same spending cash as Plan A: only its route to the IRS differs.
+  const netOf = obj => drawsOf(obj).reduce((s, a) => s + a.amount - withheldOn(a), 0);
+  assertNear(netOf(d), netOf(plan.plans.A), 'D leaves the same net cash as A', 2);
+
+  // Only a group that actually gave up a share may claim one was held back.
+  drawsOf(d).forEach(a => {
+    const claims = /tax share/.test(a.description + ' ' + a.notes.join(' '));
+    if (claims) assert(a.tranche === 'spend', 'only a split draw may talk about a held-back share');
+  });
+  assert(/Form W-4R/.test(plan.text), 'the 0% to 100% election has to be cited somewhere');
+});
+
+// ── P56-2. Plan D: ordering, and when it must not be offered ─────────────
+// An RMD has to clear before a conversion in the same IRA, so it cannot be deferred to December
+// to host the tranche. When nothing else is eligible, D is a duplicate of A and is dropped with
+// a stated reason rather than silently.
+test('Plan D — a locked RMD never hosts the tranche, and a degenerate D is explained', () => {
+  const converting = p56({ ira2RothConversion: 40000 });
+  const d = converting.plans.D;
+  assert(d, 'voluntary draws are still eligible here, so D survives');
+  const convMonth = d.actions.find(a => a.type === T.ROTH_CONV && a.iraNum === 2).date.month;
+  drawsOf(d).filter(a => a.iraNum === 2 && a.type === T.RMD).forEach(a => {
+    assert(a.date.month <= convMonth,
+      `IRA 2's RMD must precede its conversion; RMD ${a.date.month} vs conv ${convMonth}`);
+    assert(a.tranche !== 'tax', "a converting IRA's RMD must not be deferred into the tranche");
+  });
+
+  // Single IRA, RMD only, and it converts: nothing is eligible, so D collapses onto A.
+  const degenerate = p56({
+    ira1Rmd: 0, ira1Voluntary: 0, ira2Voluntary: 0, ira2Rmd: 40000, ira2RothConversion: 20000,
+  });
+  assert(degenerate.plans.D === null, 'a degenerate D must not be offered');
+  assert(/Plan D \(split\) is not shown/.test(degenerate.text),
+    'and the reason must be printed, not left to the reader');
+  assert(/no draw is available to host/.test(degenerate.comparison.dNote),
+    'the reason should name the actual cause');
+
+  // Draws already taken are locked to the month they happened. With nothing deferrable and no
+  // conversion there is no timing choice at all, so the matrix itself is not built.
+  const taken = p56({ ira1VolTaken: true, ira2RmdTaken: true, ira2VolTaken: true });
+  assert(taken.plans === null, 'nothing deferrable and no conversion means no matrix');
+  const takenWithConv = p56({
+    ira1VolTaken: true, ira2RmdTaken: true, ira2VolTaken: true, ira1RothConversion: 30000,
+  });
+  assert(takenWithConv.plans !== null, 'a conversion still gives the timing lever something to move');
+  assert(takenWithConv.plans.D === null, 'but no draw is free to host the tranche, so D is dropped');
+});
+
+// ── P56-3. Plan D in an IRA-exempt state ─────────────────────────────────
+// Illinois does not tax IRA distributions, so no state tax can be withheld from one. The
+// December tranche covers federal only and the state liability rides quarterly estimates.
+test('Plan D — in an IRA-exempt state the tranche is federal only', () => {
+  const plan = p56({ state: 'IL', stateTax: 4200, priorYearStateTax: 4000 });
+  const d = plan.plans.D;
+  assert(d, 'D should still be built');
+  const tax = drawsOf(d).filter(a => a.tranche === 'tax');
+  assert(tax.length > 0 && tax.every(a => (a.stateWithholding || 0) === 0),
+    'no state withholding is possible from an IRA distribution in IL');
+  assertNear(tax.reduce((s, a) => s + a.federalWithholding, 0), P56.federalTax,
+    'the tranche carries the federal liability', 2);
+  const stEst = d.actions.filter(a => a.type === T.Q_STATE).reduce((s, a) => s + a.amount, 0);
+  assertNear(stEst, 4200, 'the whole Illinois liability rides estimates', 2);
+});
+
+// ── P56-4. Plan Q: shape ─────────────────────────────────────────────────
+// Q is C's twin on everything except the payment mechanism. Its draws are real and the user has
+// to execute them; they simply carry no withholding. The draw-action block used to be gated on
+// "does this plan withhold", which dropped every one of them.
+test('Plan Q — December draws with no withholding, and a full estimate schedule', () => {
+  const plan = p56();
+  const q = plan.plans.Q;
+  assert(q, 'Q should exist whenever there is tax to pay');
+  assert(q.strategy === 'all_quarterly', `Q must be all_quarterly, got ${q.strategy}`);
+
+  const draws = drawsOf(q);
+  assert(draws.length > 0, 'Q must still emit its draw actions');
+  assertNear(draws.reduce((s, a) => s + a.amount, 0),
+    P56.ira1Voluntary + P56.ira2Rmd + P56.ira2Voluntary, 'Q draws the full amounts', 1);
+  assert(draws.every(a => a.date.month === 12), 'Q draws in December');
+  assert(draws.every(a => withheldOn(a) === 0), 'Q withholds nothing, anywhere');
+
+  const fed = q.actions.filter(a => a.type === T.Q_FED);
+  const st  = q.actions.filter(a => a.type === T.Q_STATE);
+  assert(fed.length === 4, `four federal installments, got ${fed.length}`);
+  assert(st.length === 3, `California pays in three, got ${st.length}`);
+  assertNear(fed.reduce((s, a) => s + a.amount, 0), P56.federalTax, 'federal estimates total', 2);
+  assertNear(st.reduce((s, a) => s + a.amount, 0), P56.stateTax, 'California estimates total', 2);
+
+  // A user-level forceStrategy must not be able to turn the quarterly plan into a withholding one.
+  const forced = p56({ forceStrategy: 'ye_ira' });
+  assert(forced.plans.Q.strategy === 'all_quarterly',
+    'forceStrategy propagates to children and must not capture Q');
+});
+
+// ── P56-5. The one cost table ────────────────────────────────────────────
+// Anchors from the phase spec, all four computed by hand on the April 15 frame:
+//   A 24,831 x 6% x 7/12 = 869 withholding, plus 15,657 x 6% x 30% x 3/12 = 70 RMD deferral.
+//   C the same withholding in December: 24,831 x 6% x 4/12 = 497.
+//   D C's December tranche (497) plus A's early RMD deferral (70).
+//   Q 18,286 x 3.9% x 8/12 = 475 federal carry, 6,545 x 3.9% x 8.5/12 = 181 California.
+test('Plan comparison — the anchors, and every plan reconciles to the liability', () => {
+  const plan = p56();
+  const cc = plan.comparison;
+  const tax = P56.federalTax + P56.stateTax;
+
+  assertNear(cc.perPlan.A.total, 940, 'Plan A first-year cost', 5);
+  assertNear(cc.perPlan.C.total, 497, 'Plan C first-year cost', 5);
+  assertNear(cc.perPlan.D.total, 567, 'Plan D first-year cost', 5);
+  assertNear(cc.perPlan.Q.total, 656, 'Plan Q first-year cost', 5);
+  assert(cc.best === 'C', `C is the cheapest here; got ${cc.best}`);
+  assert(!cc.allTie, 'these plans are genuinely different in August');
+
+  // The identity the old pair of tables could violate: what a plan withholds plus what it
+  // schedules as estimates is the liability, and the cost table is built from those same actions.
+  cc.letters.forEach(k => {
+    const c = cc.perPlan[k];
+    assertNear(c.paid, tax, `Plan ${k} pays ${c.paid} of ${tax}`, 2);
+  });
+
+  // The verdict the user reported as contradictory: December withholding beats quarterly cash
+  // whenever the HYSA net rate is below half the portfolio rate, and the table must agree.
+  assert(cc.yeIraWins, 'hysaNet 2.1% is below the 3.0% break-even, so withholding should win');
+  assert(cc.perPlan.C.total < cc.perPlan.Q.total,
+    'and the priced table has to say the same thing, not the opposite');
+});
+
+// ── P56-6. A column never vanishes without a reason ──────────────────────
+test('Plan comparison — an omitted plan is explained in both outputs', () => {
+  const drawOnly = p56();
+  assert(drawOnly.comparison.bNote, 'B is absent here and needs a note');
+  assert(/identical to Plan C/.test(drawOnly.comparison.bNote), 'the note should say WHY');
+  assert(/Plan B \(hybrid\) is not shown/.test(drawOnly.text), 'text carries it');
+  assert(/Plan B \(hybrid\) is not shown/.test(drawOnly.html), 'html carries it');
+
+  // With a conversion, B exists and the note disappears.
+  const converting = p56({ ira1RothConversion: 40000 });
+  assert(converting.plans.B, 'a conversion gives B something to do');
+  assert(converting.comparison.bNote === null, 'and the absence note must go away');
+  assert(converting.comparison.letters.join('') === 'ABCDQ',
+    `all five columns; got ${converting.comparison.letters.join('')}`);
+
+  // A conversion large enough that its Roth growth outweighs the costs drives the totals
+  // NEGATIVE, and a negative total is a net gain. fmt$ takes the absolute value of everything it
+  // is given, which is right for an amount and silently wrong for a signed total: the winning
+  // plan printed as "$2,503 ★", which reads as the most expensive one winning.
+  const cc = converting.comparison;
+  assert(cc.anyNegative, 'a $40,000 January conversion should outweigh the timing costs');
+  assert(cc.perPlan[cc.best].total < 0, 'and the best plan is the most negative');
+  const totalLine = converting.text.split('\n').find(l => /TOTAL first-year cost/.test(l));
+  assert(/-\$/.test(totalLine), `a negative total must print its sign: ${totalLine}`);
+  assert(/−\$/.test(converting.html), 'and so must the HTML table');
+  assert(/negative total is a net gain/i.test(converting.text) &&
+         /negative total is a net gain/i.test(converting.html),
+    'both outputs must say what a negative total means');
+});
+
+// ── P56-7. Brokerage is a funding footnote, not a plan ───────────────────
+// It used to be a full row in the cost table, which invited reading it as a fourth plan with
+// steps. It funds Plan Q's estimates by selling shares, so it is priced once, below the table.
+test('Plan comparison — brokerage funding is one footnote, with no plan section', () => {
+  const plan = p56();
+  const b = plan.comparison.brokerage;
+  assert(b && b.total > 0, 'the footnote should be priced');
+  assertNear(b.cg, (24831 / (1 - 0.580514698 * 0.23)) * 0.580514698 * 0.23,
+    'capital gains on the grossed-up sale', 2);
+  assert(b.oc > plan.comparison.perPlan.Q.estimateOC,
+    'selling shares gives up the full portfolio rate, not the rate less HYSA');
+
+  assert(!plan.comparison.letters.includes('BROK'), 'it is not a plan letter');
+  const footnotes = plan.html.match(/Funding source footnote/g) || [];
+  assert(footnotes.length === 1, `exactly one footnote, got ${footnotes.length}`);
+  assert(!/plan-section-brok/.test(plan.html), 'and it gets no plan section of its own');
+});
+
+// ── P56-8. Late in the year every plan is the same plan ──────────────────
+// A November run makes "early" December, so A, C and D collapse onto the same dates. Calling one
+// of them a winner on a rounding difference would be noise dressed as advice.
+test('Plan comparison — a December run reports a tie instead of a phantom winner', () => {
+  const plan = p56({ todayDate: new Date(2028, 10, 20) });
+  const cc = plan.comparison;
+  assert(cc.allTie, 'the timing plans land on the same dates this late');
+  ['A', 'C', 'D'].filter(k => cc.letters.includes(k)).forEach(k => {
+    assert(cc.bestSet.includes(k), `Plan ${k} ties for cheapest, so it must be starred too`);
+  });
+  // Q is not part of that collapse: it differs by payment mechanism, not by timing.
+  assert(!cc.bestSet.includes('Q'), 'Q still costs more than withholding here');
+  assert(cc.perPlan.Q.total > cc.perPlan[cc.best].total + 1, 'and by a real amount');
+  assert(/timing plans are identical this late in the year/.test(plan.text),
+    'the text should say why every column reads the same');
+  assert(/Plans A, C tie/.test(plan.text),
+    'the winner line should name the tie rather than pick one');
+  // D is correctly GONE this late: "early" is already December, so a split plan would be Plan C
+  // under another name. It says so rather than offering a duplicate.
+  assert(!cc.letters.includes('D'), 'D cannot be distinct once early is December');
+  assert(/identical to Plan C/.test(cc.dNote), `D's absence must name the real reason: ${cc.dNote}`);
+});
+
+
+// ══ P57: one plan per statement, and no free lunches ══════════════════════
+// Every defect below was found by an adversarially-verified audit after P56 shipped, and every one
+// of them is the same shape: a sentence that was true when the tool computed ONE plan.
+
+// ── P57-1. The header stops describing Plan A ────────────────────────────
+// The top-level summary IS Plan A's (r.summary === r.plans.A.summary). The header printed its
+// Strategy, IRA coverage, per-IRA draw and conversion months and effective withholding month
+// directly above a Winner badge naming a different plan.
+test('Header carries no value that belongs to one plan', () => {
+  const plan = p56({ ira1RothConversion: 10000 });
+  assert(plan.summary === plan.plans.A.summary,
+    'the premise: the top-level summary is literally Plan A\'s');
+
+  const header = plan.text.split('PLAN COMPARISON')[0];
+  assert(!/^Strategy/m.test(header), 'the Strategy label is Plan A\'s and must not head the page');
+  assert(!/Effective withhold/.test(header), 'so is the effective withholding month');
+  assert(!/IRA 1    : draw/.test(header), 'and so are the per-IRA draw months');
+  // What stays is true of the page, plus the winner and its own one-line description.
+  assert(/State    : California/.test(header), 'state stays');
+  assert(/Total tax: \$24,831/.test(header), 'the liability stays');
+  assert(/Winner   : Plan/.test(header), 'the winner stays');
+
+  const htmlHead = plan.html.split('Plan comparison')[0];
+  assert(!/Strategy:/.test(htmlHead), 'same in HTML: no Strategy badge');
+  assert(!/IRA Coverage:/.test(htmlHead), 'no page-level IRA Coverage badge');
+  assert(!/Effective withhold:/.test(htmlHead), 'no page-level withholding month');
+  assert(!/year-end IRA for simplicity/.test(plan.html),
+    'and the banner that asserted Plan A\'s mechanism is gone');
+});
+
+// ── P57-2. A gain is not a cost ──────────────────────────────────────────
+// fmt$ is Math.abs by design. The winner line and the badge quoted the total through it, so a plan
+// whose Roth growth outweighs its costs printed "first-year cost $15,394" twelve lines above the
+// table's own "-$15,394 star".
+test('A negative winner total prints as a gain in the header, not a cost', () => {
+  const plan = p56({ ira1RothConversion: 200000, federalTax: 20000, stateTax: 9000,
+                     priorYearFedTax: 19000, priorYearStateTax: 8000, todayDate: new Date(2028, 0, 15) });
+  const cc = plan.comparison;
+  assert(cc.perPlan[cc.best].total < -0.5, 'this scenario should produce a net gain');
+  const line = plan.text.split('\n').find(l => /^Winner/.test(l));
+  assert(/net GAIN/.test(line) && /-\$/.test(line), `winner line must not call a gain a cost: ${line}`);
+  assert(/First-year net gain/.test(plan.html), 'the badge has to say the same thing');
+  assert(!/First-year cost: \$/.test(plan.html.split('Plan comparison')[0]),
+    'and must not also print it as a cost');
+});
+
+// ── P57-3. "No penalty applies" is a claim about the recommended plan ────
+// The reassurance was gated on Plan A's strategy label, so a plan that withholds heavily and still
+// misses an installment printed it anyway, above its own PAST DUE steps.
+test('The past-due reassurance is checked against the winning plan', () => {
+  const plan = TaxPaymentPlanner.computePaymentPlan(REPORTED);
+  const rec  = plan.plans[plan.comparison.best].summary;
+  const head = plan.text.split('PLAN COMPARISON')[0];
+  if (!(rec.fedTimelyByWithholding && rec.stateTimelyByWithholding)) {
+    assert(/does not fully cover/.test(head),
+      'the winner misses a schedule here, so the header must not reassure');
+    assert(!/no penalty applies/.test(head), 'and must not claim penalty-free');
+  } else {
+    assert(/no penalty applies/.test(head), 'when it does cover, say so');
+  }
+  // A plan that withholds NOTHING must not be praised or blamed for its withholding. The original
+  // code skipped the sentence for an all-quarterly plan; the rewrite of this gate initially blamed
+  // "withholding under Plan A" on a plan with none, which is the same class of false statement in
+  // the other direction.
+  const quarterlyOnly = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, state: 'CA', federalTax: 35000, stateTax: 22000,
+    priorYearFedTax: 33000, priorYearStateTax: 11500,
+    portfolioRate: 0.02, hysaGross: 0.05, todayDate: new Date(2027, 6, 10), taxYear: 2027,
+  });
+  const qHead = quarterlyOnly.text.split('PLAN COMPARISON')[0];
+  assert(quarterlyOnly.summary.iraWithholdingUsed === 0, 'the premise: this plan withholds nothing');
+  assert(/QUARTERLY INSTALLMENT\(S\) PAST DUE/.test(qHead), 'and it does have past-due installments');
+  assert(!/[Ww]ithholding under/.test(qHead), 'so it must not blame withholding it does not have');
+  assert(/an estimate counts on the day you/.test(qHead),
+    'and must say what actually decides lateness for it');
+
+  // The flags the claim rests on are now on every plan's summary, not closure locals.
+  Object.values(plan.plans).filter(Boolean).forEach(o => {
+    assert(typeof o.summary.fedTimelyByWithholding === 'boolean',
+      'every plan reports whether its own withholding clears the federal schedule');
+    assert(typeof o.summary.stateTimelyByWithholding === 'boolean', 'and the state one');
+  });
+});
+
+// ── P57-4. The coverage table is a checklist, so it is per plan ──────────
+// Rendered once from Plan A's summary it showed conversion withholding of $7,000 and no estimates,
+// while the recommended plan withheld nothing on the conversion and owed seven estimated payments.
+test('Each plan section carries its own Tax Coverage Summary', () => {
+  const plan = p56({ ira1RothConversion: 10000 });
+  const n = (plan.html.match(/Tax Coverage Summary/g) || []).length;
+  assert(n === plan.comparison.letters.length,
+    `one table per plan: expected ${plan.comparison.letters.length}, got ${n}`);
+  assert(plan.html.indexOf('Tax Coverage Summary') > plan.html.indexOf('plan-section-a'),
+    'and none of them page-level, above the plan sections');
+
+  // The composition really does differ, which is why one shared table was wrong.
+  const compo = k => {
+    const cs = plan.plans[k].summary.coverageSummary;
+    return Object.keys(cs).filter(n2 => cs[n2].fed + cs[n2].state > 0).sort().join(',');
+  };
+  assert(compo('A') !== compo('Q'), `A and Q must not share a composition: ${compo('A')} vs ${compo('Q')}`);
+});
+
+// ── P57-5. Every label reads its own plan's actions ──────────────────────
+// Plan B's said "draws and withholding in December" while an IRA that both converts and has an RMD
+// has that RMD pulled forward, so Plan B withheld in the early month.
+test('Plan labels name the months that plan actually uses', () => {
+  const plan = p56({ ira1Rmd: 20000, ira1RothConversion: 30000 });
+  const cc = plan.comparison;
+  const monthsIn = (k, types) => Array.from(new Set(plan.plans[k].actions
+    .filter(a => types.includes(a.type) && a.date).map(a => a.date.month))).sort((x, y) => x - y);
+  const drawMonths = k => monthsIn(k, [T.RMD, T.IRA_VOL]);
+  [['A', cc.labels.A], ['B', cc.labels.B], ['C', cc.labels.C]].forEach(([k, label]) => {
+    if (!plan.plans[k]) return;
+    drawMonths(k).forEach(m => {
+      const name = ['January','February','March','April','May','June','July','August','September',
+                    'October','November','December'][m - 1];
+      assert(label.includes(name), `Plan ${k} draws in ${name} but its label says: ${label}`);
+    });
+  });
+});
+
+// ── P57-6. Plan D must not be Plan C under another name ─────────────────
+// When the tax portion consumes every eligible dollar, D keeps no early leg: same dates, same
+// amounts, same cost as C, while its label promised early spending draws.
+test('Plan D is dropped when nothing is left to draw early', () => {
+  const plan = p56({ ira1Rmd: 0, ira1Voluntary: 20000, ira2Rmd: 0, ira2Voluntary: 0 });
+  assert(plan.plans.D === null, 'D would be identical to C here, so it must not be offered');
+  assert(/identical to Plan C/.test(plan.comparison.dNote),
+    `and the note must say why: ${plan.comparison.dNote}`);
+  const sections = plan.html.slice(plan.html.indexOf('plan-section-a'), plan.html.indexOf('Rules and sources'));
+  assert(!/tax-holdback tranche/.test(sections),
+    'no tranche STEP should survive for a plan that was not offered (the W-4R citation may still explain it)');
+
+  // The child still computes; it is the parent that declines to show it.
+  const child = p56({ ira1Rmd: 0, ira1Voluntary: 20000, ira2Rmd: 0, ira2Voluntary: 0, _variant: 'D' });
+  assert(child.summary.dNoEarlyLeg === true, 'the child reports the reason');
+  assert(child.summary.dDegenerate === true, 'and counts it as degenerate');
+});
+
+// ── P57-7. Say what the plan hands you, and when ─────────────────────────
+// The old footnote claimed voluntary draws were "not free to move" while every plan but A moved
+// them to December and priced the move at zero.
+test('Each plan states the cash it delivers, and the footnote gives the real reason', () => {
+  const plan = p56();
+  assert(!/not free to move/.test(plan.text) && !/not free to move/.test(plan.html),
+    'the inverted reasoning must be gone from both renderers');
+  assert(/does not know when you actually spend the money/.test(plan.text),
+    'and replaced by the reason the deferral is not priced');
+  assert(/comes from somewhere else|does not arrive until December/.test(plan.text),
+    'plus the consequence of a December draw');
+
+  // Per plan, in that plan's own dollars.
+  const q = plan.plans.Q.summary;
+  assert(q.netCashMonths.length === 1 && q.netCashMonths[0] === 12,
+    'Plan Q delivers only in December');
+  assertNear(q.netCashByMonth[12], 139182, 'and it delivers the whole draw, with nothing withheld', 1);
+  const a = plan.plans.A.summary;
+  assert(a.netCashMonths[0] < 12, 'Plan A delivers early');
+  assert(/Net IRA cash to you/.test(plan.text), 'the line is rendered in text');
+  assert(/Net IRA cash to you/.test(plan.html), 'and in HTML');
+});
+
+// ── P57-8. Money the tax figures never saw ──────────────────────────────
+// The brokerage footnote priced $4,957 of capital gains tax and never said it sits outside the
+// liability every plan is sized against. The tool is GIVEN the tax; it does not compute it.
+test('The brokerage footnote says its capital gains tax is outside the liability', () => {
+  const plan = p56();
+  const cg = plan.comparison.brokerage.cg;
+  assert(cg > 0, 'the scenario should price a gain');
+  [['text', plan.text], ['html', plan.html]].forEach(([which, out]) => {
+    assert(/not part of the/i.test(out), `${which}: must say the gain tax is not part of the liability`);
+    assert(/Tax figures are inputs/.test(out), `${which}: and must cite the concept note`);
+  });
+  // The concept note itself, rendered in both outputs.
+  assert(/Anything that raises your income after the plan is built/.test(plan.text),
+    'the note is in the text Rules and sources panel');
+  assert(/Anything that raises your income after the plan is built/.test(plan.html),
+    'and in the HTML one');
+  // The old sentence that called this a small second-order effect is gone.
+  assert(!/These are typically small second-order effects/.test(plan.html),
+    'the income-variation note must no longer lump the gains tax in with dividends');
+});
+
+// ── P57-9. The safe-harbor box describes the number above it ────────────
+// California printed "110% of prior-year (high-income filer)" over a figure computed at 100%, and
+// Maryland printed "110% (MD rule, always)" over one that was 90% of the current year.
+test('Safe-harbor wording matches the multiplier each figure used', () => {
+  const ca = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, state: 'CA', federalTax: 35000, stateTax: 22000,
+    priorYearFedTax: 33000, priorYearStateTax: 11500, highIncomeFiler: true,
+    ira1Rmd: 15000, ira1Voluntary: 30000,
+  });
+  const box = ca.html.match(/Safe Harbor[\s\S]{0,900}/)[0];
+  assertNear(ca.summary.safeHarborState, 11500, 'CA state figure is 100% of prior year', 1);
+  assert(ca.summary.safeHarborStateMult === 1.00, 'and the multiplier says so');
+  assert(/California: \$11,500 \(100% of prior-year\)/.test(box),
+    `the state line must not borrow the federal 110% sentence: ${box.replace(/<[^>]+>/g, ' ').slice(0, 240)}`);
+  assert(/Federal: \$36,300 \(110% of prior-year \(high-income filer\)\)/.test(box),
+    'while the federal line, which really is 110%, says 110%');
+  assert(/UNDERSTATES/.test(box) && /not given your AGI/.test(box),
+    'and the AGI threshold caveat states the direction of the error');
+
+  const md = TaxPaymentPlanner.computePaymentPlan({
+    ...BASE, state: 'MD', federalTax: 35000, stateTax: 22000,
+    priorYearFedTax: 33000, priorYearStateTax: null, ira1Rmd: 15000, ira1Voluntary: 30000,
+  });
+  const mdBox = md.html.match(/Safe Harbor[\s\S]{0,900}/)[0];
+  assertNear(md.summary.safeHarborState, 19800, 'with no prior state tax it is 90% of this year', 1);
+  assert(/Maryland: \$19,800 \(estimated at 90% of this year/.test(mdBox),
+    `Maryland must not claim 110% over a 90% number: ${mdBox.replace(/<[^>]+>/g, ' ').slice(0, 240)}`);
+  assert(!/high earners/.test(mdBox), 'and a state that applies 110% to everyone has no threshold to describe');
 });
 
 // ── Runner ────────────────────────────────────────────────────────────────

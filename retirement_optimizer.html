@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1585</title>
+    <title>Retirement Optimizer 11.1599</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -64,7 +64,7 @@
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
 	<script src="optimizer_ui.js?v=111585"></script>
-	<script src="optimizer_tests.js?v=111585"></script>
+	<script src="optimizer_tests.js?v=111599"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -757,6 +757,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li><b>11.1599</b> <strong>Tax Payment Planner: five plans instead of three, priced in one table that can no longer contradict itself, and every statement on the page now belongs to one named plan. The plan letters have changed.</strong> The planner used to carry two cost tables on two different clocks, and on the same screen one could say December withholding wins while the other said quarterly estimates were cheaper. Every plan is now priced from its own list of steps to one April 15 reference. Two new plans join it: taking your spending money early while holding the tax back to a December draw withheld at up to 100%, and paying the whole bill as quarterly estimates. The letters now run in time order, so the old Plan A (hybrid) is Plan B and the old Plan B (early) is Plan A. The header, the coverage checklist and the past-due banner used to describe the early plan even when a different one was recommended, and they no longer do. Each plan also states what it hands you and when, because a December draw is not free: it either funds next year or assumes you can cover this year from something else. And because this planner is given your tax rather than computing it, the page now says plainly that selling shares or taking an extra withdrawal adds tax these plans are not sized for. Nothing in the Retirement Optimizer itself changed. <a href="optimizer_changelog.md#11.1599" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1585</b> <strong>The Stress Test now updates when you load a saved scenario, and reads correctly when you ask for all start years. No change to your plan or its numbers.</strong> Loading a scenario refreshed everything in the summary bar except the Stress Test, which kept the previous plan's result until you edited a field or opened the Monte Carlo tab, so the most likely reading was that the scenario had not loaded. Separately, the Stress window offers Combined, which runs the worst start years of each ranking length, and All start years, which runs the whole record, good years and bad alike. The result sentence described both as the worst on record. In All start years it now says what it actually ran, and the tooltip explains the selection in use. <a href="optimizer_changelog.md#11.1585" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1553</b> <strong>A new teaching demo shows how the number of Monte Carlo paths changes what you see. No change to your plan or its numbers.</strong> Adding <code>?montecarlo</code> to the page address opens the Monte Carlo tab in Synthetic mode and runs a small experiment: the same plan simulated with three random seeds at each of four path counts (5, 10, 25 and 100). The resulting table makes it plain that a handful of paths gives a jumpy, unreliable equity range that steadies as the count climbs. The Input Distributions panel below now shows its worst and best sampled lines by default in this mode. Separately, the Paths box, which is normally held at a minimum of 100 so the survival rate stays meaningful, can now go as low as 3 when advanced controls or the demo are on, so you can watch small samples misbehave for yourself. <a href="optimizer_changelog.md#11.1553" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.152f</b> <strong>You now choose between running just your plan or comparing every strategy, and each button says how long it will take. One behavior change: Historical results shift slightly.</strong> "My Plan Only" is the new default and answers how your own plan did in a second or two. "Compare All Scenarios" ranks every withdrawal strategy against each other and takes closer to a minute. Both state their expected time, measured on your own machine, so the cost is visible before you click rather than after. A new Stress window selector chooses which historical starting years the Stress Test uses: Combined picks the worst openings measured over several different lengths, All runs every start year in the record. Red and amber now mean the money ran out in the first or second half of your plan. The Stress Test chart has dropped its legend, since the table below it names every line and can be sorted, and the hover-over readout now appears once you click a row to isolate a single line. <a href="optimizer_changelog.md#11.152f" target="_blank" rel="noopener">Details</a></li>
@@ -1274,7 +1275,7 @@ runTests?.();
 runSimulation?.();
 
 // ── Tier 2: the node-only suites, after first paint ──────────────────────────
-// 325 tests in optimizer_core.tests.js, taxPaymentPlanner.tests.js and doclinks.tests.js never ran
+// 342 tests in optimizer_core.tests.js, taxPaymentPlanner.tests.js and doclinks.tests.js never ran
 // in a browser, so breaking one was invisible at release time. They run here instead, and NOTHING
 // about this is on the critical path: the scripts are not <script> tags, they are injected from
 // requestIdleCallback after the page has painted and the first simulation has rendered.
@@ -1287,7 +1288,7 @@ runSimulation?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111585';
+    const V = '?v=111599';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

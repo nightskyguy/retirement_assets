@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-17:** `main` = `1c79c29` (v11.1581, PR #179), **merged into this branch** (`c4225fc`). Branch ships **v11.1585**: P32c arms (`fc45bbf`) plus the issue #177 stress-tile fix and the All-start-years wording (`82dee30`). Pushed, PR open, merges clean. New repo rule from main: test counts are pinned in `TestTiers.EXPECTED` **and** `.githooks/README.md`.
+**As of 2026-08-18:** `main` = `02eaf2b`, which is [PR #180](https://github.com/nightskyguy/retirement_assets/pull/180) **merged**: v11.1585 (P32c arms, the issue #177 stress-tile fix, the All-start-years wording) is now shipped on `main`. This worktree (`context-e73361`, branch `worktrees/planning-with-files-38a21e`) started at `main` and now carries **P56 + P57 complete and UNCOMMITTED**, folded into one release: planner v1.1599 / Optimizer v11.1599, suites **269 / 51 / 22** (`slowInCore` 3), `?runtests` green at 587. The taxPaymentPlanner count moved 34 -> 51, updated in BOTH pinned homes.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -10,17 +10,17 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P56 | Tax Payment Planner: 5-plan matrix + one cost table | `P56a` |
-| **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O0** | P32 | Brokerage draws: arms shipped v11.1582, spiral unmeasured | `P32d` |
+| **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P51 | Oracle a-c,e-g DONE 08-10; propwd refuted | `P51d` |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P56 is NEW (2026-08-17), plan APPROVED by user, no code written yet** - it fixes a real
-contradiction: the planner's two cost tables can disagree, and quarterly-vs-withholding was never
-compared head to head. **`P35f`/`P35g` DONE (v11.1499)**: §1014 fires at both deaths, so
+**P56 + P57 SHIPPED 2026-08-18 as v11.1599, UNCOMMITTED**: five plans priced on one clock, and
+every statement on the page now belongs to one named plan. Open call for the user, in the P56 section:
+the brokerage footnote prints an absolute cost, not the extra cost over Plan Q, and one release entry
+covers both phases because v11.1598 was never published. **`P35f`/`P35g` DONE (v11.1499)**: §1014 fires at both deaths, so
 **P35's O0 was earned by that fix and is now spent** - re-bucket if `P35i` is not next.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
@@ -45,7 +45,8 @@ first task. Every open item in the file now carries one.
 |---|---|---|---|---|
 | **O0** | P35 | Phased strategy; **basis step-up shipped v11.1499** | `P35i` (the Phased engine) | nothing hard |
 | **O0** | P32 | Brokerage draws — premise refuted, dividend defect fixed, Q2 arms shipped v11.1582 | `P32d` (measure Q2) | nothing |
-| **O0** | P56 | Tax Payment Planner — five-plan matrix (A/B/C/D/Q) + one unified cost table *(new 2026-08-17, plan approved)* | `P56a` | nothing |
+| ~~DONE~~ | ~~P57~~ | ~~Planner: Plan-A leakage plus unmodelled-consequence copy~~ — **COMPLETE, folded into v11.1599, uncommitted** | — | — |
+| ~~DONE~~ | ~~P56~~ | ~~Tax Payment Planner five-plan matrix + one unified cost table~~ — **COMPLETE, shipped as v11.1599 with P57, uncommitted** | — | — |
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
 | **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
@@ -2355,6 +2356,169 @@ schedule column is ever productized.
 
 ---
 
+---
+
+## P57: Tax Payment Planner - stop describing one plan while recommending another, and stop implying free money  *(NEW 2026-08-18, user-approved, all four groups, follows P56)*
+
+**Scope:** `taxPaymentPlanner.js` + `RetirementTaxPlanner.html`. No Optimizer engine change.
+
+Two adversarially-verified audits (29 agents / 12 confirmed, and 19 agents / 10 confirmed) off two
+user reports. The unifying defect: P56 gave the page five plans but left several surfaces still
+describing the PARENT computation, which is Plan A, and left several statements that imply a cost of
+zero where the real cost is simply unmodelled.
+
+### Group 1 - copy that misstates a consequence (the two user reports)
+
+- [x] **P57a** - The comparison footnote said voluntary draws "are not free to move". The engine moves
+  every one of them to December in B, C, D and Q, and prices the move at zero. **Measured**: plan A
+  hands the household $63,000 net in February; plan C, starred as the winner, hands the same $63,000
+  in **December**. Replace the reasoning: the planner does not know when spending happens, so a
+  December draw either funds next year or assumes another source until it lands. Both renderers.
+- [x] **P57b** - Per-plan line naming that plan's own December net cash, so the consequence is a
+  number rather than a caution.
+- [x] **P57c** - Brokerage footnote prices $3,826 of capital gains tax and never says it is OUTSIDE
+  the liability the five plans are sized against. `paid` = the entered tax exactly, on all five plans;
+  the string "4956" appears once in the whole result object, in `comparison.brokerage`. The engine
+  already holds the principle internally at line ~940 ("must never add a supplemental draw, because
+  that would create taxable income the pre-calculated tax inputs do not include").
+- [x] **P57d** - New `CONCEPT_NOTES` entry, tag `Tax figures are inputs`, cited from P57c and from the
+  shortfall estimates. Safe-harbor nuance included: extra tax is a balance due in April, and carries
+  an underpayment charge only where the prior-year safe harbor is not the binding test.
+- [x] **P57e** - Rewrite the "Note on income variation": it calls selling-brokerage side effects
+  "typically small second-order effects", which contradicts a $4,957 line item on the same page.
+- [x] **P57f** - Relabel the "RMD deferral given up" row. **Measured confound**: A and D take the RMD
+  in the SAME month and the row reads $276 vs $350, because its basis is net of withholding while its
+  label names timing. No double count (withheld dollars sit in `withholdOC`), so this is a label fix.
+- [x] **P57g** - The December-draw step note claims "maximises IRA tax-deferred growth" with no
+  mention of what the household lives on, and contradicts the footnote 780 lines below it.
+- [x] **P57h** - Shortfall estimates say "from cash or HYSA" with no funding-source disclosure at all.
+
+### Group 2 - surfaces still describing Plan A
+
+- [x] **P57i** - Strip the plan-specific values from both headers (Strategy, IRA Coverage, per-IRA
+  draw/conversion months, Effective withhold, the `yeIraWins` banner). Keep tax year, state and its
+  exemption flags, the three tax figures, and Winner + first-year cost. **Chosen over re-pointing at
+  the winner**, because re-pointing relocates wrong values: `planARmdMonth` reads the same in all five
+  plans in the divergent case, `plans.D.summary.ira1.rmdMonth` says September on a December-only plan,
+  `bestSet` can hold two plans with different strategies, and `comparison` is null when only one plan
+  exists - which is exactly where the banner's second defect lives.
+- [x] **P57j** - The winner line and the First-year cost badge drop the sign: **measured** "first-year
+  cost $15,394" twelve lines above the table's own "-$15,394 star". `fmt$` is `Math.abs` by design, so
+  the two quoting sites need the sign the TOTAL row already applies.
+- [x] **P57k** - "YE-IRA withholding is retroactive, NO penalty applies" is gated on Plan A's strategy
+  and prints above the winner's own PAST DUE actions. Fired in 4,200 of 11,880 swept scenarios, and in
+  51% of those the winner really did carry past-due installments. Gate on the winner and on
+  `fedTimelyByWithholding` / `stateTimelyByWithholding`, which are closure locals and must be surfaced.
+- [x] **P57l** - The Tax Coverage Summary is Plan A's (`r.summary === r.plans.A.summary` is literally
+  true) and is read as a pay checklist. **Measured**: it shows conversion $7,000 / quarterly $0 while
+  the winner shows conversion $0 / quarterly $7,000 across **seven** estimate payments a reader would
+  skip. Render it per plan.
+- [x] **P57m** - Labels B and D are built from Plan A's months, and B hard-codes "December" for draws
+  and withholding while measured doing $19,000 of withholding on January 4. Read each label off that
+  plan's own actions.
+- [x] **P57n** - **Plan D can keep no early draw at all** and still be offered as "Split". Measured:
+  draws $20,000 against $57,000 of tax, D's whole list is one December tranche, label says "spending
+  draws in January", the tranche note says "held back from the early distribution", cost identical to
+  C at $1,563, same nine actions. P56c guarded the empty end (`dDegenerate`) and never guarded the
+  full end.
+
+### Group 3 - the second model nobody labelled
+
+- [x] **P57o** - `RetirementTaxPlanner.html:773-813` is an independent model of the same decision that
+  never calls `computePaymentPlan`, is bound only to input events so it is never re-run after Compute,
+  and sits on screen contradicting the results. Its verdict disagreed with the priced table in
+  **1,231 of 7,128** swept scenarios; its coverage percentage counts draws only and ignores conversion
+  withholding capacity; its OC factor reads `new Date()` and never consults `p.taxYear`, so it showed
+  58.3% where no plan's factor was (A 125%, the rest 33.3%). Related: `yeIraWins` no longer affects
+  plan selection at all - all three branches at ~1096 resolve identically - so a dead heuristic drives
+  only display.
+
+### Group 4 - pre-existing safe-harbor wording  *(P46 backlog, folded in by user request)*
+
+- [x] **P57p** - CA prints "110% of prior-year (high-income filer)" above a 100% number; MD prints
+  "110% (MD rule, always)" above a 90% number, because the corrective clause is appended only when
+  `priorYearStateTax` is truthy while the federal line has an explicit else; and the threshold note
+  says "AGI" while the code compares a state **tax** amount.
+
+### Release chores
+
+- [x] **P57q** - Tests for every behavioral change, then reconcile `TestTiers.EXPECTED` **and** the
+  `.githooks/README.md` table, version bump both pages, changelog with no em-dash.
+
+**Status:** **COMPLETE 2026-08-18**, a through q, folded with P56 into ONE release, planner
+**v1.1599** / Optimizer **v11.1599**, UNCOMMITTED. Suites **269 / 51 / 22**; `?runtests` full
+synchronous run green at **587 (245 in-page + 342 node)**. Adversarial diff review running at the
+time of writing.
+
+**Verified in the browser** on the reported URL: the header no longer contains the word January at
+all, carries no Strategy or IRA Coverage badge, and reads "Winner: Plan C ... Plan C - Late: draws in
+December, conversions in December". Plan C's own coverage table now lists **Quarterly estimated taxes
+$4,298 / $2,702 / $7,000**, the seven payments the single page-level table used to omit. Every section
+carries its own cost line and cash-delivery sentence: A/B/C "none. Every dollar of the $50,000 drawn
+is withheld for tax, so this plan funds no spending", D "January $15,000", Q "December $50,000.
+Anything you spend before December comes from somewhere else." The input panel reads "From your
+inputs" and no longer prints a verdict, a coverage percentage or an opportunity-cost factor. Console
+clean apart from the Cloudflare RUM CORS error localhost always throws.
+
+**Changelog decision:** 11.1598 was written but never committed or published, so P56 and P57 are ONE
+entry at 11.1599 rather than a release plus a hotfix for defects no user ever saw. The entry separates
+what is new from what was fixed from earlier shipped releases.
+
+---
+
+## P58: the withholding a taken draw is ASSUMED to have carried  *(PROPOSED 2026-08-18, found while reviewing P57, NOT approved, no code written)*
+
+**Found by self-review during P57, verified, out of P57's approved scope.**
+
+The cross-IRA withholding optimizer sorts every draw group by month descending and assigns
+withholding to the latest first. That set includes groups flagged **already taken**, so a plan can
+assign withholding to a distribution the user received months ago. Measured (CA, tax year 2027, run
+2027-07-10, `ira1Rmd: 8000` with `ira1RmdTaken: true`, `ira1Voluntary: 20000`, tax 57,000): plans A
+and C both put **$8,000 of withholding on the June draw that was already taken**.
+
+**It is not simply a bug.** Section 11a-w emits an "already-taken withholding reminder" that presents
+those dollars as an ESTIMATE of what the user already elected, and asks them to confirm. So the design
+intends the assumption. Two problems remain:
+
+1. **The reminder is parent-only** (`if (!isChild)`), so it renders in Plan A's section alone, while
+   every plan leans on the same assumption. That is precisely the defect class P57 closed everywhere
+   else: a disclosure attached to one plan and relied on by five.
+2. **The direction of the error is not stated.** A retiree who took the RMD with the default 10%
+   election, or with none, has a plan whose coverage is overstated by the difference, and the page
+   reports `✓ Fully covered` anyway. That understates what they still owe.
+
+**Options, for the user to choose:** (a) render the reminder in every plan section that assumes
+withholding on a taken draw, stating the direction of the error; (b) stop assigning withholding to
+taken groups altogether and route that share to estimates, which is conservative and changes numbers;
+(c) collect the withholding actually elected on a taken draw as an input. (a) is the smallest honest
+fix, (c) is the correct one.
+
+### Second item, found the same way: `forceStrategy: 'quarterly'` makes a plan OVERPAY
+
+Self-review swept 22 scenarios through the engine asserting that every plan pays exactly the entered
+liability. One case fails: with `forceStrategy: 'quarterly'` and a conversion early enough for the
+gap-fill to fire, the gap-fill withholds on the conversion AND the forced strategy then schedules the
+**whole** liability as estimates on top of it. Measured: plans A and B pay **$64,000 against $57,000**
+of tax, a 12% overpayment.
+
+**Not from P56 or P57.** The identical scenario at `HEAD` pays the same $64,000, so this predates the
+five-plan work.
+
+**Not reachable from either page.** `grep -rn forceStrategy --include=*.html --include=*.js` returns
+nothing outside `taxPaymentPlanner.js` and its suite: no input, no URL parameter, three test call
+sites. A programmatic caller is the only way in.
+
+One defensive change WAS made in P57's release, because it guards an invariant P57 itself introduced:
+the parent now offers Plan D only when its December tranche exists as an **action**, not merely as a
+dollar figure. Without it, a caller-level `forceStrategy` suppressed the child's draw actions and the
+page offered a "Split" plan with nothing split. That guard cannot change reachable behavior.
+
+**Fix, when approved:** when a plan is forced to all-quarterly, size the estimates at the liability
+LESS whatever the plan already withholds, or refuse to apply gap-fill withholding at all under a
+forced-quarterly strategy. The second is cleaner and matches Plan Q, which already skips the gap-fill.
+
+**Status:** PROPOSED, two items. Priority unset, awaiting the user.
+
 ## Dependency Graph (remaining)
 
 ```
@@ -2711,18 +2875,22 @@ this section is the whole specification.
 
 ### Starting state — READ FIRST
 
-Work sits on worktree `.claude/worktrees/context-e73361` (branch
-`worktrees/retirement-tax-planner-payment-582cdf`), which has an **UNCOMMITTED v1.1580** change that
-must be preserved or re-derived:
+**Resynced 2026-08-18: the prerequisite work is MERGED.** This block used to say the v1.1580 fix was
+uncommitted on branch `worktrees/retirement-tax-planner-payment-582cdf` and had to be preserved. It no
+longer does: the fix shipped in [PR #178](https://github.com/nightskyguy/retirement_assets/pull/178)
+(`c3bd384`) and rides at `main` = `02eaf2b`. **P56a starts from a clean tree, nothing to re-derive.**
 
 - The early-vs-December comparison used to be gated behind `hasAnyConversion`, so a **draw-only**
   scenario silently computed exactly ONE plan and never showed the December alternative. It is now
   gated on `hasAnyConversion || hasDeferrableDraw`, where a draw is deferrable only if it is not
   already taken. Draw-only renders a two-plan (early vs December) comparison with the Roth-specific
   column, pill and growth row suppressed.
-- Test count went 32 -> **34** (node and browser both green), version 1.13c3 -> **1.1580**.
-- **`optimizer_tests.js:2220` is STALE**: `EXPECTED: { ..., taxPaymentPlanner: 32, ... }` while 34 are
-  on disk, so the browser tiered runner shows a red count-changed badge today. Fix it in the P56 commit.
+- Test count went 32 -> **34** (node and browser both green), version 1.13c3 -> **1.1580**. Both live
+  on `main`.
+- The stale `taxPaymentPlanner: 32` pin is **FIXED on `main`** (PR #179 corrected it to 34), which is
+  **P56j, done by someone else**. P56i must move that number again when it adds its 8 test groups, and
+  per the `CLAUDE.md` rule `main` brought in, the same count is pinned a second time in the
+  `.githooks/README.md` suite table.
 
 ### Why (the defect this phase closes)
 
@@ -2898,23 +3066,78 @@ afterward, because a collapsed `<details>` otherwise prints collapsed. `updateCo
 
 ### Tasks
 
-- [ ] **P56a** — Variant plumbing: `_variant` replaces `_baseline`/`_planC`; target-month selection;
-  stale letter labels in note strings fixed. No behavior change for A/B/C yet.
-- [ ] **P56b** — Q variant, including the 11d `usesIraWithholding` gate widening (without it Q renders
-  no draw actions at all) and Q-specific shortfall wording.
-- [ ] **P56c** — D variant: eligibility rule, largest-first sourcing, split draw groups, tranche-tagged
-  actions, Form W-4R RULE_CITE, degenerate-D omission note.
-- [ ] **P56d** — New return shape `plans` + `comparison`; children skip rendering; delete `planB` /
-  `planC` / `analysis` / `convComparison`.
-- [ ] **P56e** — `buildPlanCost` + `buildComparison` on the April-15 frame; delete `buildAnalysis` and
-  `buildConvComparison`; expose `rmdAmount`/`volAmount` on draw actions.
-- [ ] **P56f** — buildText restructure: unified table, B-absence note, five plan sections, COST
-  ANALYSIS section deleted.
-- [ ] **P56g** — buildHtml restructure: unified table, five pills/sections, `<details>` collapse,
-  brokerage footnote, old Cost Analysis table deleted.
-- [ ] **P56h** — HTML driver: `_planData` map, ics/print for five letters, print-button label,
-  beforeprint/afterprint `<details>` handling.
-- [ ] **P56i** — Tests. **Breaking (8):** #14 coverage invariant, #15 draw-only comparison (rewrite -
+- [x] **P56a** — Variant plumbing: `_variant` replaces `_baseline`/`_planC`; target-month selection;
+  stale letter labels in note strings fixed. No behavior change for A/B/C yet. **DONE 2026-08-18.**
+  `variant`/`isChild` derived once at the top; `convTargetMonth` keys off `C|Q`, `drawTargetMonth`
+  off `A|D`; siblings spawn as `_variant:'C'` (late) and `_variant:'B'` (hybrid); the parent's
+  locals renamed `planLate`/`planHybrid` while the return keys `planB`/`planC` stay until P56d.
+  Four note strings fixed: "Plan C fallback" -> "Plan B fallback", "(Plan A hybrid)" ->
+  "(Plan B hybrid)", and two "two-plan comparison" cross-references made count-neutral.
+  **Equivalence proven, not assumed**: a probe ran HEAD's planner against the new one over 7
+  scenarios (draw-only, one conversion, two conversions, IL IRA-exempt, already-taken, a December
+  run, zero tax) and `text`, `html` and the full action/summary/comparison structure are identical
+  once those four intended strings are normalized. Suite 34/34.
+- [x] **P56b** — Q variant, including the 11d `usesIraWithholding` gate widening (without it Q renders
+  no draw actions at all) and Q-specific shortfall wording. **DONE 2026-08-18.** `isQ` forces
+  `all_quarterly` **ahead of** `forceStrategy`, so a user-level `forceStrategy:'ye_ira'` propagating
+  into this child cannot turn the quarterly plan into a withholding plan; `drawWithholdCap` is 0, the
+  gap-fill and both `ira*RothWithhold === true` overrides are skipped. Wording: the shortfall headline,
+  the funding clause, the per-draw notes and the estimate labels all branch for Q, and the IRC 6654(g)
+  pro-rata note is **suppressed** there because Q has no withholding for it to describe. Verified by
+  probe over 5 scenarios (draw-only, two conversions, IL, `forceStrategy` propagation, an
+  `ira1RothWithhold:true` override): strategy all_quarterly, every draw in December at zero
+  withholding, draw dollars complete, 4 federal + 3 CA estimates summing to the liability.
+  **Probe gotcha worth keeping:** estimate actions carry `federalWithholding`/`stateWithholding`
+  equal to their own amount, so a naive sum over all actions double-counts and reads as if Q withheld.
+- [x] **P56c** — D variant: eligibility rule, largest-first sourcing, split draw groups, tranche-tagged
+  actions, Form W-4R RULE_CITE, degenerate-D omission note. **DONE 2026-08-18** (the omission NOTE
+  itself belongs to the parent and lands in P56d; the child now reports `summary.dDegenerate` /
+  `summary.dTaxPortion` for it to read). The four input groups became `baseGroups`; D splits them into
+  an early `tranche:'spend'` part and a December `tranche:'tax'` part withheld 100%, sourced
+  largest-first from the eligible set (not already taken, and not the RMD of a converting IRA).
+  Non-D variants keep the original single-entry path and withholding loop. `tranche` rides the
+  (num, month) merge into the emitted action and is **cleared to null when a spend part and a tax part
+  merge**, which is what happens on a November/December run where "early" already IS December.
+  Form W-4R added to `RULE_CITES` and cited from the tranche.
+  **Correctness catch:** the first draft tagged EVERY early part `'spend'`, so an IRA the
+  largest-first pass never touched printed "the tax share of this draw is held back to December"
+  when none of it was. Only a group that actually gave up a share is tagged now.
+  Probe over 7 scenarios (incl. IL, a converting IRA whose RMD is locked ahead of it, all-draws-taken
+  and zero-tax degenerates) proves all four invariants: draws equal the input exactly, tranche
+  withholding never exceeds its own amount, net cash out of the IRAs equals Plan A's, and
+  withholding + estimates reconcile to the liability.
+- [x] **P56d** — New return shape `plans` + `comparison`; children skip rendering; delete `planB` /
+  `planC` / `analysis` / `convComparison`. **DONE 2026-08-18.** `plans` is the A/B/C/D/Q map with
+  nulls for omitted letters; A is the parent itself. Spawn gates: B only with a conversion, D only
+  when `hasDeferrableDraw && totalTax > 0` and it did not degenerate, Q only when `totalTax > 0`.
+  Children return `text: ''` / `html: ''` instead of rendering output nobody reads.
+- [x] **P56e** — `buildPlanCost` + `buildComparison` on the April-15 frame; delete `buildAnalysis` and
+  `buildConvComparison`; expose `rmdAmount`/`volAmount` on draw actions. **DONE 2026-08-18.** Both old
+  functions deleted along with `summary.opportunityCost` / `savingsVsWorst`; `iraOcFactor` stays
+  exported for the HTML live preview. `buildPlanCost` walks each plan's own actions with
+  `carry(m) = (16 - m)/12` and January of the next year as month 13.
+  **Anchors hit exactly** (A 940 / C 497 star / D 567 / Q 656, run in August OF the tax year).
+  **One spec anchor does NOT reconcile and was not bent to fit:** the brokerage footnote computes
+  **$4,836**, not the ~3,169 in the phase text. Its two parts are $1,010 of forgone growth
+  (18,286 x 6% x 8/12 + 6,545 x 6% x 8.5/12) and $3,826 of capital gains tax
+  ((24,831 / (1 - 0.5805 x 0.23)) x 0.5805 x 0.23), which is exactly what the shipped `all_brokerage`
+  row computed before this change. 3,169 happens to equal 3,826 - 657, so the spec number looks like
+  a delta against Q's carry rather than an absolute. **Open question for the user:** absolute (now) or
+  extra-cost-vs-Q.
+- [x] **P56f** — buildText restructure: unified table, B-absence note, five plan sections, COST
+  ANALYSIS section deleted. **DONE 2026-08-18.** Header now prints the winner and its cost instead of
+  the OC factor and the savings-vs-brokerage line. Both absence notes (B and D) render.
+- [x] **P56g** — buildHtml restructure: unified table, five pills/sections, `<details>` collapse,
+  brokerage footnote, old Cost Analysis table deleted. **DONE 2026-08-18.** Each plan keeps the colour
+  its CONCEPT had before the remap (early green, hybrid blue, December purple) so only the letter
+  moved, with D teal and Q orange as specced. Buttons sit in the `<summary>` with
+  `preventDefault`/`stopPropagation`.
+- [x] **P56h** — HTML driver: `_planData` map, ics/print for five letters, print-button label,
+  beforeprint/afterprint `<details>` handling. **DONE 2026-08-18.** `_planData.actions` is the A..Q
+  map (the old three-way ternary silently fell through to Plan C for any letter it did not know);
+  print label counts non-null plans. Verified in the browser: `beforeprint` opens all five sections
+  and `afterprint` restores exactly the one that was open.
+- [x] **P56i** — Tests. **Breaking (8):** #14 coverage invariant, #15 draw-only comparison (rewrite -
   "Plan A" now legitimately exists under the new lettering, so its `!/Plan A/` assertion is wrong),
   #16 already-taken, #29 pays-100% (iterate `Object.entries(plans)`, which extends the invariant to D
   and Q for free), #30, #31, #33 brokerage. **New (8 groups):** D tranche math and invariants; D
@@ -2924,10 +3147,30 @@ afterward, because a collapsed `<details>` otherwise prints collapsed. `updateCo
   liability); unified-comparison sanity anchors + reconciliation identity; B-absence note in text and
   html; brokerage footnote present once and absent from the plan columns; extend the non-business-day
   sweep (#21) across `plans.*.actions` so D's synthesized December date and Q's estimate dates are covered.
+  **DONE 2026-08-18. Suite 34 -> 42.** All six breaking tests rewritten (only 6 of the 8 predicted
+  actually broke). Two real defects were found by the new tests rather than by review:
+  1. **The extended sweep immediately failed on ten dates.** A draw group with no RMD in it was
+     dated the 15th with no business-day nudge at all, and D's December tranche reused a day chosen
+     for a different month. `Sat Aug 15 2026`, `Sun Dec 17 2028` and eight more. The old sweep passed
+     only because no shape it ran produced a voluntary-only group; D's split produces them
+     constantly. Fixed in `11d` for every plan, forward to the next business day and backward when
+     forward would leave December (an RMD cannot cross year end).
+  2. **`fmt$` takes `Math.abs` of everything it is given**, which is right for an amount and wrong
+     for a signed total. A $40,000 January conversion drives every total NEGATIVE (the Roth growth
+     outweighs the timing costs), and the winning plan printed as `$2,503 ★` - the most expensive
+     number on the row appearing to win. Totals now carry their sign and both outputs explain that a
+     negative total is a net gain.
+  The coverage invariant also had to split: an all-quarterly plan has no withholding *shortfall* by
+  construction, so Q is held to `withheld === 0` plus the payment reconciliation every plan satisfies.
 - [x] **P56j** — Fix the stale `optimizer_tests.js:2220` `taxPaymentPlanner` EXPECTED count.
   **DONE by someone else**: shipped on `main` as v11.1581 in [PR #179](https://github.com/nightskyguy/retirement_assets/pull/179)
   (32 -> 34). P56i will still have to move it again when it adds its 8 test groups.
-- [ ] **P56k** — Version bump (title + all three `?v=` cache busters, `hex(dayOfYear*24 + hour)`) and an
+- [x] **P56k** — **DONE 2026-08-18, planner v1.1598 / Optimizer v11.1598** (dayOfYear 230 x 24 + 8 =
+  0x1598). The Optimizer release is not optional here: `optimizer_tests.js` holds the pinned suite
+  counts, so its cache buster had to move, which is a release of that page too - the same coupling
+  that forced 11.1581 into existence. Counts updated in **both** homes (`TestTiers.EXPECTED` 34 -> 42
+  and the `.githooks/README.md` table), plus the tier-2 loader prose count 325 -> 333.
+  Original task text: Version bump (title + all three `?v=` cache busters, `hex(dayOfYear*24 + hour)`) and an
   `optimizer_changelog.md` entry. Lead with the correctness win: because every plan is now priced from
   its own action list, the cost table can no longer contradict the timing verdict. Call out the
   **BEHAVIOR CHANGE** explicitly - plan letters are remapped, so old shared links and printouts
@@ -2965,4 +3208,18 @@ afterward, because a collapsed `<details>` otherwise prints collapsed. `updateCo
 4. `.ics` download for D and Q - December tranche and estimate dates present.
 5. Console clean in both scenarios.
 
-**Status:** OPEN, O0, **specification complete and user-approved, zero code written.** Start at P56a.
+**Status:** **COMPLETE 2026-08-18** (a through k), shipped as planner **v1.1598** / Optimizer
+**v11.1598**, UNCOMMITTED on worktree `context-e73361`. Suites 269 / 42 / 22, browser badge green at
+575 (245 in-page + 330 node, 3 slow skipped), console clean.
+
+**Verified in the browser** on the reported scenario, worktree-rooted server: four columns A/C/D/Q
+with the B-absence note, C starred, C $497 and Q $656 (A reads $2,121 rather than the spec's $940
+because that URL is a FUTURE tax year, so "early" is January, not September; the spec anchors assume
+a run in August of the tax year and are asserted at those months in the suite). Adding
+`&ira1RothConversion=40000` gives all five columns with B present and winning at -$2,503.
+`_planData` carries all five action lists for .ics; print opens and restores every section.
+
+**Two open items for the user:**
+1. The brokerage footnote is absolute ($4,836) and the spec's ~3,169 anchor does not reconcile with
+   its own formula (see P56e). Absolute, or extra-cost-vs-Q?
+2. Nothing is committed and no PR was requested.

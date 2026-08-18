@@ -16,7 +16,7 @@ Runs the three `node`-only suites and blocks the commit if any of them fails:
 | suite | tests | approx |
 |---|---|---|
 | `optimizer_core.tests.js` | 269 | 2.9 s |
-| `taxPaymentPlanner.tests.js` | 34 | 0.4 s |
+| `taxPaymentPlanner.tests.js` | 51 | 0.5 s |
 | `doclinks.tests.js` | 22 | 0.1 s |
 
 About 3.5 s total.

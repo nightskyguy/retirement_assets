@@ -8,7 +8,7 @@
        Example: Jul 29 08:00 -> day 210 -> (210*24)+8 = 5048 = 0x13b8 -> "1.13b8"
        Bump major manually for significant feature batches. Hardcode it here: the heading
        reads it back out of this tag at runtime rather than duplicating the number. -->
-  <title>Retirement Tax Payment Planner 1.1580</title>
+  <title>Retirement Tax Payment Planner 1.1599</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -512,8 +512,8 @@
 
 </div><!-- end .layout -->
 
-<script src="displayhelpers.js?v=1580"></script>
-<script src="taxPaymentPlanner.js?v=1580"></script>
+<script src="displayhelpers.js?v=1599"></script>
+<script src="taxPaymentPlanner.js?v=1599"></script>
 <script>
   // Version readout — parsed out of <title> so the number lives in exactly one place.
   (() => {
@@ -768,30 +768,24 @@
       }
     })();
 
+    // P57. This panel used to be a SECOND model of the decision the engine makes, written before
+    // there were five plans and never wired to `computePaymentPlan`. It printed a winner
+    // ("YE-IRA wins" / "Quarterly competitive") from a two-way rate heuristic, a coverage percentage
+    // that counted draws only and ignored conversion-withholding capacity, and an opportunity-cost
+    // factor built from the wall-clock month with the tax year never consulted. Swept across rates
+    // and states, its verdict disagreed with the priced comparison in 1,231 of 7,128 scenarios, and
+    // because it is bound only to input events it is never re-run after Compute, so it sat on screen
+    // contradicting the results.
+    //
+    // It now shows only what comes straight off the fields: the figures you typed and the two rates
+    // derived from them. Every verdict, every coverage number and every month belongs to a plan, and
+    // plans are priced below by the engine.
     const hysaNet = p.hysaGross * (1 - p.marginalOrdRate);
     const be      = p.portfolioRate / 2;
-    const wins    = hysaNet < be;
     const totalTax  = p.federalTax + p.stateTax;
     const ira1Draws = p.ira1Rmd + p.ira1Voluntary;
     const ira2Draws = p.ira2Rmd + p.ira2Voluntary;
     const allDraws  = ira1Draws + ira2Draws;
-    const iraWCap   = Math.min(allDraws, totalTax);
-    const covPct    = totalTax > 0 ? (iraWCap / totalTax * 100).toFixed(0) : 0;
-    const shortfall = Math.max(0, totalTax - iraWCap);
-
-    // Effective withhold month preview — mirrors engine: Plan A = next month, already-taken = prev month.
-    // RMD and voluntary have independent taken flags; effective month = latest draw across both IRAs.
-    const cm   = new Date().getMonth() + 1;
-    const nxt  = Math.min(cm + 1, 12);
-    const prv  = cm > 1 ? cm - 1 : 1;
-    const ira1RmdMo = p.ira1Rmd > 0       ? (p.ira1RmdTaken ? prv : nxt) : 0;
-    const ira1VolMo = p.ira1Voluntary > 0  ? (p.ira1VolTaken ? prv : nxt) : 0;
-    const ira2RmdMo = p.ira2Rmd > 0       ? (p.ira2RmdTaken ? prv : nxt) : 0;
-    const ira2VolMo = p.ira2Voluntary > 0  ? (p.ira2VolTaken ? prv : nxt) : 0;
-    const ira1Month = Math.max(ira1RmdMo, ira1VolMo);
-    const ira2Month = Math.max(ira2RmdMo, ira2VolMo);
-    const effectiveMonth = Math.max(ira1Month, ira2Month) || 12;
-    const rmdFactor = TaxPaymentPlanner.iraOcFactor(effectiveMonth);
 
     const stateInfo = TaxPaymentPlanner.getStateInfo(p.state);
     const stateNote = stateInfo.iraExempt
@@ -804,14 +798,15 @@
     const fPct  = (n, d) => (n * 100).toFixed(d || 2) + '%';
 
     document.getElementById('computed').innerHTML = `
+      <div style="font-weight:600;color:#1F4E79;margin-bottom:3px;">From your inputs</div>
       <div><span class="key">Total Tax:</span> ${fmt$(totalTax)}</div>
-      <div><span class="key">IRA 1 Draws:</span> ${fmt$(ira1Draws)}${ira2Draws > 0 ? ` &nbsp;|&nbsp; <span class="key">IRA 2:</span> ${fmt$(ira2Draws)}` : ''} → covers <strong>${covPct}%</strong> of taxes</div>
-      ${shortfall > 0 ? `<div><span class="key">Shortfall:</span> ${fmt$(shortfall)} → quarterly estimates</div>` : ''}
+      <div><span class="key">IRA 1 Draws:</span> ${fmt$(ira1Draws)}${ira2Draws > 0 ? ` &nbsp;|&nbsp; <span class="key">IRA 2:</span> ${fmt$(ira2Draws)}` : ''}${allDraws > 0 ? ` &nbsp;|&nbsp; <span class="key">Total:</span> ${fmt$(allDraws)}` : ''}</div>
       <div><span class="key">HYSA Net:</span> ${fPct(hysaNet)} (${fPct(p.hysaGross)} × (1−${(p.marginalOrdRate*100).toFixed(0)}%))</div>
-      <div><span class="key">Break-even:</span> r/2 = ${fPct(be)} &nbsp;|&nbsp; IRA OC factor: ${fPct(rmdFactor,1)}</div>
-      <div class="${wins ? 'win' : 'lose'}">
-        ${wins ? '✓ YE-IRA wins (HYSA net &lt; break-even)' : '≈ Quarterly competitive (HYSA net ≥ break-even)'}
-      </div>
+      <div><span class="key">Break-even:</span> r/2 = ${fPct(be)} &nbsp;|&nbsp; ${
+        hysaNet < be
+          ? 'cash nets less than the portfolio gives up, so withholding tends to win'
+          : 'cash nets about what the portfolio gives up, so the two are close'}</div>
+      <div style="margin-top:3px;color:#555;">Compute to price every plan against these figures. Which plan wins, how much of the tax each one withholds, and when the money moves are all answered below, per plan.</div>
       ${stateNote ? `<div style="margin-top:3px;">${stateNote}</div>` : ''}`;
   }
 
@@ -865,10 +860,9 @@
 
   function downloadPlanIcs(which) {
     if (!_planData) return;
-    // Plan A = hybrid (_planC computation), Plan B = early (main), Plan C = December (_baseline)
-    const actions = which === 'A' ? _planData.planAActions
-                  : which === 'B' ? _planData.planBActions
-                  : _planData.planCActions;
+    // A/B/C/D/Q, straight off the map the engine returned. The old three-way ternary hard-coded
+    // the letters and silently fell through to the last one for anything it did not recognise.
+    const actions = _planData.actions[which];
     if (!actions) return;
     const label = `plan-${which.toLowerCase()}`;
     const blob = new Blob([generateIcs(actions)], { type: 'text/calendar;charset=utf-8' });
@@ -880,7 +874,7 @@
   }
 
   function printPlan(which) {
-    const allIds = ['plan-section-a', 'plan-section-b', 'plan-section-c'];
+    const allIds = ['plan-section-a', 'plan-section-b', 'plan-section-c', 'plan-section-d', 'plan-section-q'];
     const targetId = `plan-section-${which.toLowerCase()}`;
     const others = allIds
       .filter(id => id !== targetId)
@@ -910,22 +904,39 @@
     // Text tab
     document.getElementById('plan-text').textContent = plan.text;
 
-    // Store plan data for per-plan ICS/print buttons embedded in generated HTML.
-    // New plan convention: A=hybrid (_planC), B=early (main), C=December (_baseline)
+    // Store plan data for per-plan ICS/print buttons embedded in generated HTML. The engine
+    // returns `plans` as an A/B/C/D/Q map with nulls for the ones it omitted; with no comparison
+    // at all there is a single plan and it is A.
+    const _plans = plan.plans || { A: { actions: plan.actions } };
     _planData = {
-      taxYear:      params.taxYear,
-      planAActions: plan.planC  ? plan.planC.actions  : null,   // hybrid
-      planBActions: plan.actions,                                 // early everything (main)
-      planCActions: plan.planB  ? plan.planB.actions  : null,   // December baseline
+      taxYear: params.taxYear,
+      actions: ['A', 'B', 'C', 'D', 'Q'].reduce((acc, k) => {
+        acc[k] = _plans[k] ? _plans[k].actions : null;
+        return acc;
+      }, {}),
     };
 
     // Update global print button label
-    const planCount = (plan.planC ? 1 : 0) + 1 + (plan.planB ? 1 : 0);
+    const planCount = Object.values(_planData.actions).filter(Boolean).length;
     document.getElementById('btn-print').textContent =
       planCount >= 3 ? '🖨️ Print ALL Plans' : planCount === 2 ? '🖨️ Print BOTH Plans' : '🖨️ Print / PDF';
   }
 
   document.getElementById('compute').addEventListener('click', runCompute);
+
+  // Plan sections are <details>, and a collapsed one prints collapsed — the reader would get a
+  // page of headers. Force every section open for the print job, then restore what was open.
+  let _printRestore = null;
+  window.addEventListener('beforeprint', () => {
+    const all = Array.from(document.querySelectorAll('#plan-html details'));
+    _printRestore = all.map(d => [d, d.open]);
+    all.forEach(d => { d.open = true; });
+  });
+  window.addEventListener('afterprint', () => {
+    if (!_printRestore) return;
+    _printRestore.forEach(([d, wasOpen]) => { d.open = wasOpen; });
+    _printRestore = null;
+  });
 
   // ── URL parameter support ─────────────────────────────────────────────────
   //
@@ -1080,7 +1091,7 @@
     badge.textContent = '⏳';
     badge.title = 'Loading taxPaymentPlanner.tests.js…';
     const s = document.createElement('script');
-    s.src = 'taxPaymentPlanner.tests.js?v=1580';
+    s.src = 'taxPaymentPlanner.tests.js?v=1599';
     s.onload = () => {
       const r = window.runTaxPlannerTests();
       badge.textContent = r.failed === 0 ? `🟢 ${r.passed}/${r.total}` : `❌ ${r.failed} failed`;

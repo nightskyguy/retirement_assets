@@ -11,6 +11,59 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15b7"></a>
+
+## 11.15b7
+
+### The higher state-and-local-tax cap no longer expires a year early
+
+**Behavior change.** The 2025 law raised the cap on deducting state and local taxes from $10,000 to
+$40,000, and set two different end dates: the senior deduction ends after 2028, the higher cap ends
+after 2029. Both were being read off the same switch, so the moment the senior deduction expired the
+cap fell back to $10,000 as well. Tax year 2029 was priced a full year early, at the old cap.
+
+Anyone who itemizes now pays less federal tax in 2029 than the tool previously reported. For a large
+household with substantial property tax the correction is worth a few hundred dollars in that one
+year. Nothing before 2029 or after it changes, because those years were already right.
+
+### The cap and its income limit are indexed 1% a year, which the tool was not doing
+
+**Behavior change.** The law states both the $40,000 cap and the $500,000 income level where it starts
+phasing out as 2025 figures, and steps each up 1% per year through 2029. So 2026 is $40,400 and
+$505,000, not $40,000 and $500,000. The tool held both frozen at the 2025 numbers, with a code comment
+claiming the indexing that nothing performed, so every year from 2026 on was priced with too small a
+cap and too low an income limit.
+
+This one is not always small. The income limit decides how much of the raised cap survives a large
+Roth conversion, so a plan that converts hard in a high-tax state can now land on a different answer:
+one test case moves from converting $250,000 a year for five years to $300,000 a year for four, and
+the new plan is worth about $1,800 more than the old one on the same portfolio.
+
+The 1% step for 2027 through 2029 is applied without rounding. Whether the published figures round to
+the nearest dollar or to the nearest fifty or hundred is not settled by the sources consulted; the
+difference is a few dollars of deduction.
+
+### Property and local taxes now reach the Optimizer's tax calculation
+
+The tax engine has always been able to add property and other local taxes to the state income tax
+before testing whether itemizing beats the standard deduction. The Optimizer never handed it that
+figure, so its state-and-local total was state income tax and nothing else, and any plan that would
+have itemized was charged too much federal tax in every year. The figure now flows through, along with
+a choice of how it grows over time: with inflation, flat in dollar terms, or at a rate you set, which
+is what a state with a statutory assessment cap needs.
+
+The amount is entered through the web address rather than a box on the page: add `?ptx=25000` for
+the annual figure, `?ptxm=flat` or `?ptxm=custom` with `?ptxr=2` to change how it grows. Sharing a
+link keeps them. Measurement is the reason it is not a field: the whole effect is small and
+short-lived. Specifically, measurement found that
+the whole effect is small and short-lived: it exists only for tax years 2026 through 2029, it shrinks
+every year inside that window because the standard deduction is inflation-indexed while the cap is
+not, and it is worth at most about $4,000 of lifetime federal tax for any household. It changed no
+strategy recommendation in any case tested. The Income Tax Planner, which prices a single year, has
+had the input all along and is the better place to explore it.
+
+---
+
 <a id="11.15a2"></a>
 
 ## 11.15a2

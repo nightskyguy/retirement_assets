@@ -281,6 +281,35 @@ function clearCompareRow() {
 
 
 /** UI CONTROLS **/
+// ── P64e. Property / local taxes: URL entry only, deliberately no control on the page ──────────
+// Measured 2026-08-19 (findings.md, P64): threading property tax into the SALT test is worth at most
+// about $4,000 of lifetime federal tax for ANY household, it saturates at the cap, it shrinks every
+// year because the standard deduction is indexed faster than the cap, it is exactly zero from 2030,
+// and it changed no strategy recommendation in any case measured. That does not earn a field, a
+// growth-mode selector and their help text on a page that already has a lot of both. It does earn a
+// way in, so the engine parameter is reachable and testable rather than dead code:
+//
+//   ?ptx=25000          annual property + other local taxes, today's dollars
+//   ?ptxm=inflation     how it grows: inflation (default) | flat | custom
+//   ?ptxr=2             growth rate in PERCENT, read only when ptxm=custom (e.g. a Prop 13 2% cap)
+//
+// Read once at load and re-emitted by buildShareURL, so a shared link keeps them. The single-year
+// question this answers well lives in IncomeTaxPlanner.html, which has had the input all along.
+const URL_PROP_TAX = (() => {
+    const q = new URLSearchParams(location.search);
+    const amt = Number(q.get('ptx'));
+    if (!Number.isFinite(amt) || amt <= 0) return null;
+    const rawMode = (q.get('ptxm') || 'inflation').toLowerCase();
+    const mode = ['inflation', 'flat', 'custom'].includes(rawMode) ? rawMode : 'inflation';
+    const rate = Number(q.get('ptxr'));
+    return {
+        propTax: amt,
+        propTaxGrowthMode: mode,
+        // Percent in the URL, fraction in the engine, matching every other rate the UI passes.
+        propTaxGrowthRate: Number.isFinite(rate) ? rate / 100 : 0,
+    };
+})();
+
 function getInputs() {
     // UI GAP: when spendChange (or BrokerageBasis) is out-of-range and corrected to 0 below,
     // the form field still shows the user's invalid value. Fix: call
@@ -387,6 +416,7 @@ function getInputs() {
             return digits < 4 ? (+val('birthyear1') + n) : n;
         })(),
         convEndMode: val('convEndMode') === 'extra' ? 'extra' : 'all',
+        ...(URL_PROP_TAX || {}),
         propWithdraw: +val('propWithdraw') / 100.0,
         iraWithdrawPct: +val('iraWithdrawPct') / 100.0,
         startAge: +val('startAge') || (new Date().getFullYear() - +val('birthyear1')),
@@ -3852,6 +3882,13 @@ function buildShareURL() {
             params.set(short, el.value);
         }
     });
+    // P64e: these have no DOM field, so the loop above cannot see them. Re-emit them or a shared
+    // link silently drops a figure the recipient never had a way to re-enter.
+    if (URL_PROP_TAX) {
+        params.set('ptx', String(URL_PROP_TAX.propTax));
+        if (URL_PROP_TAX.propTaxGrowthMode !== 'inflation') params.set('ptxm', URL_PROP_TAX.propTaxGrowthMode);
+        if (URL_PROP_TAX.propTaxGrowthMode === 'custom') params.set('ptxr', String(URL_PROP_TAX.propTaxGrowthRate * 100));
+    }
     const base = location.href.split('?')[0].split('#')[0];
     return base + '?' + params.toString();
 }

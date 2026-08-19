@@ -2063,9 +2063,9 @@ test('OBBBA: every tax call in a simulation is handed the year-gated flags', () 
     // contract it shares with the browser) and inspect what it actually receives.
     const seen = [];
     const real = globalThis.calculateTaxes;
-    globalThis.calculateTaxes = function (p) { seen.push({ obbaOn: p.obbaOn, saltHigh: p.saltHigh }); return real(p); };
+    globalThis.calculateTaxes = function (p) { seen.push({ obbaOn: p.obbaOn, saltHigh: p.saltHigh, propTax: p.propTax, taxYear: p.taxYear }); return real(p); };
     try {
-        simulate({ ...OBBBA_BASE, nYears: 10 });   // 2026-2035, spans both sunsets
+        simulate({ ...OBBBA_BASE, nYears: 10, propTax: 12000 });   // 2026-2035, spans both sunsets
     } finally {
         globalThis.calculateTaxes = real;          // restore even if simulate throws
     }
@@ -2074,11 +2074,109 @@ test('OBBBA: every tax call in a simulation is handed the year-gated flags', () 
     assert(missing.length === 0,
         `${missing.length} of ${seen.length} calculateTaxes calls were not given obbaOn/saltHigh, ` +
         `so they silently fell back to the false defaults`);
+    // P64a extends this assertion rather than adding a second one, because propTax failed in exactly
+    // the same way: implemented in calculateTaxes, never passed by this engine, so SALT was state
+    // income tax alone and every itemizer was overtaxed in every simulated year. This is the test
+    // that would have caught it, so it is the test that has to cover it.
+    const noProp = seen.filter(s => s.propTax === undefined);
+    assert(noProp.length === 0,
+        `${noProp.length} of ${seen.length} calculateTaxes calls were not given propTax, so they ` +
+        `silently fell back to 0 and SALT was state income tax alone`);
+    assert(seen.every(s => s.propTax === 12000),
+        'with zero inflation the entered property tax must reach every call unchanged');
+    // P64d joins the same list: the SALT cap and its phase-out threshold step 1%/yr from a 2025 base,
+    // so a call with no taxYear silently prices 2025 in every year of a 30-year plan.
+    const noYear = seen.filter(s => !s.taxYear);
+    assert(noYear.length === 0,
+        `${noYear.length} of ${seen.length} calculateTaxes calls were not given taxYear, so the SALT ` +
+        `cap and threshold were frozen at their 2025 base`);
+    assert(new Set(seen.map(s => s.taxYear)).size > 1,
+        'taxYear must advance with the simulation, not be pinned to one year');
     // And the gate must actually vary with the year, or it is hardcoded rather than gated.
     assert(seen.some(s => s.obbaOn === true) && seen.some(s => s.obbaOn === false),
         'obbaOn must be true before its 2028 sunset and false after, across a run that spans it');
     assert(seen.some(s => s.saltHigh === true) && seen.some(s => s.saltHigh === false),
         'saltHigh must be true before its 2029 sunset and false after');
+});
+
+test('P64: property tax lowers federal tax while the elevated SALT cap lives, and stops when it dies', () => {
+    // The whole question the user asked, as an assertion. Alaska has no income tax, so SALT here is
+    // the property tax and nothing else - the band where the input matters most and the one the old
+    // code could never represent. Everything else is frozen (no inflation, no growth, basis = value,
+    // no Social Security), so the only thing moving year to year is the cap.
+    const withOut = simulate({ ...OBBBA_BASE, nYears: 10 }).log;
+    const withIn  = simulate({ ...OBBBA_BASE, nYears: 10, propTax: 40000 }).log;
+    const fed = (log, y) => log.find(e => e.year === y).FedTax;
+
+    // 2026-2029: capped SALT is $40,000, which beats the standard deduction, so the household
+    // itemizes and pays less. Before P64a both runs were identical - that was the defect.
+    for (const y of [2026, 2027, 2028, 2029]) {
+        assert(fed(withIn, y) < fed(withOut, y),
+            `${y}: property tax must reduce federal tax while the $40k cap is in force ` +
+            `(got ${fed(withIn, y)} with, ${fed(withOut, y)} without)`);
+    }
+    // 2030+: the cap reverts to $10,000, which loses to the standard deduction, so the same
+    // $40,000 bill buys nothing. This is the user's own objection, pinned: past 2029 modelling it
+    // changes no number at all.
+    for (const y of [2030, 2031]) {
+        assertNear(fed(withIn, y), fed(withOut, y),
+            `${y}: after the SALT cap reverts to $10k the property tax must stop mattering`, 1);
+    }
+});
+
+test('P64d: the SALT cap and its phase-out threshold are indexed 1%/yr from their 2025 base', () => {
+    // The constants in TAXData are 2025 figures, and the statute steps both up 1% per year applied
+    // to the prior year's figure. 2026 is exactly $40,400 / $505,000, which is the published pair -
+    // the code used to hand every year the flat 2025 numbers while its own comment claimed otherwise.
+    const S = TAXData.OBBBA.SALT;
+    const capIn = (year, magi) => {
+        // $60k of property tax in a no-tax state makes SALT = propTax, so the deduction the engine
+        // lands on IS the cap whenever the cap beats the standard deduction. Reading it back that way
+        // avoids exporting internals just to test them.
+        const r = calculateTaxes({ filingStatus: 'MFJ', ages: [60, 60], state: 'TX',
+            earnedIncome: magi, saltHigh: true, obbaOn: true, propTax: 200000, taxYear: year });
+        return r.federalStdDeduction;   // this is the FINAL federal deduction, itemized when it wins
+    };
+    assertNear(capIn(2025, 200000), 40000, 'the 2025 base cap', 1);
+    assertNear(capIn(2026, 200000), 40400, 'the published 2026 cap', 1);
+    assertNear(capIn(2029, 200000), 40000 * Math.pow(1.01, 4), 'the 2029 cap after four steps', 1);
+    // Past the sunset the index stops rather than compounding a figure that no longer applies.
+    assertNear(capIn(2031, 200000), 40000 * Math.pow(1.01, 4), 'the index is clamped at the sunset', 1);
+    // The threshold moves with it: at $505,000 of MAGI in 2026 nothing has phased out yet, because
+    // the threshold is $505,000 that year and not the 2025 figure of $500,000.
+    assertNear(capIn(2026, 505000), 40400, 'no phase-down at exactly the 2026 threshold', 1);
+    assertNear(capIn(2026, 525000), 40400 - 20000 * S.phaseoutRate, 'phase-down measured from the indexed threshold', 1);
+});
+
+test('P64: the three property-tax growth modes are actually three different plans', () => {
+    // Entered in today's dollars, so it has to compound like spendGoal does. 'flat' is the one that
+    // decays in real terms, and 'custom' exists for a statutory cap such as California Proposition
+    // 13's 2%, which is neither general inflation nor constant.
+    // The horizon comes from the log, not from nYears: this household's death ages carry the run
+    // well past nYears, and hardcoding the exponent here would test the test rather than the code.
+    let horizon = 0;
+    const capture = (extra) => {
+        const seen = [];
+        const real = globalThis.calculateTaxes;
+        globalThis.calculateTaxes = function (p) { seen.push(p.propTax); return real(p); };
+        let out;
+        try { out = simulate({ ...OBBBA_BASE, nYears: 12, inflation: 0.05, cpi: 0.05, propTax: 10000, ...extra }); }
+        finally { globalThis.calculateTaxes = real; }
+        horizon = out.log[out.log.length - 1].year - out.log[0].year;
+        return seen;
+    };
+    const flat      = capture({ propTaxGrowthMode: 'flat' });
+    const inflated  = capture({ propTaxGrowthMode: 'inflation' });
+    const custom    = capture({ propTaxGrowthMode: 'custom', propTaxGrowthRate: 0.02 });
+
+    assert(flat.every(v => v === 10000), 'flat mode must hand the same nominal bill to every year');
+    // Ordering is the point: at the same horizon a 5% assessment outgrows a 2% one, which outgrows a
+    // frozen bill. Comparing the largest value seen avoids depending on how many calls a year makes.
+    const top = a => Math.max(...a);
+    assert(top(inflated) > top(custom) && top(custom) > top(flat),
+        `inflation > custom 2% > flat expected, got ${top(inflated)} / ${top(custom)} / ${top(flat)}`);
+    // And custom must compound at the rate given, not at inflation.
+    assertNear(top(custom), 10000 * Math.pow(1.02, horizon), 'custom mode compounds at its own rate', 1);
 });
 
 // ── The one exception: a live ACA cap ─────────────────────────────────────────
@@ -3642,9 +3740,15 @@ const TL_BASE = { ...CONV_BASE, IRA1: 3000000 };
 test('bestTimeLimitedConversion: finds a convert-then-stop plan and reports it in calendar years', () => {
     const tl = bestTimeLimitedConversion(TL_BASE, FIXED_OV, { futureIRARate: 0.24 });
     assert(tl !== null, 'this fixture has a paying time-limited conversion');
-    assert(tl.amount === 250000, `expected $250,000/yr, got ${tl.amount}`);
-    assert(tl.stopIndex === 5, `expected a 5-year conversion window, got ${tl.stopIndex}`);
-    assert(tl.stopYearCalendar === 2030,
+    // P64d moved this optimum, and it is not a flat one. Indexing the SALT phase-out threshold 1%/yr
+    // ($500,000 -> $505,000 in 2026 and up from there) changes how much of the elevated cap survives
+    // a conversion that lifts MAGI past it, and this CA fixture converts hard enough to be squarely
+    // in that band. Was $250,000/yr for 5 years scoring 166,002; now $300,000/yr for 4 years scoring
+    // 167,787 - a genuinely better plan, not a tie broken differently. Under the old frozen threshold
+    // $300,000 scored 140,173, so the ranking really did invert.
+    assert(tl.amount === 300000, `expected $300,000/yr, got ${tl.amount}`);
+    assert(tl.stopIndex === 4, `expected a 4-year conversion window, got ${tl.stopIndex}`);
+    assert(tl.stopYearCalendar === 2029,
         `stop year must be a calendar year the sidebar can hold, got ${tl.stopYearCalendar}`);
     assert(tl.gain > 0, 'and it must actually beat converting nothing');
 });

@@ -11,6 +11,59 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15a2"></a>
+
+## 11.15a2
+
+### Five Payment Plans - Was 3 plus Quarterly
+
+Previously comparisons were not apples-to-applies (same time frames). Now there are 5 plans now rather than 4 - Quarterly payment was not called out as a separate plan, 
+so it became "Plan Q". Each plan is measured up to April 15th so they are on equal footing - previously one plan 
+measured to April 15th of the following year, but the others did not.
+
+Each plan is a full computation in its own right.
+Draw timing and tax-payment timing are separate levers, and the tool now says so.
+A star (★) marks the cheapest plan(s)
+
+- **Plan A, Early.** Draws and conversions next month, tax withheld at the draw. [Was Plan B]
+- **Plan B, Hybrid.** Conversions next month, draws and withholding in December. Shown only when
+  there is a conversion to pull early; without one it would be a copy of Plan C, and the table now
+  says that in a line rather than letting the column vanish. [Was Plan A]
+- **Plan C, Late.** Everything in December. [Same as prior]
+- **Plan D, Split.** New. The spending part of each draw is taken early with no withholding, and the
+  tax part is held back to a separate December draw withheld up to 100%, which Form W-4R permits.
+  You get your spending cash on the early schedule and the tax still gets the pro-rata credit that
+  only withholding earns. Total draws are unchanged: D never adds a supplemental draw, because that
+  would create taxable income your entered tax figures do not include.  Useful if you want to get your spending money early, 
+  and pay taxes when there is more tax certainty - however there are some costs and potential gotchas.
+- **Plan Q, Quarterly.** Spelled out separately, but was being compared to in the prior version. December draws with no withholding at all, and the whole liability paid
+  as quarterly estimates.  NOTE: Selling appreciated brokerage shares to fund those estimates is now a footnote under the table rather than a fourth row that read like a plan. It is a way to fund Plan Q, and it carries the capital gains tax on the sale.
+
+Some minor corrections were also made: 
+- Using weekdays where previously they were not being used. Payments that may 
+have landed at the end of the year or past deadlines are moved earlier - for example when running the Tax Planner at the end of the year, compliance requires timely payment within the year.
+- In some cases the plan reported that there were no penalties, but the logic was inconsistent. 
+- Roth gains from an early conversion appeared as if they were costs, rather than improvements.
+- The tool failed to point out that late draws carried the consequence of not getting "spending money" until late in the year. This is now spelled out.
+- *Citations are clickable* - in plan descriptions the codes cited are now clickable.
+- **The Income Tax Planner button** In the [IncomeTaxPlanner Tool](standalone/IncomeTaxPlanner.html) was non-operational and is now fixed.
+- **Safe harbor** now states whether Federal safe harbor is met, and does so using either the input fields, or by inferring net income.
+- **Withholding is credited in equal parts across every due date**, whatever date it actually
+  happened [IRC 6654(g)], so a December draw can still satisfy a quarter that has already gone by.
+- **An estimated payment counts on the day you pay it**, so an installment already past cannot be
+  made timely at all.
+- Plans are ranked by first-year cost, and an **underpayment penalty** is not part of that cost. When the cheapest plan is one that misses safe harbor,
+the winner line and a header badge now say so, because the ranking alone would hide it.
+- The planner no longer credits withholding to money that has already moved.  You can indicate that some of the payments or withdrawals have already been done and the planner no longer assumes that "completed" items had the proper withholding.  Instead you must 
+   - **Tell the planner the figure** and it is credited in full, exactly as before but on your numbers.
+   - **Leave it blank** and the planner credits nothing. It then schedules estimated payments for the
+  shortfall, which overstates what you still owe rather than understating it. That is the safer
+  direction to be wrong in, and the note on the plan says so in as many words.
+
+**Saved URLs will now compute correctly and may show the newer (not prior) plan numbers.**
+
+---
+
 <a id="11.1585"></a>
 
 ## 11.1585

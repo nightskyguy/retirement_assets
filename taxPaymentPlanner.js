@@ -183,6 +183,14 @@ const TaxPaymentPlanner = (() => {
       long:  'Because conversions are excluded from the one-rollover-per-12-months limit, withhold-and-replace is repeatable: you can do it on every conversion you make, in the same year, in both IRAs. It also does not use up your one regular IRA-to-IRA rollover, because conversions are disregarded when that limit is applied to other rollovers.',
     },
     {
+      tag:   'Form W-4R',
+      label: 'You choose the withholding rate on an IRA distribution, anywhere from 0% to 100%',
+      cite:  'IRS, About Form W-4R, Withholding Certificate for Nonperiodic Payments and Eligible Rollover Distributions',
+      url:   'https://www.irs.gov/forms-pubs/about-form-w-4r',
+      note:  'The default rate on a nonperiodic IRA distribution is 10%, but you may elect any rate from 0% to 100% in whole percentages.',
+      long:  'This is what makes a December tax-holdback tranche possible: a distribution can be withheld at 100%, sending the entire gross amount to the IRS and the states that allow it. Combined with the pro-rata credit rule, a single December draw withheld at 100% can satisfy the whole year of installments. The election is made on Form W-4R with the custodian, and some custodians cap the rate they will accept online, so confirm before relying on it.',
+    },
+    {
       tag:   'IRC 6654(g)',
       label: 'Withholding is credited as if paid in equal parts on every due date',
       cite:  '26 U.S.C. 6654(g)(1)',
@@ -262,6 +270,18 @@ const TaxPaymentPlanner = (() => {
             'figures are on the conversion and restore steps.',
     },
     {
+      tag:  'Tax figures are inputs',
+      label: 'Anything that raises your income after the plan is built is not in these numbers',
+      long: 'The federal and state tax on this page was calculated elsewhere and handed to the planner, ' +
+            'which decides only when to draw and when to pay. Any money you raise on top of the draws ' +
+            'entered here sits outside that calculation. Selling shares from a taxable account realises a ' +
+            'gain, and an extra IRA withdrawal is ordinary income. Either one lifts the bill above the ' +
+            'figure every plan here is sized against, and the difference turns up as a balance due when ' +
+            'you file. Where the prior-year safe harbor is the test protecting you, that extra tax is ' +
+            'simply due in April. Where it is not, it can carry an underpayment charge as well. Recompute ' +
+            'the tax figures if you take either step.',
+    },
+    {
       tag:  'RMD ordering',
       label: 'Why the RMD is scheduled before the conversion',
       long: 'The RMD for the year must be distributed before any Roth conversion from the same IRA, and RMD ' +
@@ -275,6 +295,25 @@ const TaxPaymentPlanner = (() => {
   // can find by eye in the sources list. Same string in both outputs, deliberately.
   function seeAlso(tag) {
     return `[see ${tag} in Rules and sources]`;
+  }
+
+  // P62. seeAlso's marker has to stay PLAIN in the action objects, because three sinks consume it:
+  // the text renderer prints notes verbatim, the .ics export copies them into DESCRIPTION, and only
+  // the HTML renderer can carry markup. So the marker is linkified at HTML render time, never at
+  // creation time.
+  const citeSlug = tag => 'tpp-cite-' + String(tag).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  // Anything with an entry in either panel is linkable; a marker naming something absent is left as
+  // plain text rather than turned into a link that goes nowhere.
+  const citeTags = () => new Set([].concat(RULE_CITES.map(c => c.tag), CONCEPT_NOTES.map(c => c.tag)));
+  function linkifyCites(html) {
+    if (typeof html !== 'string' || html.indexOf('[see ') < 0) return html;
+    const known = citeTags();
+    return html.replace(/\[see ([^\]]+?) in Rules and sources\]/g, (whole, tag) => {
+      if (!known.has(tag)) return whole;
+      return `<a href="#${citeSlug(tag)}" class="tpp-cite" data-cite="${citeSlug(tag)}" ` +
+             `title="Jump to ${tag} in Rules and sources" ` +
+             `style="color:#1F4E79;text-decoration:underline dotted;cursor:pointer;">[${tag}]</a>`;
+    });
   }
 
   // ── STATE_DB builder helpers ───────────────────────────────────────────────
@@ -611,6 +650,52 @@ const TaxPaymentPlanner = (() => {
   // required installment? A uniform credit against a WEIGHTED schedule can clear the annual total
   // and still miss an early date — California is 30/40/30 — which is the case a single
   // total-versus-total test gets wrong.
+  // P59. The full safe-harbor question, which withholdingCoversSchedule only half answers: it
+  // asks whether WITHHOLDING alone clears each installment, and says nothing about a plan that
+  // pays by estimates. Both credit rules apply here:
+  //   withholding is deemed paid in equal parts on every due date, whatever date it happened
+  //     [IRC 6654(g)(1)], so it is spread across the schedule;
+  //   an estimate counts on the day it is actually paid, so it clears the installments it is on
+  //     time for and nothing earlier.
+  // Returns whether the plan clears every installment, and the first one it misses if not.
+  function scheduleSafeHarbor(actions, reqAnnual, schedule, yr, estType, withheldKey, today) {
+    if (reqAnnual <= 0)      return { met: true, required: 0, missedAt: null };
+    if (schedule.length === 0) return { met: true, required: reqAnnual, missedAt: null };
+
+    const withheld = actions
+      .filter(a => a.type !== T.Q_FED && a.type !== T.Q_STATE)
+      .reduce((sum, a) => sum + (a[withheldKey] || 0), 0);
+    // An installment whose due date has already passed cannot be paid on time any more. The action
+    // keeps its statutory date and is marked PAST DUE, so crediting it at that date would let a
+    // plan that is genuinely late report itself safe. It is credited at the earliest date the money
+    // could actually move instead, which is today.
+    const estimates = actions
+      .filter(a => a.type === estType && a.date)
+      .map(a => {
+        const due = new Date(a.date.year, a.date.month - 1, a.date.day);
+        return { amount: a.amount, t: due < today ? today : due };
+      });
+
+    const n = schedule.length;
+    let cumReq = 0, missedAt = null, shortBy = 0;
+    schedule.forEach((q, i) => {
+      cumReq += reqAnnual * q.w;
+      const due = dueDateFor(q, yr).dueDate;
+      // Withholding: (i+1)/n of the year's total is credited by this due date.
+      // Estimates: only those actually paid by it.
+      const credited = withheld * (i + 1) / n
+        + estimates.filter(e => e.t <= due).reduce((sum, e) => sum + e.amount, 0);
+      if (credited + 1 < cumReq && missedAt === null) {
+        missedAt = q.label;
+        // The size of the miss decides whether this is worth acting on. A plan can miss by a few
+        // hundred dollars for one quarter and by thousands for the year, and those are not the
+        // same problem.
+        shortBy = cumReq - credited;
+      }
+    });
+    return { met: missedAt === null, required: reqAnnual, missedAt, shortBy };
+  }
+
   function withholdingCoversSchedule(withheldTotal, reqAnnual, schedule) {
     if (reqAnnual <= 0) return true;
     const n = schedule.length;
@@ -697,6 +782,21 @@ const TaxPaymentPlanner = (() => {
 
       ira1Rmd:             0,
       ira1Voluntary:       0,
+      // P58. Withholding on a draw you have ALREADY TAKEN is a past fact, not a choice the planner
+      // can make for you: you cannot elect withholding retroactively. Null means "not stated", and
+      // the planner then assumes NOTHING was withheld, which overstates what you still owe rather
+      // than understating it. Give the real figure here and it is credited exactly.
+      ira1RmdWithheld:     null,
+      ira1VolWithheld:     null,
+      ira2RmdWithheld:     null,
+      ira2VolWithheld:     null,
+      // Same rule for a conversion already completed. The gap fill used to be able to elect
+      // withholding on one, and because it sizes off the gap it could take the WHOLE conversion:
+      // a $40,000 conversion marked done was assigned $40,000 of withholding, retroactively,
+      // leaving nothing in the Roth.
+      ira1ConvWithheld:    null,
+      ira2ConvWithheld:    null,
+
       ira1RmdTaken:        false,   // RMD/draw already taken — must be true before VolTaken/ConvDone
       ira1VolTaken:        false,   // voluntary withdrawal already taken (requires ira1Rmd=0 or ira1RmdTaken)
       ira1RothConversion:  0,
@@ -725,8 +825,10 @@ const TaxPaymentPlanner = (() => {
       brokerageBasis:    null,
       forceStrategy:     null,
       todayDate:         new Date(),
-      _baseline:         false,
-      _planC:            false,
+      // P56 variant plumbing. Unset means the parent run, which carries Plan A semantics
+      // (early draws, early conversions). Any run with _variant set is a CHILD: it renders no
+      // text/html and spawns no siblings of its own.
+      _variant:          null,        // null | 'A' | 'B' | 'C' | 'D' | 'Q'
     }, params);
 
     // appreciationPct is a FRACTION OF VALUE — what share of the brokerage position is
@@ -749,22 +851,32 @@ const TaxPaymentPlanner = (() => {
     const stateInfo = getStateInfo(p.state);
 
     // 2. Per-IRA ordering rules
-    // Plan A targets the first of NEXT month — always in the future, no false urgency.
-    // Plan B (_baseline) targets December for any action not yet taken.
-    // Plan C (_planC): conversions early (nextMonth), draws deferred to December.
+    // The plan letters are the P56 matrix, NOT the old display lettering:
+    //   A  early draws  + early conversions            (the parent computation)
+    //   B  December draws + early conversions          (hybrid; was the _planC flag)
+    //   C  December draws + December conversions       (late; was the _baseline flag)
+    //   D  early spending draws + a December tax-holdback tranche
+    //   Q  December draws + December conversions, taxes paid as quarterly estimates
+    // "Early" is the first of NEXT month, always in the future, so there is no false urgency.
     // Already-taken/done actions use the 1st of the PREVIOUS month (or January if in Jan).
     const currentMonth = today.getMonth() + 1;                          // 1–12
     const isFutureYear = yr > today.getFullYear();
     const nextMonth    = isFutureYear ? 1 : Math.min(currentMonth + 1, 12);  // Jan for future years
     const prevMonth    = currentMonth > 1 ? currentMonth - 1 : 1;      // already-done target
 
-    const isBaseline = p._baseline === true;
-    const isPlanC    = p._planC    === true;
+    const variant = p._variant || 'A';      // unset parent runs with Plan A semantics
+    const isChild = p._variant != null;     // children render nothing and spawn no siblings
 
-    // Conversions: Plans A and C use nextMonth (early); Plan B uses December.
-    const convTargetMonth = isBaseline ? 12 : nextMonth;
-    // Draws (RMD + voluntary): only Plan A uses nextMonth; Plans B and C defer to December.
-    const drawTargetMonth = (isBaseline || isPlanC) ? 12 : nextMonth;
+    // Conversions: C and Q convert in December; A, B and D convert early.
+    const convTargetMonth = (variant === 'C' || variant === 'Q') ? 12 : nextMonth;
+    // Draws (RMD + voluntary): A and D draw early; B, C and Q defer to December. D's December
+    // tax tranche is synthesized separately, so resolveIraOrdering still sees early months here
+    // and the RMD-before-conversion invariant holds with no extra work.
+    const drawTargetMonth = (variant === 'A' || variant === 'D') ? nextMonth : 12;
+    // Q pays the whole liability as quarterly estimates, so it withholds NOTHING: not from draws,
+    // not from conversions, and not through an explicit ira*RothWithhold override. That is the one
+    // lever it isolates against C, which is identical to it in every other respect.
+    const isQ = variant === 'Q';
 
     const ira1ConvMonth = p.ira1ConvDone  ? prevMonth : convTargetMonth;
     const ira1RmdMonth  = p.ira1RmdTaken  ? prevMonth : drawTargetMonth;
@@ -880,14 +992,14 @@ const TaxPaymentPlanner = (() => {
 
     // Explicit override: ira1RothWithhold === true → pre-draw full pro-rata conversion withholding.
     // This is included in taxAfterConvW so the draw optimizer knows less remains to cover.
-    if (p.ira1RothConversion > 0 && p.ira1RothWithhold === true) {
+    if (p.ira1RothConversion > 0 && p.ira1RothWithhold === true && !isQ && !p.ira1ConvDone) {
       const w = _estConvW(p.ira1RothConversion);
       ira1ConvFedW = w.fed;  ira1ConvStW = w.state;
       convWithholdFed += ira1ConvFedW;  convWithholdState += ira1ConvStW;
       doWithhold1 = true;
       ira1Replacement = _replacementAnalysis(p.ira1RothConversion, ira1.planAConvMonth, ira1.planAConvDay, w);
     }
-    if (p.ira2RothConversion > 0 && p.ira2RothWithhold === true) {
+    if (p.ira2RothConversion > 0 && p.ira2RothWithhold === true && !isQ && !p.ira2ConvDone) {
       const w = _estConvW(p.ira2RothConversion);
       ira2ConvFedW = w.fed;  ira2ConvStW = w.state;
       convWithholdFed += ira2ConvFedW;  convWithholdState += ira2ConvStW;
@@ -895,29 +1007,119 @@ const TaxPaymentPlanner = (() => {
       ira2Replacement = _replacementAnalysis(p.ira2RothConversion, ira2.planAConvMonth, ira2.planAConvDay, w);
     }
 
+    // A conversion already completed carries exactly what the user says it carried. Nothing else
+    // is available: the distribution happened and its election cannot be revisited.
+    [[1, p.ira1ConvDone, p.ira1RothConversion, p.ira1ConvWithheld],
+     [2, p.ira2ConvDone, p.ira2RothConversion, p.ira2ConvWithheld]].forEach(([num, isDone, amt, stated]) => {
+      if (!isDone || amt <= 0) return;
+      const total = (typeof stated === 'number' && isFinite(stated) && stated >= 0)
+        ? Math.min(stated, amt) : 0;
+      const fed = Math.round(total * (stateIraExempt ? 1.0 : fedFrac));
+      const st  = stateIraExempt ? 0 : total - fed;
+      if (num === 1) { ira1ConvFedW = fed; ira1ConvStW = st; doWithhold1 = true; }
+      else           { ira2ConvFedW = fed; ira2ConvStW = st; doWithhold2 = true; }
+      convWithholdFed   += fed;
+      convWithholdState += st;
+      const rep2 = _replacementAnalysis(amt,
+        num === 1 ? ira1.planAConvMonth : ira2.planAConvMonth,
+        num === 1 ? ira1.planAConvDay   : ira2.planAConvDay,
+        { total, fed, state: st });
+      if (num === 1) ira1Replacement = rep2; else ira2Replacement = rep2;
+    });
+
     // 6. Cross-IRA withholding optimizer
     // Tax remaining after conversion withholding that IRA draws must cover
     const taxAfterConvW = Math.max(0, totalTax - convWithholdFed - convWithholdState);
     // For IRA-exempt states, IRA draws can only cover federal portion
-    const drawWithholdCap = stateIraExempt
-      ? Math.min(allDrawsTotal, Math.max(0, p.federalTax - convWithholdFed))
-      : Math.min(allDrawsTotal, taxAfterConvW);
+    // What the user says was already withheld from a draw they already took. Anything else on a
+    // taken draw is unavailable: the distribution has happened and its election cannot be changed.
+    const statedWithheld = (num, tag) => {
+      const v = num === 1 ? (tag === 'rmd' ? p.ira1RmdWithheld : p.ira1VolWithheld)
+                          : (tag === 'rmd' ? p.ira2RmdWithheld : p.ira2VolWithheld);
+      return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : null;
+    };
 
-    // Sort draw groups by month descending — latest-month draws get withholding first.
-    // RMD and voluntary are tracked separately so a later voluntary draw (nextMonth) can
-    // carry the withholding even when the RMD was already taken (prevMonth).
-    const drawGroups = [
-      { num: 1, tag: 'rmd', month: ira1.planARmdMonth, total: p.ira1Rmd,       withheld: 0 },
-      { num: 1, tag: 'vol', month: ira1VolMonth,        total: p.ira1Voluntary, withheld: 0 },
-      { num: 2, tag: 'rmd', month: ira2.planARmdMonth,  total: p.ira2Rmd,       withheld: 0 },
-      { num: 2, tag: 'vol', month: ira2VolMonth,         total: p.ira2Voluntary, withheld: 0 },
-    ].filter(g => g.total > 0).sort((a, b) => b.month - a.month);
+    // The input draw groups, before D splits any of them. RMD and voluntary are tracked
+    // separately so a later voluntary draw (nextMonth) can carry the withholding even when the
+    // RMD was already taken (prevMonth). `taken` is read for D eligibility only.
+    const baseGroups = [
+      { num: 1, tag: 'rmd', month: ira1.planARmdMonth, total: p.ira1Rmd,       withheld: 0, taken: p.ira1RmdTaken },
+      { num: 1, tag: 'vol', month: ira1VolMonth,       total: p.ira1Voluntary, withheld: 0, taken: p.ira1VolTaken },
+      { num: 2, tag: 'rmd', month: ira2.planARmdMonth, total: p.ira2Rmd,       withheld: 0, taken: p.ira2RmdTaken },
+      { num: 2, tag: 'vol', month: ira2VolMonth,       total: p.ira2Voluntary, withheld: 0, taken: p.ira2VolTaken },
+    ].filter(g => g.total > 0);
 
-    let remaining = drawWithholdCap;
-    for (const g of drawGroups) {
-      g.withheld = Math.min(g.total, remaining);
-      remaining -= g.withheld;
-      if (remaining <= 0) break;
+    // A taken group carries exactly what the user says it carried, and nothing the planner wishes
+    // it carried. The optimizer used to sort ALL groups by month and assign withholding to the
+    // latest first, which meant a plan could put thousands of dollars of withholding on a
+    // distribution received months ago, then report itself fully covered.
+    baseGroups.forEach(g => {
+      g.stated = g.taken ? statedWithheld(g.num, g.tag) : null;
+      g.locked = g.taken;                                   // not available to the optimizer
+      if (g.locked) g.fixedWithheld = Math.min(g.total, g.stated || 0);
+    });
+    const lockedWithheld = baseGroups.reduce((sum, g) => sum + (g.locked ? g.fixedWithheld : 0), 0);
+    const movableTotal   = baseGroups.reduce((sum, g) => sum + (g.locked ? 0 : g.total), 0);
+    // Draws the planner can still direct, capped by what is left to cover after the locked credits.
+    const drawWithholdCap = isQ ? 0
+      : stateIraExempt
+        ? Math.min(movableTotal, Math.max(0, p.federalTax - convWithholdFed - lockedWithheld))
+        : Math.min(movableTotal, Math.max(0, taxAfterConvW - lockedWithheld));
+
+    // D takes the SPENDING part of each draw early with no withholding and holds the TAX part
+    // back to a separate December tranche withheld up to 100%, which Form W-4R permits on an IRA
+    // distribution. Total draws still equal the input amounts exactly: D must never add a
+    // supplemental draw, because that would create taxable income the pre-calculated tax inputs
+    // do not include.
+    const isD = variant === 'D';
+    const iraHasConv = num => (num === 1 ? p.ira1RothConversion : p.ira2RothConversion) > 0;
+    // Eligible to host the December tranche: not already taken (a taken draw is locked to the
+    // month it actually happened), and not the RMD of an IRA that also converts — that RMD has to
+    // complete before the early conversion, so it cannot be deferred to December.
+    const dEligible      = isD ? baseGroups.filter(g => !g.taken && !(g.tag === 'rmd' && iraHasConv(g.num))) : [];
+    const dEligibleTotal = dEligible.reduce((sum, g) => sum + g.total, 0);
+    const dTaxPortion    = isD
+      ? Math.min(dEligibleTotal, stateIraExempt
+          ? Math.max(0, p.federalTax - convWithholdFed)
+          : taxAfterConvW)
+      : 0;
+
+    let drawGroups;
+    if (isD && dTaxPortion > 0) {
+      // Source largest-first, mirroring the gap-fill convSlots convention. Month-descending is
+      // meaningless here because every holdback lands in the same month.
+      let need = dTaxPortion;
+      const decShare = new Map();
+      for (const g of dEligible.slice().sort((a, b) => b.total - a.total)) {
+        if (need <= 0) break;
+        const take = Math.min(g.total, need);
+        decShare.set(g, take);
+        need -= take;
+      }
+      drawGroups = [];
+      for (const g of baseGroups) {
+        const dec   = decShare.get(g) || 0;
+        const early = g.total - dec;
+        if (early > 0) drawGroups.push({ num: g.num, tag: g.tag, month: g.month, total: early,
+                                         withheld: g.locked ? g.fixedWithheld : 0,
+                                         taken: g.locked, stated: g.stated,
+                                         tranche: dec > 0 ? 'spend' : undefined });
+        if (dec   > 0) drawGroups.push({ num: g.num, tag: g.tag, month: 12,      total: dec,   withheld: dec, tranche: 'tax'   });
+      }
+      drawGroups.sort((a, b) => b.month - a.month);
+    } else {
+      // Every other variant: one entry per input group, latest-month draws withheld first.
+      drawGroups = baseGroups
+        .map(g => ({ num: g.num, tag: g.tag, month: g.month, total: g.total,
+                     withheld: g.locked ? g.fixedWithheld : 0, taken: g.locked, stated: g.stated }))
+        .sort((a, b) => b.month - a.month);
+      let remaining = drawWithholdCap;
+      for (const g of drawGroups) {
+        if (g.taken) continue;                              // its election already happened
+        g.withheld = Math.min(g.total, remaining);
+        remaining -= g.withheld;
+        if (remaining <= 0) break;
+      }
     }
 
     const ira1Withheld = drawGroups.filter(g => g.num === 1).reduce((s, g) => s + g.withheld, 0);
@@ -927,9 +1129,19 @@ const TaxPaymentPlanner = (() => {
     let shortfall    = Math.max(0, totalTax - totalCovered);
 
     // 7. Safe-harbor amounts (computed before the gap fill — the December branch needs them)
-    const sfFedMult   = p.highIncomeFiler ? 1.10 : 1.00;
+    // The 110% bar turns on PRIOR-year AGI above $150,000 [IRC 6654(d)(1)(C)], and this planner is
+    // never given AGI. It IS given this year's income components, and their sum is a usable proxy:
+    // a household comfortably above the threshold this year was very probably above it last year.
+    // So when the caller has not said, infer rather than assume the lower bar, because assuming
+    // 100% where 110% applies UNDERSTATES what is owed, and that is the expensive direction to be
+    // wrong in. Inferring the other way overstates it, which costs a refund rather than a penalty.
+    const FED_HIGH_INCOME_AGI = 150000;
+    const highIncomeStated    = p.highIncomeFiler === true;
+    const highIncomeInferred  = !highIncomeStated && grossIncome > FED_HIGH_INCOME_AGI;
+    const treatHighIncome     = highIncomeStated || highIncomeInferred;
+    const sfFedMult   = treatHighIncome ? 1.10 : 1.00;
     const sfStateMult = stateInfo.safeHarborAlways110 ? 1.10
-                      : (p.highIncomeFiler && p.stateTax >= (stateInfo.safeHarborHighIncomeThreshold || Infinity))
+                      : (treatHighIncome && p.stateTax >= (stateInfo.safeHarborHighIncomeThreshold || Infinity))
                         ? 1.10 : 1.00;
     const shFed   = p.priorYearFedTax   != null ? p.priorYearFedTax   * sfFedMult   : p.federalTax * 0.90;
     const shState = p.priorYearStateTax != null ? p.priorYearStateTax * sfStateMult : p.stateTax   * 0.90;
@@ -973,8 +1185,13 @@ const TaxPaymentPlanner = (() => {
     // shortfall and never looked at the conversion amount, so a $5,000 conversion against a
     // $37,000 gap was told to withhold $24,851 federal (497%) and $12,149 state (243%).
     // Whatever the conversions cannot absorb belongs in quarterly estimates instead.
+    // A plan forced to all-quarterly pays the whole liability as estimates, so withholding on a
+    // conversion is money paid twice. Plan Q already skips the gap fill for exactly this reason;
+    // a caller-level forceStrategy of 'quarterly' did not, and the plan then paid $64,000 against
+    // a $57,000 bill.
+    const forcedQuarterly = isQ || p.forceStrategy === 'quarterly';
     let convWithholdCapped = false;
-    if (shortfall > 0) {
+    if (shortfall > 0 && !forcedQuarterly) {
       // In an IRA-exempt state no state tax can be withheld from an IRA distribution, so
       // conversion withholding can only chase the FEDERAL gap. Sizing it off the whole
       // shortfall there would over-withhold federal past the federal liability.
@@ -1017,7 +1234,11 @@ const TaxPaymentPlanner = (() => {
     // 8. Strategy selection
     let strategy;
     const iraWCap = drawWithholdCap + convWithholdFed + convWithholdState; // total IRA coverage capacity
-    if (p.forceStrategy === 'ye_ira') {
+    if (isQ) {
+      // By definition, and ahead of forceStrategy: a user-level forceStrategy of 'ye_ira' must not
+      // turn the quarterly plan into a withholding plan when it propagates to this child.
+      strategy = 'all_quarterly';
+    } else if (p.forceStrategy === 'ye_ira') {
       strategy = iraWCap >= totalTax ? 'ye_ira_full' : 'ye_ira_partial';
     } else if (p.forceStrategy === 'quarterly') {
       strategy = 'all_quarterly';
@@ -1100,7 +1321,7 @@ const TaxPaymentPlanner = (() => {
           description:
             `IRA ${iraNum} — IRS ordering rule: the RMD (${fmt$(rmdAmt)}) must be distributed ` +
             `before any Roth conversion in the same tax year. ${timing} ` +
-            `See the two-plan comparison below.`,
+            `See the plan comparison below.`,
           notes: [
             'Only the balance beyond the RMD can be converted. ' + seeAlso('IRC 408(d)(3)'),
             'QCD alternative: sending this RMD to charity satisfies the RMD and keeps it out of income, which allows ' +
@@ -1110,53 +1331,55 @@ const TaxPaymentPlanner = (() => {
       }
     }
 
-    // ── 11a-w. Already-taken withholding reminder ─────────────────────────
-    if (!p._baseline && !isPlanC) {
+    // ── 11a-w. What an action you have ALREADY TAKEN actually carried ──────
+    // This used to render only in the parent plan and to report the withholding the optimizer had
+    // ASSIGNED to a past distribution, as though the planner could elect it after the fact. It
+    // cannot. Every plan now carries the disclosure, because every plan depends on the answer, and
+    // it distinguishes a figure you supplied from an assumption the planner made for you.
+    {
       const items = [];
-      // RMD and voluntary are tracked independently — each gets its own withholding reminder
-      for (const [iraNum, rmdTaken, rmd, volTaken, vol] of [
-        [1, p.ira1RmdTaken, p.ira1Rmd, p.ira1VolTaken, p.ira1Voluntary],
-        [2, p.ira2RmdTaken, p.ira2Rmd, p.ira2VolTaken, p.ira2Voluntary],
+      const split = amt => {
+        const fed = Math.round(amt * wFedFrac);
+        return { fed, st: amt - fed };
+      };
+      const line = (label, gross, statedVal) => {
+        if (statedVal != null) {
+          const { fed, st } = split(Math.min(statedVal, gross));
+          return `${label} (${fmt$(gross)}) — you reported ${fmt$(Math.min(statedVal, gross))} withheld ` +
+                 `(${fmt$(fed)} federal` + (st > 0 ? ` + ${fmt$(st)} ${stateInfo.name}` : '') +
+                 `). Credited in full against this year's liability.`;
+        }
+        return `${label} (${fmt$(gross)}) — no withholding assumed. Withholding cannot be elected ` +
+               `after a distribution has been taken, so the planner credits nothing unless you say ` +
+               `what was actually withheld. If tax WAS withheld from it, enter that amount; until ` +
+               `you do, the plan below schedules estimated payments for money you may have already ` +
+               `paid, which OVERSTATES what you still owe.`;
+      };
+
+      for (const [iraNum, rmdTaken, rmd, rmdW, volTaken, vol, volW] of [
+        [1, p.ira1RmdTaken, p.ira1Rmd, p.ira1RmdWithheld, p.ira1VolTaken, p.ira1Voluntary, p.ira1VolWithheld],
+        [2, p.ira2RmdTaken, p.ira2Rmd, p.ira2RmdWithheld, p.ira2VolTaken, p.ira2Voluntary, p.ira2VolWithheld],
       ]) {
-        if (rmdTaken && rmd > 0) {
-          const g = drawGroups.find(h => h.num === iraNum && h.tag === 'rmd');
-          const wFed = Math.round((g?.withheld || 0) * wFedFrac);
-          const wSt  = Math.round((g?.withheld || 0) * wStFrac);
-          items.push(`IRA ${iraNum} RMD (${fmt$(rmd)}) — estimated withholding: ` +
-            `${fmt$(wFed)} federal` + (wSt > 0 ? ` + ${fmt$(wSt)} ${stateInfo.name}` : ''));
-        }
-        if (volTaken && vol > 0) {
-          const g = drawGroups.find(h => h.num === iraNum && h.tag === 'vol');
-          const wFed = Math.round((g?.withheld || 0) * wFedFrac);
-          const wSt  = Math.round((g?.withheld || 0) * wStFrac);
-          items.push(`IRA ${iraNum} voluntary withdrawal (${fmt$(vol)}) — estimated withholding: ` +
-            `${fmt$(wFed)} federal` + (wSt > 0 ? ` + ${fmt$(wSt)} ${stateInfo.name}` : ''));
-        }
+        if (rmdTaken && rmd > 0) items.push(line(`IRA ${iraNum} RMD`, rmd, rmdW));
+        if (volTaken && vol > 0) items.push(line(`IRA ${iraNum} voluntary withdrawal`, vol, volW));
       }
       if (p.ira1ConvDone && p.ira1RothConversion > 0) {
-        const wLabel = doWithhold1
-          ? `${fmt$(ira1ConvFedW)} federal` + (ira1ConvStW > 0 ? ` + ${fmt$(ira1ConvStW)} ${stateInfo.name}` : '')
-          : 'none (IRA draws cover all taxes)';
-        items.push(`IRA 1 Roth conversion (${fmt$(p.ira1RothConversion)}) — estimated withholding: ${wLabel}`);
+        items.push(line('IRA 1 Roth conversion', p.ira1RothConversion, p.ira1ConvWithheld));
       }
       if (p.ira2ConvDone && p.ira2RothConversion > 0) {
-        const wLabel = doWithhold2
-          ? `${fmt$(ira2ConvFedW)} federal` + (ira2ConvStW > 0 ? ` + ${fmt$(ira2ConvStW)} ${stateInfo.name}` : '')
-          : 'none (IRA draws cover all taxes)';
-        items.push(`IRA 2 Roth conversion (${fmt$(p.ira2RothConversion)}) — estimated withholding: ${wLabel}`);
+        items.push(line('IRA 2 Roth conversion', p.ira2RothConversion, p.ira2ConvWithheld));
       }
+
       if (items.length > 0) {
+        const anyAssumed = items.some(t => /no withholding assumed/.test(t));
         addAction({
-          type: T.ALERT,
-          description: `One or more distributions are marked as already taken. ` +
-            `Verify that you instructed your IRA custodian to withhold the amounts shown below. ` +
-            `If withholding was insufficient, a supplemental estimated tax payment may be needed.`,
-          notes: [
-            ...items,
-            `IRA withholding is voluntary and must be requested at the time of distribution — ` +
-            `custodians do not withhold automatically unless instructed.`,
-            `If you under-withheld, use Form 1040-ES to make a catch-up estimated payment by the next quarterly due date.`,
-          ],
+          type: T.NOTE,
+          description: anyAssumed
+            ? 'Some of this year\'s money has already moved, and the planner does not know what tax ' +
+              'was withheld from it. Read the figures below before following any plan.'
+            : 'Already completed this year, with the withholding you reported credited against the ' +
+              'liability every plan below is sized against.',
+          notes: items,
         });
       }
     }
@@ -1305,8 +1528,8 @@ const TaxPaymentPlanner = (() => {
             (convStW > 0 ? ` and ${fmt$(convStW)} ${stateInfo.name} (${fmtPct(convStW / convAmt)})` : '') +
             `. See the restore-cash step below.`,
           notes: [
-            isPlanC
-              ? `Plan C fallback: December draws cover most taxes, but a ${fmt$(restoreAmt)} gap required this minimum conversion withholding. Restoring this amount keeps the full conversion in Roth.`
+            variant === 'B'
+              ? `Plan B fallback: December draws cover most taxes, but a ${fmt$(restoreAmt)} gap required this minimum conversion withholding. Restoring this amount keeps the full conversion in Roth.`
               : 'Withholding reduces the Roth credit — the 60-day cash replacement makes the conversion whole so the full amount earns tax-free Roth growth.',
             sdaNote,
             earlyNote,
@@ -1372,8 +1595,8 @@ const TaxPaymentPlanner = (() => {
         });
       } else {
         // No conversion withholding — draws cover taxes. Build a plan-aware description.
-        const drawTimingLabel = isBaseline ? 'December draws'
-          : isPlanC ? 'December draws (Plan A hybrid)'
+        const drawTimingLabel = variant === 'C' ? 'December draws'
+          : variant === 'B' ? 'December draws (Plan B hybrid)'
           : 'IRA draws';
         // These used to assert "Taxes covered by December draws" / "Taxes funded by IRA draws"
         // unconditionally, which is false whenever a shortfall is being routed to quarterly
@@ -1382,10 +1605,12 @@ const TaxPaymentPlanner = (() => {
         // the residual goes to estimates while this step claimed the draws had it handled. Say what
         // the plan actually does.
         const partlyEstimated = shortfall > 0;
-        const fundingClause = partlyEstimated
-          ? `Draws cover ${fmt$(totalCovered)} of the ${fmt$(totalTax)} due; the remaining ` +
-            `${fmt$(shortfall)} is scheduled as quarterly estimates below.`
-          : `Taxes covered by ${drawTimingLabel}.`;
+        const fundingClause = isQ
+          ? `This plan withholds nothing: the full ${fmt$(totalTax)} is scheduled as quarterly estimates below.`
+          : partlyEstimated
+            ? `Draws cover ${fmt$(totalCovered)} of the ${fmt$(totalTax)} due; the remaining ` +
+              `${fmt$(shortfall)} is scheduled as quarterly estimates below.`
+            : `Taxes covered by ${drawTimingLabel}.`;
         const noWithholdDesc = sda.monthsRem === 0
           ? `No withholding — December conversion; no Roth growth remaining to capture this year. ${fundingClause}`
           : `No withholding — full ${fmt$(convAmt)} earns ${monthsOfGrowth} months of tax-free Roth growth, and no 60-day rollover is needed. ${fundingClause}`;
@@ -1447,7 +1672,10 @@ const TaxPaymentPlanner = (() => {
     }
 
     // ── 11d. IRA draw actions (with cross-IRA optimized withholding) ─────────
-    if (usesIraWithholding) {
+    // The gate used to be `usesIraWithholding` alone, which silently dropped every draw action
+    // from any all-quarterly plan that still takes draws. Q is exactly that plan: the draws are
+    // real and the user has to execute them, they just carry no withholding.
+    if (usesIraWithholding || (isQ && allDrawsTotal > 0)) {
       // Merge optimizer groups into action-level entries, combining same-IRA same-month subdraws
       // into one action while keeping different-month subdraws as separate calendar entries.
       const actionGroups = [];
@@ -1457,12 +1685,17 @@ const TaxPaymentPlanner = (() => {
           ex.total    += g.total;
           ex.withheld += g.withheld;
           if (g.tag === 'rmd') ex.rmdAmt += g.total; else ex.volAmt += g.total;
+          // Late in the year D's early month IS December, so a spend part and a tax part can
+          // merge into one action. That merged action is plain Plan A behavior, not a holdback,
+          // so it must not claim to be either tranche.
+          if (ex.tranche !== g.tranche) ex.tranche = null;
         } else {
           actionGroups.push({
             num: g.num, month: g.month,
             total: g.total, withheld: g.withheld,
             rmdAmt: g.tag === 'rmd' ? g.total : 0,
             volAmt: g.tag === 'vol' ? g.total : 0,
+            tranche: g.tranche || null,
           });
         }
       }
@@ -1480,7 +1713,18 @@ const TaxPaymentPlanner = (() => {
 
         // RMD groups use the day from resolveIraOrdering (may be day 1 for same-month conv);
         // vol-only groups default to the 15th.
-        const actionDay  = iRmd > 0 ? ira.planARmdDay : 15;
+        //
+        // Both of those days then have to be nudged off weekends and holidays HERE. The
+        // resolveIraOrdering day is nudged for the month IT chose, and D's December tranche
+        // reuses that day in a different month, where it can land on a Saturday. The plain
+        // day-15 path was never nudged at all: the business-day sweep passed only because no
+        // shape it ran produced a voluntary-only draw group, and D's split creates one.
+        // A forward nudge could leave December, and an RMD cannot cross year end, so fall back
+        // to the previous business day when it would.
+        const rawDrawDate = new Date(yr, ag.month - 1, iRmd > 0 ? ira.planARmdDay : 15);
+        let drawDate = nextBusinessDay(rawDrawDate);
+        if (drawDate.getMonth() !== rawDrawDate.getMonth()) drawDate = prevBusinessDay(rawDrawDate);
+        const actionDay  = drawDate.getDate();
         const rmdDate    = { year: yr, month: ag.month, day: actionDay };
         const rmdDateStr = fmtDate(yr, ag.month, actionDay);
 
@@ -1490,28 +1734,53 @@ const TaxPaymentPlanner = (() => {
         const pctSt  = ag.total > 0 ? iraStW  / ag.total : 0;
         const pctTot = ag.total > 0 ? totW    / ag.total : 0;
 
-        const optimizerNote = drawGroups.length > 1 && iraWithheld === 0
+        const isTaxTranche   = ag.tranche === 'tax';
+        const isSpendTranche = ag.tranche === 'spend';
+        // D's zero-withholding early draws are a holdback, not the draw-order optimizer's doing.
+        const optimizerNote = isQ || isD
+          ? null
+          : drawGroups.length > 1 && iraWithheld === 0
           ? `This draw (${MONTH_NAMES[ag.month-1]}) is earlier than another scheduled draw — the optimizer directed all withholding to the later draw to maximize tax-deferred growth. No withholding from this entry.`
           : drawGroups.length > 1
             ? `Draw-order optimizer: this entry (${MONTH_NAMES[ag.month-1]}) carries withholding because it is the latest scheduled draw, keeping IRA funds invested the longest.`
             : null;
 
         // Build description — combine RMD + voluntary into one line when both exist in this group
-        const drawLabel = iRmd > 0 && iVol > 0
-          ? `IRA ${iraNum} draw of ${fmt$(ag.total)} (RMD ${fmt$(iRmd)} + voluntary ${fmt$(iVol)})`
-          : iRmd > 0
-            ? `IRA ${iraNum} RMD of ${fmt$(iRmd)}`
-            : `IRA ${iraNum} voluntary withdrawal of ${fmt$(iVol)}`;
+        const drawLabel = isTaxTranche
+          ? `IRA ${iraNum} December tax-holdback tranche of ${fmt$(ag.total)}`
+          : iRmd > 0 && iVol > 0
+            ? `IRA ${iraNum} draw of ${fmt$(ag.total)} (RMD ${fmt$(iRmd)} + voluntary ${fmt$(iVol)})`
+            : iRmd > 0
+              ? `IRA ${iraNum} RMD of ${fmt$(iRmd)}`
+              : `IRA ${iraNum} voluntary withdrawal of ${fmt$(iVol)}`;
 
         const notes = [];
+        if (isTaxTranche) {
+          notes.push(
+            `This is the tax portion of draws you were already taking, held back from the early ` +
+            `distribution and withheld up to 100%. Form W-4R allows a 0% to 100% federal election ` +
+            `on an IRA distribution. ` + seeAlso('Form W-4R'));
+          notes.push('Total draws are unchanged: the early part plus this tranche equals the amount you entered, so no extra taxable income is created.');
+        }
+        if (isSpendTranche) {
+          notes.push('Spending portion only — the tax share of this draw is held back to the December tranche below, so the cash you receive now matches what Plan A leaves you after withholding.');
+        }
         if (iRmd > 0 && iVol > 0)
           notes.push(`Breakdown: required RMD ${fmt$(iRmd)}, voluntary withdrawal ${fmt$(iVol)}.`);
         notes.push(
           totW > 0
             ? `Total withholding: ${fmt$(totW)} (${fmtPct(pctTot)} of distribution).`
-            : `No withholding on this draw — taxes covered by another draw.`
+            : isQ
+              ? `No withholding on this draw — this plan pays the entire liability as quarterly estimates.`
+              : isSpendTranche
+                ? `No withholding on this draw — the tax share rides the December tranche instead.`
+                : isD
+                  ? `No withholding on this draw — the tax is paid by the December holdback tranche.`
+                  : `No withholding on this draw — taxes covered by another draw.`
         );
-        notes.push('Withholding is credited pro-rata on all four due dates, so even a December draw satisfies the whole year retroactively. ' + seeAlso('IRC 6654(g)'));
+        // The pro-rata credit is a property of WITHHOLDING. Q has none, and its estimates are
+        // credited when they are paid, so printing this note there would be actively misleading.
+        if (!isQ) notes.push('Withholding is credited pro-rata on all four due dates, so even a December draw satisfies the whole year retroactively. ' + seeAlso('IRC 6654(g)'));
         if (optimizerNote) notes.push(optimizerNote);
         if (stateIraExempt) {
           notes.push(`${stateInfo.name}: IRA distributions are exempt from state tax — no state withholding applied. State tax covered by quarterly estimates.`);
@@ -1519,9 +1788,11 @@ const TaxPaymentPlanner = (() => {
           notes.push(`${stateInfo.name} similarly credits IRA withholding as if paid pro-rata throughout the year.`);
         }
         if (ag.month < 12) {
-          notes.push(`Taking this draw in ${MONTH_NAMES[ag.month-1]} is earlier than December — see the two-plan comparison to quantify the opportunity cost.`);
+          notes.push(`Taking this draw in ${MONTH_NAMES[ag.month-1]} is earlier than December — see the plan comparison to quantify the opportunity cost.`);
         } else {
-          notes.push('Taking this draw in December maximises IRA tax-deferred growth through the year.');
+          notes.push('Taking this draw in December keeps the money growing tax-deferred for the whole year, ' +
+                     'and it also means these proceeds are not in your hands until December. Whatever you ' +
+                     'spend before then has to come from another source.');
         }
         if (iRmd > 0) {
           notes.push(
@@ -1534,8 +1805,11 @@ const TaxPaymentPlanner = (() => {
         addAction({
           type: iRmd > 0 ? T.RMD : T.IRA_VOL,
           iraNum,
+          tranche: ag.tranche || undefined,
           date: rmdDate,
           amount: ag.total,
+          rmdAmount: iRmd,
+          volAmount: iVol,
           federalWithholding: iraFedW,
           stateWithholding:   iraStW,
           description:
@@ -1544,15 +1818,21 @@ const TaxPaymentPlanner = (() => {
               ? `Withhold ${fmt$(iraFedW)} federal (${fmtPct(pctFed)})` +
                 (iraStW > 0 ? ` and ${fmt$(iraStW)} ${stateInfo.name} (${fmtPct(pctSt)})` : '') +
                 `. Net deposited: ${fmt$(net)}.`
-              : `No withholding — taxes covered by other draws. Net deposited: ${fmt$(net)}.`),
+              : isQ
+                ? `No withholding — this plan pays the whole liability as quarterly estimates. Net deposited: ${fmt$(net)}.`
+                : isSpendTranche
+                  ? `No withholding — the tax share is held back to December. Net deposited: ${fmt$(net)}.`
+                  : isD
+                    ? `No withholding — the tax rides the December holdback tranche. Net deposited: ${fmt$(net)}.`
+                    : `No withholding — taxes covered by other draws. Net deposited: ${fmt$(net)}.`),
           notes,
         });
       }
 
       // ── Shortfall quarterly estimates ──────────────────────────────────────
-      // EVERY plan must pay the whole liability. The _baseline and _planC variants are not
-      // internal scratch work: they are rendered as the displayed Plan C and Plan A, complete
-      // action lists a user is meant to follow. They used to skip this block so that
+      // EVERY plan must pay the whole liability. The child variants are not internal scratch
+      // work: every one of them is rendered as a displayed plan, a complete action list a user
+      // is meant to follow. They used to skip this block so that
       // summary.totalCovered would equal withholding alone and an old invariant test could
       // read the gap off it. That test convenience made two of the three displayed plans
       // silently underpay: 25k of draws and a 10k conversion against a 72k liability produced
@@ -1572,12 +1852,22 @@ const TaxPaymentPlanner = (() => {
         addAction({
           type: T.NOTE,
           description:
-            `IRA withholding covers ${fmt$(totalCovered)} of your ${fmt$(totalTax)} total liability. ` +
-            `The remaining ${fmt$(shortfall)} (${fmt$(sfFed)} federal` +
-            (sfState > 0 ? `, ${fmt$(sfState)} ${stateInfo.name}` : '') +
-            `) must be paid as quarterly estimated taxes from cash or HYSA.` +
+            (isQ
+              ? `This plan takes its draws without any withholding, so the full ${fmt$(totalTax)} liability ` +
+                `(${fmt$(sfFed)} federal` +
+                (sfState > 0 ? `, ${fmt$(sfState)} ${stateInfo.name}` : '') +
+                `) is paid as quarterly estimated taxes from cash or HYSA.`
+              : `IRA withholding covers ${fmt$(totalCovered)} of your ${fmt$(totalTax)} total liability. ` +
+                `The remaining ${fmt$(shortfall)} (${fmt$(sfFed)} federal` +
+                (sfState > 0 ? `, ${fmt$(sfState)} ${stateInfo.name}` : '') +
+                `) must be paid as quarterly estimated taxes from cash or HYSA.`) +
             (stateIraExempt ? ` Note: ${stateInfo.name} retirement income is IRA-exempt — the full ${fmt$(p.stateTax)} state tax is covered by quarterly estimates.` : ''),
-          notes: ['Pay from a high-yield savings account — HYSA earnings partially offset the opportunity cost.'],
+          notes: [
+            'Pay from a high-yield savings account — HYSA earnings partially offset the opportunity cost.',
+            'This assumes the cash already exists outside your IRAs. Raising it by selling shares or by ' +
+            'taking an extra withdrawal adds income the tax figures on this page do not include. ' +
+            seeAlso('Tax figures are inputs'),
+          ],
         });
 
         // Late-year conversion + residual shortfall → Schedule AI is the alternative lever.
@@ -1616,7 +1906,7 @@ const TaxPaymentPlanner = (() => {
             noPenalty: fedTimelyByWithholding,
             description:
               `Pay federal estimated tax of ${fmt$(amt)} by ${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
-              `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfFed)} federal shortfall).` +
+              `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfFed)} federal ${isQ ? 'liability' : 'shortfall'}).` +
               (isPast ? (fedTimelyByWithholding ? ' [DATE PASSED]' : ' [PAST DUE — pay immediately]') : ''),
             notes: [
               'Pay via IRS Direct Pay at directpay.irs.gov or EFTPS at eftps.gov.',
@@ -1650,7 +1940,7 @@ const TaxPaymentPlanner = (() => {
               description:
                 `Pay ${stateInfo.name} estimated tax of ${fmt$(amt)} by ` +
                 `${fmtDate(d.date.year, d.date.month, d.date.day)} ` +
-                `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfState)} ${stateInfo.name} shortfall).` +
+                `(${q.label} — ${fmtPct(q.w)} of ${fmt$(sfState)} ${stateInfo.name} ${isQ ? 'liability' : 'shortfall'}).` +
                 (isPast ? (stateTimelyByWithholding ? ' [DATE PASSED]' : ' [PAST DUE — pay immediately]') : ''),
               notes: [
                 stateInfo.paymentNote,
@@ -1763,15 +2053,70 @@ const TaxPaymentPlanner = (() => {
       }
     });
 
-    // 14. OC analysis
-    const analysis = buildAnalysis(p, {
-      totalTax, fedFrac, stFrac,
-      iraWCap: totalIraDrawWithheld + convWithholdFed + convWithholdState,
-      shortfall,
-      hysaNet, breakeven, yeIraWins, strategy,
-    }, stateInfo, effectiveWithholdMonth);
+    // P57. Plan D is only a distinct plan if something is still drawn EARLY. When the tax portion
+    // consumes every eligible dollar, D's whole draw list IS the December tranche: same dates, same
+    // amounts and the same cost as Plan C, while its label promises early spending draws and its
+    // tranche note describes an early distribution that does not exist. P56c guarded the empty end
+    // (nothing eligible to host the tranche) and never guarded this one.
+    const dNoEarlyLeg = isD && drawGroups.length > 0 && drawGroups.every(g => g.month === 12);
 
-    // 15. Summary
+    // P57. What each plan actually hands the household, and when. The comparison prices the timing
+    // of the tax, but it cannot price the cash-flow consequence of moving a draw, because nothing
+    // here knows when the money gets spent. So the outputs state the consequence instead, per plan,
+    // in dollars.
+    const netCashByMonth = {};
+    actions.filter(a => a.type === T.RMD || a.type === T.IRA_VOL).forEach(a => {
+      const net = a.amount - ((a.federalWithholding || 0) + (a.stateWithholding || 0));
+      if (net > 0.5 && a.date) netCashByMonth[a.date.month] = (netCashByMonth[a.date.month] || 0) + net;
+    });
+    const netCashMonths = Object.keys(netCashByMonth).map(Number).sort((x, y) => x - y);
+
+    // P59. Which rule actually sets the bar, so the page can say WHICH safe harbor is being met
+    // rather than leaving the reader to guess. IRC 6654(d)(1)(B): the requirement is the LESSER of
+    // 90% of this year and 100% (110% for a high earner) of last year.
+    // Which test sets the bar, and the short tag the comparison row prints. A verdict of "met" is
+    // worth very different amounts depending on which of these it rests on, so the row names it.
+    const bindingRule = (cur, prior, mult) => {
+      if (prior == null) {
+        return { rule: '90% of this year, because last year\'s tax was not supplied', tag: '90%',
+                 basis: 'current-year-only' };
+      }
+      if (cur * 0.90 < prior * mult) {
+        return { rule: '90% of this year', tag: '90%', basis: 'current' };
+      }
+      return mult >= 1.10
+        ? { rule: '110% of last year', tag: '110%', basis: 'prior-110' }
+        : { rule: '100% of last year', tag: '100%', basis: 'prior-100' };
+    };
+    const safeHarbor = {
+      federal: Object.assign(
+        scheduleSafeHarbor(actions, reqAnnualFed, FED_Q, yr, T.Q_FED, 'federalWithholding', today),
+        bindingRule(p.federalTax, p.priorYearFedTax, sfFedMult)),
+      state: stateInfo.hasIncomeTax
+        ? Object.assign(
+            scheduleSafeHarbor(actions, reqAnnualState, stateInfo.quarterlySchedule, yr, T.Q_STATE, 'stateWithholding', today),
+            bindingRule(p.stateTax, p.priorYearStateTax, sfStateMult))
+        : null,
+    };
+    safeHarbor.met = safeHarbor.federal.met && (!safeHarbor.state || safeHarbor.state.met);
+    // A verdict resting on the 100% bar is the one that can be quietly wrong: the 110% bar applies
+    // on PRIOR-year AGI, which this planner never sees. Flag it so "met" at 100% is never mistaken
+    // for "met" at the bar that actually applied.
+    safeHarbor.provisional = safeHarbor.federal.basis === 'prior-100'
+      || (safeHarbor.state && safeHarbor.state.basis === 'prior-100');
+    safeHarbor.highIncomeInferred = highIncomeInferred;
+    safeHarbor.highIncomeStated   = highIncomeStated;
+    safeHarbor.agiProxy           = grossIncome;
+    // With no prior-year figure the requirement falls back to 90% of this year. That can only be
+    // too HIGH: had last year's tax been lower, the lesser-of rule would have set a lower bar.
+    safeHarbor.priorYearMissing = p.priorYearFedTax == null
+      || (stateInfo.hasIncomeTax && p.priorYearStateTax == null);
+
+    // 14. Summary
+    // buildAnalysis is deleted. It priced three hypothetical funding strategies on an April-15
+    // frame while buildConvComparison priced the real plans on a Dec-31 frame, and the two could
+    // print opposite verdicts for the same run. Every plan is now priced from its own action list
+    // by buildPlanCost, on one frame, which is what makes that contradiction impossible.
     const summary = {
       strategy,
       strategyLabel:       strategyLabel(strategy),
@@ -1786,22 +2131,46 @@ const TaxPaymentPlanner = (() => {
       hysaNet, breakeven, yeIraWins,
       safeHarborFed:       shFed,
       safeHarborState:     shState,
-      opportunityCost:     analysis.recommended.total,
-      savingsVsWorst:      analysis.worst.total - analysis.recommended.total,
+      safeHarbor,
+      // P57. The box used to reuse the FEDERAL sentence for the state line, so California printed
+      // "110% of prior-year (high-income filer)" over a number computed at 100%, and Maryland
+      // printed "110% (MD rule, always)" over a number that was 90% of the current year. Both notes
+      // are now built from the multiplier each figure actually used.
+      safeHarborFedMult:   sfFedMult,
+      safeHarborStateMult: sfStateMult,
+      priorYearFedGiven:   p.priorYearFedTax   != null,
+      priorYearStateGiven: p.priorYearStateTax != null,
       stateIraExempt,
       stateHasIncomeTax:   stateInfo.hasIncomeTax,
       missedFedCount:      missedFed.length,
       missedStateCount:    missedState.length,
+      // P57. Whether THIS plan's withholding actually clears each installment schedule on its own.
+      // These were closure locals, so the past-due reassurance in both renderers was gated on the
+      // strategy label instead, which let a plan that withholds heavily and still misses by a few
+      // hundred dollars print "no penalty applies".
+      fedTimelyByWithholding,
+      stateTimelyByWithholding,
       effectiveWithholdMonth,
       ira1: { rmdMonth: ira1.origRmdMonth, planARmdMonth: ira1.planARmdMonth, convMonth: ira1.planAConvMonth, hasConflict: ira1.hasConflict, withheld: ira1Withheld, replacement: ira1Replacement, doWithhold: doWithhold1 },
       ira2: { rmdMonth: ira2.origRmdMonth, planARmdMonth: ira2.planARmdMonth, convMonth: ira2.planAConvMonth, hasConflict: ira2.hasConflict, withheld: ira2Withheld, replacement: ira2Replacement, doWithhold: doWithhold2 },
       todayDate: today,
       coverageSummary,
+      // P56 variant identity. `dTaxPortion` is the dollar size of D's December holdback tranche;
+      // 0 means D degenerated (nothing eligible to host it) and the parent should omit the plan
+      // with a note rather than print a duplicate of A.
+      variant,
+      dTaxPortion,
+      // Either end of the range makes D a duplicate of another plan rather than a choice.
+      dDegenerate: isD && (dTaxPortion <= 0 || dNoEarlyLeg),
+      dNoEarlyLeg,
+      netCashByMonth,
+      netCashMonths,
+      lateNetCash: netCashByMonth[12] || 0,
+      drawsTotal:  allDrawsTotal,
     };
 
     // 16. Early-vs-December timing comparison.
-    //     Plan B (December baseline) and Plan C (early conv + December draws).
-    //     Guard with both _baseline and _planC to prevent infinite recursion.
+    //     The parent (Plan A) spawns the sibling variants; `isChild` prevents infinite recursion.
     const hasAnyConversion = p.ira1RothConversion > 0 || p.ira2RothConversion > 0;
     // The timing lever is NOT conversion-specific. Any draw that has not been taken yet can be
     // deferred to December, keeping its net proceeds tax-deferred longer, so the Early-vs-December
@@ -1812,35 +2181,67 @@ const TaxPaymentPlanner = (() => {
       (p.ira1Voluntary > 0 && !p.ira1VolTaken) ||
       (p.ira2Rmd       > 0 && !p.ira2RmdTaken) ||
       (p.ira2Voluntary > 0 && !p.ira2VolTaken);
-    let planB = null;
-    let planC = null;
-    let convComparison = null;
-    if ((hasAnyConversion || hasDeferrableDraw) && !p._baseline && !isPlanC) {
-      // December baseline — always the far end of the timing lever.
-      planB = computePaymentPlan(Object.assign({}, p, { _baseline: true }));
-      // The hybrid (early conversions, December draws) only differs from the December baseline when
-      // there are conversions to pull early. With none it is identical, so skip it rather than show
-      // a duplicate Plan A column.
-      if (hasAnyConversion) planC = computePaymentPlan(Object.assign({}, p, { _planC: true }));
-      // buildConvComparison(p, ira1, ira2, ewm, totalIraWithheld, planC_obj, planA_obj, _unused)
-      // planC_obj = _baseline computation → displayed as Plan C (December baseline)
-      // planA_obj = _planC computation    → displayed as Plan A (hybrid), null when no conversion
-      convComparison = buildConvComparison(p, ira1, ira2, effectiveWithholdMonth,
-                         totalIraDrawWithheld, planB, planC, null);
+    // The plan matrix. Each sibling is a full computePaymentPlan run under its own variant, so
+    // every plan owns a complete, executable action list rather than an adjustment applied to
+    // someone else's.
+    let plans      = null;
+    let comparison = null;
+    if ((hasAnyConversion || hasDeferrableDraw) && !isChild) {
+      const asPlan = r => (r ? { actions: r.actions, summary: r.summary, strategy: r.strategy } : null);
+      const sibling = v => computePaymentPlan(Object.assign({}, p, { _variant: v }));
+
+      // B (hybrid) only differs from C when there are conversions to pull early. With none it is
+      // identical to C, so it is omitted and the reason is printed — a column that silently
+      // vanishes is the complaint this replaces.
+      const planB = hasAnyConversion ? asPlan(sibling('B')) : null;
+      const planC = asPlan(sibling('C'));
+
+      // D needs a deferrable draw to host the December tax tranche and a tax bill to hold back.
+      // A D that finds nothing eligible (a lone RMD locked ahead of a conversion, or draws all
+      // already taken) is a duplicate of A, so it is dropped the same way B is.
+      let planD       = null;
+      let dOmitReason = totalTax > 0 ? 'nothing-eligible' : 'no-tax';
+      if (hasDeferrableDraw && totalTax > 0) {
+        const d = sibling('D');
+        // The tranche has to exist as an ACTION, not just as a dollar figure. A caller-level
+        // forceStrategy of 'quarterly' propagates into this child and suppresses its draw actions,
+        // which would otherwise offer a "Split" plan with nothing split. Belt and braces: D is only
+        // offered when it is genuinely a distinct, executable plan.
+        const hasTranche = d.actions.some(a => a.tranche === 'tax');
+        if (d.summary.dDegenerate || !hasTranche) {
+          // Different reasons, and the reader deserves the right one.
+          dOmitReason = d.summary.dNoEarlyLeg ? 'no-early-leg' : 'nothing-eligible';
+        } else {
+          planD = asPlan(d);
+        }
+      }
+
+      // Q isolates the payment mechanism against C: same December draws and conversions, taxes
+      // paid as estimates instead of withheld. With no tax there is nothing to isolate.
+      const planQ = totalTax > 0 ? asPlan(sibling('Q')) : null;
+
+      plans = {
+        A: { actions, summary, strategy },
+        B: planB,
+        C: planC,
+        D: planD,
+        Q: planQ,
+      };
+      comparison = buildComparison(p, plans, stateInfo, yr, hasAnyConversion, dOmitReason);
     }
 
     return {
       params:   p,
       strategy,
       actions,
-      analysis,
       summary,
       stateInfo,
-      planB,
-      planC,
-      convComparison,
-      text: buildText(p, actions, summary, analysis, yr, stateInfo, planB, planC, convComparison),
-      html: buildHtml(p, actions, summary, analysis, yr, stateInfo, planB, planC, convComparison),
+      plans,
+      comparison,
+      // Children render nothing: the work was thrown away before, and a child-rendered plan letter
+      // would be stale anyway because only the parent knows which siblings exist.
+      text: isChild ? '' : buildText(p, actions, summary, yr, stateInfo, plans, comparison),
+      html: isChild ? '' : buildHtml(p, actions, summary, yr, stateInfo, plans, comparison),
     };
   }
 
@@ -1853,237 +2254,361 @@ const TaxPaymentPlanner = (() => {
   }
 
   // ── OC Analysis ───────────────────────────────────────────────────────────
-  function buildAnalysis(p, d, stateInfo, effectiveWithholdMonth) {
-    const r   = p.portfolioRate;
-    const h   = d.hysaNet;
-    const ir  = d.iraWCap;
-    const sf  = d.shortfall;
-    const ff  = d.fedFrac;
-    const cf  = d.stFrac;
-    const stOcF = (stateInfo.ocWeightedMonths || 8.0) / 12;
-    const iraF  = iraOcFactor(effectiveWithholdMonth);
+  // ── One cost model, one frame ─────────────────────────────────────────────
+  // Every plan is priced by walking its OWN action list to a single April 15 reference (the month
+  // index runs 1..13, where January of the following year is 13, so `16 - m` months of carry is
+  // the distance from an action to that reference).
+  //
+  // This replaces two cost models that never met. buildConvComparison measured first-year timing
+  // deltas to December 31 with no cash-carry term; buildAnalysis measured absolute opportunity
+  // cost to April 15 with one, and priced its year-end-IRA row at the MAIN plan's withholding
+  // month even when a later plan won. On the scenario that prompted this phase they printed
+  // opposite verdicts on the same screen. Pricing each plan from its own actions makes that
+  // structurally impossible: there is no second clock left to disagree with.
+  function buildPlanCost(plan, p, yr) {
+    const r       = p.portfolioRate;
+    const hysaNet = p.hysaGross * (1 - p.marginalOrdRate);
+    const carry   = m => Math.max(0, 16 - m) / 12;
+    const frame   = a => a.date.month + (a.date.year > yr ? 12 : 0);
 
-    const ocIra   = amt => amt * r * iraF;
-    const ocQcash = (f, s) => f * (r - h) * OC_FACTOR.Q_FED + s * (r - h) * stOcF;
-    const ocQbrok = (f, s) => f * r * OC_FACTOR.Q_FED + s * r * stOcF;
+    let withholdOC = 0, estimateOC = 0, rmdDeferral = 0, rothGrowth = 0;
+    let withheldTotal = 0, estimatesTotal = 0;
+
+    for (const a of plan.actions) {
+      const w = (a.federalWithholding || 0) + (a.stateWithholding || 0);
+      if (a.type === T.Q_FED || a.type === T.Q_STATE) {
+        // Cash held for an estimate earns the HYSA rate meanwhile, so only the spread is lost.
+        estimateOC     += a.amount * (r - hysaNet) * carry(frame(a));
+        estimatesTotal += a.amount;
+      } else if (a.type === T.ROTH_CONV) {
+        // No tax rate is applied to the Roth growth, matching the shipped convention, so
+        // plan-to-plan deltas stay comparable with the calendar-frame numbers this replaces.
+        rothGrowth    += a.amount * r * carry(frame(a));
+        withholdOC    += w * r * carry(frame(a));
+        withheldTotal += w;
+      } else if (a.type === T.RMD || a.type === T.IRA_VOL) {
+        withholdOC    += w * r * carry(frame(a));
+        withheldTotal += w;
+        // Only the RMD portion carries a deferral value, and only to December 31: an RMD cannot
+        // be pushed past year end. Voluntary draws serve a spending need and are not free to
+        // move, so they are deliberately left un-costed.
+        const netFrac = a.amount > 0 ? 1 - w / a.amount : 1;
+        rmdDeferral  += (a.rmdAmount || 0) * netFrac * r * p.marginalOrdRate
+                        * Math.max(0, 12 - a.date.month) / 12;
+      }
+    }
+
+    return {
+      withholdOC, estimateOC, rmdDeferral, rothGrowth,
+      total: withholdOC + estimateOC + rmdDeferral - rothGrowth,
+      withheldTotal, estimatesTotal,
+      paid: withheldTotal + estimatesTotal,
+    };
+  }
+
+  // ── The one comparison table ──────────────────────────────────────────────
+  function buildComparison(p, plans, stateInfo, yr, hasConv, dOmitReason) {
+    const r        = p.portfolioRate;
+    const hysaNet  = p.hysaGross * (1 - p.marginalOrdRate);
+    const totalTax = p.federalTax + p.stateTax;
+    const letters  = ['A', 'B', 'C', 'D', 'Q'].filter(k => plans[k]);
+
+    // Every label is built from the plan it names. They used to be built from Plan A's months, so
+    // Plan B's said "draws and withholding in December" while Plan B withheld in January (an IRA
+    // that both converts and has an RMD has that RMD pulled forward by resolveIraOrdering), and
+    // Plan D's named an early month even when D kept no early draw at all.
+    const monthsOf = (k, types, filter) => {
+      if (!plans[k]) return [];
+      const ms = plans[k].actions
+        .filter(a => types.includes(a.type) && a.date && (!filter || filter(a)))
+        .map(a => a.date.month);
+      return Array.from(new Set(ms)).sort((x, y) => x - y);
+    };
+    const mName = m => (m ? MONTH_NAMES[m - 1] : 'December');
+    // An empty month list means the plan does nothing of that kind, and saying "December" would be
+    // a plain falsehood: a conversion-only plan was labelled "draws in December" with no draws.
+    const mList = ms => (ms.length === 0 ? null
+      : ms.length === 1 ? MONTH_NAMES[ms[0] - 1]
+      : ms.slice(0, -1).map(m => MONTH_NAMES[m - 1]).join(', ') + ' and ' + MONTH_NAMES[ms[ms.length - 1] - 1]);
+    const drawMonths = k => monthsOf(k, [T.RMD, T.IRA_VOL]);
+    const convMonths = k => monthsOf(k, [T.ROTH_CONV]);
+
+    const perPlan = {};
+    letters.forEach(k => { perPlan[k] = buildPlanCost(plans[k], p, yr); });
+
+    let best = null;
+    letters.forEach(k => { if (best === null || perPlan[k].total < perPlan[best].total - 0.5) best = k; });
+    // Everything within a dollar of the cheapest is a co-winner: starring one of them on a
+    // rounding artefact would be noise dressed as advice.
+    const bestSet = letters.filter(k => Math.abs(perPlan[k].total - perPlan[best].total) <= 1);
+    const anyNegative = letters.some(k => perPlan[k].total < -0.5);
+    // Late in the year "early" IS December, so the TIMING plans collapse onto the same dates.
+    // Q is not part of that: it differs by payment mechanism, not by timing, and stays distinct
+    // however late it gets.
+    const timing  = letters.filter(k => k !== 'Q');
+    const allTie  = timing.length > 1 &&
+      timing.every(k => Math.abs(perPlan[k].total - perPlan[timing[0]].total) <= 1);
+
+    // Each label is assembled from the clauses that are actually true of that plan, so a plan with
+    // no draws does not describe draw timing and a plan with no conversion does not describe a
+    // conversion month.
+    const clause = (months, phrase) => (months ? `${phrase} ${months}` : null);
+    const join   = parts => parts.filter(Boolean).join(', ');
+    const dEarly = mList(monthsOf('D', [T.RMD, T.IRA_VOL], a => a.tranche !== 'tax'));
+    const dTax   = mList(monthsOf('D', [T.RMD, T.IRA_VOL], a => a.tranche === 'tax'));
+    const labels = {
+      A: `Plan A — Early: ` + (join([clause(mList(convMonths('A')), 'conversions in'),
+                                     clause(mList(drawMonths('A')), 'draws in')])
+            || 'nothing to draw or convert') +
+         (mList(drawMonths('A')) ? ', tax withheld at the draw' : ''),
+      B: `Plan B — Hybrid: ` + join([clause(mList(convMonths('B')), 'conversions in'),
+                                     clause(mList(drawMonths('B')), 'draws and withholding in')]),
+      C: `Plan C — Late: ` + (join([clause(mList(drawMonths('C')), 'draws in'),
+                                    clause(mList(convMonths('C')), 'conversions in')])
+            || 'nothing to draw or convert'),
+      // D's early leg is whatever is NOT the December tax tranche.
+      D: `Plan D — Split: ` + join([clause(dEarly, 'spending draws in'),
+                                    dTax ? `tax held back to a ${dTax} tranche` : null]),
+      Q: `Plan Q — Quarterly: ` + join([clause(mList(drawMonths('Q')), 'draws in'),
+                                        'the whole liability paid as quarterly estimates']),
+    };
+
+    // Why a column is missing, rather than letting it silently vanish.
+    const bNote = plans.B ? null
+      : 'Plan B (hybrid) is not shown: with no Roth conversion to pull early it would be identical to Plan C.';
+    const dNote = plans.D ? null
+      : dOmitReason === 'no-tax'
+        ? 'Plan D (split) is not shown: with no tax due there is nothing to hold back.'
+        : dOmitReason === 'no-early-leg'
+          ? 'Plan D (split) is not shown: the tax needs every dollar of the draws you can still move, ' +
+            'so nothing would be left to take early and the plan would be identical to Plan C.'
+          : 'Plan D (split) is not shown: no draw is available to host the December tax tranche. ' +
+            'A draw already taken is locked to the month it happened, and the RMD of an IRA you are ' +
+            'converting has to complete before the conversion.';
+
+    // Funding the same estimates by selling in a taxable brokerage account instead of holding
+    // cash: the whole balance stays invested at r rather than the HYSA rate, and the sale itself
+    // realises capital gains, so the sale has to be grossed up to net the tax.
     const extraCg = n => {
       if (n <= 0) return 0;
       const denom = 1 - p.appreciationPct * p.cgRateBlended;
       return denom <= 0 ? 0 : (n / denom) * p.appreciationPct * p.cgRateBlended;
     };
+    let brokerage = null;
+    if (plans.Q && totalTax > 0) {
+      const q  = plans.Q.actions.filter(a => a.type === T.Q_FED || a.type === T.Q_STATE);
+      const oc = q.reduce((sum, a) =>
+        sum + a.amount * r * Math.max(0, 16 - (a.date.month + (a.date.year > yr ? 12 : 0))) / 12, 0);
+      const cg = extraCg(totalTax);
+      brokerage = { oc, cg, total: oc + cg };
+    }
 
-    const s1 = {
-      id: 'ye_ira_partial', label: 'YE-IRA + Quarterly Cash (shortfall)',
-      oc: ocIra(ir) + ocQcash(sf * ff, sf * cf), cg: 0,
-    };
-    s1.total = s1.oc + s1.cg;
-
-    const s2 = {
-      id: 'all_quarterly', label: 'All Quarterly Cash (HYSA)',
-      oc: ocQcash(p.federalTax, p.stateTax), cg: 0,
-    };
-    s2.total = s2.oc + s2.cg;
-
-    const totalTax = p.federalTax + p.stateTax;
-    const s3 = {
-      id: 'all_brokerage', label: 'All Quarterly Brokerage Sales',
-      oc: ocQbrok(p.federalTax, p.stateTax),
-      cg: extraCg(totalTax),
-    };
-    s3.total = s3.oc + s3.cg;
-
-    const rec = d.strategy === 'all_quarterly' ? s2 : s1;
-    const all = [s1, s2, s3].sort((a, b) => a.total - b.total);
+    // The safe-harbor verdict is a property of the plan, not of the cost model, so it rides along
+    // from each plan's own summary rather than being recomputed here.
+    const safeHarbor = {};
+    letters.forEach(k => { safeHarbor[k] = plans[k].summary.safeHarbor; });
 
     return {
-      strategies: [s1, s2, s3],
-      recommended: rec,
-      best:        all[0],
-      worst:       all[all.length - 1],
-      savingsVsAllBrokerage: s3.total - rec.total,
-      savingsVsAllCash:      s2.total - s1.total,
-      iraCoverage:   d.iraWCap / Math.max(1, totalTax),
-      hysaNet:       d.hysaNet,
-      breakeven:     d.breakeven,
-      yeIraWins:     d.yeIraWins,
-      iraOcFactor:   iraF,
-      stateOcFactor: stOcF,
-    };
-  }
-
-  // ── Three-plan conversion comparison (aggregate across both IRAs) ──────────
-  // New plan letter convention:
-  //   Plan A = hybrid  (early conversions + December draws)   ← _planC flag
-  //   Plan B = early   (early conversions + early draws)      ← no flag (main computation)
-  //   Plan C = December baseline (everything in December)      ← _baseline flag
-  function buildConvComparison(p, ira1, ira2, effectiveWithholdMonth, totalIraWithheld,
-                                planC_obj, planA_obj, planB_oc_unused) {
-    // Note: parameter names use old convention from call site; we remap inside:
-    //   planC_obj = the object computed with _baseline:true  → displayed as Plan C
-    //   planA_obj = the object computed with _planC:true     → displayed as Plan A
-    const r = p.portfolioRate;
-
-    // Earliest conversion month across IRAs (Plans A and B use same timing)
-    const earliestConvMonth = Math.min(
-      p.ira1RothConversion > 0 ? ira1.planAConvMonth : 12,
-      p.ira2RothConversion > 0 ? ira2.planAConvMonth : 12,
-    );
-
-    // ── Plan B (early everything) components ─────────────────────────────────
-    // Roth growth: conversion happens in nextMonth for Plans A and B
-    let planB_rothGrowth = 0;
-    if (p.ira1RothConversion > 0) planB_rothGrowth += p.ira1RothConversion * r * (12 - ira1.planAConvMonth) / 12;
-    if (p.ira2RothConversion > 0) planB_rothGrowth += p.ira2RothConversion * r * (12 - ira2.planAConvMonth) / 12;
-
-    // Withholding OC: draw withholding leaves IRA early (Plan B draws happen in nextMonth)
-    const monthsDrawEarly = 12 - effectiveWithholdMonth;
-    const planB_withholdOC = totalIraWithheld * r * monthsDrawEarly / 12;
-
-    // Draw deferral lost (Plan B): draws happen early, so net after-tax proceeds are out
-    // of the IRA sooner, earning taxably rather than tax-deferred
-    const allDraws = p.ira1Rmd + p.ira1Voluntary + p.ira2Rmd + p.ira2Voluntary;
-    const approxWithholdPct = allDraws > 0 ? Math.min(1, totalIraWithheld / allDraws) : 0;
-    let planB_drawDeferral = 0;
-    if (p.ira1Rmd > 0) {
-      planB_drawDeferral += p.ira1Rmd * (1 - approxWithholdPct) * r * p.marginalOrdRate * (12 - ira1.planARmdMonth) / 12;
-    }
-    if (p.ira2Rmd > 0) {
-      planB_drawDeferral += p.ira2Rmd * (1 - approxWithholdPct) * r * p.marginalOrdRate * (12 - ira2.planARmdMonth) / 12;
-    }
-
-    // Plan B net advantage vs Plan C baseline (higher = better)
-    const planB_netVsC = planB_rothGrowth - planB_withholdOC - planB_drawDeferral;
-
-    // ── Plan A (hybrid) components ────────────────────────────────────────────
-    // Same Roth growth as Plan B (same conversion timing); draws deferred to December
-    const planA_rothGrowth = planB_rothGrowth;
-
-    // Withhold OC: only from minimum conversion withholding (usually 0 when draws suffice)
-    let planA_withholdOC = 0;
-    if (planA_obj) {
-      const cs = planA_obj.summary.coverageSummary;
-      const convW = cs.conversion.fed + cs.conversion.state;
-      planA_withholdOC = convW > 0 ? convW * r * (12 - earliestConvMonth) / 12 : 0;
-    }
-
-    // Draw deferral: only forced-early RMDs (same-IRA ordering rule); voluntary always stays December
-    let planA_drawDeferral = 0;
-    if (planA_obj) {
-      const approxW = allDraws > 0 ? Math.min(1, totalIraWithheld / allDraws) : 0;
-      if (p.ira1Rmd > 0 && p.ira1RothConversion > 0) {
-        const rmd1Month = planA_obj.summary.ira1.planARmdMonth;
-        planA_drawDeferral += p.ira1Rmd * (1 - approxW) * r * p.marginalOrdRate * (12 - rmd1Month) / 12;
-      }
-      if (p.ira2Rmd > 0 && p.ira2RothConversion > 0) {
-        const rmd2Month = planA_obj.summary.ira2.planARmdMonth;
-        planA_drawDeferral += p.ira2Rmd * (1 - approxW) * r * p.marginalOrdRate * (12 - rmd2Month) / 12;
-      }
-    }
-
-    // Plan A net advantage vs Plan C baseline
-    const planA_netVsC = planA_obj ? planA_rothGrowth - planA_withholdOC - planA_drawDeferral : null;
-
-    // ── Best plan: highest net advantage vs Plan C (baseline = 0) ────────────
-    const netValues = [
-      { label: 'A', net: planA_netVsC !== null ? planA_netVsC : -Infinity },
-      { label: 'B', net: planB_netVsC },
-      { label: 'C', net: 0 },
-    ];
-    const bestNet  = Math.max(...netValues.map(x => x.net));
-    const bestPlan = netValues.find(x => x.net === bestNet)?.label;
-
-    const hasConv = p.ira1RothConversion > 0 || p.ira2RothConversion > 0;
-
-    return {
+      letters, perPlan, best, bestSet, allTie, anyNegative, labels, bNote, dNote, brokerage, safeHarbor,
       hasConversion: hasConv,
-      planALabel: `Plan A — Hybrid: early conversion(s) (${MONTH_NAMES[earliestConvMonth-1]}), December draws`,
-      planBLabel: hasConv
-        ? `Plan B — Early everything: conversions and draws in ${MONTH_NAMES[effectiveWithholdMonth-1]}`
-        : `Plan B — Early draws: all draws in ${MONTH_NAMES[effectiveWithholdMonth-1]}`,
-      planCLabel: hasConv
-        ? `Plan C — December baseline: all draws and conversions in December`
-        : `Plan C — December: all draws deferred to December`,
-      // Plan A (hybrid) components
-      planA_rothGrowth,
-      planA_withholdOC,
-      planA_drawDeferral,
-      planA_netVsC,
-      // Plan B (early) components
-      planB_rothGrowth,
-      planB_withholdOC,
-      planB_drawDeferral,
-      planB_netVsC,
-      // Winner
-      bestPlan,
-      earliestConvMonth,
-      monthsDrawEarly,
+      hysaNet,
+      breakeven: r / 2,
+      yeIraWins: hysaNet < r / 2,
+      stateName: stateInfo.name,
+      totalTax,
     };
   }
+
+
 
   // ── Plain text output ─────────────────────────────────────────────────────
-  function buildText(p, actions, summary, analysis, yr, stateInfo, planB, planC, convComparison) {
+  // P57. One sentence, used by both renderers, saying what a plan actually hands the household and
+  // when. The comparison prices the timing of the TAX. Nothing in this tool knows when the money
+  // gets SPENT, so the cash-flow consequence of pushing a draw to December cannot be priced; it is
+  // stated instead, in that plan's own dollars.
+  // P60. "met" is worth different amounts depending on which bar it cleared, and the 110% bar
+  // turns on prior-year AGI that this planner never sees. These read the tags off a safe-harbor
+  // object so both renderers say the same thing.
+  function shTag(sh) {
+    const parts = [sh.federal.tag];
+    if (sh.state && sh.state.tag !== sh.federal.tag) parts.push(sh.state.tag);
+    return parts.join('/');
+  }
+  function shCaveats(sh, stateName) {
+    const out = [];
+    if (sh.highIncomeInferred) {
+      out.push(`The 110% bar was applied because the income entered here totals ${fmt$(sh.agiProxy)}, ` +
+        `over the $150,000 AGI threshold. That threshold is measured on LAST year's AGI, which this ` +
+        `planner is not given, so if last year was the quieter year the real bar is 100% and this ` +
+        `overstates what you must pay.`);
+    } else if (sh.provisional) {
+      out.push(`This rests on the 100% bar. The bar rises to 110% when LAST year's AGI was over ` +
+        `$150,000, and this planner is not given AGI, so it cannot check. If last year was above it, ` +
+        `the real requirement is 10% higher than shown and a plan marked met may not clear it.`);
+    }
+    if (sh.priorYearMissing) {
+      out.push(`Last year's tax was not supplied, so the requirement falls back to 90% of this year. ` +
+        `That can only be too HIGH: a lower prior-year tax would have set a lower bar under the ` +
+        `lesser-of rule. Enter last year's figures for the real test.`);
+    }
+    return out;
+  }
+
+  function cashDeliveryLine(sum) {
+    const months = sum.netCashMonths || [];
+    if (months.length === 0) {
+      return (sum.drawsTotal || 0) > 0.5
+        ? `Net IRA cash to you: none. Every dollar of the ${fmt$(sum.drawsTotal)} drawn is withheld for tax, ` +
+          `so this plan funds no spending.`
+        : 'Net IRA cash to you: none, this plan takes no draws.';
+    }
+    const parts = months.map(m => `${MONTH_NAMES[m - 1]} ${fmt$(sum.netCashByMonth[m])}`);
+    const when  = parts.length === 1 ? parts[0]
+      : parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1];
+    const late  = sum.lateNetCash || 0;
+    const tail  = (months.length === 1 && months[0] === 12)
+      ? ' Anything you spend before December comes from somewhere else.'
+      : late > 0.5
+        ? ` ${fmt$(late)} of it does not arrive until December.`
+        : '';
+    return `Net IRA cash to you: ${when}.${tail}`;
+  }
+
+  function buildText(p, actions, summary, yr, stateInfo, plans, comparison) {
     const lines = [];
     const hr = '─'.repeat(70);
 
     lines.push(`TAX PAYMENT PLAN — ${yr} Tax Year`);
     lines.push(hr);
-    lines.push(`Strategy : ${summary.strategyLabel}`);
     lines.push(`State    : ${stateInfo.name}${summary.stateIraExempt ? ' [IRA-exempt — no state IRA withholding]' : ''}`);
     lines.push(`Total tax: ${fmt$(summary.totalTaxDue)}  (${fmt$(p.federalTax)} federal + ${fmt$(p.stateTax)} ${stateInfo.name})`);
 
-    const ira1DrawTotal = p.ira1Rmd + p.ira1Voluntary;
-    const ira2DrawTotal = p.ira2Rmd + p.ira2Voluntary;
-    if (ira1DrawTotal > 0) lines.push(`IRA 1    : draw ${MONTH_NAMES[summary.ira1.planARmdMonth-1]}` + (p.ira1RothConversion > 0 ? `  | conversion ${MONTH_NAMES[summary.ira1.convMonth-1]}` : ''));
-    if (ira2DrawTotal > 0) lines.push(`IRA 2    : draw ${MONTH_NAMES[summary.ira2.planARmdMonth-1]}` + (p.ira2RothConversion > 0 ? `  | conversion ${MONTH_NAMES[summary.ira2.convMonth-1]}` : ''));
-    lines.push(`Effective withhold month: ${MONTH_NAMES[summary.effectiveWithholdMonth-1]}  |  Opportunity Cost factor: ${fmtPct(analysis.iraOcFactor, 1)} yrs`);
-    lines.push(`OC savings vs. all-brokerage: ${fmt$(summary.savingsVsWorst)}`);
+    // The header used to print Strategy, IRA Coverage, per-IRA draw and conversion months and an
+    // effective withholding month, all read from the top-level summary. The top-level summary is
+    // PLAN A's, so the page opened by describing one plan while crowning another: on a reported
+    // scenario it said "draw January, withhold January, coverage 100%" directly above
+    // "Winner: Plan C", a plan that draws in December and routes $7,000 to estimates. Those values
+    // are per-plan and now live only where the plan letter is attached to them: the comparison
+    // table and each plan's own section. What stays here is true of the page.
+    if (comparison) {
+      const t = comparison.perPlan[comparison.best].total;
+      const money = (t < -0.5 ? '-' : '') + fmt$(t);
+      lines.push(comparison.bestSet.length > 1
+        ? `Winner   : Plans ${comparison.bestSet.join(', ')} tie at ${money} to April 15`
+        : `Winner   : Plan ${comparison.best} — first-year ${t < -0.5 ? 'net GAIN' : 'cost'} of ${money} to April 15`);
+      lines.push(`           ${comparison.labels[comparison.best]}`);
+      if (!comparison.safeHarbor[comparison.best].met) {
+        lines.push('           NOTE: the cheapest plan MISSES safe harbor. The cost above does not');
+        lines.push('           include an underpayment penalty. See the comparison below.');
+      }
+    }
 
     if (summary.missedFedCount > 0 || summary.missedStateCount > 0) {
       lines.push('');
       lines.push(`*** ${summary.missedFedCount + summary.missedStateCount} QUARTERLY INSTALLMENT(S) PAST DUE ***`);
-      if (summary.strategy !== 'all_quarterly') lines.push('    YE-IRA withholding is retroactive — NO penalty applies.');
+      // "Withholding is retroactive, no penalty applies" used to be gated on the strategy LABEL of
+      // Plan A. A plan can withhold heavily, still miss an installment by a few hundred dollars, and
+      // it printed the reassurance anyway; worse, the recommended plan's own steps forty lines below
+      // could be marked PAST DUE at the same time. It is now checked against the plan being
+      // recommended, using that plan's own coverage of each schedule.
+      const rec     = comparison ? plans[comparison.best].summary : summary;
+      const recName = comparison ? comparison.best : 'A';
+      if (rec.iraWithholdingUsed <= 0.5) {
+        // A plan that withholds nothing can be neither praised nor blamed for its withholding.
+        // The original code skipped this sentence entirely for an all-quarterly plan, which was
+        // right about withholding and silent about what actually decides lateness for it.
+        lines.push(`    Plan ${recName} pays by quarterly estimates, and an estimate counts on the day you`);
+        lines.push('    pay it, so an installment already past is late. Pay the missed ones now.');
+      } else if (rec.fedTimelyByWithholding && rec.stateTimelyByWithholding) {
+        lines.push(`    Plan ${recName} withholding covers every installment on both schedules, and`);
+        lines.push('    withholding is credited pro-rata, so no penalty applies.');
+      } else {
+        const short = [!rec.fedTimelyByWithholding ? 'federal' : null,
+                       !rec.stateTimelyByWithholding ? stateInfo.name : null].filter(Boolean).join(' and ');
+        lines.push(`    Withholding under Plan ${recName} does not fully cover the ${short} schedule,`);
+        lines.push('    so a penalty can accrue. See that plan\'s steps below.');
+      }
     }
 
-    if (convComparison) {
-      const cc = convComparison;
-      const fmtNetTxt = v => v === null || v === undefined ? 'n/a'
-        : v === 0 ? '$0 (baseline)'
-        : (v > 0 ? '+' : '−') + fmt$(Math.abs(v));
+    // ── The one comparison table ────────────────────────────────────────────
+    if (comparison) {
+      const cc = comparison;
+      const W  = 11;
+      const cell = v => String(v).padStart(W);
+      const row  = (label, fn) => lines.push('  ' + label.padEnd(24) + cc.letters.map(k => cell(fn(cc.perPlan[k], k))).join(''));
+
       lines.push('');
-      if (cc.hasConversion) {
-        lines.push('ROTH CONVERSION — THREE-PLAN COMPARISON');
-        lines.push(hr);
-        lines.push(`  ${cc.planALabel}`);
-        lines.push(`  ${cc.planBLabel}`);
-        lines.push(`  ${cc.planCLabel}`);
-        lines.push('');
-        lines.push(`  Component             Plan A (hybrid)   Plan B (early)   Plan C (Dec)`);
-        lines.push(`  Roth growth          +${fmt$(cc.planA_rothGrowth).padStart(10)}   +${fmt$(cc.planB_rothGrowth).padStart(10)}          $0`);
-        lines.push(`  Withhold OC          -${fmt$(cc.planA_withholdOC).padStart(10)}   -${fmt$(cc.planB_withholdOC).padStart(10)}          $0`);
-        lines.push(`  Draw deferral        -${fmt$(cc.planA_drawDeferral).padStart(10)}   -${fmt$(cc.planB_drawDeferral).padStart(10)}          $0`);
-        lines.push(`  ${'─'.repeat(66)}`);
-        lines.push(`  Net adv. vs Plan C   ${fmtNetTxt(cc.planA_netVsC).padStart(14)}   ${fmtNetTxt(cc.planB_netVsC).padStart(14)}   $0 (baseline)   ← ${cc.bestPlan ? 'Plan ' + cc.bestPlan + ' WINS' : ''}`);
-        lines.push('');
-        lines.push('  NOTE: First-year only. Early conversion provides compounding Roth');
-        lines.push('  growth for every subsequent year — long-term benefit grows beyond what is shown.');
-      } else {
-        // Draw-only: no conversion to pull early, so the hybrid plan does not exist. Two plans —
-        // early draws (Plan B) vs draws deferred to December (Plan C baseline).
-        lines.push('DRAW TIMING — EARLY vs DECEMBER');
-        lines.push(hr);
-        lines.push(`  ${cc.planBLabel}`);
-        lines.push(`  ${cc.planCLabel}`);
-        lines.push('');
-        lines.push(`  Component             Plan B (early)   Plan C (Dec)`);
-        lines.push(`  Withhold OC          -${fmt$(cc.planB_withholdOC).padStart(10)}          $0`);
-        lines.push(`  Draw deferral        -${fmt$(cc.planB_drawDeferral).padStart(10)}          $0`);
-        lines.push(`  ${'─'.repeat(52)}`);
-        lines.push(`  Net adv. vs Plan C   ${fmtNetTxt(cc.planB_netVsC).padStart(14)}   $0 (baseline)   ← ${cc.bestPlan ? 'Plan ' + cc.bestPlan + ' WINS' : ''}`);
-        lines.push('');
-        lines.push('  Deferring a not-yet-taken draw to December keeps its net proceeds tax-deferred');
-        lines.push('  longer. Only draws you can freely postpone count here (an RMD is required either');
-        lines.push('  way; a voluntary draw you need for spending is not free to move).');
+      lines.push('PLAN COMPARISON — first-year cost, every plan priced to April 15');
+      lines.push(hr);
+      cc.letters.forEach(k => lines.push(`  ${cc.labels[k]}`));
+      if (cc.bNote) lines.push(`  ${cc.bNote}`);
+      if (cc.dNote) lines.push(`  ${cc.dNote}`);
+      lines.push('');
+      // The star marks the column, not the cell. On the TOTAL row it had to share the cell with a
+      // right-aligned dollar figure, which pushed that one row out of alignment with every other.
+      lines.push('  ' + 'Component'.padEnd(24) +
+        cc.letters.map(k => cell('Plan ' + k + (cc.bestSet.includes(k) ? '★' : ''))).join(''));
+      row('Withholding OC',    c => fmt$(c.withholdOC));
+      row('Estimate carry',    c => fmt$(c.estimateOC));
+      row('RMD proceeds held',  c => fmt$(c.rmdDeferral));
+      row('Roth growth credit', c => (c.rothGrowth > 0.5 ? '-' : '') + fmt$(c.rothGrowth));
+      lines.push('  ' + '─'.repeat(24 + W * cc.letters.length));
+      row('TOTAL first-year cost',
+        (c, k) => (c.total < -0.5 ? '-' : '') + fmt$(c.total));
+      row('vs best', (c, k) => (cc.bestSet.includes(k) ? '—' : '+' + fmt$(c.total - cc.perPlan[cc.best].total)));
+      lines.push('  ' + '─'.repeat(24 + W * cc.letters.length));
+      // How the money actually reaches the IRS, which the cost rows above do not say.
+      row('Withheld from IRA',  c => fmt$(c.withheldTotal));
+      row('Quarterly estimates', c => fmt$(c.estimatesTotal));
+      const shLabel = `Safe harbor (${shTag(cc.safeHarbor[cc.letters[0]])}` +
+        `${cc.safeHarbor[cc.letters[0]].provisional ? '*' : ''})`;
+      row(shLabel, (c, k) => (cc.safeHarbor[k].met ? 'met' : 'MISSED'));
+      lines.push('');
+      // Name the rule once, since it is the same test for every plan; only the outcome differs.
+      const shAny = cc.safeHarbor[cc.letters[0]];
+      lines.push(`  Safe harbor test: federal ${fmt$(shAny.federal.required)} (${shAny.federal.rule})` +
+        (shAny.state ? `, ${stateInfo.name} ${fmt$(shAny.state.required)} (${shAny.state.rule})` : ''));
+      shCaveats(shAny, stateInfo.name).forEach(c => {
+        lines.push('  ' + (shAny.provisional ? '* ' : '  ') + c);
+      });
+      const missing = cc.letters.filter(k => !cc.safeHarbor[k].met);
+      if (missing.length > 0) {
+        missing.forEach(k => {
+          const sh = cc.safeHarbor[k];
+          const which = [sh.federal.missedAt ? `federal at ${sh.federal.missedAt}, short ${fmt$(sh.federal.shortBy)}` : null,
+                         sh.state && sh.state.missedAt ? `${stateInfo.name} at ${sh.state.missedAt}, short ${fmt$(sh.state.shortBy)}` : null]
+                        .filter(Boolean).join('; ');
+          lines.push(`  Plan ${k} misses it: ${which}.`);
+        });
+        lines.push('  An estimate counts on the day you pay it, so an installment already past cannot be');
+        lines.push('  made timely. Withholding is credited across all four due dates, which is why a plan');
+        lines.push('  that withholds can still clear a quarter that has gone by. ' + seeAlso('IRC 6654(g)'));
       }
+      lines.push('');
+      if (cc.allTie) {
+        lines.push('  The timing plans are identical this late in the year: "early" is already December,');
+        lines.push('  so they land on the same dates. Plan Q still differs, because what it changes is');
+        lines.push('  how the tax is paid rather than when the money moves.');
+      }
+      if (cc.brokerage) {
+        lines.push(`  Funding those estimates by selling brokerage instead of holding cash costs`);
+        lines.push(`  ${fmt$(cc.brokerage.total)}: ${fmt$(cc.brokerage.oc)} of forgone growth plus ` +
+                   `${fmt$(cc.brokerage.cg)} of capital gains tax on the sale.`);
+        lines.push(`  That ${fmt$(cc.brokerage.cg)} is NOT part of the ${fmt$(cc.totalTax)} these plans are built around,`);
+        lines.push(`  because the tax figures were calculated before the sale existed. Selling raises next`);
+        lines.push(`  April's bill by roughly that much. ` + seeAlso('Tax figures are inputs'));
+      }
+      if (cc.anyNegative) {
+        lines.push('  A NEGATIVE total is a net gain: the Roth growth that plan buys outweighs everything');
+        lines.push('  it costs.');
+      }
+      lines.push('  Lower is better. Moving a draw to December is not free, and this table does not');
+      lines.push('  price it: the planner does not know when you actually spend the money. A December');
+      lines.push('  draw either funds next year\'s spending, or it assumes you can cover this year\'s from');
+      lines.push('  somewhere else until it lands. Only the RMD portion carries a deferral value here,');
+      lines.push('  and only to December 31.');
+      lines.push('  First-year only: an early conversion compounds tax-free in every later year too,');
+      lines.push('  which this table does not count.');
     }
 
     const renderActions = acts => acts.forEach(a => {
@@ -2103,24 +2628,27 @@ const TaxPaymentPlanner = (() => {
       lines.push('');
     });
 
-    // Render order: Plan A (hybrid) first, Plan B (early) second, Plan C (December) third.
-    // Plan A only exists when there is a conversion to pull early (planC object present).
-    if (planB || planC) {
-      const hasConv = convComparison ? convComparison.hasConversion : (planC != null);
+    if (comparison) {
       lines.push('');
-      if (planC) {
-        lines.push('PLAN A — HYBRID (EARLY CONVERSION + DECEMBER DRAWS)');
+      comparison.letters.forEach(k => {
+        const win = comparison.bestSet.includes(k) ? '   ★ LOWEST FIRST-YEAR COST' : '';
+        lines.push(comparison.labels[k].toUpperCase() + win);
         lines.push(hr);
-        renderActions(planC.actions);
-      }
-
-      lines.push(hasConv ? 'PLAN B — EARLY EVERYTHING' : 'PLAN B — EARLY DRAWS');
-      lines.push(hr);
-      renderActions(actions);
-
-      lines.push(hasConv ? 'PLAN C — DECEMBER BASELINE' : 'PLAN C — DECEMBER (DRAWS DEFERRED)');
-      lines.push(hr);
-      if (planB) renderActions(planB.actions);
+        const sum = plans[k].summary;
+        const c   = comparison.perPlan[k];
+        lines.push(`  First-year cost to April 15: ${(c.total < -0.5 ? '-' : '') + fmt$(c.total)}` +
+                   `   |   tax withheld ${fmt$(c.withheldTotal)}, paid as estimates ${fmt$(c.estimatesTotal)}`);
+        lines.push('  ' + cashDeliveryLine(sum));
+        const sh = sum.safeHarbor;
+        lines.push(`  Safe harbor [${shTag(sh)}${sh.provisional ? '*' : ''}]: federal ` +
+          (sh.federal.met ? 'met' : 'MISSED at ' + sh.federal.missedAt) +
+          ` (${sh.federal.rule}, ${fmt$(sh.federal.required)})` +
+          (sh.state ? `   |   ${stateInfo.name} ` +
+            (sh.state.met ? 'met' : 'MISSED at ' + sh.state.missedAt) +
+            ` (${sh.state.rule}, ${fmt$(sh.state.required)})` : ''));
+        lines.push('');
+        renderActions(plans[k].actions);
+      });
     } else {
       lines.push('');
       lines.push('ACTION PLAN');
@@ -2128,15 +2656,6 @@ const TaxPaymentPlanner = (() => {
       renderActions(actions);
     }
 
-    lines.push('COST ANALYSIS');
-    lines.push(hr);
-    analysis.strategies.forEach(s => {
-      const isRec = s.id === summary.strategy ||
-                    (summary.strategy === 'ye_ira_full' && s.id === 'ye_ira_partial');
-      lines.push(`${isRec ? '>>> ' : '    '}${s.label.padEnd(42)} ` +
-                 `OC=${fmt$(s.oc)}  CG=${fmt$(s.cg)}  Total=${fmt$(s.total)}`);
-    });
-    lines.push('');
     lines.push('SAFE HARBOR (minimum to avoid underpayment penalty)');
     lines.push(`  Federal: ${fmt$(summary.safeHarborFed)}`);
     lines.push(`  ${stateInfo.name}: ${fmt$(summary.safeHarborState)}` +
@@ -2170,7 +2689,7 @@ const TaxPaymentPlanner = (() => {
   }
 
   // ── HTML output ───────────────────────────────────────────────────────────
-  function buildHtml(p, actions, summary, analysis, yr, stateInfo, planB, planC, convComparison) {
+  function buildHtml(p, actions, summary, yr, stateInfo, plans, comparison) {
     const typeIcon = {
       [T.ROTH_CONV]:    '🔄', [T.RMD]: '🏦', [T.IRA_VOL]: '🏦',
       [T.SUPPL_IRA]:    '🏦', [T.CASH_RESTORE]: '💵',
@@ -2194,10 +2713,6 @@ const TaxPaymentPlanner = (() => {
     const alert = txt => `<div style="background:#FFECEC;border-left:4px solid #CC0000;padding:10px 14px;margin:8px 0;font-size:0.9em;color:#8B0000;font-weight:500;">${txt}</div>`;
     const good  = txt => `<div style="background:#E8F5E9;border-left:4px solid #2E7D32;padding:8px 12px;margin:6px 0;font-size:0.88em;color:#1B5E20;">${txt}</div>`;
 
-    // Conversion present? Drives whether the timing comparison shows the Roth-specific Plan A
-    // (hybrid) and the Roth growth row, or reads as a plain Early-vs-December draw comparison.
-    const hasConv = p.ira1RothConversion > 0 || p.ira2RothConversion > 0;
-
     let h = '';
     h += `<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;color:#222;">`;
 
@@ -2205,154 +2720,191 @@ const TaxPaymentPlanner = (() => {
 
     h += `<div style="background:#EBF3FB;padding:12px 18px;border:1px solid #BDD7EE;border-top:none;">`;
     h += `<div style="margin-bottom:6px;">`;
-    h += badge('Strategy', summary.strategyLabel, '#1F4E79');
-    h += `</div><div>`;
+    // The Strategy and IRA Coverage badges described the TOP-LEVEL summary, which is Plan A's, and
+    // sat inches from a Winner badge naming a different plan. Both are per-plan values and now live
+    // only inside the plan sections and the priced table, where the letter travels with them.
     h += badge('Federal', fmt$(p.federalTax), '#C9360C');
     h += badge(stateInfo.name, fmt$(p.stateTax), '#9C4A00');
     h += badge('Total Tax', fmt$(summary.totalTaxDue), '#222');
-    h += badge('IRA Coverage', fmtPct(summary.iraCoveragePct), '#2E75B6');
-    h += badge('Opportunity Cost', fmt$(summary.opportunityCost), '#596A2F');
-    h += badge('Saves vs Brokerage', fmt$(summary.savingsVsWorst), '#375623');
+    if (comparison) {
+      const t = comparison.perPlan[comparison.best].total;
+      h += comparison.bestSet.length > 1
+        ? badge('Winner', 'Plans ' + comparison.bestSet.join(', ') + ' tie', '#596A2F')
+        : badge('Winner', 'Plan ' + comparison.best, '#375623');
+      // fmt$ is Math.abs by design, so a plan whose Roth growth outweighs its costs printed a gain
+      // as a cost here while the table twelve lines below printed it correctly as negative.
+      h += badge(t < -0.5 ? 'First-year net gain' : 'First-year cost',
+                 (t < -0.5 ? '' : '') + fmt$(t), '#596A2F');
+      // Ranking is by first-year cost, which does not price an underpayment penalty. If the
+      // cheapest plan misses safe harbor, that omission is exactly what a reader would act on.
+      if (!comparison.safeHarbor[comparison.best].met) {
+        h += badge('Safe harbor', 'MISSED by the cheapest plan', '#8B0000');
+      }
+    }
     h += `</div>`;
 
-    // IRA timing metadata
+    // What is left here is true of the page rather than of one plan: the state's treatment of IRA
+    // income, and the winning plan's own one-line description.
     h += `<div style="margin-top:8px;font-size:0.82em;color:#555;">`;
-    const ira1DrawTotal = p.ira1Rmd + p.ira1Voluntary;
-    const ira2DrawTotal = p.ira2Rmd + p.ira2Voluntary;
-    if (ira1DrawTotal > 0) h += `IRA 1 draw: <strong>${MONTH_NAMES[summary.ira1.planARmdMonth-1]}</strong>` +
-      (p.ira1RothConversion > 0 ? ` / conv: <strong>${MONTH_NAMES[summary.ira1.convMonth-1]}</strong>` : '') + ` &nbsp;|&nbsp; `;
-    if (ira2DrawTotal > 0) h += `IRA 2 draw: <strong>${MONTH_NAMES[summary.ira2.planARmdMonth-1]}</strong>` +
-      (p.ira2RothConversion > 0 ? ` / conv: <strong>${MONTH_NAMES[summary.ira2.convMonth-1]}</strong>` : '') + ` &nbsp;|&nbsp; `;
-    h += `Effective withhold: <strong>${MONTH_NAMES[summary.effectiveWithholdMonth-1]}</strong> &nbsp;|&nbsp; `;
-    h += `Opp. Cost factor: <strong>${fmtPct(analysis.iraOcFactor, 1)}</strong>`;
+    if (comparison) h += comparison.labels[comparison.best];
     if (summary.stateIraExempt) h += ` &nbsp;|&nbsp; <span style="color:#2E7D32;font-weight:600;">${stateInfo.name}: IRA-exempt ✓</span>`;
     else if (!summary.stateHasIncomeTax) h += ` &nbsp;|&nbsp; <span style="color:#2E7D32;font-weight:600;">${stateInfo.name}: no income tax ✓</span>`;
     h += `</div>`;
 
+    // The old banner here said "Plan uses year-end IRA for simplicity" whenever the HYSA net rate
+    // had caught up with the break-even. It asserted Plan A's funding mechanism, it fired most often
+    // in exactly the scenarios where the quarterly plan wins, and it printed even when the parent
+    // plan itself was all-quarterly, contradicting the Strategy badge in the same block. The rates
+    // it quoted are facts, so they stay; the verdict it drew from them is the priced table's job.
     if (!summary.yeIraWins) {
-      h += warn(`<strong>Note:</strong> At current HYSA net rate ${fmtPct(summary.hysaNet, 2)}, quarterly cash and year-end IRA are nearly equivalent. Break-even = r/2 = ${fmtPct(summary.breakeven, 2)}. Plan uses year-end IRA for simplicity.`);
+      h += warn(`<strong>Rates are close.</strong> Cash in a high-yield account nets ` +
+                `${fmtPct(summary.hysaNet, 2)} against a break-even of r/2 = ${fmtPct(summary.breakeven, 2)}, ` +
+                `so withholding from the IRA and paying quarterly from cash cost nearly the same. ` +
+                `The comparison below prices both against your figures.`);
     }
     h += `</div>`;
 
-    // ── Timing comparison ──────────────────────────────────────────────────
-    // With a conversion: three plans (A hybrid / B early / C December baseline).
-    // Draw-only: no conversion to pull early, so Plan A (hybrid) does not exist — the
-    // Plan A column, its pill, and the Roth-growth row are all dropped and it reads as a
-    // plain Early-vs-December draw comparison.
-    if (convComparison) {
-      const cc = convComparison;
-      const showA = !!planC;   // Plan A (hybrid) only when there is a conversion
-      const planAColor = '#1565C0';   // blue  — Plan A (hybrid, often best)
-      const planBColor = '#1B5E20';   // green — Plan B (early everything)
-      const planCColor = '#6A1B9A';   // purple — Plan C (December baseline)
+    // ── The one comparison table ───────────────────────────────────────────
+    // Up to five plans, every one of them priced from its own action list on a single April 15
+    // frame. There is no second cost table further down the page any more: the old Cost Analysis
+    // block measured hypothetical funding strategies on a different clock and could contradict
+    // this one on the same screen.
+    const PLAN_COLOR = { A: '#1B5E20', B: '#1565C0', C: '#6A1B9A', D: '#00695C', Q: '#E65100' };
+    const PLAN_BG    = { A: '#E8F5E9', B: '#E3F2FD', C: '#F3E5F5', D: '#E0F2F1', Q: '#FFF3E0' };
+    const PLAN_BDR   = { A: '#A5D6A7', B: '#90CAF9', C: '#CE93D8', D: '#80CBC4', Q: '#FFCC80' };
+    if (comparison) {
+      const cc = comparison;
       h += `<div style="margin:12px 0;border:2px solid #1F4E79;border-radius:6px;overflow:hidden;">`;
-      h += `<div style="background:#1F4E79;color:#fff;padding:10px 16px;font-weight:700;font-size:0.95em;">⚖️ ${
-        hasConv ? 'Roth Conversion Timing — Three-Plan Comparison'
-                : 'Draw Timing — Early vs. December'}</div>`;
+      h += `<div style="background:#1F4E79;color:#fff;padding:10px 16px;font-weight:700;font-size:0.95em;">` +
+           `⚖️ Plan comparison — first-year cost, every plan priced to April 15</div>`;
       h += `<div style="padding:12px 16px;background:#F8FAFF;">`;
 
-      // Plan label pills — A first (hybrid, often best), shown only when a conversion exists
+      // One pill per plan that exists.
       h += `<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">`;
-      if (showA) {
-        h += `<div style="flex:1;min-width:180px;background:#E3F2FD;border:1px solid #90CAF9;border-radius:5px;padding:9px 12px;">`;
-        h += `<div style="font-weight:700;color:${planAColor};font-size:0.86em;margin-bottom:3px;">📅 Plan A — Hybrid (often best)</div>`;
-        h += `<div style="font-size:0.80em;color:#444;">Conversions early (${MONTH_NAMES[cc.earliestConvMonth-1]}), draws in December. Tax certainty before setting withholding.</div>`;
+      cc.letters.forEach(k => {
+        const label = cc.labels[k];
+        const dash  = label.indexOf('—');
+        const head  = dash >= 0 ? label.slice(0, dash + 1) + label.slice(dash + 1).split(':')[0] : label;
+        const rest  = dash >= 0 && label.slice(dash + 1).includes(':')
+          ? label.slice(label.indexOf(':', dash) + 1).trim() : '';
+        h += `<div style="flex:1;min-width:170px;background:${PLAN_BG[k]};border:1px solid ${PLAN_BDR[k]};border-radius:5px;padding:9px 12px;">`;
+        h += `<div style="font-weight:700;color:${PLAN_COLOR[k]};font-size:0.86em;margin-bottom:3px;">📅 ${head}</div>`;
+        h += `<div style="font-size:0.80em;color:#444;">${rest}</div>`;
         h += `</div>`;
-      }
-      h += `<div style="flex:1;min-width:180px;background:#E8F5E9;border:1px solid #A5D6A7;border-radius:5px;padding:9px 12px;">`;
-      h += `<div style="font-weight:700;color:${planBColor};font-size:0.86em;margin-bottom:3px;">📅 Plan B — Early ${hasConv ? 'everything' : 'draws'}</div>`;
-      h += `<div style="font-size:0.80em;color:#444;">${
-        hasConv ? `Conversions &amp; draws in ${MONTH_NAMES[summary.effectiveWithholdMonth-1]}. Withholding from draws; no 60-day rollover.`
-                : `All draws in ${MONTH_NAMES[summary.effectiveWithholdMonth-1]}. Withholding taken from those draws.`}</div>`;
+      });
       h += `</div>`;
-      h += `<div style="flex:1;min-width:180px;background:#F3E5F5;border:1px solid #CE93D8;border-radius:5px;padding:9px 12px;">`;
-      h += `<div style="font-weight:700;color:${planCColor};font-size:0.86em;margin-bottom:3px;">📅 Plan C — December ${hasConv ? 'baseline' : ''}</div>`;
-      h += `<div style="font-size:0.80em;color:#444;">${
-        hasConv ? 'All draws &amp; conversions in December. Maximum IRA tax-deferred growth; no early Roth growth.'
-                : 'All draws deferred to December. Maximum IRA tax-deferred growth.'}</div>`;
-      h += `</div></div>`;
 
-      // Comparison table — columns: [Plan A] | Plan B | Plan C. Plan A column present only with a conversion.
-      const winBg = '#E8F5E9', nearBg = '#FFFDE7', loseBg = '#fff';
-      // Winner = highest net advantage vs Plan C baseline (higher = better)
-      const _allNets = [
-        showA && cc.planA_netVsC !== null ? cc.planA_netVsC : -Infinity,
-        cc.planB_netVsC,
-        0,
-      ];
-      const bestNet  = Math.max(..._allNets);
-      const isWinner = v => v !== null && v !== undefined && Math.abs(v - bestNet) < 1;
-      const isNear   = v => v !== null && v !== undefined && !isWinner(v) && bestNet > 0 && v > bestNet * 0.95;
-      const cellBg   = v => isWinner(v) ? winBg : isNear(v) ? nearBg : loseBg;
-      const winStar  = v => isWinner(v) ? ' ★' : '';
-
-      h += `<table style="width:100%;border-collapse:collapse;font-size:0.86em;margin-bottom:10px;">`;
-      h += `<thead><tr style="background:#E3F2FD;">`;
-      h += `<th style="padding:7px 10px;text-align:left;color:#1F4E79;font-weight:600;">Component (first-year advantage vs. Plan C baseline)</th>`;
-      if (showA) h += `<th style="padding:7px 10px;text-align:right;color:${planAColor};font-weight:700;">Plan A</th>`;
-      h += `<th style="padding:7px 10px;text-align:right;color:${planBColor};font-weight:700;">Plan B</th>`;
-      h += `<th style="padding:7px 10px;text-align:right;color:${planCColor};font-weight:700;">Plan C</th>`;
-      h += `</tr></thead><tbody>`;
-
-      // compRow: aVal=Plan A (hybrid), bVal=Plan B (early), cVal=Plan C (Dec=0 baseline).
-      // The Plan A cell is omitted entirely when there is no conversion.
-      const compRow = (label, aVal, bVal, cVal, isGood, note) => {
-        const fmtCell = (v, isPos) => {
-          if (v === null || v === undefined) return '—';
-          const sign = isPos ? (isGood ? '+' : '−') : (isGood ? '−' : '+');
-          const col  = isPos ? (isGood ? '#1B5E20' : '#C62828') : (isGood ? '#C62828' : '#1B5E20');
-          return `<span style="color:${col};font-weight:600;">${v > 0.5 ? sign : ''}${fmt$(Math.abs(v))}</span>`;
-        };
-        h += `<tr style="border-bottom:1px solid #eee;">`;
-        h += `<td style="padding:6px 10px;">${label}${note ? ` <span style="color:#888;font-size:0.88em;">${note}</span>` : ''}</td>`;
-        if (showA) h += `<td style="padding:6px 10px;text-align:right;">${fmtCell(aVal, true)}</td>`;
-        h += `<td style="padding:6px 10px;text-align:right;">${fmtCell(bVal, true)}</td>`;
-        h += `<td style="padding:6px 10px;text-align:right;">${fmtCell(cVal, false)}</td>`;
+      const money = v => fmt$(Math.abs(v));
+      const compRow = (label, fn, note, bold) => {
+        h += `<tr style="border-bottom:1px solid #eee;${bold ? 'border-top:2px solid #1F4E79;' : ''}">`;
+        h += `<td style="padding:${bold ? '8px' : '6px'} 10px;${bold ? 'font-weight:700;' : ''}">${label}` +
+             `${note ? ` <span style="color:#888;font-size:0.88em;">${note}</span>` : ''}</td>`;
+        cc.letters.forEach(k => {
+          const win = bold && cc.bestSet.includes(k);
+          h += `<td style="padding:${bold ? '8px' : '6px'} 10px;text-align:right;` +
+               `${win ? 'background:#E8F5E9;' : ''}${bold ? `font-weight:700;color:${PLAN_COLOR[k]};` : ''}">` +
+               `${fn(cc.perPlan[k], k)}</td>`;
+        });
         h += `</tr>`;
       };
 
-      // Roth growth only applies when there is a conversion to grow — hidden in the draw-only case.
-      if (hasConv) {
-        compRow('Roth tax-free growth',
-          cc.planA_rothGrowth, cc.planB_rothGrowth, 0, true,
-          `(${MONTH_NAMES[cc.earliestConvMonth-1]} conv × rate)`);
+      h += `<table style="width:100%;border-collapse:collapse;font-size:0.86em;margin-bottom:10px;">`;
+      h += `<thead><tr style="background:#E3F2FD;">`;
+      h += `<th style="padding:7px 10px;text-align:left;color:#1F4E79;font-weight:600;">Component (cost to April 15, lower is better)</th>`;
+      cc.letters.forEach(k => {
+        h += `<th style="padding:7px 10px;text-align:right;color:${PLAN_COLOR[k]};font-weight:700;">` +
+             `Plan ${k}${cc.bestSet.includes(k) ? '★' : ''}</th>`;
+      });
+      h += `</tr></thead><tbody>`;
+      compRow('Withholding opportunity cost', c => money(c.withholdOC), 'growth given up when tax leaves the IRA early');
+      compRow('Estimate cash carry',          c => money(c.estimateOC), `portfolio rate less HYSA net ${fmtPct(cc.hysaNet, 2)}`);
+      compRow('RMD proceeds held outside the IRA', c => money(c.rmdDeferral),
+        'RMD taken before December, net of the withholding on it');
+      if (cc.hasConversion) {
+        compRow('Roth tax-free growth (credit)',
+          c => `<span style="color:#1B5E20;">${c.rothGrowth > 0.5 ? '−' : ''}${money(c.rothGrowth)}</span>`,
+          'earned by converting earlier');
       }
-      compRow('Withholding OC paid',
-        cc.planA_withholdOC, cc.planB_withholdOC, 0, false,
-        cc.planB_withholdOC > 0.5 ? `(${cc.monthsDrawEarly} mo. early for Plan B)` : '');
-      compRow('Draw deferral lost',
-        cc.planA_drawDeferral, cc.planB_drawDeferral, 0, false,
-        cc.planB_drawDeferral > 0.5 ? '(Plan B early draws)' : '');
-
-      // Net advantage vs Plan C baseline row — higher is better
-      const fmtNet = v => v === null || v === undefined ? '—'
-        : v === 0 ? '$0 (baseline)'
-        : (v > 0 ? '+' : '−') + fmt$(Math.abs(v));
-      const netCells = showA
-        ? [[cc.planA_netVsC, planAColor],[cc.planB_netVsC, planBColor],[0, planCColor]]
-        : [[cc.planB_netVsC, planBColor],[0, planCColor]];
-      h += `<tr style="border-top:2px solid #1F4E79;">`;
-      h += `<td style="padding:8px 10px;font-weight:700;">Net advantage vs Plan C <span style="font-weight:400;color:#777;font-size:0.9em;">(higher = better)</span></td>`;
-      for (const [nv, col] of netCells) {
-        const bg = cellBg(nv);
-        h += `<td style="padding:8px 10px;text-align:right;background:${bg};font-weight:700;color:${col};">`;
-        h += `${fmtNet(nv)}${winStar(nv)}</td>`;
-      }
-      h += `</tr>`;
-
+      compRow('TOTAL first-year cost',
+        c => (c.total < -0.5 ? '−' : '') + money(c.total), '', true);
+      compRow('vs best', (c, k) => (cc.bestSet.includes(k) ? '—' : '+' + money(c.total - cc.perPlan[cc.best].total)), '');
+      // How the tax actually reaches the IRS, and whether that clears the installment rules.
+      compRow('Withheld from IRA',   c => money(c.withheldTotal), 'credited across all four due dates');
+      compRow('Quarterly estimates', c => money(c.estimatesTotal), 'credited on the day each is paid');
+      const sh0 = cc.safeHarbor[cc.letters[0]];
+      compRow(`Safe harbor (${shTag(sh0)}${sh0.provisional ? '<span style="color:#8B6A00;">*</span>' : ''})`,
+        (c, k) => (cc.safeHarbor[k].met
+          ? `<span style="color:#1B5E20;font-weight:700;">met</span>`
+          : `<span style="color:#8B0000;font-weight:700;">MISSED</span>`),
+        'which bar it clears matters: 90% of this year, or 100% or 110% of last year');
       h += `</tbody></table>`;
 
+      {
+        const shAny = cc.safeHarbor[cc.letters[0]];
+        h += `<div style="font-size:0.82em;color:#444;margin:-4px 0 10px;">`;
+        h += `<strong>The test:</strong> federal ${fmt$(shAny.federal.required)} (${shAny.federal.rule})`;
+        if (shAny.state) h += `, ${stateInfo.name} ${fmt$(shAny.state.required)} (${shAny.state.rule})`;
+        h += `. The requirement is the lesser of 90% of this year and 100% of last year, or 110% for a ` +
+             `high earner. ${linkifyCites(seeAlso('IRC 6654(g)'))}`;
+        shCaveats(shAny, stateInfo.name).forEach(c => {
+          h += `<div style="margin-top:4px;color:#8B6A00;">${shAny.provisional ? '* ' : ''}${c}</div>`;
+        });
+        const missing = cc.letters.filter(k => !cc.safeHarbor[k].met);
+        if (missing.length > 0) {
+          h += `<div style="margin-top:4px;color:#8B0000;">`;
+          missing.forEach(k => {
+            const sh = cc.safeHarbor[k];
+            const which = [sh.federal.missedAt ? `federal at ${sh.federal.missedAt}, short ${fmt$(sh.federal.shortBy)}` : null,
+                           sh.state && sh.state.missedAt ? `${stateInfo.name} at ${sh.state.missedAt}, short ${fmt$(sh.state.shortBy)}` : null]
+                          .filter(Boolean).join('; ');
+            h += `Plan ${k} misses it: ${which}.<br>`;
+          });
+          h += `</div><div style="margin-top:3px;">An estimate counts on the day you pay it, so an ` +
+               `installment already past cannot be made timely. Withholding is credited across every due ` +
+               `date, which is why a plan that withholds can still clear a quarter that has gone by.</div>`;
+        }
+        h += `</div>`;
+      }
+
       h += `<div style="font-size:0.81em;color:#555;border-top:1px solid #ddd;padding-top:8px;">`;
-      h += hasConv
-        ? `⚠️ <strong>First-year only.</strong> Early conversion provides compounding Roth growth every subsequent year — the long-term advantage of Plans A and B over Plan C grows with time. `
-        : `Deferring a not-yet-taken draw to December keeps its net proceeds tax-deferred longer. Only draws you can freely postpone count — an RMD is required either way, a voluntary draw you need for spending is not free to move. `;
-      h += `★ = highest first-year net advantage vs Plan C baseline.`;
+      if (cc.allTie) {
+        h += `<div style="margin-bottom:4px;"><strong>The timing plans are identical this late in the year.</strong> ` +
+             `"Early" is already December, so they land on the same dates. Plan Q still differs, because what ` +
+             `it changes is how the tax is paid rather than when the money moves.</div>`;
+      }
+      if (cc.bNote) h += `<div style="margin-bottom:4px;">${cc.bNote}</div>`;
+      if (cc.dNote) h += `<div style="margin-bottom:4px;">${cc.dNote}</div>`;
+      if (cc.brokerage) {
+        h += `<div style="margin-bottom:4px;"><strong>Funding source footnote.</strong> Paying those estimates by ` +
+             `selling appreciated brokerage shares instead of holding cash costs ${fmt$(cc.brokerage.total)}: ` +
+             `${fmt$(cc.brokerage.oc)} of forgone growth plus ${fmt$(cc.brokerage.cg)} of capital gains tax on the ` +
+             `sale itself. It is a way to fund Plan Q, not a plan of its own, so it has no steps below. ` +
+             `<strong>That ${fmt$(cc.brokerage.cg)} is not part of the ${fmt$(cc.totalTax)} these plans are sized ` +
+             `against</strong>, because the tax figures were calculated before the sale existed, so selling lifts ` +
+             `next April's bill by roughly that much. ${linkifyCites(seeAlso('Tax figures are inputs'))}</div>`;
+      }
+      if (cc.anyNegative) {
+        h += `<div style="margin-bottom:4px;"><strong>A negative total is a net gain</strong>, not a cost: ` +
+             `the Roth growth that plan buys outweighs everything it gives up.</div>`;
+      }
+      h += `<strong>Moving a draw to December is not free, and this table does not price it</strong>, because ` +
+           `the planner does not know when you actually spend the money. A December draw either funds next ` +
+           `year's spending, or it assumes you can cover this year's from somewhere else until it lands. Each ` +
+           `plan below states what it hands you and when. Only the RMD portion carries a deferral value here, ` +
+           `and only to December 31. <strong>First-year only</strong>: an early conversion keeps compounding ` +
+           `tax-free in every later year, which this table does not count. ★ marks the column with the ` +
+           `lowest first-year cost.`;
       h += `</div></div></div>`;
     }
 
-    // ── Coverage summary table ─────────────────────────────────────────────
-    {
-      const cs = summary.coverageSummary;
+    // P57. This table is a pay checklist, and it used to be rendered ONCE from the top-level
+    // summary, which is Plan A's. On a reported scenario it listed conversion withholding of
+    // $7,000 and no estimates at all, while the recommended plan withheld nothing on the
+    // conversion and owed seven estimated payments totalling the same $7,000. A reader working
+    // from it would have skipped all seven. It is now built per plan.
+    const coverageBlock = sum => {
+      let out = '';
+      const cs = sum.coverageSummary;
       const rows = [
         { label: 'IRA 1 withholding',         fed: cs.ira1Draw.fed,   state: cs.ira1Draw.state,   show: cs.ira1Draw.fed + cs.ira1Draw.state > 0 },
         { label: 'IRA 2 withholding',         fed: cs.ira2Draw.fed,   state: cs.ira2Draw.state,   show: cs.ira2Draw.fed + cs.ira2Draw.state > 0 },
@@ -2363,49 +2915,50 @@ const TaxPaymentPlanner = (() => {
       const totalFed   = rows.reduce((s, r) => s + r.fed,   0);
       const totalState = rows.reduce((s, r) => s + r.state, 0);
       const totalAll   = totalFed + totalState;
-      const taxDue     = summary.totalTaxDue;
+      const taxDue     = sum.totalTaxDue;
       const balanced   = Math.abs(totalAll - taxDue) < 2;
 
-      h += `<div style="margin:12px 0;border:1px solid #BDD7EE;border-radius:6px;overflow:hidden;">`;
-      h += `<div style="background:#2E75B6;color:#fff;padding:8px 16px;font-weight:700;font-size:0.92em;">📊 Tax Coverage Summary</div>`;
-      h += `<table style="width:100%;border-collapse:collapse;font-size:0.88em;">`;
-      h += `<thead><tr style="background:#EBF3FB;">`;
-      h += `<th style="padding:6px 12px;text-align:left;color:#1F4E79;">Payment Source</th>`;
-      h += `<th style="padding:6px 12px;text-align:right;color:#1F4E79;">Federal</th>`;
-      h += `<th style="padding:6px 12px;text-align:right;color:#1F4E79;">State</th>`;
-      h += `<th style="padding:6px 12px;text-align:right;color:#1F4E79;">Total</th>`;
-      h += `</tr></thead><tbody>`;
+      out += `<div style="margin:12px 0;border:1px solid #BDD7EE;border-radius:6px;overflow:hidden;">`;
+      out += `<div style="background:#2E75B6;color:#fff;padding:8px 16px;font-weight:700;font-size:0.92em;">📊 Tax Coverage Summary</div>`;
+      out += `<table style="width:100%;border-collapse:collapse;font-size:0.88em;">`;
+      out += `<thead><tr style="background:#EBF3FB;">`;
+      out += `<th style="padding:6px 12px;text-align:left;color:#1F4E79;">Payment Source</th>`;
+      out += `<th style="padding:6px 12px;text-align:right;color:#1F4E79;">Federal</th>`;
+      out += `<th style="padding:6px 12px;text-align:right;color:#1F4E79;">State</th>`;
+      out += `<th style="padding:6px 12px;text-align:right;color:#1F4E79;">Total</th>`;
+      out += `</tr></thead><tbody>`;
       rows.forEach((r, i) => {
         const bg = i % 2 === 0 ? '#fff' : '#F9F9F9';
-        h += `<tr style="background:${bg};border-bottom:1px solid #eee;">`;
-        h += `<td style="padding:6px 12px;">${r.label}</td>`;
-        h += `<td style="padding:6px 12px;text-align:right;">${r.fed > 0 ? fmt$(r.fed) : '—'}</td>`;
-        h += `<td style="padding:6px 12px;text-align:right;">${r.state > 0 ? fmt$(r.state) : '—'}</td>`;
-        h += `<td style="padding:6px 12px;text-align:right;font-weight:600;">${fmt$(r.fed + r.state)}</td>`;
-        h += `</tr>`;
+        out += `<tr style="background:${bg};border-bottom:1px solid #eee;">`;
+        out += `<td style="padding:6px 12px;">${r.label}</td>`;
+        out += `<td style="padding:6px 12px;text-align:right;">${r.fed > 0 ? fmt$(r.fed) : '—'}</td>`;
+        out += `<td style="padding:6px 12px;text-align:right;">${r.state > 0 ? fmt$(r.state) : '—'}</td>`;
+        out += `<td style="padding:6px 12px;text-align:right;font-weight:600;">${fmt$(r.fed + r.state)}</td>`;
+        out += `</tr>`;
       });
-      h += `<tr style="background:#E2EFDA;font-weight:700;border-top:2px solid #2E75B6;">`;
-      h += `<td style="padding:7px 12px;">Total covered</td>`;
-      h += `<td style="padding:7px 12px;text-align:right;">${fmt$(totalFed)}</td>`;
-      h += `<td style="padding:7px 12px;text-align:right;">${fmt$(totalState)}</td>`;
-      h += `<td style="padding:7px 12px;text-align:right;">${fmt$(totalAll)}</td>`;
-      h += `</tr>`;
-      h += `<tr style="background:#F5F5F5;border-top:1px solid #ccc;">`;
-      h += `<td style="padding:6px 12px;color:#555;">Tax due</td>`;
-      h += `<td style="padding:6px 12px;text-align:right;color:#555;">${fmt$(p.federalTax)}</td>`;
-      h += `<td style="padding:6px 12px;text-align:right;color:#555;">${fmt$(p.stateTax)}</td>`;
-      h += `<td style="padding:6px 12px;text-align:right;color:#555;">${fmt$(taxDue)}</td>`;
-      h += `</tr>`;
+      out += `<tr style="background:#E2EFDA;font-weight:700;border-top:2px solid #2E75B6;">`;
+      out += `<td style="padding:7px 12px;">Total covered</td>`;
+      out += `<td style="padding:7px 12px;text-align:right;">${fmt$(totalFed)}</td>`;
+      out += `<td style="padding:7px 12px;text-align:right;">${fmt$(totalState)}</td>`;
+      out += `<td style="padding:7px 12px;text-align:right;">${fmt$(totalAll)}</td>`;
+      out += `</tr>`;
+      out += `<tr style="background:#F5F5F5;border-top:1px solid #ccc;">`;
+      out += `<td style="padding:6px 12px;color:#555;">Tax due</td>`;
+      out += `<td style="padding:6px 12px;text-align:right;color:#555;">${fmt$(p.federalTax)}</td>`;
+      out += `<td style="padding:6px 12px;text-align:right;color:#555;">${fmt$(p.stateTax)}</td>`;
+      out += `<td style="padding:6px 12px;text-align:right;color:#555;">${fmt$(taxDue)}</td>`;
+      out += `</tr>`;
       const balColor = balanced ? '#1B5E20' : '#8B0000';
       const balText  = balanced
         ? `✓ Fully covered`
         : `${fmt$(Math.abs(taxDue - totalAll))} ${totalAll < taxDue ? 'uncovered — check inputs' : 'over-withheld (refund expected)'}`;
-      h += `<tr style="background:${balanced ? '#E8F5E9' : '#FFECEC'};">`;
-      h += `<td colspan="3" style="padding:6px 12px;font-weight:700;color:${balColor};">${balText}</td>`;
-      h += `<td style="padding:6px 12px;text-align:right;font-weight:700;color:${balColor};">${balanced ? '' : fmt$(Math.abs(taxDue - totalAll))}</td>`;
-      h += `</tr>`;
-      h += `</tbody></table></div>`;
-    }
+      out += `<tr style="background:${balanced ? '#E8F5E9' : '#FFECEC'};">`;
+      out += `<td colspan="3" style="padding:6px 12px;font-weight:700;color:${balColor};">${balText}</td>`;
+      out += `<td style="padding:6px 12px;text-align:right;font-weight:700;color:${balColor};">${balanced ? '' : fmt$(Math.abs(taxDue - totalAll))}</td>`;
+      out += `</tr>`;
+      out += `</tbody></table></div>`;
+      return out;
+    };
 
     // ── Render one action list ─────────────────────────────────────────────
     const renderActionList = (acts, planSummary) => {
@@ -2422,24 +2975,24 @@ const TaxPaymentPlanner = (() => {
           // STRATEGY — any plan using IRA withholding got the green treatment. That painted a
           // reassuring box around text saying the withholding falls short and a penalty accrues.
           // The action now carries `benign`, set only where the coverage was actually checked.
-          const html = `${icon} <strong>${a.benign ? 'Calendar Notice' : 'MISSED PAYMENT WARNING'}:</strong> ${a.description}`;
+          const html = `${icon} <strong>${a.benign ? 'Calendar Notice' : 'MISSED PAYMENT WARNING'}:</strong> ${linkifyCites(a.description)}`;
           h += a.benign ? good(html) : alert(html);
           if (a.notes.length > 0) {
             h += `<ul style="margin:0 0 8px 28px;padding:0;font-size:0.86em;color:#555;">`;
-            a.notes.forEach(n => { h += `<li style="margin-bottom:3px;">${n}</li>`; });
+            a.notes.forEach(n => { h += `<li style="margin-bottom:3px;">${linkifyCites(n)}</li>`; });
             h += `</ul>`;
           }
           return;
         }
         if (isNote) {
-          h += info(`<strong>Note:</strong> ${a.description}`);
+          h += info(`<strong>Note:</strong> ${linkifyCites(a.description)}`);
           // This branch used to `return` before the bullet loop that every other action type gets,
           // which meant T.NOTE was the one type whose `notes` never rendered in either output. The
           // QCD alternative had therefore never reached a reader. Styled to match the alert bullets
           // above rather than the per-step ones, since a note is not a numbered step.
           if (a.notes.length > 0) {
             h += `<ul style="margin:0 0 8px 28px;padding:0;font-size:0.86em;color:#555;">`;
-            a.notes.forEach(n => { h += `<li style="margin-bottom:3px;">${n}</li>`; });
+            a.notes.forEach(n => { h += `<li style="margin-bottom:3px;">${linkifyCites(n)}</li>`; });
             h += `</ul>`;
           }
           return;
@@ -2465,12 +3018,13 @@ const TaxPaymentPlanner = (() => {
           h += `</span>`;
         }
         h += `</div>`;
-        h += `<p style="margin:4px 0 6px;line-height:1.5;">${a.description}</p>`;
+        h += `<p style="margin:4px 0 6px;line-height:1.5;">${linkifyCites(a.description)}</p>`;
         if (a.notes.length > 0) {
           h += `<ul style="margin:2px 0 0 18px;padding:0;color:#555;font-size:0.87em;">`;
           a.notes.forEach(n => {
+            // isWarn tests the RAW note: linkifying first would let the markup match.
             const isWarn = /caution|warning|past due|missed/i.test(n);
-            h += `<li style="margin-bottom:3px;${isWarn ? 'color:#8B0000;font-weight:600;' : ''}">${n}</li>`;
+            h += `<li style="margin-bottom:3px;${isWarn ? 'color:#8B0000;font-weight:600;' : ''}">${linkifyCites(n)}</li>`;
           });
           h += `</ul>`;
         }
@@ -2481,44 +3035,52 @@ const TaxPaymentPlanner = (() => {
     const planBtnStyle = `background:rgba(255,255,255,0.18);color:#fff;border:1px solid rgba(255,255,255,0.5);` +
       `border-radius:4px;padding:3px 10px;font-size:0.8em;cursor:pointer;margin-left:6px;font-weight:600;`;
 
-    const makePlanSection = (id, winLetter, winColor, defaultColor, title, subtitle, actList, actSummary) => {
-      const cc   = convComparison;
-      const wins = cc?.bestPlan === winLetter;
-      const bdr  = wins ? '#1B5E20' : defaultColor;
-      h += `<div id="${id}" style="border:2px solid ${bdr};border-radius:6px;margin-bottom:16px;overflow:hidden;">`;
-      h += `<div style="background:${bdr};color:#fff;padding:8px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center;">`;
-      h += `<span>${title}`;
-      if (cc) h += ` &nbsp;<span style="font-weight:400;font-size:0.88em;">(${wins ? '★ highest first-year advantage' : subtitle})</span>`;
+    // One section per plan, collapsed except the winner. The .ics and Print buttons live inside
+    // the <summary>, so they must stop the click before it reaches the disclosure and toggles it.
+    const makePlanSection = (letter, plan) => {
+      const cc    = comparison;
+      const wins  = !!cc && cc.bestSet.includes(letter);
+      const color = PLAN_COLOR[letter] || '#2E75B6';
+      const bdr   = wins ? '#1B5E20' : color;
+      const cost  = cc ? fmt$(cc.perPlan[letter].total) : null;
+      const label = cc ? cc.labels[letter] : 'Action plan';
+      h += `<details id="plan-section-${letter.toLowerCase()}"${wins || !cc ? ' open' : ''} ` +
+           `style="border:2px solid ${bdr};border-radius:6px;margin-bottom:16px;overflow:hidden;">`;
+      h += `<summary style="background:${bdr};color:#fff;padding:8px 16px;font-weight:700;cursor:pointer;">`;
+      h += `<span class="plan-action-btns" style="float:right;white-space:nowrap;">`;
+      h += `<button style="${planBtnStyle}" onclick="event.preventDefault();event.stopPropagation();downloadPlanIcs('${letter}')">📅 .ics</button>`;
+      h += `<button style="${planBtnStyle}" onclick="event.preventDefault();event.stopPropagation();printPlan('${letter}')">🖨️ Print</button>`;
       h += `</span>`;
-      h += `<span class="plan-action-btns" style="white-space:nowrap;">`;
-      h += `<button style="${planBtnStyle}" onclick="downloadPlanIcs('${winLetter}')">📅 .ics</button>`;
-      h += `<button style="${planBtnStyle}" onclick="printPlan('${winLetter}')">🖨️ Print</button>`;
-      h += `</span></div>`;
+      h += `📅 ${label}`;
+      if (cost !== null) {
+        h += ` &nbsp;<span style="font-weight:400;font-size:0.88em;">(${wins ? '★ lowest first-year cost, ' : ''}${cost})</span>`;
+      }
+      h += `</summary>`;
       h += `<div style="padding:8px;">`;
-      renderActionList(actList, actSummary);
-      h += `</div></div>`;
+      if (cc) {
+        const c = cc.perPlan[letter];
+        h += `<div style="font-size:0.85em;color:#333;background:#F5F7FA;border:1px solid #E1E6ED;` +
+             `border-radius:5px;padding:8px 12px;margin:0 0 8px 0;">`;
+        h += `<div>First-year cost to April 15: <strong>${(c.total < -0.5 ? '−' : '') + fmt$(c.total)}</strong>` +
+             ` &nbsp;|&nbsp; tax withheld <strong>${fmt$(c.withheldTotal)}</strong>` +
+             `, paid as estimates <strong>${fmt$(c.estimatesTotal)}</strong></div>`;
+        h += `<div style="margin-top:3px;">${cashDeliveryLine(plan.summary)}</div>`;
+        const sh = plan.summary.safeHarbor;
+        const shBits = [
+          `federal ${sh.federal.met ? 'met' : 'MISSED at ' + sh.federal.missedAt} (${sh.federal.rule}, ${fmt$(sh.federal.required)})`,
+          sh.state ? `${stateInfo.name} ${sh.state.met ? 'met' : 'MISSED at ' + sh.state.missedAt} (${sh.state.rule}, ${fmt$(sh.state.required)})` : null,
+        ].filter(Boolean).join(' &nbsp;|&nbsp; ');
+        h += `<div style="margin-top:3px;color:${sh.met ? '#1B5E20' : '#8B0000'};">Safe harbor ` +
+             `[${shTag(sh)}${sh.provisional ? '*' : ''}]: ${shBits}</div>`;
+        h += `</div>`;
+      }
+      h += coverageBlock(plan.summary);
+      renderActionList(plan.actions, plan.summary);
+      h += `</div></details>`;
     };
 
-    if (planB || planC) {
-      // Render order: Plan A (hybrid) → Plan B (early) → Plan C (December baseline)
-      // Plan A = _planC computation (planC object); Plan B = main computation; Plan C = _baseline computation (planB object)
-      if (planC) {
-        makePlanSection('plan-section-a', 'A', '#1565C0', '#1565C0',
-          '📅 Plan A — Hybrid: Early Conversion(s) + December Draws',
-          'see comparison above', planC.actions, planC.summary);
-      }
-      makePlanSection('plan-section-b', 'B', '#1B5E20', '#2E75B6',
-        hasConv
-          ? '📅 Plan B — Early Everything: Conversion(s) + Draws in ' + MONTH_NAMES[summary.effectiveWithholdMonth - 1]
-          : '📅 Plan B — Early Draws: All Draws in ' + MONTH_NAMES[summary.effectiveWithholdMonth - 1],
-        'see comparison above', actions, summary);
-      if (planB) {
-        makePlanSection('plan-section-c', 'C', '#6A1B9A', '#6A1B9A',
-          hasConv
-            ? '📅 Plan C — December Baseline: All Draws and Conversions in December'
-            : '📅 Plan C — December: All Draws Deferred to December',
-          'see comparison above', planB.actions, planB.summary);
-      }
+    if (comparison) {
+      comparison.letters.forEach(k => makePlanSection(k, plans[k]));
     } else {
       h += `<h3 style="margin:16px 18px 8px;color:#1F4E79;font-size:1em;">Action Plan</h3>`;
       h += `<div style="padding:0 4px;">`;
@@ -2526,56 +3088,33 @@ const TaxPaymentPlanner = (() => {
       h += `</div>`;
     }
 
-    // Cost analysis table
-    h += `<h3 style="margin:16px 18px 8px;color:#1F4E79;font-size:1em;">Cost Analysis — Opportunity Cost Comparison</h3>`;
-    h += `<div style="font-size:0.84em;color:#555;padding:0 4px 6px;">Reference date: April 15 filing deadline. `;
-    h += `HYSA net: ${fmtPct(summary.hysaNet, 2)} (${fmtPct(p.hysaGross)} × (1−${fmtPct(p.marginalOrdRate)})). `;
-    h += `Break-even: r/2 = ${fmtPct(summary.breakeven, 2)}. `;
-    h += `Effective withhold month: ${MONTH_NAMES[summary.effectiveWithholdMonth-1]} → Opportunity Cost factor: ${fmtPct(analysis.iraOcFactor, 1)}.`;
-    h += `</div>`;
-
-    h += `<table style="width:100%;border-collapse:collapse;font-size:0.88em;margin-bottom:16px;">`;
-    h += `<thead><tr style="background:#2E75B6;color:#fff;">`;
-    [
-      { label: 'Strategy',          title: '',                                                                   left: true },
-      { label: 'Opportunity Cost',  title: 'Foregone portfolio growth while tax money sits outside the IRA',     left: false },
-      { label: 'Extra CG Tax',      title: 'Capital Gains tax triggered by selling appreciated brokerage shares', left: false },
-      { label: 'Total Extra Cost',  title: 'Opportunity Cost + Capital Gains tax vs. this plan',                 left: false },
-      { label: 'vs. This Plan',     title: 'Additional cost compared to the recommended strategy',               left: false },
-    ].forEach(col => {
-      const titleAttr = col.title ? ` title="${col.title}"` : '';
-      h += `<th style="padding:7px 10px;text-align:${col.left ? 'left' : 'right'};cursor:${col.title ? 'help' : 'default'};"${titleAttr}>${col.label}${col.title ? ' ℹ️' : ''}</th>`;
-    });
-    h += `</tr></thead><tbody>`;
-
-    const recTotal = summary.opportunityCost;
-    analysis.strategies.forEach((s, i) => {
-      const isRec = s.id === summary.strategy || (summary.strategy === 'ye_ira_full' && s.id === 'ye_ira_partial');
-      const bg    = isRec ? '#E2EFDA' : (i % 2 === 0 ? '#F9F9F9' : '#fff');
-      const diff  = s.total - recTotal;
-      const diffStr = diff < 1 ? '—' : `+${fmt$(diff)} more`;
-      h += `<tr style="background:${bg};">`;
-      h += `<td style="padding:7px 10px;font-weight:${isRec ? '700' : '400'};">${isRec ? '✓ ' : ''}${s.label}</td>`;
-      h += `<td style="padding:7px 10px;text-align:right;">${fmt$(s.oc)}</td>`;
-      h += `<td style="padding:7px 10px;text-align:right;">${fmt$(s.cg)}</td>`;
-      h += `<td style="padding:7px 10px;text-align:right;font-weight:${isRec ? '700' : '400'};">${fmt$(s.total)}</td>`;
-      h += `<td style="padding:7px 10px;text-align:right;color:${diff > 0 ? '#C00000' : '#375623'};">${diffStr}</td>`;
-      h += `</tr>`;
-    });
-    h += `</tbody></table>`;
-
     // Safe harbor
-    const shFedNote = p.highIncomeFiler ? '110% of prior-year (high-income filer)' : '100% of prior-year or 90% current';
-    const shStNote  = stateInfo.safeHarborAlways110 ? '110% of prior-year (MD rule — always)' : shFedNote;
+    // Each line describes the multiplier its own figure used, and says so only when the figure was
+    // built from a prior year at all.
+    const shNote = (mult, given, always110) =>
+      !given ? 'estimated at 90% of this year; enter last year\'s tax for the real test'
+      : mult >= 1.10
+        ? (always110 ? `110% of prior-year (${stateInfo.name} applies 110% to every filer)`
+                     : '110% of prior-year (high-income filer)')
+        : '100% of prior-year';
     h += info(
       `<strong>Safe Harbor (minimum to avoid underpayment penalty):</strong><br>` +
-      `Federal: ${fmt$(summary.safeHarborFed)} (${shFedNote})` +
-      (p.priorYearFedTax ? ` — based on prior-year tax ${fmt$(p.priorYearFedTax)}` : ' — estimated at 90% of current year; update with actual prior-year amount') + `.<br>` +
-      `${stateInfo.name}: ${fmt$(summary.safeHarborState)} (${shStNote})` +
-      (p.priorYearStateTax ? ` — based on prior-year tax ${fmt$(p.priorYearStateTax)}` : '') +
-      (stateInfo.safeHarborHighIncomeThreshold
-        ? `<br><em>Note: ${stateInfo.name} high-income threshold for 110% safe harbor: $${(stateInfo.safeHarborHighIncomeThreshold/1000).toFixed(0)}K AGI.</em>`
-        : '') + '.'
+      `Federal: ${fmt$(summary.safeHarborFed)} (${shNote(summary.safeHarborFedMult, summary.priorYearFedGiven, false)})` +
+      (summary.priorYearFedGiven ? ` — based on prior-year tax ${fmt$(p.priorYearFedTax)}` : '') + `.<br>` +
+      `${stateInfo.name}: ${fmt$(summary.safeHarborState)} ` +
+      `(${shNote(summary.safeHarborStateMult, summary.priorYearStateGiven, stateInfo.safeHarborAlways110)})` +
+      (summary.priorYearStateGiven ? ` — based on prior-year tax ${fmt$(p.priorYearStateTax)}` : '') + '.' +
+      // A state that applies 110% to everyone has no threshold to describe, so the caveat below is
+      // for the states where the higher rate depends on income the planner is never given.
+      (stateInfo.safeHarborHighIncomeThreshold && !stateInfo.safeHarborAlways110
+        ? `<br><em>NOTE: ${stateInfo.name} raises the requirement to 110% for high earners, and writes that ` +
+          `threshold against adjusted gross income (${stateInfo.safeHarborHighIncomeThreshold >= 1000000
+              ? '$' + (stateInfo.safeHarborHighIncomeThreshold / 1000000).toFixed(1) + 'M'
+              : '$' + (stateInfo.safeHarborHighIncomeThreshold / 1000).toFixed(0) + 'K'}). ` +
+          `This planner is not given your AGI, so it compares your ${stateInfo.name} tax to that figure instead. ` +
+          `The 110% requirement will therefore usually not trigger here even when it applies to you, which ` +
+          `UNDERSTATES the minimum you owe. Check the rule yourself if your income is near it.</em>`
+        : '')
     );
 
     if (stateInfo.paymentNote) {
@@ -2585,8 +3124,10 @@ const TaxPaymentPlanner = (() => {
 
     h += `<div style="font-size:0.81em;color:#888;padding:8px 0 4px;border-top:1px solid #eee;margin-top:6px;">`;
     h += `<strong>Note on income variation:</strong> Holding cash in a HYSA to pay quarterly estimates `;
-    h += `reduces your average cash balance, slightly lowering interest income relative to the planned amount. `;
-    h += `Selling brokerage shares eliminates future dividends on those shares. These are typically small second-order effects.`;
+    h += `reduces your average cash balance, slightly lowering interest income relative to the planned amount, `;
+    h += `and selling brokerage shares gives up the future dividends on those shares. Both of those are small `;
+    h += `second-order effects. The capital gains tax on such a sale is not: it is priced in the funding-source `;
+    h += `footnote above, and it is not part of the tax these plans are sized against. ${linkifyCites(seeAlso('Tax figures are inputs'))}`;
     h += `</div>`;
 
     // ── Rules and sources ──────────────────────────────────────────────────
@@ -2595,7 +3136,7 @@ const TaxPaymentPlanner = (() => {
     h += `<div style="padding:12px 16px;background:#F8FAFF;">`;
     h += `<table style="width:100%;border-collapse:collapse;font-size:0.84em;">`;
     RULE_CITES.forEach(c => {
-      h += `<tr style="border-bottom:1px solid #E3F2FD;">`;
+      h += `<tr id="${citeSlug(c.tag)}" style="border-bottom:1px solid #E3F2FD;">`;
       h += `<td style="padding:8px 10px;vertical-align:top;white-space:nowrap;color:#1F4E79;font-weight:700;">[${c.tag}]</td>`;
       h += `<td style="padding:8px 10px;vertical-align:top;">`;
       h += `<div style="font-weight:600;color:#222;">${c.label}</div>`;
@@ -2610,7 +3151,7 @@ const TaxPaymentPlanner = (() => {
     h += `<div style="font-weight:700;color:#1F4E79;margin:14px 0 4px;font-size:0.88em;">CONCEPTS</div>`;
     h += `<table style="width:100%;border-collapse:collapse;font-size:0.84em;">`;
     CONCEPT_NOTES.forEach(c => {
-      h += `<tr style="border-bottom:1px solid #E3F2FD;">`;
+      h += `<tr id="${citeSlug(c.tag)}" style="border-bottom:1px solid #E3F2FD;">`;
       h += `<td style="padding:8px 10px;vertical-align:top;white-space:nowrap;color:#1F4E79;font-weight:700;">[${c.tag}]</td>`;
       h += `<td style="padding:8px 10px;vertical-align:top;">`;
       h += `<div style="font-weight:600;color:#222;">${c.label}</div>`;

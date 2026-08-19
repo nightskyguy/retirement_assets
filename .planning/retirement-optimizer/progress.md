@@ -2536,3 +2536,426 @@ exactly the case the queued trailing re-run would close.
 **No test-count edits.** `mc_tab.js` is unreachable from both tiers: it loads at
 `retirement_optimizer.html:1350` while the in-page runner fires at `:1272`, and it has no
 `module.exports` for node. Zero existing coverage of `montecarlo/*` anywhere.
+
+---
+
+## Session 2026-08-18 (fifteenth) — `/plan` re-entry in worktree `context-e73361`, files resynced
+
+Ran `/plan` in the same worktree, now on branch `worktrees/planning-with-files-38a21e`. Restored
+context from `task_plan.md` / `progress.md` / `findings.md`; `session-catchup.py` printed nothing
+unsynced.
+
+**What changed since the last entry: [PR #180](https://github.com/nightskyguy/retirement_assets/pull/180)
+merged.** `git rev-parse HEAD` and `origin/main` are both `02eaf2b`, with zero commits either side of
+that comparison, so **v11.1585 is on `main`** (P32c research arms, the issue #177 stress-tile refresh,
+the All-start-years wording, and the earlier `main` merge). Working tree clean.
+
+**Measured, not assumed:** `node optimizer_core.tests.js && node taxPaymentPlanner.tests.js &&
+node doclinks.tests.js` -> **269 / 34 / 22**, all green, matching `TestTiers.EXPECTED`
+(`optimizer_tests.js:2227`, which also pins `slowInCore: 3`). Page title reads `11.1585`.
+
+**Two stale claims corrected in `task_plan.md`:**
+
+1. Header line 3 said "Pushed, PR open, merges clean" against `main` = `1c79c29`. That PR is merged;
+   the line now names `main` = `02eaf2b`, this worktree's branch, and the measured counts. Line count
+   preserved, so the LINE-30 hook boundary still lands on the marker.
+2. **P56 "Starting state - READ FIRST" was actively misleading.** It told the next session that a
+   v1.1580 change sat UNCOMMITTED on branch `worktrees/retirement-tax-planner-payment-582cdf` and
+   "must be preserved or re-derived", and that `optimizer_tests.js` still pinned
+   `taxPaymentPlanner: 32`. Both were true when written and are false now: the fix merged as PR #178
+   (`c3bd384`) and PR #179 corrected the count to 34. Rewritten to say P56a starts from a clean tree,
+   with **P56j marked done by someone else** and the note that P56i must move the count in *two*
+   places (`TestTiers.EXPECTED` and `.githooks/README.md`) per the `CLAUDE.md` rule `main` brought in.
+
+**Queue unchanged.** O0 is still P56a (five-plan matrix, spec complete and user-approved, zero code),
+P35i (the Phased engine) and P32d (measure Q2 with the arms that shipped in v11.1582/1585). No code
+touched this session; only the two planning files above were edited.
+
+### Same session — P56a, P56b, P56c BUILT (engine only, uncommitted, nothing user-visible yet)
+
+User picked **P56a** from the O0 menu. Built the first three tasks of P56; the tax planner engine now
+knows all five plans, but nothing spawns D or Q yet, so the shipped page is unchanged.
+
+**P56a — variant plumbing.** `_baseline`/`_planC` booleans replaced by one `_variant` param
+(`null|A|B|C|D|Q`), with `variant` and `isChild` derived once. `convTargetMonth` keys off `C|Q`,
+`drawTargetMonth` off `A|D`. Siblings now spawn as `_variant:'C'` and `_variant:'B'`, and the parent's
+locals were renamed `planLate`/`planHybrid` (the old names, `planB` for the December plan and `planC`
+for the hybrid, are the letter soup this phase exists to kill). Return keys `planB`/`planC` stay until
+P56d deletes them. Four note strings corrected: "Plan C fallback" -> "Plan B fallback" (it was wrong
+under the OLD lettering too - the object it describes displayed as Plan A), "(Plan A hybrid)" ->
+"(Plan B hybrid)", and two "two-plan comparison" cross-references made count-neutral.
+
+**P56b — Q.** Forces `all_quarterly` **ahead of `forceStrategy`**, zero `drawWithholdCap`, no gap-fill,
+no `ira*RothWithhold` override. The 11d gate widened from `usesIraWithholding` to
+`usesIraWithholding || (isQ && allDrawsTotal > 0)`; without that Q emitted no draw actions at all, as
+the phase spec predicted. Q-specific wording throughout, and the IRC 6654(g) pro-rata note is
+suppressed for Q because there is no withholding for it to describe.
+
+**P56c — D.** The four input groups became `baseGroups`; D splits each eligible one into an early
+`tranche:'spend'` part and a December `tranche:'tax'` part withheld 100%, sourced largest-first.
+Eligible = not already taken and not the RMD of a converting IRA. Form W-4R added to `RULE_CITES`.
+`summary.variant`, `summary.dTaxPortion` and `summary.dDegenerate` are exposed for P56d's spawn gate.
+
+**Verification, all measured.** Three throwaway probes in the scratchpad:
+
+1. **Equivalence probe** (old `HEAD` planner vs new, 7 scenarios): `text`, `html` and the full
+   action/summary/comparison structure are **identical** for A/B/C once the four intended note strings,
+   the new W-4R citation and the three new summary keys are accounted for. That is the guarantee P56a
+   claimed and it is now checked rather than asserted.
+2. **Q probe**, 5 scenarios: all checks pass.
+3. **D probe**, 7 scenarios: all four spec invariants hold.
+
+Suites: taxPaymentPlanner **34/34**, doclinks 22/22. No test-count change, so `TestTiers.EXPECTED` and
+`.githooks/README.md` need no edit yet - P56i will move both.
+
+**Two defects caught in my own drafts before they could ship**, both found by probing rather than by
+the suite: the Q probe first read $24,831 of "withholding" in a zero-withholding plan (estimate actions
+carry `federalWithholding` equal to their own amount, so summing every action double-counts), and D's
+first draft tagged **every** early part `'spend'`, so an IRA the largest-first pass never touched
+claimed "the tax share of this draw is held back to December" when none of it was.
+
+**Stopping point is deliberate.** P56d deletes `planB`/`planC` and breaks both
+`RetirementTaxPlanner.html` and 8 existing tests, which only P56e-P56i restore, so d through i is one
+indivisible chunk. a/b/c leave the tool exactly as it shipped apart from the four note strings.
+Next: **P56d**.
+
+### Same session, continued — P56d through P56k BUILT: the five-plan matrix ships (v1.1598 / v11.1598)
+
+User chose to push straight through the indivisible half. **P56 is complete, a through k, uncommitted.**
+
+**What landed.** `plans` is an A/B/C/D/Q map (nulls for the omitted letters, A being the parent
+itself) plus one `comparison`; `planB` / `planC` / `analysis` / `convComparison` are gone, and so are
+`buildAnalysis`, `buildConvComparison` and `summary.opportunityCost` / `savingsVsWorst`. Children
+return empty `text`/`html` rather than rendering output that was always thrown away. Every plan is
+priced by `buildPlanCost` walking its OWN action list to one April 15 frame, which is the structural
+part: there is no second clock left to disagree with. buildText and buildHtml were rebuilt around
+that one table, the Cost Analysis table is deleted, plan sections are collapsible `<details>` with
+the winner open, and the driver's `_planData` is now a five-letter map.
+
+**The spec's anchors hit exactly**: A 940 / C 497 star / D 567 / Q 656, run in August OF the tax year.
+
+**One anchor does not, and was not bent to fit.** The brokerage footnote computes **$4,836**
+($1,010 of forgone growth plus $3,826 of capital gains tax), not the ~3,169 the phase text predicted.
+Both components reproduce the shipped `all_brokerage` row exactly, and 3,169 = 3,826 - 657 looks like
+a delta against Q's carry rather than an absolute. Left absolute, flagged for the user.
+
+**Two real defects, both found by the new tests rather than by reading the code.**
+
+1. **A draw date could land on a Saturday.** A draw group with no RMD in it was dated the 15th with
+   no business-day nudge at all, and D's December tranche reused a day chosen for a different month.
+   The extended sweep printed ten of them (`Sat Aug 15 2026`, `Sun Dec 17 2028`, ...). The old sweep
+   had passed for years because no shape it ran produced a voluntary-only draw group; D's split
+   produces them constantly. Fixed for every plan: forward to the next business day, backward when
+   forward would leave December, since an RMD cannot cross year end.
+2. **`fmt$` takes `Math.abs` of everything.** Correct for an amount, wrong for a signed total. A
+   $40,000 January conversion drives every total negative, and the winning plan printed as
+   `$2,503 ★` - the biggest number on the row looking like the winner. Totals now carry their sign
+   and both outputs say a negative total is a net gain. Caught in the browser, not by the suite.
+
+Also: "every plan ties" was wrong late in the year. Q differs by payment mechanism, not by timing, so
+the tie now covers the timing plans only and every co-winner is starred.
+
+**Counts and versions.** Suite 34 -> **42**. That number is pinned in TWO files, so both moved
+(`TestTiers.EXPECTED` and the `.githooks/README.md` table), plus the tier-2 loader's prose count
+325 -> 333. The planner is **v1.1598** (title + three cache busters) and the Optimizer is
+**v11.1598** - the Optimizer release is not optional, because `optimizer_tests.js` carries the pinned
+counts and its cache buster had to move. That is the same coupling that forced 11.1581 into existence
+a day earlier. Changelog entry written for both, no em-dashes, leading with the correctness win and
+calling out the letter remap as a BEHAVIOR CHANGE.
+
+**Verified in the browser**, worktree-rooted server (`--root` added to this worktree's gitignored
+`launch.json`; without it the preview serves the MAIN checkout). Reported scenario: four columns
+A/C/D/Q, B-absence note present, C starred at $497, Q $656, D $755, A $2,121 (that URL is a FUTURE
+tax year, so "early" is January; the 940/497/567/656 anchors assume a run in August of the tax year
+and are asserted at those months in the suite). With `&ira1RothConversion=40000`: five columns, B
+wins at -$2,503, Form W-4R cited in D's tranche step, Q shows 7 estimate steps, `_planData` carries
+all five action lists, `beforeprint` opens all five sections and `afterprint` restores exactly the one
+that was open. Console clean. Optimizer badge green: **575 (245 in-page + 330 node)**.
+
+Suites: **269 / 42 / 22**. Nothing committed, no PR requested.
+
+## Session 2026-08-18 (continued) — P57: two user reports become 22 verified defects, all fixed
+
+The user opened the planner on the default scenario advanced to 2027 and asked why the header said
+"IRA 1 draw: January / conv: January | Effective withhold: January" when Plan C, which draws in
+December, was the winner. Then, separately, they called out two sentences: the footnote claiming
+voluntary draws "are not free to move", and the brokerage footnote pricing capital gains tax that this
+tool never adds to anyone's liability.
+
+**Both were right, and both were bigger than the sentence.** Two adversarially-verified audits
+(29 agents / 24 candidates / 12 confirmed, and 19 agents / 10 confirmed, several with sweeps in the
+thousands of scenarios) turned them into 22 findings. The user approved all four groups.
+
+### What the diagnosis actually was
+
+`plan.summary` at the top level IS Plan A's (`r.summary === r.plans.A.summary` is literally true).
+P56 re-pointed the comparison table and the plan sections at `plans`/`comparison` and left every other
+surface reading the parent. So the page opened by describing the early plan while crowning another.
+
+Fixed by REMOVING those values from both headers rather than re-pointing them, which was the audit's
+recommendation and the right call: re-pointing relocates wrong values instead of correcting them.
+`planARmdMonth` reads the same in all five plans in the divergent case, `plans.D.summary.ira1.rmdMonth`
+says September on a December-only plan, `bestSet` can hold two plans with different strategies, and
+`comparison` is null when only one plan exists, which is exactly where the old banner's second defect
+lived.
+
+### The four that cost real money, each reproduced by hand before being trusted
+
+1. **The Tax Coverage Summary is a pay checklist and it was Plan A's.** On the reported scenario it
+   listed $7,000 of conversion withholding and no estimates, while the winner withheld nothing on the
+   conversion and owed **seven** estimated payments. Now rendered per plan; the browser confirms Plan
+   C's own table lists "Quarterly estimated taxes $4,298 / $2,702 / $7,000".
+2. **A gain printed as a cost.** `fmt$` is `Math.abs` by design. The winner line and the badge quoted
+   the total through it, so a $15,394 net gain read as a $15,394 cost twelve lines above the table
+   printing `-$15,394 star`. My own defect from P56.
+3. **"No penalty applies" was decided by the wrong plan.** Gated on Plan A's strategy label; fired in
+   4,200 of 11,880 swept scenarios and in 51% of those the winner really carried past-due
+   installments. Now gated on the winning plan's own `fedTimelyByWithholding` /
+   `stateTimelyByWithholding`, which had to be surfaced from closure locals.
+4. **Plan D could be Plan C wearing a different name.** Draws $20,000 against $57,000 of tax and the
+   whole plan becomes the December tranche: label promising early spending draws, a note describing an
+   early distribution that does not exist, cost identical to C at $1,563, same nine actions. P56c
+   guarded the empty end and never guarded the full end. Also my defect.
+
+### The user's two sentences
+
+The footnote's reasoning was inverted. A draw that funds spending has to precede the spending, and the
+engine moves those draws to December in B, C, D and Q anyway. **Measured**: Plan A hands the household
+$63,000 net in February; Plan C, starred, hands the same $63,000 in December. The real reason the
+deferral is not priced is that nothing here knows when the money is spent, so the tool now says that,
+and every plan states what it delivers and when in its own dollars. On the reported scenario A, B and C
+all read "none. Every dollar of the $50,000 drawn is withheld for tax, so this plan funds no spending",
+which was true before and never said.
+
+The brokerage footnote priced $4,957 of capital gains tax that appears exactly once in the whole result
+object, in `comparison.brokerage`, and never in any plan's schedule: every plan pays the entered
+$57,000 exactly. The footnote now says the gain tax is outside the liability the plans are sized
+against, a new `CONCEPT_NOTES` entry "Tax figures are inputs" carries the general rule, and the
+estimate steps cite it. The engine already held the principle internally at line ~940 for Plan D, so
+this extended a stated rule rather than inventing one. The safe-harbor nuance from the verifier is in
+the note: a balance due in April, and an underpayment charge only where the prior-year test is not the
+binding one.
+
+### Two more, and one dead heuristic
+
+The input-side live preview was a second model of the same decision, never wired to the engine, whose
+verdict disagreed with the priced table in **1,231 of 7,128** swept scenarios, whose coverage
+percentage ignored conversion-withholding capacity, and whose opportunity-cost factor read
+`new Date()` and never consulted `taxYear`. Because it refreshes on typing and not on Compute it sat
+on screen contradicting the results. It now shows inputs and the two rates, labelled "From your
+inputs", and leaves the verdict to the table. Related: `yeIraWins` no longer affects plan selection
+at all, so it was driving display only.
+
+Safe-harbor wording: California printed "110% of prior-year (high-income filer)" over a figure
+computed at 100%, and Maryland printed "110%, MD rule, always" over one that was 90% of the current
+year. Each line now describes the multiplier its own figure used, and the AGI-threshold note states
+the direction of the error, per the state-NOTE style rule.
+
+**A pre-existing date defect surfaced too**: a draw group with no RMD in it was dated the 15th with no
+business-day nudge at all. The sweep had passed for years because no shape it ran produced a
+voluntary-only group; Plan D's split produces them constantly.
+
+### Release
+
+Suite 42 -> **51**, reconciled in both pinned homes plus the tier-2 prose count 333 -> 342. **11.1598
+was never committed or published, so P56 and P57 are ONE changelog entry at 11.1599** rather than a
+release plus a hotfix for defects no user ever saw; the entry separates what is new from what was fixed
+from earlier shipped releases. `?runtests` full synchronous run: **587 (245 in-page + 342 node)**,
+badge green.
+
+Nothing committed. An adversarial review of the whole uncommitted diff was running when this was
+written.
+
+## Session 2026-08-18 (continued) — v11.1599 committed, then P58: withholding on money already moved
+
+**Committed the P56+P57 release** as `6e74f1f`, one commit for one changelog entry (the two phases
+interleave in `taxPaymentPlanner.js`, so splitting would have meant hunk surgery for no benefit).
+Pre-commit hook ran all three suites green.
+
+### P58, all four items, shipped as v1.159d / v11.159d
+
+The seed was a self-review finding: the cross-IRA optimizer sorted EVERY draw group by month and gave
+withholding to the latest first, and that set included groups flagged already taken. Measured, plans
+A and C each put **$8,000 of withholding on a June draw the user had already received**, then reported
+themselves fully covered.
+
+**A third instance turned up while fixing it, and it was worse.** The gap fill's `convSlots` filter
+never checked `ConvDone`, and because the gap fill sizes off the shortfall it could take the entire
+conversion: a **$40,000 conversion marked done was assigned $40,000 of withholding**, which would
+leave nothing in the Roth. The explicit `ira*RothWithhold: true` override had the same hole.
+
+**The model now.** An action already completed carries exactly what the user reports and nothing else.
+Six new optional inputs (`ira1RmdWithheld`, `ira1VolWithheld`, `ira1ConvWithheld` and the IRA 2
+equivalents), blank meaning not stated. Blank credits nothing and routes the difference to estimates,
+which OVERSTATES what is still owed rather than understating it, and the note says exactly that. The
+disclosure renders in every plan now, because every plan depends on the answer; it reads as a fact
+when the user supplied a figure and as a warning when it is the planner's assumption.
+
+**Fourth item.** `forceStrategy: 'quarterly'` stacked estimates on top of gap-fill withholding and
+paid $64,000 against a $57,000 bill. Forcing quarterly now skips the gap fill, which is what Plan Q
+already did. No page control reaches this path, so no shared link was affected.
+
+**Verified in the browser.** `i1rt=1` with no figure gives "no withholding assumed ... OVERSTATES what
+you still owe"; adding `i1rw=1600` flips the heading to "Already completed this year" and the note to
+"you reported $1,600 withheld ($982 federal + $618 California)". Fields appear only once their
+checkbox is ticked and survive a share link.
+
+**GOTCHA worth keeping:** a new numeric input does not load from a URL until its id is added to the
+`NUM_FIELDS` allowlist inside `loadFromUrl`. Adding it to `SHORT_TO_LONG` is not enough, and the
+symptom is silent: the parameter parses, the page ignores it.
+
+Suite 51 -> **55**, both pinned homes plus the tier-2 prose count 342 -> 346. `?runtests` full
+synchronous run green at **591 (245 in-page + 346 node)**. The 22-scenario self-review sweep reports
+NO PROBLEMS. In-page changelog list trimmed back to its documented five-entry ceiling (it had drifted
+to six before this session).
+
+## Session 2026-08-18 (continued) — PR #181 opened, then P59 from three more user questions
+
+**Network was the blocker, not GitHub.** Diagnosed it properly rather than guessing: `curl -6` to
+google returned 200 while `curl -4` returned 000 at the same moment, every working host had an AAAA
+record and every failing one was IPv4-only, raw IPv4 addresses all timed out, and the machine held
+**169.254.93.53** (APIPA) because DHCPv4 never leased. IPv6 kept working because it uses router
+advertisements, not DHCP. github.com publishes no AAAA record, so an IPv6-only host cannot reach it
+at all. `www.githubstatus.com` failing too was the tell that it was not a GitHub outage, since that
+is Atlassian on CloudFront. The user reset the adapter, DHCP handed out 192.168.1.203, and everything
+worked. **`gh auth` was fine all along** - it had been reporting a network failure as an invalid token.
+
+**PR [#181](https://github.com/nightskyguy/retirement_assets/pull/181) opened**, MERGEABLE / CLEAN,
+three commits, 9 files, +2,466 / -731. `origin/main` had not moved since #180, so none of the
+conflict-prone files collided this time.
+
+### P59: what the comparison still did not say
+
+Three questions from the user, one of which was a check on my own arithmetic.
+
+**1. Which plans need quarterly payments, and how much.** Two rows under "vs best": **Withheld from
+IRA** and **Quarterly estimates**, per plan, always summing to the liability. On the reported
+scenario: A and B are $57,000 withheld / $0 estimated, C is 50/7, D is 45/12, Q is 0/57.
+
+**2. Which plans meet safe harbor, under which rule.** This turned out to be the most valuable of the
+three, because the answer is **not the same for every plan**. New `scheduleSafeHarbor` walks each
+plan's own actions under both credit rules: withholding is credited in equal parts across every due
+date [IRC 6654(g)], an estimate counts only on the day it is paid. Run mid-year, after April and June
+have passed, the plans split: **A and B clear safe harbor, C, D and Q miss federal at Q1** by $200,
+$967 and $7,875 respectively (Q misses California by $3,450 too). The binding rule is named per
+jurisdiction, and they differ on the same run: federal is 90% of this year ($31,500) while California
+is last year in full ($11,500).
+
+**A defect in my first draft, caught before showing it.** Past-due estimates keep their statutory
+date and are marked PAST DUE, so crediting them at that date let a genuinely late plan report itself
+safe. They are now credited at the earliest date the money could actually move, which is today.
+Without that fix every plan read "met" and the feature would have been decorative.
+
+**Consequence worth stating:** ranking is by first-year cost, which does not price an underpayment
+penalty, so the cheapest plan can be the one that misses. The winner line and a header badge now say
+so. On the reported scenario Plan C wins at $1,141 **and** misses federal safe harbor by $200.
+
+**3. The user's question about the quarterly schedule was a check on my arithmetic, and it holds.**
+The cost model prices each payment from its real due date, not a uniform quarter: the four federal
+payments get 12, 10, 7 and 3 months of carry to the April 15 frame, California's three get 12, 10 and
+3. Installments are equal at 25% while the periods are 3, 2, 3 and 4 months long, which is the
+statute rather than an approximation. Their weighted averages are exactly the 8 and 8.5 months the
+old hardcoded `OC_FACTOR.Q_FED` and `ocWeightedMonths` constants carried, so the action-based model
+reproduces them from the dates. Business-day shifting applies (Jan 15 2028 is a Saturday, so the
+model prices the 17th).
+
+Suite 55 -> **58**, both pinned homes plus the tier-2 prose count 346 -> 349. v1.159f / v11.159f.
+The 22-scenario sweep still reports NO PROBLEMS. Browser-verified both branches: a future tax year
+shows every plan meeting safe harbor (nothing is past due yet), the current tax year shows
+met/met/MISSED/MISSED/MISSED with the badge and the per-plan shortfalls.
+
+### Same session — P60: which safe-harbor bar was cleared (items 1 and 2 of five)
+
+**Item 1, the sad day.** "met" said nothing about which bar it cleared, and meeting 100% of last year
+when 110% was required is the expensive way to be wrong. The verdict row now names it:
+`Safe harbor (110%/90%)`, federal and state shown separately when they differ, with the per-plan
+lines and the detail block carrying the same tag.
+
+**Item 2, and it folded into item 1.** The 110% bar turns on PRIOR-year AGI over $150,000, which this
+planner is never given. It used to fall back to 100% unless the high-income box was ticked. It now
+sums the income already entered (`grossIncome`, taxPaymentPlanner.js:908, which is draws +
+conversions + SS + pension + interest + dividends + gains) and applies 110% when that clears the
+threshold. Measured: $180,000 of income with $20,000 of prior-year federal tax moves the requirement
+from $20,000 to $22,000.
+
+**Both directions are stated, per the state-NOTE style rule.** Inferring 110% from this year when
+last year was quieter overstates the requirement; resting on 100% when last year was above the
+threshold understates it, so a 100% verdict carries a `*` and a line saying the planner cannot check.
+
+**The user's "assume from this year's income" for a missing prior year is a no-op, and the honest
+answer was to say so.** The requirement is the LESSER of 90% of this year and 100% or 110% of last
+year. Substituting this year for last year gives min(0.90x, 1.00x) = 0.90x either way, so the answer
+is unchanged. What it CAN do is overstate, when last year was genuinely lower. The page now says the
+90% fallback can only be too high and asks for the real figure instead of inventing one.
+
+**Two defects in my own first draft, both caught before showing it.** The tag repeated in all five
+cells overflowed the 11-character column and ran the row together (`met 90%/100%*met 90%/100%*...`);
+it belongs in the row LABEL, since the test is the same taxpayer for every plan. And the test fixture
+I wrote to prove the inference summed to exactly $140,000, just under the threshold, so it proved
+nothing until raised to $170,000.
+
+Suite 58 -> **60**, both pinned homes plus the tier-2 prose count 349 -> 351. v1.15a0 / v11.15a0.
+Browser-verified: `Safe harbor (110%/90%)`, `The test: federal $22,000 (110% of last year),
+California $19,800 (90% of this year)`, and the inference explained from $180,000 of income.
+
+Items 3, 4 and 5 (generic state safe harbor, clickable rule citations, IncomeTaxPlanner cohesion) are
+out with a research workflow and not yet answered.
+
+### Same session — items 3, 4 and 5: research back, two shipped, one deferred
+
+A 7-agent workflow researched all three with adversarial verification. Two of the three proposals
+were marked UNSOUND by their verifier and the corrections mattered, which is the point of the pass.
+
+**Item 5, the IncomeTaxPlanner handoff. SHIPPED, and it was the worst of the three.** Verified
+myself before touching code: `standalone/RetirementTaxPlanner.html` does not exist, so the button has
+404'd since the tools moved. But the important half is that it sent **no tax figures at all**, and the
+planner takes tax as an INPUT while its page ships demo defaults. Reproduced in the browser with only
+the params the button sends: the planner filled in **$35,000 federal, $22,000 state, a $15,000 RMD
+and a $10,000 conversion** and priced a $57,000 plan with a winner. **A path-only fix would have been
+strictly worse than the dead button**, which is why both moved in one commit.
+
+Also fixed: `pinnedIncome - cfg.ssIncome` subtracted Social Security from an axis that never included
+it (`calcAt(ordInc)` takes ordinary income, `ssIncome` rides separately in `cfg`).
+
+Now sends the tax this page computed (income tax only, IRMAA excluded as a premium rather than
+withholdable tax), explicit zeros for everything the planner would otherwise invent, and empty
+prior-year fields so `readNum(...) || null` yields null and the planner says "not supplied". Verified
+end to end: $6,501 priced, RMD and conversion $0, prior-year fallback honest. Refuses with a message
+when nothing is pinned, guarded at click time because `renderSummary()` is not on every pin path.
+
+**Item 4, clickable citations. SHIPPED.** `linkifyCites` at HTML render time only, because the marker
+feeds three sinks and two of them cannot carry markup: the text tab prints notes verbatim and the
+.ics export copies them into DESCRIPTION. The verifier's correction was real - `renderActionList` has
+three branches, not one, so a naive patch would have linkified a third of the markers and left the
+rest looking broken. Nine emit sites in total. 61 links on a typical plan, every href resolving,
+`plan.text` byte-identical. Delegated listener on `#plan-html` walks ancestor `<details>` open before
+scrolling, since a browser will not open a closed disclosure to reach an anchor.
+
+**GOTCHA, again, and it cost a browser round trip:** node showed 58 links while the browser showed
+zero, because the JS changed and the `?v=` cache buster had not. Bump it in the same edit.
+
+**Item 3, generic state safe harbor. DEFERRED as P63, with two live bugs recorded.** The shape is
+~200 lines; the facts behind it are 47 jurisdictions x 8 fields, about 376 cited figures off state
+underpayment forms. 45 of 48 taxing entries currently carry the federal rule as an unresearched
+default. Two separable bugs: `withholdingCreditedProRata` is never consulted, so AL and AS return
+identical verdicts; and the state 110% gate compares a TAX amount against an AGI threshold, so it
+never fires. **The second must not be fixed alone** - applied in isolation it flips 46 unresearched
+states from understating-and-disclosed to overstating-and-undisclosed, with the suite still green.
+
+Suite 60 -> **61**. v1.15a1 / v11.15a1. Same-hour collision with 15a0, so incremented, matching the
+1598 -> 1599 precedent earlier today.
+
+### Same session — the star moved to the column heading (v11.15a2)
+
+User report: the star on the "Total first-year cost" line messed with the formatting. It did. The
+star shared a cell with a right-aligned dollar figure, so that one row ran two characters wider than
+every other row and the money column stopped lining up down the page.
+
+Moved to the column heading in both renderers, so the table reads `Plan C★` and every figure below it
+stays in its column. The tie case gets a star on each winning heading, which is also clearer than two
+marked cells on one row. Footnote reworded from "★ = lowest first-year cost" to "★ marks the column
+with the lowest first-year cost".
+
+No number changed. Suite stays at 61; no test pinned the star's position (the only `★` in the suite
+is inside a comment describing the old sign defect). v1.15a2 / v11.15a2, third same-hour increment of
+the day.

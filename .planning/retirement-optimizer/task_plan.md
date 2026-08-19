@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-19:** `main` = `4c3e98c`. Everything through [PR #181](https://github.com/nightskyguy/retirement_assets/pull/181) is **merged and shipped** - P56 + P57 + P58, the clickable citations, the IncomeTaxPlanner handoff repair, the winner-star move and the changelog consolidation. The worktree (`context-e73361`, branch `worktrees/planning-with-files-02d4ce`) is **clean, 0/0 against `origin/main`**; nothing is uncommitted. Suites **269 / 61 / 22** (`slowInCore` 3), version **v11.15a2**. The taxPaymentPlanner count moved 34 -> 55 -> 61, updated in BOTH pinned homes each time.
+**As of 2026-08-19:** `main` = `4c3e98c`, everything through [PR #181](https://github.com/nightskyguy/retirement_assets/pull/181) merged and shipped. This worktree (`context-e73361`, branch `worktrees/planning-with-files-02d4ce`) now carries **one commit**, `49509e9` (P64a/b/c/d/e/f, one release at **v11.15b7**): property tax reaches the tax engine, the elevated SALT cap no longer dies a year early, and the cap and its phase-out threshold are indexed 1%/yr as the statute requires. Suites **272 / 61 / 22** (`slowInCore` 3), badge green, both pinned homes reconciled.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -10,7 +10,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O0** | P64 | SALT: `propTax` reaches no Optimizer year, so itemizers are overtaxed | `P64a` |
+| **O2** | P64 | SALT DONE v11.15b7; only the sibling tool is left | `P64g` |
 | **O0** | P32 | Brokerage draws: arms shipped v11.1582, spiral unmeasured | `P32d` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P51 | Oracle a-c,e-g DONE 08-10; propwd refuted | `P51d` |
@@ -18,10 +18,10 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P64 is new, user-approved 2026-08-19, and is a STUDY before it is a build.** `taxengine.js` already
-does SALT right; no Optimizer caller passes `propTax`, exactly the defect `obbaOn`/`saltHigh` had. The
-elevated cap dies after 2029, so the question is whether four years of it moves any decision. Open
-call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
+**P64 SHIPPED 2026-08-19 (v11.15b7, `49509e9`).** The study answered its own question: property tax is
+worth <=$4k of lifetime tax and moved no decision, so it is URL entry only, no field. But indexing the
+SALT cap DID move one - a fixture's best conversion went $250k x 5yr -> $300k x 4yr. Only `P64g` is
+left. Open call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 
@@ -43,7 +43,7 @@ first task. Every open item in the file now carries one.
 
 | User Priority | ID | Phase | Next open item | Blocked by |
 |---|---|---|---|---|
-| **O0** | P64 | SALT deductibility — `propTax` reaches no Optimizer year *(new 2026-08-19, user-approved as a study first)* | `P64a` (thread the param) | nothing |
+| **O2** | P64 | SALT deductibility — **a-f DONE, shipped v11.15b7**; study said the input does not earn a field | `P64g` (Retirement_Projection passes no OBBBA flags at all) | nothing |
 | **O0** | P35 | Phased strategy; **basis step-up shipped v11.1499** | `P35i` (the Phased engine) | nothing hard |
 | **O0** | P32 | Brokerage draws — premise refuted, dividend defect fixed, Q2 arms shipped v11.1582 | `P32d` (measure Q2) | nothing |
 | ~~DONE~~ | ~~P58~~ | ~~Withholding assumed on money already moved, plus the forced-quarterly double payment~~ — **COMPLETE, v11.159d (`0bc7ba0`)** | — | — |

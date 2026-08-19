@@ -15,346 +15,52 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ## 11.15a2
 
-**Tax Payment Planner: the star marking the cheapest plan moved to the column heading.**
+### Five Payment Plans - Was 3 plus Quarterly
 
-It used to sit in the Total first-year cost cell, sharing that cell with a right-aligned dollar
-figure. One row of the table was therefore two characters wider than every other row, and the money
-column no longer lined up down the page. The star now marks the heading, so the table reads
-`Plan C★` and every figure below it stays in its column. When two plans tie, both headings carry a
-star, which is also clearer than two marked cells on one row.
+Previously comparisons were not apples-to-applies (same time frames). Now there are 5 plans now rather than 4 - Quarterly payment was not called out as a separate plan, 
+so it became "Plan Q". Each plan is measured up to April 15th so they are on equal footing - previously one plan 
+measured to April 15th of the following year, but the others did not.
 
-No number changed.
+Each plan is a full computation in its own right.
+Draw timing and tax-payment timing are separate levers, and the tool now says so.
+A star (★) marks the cheapest plan(s)
 
----
-
-<a id="11.15a1"></a>
-
-## 11.15a1
-
-**Citations are clickable, and the Income Tax Planner's handoff to this tool works again.**
-
-### Every "[see ... in Rules and sources]" is now a link
-
-The plan steps cite the rules they rest on, and the citation was a bracket of plain text asking you
-to scroll and search. Each one is now a link that opens the Rules and sources panel, scrolls to the
-entry and highlights it briefly. Sixty-one links on a typical plan, every one resolving to an entry
-that exists.
-
-The plain-text tab and the calendar export are deliberately unchanged. Both copy these strings
-verbatim, so the marker stays plain there and is turned into a link only where markup can be shown.
-
-### The Income Tax Planner button was broken in a way worth explaining
-
-"Open in Tax Planner" opened a page that does not exist at that path, so it has been a dead button
-since the tools moved. That turned out to be the lucky part.
-
-The button sent an income figure but **no tax figures at all**, and the Tax Payment Planner takes the
-tax as an INPUT. Its page ships demo defaults in those fields. Had the path been fixed on its own, the
-button would have opened a confidently priced plan built on a $35,000 federal tax, a $22,000 state
-tax, a $15,000 required distribution and a $10,000 conversion that belonged to nobody, with the input
-panel collapsed so none of it was visible. So the path and the parameters were fixed together, and
-they must never be separated.
-
-It now hands over the tax this page computed at your pinned income, with everything the other page
-would otherwise invent sent explicitly as zero, and last year's tax deliberately left empty so the
-planner reports it as not supplied rather than assuming a safe-harbor bar. The button also refuses
-politely when no income is pinned, instead of opening a plan for an income you never chose.
-
-One arithmetic fix went with it: the handoff subtracted Social Security from an income axis that
-never included it, which understated the withdrawal it passed across.
-
-Suite: 61 tests, up from 60.
-
----
-
-<a id="11.15a0"></a>
-
-## 11.15a0
-
-**Tax Payment Planner: "safe harbor met" now says WHICH bar it cleared, and stops quietly assuming
-the cheaper one.**
-
-Meeting 100% of last year's tax when 110% was the real requirement is an expensive way to be wrong,
-and nothing on the page distinguished the two. The verdict row now names the bar it rests on, as
-`Safe harbor (90%)`, `(100%)` or `(110%)`, with the federal and state tests shown separately when
-they differ. On one scenario that reads `Safe harbor (110%/90%)`: the federal bar is 110% of last
-year while California's is 90% of this year.
-
-**The 110% bar is now inferred from income instead of assumed away.** It applies when last year's AGI
-was over $150,000. This planner is never given AGI, so it used to fall back to 100% unless you ticked
-the high-income box. It now adds up the income you entered and, if that clears $150,000, applies the
-110% bar and says why. On a $170,000 income with $20,000 of prior-year federal tax, the requirement
-moves from $20,000 to $22,000.
-
-Both directions of that inference are stated on the page. Inferring 110% from this year when last
-year was quieter overstates what you must pay. Resting on 100% when last year was above the threshold
-understates it, so a verdict at 100% now carries a `*` and a line saying the planner cannot check the
-threshold and that the real requirement may be 10% higher.
-
-**When last year's tax is missing**, the requirement falls back to 90% of this year, and the page now
-says which way that errs: it can only be too HIGH, because a lower prior-year tax would have set a
-lower bar under the lesser-of rule. Substituting this year's figures for last year's cannot change
-the answer, since 90% is below both 100% and 110% of the same number, so the honest move is to ask
-for the real figure rather than invent one.
-
-Suite: 60 tests, up from 58.
-
----
-
-<a id="11.159f"></a>
-
-## 11.159f
-
-**Tax Payment Planner: the comparison now says which plans need quarterly payments, how much, and
-whether each one actually clears safe harbor.**
-
-### How each plan pays
-
-The table priced five plans and never said how the money reaches the IRS. Two rows under "vs best"
-now do: **Withheld from IRA** and **Quarterly estimates**, per plan. On one scenario that reads
-$57,000 withheld and nothing estimated for Plan A, against nothing withheld and $57,000 estimated for
-Plan Q, with the middle plans splitting it. Those two numbers always add to the whole liability.
-
-### Whether each plan clears safe harbor, and which rule it is being measured against
-
-A third row gives the verdict, and it is not the same for every plan. Two credit rules decide it:
-
-- **Withholding is credited in equal parts across every due date**, whatever date it actually
-  happened [IRC 6654(g)], so a December draw can still satisfy a quarter that has already gone by.
-- **An estimated payment counts on the day you pay it**, so an installment already past cannot be
-  made timely at all.
-
-Run the same scenario in July, after the April and June installments have passed, and the plans split:
-the two that withhold the whole liability clear safe harbor, while the three that lean on estimates
-miss the first quarter. The page names the quarter and the amount, so a $200 miss is not presented
-like a $7,875 one.
-
-It also names the test itself. The requirement is the lesser of 90% of this year and 100% of last
-year, or 110% for a high earner, and which of those binds differs by jurisdiction: on that same run
-the federal bar is 90% of this year at $31,500 while California's is last year in full at $11,500.
-
-**One consequence is called out where it matters.** Plans are ranked by first-year cost, and an
-underpayment penalty is not part of that cost. When the cheapest plan is one that misses safe harbor,
-the winner line and a header badge now say so, because the ranking alone would hide it.
-
-Every plan section repeats its own verdict with the rule and the shortfall, so a printed plan carries
-the answer.
-
-Suite: 58 tests, up from 55.
-
----
-
-<a id="11.159d"></a>
-
-## 11.159d
-
-**Tax Payment Planner: the planner no longer credits withholding to money that has already moved.
-BEHAVIOR CHANGE, and it can raise what a plan tells you to pay.**
-
-### What was wrong
-
-If you ticked "RMD already taken this year", the planner still treated that distribution as a place
-to put withholding. It would decide, for example, that $8,000 of your tax was covered by a draw you
-received in June, and then report the plan fully covered. You cannot elect withholding after a
-distribution has been taken, so those dollars were an assumption, not a payment.
-
-The same applied to a conversion marked already done, and there it was worse. The step that closes a
-funding gap sizes itself off the gap, and it could take the entire conversion: a $40,000 conversion
-marked done was assigned $40,000 of withholding, which would have left nothing in the Roth at all.
-
-### What happens now
-
-An action you have already completed carries exactly what you say it carried, and nothing else. Each
-"already taken" and "already done" box now has a field beside it for the tax actually withheld from
-that distribution.
-
-- **Tell the planner the figure** and it is credited in full, exactly as before but on your numbers.
-- **Leave it blank** and the planner credits nothing. It then schedules estimated payments for the
-  shortfall, which overstates what you still owe rather than understating it. That is the safer
-  direction to be wrong in, and the note on the plan says so in as many words.
-
-Every plan carries that note now, not just the first one, because every plan depended on the answer.
-
-**This changes numbers.** A saved link with an already-taken draw will now show a larger estimated
-payment schedule than it did before, until you fill in what was withheld. The three new figures ride
-in shared links, so a link you build after filling them in carries them.
-
-### Also fixed
-
-A plan whose strategy was forced to quarterly paid the tax twice over: the gap-filling step withheld
-on the conversion, and the forced strategy then scheduled the whole liability as estimates on top of
-it, $64,000 against a $57,000 bill. Forcing quarterly now skips the gap fill, which is what the
-quarterly plan itself already did. This path has no control on the page and is reachable only by a
-caller, so no shared link was affected.
-
-Suite: 55 tests, up from 51.
-
----
-
-<a id="11.1599"></a>
-
-## 11.1599
-
-**Tax Payment Planner: five plans, one cost table, and the two tables can no longer contradict each
-other. BEHAVIOR CHANGE: the plan letters have been remapped.**
-
-### The defect this closes
-
-The planner had grown two cost models that never met. The timing comparison at the top measured each
-plan's first-year advantage to December 31 and ignored the cost of holding cash. The Cost Analysis
-table at the bottom measured opportunity cost to April 15 and included that cost, and it priced its
-year-end IRA row at the FIRST plan's withholding month even when a later plan won. Same scenario,
-same screen: the timing table said December withholding wins, and the cost table said quarterly
-estimates were cheaper. Priced at the month the winning plan actually uses, December withholding
-costs about $497 against quarterly's $656, so the timing table was right and the cost table was
-contradicting it.
-
-There is now ONE table. Every plan is priced by walking its own list of actions to a single April 15
-reference, so there is no second clock left to disagree with, and the state schedules that used to
-need special handling (California's 30/40/30, Virginia's May 1, Oregon's December 15) fall out of the
-dates themselves.
-
-### Five plans instead of three
-
-Draw timing and tax-payment timing are separate levers, and the tool now says so:
-
-- **Plan A, Early.** Draws and conversions next month, tax withheld at the draw.
+- **Plan A, Early.** Draws and conversions next month, tax withheld at the draw. [Was Plan B]
 - **Plan B, Hybrid.** Conversions next month, draws and withholding in December. Shown only when
   there is a conversion to pull early; without one it would be a copy of Plan C, and the table now
-  says that in a line rather than letting the column vanish.
-- **Plan C, Late.** Everything in December.
+  says that in a line rather than letting the column vanish. [Was Plan A]
+- **Plan C, Late.** Everything in December. [Same as prior]
 - **Plan D, Split.** New. The spending part of each draw is taken early with no withholding, and the
   tax part is held back to a separate December draw withheld up to 100%, which Form W-4R permits.
   You get your spending cash on the early schedule and the tax still gets the pro-rata credit that
   only withholding earns. Total draws are unchanged: D never adds a supplemental draw, because that
-  would create taxable income your entered tax figures do not include.
-- **Plan Q, Quarterly.** New. December draws with no withholding at all, and the whole liability paid
-  as quarterly estimates.
+  would create taxable income your entered tax figures do not include.  Useful if you want to get your spending money early, 
+  and pay taxes when there is more tax certainty - however there are some costs and potential gotchas.
+- **Plan Q, Quarterly.** Spelled out separately, but was being compared to in the prior version. December draws with no withholding at all, and the whole liability paid
+  as quarterly estimates.  NOTE: Selling appreciated brokerage shares to fund those estimates is now a footnote under the table rather than a fourth row that read like a plan. It is a way to fund Plan Q, and it carries the capital gains tax on the sale.
 
-Selling appreciated brokerage shares to fund those estimates is now a footnote under the table rather
-than a fourth row that read like a plan. It is a way to fund Plan Q, and it carries the capital gains
-tax on the sale.
+Some minor corrections were also made: 
+- Using weekdays where previously they were not being used. Payments that may 
+have landed at the end of the year or past deadlines are moved earlier - for example when running the Tax Planner at the end of the year, compliance requires timely payment within the year.
+- In some cases the plan reported that there were no penalties, but the logic was inconsistent. 
+- Roth gains from an early conversion appeared as if they were costs, rather than improvements.
+- The tool failed to point out that late draws carried the consequence of not getting "spending money" until late in the year. This is now spelled out.
+- *Citations are clickable* - in plan descriptions the codes cited are now clickable.
+- **The Income Tax Planner button** In the [IncomeTaxPlanner Tool](standalone/IncomeTaxPlanner.html) was non-operational and is now fixed.
+- **Safe harbor** now states whether Federal safe harbor is met, and does so using either the input fields, or by inferring net income.
+- **Withholding is credited in equal parts across every due date**, whatever date it actually
+  happened [IRC 6654(g)], so a December draw can still satisfy a quarter that has already gone by.
+- **An estimated payment counts on the day you pay it**, so an installment already past cannot be
+  made timely at all.
+- Plans are ranked by first-year cost, and an **underpayment penalty** is not part of that cost. When the cheapest plan is one that misses safe harbor,
+the winner line and a header badge now say so, because the ranking alone would hide it.
+- The planner no longer credits withholding to money that has already moved.  You can indicate that some of the payments or withdrawals have already been done and the planner no longer assumes that "completed" items had the proper withholding.  Instead you must 
+   - **Tell the planner the figure** and it is credited in full, exactly as before but on your numbers.
+   - **Leave it blank** and the planner credits nothing. It then schedules estimated payments for the
+  shortfall, which overstates what you still owe rather than understating it. That is the safer
+  direction to be wrong in, and the note on the plan says so in as many words.
 
-Each plan is a full computation in its own right, so each one owns a complete, executable list of
-steps, and each is collapsible with the cheapest plan open. Printing forces every section open, so a
-collapsed plan no longer prints as a bare header.
-
-### BEHAVIOR CHANGE: the letters moved
-
-The old lettering grew by accretion and had stopped matching what the plans do: the hybrid was shown
-as Plan A, the early plan as Plan B, and December as Plan C. The letters now run in time order.
-
-| Was | Is now |
-|---|---|
-| Plan A, hybrid | **Plan B** |
-| Plan B, early everything | **Plan A** |
-| Plan C, December | **Plan C** (unchanged) |
-
-A saved link or a printout from an earlier release still describes the same plans, but two of the
-three names have changed. Nothing about the underlying money moved with the rename.
-
-### Two fixes found while building it
-
-A draw with no required minimum in it was dated the 15th of its month with no check that the 15th was
-a business day, so it could land on a Saturday. Every other date in the tool is nudged off weekends
-and the two tracked holidays; this one was missed because the sweep that guards it never happened to
-produce that shape. Plan D's splitting produces it constantly, which is how it surfaced. Dates now
-move to the next business day, or the previous one when moving forward would leave December, since a
-required distribution cannot cross year end.
-
-Late in the year, "early" already IS December, so the timing plans collapse onto the same dates. The
-comparison now says they tie instead of starring one of them on a rounding difference. Plan Q stays
-distinct there, because what it changes is how the tax is paid rather than when the money moves.
-
-### Every statement now belongs to one plan
-
-Five plans arrived with a page still written for one. Two rounds of audit found the leftovers, and
-they were not cosmetic.
-
-**The header described Plan A while the page recommended someone else.** The tool returns the early
-plan as its top-level result, so the header's Strategy, IRA coverage, per-IRA draw and conversion
-months and effective withholding month were all Plan A's, printed inches from a badge naming the
-winner. On one reported scenario it read "IRA 1 draw: January, Effective withhold: January, IRA
-Coverage: 100%" directly above "Winner: Plan C", a plan that draws in December and sends $7,000 to
-quarterly estimates. Those values belong to a plan, so they now appear only where the plan letter
-travels with them: in the comparison table and inside each plan's own section. The header keeps what
-is true of the page, which is the tax year, the state, the tax due and the winner.
-
-**The Tax Coverage Summary was Plan A's, and people use it as a checklist.** On that same scenario it
-listed $7,000 of conversion withholding and no estimated payments at all, while the recommended plan
-withheld nothing on the conversion and owed seven estimated payments. Each plan section now carries
-its own.
-
-**"No penalty applies" was decided by the wrong plan.** The past-due banner claimed year-end
-withholding made the year safe based on the early plan's funding label, which is not the same
-question as whether the recommended plan's withholding actually clears each installment. It is now
-checked against the winning plan, one schedule at a time.
-
-**A gain printed as a cost.** A large early conversion can make a plan's first-year total negative,
-meaning the Roth growth outweighs everything the plan gives up. The winner line and the header badge
-formatted that total without its sign, so a $15,394 net gain read as a $15,394 cost twelve lines
-above a table that printed it correctly as negative.
-
-**Plan D could be Plan C wearing a different name.** When the tax needs every dollar of the draws you
-can still move, nothing is left to take early: the whole plan becomes the December tranche. It was
-still offered as a Split plan, with a label promising early spending draws and a step describing an
-early distribution that did not exist. It is now dropped, with the reason stated.
-
-**Plan labels were built from Plan A's months.** Plan B's said "draws and withholding in December"
-while an IRA that both converts and has a required distribution has that distribution pulled forward,
-so Plan B withheld in the early month. Every label now reads the months off the plan it names.
-
-### Late draws have a consequence, and the tool now says what it is
-
-The comparison footnote used to explain that voluntary draws were not costed because "they fund
-spending you need, so they are not free to move". That reasoning is backwards. If a draw funds
-spending, it has to come before the spending, and the plans move those draws to December anyway. The
-real reason is that this tool has no idea when you spend the money, so it cannot price the deferral,
-and the consequence lands on you: a December draw either funds next year, or it assumes you can cover
-this year from something else until it arrives.
-
-So every plan now states, in its own dollars, what it hands you and when. On one scenario that reads
-"Net IRA cash to you: December $50,000. Anything you spend before December comes from somewhere else",
-and on another it reads "none. Every dollar of the $50,000 drawn is withheld for tax, so this plan
-funds no spending." Both were true before and neither was said.
-
-### Money the tax figures never saw
-
-This planner does not calculate your tax. It is handed a federal and a state figure and decides only
-when to draw and when to pay. That means anything you raise on top of the draws you entered is outside
-those figures, and the page was quietly recommending exactly that: the funding footnote priced $4,957
-of capital gains tax on selling shares, and not one dollar of it was in the $57,000 every plan was
-sized against. The footnote now says so, a new Rules and sources entry explains the general rule, and
-the estimated-payment steps cite it where they tell you to pay from cash. The old note that called
-selling side effects "typically small second-order effects" no longer covers the gains tax, because
-it is not small.
-
-### The panel that argued with the results
-
-The input panel carried its own verdict on the same decision, written before there were five plans and
-never connected to the engine. Swept across rates and states it disagreed with the priced comparison
-in 1,231 of 7,128 cases; its coverage percentage counted draws only and ignored what a conversion can
-withhold; its opportunity-cost factor was built from today's calendar month and never looked at the
-tax year, so it could show a figure matching no plan on the page. Because it refreshes on typing
-rather than on Compute, it then sat there contradicting the results. It now shows only what comes
-straight off your inputs, and leaves the verdict to the priced table.
-
-### Also fixed
-
-- A draw with no required minimum in it was dated the 15th with no check that the 15th was a business
-  day, so it could land on a Saturday. Dates now move to the next business day, or the previous one
-  when moving forward would leave December.
-- The safe-harbor box reused the federal sentence for the state line, so California printed "110% of
-  prior-year (high-income filer)" above a figure computed at 100%, and Maryland printed "110%, MD
-  rule, always" above one that was 90% of the current year. Each line now describes the multiplier
-  its own figure used. The note about a state's high-income threshold says plainly that the threshold
-  is written against adjusted gross income, that this planner is not given your AGI, and that
-  comparing your state tax instead understates the minimum for a very high earner.
-- The "RMD deferral given up" row measured proceeds net of the withholding taken from them while its
-  label named timing, so two plans drawing in the same month showed different numbers. Relabelled to
-  say what it measures.
-
-Suite: 51 tests, up from 34.
+**Saved URLs will now compute correctly and may show the newer (not prior) plan numbers.**
 
 ---
 

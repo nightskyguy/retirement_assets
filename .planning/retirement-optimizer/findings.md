@@ -2414,3 +2414,57 @@ consistent with plain compounding at the first step. Whether 2027-2029 round to 
 to $100 is not established by these sources. The implementation compounds without rounding, which can
 differ from the published figure by a few dollars of DEDUCTION - at most a dollar or two of tax. Worth
 correcting if an IRS revenue procedure states the convention.
+
+## P65 — the rest of Schedule A, and why medical is the only piece that likely matters
+
+Raised by the user 2026-08-19, immediately after P64 shipped, from the question of whether the SALT
+cap is additive to the standard deduction. **It is not** - SALT is a Schedule A itemized deduction, so
+it is strictly either/or against the standard deduction. The user's instinct was right about the OBBBA
+**senior deduction**, which IS additive: it sits above the line on Schedule 1-A and applies whether you
+itemize or not. `taxengine.js` already models both correctly - `useItemized ? saltItemized :
+federalStdDeduction`, then `federalDeduction += seniorDeduction` unconditionally.
+
+### The gap the question exposed
+
+**`calculateTaxes` treats SALT as the ONLY itemized deduction.** There is no parameter for mortgage
+interest, charitable contributions, or medical expenses above the 7.5%-of-AGI floor. So the engine
+asks "does SALT alone beat the standard deduction", which is a much harder bar than the one a real
+filer faces, and a household that genuinely itemizes is told it takes the standard deduction and is
+charged too much federal tax.
+
+**This directly qualifies the P64c measurement.** The ">=$4,000 of lifetime tax, no decision moved"
+result was measured on a model that under-itemizes. Once a household is over the itemizing line for
+any reason, the marginal property-tax dollar is worth its full marginal rate up to the cap, instead of
+being worth nothing until SALT alone clears ~$32,200. The P64 conclusion is sound for the model as it
+stands; it is not a statement about real filers with a full Schedule A.
+
+### Which line items actually matter for THIS tool's users, per the user
+
+- **Mortgage interest - unlikely.** Significant mortgage deductions are less likely for retirees. Not
+  worth an input on its own.
+- **Charitable - mostly routed around Schedule A, but not entirely.** A well-advised retiree gives
+  through a QCD or by donating appreciated assets rather than cash. **The QCD genuinely bypasses
+  Schedule A**: it is an exclusion from income, not a deduction, and the engine already models it
+  correctly in `computeAnnualQCDs`. **A gift of appreciated stock does NOT bypass it** - that is an
+  itemized deduction at fair market value, subject to the 30%-of-AGI limit, so it lands on Schedule A
+  like any other charitable contribution. It also stays available to retirees who are not yet QCD-
+  eligible, and to anyone giving above the annual QCD limit. So charitable is smaller than a naive
+  model would assume, but it is not zero.
+- **Medical above 7.5% of AGI - the one that likely qualifies, and it can be large.** Retiree medical
+  is lumpy: most years nothing clears the floor, and then a year of long-term care, a nursing home, or
+  a major procedure can run well into six figures and dominate Schedule A by itself. That is exactly
+  the year a household itemizes, and exactly the year the SALT figure suddenly becomes worth its full
+  marginal rate. It is also the year a Roth conversion is cheapest, which makes it a strategy question
+  and not only an accuracy question.
+
+### Shape, if it is ever built
+
+The lumpiness is the whole difficulty. A flat annual medical figure would be wrong in both directions:
+it would create itemizing in years that would not have it and miss the spike year that matters. This
+belongs with the Lumpy Spending work (P42) rather than as a scalar input, or as an explicit
+"high-medical years" range. **Not scoped, not measured, and it should be measured the way P64 was
+before any input is built** - the same discipline caught P64's answer being "no".
+
+**Note the interaction to check first:** a big medical year raises itemized deductions AND is usually a
+big withdrawal year, so AGI rises too, which raises the 7.5% floor. The two move against each other
+and the net is not obvious without measuring.

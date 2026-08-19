@@ -69,6 +69,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
+| **O2** | P65 | Rest of Schedule A — engine itemizes on SALT alone; medical is the piece that likely qualifies *(new 2026-08-19)* | `P65a` (measure first) | nothing |
 | **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
 | **O3** | P28 | "Every voluntary IRA withdrawal is a conversion" — ship decision | `P28f` | nothing |
 | **O3** | P40 | Test-file layout — the `tests/` subfolder move | decision, then the move | nothing |
@@ -2771,6 +2772,43 @@ parameter is threaded and guarded, so the model is no longer knowingly wrong, an
 already has the input for the single-year question where it actually matters. The options offered
 were: no input at all (document the omission), a URL-parameter-only entry with no visible control, or
 the full field plus growth-mode control.
+
+## P65: the rest of Schedule A - medical is the only piece likely to qualify  *(NEW 2026-08-19, user-raised, NOT scoped)*
+
+Raised by the user straight after P64 shipped, from asking whether the SALT cap is additive to the
+standard deduction. **It is not** - SALT is Schedule A, so it is strictly either/or. The user's
+instinct was right about the OBBBA **senior deduction**, which IS additive, and `taxengine.js` already
+does both correctly: `useItemized ? saltItemized : federalStdDeduction`, then `federalDeduction +=
+seniorDeduction` on either path.
+
+**The gap it exposed:** `calculateTaxes` treats SALT as the ONLY itemized deduction. No mortgage
+interest, no charitable, no medical above the 7.5% AGI floor. So the engine asks "does SALT alone beat
+the standard deduction", a harder bar than a real filer faces, and genuine itemizers are overtaxed.
+**This qualifies the P64c result**: ">=$4k, no decision moved" was measured on a model that
+under-itemizes. Over the itemizing line, the marginal property-tax dollar is worth its full marginal
+rate instead of nothing.
+
+User's read on which line items matter here, recorded because it narrows the work sharply:
+
+- [ ] **P65a** - **Medical above 7.5% of AGI. The one that likely qualifies.** Retiree medical is
+  lumpy: nothing for years, then long-term care or a nursing home runs six figures and dominates
+  Schedule A alone. That is the year the household itemizes, the year the SALT figure suddenly pays
+  its full marginal rate, and the year a conversion is cheapest - a strategy question, not only an
+  accuracy one. **A flat annual figure would be wrong in both directions**, so this belongs with Lumpy
+  Spending (P42) or as an explicit high-medical year range, not a scalar. **Measure before building,
+  the way P64 was measured.** Check the interaction first: a big medical year is usually a big
+  withdrawal year, so AGI rises and the 7.5% floor rises with it; the two move against each other.
+- [ ] **P65b** - **Charitable. Smaller than a naive model assumes, but not zero.** A well-advised
+  retiree gives via QCD or appreciated assets. The **QCD really does bypass Schedule A** - it is an
+  income exclusion, already modelled correctly in `computeAnnualQCDs`. **A gift of appreciated stock
+  does NOT** - that is an itemized deduction at fair market value under the 30%-of-AGI limit, so it
+  lands on Schedule A, and it stays relevant below QCD age and above the annual QCD limit.
+- [ ] **P65c** - **Mortgage interest. Deprioritised by the user**: significant mortgage deductions are
+  less likely for retirees. Not worth an input on its own; only in scope if P65a is built and the
+  parameter is nearly free at that point.
+
+**Status:** NOT SCOPED. Recorded so the P64 conclusion is never re-read as a statement about real
+filers with a full Schedule A.
 
 ## Dependency Graph (remaining)
 

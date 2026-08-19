@@ -3098,3 +3098,30 @@ passes none of `obbaOn`, `saltHigh`, `propTax`, `taxYear`, so it prices the pre-
 Same defect family, different tool, not behaviour-neutral, so it gets its own commit.
 
 Suites **272 / 61 / 22**, reconciled in both pinned homes. v11.15b7.
+
+### Same session — the user checked the SALT premise, and was half right in a useful way
+
+User: "the 40k SALT increment (or the 10k SALT cap) are not exclusive to standard deduction, but
+additive to it". Checked the law and the code rather than answering from memory. **SALT is not
+additive** - it is Schedule A, strictly either/or. But the **senior deduction IS**, sitting above the
+line on Schedule 1-A and applying on either path, which is what the intuition was actually tracking.
+The engine already does both right: `useItemized ? saltItemized : federalStdDeduction`, then
+`federalDeduction += seniorDeduction` unconditionally.
+
+**The question exposed a real gap anyway.** `calculateTaxes` treats SALT as the ONLY itemized
+deduction - no mortgage, no charitable, no medical over the 7.5% floor - so it asks whether SALT alone
+beats the standard deduction, a harder bar than a real filer faces. **That qualifies the P64c
+headline**: ">=$4k, no decision moved" is true of this model, which under-itemizes, not necessarily of
+a filer with a full Schedule A.
+
+User narrowed the follow-up sharply and correctly: mortgage is unlikely for retirees, charitable is
+mostly routed around Schedule A by QCDs, so **medical above 7.5% of AGI is the piece that likely
+qualifies**. One refinement recorded in findings: a QCD really does bypass Schedule A (income
+exclusion, already modelled in `computeAnnualQCDs`), but **a gift of appreciated stock does not** - it
+is an itemized deduction at FMV under the 30%-of-AGI limit, and still matters below QCD age or above
+the annual QCD limit.
+
+Logged as **P65** (a medical, b charitable, c mortgage), O2, NOT scoped. The note that matters for
+whoever picks it up: retiree medical is lumpy, a flat annual figure would be wrong in both directions,
+so it belongs with Lumpy Spending (P42) rather than as a scalar - and a big medical year is usually a
+big withdrawal year, so AGI and the 7.5% floor rise together and the net needs measuring, not guessing.

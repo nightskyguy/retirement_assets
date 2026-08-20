@@ -2179,6 +2179,42 @@ assertEqual(
 			'no ACA option carries an uncomputed warning triangle');
 	})();
 
+	// ===== An unclosed inline tag in the changelog eats the rest of the page =====
+	// v11.15a2 shipped an <li> whose <strong> was never closed. Nothing threw and nothing looked
+	// wrong in the source, but the HTML parser's recovery re-parented the two entries BELOW it
+	// INSIDE a stray <strong> that became a direct child of the <ul> (four <li> in the file, two in
+	// the DOM), and carried the bold on out of the list and into the How to Use section further
+	// down the page. It was reported as "everything is bold", which is a long way from the one
+	// missing tag that caused it.
+	//
+	// Three assertions, deliberately not one. The first is the general law and catches this class
+	// of mistake anywhere on the page; the other two name the specific damage so a failure message
+	// points at the changelog rather than at "some list".
+	(function changelogMarkupIsClosed() {
+		const lists = document.querySelectorAll('ul, ol');
+		if (!lists.length) return;   // shared suite; not every page carries these
+		// A list may contain ONLY <li> children. A leaked inline tag always shows up here, because
+		// the parser wraps the orphaned items in it and hangs it off the list.
+		const bad = [...lists].filter(l => [...l.children].some(c => c.tagName !== 'LI'))
+			.map(l => `${l.tagName.toLowerCase()}#${l.id || '(no id)'} contains `
+				+ [...new Set([...l.children].map(c => c.tagName))].filter(t => t !== 'LI').join(','));
+		assertEqual(bad.join(' | '), '', 'every <ul>/<ol> contains only <li> children');
+
+		const ul = document.getElementById('changelog-list');
+		if (!ul) return;
+		// Each entry opens with <b>version</b>, so the two counts move together only when every
+		// stamp is still in its own <li>. When an entry gets swallowed the <li> count drops and the
+		// stamp count does not, because the stray wrapper stays inside the same <ul>.
+		assertEqual(ul.querySelectorAll(':scope > li').length, ul.querySelectorAll('b').length,
+			'every changelog version stamp still sits in its own <li>');
+
+		// The visible symptom, pinned at the place it was actually noticed.
+		const howTo = [...document.querySelectorAll('li')]
+			.find(li => /Withdrawal Strategy:/.test(li.textContent || ''));
+		if (howTo) assertEqual(!howTo.closest('strong') && !howTo.closest('em'), true,
+			'How to Use is not inside an inline tag that leaked out of the changelog');
+	})();
+
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`);
 	console.log(`   chart.js version ${Chart.version}`);
@@ -2224,7 +2260,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 272, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 279, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

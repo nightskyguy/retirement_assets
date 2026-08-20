@@ -11,6 +11,123 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15ca"></a>
+
+## 11.15ca
+
+### The IRMAA ceiling was aiming two years of inflation too low
+
+IRMAA bills the premium for a given year against the MAGI you reported two years earlier, and it
+compares that MAGI against the thresholds published for the **billing** year. The engine had the
+billing half right: it reads the MAGI from two years back and measures it against thresholds
+inflated to the current year, which is what SSA does.
+
+The targeting half was wrong. Every ceiling that caps *this* year's MAGI to stay inside a tier used
+*this* year's threshold, when the MAGI it is capping will be judged against the threshold published
+two years later. At 3% inflation that aims about 6% low. On the MFJ Tier 1 floor of $218,000 it is
+roughly $13,300 a year of Roth conversion room that was never used, every year of a plan.
+
+The error was in the safe direction, so no plan was ever told it would stay in a tier and then
+billed for a higher one. But the cushion was accidental, undocumented, and unrelated to how
+expensive the cliff it was guarding actually is.
+
+Three places did this, and all three are fixed. Only **two** of them can actually change a number:
+
+- **IRMAA Ceiling strategy** ("Fill Fed/IRMAA Bracket" with a tier selected). Live.
+- **QCD "As Needed"**, which donates only as much as it takes to drop two IRMAA tiers. Live, and
+  the place the correction is worth the most.
+- **The internal `minlimit` ceiling**. Provably **inert**: the value it computes has always been
+  equal to the spending-goal band it is compared against, so the IRMAA lookup there contributes
+  nothing and never did. Verified over 7,216 combinations of goal, filing status and inflation with
+  zero exceptions. The projection is applied there anyway so all three read the same way, and a
+  test now pins the inertness so the site announces itself if the bracket ladder ever changes.
+
+**Behavior change.** An IRMAA Ceiling plan now converts more, a QCD "As Needed" plan donates
+slightly less, and both shift the numbers in a saved scenario or a shared link. At 0% inflation
+nothing moves at all, which is what makes this an indexing fix rather than a new policy.
+
+### A selectable safety margin, behind the nerdknob
+
+An IRMAA tier is a cliff: one dollar over the line costs the whole surcharge for a year. The old
+buffer against that was exactly $1. There is now an **IRMAA safety margin** selector next to the
+Cycle Brokerage row, visible with `?nerdknob`, offering:
+
+- **Half the next-tier surcharge** (default). Looks up what crossing this particular boundary
+  costs per year and holds back half of it, so the setback scales with the size of the cliff.
+- **None**, **$1,000**, **$2,000** - fixed setbacks below the projected threshold.
+- **Half the expected inflation**, **1% less than expected inflation** - hold room back by
+  projecting the threshold forward at a slower rate instead of subtracting dollars.
+
+It is gated because it is still being measured, not because it is dangerous. The forward projection
+underneath it is **not** gated: that is a correctness fix and it applies to everyone. Hiding the
+selector leaves the default margin in force, not "no margin".
+
+### What the measurements say, including the parts that did not go as expected
+
+`node .test_harnesses/irmaa_margin_harness.js`, 588 simulations across 7 portfolio shapes, 3 CPI
+rates and 3 strategy arms, written up in
+[.test_harnesses/IRMAA_MARGIN_RESULTS.md](.test_harnesses/IRMAA_MARGIN_RESULTS.md):
+
+- **The correction is worth real money on QCD "As Needed".** That mode donates exactly enough to
+  reach the target, so raising the target shrinks the donation dollar for dollar. Across the swept
+  cells the forward projection alone avoids **$1.9M of unnecessary donation** against the old
+  under-indexed target. This is the place the fix pays.
+- **The margin itself prevents nothing measurable**, and cannot be chosen on this evidence. Every
+  breach in every mode - twice now, on two different grids - is the same thing: income sized while
+  married and billed after a death against single-filer thresholds roughly half as high. There was
+  never a same-status breach for a margin to prevent. That is the IRMAA half of the widow penalty;
+  the billing is correct and the targeting does not see it coming. Projecting the filing status
+  forward, not just the inflation, is the follow-up.
+- **The margin does earn its keep, but only against an inflation UNDERSHOOT.** CPI is a constant in
+  this engine, and Monte Carlo does not help: it varies spending inflation, never the CPI that
+  indexes the IRMAA ladder. Feeding the 1971-2000 CPI record through it as an inflation sequence
+  leaves the ceiling byte-identical. So the margin was measured a different way, by letting the plan
+  decide under its assumed CPI and then re-billing those same decisions against thresholds indexed
+  by a realized CPI, over the whole CPI-U record since 1928. That needs no engine change, and it
+  gives a clean answer: **zero breaches in every setting when inflation meets or beats the
+  assumption, and breaches only when it falls short**. Assume 2.5% and get 1%, and the "1% less than
+  expected inflation" setting prevents about a fifth of them; the flat dollar settings prevent almost
+  none. A CPI error is proportional, so only a proportional setback absorbs it - a flat $1,000 decays
+  to irrelevance as thresholds inflate. Across 60 rolling 40-year windows the breach rate runs 16.2%
+  with no margin and 11.9% with the strongest one.
+- **The shipped default is the weak setting.** "Half the next-tier surcharge" is $1,000 to $2,500,
+  while two years of a 1.5-point CPI miss on the $274,000 MFJ Tier 2 floor is about $8,300. It
+  prevents 5 breaches out of 92 where a rate haircut prevents 18. The default is unchanged in this
+  release because moving it changes every existing plan's numbers; the evidence for changing it is
+  in [.test_harnesses/IRMAA_CPI_RISK_RESULTS.md](.test_harnesses/IRMAA_CPI_RISK_RESULTS.md).
+- **Careful with an apparent win.** On a plan with Cycle Brokerage on, one setting looked worth
+  +0.68% of final wealth. It was harvest timing, not IRMAA: wealth there is a smooth function of how
+  many dollars the ceiling is lowered by, the best amount moves from $1,000 to beyond $9,000
+  depending on the portfolio, and with Cycle Brokerage off the effect falls to +0.002%.
+
+### Fixed in the same release: one unclosed tag was bolding the rest of the page
+
+The v11.15a2 changelog entry on the Documentation tab opened a `<strong>` and never closed it.
+Nothing threw and the source read fine, but the HTML parser's recovery moved the two entries below
+it inside a stray `<strong>` hanging off the list itself - four entries in the file, two in the
+page - and carried the bold on out of the list and into the **How to Use** section. It was reported
+as "everything is bold", which is a long way from the single missing tag behind it.
+
+The in-page suite now refuses to let that ship again, with three checks. A `<ul>` or `<ol>` may
+contain only `<li>` children, which is the general law and catches the same mistake anywhere on the
+page. Every changelog version stamp must still sit in its own `<li>`. And **How to Use** must not be
+inside an inline tag, which is the symptom as a reader actually meets it.
+
+### Also
+
+- `optimizer_core.tests.js` gains 7 tests (269 to 276), pinning the forward factor, the identity at
+  0% inflation, the ordering of all six margin settings, the margin at age 63 before anyone is
+  enrolled in Medicare, and that none of it leaks into a plan with no IRMAA ceiling.
+- A test added earlier in this release claimed to cover the `minlimit` ceiling and covered the tier
+  ceiling instead, because the tier it passed sent the code down the other branch. Replaced with the
+  inertness proof described above.
+- The long-standing P32 tripwire moved for the first time in four attempts: `minlimit` now strands
+  spending across 11 years rather than 9, because a higher ceiling drains the IRA two years sooner
+  and hands two more years to the pass that refuses to touch Brokerage. Re-pinned with the reason
+  recorded next to it.
+
+---
+
 <a id="11.15c9"></a>
 
 ## 11.15c9
@@ -34,6 +151,8 @@ For plans converting heavily in a high-tax state, these can change the recommend
 Note that this tool tests only SALT against the standard deduction - it does not model mortgage
 interest, charitable giving, or medical expenses - so the benefit is limited to households where SALT
 alone exceeds the standard deduction, and it ends after 2029.
+
+---
 
 <a id="11.15a2"></a>
 

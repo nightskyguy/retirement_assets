@@ -83,6 +83,11 @@ const baselineScoreOf = core.baselineScoreOf;
 const selectConversionCandidates = core.selectConversionCandidates;
 const rankRowsByObjective = core.rankRowsByObjective;
 const taxCreepFactor = core.taxCreepFactor;
+const IRMAA_MARGIN_MODES = core.IRMAA_MARGIN_MODES;
+const irmaaMarginModeOf = core.irmaaMarginModeOf;
+const irmaaFwdFactor = core.irmaaFwdFactor;
+const irmaaMarginDollars = core.irmaaMarginDollars;
+const onMedicareAtCharge = core.onMedicareAtCharge;
 const breakEvenHeirsRate = core.breakEvenHeirsRate;
 const lowestBreakEvenHeirsRate = core.lowestBreakEvenHeirsRate;
 const bestTimeLimitedConversion = core.bestTimeLimitedConversion;
@@ -2243,14 +2248,15 @@ test('ACA exception ends at Medicare: the lapsed tail IS backstopped', () => {
 // balance sitting there. `minlimit` is the only arm on this fixture that reaches it, and it is not
 // a rounding artifact — nine consecutive years, 2041 through 2049, $71,382 stranded in total, the
 // first of them with $945,376 of Brokerage untouched and draining only to fund taxes and growth.
+// (Eleven years now, 2039-2049 - see the note on the assertions below.)
 // Nothing in P38 fixes this: widening the forced-IRA gate cannot help a year whose IRA is already
 // at zero. Pinned so P32 starts from a measured number rather than a fresh investigation, and so
 // that a change in the meantime has to announce itself.
 test('P32 (not fixed here): minlimit strands spending with Brokerage still funded', () => {
     const log = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1, stratACAMultiple: 0 }).log;
     const stranded = _brokStranded(log);
-    assert(stranded.length === 9,
-        `expected the known 9 Brokerage-stranded years, got ${stranded.length}`);
+    assert(stranded.length === 11,
+        `expected the known 11 Brokerage-stranded years, got ${stranded.length}`);
     // The numbers nudged when dividends and interest stopped being double-credited (total
     // 71,382 -> 71,481, worst 9,468 -> 9,478, Brokerage 945,376 -> 926,096) and the COUNT did not
     // move at all. That is worth recording: the two defects are independent. Removing the phantom
@@ -2262,11 +2268,21 @@ test('P32 (not fixed here): minlimit strands spending with Brokerage still funde
     // and there is MORE brokerage sitting there unused, which sharpens the defect rather than
     // softening it. Three independent changes now, none of which freed a single one of these nine
     // years, because what strands them is the third pass refusing to touch Brokerage at all.
-    assertNear(_worst(stranded), 6593.023132, 'worst single-year unfunded amount with Brokerage left', 1);
-    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 27509.710277,
-        'total stranded across the nine years', 1);
+    //
+    // THE COUNT FINALLY MOVED, 9 -> 11 (2041-2049 -> 2039-2049), when the IRMAA ceiling started
+    // targeting the threshold that will actually apply |LOOKBACK| years out instead of today's
+    // (irmaaFwdFactor, optimizer_core.js). That is not a fourth failed attempt at this defect - it
+    // is a different mechanism entirely. A forward-projected ceiling is ~5% higher at 2.5% CPI, so
+    // `minlimit` draws more IRA earlier, empties it two years sooner, and hands two more years to
+    // the third pass that refuses to touch Brokerage. Totals: 27,510 -> 26,869, worst 6,593 ->
+    // 6,564, Brokerage 960,183 -> 1,100,390. More money stranded, spread over more years, with a
+    // QUARTER of a million more Brokerage sitting unused. The defect got worse, not better, which
+    // is exactly what a tripwire is for.
+    assertNear(_worst(stranded), 6563.558780, 'worst single-year unfunded amount with Brokerage left', 1);
+    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 26868.524260,
+        'total stranded across the eleven years', 1);
     // The headline number: how much was sitting in Brokerage the first year it gave up.
-    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 960182.995197,
+    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 1100390.353415,
         'Brokerage balance in the first year minlimit reported an unfunded shortfall', 1);
     assert(stranded.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
         'every stranded year must have Cash, Roth and IRA at zero — Brokerage is the only source left');
@@ -3515,6 +3531,134 @@ test('ELIGIBILITY_AGE: the IRMAA-tier ceiling relevance gate is ELIGIBILITY_AGE 
         `releasing the tier ceiling must widen the target: ${inside.BracketTarget} → ${outside.BracketTarget}`);
     assert((outside.rothConv || 0) > (inside.rothConv || 0) * 2,
         `and convert materially more: ${Math.round(inside.rothConv || 0)} → ${Math.round(outside.rothConv || 0)}`);
+});
+
+// -- IRMAA targeting: the two-year lookback, and the safety margin ------------
+// IRMAA charges year Y's premium against year Y+LOOKBACK's MAGI, judged against the thresholds
+// published for Y. The CHARGE side always got that right (beginYear reads magiHistory[-2]); the
+// TARGETING side did not, and capped MAGI at TODAY's threshold instead of the one that will
+// actually apply. These pin the fix and the nerdknob-selectable margin that rides on it.
+const IRMAA_FWD = (cpi, mode) => Math.pow(1 + (mode === 'halfcpi' ? cpi / 2
+                                             : mode === 'cpiminus1' ? Math.max(0, cpi - 0.01)
+                                             : cpi), 2);
+// Tier 0 = "Below IRMAA", so the ceiling is the SGL Tier 1 floor ($109,000). BASE is a single
+// filer aged 74 in 2026, well past ELIGIBILITY_AGE + LOOKBACK, so the tier ceiling binds.
+const IRMAA_CEIL_BASE = { ...BASE, strategy: 'bracket', stratRate: 0, stratIRMAATier: 0,
+                          stratACAMultiple: 0, cpi: 0.03, convertExcessToRoth: true };
+const _target = over => simulate({ ...IRMAA_CEIL_BASE, ...over }).log[0].BracketTarget;
+
+test('irmaaFwdFactor: |LOOKBACK| years of CPI, and an exact identity at cpi = 0', () => {
+    assertNear(irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'none' }), 1.0609, 'two years at 3%', 1e-12);
+    assert(irmaaFwdFactor({ cpi: 0 }) === 1, 'cpi 0 must be an exact 1, so a no-inflation run is unchanged');
+    // The two CPI-haircut modes carry their margin in the factor rather than in dollars.
+    assertNear(irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'halfcpi' }), 1.030225, 'half of 3%', 1e-12);
+    assertNear(irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'cpiminus1' }), 1.0404, '3% less 1%', 1e-12);
+    // An unknown or missing mode must land on the default rather than silently disabling the margin.
+    assert(irmaaMarginModeOf({}) === 'halfstep', 'missing mode defaults to halfstep');
+    assert(irmaaMarginModeOf({ irmaaMarginMode: 'nonsense' }) === 'halfstep', 'unknown mode defaults to halfstep');
+});
+
+test('IRMAA tier ceiling targets the threshold that will apply, not the one in force today', () => {
+    // 3% CPI: this year's MAGI is judged against the SGL Tier 1 floor as indexed two years out.
+    assertNear(_target({ irmaaMarginMode: 'none' }), 109000 * 1.0609 - 1,
+        'tier ceiling must be the forward-projected Tier 1 floor', 0.01);
+    // And at cpi = 0 the factor is 1, so the pre-fix number comes back exactly. That is what makes
+    // this an indexing fix rather than a new policy.
+    assert(_target({ cpi: 0, irmaaMarginMode: 'none' }) === 108999,
+        'at cpi = 0 the ceiling must be exactly the old 108999');
+});
+
+test('irmaaMarginMode: the six modes are distinct and correctly ordered', () => {
+    const t = Object.fromEntries(IRMAA_MARGIN_MODES.map(m => [m, _target({ irmaaMarginMode: m })]));
+    assert(new Set(Object.values(t)).size === 6, `all six modes must differ: ${JSON.stringify(t)}`);
+    // Dollar setbacks, biggest ceiling first.
+    assert(t.none > t.flat1000 && t.flat1000 > t.halfstep && t.halfstep > t.flat2000,
+        `dollar-margin ordering broke: ${JSON.stringify(t)}`);
+    assertNear(t.none - t.flat1000, 1000, 'flat1000 sets back exactly $1,000', 0.01);
+    assertNear(t.none - t.flat2000, 2000, 'flat2000 sets back exactly $2,000', 0.01);
+    // CPI haircuts. At 3% CPI, cpiminus1 (2%) is the gentler haircut and halfcpi (1.5%) the harsher
+    // one; below 2% CPI they cross over, which is why this pins the ordering AT a stated CPI rather
+    // than as a general law.
+    assert(t.none > t.cpiminus1 && t.cpiminus1 > t.halfcpi,
+        `CPI-haircut ordering broke at 3% CPI: ${JSON.stringify(t)}`);
+    // Every margin still leaves the ceiling well above the unprojected threshold it replaced, so
+    // the fix is not cancelled out by its own safety belt.
+    for (const [m, v] of Object.entries(t))
+        assert(v > 108999, `${m} fell back below the old un-projected ceiling: ${v}`);
+});
+
+test('irmaaMarginMode halfstep: priced off the real tier step, and live at age 63', () => {
+    // SGL Tier 1 is $202.90/month in TAXData, so the step a filer avoids is $2,434.80/yr and the
+    // setback is half of it. Not a guessed constant: change the table and this moves with it.
+    const step = getRateBracket('IRMAA', 'SGL')[1].r * 12;
+    assertNear(_target({ irmaaMarginMode: 'none' }) - _target({ irmaaMarginMode: 'halfstep' }),
+        step / 2, 'halfstep must hold back half the tier step', 0.01);
+    // The gate that makes this hard: the tier ceiling switches on at ELIGIBILITY_AGE + LOOKBACK
+    // (63), when nobody is enrolled in Medicare yet. Pricing the margin off yr.onMedicare would
+    // zero it out at exactly the ages the ceiling first bites, so onMedicareAtCharge counts who
+    // WILL be enrolled when this year's MAGI is charged.
+    assert(onMedicareAtCharge(63, 0, true, false) === 1, 'a 63-year-old counts at charge time');
+    assert(onMedicareAtCharge(62, 0, true, false) === 0, 'a 62-year-old does not');
+    const age63 = { ...IRMAA_CEIL_BASE, birthyear1: 1963, die1: 95 };
+    const row = m => simulate({ ...age63, irmaaMarginMode: m }).log[0];
+    assert(row('none').age1 === 63, 'fixture must open at 63');
+    assertNear(row('none').BracketTarget - row('halfstep').BracketTarget, step / 2,
+        'the margin must still be live at 63, before anyone is enrolled', 0.01);
+});
+
+test('yr.IRMAALimit is inert: it can never differ from yr.goalLimit', () => {
+    // This test used to claim it exercised `minlimit`'s ceiling. It did not, twice over, and both
+    // mistakes are worth naming because either one alone would have kept it green and wrong.
+    //   1. It passed stratIRMAATier: 1, which sends computeBracketCeiling down the IRMAA-TIER branch
+    //      (`stratIRMAATier >= 0`). The minlimit-specific `Math.min(limit, IRMAALimit)` never ran, so
+    //      the test was a duplicate of the tier-ceiling test wearing another name.
+    //   2. The site it meant to test cannot move a number at all:
+    //         yr.goalLimit  = the federal/state band containing sim.spendGoal
+    //         IRMAABracket  = findUpperLimitByAmount('IRMAA', status, yr.goalLimit, effCpi)
+    //         yr.IRMAALimit = min(yr.goalLimit, IRMAABracket.limit)
+    //      findUpperLimitByAmount returns the top of the band CONTAINING its amount, which is >= that
+    //      amount by construction, so the min() always selects goalLimit. True before the forward
+    //      projection was added and after it.
+    // Pinned over the domain rather than argued, so a change to the IRMAA ladder or to
+    // findUpperLimitByAmount turns this site live LOUDLY instead of silently.
+    const violations = [];
+    for (const status of ['MFJ', 'SGL'])
+        for (let goal = 1000; goal <= 900000; goal += 4973)
+            for (const infl of [1, 1.0609, 1.5, 2.4]) {
+                const band = findUpperLimitByAmount('IRMAA', status, goal, infl);
+                if (Math.abs(Math.min(goal, band.limit) - goal) > 1e-9)
+                    violations.push(`${status} goal ${goal} infl ${infl} -> band top ${band.limit}`);
+            }
+    assert(violations.length === 0,
+        `yr.IRMAALimit became live again: ${violations.slice(0, 3).join(' | ')}`);
+});
+
+test('QCD As Needed: trims to the forward-projected tier ceiling, and further under a margin', () => {
+    // $5M IRA, so the RMD alone puts MAGI in SGL Tier 4 and the two-tier drop targets Tier 2.
+    const qb = { ...BASE, IRA1: 5000000, cpi: 0.03, qcdHHMax: 120000, qcdMode: 'asneeded' };
+    const qcd = m => { const r = simulate({ ...qb, irmaaMarginMode: m }).log[0];
+                       return (r.QCD1 || 0) + (r.QCD2 || 0); };
+    const none = qcd('none');
+    assert(none > 0, 'fixture must actually trigger As Needed QCDs');
+    // The closed form is the proof that the LADDER moved, not just the answer: switching to the
+    // halfcpi projection lowers the Tier 2 target by exactly the SGL Tier 2 floor times the change
+    // in the forward factor, so the QCD has to grow by that much to reach it.
+    assertNear(qcd('halfcpi') - none,
+        137000 * (IRMAA_FWD(0.03, 'none') - IRMAA_FWD(0.03, 'halfcpi')),
+        'the As Needed target must scale with the forward factor', 1);
+    // Dollar margins push the same way: a tighter ceiling means a bigger donation to reach it.
+    assertNear(qcd('flat2000') - none, 2000, 'flat2000 needs exactly $2,000 more of QCD', 1);
+    const brks = getRateBracket('IRMAA', 'SGL');
+    assertNear(qcd('halfstep') - none, (brks[2].r - brks[1].r) * 12 / 2,
+        'halfstep needs half the Tier 1 -> Tier 2 step more', 1);
+});
+
+test('irmaaMarginMode is inert for a plan with no IRMAA ceiling and no QCDs', () => {
+    // The leak guard. `fixed` never consults an IRMAA threshold, so no margin mode may move it.
+    const run = m => JSON.stringify(simulate({ ...BASE, cpi: 0.03, irmaaMarginMode: m }).log);
+    const base = run('none');
+    for (const m of IRMAA_MARGIN_MODES)
+        assert(run(m) === base, `margin mode ${m} leaked into a plan with no IRMAA ceiling`);
 });
 
 test('ELIGIBILITY_AGE: the harness restores the constant', () => {

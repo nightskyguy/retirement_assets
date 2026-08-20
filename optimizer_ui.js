@@ -102,6 +102,12 @@ function applyNerdKnobVisibility() {
     // Tax-rate creep (Assumptions) and Stop-conversions-after (sidebar) are NOT handled here any
     // more: both graduated out of nerdknob once they were finished and tested, so their markup
     // carries no display:none and nothing hides them. Same treatment as convAdvanced-wrap above.
+    // IRMAA safety margin below a projected tier threshold - experimental, still being measured
+    // (.test_harnesses/IRMAA_MARGIN_RESULTS.md). The FORWARD PROJECTION it sits on is NOT gated:
+    // that is a correctness fix and applies to every user. Only the choice of margin is hidden,
+    // and hiding it leaves the default ('halfstep') in force, not "no margin".
+    const irmaaMarginWrap = document.getElementById('irmaaMarginMode-wrap');
+    if (irmaaMarginWrap) irmaaMarginWrap.style.display = NERD_KNOBS ? '' : 'none';
     // 💵 legend - only meaningful once nerdknob is sweeping the cash-funded arm
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
@@ -437,6 +443,7 @@ function getInputs() {
         cyclicEnabled: !!valChecked('cyclicEnabled'),
         cyclicOrder:   val('cyclicOrder') ?? 'ira-first',
         cycleLTCGTarget: +(val('cycleLTCGTarget') ?? 0.15),
+        irmaaMarginMode: val('irmaaMarginMode') || 'halfstep',
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
         comp_IRA1_intl: +val('comp_IRA1_intl'),
@@ -3819,7 +3826,7 @@ const OPT_LONG_TO_SHORT = {
     spendGoal:'sg', spendChange:'sc', strategy:'str', nYears:'ny',
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
-    convEndYear:'cey', convEndMode:'cem',
+    convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
     IRA1:'i1', IRA2:'i2', Roth:'ro', Roth2:'ro2',

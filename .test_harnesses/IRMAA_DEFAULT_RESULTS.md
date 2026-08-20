@@ -7,10 +7,10 @@
 >
 > | mode | mean dSurcharge | windows where it saved |
 > |---|---|---|
-> | halfcpi *(now the default)* | **-$47,987** | **60/60** |
-> | cpiminus1 | -$23,832 | 58/60 |
-> | halfstep | -$11,649 | 49/60 |
-> | flat2000 | -$10,047 | 48/60 |
+> | halfcpi *(now the default)* | **-$79,002** | **59/60** |
+> | cpiminus1 | -$38,908 | 58/60 |
+> | halfstep | -$19,007 | 49/60 |
+> | flat2000 | -$16,660 | 49/60 |
 >
 > The correction is what settled section 4's open question: before it, `halfcpi` and `cpiminus1`
 > measured as near-duplicates (-$48.5k vs -$37.2k) and one looked deletable. Corrected they separate
@@ -89,9 +89,9 @@ historical record, but four to five times less than the rate-shaped ones:
 | flat2000 | -$10,047 | -$45,462 | +$11,477 | 48/60 |
 | halfstep | -$11,649 | -$49,530 | +$11,477 | 49/60 |
 | cpiminus1 | -$37,178 | -$112,142 | +$5,114 | 58/60 |
-| **halfcpi** | **-$48,493** | **-$142,820** | **-$1,494** | **60/60** |
+| **halfcpi** | **-$79,002** | **-$186,401** | +$5,205 | **59/60** |
 
-`halfcpi` is the only setting that never costs surcharge in any of the 60 windows.
+`halfcpi` saves surcharge in 59 of the 60 windows, more than any other setting.
 
 **P5 held** — `halfcpi` and `cpiminus1` are within 25% of each other. Keeping both is redundant.
 
@@ -113,7 +113,7 @@ decays to irrelevance as thresholds inflate) and save four to five times less th
 
 - **`none`** — the default, and the honest meaning of the tier ceiling.
 - **`halfcpi`** — the one opt-in worth keeping, for a user who wants the cliff guarded against an
-  inflation undershoot. It is the only setting that never cost surcharge in 60 historical windows.
+  inflation undershoot. It saves surcharge in 59 of 60 historical windows, the best of any setting.
 - **`halfstep`** — keep only if a small, self-scaling default is wanted for non-nerdknob users;
   otherwise drop it too and go to two.
 

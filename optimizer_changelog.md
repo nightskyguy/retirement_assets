@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15ce"></a>
+<a id="11.15cf"></a>
 
-## 11.15ce
+## 11.15cf
 
 ### The IRMAA ceiling was aiming two years of inflation too low
 
@@ -69,6 +69,21 @@ projected to $115,638:
 Pinned by a test at that boundary, including the check that it still trims once you are genuinely
 over the projected floor - it is a boundary, not a blanket exemption.
 
+### A units error in the study behind these numbers
+
+Reported by the user, who asked whether the "surcharge avoided" figures were annual or monthly. They
+are annual - TAXData holds IRMAA as monthly amounts and every figure is multiplied by 12, matching
+the engine. But checking that turned up a related error one step over: the study was leaving out the
+premium ESCALATION the engine applies each year, on the reasoning that it "cancels out of the
+difference". It does not - it is a common factor, not an additive term.
+
+The effect was to report surcharge savings in today's premium dollars while comparing them against
+donations in the nominal dollars of the year given. Mean understatement about 2.0x, rising to 3.4x by
+the last year of the plan. Every surcharge figure in the harnesses and in the notes below has been
+re-measured; the ratios between settings barely moved, so no conclusion changes and no behaviour
+changes. One claim did have to be withdrawn: "half the projected increase" saves surcharge in 59 of
+60 historical windows, not all 60.
+
 ### The safety margin no longer applies to QCDs, which cuts the donation it was costing
 
 **Behavior change, and it only ever goes one way: your QCDs get smaller.**
@@ -81,12 +96,12 @@ losing trade:
 
 | setting | extra donated | surcharge avoided | net |
 |---|---|---|---|
-| Half the projected increase | $82,764 | $1,776 | **-$80,988** |
-| Half the next-tier surcharge | $50,359 | $1,015 | -$49,345 |
-| The projected increase, less 1 point | $34,018 | $787 | -$33,230 |
-| $2,000 | $32,701 | $752 | -$31,950 |
+| Half the projected increase | $82,764 | $3,348 | **-$79,416** |
+| Half the next-tier surcharge | $50,359 | $1,913 | -$48,446 |
+| The projected increase, less 1 point | $34,018 | $1,506 | -$32,512 |
+| $2,000 | $32,701 | $1,445 | -$31,257 |
 
-About 47 to 1 against for the default. The reason is structural rather than a quirk of one plan: a
+Between 22 and 26 to one against, every setting. The reason is structural rather than a quirk of one plan: a
 surcharge is a few thousand dollars a year, while the income you have to shed to clear a threshold is
 tens of thousands, so buying threshold headroom with donated dollars cannot pay for itself unless you
 wanted to give the money anyway.
@@ -131,7 +146,7 @@ Measured across 60 rolling 40-year windows of the actual CPI-U record since 1928
 half the next tier's surcharge, is $1,000 to $2,500 of room - against roughly $8,300 for two years of
 a 1.5-point inflation miss on the $274,000 MFJ Tier 2 floor. It prevented 5 breaching years out of 92
 where the half-inflation setting prevented 21, and the half-inflation setting is the only one that
-never cost surcharge in any of the 60 windows.
+saves surcharge in 59 of the 60 windows, the best of any setting.
 
 The $1,000 option went because it is the wrong SHAPE. An inflation forecast error is proportional, so
 the room that absorbs it has to be proportional too; a fixed dollar setback is worth less every year

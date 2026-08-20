@@ -152,10 +152,15 @@ function rebill(dec, targetTier, realizedPath) {
         if (!charge.onMedicare) continue;
         const idx = tierIndex(charge.status === 'MFJ' ? 'MFJ' : 'SGL');
         const persons = charge.status === 'MFJ' ? 2 : 1;
-        const rateOf = rate => rate / persons * Math.min(charge.onMedicare, persons) * 12;
-        // The engine also scales by medicareRate (premium escalation). It is identical in both
-        // worlds for a given year, so it cancels out of the DIFFERENCE and is left out; the extra
-        // dollars below are therefore in today's premium terms, deliberately.
+        // x12 because TAXData's IRMAA `r` values are MONTHLY, so this is an ANNUAL surcharge and
+        // the loop sums annual figures across the plan. medicareRate is the engine's premium
+        // escalation, (1+cpi+inflation)^y. An earlier version dropped it, reasoning that it "cancels
+        // out of the DIFFERENCE" - which was wrong. It is a common FACTOR, not an additive term, so
+        // omitting it reported everything in today's premium dollars and understated the later
+        // years badly: the mean factor over this fixture's charged years is about 2.04 and the last
+        // year is 3.39.
+        const medicareRate = Math.pow(1 + ASSUMED_CPI + ASSUMED_CPI, y);
+        const rateOf = rate => rate / persons * Math.min(charge.onMedicare, persons) * 12 * medicareRate;
         const realized = findUpperLimitByAmount('IRMAA', charge.status === 'MFJ' ? 'MFJ' : 'SGL',
                                                 src.magi, cpiRateAt[y]);
         const assumedRate = findUpperLimitByAmount('IRMAA', charge.status === 'MFJ' ? 'MFJ' : 'SGL',

@@ -132,7 +132,15 @@ function extraSurcharge(dec, realizedPath) {
         const charge = dec.years[y], src = dec.years[y - LOOKBACK];
         if (!charge.onMedicare) continue;
         const persons = charge.status === 'MFJ' ? 2 : 1;
-        const scale = r => r / persons * Math.min(charge.onMedicare, persons) * 12;
+        // x12 because TAXData's IRMAA `r` values are MONTHLY, so this is an ANNUAL surcharge, and
+        // the loop sums annual figures across the plan. medicareRate is the premium escalation the
+        // engine applies ((1+cpi+inflation)^y, calcIRMAA); an earlier version left it out on the
+        // grounds that it "cancels out of the difference", which was wrong - it is a common FACTOR,
+        // not an additive term, so dropping it reported the delta in today's premium dollars while
+        // the donations it is compared against were nominal dollars of the year given. Mean factor
+        // over this fixture's charged years is about 2.04, rising to 3.39 by the last year.
+        const medicareRate = Math.pow(1 + ASSUMED_CPI + ASSUMED_CPI, y);
+        const scale = r => r / persons * Math.min(charge.onMedicare, persons) * 12 * medicareRate;
         const real = findUpperLimitByAmount('IRMAA', charge.status, src.magi, cpiAt[y]).rate;
         const asmd = findUpperLimitByAmount('IRMAA', charge.status, src.magi,
                                             Math.pow(1 + ASSUMED_CPI, y)).rate;
@@ -235,10 +243,14 @@ console.log('Extra donation is the premium paid, surcharge avoided is the payout
 console.log('Since v11.15ce every row below is zero by construction - the margin was decoupled from');
 console.log('this site. The figures that forced that decision, measured before the split:');
 console.log('');
-console.log('  halfcpi    $82,764 donated  ->  $1,776 avoided   -$80,988');
-console.log('  halfstep   $50,359          ->  $1,015           -$49,345');
-console.log('  cpiminus1  $34,018          ->    $787           -$33,230');
-console.log('  flat2000   $32,701          ->    $752           -$31,950');
+console.log('  halfcpi    $82,764 donated  ->  $3,348 avoided   -$79,416   24.7:1');
+console.log('  halfstep   $50,359          ->  $1,913           -$48,446   26.3:1');
+console.log('  cpiminus1  $34,018          ->  $1,506           -$32,512   22.6:1');
+console.log('  flat2000   $32,701          ->  $1,445           -$31,257   22.6:1');
+console.log('');
+console.log('(Payouts re-measured against the pre-split engine once the premium escalation was');
+console.log(' restored - see extraSurcharge. First published at half these values, which flattered');
+console.log(' the split rather than the setting, so the verdict never turned on the error.)');
 console.log('');
 console.log(['mode'.padEnd(11), 'extra donated'.padStart(15), 'surcharge avoided'.padStart(19),
              'net'.padStart(14), 'verdict'.padStart(10)].join(' '));

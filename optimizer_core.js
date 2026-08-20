@@ -130,8 +130,8 @@ const IRMAA_MARGIN_MODES = ['halfcpi', 'cpiminus1', 'halfstep', 'flat2000', 'non
 // Named rather than repeated, because it is asserted in the tests, read by the UI when the control
 // is hidden, and relied on as the fallback for an unknown value - three places that must not drift.
 // Moved from 'halfstep' to 'halfcpi' in v11.15cc: halfstep prevented 5 breaching years of 92 at a
-// 1.5-point CPI miss where halfcpi prevented 21, and halfcpi is the only setting that never cost
-// surcharge in any of the 60 windows measured.
+// 1.5-point CPI miss where halfcpi prevented 21, and halfcpi saves surcharge in 59 of the 60
+// windows measured, the best of any setting.
 const IRMAA_MARGIN_DEFAULT = 'halfcpi';
 
 function irmaaMarginModeOf(inputs) {

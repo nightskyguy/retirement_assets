@@ -32,6 +32,13 @@
  * The economy of it is that step 1 does not depend on the realized path, so N realized worlds cost
  * one simulation, not N. A few dozen sims cover thousands of world-plan pairs.
  *
+ * BASIS: every dollar figure is an ANNUAL surcharge (TAXData is monthly, everything is x12),
+ * escalated by medicareRate, and summed in the NOMINAL dollars of the year it occurs. Nothing is
+ * discounted to today. Donations and surcharges grow at different rates (about 2.5%/yr and 5%/yr)
+ * and the surcharge lags its donation by |LOOKBACK| years, so discounting makes a margin look
+ * WORSE - the QCD verdict moves from about 24:1 against to about 32:1 at a 6% discount rate, and
+ * no ordering changes anywhere. Nominal is therefore the conservative presentation.
+ *
  * WHAT THIS DELIBERATELY DOES NOT MODEL
  * Feedback. A larger realized surcharge is a larger real bill, which would slightly change later
  * balances and hence later MAGI. Second-order for counting breaches and pricing the surcharge

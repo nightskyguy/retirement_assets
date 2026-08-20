@@ -22,6 +22,38 @@ simulations, each re-billed in 7 constant and 60 historical CPI worlds. Plan ass
 
 ---
 
+## Basis: every dollar figure here is NOMINAL, and that is the conservative choice
+
+Both series are summed in the nominal dollars of the year they occur. Neither is discounted to
+today. They are on the same basis as each other, which is what makes their ratio meaningful, but
+they do not grow at the same rate:
+
+- donations track the tier target, which grows at `cpiRate` (about 2.5%/yr here)
+- surcharges track `medicareRate`, `(1+cpi+inflation)^y` (about 5%/yr)
+- and the surcharge a donation buys lands `|LOOKBACK|` years **after** the donation is made
+
+All three push the same way, so discounting makes a margin look **worse**, not better. Measured on
+the pre-split engine:
+
+| basis | halfcpi | cpiminus1 | halfstep | flat2000 |
+|---|---|---|---|---|
+| nominal (as published) | 24.7:1 | 22.6:1 | 26.3:1 | 22.6:1 |
+| real, discounted at CPI 2.5% | 27.5:1 | 25.2:1 | 28.6:1 | 26.2:1 |
+| discounted at plan growth 6% | **31.9:1** | 29.3:1 | 32.0:1 | 31.8:1 |
+
+The ceiling-side ladder is likewise unchanged in ordering, and keeps its roughly 2:1 gap between the
+top two settings:
+
+| mode | nominal | real @2.5% | @6% growth |
+|---|---|---|---|
+| halfcpi | -$79,002 | -$60,659 | -$44,015 |
+| cpiminus1 | -$38,908 | -$30,086 | -$21,845 |
+| halfstep | -$19,007 | -$14,636 | -$10,722 |
+| flat2000 | -$16,660 | -$12,700 | -$9,234 |
+
+So the default choice is basis-independent, and the nominal figures quoted throughout understate the
+case against a QCD margin rather than overstating it.
+
 ## 1. The question inverts: conversions and QCDs both point at *no margin at all*
 
 Both objectives improve monotonically as the margin shrinks — more conversion room is a **higher**

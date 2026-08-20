@@ -8,6 +8,13 @@ This is the measurement [IRMAA_MARGIN_RESULTS.md](IRMAA_MARGIN_RESULTS.md) could
 
 ---
 
+## 0. Basis
+
+Every dollar figure is an ANNUAL surcharge (TAXData holds IRMAA monthly; everything is x12,
+matching `calcIRMAA`), escalated by the engine's `medicareRate` and summed in the NOMINAL dollars of
+the year charged. Nothing is discounted to today. Discounting does not change any ordering here -
+see the basis table in [IRMAA_DEFAULT_RESULTS.md](IRMAA_DEFAULT_RESULTS.md).
+
 ## 1. Why Monte Carlo and the Stress Test cannot do this
 
 They vary the wrong inflation.

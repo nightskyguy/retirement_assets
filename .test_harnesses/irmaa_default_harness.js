@@ -31,6 +31,13 @@
  * once under its assumed CPI to get its decisions, then re-bill those decisions against thresholds
  * indexed by each realized path from the CPI-U record.
  *
+ * BASIS: every dollar figure is an ANNUAL surcharge (TAXData is monthly, everything is x12),
+ * escalated by medicareRate, and summed in the NOMINAL dollars of the year it occurs. Nothing is
+ * discounted to today. Donations and surcharges grow at different rates (about 2.5%/yr and 5%/yr)
+ * and the surcharge lags its donation by |LOOKBACK| years, so discounting makes a margin look
+ * WORSE - the QCD verdict moves from about 24:1 against to about 32:1 at a 6% discount rate, and
+ * no ordering changes anywhere. Nominal is therefore the conservative presentation.
+ *
  * NOT MODELED: feedback. A larger realized surcharge is a larger real bill, which would slightly
  * change later balances. Second-order against terminal wealth, and capturing it is the engine change
  * this avoids. The ranking below is first-order.

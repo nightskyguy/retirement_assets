@@ -18,10 +18,12 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P64 SHIPPED 2026-08-19 (v11.15b7, `49509e9`).** The study answered its own question: property tax is
-worth <=$4k of lifetime tax and moved no decision, so it is URL entry only, no field. But indexing the
-SALT cap DID move one - a fixture's best conversion went $250k x 5yr -> $300k x 4yr. Only `P64g` is
-left. Open call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
+**P64 SHIPPED 2026-08-19 (v11.15b7, `49509e9`), then a review found a real bug (v11.15c8).** Property
+tax is worth <=$4k of lifetime tax and moved no decision, so it is URL entry only, no field. Indexing
+the SALT cap DID move one - a fixture's best conversion went $250k x 5yr -> $300k x 4yr. **PR #182
+review found `?ptx=` was captured on Save Scenario but silently dropped on Load** - no DOM element for
+`applyScenario` to restore into - fixed via a mutable `PROP_TAX_STATE`, verified in-browser. `P64g`
+still open. Open call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 

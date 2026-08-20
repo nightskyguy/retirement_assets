@@ -3125,3 +3125,56 @@ Logged as **P65** (a medical, b charitable, c mortgage), O2, NOT scoped. The not
 whoever picks it up: retiree medical is lumpy, a flat annual figure would be wrong in both directions,
 so it belongs with Lumpy Spending (P42) rather than as a scalar - and a big medical year is usually a
 big withdrawal year, so AGI and the 7.5% floor rise together and the net needs measuring, not guessing.
+
+### Same session — code review on PR #182, one real bug found (v11.15c8)
+
+User posted review comments on the PR (six inline, all on `optimizer_changelog.md`) and said "Changes
+requested." Pulled them via `gh api repos/.../pulls/182/comments`.
+
+**Five were changelog wording**, and all fair: "anyone who itemizes" overstated what the tool does
+(it only ever tests SALT against the standard deduction - no mortgage, no charitable, no medical - so
+"itemizes" implied a generality that does not exist, and directly echoes the P65 finding from
+yesterday); "the cap" was ambiguous and SALT was never spelled out; the rounding-uncertainty paragraph
+was judged unneeded detail for end users; "The Optimizer never handed it that figure..." was internal
+implementation history, not user-facing information; and "the amount" needed to say explicitly that
+it is PROPERTY and OTHER LOCAL taxes being added, since state tax is already supplied elsewhere and
+must not be double-entered. Rewrote the three 11.15b7 sections in both `optimizer_changelog.md` and
+the `retirement_optimizer.html` banner `<li>` to fix all five, and in doing so found a leftover
+duplicate sentence from an earlier same-session sed edit ("Measurement is the reason... Specifically,
+measurement found that\nthe whole effect is small and short-lived:...") - fixed as part of the same
+rewrite.
+
+**The sixth was a real bug**, asked as an editor's question: "are these values also being SAVED in
+the internal memory or .js?" Checked rather than assumed. `saveScenario()` calls `getInputs()`, which
+spreads in the property-tax fields, so YES they were captured into the localStorage JSON on save. But
+`applyScenario()` restores every field via `document.getElementById(key)`, and `propTax` /
+`propTaxGrowthMode` / `propTaxGrowthRate` have no DOM element - they are URL-only. So the value was
+saved correctly and then **silently dropped on every load**, with no warning, which is worse than
+never supporting it: the user believes their saved scenario carries it and it quietly does not.
+
+Fixed by converting the frozen `URL_PROP_TAX` const into a mutable `PROP_TAX_STATE`, read from the URL
+once at load same as before, but now also writable. `applyScenario()` gained a special case - the same
+pattern the file already uses for `qcdMode`/`stratIRMAATier`, which also have no direct DOM element -
+that restores it from `data.propTax` when the key is present, and otherwise leaves the current value
+alone, matching the convention every other field in that loop already follows. `getInputs()` and
+`buildShareURL()` both now read the mutable slot instead of the frozen const.
+
+**Verified in the browser, not just read**, since `optimizer_ui.js` has no node harness (DOM-only,
+untouched by the three node suites - confirmed unaffected, still 272/61/22 green). Loaded
+`?s=TX&ptx=60000&ptxm=custom&ptxr=2`, called `saveScenario()` programmatically, reloaded the page with
+a PLAIN url (no `?ptx` - exactly the state that used to lose the value), called `applyScenario()` with
+the saved blob, and confirmed `getInputs()` came back 60000/custom/0.02 and `buildShareURL()` carried
+`ptx=60000&ptxm=custom&ptxr=2`. Before the fix this would have silently reverted to 0. Badge green at
+600, console clean apart from the same unrelated Cloudflare RUM CORS error as every prior check.
+
+**GOTCHA, port collision.** `~/.claude/preview-servers.json` showed two entries claiming 8767
+simultaneously and `curl` kept answering with the OTHER worktree's stale 11.15a2 title even after
+starting a fresh worktree-rooted server there - looks like Windows' looser `SO_REUSEADDR` semantics
+let a second process bind a port a live listener already holds, so `_free()`'s probe-then-release
+check in `serve.py` is not reliable proof of exclusivity on this platform. Fixed by forcing an explicit
+`PORT=8791` rather than trusting the fallback scan.
+
+New changelog entry `11.15c8` (own anchor, own `<li>`, since it is a genuine behavior fix on top of an
+already-versioned release) rather than folding into 11.15b7's entry; the 11.15b7 prose itself was
+edited in place since it was inaccurate, not superseded. `taxengine.js`/`optimizer_core.js` untouched
+this round, so only `optimizer_ui.js`'s cache buster and the tier-2 `const V` moved.

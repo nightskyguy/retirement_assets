@@ -251,10 +251,13 @@ const verdicts = [
         surch(m, Array(45).fill(0.03)) - surch('none', Array(45).fill(0.03)) >= -1),
      'at realized 3%: ' + MODES.filter(m => m !== 'none').map(m => m + ' '
         + money(surch(m, Array(45).fill(0.03)) - surch('none', Array(45).fill(0.03)))).join(', ')],
-    ['P4 flat1000/flat2000/halfstep are dominated',
-     ['flat1000', 'flat2000', 'halfstep'].every(dominated),
-     ['flat1000', 'flat2000', 'halfstep'].map(m => m + ' mean dSurcharge ' + money(meanOf(m))
-        + ' vs halfcpi ' + money(meanOf('halfcpi'))).join(', ')],
+    // flat1000 was retired in v11.15cc on the strength of this row, so it is no longer in
+    // IRMAA_MARGIN_MODES and the check now covers whatever dollar-shaped settings remain.
+    ['P4 the dollar-shaped settings are dominated',
+     IRMAA_MARGIN_MODES.filter(m => /^flat|halfstep/.test(m)).every(dominated),
+     IRMAA_MARGIN_MODES.filter(m => /^flat|halfstep/.test(m))
+        .map(m => m + ' mean dSurcharge ' + money(meanOf(m))
+             + ' vs halfcpi ' + money(meanOf('halfcpi'))).join(', ')],
     ['P5 halfcpi and cpiminus1 are near-duplicates',
      Math.abs(meanOf('halfcpi') - meanOf('cpiminus1')) < Math.abs(meanOf('halfcpi')) * 0.25,
      'halfcpi ' + money(meanOf('halfcpi')) + ' vs cpiminus1 ' + money(meanOf('cpiminus1'))],

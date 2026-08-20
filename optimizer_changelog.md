@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15cb"></a>
+<a id="11.15cc"></a>
 
-## 11.15cb
+## 11.15cc
 
 ### The IRMAA ceiling was aiming two years of inflation too low
 
@@ -68,6 +68,25 @@ projected to $115,638:
 
 Pinned by a test at that boundary, including the check that it still trims once you are genuinely
 over the projected floor - it is a boundary, not a blanket exemption.
+
+### The default margin, and one setting retired
+
+The default is now **"project forward at half the expected inflation"**, and the **$1,000** option is
+gone.
+
+Measured across 60 rolling 40-year windows of the actual CPI-U record since 1928. The old default,
+half the next tier's surcharge, is $1,000 to $2,500 of room - against roughly $8,300 for two years of
+a 1.5-point inflation miss on the $274,000 MFJ Tier 2 floor. It prevented 5 breaching years out of 92
+where the half-inflation setting prevented 21, and the half-inflation setting is the only one that
+never cost surcharge in any of the 60 windows.
+
+The $1,000 option went because it is the wrong SHAPE. An inflation forecast error is proportional, so
+the room that absorbs it has to be proportional too; a fixed dollar setback is worth less every year
+as the thresholds inflate, and it saved four to five times less than a rate-based one. A saved link
+or scenario still carrying it falls back to the default rather than failing.
+
+Five settings remain: half the expected inflation (default), 1% less than expected inflation, half
+the next-tier surcharge, $2,000, and no margin at all.
 
 ### A selectable safety margin, behind the nerdknob
 

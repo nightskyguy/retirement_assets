@@ -105,7 +105,7 @@ function applyNerdKnobVisibility() {
     // IRMAA safety margin below a projected tier threshold - experimental, still being measured
     // (.test_harnesses/IRMAA_MARGIN_RESULTS.md). The FORWARD PROJECTION it sits on is NOT gated:
     // that is a correctness fix and applies to every user. Only the choice of margin is hidden,
-    // and hiding it leaves the default ('halfstep') in force, not "no margin".
+    // and hiding it leaves the default (IRMAA_MARGIN_DEFAULT, 'halfcpi') in force, not "no margin".
     const irmaaMarginWrap = document.getElementById('irmaaMarginMode-wrap');
     if (irmaaMarginWrap) irmaaMarginWrap.style.display = NERD_KNOBS ? '' : 'none';
     // 💵 legend - only meaningful once nerdknob is sweeping the cash-funded arm
@@ -443,7 +443,7 @@ function getInputs() {
         cyclicEnabled: !!valChecked('cyclicEnabled'),
         cyclicOrder:   val('cyclicOrder') ?? 'ira-first',
         cycleLTCGTarget: +(val('cycleLTCGTarget') ?? 0.15),
-        irmaaMarginMode: val('irmaaMarginMode') || 'halfstep',
+        irmaaMarginMode: val('irmaaMarginMode') || IRMAA_MARGIN_DEFAULT,
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
         comp_IRA1_intl: +val('comp_IRA1_intl'),

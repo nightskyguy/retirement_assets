@@ -287,7 +287,8 @@ the target, so a correctly projected target means a smaller donation buys the sa
 filing status: income sized while married but billed after a death is judged against single-filer
 thresholds roughly half as high, which is the IRMAA half of the widow penalty and the one case where
 a plan can land in a much higher tier than it targeted. And the safety margin it leaves below the threshold (an
-`?nerdknob` setting, default half the next tier's surcharge) only insures one thing: **inflation
+`?nerdknob` setting, default: project the threshold forward at half your expected inflation) only
+insures one thing: **inflation
 coming in BELOW your assumption**. If CPI meets or beats what you entered, the thresholds outrun
 your plan and the margin buys nothing at all - measured as exactly zero breaches in every setting at
 or above the assumed rate. It also does not cover income you could not know about in December, such

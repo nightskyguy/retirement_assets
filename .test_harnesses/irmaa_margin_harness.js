@@ -35,9 +35,9 @@
  *      after-tax wealth. Ranking QCD arms on wealth alone would just rank them by stinginess.
  *
  * THE SIX MODES (optimizer_core.js, irmaaFwdFactor / irmaaMarginDollars)
- *   halfstep    default. Hold back half the annual surcharge that crossing this exact tier costs.
+ *   halfcpi     DEFAULT since v11.15cc. Project the threshold forward at half the expected CPI.
  *   none        aim at the projected threshold, minus the traditional $1.
- *   flat1000    hold back $1,000 of MAGI.       flat2000   hold back $2,000.
+ *   flat2000    hold back $2,000 of MAGI. (flat1000 was retired in v11.15cc.)
  *   halfcpi     project forward at half the expected CPI instead.
  *   cpiminus1   project forward at CPI less one point.
  * Plus `legacy`: the PRE-FIX ceiling, reproduced by forcing LOOKBACK to 0 so the forward factor

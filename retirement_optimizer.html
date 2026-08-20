@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.15cb</title>
+    <title>Retirement Optimizer 11.15cc</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1115ca"></script>
-	<script src="optimizer_core.js?v=1115ca"></script>
+	<script src="optimizer_core.js?v=1115cc"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1115ca"></script>
-	<script src="optimizer_tests.js?v=1115cb"></script>
+	<script src="optimizer_ui.js?v=1115cc"></script>
+	<script src="optimizer_tests.js?v=1115cc"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -186,12 +186,11 @@
 			<div class="input-group" id="irmaaMarginMode-wrap" style="display:none;margin-top:4px;">
 				<label style="font-size:0.85em;" title="IRMAA bills this year's premium against the MAGI you reported two years ago, and compares that MAGI against the thresholds published for the premium year. So a ceiling that caps THIS year's MAGI aims at the threshold two years out, not today's - at 3% inflation that is about 6% higher. THE FORWARD PROJECTION ALWAYS APPLIES, including on 'No margin'; this setting only chooses how much extra room to leave BELOW that projected threshold, because an IRMAA tier is a cliff and one dollar over costs the whole surcharge for a year. Practical effect on QCD 'As Needed': income sitting between today's tier floor and the projected one is already under the line that will judge it, so no donation is asked for at all. The two inflation choices leave room a different way, by projecting forward at a slower rate instead of subtracting dollars. Applies to the IRMAA Ceiling strategy and to QCD 'As Needed'.">IRMAA safety margin
 				<select id="irmaaMarginMode" style="font-size:0.95em;">
-					<option value="halfstep" selected>Half the next-tier surcharge below the projected threshold</option>
-					<option value="none">No margin (aim right at the projected threshold)</option>
-					<option value="flat1000">$1,000 below the projected threshold</option>
-					<option value="flat2000">$2,000 below the projected threshold</option>
-					<option value="halfcpi">Project forward at half the expected inflation</option>
+					<option value="halfcpi" selected>Project forward at half the expected inflation</option>
 					<option value="cpiminus1">Project forward at 1% less than expected inflation</option>
+					<option value="halfstep">Half the next-tier surcharge below the projected threshold</option>
+					<option value="flat2000">$2,000 below the projected threshold</option>
+					<option value="none">No margin (aim right at the projected threshold)</option>
 				</select></label>
 			</div>
 			<input type="hidden" id="cyclicOrder" value="ira-first">
@@ -768,7 +767,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.15cb</b> <strong>The IRMAA ceiling now aims at the threshold that will actually apply, two years out, instead of today's.</strong> IRMAA bills this year's premium against the income you reported two years ago, and compares it against the thresholds published for the billing year. The tool charged that correctly but aimed at it wrongly: an "IRMAA Ceil" plan capped income at today's threshold, about 6% below the one it would be judged against at 3% inflation, leaving roughly $13,000 a year of Roth conversion room unused. The same fix applies to QCD "As Needed". Behavior change: an IRMAA Ceiling plan now converts more. <a href="optimizer_changelog.md#11.15cb" target="_blank" rel="noopener">Details</a></li>
+				<li data-flag="behavior"><b>11.15cc</b> <strong>The IRMAA ceiling now aims at the threshold that will actually apply, two years out, instead of today's.</strong> IRMAA bills this year's premium against the income you reported two years ago, and compares it against the thresholds published for the billing year. The tool charged that correctly but aimed at it wrongly: an "IRMAA Ceil" plan capped income at today's threshold, about 6% below the one it would be judged against at 3% inflation, leaving roughly $13,000 a year of Roth conversion room unused. The same fix applies to QCD "As Needed". Behavior change: an IRMAA Ceiling plan now converts more. <a href="optimizer_changelog.md#11.15cc" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15c9</b> <strong>More accurate SALT (state and local tax) deductions for tax years 2026 through 2029.</strong> Property and other local taxes can now be included in the SALT figure, which previously counted state income tax alone - add yours with <code>?ptx=25000</code> in the web address, optionally with <code>?ptxm=flat</code> or <code>?ptxm=custom</code> plus <code>?ptxr=2</code> to set how it grows. The higher $40,000 SALT cap now runs through 2029 as the law allows, and the cap and the income limit that phases it out both step up 1% a year, so 2026 uses $40,400 and $505,000. For plans converting heavily in a high-tax state these can change the recommended conversion size. This tool tests only SALT against the standard deduction, so the benefit applies where SALT alone exceeds it, and it ends after 2029. <a href="optimizer_changelog.md#11.15c9" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15a2</b> <strong>Tax Payment Planner (called by Retirement Optimizer and Income Tax Planner) now has 5 plans compared, many improvements and corrections.</strong> For the full list of changes see <a href="optimizer_changelog.md#11.15a2" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.152f</b> <strong>You now choose between running just your plan or comparing every strategy, and each button says how long it will take. One behavior change: Historical results shift slightly.</strong> "My Plan Only" is the new default and answers how your own plan did in a second or two. "Compare All Scenarios" ranks every withdrawal strategy against each other and takes closer to a minute. Both state their expected time, measured on your own machine, so the cost is visible before you click rather than after. A new Stress window selector chooses which historical starting years the Stress Test uses: Combined picks the worst openings measured over several different lengths, All runs every start year in the record. Red and amber now mean the money ran out in the first or second half of your plan. The Stress Test chart has dropped its legend, since the table below it names every line and can be sorted, and the hover-over readout now appears once you click a row to isolate a single line. <a href="optimizer_changelog.md#11.152f" target="_blank" rel="noopener">Details</a></li>
@@ -1296,7 +1295,7 @@ runSimulation?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1115cb';
+    const V = '?v=1115cc';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

@@ -121,11 +121,22 @@ function propTaxFor(inputs, currentYear, baseYear) {
 // by projecting at a SLOWER CPI rather than by subtracting dollars, so they live in the factor
 // below; the rest return 0 from irmaaFwdFactor's point of view and get their dollars from
 // irmaaMarginDollars(). Every IRMAA-shaped ceiling in this file goes through both.
-const IRMAA_MARGIN_MODES = ['halfstep', 'none', 'flat1000', 'flat2000', 'halfcpi', 'cpiminus1'];
+// Ordered strongest-setback first. `flat1000` was dropped in v11.15cc: it is the wrong SHAPE (a
+// fixed dollar setback decays to irrelevance as thresholds inflate) and it saved four to five times
+// less surcharge than a rate haircut across 60 historical CPI-U windows. A saved link or scenario
+// carrying the retired value falls through to IRMAA_MARGIN_DEFAULT below rather than erroring.
+const IRMAA_MARGIN_MODES = ['halfcpi', 'cpiminus1', 'halfstep', 'flat2000', 'none'];
+
+// Named rather than repeated, because it is asserted in the tests, read by the UI when the control
+// is hidden, and relied on as the fallback for an unknown value - three places that must not drift.
+// Moved from 'halfstep' to 'halfcpi' in v11.15cc: halfstep prevented 5 breaching years of 92 at a
+// 1.5-point CPI miss where halfcpi prevented 21, and halfcpi is the only setting that never cost
+// surcharge in any of the 60 windows measured.
+const IRMAA_MARGIN_DEFAULT = 'halfcpi';
 
 function irmaaMarginModeOf(inputs) {
     const m = inputs && inputs.irmaaMarginMode;
-    return IRMAA_MARGIN_MODES.includes(m) ? m : 'halfstep';
+    return IRMAA_MARGIN_MODES.includes(m) ? m : IRMAA_MARGIN_DEFAULT;
 }
 
 // Multiplier that carries a threshold from today's indexing to the premium year that will judge
@@ -147,7 +158,6 @@ function irmaaFwdFactor(inputs) {
 // threshold, which is not worth carrying an extra term for.
 function irmaaMarginDollars(inputs, threshold, status, effCpiRate, medicareRate, onMedicareCount) {
     switch (irmaaMarginModeOf(inputs)) {
-        case 'flat1000': return 1000;
         case 'flat2000': return 2000;
         case 'halfstep': {
             const above = calcIRMAA(threshold,     status, effCpiRate, medicareRate, onMedicareCount);
@@ -4277,7 +4287,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -4285,7 +4295,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

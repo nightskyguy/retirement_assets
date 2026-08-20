@@ -84,6 +84,7 @@ const selectConversionCandidates = core.selectConversionCandidates;
 const rankRowsByObjective = core.rankRowsByObjective;
 const taxCreepFactor = core.taxCreepFactor;
 const IRMAA_MARGIN_MODES = core.IRMAA_MARGIN_MODES;
+const IRMAA_MARGIN_DEFAULT = core.IRMAA_MARGIN_DEFAULT;
 const irmaaMarginModeOf = core.irmaaMarginModeOf;
 const irmaaFwdFactor = core.irmaaFwdFactor;
 const irmaaMarginDollars = core.irmaaMarginDollars;
@@ -2254,10 +2255,17 @@ test('ACA exception ends at Medicare: the lapsed tail IS backstopped', () => {
 // at zero. Pinned so P32 starts from a measured number rather than a fresh investigation, and so
 // that a change in the meantime has to announce itself.
 test('P32 (not fixed here): minlimit strands spending with Brokerage still funded', () => {
-    const log = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1, stratACAMultiple: 0 }).log;
+    // irmaaMarginMode is pinned EXPLICITLY rather than left to the default. This is a P32 tripwire,
+    // not an IRMAA one: when the default moved from 'halfstep' to 'halfcpi' in v11.15cc it dragged
+    // these numbers with it (11 years -> 10) purely because a tighter ceiling drains the IRA on a
+    // different schedule. A defect tripwire should not re-pin every time an unrelated knob's default
+    // is retuned, so it now names the mode it measures under - the shipped default, so the figures
+    // still describe what a user gets.
+    const log = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
+                           stratACAMultiple: 0, irmaaMarginMode: 'halfcpi' }).log;
     const stranded = _brokStranded(log);
-    assert(stranded.length === 11,
-        `expected the known 11 Brokerage-stranded years, got ${stranded.length}`);
+    assert(stranded.length === 10,
+        `expected the known 10 Brokerage-stranded years, got ${stranded.length}`);
     // The numbers nudged when dividends and interest stopped being double-credited (total
     // 71,382 -> 71,481, worst 9,468 -> 9,478, Brokerage 945,376 -> 926,096) and the COUNT did not
     // move at all. That is worth recording: the two defects are independent. Removing the phantom
@@ -2279,11 +2287,17 @@ test('P32 (not fixed here): minlimit strands spending with Brokerage still funde
     // 6,564, Brokerage 960,183 -> 1,100,390. More money stranded, spread over more years, with a
     // QUARTER of a million more Brokerage sitting unused. The defect got worse, not better, which
     // is exactly what a tripwire is for.
-    assertNear(_worst(stranded), 6563.558780, 'worst single-year unfunded amount with Brokerage left', 1);
-    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 26868.524260,
-        'total stranded across the eleven years', 1);
+    //
+    // FIFTH move, v11.15cc, and the least interesting: the margin default went 'halfstep' ->
+    // 'halfcpi', a tighter ceiling, which drains the IRA on a slightly different schedule. 2039-2049
+    // -> 2040-2049, total 26,869 -> 27,523, worst 6,564 -> 6,576, Brokerage 1,100,390 -> 1,027,335.
+    // Still nothing frees any of these years, and the mode is now pinned explicitly above so a
+    // future default change cannot move this test again.
+    assertNear(_worst(stranded), 6575.615457, 'worst single-year unfunded amount with Brokerage left', 1);
+    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 27522.500028,
+        'total stranded across the ten years', 1);
     // The headline number: how much was sitting in Brokerage the first year it gave up.
-    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 1100390.353415,
+    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 1027335.347761,
         'Brokerage balance in the first year minlimit reported an unfunded shortfall', 1);
     assert(stranded.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
         'every stranded year must have Cash, Roth and IRA at zero — Brokerage is the only source left');
@@ -3555,8 +3569,13 @@ test('irmaaFwdFactor: |LOOKBACK| years of CPI, and an exact identity at cpi = 0'
     assertNear(irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'halfcpi' }), 1.030225, 'half of 3%', 1e-12);
     assertNear(irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'cpiminus1' }), 1.0404, '3% less 1%', 1e-12);
     // An unknown or missing mode must land on the default rather than silently disabling the margin.
-    assert(irmaaMarginModeOf({}) === 'halfstep', 'missing mode defaults to halfstep');
-    assert(irmaaMarginModeOf({ irmaaMarginMode: 'nonsense' }) === 'halfstep', 'unknown mode defaults to halfstep');
+    assert(irmaaMarginModeOf({}) === IRMAA_MARGIN_DEFAULT, 'missing mode falls back to the default');
+    assert(irmaaMarginModeOf({ irmaaMarginMode: 'nonsense' }) === IRMAA_MARGIN_DEFAULT,
+        'unknown mode falls back to the default');
+    // A saved link or scenario can still carry `flat1000`, retired in v11.15cc. It must degrade to
+    // the default rather than throwing or silently disabling the margin.
+    assert(irmaaMarginModeOf({ irmaaMarginMode: 'flat1000' }) === IRMAA_MARGIN_DEFAULT,
+        'the retired flat1000 value degrades to the default');
 });
 
 test('IRMAA tier ceiling targets the threshold that will apply, not the one in force today', () => {
@@ -3569,13 +3588,13 @@ test('IRMAA tier ceiling targets the threshold that will apply, not the one in f
         'at cpi = 0 the ceiling must be exactly the old 108999');
 });
 
-test('irmaaMarginMode: the six modes are distinct and correctly ordered', () => {
+test('irmaaMarginMode: every shipped mode is distinct and correctly ordered', () => {
     const t = Object.fromEntries(IRMAA_MARGIN_MODES.map(m => [m, _target({ irmaaMarginMode: m })]));
-    assert(new Set(Object.values(t)).size === 6, `all six modes must differ: ${JSON.stringify(t)}`);
+    assert(new Set(Object.values(t)).size === IRMAA_MARGIN_MODES.length,
+        `every mode must give a different ceiling: ${JSON.stringify(t)}`);
     // Dollar setbacks, biggest ceiling first.
-    assert(t.none > t.flat1000 && t.flat1000 > t.halfstep && t.halfstep > t.flat2000,
+    assert(t.none > t.halfstep && t.halfstep > t.flat2000,
         `dollar-margin ordering broke: ${JSON.stringify(t)}`);
-    assertNear(t.none - t.flat1000, 1000, 'flat1000 sets back exactly $1,000', 0.01);
     assertNear(t.none - t.flat2000, 2000, 'flat2000 sets back exactly $2,000', 0.01);
     // CPI haircuts. At 3% CPI, cpiminus1 (2%) is the gentler haircut and halfcpi (1.5%) the harsher
     // one; below 2% CPI they cross over, which is why this pins the ordering AT a stated CPI rather

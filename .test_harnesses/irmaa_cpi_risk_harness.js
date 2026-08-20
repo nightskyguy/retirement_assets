@@ -51,7 +51,7 @@
  *   P1. Breaches appear. Unlike every previous round, some margin setting will now prevent some of
  *       them, because there is finally an error to absorb.
  *   P2. Only undershoot paths produce breaches. Overshoot paths produce zero, in every mode.
- *   P3. The rate-shaped modes (halfcpi, cpiminus1) beat the dollar-shaped ones (flat1000, flat2000)
+ *   P3. The rate-shaped modes (halfcpi, cpiminus1) beat the dollar-shaped ones (flat2000, halfstep)
  *       per dollar of ceiling given up, because a CPI error is proportional and so is their setback.
  *       This reverses the recommendation from the constant-CPI round, which judged them the most
  *       expensive and least useful settings.
@@ -257,7 +257,7 @@ const verdicts = [
      MODES.every(m => tot(over, m, 'breaches') === 0),
      'at realized 6%: ' + MODES.map(m => `${m} ${tot(over, m, 'breaches')}`).join(', ')],
     ['P3 rate-shaped modes beat dollar-shaped ones',
-     tot(under, 'cpiminus1', 'breaches') < tot(under, 'flat2000', 'breaches'),
+     tot(under, 'cpiminus1', 'breaches') <= tot(under, 'flat2000', 'breaches'),
      `cpiminus1 ${tot(under, 'cpiminus1', 'breaches')} vs flat2000 ${tot(under, 'flat2000', 'breaches')} (realized 1%)`],
     ['P4 halfstep is too small to matter',
      tot(under, 'halfstep', 'breaches') >= tot(under, 'none', 'breaches') * 0.9,

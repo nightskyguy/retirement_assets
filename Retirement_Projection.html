@@ -229,7 +229,7 @@ var TAXData = {
 <body>
 
 <header>
-  <h1>Retirement Projection 9.1</h1>
+  <h1>Retirement Projection 9.2</h1>
   <p>SECURE 2.0 · IRS Uniform Lifetime Table · RMDs begin at age 75 · 2026 Tax / IRMAA Code</p>
   <button class="help-btn share" onclick="toggleSharePanel()">&#8258; Share</button>
   <div class="share-panel" id="share-panel">
@@ -508,6 +508,11 @@ var TAXData = {
           <div class="ctrl-header"><label>State income tax</label></div>
           <select id="stateSelect" class="state-select" style="margin-top:6px" onchange="applyStateThresholds(); updateStateNote(); update()"></select>
           <div id="state-note" style="display:none;margin-top:5px;font-size:11px;color:var(--muted);font-style:italic;line-height:1.5;"></div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-header"><label>Property + local tax (today $)</label><span class="val" id="vPropTax">$0</span></div>
+          <input type="range" id="propTax" min="0" max="60000" step="500" value="0">
+          <div class="ctrl-note">Real estate + other state/local taxes paid, for the federal SALT itemizing cap. Grows with inflation.</div>
         </div>
       </div>
     </details>
@@ -1152,7 +1157,7 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
                   cgMode, cgAmt, cgFreq, cgStartAge, cgInflate,
                   cashStart, cashRatePct,
                   myRmdStart, spouseStartAge, spouseRmdStart, spouseIRAStart, rothStart,
-                  selectedState, isSingle, retireAge, birthYearIn, spouseBirthYearIn){
+                  selectedState, isSingle, retireAge, birthYearIn, spouseBirthYearIn, propTax){
   let bal       = start;
   let brokBal   = brokStart;
   let brokBasis = brokStart * (brokBasisPct / 100);
@@ -1268,6 +1273,12 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
     const medicareGrowth  = Math.pow(1 + (TAXData.IRMAA?.ANNUAL_INCREASE ?? 0), y - 1);
     const IRMAAAnnualCost = calcIRMAA(prevPrevMagi, filingStatus, inflMult, medicareGrowth, onMedicareCount);
 
+    // OBBBA (P.L. 119-21) provisions are calendar-year-gated, not permanent — mirrors
+    // optimizer_core.js's per-year yr.obbaOn/yr.saltHigh so the two tools price the same law.
+    const obbaOn      = calYear <= TAXData.OBBBA.SENIOR_DED.sunsetYear;
+    const saltHigh    = calYear <= TAXData.OBBBA.SALT.sunsetYear;
+    const propTaxAmt  = (propTax || 0) * inflMult;
+
     let taxResult = null;
     if(selectedState && typeof calculateTaxes === 'function'){
       try {
@@ -1287,6 +1298,9 @@ function project(start, rate, wd1, wd2, wd1StartAge, wd2StartAge, inflRate, year
           ages:            isSingle ? [age] : [age, spouseCurrentAge],
           birthyears:      isSingle ? [birthYearIn] : [birthYearIn, spouseBirthYearIn],
           IRMAAAnnualCost,
+          obbaOn,
+          saltHigh,
+          propTax: propTaxAmt,
         });
       } catch(e){ taxResult = null; }
     }
@@ -1628,6 +1642,7 @@ function update(){
   const ss2         = hasSpouse ? +document.getElementById('ss2').value : 0;
   const ss2Age      = +document.getElementById('ss2Age').value;
   const fixedIncome    = +document.getElementById('fixedInc').value;
+  const propTax        = +document.getElementById('propTax').value;
   const contrib        = parseContribInput('contrib');
   const contribEndAge  = +document.getElementById('contribEndAge').value;
   const contribInflate = document.getElementById('contribInflate').checked;
@@ -1662,6 +1677,7 @@ function update(){
   document.getElementById('vSS2Age').textContent  = ss2Age;
   document.getElementById('vSS2').textContent     = fmt(ss2);
   document.getElementById('vFixedInc').textContent    = fmt(fixedIncome);
+  document.getElementById('vPropTax').textContent     = fmt(propTax);
   document.getElementById('vContribEndAge').textContent= contribEndAge;
   document.getElementById('vRothContribEndAge').textContent = rothContribEndAge;
   document.getElementById('vRetireAge').textContent    = retireAge;
@@ -1697,7 +1713,7 @@ function update(){
                           cashStartVal, cashRateVal,
                           myRmdStartAge, spouseStartAge, spouseRmdStartAge,
                           spouseIRAStartVal, rothStartVal,
-                          selectedState, isSingle, retireAge, birthYear, spouseBirthYear);
+                          selectedState, isSingle, retireAge, birthYear, spouseBirthYear, propTax);
   const labels = rows.map(r => `Age ${r.age}`);
 
   chart.data.labels           = labels;
@@ -1943,6 +1959,7 @@ function buildBookmarkUrl(){
   p.set('ss2',    document.getElementById('ss2').value);
   p.set('ss2age', document.getElementById('ss2Age').value);
   p.set('fixed',  document.getElementById('fixedInc').value);
+  p.set('propTax',document.getElementById('propTax').value);
   if(document.getElementById('realToggle').checked)   p.set('real',   '1');
   if(document.getElementById('singleToggle').checked) p.set('single', '1');
 
@@ -2033,6 +2050,7 @@ function applyUrlParams(){
   setSlider('ss2',      'ss2');
   setSlider('ss2Age',   'ss2age');
   setSlider('fixedInc',     'fixed');
+  setSlider('propTax',      'propTax');
   if(p.has('contrib'))    document.getElementById('contrib').value    = fmt(+p.get('contrib')    || 0);
   setSlider('contribEndAge','contribEnd');
   document.getElementById('contribInflate').checked = p.get('contribInflate') === '1';
@@ -2374,7 +2392,7 @@ document.querySelectorAll('input[name="ltMode"]').forEach(r =>
 );
 document.getElementById('ltDecline').addEventListener('input', update);
 
-['wd2Age','rate','wd','infl','ss1','ss1Age','ss2','ss2Age','fixedInc','contribEndAge','contribInflate',
+['wd2Age','rate','wd','infl','ss1','ss1Age','ss2','ss2Age','fixedInc','propTax','contribEndAge','contribInflate',
  'rothContribEndAge','rothContribInflate',
  'brokBasis','brokApp','brokDiv','cgAmt','cgFreq','cgStartAge','cashRate'
 ].forEach(id => document.getElementById(id).addEventListener('input', update));

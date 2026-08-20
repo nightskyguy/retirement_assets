@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15cd"></a>
+<a id="11.15ce"></a>
 
-## 11.15cd
+## 11.15ce
 
 ### The IRMAA ceiling was aiming two years of inflation too low
 
@@ -68,6 +68,32 @@ projected to $115,638:
 
 Pinned by a test at that boundary, including the check that it still trims once you are genuinely
 over the projected floor - it is a boundary, not a blanket exemption.
+
+### The safety margin no longer applies to QCDs, which cuts the donation it was costing
+
+**Behavior change, and it only ever goes one way: your QCDs get smaller.**
+
+The margin was applied to both places that aim at an IRMAA threshold - the Fill Fed/IRMAA Bracket
+ceiling and QCD "As Needed". On the ceiling it costs conversion room, which is money moving between
+your own accounts. On QCDs it costs money that **leaves the household for charity**, so they are not
+the same decision, and measured against the historical inflation record the QCD half was a badly
+losing trade:
+
+| setting | extra donated | surcharge avoided | net |
+|---|---|---|---|
+| Half the projected increase | $82,764 | $1,776 | **-$80,988** |
+| Half the next-tier surcharge | $50,359 | $1,015 | -$49,345 |
+| The projected increase, less 1 point | $34,018 | $787 | -$33,230 |
+| $2,000 | $32,701 | $752 | -$31,950 |
+
+About 47 to 1 against for the default. The reason is structural rather than a quirk of one plan: a
+surcharge is a few thousand dollars a year, while the income you have to shed to clear a threshold is
+tens of thousands, so buying threshold headroom with donated dollars cannot pay for itself unless you
+wanted to give the money anyway.
+
+QCD "As Needed" now aims at the fully projected threshold and holds nothing back. Donations return to
+their minimum, and the ceiling keeps its margin and all of its protection. In As Needed mode this
+release donates less than the last one, and the margin setting no longer affects you at all.
 
 ### "1% less than expected inflation" was subtracting the point from the wrong number
 

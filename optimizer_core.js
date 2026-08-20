@@ -197,7 +197,7 @@ function onMedicareAtCharge(age1, age2, alive1, alive2) {
 // "Always" mode: donate up to qcdHHMax every eligible year.
 // "As Needed" mode: donate only the minimum needed to drop below the current IRMAA tier cliff.
 // Sourcing: larger eligible IRA first, then smaller if budget remains.
-function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, cpiRate, alive1, alive2, status, age1, age2, medicareRate = 1) {
+function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, cpiRate, alive1, alive2, status) {
     const elig1 = alive1 && isQCDEligible(inputs.birthyear1, inputs.birthmonth1, simYear);
     const elig2 = alive2 && isQCDEligible(inputs.birthyear2, inputs.birthmonth2, simYear);
 
@@ -211,14 +211,24 @@ function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, 
         // Returns the MAGI ceiling of the target tier; 0 = already at no-surcharge level.
         // effCpi, not cpiRate: the MAGI being trimmed here is charged |LOOKBACK| years from now,
         // against the thresholds published for THAT year (see irmaaFwdFactor).
-        const effCpi = cpiRate * irmaaFwdFactor(inputs);
+        //
+        // THE FULL PROJECTION, AND NO MARGIN - deliberately, and unlike the tier ceiling. The
+        // irmaaMarginMode haircuts and setbacks are not applied here at all, which is why this asks
+        // irmaaFwdFactor for the 'none' factor rather than the user's.
+        //   The margin exists to guard a cliff the plan is deliberately aiming AT. On this arm the
+        // plan is already aiming BELOW the threshold, and every dollar of margin is bought with a
+        // dollar that leaves the household for charity. Measured across the historical CPI record:
+        // the default setting donated $82,764 more to avoid $1,776 of surcharge, about 47 to 1
+        // against, and every other setting lost on the same trade. The asymmetry is structural - a
+        // surcharge is a few thousand a year while the MAGI needed to clear a threshold is tens of
+        // thousands - so no setting could ever pay for itself here.
+        //   See .test_harnesses/IRMAA_DEFAULT_RESULTS.md.
+        const effCpi = cpiRate * irmaaFwdFactor({ ...inputs, irmaaMarginMode: 'none' });
         const tierTarget = getIRMAATierTargetMAGI(provisionalMAGI, status, effCpi, 2);
-        // 0 means the household is already clear of every surcharge, so there is no cliff to guard
-        // and no margin to hold back - donating anyway would be charity the tool never asked for.
+        // 0 means the household is already clear of every surcharge, so there is nothing to escape
+        // and donating anyway would be charity the tool never asked for.
         if (tierTarget === 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
-        const margin = irmaaMarginDollars(inputs, tierTarget + 1, status, effCpi, medicareRate,
-                                          onMedicareAtCharge(age1, age2, alive1, alive2));
-        const needed = provisionalMAGI - (tierTarget - margin);
+        const needed = provisionalMAGI - tierTarget;
         if (needed <= 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
         qcdBudget = Math.min(inputs.qcdHHMax, needed);
     }
@@ -1423,7 +1433,7 @@ function computeIncome(sim, yr) {
     // Provisional MAGI estimate (IRA withdrawals unknown here; uses pension+RMD+SS+interest/divs).
     const qcdLimit = getQCDLimit(sim.currentYear, inputs.cpi);
     const provisionalMAGI = yr.taxableInc + yr.rmd1 + yr.rmd2 + 0.85 * (yr.s1 + yr.s2) + yr.taxableInterest + yr.taxableDividends;
-    const _qcds = computeAnnualQCDs(inputs, balance, sim.currentYear, qcdLimit, provisionalMAGI, sim.cpiRate, yr.alive1, yr.alive2, yr.status, yr.age1, yr.age2, sim.medicareRate);
+    const _qcds = computeAnnualQCDs(inputs, balance, sim.currentYear, qcdLimit, provisionalMAGI, sim.cpiRate, yr.alive1, yr.alive2, yr.status);
     yr.qcd1 = _qcds.qcd1;
     yr.qcd2 = _qcds.qcd2;
     yr.totalQCD = _qcds.totalQCD;

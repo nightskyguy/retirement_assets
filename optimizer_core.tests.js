@@ -3664,24 +3664,22 @@ test('yr.IRMAALimit is inert: it can never differ from yr.goalLimit', () => {
         `yr.IRMAALimit became live again: ${violations.slice(0, 3).join(' | ')}`);
 });
 
-test('QCD As Needed: trims to the forward-projected tier ceiling, and further under a margin', () => {
-    // $5M IRA, so the RMD alone puts MAGI in SGL Tier 4 and the two-tier drop targets Tier 2.
+test('QCD As Needed uses the full projection and ignores the margin setting entirely', () => {
+    // The margin applies to the TIER CEILING only. It used to apply here too, and that was measured
+    // to be about 47 to 1 against: the default donated $82,764 more to avoid $1,776 of surcharge.
+    // On this arm a margin is bought with dollars that leave the household, and the surcharge it
+    // avoids is far smaller than the MAGI needed to clear a threshold, so it cannot pay.
     const qb = { ...BASE, IRA1: 5000000, cpi: 0.03, qcdHHMax: 120000, qcdMode: 'asneeded' };
     const qcd = m => { const r = simulate({ ...qb, irmaaMarginMode: m }).log[0];
                        return (r.QCD1 || 0) + (r.QCD2 || 0); };
-    const none = qcd('none');
-    assert(none > 0, 'fixture must actually trigger As Needed QCDs');
-    // The closed form is the proof that the LADDER moved, not just the answer: switching to the
-    // halfcpi projection lowers the Tier 2 target by exactly the SGL Tier 2 floor times the change
-    // in the forward factor, so the QCD has to grow by that much to reach it.
-    assertNear(qcd('halfcpi') - none,
-        137000 * (IRMAA_FWD(0.03, 'none') - IRMAA_FWD(0.03, 'halfcpi')),
-        'the As Needed target must scale with the forward factor', 1);
-    // Dollar margins push the same way: a tighter ceiling means a bigger donation to reach it.
-    assertNear(qcd('flat2000') - none, 2000, 'flat2000 needs exactly $2,000 more of QCD', 1);
-    const brks = getRateBracket('IRMAA', 'SGL');
-    assertNear(qcd('halfstep') - none, (brks[2].r - brks[1].r) * 12 / 2,
-        'halfstep needs half the Tier 1 -> Tier 2 step more', 1);
+    const base = qcd('none');
+    assert(base > 0, 'fixture must actually trigger As Needed QCDs');
+    for (const m of IRMAA_MARGIN_MODES)
+        assertNear(qcd(m), base, `margin mode ${m} must not change the QCD at all`, 0.01);
+    // The loop above already covers the haircut modes, whose FACTOR would otherwise shrink the
+    // target even with no dollar setback - that is the half of the decoupling easiest to get wrong,
+    // since dropping only irmaaMarginDollars would leave halfcpi still moving the QCD.
+    // That the target is forward-projected at all is pinned by the boundary test below.
 });
 
 test('QCD As Needed: MAGI between today\'s floor and the projected floor needs no QCD', () => {

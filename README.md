@@ -283,7 +283,10 @@ given year's premium against the income you reported **two years earlier**, and 
 the thresholds published for the billing year, so a ceiling capping this year's income has to target
 the threshold two years out. At 3% inflation that is about 6% higher than today's. The same forward
 projection drives QCD "As Needed", where it matters most: that mode donates exactly enough to reach
-the target, so a correctly projected target means a smaller donation buys the same tier. Two things it does **not** do. It does not anticipate a change of
+the target, so a correctly projected target means a smaller donation buys the same tier. The safety
+margin below does **not** apply there, only to the ceiling, because on the QCD side a margin is paid
+for with money that leaves the household and it measured costing far more in donations than it saved
+in surcharges. Two things it does **not** do. It does not anticipate a change of
 filing status: income sized while married but billed after a death is judged against single-filer
 thresholds roughly half as high, which is the IRMAA half of the widow penalty and the one case where
 a plan can land in a much higher tier than it targeted. And the safety margin it leaves below the threshold (an

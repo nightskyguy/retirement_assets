@@ -167,8 +167,12 @@ for (const m of MODES) {
     console.log([m.padEnd(11), money(c).padStart(15), money(c - convNone).padStart(13),
                  money(g).padStart(15), money(g - givenNone).padStart(13)].join(' '));
 }
-console.log('\nBoth columns are maximised by `none`, by construction. That is why the default cannot');
-console.log('be picked from this table - see the net comparison below.');
+console.log('');
+console.log('CONVERTED is maximised by `none`, by construction, which is why the default cannot be');
+console.log('picked from this column - see the net comparison below.');
+console.log('QCD GIVEN is now flat across every mode: since v11.15ce the margin applies to the tier');
+console.log('ceiling ONLY, never to the As Needed target, so donations sit at their minimum whatever');
+console.log('the setting. The section below records the measurement that forced that split.');
 
 // ---- 2. DECOMPOSED, because the raw net is dominated by the wrong effect ------------------------
 // A first version of this file compared modes on net terminal wealth and reported that every margin
@@ -224,9 +228,18 @@ for (const m of MODES.filter(x => x !== 'none')) {
 const donGiven = m => DON.reduce((a, p) => a + DEC[p.key + '|' + m].given, 0);
 const donSurch = (m, path) => DON.reduce((a, p) => a + extraSurcharge(DEC[p.key + '|' + m], path), 0);
 
-console.log('\n## QCD "As Needed": does the extra donation buy back more than it costs?\n');
-console.log('Extra donation is the premium paid. Surcharge avoided is the payout. Both vs `none`,');
-console.log('summed over the ' + DON.length + ' donating plans.\n');
+console.log('');
+console.log('## QCD "As Needed": why the margin no longer applies here');
+console.log('');
+console.log('Extra donation is the premium paid, surcharge avoided is the payout, both vs `none`.');
+console.log('Since v11.15ce every row below is zero by construction - the margin was decoupled from');
+console.log('this site. The figures that forced that decision, measured before the split:');
+console.log('');
+console.log('  halfcpi    $82,764 donated  ->  $1,776 avoided   -$80,988');
+console.log('  halfstep   $50,359          ->  $1,015           -$49,345');
+console.log('  cpiminus1  $34,018          ->    $787           -$33,230');
+console.log('  flat2000   $32,701          ->    $752           -$31,950');
+console.log('');
 console.log(['mode'.padEnd(11), 'extra donated'.padStart(15), 'surcharge avoided'.padStart(19),
              'net'.padStart(14), 'verdict'.padStart(10)].join(' '));
 const gNoneD = donGiven('none');

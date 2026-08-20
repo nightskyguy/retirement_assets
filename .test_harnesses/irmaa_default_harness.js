@@ -213,6 +213,36 @@ for (const m of MODES.filter(x => x !== 'none')) {
                  `${d.filter(x => x < -1).length}/${d.length}`.padStart(24)].join(' '));
 }
 
+// ---- 2b. The QCD arm pays for its margin in DONATIONS, and that is a real price -----------------
+// On the converting arm a margin costs conversion room, which is a transfer rather than a loss. On
+// the "As Needed" arm it costs actual dollars leaving the household: the mode donates only in order
+// to dodge a surcharge, so a bigger margin means a bigger donation bought purely as insurance.
+//
+// That makes the test unusually clean. Extra donation is the premium; surcharge avoided is the
+// payout. If the premium exceeds the payout the margin is a straight loss in this mode, no matter
+// how well it scores anywhere else.
+const donGiven = m => DON.reduce((a, p) => a + DEC[p.key + '|' + m].given, 0);
+const donSurch = (m, path) => DON.reduce((a, p) => a + extraSurcharge(DEC[p.key + '|' + m], path), 0);
+
+console.log('\n## QCD "As Needed": does the extra donation buy back more than it costs?\n');
+console.log('Extra donation is the premium paid. Surcharge avoided is the payout. Both vs `none`,');
+console.log('summed over the ' + DON.length + ' donating plans.\n');
+console.log(['mode'.padEnd(11), 'extra donated'.padStart(15), 'surcharge avoided'.padStart(19),
+             'net'.padStart(14), 'verdict'.padStart(10)].join(' '));
+const gNoneD = donGiven('none');
+for (const m of MODES.filter(x => x !== 'none')) {
+    const premium = donGiven(m) - gNoneD;
+    // Payout averaged over the historical record, so this is an expected value not a best case.
+    const payout = -HIST_WINDOWS.reduce((a, w) => a + (donSurch(m, w.path) - donSurch('none', w.path)), 0)
+                   / HIST_WINDOWS.length;
+    const net = payout - premium;
+    console.log([m.padEnd(11), money(premium).padStart(15), money(payout).padStart(19),
+                 money(net).padStart(14), (net > 0 ? 'pays' : 'LOSES').padStart(10)].join(' '));
+}
+console.log('\nA margin that LOSES here is buying surcharge relief with donated dollars at worse than');
+console.log('one for one. In As Needed mode the donation exists only to dodge the surcharge, so that');
+console.log('is a straight loss to the household regardless of how the setting scores elsewhere.');
+
 // ---- 3. Where the IRMAA effect actually turns on -----------------------------------------------
 // Scanned over the whole range rather than stopped at the first failure: an earlier version broke
 // out of the loop and then printed the last value it happened to test, which read as a crossover

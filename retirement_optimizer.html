@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.15c8</title>
+    <title>Retirement Optimizer 11.15c9</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -58,13 +58,13 @@
     .share-panel .share-status { font-family:monospace; font-size:10px; color:#1a7a1a; margin-top:.35rem; min-height:14px; }
 	</style>
 	<base target="_blank">	
-	<script src="taxengine.js?v=1115b7"></script>
-	<script src="optimizer_core.js?v=1115b7"></script>
+	<script src="taxengine.js?v=1115c9"></script>
+	<script src="optimizer_core.js?v=1115c9"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1115c8"></script>
-	<script src="optimizer_tests.js?v=1115b7"></script>
+	<script src="optimizer_ui.js?v=1115c9"></script>
+	<script src="optimizer_tests.js?v=1115c9"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -757,8 +757,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li data-flag="behavior"><b>11.15c8</b> <strong>Saving a scenario with property tax entered used to lose it on the next load.</strong> There is no box on the page for that figure - it is entered through the share URL - and scenario loading only restores fields that have one, so it silently reverted to zero on the next load with no warning. Save Scenario and Load Scenario now carry it correctly. <a href="optimizer_changelog.md#11.15c8" target="_blank" rel="noopener">Details</a></li>
-				<li data-flag="behavior"><b>11.15b7</b> <strong>The higher $40,000 cap on deducting state and local taxes (SALT) no longer expires a year early.</strong> The SALT cap and the senior deduction were sharing one switch, and the senior deduction ends first, so tax year 2029 was priced at the old $10,000 cap even though the higher one still applied. This tool only ever tests SALT against the standard deduction - it does not model itemizing more broadly - so the fix affects households where SALT alone clears the standard deduction, and federal tax for them in 2029 is now lower than the tool used to say. The SALT cap and the income limit that phases it out both step up 1% a year as the law requires, which the tool was not doing at all, so 2026 onward were priced too low; for a plan that converts heavily in a high-tax state this can change the best conversion size. Property and other local taxes can now be added to the SALT figure via the share URL (`?ptx=`), which previously counted state income tax alone. <a href="optimizer_changelog.md#11.15b7" target="_blank" rel="noopener">Details</a></li>
+				<li data-flag="behavior"><b>11.15c9</b> <strong>More accurate SALT (state and local tax) deductions for tax years 2026 through 2029.</strong> Property and other local taxes can now be included in the SALT figure, which previously counted state income tax alone - add yours with <code>?ptx=25000</code> in the web address, optionally with <code>?ptxm=flat</code> or <code>?ptxm=custom</code> plus <code>?ptxr=2</code> to set how it grows. The higher $40,000 SALT cap now runs through 2029 as the law allows, and the cap and the income limit that phases it out both step up 1% a year, so 2026 uses $40,400 and $505,000. For plans converting heavily in a high-tax state these can change the recommended conversion size. This tool tests only SALT against the standard deduction, so the benefit applies where SALT alone exceeds it, and it ends after 2029. <a href="optimizer_changelog.md#11.15c9" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15a2</b> <strong>Tax Payment Planner (called by Retirement Optimizer and Income Tax Planner) now has 5 plans compared, many improvements and corrections. For the full list of changes see <a href="optimizer_changelog.md#11.15a2" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.152f</b> <strong>You now choose between running just your plan or comparing every strategy, and each button says how long it will take. One behavior change: Historical results shift slightly.</strong> "My Plan Only" is the new default and answers how your own plan did in a second or two. "Compare All Scenarios" ranks every withdrawal strategy against each other and takes closer to a minute. Both state their expected time, measured on your own machine, so the cost is visible before you click rather than after. A new Stress window selector chooses which historical starting years the Stress Test uses: Combined picks the worst openings measured over several different lengths, All runs every start year in the record. Red and amber now mean the money ran out in the first or second half of your plan. The Stress Test chart has dropped its legend, since the table below it names every line and can be sorted, and the hover-over readout now appears once you click a row to isolate a single line. <a href="optimizer_changelog.md#11.152f" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.14dd</b> <strong>The Ordered strategy now banks leftover money in the account it will spend first, not always in cash.</strong> Before, any year income exceeded spending the extra went to cash, which the Roth-first (RIBC) and Brokerage-first (BIRC) orders draw last, so it sat idle. Now it goes to whichever of cash or brokerage your sequence draws first, so it stays invested and is spent sooner. Cash-first (CBIR) is unchanged. <a href="optimizer_changelog.md#11.14dd" target="_blank" rel="noopener">Details</a></li>
@@ -1285,7 +1284,7 @@ runSimulation?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1115c8';
+    const V = '?v=1115c9';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

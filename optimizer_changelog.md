@@ -11,72 +11,29 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15c8"></a>
+<a id="11.15c9"></a>
 
-## 11.15c8
+## 11.15c9
 
-### Saving a scenario with property tax entered used to lose it on the next load
+### More accurate SALT (state and local tax) deductions
 
-**Behavior change, but a corrective one.** 11.15b7 added property and local taxes, entered through the
-web address (`?ptx=`). Saving that scenario under a name captured the figure into the saved file
-correctly, but loading it back did not restore it - there is no box on the page for this field, and
-scenario loading only restores fields that have one. The property tax silently reverted to zero on
-every reload, with no warning that anything had been dropped. Save Scenario and Load Scenario now
-carry it correctly, the same as every other field.
+**Behavior change.** Three corrections to how state and local taxes are deducted, all affecting tax
+years 2026 through 2029:
 
-<a id="11.15b7"></a>
+- **Property and other local taxes can now be included.** Previously only state income tax counted
+  toward the SALT figure. Add yours with `?ptx=25000` in the web address - state income tax is
+  already supplied elsewhere, so enter only property and other local taxes here. Optionally set how
+  it grows over time with `?ptxm=flat` or `?ptxm=custom` plus `?ptxr=2`; the default is to grow with
+  inflation. Sharing a link and saving a named scenario both keep the figure.
+- **The higher $40,000 SALT cap now runs through 2029**, as the law allows, rather than reverting to
+  $10,000 a year early.
+- **The SALT cap and the income limit that phases it out now step up 1% a year**, so 2026 uses
+  $40,400 and $505,000.
 
-## 11.15b7
-
-### The higher SALT (state-and-local-tax) cap no longer expires a year early
-
-**Behavior change.** The 2025 law raised the cap on deducting state and local taxes (SALT) from
-$10,000 to $40,000, and set two different end dates: the senior deduction ends after 2028, the higher
-SALT cap ends after 2029. Both were being read off the same switch, so the moment the senior deduction
-expired the SALT cap fell back to $10,000 as well. Tax year 2029 was priced a full year early, at the
-old cap.
-
-This tool does not model itemizing in general - no mortgage interest, no charitable giving, no
-medical expenses. The only itemized figure it ever tests against the standard deduction is SALT: state
-income tax, plus property and other local taxes once you enter them (see below). For the households
-where SALT alone clears the standard deduction, federal tax in 2029 is now lower than the tool
-previously reported. Nothing before 2029 or after it changes, because those years were already right.
-
-### The SALT cap and its income limit are indexed 1% a year, which the tool was not doing
-
-**Behavior change.** The law states both the SALT cap ($40,000 base) and the income level where it
-starts phasing out ($500,000 base) as 2025 figures, and steps each up 1% per year through 2029. So
-2026 is $40,400 and $505,000, not $40,000 and $500,000. The tool held both frozen at the 2025 numbers,
-with a code comment claiming the indexing that nothing performed, so every year from 2026 on was
-priced with too small a cap and too low an income limit.
-
-This one is not always small. The income limit decides how much of the raised cap survives a large
-Roth conversion, so a plan that converts hard in a high-tax state can now land on a different answer:
-one test case moves from converting $250,000 a year for five years to $300,000 a year for four, and
-the new plan is worth about $1,800 more than the old one on the same portfolio.
-
-### Property and local taxes now reach the Optimizer's tax calculation
-
-The tax engine has always been able to add property and other local taxes to the SALT figure before
-testing whether it exceeds the standard deduction. The figure now flows through, along with a choice
-of how it grows over time: with inflation, flat in dollar terms, or at a rate you set, which is what a
-state with a statutory assessment cap needs.
-
-Add your property and other local taxes through the web address rather than a box on the page - state
-income tax is already supplied elsewhere and should not be included here: `?ptx=25000` for the annual
-figure, `?ptxm=flat` or `?ptxm=custom` with `?ptxr=2` to change how it grows. Sharing a link keeps
-them, and now so does saving a named scenario.
-
-It is not a box on the page because measurement said it should not be: the effect is small and it
-stops in 2029, and because this tool does not model itemizing beyond SALT, a wider input would not
-change that. Specifically, it exists only for tax years 2026 through 2029, it shrinks every year
-inside that window because the standard deduction is inflation-indexed while the cap is not, and it
-is worth at most about $4,000 of lifetime federal tax for any household in this model. It changed no
-strategy recommendation in any case tested. Because it can still be worth entering, the parameters
-above exist on the URL. The Income Tax Planner, which prices a single year and has a real box for this
-figure, is the better place to explore it.
-
----
+For plans converting heavily in a high-tax state, these can change the recommended conversion size.
+Note that this tool tests only SALT against the standard deduction - it does not model mortgage
+interest, charitable giving, or medical expenses - so the benefit is limited to households where SALT
+alone exceeds the standard deduction, and it ends after 2029.
 
 <a id="11.15a2"></a>
 

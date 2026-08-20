@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15cc"></a>
+<a id="11.15cd"></a>
 
-## 11.15cc
+## 11.15cd
 
 ### The IRMAA ceiling was aiming two years of inflation too low
 
@@ -68,6 +68,33 @@ projected to $115,638:
 
 Pinned by a test at that boundary, including the check that it still trims once you are genuinely
 over the projected floor - it is a boundary, not a blanket exemption.
+
+### "1% less than expected inflation" was subtracting the point from the wrong number
+
+Reported by the user, and they were right. The setting was meant to project the thresholds forward
+at the full rate and then take one percentage point off the **projected increase**. It was instead
+taking the point off the **annual rate** and compounding that, which is a far harsher haircut than
+the name suggests:
+
+| at 3% inflation | two-year projection |
+|---|---|
+| no margin | +6.09% |
+| intended: the increase, less 1 point | **+5.09%** |
+| what it did: (3% - 1%) compounded | +4.04% |
+
+On the $274,000 MFJ Tier 2 floor that is a $2,877 difference. It also left the setting sitting almost
+on top of "half the expected inflation" - measured across 60 historical inflation windows the two
+saved $48.5k and $37.2k of surcharge, close enough to be redundant. Corrected, they separate about
+two to one ($48.0k and $23.8k) and form a real ladder rather than two names for nearly the same
+thing.
+
+"Half the expected inflation" was restated the same way in the same release, so one sentence now
+describes both: they act on the projected increase, taking half of it or a point off it. At 3%
+inflation that moves it by 0.025 percentage points, which is immaterial on its own and buys a
+consistent explanation. Both options are relabelled to say what they do: **"Half the projected
+increase"** and **"The projected increase, less 1 percentage point"**.
+
+Both are clamped so a very low-inflation plan can never aim below today's un-projected threshold.
 
 ### The default margin, and one setting retired
 

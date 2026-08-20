@@ -2293,11 +2293,11 @@ test('P32 (not fixed here): minlimit strands spending with Brokerage still funde
     // -> 2040-2049, total 26,869 -> 27,523, worst 6,564 -> 6,576, Brokerage 1,100,390 -> 1,027,335.
     // Still nothing frees any of these years, and the mode is now pinned explicitly above so a
     // future default change cannot move this test again.
-    assertNear(_worst(stranded), 6575.615457, 'worst single-year unfunded amount with Brokerage left', 1);
-    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 27522.500028,
+    assertNear(_worst(stranded), 6575.510146, 'worst single-year unfunded amount with Brokerage left', 1);
+    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 27529.424758,
         'total stranded across the ten years', 1);
     // The headline number: how much was sitting in Brokerage the first year it gave up.
-    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 1027335.347761,
+    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 1027282.093360,
         'Brokerage balance in the first year minlimit reported an unfunded shortfall', 1);
     assert(stranded.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
         'every stranded year must have Cash, Roth and IRA at zero — Brokerage is the only source left');
@@ -3553,9 +3553,10 @@ test('ELIGIBILITY_AGE: the IRMAA-tier ceiling relevance gate is ELIGIBILITY_AGE 
 // published for Y. The CHARGE side always got that right (beginYear reads magiHistory[-2]); the
 // TARGETING side did not, and capped MAGI at TODAY's threshold instead of the one that will
 // actually apply. These pin the fix and the nerdknob-selectable margin that rides on it.
-const IRMAA_FWD = (cpi, mode) => Math.pow(1 + (mode === 'halfcpi' ? cpi / 2
-                                             : mode === 'cpiminus1' ? Math.max(0, cpi - 0.01)
-                                             : cpi), 2);
+// Deliberately NOT a local re-derivation of the engine's formula. An earlier version copied it, and
+// went stale the moment irmaaFwdFactor changed shape - the copy still passed its own arithmetic and
+// the assertion below started measuring the wrong thing. Ask the engine.
+const IRMAA_FWD = (cpi, mode) => irmaaFwdFactor({ cpi, irmaaMarginMode: mode });
 // Tier 0 = "Below IRMAA", so the ceiling is the SGL Tier 1 floor ($109,000). BASE is a single
 // filer aged 74 in 2026, well past ELIGIBILITY_AGE + LOOKBACK, so the tier ceiling binds.
 const IRMAA_CEIL_BASE = { ...BASE, strategy: 'bracket', stratRate: 0, stratIRMAATier: 0,
@@ -3566,8 +3567,18 @@ test('irmaaFwdFactor: |LOOKBACK| years of CPI, and an exact identity at cpi = 0'
     assertNear(irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'none' }), 1.0609, 'two years at 3%', 1e-12);
     assert(irmaaFwdFactor({ cpi: 0 }) === 1, 'cpi 0 must be an exact 1, so a no-inflation run is unchanged');
     // The two CPI-haircut modes carry their margin in the factor rather than in dollars.
-    assertNear(irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'halfcpi' }), 1.030225, 'half of 3%', 1e-12);
-    assertNear(irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'cpiminus1' }), 1.0404, '3% less 1%', 1e-12);
+    // Half the two-year PROJECTED INCREASE (6.09%), not half the annual rate compounded.
+    assertNear(irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'halfcpi' }), 1.03045,
+        'half the two-year projected increase', 1e-12);
+    // One point off the PROJECTED INCREASE, not off the annual rate: (1.03)^2 - 0.01, not (1.02)^2.
+    assertNear(irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'cpiminus1' }), 1.0509,
+        'one point off the two-year projected increase', 1e-12);
+    // Clamped, so a low-CPI plan never aims below today's un-projected threshold. The clamp bites
+    // under about 0.5% CPI, where two years of compounding earns less than the point being removed.
+    assert(irmaaFwdFactor({ cpi: 0.002, irmaaMarginMode: 'cpiminus1' }) === 1,
+        'cpiminus1 must clamp at 1 rather than aiming below the un-projected threshold');
+    assert(irmaaFwdFactor({ cpi: 0.02, irmaaMarginMode: 'cpiminus1' }) > 1,
+        'and must not clamp once the projection outruns the point removed');
     // An unknown or missing mode must land on the default rather than silently disabling the margin.
     assert(irmaaMarginModeOf({}) === IRMAA_MARGIN_DEFAULT, 'missing mode falls back to the default');
     assert(irmaaMarginModeOf({ irmaaMarginMode: 'nonsense' }) === IRMAA_MARGIN_DEFAULT,

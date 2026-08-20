@@ -1,5 +1,22 @@
 # Which IRMAA margin setting should be the default?
 
+> **RE-MEASURED at v11.15cd.** Two things changed under this file after it was written: `flat1000`
+> was retired, and `cpiminus1` was corrected to take its point off the projected INCREASE rather
+> than off the annual rate. Both haircuts now act on the projected increase. Current figures, mean
+> surcharge saved across the 60 historical windows:
+>
+> | mode | mean dSurcharge | windows where it saved |
+> |---|---|---|
+> | halfcpi *(now the default)* | **-$47,987** | **60/60** |
+> | cpiminus1 | -$23,832 | 58/60 |
+> | halfstep | -$11,649 | 49/60 |
+> | flat2000 | -$10,047 | 48/60 |
+>
+> The correction is what settled section 4's open question: before it, `halfcpi` and `cpiminus1`
+> measured as near-duplicates (-$48.5k vs -$37.2k) and one looked deletable. Corrected they separate
+> about two to one and form a ladder, so both are kept. Everything below is the reasoning, which is
+> unchanged; only `cpiminus1`'s numbers and the retired `flat1000` rows are stale.
+
 `node .test_harnesses/irmaa_default_harness.js`. 16 plans (12 converting, 4 donating) x 6 modes = 96
 simulations, each re-billed in 7 constant and 60 historical CPI worlds. Plan assumes CPI 2.5%.
 

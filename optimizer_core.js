@@ -141,13 +141,29 @@ function irmaaMarginModeOf(inputs) {
 
 // Multiplier that carries a threshold from today's indexing to the premium year that will judge
 // this year's MAGI. Returns 1 at cpi = 0, so a zero-inflation run reproduces the old numbers exactly.
+// Both haircut modes act on the PROJECTED INCREASE - the full |LOOKBACK|-year growth - rather than
+// on the annual rate. One sentence describes both: take half of it, or take one point off it.
+//   full       (1+cpi)^2.            3% -> +6.09%
+//   halfcpi    half the increase.    3% -> +3.045%
+//   cpiminus1  the increase, less one point. 3% -> +5.09%
+//
+// v11.15cd corrected cpiminus1, which used to subtract the point from the ANNUAL rate and compound
+// that: (1.02)^2 = +4.04%. That is a far harsher haircut than "1% less" suggests, and it sat almost
+// on top of halfcpi - the two measured as near-duplicates, saving $48.5k and $37.2k of surcharge
+// across 60 historical CPI windows. Corrected they separate roughly 2:1 ($48.5k vs $23.8k) and form
+// a real ladder. halfcpi was restated the same way in the same release; at 3% CPI that moves it by
+// 0.025 points, which is immaterial on its own and buys one consistent description of both.
+//
+// Clamped at 1 so a low-CPI plan can never aim BELOW today's un-projected threshold - a different
+// and unintended thing - and so the cpi = 0 identity stays exact.
 function irmaaFwdFactor(inputs) {
     const cpi = (inputs && inputs.cpi) || 0;
-    const mode = irmaaMarginModeOf(inputs);
-    const rate = mode === 'halfcpi'   ? cpi / 2
-               : mode === 'cpiminus1' ? Math.max(0, cpi - 0.01)
-               : cpi;
-    return Math.pow(1 + rate, -TAXData.IRMAA.LOOKBACK);
+    const increase = Math.pow(1 + cpi, -TAXData.IRMAA.LOOKBACK) - 1;
+    switch (irmaaMarginModeOf(inputs)) {
+        case 'halfcpi':   return 1 + increase / 2;
+        case 'cpiminus1': return Math.max(1, 1 + increase - 0.01);
+        default:          return 1 + increase;
+    }
 }
 
 // Dollar setback below `threshold`, which must ALREADY be forward-projected with `effCpiRate` as

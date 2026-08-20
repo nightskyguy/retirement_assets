@@ -1007,10 +1007,20 @@ TAXData.WY = { STATE: 'Wyoming', ...NO_TAX_SHELL };
 // calculateTaxes() and IncomeTaxPlanner.html read from here; no values are hardcoded there.
 TAXData.OBBBA = {
     SALT: {
-        capHigh:           40000,   // elevated cap (2025); increases 1%/yr through 2029
-        capLow:            10000,   // TCJA floor / fallback when OBBBA is off or after sunset
-        phaseoutThreshold: 500000,  // MAGI above which capHigh phases down (MFJ & SGL per OBBBA)
-        phaseoutRate:      0.30,    // 30¢ reduction per $1 above threshold ($40k→$10k over $100k of income)
+        // P64d. BOTH of these are 2025 BASE figures that the statute steps up 1% per year, applied
+        // to the prior year's figure, through 2029 - so 2026 is $40,400 / $505,000, not $40,000 /
+        // $500,000. The old comment here claimed the cap "increases 1%/yr through 2029" while nothing
+        // implemented it and the threshold carried no comment at all, so the CURRENT tax year was
+        // already being priced $400 low on the cap and $5,000 low on the threshold.
+        // Rounding for 2027-2029 is unconfirmed: 2026 is exactly 40000 x 1.01, so plain compounding
+        // matches at the first step, but whether later years round to the dollar or to $50/$100 is not
+        // established. The difference is a few dollars of DEDUCTION, i.e. a dollar or two of tax.
+        capHigh:           40000,   // 2025 base for the elevated cap; indexed below
+        capLow:            10000,   // TCJA floor / fallback after the sunset. Never indexed.
+        phaseoutThreshold: 500000,  // 2025 base MAGI above which capHigh phases down; indexed below
+        phaseoutRate:      0.30,    // 30¢ reduction per $1 above threshold, and it stops at capLow
+        indexRate:         0.01,    // statutory step, NOT a CPI adjustment
+        indexBaseYear:     2025,    // the year both base figures are stated for
         sunsetYear:        2029     // capHigh expires after this tax year; reverts to capLow in 2030
     },
     SENIOR_DED: {
@@ -1320,6 +1330,10 @@ function calculateTaxableSocialSecurity(status, provisionalIncome, totalSS) {
  *                 still track `inflation`. Capital gains and NIIT are deliberately excluded.
  * @param {number} params.stateRateCreep - Same, for state bracket rates.
  * @param {number}  params.propTax - Property + local taxes paid (for SALT itemizing).
+ * @param {number}  params.taxYear - Calendar tax year, used ONLY to index the SALT cap and its
+ *                 phase-out threshold at their statutory 1%/yr. Omitting it prices the 2025 base
+ *                 figures, which is wrong for every later year - callers that know the year must
+ *                 pass it, and optimizer_core's guard test asserts they do.
  * @returns {Object} Comprehensive tax calculation results.
  */
 function calculateTaxes(params = {}) {
@@ -1340,6 +1354,7 @@ function calculateTaxes(params = {}) {
         obbaOn = false,
         saltHigh = false,
         propTax = 0,
+        taxYear = TAXData.OBBBA.SALT.indexBaseYear,
         pensionIncome = 0,   // employer/govt pension + annuity portion of earnedIncome
         iraIncome     = 0,   // IRA/401k/RMD distribution portion of earnedIncome
         fedRateCreep   = 1,  // tax-rate creep multipliers (1 = today's statutory rates)
@@ -1361,7 +1376,20 @@ function calculateTaxes(params = {}) {
 
     const obbaSalt = TAXData.OBBBA.SALT;
     const obbaSen  = TAXData.OBBBA.SENIOR_DED;
-    const saltBaseCap = obbaOn ? (saltHigh ? obbaSalt.capHigh : obbaSalt.capLow) : obbaSalt.capLow;
+    // P64d. Both the elevated cap and its phase-out threshold step up 1% per year from their 2025
+    // base, through the sunset. Clamped there so a post-sunset year cannot keep compounding a figure
+    // that no longer applies (saltHigh is false then anyway, but the threshold is read below).
+    const saltIdxYear = Math.min(Math.max(taxYear || obbaSalt.indexBaseYear, obbaSalt.indexBaseYear), obbaSalt.sunsetYear);
+    const saltIndex   = Math.pow(1 + obbaSalt.indexRate, saltIdxYear - obbaSalt.indexBaseYear);
+
+    // P64f. `saltHigh` is the SOLE gate on the elevated cap, and `obbaOn` gates only the senior
+    // deduction. It used to read `obbaOn ? (saltHigh ? capHigh : capLow) : capLow`, and that quietly
+    // killed the elevated cap a year early: both callers derive obbaOn from SENIOR_DED.sunsetYear
+    // (2028) and saltHigh from SALT.sunsetYear (2029), so in tax year 2029 obbaOn was already false
+    // and the $40k cap collapsed to $10k while the statute still allowed it. IncomeTaxPlanner.html
+    // even says so in its own comment - "SALT elevated cap continues through 2029" - while passing
+    // flags this line then ignored. One flag cannot carry two different sunsets.
+    const saltBaseCap = saltHigh ? obbaSalt.capHigh * saltIndex : obbaSalt.capLow;
 
     // ========================================================================
     // STEP 2: Social Security Taxability
@@ -1427,8 +1455,10 @@ function calculateTaxes(params = {}) {
     // STEP 5: Finalize Federal Deduction (SALT itemizing + OBBBA senior deduction)
     // ========================================================================
     const saltMagi = federalAGI + taxExemptInterest;
-    const saltCap = (obbaOn && saltHigh)
-        ? Math.max(obbaSalt.capLow, saltBaseCap - Math.max(0, saltMagi - obbaSalt.phaseoutThreshold) * obbaSalt.phaseoutRate)
+    // Same correction as saltBaseCap: the phase-down belongs to the elevated cap, so it is gated on
+    // saltHigh alone. Under the $10k floor there is nothing to phase down.
+    const saltCap = saltHigh
+        ? Math.max(obbaSalt.capLow, saltBaseCap - Math.max(0, saltMagi - obbaSalt.phaseoutThreshold * saltIndex) * obbaSalt.phaseoutRate)
         : saltBaseCap;
     const saltItemized = Math.min(stateTax + propTax, saltCap);
     const useItemized = saltItemized > federalStdDeduction;

@@ -2298,3 +2298,173 @@ Three readings, all provisional:
    eliminates all $253,802 of forced IRA and funds **five fewer years** - spending Brokerage early leaves
    none later, the same shape as BIRC drawing Brokerage first and having none left. Any ship decision from
    this arm needs the funded-years column next to the forced-IRA column, never the tax saving alone.
+
+## P64 — SALT / property tax: measured 2026-08-19, and the answer is "almost never"
+
+**Question the user asked:** the SALT limit is high now but falls to $10k in 2029/2030; is modelling
+property and local taxes worth an input at all? Measured before building anything.
+
+### What was wrong before the measurement
+
+`calculateTaxes` has always accepted `propTax` and always computed
+`min(stateTax + propTax, saltCap)` against the standard deduction correctly. No caller in
+`optimizer_core.js` ever passed it - 0 of 11 call sites - so SALT was state income tax alone in every
+simulated year. `Retirement_Projection.html` and `standalone/irmaa_and_rmds.html` are the same. Only
+`standalone/IncomeTaxPlanner.html` supplied it. Identical in shape to the `obbaOn`/`saltHigh` defect
+this repo already found and guard-tested; the guard did not cover `propTax`.
+
+### A real bug the work exposed: the elevated cap died a year early (P64f)
+
+`taxengine.js` read `saltBaseCap = obbaOn ? (saltHigh ? capHigh : capLow) : capLow`. Both callers
+derive `obbaOn` from `SENIOR_DED.sunsetYear` (2028) and `saltHigh` from `SALT.sunsetYear` (2029), so
+in tax year **2029** `obbaOn` was already false and the $40,000 cap silently collapsed to $10,000
+while the statute still allowed it. `IncomeTaxPlanner.html` says the intent in its own comment - "SALT
+elevated cap continues through 2029" - while passing flags that line then ignored. One flag cannot
+carry two sunsets. Fixed: `saltHigh` is now the sole gate on both the elevated cap and its phase-down,
+`obbaOn` gates only the senior deduction. Worth roughly $424 of federal tax in 2029 for the measured
+household, and it affects IncomeTaxPlanner, where users really do enter property tax.
+
+### The measurement
+
+Harness: `salt_study.js`, `salt_conv.js`, `salt_bound.js` (scratchpad, node-only, not shipped).
+Grid: propTax 0 / 5k / 12k / 25k / 30k / 40k / 60k x states CA, NY, PA, TX, FL x a mid household
+(~$3.4M, $160k spend) and a large one (~$9.4M, $300k spend, $120k pension) x bracket-fill targets
+12 / 22 / 24 / 32 / 35%.
+
+**Upper bound, large household, $60,000 of property tax:**
+
+| state | d lifetime federal tax | d final after-tax NW | fed delta 2026..2030 |
+|---|---|---|---|
+| TX | **-1,843** | +7,202 | -1476, -867, -649, -424, **0** |
+| FL | **-1,843** | +7,202 | -1476, -867, -649, -424, **0** |
+| CA | **-2,179** | +18,810 | -1476, -867, -649, -424, **0** |
+| NY | **-1,575** | +6,765 | -1476, -867, -649, -424, **0** |
+
+- **It saturates.** $40,000 and $60,000 give identical results: the cap binds.
+- **It is entirely 2026-2029.** Every 2030 delta is exactly zero, which is the user's own point,
+  confirmed rather than assumed.
+- **It shrinks every year inside the window** - 1476, 867, 649, 424 - because the standard deduction
+  is inflation-indexed and the cap is not. The indexed deduction outruns the flat cap and closes the
+  itemizing gap before the sunset even arrives.
+- **Final net worth moves 0.02% to 0.06%** on a $32M terminal balance.
+
+**Analytic ceiling, which the measurements match.** The gain is only the excess of capped SALT over
+the standard deduction: `(40,000 - federalStdDeduction) x marginal rate`, for four years only. At 2.5%
+inflation with both filers 65+, that gap runs about 4,500 / 3,600 / 2,700 / 1,800 and then stops. So
+**no household can gain more than roughly $4,000 of lifetime federal tax from this**, whatever its
+property tax bill and whatever state it lives in.
+
+### Does it change a DECISION? No.
+
+Best bracket-fill target across 18 (scale x state x propTax) cells: **12% in 17 of them**, unchanged
+by property tax. The single flip - big/CA at $12,000 choosing 24% over 12% - is $32,197k vs $32,194k,
+a 0.01% margin that flips back at $25,000. That is noise, not a decision.
+
+**The phase-down cliff hypothesis is refuted.** The theory was that a conversion lifting MAGI from
+$400k to $600k erases up to $30,000 of cap and adds ~4.8 points of effective marginal rate. Measured
+on the large CA household, moving the bracket target from 24% to 32% costs $2,926,207 of final wealth
+at propTax 0 and $2,945,017 at propTax 25,000 - a difference of $18,810, or 0.6% of the cost of that
+decision. The cliff is real arithmetic but it is dominated by everything else in the run.
+
+### Why no-income-tax states are NOT the sweet spot
+
+The pre-measurement guess was that TX and FL matter most, since property tax is their entire SALT
+figure. Wrong, and backwards: property tax alone must clear the whole standard deduction (~$32,200
+plus age bumps) before it buys anything, so **TX and FL show exactly zero at $30,000** and only start
+at $40,000. CA and NY reach the cap on state income tax alone, so property tax adds nothing beyond it.
+The band where it does anything is narrow at both ends.
+
+### Recommendation
+
+Keep the threaded parameter and the 2029 fix; both are corrections. **The full Optimizer UI input is
+not justified by these numbers** - it would add a field, a growth-mode control and its help text to
+buy at most ~$4,000 of lifetime tax and no decision change, on a model where the effect is
+structurally dead from 2030. See task_plan P64 for the shipped/deferred split.
+
+### P64d — the SALT cap and its phase-out threshold are both indexed, and the code has neither
+
+Researched 2026-08-19. Sources are secondary summaries of P.L. 119-21 (Sec. 164 as amended), not the
+statute itself; treat as research notes, not citations of record.
+
+| tax year | cap (single/MFJ/HoH) | MAGI phase-out threshold |
+|---|---|---|
+| 2025 | $40,000 | $500,000 |
+| 2026 | **$40,400** | **$505,000** |
+| 2027-2029 | prior year x 1.01 | prior year x 1.01 |
+| 2030+ | $10,000 (TCJA floor) | n/a |
+
+- The 1% is a **statutory step applied to the prior year's figure**, not a CPI adjustment.
+- Phase-down is **30 cents per dollar** of MAGI above the threshold and **stops at $10,000** - it
+  never falls below the TCJA floor.
+- MFS is half of each figure throughout. This engine does not model MFS, so nothing to do.
+
+**What the code had:** `capHigh: 40000` flat with a comment claiming "increases 1%/yr through 2029"
+that nothing implemented, and `phaseoutThreshold: 500000` flat with no comment at all. So **tax year
+2026 - the current year - was already being priced $400 low on the cap and $5,000 low on the
+threshold**, and the gap widens every year to 2029.
+
+**Why it matters more than $400 sounds.** The P64c measurement found the deduction window closes
+early because the standard deduction is inflation-indexed while the cap was modelled as frozen. The
+cap is not frozen; it is indexed, just at 1% rather than at CPI. So the real closing is slower than
+measured - but 1% still loses to 2.5% inflation, so the direction of the P64c finding is unchanged and
+its conclusion stands.
+
+**Rounding is the one open question.** 2026 is exactly $40,400 = $40,000 x 1.01, so the statute is
+consistent with plain compounding at the first step. Whether 2027-2029 round to the dollar, to $50, or
+to $100 is not established by these sources. The implementation compounds without rounding, which can
+differ from the published figure by a few dollars of DEDUCTION - at most a dollar or two of tax. Worth
+correcting if an IRS revenue procedure states the convention.
+
+## P65 — the rest of Schedule A, and why medical is the only piece that likely matters
+
+Raised by the user 2026-08-19, immediately after P64 shipped, from the question of whether the SALT
+cap is additive to the standard deduction. **It is not** - SALT is a Schedule A itemized deduction, so
+it is strictly either/or against the standard deduction. The user's instinct was right about the OBBBA
+**senior deduction**, which IS additive: it sits above the line on Schedule 1-A and applies whether you
+itemize or not. `taxengine.js` already models both correctly - `useItemized ? saltItemized :
+federalStdDeduction`, then `federalDeduction += seniorDeduction` unconditionally.
+
+### The gap the question exposed
+
+**`calculateTaxes` treats SALT as the ONLY itemized deduction.** There is no parameter for mortgage
+interest, charitable contributions, or medical expenses above the 7.5%-of-AGI floor. So the engine
+asks "does SALT alone beat the standard deduction", which is a much harder bar than the one a real
+filer faces, and a household that genuinely itemizes is told it takes the standard deduction and is
+charged too much federal tax.
+
+**This directly qualifies the P64c measurement.** The ">=$4,000 of lifetime tax, no decision moved"
+result was measured on a model that under-itemizes. Once a household is over the itemizing line for
+any reason, the marginal property-tax dollar is worth its full marginal rate up to the cap, instead of
+being worth nothing until SALT alone clears ~$32,200. The P64 conclusion is sound for the model as it
+stands; it is not a statement about real filers with a full Schedule A.
+
+### Which line items actually matter for THIS tool's users, per the user
+
+- **Mortgage interest - unlikely.** Significant mortgage deductions are less likely for retirees. Not
+  worth an input on its own.
+- **Charitable - mostly routed around Schedule A, but not entirely.** A well-advised retiree gives
+  through a QCD or by donating appreciated assets rather than cash. **The QCD genuinely bypasses
+  Schedule A**: it is an exclusion from income, not a deduction, and the engine already models it
+  correctly in `computeAnnualQCDs`. **A gift of appreciated stock does NOT bypass it** - that is an
+  itemized deduction at fair market value, subject to the 30%-of-AGI limit, so it lands on Schedule A
+  like any other charitable contribution. It also stays available to retirees who are not yet QCD-
+  eligible, and to anyone giving above the annual QCD limit. So charitable is smaller than a naive
+  model would assume, but it is not zero.
+- **Medical above 7.5% of AGI - the one that likely qualifies, and it can be large.** Retiree medical
+  is lumpy: most years nothing clears the floor, and then a year of long-term care, a nursing home, or
+  a major procedure can run well into six figures and dominate Schedule A by itself. That is exactly
+  the year a household itemizes, and exactly the year the SALT figure suddenly becomes worth its full
+  marginal rate. It is also the year a Roth conversion is cheapest, which makes it a strategy question
+  and not only an accuracy question.
+
+### Shape, if it is ever built
+
+The lumpiness is the whole difficulty. A flat annual medical figure would be wrong in both directions:
+it would create itemizing in years that would not have it and miss the spike year that matters. This
+belongs with the Lumpy Spending work (P42) rather than as a scalar input, or as an explicit
+"high-medical years" range. **Not scoped, not measured, and it should be measured the way P64 was
+before any input is built** - the same discipline caught P64's answer being "no".
+
+**Note the interaction to check first:** a big medical year raises itemized deductions AND is usually a
+big withdrawal year, so AGI rises too, which raises the 7.5% floor. The two move against each other
+and the net is not obvious without measuring.

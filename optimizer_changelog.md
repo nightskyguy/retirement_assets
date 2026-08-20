@@ -11,6 +11,30 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15c9"></a>
+
+## 11.15c9
+
+### More accurate SALT (state and local tax) deductions
+
+**Behavior change.** Three corrections to how state and local taxes are deducted, all affecting tax
+years 2026 through 2029:
+
+- **Property and other local taxes can now be included.** Previously only state income tax counted
+  toward the SALT figure. Add yours with `?ptx=25000` in the web address - state income tax is
+  already supplied elsewhere, so enter only property and other local taxes here. Optionally set how
+  it grows over time with `?ptxm=flat` or `?ptxm=custom` plus `?ptxr=2`; the default is to grow with
+  inflation. Sharing a link and saving a named scenario both keep the figure.
+- **The higher $40,000 SALT cap now runs through 2029**, as the law allows, rather than reverting to
+  $10,000 a year early.
+- **The SALT cap and the income limit that phases it out now step up 1% a year**, so 2026 uses
+  $40,400 and $505,000.
+
+For plans converting heavily in a high-tax state, these can change the recommended conversion size.
+Note that this tool tests only SALT against the standard deduction - it does not model mortgage
+interest, charitable giving, or medical expenses - so the benefit is limited to households where SALT
+alone exceeds the standard deduction, and it ends after 2029.
+
 <a id="11.15a2"></a>
 
 ## 11.15a2

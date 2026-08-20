@@ -78,6 +78,36 @@ function taxCreepFactor(rate, currentYear, startYear) {
     return Math.pow(1 + rate, Math.max(0, currentYear - startYear));
 }
 
+// P64a. Property + other local taxes for the SALT itemizing test, in the simulation year's NOMINAL
+// dollars. calculateTaxes() has always accepted `propTax` and always computed
+// min(stateTax + propTax, saltCap) against the standard deduction correctly - but no caller in this
+// engine ever passed it, so SALT was state income tax alone and any household that would itemize was
+// charged too much federal tax in every year. Exactly the shape of the obbaOn/saltHigh defect below.
+//
+// The amount is entered in today's dollars, like spendGoal, and `elapsed` is measured from the real
+// current year rather than the plan's first year so a plan that starts in the future is inflated over
+// the gap the same way spendGoal is.
+//
+// Three growth modes, because they are three genuinely different plans and the SALT cap turns the
+// difference into a step rather than a smooth curve:
+//   'inflation' (default) - tracks the plan's general inflation rate, like every other today's-dollars
+//                           input. Uses inputs.inflation, NOT inputs.cpi: cpi here indexes brackets,
+//                           IRMAA tiers and COLA, and a property assessment is a household price, not
+//                           a statutory threshold.
+//   'flat'                - nominal-constant bill, which decays in real terms.
+//   'custom'              - an explicit rate, as a FRACTION like every other rate in this file. This is
+//                           the California Proposition 13 case (2% assessment cap) and the
+//                           reassessment-heavy case, neither of which is general inflation.
+function propTaxFor(inputs, currentYear, baseYear) {
+    const base = +inputs.propTax || 0;
+    if (base <= 0) return 0;                      // the default, and a guaranteed no-op
+    const mode = inputs.propTaxGrowthMode || 'inflation';
+    const g = mode === 'flat'   ? 0
+            : mode === 'custom' ? (+inputs.propTaxGrowthRate || 0)
+            :                     (+inputs.inflation || 0);
+    return base * Math.pow(1 + g, Math.max(0, currentYear - baseYear));
+}
+
 // Computes QCDs for the simulation year. Returns { qcd1, qcd2, totalQCD }.
 // "Always" mode: donate up to qcdHHMax every eligible year.
 // "As Needed" mode: donate only the minimum needed to drop below the current IRMAA tier cliff.
@@ -1057,6 +1087,12 @@ function resolveHousehold(sim, yr) {
     // on permanently rather than expose as a switch.
     yr.obbaOn   = sim.currentYear <= TAXData.OBBBA.SENIOR_DED.sunsetYear;
     yr.saltHigh = sim.currentYear <= TAXData.OBBBA.SALT.sunsetYear;
+    // Same failure mode, same fix: propTax is the third parameter calculateTaxes accepts and no
+    // caller here supplied. Zero by default, so a plan that does not enter one is unchanged.
+    yr.propTax  = propTaxFor(inputs, sim.currentYear, sim.propTaxBaseYear);
+    // P64d. The SALT cap and its phase-out threshold step up 1%/yr from a 2025 base, so the engine
+    // has to know which tax year it is pricing. Without it every year silently gets the 2025 figures.
+    yr.taxYear  = sim.currentYear;
 
     totals.yearstested += 1;
 
@@ -1371,7 +1407,7 @@ function resolveSpendTarget(sim, yr) {
         earnedIncome: yr.pension + yr.taxableRMD + yr.taxableInterest, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD,
         qualifiedDiv: yr.taxableDividends, capGains: 0, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
     }).totalTax : 0;
 
     yr.additionalSpendNeeded = Math.max(0, yr.targetSpend + yr.IRMAA - (yr.possibleIncome - yr.guaranteedIncomeTax));
@@ -1687,7 +1723,7 @@ function applyPrimaryAndTaxPass1(sim, yr) {
         earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
         qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
     })
     inspectForErrors(yr.tax)  // See if any numbers look fishy.
 
@@ -1833,7 +1869,7 @@ function fillSpendingGap(sim, yr) {
         earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
         qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+        taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
     })
     inspectForErrors(yr.tax)  // See if any numbers look fishy.
 
@@ -1937,7 +1973,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
             earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
         });
         yr.totalTax = yr.tax.totalTax + yr.IRMAA;
         // P32c arm: the spiral test itself. The recalc above just priced the Brokerage leg's
@@ -1970,7 +2006,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
                     earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
                     pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
                     qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-                    taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+                    taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
                 });
                 yr.totalTax = yr.tax.totalTax + yr.IRMAA;
                 yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
@@ -2036,7 +2072,7 @@ function resolveResidualAndForcedIRA(sim, yr) {
                 earnedIncome: yr.pension + yr.taxableRMD + yr.netWithdrawals.IRA + yr.taxableInterest, inflation: sim.cpiRate,
                 pensionIncome: yr.pension, iraIncome: yr.taxableRMD + yr.netWithdrawals.IRA,
                 qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+                taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
             });
             yr.totalTax = yr.tax.totalTax + yr.IRMAA;
             yr.marginalFedTaxRate = yr.tax.federalMarginalRate;
@@ -2306,7 +2342,7 @@ function cfRefundIRA(sim, yr, netTarget) {
             earnedIncome: yr.pension + yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G) + yr.taxableInterest, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, yr.netWithdrawals.IRA - G),
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains, hsaContrib: 0,
-            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+            taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
         });
         dT = Math.max(0, (yr.totalTax - yr.IRMAA) - t2.totalTax);
         const Gnext = Math.min(netTarget + dT, _cap);
@@ -2358,7 +2394,7 @@ function applyExtraConversion(sim, yr) {
                 IRMAAAnnualCost: 0, earnedIncome: _baseEI + _gross, inflation: sim.cpiRate,
                 pensionIncome: yr.pension, iraIncome: yr.taxableRMD + _priorIRAInc + _gross,
                 qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-                hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+                hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
             });
             incrementalExtraConvTax = Math.max(0, _exTaxCalc.totalTax - (yr.totalTax - yr.IRMAA));
             yr.extraConvGross = _gross;
@@ -2441,7 +2477,7 @@ function applyConversionGrossUp(sim, yr) {
         IRMAAAnnualCost: 0, earnedIncome: baseEI + shadowIRA, inflation: sim.cpiRate,
         pensionIncome: yr.pension, iraIncome: yr.taxableRMD + shadowIRA,
         qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-        hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+        hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
     });
     const dT = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowCalc.totalTax);
     const t = Math.min(0.6, dT / conversion);   // 0.6 is a numeric safety guard, not a business rate
@@ -2502,7 +2538,7 @@ function attributeIncrementalTaxes(sim, yr) {
             IRMAAAnnualCost: 0, earnedIncome: convShadowEI, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - yr.totalConverted),
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
         });
         yr.incrementalConvTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowConvCalc.totalTax);
     }
@@ -2517,7 +2553,7 @@ function attributeIncrementalTaxes(sim, yr) {
             IRMAAAnnualCost: 0, earnedIncome: excessShadowEI, inflation: sim.cpiRate,
             pensionIncome: yr.pension, iraIncome: yr.taxableRMD + Math.max(0, (yr.netWithdrawals.IRA ?? 0) - excessCashOC),
             qualifiedDiv: yr.taxableDividends, capGains: yr.capitalGains,
-            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh
+            hsaContrib: 0, taxExemptInterest: 0, state: STATEname, fedRateCreep: yr.fedRateCreep, stateRateCreep: yr.stateRateCreep, obbaOn: yr.obbaOn, saltHigh: yr.saltHigh, propTax: yr.propTax, taxYear: yr.taxYear
         });
         yr.incrementalExcessTax = Math.max(0, (yr.totalTax - yr.IRMAA) - shadowExcessCalc.totalTax);
     }
@@ -2824,6 +2860,9 @@ function simulate(inputs) {
         // Tax-rate creep: blank/0 start year means the creep begins with the plan's first year.
         // Never advanced - resolveHousehold() derives each year's factor from the calendar year.
         creepStartYear: inputs.taxCreepStartYear > 0 ? inputs.taxCreepStartYear : currentYear,
+        // P64a. Property tax is entered in today's dollars, so it compounds from the REAL current
+        // year, not the plan's first year - the same base spendGoal's gapYears pre-inflation uses.
+        propTaxBaseYear: currentYear - gapYears,
     };
 
     for (let y = 0; y < maxYears; y++) {

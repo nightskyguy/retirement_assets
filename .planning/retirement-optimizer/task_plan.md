@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-18:** `main` = `02eaf2b`, which is [PR #180](https://github.com/nightskyguy/retirement_assets/pull/180) **merged**: v11.1585 (P32c arms, the issue #177 stress-tile fix, the All-start-years wording) is now shipped on `main`. This worktree (`context-e73361`, branch `worktrees/planning-with-files-38a21e`) started at `main` and now carries **two commits**: `6e74f1f` (P56 + P57, one release at v11.1599) and `0bc7ba0` (P58, v11.159d). Suites **269 / 55 / 22** (`slowInCore` 3), `?runtests` green at **591**. The taxPaymentPlanner count moved 34 -> 55, updated in BOTH pinned homes each time.
+**As of 2026-08-19:** `main` = `4c3e98c`, everything through [PR #181](https://github.com/nightskyguy/retirement_assets/pull/181) merged and shipped. This worktree (`context-e73361`, branch `worktrees/planning-with-files-02d4ce`) now carries **one commit**, `49509e9` (P64a/b/c/d/e/f, one release at **v11.15b7**): property tax reaches the tax engine, the elevated SALT cap no longer dies a year early, and the cap and its phase-out threshold are indexed 1%/yr as the statute requires. Suites **272 / 61 / 22** (`slowInCore` 3), badge green, both pinned homes reconciled.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -10,6 +10,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
+| **O2** | P64 | SALT DONE v11.15b7; only the sibling tool is left | `P64g` |
 | **O0** | P32 | Brokerage draws: arms shipped v11.1582, spiral unmeasured | `P32d` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P51 | Oracle a-c,e-g DONE 08-10; propwd refuted | `P51d` |
@@ -17,11 +18,12 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P56 + P57 + P58 COMMITTED 2026-08-18** (v11.1599 and v11.159d): five plans priced on one clock,
-every statement on the page belongs to one named plan, and the planner no longer credits withholding
-to money that has already moved. Open call for the user, in the P56 section: the brokerage footnote
-prints an absolute cost, not the extra cost over Plan Q. **`P35f`/`P35g` DONE (v11.1499)**: §1014 fires at both deaths, so
-**P35's O0 was earned by that fix and is now spent** - re-bucket if `P35i` is not next.
+**P64 SHIPPED 2026-08-19 (v11.15b7, `49509e9`), then a review found a real bug (v11.15c8).** Property
+tax is worth <=$4k of lifetime tax and moved no decision, so it is URL entry only, no field. Indexing
+the SALT cap DID move one - a fixture's best conversion went $250k x 5yr -> $300k x 4yr. **PR #182
+review found `?ptx=` was captured on Save Scenario but silently dropped on Load** - no DOM element for
+`applyScenario` to restore into - fixed via a mutable `PROP_TAX_STATE`, verified in-browser. `P64g`
+still open. Open call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 
@@ -43,6 +45,7 @@ first task. Every open item in the file now carries one.
 
 | User Priority | ID | Phase | Next open item | Blocked by |
 |---|---|---|---|---|
+| **O2** | P64 | SALT deductibility — **a-f DONE, shipped v11.15b7**; study said the input does not earn a field | `P64g` (Retirement_Projection passes no OBBBA flags at all) | nothing |
 | **O0** | P35 | Phased strategy; **basis step-up shipped v11.1499** | `P35i` (the Phased engine) | nothing hard |
 | **O0** | P32 | Brokerage draws — premise refuted, dividend defect fixed, Q2 arms shipped v11.1582 | `P32d` (measure Q2) | nothing |
 | ~~DONE~~ | ~~P58~~ | ~~Withholding assumed on money already moved, plus the forced-quarterly double payment~~ — **COMPLETE, v11.159d (`0bc7ba0`)** | — | — |
@@ -67,6 +70,8 @@ first task. Every open item in the file now carries one.
 | **O2** | P23 | MC arithmetic-mean returns + AR(1) variable inflation | `P23a` | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
+| **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
+| **O2** | P65 | Rest of Schedule A — engine itemizes on SALT alone; medical is the piece that likely qualifies *(new 2026-08-19)* | `P65a` (measure first) | nothing |
 | **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
 | **O3** | P28 | "Every voluntary IRA withdrawal is a conversion" — ship decision | `P28f` | nothing |
 | **O3** | P40 | Test-file layout — the `tests/` subfolder move | decision, then the move | nothing |
@@ -2585,6 +2590,26 @@ without the research buys nothing. **DEFERRED as a research ticket**, characteri
   switches text between "[DATE PASSED]" and "[PAST DUE]", so honouring it changes the action plan,
   not just a verdict. Verify the AS flag against a primary source first; it was set in a one-line
   override with no citation.
+
+  **Read 2026-08-19, so it need not be re-derived.** The user redirected to P64 before choosing a
+  shape, so P63a is still open, but the facts are settled:
+  - The flag is read at **exactly two sites, and both are prose**: taxPaymentPlanner.js ~1409 (the
+    benign-alert caveat) and ~1787 (the draw note). Neither `withholdingCoversSchedule` (~698) nor
+    `scheduleSafeHarbor` (~661) consults it. Both spread `withheld / n` unconditionally.
+  - `withholdingCreditedProRata: false` is live in **one entry, `AS` (~502)**. `_noTax` also sets it
+    false (~340), but `hasIncomeTax: false` short-circuits every consumer, so that value is dead.
+    Every other taxing entry inherits `true` from `_s()`.
+  - **Honouring it is not localized.** `stateTimelyByWithholding` is computed at step 10b (~1279),
+    which runs BEFORE the action list is built at step 11, so a date-aware credit has no dates to
+    work with there. `scheduleSafeHarbor` at ~2097 does have them.
+  - **A separate prose bug, independent of the flag's fate.** ~1409 reads "this planner assumes it
+    does not, so the state figure above may be optimistic". The premise is inverted: the math assumes
+    it DOES credit pro-rata. The conclusion (optimistic) is right for the wrong stated reason.
+  - **Zero test coverage.** No hit anywhere in `taxPaymentPlanner.tests.js` for `AS`, for the flag, or
+    for "pro-rata". Nothing pins current behaviour, in either direction.
+  - AS is a mirror-code territory (the IRC applies as local law with the territory name substituted),
+    which makes IRC 6654(g)(1) pro-rata crediting the likely correct answer - i.e. the flag's one
+    meaningful value is probably wrong. Confirm before honouring rather than deleting.
 - [ ] **P63b** - **The state 110% gate is dimensionally wrong.** taxPaymentPlanner.js ~1125 compares
   `p.stateTax >= safeHarborHighIncomeThreshold`, a TAX amount against an AGI threshold, so the state
   110% bar effectively never fires. The page already discloses this in the safe-harbor NOTE with the
@@ -2603,6 +2628,189 @@ silently drops its liability from the coverage table rather than reporting a reg
 
 **Status:** DEFERRED. P63a and P63b are separable and each is worth a small commit of its own, but
 P63b must not ship before the per-state data exists.
+
+## P64: SALT deductibility — the Optimizer never passes `propTax`  *(NEW 2026-08-19, user-approved, O0, STUDY FIRST)*
+
+### The defect
+
+The Optimizer computes federal tax with **SALT = state income tax only**. Property and other local
+taxes are never in the figure, so any household that would itemize is charged too much federal tax in
+every simulated year, and Break Even, the conversion schedule, lifetime tax, final net worth and every
+"Optimize for" ranking inherit it.
+
+The machinery is already there and already right. `taxengine.js` ~1429-1435 computes
+`saltItemized = min(stateTax + propTax, saltCap)`, picks `useItemized` against the standard deduction,
+applies the OBBBA $40k cap with its 30c-per-$1 phase-down above $500k MAGI, and reverts to $10k after
+2029. **`propTax` is simply never passed.** It defaults to 0 at all **14** `calculateTaxes` call sites
+in `optimizer_core.js`, at `Retirement_Projection.html` ~1274, and at the `standalone/irmaa_and_rmds.html`
+site. Only `standalone/IncomeTaxPlanner.html` supplies it (~396, input `num-prop`, URL param `pt`).
+
+**This defect class has already bitten this repo once.** `optimizer_core.js` ~1049-1052 records that
+`obbaOn` and `saltHigh` were "implemented and unit-tested but never reached a single simulated year"
+because no caller passed them, which "made federal tax too HIGH for anyone 65+ (or itemizing in a
+high-tax state)". `propTax` is the same bug, still open, and the guard test written to stop the
+recurrence (`optimizer_core.tests.js` ~2066) does not cover it.
+
+### Why it is a study before it is a build
+
+**The user's framing, 2026-08-19:** the elevated cap is high now but falls to $10k in 2029, and past
+that it is not clear modeling it helps. Correct - and at $10k the standard deduction beats it for
+nearly every retiree. For a plan starting in 2026 the entire deductible window is **four years**, and
+only for households whose capped SALT clears the standard deduction at all. So Phase 1 measures, and
+Phase 2 is contingent on the measurement.
+
+**The reason it may still matter a lot.** Those four years are the prime conversion window, and the
+phase-down makes the cap itself conversion-sensitive: `saltMagi = federalAGI + taxExemptInterest`, so
+a conversion lifting MAGI from $400k to $600k erases up to $30,000 of deduction - roughly $9,600 of
+federal tax, about 4.8 points of extra effective marginal rate across that band, invisible today. At
+`propTax: 0` most households never itemize, so the cliff never fires; give them real property tax and
+it becomes reachable. **If that shows up it resizes conversions, not just the tax total**, and that
+alone would justify the input.
+
+### Assumption, stated because it changes results
+
+`spendGoal` is "Annual after-tax spending the plan must deliver" (`retirement_optimizer.html` ~78).
+Property tax is an after-tax expense, so a correctly-filled plan **already includes it there**. The
+new input is therefore **deduction-only** and must NOT also be added to spending. The help text has to
+say so, or users will enter it twice.
+
+### Tasks
+
+- [x] **P64a** - **DONE v11.15b6.** Thread the parameter, behaviour-neutral at the default. `inputs.propTax` (today's
+  dollars, default 0), `inputs.propTaxGrowthMode` (`'cpi' | 'flat' | 'custom'`, default `'cpi'`),
+  `inputs.propTaxGrowthRate` (percent, read only in custom mode). Compute `yr.propTax` in the same
+  per-year block as `yr.obbaOn` / `yr.saltHigh` (~1058), then pass `propTax: yr.propTax` at all 14
+  sites. Three-way growth is the user's call: custom covers California Prop 13's 2% assessment cap and
+  the reassessment-heavy states, and because the cap is a threshold the CPI-vs-2% difference is a step
+  function over 30 years, not a smooth one. **Acceptance: byte-identical run at `propTax: 0`.**
+- [x] **P64b** - **DONE v11.15b6.** Extend the existing guard test at `optimizer_core.tests.js` ~2066 to assert `propTax`
+  on every observed call, rather than writing a new one. That is the test that would have caught the
+  original bug and it is the one that must catch the next. Prove it: drop `propTax` from one site,
+  watch it go red, restore.
+- [x] **P64c** - **DONE 2026-08-19, and the answer is "almost never" - see findings.md.** The harness, node-only, not shipped, modeled on the P51 oracle. Sweep propTax
+  `0 / 5k / 12k / 25k` x states `CA, NY, PA, TX, FL` (TX and FL are the band where property tax is the
+  ENTIRE SALT figure) x one mid and one large case chosen so MAGI straddles $500k in the conversion
+  years, plus `cpi` vs `custom 2%` on CA. Per cell report: delta federal tax per year 2026-2029 and how
+  many years `useItemized` flips; delta lifetime tax and final net worth; **whether the Break Even
+  verdict or the conversion schedule changes**; the effective marginal rate on the conversion band with
+  and without propTax, to confirm or kill the cliff; and how much survives the 2030 revert.
+  **"Almost nothing survives and no decision moved" is a legitimate result** - it would mean documenting
+  the omission instead of building the input.
+- [x] **P64d** - **DONE v11.15b7, and both were real.** Verify two suspected constant defects against primary sources, research only.
+  `taxengine.js` ~1010 comments `capHigh: 40000 // increases 1%/yr through 2029` while the code is flat,
+  and `phaseoutThreshold: 500000` is believed to index the same way under P.L. 119-21. **Do not fix
+  either inside P64a.** Unlike `propTax: 0` these are NOT behaviour-neutral: a CA household whose state
+  income tax alone exceeds the standard deduction already itemizes today, so changing the cap moves its
+  numbers immediately. Cite in `findings.md`, ship as its own commit with its own before/after.
+- [x] **P64e** - **DONE v11.15b7 as URL-entry-only, the user's call at the checkpoint.** `?ptx=` amount, `?ptxm=inflation|flat|custom`, `?ptxr=` percent; read once at load, re-emitted by `buildShareURL` so a shared link keeps them, no control on the page. Original scope was the UI. Amount field plus the three-way growth
+  control following the `num-prop` pattern at `standalone/IncomeTaxPlanner.html` ~218; help text saying
+  do not also add it to the spending goal; a URL param on a free short key (`pt` is taken by
+  IncomeTaxPlanner). Default-visible vs nerd-gated is decided by the P64c numbers, not now.
+  `Retirement_Projection.html` and `standalone/irmaa_and_rmds.html` are a follow-up, not part of this.
+
+### P64f - the bug the study found: the elevated cap died a year early  *(FIXED v11.15b6)*
+
+- [x] **P64f** - `taxengine.js` read `saltBaseCap = obbaOn ? (saltHigh ? capHigh : capLow) : capLow`.
+  Both callers derive `obbaOn` from `SENIOR_DED.sunsetYear` (2028) and `saltHigh` from
+  `SALT.sunsetYear` (2029), so in tax year **2029** obbaOn was already false and the $40,000 cap
+  collapsed to $10,000 a full year early. `IncomeTaxPlanner.html` states the intent in its own comment
+  - "SALT elevated cap continues through 2029" - while passing flags that line then ignored. One flag
+  cannot carry two sunsets. `saltHigh` is now the sole gate on both the cap and its phase-down;
+  `obbaOn` gates only the senior deduction. **Not behaviour-neutral**: it lowers 2029 federal tax for
+  any itemizer, in the Optimizer and in IncomeTaxPlanner, which has always had a property-tax input.
+
+### What the measurement found
+
+Full numbers in `findings.md`. The short version:
+
+- **Upper bound is about $4,000 of lifetime federal tax, for any household.** The gain is only the
+  excess of capped SALT over the standard deduction, `(40,000 - stdDed) x marginal rate`, for four
+  years. Measured maximum across every cell was **-$2,179** of lifetime tax and **+$18,810** of final
+  after-tax net worth on a $32M terminal balance, i.e. **0.06%**.
+- **It saturates.** $40,000 and $60,000 of property tax give identical results; the cap binds.
+- **It is dead from 2030.** Every 2030 delta measured exactly zero, confirming the user's premise
+  rather than assuming it.
+- **It shrinks every year inside the window** (-1476, -867, -649, -424): the standard deduction is
+  inflation-indexed and the cap is not, so the indexed deduction outruns the flat cap.
+- **No decision moved.** Best bracket-fill target was 12% in 17 of 18 cells regardless of property
+  tax; the single flip was a 0.01% margin that reversed at the next propTax value.
+- **The phase-down cliff is refuted.** Moving the target from 24% to 32% costs $2,926,207 at
+  propTax 0 and $2,945,017 at propTax 25,000 - the SALT part is 0.6% of the cost of that decision.
+- **No-income-tax states are NOT the sweet spot**, which was the pre-measurement guess and was
+  backwards: TX and FL must clear the entire standard deduction on property tax alone, so they show
+  exactly zero at $30,000 and only start at $40,000.
+
+### P64d outcome, and the one place it moved a decision
+
+Both suspected defects were real. `capHigh` and `phaseoutThreshold` are 2025 BASE figures that step up
+**1% per year applied to the prior year's figure** through 2029, so 2026 is $40,400 / $505,000 - the
+tool froze both at the 2025 numbers, i.e. the CURRENT tax year was already priced wrong. Now indexed,
+clamped at the sunset, with `taxYear` passed from both callers and asserted by the guard test.
+
+**This one is not always small.** The threshold decides how much of the elevated cap survives a
+conversion that lifts MAGI past it, so a plan converting hard in a high-tax state can land elsewhere.
+The `bestTimeLimitedConversion` fixture moved from **$250,000/yr for 5 years to $300,000/yr for 4**,
+and the new plan scores **167,787 against 166,002** - under the frozen threshold $300,000 scored only
+140,173, so the ranking genuinely inverted rather than a tie being broken differently. The golden
+values in that test were updated with the reasoning recorded inline. This qualifies the P64c headline:
+*property tax* moved no decision, but correcting the *cap indexation* did.
+
+Open rounding question: 2026 is exactly 40000 x 1.01 so plain compounding matches at the first step;
+the convention for 2027-2029 is unconfirmed and worth a few dollars of deduction at most.
+
+- [ ] **P64g** - `Retirement_Projection.html` (~1274) passes NO `obbaOn`, `saltHigh`, `propTax` or
+  `taxYear`, so it still prices the pre-OBBBA world entirely - no senior deduction, $10k SALT cap,
+  2025 figures forever. Same defect family, different tool, and NOT behaviour-neutral to fix. Its own
+  commit, with its own before/after.
+
+**Status:** Phase 0 DONE. **P64a, P64b, P64c and P64f DONE 2026-08-19, shipped at v11.15b6**, suites
+271 / 61 / 22, browser badge green at 607, console clean. **P64e is now a user decision** and the
+measurement argues against it: see the recommendation below. **P64d still open** and is now more
+interesting than it looked, because the missing 1%/yr cap indexation is part of why the window closes
+so fast.
+
+**Recommendation put to the user:** the Optimizer input is not justified by these numbers. The
+parameter is threaded and guarded, so the model is no longer knowingly wrong, and IncomeTaxPlanner
+already has the input for the single-year question where it actually matters. The options offered
+were: no input at all (document the omission), a URL-parameter-only entry with no visible control, or
+the full field plus growth-mode control.
+
+## P65: the rest of Schedule A - medical is the only piece likely to qualify  *(NEW 2026-08-19, user-raised, NOT scoped)*
+
+Raised by the user straight after P64 shipped, from asking whether the SALT cap is additive to the
+standard deduction. **It is not** - SALT is Schedule A, so it is strictly either/or. The user's
+instinct was right about the OBBBA **senior deduction**, which IS additive, and `taxengine.js` already
+does both correctly: `useItemized ? saltItemized : federalStdDeduction`, then `federalDeduction +=
+seniorDeduction` on either path.
+
+**The gap it exposed:** `calculateTaxes` treats SALT as the ONLY itemized deduction. No mortgage
+interest, no charitable, no medical above the 7.5% AGI floor. So the engine asks "does SALT alone beat
+the standard deduction", a harder bar than a real filer faces, and genuine itemizers are overtaxed.
+**This qualifies the P64c result**: ">=$4k, no decision moved" was measured on a model that
+under-itemizes. Over the itemizing line, the marginal property-tax dollar is worth its full marginal
+rate instead of nothing.
+
+User's read on which line items matter here, recorded because it narrows the work sharply:
+
+- [ ] **P65a** - **Medical above 7.5% of AGI. The one that likely qualifies.** Retiree medical is
+  lumpy: nothing for years, then long-term care or a nursing home runs six figures and dominates
+  Schedule A alone. That is the year the household itemizes, the year the SALT figure suddenly pays
+  its full marginal rate, and the year a conversion is cheapest - a strategy question, not only an
+  accuracy one. **A flat annual figure would be wrong in both directions**, so this belongs with Lumpy
+  Spending (P42) or as an explicit high-medical year range, not a scalar. **Measure before building,
+  the way P64 was measured.** Check the interaction first: a big medical year is usually a big
+  withdrawal year, so AGI rises and the 7.5% floor rises with it; the two move against each other.
+- [ ] **P65b** - **Charitable. Smaller than a naive model assumes, but not zero.** A well-advised
+  retiree gives via QCD or appreciated assets. The **QCD really does bypass Schedule A** - it is an
+  income exclusion, already modelled correctly in `computeAnnualQCDs`. **A gift of appreciated stock
+  does NOT** - that is an itemized deduction at fair market value under the 30%-of-AGI limit, so it
+  lands on Schedule A, and it stays relevant below QCD age and above the annual QCD limit.
+- [ ] **P65c** - **Mortgage interest. Deprioritised by the user**: significant mortgage deductions are
+  less likely for retirees. Not worth an input on its own; only in scope if P65a is built and the
+  parameter is nearly free at that point.
+
+**Status:** NOT SCOPED. Recorded so the P64 conclusion is never re-read as a statement about real
+filers with a full Schedule A.
 
 ## Dependency Graph (remaining)
 

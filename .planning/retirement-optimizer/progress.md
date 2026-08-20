@@ -2959,3 +2959,222 @@ with the lowest first-year cost".
 No number changed. Suite stays at 61; no test pinned the star's position (the only `★` in the suite
 is inside a comment describing the old sign defect). v1.15a2 / v11.15a2, third same-hour increment of
 the day.
+
+## Session 2026-08-19 (sixteenth) — `/plan` re-entry, P63a researched then set aside, P64 opened
+
+Branch `worktrees/planning-with-files-02d4ce` in worktree `context-e73361`, clean and **0/0 against
+`origin/main`** at `4c3e98c`. Everything through PR #181 is merged: P56/P57/P58, the clickable
+citations, the IncomeTaxPlanner handoff repair, the star move and the changelog consolidation. Suites
+269 / 61 / 22 on disk, matching `TestTiers.EXPECTED`.
+
+### P63a researched, then set aside by the user
+
+Asked which shape P63a should take, honour the flag or delete it. The reading behind the question:
+`withholdingCreditedProRata` is consulted at exactly two sites and **both are prose** (~1409, ~1787);
+neither `withholdingCoversSchedule` nor `scheduleSafeHarbor` looks at it, so it has never moved a
+number. It is live-false in **one** entry, `AS` - `_noTax` also sets false but `hasIncomeTax: false`
+short-circuits every consumer. Honouring it is not localized, because `stateTimelyByWithholding` is
+computed at step 10b, before the action list that would carry the dates exists. And ~1409's caveat has
+an inverted premise: it says the planner assumes NO pro-rata credit when the math assumes there is one.
+Zero test coverage of any of it. All of that is now recorded in the P63a bullet so it is not re-derived.
+
+**The user redirected.** Not concerned about American Samoa; concerned about properly reducing state
+and local taxes from federal returns, likely needing a "Parcel/Real Estate + Other local taxes" input
+with an indicator for whether it is inflation-indexed, and wanting **an evaluation of how much the
+needle moves** before deciding.
+
+### P64 opened, and the gap is narrower and sharper than expected
+
+`taxengine.js` already does SALT completely and correctly - `min(stateTax + propTax, cap)`, itemize vs
+standard, the OBBBA $40k cap, the 30c/$1 phase-down above $500k MAGI, the 2030 revert to $10k. **The
+parameter is just never passed.** Zero of the 14 `calculateTaxes` call sites in `optimizer_core.js`
+carry `propTax`, nor does `Retirement_Projection.html` or `standalone/irmaa_and_rmds.html`. Only
+`standalone/IncomeTaxPlanner.html` does.
+
+This is the same defect as `obbaOn`/`saltHigh`, which this repo already found and fixed once and wrote
+a guard test for - a guard test that does not cover `propTax`. Extending that assertion, rather than
+writing a new one, is P64b.
+
+The user's own framing set the shape: the cap dies after 2029, so the deductible window is four years
+and the honest question is whether it moves a decision. **Study first, build contingent.** The reason
+it might still matter is the phase-down: a conversion lifting MAGI $400k -> $600k erases up to $30,000
+of deduction, roughly 4.8 points of extra effective marginal rate, and at `propTax: 0` almost nobody
+itemizes so that cliff never fires today. Growth is three-way (CPI / flat / custom %) rather than a
+checkbox, because Prop 13's 2% cap and a reassessment-heavy state are not the same plan and the SALT
+cap turns the difference into a step function.
+
+Also flagged for verification, not fixed: `capHigh` carries a comment claiming 1%/yr indexation that
+the code does not implement, and `phaseoutThreshold` likely indexes the same way. Unlike `propTax: 0`
+those are not behaviour-neutral, so they ship separately.
+
+### Phase 0 done
+
+`task_plan.md` header resynced (it still claimed PR #180 and two uncommitted commits), `P63` given the
+index row it never had, P63a's research recorded, `P64` written with a-e and indexed at O0. LINE-30
+marker re-verified at exactly line 30 after the edits; the NOW table still fits the `head -50` window.
+No code touched, no version bump, no test count change.
+
+### Same session — P64a/b/c/f built, measured, and the measurement says stop (v11.15b6)
+
+**Threaded the parameter.** `propTax` now reaches all **11** `calculateTaxes` call sites in
+`optimizer_core.js` (the plan said 14; that was a grep counting three comment lines). New
+`propTaxFor()` next to `taxCreepFactor`, `yr.propTax` computed beside `yr.obbaOn`/`yr.saltHigh`,
+`sim.propTaxBaseYear` so a plan starting in the future inflates over the gap the way spendGoal does.
+Growth is three-way per the user: inflation / flat / custom rate. Uses `inputs.inflation`, not
+`inputs.cpi` - cpi here indexes brackets and IRMAA, and a property assessment is a household price.
+
+**Byte-identical at the default**, verified by diffing a 4-scenario full-log capture taken before the
+change against the same capture after. That was the acceptance gate and it held.
+
+**Extended the existing guard test rather than adding a parallel one**, since `propTax` failed exactly
+the way `obbaOn`/`saltHigh` did. Proved it bites: dropping `propTax` from one of the 11 sites turns it
+red, restoring it turns it green. Two new tests besides - one pinning that property tax lowers federal
+tax 2026-2029 and stops mattering in 2030, one pinning that the three growth modes really are three
+different plans. Suite 269 -> **271**, reconciled in `TestTiers.EXPECTED` and `.githooks/README.md`.
+
+**GOTCHA that cost two runs:** rates in this engine are FRACTIONS. The first harness passed
+`cpi: 2.5` and `stratRate: 24`, which is 250% inflation and a 2400% bracket target; the first produced
+plausible-looking nonsense and the second produced NaN everywhere. `optimizer_ui.js` divides every
+percent field by 100 before it reaches `simulate`, so a harness has to as well.
+
+**A real bug fell out of the first failing test (P64f).** The new test asserted property tax reduces
+federal tax in each of 2026-2029 and it failed on 2029 alone. Cause: `taxengine.js` had
+`saltBaseCap = obbaOn ? (saltHigh ? capHigh : capLow) : capLow`, and both callers derive `obbaOn` from
+the SENIOR_DED sunset (2028) while `saltHigh` tracks the SALT sunset (2029) - so the $40k cap died a
+year early and `saltHigh` was dead code in 2029. `IncomeTaxPlanner.html` even documents the intended
+behaviour in a comment two lines above the call that defeated it. `saltHigh` is now the sole gate on
+the cap and its phase-down. Not behaviour-neutral, and it reaches IncomeTaxPlanner, which has had a
+property-tax input all along.
+
+**The measurement, which is the deliverable.** Numbers in `findings.md`. Upper bound is about **$4,000
+of lifetime federal tax for any household**, ever: the gain is only capped-SALT minus the standard
+deduction, for four years. Measured max was **-$2,179** lifetime tax and **+$18,810** of final
+after-tax net worth on $32M - **0.06%**. It saturates at the cap, it is exactly zero from 2030, and it
+shrinks every year inside the window because the standard deduction is indexed and the cap is not.
+**No decision moved**: the best bracket-fill target stayed 12% in 17 of 18 cells, the one flip being a
+0.01% margin that reversed at the next value. The phase-down-cliff hypothesis that motivated the study
+is **refuted** - it is 0.6% of the cost of the decision it was supposed to distort. And the
+pre-measurement guess that TX and FL would be the sweet spot was backwards: with no state income tax,
+property tax alone has to clear the entire standard deduction, so they show zero at $30,000.
+
+Shipped v11.15b6: title, tier-2 loader `?v=`, `const V`, plus the `?v=` on `taxengine.js` and
+`optimizer_core.js` in all four pages that load them. Changelog entry in both homes. Suites
+271 / 61 / 22, browser badge green at **607** (248 in-page + 359 node), console clean apart from the
+unrelated Cloudflare RUM CORS error. **Checkpoint put to the user: the input itself is not justified
+by these numbers.**
+
+### Same session — P64d and P64e folded in, and P64d moved a decision (v11.15b7)
+
+**P64d: both suspected constant defects were real.** `capHigh` and `phaseoutThreshold` are 2025 BASE
+figures that the statute steps up **1% per year applied to the prior year's figure** through 2029, so
+2026 is $40,400 / $505,000. The code froze both, with a comment on the cap claiming the indexing that
+nothing performed and no comment at all on the threshold - so the CURRENT tax year was already priced
+$400 low on the cap and $5,000 low on the threshold. Now indexed, clamped at the sunset, driven by a
+new `taxYear` param that both callers pass and the guard test asserts. Research notes and the year
+table are in `findings.md`; sources are secondary summaries of P.L. 119-21, not the statute.
+
+**And it moved a real decision, which P64c had not.** The `bestTimeLimitedConversion` fixture went red:
+$250,000/yr for 5 years became $300,000/yr for 4. Checked before touching the golden values, because a
+flipped optimum is usually a flat optimum and not worth pinning. It is not flat here - the new plan
+scores **167,787 vs 166,002**, and under the old frozen threshold the new plan scored only **140,173**.
+The threshold governs how much of the elevated cap survives a conversion that lifts MAGI past it, and
+this CA fixture converts hard enough to sit in that band. Golden values updated with the reasoning
+inline. So the honest summary is: *property tax* moves nothing, *cap indexation* can move the plan.
+
+**P64e shipped as URL entry only**, which is what the user chose at the checkpoint: `?ptx=` amount,
+`?ptxm=inflation|flat|custom`, `?ptxr=` percent. Read once at load, re-emitted by `buildShareURL` so a
+shared link does not silently drop a figure the recipient has no field to re-enter. No control on the
+page, because the measurement does not earn one. **GOTCHA:** the block was first written next to the
+share-URL map at the bottom of `optimizer_ui.js` while `getInputs()` at line ~419 reads it - a TDZ
+hazard that happens to work only because `getInputs` runs after evaluation. Moved above `getInputs`.
+
+**Verified end to end in the browser**, worktree-rooted server: `?s=TX&ptx=60000&ptxm=custom&ptxr=2`
+gives `getInputs()` 60000 / custom / 0.02, the engine sees propTax 60000 at taxYear 2026 rising to
+96,506 at 2050 (60000 x 1.02^24 = 96,506), and the share URL round-trips all three. Badge green,
+console clean apart from the unrelated Cloudflare RUM CORS error.
+
+**Found in passing, NOT fixed, logged as P64g and spawned as a task:** `Retirement_Projection.html`
+passes none of `obbaOn`, `saltHigh`, `propTax`, `taxYear`, so it prices the pre-OBBBA world entirely.
+Same defect family, different tool, not behaviour-neutral, so it gets its own commit.
+
+Suites **272 / 61 / 22**, reconciled in both pinned homes. v11.15b7.
+
+### Same session — the user checked the SALT premise, and was half right in a useful way
+
+User: "the 40k SALT increment (or the 10k SALT cap) are not exclusive to standard deduction, but
+additive to it". Checked the law and the code rather than answering from memory. **SALT is not
+additive** - it is Schedule A, strictly either/or. But the **senior deduction IS**, sitting above the
+line on Schedule 1-A and applying on either path, which is what the intuition was actually tracking.
+The engine already does both right: `useItemized ? saltItemized : federalStdDeduction`, then
+`federalDeduction += seniorDeduction` unconditionally.
+
+**The question exposed a real gap anyway.** `calculateTaxes` treats SALT as the ONLY itemized
+deduction - no mortgage, no charitable, no medical over the 7.5% floor - so it asks whether SALT alone
+beats the standard deduction, a harder bar than a real filer faces. **That qualifies the P64c
+headline**: ">=$4k, no decision moved" is true of this model, which under-itemizes, not necessarily of
+a filer with a full Schedule A.
+
+User narrowed the follow-up sharply and correctly: mortgage is unlikely for retirees, charitable is
+mostly routed around Schedule A by QCDs, so **medical above 7.5% of AGI is the piece that likely
+qualifies**. One refinement recorded in findings: a QCD really does bypass Schedule A (income
+exclusion, already modelled in `computeAnnualQCDs`), but **a gift of appreciated stock does not** - it
+is an itemized deduction at FMV under the 30%-of-AGI limit, and still matters below QCD age or above
+the annual QCD limit.
+
+Logged as **P65** (a medical, b charitable, c mortgage), O2, NOT scoped. The note that matters for
+whoever picks it up: retiree medical is lumpy, a flat annual figure would be wrong in both directions,
+so it belongs with Lumpy Spending (P42) rather than as a scalar - and a big medical year is usually a
+big withdrawal year, so AGI and the 7.5% floor rise together and the net needs measuring, not guessing.
+
+### Same session — code review on PR #182, one real bug found (v11.15c8)
+
+User posted review comments on the PR (six inline, all on `optimizer_changelog.md`) and said "Changes
+requested." Pulled them via `gh api repos/.../pulls/182/comments`.
+
+**Five were changelog wording**, and all fair: "anyone who itemizes" overstated what the tool does
+(it only ever tests SALT against the standard deduction - no mortgage, no charitable, no medical - so
+"itemizes" implied a generality that does not exist, and directly echoes the P65 finding from
+yesterday); "the cap" was ambiguous and SALT was never spelled out; the rounding-uncertainty paragraph
+was judged unneeded detail for end users; "The Optimizer never handed it that figure..." was internal
+implementation history, not user-facing information; and "the amount" needed to say explicitly that
+it is PROPERTY and OTHER LOCAL taxes being added, since state tax is already supplied elsewhere and
+must not be double-entered. Rewrote the three 11.15b7 sections in both `optimizer_changelog.md` and
+the `retirement_optimizer.html` banner `<li>` to fix all five, and in doing so found a leftover
+duplicate sentence from an earlier same-session sed edit ("Measurement is the reason... Specifically,
+measurement found that\nthe whole effect is small and short-lived:...") - fixed as part of the same
+rewrite.
+
+**The sixth was a real bug**, asked as an editor's question: "are these values also being SAVED in
+the internal memory or .js?" Checked rather than assumed. `saveScenario()` calls `getInputs()`, which
+spreads in the property-tax fields, so YES they were captured into the localStorage JSON on save. But
+`applyScenario()` restores every field via `document.getElementById(key)`, and `propTax` /
+`propTaxGrowthMode` / `propTaxGrowthRate` have no DOM element - they are URL-only. So the value was
+saved correctly and then **silently dropped on every load**, with no warning, which is worse than
+never supporting it: the user believes their saved scenario carries it and it quietly does not.
+
+Fixed by converting the frozen `URL_PROP_TAX` const into a mutable `PROP_TAX_STATE`, read from the URL
+once at load same as before, but now also writable. `applyScenario()` gained a special case - the same
+pattern the file already uses for `qcdMode`/`stratIRMAATier`, which also have no direct DOM element -
+that restores it from `data.propTax` when the key is present, and otherwise leaves the current value
+alone, matching the convention every other field in that loop already follows. `getInputs()` and
+`buildShareURL()` both now read the mutable slot instead of the frozen const.
+
+**Verified in the browser, not just read**, since `optimizer_ui.js` has no node harness (DOM-only,
+untouched by the three node suites - confirmed unaffected, still 272/61/22 green). Loaded
+`?s=TX&ptx=60000&ptxm=custom&ptxr=2`, called `saveScenario()` programmatically, reloaded the page with
+a PLAIN url (no `?ptx` - exactly the state that used to lose the value), called `applyScenario()` with
+the saved blob, and confirmed `getInputs()` came back 60000/custom/0.02 and `buildShareURL()` carried
+`ptx=60000&ptxm=custom&ptxr=2`. Before the fix this would have silently reverted to 0. Badge green at
+600, console clean apart from the same unrelated Cloudflare RUM CORS error as every prior check.
+
+**GOTCHA, port collision.** `~/.claude/preview-servers.json` showed two entries claiming 8767
+simultaneously and `curl` kept answering with the OTHER worktree's stale 11.15a2 title even after
+starting a fresh worktree-rooted server there - looks like Windows' looser `SO_REUSEADDR` semantics
+let a second process bind a port a live listener already holds, so `_free()`'s probe-then-release
+check in `serve.py` is not reliable proof of exclusivity on this platform. Fixed by forcing an explicit
+`PORT=8791` rather than trusting the fallback scan.
+
+New changelog entry `11.15c8` (own anchor, own `<li>`, since it is a genuine behavior fix on top of an
+already-versioned release) rather than folding into 11.15b7's entry; the 11.15b7 prose itself was
+edited in place since it was inaccurate, not superseded. `taxengine.js`/`optimizer_core.js` untouched
+this round, so only `optimizer_ui.js`'s cache buster and the tier-2 `const V` moved.

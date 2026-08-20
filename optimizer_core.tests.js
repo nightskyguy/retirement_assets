@@ -87,6 +87,7 @@ const IRMAA_MARGIN_MODES = core.IRMAA_MARGIN_MODES;
 const irmaaMarginModeOf = core.irmaaMarginModeOf;
 const irmaaFwdFactor = core.irmaaFwdFactor;
 const irmaaMarginDollars = core.irmaaMarginDollars;
+const getIRMAATierTargetMAGI = taxengine.getIRMAATierTargetMAGI;
 const onMedicareAtCharge = core.onMedicareAtCharge;
 const breakEvenHeirsRate = core.breakEvenHeirsRate;
 const lowestBreakEvenHeirsRate = core.lowestBreakEvenHeirsRate;
@@ -3651,6 +3652,27 @@ test('QCD As Needed: trims to the forward-projected tier ceiling, and further un
     const brks = getRateBracket('IRMAA', 'SGL');
     assertNear(qcd('halfstep') - none, (brks[2].r - brks[1].r) * 12 / 2,
         'halfstep needs half the Tier 1 -> Tier 2 step more', 1);
+});
+
+test('QCD As Needed: MAGI between today\'s floor and the projected floor needs no QCD', () => {
+    // The clearest statement of what the forward projection buys, and the one a reader is most
+    // likely to get backwards. `none` means NO MARGIN, not "no forward projection" - every mode
+    // aims at the projected threshold. So a MAGI sitting between today's tier floor and the floor
+    // as it will be indexed |LOOKBACK| years out is already under the line that will judge it, and
+    // must trigger no donation at all. Before the fix it triggered one, sized by the whole gap.
+    const fwd = irmaaFwdFactor({ cpi: 0.03, irmaaMarginMode: 'none' });
+    const floor = getRateBracket('IRMAA', 'SGL')[1].l;          // $109,000 today
+    assertNear(floor * fwd, 115638.1, 'the projected SGL Tier 1 floor at 3% CPI', 0.5);
+    for (const magi of [floor + 500, floor + 3000, floor + 6000]) {
+        assert(getIRMAATierTargetMAGI(magi, 'SGL', fwd, 2) === 0,
+            `MAGI ${magi} is under the projected floor, so As Needed must ask for nothing`);
+        // ...and the pre-fix lookup, which used today's floor, would have asked for the whole gap.
+        assert(getIRMAATierTargetMAGI(magi, 'SGL', 1, 2) > 0,
+            `MAGI ${magi} must have needed a QCD before the projection was applied`);
+    }
+    // Just past the projected floor it does engage, so this is a boundary not a blanket exemption.
+    assert(getIRMAATierTargetMAGI(floor * fwd + 500, 'SGL', fwd, 2) > 0,
+        'above the projected floor As Needed must still trim');
 });
 
 test('irmaaMarginMode is inert for a plan with no IRMAA ceiling and no QCDs', () => {

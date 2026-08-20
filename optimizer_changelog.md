@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15ca"></a>
+<a id="11.15cb"></a>
 
-## 11.15ca
+## 11.15cb
 
 ### The IRMAA ceiling was aiming two years of inflation too low
 
@@ -45,6 +45,29 @@ Three places did this, and all three are fixed. Only **two** of them can actuall
 **Behavior change.** An IRMAA Ceiling plan now converts more, a QCD "As Needed" plan donates
 slightly less, and both shift the numbers in a saved scenario or a shared link. At 0% inflation
 nothing moves at all, which is what makes this an indexing fix rather than a new policy.
+
+### The forward projection applies to every setting, including "No margin"
+
+The margin selector's options used to read "None (aim at the threshold)", "$1,000", "$2,000" and so
+on, which never said WHICH threshold and was reasonably read as "no forward projection at all". It
+never meant that: the projection always applies, and the setting only chooses how much extra room to
+leave below the projected figure. Every option now names it - "No margin (aim right at the projected
+threshold)", "$1,000 below the projected threshold" - and the tooltip says it outright.
+
+The practical consequence is worth stating because it is the point of the whole change. Income
+sitting between today's tier floor and the projected one is **already under the line that will judge
+it**, so QCD "As Needed" asks for nothing at all. Single filer, 3% inflation, Tier 1 floor $109,000
+projected to $115,638:
+
+| your MAGI | QCD asked for now | QCD asked for before |
+|---|---|---|
+| $109,500 | **nothing** | $501 |
+| $112,000 | **nothing** | $3,001 |
+| $115,000 | **nothing** | $6,001 |
+| $116,000 | $363 | $7,001 |
+
+Pinned by a test at that boundary, including the check that it still trims once you are genuinely
+over the projected floor - it is a boundary, not a blanket exemption.
 
 ### A selectable safety margin, behind the nerdknob
 

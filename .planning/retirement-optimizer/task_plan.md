@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-19:** `main` = `4c3e98c`, everything through [PR #181](https://github.com/nightskyguy/retirement_assets/pull/181) merged and shipped. This worktree (`context-e73361`, branch `worktrees/planning-with-files-02d4ce`) now carries **one commit**, `49509e9` (P64a/b/c/d/e/f, one release at **v11.15b7**): property tax reaches the tax engine, the elevated SALT cap no longer dies a year early, and the cap and its phase-out threshold are indexed 1%/yr as the statute requires. Suites **272 / 61 / 22** (`slowInCore` 3), badge green, both pinned homes reconciled.
+**As of 2026-08-21:** `main` = `0b4d5b5`. This worktree (`readme-review-updates-c9df11`, branch `worktrees/planning-with-files-c326bb`) carries **P32 complete, unreleased**, shipping at **v11.15e3**: the third pass may now draw Brokerage, which closes the `minlimit` stranding defect that survived five earlier changes. Suites **280 / 61 / 22** (`slowInCore` 3, counts UNCHANGED by this release), tier-1 248/0, badge green. P64 and P66 shipped in #182/#183/#184.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -10,20 +10,20 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O2** | P64 | SALT DONE v11.15b7; only the sibling tool is left | `P64g` |
-| **O0** | P32 | Brokerage draws: arms shipped v11.1582, spiral unmeasured | `P32d` |
+| **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
+| **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P51 | Oracle a-c,e-g DONE 08-10; propwd refuted | `P51d` |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P64 SHIPPED 2026-08-19 (v11.15b7, `49509e9`), then a review found a real bug (v11.15c8).** Property
-tax is worth <=$4k of lifetime tax and moved no decision, so it is URL entry only, no field. Indexing
-the SALT cap DID move one - a fixture's best conversion went $250k x 5yr -> $300k x 4yr. **PR #182
-review found `?ptx=` was captured on Save Scenario but silently dropped on Load** - no DOM element for
-`applyScenario` to restore into - fixed via a mutable `PROP_TAX_STATE`, verified in-browser. `P64g`
-still open. Open call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
+**P32 COMPLETE 2026-08-21, shipped v11.15e3.** Q2 measured the cap-gains spiral that justified keeping
+Brokerage out of the third pass: **0 capped years in 3,960 armed runs**, `bounded` identical to `unbounded`
+everywhere. The exclusion cost $372,455 of unpayable spending to save $1,711. Default flipped; the old
+tripwire is now a regression guard with an `off` control that must still reproduce all 10 stranded years.
+`forcedIRAAllowBrokerage` was measured and **rejected** (same 9 wins, $27.9M newly unfunded), research-only.
+Open call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 
@@ -45,9 +45,10 @@ first task. Every open item in the file now carries one.
 
 | User Priority | ID | Phase | Next open item | Blocked by |
 |---|---|---|---|---|
-| **O2** | P64 | SALT deductibility — **a-f DONE, shipped v11.15b7**; study said the input does not earn a field | `P64g` (Retirement_Projection passes no OBBBA flags at all) | nothing |
+| ~~DONE~~ | ~~P64~~ | ~~SALT deductibility - `propTax` never reached the engine, elevated cap died a year early~~ - **COMPLETE, a-f v11.15b7 (`49509e9`) + `P64g` in PR #184** | - | - |
+| ~~DONE~~ | ~~P66~~ | ~~IRMAA tier ceiling aimed two years of inflation too low~~ - **COMPLETE, v11.15cf (PR #182/#183)**, plus a hidden selectable safety margin | - | - |
 | **O0** | P35 | Phased strategy; **basis step-up shipped v11.1499** | `P35i` (the Phased engine) | nothing hard |
-| **O0** | P32 | Brokerage draws — premise refuted, dividend defect fixed, Q2 arms shipped v11.1582 | `P32d` (measure Q2) | nothing |
+| ~~DONE~~ | ~~P32~~ | ~~Brokerage barely drawn; is the third-pass exclusion still right?~~ - **COMPLETE 2026-08-21.** Premise refuted (Q1), dividend double-credit fixed, the cap-gains spiral measured and REFUTED (Q2, 0 capped years in 3,960 armed runs), and the exclusion re-scoped at **v11.15e3** | - | - |
 | ~~DONE~~ | ~~P58~~ | ~~Withholding assumed on money already moved, plus the forced-quarterly double payment~~ — **COMPLETE, v11.159d (`0bc7ba0`)** | — | — |
 | ~~DONE~~ | ~~P56~~+~~P57~~ | ~~Five-plan matrix, one cost table, and every statement attributed to one plan~~ — **COMPLETE, v11.1599 (`6e74f1f`)** | — | — |
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
@@ -1153,18 +1154,44 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
   A third value, `'unbounded'`, was added beyond the two the task named because Q2 asks for an
   unbounded-with-a-counter arm and P32d would otherwise have to add it itself.
   6 new tests, suite 263 -> **269/269**, browser badge green at 570 (245 in-page + 325 node).
-- [ ] **P32d** — Q2 with an explicit iteration counter, so "spiral" becomes a measured claim either way.
-  **UNBLOCKED — the arms exist as of v11.1582.** Re-run Q1's numbers first, since they were
-  measured on the double-crediting engine. **Read the counter semantics before interpreting
-  anything**: `totals.thirdPassBrokerCapped` counts years that kept needing another pass, which is
-  the only spiral evidence; `totals.thirdPassBrokerStalled` counts years whose residual stopped
-  improving while Brokerage still held a balance, which is that account running out of usable money.
-  The first draft of the loop lacked the stall guard and burned the entire 200-pass cap on dust
-  balances, reading as divergence on a run whose lifetime Brokerage draw had not moved a dollar.
-  **Preliminary, 8 scenarios only, NOT the answer:** zero capped years anywhere, bounded and
-  unbounded identical. Two arms moved funded years materially (minlimit tier-1 6 -> 11 on the
-  third-pass arm), and `brokerageFirst` cut funded years 12 -> 7 in one fixture, so neither arm is
-  a free win. Details in findings.md 2026-08-17.
+- [x] **P32d** - Q2 with an explicit iteration counter, so "spiral" becomes a measured claim either
+  way. **COMPLETE 2026-08-21** (d-1/d-2/d-3/d-5 done, d-4 moot). Full numbers in findings.md
+  2026-08-21. Headline: **zero capped years in 3,960 armed runs - the spiral the exclusion comment
+  asserts does not exist on this grid** - and the two arms point OPPOSITE ways, which the 8-scenario
+  preliminary could not have shown.
+  - [x] **P32d-1 - repair the dead `q2()`. DONE.** It probed `tpBrokIters` and the engine ships
+        `thirdPassBrokerIters` / `thirdPassBrokerCapped` / `thirdPassBrokerStalled`
+        (`optimizer_core.js:2138-2140`), so it printed SKIPPED on every run from v11.1582 to
+        2026-08-21 and the question sat inert while looking answered. Also fixed the arm table's
+        `forcedIRAAllowBrokerage: true` -> `'brokerageFirst'`. The probe now names the shipped
+        counters and its failure message says to check BOTH causes, not just the flags.
+  - [x] **P32d-2 - capped and stalled in separate columns. DONE.** Never summed anywhere. Iters
+        printed as total and max, not mean. **Read `max iters` as a RUN TOTAL** (it sums across the
+        plan's years), not a per-year depth - the bounded/unbounded identity is what proves no
+        single year exceeded 6. Added a per-arm funded-year better/WORSE table, which is what
+        separated the two arms.
+  - [x] **P32d-3 - widen the grid. DONE.** basis 0.2/0.5/0.8 x state CA/NY/TX x dividendRate
+        0/0.02 x 5 scenarios x 11 strategy arms x 5 Q2 arms = **4,950 runs**, ~0.7ms each. Kept on
+        `q2()`'s own `SCENARIOS x ARMS` grid rather than `s1Cells()`, which re-enumerates every
+        strategy family per cell and would have made this combinatorial. Ordered arms are reported
+        **inert by design**, not zero, and a check confirms 0 ordered rows moved.
+  - [x] **P32d-4 - MOOT, not skipped.** The cap-artifact worry was that a `bounded` year consuming
+        all 6 draws is counted Capped without a final convergence test. There are **zero capped
+        years at all**, and `bounded` is identical to `unbounded` on every counter across the whole
+        grid - so no year ever wanted a 7th pass and there is nothing to re-check. If a future grid
+        ever produces a capped year, the re-check is still the right move and the reasoning is in
+        findings.md.
+  - [x] **P32d-5 - written up. DONE 2026-08-21.** New Q2 section in
+        `.test_harnesses/P32_RESULTS.md` (title, run header, predictions table, Coverage and Scope
+        Limits all updated); `.test_harnesses/README.md` now records that q2 printed SKIPPED for
+        months and why. **P5 RIGHT**, **P6 RIGHT** - P6 named the third-pass arm, so it is scored
+        per arm instead of on the pooled total, which had let `brokFirst` print "MIXED" for an arm
+        P6 never mentioned. Arm labels renamed at the user's request: `fib` -> `brokFirst`,
+        `bnd+fib` -> `bnd+brokFirst`.
+  - **Q2's answer, in one line:** there is no spiral, and `brokFirst`'s 9 winning cells are
+    **set-identical** to `bounded`'s 9, so the third-pass arm strictly dominates it on funded years.
+  - **Do NOT re-run Q1.** `P32e` already re-measured it post-dividend-fix ("three families UP,
+    cyclic -0.8pt, never-draw still 0/55").
 - [x] **P32e** — Q3/Q4 DONE 2026-08-10 (`.test_harnesses/P32_RESULTS.md`). Q3: cyclic wins 26/45
   cells as shipped but HALF is the surplus-routing confound — a `CashReserve: 0` control still wins
   23/45 at half the magnitude ($891k max). Q4 INVERTED: `cycleLTCGTarget 0.20` moves 898/2,576
@@ -1173,11 +1200,98 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
 - [x] **P32f** — Q5 DONE 2026-08-10 (q5, `P32_RESULTS.md`). **INVERTED**: maxbracket wins only
   108/2,514 pairs (4%); spendonly gains to +$396k. Post-§1014 (v11.1499) a held-to-death harvest
   has no terminal payoff, only MAGI costs — the top-off is a pre-step-up design.
-- [ ] **P32g** — Record the aggregate-basis modeling ceiling as a README limitation regardless of outcome
-- [ ] **P32h** — Decision: re-scope the third-pass exclusion, un-gate `cycleLTCGTarget`, or record and keep.
-  Evidence now in: Q4 says keep the gate + keep 0.15; Q5 says the harvest top-off itself is suspect
-  post-step-up (a `spendonly` default flip would be a behavior change needing its own ship decision);
-  Q6 says coexist must stay research-only absent arm-aware gating. P32d (Q2) still missing.
+- [x] **P32g** - **DONE 2026-08-21.** New item in README "Limitations and Restrictions", after the
+  §1014 step-up item: cost basis is one aggregate number consumed proportionally
+  (`calculateBrokerageWithdrawal`, `optimizer_core.js:304-321` - verified, not cited from the old
+  note, whose line numbers had rotted), so the tool cannot model specific-ID or HIFO lot selection.
+  States the direction as the README's other limitations do: for anyone who does select lots the
+  tool **overstates** the capital-gains tax on a Brokerage withdrawal and therefore **understates**
+  both the spendable income it produces and the terminal wealth of a Brokerage-leaning plan, so such
+  a household should read the tool as too **pessimistic** about Brokerage draws. Also names the
+  consequence for lot-level tax-loss harvesting, which is absent for the same reason.
+- [x] **P32h** - **COMPLETE 2026-08-21. Four calls settled by evidence, the fifth shipped at
+  v11.15e3 on the user's go-ahead.** All five were being carried as a single
+  undifferentiated "decision", which is how the two Brokerage arms nearly got treated as one thing.
+
+  1. **`forcedIRAAllowBrokerage` (`brokFirst`): DO NOT SHIP. Settled.** It is **dominated**, not
+     merely riskier. Its 9 winning cells are set-identical to the third-pass arm's, and it buys them
+     at **$27,860,186** of newly unfunded spending against that arm's **$1,711**. There is no
+     household this helps that the third-pass arm does not already help. Keep the input as a
+     research flag, default off, so the measurement stays reproducible; add no UI.
+  2. **`cycleLTCGTarget`: keep the nerdknob gate, keep the 0.15 default. Settled by Q4.** The 0.20
+     arm moves 898 of 2,576 pairs and wins 53 of them; the gate is protecting users, not hiding a
+     lever. Verdict strengthens at low basis (worst loss -$540k at 20% basis).
+  3. **`cycleCoexist`: stays research-only. Settled by Q6.** Median NEGATIVE (-0.73%); the harvest
+     skip is accidentally protective for aggressive ceilings (Fill Bracket 35% -$2.1M) while
+     measured arms genuinely gain (IRA Draw 5-8%, up to +$808k). Shipping needs arm-aware gating,
+     which is its own phase, not a line in this one.
+  4. **`cycleHarvestMode` default flip to `spendonly`: NOT folded in here.** Q5 says the maxbracket
+     top-off wins only 108 of 2,514 pairs post-§1014, so the default looks wrong - but flipping it
+     is a behavior change on a different code path from anything Q2 touched, and bundling it would
+     make one ship decision unfalsifiable against another. Give it its own item when someone picks
+     it up.
+  5. **`thirdPassBrokerage`: RE-SCOPE THE EXCLUSION. Recommended, but USER CALL** - it changes
+     default behavior for every existing scenario and shared link.
+
+  **The case for (5).** The exclusion's stated reason is a cap-gains spiral, and Q2 measured **zero
+  capped years in 3,960 armed runs**, with `bounded` identical to `unbounded` everywhere - so no
+  year ever wanted a 7th pass. What the arm buys: **$372,455** of previously unpayable spending
+  funded, for **$1,711** of new unfunded (385 runs at about $4 each, rounding dust). 218:1. Every
+  one of the 9 winners is a `minlimit` row, which is the defect this phase opened with: the pinned
+  fixture stranding $71,382 across nine consecutive years with Brokerage untouched and every other
+  account at zero. On the sharpest cell it takes failed years from **10 to 1** and unfunded dollars
+  from **$68,792 to $6**.
+
+  **The cost, stated plainly.** Terminal wealth falls (-$103,847 on that cell) because the money is
+  spent instead of left to heirs. Anyone ranking on final net worth sees a loss; anyone ranking on
+  "does my plan actually pay for my retirement" sees a large win. That is the whole trade, and it is
+  a much smaller ambiguity than the first write-up of this result claimed (see the CORRECTION in
+  findings.md - the shortfall sign was read backwards).
+
+  **What shipping it costs, so the estimate is not a surprise:** it is a default behavior change, so
+  every saved scenario and shared link on a `minlimit` plan moves. Needs `bounded` promoted from
+  research flag to default (`'off'` -> `'bounded'`), the `optimizer_core.js:2044` comment rewritten
+  to record that the spiral was measured and refuted rather than deleted silently, new pinned tests
+  including the stranding fixture, `TestTiers.EXPECTED` reconciled in the same commit along with
+  `.githooks/README.md`, a version bump in all four sites, and a changelog entry. `unbounded` and
+  `brokFirst` stay research-only either way.
+
+  - [x] **P32h-1** - **USER SAID SHIP, 2026-08-21.**
+  - [x] **P32h-2** - **SHIPPED at v11.15e3.** `_tpBrokArm` default `'off'` -> `'bounded'`; the
+        exclusion comment rewritten to record that the spiral was measured and refuted (kept as
+        HISTORY rather than deleted, so nobody re-derives it); the `forcedIRAAllowBrokerage` comment
+        now records that it was measured and rejected, with the $27,860,186-vs-$1,711 figure in the
+        code itself. Five tests moved, all of them by design and none re-pinned lazily:
+        - The old **tripwire flipped into a regression guard**. `P32 (not fixed here): minlimit
+          strands spending...` asserted the defect was present with the count 10; it now asserts
+          **0**, keeps the full five-attempt history verbatim, and adds a `thirdPassBrokerage: 'off'`
+          control that must still reproduce all 10 stranded years with the same pinned amounts.
+          Without that control a future refactor could zero the count for an unrelated reason and
+          still pass. It also now asserts the PRICE: funded years up, spend up, **finalNW down**, so
+          the change can never be read as free.
+        - `absent = off` became `absent = bounded`, with explicit `off` still pinned as reachable,
+          and the absent-equals-off contract kept for `forcedIRAAllowBrokerage`, which did not ship.
+        - The `bounded draws Brokerage` test inverted its control to explicit `'off'`.
+        - `brokerageFirst spends Brokerage before forcing IRA` now pins `thirdPassBrokerage: 'off'`.
+          It had started failing 131,780 -> 131,780, which looked like a regression and was really an
+          OVERLAP: the shipped third pass already spends the Brokerage that arm wanted. Isolating it
+          measures the backstop alone, which is all the test was ever about.
+        - `P38` forced-IRA total 20,381 -> 18,719, because the third pass now funds from Brokerage
+          part of what used to be forced out of the IRA. Down is the intended direction.
+        **Counts did not move** (280 / 61 / 22, `slowInCore` 3), so `TestTiers.EXPECTED` and
+        `.githooks/README.md` needed no edit - checked rather than assumed. Version bumped at the
+        three sites this release touches (title, `optimizer_core.js?v=`, the tier-2 loader's own
+        `const V`); `taxengine.js`, `optimizer_ui.js` and the CSS were deliberately left alone since
+        none of them changed.
+        **The page's own test caught a defect in my changelog entry**: I wrote
+        `<b>Behavior change:</b>`, and a tier-1 test asserts every changelog `<b>` is a version stamp
+        in its own `<li>`. Badge went red at 610/611. Changed to `<strong>`; that is exactly what
+        the test exists for. Browser verified after the fix: tier-1 **248/0**, core 280, TPP 61,
+        doclinks 22, slow 3, **Documentation 🟢**, console clean apart from the usual unrelated
+        Cloudflare RUM CORS error.
+  - [x] **P32h-3** - decisions (1)-(4) recorded above. No code, deliberately: three of them are
+        "keep what ships" and the fourth is explicitly deferred to its own item.
+
 - [x] **P32i** — Q6 DONE 2026-08-10 (q6, `P32_RESULTS.md`). Median NEGATIVE (−0.73%): the harvest
   skip was accidentally protective for aggressive ceilings (Fill Bracket 35% −$2.1M) while measured
   arms genuinely gain (IRA Draw 5-8% up to +$808k). The money-on-the-table is real but reclaiming
@@ -2758,12 +2872,12 @@ values in that test were updated with the reasoning recorded inline. This qualif
 Open rounding question: 2026 is exactly 40000 x 1.01 so plain compounding matches at the first step;
 the convention for 2027-2029 is unconfirmed and worth a few dollars of deduction at most.
 
-- [ ] **P64g** - `Retirement_Projection.html` (~1274) passes NO `obbaOn`, `saltHigh`, `propTax` or
-  `taxYear`, so it still prices the pre-OBBBA world entirely - no senior deduction, $10k SALT cap,
-  2025 figures forever. Same defect family, different tool, and NOT behaviour-neutral to fix. Its own
-  commit, with its own before/after.
+- [x] **P64g** - **DONE 2026-08-20, shipped in PR #184.** `Retirement_Projection.html` passed NO `obbaOn`,
+  `saltHigh`, `propTax` or `taxYear`, so it priced the pre-OBBBA world forever - no senior deduction, $10k SALT
+  cap, 2025 figures. It now derives `obbaOn`/`saltHigh` from `TAXData.OBBBA.*.sunsetYear` per projection year and
+  passes an inflation-adjusted `propTax` (its own slider, `#propTax`), so both tools price the same law.
 
-**Status:** Phase 0 DONE. **P64a, P64b, P64c and P64f DONE 2026-08-19, shipped at v11.15b6**, suites
+**Status:** **PHASE COMPLETE 2026-08-20.** `P64a/b/c/f` shipped v11.15b6, `P64d/e` v11.15b7, the Save/Load drop of `?ptx=` fixed at v11.15c8, `P64g` in PR #184. Original status text follows. Phase 0 DONE.
 271 / 61 / 22, browser badge green at 607, console clean. **P64e is now a user decision** and the
 measurement argues against it: see the recommendation below. **P64d still open** and is now more
 interesting than it looked, because the missing 1%/yr cap indexation is part of why the window closes
@@ -2811,6 +2925,48 @@ User's read on which line items matter here, recorded because it narrows the wor
 
 **Status:** NOT SCOPED. Recorded so the P64 conclusion is never re-read as a statement about real
 filers with a full Schedule A.
+
+## P66: IRMAA - the tier ceiling aimed two years of inflation too low  *(COMPLETE 2026-08-20, v11.15cf, PR #182/#183)*
+
+Recorded after the fact: the work shipped without a phase ID, so this section exists so the change is
+findable from the plan and not only from the changelog.
+
+**The defect.** IRMAA bills a given year's premium against the MAGI reported **two years earlier**,
+compared against the thresholds published for the **billing** year. The engine had the billing half
+right (MAGI from two years back, thresholds inflated to the current year, which is what SSA does).
+The **targeting** half was wrong: every ceiling that caps *this* year's MAGI to stay inside a tier
+used *this* year's threshold, when that MAGI will be judged against the threshold published two years
+later. At 3% inflation that aims about 6% low - roughly **$13,300/yr** of unused IRA spending or Roth
+conversion room on the MFJ Tier 1 floor of $218,000, every year of a plan. At 0% inflation nothing
+moves, which is what makes it an indexing fix and not a new policy.
+
+**Two paths changed:** the IRMAA Ceiling strategy ("Fill Fed/IRMAA Bracket" with a tier selected),
+and QCD "As Needed" (donates only as much as it takes to drop two tiers) - the second is where the
+correction is worth the most. Behavior change is real: a Ceiling plan converts more, a QCD "As
+Needed" plan donates less, and saved scenarios and shared links both move.
+
+- [x] **P66a** - aim the ceiling at the projected **future** threshold rather than the current one.
+- [x] **P66b** - a selectable **IRMAA safety margin**, nerd-gated because it is still being measured,
+      not because it is dangerous. Default **half the next-tier surcharge** (scales the setback to
+      the size of the cliff); also None / $1,000 / $2,000 fixed setbacks, and two rate-based options
+      (half the expected inflation, 1% less than expected inflation).
+- [x] **P66c** - the margin applies to the **ceiling only, never to QCDs**. Measured: the money
+      leaving as a QCD to stay under a future threshold exceeded the value of the surcharge avoided,
+      so "As Needed" always aims straight at the projected threshold with no margin. Risking an IRMAA
+      penalty and money permanently leaving for charity are not the same decision.
+- [x] **P66d** - three node harnesses under `.test_harnesses/` with their results checked in:
+      `irmaa_default_harness.js`, `irmaa_margin_harness.js`, `irmaa_cpi_risk_harness.js`.
+
+**Merge note.** This branch was rebased onto P64 (SALT); the pre-merge prediction "SALT and IRMAA
+cannot interact" held for the merge but is **stated too strongly** - see
+`.planning/retirement-optimizer/MERGE_PR182_IRMAA.md`. Property tax cannot move MAGI *directly*, but
+the engine is a feedback loop: a lower tax bill changes what has to be withdrawn, and by 2029 the
+measured dMAGI reached **$5,791 (3.74%)**. Any future "feature X cannot affect Y" claim in this repo
+needs that caveat.
+
+**Test counts after:** 280 / 61 / 22 (`slowInCore` 3).
+
+---
 
 ## Dependency Graph (remaining)
 

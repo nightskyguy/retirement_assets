@@ -11,6 +11,35 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15e3"></a>
+
+## 11.15e3
+
+### A plan that has run out of everything else will now spend from Brokerage
+
+Each year prices its taxes (up to 4 times) because the first estimate cannot know what the
+final tax bill will be. A late step exists to cover the gap when the bill lands higher than expected, and
+that step could draw Cash, then Roth, but never Brokerage for fear of creating a "tax death spiral".
+That possibility was finally measured - and two additional taxation passes is always enough to converge.
+
+Previously a plan that had already emptied its IRA, its Cash and its Roth
+would report year after year of unpaid spending while a seven-figure Brokerage balance sat there
+untouched, because the only step left refused to look at it. On the sharpest test plan that was ten
+unfunded years out of twenty-four, with just over $1,000,000 in Brokerage. It is now one.
+
+**Behavior change.** Most affected is "Fill Fed/IRMAA Bracket" with an IRMAA tier selected, the shape
+that tends to drain the IRA early. Such a plan now pays for more of its spending and finishes with
+less left over, because the money is spent instead of passed on. If that trade is not the one you
+want, it is worth knowing the plan was never really funding those years before; it was reporting a
+shortfall and holding the money back. Saved scenarios and shared links for affected plans will show
+different numbers than they did.
+
+The companion idea, letting the very last funding step spend Brokerage before pulling extra from the
+IRA, was measured at the same time and **rejected**. It rescued exactly the same plans and left far
+more spending unpaid elsewhere by spending the Brokerage too early and having none left later.
+
+---
+
 <a id="11.15cf"></a>
 
 ## 11.15cf
@@ -103,8 +132,8 @@ Each plan is a full computation in its own right.
 Draw timing and tax-payment timing are separate levers, and the tool now says so.
 A star (★) marks the cheapest plan(s)
 
-- **Plan A, Early.** Draws and conversions next month, tax withheld at the draw. [Was Plan B]
-- **Plan B, Hybrid.** Conversions next month, draws and withholding in December. Shown only when
+- **Plan A, Early.** Draws and conversions in January (or next month if already past January), tax withheld at the draw. [Was Plan B]
+- **Plan B, Hybrid.** Conversions early (January or next month), draws and withholding in December. Shown only when
   there is a conversion to pull early; without one it would be a copy of Plan C, and the table now
   says that in a line rather than letting the column vanish. [Was Plan A]
 - **Plan C, Late.** Everything in December. [Same as prior]
@@ -115,8 +144,8 @@ A star (★) marks the cheapest plan(s)
   would create taxable income your entered tax figures do not include.  Useful if you want to get your spending money early, 
   and pay taxes when there is more tax certainty - however there are some costs and potential gotchas.
 - **Plan Q, Quarterly.** Spelled out separately, but was being compared to in the prior version. December draws with no withholding at all, and the whole liability paid
-  as quarterly estimates.  NOTE: Selling appreciated brokerage shares to fund those estimates is now a footnote under the table rather than a fourth row that read like a plan. It is a way to fund Plan Q, and it carries the capital gains tax on the sale.
-
+  as quarterly estimates.
+  
 Some minor corrections were also made: 
 - Using weekdays where previously they were not being used. Payments that may 
 have landed at the end of the year or past deadlines are moved earlier - for example when running the Tax Planner at the end of the year, compliance requires timely payment within the year.

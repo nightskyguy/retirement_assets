@@ -166,10 +166,15 @@ proportional at every wealth level tested.
 node .test_harnesses/brokerage_harness.js
 ```
 
-**Q3/Q4 results live in [`P32_RESULTS.md`](P32_RESULTS.md).** P32's harness: q1 (how often is
+**Q2/Q3/Q4 results live in [`P32_RESULTS.md`](P32_RESULTS.md).** P32's harness: q1 (how often is
 Brokerage drawn -- premise refuted, re-run post-fix with three of four families UP), the
 accounting audit that found the dividend double-credit (`e9a3c8b`), q2 (third-pass spiral --
-waits on the P32c research flags), and as of 2026-08-10 q3/q4 over the Stage-1 45-cell grid:
+**answered 2026-08-21: there is no spiral**, 0 capped years in 3,960 armed runs and `bounded`
+identical to `unbounded` everywhere), and as of 2026-08-10 q3/q4 over the Stage-1 45-cell grid:
+
+0. **q2 printed `SKIPPED` on every run from v11.1582 to 2026-08-21** because its probe tested for
+   `totals.tpBrokIters`, a counter name that never existed. If a harness question reports SKIPPED,
+   check the name it is probing against the engine before believing the question is blocked.
 
 1. **Cyclic wins 26/45 cells (58%) as shipped, 23/45 with the surplus-routing confound
    removed** (`CashReserve: 0` control). About half the headline delta was the non-cyclic arm

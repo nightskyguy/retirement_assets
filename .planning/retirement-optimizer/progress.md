@@ -3178,3 +3178,179 @@ New changelog entry `11.15c8` (own anchor, own `<li>`, since it is a genuine beh
 already-versioned release) rather than folding into 11.15b7's entry; the 11.15b7 prose itself was
 edited in place since it was inaccurate, not superseded. `taxengine.js`/`optimizer_core.js` untouched
 this round, so only `optimizer_ui.js`'s cache buster and the tier-2 `const V` moved.
+
+
+---
+
+## Session: 2026-08-20 (worktree readme-review-updates-c9df11) - plan resync, no code
+
+`/plan` invoked with no task. Worktree is clean and level with `main` = `0b4d5b5`; nothing in flight.
+The planning files had drifted three ways against reality and this session only closed that gap - no
+product file was touched.
+
+**What had drifted.** `task_plan.md` still opened "As of 2026-08-19, `main` = `4c3e98c`, everything
+through PR #181", and `progress.md` ended at the P64/SALT session. Since then **PR #182, #183 and
+#184** all merged. Corrected, all measured rather than assumed:
+
+- **`P64g` is DONE**, shipped in **PR #184** - verified by reading the file, not the merge message:
+  `Retirement_Projection.html:1278-1303` now derives `obbaOn`/`saltHigh` from
+  `TAXData.OBBBA.*.sunsetYear` per projection year and passes an inflated `propTax` from its own
+  `#propTax` slider. That was P64's last open item, so **P64 is COMPLETE** and its index row is struck.
+- **The IRMAA forward-threshold work had no phase ID at all.** It shipped in #182/#183 at
+  **v11.15cf** with a full changelog entry, three checked-in harnesses and a merge post-mortem, and
+  was invisible from the plan. Written up as new phase **P66** (a-d, all complete) and placed after
+  P65 so the sections stay in numeric order.
+- **Test counts moved 272 -> 280** core (`TestTiers.EXPECTED`, `optimizer_tests.js:2263`); TPP 61 and
+  doclinks 22 unchanged, `slowInCore` still 3. Live version is **v11.15cf**.
+
+**The NOW table kept its 7 rows.** P64's row was replaced by **P65** (Schedule A beyond SALT) rather
+than left short, since P65 is P64's direct successor and was already in the index at O2. O0/O1 did
+not change: P32, P35, P51, P30, P19, P34 are all still open exactly as before.
+
+**LINE-30 BOUNDARY respected.** The header rewrite was done line-neutrally in Python (8 lines
+replaced, 8 written) and the marker was asserted to still be on line 30 both before and after the
+write; the file is LF and the em-dash at offset 34 was checked by codepoint (`0x2014`) afterwards,
+since a careless rewrite here silently drops a table row out of the hook's `head -30` window.
+
+**One memory correction.** The `project_readme_audit_followup` memory claims P48's evidence is
+"preserved in-repo at `.planning/retirement-optimizer/readme_caveats_findings.md`". **That file does
+not exist in this worktree** (`find` for `*caveat*` returns nothing) and `task_plan.md:2209` says the
+audit session "never wrote it into this worktree". The three-cluster summary in the P48 section is
+therefore the only surviving record: 16 limitations, 13 unmodeled states, ~10 undocumented features.
+
+**P32d scoped, same session.** User chose `P32d` (measure Q2) from the four options. Scoping turned up
+the blocker by running the harness rather than reading it: `node .test_harnesses/brokerage_harness.js`
+prints `SKIPPED: engine does not expose totals.tpBrokIters` - `q2()` was written before the arms
+shipped and guessed all three counter names wrong, so the question has been inert since v11.1582.
+Second trap found by reading the loop: the Capped counter false-positives at the bounded cap of 6,
+because the convergence test sits at the top of the loop body. Both written to findings.md
+(2026-08-21) and turned into `P32d-1` .. `P32d-5` in task_plan. Index rows now point at `P32d-1`, not
+a general "measure Q2". No code written yet.
+
+**P32d-1/2/3 built and run, same session.** User approved 1-3. `q2()` repaired (it had been probing
+counter names that never existed, printing SKIPPED since v11.1582), capped and stalled split into
+separate columns, and the grid widened to basis x state x dividend = **4,950 runs**, ~0.7ms each.
+
+**Result: zero capped years in 3,960 armed runs, and `bounded` is identical to `unbounded` on every
+counter.** That identity is the proof - bounded caps at 6 passes, unbounded at 200, so if any year
+had wanted a 7th they would differ. The cap-gains spiral asserted at `optimizer_core.js:2044` as the
+reason for the exclusion does not exist on this grid. Prediction P5 scores RIGHT. **`P32d-4` is
+therefore moot rather than skipped** - there is no capped year to re-check against the unbounded arm -
+and it is marked that way with the reasoning kept, in case a future grid produces one.
+
+**The finding worth more than the spiral answer: the two arms are not one decision.**
+`thirdPassBrokerage` moves 11 rows (9 better), every one of them a `minlimit` row - the exact IRMAA
+Ceiling stranding the phase opened with. `forcedIRAAllowBrokerage` moves 97, **88 worse**, the worst
+going 24 funded years to 5 while erasing $2.2M of forced IRA and RAISING final net worth $1.3M. Judged
+on the tax column or the wealth column alone that reads as a $1.3M win. The funded-years column beside
+it is what makes it legible, which is why d-2 put it there before the grid ran rather than after.
+
+Also recorded: the winning third-pass rows fund more years while raising total shortfall and lowering
+final net worth, so P32h has a genuine trade-off to settle, not a free win. And a correction to my own
+scoping note - I repeated "zero growth" about `CAP_BASE`, which actually runs growth 0.05; only the
+zero dividend rate was right.
+
+Harness only (`.test_harnesses/brokerage_harness.js` is node-only, loaded by no page and by none of
+the three suites). Suites re-run anyway: **280 / 61 / 22**, unchanged. No shipped file touched, so no
+version bump and no changelog entry - correct per the repo's rules, since nothing user-facing moved.
+
+**Arm rename + `P32d-5`, same session.** User asked for `fib` -> `brokFirst` (it read as Fibonacci and
+hid which of the two exclusions was under test) and for the write-up. Both done; `P32d` is now
+COMPLETE.
+
+**The rename surfaced a scoring bug worth more than the rename.** P6 was being scored on the POOLED
+funded-year total, which let `brokFirst` - an arm P6 never mentions - decide the verdict and print
+"MIXED". P6's text names the third-pass arm specifically. Scored per arm it is **RIGHT** (9 better,
+2 worse), with `brokFirst`'s 9/88 record printed beside it as the separate decision it is.
+
+**New result found while writing up, not just re-reported.** `brokFirst`'s 9 winning cells are
+**set-identical** to `bounded`'s 9 - checked as a Python set comparison over the printed table, not
+by eye. So `brokFirst` buys nothing the third-pass arm does not already deliver and pays 88 funded-year
+losses for it: on this metric it is **dominated**, not merely riskier. That is a stronger statement
+than "the two arms disagree" and it goes straight into P32h.
+
+Written: a full Q2 section in `.test_harnesses/P32_RESULTS.md` (with the title line, run header,
+predictions table, Coverage and Scope Limits sections all updated - Q2 crosses basis/state/dividend,
+so the file's old "single state, 50% basis" limits had to be scoped to Q1 rather than left standing);
+`.test_harnesses/README.md` now records that q2 printed SKIPPED from v11.1582 to 2026-08-21 and says
+to check a probe's counter names against the engine before believing a question is blocked.
+
+Still harness + docs only. No shipped file touched, no version bump, no changelog. `P32g` (record the
+aggregate-basis modeling ceiling as a README limitation) and `P32h` (the ship decision) are what
+remain in P32.
+
+**P32g + P32h, same session. And a real error of my own, caught and corrected.**
+
+**The correction first, because it changed the recommendation.** Probing the sharpest cell per-year
+before writing any advice showed I had read `totals.shortfall` backwards. It accumulates
+`Math.min(0, netIncome - spendGoal)` (`optimizer_core.js:2310`, `:2726`), so it is NEGATIVE or zero
+and a delta of `+$68,786` is that much previously unpaid spending **now paid**, not new shortfall.
+The engine confirms it three ways: lifetime spend rises by exactly $68,786, unfunded dollars go
+$68,792 -> $6, and `failedInYear` goes from ten years to one. So the "unresolved trade-off" I wrote
+into P32_RESULTS.md and findings.md that morning was not unresolved and not a trade-off in the
+direction stated. Corrected in both files with the mechanism named, and the harness now prints
+unfunded dollars as positive magnitudes `off -> armed` so the direction is on the page. Also added a
+per-arm unfunded-dollars table, because the pooled version of that number was misleading in exactly
+the way the pooled funded-year count had been.
+
+**With the sign right, the arms separate decisively:**
+
+| arm | $ newly funded | $ newly unfunded |
+|---|---|---|
+| `bounded` / `unbounded` | $372,455 | **$1,711** (385 runs, ~$4 each) |
+| `brokFirst` | $372,455 | **$27,860,186** |
+
+218:1 for the third-pass arm. `brokFirst` is dominated - identical wins, four orders of magnitude
+more damage.
+
+**P32g DONE.** New README limitation after the §1014 item: basis is one aggregate number consumed
+proportionally (`calculateBrokerageWithdrawal`, `optimizer_core.js:304-321` - re-verified, the old
+note's line numbers had rotted), so no specific-ID or HIFO. Direction stated as the section's other
+items do: the tool **overstates** cap-gains tax on Brokerage withdrawals for anyone who selects
+lots, so such a household should read it as too **pessimistic** about Brokerage draws. Also names
+why lot-level tax-loss harvesting is absent. doclinks 22/22 still green.
+
+**P32h DONE as a decision record**, split into five calls rather than the one undifferentiated
+"decision" it had been - which is precisely how the two Brokerage arms nearly got treated as one
+thing. Four are settled by evidence: `brokFirst` never ships; `cycleLTCGTarget` keeps its gate and
+0.15; `cycleCoexist` stays research-only; the `cycleHarvestMode` default flip gets its own item
+rather than being bundled. The fifth, promoting `thirdPassBrokerage: 'bounded'` to the default, is
+recommended but is a **USER CALL** (`P32h-1`) because it moves every saved scenario and shared link
+on a `minlimit` plan. The cost of shipping it is written out in the plan so the estimate is not a
+surprise later.
+
+**P32h-2 SHIPPED, v11.15e3. P32 is complete.** User said ship, so `thirdPassBrokerage` default went
+`'off'` -> `'bounded'`: the third pass may now draw Brokerage after Cash and before the Roth fallback.
+
+**Five tests moved, every one of them for a reason worth reading.** The best of them is the old
+tripwire, `P32 (not fixed here): minlimit strands spending with Brokerage still funded`, which had
+survived five separate changes over months while its comment accumulated a history of each failed
+attempt. It asserted the defect was PRESENT, count 10. It now asserts **0**, keeps that whole history
+verbatim, and gains a `thirdPassBrokerage: 'off'` control that must still reproduce all ten stranded
+years at the same pinned dollar amounts - because otherwise a future refactor could zero the count for
+some unrelated reason and still pass. It also asserts the PRICE now (funded up, spend up, finalNW
+DOWN), so nobody can later read this change as free.
+
+The subtlest was `brokerageFirst spends Brokerage before forcing IRA`, failing `131,780 -> 131,780`.
+That looks like a regression and is an **overlap**: the shipped third pass already spends the
+Brokerage that arm wanted to spend. Pinning `thirdPassBrokerage: 'off'` isolates the backstop, which
+is all the test was ever measuring. Re-pinning the number instead would have quietly destroyed the
+test.
+
+**Test counts did NOT move** (280 / 61 / 22, slowInCore 3) - checked, not assumed - so
+`TestTiers.EXPECTED` and `.githooks/README.md` needed no edit this time.
+
+**The page's own test caught a defect in my changelog entry.** I wrote `<b>Behavior change:</b>`, and
+a tier-1 test asserts every `<b>` in the changelog list is a version stamp sitting in its own `<li>`.
+Badge went RED at 610/611 and I had to chase it through `TIER1_RESULT` and a console capture to find
+it, since the failure text is not in the DOM. Changed to `<strong>`. Precisely what that test is for,
+and a good argument for always loading the page rather than trusting three green node suites.
+
+**Verified in the browser after the fix:** tier-1 248/0, core 280, TPP 61, doclinks 22, slow 3,
+**Documentation 🟢**, console clean apart from the usual unrelated Cloudflare RUM CORS error. Server
+run on an explicit `PORT=8793` with `--root` on the worktree, per the standing GOTCHA about port
+collisions serving the MAIN checkout - confirmed by curl'ing the title before trusting anything.
+
+Version bumped at the three sites this release actually touches: the `<title>`,
+`optimizer_core.js?v=`, and the tier-2 loader's own `const V`. `taxengine.js`, `optimizer_ui.js` and
+the CSS were deliberately left at their old tokens because none of them changed.

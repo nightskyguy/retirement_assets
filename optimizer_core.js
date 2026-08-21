@@ -2007,23 +2007,30 @@ function fillSpendingGap(sim, yr) {
 // Third tax pass for residual shortfall, soft-cap forced-IRA convergence, and the year's income/overage finalization.
 function resolveResidualAndForcedIRA(sim, yr) {
     const { inputs, totals, birthyear1, birthyear2 } = sim;
-    // P32c research inputs, BOTH default off / today's behavior, no UI sets either. They exist to
-    // make the two Brokerage exclusions in this function falsifiable (P32d / Q2) rather than
-    // asserted; nothing here fires unless a node harness passes them.
-    //   thirdPassBrokerage       'off' (default, today) | 'bounded' | 'unbounded' - allow a
+    // Two inputs, one SHIPPED and one research-only. Both were added by P32c to make the Brokerage
+    // exclusions in this function falsifiable rather than asserted; P32d then measured them over
+    // 3,960 armed runs and they came out opposite ways, so they ship differently.
+    //   thirdPassBrokerage       'bounded' (DEFAULT since P32h) | 'off' | 'unbounded' - allow a
     //                            Brokerage leg in the third pass, drawn AFTER Cash and BEFORE the
     //                            Roth fallback, then re-drawn against whatever residual the
     //                            realized gains re-open. 'bounded' caps the re-draw at the same 6
     //                            iterations the forced-IRA backstop below uses; 'unbounded' raises
     //                            the cap to 200 and records the iterations actually consumed, so a
     //                            real cap-gains spiral shows up as a run that keeps needing passes
-    //                            instead of one that converges. Ordered is excluded either way -
-    //                            it runs the user's own sequence in this pass.
-    //   forcedIRAAllowBrokerage  'off' (default, today) | 'brokerageFirst' - let the funding
-    //                            backstop spend Brokerage before it forces IRA above the ceiling.
-    //                            Forced IRA is ordinary income at the marginal rate; a Brokerage
-    //                            dollar may be LTCG at 0%.
-    const _tpBrokArm = inputs.thirdPassBrokerage ?? 'off';
+    //                            instead of one that converges. 'off' restores the pre-P32h
+    //                            behavior and is kept so the measurement stays reproducible.
+    //                            Ordered is excluded either way - it runs the user's own sequence
+    //                            in this pass.
+    //   forcedIRAAllowBrokerage  'off' (DEFAULT, and P32h decided it stays that way) |
+    //                            'brokerageFirst' - let the funding backstop spend Brokerage before
+    //                            it forces IRA above the ceiling. The theory was sound (forced IRA
+    //                            is ordinary income at the marginal rate; a Brokerage dollar may be
+    //                            LTCG at 0%) and the measurement refuted it: across the P32d grid
+    //                            it won the SAME 9 cells the third-pass arm wins - set-identical -
+    //                            while leaving $27,860,186 of spending unfunded against that arm's
+    //                            $1,711. It spends Brokerage early and has none left later. Kept as
+    //                            a research flag only; do not wire it to any UI.
+    const _tpBrokArm = inputs.thirdPassBrokerage ?? 'bounded';   // P32h: was 'off' until v11.15e3
     const _fibArm = inputs.forcedIRAAllowBrokerage ?? 'off';
     const _brokTaxRate = yr.capGainsPercentage * (sim.capitalGainsRate + (yr.nominalStateTaxAtLimit ?? 0));
     // Third pass: if second-pass taxes created a residual shortfall, withdraw more and recalc once.
@@ -2038,13 +2045,24 @@ function resolveResidualAndForcedIRA(sim, yr) {
             const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage: yr.capGainsPercentage, capitalGainsRate: sim.capitalGainsRate, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, nominalTaxRate: sim.nominalTaxRate, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate });
             yr.netWithdrawals = runOrderedWithdrawal(yr.curBalances, residualGap, seq, yr.netWithdrawals, applyWithdrawals);
         } else {
-            // Always use Cash-only in the 3rd pass - adding more Brokerage here creates a
-            // cap-gains spiral: more gains → higher SS taxation → bigger residual → repeat.
-            // The 2nd-pass gap-fill already grossed up Brokerage; the 3rd pass handles the
-            // leftover tax from SS phaseout and NIIT cliffs that the gross-up couldn't predict.
-            // Cash (and Roth as fallback) carry no new cap gains, so they break the cycle.
-            // The spiral is an argument, not a measurement; `thirdPassBrokerage` above is the arm
-            // that tests it. Until P32d runs it, this stays the shipped behavior.
+            // HISTORY, kept because the reasoning was plausible and wrong, and deleting it would
+            // invite someone to re-derive it. This pass was Cash-only for years, justified as:
+            // "adding more Brokerage here creates a cap-gains spiral - more gains -> higher SS
+            // taxation -> bigger residual -> repeat". The 2nd-pass gap-fill already grossed up
+            // Brokerage; the 3rd pass handles the leftover tax from SS phaseout and NIIT cliffs
+            // that the gross-up couldn't predict, and Cash (and Roth as fallback) carry no new cap
+            // gains, so they break the cycle.
+            //
+            // P32d MEASURED the spiral and it does not exist. 3,960 armed runs across 3 basis
+            // fractions x 3 states x 2 dividend rates: ZERO capped years, and the 6-iteration and
+            // 200-iteration caps produced identical counters everywhere, so no single year ever
+            // wanted a 7th pass. The feedback is convergent, as the bounds predict - SS inclusion
+            // stops at 85% and LTCG tops out at 20%, so each pass recovers a shrinking fraction.
+            // Cost of the old behavior, on the same grid: $372,455 of spending the plan had
+            // promised and could not pay, against $1,711 of new unfunded spending from allowing it.
+            // Every scenario it rescued was an IRMAA Ceiling (`minlimit`) plan, the case this was
+            // pinned on - Brokerage the only money left, and the engine refusing to touch it.
+            // See `.test_harnesses/P32_RESULTS.md`, section Q2.
             // P28 flag: only 'fillRothThenCash' changes the third pass. The pass is already Cash then
             // Roth, which IS the 'fillCashThenRoth' order, so that mode leaves it untouched.
             // Neither carries cap gains, so this only picks which tax-free account drains first.

@@ -405,22 +405,32 @@ const P32C_TP = { ...BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1
 const P32C_FIXED = { ...BASE, Cash: 2000, Brokerage: 900000, BrokerageBasis: 200000,
                      ss1: 45000, ss1Age: 66, spendGoal: 120000 };
 
-test('P32c: thirdPassBrokerage/forcedIRAAllowBrokerage absent ≡ off → byte-identical log', () => {
+test('P32h: absent thirdPassBrokerage ≡ bounded (the shipped default); off stays reachable', () => {
+    // This asserted `absent ≡ off` until P32h flipped the default. Both halves are pinned now,
+    // because the pair is what keeps the old behavior reproducible: a future reader measures the
+    // exclusion by passing 'off' and diffing against the default.
     for (const scen of [P32C_TP, P32C_FIXED]) {
         const plain = simulate({ ...scen });
         assert(plain.totals.thirdPassCount > 0,
             'fixture must reach the third pass, or byte-identity proves nothing about these arms');
-        const withOff = simulate({ ...scen, thirdPassBrokerage: 'off', forcedIRAAllowBrokerage: 'off' });
-        assert(JSON.stringify(plain.log) === JSON.stringify(withOff.log),
-            'explicit off must not perturb the year-by-year log');
-        assert(plain.totals.thirdPassBrokerIters === undefined,
+        const withBounded = simulate({ ...scen, thirdPassBrokerage: 'bounded' });
+        assert(JSON.stringify(plain.log) === JSON.stringify(withBounded.log),
+            'omitting the input must be identical to asking for the shipped default');
+        const withOff = simulate({ ...scen, thirdPassBrokerage: 'off' });
+        assert(withOff.totals.thirdPassBrokerIters === undefined,
             'an off run must not even attach the P32c counters to totals');
+        // forcedIRAAllowBrokerage did NOT ship (P32h call 1: dominated), so for THAT input the
+        // original absent-equals-off contract still holds and is still worth pinning.
+        const fibOff = simulate({ ...scen, forcedIRAAllowBrokerage: 'off' });
+        assert(JSON.stringify(plain.log) === JSON.stringify(fibOff.log),
+            'forcedIRAAllowBrokerage is research-only: explicit off must equal absent');
     }
 });
 
 test('P32c: thirdPassBrokerage bounded draws Brokerage in the third pass, within its cap', () => {
-    const off = simulate({ ...P32C_TP });
-    const on = simulate({ ...P32C_TP, thirdPassBrokerage: 'bounded' });
+    // Sense inverted at P32h: 'bounded' ships, so the control is explicit 'off'.
+    const off = simulate({ ...P32C_TP, thirdPassBrokerage: 'off' });
+    const on = simulate({ ...P32C_TP });
     assert(JSON.stringify(off.log) !== JSON.stringify(on.log), 'the arm must actually change the run');
     assert((on.totals.thirdPassBrokerIters ?? 0) > 0, 'the Brokerage leg must have fired');
     // The cap is per year, so the lifetime total cannot exceed 6 x the years that reached the pass.
@@ -465,8 +475,13 @@ test('P32c: thirdPassBrokerage is inert for Ordered (it runs the user sequence i
 });
 
 test('P32c: forcedIRAAllowBrokerage brokerageFirst spends Brokerage before forcing IRA', () => {
-    const off = simulate({ ...P32C_FIXED });
-    const on = simulate({ ...P32C_FIXED, forcedIRAAllowBrokerage: 'brokerageFirst' });
+    // Measured against `thirdPassBrokerage: 'off'` since P32h. Under the shipped default the third
+    // pass has already spent the Brokerage this arm wanted, so the two together showed no
+    // displacement at all (131,780 -> 131,780) and this read as a regression when it was really an
+    // overlap. Pinning the third pass off measures the backstop alone, which is all this was about.
+    const CTL = { ...P32C_FIXED, thirdPassBrokerage: 'off' };
+    const off = simulate({ ...CTL });
+    const on = simulate({ ...CTL, forcedIRAAllowBrokerage: 'brokerageFirst' });
     assert(off.totals.forcedIRATotal > 0, 'fixture must actually force IRA above the ceiling');
     assert(on.totals.forcedIRATotal < off.totals.forcedIRATotal,
         `brokerageFirst must displace forced IRA: ${Math.round(off.totals.forcedIRATotal)} -> ` +
@@ -2001,7 +2016,12 @@ test('P38: the primary draw funds the tax on guaranteed income, not the backstop
     // the backstop to discover. Then 20,381 with the IRC 1014 basis step-up (P35g): the first
     // death raises the survivor's basis, so the same brokerage draw realizes less capital gain and
     // costs less tax, and less spending has to be forced out of the IRA above the ceiling.
-    assertNear(_sumForcedIRA(r.log), 20381.208, 'forced-IRA total once the draw is sized correctly', 1);
+    // 20,381 -> 18,719 at P32h, and this one is not a re-pin for its own sake. The third pass may
+    // now draw Brokerage, so part of the residual that used to be forced out of the IRA above the
+    // ceiling is funded from the taxable account instead. Forced IRA going DOWN is the intended
+    // direction: the measurement this test exists for (the primary draw sizing the tax on
+    // guaranteed income) is unchanged, and the remaining gap is smaller than it was.
+    assertNear(_sumForcedIRA(r.log), 18719.301, 'forced-IRA total once the draw is sized correctly', 1);
 });
 
 test('P38: sizing by a flat nominal rate would badly over-draw an SS-heavy household', () => {
@@ -2254,7 +2274,7 @@ test('ACA exception ends at Medicare: the lapsed tail IS backstopped', () => {
 // Nothing in P38 fixes this: widening the forced-IRA gate cannot help a year whose IRA is already
 // at zero. Pinned so P32 starts from a measured number rather than a fresh investigation, and so
 // that a change in the meantime has to announce itself.
-test('P32 (not fixed here): minlimit strands spending with Brokerage still funded', () => {
+test('P32h: minlimit no longer strands spending with Brokerage still funded (was the defect)', () => {
     // irmaaMarginMode is pinned EXPLICITLY rather than left to the default. This is a P32 tripwire,
     // not an IRMAA one: when the default moved from 'halfstep' to 'halfcpi' in v11.15cc it dragged
     // these numbers with it (11 years -> 10) purely because a tighter ceiling drains the IRA on a
@@ -2264,8 +2284,26 @@ test('P32 (not fixed here): minlimit strands spending with Brokerage still funde
     const log = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
                            stratACAMultiple: 0, irmaaMarginMode: 'halfcpi' }).log;
     const stranded = _brokStranded(log);
-    assert(stranded.length === 10,
-        `expected the known 10 Brokerage-stranded years, got ${stranded.length}`);
+    // ── P32h, 2026-08-21. THE DEFECT IS FIXED, and this test flipped from tripwire to guard. ──
+    // Everything below the fold is the history of five failed attempts, kept verbatim because it
+    // is the evidence that nothing else could have closed this: three unrelated corrections moved
+    // the amounts and never freed a single year, and a fourth made it worse. What closed it was
+    // allowing the third pass to draw Brokerage (`thirdPassBrokerage`, default 'bounded' since
+    // P32h), after P32d measured the cap-gains spiral that justified the exclusion and found ZERO
+    // capped years in 3,960 armed runs.
+    assert(stranded.length === 0,
+        `minlimit must no longer strand spending while Brokerage is funded, got ${stranded.length} ` +
+        `years (${stranded.map(e => e.year).join(', ')})`);
+    // The control that makes the claim falsifiable: pass 'off' and the ten stranded years come
+    // straight back, with the amounts the tripwire pinned. Without this a future refactor could
+    // make the count zero for some entirely different reason and still pass.
+    const before = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
+                              stratACAMultiple: 0, irmaaMarginMode: 'halfcpi',
+                              thirdPassBrokerage: 'off' }).log;
+    const strandedBefore = _brokStranded(before);
+    assert(strandedBefore.length === 10,
+        `the pre-P32h behavior must still be reproducible via 'off': expected 10 stranded years, ` +
+        `got ${strandedBefore.length}`);
     // The numbers nudged when dividends and interest stopped being double-credited (total
     // 71,382 -> 71,481, worst 9,468 -> 9,478, Brokerage 945,376 -> 926,096) and the COUNT did not
     // move at all. That is worth recording: the two defects are independent. Removing the phantom
@@ -2293,14 +2331,32 @@ test('P32 (not fixed here): minlimit strands spending with Brokerage still funde
     // -> 2040-2049, total 26,869 -> 27,523, worst 6,564 -> 6,576, Brokerage 1,100,390 -> 1,027,335.
     // Still nothing frees any of these years, and the mode is now pinned explicitly above so a
     // future default change cannot move this test again.
-    assertNear(_worst(stranded), 6575.510146, 'worst single-year unfunded amount with Brokerage left', 1);
-    assertNear(stranded.reduce((s, e) => s + Math.abs(e.shortfall), 0), 27529.424758,
+    // These three pinned the size of the defect. They now describe the 'off' control, which is
+    // what the defect COST: unchanged values, different subject.
+    assertNear(_worst(strandedBefore), 6575.510146, 'worst single-year unfunded amount with Brokerage left', 1);
+    assertNear(strandedBefore.reduce((s, e) => s + Math.abs(e.shortfall), 0), 27529.424758,
         'total stranded across the ten years', 1);
     // The headline number: how much was sitting in Brokerage the first year it gave up.
-    assertNear(Math.max(...stranded.map(e => e.Brokerage || 0)), 1027282.093360,
+    assertNear(Math.max(...strandedBefore.map(e => e.Brokerage || 0)), 1027282.093360,
         'Brokerage balance in the first year minlimit reported an unfunded shortfall', 1);
-    assert(stranded.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
+    assert(strandedBefore.every(e => (e.Cash || 0) <= 1 && (e.Roth || 0) <= 1 && (e.TotalIRA || 0) <= 1),
         'every stranded year must have Cash, Roth and IRA at zero — Brokerage is the only source left');
+    // What the fix bought, in the two directions that matter. Funded years up and spending up are
+    // the point; terminal wealth DOWN is the price, and it is asserted rather than left implicit so
+    // that nobody later reads the change as free.
+    const after = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
+                             stratACAMultiple: 0, irmaaMarginMode: 'halfcpi' });
+    const beforeRun = simulate({ ...CAP_BASE, strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1,
+                                 stratACAMultiple: 0, irmaaMarginMode: 'halfcpi',
+                                 thirdPassBrokerage: 'off' });
+    assert(after.totals.yearsfunded > beforeRun.totals.yearsfunded,
+        `the fix must fund more years: ${beforeRun.totals.yearsfunded} -> ${after.totals.yearsfunded}`);
+    assert(after.totals.spend > beforeRun.totals.spend,
+        `the fix must actually pay for more spending: ${Math.round(beforeRun.totals.spend)} -> ` +
+        `${Math.round(after.totals.spend)}`);
+    assert(after.finalNW < beforeRun.finalNW,
+        `and it must cost terminal wealth, because the money is spent rather than left: ` +
+        `${Math.round(beforeRun.finalNW)} -> ${Math.round(after.finalNW)}`);
 });
 
 // ── State retirement-income exclusion (IL/PA full exemption) ────────────────────

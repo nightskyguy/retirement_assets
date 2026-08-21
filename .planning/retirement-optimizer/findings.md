@@ -2468,3 +2468,166 @@ before any input is built** - the same discipline caught P64's answer being "no"
 **Note the interaction to check first:** a big medical year raises itemized deductions AND is usually a
 big withdrawal year, so AGI rises too, which raises the 7.5% floor. The two move against each other
 and the net is not obvious without measuring.
+
+
+## 2026-08-21 - P32d scoping: the harness `q2()` has been silently skipping, and the cap counter can false-positive
+
+**Measured, not read.** Ran `node .test_harnesses/brokerage_harness.js` in full. Line 89 of the output:
+
+```
+  SKIPPED: engine does not expose totals.tpBrokIters, so the research flags
+  are not wired in yet. Q1 above still stands on shipped behavior.
+```
+
+**`q2()` was written before the arms existed and guessed their names wrong.** It probes
+`probe.totals.tpBrokIters` (`brokerage_harness.js:207`) and reads `t.tpBrokMaxIters` /
+`t.tpBrokNonConverged`. The engine ships `totals.thirdPassBrokerIters`,
+`totals.thirdPassBrokerCapped` and `totals.thirdPassBrokerStalled` (`optimizer_core.js:2138-2140`).
+Nothing matches, so `supported` is false and the whole question prints SKIPPED. It has been
+green-looking and inert since v11.1582. Its arm table is wrong too:
+`forcedIRAAllowBrokerage: true` (`:203`), where the engine wants the string `'brokerageFirst'`
+(`:2027`) - a boolean is neither `'off'` nor `'brokerageFirst'`, so that arm would silently take the
+`_fibArm !== 'off'` path and read as enabled by luck rather than by contract.
+
+**Consequence for the preliminary numbers.** The 8-scenario table in the 2026-08-17 entry was NOT
+produced by this harness - it cannot have been. It came from a separate scratch run, which is why it
+is 8 hand-picked scenarios instead of the harness's 5 x 11 grid.
+
+**A second trap, found by reading the loop rather than running it.** The Capped counter can
+false-positive at the `bounded` cap. The loop is `for (; _it < _cap; _it++)` with the convergence
+test `if (_res <= 1 ...) break;` at the TOP of the body (`optimizer_core.js:2118`). A year that
+consumes all `_cap` draws exits on the loop condition without ever running the test again, so `_it
+=== _cap` and it is counted as Capped - even if the residual it just closed would have tested `<= 1`
+on the next pass. At `bounded`'s cap of 6 that is a live risk; at `unbounded`'s 200 it is not.
+**Therefore: no Capped year in the bounded arm is spiral evidence on its own. It has to be re-checked
+against the same scenario under `unbounded` before the word "spiral" is used.** This is the same
+species of mistake the stall guard already fixed once.
+
+**Where the Brokerage leg actually sits.** Confirmed against the code, since the ordering decides
+what the arm can possibly do: the third pass draws Cash (`:2059`), then the arm's Brokerage leg
+(`:2066-2072`), then the Roth fallback (`:2074`). The re-draw loop (`:2107-2137`) runs after the
+tax recalc and re-prices realized gains each pass. Ordered strategies are excluded from both, so
+`ord-CBIR` / `ord-RIBC` / `ord-BIRC` are inert arms in Q2 and should be reported as inert, not as
+zero.
+
+**One stale instruction in the task.** `P32d` says "Re-run Q1's numbers first, since they were
+measured on the double-crediting engine." That was already done - `P32e` records "Q1 re-run post-fix:
+three families UP, cyclic -0.8pt, never-draw still 0/55". Do not re-run it a third time.
+
+
+## 2026-08-21 - P32d-1/2/3 built and run: no spiral anywhere, and the TWO arms point opposite ways
+
+`q2()` repaired, widened, and run. Grid: 3 basis x 3 states x 2 dividend rates x 5 scenarios x 11
+strategy arms x 5 Q2 arms = **4,950 runs**, of which 3,960 are armed. ~0.7ms per `simulate()`, so the
+whole thing is a few seconds - cost was never the reason this went unmeasured.
+
+### The spiral does not exist on this grid
+
+```
+SPIRAL VERDICT: capped years = 0   (the ONLY spiral evidence);  stalled years = 2545
+arm          runs w/ iters    total iters      max iters      CAPPED yrs     stalled yrs
+bounded           461/990          12732             74               0             892
+unbounded         461/990          12732             74               0             892
+bnd+fib           461/990          12601             74               0             761
+```
+
+**Zero capped years in 3,960 armed runs**, and `bounded` is byte-identical to `unbounded` on every
+counter. That identity is the load-bearing part: `bounded` caps at 6 passes and `unbounded` at 200,
+so if any year had ever wanted a 7th pass the two columns would differ. They do not, anywhere on the
+grid. **`P32d-4`'s cap-artifact re-check is therefore moot - there is nothing to re-check.**
+
+The comment at `optimizer_core.js:2044` asserts a cap-gains spiral as the reason Brokerage is
+excluded from the third pass. On this grid that reason is **not supported**. Prediction **P5** (no
+divergence, bounded feedback because SS inclusion caps at 85% and LTCG tops out at 20%) scores
+**RIGHT**.
+
+`max iters = 74` is a **run total**, not a per-year depth - it sums `thirdPassBrokerIters` across
+every year of a 24-year plan. Do not read it as "74 passes in one year"; the bounded/unbounded
+identity already proves no single year exceeded 6.
+
+**The 2,545 stalled years are not a counter-finding.** Stalled means the residual stopped improving
+while Brokerage still held a balance - dust, or a draw whose own tax eats the draw. Without the stall
+guard those years would have consumed the whole cap and read as divergence, which is exactly the
+mistake the guard was added to prevent.
+
+### Axis readings, and why widening was worth it
+
+| axis | total iters | capped | stalled | armed runs |
+|---|---|---|---|---|
+| basis 20% / 50% / 80% | 13,088 / 12,652 / 12,325 | 0 / 0 / 0 | 827 / 874 / 844 | 453 / 465 / 465 |
+| state CA / NY / TX | 12,362 / 15,718 / 9,985 | 0 / 0 / 0 | 950 / 889 / 706 | 480 / 480 / 423 |
+| dividend 0% / 2% | 20,873 / 17,192 | 0 / 0 | 1,796 / 749 | 771 / 612 |
+
+Basis barely moves the iteration count, which is itself the finding: the axis chosen as the spiral's
+*amplitude* does not amplify it. NY works the third pass hardest (15,718 iters vs TX's 9,985), which
+is the state tax rate feeding `_brokTaxRate` exactly as expected. Dividends **suppress** the arm
+rather than feed it - at 2% there are fewer armed runs and less than half the stalled years, because
+the dividend income closes part of the gap before the Brokerage leg ever fires.
+
+### The finding that actually matters: the two arms are not one decision
+
+```
+funded-year movers BY ARM
+arm                movers      better       WORSE
+bounded               11           9           2
+unbounded             11           9           2
+brokFirst             97           9          88
+bnd+brokFirst        101           9          92
+```
+
+**`brokFirst`'s 9 winning cells are set-identical to `bounded`'s 9** (checked as a set, not
+eyeballed). It buys nothing the third-pass arm does not already deliver and pays 88 losses for it,
+so on funded years the third-pass arm **strictly dominates** it. All 9 are `minlimit` rows; both of
+`bounded`'s 2 losers are `brokPoor/minlimit` NY.
+
+- **`thirdPassBrokerage` rarely fires and mostly helps** - 11 movers out of 990, 9 of them better.
+- **`forcedIRAAllowBrokerage` (`brokFirst`) fires constantly and mostly hurts** - 97 movers, **88 of
+  them worse**, and `bnd+brokFirst` is dominated by the `brokFirst` half. The preliminary 8-scenario run saw this shape once
+  (BASE fixed, five fewer funded years); at grid scale it is the rule, not an outlier.
+
+Worst cases are severe, not marginal: `capbase/fixedpct2 b20 CA d0` under `brokFirst` goes **24 funded
+years -> 5** while erasing $2,238,492 of forced IRA down to $270,857 and *raising* final net worth by
+$1,343,512. A ship decision made on the forced-IRA column or the net-worth column alone would read
+that as a $1.3M win. It funds nineteen fewer years of the plan.
+
+### Every third-pass mover is `minlimit`, which is the defect the phase opened with
+
+All 11 are IRMAA Ceiling rows: `capbase/minlimit` 19->23 (CA), 14->23 (NY), 19->24 (TX), at all three
+basis fractions. That is precisely the pinned defect in the harness header - `minlimit` stranding
+$71,382 across nine years with Brokerage untouched and every other account at zero. Prediction **P6**
+(the arm ends the stranding) named the THIRD-PASS arm, and is now scored per arm rather than on the
+pooled total - **RIGHT** (9 better / 2 worse), with `brokFirst`'s own 9/88 record printed beside it
+as the separate decision it is.
+
+**CORRECTED same day - the sign was read backwards the first time.** This paragraph originally said
+the winners "fund more years while *raising* total shortfall", and called it an unresolved trade-off.
+`totals.shortfall` accumulates `Math.min(0, netIncome - spendGoal)` (`optimizer_core.js:2310`,
+`:2726`), so it is **negative or zero** and a delta of `+$68,786` is that much previously unpaid
+spending **now paid**. Confirmed against the engine, not just re-read: on `capbase/minlimit b20 NY
+d0` the arm takes unfunded dollars from **$68,792 to $6**, `failedInYear` from **ten years to one**,
+and lifetime spend UP by exactly $68,786.
+
+Per-arm unfunded dollars, which is the number the funded-year count could not give:
+
+| arm | $ newly funded | $ newly unfunded |
+|---|---|---|
+| `bounded` / `unbounded` | **$372,455** | **$1,711** (385 runs, ~$4 each - rounding dust) |
+| `brokFirst` | $372,455 | **$27,860,186** |
+
+218:1 for the third-pass arm. The real cost is **terminal wealth** (-$103,847 on that cell), because
+the money gets spent rather than left. That is a far easier trade than the one first written down.
+
+The 2 "worse" third-pass rows are trivial: `brokPoor/minlimit` NY, 24->23 funded, shortfall better by
+$6, finalNW -$9,108.
+
+### Corrections to earlier notes in this file
+
+- The 2026-08-17 entry's grid claim was repeated in my own scoping note as "one state, zero growth,
+  zero dividends". **`CAP_BASE` growth is 0.05, not zero** - `dividendRate: 0.0` is the part that was
+  right. The preliminary run was a separate scratch script, not this harness, so its exact fixture is
+  not recoverable from the repo.
+- `brokFirst` never sets `thirdPassBrokerIters` (0/990 runs). Correct and not a bug: it is the
+  funding backstop, a different loop, and it has no counter of its own. If it ever needs iteration
+  evidence, one has to be added.
+- **Arm labels renamed 2026-08-21** at the user's request: `fib` -> `brokFirst`, `bnd+fib` ->
+  `bnd+brokFirst`. `fib` read as Fibonacci and hid which of the two exclusions was under test.

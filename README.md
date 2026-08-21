@@ -276,7 +276,26 @@ individual).
 + There is no provision for itemized tax returns.  This tool assumes you rely on standard deductions (or exemptions, if that's what your state uses).  It also assumes that Single means one person, Married Filing Jointly is two. If you have a dependent adult, or children, it will not calculate the proper possible exemptions or deductions for these situations.
 + The tool doesn't try to maintain a *brokerage* balance. It will deplete the brokerage account to zero if required to meet your spend goal. Cash is the exception: the **Cash Reserve** setting does keep a target cash buffer, and the tool only breaks into it after every other account has been exhausted. See [When might Cash Reserve be depleted?](#when-might-cash-reserve-be-depleted) in the FAQ. There is no equivalent floor for brokerage, and no plan to add one.
 + When enabled ACA subsidy targeting keeps MAGI below 200/250/300/400% of the Federal Poverty Level. ACA thresholds are the only strategy that **strictly** enforce the ceiling. Crossing an ACA Federal Poverty Level (FPL) threshold forfeits the entire premium subsidy (a cliff, not a gradual cost), so the simulation never breaches the cap. If your spending can't be met within the ACA target, the plan is flagged untenable rather than quietly overspending. The cap **ends at Medicare**: from the year every living person in the plan is Medicare-eligible there is no premium subsidy left to protect, so the ceiling is dropped and the strategy runs as **Proportional 0%** from then on. Before that point the cap is measured against *household* income, so a spouse who is already on Medicare still has their RMDs and Social Security counted against the younger spouse's limit. What the tool does **not** model is the subsidy itself - there is no premium tax credit, no applicable-percentage table, and no health-insurance premium in the spend goal, so it can show you what staying under the cap **costs** but not what it **buys**. Read an ACA row as a constraint study, never as a recommendation.
-+ All other strategies e.g. the **🪣Fill Fed/IRMAA Bracket** strategy, are *soft* - and will exceed the ceiling to fund spending. It warns about this, but don't expect to spend 300k/year and remain in the 12% Federal bracket unless you've got a lot of Roth or high basis brokerage assets.
++ All other strategies e.g. the **🪣Fill Fed/IRMAA Bracket** strategy, are *soft* - and will exceed the ceiling to fund spending.
+
++ An **IRMAA tier ceiling** aims at the threshold that will actually apply, not today's. IRMAA bills a
+given year's premium against the income you reported **two years earlier**, and compares it against
+the thresholds published for the billing year, so a ceiling capping this year's income has to target
+the threshold two years out. At 3% inflation that is about 6% higher than today's. The same forward
+projection drives QCD "As Needed", where it matters most: that mode donates exactly enough to reach
+the target, so a correctly projected target means a smaller donation buys the same tier. The safety
+margin below does **not** apply there, only to the ceiling, because on the QCD side a margin is paid
+for with money that leaves the household and it measured costing far more in donations than it saved
+in surcharges. Two things it does **not** do. It does not anticipate a change of
+filing status: income sized while married but billed after a death is judged against single-filer
+thresholds roughly half as high, which is the IRMAA half of the widow penalty and the one case where
+a plan can land in a much higher tier than it targeted. And the safety margin it leaves below the threshold (an
+`?nerdknob` setting, default: project the threshold forward at half your expected inflation) only
+insures one thing: **inflation
+coming in BELOW your assumption**. If CPI meets or beats what you entered, the thresholds outrun
+your plan and the margin buys nothing at all - measured as exactly zero breaches in every setting at
+or above the assumed rate. It also does not cover income you could not know about in December, such
+as a late fund distribution or K-1, because the simulation never has any. It warns about this, but don't expect to spend 300k/year and remain in the 12% Federal bracket unless you've got a lot of Roth or high basis brokerage assets.
 + There is no modeling of any kind of Annuity, Life Insurance, Reverse Mortgage, inheritance, or ongoing (part time or full time) Income.  If you have a lifetime annuity, or other ongoing income you can treat it like a pension.
 + There is only one pension and it's assigned to "You". If your spouse has a pension and you don't, you can swap roles. You become **your spouse**, and your spouse becomes you in the entry fields.
 + There is no modeling of rental income (Schedule E), 1099/self-employment income, or self-employment tax.

@@ -11,6 +11,58 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15cf"></a>
+
+## 11.15cf
+
+### The IRMAA ceiling was aiming two years of inflation too low
+
+IRMAA bills the premium for a given year against the MAGI you reported two years earlier, and it
+compares that MAGI against the thresholds published for the **billing** year. The engine had the
+billing half right: it reads the MAGI from two years back and measures it against thresholds
+inflated to the current year, which is what SSA does.
+
+The targeting half was wrong. Every ceiling that caps *this* year's MAGI to stay inside a tier used
+*this* year's threshold, when the MAGI it is capping will be judged against the threshold published
+two years later. At 3% inflation that aims about 6% low. On the MFJ Tier 1 floor of $218,000 it is
+roughly $13,300 a year of IRA spending or Roth conversion room that was never used, every year of a plan.
+
+Two paths change as a result:
+
+- **IRMAA Ceiling strategy** ("Fill Fed/IRMAA Bracket" with a tier selected). Live.
+- **QCD "As Needed"**, which donates only as much as it takes to drop two IRMAA tiers. Live, and
+  the place the correction is worth the most.
+
+**Behavior change.** An IRMAA Ceiling plan now converts more, a QCD "As Needed" plan donates
+slightly less, and both shift the numbers in a saved scenario or a shared link. At 0% inflation
+nothing moves at all, which is what makes this an indexing fix rather than a new policy.
+
+The projection of the future threshold is always performed. A setting chooses how much extra room to
+leave below the projected future threshold. "No margin (aim right at the projected
+threshold)" - is riskiest because slightly less future inflation could result in exceeding the future threshold and incur an increased IRMAA penalty.
+The other side of the argument is that a future threshold set too low wastes potential IRA spending or Roth Conversion space year after year.
+
+**Behavior change: your "as needed" QCDs get smaller.**
+
+Risking an IRMAA penalty and money leaving for charity are not the same decision.  Tests show that the 
+money leaving the QCD to stay under a future threshold were exceeding the value of avoiding the IRMAA surcharge. For that reason,
+the QCD "as Needed" contribution always uses the future threshold projection, and doesn't leave a "margin".
+The withdrawal/conversions however are capped according to a projection that leaves a safety margin.
+
+### A selectable safety margin (hidden for now)
+
+An "IRMAA Safety margin" setting has been added to tune the behavior.
+
+- **Half the next-tier surcharge** (default). Looks up what crossing this particular boundary
+  costs per year and holds back half of it, so the setback scales with the size of the cliff.
+- **None**, **$1,000**, **$2,000** - fixed setbacks below the projected threshold.  These are the "riskiest".
+- **Half the expected inflation**, **1% less than expected inflation** - hold room back by
+  projecting the threshold forward at a slower rate instead of subtracting dollars.
+
+It is gated because it is still being measured, not because it is dangerous.
+
+---
+
 <a id="11.15c9"></a>
 
 ## 11.15c9
@@ -34,6 +86,8 @@ For plans converting heavily in a high-tax state, these can change the recommend
 Note that this tool tests only SALT against the standard deduction - it does not model mortgage
 interest, charitable giving, or medical expenses - so the benefit is limited to households where SALT
 alone exceeds the standard deduction, and it ends after 2029.
+
+---
 
 <a id="11.15a2"></a>
 

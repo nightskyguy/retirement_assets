@@ -18,6 +18,9 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `phased_harness.js` | **node** | P36 round 1: which families rank where under every objective, and do any arms never win? |
 | `oracle_harness.js` | **node** | P51: how far below the perfect-foresight ceiling does each family sit, and is it conversions or the split? |
 | `endgame_harness.js` | **node** | P35n: once the IRA sits at its target, what should the tail draw from? |
+| `irmaa_margin_harness.js` | **node** | Does an explicit IRMAA safety margin buy anything, now that the tier ceiling is projected forward? |
+| `irmaa_cpi_risk_harness.js` | **node** | Same question with the CPI allowed to come out different from the one the plan assumed. Reverses the answer. |
+| `irmaa_default_harness.js` | **node** | Which margin setting should be the DEFAULT, and which of the six can be deleted. Separates the IRMAA effect from the conversion-sizing side effect that dwarfs it. |
 
 ## betr_harness.js  (node)
 

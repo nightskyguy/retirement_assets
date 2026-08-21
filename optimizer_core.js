@@ -108,6 +108,91 @@ function propTaxFor(inputs, currentYear, baseYear) {
     return base * Math.pow(1 + g, Math.max(0, currentYear - baseYear));
 }
 
+// ── IRMAA targeting: this year's MAGI is judged two years from now ────────────────────────────
+// IRMAA charges the premium in year Y against MAGI from year Y + LOOKBACK (LOOKBACK is -2), and
+// SSA indexes the thresholds to the PREMIUM year. So any ceiling that caps THIS year's MAGI has to
+// aim at the threshold published |LOOKBACK| years from now, not today's. The CHARGE side
+// (beginYear's calcIRMAA against magiHistory[-2]) was always right; only the TARGETING side was
+// not, and it was wrong in the safe direction - it under-filled every tier by (1+cpi)^2, roughly
+// 6% at 3% CPI, so plans left conversion headroom unused rather than breaching a cliff.
+//
+// irmaaMarginMode is a nerdknob (retirement_optimizer.html) choosing how much safety margin to
+// hold back below that projected threshold. Two modes ('halfcpi', 'cpiminus1') express the margin
+// by projecting at a SLOWER CPI rather than by subtracting dollars, so they live in the factor
+// below; the rest return 0 from irmaaFwdFactor's point of view and get their dollars from
+// irmaaMarginDollars(). Every IRMAA-shaped ceiling in this file goes through both.
+// Ordered strongest-setback first. `flat1000` was dropped in v11.15cc: it is the wrong SHAPE (a
+// fixed dollar setback decays to irrelevance as thresholds inflate) and it saved four to five times
+// less surcharge than a rate haircut across 60 historical CPI-U windows. A saved link or scenario
+// carrying the retired value falls through to IRMAA_MARGIN_DEFAULT below rather than erroring.
+const IRMAA_MARGIN_MODES = ['halfcpi', 'cpiminus1', 'halfstep', 'flat2000', 'none'];
+
+// Named rather than repeated, because it is asserted in the tests, read by the UI when the control
+// is hidden, and relied on as the fallback for an unknown value - three places that must not drift.
+// Moved from 'halfstep' to 'halfcpi' in v11.15cc: halfstep prevented 5 breaching years of 92 at a
+// 1.5-point CPI miss where halfcpi prevented 21, and halfcpi saves surcharge in 59 of the 60
+// windows measured, the best of any setting.
+const IRMAA_MARGIN_DEFAULT = 'halfcpi';
+
+function irmaaMarginModeOf(inputs) {
+    const m = inputs && inputs.irmaaMarginMode;
+    return IRMAA_MARGIN_MODES.includes(m) ? m : IRMAA_MARGIN_DEFAULT;
+}
+
+// Multiplier that carries a threshold from today's indexing to the premium year that will judge
+// this year's MAGI. Returns 1 at cpi = 0, so a zero-inflation run reproduces the old numbers exactly.
+// Both haircut modes act on the PROJECTED INCREASE - the full |LOOKBACK|-year growth - rather than
+// on the annual rate. One sentence describes both: take half of it, or take one point off it.
+//   full       (1+cpi)^2.            3% -> +6.09%
+//   halfcpi    half the increase.    3% -> +3.045%
+//   cpiminus1  the increase, less one point. 3% -> +5.09%
+//
+// v11.15cd corrected cpiminus1, which used to subtract the point from the ANNUAL rate and compound
+// that: (1.02)^2 = +4.04%. That is a far harsher haircut than "1% less" suggests, and it sat almost
+// on top of halfcpi - the two measured as near-duplicates, saving $48.5k and $37.2k of surcharge
+// across 60 historical CPI windows. Corrected they separate roughly 2:1 ($48.5k vs $23.8k) and form
+// a real ladder. halfcpi was restated the same way in the same release; at 3% CPI that moves it by
+// 0.025 points, which is immaterial on its own and buys one consistent description of both.
+//
+// Clamped at 1 so a low-CPI plan can never aim BELOW today's un-projected threshold - a different
+// and unintended thing - and so the cpi = 0 identity stays exact.
+function irmaaFwdFactor(inputs) {
+    const cpi = (inputs && inputs.cpi) || 0;
+    const increase = Math.pow(1 + cpi, -TAXData.IRMAA.LOOKBACK) - 1;
+    switch (irmaaMarginModeOf(inputs)) {
+        case 'halfcpi':   return 1 + increase / 2;
+        case 'cpiminus1': return Math.max(1, 1 + increase - 0.01);
+        default:          return 1 + increase;
+    }
+}
+
+// Dollar setback below `threshold`, which must ALREADY be forward-projected with `effCpiRate` as
+// its multiplier. 'halfstep' asks calcIRMAA what crossing this exact boundary costs and holds back
+// half of it, so the setback scales with the size of the cliff instead of being a guessed constant.
+// The step is priced at THIS year's medicareRate rather than escalated to the premium year: that
+// understates it by about two years of ANNUAL_INCREASE, on a figure already well under 1% of the
+// threshold, which is not worth carrying an extra term for.
+function irmaaMarginDollars(inputs, threshold, status, effCpiRate, medicareRate, onMedicareCount) {
+    switch (irmaaMarginModeOf(inputs)) {
+        case 'flat2000': return 2000;
+        case 'halfstep': {
+            const above = calcIRMAA(threshold,     status, effCpiRate, medicareRate, onMedicareCount);
+            const below = calcIRMAA(threshold - 1, status, effCpiRate, medicareRate, onMedicareCount);
+            return 0.5 * Math.max(0, above - below);
+        }
+        default: return 0;   // 'none', plus the two CPI-haircut modes already handled in irmaaFwdFactor
+    }
+}
+
+// Filers who will be enrolled in Medicare by the time THIS year's MAGI is charged, i.e. who are
+// already past ELIGIBILITY_AGE + LOOKBACK. Deliberately NOT yr.onMedicare: the tier ceiling switches
+// on at 63, when nobody is enrolled yet, so pricing the margin off the current enrolment count would
+// zero it out at exactly the ages the ceiling first bites.
+function onMedicareAtCharge(age1, age2, alive1, alive2) {
+    const gate = TAXData.IRMAA.ELIGIBILITY_AGE + TAXData.IRMAA.LOOKBACK;
+    return (alive1 && age1 >= gate ? 1 : 0) + (alive2 && age2 >= gate ? 1 : 0);
+}
+
 // Computes QCDs for the simulation year. Returns { qcd1, qcd2, totalQCD }.
 // "Always" mode: donate up to qcdHHMax every eligible year.
 // "As Needed" mode: donate only the minimum needed to drop below the current IRMAA tier cliff.
@@ -124,7 +209,24 @@ function computeAnnualQCDs(inputs, balance, simYear, qcdLimit, provisionalMAGI, 
     if (inputs.qcdMode === 'asneeded') {
         // Target: drop 2 IRMAA tiers (or escape all surcharges), whichever needs fewer QCDs.
         // Returns the MAGI ceiling of the target tier; 0 = already at no-surcharge level.
-        const tierTarget = getIRMAATierTargetMAGI(provisionalMAGI, status, cpiRate, 2);
+        // effCpi, not cpiRate: the MAGI being trimmed here is charged |LOOKBACK| years from now,
+        // against the thresholds published for THAT year (see irmaaFwdFactor).
+        //
+        // THE FULL PROJECTION, AND NO MARGIN - deliberately, and unlike the tier ceiling. The
+        // irmaaMarginMode haircuts and setbacks are not applied here at all, which is why this asks
+        // irmaaFwdFactor for the 'none' factor rather than the user's.
+        //   The margin exists to guard a cliff the plan is deliberately aiming AT. On this arm the
+        // plan is already aiming BELOW the threshold, and every dollar of margin is bought with a
+        // dollar that leaves the household for charity. Measured across the historical CPI record:
+        // the default setting donated $82,764 more to avoid $1,776 of surcharge, about 47 to 1
+        // against, and every other setting lost on the same trade. The asymmetry is structural - a
+        // surcharge is a few thousand a year while the MAGI needed to clear a threshold is tens of
+        // thousands - so no setting could ever pay for itself here.
+        //   See .test_harnesses/IRMAA_DEFAULT_RESULTS.md.
+        const effCpi = cpiRate * irmaaFwdFactor({ ...inputs, irmaaMarginMode: 'none' });
+        const tierTarget = getIRMAATierTargetMAGI(provisionalMAGI, status, effCpi, 2);
+        // 0 means the household is already clear of every surcharge, so there is nothing to escape
+        // and donating anyway would be charity the tool never asked for.
         if (tierTarget === 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
         const needed = provisionalMAGI - tierTarget;
         if (needed <= 0) return { qcd1: 0, qcd2: 0, totalQCD: 0 };
@@ -700,17 +802,25 @@ function getLTCGBracketTopRate(ordinaryIncome, totalGains, status, cpiRate) {
 // fedRateCreep/stateRateCreep scale the RATES this function reports (the seeds that drive
 // withdrawal ordering) so they match what calculateTaxes() will actually charge. The bracket
 // LIMITS are deliberately left alone - creep raises rates, not thresholds.
-function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1) {
+function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1) {
     let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
 
     if ((inputs.stratIRMAATier ?? -1) >= 0) {
-        // IRMAA tier ceiling mode: fill MAGI up to the top of the chosen IRMAA tier.
+        // IRMAA tier ceiling mode: fill MAGI up to the top of the chosen IRMAA tier - as that tier
+        // will be indexed when THIS year's MAGI is actually charged, |LOOKBACK| years from now, less
+        // whatever safety margin irmaaMarginMode asks for. See the irmaaFwdFactor block above.
         const IRMAABrks = getRateBracket('IRMAA', status);
-        limit = IRMAABrks[inputs.stratIRMAATier + 1].l * cpiRate - 1;
+        const effCpi = cpiRate * irmaaFwdFactor(inputs);
+        const rawThreshold = IRMAABrks[inputs.stratIRMAATier + 1].l * effCpi;
         const maxAliveAge = Math.max(alive1 ? age1 : -1, alive2 ? age2 : -1);
         const IRMAARelevant = maxAliveAge >= TAXData.IRMAA.ELIGIBILITY_AGE + TAXData.IRMAA.LOOKBACK;
-        if (!IRMAARelevant) {
-            limit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate).limit;
+        if (IRMAARelevant) {
+            limit = rawThreshold - irmaaMarginDollars(inputs, rawThreshold, status, effCpi, medicareRate,
+                                                      onMedicareAtCharge(age1, age2, alive1, alive2)) - 1;
+        } else {
+            // Too young for the tier to mean anything yet, so degrade to the federal bracket holding
+            // the same dollar figure. No IRMAA cliff is in play here, so no margin either.
+            limit = findUpperLimitByAmount('FEDERAL', status, rawThreshold - 1, cpiRate).limit;
         }
         const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
         // findUpperLimitByAmount reads the statutory rate straight off the bracket table and never
@@ -1153,8 +1263,21 @@ function resolveHousehold(sim, yr) {
     yr.goalFedBracketLimit = findUpperLimitByAmount('FEDERAL', yr.status, sim.spendGoal, sim.cpiRate)
     yr.goalStateBracketLimit = findUpperLimitByAmount(STATEname, yr.status, sim.spendGoal, sim.cpiRate)
     yr.goalLimit = Math.min(yr.goalFedBracketLimit.limit, yr.goalStateBracketLimit.limit)
-    let IRMAABracket = findUpperLimitByAmount('IRMAA', yr.status, yr.goalLimit, sim.cpiRate)
-    yr.IRMAALimit = Math.min(yr.goalLimit, IRMAABracket.limit);
+    // Forward-projected exactly like the tier ceiling in computeBracketCeiling: `minlimit` uses this
+    // to cap THIS year's MAGI, which is charged against the thresholds published |LOOKBACK| years
+    // from now.
+    //   INERT, AND KNOWN TO BE. findUpperLimitByAmount returns the top of the band CONTAINING its
+    // amount, so IRMAABracket.limit >= yr.goalLimit always and the Math.min below always selects
+    // goalLimit. This site cannot change a result - it could not before the forward projection
+    // either. The projection is kept rather than deleted so that the three IRMAA-targeting sites
+    // stay written the same way, and so this one starts behaving correctly the moment a change to
+    // the IRMAA ladder or to findUpperLimitByAmount makes it bind. A test pins the inertness
+    // (optimizer_core.tests.js, "yr.IRMAALimit is inert"), so that day announces itself.
+    const _irmaaEffCpi = sim.cpiRate * irmaaFwdFactor(inputs);
+    let IRMAABracket = findUpperLimitByAmount('IRMAA', yr.status, yr.goalLimit, _irmaaEffCpi)
+    const _irmaaMargin = irmaaMarginDollars(inputs, IRMAABracket.limit + 1, yr.status, _irmaaEffCpi,
+                                            sim.medicareRate, onMedicareAtCharge(yr.age1, yr.age2, yr.alive1, yr.alive2));
+    yr.IRMAALimit = Math.min(yr.goalLimit, IRMAABracket.limit - _irmaaMargin);
     yr.totalIncome = 0;
     yr.netIncome = 0;
     yr.capitalGains = 0;
@@ -1568,7 +1691,7 @@ function planPrimaryWithdrawals(sim, yr) {
                 // year, so compute it fresh here rather than reading a stale/undefined `limit`.
                 // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
                 // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
-                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep).limit;
+                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate).limit;
                 _room = Math.min(_room, Math.max(0, _ceil - ordFloor));
             }
             return Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
@@ -1580,7 +1703,7 @@ function planPrimaryWithdrawals(sim, yr) {
                 // Same ceiling call and field assignments as the family's own branch below, so a
                 // coexist harvest year looks to downstream passes like the family branch ran.
                 ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep));
+                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate));
                 yr.bracketTarget = yr.limit;
                 let _iraRoom = Math.max(0, yr.limit - _baseOrdinaryInc);
                 const _magiShaped = (inputs.stratIRMAATier ?? -1) >= 0
@@ -1647,7 +1770,7 @@ function planPrimaryWithdrawals(sim, yr) {
     // to the baseline `else` below - Proportional 0%, which is the intended successor.
     } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
         ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-            computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep));
+            computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate));
 
         yr.bracketTarget = yr.limit;
 
@@ -4190,7 +4313,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -4198,7 +4321,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

@@ -25,216 +25,41 @@ inflated to the current year, which is what SSA does.
 The targeting half was wrong. Every ceiling that caps *this* year's MAGI to stay inside a tier used
 *this* year's threshold, when the MAGI it is capping will be judged against the threshold published
 two years later. At 3% inflation that aims about 6% low. On the MFJ Tier 1 floor of $218,000 it is
-roughly $13,300 a year of Roth conversion room that was never used, every year of a plan.
+roughly $13,300 a year of IRA spending or Roth conversion room that was never used, every year of a plan.
 
-The error was in the safe direction, so no plan was ever told it would stay in a tier and then
-billed for a higher one. But the cushion was accidental, undocumented, and unrelated to how
-expensive the cliff it was guarding actually is.
-
-Three places did this, and all three are fixed. Only **two** of them can actually change a number:
+Two paths change as a result:
 
 - **IRMAA Ceiling strategy** ("Fill Fed/IRMAA Bracket" with a tier selected). Live.
 - **QCD "As Needed"**, which donates only as much as it takes to drop two IRMAA tiers. Live, and
   the place the correction is worth the most.
-- **The internal `minlimit` ceiling**. Provably **inert**: the value it computes has always been
-  equal to the spending-goal band it is compared against, so the IRMAA lookup there contributes
-  nothing and never did. Verified over 7,216 combinations of goal, filing status and inflation with
-  zero exceptions. The projection is applied there anyway so all three read the same way, and a
-  test now pins the inertness so the site announces itself if the bracket ladder ever changes.
 
 **Behavior change.** An IRMAA Ceiling plan now converts more, a QCD "As Needed" plan donates
 slightly less, and both shift the numbers in a saved scenario or a shared link. At 0% inflation
 nothing moves at all, which is what makes this an indexing fix rather than a new policy.
 
-### The forward projection applies to every setting, including "No margin"
+The projection of the future threshold is always performed. A setting chooses how much extra room to
+leave below the projected future threshold. "No margin (aim right at the projected
+threshold)" - is riskiest because slightly less future inflation could result in exceeding the future threshold and incur an increased IRMAA penalty.
+The other side of the argument is that a future threshold set too low wastes potential IRA spending or Roth Conversion space year after year.
 
-The margin selector's options used to read "None (aim at the threshold)", "$1,000", "$2,000" and so
-on, which never said WHICH threshold and was reasonably read as "no forward projection at all". It
-never meant that: the projection always applies, and the setting only chooses how much extra room to
-leave below the projected figure. Every option now names it - "No margin (aim right at the projected
-threshold)", "$1,000 below the projected threshold" - and the tooltip says it outright.
+**Behavior change: your "as needed" QCDs get smaller.**
 
-The practical consequence is worth stating because it is the point of the whole change. Income
-sitting between today's tier floor and the projected one is **already under the line that will judge
-it**, so QCD "As Needed" asks for nothing at all. Single filer, 3% inflation, Tier 1 floor $109,000
-projected to $115,638:
+Risking an IRMAA penalty and money leaving for charity are not the same decision.  Tests show that the 
+money leaving the QCD to stay under a future threshold were exceeding the value of avoiding the IRMAA surcharge. For that reason,
+the QCD "as Needed" contribution always uses the future threshold projection, and doesn't leave a "margin".
+The withdrawal/conversions however are capped according to a projection that leaves a safety margin.
 
-| your MAGI | QCD asked for now | QCD asked for before |
-|---|---|---|
-| $109,500 | **nothing** | $501 |
-| $112,000 | **nothing** | $3,001 |
-| $115,000 | **nothing** | $6,001 |
-| $116,000 | $363 | $7,001 |
+### A selectable safety margin (hidden for now)
 
-Pinned by a test at that boundary, including the check that it still trims once you are genuinely
-over the projected floor - it is a boundary, not a blanket exemption.
-
-### A units error in the study behind these numbers
-
-Reported by the user, who asked whether the "surcharge avoided" figures were annual or monthly. They
-are annual - TAXData holds IRMAA as monthly amounts and every figure is multiplied by 12, matching
-the engine. But checking that turned up a related error one step over: the study was leaving out the
-premium ESCALATION the engine applies each year, on the reasoning that it "cancels out of the
-difference". It does not - it is a common factor, not an additive term.
-
-The effect was to report surcharge savings in today's premium dollars while comparing them against
-donations in the nominal dollars of the year given. Mean understatement about 2.0x, rising to 3.4x by
-the last year of the plan. Every surcharge figure in the harnesses and in the notes below has been
-re-measured; the ratios between settings barely moved, so no conclusion changes and no behaviour
-changes. One claim did have to be withdrawn: "half the projected increase" saves surcharge in 59 of
-60 historical windows, not all 60.
-
-### The safety margin no longer applies to QCDs, which cuts the donation it was costing
-
-**Behavior change, and it only ever goes one way: your QCDs get smaller.**
-
-The margin was applied to both places that aim at an IRMAA threshold - the Fill Fed/IRMAA Bracket
-ceiling and QCD "As Needed". On the ceiling it costs conversion room, which is money moving between
-your own accounts. On QCDs it costs money that **leaves the household for charity**, so they are not
-the same decision, and measured against the historical inflation record the QCD half was a badly
-losing trade:
-
-| setting | extra donated | surcharge avoided | net |
-|---|---|---|---|
-| Half the projected increase | $82,764 | $3,348 | **-$79,416** |
-| Half the next-tier surcharge | $50,359 | $1,913 | -$48,446 |
-| The projected increase, less 1 point | $34,018 | $1,506 | -$32,512 |
-| $2,000 | $32,701 | $1,445 | -$31,257 |
-
-Between 22 and 26 to one against, every setting. The reason is structural rather than a quirk of one plan: a
-surcharge is a few thousand dollars a year, while the income you have to shed to clear a threshold is
-tens of thousands, so buying threshold headroom with donated dollars cannot pay for itself unless you
-wanted to give the money anyway.
-
-QCD "As Needed" now aims at the fully projected threshold and holds nothing back. Donations return to
-their minimum, and the ceiling keeps its margin and all of its protection. In As Needed mode this
-release donates less than the last one, and the margin setting no longer affects you at all.
-
-### "1% less than expected inflation" was subtracting the point from the wrong number
-
-Reported by the user, and they were right. The setting was meant to project the thresholds forward
-at the full rate and then take one percentage point off the **projected increase**. It was instead
-taking the point off the **annual rate** and compounding that, which is a far harsher haircut than
-the name suggests:
-
-| at 3% inflation | two-year projection |
-|---|---|
-| no margin | +6.09% |
-| intended: the increase, less 1 point | **+5.09%** |
-| what it did: (3% - 1%) compounded | +4.04% |
-
-On the $274,000 MFJ Tier 2 floor that is a $2,877 difference. It also left the setting sitting almost
-on top of "half the expected inflation" - measured across 60 historical inflation windows the two
-saved $48.5k and $37.2k of surcharge, close enough to be redundant. Corrected, they separate about
-two to one ($48.0k and $23.8k) and form a real ladder rather than two names for nearly the same
-thing.
-
-"Half the expected inflation" was restated the same way in the same release, so one sentence now
-describes both: they act on the projected increase, taking half of it or a point off it. At 3%
-inflation that moves it by 0.025 percentage points, which is immaterial on its own and buys a
-consistent explanation. Both options are relabelled to say what they do: **"Half the projected
-increase"** and **"The projected increase, less 1 percentage point"**.
-
-Both are clamped so a very low-inflation plan can never aim below today's un-projected threshold.
-
-### The default margin, and one setting retired
-
-The default is now **"project forward at half the expected inflation"**, and the **$1,000** option is
-gone.
-
-Measured across 60 rolling 40-year windows of the actual CPI-U record since 1928. The old default,
-half the next tier's surcharge, is $1,000 to $2,500 of room - against roughly $8,300 for two years of
-a 1.5-point inflation miss on the $274,000 MFJ Tier 2 floor. It prevented 5 breaching years out of 92
-where the half-inflation setting prevented 21, and the half-inflation setting is the only one that
-saves surcharge in 59 of the 60 windows, the best of any setting.
-
-The $1,000 option went because it is the wrong SHAPE. An inflation forecast error is proportional, so
-the room that absorbs it has to be proportional too; a fixed dollar setback is worth less every year
-as the thresholds inflate, and it saved four to five times less than a rate-based one. A saved link
-or scenario still carrying it falls back to the default rather than failing.
-
-Five settings remain: half the expected inflation (default), 1% less than expected inflation, half
-the next-tier surcharge, $2,000, and no margin at all.
-
-### A selectable safety margin, behind the nerdknob
-
-An IRMAA tier is a cliff: one dollar over the line costs the whole surcharge for a year. The old
-buffer against that was exactly $1. There is now an **IRMAA safety margin** selector next to the
-Cycle Brokerage row, visible with `?nerdknob`, offering:
+An "IRMAA Safety margin" setting has been added to tune the behavior.
 
 - **Half the next-tier surcharge** (default). Looks up what crossing this particular boundary
   costs per year and holds back half of it, so the setback scales with the size of the cliff.
-- **None**, **$1,000**, **$2,000** - fixed setbacks below the projected threshold.
+- **None**, **$1,000**, **$2,000** - fixed setbacks below the projected threshold.  These are the "riskiest".
 - **Half the expected inflation**, **1% less than expected inflation** - hold room back by
   projecting the threshold forward at a slower rate instead of subtracting dollars.
 
-It is gated because it is still being measured, not because it is dangerous. The forward projection
-underneath it is **not** gated: that is a correctness fix and it applies to everyone. Hiding the
-selector leaves the default margin in force, not "no margin".
-
-### What the measurements say, including the parts that did not go as expected
-
-`node .test_harnesses/irmaa_margin_harness.js`, 588 simulations across 7 portfolio shapes, 3 CPI
-rates and 3 strategy arms, written up in
-[.test_harnesses/IRMAA_MARGIN_RESULTS.md](.test_harnesses/IRMAA_MARGIN_RESULTS.md):
-
-- **The correction is worth real money on QCD "As Needed".** That mode donates exactly enough to
-  reach the target, so raising the target shrinks the donation dollar for dollar. Across the swept
-  cells the forward projection alone avoids **$1.9M of unnecessary donation** against the old
-  under-indexed target. This is the place the fix pays.
-- **The margin itself prevents nothing measurable**, and cannot be chosen on this evidence. Every
-  breach in every mode - twice now, on two different grids - is the same thing: income sized while
-  married and billed after a death against single-filer thresholds roughly half as high. There was
-  never a same-status breach for a margin to prevent. That is the IRMAA half of the widow penalty;
-  the billing is correct and the targeting does not see it coming. Projecting the filing status
-  forward, not just the inflation, is the follow-up.
-- **The margin does earn its keep, but only against an inflation UNDERSHOOT.** CPI is a constant in
-  this engine, and Monte Carlo does not help: it varies spending inflation, never the CPI that
-  indexes the IRMAA ladder. Feeding the 1971-2000 CPI record through it as an inflation sequence
-  leaves the ceiling byte-identical. So the margin was measured a different way, by letting the plan
-  decide under its assumed CPI and then re-billing those same decisions against thresholds indexed
-  by a realized CPI, over the whole CPI-U record since 1928. That needs no engine change, and it
-  gives a clean answer: **zero breaches in every setting when inflation meets or beats the
-  assumption, and breaches only when it falls short**. Assume 2.5% and get 1%, and the "1% less than
-  expected inflation" setting prevents about a fifth of them; the flat dollar settings prevent almost
-  none. A CPI error is proportional, so only a proportional setback absorbs it - a flat $1,000 decays
-  to irrelevance as thresholds inflate. Across 60 rolling 40-year windows the breach rate runs 16.2%
-  with no margin and 11.9% with the strongest one.
-- **The shipped default is the weak setting.** "Half the next-tier surcharge" is $1,000 to $2,500,
-  while two years of a 1.5-point CPI miss on the $274,000 MFJ Tier 2 floor is about $8,300. It
-  prevents 5 breaches out of 92 where a rate haircut prevents 18. The default is unchanged in this
-  release because moving it changes every existing plan's numbers; the evidence for changing it is
-  in [.test_harnesses/IRMAA_CPI_RISK_RESULTS.md](.test_harnesses/IRMAA_CPI_RISK_RESULTS.md).
-- **Careful with an apparent win.** On a plan with Cycle Brokerage on, one setting looked worth
-  +0.68% of final wealth. It was harvest timing, not IRMAA: wealth there is a smooth function of how
-  many dollars the ceiling is lowered by, the best amount moves from $1,000 to beyond $9,000
-  depending on the portfolio, and with Cycle Brokerage off the effect falls to +0.002%.
-
-### Fixed in the same release: one unclosed tag was bolding the rest of the page
-
-The v11.15a2 changelog entry on the Documentation tab opened a `<strong>` and never closed it.
-Nothing threw and the source read fine, but the HTML parser's recovery moved the two entries below
-it inside a stray `<strong>` hanging off the list itself - four entries in the file, two in the
-page - and carried the bold on out of the list and into the **How to Use** section. It was reported
-as "everything is bold", which is a long way from the single missing tag behind it.
-
-The in-page suite now refuses to let that ship again, with three checks. A `<ul>` or `<ol>` may
-contain only `<li>` children, which is the general law and catches the same mistake anywhere on the
-page. Every changelog version stamp must still sit in its own `<li>`. And **How to Use** must not be
-inside an inline tag, which is the symptom as a reader actually meets it.
-
-### Also
-
-- `optimizer_core.tests.js` gains 7 tests (269 to 276), pinning the forward factor, the identity at
-  0% inflation, the ordering of all six margin settings, the margin at age 63 before anyone is
-  enrolled in Medicare, and that none of it leaks into a plan with no IRMAA ceiling.
-- A test added earlier in this release claimed to cover the `minlimit` ceiling and covered the tier
-  ceiling instead, because the tier it passed sent the code down the other branch. Replaced with the
-  inertness proof described above.
-- The long-standing P32 tripwire moved for the first time in four attempts: `minlimit` now strands
-  spending across 11 years rather than 9, because a higher ceiling drains the IRA two years sooner
-  and hands two more years to the pass that refuses to touch Brokerage. Re-pinned with the reason
-  recorded next to it.
+It is gated because it is still being measured, not because it is dangerous.
 
 ---
 

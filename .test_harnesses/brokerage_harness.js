@@ -191,65 +191,203 @@ function q1() {
 // Q2 -- does a third-pass Brokerage leg spiral, converge, or improve?
 // Requires the engine research flags (default off): thirdPassBrokerage, forcedIRAAllowBrokerage.
 // ════════════════════════════════════════════════════════════════════════════════════════════════
+// ── Q2 axes (P32d-3) ────────────────────────────────────────────────────────────────────────────
+// The 2026-08-17 preliminary reading was 8 hand-picked scenarios in ONE state, on a fixture whose
+// dividendRate is 0. That is close to the configuration LEAST able to produce the feedback under
+// test, so "no spiral" measured there is weak evidence. These three axes move the spiral's own
+// arithmetic:
+//   basis    - gains per withdrawn dollar IS the amplitude. A 20%-basis account realizes four times
+//              the gain per dollar raised that an 80%-basis one does. findings.md already records
+//              that brokerage conclusions are basis-stable in SIGN and basis-scaled in SIZE.
+//   state    - feeds `_brokTaxRate` directly via `nominalStateTaxAtLimit`. CA taxes gains as
+//              ordinary income, TX not at all, NY in between.
+//   dividend - raises MAGI independently of any withdrawal, pushing SS inclusion toward its 85%
+//              ceiling BEFORE the Brokerage leg fires. If SS phase-in is the spiral's engine, a
+//              household already at the ceiling cannot spiral and one approaching it is worst case.
+const Q2_BASIS = [0.2, 0.5, 0.8];
+const Q2_STATES = ['CA', 'NY', 'TX'];
+const Q2_DIVS = [0, 0.02];
+// `brokFirst` is measured ALONE as well as combined, because the preliminary run found the two arms
+// can pull opposite ways: it erased every forced-IRA dollar on one fixture and funded five FEWER
+// years. Reporting only the combined arm would have averaged that away.
+// Labels name the SETTING, not an abbreviation of it. An earlier draft called the backstop arm
+// `fib` (forced-IRA-brokerage), which reads as Fibonacci and hid which of the two exclusions was
+// under test in every table it printed.
+const Q2_ARMS = [
+    ['off',            {}],
+    ['bounded',        { thirdPassBrokerage: 'bounded' }],
+    ['unbounded',      { thirdPassBrokerage: 'unbounded' }],
+    ['brokFirst',      { forcedIRAAllowBrokerage: 'brokerageFirst' }],
+    ['bnd+brokFirst',  { thirdPassBrokerage: 'bounded', forcedIRAAllowBrokerage: 'brokerageFirst' }],
+];
+
 function q2() {
     console.log('\n' + '='.repeat(100));
     console.log('Q2  Third-pass Brokerage: spiral, converge, or improve?');
     console.log('='.repeat(100));
 
-    const Q2ARMS = [
-        ['off',       {}],
-        ['bounded',   { thirdPassBrokerage: 'bounded' }],
-        ['unbounded', { thirdPassBrokerage: 'unbounded' }],
-        ['bnd+forced', { thirdPassBrokerage: 'bounded', forcedIRAAllowBrokerage: true }],
-    ];
+    // These are the SHIPPED counter names (optimizer_core.js:2138-2140). The previous probe guessed
+    // `tpBrokIters` before the arms existed, never matched, and printed SKIPPED on every run from
+    // v11.1582 until 2026-08-21 - the question looked answered and was inert.
     const supported = (() => {
-        const probe = run(CAP_BASE, { strategy: 'minlimit', stratRate: 0, stratIRMAATier: 1 },
-            { thirdPassBrokerage: 'bounded' });
-        return probe.totals.tpBrokIters !== undefined;
+        const probe = run(CAP_BASE, {}, { thirdPassBrokerage: 'unbounded' });
+        return probe.totals.thirdPassBrokerIters !== undefined;
     })();
     if (!supported) {
-        console.log('\n  SKIPPED: engine does not expose totals.tpBrokIters, so the research flags');
-        console.log('  are not wired in yet. Q1 above still stands on shipped behavior.\n');
+        console.log('\n  SKIPPED: totals.thirdPassBrokerIters absent on a run that should have used');
+        console.log('  the arm. Either the research flags are gone or CAP_BASE stopped reaching the');
+        console.log('  third pass at all - check BOTH before believing this line.\n');
         return null;
     }
 
-    console.log('\nscenario/arm                    mode        shortfall     spend      finalNW   iters(max)  nonConv');
     const out = [];
-    for (const [sn, scen] of SCENARIOS) {
-        for (const [an, ov] of ARMS) {
-            for (const [qn, qov] of Q2ARMS) {
-                let r; try { r = run(scen, ov, qov); } catch (e) { continue; }
-                const t = r.totals;
-                out.push({ sn, an, qn, shortfall: t.shortfall, spend: t.spend, finalNW: r.finalNW,
-                           maxIter: t.tpBrokMaxIters ?? 0, nonConv: t.tpBrokNonConverged ?? 0,
-                           success: t.success });
+    for (const basis of Q2_BASIS) for (const st of Q2_STATES) for (const dv of Q2_DIVS) {
+        for (const [sn, scen] of SCENARIOS) {
+            for (const [an, ov] of ARMS) {
+                for (const [qn, qov] of Q2_ARMS) {
+                    const axis = { STATEname: st, dividendRate: dv,
+                                   BrokerageBasis: Math.round((scen.Brokerage || 0) * basis) };
+                    let r; try { r = run(scen, ov, { ...axis, ...qov }); } catch (e) { continue; }
+                    const t = r.totals;
+                    out.push({
+                        basis, st, dv, sn, an, qn, fam: FAMILY[an],
+                        shortfall: t.shortfall, spend: t.spend, finalNW: r.finalNW,
+                        funded: t.yearsfunded, tested: t.yearstested,
+                        forcedIRA: t.forcedIRATotal ?? 0,
+                        brokLife: r.log.reduce((a, e) => a + (e['Brokerage-'] || 0), 0),
+                        // Counters attach lazily, so ABSENT means the arm never fired - which is not
+                        // the same as zero. Kept distinct here, coerced only at print time.
+                        iters: t.thirdPassBrokerIters, capped: t.thirdPassBrokerCapped,
+                        stalled: t.thirdPassBrokerStalled,
+                    });
+                }
             }
         }
     }
-    // Only print rows where an arm actually changed something
-    for (const [sn] of SCENARIOS) {
-        for (const [an] of ARMS) {
-            const base = out.find(o => o.sn === sn && o.an === an && o.qn === 'off');
-            if (!base) continue;
-            const moved = out.filter(o => o.sn === sn && o.an === an && o.qn !== 'off' &&
-                (Math.abs(o.shortfall - base.shortfall) > 1 || Math.abs(o.finalNW - base.finalNW) > 1));
-            if (!moved.length) continue;
-            console.log((sn + '/' + an).padEnd(32) + 'off'.padEnd(12) +
-                money(base.shortfall).padStart(12) + money(base.spend).padStart(11) +
-                money(base.finalNW).padStart(13));
-            for (const m of moved) {
-                console.log(''.padEnd(32) + m.qn.padEnd(12) +
-                    money(m.shortfall).padStart(12) + money(m.spend).padStart(11) +
-                    money(m.finalNW).padStart(13) + String(m.maxIter).padStart(12) +
-                    String(m.nonConv).padStart(9));
-            }
-        }
+
+    const armed = o => o.qn !== 'off';
+    const num = v => v ?? 0;
+    const cells = out.length / Q2_ARMS.length;
+
+    // ── Capped and stalled are NEVER summed. Only capped is spiral evidence; a stalled year is the
+    // account's own arithmetic (dust, or a draw whose tax eats the draw). The engine's first draft
+    // lacked the stall guard and burned 200 passes on dust, which would have read as divergence.
+    console.log('\nSPIRAL COUNTERS by arm  (' + cells + ' scenario cells per arm)');
+    console.log('arm              runs w/ iters    total iters      max iters      CAPPED yrs     stalled yrs');
+    for (const [qn] of Q2_ARMS) {
+        const rs = out.filter(o => o.qn === qn);
+        if (!rs.length) continue;
+        const fired = rs.filter(o => o.iters !== undefined).length;
+        console.log(qn.padEnd(16) +
+            (fired + '/' + rs.length).padStart(13) +
+            String(rs.reduce((s, o) => s + num(o.iters), 0)).padStart(15) +
+            String(Math.max(0, ...rs.map(o => num(o.iters)))).padStart(15) +
+            String(rs.reduce((s, o) => s + num(o.capped), 0)).padStart(16) +
+            String(rs.reduce((s, o) => s + num(o.stalled), 0)).padStart(16));
     }
-    const allNon = out.filter(o => o.qn !== 'off').reduce((s, o) => s + o.nonConv, 0);
-    const worstIter = Math.max(0, ...out.filter(o => o.qn !== 'off').map(o => o.maxIter));
-    console.log('\nSPIRAL VERDICT: non-converged years across every arm = ' + allNon +
-                ';  worst iteration count seen = ' + worstIter);
-    return { out, allNon, worstIter };
+
+    // ── Read one axis at a time. A pooled total hides an axis that only bites at one end.
+    const axisTable = (title, key, vals, fmt) => {
+        const f = fmt || String;
+        console.log('\nby ' + title + '   (armed runs only)');
+        console.log(title.padEnd(12) + '  total iters    max iters       CAPPED       stalled     armed runs');
+        for (const v of vals) {
+            const rs = out.filter(o => armed(o) && o[key] === v);
+            console.log(f(v).padEnd(12) +
+                String(rs.reduce((s, o) => s + num(o.iters), 0)).padStart(13) +
+                String(Math.max(0, ...rs.map(o => num(o.iters)))).padStart(13) +
+                String(rs.reduce((s, o) => s + num(o.capped), 0)).padStart(13) +
+                String(rs.reduce((s, o) => s + num(o.stalled), 0)).padStart(14) +
+                String(rs.filter(o => o.iters !== undefined).length).padStart(15));
+        }
+    };
+    axisTable('basis', 'basis', Q2_BASIS, v => (v * 100) + '%');
+    axisTable('state', 'st', Q2_STATES);
+    axisTable('dividend', 'dv', Q2_DIVS, v => (v * 100) + '%');
+
+    const mate = o => out.find(x => x.qn === 'off' && x.sn === o.sn && x.an === o.an &&
+                                    x.basis === o.basis && x.st === o.st && x.dv === o.dv);
+
+    // ── Ordered is excluded from BOTH arms by design (optimizer_core.js:2107 and :2169). Its rows
+    // are INERT, not zero. Printing them as zeros would read as "measured, no effect".
+    const inertFams = [...new Set(out.filter(o => o.fam === 'ordered').map(o => o.an))];
+    console.log('\nINERT by design (engine excludes ordered from both arms): ' + inertFams.join(', '));
+    const inertMoved = out.filter(o => armed(o) && o.fam === 'ordered').filter(o => {
+        const b = mate(o);
+        return b && (Math.abs(o.finalNW - b.finalNW) > 1 || Math.abs(o.shortfall - b.shortfall) > 1);
+    });
+    console.log('  ordered rows that moved anyway: ' + inertMoved.length +
+                (inertMoved.length ? '   <-- INVESTIGATE, the exclusion is not holding' : '   (as expected)'));
+
+    // ── Funded years sits BESIDE the forced-IRA saving deliberately: on the preliminary run
+    // `brokerageFirst` erased $253,802 of forced IRA and funded five fewer years. A saving column
+    // on its own would have shipped that as a win.
+    console.log('\nWHAT MOVED  (armed vs off, same cell; only funded-year movers are printed)');
+    // `totals.shortfall` is Math.min(0, netIncome - spendGoal) accumulated, so it is NEGATIVE or
+    // zero (optimizer_core.js:2310, :2726). A raw delta reads backwards - a smaller shortfall is a
+    // LARGER number. Printed as unfunded dollars, positive, off -> armed, so the direction is on
+    // the page and cannot be misread.
+    console.log('cell                                      arm                 funded          unfunded off->armed      dBrokLife      dFinalNW');
+    let movedN = 0, fundedWorse = 0, fundedBetter = 0;
+    for (const o of out) {
+        if (!armed(o)) continue;
+        const b = mate(o);
+        if (!b || o.funded === b.funded) continue;
+        movedN++;
+        if (o.funded < b.funded) fundedWorse++; else fundedBetter++;
+        const cell = o.sn + '/' + o.an + ' b' + (o.basis * 100) + ' ' + o.st + ' d' + (o.dv * 100);
+        console.log(cell.padEnd(42) + o.qn.padEnd(16) +
+            (b.funded + '->' + o.funded).padStart(8) +
+            (money(-b.shortfall) + '->' + money(-o.shortfall)).padStart(28) +
+            money(o.brokLife - b.brokLife).padStart(14) +
+            money(o.finalNW - b.finalNW).padStart(14));
+    }
+    console.log('\nfunded-year changes: ' + movedN + '  (better ' + fundedBetter +
+                ',  WORSE ' + fundedWorse + ')');
+    // A funded-year COUNT cannot say whether the unfunded DOLLARS fell, and the two arms differ so
+    // sharply that a pooled figure is actively misleading. Per arm, always.
+    console.log('\nunfunded DOLLARS by arm  (positive column = spending that stays unpaid)');
+    console.log('arm                 fell     rose      $ newly funded      $ newly unfunded');
+    for (const [qn] of Q2_ARMS) {
+        if (qn === 'off') continue;
+        let fell = 0, rose = 0, gained = 0, lost = 0;
+        for (const o of out.filter(x => x.qn === qn)) {
+            const b = mate(o);
+            if (!b) continue;
+            const du = (-o.shortfall) - (-b.shortfall);   // positive = MORE unfunded = worse
+            if (du < -1) { fell++; gained += -du; } else if (du > 1) { rose++; lost += du; }
+        }
+        console.log(qn.padEnd(18) + String(fell).padStart(6) + String(rose).padStart(9) +
+                    money(gained).padStart(20) + money(lost).padStart(22));
+    }
+    // Pooled better/worse hides the only thing this question needs to separate: the third-pass arm
+    // and the funding-backstop arm are different decisions and can point opposite ways.
+    console.log('\nfunded-year movers BY ARM  (the two arms are separate ship decisions)');
+    console.log('arm                movers      better       WORSE');
+    for (const [qn] of Q2_ARMS) {
+        if (qn === 'off') continue;
+        let bt = 0, ws = 0;
+        for (const o of out.filter(x => x.qn === qn)) {
+            const b = mate(o);
+            if (!b || o.funded === b.funded) continue;
+            if (o.funded < b.funded) ws++; else bt++;
+        }
+        console.log(qn.padEnd(18) + String(bt + ws).padStart(6) + String(bt).padStart(12) +
+                    String(ws).padStart(12));
+    }
+
+    const totalCapped = out.filter(armed).reduce((s, o) => s + num(o.capped), 0);
+    const totalStalled = out.filter(armed).reduce((s, o) => s + num(o.stalled), 0);
+    const worstIter = Math.max(0, ...out.filter(armed).map(o => num(o.iters)));
+    console.log('\nSPIRAL VERDICT: capped years = ' + totalCapped + '   (the ONLY spiral evidence);' +
+                '  stalled years = ' + totalStalled + ';  worst iters in one run = ' + worstIter);
+    if (totalCapped) {
+        console.log('  NOTE: a capped year in the BOUNDED arm can be a cap artifact - the convergence');
+        console.log('  test sits at the TOP of the loop body, so a year consuming all 6 draws exits on');
+        console.log('  the loop condition without testing again. P32d-4 re-checks each of these against');
+        console.log('  the unbounded arm before the word "spiral" is used.');
+    }
+    return { out, totalCapped, totalStalled, worstIter, fundedWorse, fundedBetter };
 }
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -670,10 +808,32 @@ const neverRows = q1r.rows.filter(r => r.neverDrew);
 console.log('P4 never-drawing rows rare   : ' + neverRows.length + '/' + q1r.rows.length +
             (neverRows.length ? '  [' + neverRows.map(r => r.scen + '/' + r.arm).join(', ') + ']' : ''));
 if (q2r) {
-    console.log('P5 no divergence             : nonConverged=' + q2r.allNon + ' worstIters=' +
-                q2r.worstIter + '  -> ' + (q2r.allNon === 0 ? 'RIGHT' : 'WRONG'));
+    // P5 is scored on CAPPED years alone. Stalled years are the account running out of usable
+    // money, not the cap-gains spiral, and summing the two would score P5 WRONG on arithmetic that
+    // has nothing to do with the prediction.
+    console.log('P5 no divergence             : capped=' + q2r.totalCapped +
+                ' (stalled=' + q2r.totalStalled + ', not spiral evidence) worstIters=' +
+                q2r.worstIter + '  -> ' + (q2r.totalCapped === 0 ? 'RIGHT' : 'WRONG'));
+    // P6 named the THIRD-PASS arm ("allowing Brokerage in the third pass eliminates the pinned
+    // minlimit stranding"). Scoring it against the pooled total lets the backstop arm, which P6
+    // never mentioned, decide the verdict. Scored per arm instead.
+    const scoreArm = qn => {
+        let bt = 0, ws = 0;
+        for (const o of q2r.out.filter(x => x.qn === qn)) {
+            const b = q2r.out.find(x => x.qn === 'off' && x.sn === o.sn && x.an === o.an &&
+                                        x.basis === o.basis && x.st === o.st && x.dv === o.dv);
+            if (!b || o.funded === b.funded) continue;
+            if (o.funded < b.funded) ws++; else bt++;
+        }
+        return { bt, ws };
+    };
+    const tp = scoreArm('bounded'), bf = scoreArm('brokFirst');
+    console.log('P6 third pass ends stranding : better=' + tp.bt + ' worse=' + tp.ws +
+                '  -> ' + (tp.bt > 0 && tp.bt > tp.ws ? 'RIGHT' : tp.bt > 0 ? 'MIXED' : 'WRONG'));
+    console.log('   brokFirst (NOT named by P6) : better=' + bf.bt + ' WORSE=' + bf.ws +
+                '  -> its own decision, scored separately');
 } else {
-    console.log('P5/P6                        : not yet testable (research flags not wired)');
+    console.log('P5/P6                        : not testable (see the Q2 SKIP note above)');
 }
 console.log('');
 

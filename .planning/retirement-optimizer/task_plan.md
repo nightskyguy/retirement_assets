@@ -73,6 +73,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
+| **O2** | P68 | `optimizer_changelog.md` brevity pass over the recent entries *(new 2026-08-22)* | `P68a` | nothing |
 | **O2** | P65 | Rest of Schedule A — engine itemizes on SALT alone; medical is the piece that likely qualifies *(new 2026-08-19)* | `P65a` (measure first) | nothing |
 | **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
 | **O3** | P28 | "Every voluntary IRA withdrawal is a conversion" — ship decision | `P28f` | nothing |
@@ -1754,6 +1755,40 @@ bodies, `findings.md` and `progress.md` cite them; see the ID migration table at
 - **Touches the same gap-fill code as:** P28's open ship decision (`rothGapFill`) and P30's `[40,60]`
   question. Settling P28 and P30 first would mean `P35i`'s new arm is written against a settled
   ordering rather than one about to change.
+
+---
+## P68 — changelog brevity pass over the recent entries
+
+`optimizer_changelog.md` is **79 entries, 18,459 words**. The convention says entries are
+user-facing and brief; in practice they carry the "why", the mechanism, and a per-item breakdown that
+repeats what the summary already said. User 2026-08-22, on a 954-word entry: "WAY too long".
+
+The rule was settled and applied to **11.15fc only** (954 -> 183 words), plus its in-page `<li>`
+(89 words) and its README bullet. The target is **roughly 150 words per release entry**, recorded in
+the `feedback_changelog_conventions` memory with the cut order: the "why" first, then the mechanism,
+then any per-item list that restates the summary. Sweeping beats complete.
+
+Deferred by the user on 2026-08-22: "Add changelog brevity improvements to the Task list. Let's not
+do now."
+
+**Measured word counts, worst first** (`<a id=...>` anchor to the next anchor):
+
+| entry | words | entry | words |
+|---|---|---|---|
+| 11.150b | 1717 | 11.1585 | 350 |
+| 11.152f | 1474 | 11.1553 | 319 |
+| 11.15a2 | 728 | 11.15e3 | 298 |
+| 11.15cf | 509 | 11.1508 | 273 |
+| | | 11.15c9 | 214 |
+
+- [ ] **P68a** rewrite the top ~12 entries to <=150 words each. Anchors (`<a id="11.15cf"></a>`) and
+      `## version` headings MUST survive verbatim: `doclinks.tests.js` resolves links against them and
+      the in-page changelog links here. Re-run it after every edit.
+- [ ] **P68b** decide whether to keep going past the top 12. Rewriting entries for releases people
+      have already read is a different call from fixing an unmerged one, and is the user's to make.
+- [ ] **P68c** what NOT to cut: the **behavior-change** warnings. A reader's actual question is "does
+      this release move my saved plan?", so those sentences are the one part that earns its length.
+- **Status:** NOT STARTED, deferred. **Depends on:** nothing.
 
 ---
 ## P67 — "Optimize for" drives the columns, plus a relative (delta) view

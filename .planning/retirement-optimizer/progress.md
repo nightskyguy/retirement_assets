@@ -3499,3 +3499,45 @@ displayed, so all of it is DOM assertion.
 **Planning-file near-miss worth recording:** updating the NOW table by line INDEX clobbered the P30
 row and duplicated P67, because the assert was written after the assignment and so was vacuous.
 Caught by diffing the table against HEAD. Match on row TEXT, not on index, and assert before writing.
+
+## Session 2026-08-22 (continued) - changelog brevity rule, P68 deferred, then P67b built
+
+**The changelog rule got a NUMBER, which is why it will now hold.** The memory already said
+"brevity"; it constrained nothing, and a 954-word entry got written under it. User: "WAY too long",
+with a ~110-word example. Rewrote 11.15fc to 183 words, the in-page `<li>` to 89, and the README
+bullet to match. `feedback_changelog_conventions` now carries a **target of roughly 150 words** and a
+cut ORDER: the "why" first, then the mechanism, then any per-item list that restates the summary.
+
+Measured the whole file while there: **79 entries, 18,459 words**, worst offenders 11.150b (1717) and
+11.152f (1474). User asked for a pass over the recent ones, then interrupted and deferred it. Written
+up as **P68** (a-c) at O2 with the measured table, and the one instruction that matters for it:
+**do not cut the behavior-change warnings** - "does this release move my saved plan?" is the reader's
+actual question, so those sentences are the part that earns its length.
+
+**P67b, the relative view, built and shipped at v11.15fd** (`a98c94a`), nerdknob-gated.
+
+The mechanism decision that made it small: a wrapper over `col.getSortValue` at the body-cell emit,
+NOT 21 edited descriptors. `getSortValue` already bakes in the Future $ / Current $ toggle, so the
+mode inherits it, and a column changing how it computes cannot leave the delta reading a stale field.
+
+**Row order is provably identical in both modes** - sorting keeps using the absolutes, and a
+difference from a common reference is monotonic in the absolute. Verified rather than asserted: the
+first 25 rows come out in the same order either way.
+
+Three judgement calls worth keeping:
+- **Direction is per column, and `neutral` is a real option.** A negative on All Taxes is green, a
+  negative on End Wealth is red. Final IRA and All RMDs colour NOTHING: a bigger Final IRA is worse
+  for a widow and better for a spender, and the table should not pretend to know which one you are.
+- **Conv Tax stays absolute**, pinned by a node test rather than by a comment. It is already a
+  difference, measured inside one row's own conversion search rather than against another row.
+- **A row with nothing to compare keeps its dash.** Turning "no value" into "+0" would read as a tie.
+
+**Turning the nerdknob OFF also forces the mode off**, or a reader who enabled it once would be left
+reading a table of differences with no visible way back.
+
+**Known, recorded, not fixed:** under the two conversion goals the ⚓ baseline never converts, so it
+has no break-even year and the ENTIRE Break Even column reads as dashes in relative view until a ⚖
+row is pinned. Logically right, practically useless there. Flagged to the user.
+
+Tests 287 -> 288 node, both pins reconciled from measured output, badge green at 658. PR #186 now
+carries 12 commits. Still no screenshot - the Browser pane was never displayed this session.

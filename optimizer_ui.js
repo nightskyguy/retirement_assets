@@ -1283,8 +1283,14 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
 }
 
 // Column definitions (shared between render and sort)
-function getOptimizerColumns() {
+// showAll: return the complete column set rather than the subset the active "Optimize for" goal
+// asks for. Callers that need a column regardless of what is on screen - the sort tiebreakers, the
+// "N of M columns" counter - pass true. The filter itself arrives with OPT_OBJECTIVE_COLUMNS; until
+// then this parameter is accepted and ignored, so those call sites can already be written correctly.
+function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
     const inC = () => document.getElementById('show-current-dollars')?.checked;
+    const objKey   = OptimizerState.objective || 'taxflex';
+    const objLabel = OPT_OBJECTIVE_LABELS[objKey] || OPT_OBJECTIVE_LABELS.taxflex;
     const cols = [
         // compareZone: these cells select the comparison row instead of loading the strategy.
         // The ⚖ used to be a small glyph inside the Strategy cell, where a near miss loaded the
@@ -1322,6 +1328,23 @@ function getOptimizerColumns() {
             title: 'The strategy parameter: bracket/IRMAA/ACA ceiling, IRA draw %, amortization years, proportional boost %, or account order (CBIR/RIBC/BIRC).',
             getValue: r => r._paramLabel,
             getSortValue: r => r._paramSortVal
+        },
+        // Rank column: numbers rows 1 (best) … N by the currently-selected objective (looked up from
+        // the per-render map on OptimizerState; failed rows show '—'). Always visible - it is the
+        // readout for the "Optimize for" choice, which every user can now set. PF13 item 4 removed
+        // the redundant raw Score column, since the row order already conveys the ranking.
+        //
+        // Written inline here rather than spliced in after the fact. The old code did
+        // `cols.splice(cols.findIndex(c => c.key === 'afterTaxNW') + 1, 0, ...)`, which was a trap
+        // waiting for the first conditional column: findIndex returns -1 when its target is absent,
+        // and splice(0, 0, ...) then puts Rank at index 0, in front of the ⚖ column that the Best
+        // table assumes is there. Sitting beside Strategy and Param also reads better, since all
+        // three answer "which plan is this?" rather than "how did it do?".
+        {
+            key: 'rank', label: 'Rank',
+            title: `Rank under the selected objective - "${objLabel}". 1 = best, N = worst among successful plans (failed plans show -). Change the objective with the "Optimize for" selector above.`,
+            getValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : '—',
+            getSortValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : Infinity
         },
         {
             key: 'spendGoal', label: 'Spend Goal',
@@ -1408,23 +1431,6 @@ function getOptimizerColumns() {
             getSortValue: r => r._convBEYear ?? 9999
         }
     ];
-    // Rank column: numbers rows 1 (best) … N by the currently-selected objective (looked up from
-    // the per-render map on OptimizerState; failed rows show '—'). Always visible - it is the
-    // readout for the "Optimize for" choice, which every user can now set. PF13 item 4 removed the
-    // redundant raw Score column, since the row order already conveys the ranking.
-    {
-        const i = cols.findIndex(c => c.key === 'afterTaxNW');
-        const objKey   = OptimizerState.objective || 'taxflex';
-        const objLabel = OPT_OBJECTIVE_LABELS[objKey] || OPT_OBJECTIVE_LABELS.taxflex;
-        cols.splice(i + 1, 0,
-            {
-                key: 'rank', label: 'Rank',
-                title: `Rank under the selected objective - "${objLabel}". 1 = best, N = worst among successful plans (failed plans show -). Change the objective with the "Optimize for" selector above.`,
-                getValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : '—',
-                getSortValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : Infinity
-            }
-        );
-    }
     return cols;
 }
 
@@ -1434,8 +1440,10 @@ function renderOptimizerTable(results) {
     results = results ?? OptimizerState.results;
     if (!results || results.length === 0) return;
     const columns = getOptimizerColumns();
-    // Default: sort by After-Tax NW descending; Spendable descending as tiebreaker
-    const sortState = OptimizerState.sortState ?? { colKey: '__objective__', direction: 'desc' };
+    // Default: sort by After-Tax NW descending; Spendable descending as tiebreaker.
+    // normalizeSortState is the single choke point where a vanished sort column is caught - see the
+    // comment on the function. Written back to state so the header arrow and the next render agree.
+    const sortState = OptimizerState.sortState = normalizeSortState(OptimizerState.sortState, columns);
 
     // Rank map (item 10): number successful rows 1 (best) … N under the active objective. Looked up
     // by the nerdknob Rank column; failed rows are left unranked ('—').
@@ -1459,8 +1467,13 @@ function renderOptimizerTable(results) {
     let display = results.filter(r => !(baselineRow && r._id === baselineRow._id) && !r._isCurrentPlan);
     if (!showInfeasible) display = display.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
     if (!showFailed) display = display.filter(r => r.totals.success);
-    const afterTaxCol = columns.find(c => c.key === 'afterTaxNW');
-    const spendCol = columns.find(c => c.key === 'spend');
+    // Tiebreaker comparators come from the UNFILTERED column set. What the sort does when two rows
+    // tie is a property of the sort, not of what happens to be on screen: reading these out of the
+    // filtered `columns` would make the NetWealth/Spendable tiebreak quietly evaporate whenever the
+    // active goal hid the other column.
+    const allColumns  = getOptimizerColumns(true);
+    const afterTaxCol = allColumns.find(c => c.key === 'afterTaxNW');
+    const spendCol    = allColumns.find(c => c.key === 'spend');
     // PF13: default body order follows the active "Optimize for" objective (same order as the Rank
     // column) until the user clicks a real column header. rankRows already keeps failed rows last.
     if (sortState.colKey === '__objective__') {
@@ -1684,11 +1697,17 @@ function renderOptimizerTable(results) {
                 return true;
             });
             const _bHdrStyle = 'background:#f8f9fa;padding:4px 8px;border-bottom:2px solid #dee2e6;font-weight:bold;white-space:nowrap;';
+            // By key, not by index. `columns.slice(1)` and `i === 0 ? 'Best' : ...` both encoded
+            // "column zero is the ⚖ control" as an unstated assumption, which any change to the
+            // column set would be free to break - silently, by shifting every cell one place left
+            // under a header that no longer describes it. Naming the column it drops makes the two
+            // halves of this table impossible to knock out of alignment with each other.
+            const dataCols = columns.filter(c => c.key !== 'compare');
             const bestRows = uniqueWinners.map(w => {
                 const r = results.find(x => x._id === w.id);
                 if (!r) return '';
                 const labelCell = `<div style="background:#A5D6A7;color:#14532d;font-weight:bold;font-size:0.78em;white-space:nowrap;padding:2px 6px;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} - click to load">${w.label}</div>`;
-                const dataCells = columns.slice(1).map(col => {
+                const dataCells = dataCols.map(col => {
                     const cellWin = col.key === w.key;
                     const bg = cellWin ? '#4CAF5080' : '#90EE90';
                     let cellVal = col.getValue(r);
@@ -1701,15 +1720,13 @@ function renderOptimizerTable(results) {
                 }).join('');
                 return `<div style="display:contents;">${labelCell}${dataCells}</div>`;
             }).join('');
-            const bestHeader = columns.map((col, i) => {
-                const lbl = i === 0 ? 'Best' : col.label;
-                const titleText = i === 0
-                    ? 'Each row is the strategy that wins one metric (the highlighted cell shows which). Click a row to load that strategy.'
-                    : (col.title || '');
-                const tip = titleText ? ` title="${titleText.replace(/"/g, '&quot;')}"` : '';
-                return `<div style="${_bHdrStyle}"${tip}>${lbl}</div>`;
-            }).join('');
-            const _bColsCss = columns.map(() => 'max-content').join(' ');
+            const _bLabelTip = 'Each row is the strategy that wins one metric (the highlighted cell shows which). Click a row to load that strategy.';
+            const bestHeader = `<div style="${_bHdrStyle}" title="${_bLabelTip}">Best</div>`
+                + dataCols.map(col => {
+                    const tip = col.title ? ` title="${col.title.replace(/"/g, '&quot;')}"` : '';
+                    return `<div style="${_bHdrStyle}"${tip}>${col.label}</div>`;
+                }).join('');
+            const _bColsCss = ['max-content', ...dataCols.map(() => 'max-content')].join(' ');
             bestEl.innerHTML = `<div style="display:grid;grid-template-columns:${_bColsCss};width:fit-content;margin-bottom:16px;border:1px solid #dee2e6;">${bestHeader}${bestRows}</div>`;
             bestEl.style.display = 'block';
         } else {
@@ -1752,6 +1769,19 @@ function toggleInfeasibleRows() {
 function toggleFailedRows() {
     OptimizerState.showFailed = !OptimizerState.showFailed;
     if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
+}
+
+// A sort column can vanish out from under the user: the "Optimize for" goal picks the column set,
+// so a column sorted on under one goal may not exist under the next, and the "show all columns"
+// escape hatch can be switched back off while sorted by a column only it showed. The old code left
+// `col` undefined, skipped the sort block entirely, and rendered the rows in BUILD order under a
+// header carrying no arrow - unsorted, and silently so. Falling back to the objective sentinel is
+// the honest answer: goal order is what the table shows when nothing else is asked for. Pure, so it
+// is assertable without rendering anything.
+function normalizeSortState(sortState, columns) {
+    const s = sortState ?? { colKey: '__objective__', direction: 'desc' };
+    if (s.colKey === '__objective__') return s;
+    return columns.some(c => c.key === s.colKey) ? s : { colKey: '__objective__', direction: 'desc' };
 }
 
 function sortOptimizerBy(colKey) {

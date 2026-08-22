@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-22:** `main` = `721653d`. **P67 COMPLETE at v11.15fd**, PR [#186](https://github.com/nightskyguy/retirement_assets/pull/186) open, 12 commits: the "Optimize for" goal picks the table's columns (PR A) and a nerdknob-gated relative view renders every comparable column as a difference from the reference row (PR B). Suites **288 / 61 / 22** (`slowInCore` 3), tier-1 **287**/0, badge green at 658. P32 shipped v11.15e3 in PR #185; P64/P66 in #182/#183/#184.
+**As of 2026-08-22:** `main` = `721653d`. **P67 COMPLETE at v11.1601**, PR [#186](https://github.com/nightskyguy/retirement_assets/pull/186) open, 16 commits: the "Optimize for" goal picks the table's columns, a nerdknob-gated relative view renders every column as a difference from the reference row, plus five rounds of review. Suites **289 / 61 / 22** (`slowInCore` 3), tier-1 **289**/0, badge green at 661. P32 shipped v11.15e3 in PR #185; P64/P66 in #182/#183/#184.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -1853,7 +1853,7 @@ AND the descriptor literal. Editing `OPT_OBJECTIVE_COLUMNS` alone changes nothin
 but `.gitattributes` pins `.githooks/**` to `eol=lf` and a CR in a shebang breaks the hook, so the
 "restore CRLF everywhere" reflex is wrong for that one path. Use Python with `newline=''`.
 
-### P67b — the relative (delta) view, nerdknob-gated. **DONE, v11.15fd** (`a98c94a`)
+### P67b — the relative (delta) view, nerdknob-gated. **DONE, v11.15fd** (`a98c94a`), refined through v11.1601
 
 Every numeric column reads as a signed difference from a reference row; the reference row shows the
 absolute the rest are measured against. User's words: "the pin column shows the number, all other
@@ -1874,6 +1874,20 @@ columns show the delta", so `ΔFinalWealth`/`ΔTax` stop existing as separate co
   descriptors, so the Future $ / Current $ handling comes free and a column's display cannot drift
   from its delta. Row order is provably identical in both modes (sorting still uses the absolutes;
   a difference from a common reference is monotonic in it) and that was VERIFIED, not argued.
+- **Five review rounds followed (v11.15fe → v11.1601), all shipped.** Switches instead of text links;
+  the Δ columns dropped in relative view on BOTH paths (showing all columns had brought them back);
+  both PINNED rows routed through the delta wrapper (they were built by their own code paths and
+  stayed absolute); percent deltas lost the "pp" suffix; the reference row moves to a converting row
+  under the two conversion goals (`OPT_BASELINE_REQUIRES`); Conv Tax colored by sign with no `$`;
+  the ⏹ stop-year mark explained; Version column dropped from the scenario list; `?tab=` added;
+  **End Wealth and All Taxes pinned for every goal**; US spelling normalized.
+- **GOTCHA retired:** display order now comes from `OPT_COLUMN_KEYS`, not from the order the
+  descriptors are written in. That coupling caused two separate incidents - a reorder that did
+  nothing visible, and a scripted block move that relocated a descriptor into an unrelated Chart.js
+  helper. Reordering is now a one-line edit in core.
+- **Still NOT verified live:** the Roth Conversion Effectiveness half of `OPT_BASELINE_REQUIRES`.
+  Neither the default scenario nor the user's own URL produced ⇌ rows, so only the fallback ran.
+  Covered by a node test, not by a browser check.
 - **Open call for later:** under the two conversion goals the ⚓ baseline never converts, so it has
   no break-even year and the whole Break Even column reads as dashes until a ⚖ row is pinned.
   Correct - there is no difference to state - but it makes the mode much less useful there.

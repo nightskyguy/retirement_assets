@@ -3541,3 +3541,58 @@ row is pinned. Logically right, practically useless there. Flagged to the user.
 
 Tests 287 -> 288 node, both pins reconciled from measured output, badge green at 658. PR #186 now
 carries 12 commits. Still no screenshot - the Browser pane was never displayed this session.
+
+## Session 2026-08-22 (continued) - five review rounds, v11.15fe through v11.1601
+
+Rapid review cycles on the shipped Optimizer table. Everything below came from the user looking at
+the real page; almost none of it was predicted.
+
+**Two bugs that were MY regressions, both found by the user rather than by me.**
+1. The 💵 legend entry vanished. My legend-merge script kept only spans opening `<span title=`, and
+   that one opens `<span id=` because `optimizer_ui.js` toggles it by id. The symbol was on screen
+   with its explanation deleted.
+2. The Δ columns were still there in relative view. I had excluded them from the FILTERED set only,
+   so switching "show all columns" on brought them straight back. I had also reported this as done.
+
+**Two gaps found while verifying, not predicted:**
+- Both PINNED rows are built by their own code paths calling `col.getValue` directly, so 📍 Your plan
+  stayed absolute in relative view while every row beneath it was a difference, in the same columns.
+- Chrome fires `toggle` when it PARSES `<details open>`, before init runs, so the fold preference was
+  clobbered before it could be read.
+
+**The coupling that caused two incidents is now gone.** Display order came from the order the
+descriptors happened to be written in, while `OPT_COLUMN_KEYS` claimed to be the contract. That
+caused (a) a Break Even reorder that changed nothing visible, and (b) a scripted block move that
+relocated the Conv Tax descriptor into an unrelated Chart.js legend helper 1600 lines away. Order now
+comes from `OPT_COLUMN_KEYS`; a descriptor missing from it logs the key instead of vanishing.
+
+**A test found data drift I would not have.** Pinning End Wealth and All Taxes made them RENDER
+everywhere via the pinned union, while the nine goal lists still did not name them. The assertion
+failed on its first run. Without it the data and the display would have disagreed indefinitely, with
+nothing visibly wrong.
+
+**Two style rules earned memories**, both because the existing guidance was too vague to constrain
+anything:
+- **US spelling** ([[feedback_us_spelling]]). "colour" had reached a `<summary>` a reader sees. It
+  lands in comments first, where it looks harmless, then gets copied into a visible string.
+- **Do not argue for the change** (added to [[feedback_changelog_conventions]] as 3c). "and it used
+  to print in the same black as a gain" is a pitch, not a fact. Cut "previously...", "it used to...".
+
+**Also shipped:** switches instead of text links; percent deltas lost the "pp" suffix (user: "the pp
+is the confuser"); the reference row moves to a converting row under the two conversion goals
+(`OPT_BASELINE_REQUIRES`, with a node test asserting it covers exactly the goals ranking on a
+conversion column); Conv Tax colored by sign with no `$`; the ⏹ stop-year mark explained; the
+Version column dropped from the scenario list; `?tab=` added with friendly aliases.
+
+**Answered:** there is no nerdknob control on the Optimizer tab. It is at the bottom of the
+Documentation tab, unlabeled and faint, plus `?nerdknob`. It still gates the 💵 sweep arm, its legend
+and the relative-view switch, so it is not vestigial.
+
+**Still NOT verified live, and worth saying plainly:** the Roth Conversion Effectiveness half of the
+baseline change. Neither the default scenario nor the user's own shared URL produced ⇌ rows, so only
+the fallback path ran. Covered by a node test, not by a browser check. The user's URL also swept to
+zero rows for me with no JS error, which is itself unexplained.
+
+Final: **v11.1601**, 16 commits on PR #186, suites 289 / 61 / 22, tier-1 289/0, badge green at 661.
+No screenshot at any point this session - the Browser pane was never displayed, so every visual claim
+rests on DOM and computed-style assertions.

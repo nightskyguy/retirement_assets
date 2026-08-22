@@ -45,6 +45,9 @@ const OptimizerState = {
     // to open. Deliberately NOT reset by setOptObjective: how dense you want the table is a
     // preference, not a property of the goal.
     showAllColumns: false,
+    // Relative view: every comparable column reads as a difference from the reference row rather
+    // than as its own value. Nerdknob-gated while it is being lived with.
+    relativeView: false,
     objective: 'taxflex',       // PF13: default ranking = Tax Flexibility (most-requested)
     sharedFutureIRARate: 0,     // PF13: heirs rate for widowrmd/taxflex metrics; set each runOptimizer
     perfStats: null,
@@ -115,6 +118,12 @@ function applyNerdKnobVisibility() {
     // 💵 legend - only meaningful once nerdknob is sweeping the cash-funded arm
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
+    // Relative view control - gated while the mode is being lived with. Turning the knob OFF must
+    // also turn the mode off, or a reader who enabled it once would be left reading a table of
+    // differences with no visible way to get back.
+    const relWrap = document.getElementById('opt-relmode');
+    if (relWrap) relWrap.style.display = NERD_KNOBS ? '' : 'none';
+    if (!NERD_KNOBS) OptimizerState.relativeView = false;
     // The ACA Cliff documentation paragraph used to be hidden here. It is now always visible, like
     // every other strategy's paragraph, so there is nothing to toggle - the inline display:none was
     // dropped from the markup rather than being switched off from JS, which keeps it visible even
@@ -252,6 +261,36 @@ function deltaRefDescription() {
 // The empty cells are still the click target. The column heading keeps the ⚖ so the column says
 // what it is, and CSS reveals a faint ⚖ under the pointer (see .opt-cmp-cell) so the affordance
 // is findable without printing it 177 times.
+// Relative view: render one cell as its difference from the reference row instead of its own
+// value. Returns null when this cell should stay absolute, so the caller falls through to
+// col.getValue unchanged - that covers the reference row itself, every column with no entry in
+// OPT_DELTA_COLUMNS, and any row whose column has no value to compare.
+//
+// Built on getSortValue rather than on the raw row fields, which buys two things for free: the
+// Future $ / Current $ toggle is already baked into it, and a column changing how it computes
+// cannot leave the delta reading from a stale field.
+function deltaCellHtml(col, r, refRow) {
+    const meta = OPT_DELTA_COLUMNS[col.key];
+    if (!meta || !refRow || r === refRow) return null;
+    // A dash means this row has nothing to compare - a sweep row has no break-even year, for
+    // instance. It must stay a dash: turning "no value" into "+0" would read as a tie.
+    if (col.getValue(r) === '—' || col.getValue(refRow) === '—') return '—';
+    const a = col.getSortValue(r), b = col.getSortValue(refRow);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return '—';
+    const d = a - b;
+    let body;
+    if (meta.unit === 'pp')         body = `${(Math.abs(d) * 100).toFixed(1)}pp`;
+    else if (meta.unit === 'years') body = `${Math.abs(Math.round(d))} yr`;
+    else                            body = Math.round(Math.abs(d)).toLocaleString();
+    if (Math.round(Math.abs(d) * (meta.unit === 'dollar' ? 1 : 1000)) === 0) {
+        return `<span style="color:#57606a">same</span>`;
+    }
+    const better = meta.dir === 'neutral' ? null
+                 : (meta.dir === 'higher' ? d > 0 : d < 0);
+    const colour = better === null ? '#57606a' : (better ? '#1a7f37' : '#cf222e');
+    return `<span style="color:${colour}">${d > 0 ? '+' : '−'}${body}</span>`;
+}
+
 function compareToggleHtml(r) {
     return (deltaReferenceRow() === r) ? '<span style="font-size:1.2em;">⚖</span>' : '';
 }
@@ -1508,7 +1547,9 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
     // The Δ columns are in no goal's list. They measure against a reference, so they earn their
     // space only once the reader has chosen one by pinning a ⚖ row - until then they restate the
     // ⚓ baseline the table is already ordered around.
-    if (OptimizerState.compareRow) { keep.add('dNW'); keep.add('dTax'); }
+    // ...except in relative view, where every comparable column is already a difference from that
+    // same row, so a column whose NAME says delta is just two of them.
+    if (OptimizerState.compareRow && !OptimizerState.relativeView) { keep.add('dNW'); keep.add('dTax'); }
     // filter(), never a map over the goal's list: this array IS the display order, so a goal's
     // columns can be written in any order and `compare` still lands at index 0.
     return cols.filter(c => keep.has(c.key));
@@ -1674,7 +1715,8 @@ function renderOptimizerTable(results) {
                         : (r._isReverseOptimized || r._isConvOptimized || r._isSpendOptimized) ? 'font-style:italic;' : '';
             const bgCss = bg ? `background-color:${bg};` : '';
             const cls = col.key === 'compare' ? ' class="opt-cmp-cell"' : '';
-            return `<div${cls} style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${col.getValue(r)}</div>`;
+            const dv = OptimizerState.relativeView ? deltaCellHtml(col, r, deltaReferenceRow()) : null;
+            return `<div${cls} style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${dv ?? col.getValue(r)}</div>`;
         }).join('');
         return `<div style="display:contents;">${cells}</div>`;
     }).join('');
@@ -1756,6 +1798,19 @@ function renderOptimizerTable(results) {
             + 'screen at once, and the goal still sets the row order. Hover over any column heading for '
             + 'what it means.';
         colModeEl.innerHTML = `<span onclick="toggleAllColumns()" title="${_tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${_label}</span>`;
+    }
+
+    const relModeEl = document.getElementById('opt-relmode');
+    if (relModeEl) {
+        const _ref = deltaReferenceRow();
+        const _refName = _ref ? (_ref === OptimizerState.baseline ? 'the ⚓ baseline' : 'the ⚖ row') : 'the baseline';
+        const _label = OptimizerState.relativeView
+            ? `Showing every column as a difference from ${_refName} - click for actual values`
+            : `Showing actual values - click to show them as differences from ${_refName}`;
+        const _tip = 'Relative view prints each comparable column as its difference from the reference row, '
+            + 'green where the difference is the better direction. The reference row itself keeps its actual '
+            + 'numbers. Row order does not change: the ranking uses the actual values in both views.';
+        relModeEl.innerHTML = `<span onclick="toggleRelativeView()" title="${_tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${_label}</span>`;
     }
 
     // Legend - make the "Infeasible" item a click toggle (rows hidden by default).
@@ -1938,6 +1993,14 @@ function restoreFoldState() {
 // real data behind it; this shows all of them at once, the way the table used to open. The
 // vanished-sort-column case is handled by normalizeSortState at the render choke point, so
 // this needs no guard of its own.
+// Relative view on/off. The row ORDER is untouched by this: sorting keeps using getSortValue on
+// the absolute values, and a difference from a common reference is monotonic in that absolute, so
+// the ranking is identical in both modes. Only what each cell prints changes.
+function toggleRelativeView() {
+    OptimizerState.relativeView = !OptimizerState.relativeView;
+    if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
+}
+
 function toggleAllColumns() {
     OptimizerState.showAllColumns = !OptimizerState.showAllColumns;
     if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);

@@ -88,6 +88,7 @@ const OPT_COLUMNS_PINNED = core.OPT_COLUMNS_PINNED;
 const OPT_OBJECTIVE_COLUMNS = core.OPT_OBJECTIVE_COLUMNS;
 const OPT_OBJECTIVE_METRIC_COLUMN = core.OPT_OBJECTIVE_METRIC_COLUMN;
 const OPT_OBJECTIVE_BLURB = core.OPT_OBJECTIVE_BLURB;
+const OPT_DELTA_COLUMNS = core.OPT_DELTA_COLUMNS;
 const OPTIMIZER_OBJECTIVES = core.OPTIMIZER_OBJECTIVES;
 const taxCreepFactor = core.taxCreepFactor;
 const IRMAA_MARGIN_MODES = core.IRMAA_MARGIN_MODES;
@@ -3603,6 +3604,22 @@ test('every objective has a blurb, and it names the column that objective ranks 
         assert(label, `${objKey}: no label recorded for ${OPT_OBJECTIVE_METRIC_COLUMN[objKey]}`);
         assert(OPT_OBJECTIVE_BLURB[objKey].includes(label),
             `${objKey} ranks on "${label}" but its blurb never says so: ${OPT_OBJECTIVE_BLURB[objKey]}`);
+    }
+});
+
+test('OPT_DELTA_COLUMNS names only real columns, with a usable direction and unit', () => {
+    const known = new Set(OPT_COLUMN_KEYS);
+    for (const [key, meta] of Object.entries(OPT_DELTA_COLUMNS)) {
+        assert(known.has(key), `OPT_DELTA_COLUMNS names a column that does not exist: ${key}`);
+        assert(['higher', 'lower', 'neutral'].includes(meta.dir), `${key}: bad dir ${meta.dir}`);
+        assert(['dollar', 'pp', 'years'].includes(meta.unit), `${key}: bad unit ${meta.unit}`);
+    }
+    // Conv Tax must never be deltaed: it is already a difference, measured inside one row's own
+    // conversion search rather than against another row, so a delta of it is a delta of a delta.
+    assert(!OPT_DELTA_COLUMNS.convSaved, 'convSaved must stay absolute in relative view');
+    // Neither are the identity columns, nor Rank, which is itself a comparison.
+    for (const k of ['compare', 'status', 'gap', 'strategy', 'param', 'rank', 'dNW', 'dTax']) {
+        assert(!OPT_DELTA_COLUMNS[k], `${k} must not be rendered as a delta`);
     }
 });
 

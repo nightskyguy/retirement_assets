@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-21:** `main` = `0b4d5b5`. This worktree (`readme-review-updates-c9df11`, branch `worktrees/planning-with-files-c326bb`) carries **P32 complete, unreleased**, shipping at **v11.15e3**: the third pass may now draw Brokerage, which closes the `minlimit` stranding defect that survived five earlier changes. Suites **280 / 61 / 22** (`slowInCore` 3, counts UNCHANGED by this release), tier-1 248/0, badge green. P64 and P66 shipped in #182/#183/#184.
+**As of 2026-08-22:** `main` = `721653d`. **P32 SHIPPED at v11.15e3 in PR #185**, merged; this worktree (`readme-review-updates-c9df11`, branch `worktrees/planning-with-files-2a1f63`) is clean and level with `main`, nothing in flight. Suites **280 / 61 / 22** (`slowInCore` 3), tier-1 248/0, badge green. P64 and P66 shipped in #182/#183/#184.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -18,7 +18,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P32 COMPLETE 2026-08-21, shipped v11.15e3.** Q2 measured the cap-gains spiral that justified keeping
+**P32 COMPLETE 2026-08-21, shipped v11.15e3, MERGED in PR #185.** Q2 measured the cap-gains spiral that justified keeping
 Brokerage out of the third pass: **0 capped years in 3,960 armed runs**, `bounded` identical to `unbounded`
 everywhere. The exclusion cost $372,455 of unpayable spending to save $1,711. Default flipped; the old
 tripwire is now a regression guard with an `off` control that must still reproduce all 10 stranded years.

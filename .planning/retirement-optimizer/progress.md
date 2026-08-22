@@ -3354,3 +3354,20 @@ collisions serving the MAIN checkout - confirmed by curl'ing the title before tr
 Version bumped at the three sites this release actually touches: the `<title>`,
 `optimizer_core.js?v=`, and the tier-2 loader's own `const V`. `taxengine.js`, `optimizer_ui.js` and
 the CSS were deliberately left at their old tokens because none of them changed.
+
+## Session: 2026-08-22 (worktree readme-review-updates-c9df11) - `/plan` re-entry, context restore
+
+`/plan` invoked with no task. Planning files already exist under `.planning/retirement-optimizer/`
+with `.planning/.active_plan` pointing at it; no root-level `task_plan.md` was created, since that
+would have forked the plan.
+
+**State measured, not assumed.** `git rev-parse --abbrev-ref HEAD` =
+`worktrees/planning-with-files-2a1f63`; `git rev-list --count origin/main..HEAD` = 0, working tree
+clean, `main` = `721653d` (Merge PR #185). `retirement_optimizer.html` `<title>` reads **11.15e3**.
+
+**One drift closed.** The header still called v11.15e3 "P32 complete, unreleased" - it merged in
+**PR #185**. Header rewritten line-neutrally (3 lines out, 3 in) with the LINE-30 BOUNDARY marker
+asserted before and after the write, and the P32 NOW paragraph now names the PR.
+
+Nothing else had drifted: O0/O1 rows (P35, P36, P51, P30, P19, P34, P65) are unchanged and P32's
+index row was already struck. No product file touched, so no version bump and no changelog entry.

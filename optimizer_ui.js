@@ -241,16 +241,29 @@ function cellActionCss(col) {
     return 'cursor:pointer;';
 }
 
+// The two figures that used to occupy columns of their own. Spend Goal repeated your own input on
+// every row except the ✦ optimized ones, so a whole column bought one number on a handful of rows.
+// Yrs Funded is already said by the 🟢/🚨 in the status column, which means "every year funded" -
+// only the n/N detail was lost, and this is where it went. Appended to EVERY cell's tooltip in the
+// row, so it does not matter which cell the reader happens to be over.
+// No double quotes in here: the callers interpolate straight into title="..." without escaping.
+function rowDetailTip(r) {
+    const goal = Math.round(r._spendGoal ?? 0).toLocaleString();
+    return `\nSpend goal: $${goal}/yr in today’s dollars.`
+         + `\nYears funded: ${r.totals.yearsfunded} of ${r.totals.yearstested}.`;
+}
+
 function cellActionAttrs(col, r, loadTitle) {
     if (col.inert) return '';
     if (col.compareZone) {
         const isRef = deltaReferenceRow() === r;
-        const tip = isRef
+        const tip = (isRef
             ? 'Every Δ column is currently measured against this row. Click to go back to the ⚓ baseline.'
-            : 'Compare against this row: the ΔNetWealth and ΔTax columns are re-measured from it instead of the ⚓ baseline.';
+            : 'Compare against this row: the ΔNetWealth and ΔTax columns are re-measured from it instead of the ⚓ baseline.')
+            + rowDetailTip(r);
         return ` onclick="toggleCompareRow(${r._id})" title="${tip}"`;
     }
-    return ` onclick="loadOptimizerResult(${r._id})" title="${loadTitle}"`;
+    return ` onclick="loadOptimizerResult(${r._id})" title="${loadTitle + rowDetailTip(r)}"`;
 }
 
 // One line above the table that is always saying something: how to start a comparison when none is
@@ -1289,6 +1302,12 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
 // then this parameter is accepted and ignored, so those call sites can already be written correctly.
 function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
     const inC = () => document.getElementById('show-current-dollars')?.checked;
+    // Nominal -> today's-dollar deflator for the terminal-balance columns. A row does not retain
+    // res.log, so there is no terminal.rothCurrentDollars to read; this is the same ratio
+    // _scoreRows already uses to build afterTaxNWCurrentDollars. Final IRA and Final Roth therefore
+    // restate on the Future $ / Current $ toggle the way NetWealth does, rather than sitting there
+    // nominal-only next to columns that move.
+    const defl = r => (inC() && r.finalNW) ? (r.finalNWCurrentDollars / r.finalNW) : 1;
     const objKey   = OptimizerState.objective || 'taxflex';
     const objLabel = OPT_OBJECTIVE_LABELS[objKey] || OPT_OBJECTIVE_LABELS.taxflex;
     const cols = [
@@ -1365,14 +1384,38 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             getSortValue: r => inC() ? r.totals.spendCurrentDollars : r.totals.spend
         },
         {
-            key: 'afterTaxNW', label: 'NetWealth',
-            title: 'After-tax terminal net worth: IRA × (1 − your expected future IRA rate), brokerage gains × (1 − cap-gains rate), Roth + Cash + basis at face. Uses ONE shared future-IRA rate across all rows so strategies compare on a level footing. This is the ranking metric. Toggle Future $/Current $ for nominal vs today\'s dollars.',
+            key: 'afterTaxNW', label: 'FinalWealth',
+            title: 'After-tax terminal net worth: IRA × (1 − your expected future IRA rate), brokerage gains × (1 − cap-gains rate), Roth + Cash + basis at face. Uses ONE shared future-IRA rate across all rows so strategies compare on a level footing. This is what the "Maximum Net Wealth" objective ranks on. Toggle Future $/Current $ for nominal vs today\'s dollars.',
             getValue: r => Math.round(inC() ? (r.afterTaxNWCurrentDollars ?? 0) : (r.afterTaxNW ?? 0)).toLocaleString(),
             getSortValue: r => inC() ? (r.afterTaxNWCurrentDollars ?? 0) : (r.afterTaxNW ?? 0)
         },
         {
-            key: 'dNW', label: 'ΔNetWealth' + deltaRefSuffix(),
-            title: 'NetWealth minus ' + deltaRefDescription() + '. Positive (green) = this strategy ends wealthier after tax than that reference; negative (red) = it ends behind it.',
+            key: 'finalIRA', label: 'Final IRA',
+            title: 'Traditional (pre-tax) IRA balance at the end of the plan, both people combined, at face value. This is the tax bomb: the balance that drives Required Minimum Distributions, that a surviving spouse pays Single rates on, and that heirs must empty within ten years. FinalWealth already subtracts the tax owed on it; this column is the raw number that tax is charged against, and it is half of what the "Avoiding Widow & RMD Tax" objective ranks on. Toggle Future $/Current $ for nominal vs today\'s dollars.',
+            getValue: r => Math.round(defl(r) * (r.totals.terminal?.ira ?? 0)).toLocaleString(),
+            getSortValue: r => defl(r) * (r.totals.terminal?.ira ?? 0)
+        },
+        {
+            key: 'finalRoth', label: 'Final Roth',
+            title: 'Roth balance at the end of the plan, both people combined. Counts at face value: no tax is ever owed on it, by you or by your heirs. This is what the "Maximum Roth" objective ranks on. Toggle Future $/Current $ for nominal vs today\'s dollars.',
+            getValue: r => Math.round(defl(r) * (r.totals.terminal?.roth ?? 0)).toLocaleString(),
+            getSortValue: r => defl(r) * (r.totals.terminal?.roth ?? 0)
+        },
+        {
+            // A unitless ratio, so inC() deliberately does NOT apply: deflating all three buckets by
+            // the same factor leaves the ratio unchanged, and a number that jumped on the
+            // Future $/Current $ toggle would be wrong, not merely restated.
+            key: 'mixSpread', label: 'Mix Spread',
+            title: 'How unevenly the plan ends up split across the three tax treatments: pre-tax IRA (net of the future IRA rate), Roth, and taxable (brokerage plus cash). 0% is a perfectly even three-way split, so in any future year you can draw from whichever account is cheapest that year. 100% means it all landed in one bucket and you draw from whatever you have. Lower is better. This is the measure the "Tax Flexibility" objective ranks on, among the plans that also finish among the wealthiest.',
+            getValue: r => {
+                const s = afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0);
+                return Number.isFinite(s) ? `${(s * 100).toFixed(0)}%` : '—';
+            },
+            getSortValue: r => afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0)
+        },
+        {
+            key: 'dNW', label: 'ΔFinalWealth' + deltaRefSuffix(),
+            title: 'FinalWealth minus ' + deltaRefDescription() + '. Positive (green) = this strategy ends wealthier after tax than that reference; negative (red) = it ends behind it.',
             getValue: r => {
                 const d = inC() ? r._dNWCurrent : r._dNW;
                 if (d == null) return '—';
@@ -1419,14 +1462,17 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             getSortValue: r => r.totals.rmdTax / (r.totals.tax || 1)
         },
         {
-            key: 'convSavings', label: 'Tax Paid Δ',
+            // Renamed from "Tax Paid Δ". The Δ was misleading: unlike every other Δ in this table it
+            // is not measured against the ⚓ baseline or a ⚖ pinned row, it is one row's own
+            // conversion search compared against itself without the extra conversions.
+            key: 'convSaved', label: 'Conversion Tax Saved',
             title: 'Counts only tax actually paid during the plan, so it is NOT a verdict on whether converting was worth it. Positive = the extra IRA→Roth conversions run by Optimize Conversions lowered lifetime tax vs the same strategy without them. It does not price the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so a big positive number here can sit alongside a plan that ends up worse off overall. Use the Break Even column, which prices in that deferred tax, for the actual answer.',
             getValue: r => r._convSavings != null ? '$' + Math.round(r._convSavings).toLocaleString() : '—',
             getSortValue: r => r._convSavings ?? -Infinity
         },
         {
             key: 'convBE', label: 'Break Even',
-            title: 'The year this strategy\'s after-tax wealth permanently overtakes the same strategy with no conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead, or the strategy never converts at all. Unlike Tax Paid Δ, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Sort by it, or choose "Earliest Break Even" under Optimize for, to rank strategies by how fast their conversions pay back.',
+            title: 'The year this strategy\'s after-tax wealth permanently overtakes the same strategy with no conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead, or the strategy never converts at all. Unlike Conversion Tax Saved, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Sort by it, or choose "Earliest Break Even" under Optimize for, to rank strategies by how fast their conversions pay back.',
             getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
             getSortValue: r => r._convBEYear ?? 9999
         }
@@ -1681,7 +1727,7 @@ function renderOptimizerTable(results) {
     if (bestEl) {
         if (feasibleSuccesses.length > 0) {
             const winnerDefs = [
-                { key: 'afterTaxNW', label: '💎 Most NetWealth',    id: colWinners.afterTaxNW },
+                { key: 'afterTaxNW', label: '💎 Most FinalWealth',    id: colWinners.afterTaxNW },
                 { key: 'spend',  label: '🏆 Most Spendable',   id: colWinners.spend  },
                 { key: 'tax',    label: '📉 Lowest Tax',        id: colWinners.tax    },
                 { key: 'rate',   label: '📊 Lowest Tax Rate',   id: colWinners.rate   },

@@ -32,6 +32,38 @@ let NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
 // panels and lowers the paths floor. Read once at load; not flipped at runtime, not in the URL twice.
 const MONTE_DEMO = new URLSearchParams(location.search).has('montecarlo');
 
+// ?tab=... opens the page on a named tab instead of Charts. Friendly names rather than the DOM ids,
+// because a shared link is read by people: ?tab=optimizer, not ?tab=tab-opt. Both are accepted, so
+// a link built from an id still works.
+const TAB_ALIASES = Object.freeze({
+    annual: 'tab-tbl', details: 'tab-tbl', table: 'tab-tbl', annualdetails: 'tab-tbl',
+    charts: 'tab-chart', chart: 'tab-chart',
+    optimizer: 'tab-opt', opt: 'tab-opt',
+    montecarlo: 'tab-mc', mc: 'tab-mc',
+    importexport: 'tab-fileio', fileio: 'tab-fileio', import: 'tab-fileio', export: 'tab-fileio',
+    documentation: 'tab-docs', docs: 'tab-docs', help: 'tab-docs',
+});
+
+// Returns a tab id from ?tab=, or null when the parameter is absent or names nothing. Null means
+// 'leave the default alone' rather than 'go to Charts', so a typo cannot silently move the user.
+function tabIdFromUrl() {
+    const raw = new URLSearchParams(location.search).get('tab');
+    if (!raw) return null;
+    const key = String(raw).trim().toLowerCase().replace(/[^a-z-]/g, '');
+    if (TAB_ALIASES[key]) return TAB_ALIASES[key];
+    // also accept a literal id, but only one that actually exists on the page
+    return (/^tab-[a-z]+$/.test(key) && document.getElementById(key)) ? key : null;
+}
+
+// Called once on load, after the tabs and their content exist. Monte Carlo needs its own
+// activation hook, the same one its tab button calls, or the tab opens without its charts built.
+function applyTabFromUrl() {
+    const id = tabIdFromUrl();
+    if (!id) return;
+    showTab(id);
+    if (id === 'tab-mc') mcTabActivated?.();
+}
+
 // Optimizer UI state - replaces window.optimizer* globals.
 const OptimizerState = {
     results: null,
@@ -45,6 +77,9 @@ const OptimizerState = {
     // to open. Deliberately NOT reset by setOptObjective: how dense you want the table is a
     // preference, not a property of the goal.
     showAllColumns: false,
+    // Relative view: every comparable column reads as a difference from the reference row rather
+    // than as its own value. Nerdknob-gated while it is being lived with.
+    relativeView: false,
     objective: 'taxflex',       // PF13: default ranking = Tax Flexibility (most-requested)
     sharedFutureIRARate: 0,     // PF13: heirs rate for widowrmd/taxflex metrics; set each runOptimizer
     perfStats: null,
@@ -115,6 +150,12 @@ function applyNerdKnobVisibility() {
     // 💵 legend - only meaningful once nerdknob is sweeping the cash-funded arm
     const cashFundLegend = document.getElementById('opt-legend-cashfund');
     if (cashFundLegend) cashFundLegend.style.display = NERD_KNOBS ? '' : 'none';
+    // Relative view control - gated while the mode is being lived with. Turning the knob OFF must
+    // also turn the mode off, or a reader who enabled it once would be left reading a table of
+    // differences with no visible way to get back.
+    const relWrap = document.getElementById('opt-relmode-wrap');
+    if (relWrap) relWrap.style.display = NERD_KNOBS ? '' : 'none';
+    if (!NERD_KNOBS) OptimizerState.relativeView = false;
     // The ACA Cliff documentation paragraph used to be hidden here. It is now always visible, like
     // every other strategy's paragraph, so there is nothing to toggle - the inline display:none was
     // dropped from the markup rather than being switched off from JS, which keeps it visible even
@@ -163,9 +204,22 @@ function setOptObjective(key) {
 function recomputeBaselineForObjective() {
     const results = OptimizerState.results;
     if (!results) return;
-    const noConvSuccesses = results.filter(r => r._isNoConv && r.totals.success);
-    const feasibleNoConv = noConvSuccesses.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
-    const baselinePool = feasibleNoConv.length > 0 ? feasibleNoConv : noConvSuccesses;
+    // Normally the baseline is the strongest plan that converts nothing: the "what if I do nothing"
+    // reference. The two conversion goals rank on a field only a CONVERTING row has, so against a
+    // no-conversion baseline every one of their deltas came out as a dash. Under those goals the
+    // pool is the rows that actually carry the field instead (OPT_BASELINE_REQUIRES).
+    const needField = OPT_BASELINE_REQUIRES[OptimizerState.objective];
+    const successes = results.filter(r => r.totals.success
+        && (needField ? r[needField] != null : r._isNoConv));
+    const feasible = successes.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
+    let baselinePool = feasible.length > 0 ? feasible : successes;
+    // If a goal that wants a converting row has none - no ⇌ rows in this run - fall back to the
+    // usual no-conversion baseline rather than leaving the table with no reference at all.
+    if (needField && baselinePool.length === 0) {
+        const noConv = results.filter(r => r._isNoConv && r.totals.success);
+        const noConvFeasible = noConv.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
+        baselinePool = noConvFeasible.length > 0 ? noConvFeasible : noConv;
+    }
     OptimizerState.baseline = baselinePool.length > 0
         ? rankRows(baselinePool, OptimizerState.objective)[0]
         : null;
@@ -252,6 +306,40 @@ function deltaRefDescription() {
 // The empty cells are still the click target. The column heading keeps the ⚖ so the column says
 // what it is, and CSS reveals a faint ⚖ under the pointer (see .opt-cmp-cell) so the affordance
 // is findable without printing it 177 times.
+// Relative view: render one cell as its difference from the reference row instead of its own
+// value. Returns null when this cell should stay absolute, so the caller falls through to
+// col.getValue unchanged - that covers the reference row itself, every column with no entry in
+// OPT_DELTA_COLUMNS, and any row whose column has no value to compare.
+//
+// Built on getSortValue rather than on the raw row fields, which buys two things for free: the
+// Future $ / Current $ toggle is already baked into it, and a column changing how it computes
+// cannot leave the delta reading from a stale field.
+function deltaCellHtml(col, r, refRow) {
+    const meta = OPT_DELTA_COLUMNS[col.key];
+    if (!meta || !refRow || r === refRow) return null;
+    // A dash means this row has nothing to compare - a sweep row has no break-even year, for
+    // instance. It must stay a dash: turning "no value" into "+0" would read as a tie.
+    if (col.getValue(r) === '—' || col.getValue(refRow) === '—') return '—';
+    const a = col.getSortValue(r), b = col.getSortValue(refRow);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return '—';
+    const d = a - b;
+    let body;
+    // No unit suffix on the percent columns. These are differences between two percentages, so
+    // strictly they are percentage POINTS - but "pp" read as an unexplained code, and "%" would be
+    // worse than jargon: it invites reading 0.8 as a share OF the rate rather than a step in it.
+    // The heading already says which column this is, so the bare number is the honest form.
+    if (meta.unit === 'pp')         body = `${(Math.abs(d) * 100).toFixed(1)}`;
+    else if (meta.unit === 'years') body = `${Math.abs(Math.round(d))} yr`;
+    else                            body = Math.round(Math.abs(d)).toLocaleString();
+    if (Math.round(Math.abs(d) * (meta.unit === 'dollar' ? 1 : 1000)) === 0) {
+        return `<span style="color:#57606a">same</span>`;
+    }
+    const better = meta.dir === 'neutral' ? null
+                 : (meta.dir === 'higher' ? d > 0 : d < 0);
+    const color = better === null ? '#57606a' : (better ? '#1a7f37' : '#cf222e');
+    return `<span style="color:${color}">${d > 0 ? '+' : '−'}${body}</span>`;
+}
+
 function compareToggleHtml(r) {
     return (deltaReferenceRow() === r) ? '<span style="font-size:1.2em;">⚖</span>' : '';
 }
@@ -1333,7 +1421,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
     const defl = r => (inC() && r.finalNW) ? (r.finalNWCurrentDollars / r.finalNW) : 1;
     const objKey   = OptimizerState.objective || 'taxflex';
     const objLabel = OPT_OBJECTIVE_LABELS[objKey] || OPT_OBJECTIVE_LABELS.taxflex;
-    const cols = [
+    let cols = [
         // compareZone: these cells select the comparison row instead of loading the strategy.
         // The ⚖ used to be a small glyph inside the Strategy cell, where a near miss loaded the
         // strategy instead -- a destructive, surprising outcome for a click aimed at a comparison.
@@ -1496,11 +1584,39 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // conversion search compared against itself without the extra conversions.
             key: 'convSaved', label: 'Conv Tax',
             title: 'Counts only tax actually paid during the plan, so it is NOT a verdict on whether converting was worth it. Positive = the extra IRA→Roth conversions run by Optimize Conversions lowered lifetime tax vs the same strategy without them. It does not price the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so a big positive number here can sit alongside a plan that ends up worse off overall. Use the Break Even column, which prices in that deferred tax, for the actual answer.',
-            getValue: r => r._convSavings != null ? '$' + Math.round(r._convSavings).toLocaleString() : '—',
+            // Colored by SIGN, not left plain. This is a saving, so a negative means the extra
+            // conversions cost MORE lifetime tax - a worse plan - and it was rendering in the same
+            // black as a gain, with only a minus sign to say otherwise. No dollar prefix: every
+            // other money column in this table is bare, and the heading already says what it is.
+            getValue: r => {
+                if (r._convSavings == null) return '—';
+                const v = Math.round(r._convSavings);
+                const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
+                return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
+            },
             getSortValue: r => r._convSavings ?? -Infinity
         }
     ];
-    if (showAll) return cols;
+    // Display order comes from OPT_COLUMN_KEYS, not from the order these descriptors happen to be
+    // written in. One source of truth, and reordering a column is a one-line edit in core instead
+    // of moving a twenty-line block through this literal - which is exactly the edit that once
+    // relocated a descriptor into an unrelated function.
+    const _byKey = new Map(cols.map(c => [c.key, c]));
+    const _ordered = OPT_COLUMN_KEYS.map(k => _byKey.get(k)).filter(Boolean);
+    // A descriptor whose key is missing from OPT_COLUMN_KEYS would silently disappear from the
+    // table. Fail loudly in the console instead, and fall back to the literal order so the table
+    // still renders.
+    if (_ordered.length !== cols.length) {
+        const missing = cols.map(c => c.key).filter(k => !OPT_COLUMN_KEYS.includes(k));
+        console.error('getOptimizerColumns: column(s) not listed in OPT_COLUMN_KEYS:', missing);
+    }
+    cols = (_ordered.length === cols.length) ? _ordered : cols;
+
+    // In relative view every comparable column already IS a difference from the reference row, so a
+    // column whose name says delta is a second copy of one. Dropped on BOTH paths: switching all
+    // columns on must not bring them back, which is exactly how they reappeared the first time.
+    const dropDeltaCols = c => !(OptimizerState.relativeView && (c.key === 'dNW' || c.key === 'dTax'));
+    if (showAll) return cols.filter(dropDeltaCols);
     // Union with the pinned set, not a straight read of the goal's list. `compare` MUST survive:
     // the Best summary table drops the leading column on the understanding that it is the ⚖
     // control. A typo in the data above cannot take it out.
@@ -1508,10 +1624,12 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
     // The Δ columns are in no goal's list. They measure against a reference, so they earn their
     // space only once the reader has chosen one by pinning a ⚖ row - until then they restate the
     // ⚓ baseline the table is already ordered around.
+    // ...except in relative view, where every comparable column is already a difference from that
+    // same row, so a column whose NAME says delta is just two of them.
     if (OptimizerState.compareRow) { keep.add('dNW'); keep.add('dTax'); }
     // filter(), never a map over the goal's list: this array IS the display order, so a goal's
     // columns can be written in any order and `compare` still lands at index 0.
-    return cols.filter(c => keep.has(c.key));
+    return cols.filter(c => keep.has(c.key) && dropDeltaCols(c));
 }
 
 function renderOptimizerTable(results) {
@@ -1674,7 +1792,8 @@ function renderOptimizerTable(results) {
                         : (r._isReverseOptimized || r._isConvOptimized || r._isSpendOptimized) ? 'font-style:italic;' : '';
             const bgCss = bg ? `background-color:${bg};` : '';
             const cls = col.key === 'compare' ? ' class="opt-cmp-cell"' : '';
-            return `<div${cls} style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${col.getValue(r)}</div>`;
+            const dv = OptimizerState.relativeView ? deltaCellHtml(col, r, deltaReferenceRow()) : null;
+            return `<div${cls} style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${dv ?? col.getValue(r)}</div>`;
         }).join('');
         return `<div style="display:contents;">${cells}</div>`;
     }).join('');
@@ -1691,7 +1810,13 @@ function renderOptimizerTable(results) {
             // Zero only when the baseline IS the reference. With a compare row pinned the baseline
             // has a real Δ like every other row, and printing 0 would be a lie.
             else if ((col.key === 'dNW' || col.key === 'dTax') && !OptimizerState.compareRow) v = '0';
-            else v = col.getValue(baselineRow);
+            // Both pinned rows go through the delta wrapper too. They are rows like any other in
+            // relative view: the reference one returns null and falls through to its own numbers,
+            // and any pinned row that is NOT the reference reads as a difference. Without this the
+            // two rows at the top of the table stayed absolute while everything under them was a
+            // difference, in the same columns, with nothing saying so.
+            else v = (OptimizerState.relativeView ? deltaCellHtml(col, baselineRow, deltaReferenceRow()) : null)
+                  ?? col.getValue(baselineRow);
             return `<div style="${_bCell}${cellActionCss(col)}"${cellActionAttrs(col, baselineRow, bTitle)}>${v}</div>`;
         }).join('') + '</div>';
     }
@@ -1722,7 +1847,8 @@ function renderOptimizerTable(results) {
             const _curBare = currentRow._strategyLabel.startsWith(CURRENT_PLAN_MARK)
                 ? currentRow._strategyLabel.slice(CURRENT_PLAN_MARK.length)
                 : currentRow._strategyLabel;
-            const v = col.key === 'strategy' ? CURRENT_PLAN_MARK + _curBare : col.getValue(currentRow);
+            const _rel = OptimizerState.relativeView ? deltaCellHtml(col, currentRow, deltaReferenceRow()) : null;
+            const v = col.key === 'strategy' ? CURRENT_PLAN_MARK + _curBare : (_rel ?? col.getValue(currentRow));
             return `<div style="${_cCell}${cellActionCss(col)}"${cellActionAttrs(col, currentRow, cTitle)}>${v}</div>`;
         }).join('') + '</div>';
     }
@@ -1744,19 +1870,27 @@ function renderOptimizerTable(results) {
 
     // Column-count escape hatch. Written here rather than in the markup for the same reason the two
     // legend toggles are: the count is only knowable after the columns are built.
-    const colModeEl = document.getElementById("opt-colmode");
-    if (colModeEl) {
+    // The two switches. Only the label text and the checked state are written here; the switch
+    // itself is CSS. checked is assigned rather than toggled so it cannot drift out of step with
+    // state - applyNerdKnobVisibility can force relativeView off underneath it.
+    const colTextEl = document.getElementById('opt-colmode-text');
+    const colCbEl   = document.getElementById('opt-colmode-cb');
+    if (colTextEl) {
         const _allCols = getOptimizerColumns(true).length;
-        const _objLbl  = OPT_OBJECTIVE_LABELS[OptimizerState.objective] || OPT_OBJECTIVE_LABELS.taxflex;
-        const _label = OptimizerState.showAllColumns
-            ? `Showing all ${_allCols} columns - click to show only the ones for ${_objLbl}`
-            : `Showing ${columns.length} of ${_allCols} columns - click to show all`;
-        const _tip = 'Each "Optimize for" goal shows the columns that answer its own question and puts '
-            + 'the rest away. Nothing is discarded - this switches the filter off so every column is on '
-            + 'screen at once, and the goal still sets the row order. Hover over any column heading for '
-            + 'what it means.';
-        colModeEl.innerHTML = `<span onclick="toggleAllColumns()" title="${_tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${_label}</span>`;
+        colTextEl.textContent = OptimizerState.showAllColumns
+            ? `Show All ${_allCols} Columns (showing all ${_allCols})`
+            : `Show All ${_allCols} Columns (showing ${columns.length})`;
     }
+    if (colCbEl) colCbEl.checked = !!OptimizerState.showAllColumns;
+
+    const relTextEl = document.getElementById('opt-relmode-text');
+    const relCbEl   = document.getElementById('opt-relmode-cb');
+    if (relTextEl) {
+        const _ref = deltaReferenceRow();
+        const _refName = (_ref && _ref !== OptimizerState.baseline) ? 'the ⚖ row' : 'the ⚓ baseline';
+        relTextEl.textContent = `Show As Differences (from ${_refName})`;
+    }
+    if (relCbEl) relCbEl.checked = !!OptimizerState.relativeView;
 
     // Legend - make the "Infeasible" item a click toggle (rows hidden by default).
     const legendInfeasEl = document.getElementById('opt-legend-infeasible');
@@ -1798,7 +1932,7 @@ function renderOptimizerTable(results) {
                 ...(colWinners.convBE != null ? [{ key: 'convBE', label: '⏱ Earliest Break Even', id: colWinners.convBE }] : []),
                 // Not a metric win at all - this is "here is the ⚓ baseline row again". It survives
                 // whatever the column filter does, because nothing about it depends on a column.
-                ...(OptimizerState.baseline ? [{ key: 'afterTaxNW', always: true, label: '⚓ Best w/o Conv', id: OptimizerState.baseline._id }] : []),
+                ...(OptimizerState.baseline ? [{ key: 'afterTaxNW', always: true, label: (OptimizerState.baseline._isNoConv ? '⚓ Best w/o Conv' : '⚓ Reference row'), id: OptimizerState.baseline._id }] : []),
             // Drop any winner whose column the active goal has put away. Its label names a
             // column the reader cannot find, and its highlighted cell would not be rendered.
             ].filter(w => w.always || visibleKeys.has(w.key));
@@ -1938,6 +2072,14 @@ function restoreFoldState() {
 // real data behind it; this shows all of them at once, the way the table used to open. The
 // vanished-sort-column case is handled by normalizeSortState at the render choke point, so
 // this needs no guard of its own.
+// Relative view on/off. The row ORDER is untouched by this: sorting keeps using getSortValue on
+// the absolute values, and a difference from a common reference is monotonic in that absolute, so
+// the ranking is identical in both modes. Only what each cell prints changes.
+function toggleRelativeView() {
+    OptimizerState.relativeView = !OptimizerState.relativeView;
+    if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
+}
+
 function toggleAllColumns() {
     OptimizerState.showAllColumns = !OptimizerState.showAllColumns;
     if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
@@ -2938,7 +3080,7 @@ let showTaxThresholds = true;
 // cooperate: at the chart's 10px, U+25D0 (half) inks 9x7 while U+25CF (full) inks 6x4, so "full"
 // would render a third SMALLER than "half" and read backwards. Its family (U+25D0..U+25D7) has no
 // fully-black member to pair with, so no same-size pair exists to switch to. Drawing both from one
-// radius makes them identical by construction, matches the marker's own colour exactly, and does
+// radius makes them identical by construction, matches the marker's own color exactly, and does
 // not depend on what `sans-serif` resolves to on the reader's machine.
 // The outline is deliberately THIN. It is drawn on both so the two glyphs share an outer diameter,
 // but it also lays ink on the empty side of the half glyph, which is the only side the eye can use
@@ -4569,7 +4711,9 @@ function manageScenarios() {
         let html = '<table style="width: 100%; border-collapse: collapse;">';
         html += '<tr><th style="text-align: left; padding: 8px; border-bottom: 2px solid #ddd;">Name</th>';
         html += '<th style="text-align: left; padding: 8px; border-bottom: 2px solid #ddd;">Saved</th>';
-        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Version</th>';
+        // No Version column. An incompatible scenario is already unmistakable without one: the row is
+        // tinted red, its Load button is disabled and says why, and the warning below counts them.
+        // A column of green ticks next to every other row was three states of nothing.
         html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Actions</th></tr>';
 
         for (const [name, scenario] of Object.entries(scenarios)) {
@@ -4580,20 +4724,11 @@ function manageScenarios() {
             const isCurrent = version === SCENARIO_VERSION;
             const isOldStorage = scenario.isOldStorage || false;
 
-            const versionBadge = isCurrent
-                ? `<span style="color: green; font-weight: bold;">v${version} ✓</span>`
-                : `<span style="color: red;">v${version} ✗</span>`;
-
-            const storageBadge = isOldStorage
-                ? `<span style="color: orange; font-size: 0.9em;">OLD</span>`
-                : `<span style="color: blue; font-size: 0.9em;">NEW</span>`;
-
             const rowStyle = isCurrent ? '' : 'background-color: #ffeeee;';
 
             html += `<tr style="${rowStyle}">
                 <td style="padding: 4px; border-bottom: 1px solid #eee;">${name}</td>
                 <td style="padding: 4px; border-bottom: 1px solid #eee;">${savedDate}</td>
-                <td style="padding: 4px; border-bottom: 1px solid #eee; text-align: center;">${versionBadge}</td>
                 <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
 					<button class="modal-btn" onclick="loadScenarioByName('${escapeQuotes(name)}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
 					<button class="modal-btn" onclick="deleteScenario('${escapeQuotes(name)}')">Delete</button>

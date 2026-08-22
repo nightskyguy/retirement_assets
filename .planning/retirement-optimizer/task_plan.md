@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-22:** `main` = `721653d`. **P67 PR A COMPLETE at v11.15fa** (6 commits, unmerged, worktree `readme-review-updates-c9df11`, branch `worktrees/planning-with-files-2a1f63`): the "Optimize for" goal now picks the table's columns, plus two rounds of review cleanups on the legend, the naming and the compare marker. Suites **286 / 61 / 22** (`slowInCore` 3), tier-1 **287**/0, badge green at 656. P32 shipped v11.15e3 in PR #185; P64/P66 in #182/#183/#184.
+**As of 2026-08-22:** `main` = `721653d`. **P67 COMPLETE at v11.1601**, PR [#186](https://github.com/nightskyguy/retirement_assets/pull/186) open, 16 commits: the "Optimize for" goal picks the table's columns, a nerdknob-gated relative view renders every column as a difference from the reference row, plus five rounds of review. Suites **289 / 61 / 22** (`slowInCore` 3), tier-1 **289**/0, badge green at 661. P32 shipped v11.15e3 in PR #185; P64/P66 in #182/#183/#184.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -13,7 +13,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| **O0** | P67 | Table columns; **PR A done v11.15fa**, delta view left | `P67b` |
+| **O2** | P68 | Changelog brevity pass, deferred by user | `P68a` |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
@@ -51,7 +51,7 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P32~~ | ~~Brokerage barely drawn; is the third-pass exclusion still right?~~ - **COMPLETE 2026-08-21.** Premise refuted (Q1), dividend double-credit fixed, the cap-gains spiral measured and REFUTED (Q2, 0 capped years in 3,960 armed runs), and the exclusion re-scoped at **v11.15e3** | - | - |
 | ~~DONE~~ | ~~P58~~ | ~~Withholding assumed on money already moved, plus the forced-quarterly double payment~~ — **COMPLETE, v11.159d (`0bc7ba0`)** | — | — |
 | ~~DONE~~ | ~~P56~~+~~P57~~ | ~~Five-plan matrix, one cost table, and every statement attributed to one plan~~ — **COMPLETE, v11.1599 (`6e74f1f`)** | — | — |
-| **O0** | P67 | Optimizer table columns — **PR A COMPLETE v11.15fa**, 6 commits, unmerged | `P67b` (the relative/delta view, nerdknob) | nothing |
+| ~~DONE~~ | ~~P67~~ | ~~Optimizer table columns + relative view~~ — **COMPLETE v11.15fd**, PR #186 | — | — |
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
 | **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
@@ -73,6 +73,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
+| **O2** | P68 | `optimizer_changelog.md` brevity pass over the recent entries *(new 2026-08-22)* | `P68a` | nothing |
 | **O2** | P65 | Rest of Schedule A — engine itemizes on SALT alone; medical is the piece that likely qualifies *(new 2026-08-19)* | `P65a` (measure first) | nothing |
 | **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
 | **O3** | P28 | "Every voluntary IRA withdrawal is a conversion" — ship decision | `P28f` | nothing |
@@ -1756,6 +1757,40 @@ bodies, `findings.md` and `progress.md` cite them; see the ID migration table at
   ordering rather than one about to change.
 
 ---
+## P68 — changelog brevity pass over the recent entries
+
+`optimizer_changelog.md` is **79 entries, 18,459 words**. The convention says entries are
+user-facing and brief; in practice they carry the "why", the mechanism, and a per-item breakdown that
+repeats what the summary already said. User 2026-08-22, on a 954-word entry: "WAY too long".
+
+The rule was settled and applied to **11.15fc only** (954 -> 183 words), plus its in-page `<li>`
+(89 words) and its README bullet. The target is **roughly 150 words per release entry**, recorded in
+the `feedback_changelog_conventions` memory with the cut order: the "why" first, then the mechanism,
+then any per-item list that restates the summary. Sweeping beats complete.
+
+Deferred by the user on 2026-08-22: "Add changelog brevity improvements to the Task list. Let's not
+do now."
+
+**Measured word counts, worst first** (`<a id=...>` anchor to the next anchor):
+
+| entry | words | entry | words |
+|---|---|---|---|
+| 11.150b | 1717 | 11.1585 | 350 |
+| 11.152f | 1474 | 11.1553 | 319 |
+| 11.15a2 | 728 | 11.15e3 | 298 |
+| 11.15cf | 509 | 11.1508 | 273 |
+| | | 11.15c9 | 214 |
+
+- [ ] **P68a** rewrite the top ~12 entries to <=150 words each. Anchors (`<a id="11.15cf"></a>`) and
+      `## version` headings MUST survive verbatim: `doclinks.tests.js` resolves links against them and
+      the in-page changelog links here. Re-run it after every edit.
+- [ ] **P68b** decide whether to keep going past the top 12. Rewriting entries for releases people
+      have already read is a different call from fixing an unmerged one, and is the user's to make.
+- [ ] **P68c** what NOT to cut: the **behavior-change** warnings. A reader's actual question is "does
+      this release move my saved plan?", so those sentences are the one part that earns its length.
+- **Status:** NOT STARTED, deferred. **Depends on:** nothing.
+
+---
 ## P67 — "Optimize for" drives the columns, plus a relative (delta) view
 
 The results table rendered **all 21 columns to everyone under every goal**, so the columns that
@@ -1818,24 +1853,44 @@ AND the descriptor literal. Editing `OPT_OBJECTIVE_COLUMNS` alone changes nothin
 but `.gitattributes` pins `.githooks/**` to `eol=lf` and a CR in a shebang breaks the hook, so the
 "restore CRLF everywhere" reflex is wrong for that one path. Use Python with `newline=''`.
 
-### P67b — the relative (delta) view, nerdknob-gated. **NOT STARTED**
+### P67b — the relative (delta) view, nerdknob-gated. **DONE, v11.15fd** (`a98c94a`), refined through v11.1601
 
 Every numeric column reads as a signed difference from a reference row; the reference row shows the
 absolute the rest are measured against. User's words: "the pin column shows the number, all other
 columns show the delta", so `ΔFinalWealth`/`ΔTax` stop existing as separate columns.
 
-- [ ] **P67b-1** reference = ⚖ pinned row, falling back to the ⚓ baseline (the existing
+- [x] **P67b-1** reference = ⚖ pinned row, falling back to the ⚓ baseline (the existing
       `deltaReferenceRow()` rule), so the mode always has a reference
-- [ ] **P67b-2** format: signed, same units, colored better/worse **per column** (a negative on
+- [x] **P67b-2** format: signed, same units, colored better/worse **per column** (a negative on
       Lifetime Tax is green). Percent columns in percentage points, Break Even in years
-- [ ] **P67b-3** wrap `col.getValue` at the body-cell emit, NOT 21 edited descriptors. Sorting keeps
+- [x] **P67b-3** wrap `col.getValue` at the body-cell emit, NOT 21 edited descriptors. Sorting keeps
       using `getSortValue` on absolutes, so order is identical in both modes
-- [ ] **P67b-4** `Conversion Tax Saved` stays absolute (`absolute: true`): it is not measured against
+- [x] **P67b-4** `Conversion Tax Saved` stays absolute (`absolute: true`): it is not measured against
       the reference row but against the same row's own conversion search
-- [ ] **P67b-5** drop `dNW`/`dTax` while the mode is on; nerdknob gate + "Show relative view" control
-- [ ] **P67b-6** open question: what a delta cell shows where the row has no value. Today `'—'`;
+- [x] **P67b-5** drop `dNW`/`dTax` while the mode is on; nerdknob gate + "Show relative view" control
+- [x] **P67b-6** open question: what a delta cell shows where the row has no value. Today `'—'`;
       the delta renderer must not turn that into `+0`
-- **Status:** NOT STARTED. **Depends on:** P67a (shipped). Full design in the approved plan file.
+- **Status:** DONE. Built as a wrapper over `getSortValue` at the body-cell emit, not 21 edited
+  descriptors, so the Future $ / Current $ handling comes free and a column's display cannot drift
+  from its delta. Row order is provably identical in both modes (sorting still uses the absolutes;
+  a difference from a common reference is monotonic in it) and that was VERIFIED, not argued.
+- **Five review rounds followed (v11.15fe → v11.1601), all shipped.** Switches instead of text links;
+  the Δ columns dropped in relative view on BOTH paths (showing all columns had brought them back);
+  both PINNED rows routed through the delta wrapper (they were built by their own code paths and
+  stayed absolute); percent deltas lost the "pp" suffix; the reference row moves to a converting row
+  under the two conversion goals (`OPT_BASELINE_REQUIRES`); Conv Tax colored by sign with no `$`;
+  the ⏹ stop-year mark explained; Version column dropped from the scenario list; `?tab=` added;
+  **End Wealth and All Taxes pinned for every goal**; US spelling normalized.
+- **GOTCHA retired:** display order now comes from `OPT_COLUMN_KEYS`, not from the order the
+  descriptors are written in. That coupling caused two separate incidents - a reorder that did
+  nothing visible, and a scripted block move that relocated a descriptor into an unrelated Chart.js
+  helper. Reordering is now a one-line edit in core.
+- **Still NOT verified live:** the Roth Conversion Effectiveness half of `OPT_BASELINE_REQUIRES`.
+  Neither the default scenario nor the user's own URL produced ⇌ rows, so only the fallback ran.
+  Covered by a node test, not by a browser check.
+- **Open call for later:** under the two conversion goals the ⚓ baseline never converts, so it has
+  no break-even year and the whole Break Even column reads as dashes until a ⚖ row is pinned.
+  Correct - there is no difference to state - but it makes the mode much less useful there.
 
 
 ---

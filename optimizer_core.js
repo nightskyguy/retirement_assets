@@ -3725,8 +3725,8 @@ const OPTIMIZER_OBJECTIVES = {
 // test that every goal's list is drawn from this array, and an in-page test that
 // getOptimizerColumns(true) emits exactly this array in exactly this order.
 const OPT_COLUMN_KEYS = Object.freeze([
-    'compare', 'status', 'gap', 'strategy', 'param', 'rank',
-    'spendGoal', 'tax', 'spend', 'afterTaxNW', 'finalIRA', 'finalRoth', 'mixSpread',
+    'compare', 'status', 'gap', 'strategy', 'param', 'rank', 'afterTaxNW', 'tax',
+    'spendGoal', 'spend', 'finalIRA', 'finalRoth', 'mixSpread',
     'dNW', 'dTax', 'rate', 'years', 'rmd', 'rmdtax', 'convBE', 'convSaved',
 ]);
 
@@ -3735,7 +3735,14 @@ const OPT_COLUMN_KEYS = Object.freeze([
 // a head-to-head comparison; `gap` because it is the dead space that keeps a near-miss click off the
 // wrong control; `rank` because it is the readout for the goal selector itself; the rest because a
 // row with no strategy name on it is not a row.
-const OPT_COLUMNS_PINNED = Object.freeze(['compare', 'status', 'gap', 'strategy', 'param', 'rank']);
+const OPT_COLUMNS_PINNED = Object.freeze([
+    'compare', 'status', 'gap', 'strategy', 'param', 'rank',
+    // End Wealth and All Taxes are pinned for EVERY goal, directly after Rank. They are what any
+    // two plans get compared on whatever question you came with, and letting each goal decide
+    // whether to show them meant they slid to a different place, or vanished, as you switched
+    // goals - so the two numbers you were tracking moved under you.
+    'afterTaxNW', 'tax',
+]);
 
 // objKey -> the columns that answer the question that goal asks. Pure data: no DOM, no descriptors,
 // no formatting. Every list is written in full, pinned columns included, so it reads as the literal
@@ -3746,15 +3753,51 @@ const OPT_COLUMNS_PINNED = Object.freeze(['compare', 'status', 'gap', 'strategy'
 // dNW and dTax are in no list: they are meaningful against a reference the reader chose, so the
 // filter adds them back whenever a ⚖ row is pinned.
 const OPT_OBJECTIVE_COLUMNS = Object.freeze({
-    taxflex:    ['compare','status','gap','strategy','param','rank','mixSpread','afterTaxNW','finalRoth','finalIRA'],
-    networth:   ['compare','status','gap','strategy','param','rank','afterTaxNW','spend','tax'],
-    widowrmd:   ['compare','status','gap','strategy','param','rank','finalIRA','rmd','rmdtax','tax'],
-    mintax:     ['compare','status','gap','strategy','param','rank','tax','rate','afterTaxNW'],
-    maxspend:   ['compare','status','gap','strategy','param','rank','spend','afterTaxNW','tax'],
-    maxroth:    ['compare','status','gap','strategy','param','rank','finalRoth','afterTaxNW','tax'],
-    balanced:   ['compare','status','gap','strategy','param','rank','afterTaxNW','spend','tax'],
-    conveffect: ['compare','status','gap','strategy','param','rank','convBE','convSaved','finalRoth','afterTaxNW'],
-    earliestbe: ['compare','status','gap','strategy','param','rank','convBE','convSaved','afterTaxNW','tax'],
+    taxflex:    ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','mixSpread','finalRoth','finalIRA'],
+    networth:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','spend'],
+    widowrmd:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','finalIRA','rmd','rmdtax'],
+    mintax:     ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','rate'],
+    maxspend:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','spend'],
+    maxroth:    ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','finalRoth'],
+    balanced:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','spend'],
+    conveffect: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved','finalRoth'],
+    earliestbe: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved'],
+});
+
+// The two conversion goals rank on numbers that only a CONVERTING row has. The ⚓ baseline is drawn
+// from no-conversion rows, which by definition never break even and never save conversion tax, so
+// under those goals every delta against it came out as a dash - a reference with nothing to
+// compare is not a reference. Under these goals the baseline is instead the best row that actually
+// carries the field, ranked by that same goal.
+//
+// Value is the ROW FIELD that must be present, not a column key: the pool is filtered before any
+// column exists.
+const OPT_BASELINE_REQUIRES = Object.freeze({
+    earliestbe: '_convBEYear',
+    conveffect: '_convSavings',
+});
+
+// Relative view: which columns can be shown as a difference from the reference row, and how to read
+// that difference. A column absent from this map is never converted - Strategy and Param are text,
+// Rank is already a comparison, and Conv Tax is measured against the same row's own conversion
+// search rather than against another row, so a delta of it would be a delta of a delta.
+//
+//   dir   'higher' / 'lower' = which direction is better, and so which sign is green. 'neutral'
+//         colors nothing: a bigger Final IRA is worse for a widow and better for a spender, and
+//         the table should not pretend to know which one you are.
+//   unit  'dollar' plain thousands, 'pp' percentage POINTS (the underlying value is a fraction),
+//         'years' for the break-even year.
+const OPT_DELTA_COLUMNS = Object.freeze({
+    tax:        { dir: 'lower',   unit: 'dollar' },
+    spend:      { dir: 'higher',  unit: 'dollar' },
+    afterTaxNW: { dir: 'higher',  unit: 'dollar' },
+    finalRoth:  { dir: 'higher',  unit: 'dollar' },
+    finalIRA:   { dir: 'neutral', unit: 'dollar' },
+    rmd:        { dir: 'neutral', unit: 'dollar' },
+    mixSpread:  { dir: 'lower',   unit: 'pp' },
+    rate:       { dir: 'lower',   unit: 'pp' },
+    rmdtax:     { dir: 'lower',   unit: 'pp' },
+    convBE:     { dir: 'lower',   unit: 'years' },
 });
 
 // One line per goal, saying what the row order actually means. Replaces a single generic sentence
@@ -4419,7 +4462,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -4427,7 +4470,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

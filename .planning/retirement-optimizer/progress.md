@@ -3445,3 +3445,57 @@ of the above is DOM-level assertion rather than visual.
 commit. Content correct, commit boundary not. Explicit paths thereafter. Also, P51 was rotated out of
 the NOW table to make room for P67 (the table is capped at 7 rows by the LINE-30 BOUNDARY); it keeps
 its O1 index row and is not dropped.
+
+## Session 2026-08-22 (continued) - P67a review rounds, v11.15f9 -> v11.15fa
+
+Two rounds of user review on the shipped table, then the PR. Nine items total, all landed.
+
+**Round 1, seven items** (`bd75a56`). Duplicate "Your plan" symbol. Three legend strips merged into
+one fold. Naming unified. `Conv Tax` with Break Even ahead of it. Colour legend lines dropped for
+every colour whose rows carry a symbol. Compare hint folded. One ⚖ instead of 178.
+
+Two of these were settled by READING rather than by opinion: **"Infeasible" and "target unreachable"
+were literally the same flag** (`optimizer_ui.js:836` renders ⚠️ on exactly the condition that drives
+the row colour and the hide-rows filter), and the summary bar's four tile names were checkable at
+`retirement_optimizer.html:431-434`. The naming answer **reverts FinalWealth**, which the user had
+asked for one round earlier - the summary bar won because it is what a reader sees first.
+
+Also flagged before acting, and it changed the plan: item 7 wanted the compare row shaded like the
+baseline, but item 3 had just pointed out baseline and Optimize Spend were already both `#dbeafe`.
+Three things blue. User chose to strip ✦ of its colour rather than invent a fourth.
+
+**Round 2, two items** (`1eef3b2`). The 💵 entry was not missing an explanation - **round 1 had
+deleted it**. The merge script kept only spans opening `<span title=` and that one opens `<span id=`,
+because `optimizer_ui.js:116` toggles it by id. A self-inflicted regression, found only because the
+user noticed the symbol had no key. ⚠️ and 🚨 removed from the symbol list, both having a permanent
+chip that says more (live count, click to toggle). 🟢 kept - no chip of its own.
+
+**Two GOTCHAs, both now in task_plan under P67a.**
+1. A goal's column list does NOT set display order; the filter preserves `OPT_COLUMN_KEYS`. Moving
+   Break Even ahead of Conv Tax by editing `OPT_OBJECTIVE_COLUMNS` alone did nothing visible.
+2. `sed -i` on Git Bash rewrites a CRLF file as LF. It flattened `retirement_optimizer.html` and
+   `.githooks/README.md`. Git normalises so the blob survives, but `.gitattributes` pins
+   `.githooks/**` to `eol=lf`, so blanket "restore CRLF" is WRONG there - a CR in a shebang breaks
+   the hook for every Windows clone. Python with `newline=''` throughout instead.
+
+**One self-inflicted corruption, caught immediately.** Swapping the convBE/convSaved descriptors with
+a brace-matching script relocated the `Conv Tax` block into an unrelated Chart.js legend helper 1600
+lines away. Caught by a `new Function()` parse check before anything else ran, repaired in place
+rather than reverted (a revert would have lost the other six items), and the helper was confirmed
+absent from `git diff`. Lesson: for block moves in a large file, anchor on the unique `key:` line and
+assert the neighbours, do not trust `rfind` on a brace.
+
+**Recorded, not fixed:** `buildStrategyFamilies` (`optimizer_core.js:4305`) sets `cashClones` on
+`base.Cash > 0` with NO nerdknob gate, while the Optimizer's own call site (`optimizer_ui.js:911`)
+gates on `NERD_KNOBS && base.Cash > 0`. The ungated path is Monte Carlo's, so MC can label a row 💵
+with no legend anywhere on that tab. Pre-existing, outside this change.
+
+**Final state:** v11.15fa, 6 commits, suites 286 / 61 / 22, tier-1 287/0, badge green at 656.
+Verified in the browser at every step: Break Even now precedes Conv Tax under both conversion goals;
+of 167 compare cells exactly one carries the marker, on a row shaded `rgb(219,234,254)`; the 💵 entry
+is present under nerdknob and hidden without it. Still no screenshot - the Browser pane was never
+displayed, so all of it is DOM assertion.
+
+**Planning-file near-miss worth recording:** updating the NOW table by line INDEX clobbered the P30
+row and duplicated P67, because the assert was written after the assignment and so was vacuous.
+Caught by diffing the table against HEAD. Match on row TEXT, not on index, and assert before writing.

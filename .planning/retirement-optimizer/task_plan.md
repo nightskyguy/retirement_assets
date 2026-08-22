@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-22:** `main` = `721653d`. **P67 PR A SHIPPED at v11.15f9** (3 commits, unmerged, in this worktree `readme-review-updates-c9df11` on branch `worktrees/planning-with-files-2a1f63`): the "Optimize for" goal now picks the table's columns. Suites **286 / 61 / 22** (`slowInCore` 3, +6 node), tier-1 **287**/0, badge green at 656. P32 shipped v11.15e3 in PR #185; P64/P66 in #182/#183/#184.
+**As of 2026-08-22:** `main` = `721653d`. **P67 PR A COMPLETE at v11.15fa** (6 commits, unmerged, worktree `readme-review-updates-c9df11`, branch `worktrees/planning-with-files-2a1f63`): the "Optimize for" goal now picks the table's columns, plus two rounds of review cleanups on the legend, the naming and the compare marker. Suites **286 / 61 / 22** (`slowInCore` 3), tier-1 **287**/0, badge green at 656. P32 shipped v11.15e3 in PR #185; P64/P66 in #182/#183/#184.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -13,7 +13,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| **O0** | P67 | Table columns; **PR A shipped v11.15f9**, delta view left | `P67b` |
+| **O0** | P67 | Table columns; **PR A done v11.15fa**, delta view left | `P67b` |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
@@ -51,7 +51,7 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P32~~ | ~~Brokerage barely drawn; is the third-pass exclusion still right?~~ - **COMPLETE 2026-08-21.** Premise refuted (Q1), dividend double-credit fixed, the cap-gains spiral measured and REFUTED (Q2, 0 capped years in 3,960 armed runs), and the exclusion re-scoped at **v11.15e3** | - | - |
 | ~~DONE~~ | ~~P58~~ | ~~Withholding assumed on money already moved, plus the forced-quarterly double payment~~ — **COMPLETE, v11.159d (`0bc7ba0`)** | — | — |
 | ~~DONE~~ | ~~P56~~+~~P57~~ | ~~Five-plan matrix, one cost table, and every statement attributed to one plan~~ — **COMPLETE, v11.1599 (`6e74f1f`)** | — | — |
-| **O0** | P67 | Optimizer table columns — **PR A SHIPPED v11.15f9**, 3 commits, unmerged | `P67b` (the relative/delta view, nerdknob) | nothing |
+| **O0** | P67 | Optimizer table columns — **PR A COMPLETE v11.15fa**, 6 commits, unmerged | `P67b` (the relative/delta view, nerdknob) | nothing |
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
 | **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
@@ -1763,7 +1763,7 @@ answered your question sat off the right edge next to eighteen that did not. Thr
 also ranked on a number the table never showed: `maxroth` on `terminal.roth`, `widowrmd` partly on
 `terminal.ira`, `taxflex` (the default) on a bucket spread that lived only inside its own ranker.
 
-### P67a — objective-driven column sets. **DONE, v11.15f9**, 3 commits, unmerged
+### P67a — objective-driven column sets. **DONE, v11.15fa**, 6 commits, unmerged
 
 - [x] **P67a-1** `169ae2c` — de-hazard the column array. Four traps, each live the moment any column
       became optional: the Rank `splice(findIndex(...) + 1)` that lands at index 0 when findIndex
@@ -1793,6 +1793,30 @@ also ranked on a number the table never showed: `maxroth` on `terminal.roth`, `w
 `<details open>`, before any init runs. Both legend strips carry `open`, so two toggles landed first,
 the inline handler wrote "both open" to storage, and `restoreFoldState()` read back the value it had
 just clobbered. Nothing persists until the stored preference has been read (`_foldsRestored`).
+
+- [x] **P67a-4** `bd75a56` — seven review cleanups. Duplicate "Your plan" symbol removed. Row
+      colours, symbols and the compare hint merged into ONE fold (the compare BANNER stays outside:
+      it reports live state, not explanation). **The table adopted the summary bar's names** - End
+      Wealth, All Taxes, All RMDs, Spendable - which REVERTS the FinalWealth rename from `45dd6ee`.
+      "Infeasible" and "target unreachable" were proven to be one condition (`optimizer_ui.js`
+      renders ⚠️ on exactly the flag that drives the row colour and the filter) and are now
+      **unreachable target** everywhere. ✦ rows lost their shading so blue means one thing.
+      `Conversion Tax Saved` → **`Conv Tax`**, with Break Even ahead of it. Only Best keeps a colour
+      legend line. One ⚖, on the reference row only, which now wears the baseline blue; the empty
+      cells stay the click target, with a `(hover: hover)` CSS reveal.
+- [x] **P67a-5** `1eef3b2` — the 💵 legend entry, deleted by a-4's own merge script (it kept only
+      spans opening `<span title=`; that one opens `<span id=` because `optimizer_ui.js:116` toggles
+      it by id), restored. ⚠️ and 🚨 dropped from the symbol list: both already have a permanent
+      chip carrying a live count and a click-to-toggle. 🟢 kept, having no chip.
+
+**GOTCHA worth more than the feature: a goal's column list does NOT set display order.** The filter
+preserves `OPT_COLUMN_KEYS`, so moving Break Even ahead of Conv Tax meant editing the canonical array
+AND the descriptor literal. Editing `OPT_OBJECTIVE_COLUMNS` alone changes nothing visible.
+
+**Second GOTCHA: `sed -i` on Git Bash rewrites a CRLF file as LF.** It flattened
+`retirement_optimizer.html` and `.githooks/README.md`. Git normalises on commit so the blob is fine,
+but `.gitattributes` pins `.githooks/**` to `eol=lf` and a CR in a shebang breaks the hook, so the
+"restore CRLF everywhere" reflex is wrong for that one path. Use Python with `newline=''`.
 
 ### P67b — the relative (delta) view, nerdknob-gated. **NOT STARTED**
 

@@ -1041,3 +1041,16 @@ table th.empty-column {
     transition: transform 0.15s ease;
 }
 .mc-fold[open] > summary .mc-fold-chev { transform: rotate(90deg); }
+
+
+/* The ⚖ compare marker prints on the reference row only (compareToggleHtml). An empty cell is
+   still the click target, so the pointer reveals a faint ⚖ to say so - the column heading carries
+   the ⚖ permanently, this is the per-row confirmation. :empty means the reference row, which has
+   real content, is never given a second ghost glyph. Pointer query so touch devices, where there
+   is no hover state to reveal anything, are left alone. */
+@media (hover: hover) {
+    .opt-cmp-cell:empty:hover::after {
+        content: "⚖";
+        opacity: 0.45;
+    }
+}

@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15f9"></a>
+<a id="11.15fa"></a>
 
-## 11.15f9
+## 11.15fa
 
 ### The "Optimize for" goal now chooses the columns, not just the order
 
@@ -41,20 +41,35 @@ perfectly even three-way split, so in any future year you can draw from whicheve
 that year, and 100% means it all landed in one bucket. Lower is better. It is a ratio, so unlike the
 dollar columns it does not restate when you switch between Future $ and Current $.
 
-**Two renames.** **NetWealth** is now **FinalWealth**. **Tax Paid &Delta;** is now **Conversion Tax
-Saved**: the &Delta; was misleading, because unlike every other &Delta; in this table it was never
-measured against the baseline or against a row you pinned, but against the same row's own conversion
-search. It also now appears only under the two conversion goals, where it means something.
+**The table now uses the same names as the summary bar** at the top of the page: **End Wealth**,
+**All Taxes**, **All RMDs** and **Spendable**, rather than four different words for the same four
+numbers. **Tax Paid &Delta;** is now **Conv Tax**: the &Delta; was misleading, because unlike every
+other &Delta; in this table it was never measured against the baseline or against a row you pinned,
+but against the same row's own conversion search. It appears only under the two conversion goals,
+and Break Even now sits ahead of it, since Break Even is the column to trust.
+
+**One name for one thing.** What the legend called *Infeasible* and the tooltips called *target
+unreachable* were always the same condition: the bracket, IRMAA or ACA ceiling you asked for cannot
+be hit. It is **unreachable target** everywhere now.
 
 **Two columns left the table.** **Spend Goal** repeated your own input on every row except the
 optimized ones, and **Yrs Funded** restated what the outcome marker already says. Hover over any row
 and both are in the pop-up, on every cell, including the two pinned rows at the top.
 
-**The legend strips fold.** The row-colors and symbols keys above the table carried twenty-two
-entries between them and wrapped to several lines. Both now collapse, and stay however you left them
-next time. The Infeasible and Failed chips deliberately do not fold with them, because those are
-controls rather than legend: clicking them shows or hides rows, and folding them away would bury the
-only route back to the rows they hide.
+**The legend folds, in one piece.** The row colors, the symbols and the how-to-compare note carried
+twenty-two entries between them and wrapped to several lines above the thing you came to read. They
+are now a single fold that stays however you left it next time. Most colors lost their legend line
+rather than their color, because a row that already carries a symbol does not need a swatch too;
+only Best keeps an entry, being the one color with no glyph of its own. Optimize Spend rows lost
+their shading outright, so blue now means exactly one thing. The unreachable-target and Failed chips
+deliberately do not fold, because those are controls rather than legend: clicking them shows or
+hides rows, and folding them away would bury the only route back to the rows they hide.
+
+**One ⚖, not one per row.** The comparison marker used to print on every row, faded, with a
+slightly larger one on the row being compared against. That asked you to spot a difference of two
+tenths of an em across a scrolling table. Now only the row every Δ measures from carries the ⚖, and
+it is shaded like the ⚓ baseline it stands in for. The cells are still the click target: the column
+heading keeps its ⚖, and hovering over a row shows a faint one.
 
 This release changes what the table shows and what some columns are called. It does not change any
 number the engine produces, so a saved scenario or a shared link still gives the same answer.

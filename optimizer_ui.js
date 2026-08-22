@@ -232,9 +232,17 @@ function deltaRefDescription() {
 // The ⚖ glyph. Highlighted on whichever row the Δ columns are CURRENTLY measured against, which is
 // the ⚓ baseline until something else is picked -- so the table opens already showing where the
 // comparison point is, rather than looking like the feature is switched off.
+// The ⚖ marks the row every Δ column measures from, and NOTHING marks the others. Showing a
+// faded ⚖ on all 177 rows and a slightly larger one on the reference row asked the reader to spot
+// a difference of 0.2em and 45% opacity across a scrolling table, which is not a difference
+// anyone spots. One glyph, in one place, plus the reference row carrying the same blue as the
+// ⚓ baseline it replaces - the two are the same idea, so they read as the same thing.
+//
+// The empty cells are still the click target. The column heading keeps the ⚖ so the column says
+// what it is, and CSS reveals a faint ⚖ under the pointer (see .opt-cmp-cell) so the affordance
+// is findable without printing it 177 times.
 function compareToggleHtml(r) {
-    const isRef = deltaReferenceRow() === r;
-    return `<span style="${isRef ? 'font-size:1.2em;' : 'opacity:0.55;'}">⚖</span>`;
+    return (deltaReferenceRow() === r) ? '<span style="font-size:1.2em;">⚖</span>' : '';
 }
 
 // Click routing for a table cell. The leading ⚖ / outcome / spacer cells select the comparison row;
@@ -1342,7 +1350,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         },
         {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = bracket target unreachable. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
             getValue: r => r._strategyLabel,
             getSortValue: r => r._strategyLabel
         },
@@ -1376,26 +1384,26 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             getSortValue: r => r._spendGoal
         },
         {
-            key: 'tax', label: 'Lifetime Tax',
+            key: 'tax', label: 'All Taxes',
             title: 'Total tax paid over the whole plan: federal (ordinary + capital gains + NIIT), state, and Medicare IRMAA surcharges. Toggle Future $/Current $ to switch between nominal and today\'s-dollar totals.',
             getValue: r => Math.round(inC() ? r.totals.taxCurrentDollars : r.totals.tax).toLocaleString(),
             getSortValue: r => inC() ? r.totals.taxCurrentDollars : r.totals.tax
         },
         {
-            key: 'spend', label: 'Total Spendable',
+            key: 'spend', label: 'Spendable',
             title: 'Total after-tax money available to spend over the whole plan (gross income minus tax). Toggle Future $/Current $ for nominal vs today\'s dollars.',
             getValue: r => Math.round(inC() ? r.totals.spendCurrentDollars : r.totals.spend).toLocaleString(),
             getSortValue: r => inC() ? r.totals.spendCurrentDollars : r.totals.spend
         },
         {
-            key: 'afterTaxNW', label: 'FinalWealth',
+            key: 'afterTaxNW', label: 'End Wealth',
             title: 'After-tax terminal net worth: IRA × (1 − your expected future IRA rate), brokerage gains × (1 − cap-gains rate), Roth + Cash + basis at face. Uses ONE shared future-IRA rate across all rows so strategies compare on a level footing. This is what the "Maximum Net Wealth" objective ranks on. Toggle Future $/Current $ for nominal vs today\'s dollars.',
             getValue: r => Math.round(inC() ? (r.afterTaxNWCurrentDollars ?? 0) : (r.afterTaxNW ?? 0)).toLocaleString(),
             getSortValue: r => inC() ? (r.afterTaxNWCurrentDollars ?? 0) : (r.afterTaxNW ?? 0)
         },
         {
             key: 'finalIRA', label: 'Final IRA',
-            title: 'Traditional (pre-tax) IRA balance at the end of the plan, both people combined, at face value. This is the tax bomb: the balance that drives Required Minimum Distributions, that a surviving spouse pays Single rates on, and that heirs must empty within ten years. FinalWealth already subtracts the tax owed on it; this column is the raw number that tax is charged against, and it is half of what the "Avoiding Widow & RMD Tax" objective ranks on. Toggle Future $/Current $ for nominal vs today\'s dollars.',
+            title: 'Traditional (pre-tax) IRA balance at the end of the plan, both people combined, at face value. This is the tax bomb: the balance that drives Required Minimum Distributions, that a surviving spouse pays Single rates on, and that heirs must empty within ten years. End Wealth already subtracts the tax owed on it; this column is the raw number that tax is charged against, and it is half of what the "Avoiding Widow & RMD Tax" objective ranks on. Toggle Future $/Current $ for nominal vs today\'s dollars.',
             getValue: r => Math.round(defl(r) * (r.totals.terminal?.ira ?? 0)).toLocaleString(),
             getSortValue: r => defl(r) * (r.totals.terminal?.ira ?? 0)
         },
@@ -1418,8 +1426,8 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             getSortValue: r => afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0)
         },
         {
-            key: 'dNW', label: 'ΔFinalWealth' + deltaRefSuffix(),
-            title: 'FinalWealth minus ' + deltaRefDescription() + '. Positive (green) = this strategy ends wealthier after tax than that reference; negative (red) = it ends behind it.',
+            key: 'dNW', label: 'ΔEnd Wealth' + deltaRefSuffix(),
+            title: 'End Wealth minus ' + deltaRefDescription() + '. Positive (green) = this strategy ends wealthier after tax than that reference; negative (red) = it ends behind it.',
             getValue: r => {
                 const d = inC() ? r._dNWCurrent : r._dNW;
                 if (d == null) return '—';
@@ -1454,7 +1462,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             getSortValue: r => r.totals.yearsfunded
         },
         {
-            key: 'rmd', label: 'Total RMDs',
+            key: 'rmd', label: 'All RMDs',
             title: 'Total Required Minimum Distributions forced out of traditional IRAs over the plan. Lower means the strategy drew down or converted the IRA earlier, shrinking later forced withdrawals.',
             getValue: r => Math.round(r.totals.rmd).toLocaleString(),
             getSortValue: r => r.totals.rmd
@@ -1466,19 +1474,19 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             getSortValue: r => r.totals.rmdTax / (r.totals.tax || 1)
         },
         {
+            key: 'convBE', label: 'Break Even',
+            title: 'The year this strategy\'s after-tax wealth permanently overtakes the same strategy with no conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead, or the strategy never converts at all. Unlike Conv Tax, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Sort by it, or choose "Earliest Break Even" under Optimize for, to rank strategies by how fast their conversions pay back.',
+            getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
+            getSortValue: r => r._convBEYear ?? 9999
+        },
+        {
             // Renamed from "Tax Paid Δ". The Δ was misleading: unlike every other Δ in this table it
             // is not measured against the ⚓ baseline or a ⚖ pinned row, it is one row's own
             // conversion search compared against itself without the extra conversions.
-            key: 'convSaved', label: 'Conversion Tax Saved',
+            key: 'convSaved', label: 'Conv Tax',
             title: 'Counts only tax actually paid during the plan, so it is NOT a verdict on whether converting was worth it. Positive = the extra IRA→Roth conversions run by Optimize Conversions lowered lifetime tax vs the same strategy without them. It does not price the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so a big positive number here can sit alongside a plan that ends up worse off overall. Use the Break Even column, which prices in that deferred tax, for the actual answer.',
             getValue: r => r._convSavings != null ? '$' + Math.round(r._convSavings).toLocaleString() : '—',
             getSortValue: r => r._convSavings ?? -Infinity
-        },
-        {
-            key: 'convBE', label: 'Break Even',
-            title: 'The year this strategy\'s after-tax wealth permanently overtakes the same strategy with no conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead, or the strategy never converts at all. Unlike Conversion Tax Saved, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Sort by it, or choose "Earliest Break Even" under Optimize for, to rank strategies by how fast their conversions pay back.',
-            getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
-            getSortValue: r => r._convBEYear ?? 9999
         }
     ];
     if (showAll) return cols;
@@ -1628,6 +1636,7 @@ function renderOptimizerTable(results) {
                     : `ACA not applicable - everyone is already on Medicare (age ${TAXData.IRMAA.ELIGIBILITY_AGE}+) at the start, so there is no premium subsidy for a cap to protect. This row simulates as Proportional 0%.`)
                 : 'Bracket target exceeded in >50% of years - income sources already push MAGI above this ceiling')
             : 'Click to load this strategy';
+        const isCompareRef = deltaReferenceRow() === r;
         const cells = columns.map(col => {
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
                          || (col.key === 'rate'   && r._id === colWinners.rate)
@@ -1638,16 +1647,23 @@ function renderOptimizerTable(results) {
             const bg = cellWin    ? '#4CAF5080'
                      : isFailed   ? '#fde0e0'
                      : isInfeasible ? '#e8e8e8'
+                     // The Δ reference row wears the ⚓ baseline's blue: it IS the baseline's job,
+                     // handed to a row the reader picked. Above isWinner on purpose - having just
+                     // clicked it, that is the row they are looking for.
+                     : isCompareRef ? '#dbeafe'
                      : isWinner   ? '#90EE90'
                      : r._isReverseOptimized ? '#fde8d8'
-                     : r._isConvOptimized    ? '#e8f5e9'
-                     : r._isSpendOptimized   ? '#dbeafe' : '';
-            const extra = isFailed ? 'opacity:0.75;'
+                     // ✦ Optimize Spend rows no longer take the baseline blue. They carry the ✦
+                     // already, and blue now means exactly one thing: the row Δ measures from.
+                     : r._isConvOptimized    ? '#e8f5e9' : '';
+            const extra = isCompareRef ? 'font-weight:bold;'
+                        : isFailed ? 'opacity:0.75;'
                         : isInfeasible ? 'text-decoration:line-through;opacity:0.55;'
                         : isWinner     ? 'font-weight:bold;'
                         : (r._isReverseOptimized || r._isConvOptimized || r._isSpendOptimized) ? 'font-style:italic;' : '';
             const bgCss = bg ? `background-color:${bg};` : '';
-            return `<div style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${col.getValue(r)}</div>`;
+            const cls = col.key === 'compare' ? ' class="opt-cmp-cell"' : '';
+            return `<div${cls} style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${col.getValue(r)}</div>`;
         }).join('');
         return `<div style="display:contents;">${cells}</div>`;
     }).join('');
@@ -1737,10 +1753,10 @@ function renderOptimizerTable(results) {
         const swatch = '<span style="display:inline-block;width:14px;height:14px;background:#e8e8e8;opacity:0.8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;text-decoration:line-through;"></span>';
         if (infeasibleCount > 0) {
             const action = showInfeasible ? `click to hide ${infeasibleCount}` : `click to show ${infeasibleCount} hidden`;
-            const tip = `Infeasible = the strategy's bracket/IRMAA/ACA target is exceeded in more than half its years (existing income already pushes MAGI above the ceiling). Hidden by default - ${showInfeasible ? 'click to hide them again' : 'click to reveal them'}.`;
-            legendInfeasEl.innerHTML = `<span onclick="toggleInfeasibleRows()" title="${tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${swatch}Infeasible - ${action}</span>`;
+            const tip = `Unreachable target (⚠️) = the strategy's bracket/IRMAA/ACA ceiling is exceeded in more than half its years, because existing income already pushes MAGI above it. Hidden by default - ${showInfeasible ? 'click to hide them again' : 'click to reveal them'}.`;
+            legendInfeasEl.innerHTML = `<span onclick="toggleInfeasibleRows()" title="${tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${swatch}⚠️ Unreachable target - ${action}</span>`;
         } else {
-            legendInfeasEl.innerHTML = `${swatch}Infeasible - none in this run`;
+            legendInfeasEl.innerHTML = `${swatch}⚠️ Unreachable target - none in this run`;
         }
     }
 
@@ -1763,7 +1779,7 @@ function renderOptimizerTable(results) {
     if (bestEl) {
         if (feasibleSuccesses.length > 0 && Object.keys(colWinners).some(k => visibleKeys.has(k))) {
             const winnerDefs = [
-                { key: 'afterTaxNW', label: '💎 Most FinalWealth',    id: colWinners.afterTaxNW },
+                { key: 'afterTaxNW', label: '💎 Most End Wealth',    id: colWinners.afterTaxNW },
                 { key: 'spend',  label: '🏆 Most Spendable',   id: colWinners.spend  },
                 { key: 'tax',    label: '📉 Lowest Tax',        id: colWinners.tax    },
                 { key: 'rate',   label: '📊 Lowest Tax Rate',   id: colWinners.rate   },
@@ -1867,17 +1883,17 @@ function toggleFailedRows() {
     if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
 }
 
-// The two legend strips above the table remember whether they are folded. Deliberately persisted,
+// The legend fold above the table remembers whether it is open. Deliberately persisted,
 // unlike showInfeasible / showFailed / showAllColumns, none of which are: those are per-analysis
 // choices that should start fresh, while how much chrome you want above the table is a standing
 // preference, and one that resets on every page load is not a preference at all. Its own key, not
 // the saved-scenario blob under STORAGE_KEY, because this is not scenario data.
 const FOLD_STORAGE_KEY = 'optimizerChromeFolds';
-const FOLD_IDS = ['opt-fold-colors', 'opt-fold-symbols'];
+const FOLD_IDS = ['opt-fold-legend'];
 // Chrome fires a `toggle` event when it PARSES a <details open>, before any of our init code has
-// run. Both strips carry `open` in the markup, so two toggles land first, the inline handler
+// run. The strip carries `open` in the markup, so that toggle lands first, the inline handler
 // writes "both open" to storage, and restoreFoldState then reads back the value it just
-// clobbered - a reader who folded them would find them open again on every visit. Nothing is
+// clobbered - a reader who folded it would find it open again on every visit. Nothing is
 // persisted until the stored preference has actually been read.
 let _foldsRestored = false;
 

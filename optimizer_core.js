@@ -3727,7 +3727,7 @@ const OPTIMIZER_OBJECTIVES = {
 const OPT_COLUMN_KEYS = Object.freeze([
     'compare', 'status', 'gap', 'strategy', 'param', 'rank',
     'spendGoal', 'tax', 'spend', 'afterTaxNW', 'finalIRA', 'finalRoth', 'mixSpread',
-    'dNW', 'dTax', 'rate', 'years', 'rmd', 'rmdtax', 'convSaved', 'convBE',
+    'dNW', 'dTax', 'rate', 'years', 'rmd', 'rmdtax', 'convBE', 'convSaved',
 ]);
 
 // Never filtered out, whatever a goal's list says. `compare` because the Best summary table drops
@@ -3753,7 +3753,7 @@ const OPT_OBJECTIVE_COLUMNS = Object.freeze({
     maxspend:   ['compare','status','gap','strategy','param','rank','spend','afterTaxNW','tax'],
     maxroth:    ['compare','status','gap','strategy','param','rank','finalRoth','afterTaxNW','tax'],
     balanced:   ['compare','status','gap','strategy','param','rank','afterTaxNW','spend','tax'],
-    conveffect: ['compare','status','gap','strategy','param','rank','convSaved','convBE','finalRoth','afterTaxNW'],
+    conveffect: ['compare','status','gap','strategy','param','rank','convBE','convSaved','finalRoth','afterTaxNW'],
     earliestbe: ['compare','status','gap','strategy','param','rank','convBE','convSaved','afterTaxNW','tax'],
 });
 

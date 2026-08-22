@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15fd"></a>
+<a id="11.15fe"></a>
 
-## 11.15fd
+## 11.15fe
 
 ### Optimizer tab reorganized
 
@@ -25,7 +25,7 @@ The table shows the columns the **Optimize for** goal actually uses. Some were n
 Maximum Roth and Roth Conversion Effectiveness both ranked partly on a Roth balance that had no
 column, and Tax Flexibility ranked on a spread across your pre-tax, Roth and taxable money that was
 shown nowhere. **Final Roth**, **Final IRA** and **Mix Spread** now exist. Optimize for also says in
-one line what the goal ranks by, and a link below it shows all columns at once.
+one line what the goal ranks by, and a switch below it shows all columns at once.
 
 **Spend Goal** and **Yrs Funded** left the table; hover over any row and both are in the pop-up.
 The legend folds out of the way, and the comparison marker appears only on the row being compared

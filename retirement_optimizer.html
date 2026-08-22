@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.15fd</title>
+    <title>Retirement Optimizer 11.15fe</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1115ca"></script>
-	<script src="optimizer_core.js?v=1115fd"></script>
+	<script src="optimizer_core.js?v=1115fe"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1115fd"></script>
-	<script src="optimizer_tests.js?v=1115fd"></script>
+	<script src="optimizer_ui.js?v=1115fe"></script>
+	<script src="optimizer_tests.js?v=1115fe"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -767,7 +767,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-												<li><b>11.15fd</b> The Optimizer tab has been reorganized. Labels, column names, colors and symbols are now consistent with the rest of the tool, and the table shows the columns the <i>Optimize for</i> goal actually uses. Some were never shown at all: <strong>Final Roth</strong>, <strong>Final IRA</strong> and <strong>Mix Spread</strong> now exist. Optimize for also says what the goal ranks by, and a link below it shows all columns at once. Spend Goal and Yrs Funded moved into the row pop-up, and the legend folds out of the way. No numbers change.</li>
+												<li><b>11.15fe</b> The Optimizer tab has been reorganized. Labels, column names, colors and symbols are now consistent with the rest of the tool, and the table shows the columns the <i>Optimize for</i> goal actually uses. Some were never shown at all: <strong>Final Roth</strong>, <strong>Final IRA</strong> and <strong>Mix Spread</strong> now exist. Optimize for also says what the goal ranks by, and a switch below it shows all columns at once. Spend Goal and Yrs Funded moved into the row pop-up, and the legend folds out of the way. No numbers change.</li>
 				<li data-flag="behavior"><b>11.15e3</b> <strong>When a plan runs out of every other account, it will now spend from the Brokerage account instead of reporting that it could not pay.</strong> The math avoided a possible "tax spiral" where increasing the brokerage draw increased the capital gains which increased the tax, which may also have increased social security taxability, which resulted in a higher tax requiring a greater withdrawal. Testing revealed that no "tax spiral" exists - it settles in two or fewer passes. So now it won't "give up" funding a year when all that remains is Brokerage assets to fund spending. Previously some plans went underfunded in some years due to the "avoided tax spiral". Most affected is "Fill Fed/IRMAA Bracket" with a tier selected. <strong>Behavior change:</strong> such a plan now funds more of its spending and ends with less left over, because the money is now spent, leaving less net worth. Saved scenarios and shared links for those plans will show different numbers. <a href="optimizer_changelog.md#11.15e3" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15cf</b> <strong>The IRMAA ceiling now aims at the threshold that will actually apply, two years out, instead of today's.</strong> IRMAA bills this year's premium against the income (MAGI) you reported two years ago, and compares it against the thresholds published for the billing year. The tool charged that correctly but aimed at it wrongly: an "IRMAA Ceil" plan capped income at today's threshold, about 6% below the one it would be judged against at 3% inflation, leaving roughly $13,000 a year of unspent IRA or Roth conversion. The same fix applies to QCD "As Needed". Behavior change: an IRMAA Ceiling plan now converts more, and "as Needed" QCDs draw less. <a href="optimizer_changelog.md#11.15cf" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15c9</b> <strong>More accurate SALT (state and local tax) deductions for tax years 2026 through 2029.</strong> Property and other local taxes can now be included in the SALT figure, which previously counted state income tax alone - add yours with <code>?ptx=25000</code> in the web address, optionally with <code>?ptxm=flat</code> or <code>?ptxm=custom</code> plus <code>?ptxr=2</code> to set how it grows. The higher $40,000 SALT cap now runs through 2029 as the law allows, and the cap and the income limit that phases it out both step up 1% a year, so 2026 uses $40,400 and $505,000. For plans converting heavily in a high-tax state these can change the recommended conversion size. This tool tests only SALT against the standard deduction, so the benefit applies where SALT alone exceeds it, and it ends after 2029. <a href="optimizer_changelog.md#11.15c9" target="_blank" rel="noopener">Details</a></li>
@@ -1062,10 +1062,24 @@
                      columns are built). Each takes a full row of the flex container, because they
                      say different things and reading as one sentence is what they did before. -->
                 <span id="opt-objective-note" style="flex-basis:100%;color:#555;"></span>
-                <span id="opt-colmode" style="flex-basis:100%;"></span>
-                <!-- Relative view. Nerdknob-gated while it is being lived with; applyNerdKnobVisibility
-                     shows the wrapper and renderOptimizerTable writes the text. -->
-                <span id="opt-relmode" style="flex-basis:100%;display:none;"></span>
+                <!-- Switches, not links: these change what the table shows, which is the same kind of
+                     action as the switches in the sidebar. Deliberately the .toggle pattern rather than
+                     anything resembling the tab selectors above, which navigate instead of setting state.
+                     The label text is written by renderOptimizerTable, because the column TOTAL is only
+                     knowable once the columns are built. -->
+                <label class="toggle" id="opt-colmode-wrap" style="flex-basis:100%;font-size:0.9em;" title="Each &quot;Optimize for&quot; goal shows the columns that answer its own question and puts the rest away. Nothing is discarded - this switches the filter off so every column is on screen at once, and the goal still sets the row order. Hover over any column heading for what it means.">
+                  <input type="checkbox" id="opt-colmode-cb" data-no-share onchange="toggleAllColumns()">
+                  <span class="toggle-label"></span>
+                  <span class="toggle-switch"></span>
+                  <span id="opt-colmode-text">Show All Columns</span>
+                </label>
+                <!-- Relative view. Nerdknob-gated while it is being lived with. -->
+                <label class="toggle" id="opt-relmode-wrap" style="flex-basis:100%;font-size:0.9em;display:none;" title="Prints each comparable column as its difference from the reference row, green where the difference is the better direction. The reference row keeps its actual numbers. Row order does not change: the ranking uses the actual values either way.">
+                  <input type="checkbox" id="opt-relmode-cb" data-no-share onchange="toggleRelativeView()">
+                  <span class="toggle-label"></span>
+                  <span class="toggle-switch"></span>
+                  <span id="opt-relmode-text">Show As Differences</span>
+                </label>
             </div>
             <!-- Shown while the sweep runs, then held on "DONE" for a few seconds. The sweep blocks
                  the main thread for a second or more, so without this the page looks frozen with the
@@ -1321,7 +1335,7 @@ runSimulation?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1115fd';
+    const V = '?v=1115fe';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

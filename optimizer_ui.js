@@ -121,7 +121,7 @@ function applyNerdKnobVisibility() {
     // Relative view control - gated while the mode is being lived with. Turning the knob OFF must
     // also turn the mode off, or a reader who enabled it once would be left reading a table of
     // differences with no visible way to get back.
-    const relWrap = document.getElementById('opt-relmode');
+    const relWrap = document.getElementById('opt-relmode-wrap');
     if (relWrap) relWrap.style.display = NERD_KNOBS ? '' : 'none';
     if (!NERD_KNOBS) OptimizerState.relativeView = false;
     // The ACA Cliff documentation paragraph used to be hidden here. It is now always visible, like
@@ -1539,7 +1539,11 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             getSortValue: r => r._convSavings ?? -Infinity
         }
     ];
-    if (showAll) return cols;
+    // In relative view every comparable column already IS a difference from the reference row, so a
+    // column whose name says delta is a second copy of one. Dropped on BOTH paths: switching all
+    // columns on must not bring them back, which is exactly how they reappeared the first time.
+    const dropDeltaCols = c => !(OptimizerState.relativeView && (c.key === 'dNW' || c.key === 'dTax'));
+    if (showAll) return cols.filter(dropDeltaCols);
     // Union with the pinned set, not a straight read of the goal's list. `compare` MUST survive:
     // the Best summary table drops the leading column on the understanding that it is the ⚖
     // control. A typo in the data above cannot take it out.
@@ -1549,10 +1553,10 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
     // ⚓ baseline the table is already ordered around.
     // ...except in relative view, where every comparable column is already a difference from that
     // same row, so a column whose NAME says delta is just two of them.
-    if (OptimizerState.compareRow && !OptimizerState.relativeView) { keep.add('dNW'); keep.add('dTax'); }
+    if (OptimizerState.compareRow) { keep.add('dNW'); keep.add('dTax'); }
     // filter(), never a map over the goal's list: this array IS the display order, so a goal's
     // columns can be written in any order and `compare` still lands at index 0.
-    return cols.filter(c => keep.has(c.key));
+    return cols.filter(c => keep.has(c.key) && dropDeltaCols(c));
 }
 
 function renderOptimizerTable(results) {
@@ -1733,7 +1737,13 @@ function renderOptimizerTable(results) {
             // Zero only when the baseline IS the reference. With a compare row pinned the baseline
             // has a real Δ like every other row, and printing 0 would be a lie.
             else if ((col.key === 'dNW' || col.key === 'dTax') && !OptimizerState.compareRow) v = '0';
-            else v = col.getValue(baselineRow);
+            // Both pinned rows go through the delta wrapper too. They are rows like any other in
+            // relative view: the reference one returns null and falls through to its own numbers,
+            // and any pinned row that is NOT the reference reads as a difference. Without this the
+            // two rows at the top of the table stayed absolute while everything under them was a
+            // difference, in the same columns, with nothing saying so.
+            else v = (OptimizerState.relativeView ? deltaCellHtml(col, baselineRow, deltaReferenceRow()) : null)
+                  ?? col.getValue(baselineRow);
             return `<div style="${_bCell}${cellActionCss(col)}"${cellActionAttrs(col, baselineRow, bTitle)}>${v}</div>`;
         }).join('') + '</div>';
     }
@@ -1764,7 +1774,8 @@ function renderOptimizerTable(results) {
             const _curBare = currentRow._strategyLabel.startsWith(CURRENT_PLAN_MARK)
                 ? currentRow._strategyLabel.slice(CURRENT_PLAN_MARK.length)
                 : currentRow._strategyLabel;
-            const v = col.key === 'strategy' ? CURRENT_PLAN_MARK + _curBare : col.getValue(currentRow);
+            const _rel = OptimizerState.relativeView ? deltaCellHtml(col, currentRow, deltaReferenceRow()) : null;
+            const v = col.key === 'strategy' ? CURRENT_PLAN_MARK + _curBare : (_rel ?? col.getValue(currentRow));
             return `<div style="${_cCell}${cellActionCss(col)}"${cellActionAttrs(col, currentRow, cTitle)}>${v}</div>`;
         }).join('') + '</div>';
     }
@@ -1786,32 +1797,27 @@ function renderOptimizerTable(results) {
 
     // Column-count escape hatch. Written here rather than in the markup for the same reason the two
     // legend toggles are: the count is only knowable after the columns are built.
-    const colModeEl = document.getElementById("opt-colmode");
-    if (colModeEl) {
+    // The two switches. Only the label text and the checked state are written here; the switch
+    // itself is CSS. checked is assigned rather than toggled so it cannot drift out of step with
+    // state - applyNerdKnobVisibility can force relativeView off underneath it.
+    const colTextEl = document.getElementById('opt-colmode-text');
+    const colCbEl   = document.getElementById('opt-colmode-cb');
+    if (colTextEl) {
         const _allCols = getOptimizerColumns(true).length;
-        const _objLbl  = OPT_OBJECTIVE_LABELS[OptimizerState.objective] || OPT_OBJECTIVE_LABELS.taxflex;
-        const _label = OptimizerState.showAllColumns
-            ? `Showing all ${_allCols} columns - click to show only the ones for ${_objLbl}`
-            : `Showing ${columns.length} of ${_allCols} columns - click to show all`;
-        const _tip = 'Each "Optimize for" goal shows the columns that answer its own question and puts '
-            + 'the rest away. Nothing is discarded - this switches the filter off so every column is on '
-            + 'screen at once, and the goal still sets the row order. Hover over any column heading for '
-            + 'what it means.';
-        colModeEl.innerHTML = `<span onclick="toggleAllColumns()" title="${_tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${_label}</span>`;
+        colTextEl.textContent = OptimizerState.showAllColumns
+            ? `Show All ${_allCols} Columns (showing all ${_allCols})`
+            : `Show All ${_allCols} Columns (showing ${columns.length})`;
     }
+    if (colCbEl) colCbEl.checked = !!OptimizerState.showAllColumns;
 
-    const relModeEl = document.getElementById('opt-relmode');
-    if (relModeEl) {
+    const relTextEl = document.getElementById('opt-relmode-text');
+    const relCbEl   = document.getElementById('opt-relmode-cb');
+    if (relTextEl) {
         const _ref = deltaReferenceRow();
-        const _refName = _ref ? (_ref === OptimizerState.baseline ? 'the ⚓ baseline' : 'the ⚖ row') : 'the baseline';
-        const _label = OptimizerState.relativeView
-            ? `Showing every column as a difference from ${_refName} - click for actual values`
-            : `Showing actual values - click to show them as differences from ${_refName}`;
-        const _tip = 'Relative view prints each comparable column as its difference from the reference row, '
-            + 'green where the difference is the better direction. The reference row itself keeps its actual '
-            + 'numbers. Row order does not change: the ranking uses the actual values in both views.';
-        relModeEl.innerHTML = `<span onclick="toggleRelativeView()" title="${_tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${_label}</span>`;
+        const _refName = (_ref && _ref !== OptimizerState.baseline) ? 'the ⚖ row' : 'the ⚓ baseline';
+        relTextEl.textContent = `Show As Differences (from ${_refName})`;
     }
+    if (relCbEl) relCbEl.checked = !!OptimizerState.relativeView;
 
     // Legend - make the "Infeasible" item a click toggle (rows hidden by default).
     const legendInfeasEl = document.getElementById('opt-legend-infeasible');

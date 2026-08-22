@@ -2228,9 +2228,11 @@ assertEqual(
 			showAllColumns: OptimizerState.showAllColumns,
 			sortState: OptimizerState.sortState,
 			compareRow: OptimizerState.compareRow,
+			relativeView: OptimizerState.relativeView,
 		};
 		try {
 			OptimizerState.compareRow = null;   // the two Δ columns are pinned-compare-only
+			OptimizerState.relativeView = false;  // relative view drops the two Δ columns from BOTH paths
 
 			const all = getOptimizerColumns(true).map(c => c.key);
 			assertEqual(all.join(','), OPT_COLUMN_KEYS.join(','),
@@ -2252,6 +2254,17 @@ assertEqual(
 
 				assertEqual(keys.length < all.length, true, objKey + ': actually hides something');
 			});
+
+			// Relative view makes every comparable column a difference, so the two columns whose names
+			// say delta are redundant. They must go even with all columns switched on - showing all
+			// columns is how they came back the first time.
+			OptimizerState.relativeView = true;
+			const relAll = getOptimizerColumns(true).map(c => c.key);
+			assertEqual(relAll.includes('dNW') || relAll.includes('dTax'), false,
+				'relative view drops the two Δ columns even when all columns are shown');
+			assertEqual(relAll.length, OPT_COLUMN_KEYS.length - 2,
+				'relative view drops exactly the two Δ columns, nothing else');
+			OptimizerState.relativeView = false;
 
 			// A sort column the active goal has put away must fall back to goal order, not leave the
 			// rows in build order under a header carrying no arrow.

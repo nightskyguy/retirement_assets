@@ -60,7 +60,9 @@ and both are in the pop-up, on every cell, including the two pinned rows at the 
 twenty-two entries between them and wrapped to several lines above the thing you came to read. They
 are now a single fold that stays however you left it next time. Most colors lost their legend line
 rather than their color, because a row that already carries a symbol does not need a swatch too;
-only Best keeps an entry, being the one color with no glyph of its own. Optimize Spend rows lost
+only Best keeps an entry, being the one color with no glyph of its own. The symbol list
+dropped the outcome markers that already have a permanent chip of their own above the fold, and
+no longer lists the same symbol twice. Optimize Spend rows lost
 their shading outright, so blue now means exactly one thing. The unreachable-target and Failed chips
 deliberately do not fold, because those are controls rather than legend: clicking them shows or
 hides rows, and folding them away would bury the only route back to the rows they hide.

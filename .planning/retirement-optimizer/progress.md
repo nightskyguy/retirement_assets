@@ -3354,3 +3354,148 @@ collisions serving the MAIN checkout - confirmed by curl'ing the title before tr
 Version bumped at the three sites this release actually touches: the `<title>`,
 `optimizer_core.js?v=`, and the tier-2 loader's own `const V`. `taxengine.js`, `optimizer_ui.js` and
 the CSS were deliberately left at their old tokens because none of them changed.
+
+## Session: 2026-08-22 (worktree readme-review-updates-c9df11) - `/plan` re-entry, context restore
+
+`/plan` invoked with no task. Planning files already exist under `.planning/retirement-optimizer/`
+with `.planning/.active_plan` pointing at it; no root-level `task_plan.md` was created, since that
+would have forked the plan.
+
+**State measured, not assumed.** `git rev-parse --abbrev-ref HEAD` =
+`worktrees/planning-with-files-2a1f63`; `git rev-list --count origin/main..HEAD` = 0, working tree
+clean, `main` = `721653d` (Merge PR #185). `retirement_optimizer.html` `<title>` reads **11.15e3**.
+
+**One drift closed.** The header still called v11.15e3 "P32 complete, unreleased" - it merged in
+**PR #185**. Header rewritten line-neutrally (3 lines out, 3 in) with the LINE-30 BOUNDARY marker
+asserted before and after the write, and the P32 NOW paragraph now names the PR.
+
+Nothing else had drifted: O0/O1 rows (P35, P36, P51, P30, P19, P34, P65) are unchanged and P32's
+index row was already struck. No product file touched, so no version bump and no changelog entry.
+
+## Session 2026-08-22 (continued) - P67a: the "Optimize for" goal now picks the columns
+
+User asked for the Optimizer's goal selector to control which columns show, giving three examples:
+Roth Conversion Effectiveness should show the total Roth balance, Spend Goal and Yrs Funded should
+leave the table, Total RMDs matters mainly under Avoiding Widow & RMD Tax. Then, answering the
+Δ-columns question, asked for something larger: a second **rendering mode** where every numeric column
+reads as a delta from the pinned row. Split into PR A (shipped) and PR B (P67b, not started).
+
+**Three explorations first, and the findings shaped everything.** The table is a CSS grid of flat
+`<div>`s, not a `<table>`; all 21 columns come from ONE descriptor array, `getOptimizerColumns()`;
+**no test anywhere asserts on its columns** and no CSS targets them (`nth-child` appears nowhere in
+the repo). So the mechanism was a `filter()`, not a rewrite. What it was NOT free of was index
+arithmetic: four separate hazards, each dormant only because no column had ever been optional.
+
+**The fourth hazard was the one nobody listed and the one that mattered.** A sort column that no
+longer exists left `col === undefined`, skipped the sort block, and rendered rows in **build order
+under a header carrying no arrow**. Not an error, not a blank table - just quietly unsorted. Now
+`normalizeSortState()` at the single render choke point. Verified by hand: sort by Yrs Funded with
+all columns showing, collapse back to a goal that hides it, and the order falls to goal order.
+
+**Three goals ranked on numbers with no column.** `maxroth` on `terminal.roth`, `widowrmd` partly on
+`terminal.ira`, and `taxflex` - the DEFAULT - on a spread computed inline inside its own ranker. New
+Final IRA / Final Roth / Mix Spread columns. `afterTaxBucketSpread()` was **extracted** from the
+ranker rather than reimplemented in the UI, so the number the column prints and the number the
+ranking sorts on are the same number. A node test asserts the column and the ranker agree on order.
+
+**`OPT_OBJECTIVE_COLUMNS` went in core, not the UI.** `optimizer_ui.js` has no `module.exports` and
+no `window.*` block and no node suite loads it, so anything placed there cannot be asserted outside a
+browser. Cost: core holds string references to identifiers defined in the UI. Paid for with
+`OPT_COLUMN_KEYS` as an explicit contract plus the one tier-1 test that can see both files.
+
+**Two defects found while verifying, neither predicted.**
+
+1. The page's own changelog test caught my changelog entry: it asserts every `<b>` in the list is a
+   version stamp in its own `<li>`, and I had used `<b>` for emphasis. Badge went red at 655/656.
+   The same trap as the `<strong>` incident recorded above, from the other side. The failure text is
+   not in the DOM, so it needed a console capture around `runTests()` to name.
+2. **Chrome fires `toggle` when it PARSES a `<details open>`.** Both legend strips carry `open`, so
+   two toggles fired before any init code ran, the inline `ontoggle` handler wrote "both open" to
+   localStorage, and `restoreFoldState()` then read back the value it had just clobbered. A reader
+   who folded the strips would find them open again on every visit, with nothing in the console.
+   Found by tracing the load order rather than reasoning about it - three wrong theories first.
+   Guarded with `_foldsRestored`: nothing persists until the stored preference has been read.
+
+**One deviation from the approved plan, deliberate.** The plan put the Infeasible/Failed chips beside
+the "Showing N of 21 columns" link. That link sits by the goal selector, which is where the *cause*
+is, while the chips hide *rows* and belong beside the rows. They now sit on their own always-visible
+strip directly above the two folds, still outside the fold, which was the actual requirement.
+
+**Counts moved and both pins were reconciled from measured output**: node `optimizer_core` 280 ->
+**286**, `slowInCore` unchanged at 3, TPP 61 and doclinks 22 unchanged. `TestTiers.EXPECTED` and
+`.githooks/README.md` both edited in the same commit. Tier-1 went 248 -> **287**, which is NOT in
+`EXPECTED` (it pins node suites only) and is called out in the commit message for that reason.
+
+**Version bumped at all four sites** to **11.15f9**: `<title>`, the `?v=` on core/ui/tests, and the
+tier-2 loader's own `const V`. The stale-token GOTCHA bit mid-branch and is worth repeating: after
+commit 2 the browser served a **cached** `optimizer_core.js?v=1115e3` with no `afterTaxBucketSpread`
+in it, and the error looked like a missing export rather than a cache hit.
+
+**Browser-verified at 11.15f9**, badge green at 656 (287 in-page + 369 node): all nine goals render
+9-10 columns with ⚖ first and the main and Best tables on matching track counts; Δ columns appear
+only on pin, labelled `ΔFinalWealth vs ⚖`; the escape hatch reads "Showing 9 of 21 columns", expands
+to 21 and back; the density preference survives a goal change; no green row lacks a highlighted cell;
+`📋 Lowest RMD Tax%` disappears from the Best table under goals that hide the column while
+`⚓ Best w/o Conv` survives under all nine; the fold persists across reload with the chips still
+visible and still live-counting ("click to show 8 hidden"). Console clean apart from the usual
+unrelated Cloudflare RUM CORS error. **No screenshot** - the Browser pane was not displayed, so all
+of the above is DOM-level assertion rather than visual.
+
+**Bookkeeping note:** `git add -A` on commit 2 swept the earlier planning-file resync into a feature
+commit. Content correct, commit boundary not. Explicit paths thereafter. Also, P51 was rotated out of
+the NOW table to make room for P67 (the table is capped at 7 rows by the LINE-30 BOUNDARY); it keeps
+its O1 index row and is not dropped.
+
+## Session 2026-08-22 (continued) - P67a review rounds, v11.15f9 -> v11.15fa
+
+Two rounds of user review on the shipped table, then the PR. Nine items total, all landed.
+
+**Round 1, seven items** (`bd75a56`). Duplicate "Your plan" symbol. Three legend strips merged into
+one fold. Naming unified. `Conv Tax` with Break Even ahead of it. Colour legend lines dropped for
+every colour whose rows carry a symbol. Compare hint folded. One ⚖ instead of 178.
+
+Two of these were settled by READING rather than by opinion: **"Infeasible" and "target unreachable"
+were literally the same flag** (`optimizer_ui.js:836` renders ⚠️ on exactly the condition that drives
+the row colour and the hide-rows filter), and the summary bar's four tile names were checkable at
+`retirement_optimizer.html:431-434`. The naming answer **reverts FinalWealth**, which the user had
+asked for one round earlier - the summary bar won because it is what a reader sees first.
+
+Also flagged before acting, and it changed the plan: item 7 wanted the compare row shaded like the
+baseline, but item 3 had just pointed out baseline and Optimize Spend were already both `#dbeafe`.
+Three things blue. User chose to strip ✦ of its colour rather than invent a fourth.
+
+**Round 2, two items** (`1eef3b2`). The 💵 entry was not missing an explanation - **round 1 had
+deleted it**. The merge script kept only spans opening `<span title=` and that one opens `<span id=`,
+because `optimizer_ui.js:116` toggles it by id. A self-inflicted regression, found only because the
+user noticed the symbol had no key. ⚠️ and 🚨 removed from the symbol list, both having a permanent
+chip that says more (live count, click to toggle). 🟢 kept - no chip of its own.
+
+**Two GOTCHAs, both now in task_plan under P67a.**
+1. A goal's column list does NOT set display order; the filter preserves `OPT_COLUMN_KEYS`. Moving
+   Break Even ahead of Conv Tax by editing `OPT_OBJECTIVE_COLUMNS` alone did nothing visible.
+2. `sed -i` on Git Bash rewrites a CRLF file as LF. It flattened `retirement_optimizer.html` and
+   `.githooks/README.md`. Git normalises so the blob survives, but `.gitattributes` pins
+   `.githooks/**` to `eol=lf`, so blanket "restore CRLF" is WRONG there - a CR in a shebang breaks
+   the hook for every Windows clone. Python with `newline=''` throughout instead.
+
+**One self-inflicted corruption, caught immediately.** Swapping the convBE/convSaved descriptors with
+a brace-matching script relocated the `Conv Tax` block into an unrelated Chart.js legend helper 1600
+lines away. Caught by a `new Function()` parse check before anything else ran, repaired in place
+rather than reverted (a revert would have lost the other six items), and the helper was confirmed
+absent from `git diff`. Lesson: for block moves in a large file, anchor on the unique `key:` line and
+assert the neighbours, do not trust `rfind` on a brace.
+
+**Recorded, not fixed:** `buildStrategyFamilies` (`optimizer_core.js:4305`) sets `cashClones` on
+`base.Cash > 0` with NO nerdknob gate, while the Optimizer's own call site (`optimizer_ui.js:911`)
+gates on `NERD_KNOBS && base.Cash > 0`. The ungated path is Monte Carlo's, so MC can label a row 💵
+with no legend anywhere on that tab. Pre-existing, outside this change.
+
+**Final state:** v11.15fa, 6 commits, suites 286 / 61 / 22, tier-1 287/0, badge green at 656.
+Verified in the browser at every step: Break Even now precedes Conv Tax under both conversion goals;
+of 167 compare cells exactly one carries the marker, on a row shaded `rgb(219,234,254)`; the 💵 entry
+is present under nerdknob and hidden without it. Still no screenshot - the Browser pane was never
+displayed, so all of it is DOM assertion.
+
+**Planning-file near-miss worth recording:** updating the NOW table by line INDEX clobbered the P30
+row and duplicated P67, because the assert was written after the assignment and so was vacuous.
+Caught by diffing the table against HEAD. Match on row TEXT, not on index, and assert before writing.

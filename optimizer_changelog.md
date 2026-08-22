@@ -11,6 +11,30 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15fc"></a>
+
+## 11.15fc
+
+### Optimizer tab reorganized
+
+Labels, column names, colors and symbols are now consistent with the rest of the tool: the table
+uses the same names as the summary bar (End Wealth, All Taxes, All RMDs, Spendable), and what was
+called both "Infeasible" and "target unreachable" is now **unreachable target** everywhere.
+
+The table shows the columns the **Optimize for** goal actually uses. Some were never shown at all:
+Maximum Roth and Roth Conversion Effectiveness both ranked partly on a Roth balance that had no
+column, and Tax Flexibility ranked on a spread across your pre-tax, Roth and taxable money that was
+shown nowhere. **Final Roth**, **Final IRA** and **Mix Spread** now exist. Optimize for also says in
+one line what the goal ranks by, and a link below it shows all columns at once.
+
+**Spend Goal** and **Yrs Funded** left the table; hover over any row and both are in the pop-up.
+The legend folds out of the way, and the comparison marker appears only on the row being compared
+against.
+
+No numbers change. These are visual improvements only.
+
+---
+
 <a id="11.15e3"></a>
 
 ## 11.15e3

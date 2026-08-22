@@ -41,6 +41,10 @@ const OptimizerState = {
     sortState: { colKey: '__objective__', direction: 'desc' },
     showInfeasible: false,
     showFailed: false,
+    // Turns the per-goal column filter off, showing every column at once the way the table used
+    // to open. Deliberately NOT reset by setOptObjective: how dense you want the table is a
+    // preference, not a property of the goal.
+    showAllColumns: false,
     objective: 'taxflex',       // PF13: default ranking = Tax Flexibility (most-requested)
     sharedFutureIRARate: 0,     // PF13: heirs rate for widowrmd/taxflex metrics; set each runOptimizer
     perfStats: null,
@@ -130,10 +134,21 @@ function applyNerdKnobVisibility() {
 }
 
 // Optimizer objective setter - wired to the nerdknob <select id="opt-objective">.
+// The line under the selector describing what the CHOSEN goal ranks by. Called from
+// setOptObjective and from page init, not only from renderOptimizerTable, because the goal can
+// be changed before any sweep has run and the description should still be right.
+function renderObjectiveBlurb() {
+    const el = document.getElementById('opt-objective-note');
+    if (!el) return;
+    const key = OptimizerState.objective || 'taxflex';
+    el.textContent = OPT_OBJECTIVE_BLURB[key] || OPT_OBJECTIVE_BLURB.taxflex;
+}
+
 function setOptObjective(key) {
     OptimizerState.objective = OPT_OBJECTIVE_LABELS[key] ? key : 'taxflex';
     // Changing the objective re-follows it for the body order (drop any user column override).
     OptimizerState.sortState = { colKey: '__objective__', direction: 'desc' };
+    renderObjectiveBlurb();
     if (OptimizerState.results) {
         recomputeBaselineForObjective();
         renderOptimizerTable(OptimizerState.results);
@@ -228,9 +243,17 @@ function deltaRefDescription() {
 // The ⚖ glyph. Highlighted on whichever row the Δ columns are CURRENTLY measured against, which is
 // the ⚓ baseline until something else is picked -- so the table opens already showing where the
 // comparison point is, rather than looking like the feature is switched off.
+// The ⚖ marks the row every Δ column measures from, and NOTHING marks the others. Showing a
+// faded ⚖ on all 177 rows and a slightly larger one on the reference row asked the reader to spot
+// a difference of 0.2em and 45% opacity across a scrolling table, which is not a difference
+// anyone spots. One glyph, in one place, plus the reference row carrying the same blue as the
+// ⚓ baseline it replaces - the two are the same idea, so they read as the same thing.
+//
+// The empty cells are still the click target. The column heading keeps the ⚖ so the column says
+// what it is, and CSS reveals a faint ⚖ under the pointer (see .opt-cmp-cell) so the affordance
+// is findable without printing it 177 times.
 function compareToggleHtml(r) {
-    const isRef = deltaReferenceRow() === r;
-    return `<span style="${isRef ? 'font-size:1.2em;' : 'opacity:0.55;'}">⚖</span>`;
+    return (deltaReferenceRow() === r) ? '<span style="font-size:1.2em;">⚖</span>' : '';
 }
 
 // Click routing for a table cell. The leading ⚖ / outcome / spacer cells select the comparison row;
@@ -241,16 +264,29 @@ function cellActionCss(col) {
     return 'cursor:pointer;';
 }
 
+// The two figures that used to occupy columns of their own. Spend Goal repeated your own input on
+// every row except the ✦ optimized ones, so a whole column bought one number on a handful of rows.
+// Yrs Funded is already said by the 🟢/🚨 in the status column, which means "every year funded" -
+// only the n/N detail was lost, and this is where it went. Appended to EVERY cell's tooltip in the
+// row, so it does not matter which cell the reader happens to be over.
+// No double quotes in here: the callers interpolate straight into title="..." without escaping.
+function rowDetailTip(r) {
+    const goal = Math.round(r._spendGoal ?? 0).toLocaleString();
+    return `\nSpend goal: $${goal}/yr in today’s dollars.`
+         + `\nYears funded: ${r.totals.yearsfunded} of ${r.totals.yearstested}.`;
+}
+
 function cellActionAttrs(col, r, loadTitle) {
     if (col.inert) return '';
     if (col.compareZone) {
         const isRef = deltaReferenceRow() === r;
-        const tip = isRef
+        const tip = (isRef
             ? 'Every Δ column is currently measured against this row. Click to go back to the ⚓ baseline.'
-            : 'Compare against this row: the ΔNetWealth and ΔTax columns are re-measured from it instead of the ⚓ baseline.';
+            : 'Compare against this row: the ΔNetWealth and ΔTax columns are re-measured from it instead of the ⚓ baseline.')
+            + rowDetailTip(r);
         return ` onclick="toggleCompareRow(${r._id})" title="${tip}"`;
     }
-    return ` onclick="loadOptimizerResult(${r._id})" title="${loadTitle}"`;
+    return ` onclick="loadOptimizerResult(${r._id})" title="${loadTitle + rowDetailTip(r)}"`;
 }
 
 // One line above the table that is always saying something: how to start a comparison when none is
@@ -1283,8 +1319,20 @@ function renderSpendOptimizerBanner(results, baseSpendGoal) {
 }
 
 // Column definitions (shared between render and sort)
-function getOptimizerColumns() {
+// showAll: return the complete column set rather than the subset the active "Optimize for" goal
+// asks for. Callers that need a column regardless of what is on screen - the sort tiebreakers, the
+// "N of M columns" counter - pass true. The filter itself arrives with OPT_OBJECTIVE_COLUMNS; until
+// then this parameter is accepted and ignored, so those call sites can already be written correctly.
+function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
     const inC = () => document.getElementById('show-current-dollars')?.checked;
+    // Nominal -> today's-dollar deflator for the terminal-balance columns. A row does not retain
+    // res.log, so there is no terminal.rothCurrentDollars to read; this is the same ratio
+    // _scoreRows already uses to build afterTaxNWCurrentDollars. Final IRA and Final Roth therefore
+    // restate on the Future $ / Current $ toggle the way NetWealth does, rather than sitting there
+    // nominal-only next to columns that move.
+    const defl = r => (inC() && r.finalNW) ? (r.finalNWCurrentDollars / r.finalNW) : 1;
+    const objKey   = OptimizerState.objective || 'taxflex';
+    const objLabel = OPT_OBJECTIVE_LABELS[objKey] || OPT_OBJECTIVE_LABELS.taxflex;
     const cols = [
         // compareZone: these cells select the comparison row instead of loading the strategy.
         // The ⚖ used to be a small glyph inside the Strategy cell, where a near miss loaded the
@@ -1313,7 +1361,7 @@ function getOptimizerColumns() {
         },
         {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = bracket target unreachable. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
             getValue: r => r._strategyLabel,
             getSortValue: r => r._strategyLabel
         },
@@ -1323,6 +1371,23 @@ function getOptimizerColumns() {
             getValue: r => r._paramLabel,
             getSortValue: r => r._paramSortVal
         },
+        // Rank column: numbers rows 1 (best) … N by the currently-selected objective (looked up from
+        // the per-render map on OptimizerState; failed rows show '—'). Always visible - it is the
+        // readout for the "Optimize for" choice, which every user can now set. PF13 item 4 removed
+        // the redundant raw Score column, since the row order already conveys the ranking.
+        //
+        // Written inline here rather than spliced in after the fact. The old code did
+        // `cols.splice(cols.findIndex(c => c.key === 'afterTaxNW') + 1, 0, ...)`, which was a trap
+        // waiting for the first conditional column: findIndex returns -1 when its target is absent,
+        // and splice(0, 0, ...) then puts Rank at index 0, in front of the ⚖ column that the Best
+        // table assumes is there. Sitting beside Strategy and Param also reads better, since all
+        // three answer "which plan is this?" rather than "how did it do?".
+        {
+            key: 'rank', label: 'Rank',
+            title: `Rank under the selected objective - "${objLabel}". 1 = best, N = worst among successful plans (failed plans show -). Change the objective with the "Optimize for" selector above.`,
+            getValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : '—',
+            getSortValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : Infinity
+        },
         {
             key: 'spendGoal', label: 'Spend Goal',
             title: 'Annual after-tax spending this strategy targets (today\'s dollars). Normally your input; Optimize Spend (✦) rows show a higher sustainable figure found by search.',
@@ -1330,26 +1395,50 @@ function getOptimizerColumns() {
             getSortValue: r => r._spendGoal
         },
         {
-            key: 'tax', label: 'Lifetime Tax',
+            key: 'tax', label: 'All Taxes',
             title: 'Total tax paid over the whole plan: federal (ordinary + capital gains + NIIT), state, and Medicare IRMAA surcharges. Toggle Future $/Current $ to switch between nominal and today\'s-dollar totals.',
             getValue: r => Math.round(inC() ? r.totals.taxCurrentDollars : r.totals.tax).toLocaleString(),
             getSortValue: r => inC() ? r.totals.taxCurrentDollars : r.totals.tax
         },
         {
-            key: 'spend', label: 'Total Spendable',
+            key: 'spend', label: 'Spendable',
             title: 'Total after-tax money available to spend over the whole plan (gross income minus tax). Toggle Future $/Current $ for nominal vs today\'s dollars.',
             getValue: r => Math.round(inC() ? r.totals.spendCurrentDollars : r.totals.spend).toLocaleString(),
             getSortValue: r => inC() ? r.totals.spendCurrentDollars : r.totals.spend
         },
         {
-            key: 'afterTaxNW', label: 'NetWealth',
-            title: 'After-tax terminal net worth: IRA × (1 − your expected future IRA rate), brokerage gains × (1 − cap-gains rate), Roth + Cash + basis at face. Uses ONE shared future-IRA rate across all rows so strategies compare on a level footing. This is the ranking metric. Toggle Future $/Current $ for nominal vs today\'s dollars.',
+            key: 'afterTaxNW', label: 'End Wealth',
+            title: 'After-tax terminal net worth: IRA × (1 − your expected future IRA rate), brokerage gains × (1 − cap-gains rate), Roth + Cash + basis at face. Uses ONE shared future-IRA rate across all rows so strategies compare on a level footing. This is what the "Maximum Net Wealth" objective ranks on. Toggle Future $/Current $ for nominal vs today\'s dollars.',
             getValue: r => Math.round(inC() ? (r.afterTaxNWCurrentDollars ?? 0) : (r.afterTaxNW ?? 0)).toLocaleString(),
             getSortValue: r => inC() ? (r.afterTaxNWCurrentDollars ?? 0) : (r.afterTaxNW ?? 0)
         },
         {
-            key: 'dNW', label: 'ΔNetWealth' + deltaRefSuffix(),
-            title: 'NetWealth minus ' + deltaRefDescription() + '. Positive (green) = this strategy ends wealthier after tax than that reference; negative (red) = it ends behind it.',
+            key: 'finalIRA', label: 'Final IRA',
+            title: 'Traditional (pre-tax) IRA balance at the end of the plan, both people combined, at face value. This is the tax bomb: the balance that drives Required Minimum Distributions, that a surviving spouse pays Single rates on, and that heirs must empty within ten years. End Wealth already subtracts the tax owed on it; this column is the raw number that tax is charged against, and it is half of what the "Avoiding Widow & RMD Tax" objective ranks on. Toggle Future $/Current $ for nominal vs today\'s dollars.',
+            getValue: r => Math.round(defl(r) * (r.totals.terminal?.ira ?? 0)).toLocaleString(),
+            getSortValue: r => defl(r) * (r.totals.terminal?.ira ?? 0)
+        },
+        {
+            key: 'finalRoth', label: 'Final Roth',
+            title: 'Roth balance at the end of the plan, both people combined. Counts at face value: no tax is ever owed on it, by you or by your heirs. This is what the "Maximum Roth" objective ranks on. Toggle Future $/Current $ for nominal vs today\'s dollars.',
+            getValue: r => Math.round(defl(r) * (r.totals.terminal?.roth ?? 0)).toLocaleString(),
+            getSortValue: r => defl(r) * (r.totals.terminal?.roth ?? 0)
+        },
+        {
+            // A unitless ratio, so inC() deliberately does NOT apply: deflating all three buckets by
+            // the same factor leaves the ratio unchanged, and a number that jumped on the
+            // Future $/Current $ toggle would be wrong, not merely restated.
+            key: 'mixSpread', label: 'Mix Spread',
+            title: 'How unevenly the plan ends up split across the three tax treatments: pre-tax IRA (net of the future IRA rate), Roth, and taxable (brokerage plus cash). 0% is a perfectly even three-way split, so in any future year you can draw from whichever account is cheapest that year. 100% means it all landed in one bucket and you draw from whatever you have. Lower is better. This is the measure the "Tax Flexibility" objective ranks on, among the plans that also finish among the wealthiest.',
+            getValue: r => {
+                const s = afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0);
+                return Number.isFinite(s) ? `${(s * 100).toFixed(0)}%` : '—';
+            },
+            getSortValue: r => afterTaxBucketSpread(r, OptimizerState.sharedFutureIRARate ?? 0)
+        },
+        {
+            key: 'dNW', label: 'ΔEnd Wealth' + deltaRefSuffix(),
+            title: 'End Wealth minus ' + deltaRefDescription() + '. Positive (green) = this strategy ends wealthier after tax than that reference; negative (red) = it ends behind it.',
             getValue: r => {
                 const d = inC() ? r._dNWCurrent : r._dNW;
                 if (d == null) return '—';
@@ -1384,7 +1473,7 @@ function getOptimizerColumns() {
             getSortValue: r => r.totals.yearsfunded
         },
         {
-            key: 'rmd', label: 'Total RMDs',
+            key: 'rmd', label: 'All RMDs',
             title: 'Total Required Minimum Distributions forced out of traditional IRAs over the plan. Lower means the strategy drew down or converted the IRA earlier, shrinking later forced withdrawals.',
             getValue: r => Math.round(r.totals.rmd).toLocaleString(),
             getSortValue: r => r.totals.rmd
@@ -1396,36 +1485,33 @@ function getOptimizerColumns() {
             getSortValue: r => r.totals.rmdTax / (r.totals.tax || 1)
         },
         {
-            key: 'convSavings', label: 'Tax Paid Δ',
+            key: 'convBE', label: 'Break Even',
+            title: 'The year this strategy\'s after-tax wealth permanently overtakes the same strategy with no conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead, or the strategy never converts at all. Unlike Conv Tax, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Sort by it, or choose "Earliest Break Even" under Optimize for, to rank strategies by how fast their conversions pay back.',
+            getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
+            getSortValue: r => r._convBEYear ?? 9999
+        },
+        {
+            // Renamed from "Tax Paid Δ". The Δ was misleading: unlike every other Δ in this table it
+            // is not measured against the ⚓ baseline or a ⚖ pinned row, it is one row's own
+            // conversion search compared against itself without the extra conversions.
+            key: 'convSaved', label: 'Conv Tax',
             title: 'Counts only tax actually paid during the plan, so it is NOT a verdict on whether converting was worth it. Positive = the extra IRA→Roth conversions run by Optimize Conversions lowered lifetime tax vs the same strategy without them. It does not price the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so a big positive number here can sit alongside a plan that ends up worse off overall. Use the Break Even column, which prices in that deferred tax, for the actual answer.',
             getValue: r => r._convSavings != null ? '$' + Math.round(r._convSavings).toLocaleString() : '—',
             getSortValue: r => r._convSavings ?? -Infinity
-        },
-        {
-            key: 'convBE', label: 'Break Even',
-            title: 'The year this strategy\'s after-tax wealth permanently overtakes the same strategy with no conversions (same sustained-crossing definition as the single-scenario Break Even stat: the lead must hold through the end of the plan). "—" means it never sustains a lasting lead, or the strategy never converts at all. Unlike Tax Paid Δ, this prices in the tax still owed on whatever\'s left in the IRA, so it\'s the more complete answer to whether conversions paid off overall. Sort by it, or choose "Earliest Break Even" under Optimize for, to rank strategies by how fast their conversions pay back.',
-            getValue: r => r._convBEYear != null ? String(r._convBEYear) : '—',
-            getSortValue: r => r._convBEYear ?? 9999
         }
     ];
-    // Rank column: numbers rows 1 (best) … N by the currently-selected objective (looked up from
-    // the per-render map on OptimizerState; failed rows show '—'). Always visible - it is the
-    // readout for the "Optimize for" choice, which every user can now set. PF13 item 4 removed the
-    // redundant raw Score column, since the row order already conveys the ranking.
-    {
-        const i = cols.findIndex(c => c.key === 'afterTaxNW');
-        const objKey   = OptimizerState.objective || 'taxflex';
-        const objLabel = OPT_OBJECTIVE_LABELS[objKey] || OPT_OBJECTIVE_LABELS.taxflex;
-        cols.splice(i + 1, 0,
-            {
-                key: 'rank', label: 'Rank',
-                title: `Rank under the selected objective - "${objLabel}". 1 = best, N = worst among successful plans (failed plans show -). Change the objective with the "Optimize for" selector above.`,
-                getValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : '—',
-                getSortValue: r => (OptimizerState._rankMap && OptimizerState._rankMap[r._id]) ? OptimizerState._rankMap[r._id] : Infinity
-            }
-        );
-    }
-    return cols;
+    if (showAll) return cols;
+    // Union with the pinned set, not a straight read of the goal's list. `compare` MUST survive:
+    // the Best summary table drops the leading column on the understanding that it is the ⚖
+    // control. A typo in the data above cannot take it out.
+    const keep = new Set([...OPT_COLUMNS_PINNED, ...(OPT_OBJECTIVE_COLUMNS[objKey] || OPT_OBJECTIVE_COLUMNS.taxflex)]);
+    // The Δ columns are in no goal's list. They measure against a reference, so they earn their
+    // space only once the reader has chosen one by pinning a ⚖ row - until then they restate the
+    // ⚓ baseline the table is already ordered around.
+    if (OptimizerState.compareRow) { keep.add('dNW'); keep.add('dTax'); }
+    // filter(), never a map over the goal's list: this array IS the display order, so a goal's
+    // columns can be written in any order and `compare` still lands at index 0.
+    return cols.filter(c => keep.has(c.key));
 }
 
 function renderOptimizerTable(results) {
@@ -1434,8 +1520,10 @@ function renderOptimizerTable(results) {
     results = results ?? OptimizerState.results;
     if (!results || results.length === 0) return;
     const columns = getOptimizerColumns();
-    // Default: sort by After-Tax NW descending; Spendable descending as tiebreaker
-    const sortState = OptimizerState.sortState ?? { colKey: '__objective__', direction: 'desc' };
+    // Default: sort by After-Tax NW descending; Spendable descending as tiebreaker.
+    // normalizeSortState is the single choke point where a vanished sort column is caught - see the
+    // comment on the function. Written back to state so the header arrow and the next render agree.
+    const sortState = OptimizerState.sortState = normalizeSortState(OptimizerState.sortState, columns);
 
     // Rank map (item 10): number successful rows 1 (best) … N under the active objective. Looked up
     // by the nerdknob Rank column; failed rows are left unranked ('—').
@@ -1459,8 +1547,13 @@ function renderOptimizerTable(results) {
     let display = results.filter(r => !(baselineRow && r._id === baselineRow._id) && !r._isCurrentPlan);
     if (!showInfeasible) display = display.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
     if (!showFailed) display = display.filter(r => r.totals.success);
-    const afterTaxCol = columns.find(c => c.key === 'afterTaxNW');
-    const spendCol = columns.find(c => c.key === 'spend');
+    // Tiebreaker comparators come from the UNFILTERED column set. What the sort does when two rows
+    // tie is a property of the sort, not of what happens to be on screen: reading these out of the
+    // filtered `columns` would make the NetWealth/Spendable tiebreak quietly evaporate whenever the
+    // active goal hid the other column.
+    const allColumns  = getOptimizerColumns(true);
+    const afterTaxCol = allColumns.find(c => c.key === 'afterTaxNW');
+    const spendCol    = allColumns.find(c => c.key === 'spend');
     // PF13: default body order follows the active "Optimize for" objective (same order as the Rank
     // column) until the user clicks a real column header. rankRows already keeps failed rows last.
     if (sortState.colKey === '__objective__') {
@@ -1492,7 +1585,7 @@ function renderOptimizerTable(results) {
     // show up green in the Best table even though the plan can't actually be run.
     const successes = results.filter(r => r.totals.success);
     const feasibleSuccesses = successes.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
-    const bestIds = new Set();
+    let bestIds = new Set();
     const colWinners = {}; // key -> winning _id
     if (feasibleSuccesses.length > 0) {
         const pick = (arr, fn, isMax) => arr.reduce((a, b) => isMax ? (fn(b) > fn(a) ? b : a) : (fn(b) < fn(a) ? b : a));
@@ -1501,7 +1594,6 @@ function renderOptimizerTable(results) {
         const w3 = pick(feasibleSuccesses, r => r.totals.spend, true);
         const w5 = pick(feasibleSuccesses, r => r.totals.rmdTax / (r.totals.tax || 1), false);
         const w6 = pick(feasibleSuccesses, r => r.afterTaxNW ?? -Infinity, true);
-        [w1, w2, w3, w5, w6].forEach(w => bestIds.add(w._id));
         colWinners.tax        = w1._id;
         colWinners.rate       = w2._id;
         colWinners.spend      = w3._id;
@@ -1517,10 +1609,16 @@ function renderOptimizerTable(results) {
             const beBetter = (x, y) => (x._convBEYear - y._convBEYear)
                 || ((y.afterTaxNWCurrentDollars ?? -Infinity) - (x.afterTaxNWCurrentDollars ?? -Infinity));
             const w7 = beRows.reduce((a, b) => (beBetter(b, a) < 0 ? b : a));
-            bestIds.add(w7._id);
             colWinners.convBE = w7._id;
         }
     }
+    // A row counts as "Best" only for a metric the reader can actually see. bestIds drives the
+    // whole-row green and the bold, and the legend promises a highlighted cell explains it - a
+    // winner whose column the active goal hid would leave a green row with nothing highlighted in
+    // it, which is unexplainable. colWinners itself stays complete; only what is DISPLAYED from it
+    // is filtered, so nothing downstream loses information.
+    const visibleKeys = new Set(columns.map(c => c.key));
+    bestIds = new Set(Object.entries(colWinners).filter(([k]) => visibleKeys.has(k)).map(([, id]) => id));
 
     // Header - flat div cells for CSS grid
     const _hCellStyle = 'background:#f8f9fa;padding:6px 8px;border-bottom:2px solid #dee2e6;white-space:nowrap;font-weight:bold;cursor:pointer;user-select:none;position:sticky;top:0;z-index:1;';
@@ -1549,6 +1647,7 @@ function renderOptimizerTable(results) {
                     : `ACA not applicable - everyone is already on Medicare (age ${TAXData.IRMAA.ELIGIBILITY_AGE}+) at the start, so there is no premium subsidy for a cap to protect. This row simulates as Proportional 0%.`)
                 : 'Bracket target exceeded in >50% of years - income sources already push MAGI above this ceiling')
             : 'Click to load this strategy';
+        const isCompareRef = deltaReferenceRow() === r;
         const cells = columns.map(col => {
             const cellWin = (col.key === 'tax'    && r._id === colWinners.tax)
                          || (col.key === 'rate'   && r._id === colWinners.rate)
@@ -1559,16 +1658,23 @@ function renderOptimizerTable(results) {
             const bg = cellWin    ? '#4CAF5080'
                      : isFailed   ? '#fde0e0'
                      : isInfeasible ? '#e8e8e8'
+                     // The Δ reference row wears the ⚓ baseline's blue: it IS the baseline's job,
+                     // handed to a row the reader picked. Above isWinner on purpose - having just
+                     // clicked it, that is the row they are looking for.
+                     : isCompareRef ? '#dbeafe'
                      : isWinner   ? '#90EE90'
                      : r._isReverseOptimized ? '#fde8d8'
-                     : r._isConvOptimized    ? '#e8f5e9'
-                     : r._isSpendOptimized   ? '#dbeafe' : '';
-            const extra = isFailed ? 'opacity:0.75;'
+                     // ✦ Optimize Spend rows no longer take the baseline blue. They carry the ✦
+                     // already, and blue now means exactly one thing: the row Δ measures from.
+                     : r._isConvOptimized    ? '#e8f5e9' : '';
+            const extra = isCompareRef ? 'font-weight:bold;'
+                        : isFailed ? 'opacity:0.75;'
                         : isInfeasible ? 'text-decoration:line-through;opacity:0.55;'
                         : isWinner     ? 'font-weight:bold;'
                         : (r._isReverseOptimized || r._isConvOptimized || r._isSpendOptimized) ? 'font-style:italic;' : '';
             const bgCss = bg ? `background-color:${bg};` : '';
-            return `<div style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${col.getValue(r)}</div>`;
+            const cls = col.key === 'compare' ? ' class="opt-cmp-cell"' : '';
+            return `<div${cls} style="padding:4px 8px;${cellActionCss(col)}${bgCss}${extra}"${cellActionAttrs(col, r, rowTitle)}>${col.getValue(r)}</div>`;
         }).join('');
         return `<div style="display:contents;">${cells}</div>`;
     }).join('');
@@ -1636,16 +1742,32 @@ function renderOptimizerTable(results) {
         document.querySelectorAll('#opt-current-row > div').forEach(d => { d.style.top = _top + 'px'; });
     }
 
+    // Column-count escape hatch. Written here rather than in the markup for the same reason the two
+    // legend toggles are: the count is only knowable after the columns are built.
+    const colModeEl = document.getElementById("opt-colmode");
+    if (colModeEl) {
+        const _allCols = getOptimizerColumns(true).length;
+        const _objLbl  = OPT_OBJECTIVE_LABELS[OptimizerState.objective] || OPT_OBJECTIVE_LABELS.taxflex;
+        const _label = OptimizerState.showAllColumns
+            ? `Showing all ${_allCols} columns - click to show only the ones for ${_objLbl}`
+            : `Showing ${columns.length} of ${_allCols} columns - click to show all`;
+        const _tip = 'Each "Optimize for" goal shows the columns that answer its own question and puts '
+            + 'the rest away. Nothing is discarded - this switches the filter off so every column is on '
+            + 'screen at once, and the goal still sets the row order. Hover over any column heading for '
+            + 'what it means.';
+        colModeEl.innerHTML = `<span onclick="toggleAllColumns()" title="${_tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${_label}</span>`;
+    }
+
     // Legend - make the "Infeasible" item a click toggle (rows hidden by default).
     const legendInfeasEl = document.getElementById('opt-legend-infeasible');
     if (legendInfeasEl) {
         const swatch = '<span style="display:inline-block;width:14px;height:14px;background:#e8e8e8;opacity:0.8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;text-decoration:line-through;"></span>';
         if (infeasibleCount > 0) {
             const action = showInfeasible ? `click to hide ${infeasibleCount}` : `click to show ${infeasibleCount} hidden`;
-            const tip = `Infeasible = the strategy's bracket/IRMAA/ACA target is exceeded in more than half its years (existing income already pushes MAGI above the ceiling). Hidden by default - ${showInfeasible ? 'click to hide them again' : 'click to reveal them'}.`;
-            legendInfeasEl.innerHTML = `<span onclick="toggleInfeasibleRows()" title="${tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${swatch}Infeasible - ${action}</span>`;
+            const tip = `Unreachable target (⚠️) = the strategy's bracket/IRMAA/ACA ceiling is exceeded in more than half its years, because existing income already pushes MAGI above it. Hidden by default - ${showInfeasible ? 'click to hide them again' : 'click to reveal them'}.`;
+            legendInfeasEl.innerHTML = `<span onclick="toggleInfeasibleRows()" title="${tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${swatch}⚠️ Unreachable target - ${action}</span>`;
         } else {
-            legendInfeasEl.innerHTML = `${swatch}Infeasible - none in this run`;
+            legendInfeasEl.innerHTML = `${swatch}⚠️ Unreachable target - none in this run`;
         }
     }
 
@@ -1666,16 +1788,20 @@ function renderOptimizerTable(results) {
     // Best summary table - unique winner rows labeled by what they won
     const bestEl = document.getElementById('opt-best');
     if (bestEl) {
-        if (feasibleSuccesses.length > 0) {
+        if (feasibleSuccesses.length > 0 && Object.keys(colWinners).some(k => visibleKeys.has(k))) {
             const winnerDefs = [
-                { key: 'afterTaxNW', label: '💎 Most NetWealth',    id: colWinners.afterTaxNW },
+                { key: 'afterTaxNW', label: '💎 Most End Wealth',    id: colWinners.afterTaxNW },
                 { key: 'spend',  label: '🏆 Most Spendable',   id: colWinners.spend  },
                 { key: 'tax',    label: '📉 Lowest Tax',        id: colWinners.tax    },
                 { key: 'rate',   label: '📊 Lowest Tax Rate',   id: colWinners.rate   },
                 { key: 'rmdtax', label: '📋 Lowest RMD Tax%',   id: colWinners.rmdtax },
                 ...(colWinners.convBE != null ? [{ key: 'convBE', label: '⏱ Earliest Break Even', id: colWinners.convBE }] : []),
-                ...(OptimizerState.baseline ? [{ key: 'afterTaxNW', label: '⚓ Best w/o Conv', id: OptimizerState.baseline._id }] : []),
-            ];
+                // Not a metric win at all - this is "here is the ⚓ baseline row again". It survives
+                // whatever the column filter does, because nothing about it depends on a column.
+                ...(OptimizerState.baseline ? [{ key: 'afterTaxNW', always: true, label: '⚓ Best w/o Conv', id: OptimizerState.baseline._id }] : []),
+            // Drop any winner whose column the active goal has put away. Its label names a
+            // column the reader cannot find, and its highlighted cell would not be rendered.
+            ].filter(w => w.always || visibleKeys.has(w.key));
             // Deduplicate: a row can win multiple metrics; show it once under its first/best label
             const seen = new Set();
             const uniqueWinners = winnerDefs.filter(w => {
@@ -1684,11 +1810,17 @@ function renderOptimizerTable(results) {
                 return true;
             });
             const _bHdrStyle = 'background:#f8f9fa;padding:4px 8px;border-bottom:2px solid #dee2e6;font-weight:bold;white-space:nowrap;';
+            // By key, not by index. `columns.slice(1)` and `i === 0 ? 'Best' : ...` both encoded
+            // "column zero is the ⚖ control" as an unstated assumption, which any change to the
+            // column set would be free to break - silently, by shifting every cell one place left
+            // under a header that no longer describes it. Naming the column it drops makes the two
+            // halves of this table impossible to knock out of alignment with each other.
+            const dataCols = columns.filter(c => c.key !== 'compare');
             const bestRows = uniqueWinners.map(w => {
                 const r = results.find(x => x._id === w.id);
                 if (!r) return '';
                 const labelCell = `<div style="background:#A5D6A7;color:#14532d;font-weight:bold;font-size:0.78em;white-space:nowrap;padding:2px 6px;cursor:pointer;" onclick="loadOptimizerResult(${r._id})" title="${w.label} - click to load">${w.label}</div>`;
-                const dataCells = columns.slice(1).map(col => {
+                const dataCells = dataCols.map(col => {
                     const cellWin = col.key === w.key;
                     const bg = cellWin ? '#4CAF5080' : '#90EE90';
                     let cellVal = col.getValue(r);
@@ -1701,15 +1833,13 @@ function renderOptimizerTable(results) {
                 }).join('');
                 return `<div style="display:contents;">${labelCell}${dataCells}</div>`;
             }).join('');
-            const bestHeader = columns.map((col, i) => {
-                const lbl = i === 0 ? 'Best' : col.label;
-                const titleText = i === 0
-                    ? 'Each row is the strategy that wins one metric (the highlighted cell shows which). Click a row to load that strategy.'
-                    : (col.title || '');
-                const tip = titleText ? ` title="${titleText.replace(/"/g, '&quot;')}"` : '';
-                return `<div style="${_bHdrStyle}"${tip}>${lbl}</div>`;
-            }).join('');
-            const _bColsCss = columns.map(() => 'max-content').join(' ');
+            const _bLabelTip = 'Each row is the strategy that wins one metric (the highlighted cell shows which). Click a row to load that strategy.';
+            const bestHeader = `<div style="${_bHdrStyle}" title="${_bLabelTip}">Best</div>`
+                + dataCols.map(col => {
+                    const tip = col.title ? ` title="${col.title.replace(/"/g, '&quot;')}"` : '';
+                    return `<div style="${_bHdrStyle}"${tip}>${col.label}</div>`;
+                }).join('');
+            const _bColsCss = ['max-content', ...dataCols.map(() => 'max-content')].join(' ');
             bestEl.innerHTML = `<div style="display:grid;grid-template-columns:${_bColsCss};width:fit-content;margin-bottom:16px;border:1px solid #dee2e6;">${bestHeader}${bestRows}</div>`;
             bestEl.style.display = 'block';
         } else {
@@ -1723,7 +1853,17 @@ function renderOptimizerTable(results) {
         const spendVals = results.map(r => r.totals.spend);
         const allSame = spendVals.every(v => v === spendVals[0]);
         if (allSame && results.length > 1) {
-            noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable - this means every strategy fully funds your spending goal. Differentiate by Lifetime Tax, NetWealth, or Yrs Funded.';
+            // Names the columns that are ACTUALLY on screen. The old string named three fixed
+            // columns, one of which (Yrs Funded) is no longer a default column at all and two of
+            // which the active goal may have put away. Advice pointing at a column the reader
+            // cannot see is worse than no advice. dNW/dTax are excluded on purpose: their labels
+            // carry the ' vs ⚖' suffix and read strangely mid-sentence.
+            const _diffKeys = ['tax', 'afterTaxNW', 'mixSpread', 'finalRoth', 'finalIRA', 'rmdtax', 'convBE'];
+            const _diffNames = columns.filter(c => _diffKeys.includes(c.key)).map(c => c.label).slice(0, 3);
+            noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable - this means every strategy fully funds your spending goal. '
+                + (_diffNames.length
+                    ? `Differentiate by ${_diffNames.join(', ')}.`
+                    : 'Differentiate by changing what you Optimize for, or by showing all columns.');
             noteEl.style.display = 'block';
         } else {
             noteEl.style.display = 'none';
@@ -1752,6 +1892,68 @@ function toggleInfeasibleRows() {
 function toggleFailedRows() {
     OptimizerState.showFailed = !OptimizerState.showFailed;
     if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
+}
+
+// The legend fold above the table remembers whether it is open. Deliberately persisted,
+// unlike showInfeasible / showFailed / showAllColumns, none of which are: those are per-analysis
+// choices that should start fresh, while how much chrome you want above the table is a standing
+// preference, and one that resets on every page load is not a preference at all. Its own key, not
+// the saved-scenario blob under STORAGE_KEY, because this is not scenario data.
+const FOLD_STORAGE_KEY = 'optimizerChromeFolds';
+const FOLD_IDS = ['opt-fold-legend'];
+// Chrome fires a `toggle` event when it PARSES a <details open>, before any of our init code has
+// run. The strip carries `open` in the markup, so that toggle lands first, the inline handler
+// writes "both open" to storage, and restoreFoldState then reads back the value it just
+// clobbered - a reader who folded it would find it open again on every visit. Nothing is
+// persisted until the stored preference has actually been read.
+let _foldsRestored = false;
+
+function rememberFoldState() {
+    if (!_foldsRestored) return;   // parse-time toggles are not the reader's choice
+    try {
+        const state = {};
+        FOLD_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) state[id] = el.open;
+        });
+        localStorage.setItem(FOLD_STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { /* private mode / quota: the fold still works, it just will not be remembered */ }
+}
+
+// Called once on load. Both strips are marked `open` in the markup, so a first visit and a
+// storage failure both leave them open, which is the safe direction: the reader sees the legend
+// they have not learned yet rather than a table of symbols with no key.
+function restoreFoldState() {
+    let state;
+    try { state = JSON.parse(localStorage.getItem(FOLD_STORAGE_KEY) || '{}'); } catch (e) { state = null; }
+    _foldsRestored = true;   // from here on, a toggle really is the reader clicking
+    if (!state || typeof state !== 'object') return;
+    FOLD_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && typeof state[id] === 'boolean') el.open = state[id];
+    });
+}
+
+// Turn the per-goal column filter off and back on. Every hidden column is a real column with
+// real data behind it; this shows all of them at once, the way the table used to open. The
+// vanished-sort-column case is handled by normalizeSortState at the render choke point, so
+// this needs no guard of its own.
+function toggleAllColumns() {
+    OptimizerState.showAllColumns = !OptimizerState.showAllColumns;
+    if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
+}
+
+// A sort column can vanish out from under the user: the "Optimize for" goal picks the column set,
+// so a column sorted on under one goal may not exist under the next, and the "show all columns"
+// escape hatch can be switched back off while sorted by a column only it showed. The old code left
+// `col` undefined, skipped the sort block entirely, and rendered the rows in BUILD order under a
+// header carrying no arrow - unsorted, and silently so. Falling back to the objective sentinel is
+// the honest answer: goal order is what the table shows when nothing else is asked for. Pure, so it
+// is assertable without rendering anything.
+function normalizeSortState(sortState, columns) {
+    const s = sortState ?? { colKey: '__objective__', direction: 'desc' };
+    if (s.colKey === '__objective__') return s;
+    return columns.some(c => c.key === s.colKey) ? s : { colKey: '__objective__', direction: 'desc' };
 }
 
 function sortOptimizerBy(colKey) {

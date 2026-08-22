@@ -82,6 +82,13 @@ const optimizeConversionAmount = core.optimizeConversionAmount;
 const baselineScoreOf = core.baselineScoreOf;
 const selectConversionCandidates = core.selectConversionCandidates;
 const rankRowsByObjective = core.rankRowsByObjective;
+const afterTaxBucketSpread = core.afterTaxBucketSpread;
+const OPT_COLUMN_KEYS = core.OPT_COLUMN_KEYS;
+const OPT_COLUMNS_PINNED = core.OPT_COLUMNS_PINNED;
+const OPT_OBJECTIVE_COLUMNS = core.OPT_OBJECTIVE_COLUMNS;
+const OPT_OBJECTIVE_METRIC_COLUMN = core.OPT_OBJECTIVE_METRIC_COLUMN;
+const OPT_OBJECTIVE_BLURB = core.OPT_OBJECTIVE_BLURB;
+const OPTIMIZER_OBJECTIVES = core.OPTIMIZER_OBJECTIVES;
 const taxCreepFactor = core.taxCreepFactor;
 const IRMAA_MARGIN_MODES = core.IRMAA_MARGIN_MODES;
 const IRMAA_MARGIN_DEFAULT = core.IRMAA_MARGIN_DEFAULT;
@@ -3530,6 +3537,97 @@ test('rankRowsByObjective: Tax Flexibility cutoff handles negative after-tax NW'
     // Should not throw; the higher-NW balanced row should lead.
     const order = rankRowsByObjective(rows, 'taxflex', 0).map(r => r._id);
     assert(order[0] === 'best', `negative-NW cutoff must keep the best row eligible, got ${order.join(',')}`);
+});
+
+// ── Which columns each "Optimize for" goal shows (P67) ────────────────────────
+// OPT_OBJECTIVE_COLUMNS is pure data, so every rule about it is assertable here rather than in the
+// browser. What CANNOT be seen from node is whether the keys match the descriptors in
+// optimizer_ui.js, which no node suite loads; the in-page suite pins that against OPT_COLUMN_KEYS.
+
+test('OPT_OBJECTIVE_COLUMNS covers exactly the objectives that exist', () => {
+    const goals = Object.keys(OPTIMIZER_OBJECTIVES).sort();
+    const sets  = Object.keys(OPT_OBJECTIVE_COLUMNS).sort();
+    // Both directions. A goal with no column list silently falls back to taxflex at render time,
+    // which looks like a working feature and is not one.
+    assert(goals.join(',') === sets.join(','),
+        `objectives [${goals.join(',')}] vs column sets [${sets.join(',')}]`);
+});
+
+test('every objective\'s column list names only real columns, with no duplicates', () => {
+    const known = new Set(OPT_COLUMN_KEYS);
+    for (const [objKey, list] of Object.entries(OPT_OBJECTIVE_COLUMNS)) {
+        const bogus = list.filter(k => !known.has(k));
+        assert(bogus.length === 0, `${objKey} names columns that do not exist: ${bogus.join(', ')}`);
+        assert(new Set(list).size === list.length, `${objKey} repeats a column: ${list.join(', ')}`);
+    }
+});
+
+test('compare is first in every objective, and every pinned column is present', () => {
+    for (const [objKey, list] of Object.entries(OPT_OBJECTIVE_COLUMNS)) {
+        // The Best summary table drops the leading column on the understanding that it is the ⚖
+        // control. Pinned here so a reordered list cannot shift that table under its own header.
+        assert(list[0] === 'compare', `${objKey} starts with ${list[0]}, not compare`);
+        const missing = OPT_COLUMNS_PINNED.filter(k => !list.includes(k));
+        assert(missing.length === 0, `${objKey} is missing pinned columns: ${missing.join(', ')}`);
+    }
+    assert(OPT_COLUMN_KEYS[0] === 'compare', 'compare must be the first column in display order');
+});
+
+test('every objective shows the column its own ranking metric reads', () => {
+    // A column set that hid the very number it sorted the table on would be worse than showing
+    // everything: the order would look arbitrary. This is the rule that makes the feature honest.
+    for (const objKey of Object.keys(OPTIMIZER_OBJECTIVES)) {
+        const needed = OPT_OBJECTIVE_METRIC_COLUMN[objKey];
+        assert(needed, `${objKey} has no metric column recorded`);
+        assert(OPT_OBJECTIVE_COLUMNS[objKey].includes(needed),
+            `${objKey} ranks on ${needed} but does not show it`);
+    }
+});
+
+test('every objective has a blurb, and it names the column that objective ranks on', () => {
+    const goals = Object.keys(OPTIMIZER_OBJECTIVES).sort();
+    const blurbs = Object.keys(OPT_OBJECTIVE_BLURB).sort();
+    assert(goals.join(',') === blurbs.join(','),
+        `objectives [${goals.join(',')}] vs blurbs [${blurbs.join(',')}]`);
+    // The line under the selector and the columns on screen have to agree, or the sentence describes
+    // a ranking the reader cannot see. Checked against the label, not the key, since that is what
+    // the reader is looking at. Two goals rank on a composite with no single column of its own.
+    const COLUMN_LABEL = {
+        mixSpread: 'Mix Spread', afterTaxNW: 'End Wealth', finalIRA: 'Final IRA', tax: 'All Taxes',
+        spend: 'Spendable', finalRoth: 'Final Roth', convSaved: 'Conv Tax', convBE: 'Break Even',
+    };
+    const COMPOSITE = ['widowrmd', 'balanced'];
+    for (const objKey of goals) {
+        if (COMPOSITE.includes(objKey)) continue;
+        const label = COLUMN_LABEL[OPT_OBJECTIVE_METRIC_COLUMN[objKey]];
+        assert(label, `${objKey}: no label recorded for ${OPT_OBJECTIVE_METRIC_COLUMN[objKey]}`);
+        assert(OPT_OBJECTIVE_BLURB[objKey].includes(label),
+            `${objKey} ranks on "${label}" but its blurb never says so: ${OPT_OBJECTIVE_BLURB[objKey]}`);
+    }
+});
+
+test('afterTaxBucketSpread: 0 for an even three-way split, 1 for a single bucket', () => {
+    const even = objRow('even', { terminal: { ira: 100000, roth: 100000, cash: 100000, brokerage: 0, basis: 0 } });
+    assert(Math.abs(afterTaxBucketSpread(even, 0)) < 1e-9,
+        `even split should spread 0, got ${afterTaxBucketSpread(even, 0)}`);
+    const oneBucket = objRow('one', { terminal: { ira: 300000, roth: 0, cash: 0, brokerage: 0, basis: 0 } });
+    assert(Math.abs(afterTaxBucketSpread(oneBucket, 0) - 1) < 1e-9,
+        `single bucket should spread 1, got ${afterTaxBucketSpread(oneBucket, 0)}`);
+});
+
+test('afterTaxBucketSpread: Infinity when nothing is left, and taxflex ranks on this same number', () => {
+    const drained = objRow('drained', { terminal: { ira: 0, roth: 0, cash: 0, brokerage: 0, basis: 0 } });
+    // A plan that spent itself to zero must never read as "perfectly balanced" - every bucket is
+    // equal at zero, which is exactly the degenerate case the Infinity guards against.
+    assert(!Number.isFinite(afterTaxBucketSpread(drained, 0)),
+        'a drained plan must not look balanced');
+    // The Mix Spread column and the taxflex ranking must be the SAME number, which is why the
+    // function was extracted from the ranker rather than reimplemented in the UI.
+    const balanced = objRow('balanced', { nw: 300000, terminal: { ira: 100000, roth: 100000, cash: 100000, brokerage: 0, basis: 0 } });
+    const lopsided = objRow('lopsided', { nw: 300000, terminal: { ira: 280000, roth: 10000,  cash: 10000,  brokerage: 0, basis: 0 } });
+    assert(afterTaxBucketSpread(balanced, 0) < afterTaxBucketSpread(lopsided, 0), 'balanced spreads less');
+    const order = rankRowsByObjective([lopsided, balanced], 'taxflex', 0).map(r => r._id);
+    assert(order[0] === 'balanced', `taxflex should rank the lower spread first, got ${order.join(',')}`);
 });
 
 // ── Medicare eligibility age is DATA, not a literal (P35 PR 3b) ────────────────

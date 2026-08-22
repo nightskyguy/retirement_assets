@@ -2215,6 +2215,57 @@ assertEqual(
 			'How to Use is not inside an inline tag that leaked out of the changelog');
 	})();
 
+	// ── Objective-driven column sets (P67) ────────────────────────────────────
+	// The core data (OPT_OBJECTIVE_COLUMNS, OPT_COLUMN_KEYS) is asserted in optimizer_core.tests.js,
+	// which cannot see optimizer_ui.js. THIS is the only place both halves are visible at once, so
+	// the first assertion below is the one that catches a renamed or reordered column descriptor.
+	// getOptimizerColumns() is safe to call here with no sweep in state: inC() is a closure and the
+	// getValue functions are never invoked.
+	(function objectiveColumnSets() {
+		if (typeof getOptimizerColumns !== 'function' || typeof OPT_OBJECTIVE_COLUMNS === 'undefined') return;
+		const saved = {
+			objective: OptimizerState.objective,
+			showAllColumns: OptimizerState.showAllColumns,
+			sortState: OptimizerState.sortState,
+			compareRow: OptimizerState.compareRow,
+		};
+		try {
+			OptimizerState.compareRow = null;   // the two Δ columns are pinned-compare-only
+
+			const all = getOptimizerColumns(true).map(c => c.key);
+			assertEqual(all.join(','), OPT_COLUMN_KEYS.join(','),
+				'getOptimizerColumns(true) emits exactly OPT_COLUMN_KEYS, in order');
+
+			Object.keys(OPT_OBJECTIVE_COLUMNS).forEach(objKey => {
+				OptimizerState.objective = objKey;
+				OptimizerState.showAllColumns = false;
+				const keys = getOptimizerColumns().map(c => c.key);
+
+				assertEqual(keys[0], 'compare', objKey + ': the compare column stays first (the Best table drops column 0)');
+
+				const keep = new Set([...OPT_COLUMNS_PINNED, ...OPT_OBJECTIVE_COLUMNS[objKey]]);
+				assertEqual(keys.join(','), OPT_COLUMN_KEYS.filter(k => keep.has(k)).join(','),
+					objKey + ': emits the pinned set unioned with the goal set, in canonical display order');
+
+				// Where the old splice used to land Rank at index 0 when findIndex missed.
+				assertEqual(keys.indexOf('rank') > 0, true, objKey + ': Rank is never the leading column');
+
+				assertEqual(keys.length < all.length, true, objKey + ': actually hides something');
+			});
+
+			// A sort column the active goal has put away must fall back to goal order, not leave the
+			// rows in build order under a header carrying no arrow.
+			const cols = getOptimizerColumns(true);
+			assertEqual(normalizeSortState({ colKey: 'tax', direction: 'asc' }, cols).colKey, 'tax',
+				'normalizeSortState leaves a column that is present alone');
+			const without = cols.filter(c => c.key !== 'tax');
+			assertEqual(normalizeSortState({ colKey: 'tax', direction: 'asc' }, without).colKey, '__objective__',
+				'normalizeSortState falls back to goal order when the sort column is gone');
+		} finally {
+			Object.assign(OptimizerState, saved);
+		}
+	})();
+
     console.log('\n========================================');
     console.log(`   RESULTS: ${passed} passed, ${failed} failed`);
 	console.log(`   chart.js version ${Chart.version}`);
@@ -2260,7 +2311,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 280, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 287, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

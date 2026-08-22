@@ -1584,7 +1584,16 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // conversion search compared against itself without the extra conversions.
             key: 'convSaved', label: 'Conv Tax',
             title: 'Counts only tax actually paid during the plan, so it is NOT a verdict on whether converting was worth it. Positive = the extra IRA→Roth conversions run by Optimize Conversions lowered lifetime tax vs the same strategy without them. It does not price the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so a big positive number here can sit alongside a plan that ends up worse off overall. Use the Break Even column, which prices in that deferred tax, for the actual answer.',
-            getValue: r => r._convSavings != null ? '$' + Math.round(r._convSavings).toLocaleString() : '—',
+            // Coloured by SIGN, not left plain. This is a saving, so a negative means the extra
+            // conversions cost MORE lifetime tax - a worse plan - and it was rendering in the same
+            // black as a gain, with only a minus sign to say otherwise. No dollar prefix: every
+            // other money column in this table is bare, and the heading already says what it is.
+            getValue: r => {
+                if (r._convSavings == null) return '—';
+                const v = Math.round(r._convSavings);
+                const c = v > 0 ? '#1a7f37' : v < 0 ? '#cf222e' : '#57606a';
+                return `<span style="color:${c}">${v > 0 ? '+' : ''}${v.toLocaleString()}</span>`;
+            },
             getSortValue: r => r._convSavings ?? -Infinity
         }
     ];

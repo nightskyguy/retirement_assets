@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15ff"></a>
+<a id="11.1600"></a>
 
-## 11.15ff
+## 11.1600
 
 ### Optimizer tab reorganized
 
@@ -32,6 +32,10 @@ The legend folds out of the way, and the comparison marker appears only on the r
 against. Under Roth Conversion Effectiveness and Earliest Break Even, the &#9875; reference row is
 now the best row that actually converts, rather than a plan that never converts and so has nothing
 to compare on.
+
+**Conv Tax** is now colored: green where the extra conversions lowered lifetime tax, red where
+they raised it. A large negative there is a worse plan, and it used to print in the same black as a
+gain. The stop-after-year mark on conversion rows is explained in the symbol key.
 
 Two smaller things: the saved-scenario list drops its Version column, since an incompatible
 scenario is already marked in red with its Load button disabled; and a `?tab=` web address opens

@@ -11,79 +11,27 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15fb"></a>
+<a id="11.15fc"></a>
 
-## 11.15fb
+## 11.15fc
 
-### The "Optimize for" goal now chooses the columns, not just the order
+### Optimizer tab reorganized
 
-The results table carried twenty-one columns and showed all of them to everyone, under every goal.
-That meant the two or three columns that answered the question you had actually asked were somewhere
-off the right edge, next to eighteen that did not.
+Labels, column names, colors and symbols are now consistent with the rest of the tool: the table
+uses the same names as the summary bar (End Wealth, All Taxes, All RMDs, Spendable), and what was
+called both "Infeasible" and "target unreachable" is now **unreachable target** everywhere.
 
-Worse, three of the nine goals ranked on a number the table never showed at all. Pick Maximum Roth
-and the rows reordered by a Roth balance with no column; pick Avoiding Widow and RMD Tax and the
-order came partly from a final IRA balance with no column; Tax Flexibility, the default, sorted on a
-spread across your three tax buckets that existed only inside the ranking code. You could watch the
-table reorder and find nothing on screen that explained why.
+The table shows the columns the **Optimize for** goal actually uses. Some were never shown at all:
+Maximum Roth and Roth Conversion Effectiveness both ranked partly on a Roth balance that had no
+column, and Tax Flexibility ranked on a spread across your pre-tax, Roth and taxable money that was
+shown nowhere. **Final Roth**, **Final IRA** and **Mix Spread** now exist. Optimize for also says in
+one line what the goal ranks by, and a link below it shows all columns at once.
 
-Each goal now keeps the handful of columns that answer its own question, around ten instead of
-twenty-one, and every goal shows the number it ranks on. Nothing is computed away or thrown out: a
-**Show all columns** link beside the goal selector switches the filter off and puts all twenty-one
-back, and the goal still sets the row order while they are all showing.
+**Spend Goal** and **Yrs Funded** left the table; hover over any row and both are in the pop-up.
+The legend folds out of the way, and the comparison marker appears only on the row being compared
+against.
 
-**Three new columns.** **Final IRA** and **Final Roth** are the pre-tax and Roth balances left at the
-end of the plan. Final IRA is the tax bomb: the balance that drives Required Minimum Distributions,
-that a surviving spouse pays Single rates on, and that heirs must empty within ten years. FinalWealth
-already subtracts the tax owed on it, so Final IRA is the raw number that tax is charged against.
-**Mix Spread** is how unevenly your money ends up split across the three tax treatments: 0% is a
-perfectly even three-way split, so in any future year you can draw from whichever account is cheapest
-that year, and 100% means it all landed in one bucket. Lower is better. It is a ratio, so unlike the
-dollar columns it does not restate when you switch between Future $ and Current $.
-
-**The table now uses the same names as the summary bar** at the top of the page: **End Wealth**,
-**All Taxes**, **All RMDs** and **Spendable**, rather than four different words for the same four
-numbers. **Tax Paid &Delta;** is now **Conv Tax**: the &Delta; was misleading, because unlike every
-other &Delta; in this table it was never measured against the baseline or against a row you pinned,
-but against the same row's own conversion search. It appears only under the two conversion goals,
-and Break Even now sits ahead of it, since Break Even is the column to trust.
-
-**One name for one thing.** What the legend called *Infeasible* and the tooltips called *target
-unreachable* were always the same condition: the bracket, IRMAA or ACA ceiling you asked for cannot
-be hit. It is **unreachable target** everywhere now.
-
-**Two columns left the table.** **Spend Goal** repeated your own input on every row except the
-optimized ones, and **Yrs Funded** restated what the outcome marker already says. Hover over any row
-and both are in the pop-up, on every cell, including the two pinned rows at the top.
-
-**The goal now explains itself.** The line under the *Optimize for* selector used to describe the
-selector: that picking a goal re-orders the table and moves the baseline. Useful once, useless to
-anyone who has already picked. It now says what the goal you chose actually ranks by. Choose Tax
-Flexibility and it reads "Rows are ranked by Mix Spread, how evenly the money ends up split across
-pre-tax, Roth and taxable, among the plans that also finish among the wealthiest. Lower is better."
-Each one names a column that goal is guaranteed to be showing, and a test enforces that pairing, so
-the sentence and the table cannot drift apart. The column count moved onto its own line too, rather
-than being tacked onto the end of that sentence.
-
-**The legend folds, in one piece.** The row colors, the symbols and the how-to-compare note carried
-twenty-two entries between them and wrapped to several lines above the thing you came to read. They
-are now a single fold that stays however you left it next time. Most colors lost their legend line
-rather than their color, because a row that already carries a symbol does not need a swatch too;
-only Best keeps an entry, being the one color with no glyph of its own. The symbol list
-dropped the outcome markers that already have a permanent chip of their own above the fold, and
-no longer lists the same symbol twice. Optimize Spend rows lost
-their shading outright, so blue now means exactly one thing. The unreachable-target and Failed chips
-deliberately do not fold, because those are controls rather than legend: clicking them shows or
-hides rows, and folding them away would bury the only route back to the rows they hide.
-
-**One ⚖, not one per row.** The comparison marker used to print on every row, faded, with a
-slightly larger one on the row being compared against. That asked you to spot a difference of two
-tenths of an em across a scrolling table. Now only the row every Δ measures from carries the ⚖, and
-it is shaded like the ⚓ baseline it stands in for. The cells are still the click target: the column
-heading keeps its ⚖, and hovering over a row shows a faint one.
-
-This release changes what the table shows and what some columns are called. It does not change any
-number the engine produces, so a saved scenario or a shared link still gives the same answer.
+No numbers change. These are visual improvements only.
 
 ---
 

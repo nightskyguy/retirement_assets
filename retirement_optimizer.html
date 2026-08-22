@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.15fb</title>
+    <title>Retirement Optimizer 11.15fc</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1115ca"></script>
-	<script src="optimizer_core.js?v=1115fb"></script>
+	<script src="optimizer_core.js?v=1115fc"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=1115fb"></script>
-	<script src="optimizer_tests.js?v=1115fb"></script>
+	<script src="optimizer_ui.js?v=1115fc"></script>
+	<script src="optimizer_tests.js?v=1115fc"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -767,7 +767,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-								<li><b>11.15fb</b> The Optimizer results table no longer shows every column at once. The <i>Optimize for</i> goal now picks the columns too, so choosing <i>Maximum Roth</i> shows the Roth balances and choosing <i>Minimum Lifetime Taxes</i> shows the tax ones. Three columns are new: <strong>Final IRA</strong>, <strong>Final Roth</strong>, and <strong>Mix Spread</strong>, which is how evenly your money ends up split across pre-tax, Roth and taxable, and is what Tax Flexibility has always ranked on without ever showing it. The table now uses the same names as the summary bar at the top of the page (<strong>End Wealth</strong>, <strong>All Taxes</strong>, <strong>All RMDs</strong>, <strong>Spendable</strong>), and what was called both &ldquo;Infeasible&rdquo; and &ldquo;target unreachable&rdquo; is now <strong>unreachable target</strong> everywhere, since they were always one thing. <strong>Spend Goal</strong> and <strong>Yrs Funded</strong> left the table: hover over any row and both are in the pop-up. A <strong>Show all columns</strong> link beside the goal selector puts all twenty-one back, the legend now folds away in one piece, and the &#9878; comparison marker appears only on the row being compared against. The line under the goal selector now says what that goal actually ranks by, instead of describing the selector.</li>
+												<li><b>11.15fc</b> The Optimizer tab has been reorganized. Labels, column names, colors and symbols are now consistent with the rest of the tool, and the table shows the columns the <i>Optimize for</i> goal actually uses. Some were never shown at all: <strong>Final Roth</strong>, <strong>Final IRA</strong> and <strong>Mix Spread</strong> now exist. Optimize for also says what the goal ranks by, and a link below it shows all columns at once. Spend Goal and Yrs Funded moved into the row pop-up, and the legend folds out of the way. No numbers change.</li>
 				<li data-flag="behavior"><b>11.15e3</b> <strong>When a plan runs out of every other account, it will now spend from the Brokerage account instead of reporting that it could not pay.</strong> The math avoided a possible "tax spiral" where increasing the brokerage draw increased the capital gains which increased the tax, which may also have increased social security taxability, which resulted in a higher tax requiring a greater withdrawal. Testing revealed that no "tax spiral" exists - it settles in two or fewer passes. So now it won't "give up" funding a year when all that remains is Brokerage assets to fund spending. Previously some plans went underfunded in some years due to the "avoided tax spiral". Most affected is "Fill Fed/IRMAA Bracket" with a tier selected. <strong>Behavior change:</strong> such a plan now funds more of its spending and ends with less left over, because the money is now spent, leaving less net worth. Saved scenarios and shared links for those plans will show different numbers. <a href="optimizer_changelog.md#11.15e3" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15cf</b> <strong>The IRMAA ceiling now aims at the threshold that will actually apply, two years out, instead of today's.</strong> IRMAA bills this year's premium against the income (MAGI) you reported two years ago, and compares it against the thresholds published for the billing year. The tool charged that correctly but aimed at it wrongly: an "IRMAA Ceil" plan capped income at today's threshold, about 6% below the one it would be judged against at 3% inflation, leaving roughly $13,000 a year of unspent IRA or Roth conversion. The same fix applies to QCD "As Needed". Behavior change: an IRMAA Ceiling plan now converts more, and "as Needed" QCDs draw less. <a href="optimizer_changelog.md#11.15cf" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15c9</b> <strong>More accurate SALT (state and local tax) deductions for tax years 2026 through 2029.</strong> Property and other local taxes can now be included in the SALT figure, which previously counted state income tax alone - add yours with <code>?ptx=25000</code> in the web address, optionally with <code>?ptxm=flat</code> or <code>?ptxm=custom</code> plus <code>?ptxr=2</code> to set how it grows. The higher $40,000 SALT cap now runs through 2029 as the law allows, and the cap and the income limit that phases it out both step up 1% a year, so 2026 uses $40,400 and $505,000. For plans converting heavily in a high-tax state these can change the recommended conversion size. This tool tests only SALT against the standard deduction, so the benefit applies where SALT alone exceeds it, and it ends after 2029. <a href="optimizer_changelog.md#11.15c9" target="_blank" rel="noopener">Details</a></li>
@@ -1117,7 +1117,6 @@
                     <span title="Optimize Conversions row: swept extra fixed annual Roth conversions ($25k steps) on top of Max Conversions.">⇌ Optimize Conversions</span>
                     <span title="Plan success - every year of the plan was fully funded.">🟢 Success</span>
                     <span title="The pinned baseline reference row - the strongest no-conversion plan.">⚓ Baseline</span>
-                    <span title="Click ⚖ on any row to measure every Δ column against that row instead of the baseline - a head-to-head comparison of any two strategies.">⚖ Compare</span>
                 </div>
                 <div id="opt-compare-hint" style="padding:6px 12px;background:#f4f8fb;border:1px solid #dfe8ef;border-radius:4px;color:#4a5c6a;margin-bottom:8px;font-size:0.88em;">
                 ⚖ <strong>Compare two strategies:</strong> click the first cell of any row, under the ⚖ heading, to measure every other row against that one. The ΔEnd Wealth and ΔTax columns appear as soon as you do, showing the difference from your chosen row instead of the ⚓ baseline. The ⚖ marks whichever row is currently the comparison point, and that row is shaded like the ⚓ baseline it stands in for; click it again to put everything back.
@@ -1319,7 +1318,7 @@ runSimulation?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1115fb';
+    const V = '?v=1115fc';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

@@ -87,6 +87,7 @@ const OPT_COLUMN_KEYS = core.OPT_COLUMN_KEYS;
 const OPT_COLUMNS_PINNED = core.OPT_COLUMNS_PINNED;
 const OPT_OBJECTIVE_COLUMNS = core.OPT_OBJECTIVE_COLUMNS;
 const OPT_OBJECTIVE_METRIC_COLUMN = core.OPT_OBJECTIVE_METRIC_COLUMN;
+const OPT_OBJECTIVE_BLURB = core.OPT_OBJECTIVE_BLURB;
 const OPTIMIZER_OBJECTIVES = core.OPTIMIZER_OBJECTIVES;
 const taxCreepFactor = core.taxCreepFactor;
 const IRMAA_MARGIN_MODES = core.IRMAA_MARGIN_MODES;
@@ -3580,6 +3581,28 @@ test('every objective shows the column its own ranking metric reads', () => {
         assert(needed, `${objKey} has no metric column recorded`);
         assert(OPT_OBJECTIVE_COLUMNS[objKey].includes(needed),
             `${objKey} ranks on ${needed} but does not show it`);
+    }
+});
+
+test('every objective has a blurb, and it names the column that objective ranks on', () => {
+    const goals = Object.keys(OPTIMIZER_OBJECTIVES).sort();
+    const blurbs = Object.keys(OPT_OBJECTIVE_BLURB).sort();
+    assert(goals.join(',') === blurbs.join(','),
+        `objectives [${goals.join(',')}] vs blurbs [${blurbs.join(',')}]`);
+    // The line under the selector and the columns on screen have to agree, or the sentence describes
+    // a ranking the reader cannot see. Checked against the label, not the key, since that is what
+    // the reader is looking at. Two goals rank on a composite with no single column of its own.
+    const COLUMN_LABEL = {
+        mixSpread: 'Mix Spread', afterTaxNW: 'End Wealth', finalIRA: 'Final IRA', tax: 'All Taxes',
+        spend: 'Spendable', finalRoth: 'Final Roth', convSaved: 'Conv Tax', convBE: 'Break Even',
+    };
+    const COMPOSITE = ['widowrmd', 'balanced'];
+    for (const objKey of goals) {
+        if (COMPOSITE.includes(objKey)) continue;
+        const label = COLUMN_LABEL[OPT_OBJECTIVE_METRIC_COLUMN[objKey]];
+        assert(label, `${objKey}: no label recorded for ${OPT_OBJECTIVE_METRIC_COLUMN[objKey]}`);
+        assert(OPT_OBJECTIVE_BLURB[objKey].includes(label),
+            `${objKey} ranks on "${label}" but its blurb never says so: ${OPT_OBJECTIVE_BLURB[objKey]}`);
     }
 });
 

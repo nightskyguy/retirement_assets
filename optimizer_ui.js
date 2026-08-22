@@ -134,10 +134,21 @@ function applyNerdKnobVisibility() {
 }
 
 // Optimizer objective setter - wired to the nerdknob <select id="opt-objective">.
+// The line under the selector describing what the CHOSEN goal ranks by. Called from
+// setOptObjective and from page init, not only from renderOptimizerTable, because the goal can
+// be changed before any sweep has run and the description should still be right.
+function renderObjectiveBlurb() {
+    const el = document.getElementById('opt-objective-note');
+    if (!el) return;
+    const key = OptimizerState.objective || 'taxflex';
+    el.textContent = OPT_OBJECTIVE_BLURB[key] || OPT_OBJECTIVE_BLURB.taxflex;
+}
+
 function setOptObjective(key) {
     OptimizerState.objective = OPT_OBJECTIVE_LABELS[key] ? key : 'taxflex';
     // Changing the objective re-follows it for the body order (drop any user column override).
     OptimizerState.sortState = { colKey: '__objective__', direction: 'desc' };
+    renderObjectiveBlurb();
     if (OptimizerState.results) {
         recomputeBaselineForObjective();
         renderOptimizerTable(OptimizerState.results);

@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15fa"></a>
+<a id="11.15fb"></a>
 
-## 11.15fa
+## 11.15fb
 
 ### The "Optimize for" goal now chooses the columns, not just the order
 
@@ -55,6 +55,15 @@ be hit. It is **unreachable target** everywhere now.
 **Two columns left the table.** **Spend Goal** repeated your own input on every row except the
 optimized ones, and **Yrs Funded** restated what the outcome marker already says. Hover over any row
 and both are in the pop-up, on every cell, including the two pinned rows at the top.
+
+**The goal now explains itself.** The line under the *Optimize for* selector used to describe the
+selector: that picking a goal re-orders the table and moves the baseline. Useful once, useless to
+anyone who has already picked. It now says what the goal you chose actually ranks by. Choose Tax
+Flexibility and it reads "Rows are ranked by Mix Spread, how evenly the money ends up split across
+pre-tax, Roth and taxable, among the plans that also finish among the wealthiest. Lower is better."
+Each one names a column that goal is guaranteed to be showing, and a test enforces that pairing, so
+the sentence and the table cannot drift apart. The column count moved onto its own line too, rather
+than being tacked onto the end of that sentence.
 
 **The legend folds, in one piece.** The row colors, the symbols and the how-to-compare note carried
 twenty-two entries between them and wrapped to several lines above the thing you came to read. They

@@ -32,6 +32,38 @@ let NERD_KNOBS = new URLSearchParams(location.search).has('nerdknob');
 // panels and lowers the paths floor. Read once at load; not flipped at runtime, not in the URL twice.
 const MONTE_DEMO = new URLSearchParams(location.search).has('montecarlo');
 
+// ?tab=... opens the page on a named tab instead of Charts. Friendly names rather than the DOM ids,
+// because a shared link is read by people: ?tab=optimizer, not ?tab=tab-opt. Both are accepted, so
+// a link built from an id still works.
+const TAB_ALIASES = Object.freeze({
+    annual: 'tab-tbl', details: 'tab-tbl', table: 'tab-tbl', annualdetails: 'tab-tbl',
+    charts: 'tab-chart', chart: 'tab-chart',
+    optimizer: 'tab-opt', opt: 'tab-opt',
+    montecarlo: 'tab-mc', mc: 'tab-mc',
+    importexport: 'tab-fileio', fileio: 'tab-fileio', import: 'tab-fileio', export: 'tab-fileio',
+    documentation: 'tab-docs', docs: 'tab-docs', help: 'tab-docs',
+});
+
+// Returns a tab id from ?tab=, or null when the parameter is absent or names nothing. Null means
+// 'leave the default alone' rather than 'go to Charts', so a typo cannot silently move the user.
+function tabIdFromUrl() {
+    const raw = new URLSearchParams(location.search).get('tab');
+    if (!raw) return null;
+    const key = String(raw).trim().toLowerCase().replace(/[^a-z-]/g, '');
+    if (TAB_ALIASES[key]) return TAB_ALIASES[key];
+    // also accept a literal id, but only one that actually exists on the page
+    return (/^tab-[a-z]+$/.test(key) && document.getElementById(key)) ? key : null;
+}
+
+// Called once on load, after the tabs and their content exist. Monte Carlo needs its own
+// activation hook, the same one its tab button calls, or the tab opens without its charts built.
+function applyTabFromUrl() {
+    const id = tabIdFromUrl();
+    if (!id) return;
+    showTab(id);
+    if (id === 'tab-mc') mcTabActivated?.();
+}
+
 // Optimizer UI state - replaces window.optimizer* globals.
 const OptimizerState = {
     results: null,
@@ -172,9 +204,22 @@ function setOptObjective(key) {
 function recomputeBaselineForObjective() {
     const results = OptimizerState.results;
     if (!results) return;
-    const noConvSuccesses = results.filter(r => r._isNoConv && r.totals.success);
-    const feasibleNoConv = noConvSuccesses.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
-    const baselinePool = feasibleNoConv.length > 0 ? feasibleNoConv : noConvSuccesses;
+    // Normally the baseline is the strongest plan that converts nothing: the "what if I do nothing"
+    // reference. The two conversion goals rank on a field only a CONVERTING row has, so against a
+    // no-conversion baseline every one of their deltas came out as a dash. Under those goals the
+    // pool is the rows that actually carry the field instead (OPT_BASELINE_REQUIRES).
+    const needField = OPT_BASELINE_REQUIRES[OptimizerState.objective];
+    const successes = results.filter(r => r.totals.success
+        && (needField ? r[needField] != null : r._isNoConv));
+    const feasible = successes.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
+    let baselinePool = feasible.length > 0 ? feasible : successes;
+    // If a goal that wants a converting row has none - no ⇌ rows in this run - fall back to the
+    // usual no-conversion baseline rather than leaving the table with no reference at all.
+    if (needField && baselinePool.length === 0) {
+        const noConv = results.filter(r => r._isNoConv && r.totals.success);
+        const noConvFeasible = noConv.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
+        baselinePool = noConvFeasible.length > 0 ? noConvFeasible : noConv;
+    }
     OptimizerState.baseline = baselinePool.length > 0
         ? rankRows(baselinePool, OptimizerState.objective)[0]
         : null;
@@ -279,7 +324,11 @@ function deltaCellHtml(col, r, refRow) {
     if (!Number.isFinite(a) || !Number.isFinite(b)) return '—';
     const d = a - b;
     let body;
-    if (meta.unit === 'pp')         body = `${(Math.abs(d) * 100).toFixed(1)}pp`;
+    // No unit suffix on the percent columns. These are differences between two percentages, so
+    // strictly they are percentage POINTS - but "pp" read as an unexplained code, and "%" would be
+    // worse than jargon: it invites reading 0.8 as a share OF the rate rather than a step in it.
+    // The heading already says which column this is, so the bare number is the honest form.
+    if (meta.unit === 'pp')         body = `${(Math.abs(d) * 100).toFixed(1)}`;
     else if (meta.unit === 'years') body = `${Math.abs(Math.round(d))} yr`;
     else                            body = Math.round(Math.abs(d)).toLocaleString();
     if (Math.round(Math.abs(d) * (meta.unit === 'dollar' ? 1 : 1000)) === 0) {
@@ -1859,7 +1908,7 @@ function renderOptimizerTable(results) {
                 ...(colWinners.convBE != null ? [{ key: 'convBE', label: '⏱ Earliest Break Even', id: colWinners.convBE }] : []),
                 // Not a metric win at all - this is "here is the ⚓ baseline row again". It survives
                 // whatever the column filter does, because nothing about it depends on a column.
-                ...(OptimizerState.baseline ? [{ key: 'afterTaxNW', always: true, label: '⚓ Best w/o Conv', id: OptimizerState.baseline._id }] : []),
+                ...(OptimizerState.baseline ? [{ key: 'afterTaxNW', always: true, label: (OptimizerState.baseline._isNoConv ? '⚓ Best w/o Conv' : '⚓ Reference row'), id: OptimizerState.baseline._id }] : []),
             // Drop any winner whose column the active goal has put away. Its label names a
             // column the reader cannot find, and its highlighted cell would not be rendered.
             ].filter(w => w.always || visibleKeys.has(w.key));
@@ -4638,7 +4687,9 @@ function manageScenarios() {
         let html = '<table style="width: 100%; border-collapse: collapse;">';
         html += '<tr><th style="text-align: left; padding: 8px; border-bottom: 2px solid #ddd;">Name</th>';
         html += '<th style="text-align: left; padding: 8px; border-bottom: 2px solid #ddd;">Saved</th>';
-        html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Version</th>';
+        // No Version column. An incompatible scenario is already unmistakable without one: the row is
+        // tinted red, its Load button is disabled and says why, and the warning below counts them.
+        // A column of green ticks next to every other row was three states of nothing.
         html += '<th style="text-align: center; padding: 8px; border-bottom: 2px solid #ddd;">Actions</th></tr>';
 
         for (const [name, scenario] of Object.entries(scenarios)) {
@@ -4649,20 +4700,11 @@ function manageScenarios() {
             const isCurrent = version === SCENARIO_VERSION;
             const isOldStorage = scenario.isOldStorage || false;
 
-            const versionBadge = isCurrent
-                ? `<span style="color: green; font-weight: bold;">v${version} ✓</span>`
-                : `<span style="color: red;">v${version} ✗</span>`;
-
-            const storageBadge = isOldStorage
-                ? `<span style="color: orange; font-size: 0.9em;">OLD</span>`
-                : `<span style="color: blue; font-size: 0.9em;">NEW</span>`;
-
             const rowStyle = isCurrent ? '' : 'background-color: #ffeeee;';
 
             html += `<tr style="${rowStyle}">
                 <td style="padding: 4px; border-bottom: 1px solid #eee;">${name}</td>
                 <td style="padding: 4px; border-bottom: 1px solid #eee;">${savedDate}</td>
-                <td style="padding: 4px; border-bottom: 1px solid #eee; text-align: center;">${versionBadge}</td>
                 <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">
 					<button class="modal-btn" onclick="loadScenarioByName('${escapeQuotes(name)}')" ${!isCurrent ? 'disabled title="Incompatible version"' : ''}>Load</button>
 					<button class="modal-btn" onclick="deleteScenario('${escapeQuotes(name)}')">Delete</button>

@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.15fe"></a>
+<a id="11.15ff"></a>
 
-## 11.15fe
+## 11.15ff
 
 ### Optimizer tab reorganized
 
@@ -29,7 +29,13 @@ one line what the goal ranks by, and a switch below it shows all columns at once
 
 **Spend Goal** and **Yrs Funded** left the table; hover over any row and both are in the pop-up.
 The legend folds out of the way, and the comparison marker appears only on the row being compared
-against.
+against. Under Roth Conversion Effectiveness and Earliest Break Even, the &#9875; reference row is
+now the best row that actually converts, rather than a plan that never converts and so has nothing
+to compare on.
+
+Two smaller things: the saved-scenario list drops its Version column, since an incompatible
+scenario is already marked in red with its Load button disabled; and a `?tab=` web address opens
+the page on a chosen tab, for example `?tab=optimizer`, `?tab=annual` or `?tab=montecarlo`.
 
 No numbers change. These are visual improvements only.
 

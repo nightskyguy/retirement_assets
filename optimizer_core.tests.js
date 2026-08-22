@@ -89,6 +89,7 @@ const OPT_OBJECTIVE_COLUMNS = core.OPT_OBJECTIVE_COLUMNS;
 const OPT_OBJECTIVE_METRIC_COLUMN = core.OPT_OBJECTIVE_METRIC_COLUMN;
 const OPT_OBJECTIVE_BLURB = core.OPT_OBJECTIVE_BLURB;
 const OPT_DELTA_COLUMNS = core.OPT_DELTA_COLUMNS;
+const OPT_BASELINE_REQUIRES = core.OPT_BASELINE_REQUIRES;
 const OPTIMIZER_OBJECTIVES = core.OPTIMIZER_OBJECTIVES;
 const taxCreepFactor = core.taxCreepFactor;
 const IRMAA_MARGIN_MODES = core.IRMAA_MARGIN_MODES;
@@ -3620,6 +3621,23 @@ test('OPT_DELTA_COLUMNS names only real columns, with a usable direction and uni
     // Neither are the identity columns, nor Rank, which is itself a comparison.
     for (const k of ['compare', 'status', 'gap', 'strategy', 'param', 'rank', 'dNW', 'dTax']) {
         assert(!OPT_DELTA_COLUMNS[k], `${k} must not be rendered as a delta`);
+    }
+});
+
+test('the goals needing a converting baseline are exactly the ones ranking on a conversion field', () => {
+    // A no-conversion baseline has no break-even year and no conversion tax saved, so under these
+    // goals every delta against it renders as a dash. The override list must therefore cover
+    // exactly the goals whose ranking column only a converting row carries, no more and no less.
+    const CONVERSION_COLUMNS = new Set(['convBE', 'convSaved']);
+    const needConverting = Object.keys(OPTIMIZER_OBJECTIVES)
+        .filter(k => CONVERSION_COLUMNS.has(OPT_OBJECTIVE_METRIC_COLUMN[k])).sort();
+    const declared = Object.keys(OPT_BASELINE_REQUIRES).sort();
+    assert(needConverting.join(',') === declared.join(','),
+        `goals ranking on a conversion column [${needConverting.join(',')}] vs declared [${declared.join(',')}]`);
+    // The values are ROW FIELDS, not column keys: the pool is filtered before any column exists.
+    for (const [k, field] of Object.entries(OPT_BASELINE_REQUIRES)) {
+        assert(typeof field === 'string' && field.startsWith('_'),
+            `${k}: expected a row field like _convBEYear, got ${field}`);
     }
 });
 

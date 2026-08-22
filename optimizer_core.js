@@ -3704,6 +3704,67 @@ const OPTIMIZER_OBJECTIVES = {
     },
 };
 
+// ============================================================================
+// WHICH COLUMNS EACH "Optimize for" GOAL SHOWS
+// ============================================================================
+// The results table used to render all of these at once. Twenty-one columns meant the two or three
+// that answered the question you actually asked were somewhere off the right edge, next to eighteen
+// that did not, and three goals ranked on numbers that had no column at all. Each goal now keeps the
+// handful of columns that answer its own question. Nothing is computed away - "Show all columns"
+// beside the selector turns the filter off entirely.
+//
+// This lives in core rather than beside the descriptors in optimizer_ui.js for one reason: the UI
+// file has no module.exports and no window.* namespace, and the three node suites never load it, so
+// data placed there cannot be asserted outside a browser. Column KEYS are structural identifiers,
+// not display text; the labels stay in the descriptors, on the UI side of the line the file comments
+// already drew.
+
+// The full column set, in display order. This array is the CONTRACT between OPT_OBJECTIVE_COLUMNS,
+// which names subsets of it, and getOptimizerColumns() in optimizer_ui.js, which builds the
+// descriptors. Neither file can see the other, so the pairing is pinned by two tests instead: a node
+// test that every goal's list is drawn from this array, and an in-page test that
+// getOptimizerColumns(true) emits exactly this array in exactly this order.
+const OPT_COLUMN_KEYS = Object.freeze([
+    'compare', 'status', 'gap', 'strategy', 'param', 'rank',
+    'spendGoal', 'tax', 'spend', 'afterTaxNW', 'finalIRA', 'finalRoth', 'mixSpread',
+    'dNW', 'dTax', 'rate', 'years', 'rmd', 'rmdtax', 'convSaved', 'convBE',
+]);
+
+// Never filtered out, whatever a goal's list says. `compare` because the Best summary table drops
+// the leading column on the understanding that it is the ⚖ control, and ⚖ is the only way to start
+// a head-to-head comparison; `gap` because it is the dead space that keeps a near-miss click off the
+// wrong control; `rank` because it is the readout for the goal selector itself; the rest because a
+// row with no strategy name on it is not a row.
+const OPT_COLUMNS_PINNED = Object.freeze(['compare', 'status', 'gap', 'strategy', 'param', 'rank']);
+
+// objKey -> the columns that answer the question that goal asks. Pure data: no DOM, no descriptors,
+// no formatting. Every list is written in full, pinned columns included, so it reads as the literal
+// column set rather than as a diff; the pinned six are re-unioned at render time as a backstop.
+//
+// Every goal shows the column its own ranking metric reads - a set that hid the very number it
+// sorted the table on would be worse than showing everything. A node test enforces that.
+// dNW and dTax are in no list: they are meaningful against a reference the reader chose, so the
+// filter adds them back whenever a ⚖ row is pinned.
+const OPT_OBJECTIVE_COLUMNS = Object.freeze({
+    taxflex:    ['compare','status','gap','strategy','param','rank','mixSpread','afterTaxNW','finalRoth','finalIRA'],
+    networth:   ['compare','status','gap','strategy','param','rank','afterTaxNW','spend','tax'],
+    widowrmd:   ['compare','status','gap','strategy','param','rank','finalIRA','rmd','rmdtax','tax'],
+    mintax:     ['compare','status','gap','strategy','param','rank','tax','rate','afterTaxNW'],
+    maxspend:   ['compare','status','gap','strategy','param','rank','spend','afterTaxNW','tax'],
+    maxroth:    ['compare','status','gap','strategy','param','rank','finalRoth','afterTaxNW','tax'],
+    balanced:   ['compare','status','gap','strategy','param','rank','afterTaxNW','spend','tax'],
+    conveffect: ['compare','status','gap','strategy','param','rank','convSaved','convBE','finalRoth','afterTaxNW'],
+    earliestbe: ['compare','status','gap','strategy','param','rank','convBE','convSaved','afterTaxNW','tax'],
+});
+
+// True when a goal's column list contains the column its own ranking metric reads. Exported so the
+// node suite asserts the rule rather than restating the pairing, and so adding a goal fails loudly.
+const OPT_OBJECTIVE_METRIC_COLUMN = Object.freeze({
+    taxflex: 'mixSpread', networth: 'afterTaxNW', widowrmd: 'finalIRA', mintax: 'tax',
+    maxspend: 'spend', maxroth: 'finalRoth', balanced: 'afterTaxNW',
+    conveffect: 'convSaved', earliestbe: 'convBE',
+});
+
 // True when two plans select the SAME withdrawal strategy: same family, same family parameter, and
 // the same cyclic / cash-funding modifiers. Both arguments use plain engine field names, so a
 // buildVariations() variation, a getInputs() sidebar snapshot, and an optimizer row's recorded
@@ -4341,7 +4402,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -4349,7 +4410,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

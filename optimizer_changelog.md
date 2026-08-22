@@ -11,6 +11,56 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.15f9"></a>
+
+## 11.15f9
+
+### The "Optimize for" goal now chooses the columns, not just the order
+
+The results table carried twenty-one columns and showed all of them to everyone, under every goal.
+That meant the two or three columns that answered the question you had actually asked were somewhere
+off the right edge, next to eighteen that did not.
+
+Worse, three of the nine goals ranked on a number the table never showed at all. Pick Maximum Roth
+and the rows reordered by a Roth balance with no column; pick Avoiding Widow and RMD Tax and the
+order came partly from a final IRA balance with no column; Tax Flexibility, the default, sorted on a
+spread across your three tax buckets that existed only inside the ranking code. You could watch the
+table reorder and find nothing on screen that explained why.
+
+Each goal now keeps the handful of columns that answer its own question, around ten instead of
+twenty-one, and every goal shows the number it ranks on. Nothing is computed away or thrown out: a
+**Show all columns** link beside the goal selector switches the filter off and puts all twenty-one
+back, and the goal still sets the row order while they are all showing.
+
+**Three new columns.** **Final IRA** and **Final Roth** are the pre-tax and Roth balances left at the
+end of the plan. Final IRA is the tax bomb: the balance that drives Required Minimum Distributions,
+that a surviving spouse pays Single rates on, and that heirs must empty within ten years. FinalWealth
+already subtracts the tax owed on it, so Final IRA is the raw number that tax is charged against.
+**Mix Spread** is how unevenly your money ends up split across the three tax treatments: 0% is a
+perfectly even three-way split, so in any future year you can draw from whichever account is cheapest
+that year, and 100% means it all landed in one bucket. Lower is better. It is a ratio, so unlike the
+dollar columns it does not restate when you switch between Future $ and Current $.
+
+**Two renames.** **NetWealth** is now **FinalWealth**. **Tax Paid &Delta;** is now **Conversion Tax
+Saved**: the &Delta; was misleading, because unlike every other &Delta; in this table it was never
+measured against the baseline or against a row you pinned, but against the same row's own conversion
+search. It also now appears only under the two conversion goals, where it means something.
+
+**Two columns left the table.** **Spend Goal** repeated your own input on every row except the
+optimized ones, and **Yrs Funded** restated what the outcome marker already says. Hover over any row
+and both are in the pop-up, on every cell, including the two pinned rows at the top.
+
+**The legend strips fold.** The row-colors and symbols keys above the table carried twenty-two
+entries between them and wrapped to several lines. Both now collapse, and stay however you left them
+next time. The Infeasible and Failed chips deliberately do not fold with them, because those are
+controls rather than legend: clicking them shows or hides rows, and folding them away would bury the
+only route back to the rows they hide.
+
+This release changes what the table shows and what some columns are called. It does not change any
+number the engine produces, so a saved scenario or a shared link still gives the same answer.
+
+---
+
 <a id="11.15e3"></a>
 
 ## 11.15e3

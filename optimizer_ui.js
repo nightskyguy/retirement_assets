@@ -41,6 +41,10 @@ const OptimizerState = {
     sortState: { colKey: '__objective__', direction: 'desc' },
     showInfeasible: false,
     showFailed: false,
+    // Turns the per-goal column filter off, showing every column at once the way the table used
+    // to open. Deliberately NOT reset by setOptObjective: how dense you want the table is a
+    // preference, not a property of the goal.
+    showAllColumns: false,
     objective: 'taxflex',       // PF13: default ranking = Tax Flexibility (most-requested)
     sharedFutureIRARate: 0,     // PF13: heirs rate for widowrmd/taxflex metrics; set each runOptimizer
     perfStats: null,
@@ -1477,7 +1481,18 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             getSortValue: r => r._convBEYear ?? 9999
         }
     ];
-    return cols;
+    if (showAll) return cols;
+    // Union with the pinned set, not a straight read of the goal's list. `compare` MUST survive:
+    // the Best summary table drops the leading column on the understanding that it is the ⚖
+    // control. A typo in the data above cannot take it out.
+    const keep = new Set([...OPT_COLUMNS_PINNED, ...(OPT_OBJECTIVE_COLUMNS[objKey] || OPT_OBJECTIVE_COLUMNS.taxflex)]);
+    // The Δ columns are in no goal's list. They measure against a reference, so they earn their
+    // space only once the reader has chosen one by pinning a ⚖ row - until then they restate the
+    // ⚓ baseline the table is already ordered around.
+    if (OptimizerState.compareRow) { keep.add('dNW'); keep.add('dTax'); }
+    // filter(), never a map over the goal's list: this array IS the display order, so a goal's
+    // columns can be written in any order and `compare` still lands at index 0.
+    return cols.filter(c => keep.has(c.key));
 }
 
 function renderOptimizerTable(results) {
@@ -1551,7 +1566,7 @@ function renderOptimizerTable(results) {
     // show up green in the Best table even though the plan can't actually be run.
     const successes = results.filter(r => r.totals.success);
     const feasibleSuccesses = successes.filter(r => !(r._isBracketInfeasible || r._isACAUntenable));
-    const bestIds = new Set();
+    let bestIds = new Set();
     const colWinners = {}; // key -> winning _id
     if (feasibleSuccesses.length > 0) {
         const pick = (arr, fn, isMax) => arr.reduce((a, b) => isMax ? (fn(b) > fn(a) ? b : a) : (fn(b) < fn(a) ? b : a));
@@ -1560,7 +1575,6 @@ function renderOptimizerTable(results) {
         const w3 = pick(feasibleSuccesses, r => r.totals.spend, true);
         const w5 = pick(feasibleSuccesses, r => r.totals.rmdTax / (r.totals.tax || 1), false);
         const w6 = pick(feasibleSuccesses, r => r.afterTaxNW ?? -Infinity, true);
-        [w1, w2, w3, w5, w6].forEach(w => bestIds.add(w._id));
         colWinners.tax        = w1._id;
         colWinners.rate       = w2._id;
         colWinners.spend      = w3._id;
@@ -1576,10 +1590,16 @@ function renderOptimizerTable(results) {
             const beBetter = (x, y) => (x._convBEYear - y._convBEYear)
                 || ((y.afterTaxNWCurrentDollars ?? -Infinity) - (x.afterTaxNWCurrentDollars ?? -Infinity));
             const w7 = beRows.reduce((a, b) => (beBetter(b, a) < 0 ? b : a));
-            bestIds.add(w7._id);
             colWinners.convBE = w7._id;
         }
     }
+    // A row counts as "Best" only for a metric the reader can actually see. bestIds drives the
+    // whole-row green and the bold, and the legend promises a highlighted cell explains it - a
+    // winner whose column the active goal hid would leave a green row with nothing highlighted in
+    // it, which is unexplainable. colWinners itself stays complete; only what is DISPLAYED from it
+    // is filtered, so nothing downstream loses information.
+    const visibleKeys = new Set(columns.map(c => c.key));
+    bestIds = new Set(Object.entries(colWinners).filter(([k]) => visibleKeys.has(k)).map(([, id]) => id));
 
     // Header - flat div cells for CSS grid
     const _hCellStyle = 'background:#f8f9fa;padding:6px 8px;border-bottom:2px solid #dee2e6;white-space:nowrap;font-weight:bold;cursor:pointer;user-select:none;position:sticky;top:0;z-index:1;';
@@ -1695,6 +1715,22 @@ function renderOptimizerTable(results) {
         document.querySelectorAll('#opt-current-row > div').forEach(d => { d.style.top = _top + 'px'; });
     }
 
+    // Column-count escape hatch. Written here rather than in the markup for the same reason the two
+    // legend toggles are: the count is only knowable after the columns are built.
+    const colModeEl = document.getElementById("opt-colmode");
+    if (colModeEl) {
+        const _allCols = getOptimizerColumns(true).length;
+        const _objLbl  = OPT_OBJECTIVE_LABELS[OptimizerState.objective] || OPT_OBJECTIVE_LABELS.taxflex;
+        const _label = OptimizerState.showAllColumns
+            ? `Showing all ${_allCols} columns - click to show only the ones for ${_objLbl}`
+            : `Showing ${columns.length} of ${_allCols} columns - click to show all`;
+        const _tip = 'Each "Optimize for" goal shows the columns that answer its own question and puts '
+            + 'the rest away. Nothing is discarded - this switches the filter off so every column is on '
+            + 'screen at once, and the goal still sets the row order. Hover over any column heading for '
+            + 'what it means.';
+        colModeEl.innerHTML = `<span onclick="toggleAllColumns()" title="${_tip}" style="cursor:pointer;text-decoration:underline;color:#0969da;">${_label}</span>`;
+    }
+
     // Legend - make the "Infeasible" item a click toggle (rows hidden by default).
     const legendInfeasEl = document.getElementById('opt-legend-infeasible');
     if (legendInfeasEl) {
@@ -1725,7 +1761,7 @@ function renderOptimizerTable(results) {
     // Best summary table - unique winner rows labeled by what they won
     const bestEl = document.getElementById('opt-best');
     if (bestEl) {
-        if (feasibleSuccesses.length > 0) {
+        if (feasibleSuccesses.length > 0 && Object.keys(colWinners).some(k => visibleKeys.has(k))) {
             const winnerDefs = [
                 { key: 'afterTaxNW', label: '💎 Most FinalWealth',    id: colWinners.afterTaxNW },
                 { key: 'spend',  label: '🏆 Most Spendable',   id: colWinners.spend  },
@@ -1733,8 +1769,12 @@ function renderOptimizerTable(results) {
                 { key: 'rate',   label: '📊 Lowest Tax Rate',   id: colWinners.rate   },
                 { key: 'rmdtax', label: '📋 Lowest RMD Tax%',   id: colWinners.rmdtax },
                 ...(colWinners.convBE != null ? [{ key: 'convBE', label: '⏱ Earliest Break Even', id: colWinners.convBE }] : []),
-                ...(OptimizerState.baseline ? [{ key: 'afterTaxNW', label: '⚓ Best w/o Conv', id: OptimizerState.baseline._id }] : []),
-            ];
+                // Not a metric win at all - this is "here is the ⚓ baseline row again". It survives
+                // whatever the column filter does, because nothing about it depends on a column.
+                ...(OptimizerState.baseline ? [{ key: 'afterTaxNW', always: true, label: '⚓ Best w/o Conv', id: OptimizerState.baseline._id }] : []),
+            // Drop any winner whose column the active goal has put away. Its label names a
+            // column the reader cannot find, and its highlighted cell would not be rendered.
+            ].filter(w => w.always || visibleKeys.has(w.key));
             // Deduplicate: a row can win multiple metrics; show it once under its first/best label
             const seen = new Set();
             const uniqueWinners = winnerDefs.filter(w => {
@@ -1786,7 +1826,17 @@ function renderOptimizerTable(results) {
         const spendVals = results.map(r => r.totals.spend);
         const allSame = spendVals.every(v => v === spendVals[0]);
         if (allSame && results.length > 1) {
-            noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable - this means every strategy fully funds your spending goal. Differentiate by Lifetime Tax, NetWealth, or Yrs Funded.';
+            // Names the columns that are ACTUALLY on screen. The old string named three fixed
+            // columns, one of which (Yrs Funded) is no longer a default column at all and two of
+            // which the active goal may have put away. Advice pointing at a column the reader
+            // cannot see is worse than no advice. dNW/dTax are excluded on purpose: their labels
+            // carry the ' vs ⚖' suffix and read strangely mid-sentence.
+            const _diffKeys = ['tax', 'afterTaxNW', 'mixSpread', 'finalRoth', 'finalIRA', 'rmdtax', 'convBE'];
+            const _diffNames = columns.filter(c => _diffKeys.includes(c.key)).map(c => c.label).slice(0, 3);
+            noteEl.textContent = 'ℹ️ All strategies show the same Total Spendable - this means every strategy fully funds your spending goal. '
+                + (_diffNames.length
+                    ? `Differentiate by ${_diffNames.join(', ')}.`
+                    : 'Differentiate by changing what you Optimize for, or by showing all columns.');
             noteEl.style.display = 'block';
         } else {
             noteEl.style.display = 'none';
@@ -1814,6 +1864,55 @@ function toggleInfeasibleRows() {
 
 function toggleFailedRows() {
     OptimizerState.showFailed = !OptimizerState.showFailed;
+    if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
+}
+
+// The two legend strips above the table remember whether they are folded. Deliberately persisted,
+// unlike showInfeasible / showFailed / showAllColumns, none of which are: those are per-analysis
+// choices that should start fresh, while how much chrome you want above the table is a standing
+// preference, and one that resets on every page load is not a preference at all. Its own key, not
+// the saved-scenario blob under STORAGE_KEY, because this is not scenario data.
+const FOLD_STORAGE_KEY = 'optimizerChromeFolds';
+const FOLD_IDS = ['opt-fold-colors', 'opt-fold-symbols'];
+// Chrome fires a `toggle` event when it PARSES a <details open>, before any of our init code has
+// run. Both strips carry `open` in the markup, so two toggles land first, the inline handler
+// writes "both open" to storage, and restoreFoldState then reads back the value it just
+// clobbered - a reader who folded them would find them open again on every visit. Nothing is
+// persisted until the stored preference has actually been read.
+let _foldsRestored = false;
+
+function rememberFoldState() {
+    if (!_foldsRestored) return;   // parse-time toggles are not the reader's choice
+    try {
+        const state = {};
+        FOLD_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) state[id] = el.open;
+        });
+        localStorage.setItem(FOLD_STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { /* private mode / quota: the fold still works, it just will not be remembered */ }
+}
+
+// Called once on load. Both strips are marked `open` in the markup, so a first visit and a
+// storage failure both leave them open, which is the safe direction: the reader sees the legend
+// they have not learned yet rather than a table of symbols with no key.
+function restoreFoldState() {
+    let state;
+    try { state = JSON.parse(localStorage.getItem(FOLD_STORAGE_KEY) || '{}'); } catch (e) { state = null; }
+    _foldsRestored = true;   // from here on, a toggle really is the reader clicking
+    if (!state || typeof state !== 'object') return;
+    FOLD_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && typeof state[id] === 'boolean') el.open = state[id];
+    });
+}
+
+// Turn the per-goal column filter off and back on. Every hidden column is a real column with
+// real data behind it; this shows all of them at once, the way the table used to open. The
+// vanished-sort-column case is handled by normalizeSortState at the render choke point, so
+// this needs no guard of its own.
+function toggleAllColumns() {
+    OptimizerState.showAllColumns = !OptimizerState.showAllColumns;
     if (OptimizerState.results) renderOptimizerTable(OptimizerState.results);
 }
 

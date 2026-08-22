@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.15e3</title>
+    <title>Retirement Optimizer 11.15f9</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -64,7 +64,7 @@
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
 	<script src="optimizer_ui.js?v=1115f9"></script>
-	<script src="optimizer_tests.js?v=1115cf"></script>
+	<script src="optimizer_tests.js?v=1115f9"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -767,12 +767,12 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li><b>11.15f9</b> The Optimizer results table no longer shows every column at once. The <i>Optimize for</i> goal now picks the columns too, so choosing <i>Maximum Roth</i> shows the Roth balances and choosing <i>Minimum Lifetime Taxes</i> shows the tax ones. Three columns are new: <strong>Final IRA</strong>, <strong>Final Roth</strong>, and <strong>Mix Spread</strong>, which is how evenly your money ends up split across pre-tax, Roth and taxable, and is what Tax Flexibility has always ranked on without ever showing it. <strong>NetWealth</strong> is now called <strong>FinalWealth</strong>, and <strong>Tax Paid &Delta;</strong> is now <strong>Conversion Tax Saved</strong>, since it was never measured against the baseline the way the other &Delta; columns are. <strong>Spend Goal</strong> and <strong>Yrs Funded</strong> left the table: hover over any row and both are in the pop-up. A <strong>Show all columns</strong> link beside the goal selector puts all twenty-one back, and the two legend strips above the table now fold away.</li>
 				<li data-flag="behavior"><b>11.15e3</b> <strong>When a plan runs out of every other account, it will now spend from the Brokerage account instead of reporting that it could not pay.</strong> The math avoided a possible "tax spiral" where increasing the brokerage draw increased the capital gains which increased the tax, which may also have increased social security taxability, which resulted in a higher tax requiring a greater withdrawal. Testing revealed that no "tax spiral" exists - it settles in two or fewer passes. So now it won't "give up" funding a year when all that remains is Brokerage assets to fund spending. Previously some plans went underfunded in some years due to the "avoided tax spiral". Most affected is "Fill Fed/IRMAA Bracket" with a tier selected. <strong>Behavior change:</strong> such a plan now funds more of its spending and ends with less left over, because the money is now spent, leaving less net worth. Saved scenarios and shared links for those plans will show different numbers. <a href="optimizer_changelog.md#11.15e3" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15cf</b> <strong>The IRMAA ceiling now aims at the threshold that will actually apply, two years out, instead of today's.</strong> IRMAA bills this year's premium against the income (MAGI) you reported two years ago, and compares it against the thresholds published for the billing year. The tool charged that correctly but aimed at it wrongly: an "IRMAA Ceil" plan capped income at today's threshold, about 6% below the one it would be judged against at 3% inflation, leaving roughly $13,000 a year of unspent IRA or Roth conversion. The same fix applies to QCD "As Needed". Behavior change: an IRMAA Ceiling plan now converts more, and "as Needed" QCDs draw less. <a href="optimizer_changelog.md#11.15cf" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15c9</b> <strong>More accurate SALT (state and local tax) deductions for tax years 2026 through 2029.</strong> Property and other local taxes can now be included in the SALT figure, which previously counted state income tax alone - add yours with <code>?ptx=25000</code> in the web address, optionally with <code>?ptxm=flat</code> or <code>?ptxm=custom</code> plus <code>?ptxr=2</code> to set how it grows. The higher $40,000 SALT cap now runs through 2029 as the law allows, and the cap and the income limit that phases it out both step up 1% a year, so 2026 uses $40,400 and $505,000. For plans converting heavily in a high-tax state these can change the recommended conversion size. This tool tests only SALT against the standard deduction, so the benefit applies where SALT alone exceeds it, and it ends after 2029. <a href="optimizer_changelog.md#11.15c9" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15a2</b> <strong>Tax Payment Planner (called by Retirement Optimizer and Income Tax Planner) now has 5 plans compared, many improvements and corrections.</strong> For the full list of changes see <a href="optimizer_changelog.md#11.15a2" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.152f</b> <strong>You now choose between running just your plan or comparing every strategy, and each button says how long it will take. One behavior change: Historical results shift slightly.</strong> "My Plan Only" is the new default and answers how your own plan did in a second or two. "Compare All Scenarios" ranks every withdrawal strategy against each other and takes closer to a minute. Both state their expected time, measured on your own machine, so the cost is visible before you click rather than after. A new Stress window selector chooses which historical starting years the Stress Test uses: Combined picks the worst openings measured over several different lengths, All runs every start year in the record. Red and amber now mean the money ran out in the first or second half of your plan. The Stress Test chart has dropped its legend, since the table below it names every line and can be sorted, and the hover-over readout now appears once you click a row to isolate a single line. <a href="optimizer_changelog.md#11.152f" target="_blank" rel="noopener">Details</a></li>
-				<li data-flag="behavior"><b>11.14dd</b> <strong>The Ordered strategy now banks leftover money in the account it will spend first, not always in cash.</strong> Before, any year income exceeded spending the extra went to cash, which the Roth-first (RIBC) and Brokerage-first (BIRC) orders draw last, so it sat idle. Now it goes to whichever of cash or brokerage your sequence draws first, so it stays invested and is spent sooner. Cash-first (CBIR) is unchanged. <a href="optimizer_changelog.md#11.14dd" target="_blank" rel="noopener">Details</a></li>
 				</ul>
 				<script>
 					/* The Version stat reads the number back out of the <title> tag rather than
@@ -869,7 +869,7 @@
 				<p style="margin:6px 0 0;">Both plans are compared by after-tax portfolio <strong>value</strong>: taxable (IRA) assets are reduced by the tax that will eventually be owed on them, and non-taxable (Roth) assets count at face value. The net figure is shown as <i>Total Wealth</i> on the main chart. The IRA discount rate is either each plan's own current tax rate, or the Marginal Heirs Tax if you entered one (see 4. Assumptions). Conversions pay tax early, so the no-conversion plan usually leads at first; the crossover often lands when RMDs ramp up, or when one spouse passes away and the survivor&rsquo;s tax rate jumps when filing Single, aka &ldquo;the widow penalty&rdquo;.</p>
 				<p style="margin:6px 0 0;">The year-by-year numbers are in <i>Annual Details</i> &rarr; <i>Opp. Cost</i> (the <i>convOC</i> column; <i>excessOC</i> is the same comparison for surplus IRA withdrawals banked to Cash, using the same permanent-crossover definition of Break Even). One caveat: with <i>Guyton-Klinger</i> guardrails the no-conversion plan may adjust spending on different years, since the guardrails react to that plan's own portfolio. That is the honest comparison, not an error.</p>
 				</li>
-				<li><strong>What does &ldquo;Optimize for&rdquo; do?</strong> The Optimizer always tests the same set of strategies. What changes is how they are <em>ranked</em>. The <i>Optimize for</i> selector at the top of the Optimizer tab picks the goal used to sort the table, so the best plan for that goal appears first, the &#9875; baseline moves to the best no-conversion plan under the same goal, and the <i>Rank</i> column renumbers to match. It never changes the underlying numbers, only which plan the tool puts in front of you. Clicking any column header sorts by that column instead; changing the goal returns the table to goal order. The choices:
+				<li><strong>What does &ldquo;Optimize for&rdquo; do?</strong> The Optimizer always tests the same set of strategies. What changes is how they are <em>ranked</em>. The <i>Optimize for</i> selector at the top of the Optimizer tab picks the goal used to sort the table, so the best plan for that goal appears first, the &#9875; baseline moves to the best no-conversion plan under the same goal, and the <i>Rank</i> column renumbers to match. It also decides <strong>which columns the table shows</strong>: each goal keeps the handful of columns that answer its own question and puts the rest away, so you read ten columns instead of twenty-one. It never changes the underlying numbers, only which plan the tool puts in front of you and which figures it shows about that plan. Nothing is discarded - the <strong>Show all columns</strong> link beside the selector puts every column back on screen at once, and the goal still sets the row order. Clicking any visible column header sorts by that column instead; changing the goal, or switching the columns back, returns the table to goal order. Hover over any row for its spend goal and how many years it funded. The choices:
 					<ul style="margin:6px 0 0;">
 						<li><strong>Tax Flexibility</strong> (the default) favors plans that finish with your money spread evenly across the three tax treatments: pre-tax (IRA), Roth, and taxable (brokerage and cash). An even spread means that in any future year you can draw from whichever account is cheapest at the time, rather than being forced into whatever one account you have left. Because a plan that simply runs out of money would technically be perfectly &ldquo;even&rdquo; at zero, this only compares plans that also finish among the wealthiest, then picks the most evenly divided of those.</li>
 						<li><strong>Maximum Net Wealth</strong> ranks by after-tax wealth remaining at the end of the plan, with the tax still owed on the IRA subtracted first. This is the estate or legacy view.</li>
@@ -1057,7 +1057,10 @@
                         <option value="earliestbe">Earliest Break Even</option>
                     </select>
                 </label>
-                <span style="color:#555;">Ranks every strategy by this goal, re-orders the table, and moves the ⚓ baseline to match. See Documentation for what each choice measures.</span>
+                <span style="color:#555;">Ranks every strategy by this goal, re-orders the table, moves the ⚓ baseline to match, and shows the columns that goal is about. See Documentation for what each choice measures.</span>
+                <!-- Column-count escape hatch. renderOptimizerTable() writes the text, because the
+                     count is only knowable once the columns for the active goal are built. -->
+                <span id="opt-colmode"></span>
             </div>
             <!-- Shown while the sweep runs, then held on "DONE" for a few seconds. The sweep blocks
                  the main thread for a second or more, so without this the page looks frozen with the
@@ -1070,41 +1073,57 @@
             <div id="opt-spend-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
             <div id="opt-conv-banner" style="display:none;margin-bottom:8px;padding:10px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:0.9em;color:#856404;"></div>
             <div id="opt-best" style="display:none;"></div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:0.8em;color:#444;padding:4px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
-                <span style="font-weight:600;color:#666;">Row colors:</span>
-                <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>⚓ Baseline - strongest plan with no conversions / no brokerage cycling (Δ columns measure against it)</span>
-                <span><span style="display:inline-block;width:14px;height:14px;background:#fff3cd;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>📍 Your plan - the strategy and settings currently in the sidebar, run exactly as configured</span>
-                <span><span style="display:inline-block;width:14px;height:14px;background:#90EE90;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Best - wins at least one metric (cell highlight = the winning metric)</span>
-                <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Optimize Spend (✦) - binary search found a higher sustainable spend</span>
-                <span><span style="display:inline-block;width:14px;height:14px;background:#fde8d8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Reverse-optimized (▼) - all strategies failed; highest feasible spend shown</span>
+            <!-- The two legend strips fold. Between them they carry twenty-two entries and wrap to
+                 four to six lines, which is more vertical space than the thing they explain. Native
+                 <details> so there is no JS behind the disclosure itself; only the remembering is
+                 scripted (rememberFoldState, below). Open on a first visit, because a reader who
+                 has never seen the symbols needs them.
+
+                 The Infeasible and Failed chips do NOT fold with the rest. They read as legend but
+                 they are controls: their text is rewritten on every render with a live count, and
+                 clicking them shows or hides rows. Folding them away would bury the only route
+                 back to the rows they hide. -->
+            <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:0.8em;color:#444;padding:4px 2px 6px; border-bottom:1px solid #e0e0e0;margin-bottom:4px;">
                 <span id="opt-legend-infeasible"><span style="display:inline-block;width:14px;height:14px;background:#e8e8e8;opacity:0.8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;text-decoration:line-through;"></span>Infeasible - existing income already exceeds this bracket ceiling</span>
                 <span id="opt-legend-failed"><span style="display:inline-block;width:14px;height:14px;background:#fde0e0;opacity:0.9;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>🚨 Failed - hidden by default</span>
             </div>
+            <details id="opt-fold-colors" ontoggle="rememberFoldState()" open>
+                <summary style="cursor:pointer;font-weight:600;color:#666;font-size:0.8em;padding:2px 0;list-style-position:outside;">Row colors</summary>
+                <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:0.8em;color:#444;padding:4px 2px 6px;">
+                    <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>⚓ Baseline - strongest plan with no conversions / no brokerage cycling (Δ columns measure against it)</span>
+                    <span><span style="display:inline-block;width:14px;height:14px;background:#fff3cd;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>📍 Your plan - the strategy and settings currently in the sidebar, run exactly as configured</span>
+                    <span><span style="display:inline-block;width:14px;height:14px;background:#90EE90;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Best - wins at least one metric (cell highlight = the winning metric)</span>
+                    <span><span style="display:inline-block;width:14px;height:14px;background:#dbeafe;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Optimize Spend (✦) - binary search found a higher sustainable spend</span>
+                    <span><span style="display:inline-block;width:14px;height:14px;background:#fde8d8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Reverse-optimized (▼) - all strategies failed; highest feasible spend shown</span>
+                </div>
+            </details>
             <!-- Symbol legend (item 8) - explains the marks on strategy names / status column. -->
-            <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:0.78em;color:#444;padding:2px 2px 6px;border-bottom:1px solid #e0e0e0;margin-bottom:6px;">
-                <span style="font-weight:600;color:#666;">Symbols:</span>
-                <span title="Your own plan, pinned above the table. If a swept strategy uses your settings but differs from your plan in its conversions, that row is marked too, so you can see where your setting sits on its family's curve. When the swept row IS your plan, only the pinned row is marked.">📍 Your plan</span>
-                <span title="Convert Excess to Roth enabled - surplus after spending is converted to Roth rather than left in Cash. (Whether conversion taxes are also funded from Cash follows your sidebar's Maximize Conversions setting, except under nerdknob, where both arms are swept - see 💵.)">✓ Convert Excess on</span>
-                <span id="opt-legend-cashfund" style="display:none;" title="Uses available Cash to cover conversion taxes, so more of the conversion lands in Roth (the 'Use Cash' half of Maximize Conversions). Nerdknob sweeps this as its own dimension, so each strategy appears both with and without it. Only shown when you have Cash to spend.">💵 Cash-funded taxes</span>
-                <span title="Your current plan. The pinned CURRENT row is your sidebar settings run exactly as configured, including whether conversions are on and any Extra Conversion or stop year. The same mark in the table body is the swept row that uses the same strategy and parameter, which is not the same plan: every swept row runs with conversions on.">📍 Your plan</span>
-                <span title="Optimize Spend: a binary search found a higher sustainable After-Tax Spend than your input.">✦ Optimize Spend</span>
-                <span title="Optimize Spend hit its search ceiling - the true sustainable spend may be even higher.">✦+ / + hit search ceiling</span>
-                <span title="Reverse-optimized: every strategy failed at your spend, so the highest feasible spend is shown instead.">▼ Reverse-optimized</span>
-                <span title="Cyclic brokerage maneuvering, IRA drawn first."><span style="color:#cc0000;">🗘</span> Cyclic, IRA-first</span>
-                <span title="Cyclic brokerage maneuvering, brokerage drawn first.">🔄 Cyclic, brokerage-first</span>
-                <span title="Optimize Conversions row: swept extra fixed annual Roth conversions ($25k steps) on top of Max Conversions.">⇌ Optimize Conversions</span>
-                <span title="The strategy's bracket / IRMAA / ACA target is unreachable (infeasible).">⚠️ Target unreachable</span>
-                <span title="Plan success - every year of the plan was fully funded.">🟢 Success</span>
-                <span title="Plan failure - the portfolio ran out of money before the end of the plan.">🚨 Failure</span>
-                <span title="The pinned baseline reference row - the strongest no-conversion plan.">⚓ Baseline</span>
-                <span title="Click ⚖ on any row to measure every Δ column against that row instead of the baseline - a head-to-head comparison of any two strategies.">⚖ Compare</span>
-            </div>
+            <details id="opt-fold-symbols" ontoggle="rememberFoldState()" open>
+                <summary style="cursor:pointer;font-weight:600;color:#666;font-size:0.8em;padding:2px 0;list-style-position:outside;">Symbols</summary>
+                <div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:0.78em;color:#444;padding:4px 2px 6px; border-bottom:1px solid #e0e0e0;margin-bottom:6px;">
+                    <span title="Your own plan, pinned above the table. If a swept strategy uses your settings but differs from your plan in its conversions, that row is marked too, so you can see where your setting sits on its family's curve. When the swept row IS your plan, only the pinned row is marked.">📍 Your plan</span>
+                    <span title="Convert Excess to Roth enabled - surplus after spending is converted to Roth rather than left in Cash. (Whether conversion taxes are also funded from Cash follows your sidebar's Maximize Conversions setting, except under nerdknob, where both arms are swept - see 💵.)">✓ Convert Excess on</span>
+                    <span id="opt-legend-cashfund" style="display:none;" title="Uses available Cash to cover conversion taxes, so more of the conversion lands in Roth (the 'Use Cash' half of Maximize Conversions). Nerdknob sweeps this as its own dimension, so each strategy appears both with and without it. Only shown when you have Cash to spend.">💵 Cash-funded taxes</span>
+                    <span title="Your current plan. The pinned CURRENT row is your sidebar settings run exactly as configured, including whether conversions are on and any Extra Conversion or stop year. The same mark in the table body is the swept row that uses the same strategy and parameter, which is not the same plan: every swept row runs with conversions on.">📍 Your plan</span>
+                    <span title="Optimize Spend: a binary search found a higher sustainable After-Tax Spend than your input.">✦ Optimize Spend</span>
+                    <span title="Optimize Spend hit its search ceiling - the true sustainable spend may be even higher.">✦+ / + hit search ceiling</span>
+                    <span title="Reverse-optimized: every strategy failed at your spend, so the highest feasible spend is shown instead.">▼ Reverse-optimized</span>
+                    <span title="Cyclic brokerage maneuvering, IRA drawn first."><span style="color:#cc0000;">🗘</span> Cyclic, IRA-first</span>
+                    <span title="Cyclic brokerage maneuvering, brokerage drawn first.">🔄 Cyclic, brokerage-first</span>
+                    <span title="Optimize Conversions row: swept extra fixed annual Roth conversions ($25k steps) on top of Max Conversions.">⇌ Optimize Conversions</span>
+                    <span title="The strategy's bracket / IRMAA / ACA target is unreachable (infeasible).">⚠️ Target unreachable</span>
+                    <span title="Plan success - every year of the plan was fully funded.">🟢 Success</span>
+                    <span title="Plan failure - the portfolio ran out of money before the end of the plan.">🚨 Failure</span>
+                    <span title="The pinned baseline reference row - the strongest no-conversion plan.">⚓ Baseline</span>
+                    <span title="Click ⚖ on any row to measure every Δ column against that row instead of the baseline - a head-to-head comparison of any two strategies.">⚖ Compare</span>
+                </div>
+            </details>
             <!-- These two swap: the hint whenever no comparison is running, the banner whenever one
                  is. renderCompareBanner() in optimizer_ui.js owns both. The hint exists because the
                  ⚖ control is easy to miss; the banner because a pinned row silently changes what
                  every Δ number means. -->
             <div id="opt-compare-hint" style="padding:6px 12px;background:#f4f8fb;border:1px solid #dfe8ef;border-radius:4px;color:#4a5c6a;margin-bottom:8px;font-size:0.88em;">
-                ⚖ <strong>Compare two strategies:</strong> click the ⚖ or 🟢 at the start of any row to measure every other row against that one. The ΔNetWealth and ΔTax columns then show the difference from your chosen row instead of the ⚓ baseline. The highlighted ⚖ marks whichever row is currently the comparison point; clicking it puts everything back.
+                ⚖ <strong>Compare two strategies:</strong> click the ⚖ or 🟢 at the start of any row to measure every other row against that one. The ΔFinalWealth and ΔTax columns appear as soon as you do, showing the difference from your chosen row instead of the ⚓ baseline. The highlighted ⚖ marks whichever row is currently the comparison point; clicking it puts everything back.
             </div>
             <div id="opt-compare-banner" style="display:none;padding:6px 12px;background:#e8f4fd;border:1px solid #a8d0f0;border-radius:4px;color:#1a4d70;margin-bottom:8px;font-size:0.9em;"></div>
             <div style="overflow-x:auto;width:fit-content;max-width:100%;">
@@ -1241,6 +1260,7 @@ window.addEventListener('DOMContentLoaded', function () {
     setupAutoRecalc();
     setupTopScrollSync();   // #2 - mirror horizontal scrollbar above the Annual Details table
     setupSmallScreenUX();   // tap tooltips on touch devices, folded sidebar + jump button on phones
+    restoreFoldState();     // re-fold the legend strips the way this reader last left them
     initMCTab();
     // Apply all NERD_KNOBS-gated UI at once (Avg BETR stat, MC nerd panels, GK params, 💵
     // cash-funded legend). Two things used to be gated here and no longer are: the "Optimize for"
@@ -1296,7 +1316,7 @@ runSimulation?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=1115e3';
+    const V = '?v=1115f9';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

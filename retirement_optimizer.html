@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1600</title>
+    <title>Retirement Optimizer 11.1601</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1115ca"></script>
-	<script src="optimizer_core.js?v=111600"></script>
+	<script src="optimizer_core.js?v=111601"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=111600"></script>
-	<script src="optimizer_tests.js?v=111600"></script>
+	<script src="optimizer_ui.js?v=111601"></script>
+	<script src="optimizer_tests.js?v=111601"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -612,7 +612,7 @@
 
 			<!-- Stress test comes FIRST: it is the part that recomputes on every input change, so it
 			     is the only section here guaranteed to describe the plan currently in the sidebar.
-			     The coloured result banner IS the fold control - it is the <summary>, so the one
+			     The colored result banner IS the fold control - it is the <summary>, so the one
 			     thing worth reading while collapsed is the thing you click to collapse. Written by
 			     renderStressHeadline() in montecarlo/mc_tab.js; the chevron is rotated by the
 			     #mc-stress-fold[open] rule in optimizer_styles_responsive.css. -->
@@ -767,7 +767,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-																<li><b>11.1600</b> The Optimizer tab has been reorganized. Labels, column names, colors and symbols are now consistent with the rest of the tool, and the table shows the columns the <i>Optimize for</i> goal actually uses. Some were never shown at all: <strong>Final Roth</strong>, <strong>Final IRA</strong> and <strong>Mix Spread</strong> now exist. Optimize for also says what the goal ranks by, and a switch below it shows all columns at once. Spend Goal and Yrs Funded moved into the row pop-up, and the legend folds out of the way. The saved-scenario list drops its Version column, and a <code>?tab=</code> web address opens the page on a chosen tab. No numbers change.</li>
+																<li><b>11.1601</b> The Optimizer tab has been reorganized. Labels, column names, colors and symbols are now consistent with the rest of the tool, and the table shows the columns the <i>Optimize for</i> goal actually uses. Some were never shown at all: <strong>Final Roth</strong>, <strong>Final IRA</strong> and <strong>Mix Spread</strong> now exist. Optimize for also says what the goal ranks by, and a switch below it shows all columns at once. End Wealth and All Taxes are shown under every goal. Spend Goal and Yrs Funded moved into the row pop-up, and the legend folds out of the way. The saved-scenario list drops its Version column, and a <code>?tab=</code> web address opens the page on a chosen tab. No numbers change.</li>
 				<li data-flag="behavior"><b>11.15e3</b> <strong>When a plan runs out of every other account, it will now spend from the Brokerage account instead of reporting that it could not pay.</strong> The math avoided a possible "tax spiral" where increasing the brokerage draw increased the capital gains which increased the tax, which may also have increased social security taxability, which resulted in a higher tax requiring a greater withdrawal. Testing revealed that no "tax spiral" exists - it settles in two or fewer passes. So now it won't "give up" funding a year when all that remains is Brokerage assets to fund spending. Previously some plans went underfunded in some years due to the "avoided tax spiral". Most affected is "Fill Fed/IRMAA Bracket" with a tier selected. <strong>Behavior change:</strong> such a plan now funds more of its spending and ends with less left over, because the money is now spent, leaving less net worth. Saved scenarios and shared links for those plans will show different numbers. <a href="optimizer_changelog.md#11.15e3" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15cf</b> <strong>The IRMAA ceiling now aims at the threshold that will actually apply, two years out, instead of today's.</strong> IRMAA bills this year's premium against the income (MAGI) you reported two years ago, and compares it against the thresholds published for the billing year. The tool charged that correctly but aimed at it wrongly: an "IRMAA Ceil" plan capped income at today's threshold, about 6% below the one it would be judged against at 3% inflation, leaving roughly $13,000 a year of unspent IRA or Roth conversion. The same fix applies to QCD "As Needed". Behavior change: an IRMAA Ceiling plan now converts more, and "as Needed" QCDs draw less. <a href="optimizer_changelog.md#11.15cf" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15c9</b> <strong>More accurate SALT (state and local tax) deductions for tax years 2026 through 2029.</strong> Property and other local taxes can now be included in the SALT figure, which previously counted state income tax alone - add yours with <code>?ptx=25000</code> in the web address, optionally with <code>?ptxm=flat</code> or <code>?ptxm=custom</code> plus <code>?ptxr=2</code> to set how it grows. The higher $40,000 SALT cap now runs through 2029 as the law allows, and the cap and the income limit that phases it out both step up 1% a year, so 2026 uses $40,400 and $505,000. For plans converting heavily in a high-tax state these can change the recommended conversion size. This tool tests only SALT against the standard deduction, so the benefit applies where SALT alone exceeds it, and it ends after 2029. <a href="optimizer_changelog.md#11.15c9" target="_blank" rel="noopener">Details</a></li>
@@ -1085,7 +1085,7 @@
                  the main thread for a second or more, so without this the page looks frozen with the
                  previous run still on screen; and without the hold, a fast sweep flashed the banner
                  for well under a second, which reads as a glitch rather than an answer. Content and
-                 colours are set by setOptimizerBusy() in optimizer_ui.js -- keep the wording there,
+                 colors are set by setOptimizerBusy() in optimizer_ui.js -- keep the wording there,
                  not here, so there is one source of truth. -->
             <div id="opt-busy" style="display:none;margin-bottom:8px;padding:10px 14px;background:#eef4fb;border:1px solid #c9dcf0;border-radius:6px;font-size:0.95em;color:#1a4d70;font-weight:600;"></div>
             <div id="opt-perf" style="display:none;margin-bottom:8px;font-size:0.8em;color:#888;font-family:monospace;"></div>
@@ -1106,16 +1106,16 @@
                 <span id="opt-legend-infeasible"><span style="display:inline-block;width:14px;height:14px;background:#e8e8e8;opacity:0.8;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;text-decoration:line-through;"></span>Infeasible - existing income already exceeds this bracket ceiling</span>
                 <span id="opt-legend-failed"><span style="display:inline-block;width:14px;height:14px;background:#fde0e0;opacity:0.9;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>🚨 Failed - hidden by default</span>
             </div>
-            <!-- One fold for everything that explains the table: the row colours, the symbols, and
+            <!-- One fold for everything that explains the table: the row colors, the symbols, and
                  how to start a head-to-head comparison. Three separate strips was three things to
                  collapse and twenty-two entries of chrome above the thing you came to read.
 
-                 Most colours lost their legend line, not their colour: a row that already carries
+                 Most colors lost their legend line, not their color: a row that already carries
                  a symbol says what it is without a swatch. Only Best keeps an entry, because green
-                 is the one colour with no glyph of its own. The compare banner stays OUTSIDE this
+                 is the one color with no glyph of its own. The compare banner stays OUTSIDE this
                  fold, because it reports live state rather than explaining anything. -->
             <details id="opt-fold-legend" ontoggle="rememberFoldState()" open>
-                <summary style="cursor:pointer;font-weight:600;color:#666;font-size:0.8em;padding:2px 0;list-style-position:outside;">Legend: row colours, symbols, and comparing</summary>
+                <summary style="cursor:pointer;font-weight:600;color:#666;font-size:0.8em;padding:2px 0;list-style-position:outside;">Legend: row colors, symbols, and comparing</summary>
                 <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:0.8em;color:#444;padding:4px 2px 2px;">
                     <span style="font-weight:600;color:#666;">Row colors:</span>
                     <span><span style="display:inline-block;width:14px;height:14px;background:#90EE90;border:1px solid #ccc;vertical-align:middle;margin-right:4px;border-radius:2px;"></span>Best - wins at least one metric (cell highlight = the winning metric)</span>
@@ -1342,7 +1342,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111600';
+    const V = '?v=111601';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

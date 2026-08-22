@@ -3569,6 +3569,11 @@ test('compare is first in every objective, and every pinned column is present', 
         // The Best summary table drops the leading column on the understanding that it is the ⚖
         // control. Pinned here so a reordered list cannot shift that table under its own header.
         assert(list[0] === 'compare', `${objKey} starts with ${list[0]}, not compare`);
+
+        // End Wealth and All Taxes are on screen under every goal, so the two figures any
+        // comparison rests on do not move or vanish as the goal changes.
+        assert(list.includes('afterTaxNW') && list.includes('tax'),
+            `${objKey} must show End Wealth and All Taxes`);
         const missing = OPT_COLUMNS_PINNED.filter(k => !list.includes(k));
         assert(missing.length === 0, `${objKey} is missing pinned columns: ${missing.join(', ')}`);
     }

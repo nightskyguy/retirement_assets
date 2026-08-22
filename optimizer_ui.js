@@ -336,8 +336,8 @@ function deltaCellHtml(col, r, refRow) {
     }
     const better = meta.dir === 'neutral' ? null
                  : (meta.dir === 'higher' ? d > 0 : d < 0);
-    const colour = better === null ? '#57606a' : (better ? '#1a7f37' : '#cf222e');
-    return `<span style="color:${colour}">${d > 0 ? '+' : '−'}${body}</span>`;
+    const color = better === null ? '#57606a' : (better ? '#1a7f37' : '#cf222e');
+    return `<span style="color:${color}">${d > 0 ? '+' : '−'}${body}</span>`;
 }
 
 function compareToggleHtml(r) {
@@ -1421,7 +1421,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
     const defl = r => (inC() && r.finalNW) ? (r.finalNWCurrentDollars / r.finalNW) : 1;
     const objKey   = OptimizerState.objective || 'taxflex';
     const objLabel = OPT_OBJECTIVE_LABELS[objKey] || OPT_OBJECTIVE_LABELS.taxflex;
-    const cols = [
+    let cols = [
         // compareZone: these cells select the comparison row instead of loading the strategy.
         // The ⚖ used to be a small glyph inside the Strategy cell, where a near miss loaded the
         // strategy instead -- a destructive, surprising outcome for a click aimed at a comparison.
@@ -1584,7 +1584,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             // conversion search compared against itself without the extra conversions.
             key: 'convSaved', label: 'Conv Tax',
             title: 'Counts only tax actually paid during the plan, so it is NOT a verdict on whether converting was worth it. Positive = the extra IRA→Roth conversions run by Optimize Conversions lowered lifetime tax vs the same strategy without them. It does not price the deferred tax still owed on the no-extra-conversion plan\'s larger remaining IRA, so a big positive number here can sit alongside a plan that ends up worse off overall. Use the Break Even column, which prices in that deferred tax, for the actual answer.',
-            // Coloured by SIGN, not left plain. This is a saving, so a negative means the extra
+            // Colored by SIGN, not left plain. This is a saving, so a negative means the extra
             // conversions cost MORE lifetime tax - a worse plan - and it was rendering in the same
             // black as a gain, with only a minus sign to say otherwise. No dollar prefix: every
             // other money column in this table is bare, and the heading already says what it is.
@@ -1597,6 +1597,21 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
             getSortValue: r => r._convSavings ?? -Infinity
         }
     ];
+    // Display order comes from OPT_COLUMN_KEYS, not from the order these descriptors happen to be
+    // written in. One source of truth, and reordering a column is a one-line edit in core instead
+    // of moving a twenty-line block through this literal - which is exactly the edit that once
+    // relocated a descriptor into an unrelated function.
+    const _byKey = new Map(cols.map(c => [c.key, c]));
+    const _ordered = OPT_COLUMN_KEYS.map(k => _byKey.get(k)).filter(Boolean);
+    // A descriptor whose key is missing from OPT_COLUMN_KEYS would silently disappear from the
+    // table. Fail loudly in the console instead, and fall back to the literal order so the table
+    // still renders.
+    if (_ordered.length !== cols.length) {
+        const missing = cols.map(c => c.key).filter(k => !OPT_COLUMN_KEYS.includes(k));
+        console.error('getOptimizerColumns: column(s) not listed in OPT_COLUMN_KEYS:', missing);
+    }
+    cols = (_ordered.length === cols.length) ? _ordered : cols;
+
     // In relative view every comparable column already IS a difference from the reference row, so a
     // column whose name says delta is a second copy of one. Dropped on BOTH paths: switching all
     // columns on must not bring them back, which is exactly how they reappeared the first time.
@@ -3065,7 +3080,7 @@ let showTaxThresholds = true;
 // cooperate: at the chart's 10px, U+25D0 (half) inks 9x7 while U+25CF (full) inks 6x4, so "full"
 // would render a third SMALLER than "half" and read backwards. Its family (U+25D0..U+25D7) has no
 // fully-black member to pair with, so no same-size pair exists to switch to. Drawing both from one
-// radius makes them identical by construction, matches the marker's own colour exactly, and does
+// radius makes them identical by construction, matches the marker's own color exactly, and does
 // not depend on what `sans-serif` resolves to on the reader's machine.
 // The outline is deliberately THIN. It is drawn on both so the two glyphs share an outer diameter,
 // but it also lays ink on the empty side of the half glyph, which is the only side the eye can use

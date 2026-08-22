@@ -3725,8 +3725,8 @@ const OPTIMIZER_OBJECTIVES = {
 // test that every goal's list is drawn from this array, and an in-page test that
 // getOptimizerColumns(true) emits exactly this array in exactly this order.
 const OPT_COLUMN_KEYS = Object.freeze([
-    'compare', 'status', 'gap', 'strategy', 'param', 'rank',
-    'spendGoal', 'tax', 'spend', 'afterTaxNW', 'finalIRA', 'finalRoth', 'mixSpread',
+    'compare', 'status', 'gap', 'strategy', 'param', 'rank', 'afterTaxNW', 'tax',
+    'spendGoal', 'spend', 'finalIRA', 'finalRoth', 'mixSpread',
     'dNW', 'dTax', 'rate', 'years', 'rmd', 'rmdtax', 'convBE', 'convSaved',
 ]);
 
@@ -3735,7 +3735,14 @@ const OPT_COLUMN_KEYS = Object.freeze([
 // a head-to-head comparison; `gap` because it is the dead space that keeps a near-miss click off the
 // wrong control; `rank` because it is the readout for the goal selector itself; the rest because a
 // row with no strategy name on it is not a row.
-const OPT_COLUMNS_PINNED = Object.freeze(['compare', 'status', 'gap', 'strategy', 'param', 'rank']);
+const OPT_COLUMNS_PINNED = Object.freeze([
+    'compare', 'status', 'gap', 'strategy', 'param', 'rank',
+    // End Wealth and All Taxes are pinned for EVERY goal, directly after Rank. They are what any
+    // two plans get compared on whatever question you came with, and letting each goal decide
+    // whether to show them meant they slid to a different place, or vanished, as you switched
+    // goals - so the two numbers you were tracking moved under you.
+    'afterTaxNW', 'tax',
+]);
 
 // objKey -> the columns that answer the question that goal asks. Pure data: no DOM, no descriptors,
 // no formatting. Every list is written in full, pinned columns included, so it reads as the literal
@@ -3746,15 +3753,15 @@ const OPT_COLUMNS_PINNED = Object.freeze(['compare', 'status', 'gap', 'strategy'
 // dNW and dTax are in no list: they are meaningful against a reference the reader chose, so the
 // filter adds them back whenever a ⚖ row is pinned.
 const OPT_OBJECTIVE_COLUMNS = Object.freeze({
-    taxflex:    ['compare','status','gap','strategy','param','rank','mixSpread','afterTaxNW','finalRoth','finalIRA'],
-    networth:   ['compare','status','gap','strategy','param','rank','afterTaxNW','spend','tax'],
-    widowrmd:   ['compare','status','gap','strategy','param','rank','finalIRA','rmd','rmdtax','tax'],
-    mintax:     ['compare','status','gap','strategy','param','rank','tax','rate','afterTaxNW'],
-    maxspend:   ['compare','status','gap','strategy','param','rank','spend','afterTaxNW','tax'],
-    maxroth:    ['compare','status','gap','strategy','param','rank','finalRoth','afterTaxNW','tax'],
-    balanced:   ['compare','status','gap','strategy','param','rank','afterTaxNW','spend','tax'],
-    conveffect: ['compare','status','gap','strategy','param','rank','convBE','convSaved','finalRoth','afterTaxNW'],
-    earliestbe: ['compare','status','gap','strategy','param','rank','convBE','convSaved','afterTaxNW','tax'],
+    taxflex:    ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','mixSpread','finalRoth','finalIRA'],
+    networth:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','spend'],
+    widowrmd:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','finalIRA','rmd','rmdtax'],
+    mintax:     ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','rate'],
+    maxspend:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','spend'],
+    maxroth:    ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','finalRoth'],
+    balanced:   ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','spend'],
+    conveffect: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved','finalRoth'],
+    earliestbe: ['compare','status','gap','strategy','param','rank','afterTaxNW','tax','convBE','convSaved'],
 });
 
 // The two conversion goals rank on numbers that only a CONVERTING row has. The ⚓ baseline is drawn
@@ -3776,7 +3783,7 @@ const OPT_BASELINE_REQUIRES = Object.freeze({
 // search rather than against another row, so a delta of it would be a delta of a delta.
 //
 //   dir   'higher' / 'lower' = which direction is better, and so which sign is green. 'neutral'
-//         colours nothing: a bigger Final IRA is worse for a widow and better for a spender, and
+//         colors nothing: a bigger Final IRA is worse for a widow and better for a spender, and
 //         the table should not pretend to know which one you are.
 //   unit  'dollar' plain thousands, 'pp' percentage POINTS (the underlying value is a fraction),
 //         'years' for the break-even year.

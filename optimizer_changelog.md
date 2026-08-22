@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1600"></a>
+<a id="11.1601"></a>
 
-## 11.1600
+## 11.1601
 
 ### Optimizer tab reorganized
 
@@ -34,8 +34,9 @@ now the best row that actually converts, rather than a plan that never converts 
 to compare on.
 
 **Conv Tax** is now colored: green where the extra conversions lowered lifetime tax, red where
-they raised it. A large negative there is a worse plan, and it used to print in the same black as a
-gain. The stop-after-year mark on conversion rows is explained in the symbol key.
+they raised it. The stop-after-year mark on conversion rows is explained in the symbol key.
+
+**End Wealth** and **All Taxes** are shown under every goal, directly after Rank.
 
 Two smaller things: the saved-scenario list drops its Version column, since an incompatible
 scenario is already marked in red with its Load button disabled; and a `?tab=` web address opens

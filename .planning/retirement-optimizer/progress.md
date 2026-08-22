@@ -3371,3 +3371,77 @@ asserted before and after the write, and the P32 NOW paragraph now names the PR.
 
 Nothing else had drifted: O0/O1 rows (P35, P36, P51, P30, P19, P34, P65) are unchanged and P32's
 index row was already struck. No product file touched, so no version bump and no changelog entry.
+
+## Session 2026-08-22 (continued) - P67a: the "Optimize for" goal now picks the columns
+
+User asked for the Optimizer's goal selector to control which columns show, giving three examples:
+Roth Conversion Effectiveness should show the total Roth balance, Spend Goal and Yrs Funded should
+leave the table, Total RMDs matters mainly under Avoiding Widow & RMD Tax. Then, answering the
+Δ-columns question, asked for something larger: a second **rendering mode** where every numeric column
+reads as a delta from the pinned row. Split into PR A (shipped) and PR B (P67b, not started).
+
+**Three explorations first, and the findings shaped everything.** The table is a CSS grid of flat
+`<div>`s, not a `<table>`; all 21 columns come from ONE descriptor array, `getOptimizerColumns()`;
+**no test anywhere asserts on its columns** and no CSS targets them (`nth-child` appears nowhere in
+the repo). So the mechanism was a `filter()`, not a rewrite. What it was NOT free of was index
+arithmetic: four separate hazards, each dormant only because no column had ever been optional.
+
+**The fourth hazard was the one nobody listed and the one that mattered.** A sort column that no
+longer exists left `col === undefined`, skipped the sort block, and rendered rows in **build order
+under a header carrying no arrow**. Not an error, not a blank table - just quietly unsorted. Now
+`normalizeSortState()` at the single render choke point. Verified by hand: sort by Yrs Funded with
+all columns showing, collapse back to a goal that hides it, and the order falls to goal order.
+
+**Three goals ranked on numbers with no column.** `maxroth` on `terminal.roth`, `widowrmd` partly on
+`terminal.ira`, and `taxflex` - the DEFAULT - on a spread computed inline inside its own ranker. New
+Final IRA / Final Roth / Mix Spread columns. `afterTaxBucketSpread()` was **extracted** from the
+ranker rather than reimplemented in the UI, so the number the column prints and the number the
+ranking sorts on are the same number. A node test asserts the column and the ranker agree on order.
+
+**`OPT_OBJECTIVE_COLUMNS` went in core, not the UI.** `optimizer_ui.js` has no `module.exports` and
+no `window.*` block and no node suite loads it, so anything placed there cannot be asserted outside a
+browser. Cost: core holds string references to identifiers defined in the UI. Paid for with
+`OPT_COLUMN_KEYS` as an explicit contract plus the one tier-1 test that can see both files.
+
+**Two defects found while verifying, neither predicted.**
+
+1. The page's own changelog test caught my changelog entry: it asserts every `<b>` in the list is a
+   version stamp in its own `<li>`, and I had used `<b>` for emphasis. Badge went red at 655/656.
+   The same trap as the `<strong>` incident recorded above, from the other side. The failure text is
+   not in the DOM, so it needed a console capture around `runTests()` to name.
+2. **Chrome fires `toggle` when it PARSES a `<details open>`.** Both legend strips carry `open`, so
+   two toggles fired before any init code ran, the inline `ontoggle` handler wrote "both open" to
+   localStorage, and `restoreFoldState()` then read back the value it had just clobbered. A reader
+   who folded the strips would find them open again on every visit, with nothing in the console.
+   Found by tracing the load order rather than reasoning about it - three wrong theories first.
+   Guarded with `_foldsRestored`: nothing persists until the stored preference has been read.
+
+**One deviation from the approved plan, deliberate.** The plan put the Infeasible/Failed chips beside
+the "Showing N of 21 columns" link. That link sits by the goal selector, which is where the *cause*
+is, while the chips hide *rows* and belong beside the rows. They now sit on their own always-visible
+strip directly above the two folds, still outside the fold, which was the actual requirement.
+
+**Counts moved and both pins were reconciled from measured output**: node `optimizer_core` 280 ->
+**286**, `slowInCore` unchanged at 3, TPP 61 and doclinks 22 unchanged. `TestTiers.EXPECTED` and
+`.githooks/README.md` both edited in the same commit. Tier-1 went 248 -> **287**, which is NOT in
+`EXPECTED` (it pins node suites only) and is called out in the commit message for that reason.
+
+**Version bumped at all four sites** to **11.15f9**: `<title>`, the `?v=` on core/ui/tests, and the
+tier-2 loader's own `const V`. The stale-token GOTCHA bit mid-branch and is worth repeating: after
+commit 2 the browser served a **cached** `optimizer_core.js?v=1115e3` with no `afterTaxBucketSpread`
+in it, and the error looked like a missing export rather than a cache hit.
+
+**Browser-verified at 11.15f9**, badge green at 656 (287 in-page + 369 node): all nine goals render
+9-10 columns with ⚖ first and the main and Best tables on matching track counts; Δ columns appear
+only on pin, labelled `ΔFinalWealth vs ⚖`; the escape hatch reads "Showing 9 of 21 columns", expands
+to 21 and back; the density preference survives a goal change; no green row lacks a highlighted cell;
+`📋 Lowest RMD Tax%` disappears from the Best table under goals that hide the column while
+`⚓ Best w/o Conv` survives under all nine; the fold persists across reload with the chips still
+visible and still live-counting ("click to show 8 hidden"). Console clean apart from the usual
+unrelated Cloudflare RUM CORS error. **No screenshot** - the Browser pane was not displayed, so all
+of the above is DOM-level assertion rather than visual.
+
+**Bookkeeping note:** `git add -A` on commit 2 swept the earlier planning-file resync into a feature
+commit. Content correct, commit boundary not. Explicit paths thereafter. Also, P51 was rotated out of
+the NOW table to make room for P67 (the table is capped at 7 rows by the LINE-30 BOUNDARY); it keeps
+its O1 index row and is not dropped.

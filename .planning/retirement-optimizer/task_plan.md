@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-22:** `main` = `721653d`. **P32 SHIPPED at v11.15e3 in PR #185**, merged; this worktree (`readme-review-updates-c9df11`, branch `worktrees/planning-with-files-2a1f63`) is clean and level with `main`, nothing in flight. Suites **280 / 61 / 22** (`slowInCore` 3), tier-1 248/0, badge green. P64 and P66 shipped in #182/#183/#184.
+**As of 2026-08-22:** `main` = `721653d`. **P67 PR A SHIPPED at v11.15f9** (3 commits, unmerged, in this worktree `readme-review-updates-c9df11` on branch `worktrees/planning-with-files-2a1f63`): the "Optimize for" goal now picks the table's columns. Suites **286 / 61 / 22** (`slowInCore` 3, +6 node), tier-1 **287**/0, badge green at 656. P32 shipped v11.15e3 in PR #185; P64/P66 in #182/#183/#184.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -13,7 +13,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| **O1** | P51 | Oracle a-c,e-g DONE 08-10; propwd refuted | `P51d` |
+| **O0** | P67 | Table columns; **PR A shipped v11.15f9**, delta view left | `P67b` |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
@@ -51,6 +51,7 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P32~~ | ~~Brokerage barely drawn; is the third-pass exclusion still right?~~ - **COMPLETE 2026-08-21.** Premise refuted (Q1), dividend double-credit fixed, the cap-gains spiral measured and REFUTED (Q2, 0 capped years in 3,960 armed runs), and the exclusion re-scoped at **v11.15e3** | - | - |
 | ~~DONE~~ | ~~P58~~ | ~~Withholding assumed on money already moved, plus the forced-quarterly double payment~~ — **COMPLETE, v11.159d (`0bc7ba0`)** | — | — |
 | ~~DONE~~ | ~~P56~~+~~P57~~ | ~~Five-plan matrix, one cost table, and every statement attributed to one plan~~ — **COMPLETE, v11.1599 (`6e74f1f`)** | — | — |
+| **O0** | P67 | Optimizer table columns — **PR A SHIPPED v11.15f9**, 3 commits, unmerged | `P67b` (the relative/delta view, nerdknob) | nothing |
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
 | **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
@@ -1753,6 +1754,65 @@ bodies, `findings.md` and `progress.md` cite them; see the ID migration table at
 - **Touches the same gap-fill code as:** P28's open ship decision (`rothGapFill`) and P30's `[40,60]`
   question. Settling P28 and P30 first would mean `P35i`'s new arm is written against a settled
   ordering rather than one about to change.
+
+---
+## P67 — "Optimize for" drives the columns, plus a relative (delta) view
+
+The results table rendered **all 21 columns to everyone under every goal**, so the columns that
+answered your question sat off the right edge next to eighteen that did not. Three of the nine goals
+also ranked on a number the table never showed: `maxroth` on `terminal.roth`, `widowrmd` partly on
+`terminal.ira`, `taxflex` (the default) on a bucket spread that lived only inside its own ranker.
+
+### P67a — objective-driven column sets. **DONE, v11.15f9**, 3 commits, unmerged
+
+- [x] **P67a-1** `169ae2c` — de-hazard the column array. Four traps, each live the moment any column
+      became optional: the Rank `splice(findIndex(...) + 1)` that lands at index 0 when findIndex
+      misses; the Best table's `columns.slice(1)` + `i === 0 ? 'Best'` index assumption; the sort
+      tiebreakers read from the *filtered* array; and a vanished sort column leaving `col` undefined,
+      which rendered rows in **build order under a header with no arrow**, silently. New pure
+      `normalizeSortState()` at the one render choke point. Rank moved after Param.
+- [x] **P67a-2** `04da630` — the data. `afterTaxBucketSpread()` **extracted** from the taxflex ranker
+      and exported (not copied, so column and ranking cannot drift); `finalIRA` / `finalRoth` /
+      `mixSpread` descriptors; `rowDetailTip()` hooked into `cellActionAttrs` (not `rowTitle`, which
+      misses both pinned rows and the compare-zone cells). Renames: NetWealth → **FinalWealth**,
+      Tax Paid Δ → **Conversion Tax Saved**.
+- [x] **P67a-3** `45dd6ee` — the filter, the escape hatch, the legend fold, all copy, all tests.
+
+**Kept, and worth not re-litigating:**
+- `OPT_OBJECTIVE_COLUMNS` lives in `optimizer_core.js`, not the UI file: `optimizer_ui.js` has no
+  `module.exports` and no `window.*` block, and no node suite loads it, so data placed there is
+  unassertable outside a browser. The keys↔descriptors pairing is pinned by the ONE tier-1 test that
+  can see both files.
+- **Every goal shows the column its own ranking metric reads.** Enforced by a node test against
+  `OPT_OBJECTIVE_METRIC_COLUMN`, not by convention.
+- `dNW`/`dTax` are in no goal's set; they appear only when a ⚖ row is pinned.
+- A winner whose column the goal hid is not shown as a winner (the legend promises a highlighted
+  cell explains the green row, and there would be no cell). `colWinners` stays complete.
+
+**Defect found while verifying, now guarded:** Chrome fires `toggle` when it **parses** a
+`<details open>`, before any init runs. Both legend strips carry `open`, so two toggles landed first,
+the inline handler wrote "both open" to storage, and `restoreFoldState()` read back the value it had
+just clobbered. Nothing persists until the stored preference has been read (`_foldsRestored`).
+
+### P67b — the relative (delta) view, nerdknob-gated. **NOT STARTED**
+
+Every numeric column reads as a signed difference from a reference row; the reference row shows the
+absolute the rest are measured against. User's words: "the pin column shows the number, all other
+columns show the delta", so `ΔFinalWealth`/`ΔTax` stop existing as separate columns.
+
+- [ ] **P67b-1** reference = ⚖ pinned row, falling back to the ⚓ baseline (the existing
+      `deltaReferenceRow()` rule), so the mode always has a reference
+- [ ] **P67b-2** format: signed, same units, colored better/worse **per column** (a negative on
+      Lifetime Tax is green). Percent columns in percentage points, Break Even in years
+- [ ] **P67b-3** wrap `col.getValue` at the body-cell emit, NOT 21 edited descriptors. Sorting keeps
+      using `getSortValue` on absolutes, so order is identical in both modes
+- [ ] **P67b-4** `Conversion Tax Saved` stays absolute (`absolute: true`): it is not measured against
+      the reference row but against the same row's own conversion search
+- [ ] **P67b-5** drop `dNW`/`dTax` while the mode is on; nerdknob gate + "Show relative view" control
+- [ ] **P67b-6** open question: what a delta cell shows where the row has no value. Today `'—'`;
+      the delta renderer must not turn that into `+0`
+- **Status:** NOT STARTED. **Depends on:** P67a (shipped). Full design in the approved plan file.
+
 
 ---
 ## P35 PR 3 replan (2026-08-04) — kept as the record behind P35c/P35d

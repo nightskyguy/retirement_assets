@@ -38,8 +38,7 @@ they raised it. The stop-after-year mark on conversion rows is explained in the 
 
 **End Wealth** and **All Taxes** are shown under every goal, directly after Rank.
 
-Two smaller things: the saved-scenario list drops its Version column, since an incompatible
-scenario is already marked in red with its Load button disabled; and a `?tab=` web address opens
+A `?tab=` web address opens
 the page on a chosen tab, for example `?tab=optimizer`, `?tab=annual` or `?tab=montecarlo`.
 
 No numbers change. These are visual improvements only.

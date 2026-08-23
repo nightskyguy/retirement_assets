@@ -3756,3 +3756,25 @@ End-to-end browser proof, 400 paths seed 42: returns bit-identical between the v
 runs (median/min/max all equal to the digit); fixed inflation pinned at exactly the 3.0% Assumptions
 rate (min == cagr == max); survival 60% variable against 65% fixed, final p50 65,550 against
 81,608 - the cost of variable inflation, visible in one A/B.
+
+### Addendum 6: the presets were unreachable for the readers who needed them (v11.161A)
+
+User caught the hole left by Addendum 5: Reset / Fixed Inflation / Pessimistic all lived INSIDE
+#mc-nerd-panel, so the non-nerdknob reader - exactly the person who cannot see the knobs and cannot
+guess the old values - still had no way back to their pre-change numbers. Shipping a fix behind a
+flag is not shipping it.
+
+User proposed showing the panel with only those buttons. Deviated slightly and said why: a panel
+headed "Advanced Parameters" containing zero parameters reads wrong to the majority who would now
+see it. Instead the three buttons moved OUT into a new always-visible #mc-preset-row under the mode
+selector, labeled "Model presets"; the nerd panel keeps its heading and its knobs.
+
+Second half, and the part that was not in the request: mcInputsChanged() only raises a stale banner.
+For a reader whose knobs are invisible that is too quiet - click a button, see nothing. New
+_afterMCPreset() re-runs for non-nerd readers on the same rule onMCModeChange already uses (nerd
+mode means the reader controls when the expensive sweep happens). All three presets share it.
+
+Browser-verified nerd-OFF end to end: preset row visible with all three buttons, nerd panel hidden,
+every knob offsetParent null; click Fixed Inflation -> auto re-run -> survival 54.8% to 58.4%,
+inflationStats min==cagr==max==3.0%, caption reads "inflation shock sigma 0.0%". The caption is
+what makes an invisible-knob preset legible, which is why it had to land first.

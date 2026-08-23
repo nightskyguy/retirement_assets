@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1619"></a>
+<a id="11.161A"></a>
 
-## 11.1619
+## 11.161A
 
 ### Two Synthetic models, and prices that move
 
@@ -51,15 +51,19 @@ in Synthetic mode is now a range rather than a single number, and the inflation 
 works there for the first time.
 
 **Advanced Parameters** gains three controls for it: persistence, shock size and the correlation
-with returns.
+with returns. Those boxes stay in the advanced panel, but the presets that drive them do not: a new
+**Model presets** row sits under the mode selector where everyone can reach it.
 
-It also gains a **Fixed Inflation** button, which pins inflation to your Assumptions rate for every
+Among them is a **Fixed Inflation** button, which pins inflation to your Assumptions rate for every
 path and every year and so reproduces the pre-change model exactly. That is what to use when
 comparing against a number you wrote down before this release. It works by setting the inflation
 shock to 0, which is precisely enough: the model starts each path at your rate and only moves when
 a shock pushes it, so with no shock it never leaves. Persistence and the correlation are left as
 you set them; with no shock to act on, they simply have no effect until you turn the shock back on.
-**Reset to defaults** brings variable inflation back.
+**Reset to defaults**, in the same row, brings variable inflation back and returns every other
+parameter to its default. **Pessimistic** goes the other way in one click. Clicking any of the three
+re-runs immediately, and the Input Distributions caption then names every value the run used, so a
+preset is never a silent change.
 
 **Reset to defaults** puts every Advanced Parameter back in one click, so changing a value never
 requires remembering what it was, and a **Pessimistic** button applies a bad-decade parameter set:

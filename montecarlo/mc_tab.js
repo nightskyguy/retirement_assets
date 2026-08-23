@@ -117,8 +117,19 @@ function resetMCParams() {
         if (el) el.value = spec.dflt;
     }
     syncMCMuFromGrowth();
+    _afterMCPreset();
+}
+
+// Shared tail for the preset buttons. The stale banner alone is too quiet for these: the boxes a
+// preset moves are in the nerd panel, so a reader without it clicks a button and, without this,
+// sees nothing change. Re-run for them on the same rule the mode selector already uses - nerd mode
+// means the reader controls when the expensive sweep happens, so there we only mark it stale.
+function _afterMCPreset() {
     updateMCTimeEstimate();
     mcInputsChanged();
+    if (!_mcNerdMode() && !document.getElementById('tab-mc')?.classList.contains('hidden')) {
+        runMonteCarlo();
+    }
 }
 
 // Reproduce the pre-v11.160F Synthetic model: one flat inflation rate for every path and every
@@ -136,8 +147,7 @@ function resetMCParams() {
 function applyMCFixedInflation() {
     const el = document.getElementById('mc-inflation-shock-sd');
     if (el) el.value = 0;
-    updateMCTimeEstimate();
-    mcInputsChanged();
+    _afterMCPreset();
 }
 
 // One-click bad-decade parameter set. Not a prediction: a stress-leaning what-if for the synthetic
@@ -155,8 +165,7 @@ function applyMCPessimistic() {
     set('mc-inflation-shock-sd', 3.1);
     set('mc-inflation-return-corr', -0.45);
     updateMCGrowthWarning();
-    updateMCTimeEstimate();
-    mcInputsChanged();
+    _afterMCPreset();
 }
 
 // The run whose inputFan is on screen: {seed, mu, sigma, bearFraction}, written at dispatch.

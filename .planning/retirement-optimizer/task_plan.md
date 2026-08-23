@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-22:** `main` = `721653d`. **P67 COMPLETE at v11.1601**, PR [#186](https://github.com/nightskyguy/retirement_assets/pull/186) open, 16 commits: the "Optimize for" goal picks the table's columns, a nerdknob-gated relative view renders every column as a difference from the reference row, plus five rounds of review. Suites **289 / 61 / 22** (`slowInCore` 3), tier-1 **289**/0, badge green at 661. P32 shipped v11.15e3 in PR #185; P64/P66 in #182/#183/#184.
+**As of 2026-08-23:** **P23 COMPLETE at v11.160F**, uncommitted. The Monte Carlo tab now offers a third mode, Synthetic-AAM, beside Historical and Synthetic-GBM, and both synthetic modes give every path its own AR(1) inflation calibrated to the 1948-2025 CPI record and correlated with returns. GBM's return draws are bit-identical to before. Suites **299 / 61 / 22** (`slowInCore` 3), badge green at 671. P67 shipped v11.1601 in PR #186; P32 in #185; P64/P66 in #182/#183/#184.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -16,14 +16,14 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O2** | P68 | Changelog brevity pass, deferred by user | `P68a` |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
+| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69a` |
+| **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P32 COMPLETE 2026-08-21, shipped v11.15e3, MERGED in PR #185.** Q2 measured the cap-gains spiral that justified keeping
-Brokerage out of the third pass: **0 capped years in 3,960 armed runs**, `bounded` identical to `unbounded`
-everywhere. The exclusion cost $372,455 of unpayable spending to save $1,711. Default flipped; the old
-tripwire is now a regression guard with an `off` control that must still reproduce all 10 stranded years.
-`forcedIRAAllowBrokerage` was measured and **rejected** (same 9 wins, $27.9M newly unfunded), research-only.
-Open call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
+**P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral that justified keeping Brokerage out of the
+third pass measured **0 capped years in 3,960 armed runs**; the exclusion cost $372,455 of unpayable spending to
+save $1,711. Default flipped, old tripwire kept as a regression guard. `forcedIRAAllowBrokerage` measured and
+**rejected**. Open call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 
@@ -69,7 +69,9 @@ first task. Every open item in the file now carries one.
 | **O2** | P22 | Export Annual Details to CSV | `P22a` | nothing |
 | **O2** | P12 | Retire Optimizer tab -> MC strategy comparison | `P12a` | nothing |
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
-| **O2** | P23 | MC arithmetic-mean returns + AR(1) variable inflation | `P23a` | nothing |
+| ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 299 | - | - |
+| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | nothing |
+| **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
@@ -681,6 +683,70 @@ function calibrateMCMs(cfg) {
 - [ ] **P23l** — Add node unit tests in `optimizer_core.test.js` (or a new small test file) for `computeNextInflation()`: reversion behavior (large deviation from target decays toward target over repeated calls with shock=0), floor enforcement (`INFLATION_FLOOR`), a statistical check that many draws of `mu + sigma*boxMuller(rng)` have sample mean/stddev close to `mu`/`sigma`, and a `RETURN_FLOOR` clamp test — `require` montecarlo/prng.js alongside taxengine.js/core.js in the header (`optimizer_core.test.js:29-35`). **Two stale details corrected 2026-08-06:** the file is no longer `retirement_optimizer_core.test.js` (renamed in `d0f4a00`), and there is no "vm test context" — the suite has loaded via `require()` since `86e26fa`.
 - **Test:** In the browser, enable nerd knobs, run GBM-mode MC, confirm `msg.medianAnnualReturn` ≈ `mu` and the per-path `inflationSequence` passed into `simulate()` actually varies year-to-year (not constant) — spot-check via `console.log` in a manual run or a new browser-test-suite case in `optimizer_tests.js`
 - **Test:** Confirm bootstrap/stress mode output is byte-identical before/after this change (their code paths are untouched)
+- **Status:** **COMPLETE 2026-08-23, v11.160F.** Shipped differently from this spec in one
+  important way: AAM is a **third mode**, not a replacement for GBM, so the two models can be run
+  against each other. Both synthetic modes gained the AR(1) inflation. Three of the planning claims
+  were wrong and the measurement corrected them, recorded in findings.md under P23m:
+  the guessed shock sd of 1.20% was about half the fitted 2.12%; the planned model was NOT incapable
+  of a 1970s (8.7% of paths, four times too rare rather than impossible); and the record's longest
+  run above 5% is FIVE years, not eight. Defaults now come from a least-squares AR(1) fit to the
+  in-repo CPI-U record for 1948-2025, pinned by a node test that re-runs the fit.
+  Inflation draws use their **own PRNG stream**, so GBM's returns are bit-identical to the pre-P23
+  code whatever the inflation knobs say - the invariant that makes "GBM is unchanged" a measurement.
+  P23q result (findings.md): GBM against AAM is 0.2pp of survival and an identical median ruin year,
+  while variable inflation against the old flat rate is **4.8pp of survival and $117,047 of median
+  terminal wealth**. The returns half was a labeling fix; the inflation half was a correction.
+  Also fixed in passing: `returnSeq` exponentiated stress mode's already-decimal returns, feeding a
+  wrong `yr.baseReturn` into every stress scenario's log. No balance changed, because
+  `returnSequencePerAccount` overrides every account, but P69 would have displayed it.
+- **Independent:** no phase dependencies
+
+---
+
+## P69: Replay - walk one Monte Carlo or Stress sequence through the main model
+**Why:** The Monte Carlo and Stress tabs report survival rates, median ruin years and percentile
+bands. There is no way to take one bad sequence and walk it through the Annual Details table and the
+Charts next to your own plan. Design and sub-items are in the approved plan at
+`C:/Users/starc/.claude/plans/cryptic-wondering-wren.md`; the load-bearing findings are:
+
+- `runSimulation()` (optimizer_ui.js:675) is already a clean three-step pipeline, and
+  `loadMCVariation()` (mc_tab.js:1175) is the precedent for writing an MC row into the main model.
+- **The percentile bands are not paths.** `computePercentiles` (stats.js:41-52) sorts each year
+  independently, so the p50 line is a synthetic envelope no simulation ever lived. A "p50 sample"
+  has to be defined by ranking paths on one whole-run outcome and picking the one at that rank.
+- Ship the captured sequences in the results message (20 x 40yr x 4 assets x 8B = 26KB). Do NOT
+  regenerate them from the seed on the main thread: it works today and breaks silently the first
+  time bank-build code changes.
+- User decision 2026-08-23: capture a SPREAD, not only failures, and the headline is the overlay
+  against the user's own plan. Year-by-year scrubbing inside a path is out of scope.
+- [ ] **P69a** - extract worker.js's per-path input bundle into a shared helper
+- [ ] **P69b** - keep `ruinYears` in the main pass; capture worst-N plus samples across the ranking
+- [ ] **P69c** - ship the captured set for both the main and stress passes
+- [ ] **P69d** - replay mode in the UI, inputs never mutated
+- [ ] **P69e** - prev/next across the captured set
+- [ ] **P69f** - overlay the user's own plan on the replayed path
+- [ ] **P69g** - Annual Details under replay, ruin year marked
+- [ ] **P69h** - decide what replay does to the Optimizer tab and the Tax Planner handoff
+- **Status:** pending
+- **Independent:** no phase dependencies
+
+---
+
+## P70: Do high-inflation paths overstate tax?
+**Why:** `sim.inflation` advances at the per-path `yr.yearInflation`, but `sim.cpiRate` - which
+indexes federal and state brackets, IRMAA thresholds, the ACA FPL multiple and the IRA goal -
+advances at the **fixed** `inputs.cpi` (optimizer_core.js:2870-2873). A path escalating spending at
+11% indexes its brackets at 2.5%. That is artificial real bracket creep, overstating tax in exactly
+the paths that matter.
+
+**Live today** in Historical and Stress mode, which have carried per-path inflation for some time;
+v11.160F extends it to both synthetic modes. optimizer_core.js:73 documents a deliberate "tax policy
+must not differ per path" rule, but that comment was written about the IRMAA lookback factor, not
+about indexation - re-read it before assuming it settles this.
+
+- [ ] **P70a** - run the existing stress scenarios with `cpiRate` following realized inflation
+      against today's fixed rate; report lifetime-tax and ruin-year deltas per scenario. Small effect
+      means a NOTE; flipped ruin years mean an engine fix. **No default change in this phase.**
 - **Status:** pending
 - **Independent:** no phase dependencies
 

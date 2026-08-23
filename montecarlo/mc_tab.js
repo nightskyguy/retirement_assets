@@ -46,6 +46,11 @@ const MC_PARAMS = {
     // is per window, so 20 produces a union of roughly 40 distinct start years.
     'mc-stress-count':  { dflt: 20,  min: 3,   max: 98 },
     'mc-bear-fraction': { dflt: 25,  min: 0,   max: 50, int: false },
+    // Synthetic inflation. Defaults are the 1948-2025 CPI fit that prng.js ships; see the P23m
+    // table in .planning/retirement-optimizer/findings.md for the fit and why that window.
+    'mc-inflation-persistence':   { dflt: 0.67, min: 0,     max: 0.95, int: false },
+    'mc-inflation-shock-sd':      { dflt: 2.1,  min: 0,     max: 10,   int: false },
+    'mc-inflation-return-corr':   { dflt: -0.3, min: -0.95, max: 0.95, int: false },
 };
 
 // Clamped read of one MC parameter input, by element id. Ranges live in MC_PARAMS so the run, the
@@ -98,6 +103,22 @@ function initMCTab() {
 }
 
 // Returns true when NERD_KNOBS is active.
+// The two synthetic modes share everything except how a normal draw becomes a return, so almost
+// every test in this file wants "is this synthetic", not "is this GBM".
+function isSyntheticMode(mode) {
+    return mode === 'gbm' || mode === 'aam';
+}
+
+// The inflation model is shared by both synthetic modes and ignored by Historical, so one reader
+// serves the run, the stress refresh and the hash.
+function _mcInflationCfg() {
+    return {
+        inflationPersistence: _mcNum('mc-inflation-persistence'),
+        inflationShockSd:     _mcNum('mc-inflation-shock-sd') / 100,
+        inflationReturnCorr:  _mcNum('mc-inflation-return-corr'),
+    };
+}
+
 function _mcNerdMode() {
     return typeof NERD_KNOBS !== 'undefined' && NERD_KNOBS;
 }
@@ -132,12 +153,17 @@ function updateMCGrowthWarning() {
     }
 }
 
-// Dim μ/σ inputs when Historical is selected (unused in that mode; Stress is folded into it).
-// Show bear-start knob only in Historical (bootstrap) mode.
+// Dim the synthetic-only inputs when Historical is selected (unused in that mode; Stress is folded
+// into it). Show the bear-start knob only in Historical (bootstrap) mode.
+//
+// Everything here keys off "is this Historical", never off a specific synthetic mode, so both GBM
+// and AAM light up the same controls. The inflation knobs join μ and σ on that list: Historical
+// samples real inflation out of the record and has no model to tune.
 function updateMCModeUI() {
     const mode = document.getElementById('mc-sim-mode')?.value;
     const isBootstrap = mode === 'bootstrap';
-    ['mc-mu', 'mc-sigma'].forEach(id => {
+    ['mc-mu', 'mc-sigma', 'mc-inflation-persistence', 'mc-inflation-shock-sd',
+     'mc-inflation-return-corr'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.disabled = isBootstrap;
@@ -225,6 +251,9 @@ function _buildSweepHash() {
         seed:        _mcNum('mc-seed'),
         simMode:     document.getElementById('mc-sim-mode')?.value ?? 'gbm',
         bearFraction: _mcNum('mc-bear-fraction'),
+        // Retuning the inflation model changes every synthetic path, so it belongs in the identity
+        // of a run exactly as mu and sigma do.
+        inflation:    _mcInflationCfg(),
         // Scope is part of the identity of a run: switching between "your plan" and "every
         // strategy" has to invalidate what is on screen, or the stale banner never appears and the
         // page keeps showing the other scope's answer.
@@ -355,7 +384,7 @@ function runMonteCarlo(scope) {
     // estimate have something to say. Calibration always uses the full variation list: one variation
     // is too small a sample to measure throughput from.
     if (!mcTimingIsMeasured()) {
-        calibrateMCMs({ variations: allVariations, mu, sigma, seed, years });
+        calibrateMCMs({ variations: allVariations, mu, sigma, seed, years, simulationMode });
     }
 
     // UI feedback. The count readout is set here, not in renderSurvivalTable, so the cancel bar
@@ -365,7 +394,8 @@ function runMonteCarlo(scope) {
     setMCRunning(true);
 
     runMCWorker(
-        { variations, stressVariations, numPaths, mu, sigma, seed, years, simulationMode, stressCount, stressWindow, bearFraction, inflationRate: base.inflation },
+        { variations, stressVariations, numPaths, mu, sigma, seed, years, simulationMode, stressCount,
+          stressWindow, bearFraction, inflationRate: base.inflation, ..._mcInflationCfg() },
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);
@@ -478,9 +508,10 @@ async function runMCExperiment() {
 }
 
 // Equity range = the empirical worst/best single-year return over the cell's numPaths x years draws
-// (msg.minAnnualReturn / .maxAnnualReturn). Inflation range is written forward-compatibly: today
-// Synthetic inflation is a single fixed rate (min == max, shown "(fixed)"), but the moment gbm gains
-// a per-path inflation distribution (msg.inflationStats), this column shows a real range with no edit.
+// (msg.minAnnualReturn / .maxAnnualReturn). The Inflation column was written forward-compatibly for
+// the day Synthetic inflation stopped being one fixed rate, and that day has arrived: msg.inflationStats
+// is now populated in every mode, so this shows a real range. It still falls back to "(fixed)" when
+// min == max, which is what an inflation shock of 0 produces.
 function renderDemoTable(rows) {
     const body = document.getElementById('mc-demo-tbody');
     if (!body) return;
@@ -573,6 +604,7 @@ function refreshMCStressOnly() {
             stressWindow:  stressWindowMode(),
             bearFraction:  _mcNum('mc-bear-fraction'),
             inflationRate: base.inflation,
+            ..._mcInflationCfg(),
         },
         null,
         (msg) => {
@@ -741,16 +773,31 @@ function renderMCMainMetrics(msg) {
         parts.push(`Completed in <strong>${sec} s</strong>`);
     }
 
-    // Synthetic (GBM): one blended equity series and a fixed inflation rate, so there is nothing
-    // per-asset to report. CAGR first, then the range, matching the Historical line below.
+    // Synthetic: one blended return series, so there is nothing per-asset to report. CAGR first,
+    // then the range, matching the Historical line below.
     if (!msg.assetRanges) {
-        if (grow != null) parts.push(`Median growth <strong>${grow}%/yr</strong> <span style="color:#888;font-size:0.85em;">(geometric)</span>`);
+        // The two synthetic models centre the yearly return distribution differently, and the label
+        // has to say which one you are looking at. GBM's mu is a log drift, so the centre reported
+        // here sits below the growth rate typed in Assumptions; AAM's mu is the plain average, so
+        // the centre IS that number. Neither changes how volatility drags on compounded growth, so
+        // this is a statement about one year, not about where the plan ends up.
+        const _centreLabel = (msg.simulationMode === 'aam') ? 'arithmetic' : 'geometric';
+        if (grow != null) parts.push(`Median growth <strong>${grow}%/yr</strong> <span style="color:#888;font-size:0.85em;">(${_centreLabel})</span>`);
         if (lo != null && hi != null) parts.push(
             `Equity range <strong style="color:${parseFloat(lo)<0?'#c0392b':'inherit'}">${lo}%</strong>`
             + ` to <strong>${hi}%</strong>`
             + ` <span style="color:#888;font-size:0.85em;">(worst/best yr)</span>`
         );
-        if (inf != null) parts.push(`Inflation <strong>${_mcPct(msg.inflationRate, true)}</strong>/yr <span style="color:#888;font-size:0.85em;">(fixed)</span>`);
+        // Synthetic inflation now varies per path, so it reports a range like Historical does.
+        // The fixed-rate wording is kept for the one case that still produces it: an inflation
+        // shock of 0, which is how you ask for the old behavior.
+        const _iS = msg.inflationStats;
+        if (_iS && _iS.max - _iS.min > 1e-9) {
+            parts.push(`Inflation <strong>${_mcPct(_iS.cagr, true)}</strong>/yr`
+                + ` <span style="color:#888;font-size:0.85em;">(${_mcPct(_iS.min, true)} to ${_mcPct(_iS.max, true)})</span>`);
+        } else if (inf != null) {
+            parts.push(`Inflation <strong>${_mcPct(msg.inflationRate, true)}</strong>/yr <span style="color:#888;font-size:0.85em;">(fixed)</span>`);
+        }
     }
 
     // Historical (bootstrap): per-asset CAGR with its worst and best year, same sentence shape.
@@ -1888,7 +1935,8 @@ function renderInputFanCharts(inputFan, years) {
         });
     }
 
-    // Inflation chart (bootstrap only — null in GBM)
+    // Inflation chart. Populated in every mode now: the synthetic modes build their own inflation
+    // bank, so this is no longer blank outside Historical.
     const inflWrap = document.getElementById('mc-input-inflation-wrap');
     if (inflWrap) inflWrap.style.display = inputFan.inflation ? '' : 'none';
     if (_inputInflationChart) { _inputInflationChart.destroy(); _inputInflationChart = null; }

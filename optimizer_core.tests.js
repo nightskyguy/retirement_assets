@@ -2152,7 +2152,7 @@ test('P64: property tax lowers federal tax while the elevated SALT cap lives, an
             `(got ${fed(withIn, y)} with, ${fed(withOut, y)} without)`);
     }
     // 2030+: the cap reverts to $10,000, which loses to the standard deduction, so the same
-    // $40,000 bill buys nothing. This is the user's own objection, pinned: past 2029 modelling it
+    // $40,000 bill buys nothing. This is the user's own objection, pinned: past 2029 modeling it
     // changes no number at all.
     for (const y of [2030, 2031]) {
         assertNear(fed(withIn, y), fed(withOut, y),
@@ -4842,6 +4842,214 @@ test.critical('a no-tax state reports honest spend and honest failure', () => {
 // entry point below is what still sets the exit code.
 //
 // `skipSlow` is honoured ONLY by the browser tier. Node always passes false: a tag must never be
+// -- Synthetic Monte Carlo: arithmetic returns and AR(1) inflation (P23) ------
+// The synthetic modes draw one standard normal per path-year and differ only in the transform.
+// Everything below asserts against the real prng.js helpers, not a reimplementation.
+
+// Reproduces the pre-P23 GBM bank build exactly, so "GBM is unchanged" stays a measurement.
+function _p23OldGbmShocks(mu, sigma, seed, n) {
+    const rng = _mcPrng.mulberry32(seed);
+    const logDrift = mu - 0.5 * sigma * sigma;
+    const out = new Float64Array(n);
+    for (let i = 0; i < n; i++) out[i] = logDrift + sigma * _mcPrng.boxMuller(rng);
+    return out;
+}
+
+// Reproduces the patched synthetic bank build (worker.js / mc_controller.js share this shape).
+function _p23NewSynth(mode, mu, sigma, seed, years, opts) {
+    opts = opts || {};
+    const rng    = _mcPrng.mulberry32(seed);
+    const infRng = _mcPrng.mulberry32(seed ^ 0x5F356495);
+    const isAAM  = (mode === 'aam');
+    const logDrift = mu - 0.5 * sigma * sigma;
+    const target  = opts.inflationRate        != null ? opts.inflationRate        : 0.03;
+    const persist = opts.inflationPersistence != null ? opts.inflationPersistence : _mcPrng.INFLATION_AR1_PERSISTENCE;
+    const shockSd = opts.inflationShockSd     != null ? opts.inflationShockSd     : _mcPrng.INFLATION_AR1_SHOCK_SD;
+    const rho     = opts.inflationReturnCorr  != null ? opts.inflationReturnCorr  : _mcPrng.INFLATION_RETURN_CORR;
+    const bank = new Float64Array(years), inf = new Float64Array(years);
+    let prev = target;
+    for (let y = 0; y < years; y++) {
+        const z1 = _mcPrng.boxMuller(rng);
+        const shock = logDrift + sigma * z1;
+        const r = isAAM ? Math.max(_mcPrng.RETURN_FLOOR, mu + sigma * z1) : Math.exp(shock) - 1;
+        bank[y] = isAAM ? r : shock;
+        const zInf = _mcPrng.correlatedNormal(z1, _mcPrng.boxMuller(infRng), rho);
+        prev = _mcPrng.computeNextInflation(prev, target, persist, shockSd, zInf);
+        inf[y] = prev;
+    }
+    return { bank, inf };
+}
+
+function _p23Mean(a) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return s / a.length; }
+function _p23Sd(a) {
+    const m = _p23Mean(a); let s = 0;
+    for (let i = 0; i < a.length; i++) s += (a[i] - m) * (a[i] - m);
+    return Math.sqrt(s / (a.length - 1));
+}
+function _p23Corr(a, b) {
+    const ma = _p23Mean(a), mb = _p23Mean(b); let n = 0, da = 0, db = 0;
+    for (let i = 0; i < a.length; i++) { n += (a[i] - ma) * (b[i] - mb); da += (a[i] - ma) ** 2; db += (b[i] - mb) ** 2; }
+    return n / Math.sqrt(da * db);
+}
+// Ordinary least squares of x_t on x_{t-1}. Returns the fitted persistence and residual sd -- the
+// same fit that produced the shipped INFLATION_AR1_* constants.
+function _p23FitAR1(series) {
+    const y = series.slice(1), x = series.slice(0, -1);
+    const mx = _p23Mean(x), my = _p23Mean(y);
+    let sxy = 0, sxx = 0;
+    for (let i = 0; i < x.length; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) * (x[i] - mx); }
+    const phi = sxy / sxx;
+    const c = my - phi * mx;
+    let ss = 0;
+    for (let i = 0; i < x.length; i++) { const e = y[i] - (c + phi * x[i]); ss += e * e; }
+    return { phi, residSd: Math.sqrt(ss / (x.length - 2)), target: c / (1 - phi) };
+}
+
+test('P23: GBM return draws are untouched by the inflation model', () => {
+    // Inflation uses its own PRNG stream precisely so that turning it on, or retuning it, cannot
+    // shift a single return draw. Without that, every existing Synthetic result would move for a
+    // reason having nothing to do with returns.
+    const n = 400;
+    const want = _p23OldGbmShocks(0.07, 0.15, 42, n);
+    for (const opts of [{}, { inflationShockSd: 0 },
+                        { inflationShockSd: 0.05, inflationPersistence: 0.9, inflationReturnCorr: -0.9 }]) {
+        const got = _p23NewSynth('gbm', 0.07, 0.15, 42, n, opts).bank;
+        for (let i = 0; i < n; i++) {
+            assert(got[i] === want[i],
+                `GBM shock ${i} moved with inflation settings ${JSON.stringify(opts)}: ${got[i]} vs ${want[i]}`);
+        }
+    }
+});
+
+test('P23: a zero inflation shock leaves inflation flat at the target', () => {
+    // The regression guard for Historical parity, stated on the synthetic side: no shock, no drift.
+    const inf = _p23NewSynth('gbm', 0.07, 0.15, 7, 60, { inflationShockSd: 0, inflationRate: 0.025 }).inf;
+    for (let y = 0; y < inf.length; y++) {
+        assert(Math.abs(inf[y] - 0.025) < 1e-12, `year ${y} drifted to ${inf[y]} with no shock`);
+    }
+});
+
+test('P23: AR(1) inflation reverts toward the target', () => {
+    let v = 0.12;
+    const seen = [];
+    for (let i = 0; i < 6; i++) { v = _mcPrng.computeNextInflation(v, 0.03, 0.67, 0.021, 0); seen.push(v); }
+    for (let i = 1; i < seen.length; i++) {
+        assert(seen[i] < seen[i - 1], `step ${i} did not move toward the target: ${seen.join(', ')}`);
+    }
+    assert(Math.abs(seen[seen.length - 1] - 0.03) < 0.02,
+        `six shock-free steps should land near the 3% target, got ${seen[seen.length - 1]}`);
+    // Persistence 0 means no memory at all: one step lands exactly on the target.
+    assert(_mcPrng.computeNextInflation(0.12, 0.03, 0, 0.021, 0) === 0.03,
+        'persistence 0 should snap straight to the target');
+});
+
+test('P23: inflation cannot fall below INFLATION_FLOOR', () => {
+    const v = _mcPrng.computeNextInflation(0.0, 0.03, 0.67, 0.021, -50);
+    assert(v === _mcPrng.INFLATION_FLOOR, `a huge negative shock should clamp to the floor, got ${v}`);
+});
+
+test('P23: RETURN_FLOOR clamps the arithmetic tail short of -100%', () => {
+    // A normal draw on the LEVEL is unbounded below, unlike the lognormal one it sits beside. At a
+    // 60% sigma the tail is reached often enough to be worth clamping rather than arguing about.
+    const rng = _mcPrng.mulberry32(1);
+    let min = Infinity, clamped = 0;
+    for (let i = 0; i < 200000; i++) {
+        const r = Math.max(_mcPrng.RETURN_FLOOR, 0.07 + 0.60 * _mcPrng.boxMuller(rng));
+        if (r < min) min = r;
+        if (r === _mcPrng.RETURN_FLOOR) clamped++;
+    }
+    assert(min >= _mcPrng.RETURN_FLOOR, `draw fell to ${min}, below the floor`);
+    assert(clamped > 0, 'this fixture is only meaningful if the clamp actually fires');
+});
+
+test('P23: AAM centers the yearly return distribution on the number typed', () => {
+    // The whole point of the mode. GBM reports exp(mu - sigma^2/2) - 1, which is visibly below mu;
+    // AAM reports mu. Neither changes the volatility drag on CUMULATIVE growth.
+    const mu = 0.07, sigma = 0.15;
+    const bank = _p23NewSynth('aam', mu, sigma, 42, 40000).bank;
+    assert(Math.abs(_p23Mean(bank) - mu) < 0.002, `AAM sample mean ${_p23Mean(bank)} should sit near mu ${mu}`);
+    assert(Math.abs(_p23Sd(bank) - sigma) < 0.002, `AAM sample sd ${_p23Sd(bank)} should sit near sigma ${sigma}`);
+    // Sanity on the contrast: GBM's median draw is materially lower than mu at this sigma.
+    const gbm = Array.from(_p23NewSynth('gbm', mu, sigma, 42, 40000).bank).map(x => Math.exp(x) - 1);
+    gbm.sort((a, b) => a - b);
+    const gbmMedian = gbm[Math.floor(gbm.length / 2)];
+    assert(gbmMedian < mu - 0.005, `GBM median draw ${gbmMedian} should sit below mu ${mu}`);
+});
+
+test('P23: AAM with zero volatility is a deterministic run at mu', () => {
+    const bank = _p23NewSynth('aam', 0.055, 0, 3, 40).bank;
+    for (let y = 0; y < bank.length; y++) {
+        assert(bank[y] === 0.055, `year ${y} should be exactly mu with sigma 0, got ${bank[y]}`);
+    }
+});
+
+test('P23: the inflation shock realizes the requested correlation with the return draw', () => {
+    // Poor returns and rising prices in the same year is the joint event that breaks a plan.
+    // Independent draws erase it, so this correlation is the point of correlatedNormal().
+    for (const rho of [-0.30, -0.60, 0, 0.45]) {
+        const rng = _mcPrng.mulberry32(42), infRng = _mcPrng.mulberry32(42 ^ 0x5F356495);
+        const zs = [], zinfs = [];
+        for (let i = 0; i < 60000; i++) {
+            const z1 = _mcPrng.boxMuller(rng);
+            zs.push(z1);
+            zinfs.push(_mcPrng.correlatedNormal(z1, _mcPrng.boxMuller(infRng), rho));
+        }
+        const c = _p23Corr(zs, zinfs);
+        assert(Math.abs(c - rho) < 0.02, `rho ${rho} realized as ${c.toFixed(4)}`);
+    }
+});
+
+test('P23: the shipped AR(1) constants still match a re-fit of the CPI record', () => {
+    // The constants are a measurement of HISTORICAL_RETURNS.inflation over 1948-2025, not a guess,
+    // and this test is what stops them drifting away from the data once nobody remembers the fit.
+    // The window is deliberate: 1928-2025 fits a 3.09% shock sd only because it contains Depression
+    // deflation and WWII price controls, and 1990-2025 fits a persistence of 0.274, which makes
+    // sustained inflation unreachable.
+    const start = _histRet.inflationStartYear;
+    const series = _histRet.inflation.slice(1948 - start, 2025 - start + 1);
+    assert(series.length === 78, `expected 78 years of CPI, got ${series.length}`);
+    const fit = _p23FitAR1(series);
+    assert(Math.abs(fit.phi - _mcPrng.INFLATION_AR1_PERSISTENCE) < 0.02,
+        `fitted persistence ${fit.phi.toFixed(3)} has drifted from the shipped ${_mcPrng.INFLATION_AR1_PERSISTENCE}`);
+    assert(Math.abs(fit.residSd - _mcPrng.INFLATION_AR1_SHOCK_SD) < 0.002,
+        `fitted shock sd ${fit.residSd.toFixed(4)} has drifted from the shipped ${_mcPrng.INFLATION_AR1_SHOCK_SD}`);
+    // And the correlation default, measured against a 60/40 blend over the same window.
+    const resid = [];
+    for (let i = 1; i < series.length; i++) {
+        resid.push(series[i] - (fit.target * (1 - fit.phi) + fit.phi * series[i - 1]));
+    }
+    const eq = _histRet.equity.slice(1948 - _histRet.equityStartYear, 2025 - _histRet.equityStartYear + 1).slice(1);
+    const bd = _histRet.bonds.slice(1948 - _histRet.bondsStartYear, 2025 - _histRet.bondsStartYear + 1).slice(1);
+    const blend = eq.map((v, i) => 0.6 * v + 0.4 * bd[i]);
+    const c = _p23Corr(blend, resid);
+    assert(Math.abs(c - _mcPrng.INFLATION_RETURN_CORR) < 0.05,
+        `60/40 blend correlates with the inflation shock at ${c.toFixed(3)}, shipped default is ${_mcPrng.INFLATION_RETURN_CORR}`);
+});
+
+test('P23: simulated inflation reaches the persistence the record shows', () => {
+    // The failure this replaces: a flat rate, where no path ever sees prices run away. The record's
+    // longest stretch above 5% is five years (1977-1981), one such episode in 78 years, so a random
+    // 40-year window contains it around half the time. A model that never gets there is not
+    // modeling the thing that breaks retirements.
+    const years = 40, paths = 400;
+    let withRun = 0, sawFloorBreach = false, sum = 0, n = 0;
+    for (let p = 0; p < paths; p++) {
+        const inf = _p23NewSynth('gbm', 0.07, 0.15, 1000 + p, years).inf;
+        let best = 0, cur = 0;
+        for (let y = 0; y < years; y++) {
+            sum += inf[y]; n++;
+            if (inf[y] < _mcPrng.INFLATION_FLOOR) sawFloorBreach = true;
+            if (inf[y] > 0.05) { cur++; if (cur > best) best = cur; } else cur = 0;
+        }
+        if (best >= 5) withRun++;
+    }
+    assert(!sawFloorBreach, 'a simulated year fell below INFLATION_FLOOR');
+    assert(Math.abs(sum / n - 0.03) < 0.005, `long-run mean ${(sum / n).toFixed(4)} should sit near the 3% target`);
+    const share = withRun / paths;
+    assert(share > 0.20 && share < 0.65,
+        `${(share * 100).toFixed(1)}% of paths contain a five-year run above 5% inflation; the record implies roughly half`);
+});
+
 // able to stop a test from running in the place that gates commits.
 function runOptimizerCoreTests(opts) {
     const skipSlow = !!(opts && opts.skipSlow);

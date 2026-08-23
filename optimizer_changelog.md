@@ -11,6 +11,48 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.160F"></a>
+
+## 11.160F
+
+### Two Synthetic models, and prices that move
+
+The Monte Carlo tab's Simulation Mode now offers three choices instead of two: Historical,
+**Synthetic - GBM** and **Synthetic - AAM**.
+
+GBM is the model that was already there, unchanged. It reads the growth rate as a drift in
+logarithms, which means the middle of its yearly return distribution sits below the rate you type.
+Enter 7% with 15% volatility and it reports a median growth of 6.05%.
+
+AAM reads the same number as a plain yearly average, so it reports 7.00%. That is the whole
+difference. **It is a change to what the number means, not to how much money you end up with**:
+volatility still drags on compounded growth in both models, so the median plan finishes in much the
+same place either way. If your growth assumption came from a source quoting an average annual
+return, AAM is the model that matches it.
+
+Both draw the same market shocks from the same seed, so switching between them compares the two
+models rather than two different runs.
+
+### Synthetic inflation is no longer a flat line
+
+Every Synthetic path used to live through identical prices, at whatever rate the Assumptions section
+named. Now each path gets its own inflation, and it behaves the way inflation behaves: a high year
+tends to be followed by another high year, so a plan can run into a stretch of rising prices rather
+than a permanent average of them.
+
+The model is tuned to US consumer price data for 1948 to 2025, and it leans high in years when
+returns are poor, because that pairing is what actually breaks a retirement plan. Reported inflation
+in Synthetic mode is now a range rather than a single number, and the inflation distribution chart
+works there for the first time.
+
+**Advanced Parameters** gains three controls for it: persistence, shock size and the correlation
+with returns. Setting the shock size to 0 pins inflation at your Assumptions rate and reproduces the
+old behavior exactly.
+
+Historical mode is untouched, as is the market path Synthetic - GBM produces.
+
+---
+
 <a id="11.1601"></a>
 
 ## 11.1601

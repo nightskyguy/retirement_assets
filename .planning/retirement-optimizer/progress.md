@@ -3596,3 +3596,69 @@ zero rows for me with no JS error, which is itself unexplained.
 Final: **v11.1601**, 16 commits on PR #186, suites 289 / 61 / 22, tier-1 289/0, badge green at 661.
 No screenshot at any point this session - the Browser pane was never displayed, so every visual claim
 rests on DOM and computed-style assertions.
+
+---
+
+## Session 2026-08-23 — P23 shipped as three modes, v11.160F
+
+**Started as a planning session**, three questions from the user. Two were answered from the code and
+the record; the third became the work.
+
+**1. Why arithmetic mean rather than geometric?** The reason was never written down — progress.md
+records only "user confirmed". Reconstructed: at mu 7% / sigma 15% the Synthetic tab prints 6.05%
+because `mu` is a log drift, and the tab labels that "(geometric)". **Correction issued to the
+original spec:** the planned copy "mean === median" is true of the one-year return and false of
+cumulative growth, so AAM is a change to what the number means, not to how much money you end up
+with. The engine later confirmed this: 0.2pp of survival between the models.
+
+**2. A realistic inflation model.** The planned AR(1) constants were guessed. Fitted them against the
+CPI-U array already in `historical_returns.js`, three windows, and shipped the 1948-2025 fit.
+
+**3. Replay.** Scoped and deferred to a new phase, P69, per the user's own sequencing.
+
+**The user changed the design mid-plan:** AAM is a THIRD mode beside GBM, not a replacement, so the
+two can be compared. That decision produced the strongest guarantee in the change — inflation draws
+were given their own PRNG stream, so GBM's returns are bit-identical to the pre-P23 code whatever the
+inflation knobs say. A node test asserts it against a verbatim copy of the old bank build.
+
+### Three claims I made while planning, and what measuring did to them
+
+| claim | verdict |
+|---|---|
+| "The planned AR(1) can never produce a 1970s" | **False.** 8.7% of 40-year paths contain a five-year run above 5%. Four times too rare, not impossible. |
+| "Eight consecutive years above 5% in the record" | **False.** Five (1977-81), peak 13.30%. |
+| "rho about -0.25 against the equity draw" | **Not as stated.** Equity correlates at -0.18 to +0.10; the sensitivity is in BONDS (-0.25 to -0.38). -0.30 is right for a 60/40 blend, for a different reason than I gave. |
+
+### What shipped
+
+Third dropdown mode `aam`; `RETURN_FLOOR`, `computeNextInflation()` and `correlatedNormal()` in
+prng.js with fitted constants; both synthetic modes build an inflation bank and report
+`inflationStats`, so the Input Distribution inflation chart works outside Historical for the first
+time; three nerd-gated knobs; the "(geometric)" label became mode-dependent; `simulationMode` now
+rides on the results message.
+
+**Two live bugs fixed in passing.** `worker.js` and `mc_controller.js` both collapsed every
+non-bootstrap mode to `'gbm'` at the call site, which would have run AAM as GBM in silence. And
+`returnSeq` exponentiated stress mode's already-decimal returns, feeding a wrong `yr.baseReturn` into
+every stress scenario's log — no balance moved, because `returnSequencePerAccount` overrides all five
+accounts, but P69's replay would have put that number on screen.
+
+### The result worth remembering
+
+Variable inflation costs **4.8 points of survival, two years of median ruin, and $117,047 of median
+terminal wealth** against the flat rate. GBM against AAM is **0.2 points and an identical ruin
+year**. The returns half of this phase was a labeling fix; the inflation half was a correction to
+what the tab had been reporting. Full table in findings.md under P23q.
+
+### Verification
+
+Suites **299 / 61 / 22**, badge green at 671 (289 in-page + 382 node). `TestTiers.EXPECTED` and
+`.githooks/README.md` both reconciled to 299. Ten new tests. Three synthetic runs driven through the
+real worker in the browser and read back from the DOM.
+
+**No screenshot.** The Browser pane would not composite in this session, so every visual claim rests
+on DOM and computed-value assertions rather than on looking at the page.
+
+**Not done:** P69 and P70 are written up as phases and not started. `.planning` line endings: the
+repo is CRLF except `.githooks/**`, and an early edit put 51 bare LF lines into prng.js before that
+was caught and normalized.

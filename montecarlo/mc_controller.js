@@ -145,9 +145,15 @@ function calibrateMCMs(cfg) {
     const rng = mulberry32(seed ?? 42);
     const logDrift = mu - 0.5 * sigma * sigma;
 
+    // Draw the way the selected mode draws. This is only a timing probe, so the difference is
+    // immaterial to the measurement, but a probe that models something the run will not do is a
+    // trap for the next reader.
     const returnSeq = new Float64Array(years);
     for (let y = 0; y < years; y++) {
-        returnSeq[y] = Math.exp(logDrift + sigma * boxMuller(rng)) - 1;
+        const z = boxMuller(rng);
+        returnSeq[y] = (cfg.simulationMode === 'aam')
+            ? Math.max(RETURN_FLOOR, mu + sigma * z)
+            : Math.exp(logDrift + sigma * z) - 1;
     }
 
     const t0 = performance.now();
@@ -190,6 +196,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         const varsToUse = runVariations || variations;
         let numPaths = cfg.numPaths;
         let scenarioBank, multiAssetBank, medianAnnualReturn, logDrift;
+        let synthInflationBank = null;
         let minAnnualReturn =  Infinity;
         let maxAnnualReturn = -Infinity;
         let assetRanges    = null;
@@ -261,19 +268,48 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
             };
             inflationStats = { min: infMin, cagr: Math.exp(infLogSum / bankLen) - 1, max: infMax };
         } else {
+            // Synthetic modes -- mirrors worker.js's branch exactly; see that file for why 'gbm'
+            // banks a log-space shock while 'aam' banks the final return, and why inflation draws
+            // come from their own stream.
             const { mu, sigma } = cfg;
+            const isAAM = (mode === 'aam');
             logDrift = mu - 0.5 * sigma * sigma;
-            medianAnnualReturn = Math.exp(logDrift) - 1;
-            scenarioBank = new Float64Array(numPaths * years);
+            medianAnnualReturn = isAAM ? mu : Math.exp(logDrift) - 1;
+            const infRng           = mulberry32((cfg.seed ?? 42) ^ 0x5F356495);
+            const inflationTarget  = cfg.inflationRate ?? 0.03;
+            const inflationPersist = cfg.inflationPersistence ?? INFLATION_AR1_PERSISTENCE;
+            const inflationShockSd = cfg.inflationShockSd     ?? INFLATION_AR1_SHOCK_SD;
+            const inflationCorr    = cfg.inflationReturnCorr  ?? INFLATION_RETURN_CORR;
+            scenarioBank       = new Float64Array(numPaths * years);
+            synthInflationBank = new Float64Array(numPaths * years);
             for (let p = 0; p < numPaths; p++) {
+                let prevInflation = inflationTarget;
                 for (let y = 0; y < years; y++) {
-                    const shock = logDrift + sigma * boxMuller(rng);
-                    scenarioBank[p * years + y] = shock;
-                    const r = Math.exp(shock) - 1;
+                    const z1    = boxMuller(rng);
+                    const shock = logDrift + sigma * z1;
+                    const r     = isAAM ? Math.max(RETURN_FLOOR, mu + sigma * z1)
+                                        : Math.exp(shock) - 1;
+                    scenarioBank[p * years + y] = isAAM ? r : shock;
                     if (r < minAnnualReturn) minAnnualReturn = r;
                     if (r > maxAnnualReturn) maxAnnualReturn = r;
+                    const zInf = correlatedNormal(z1, boxMuller(infRng), inflationCorr);
+                    prevInflation = computeNextInflation(prevInflation, inflationTarget,
+                                                         inflationPersist, inflationShockSd, zInf);
+                    synthInflationBank[p * years + y] = prevInflation;
                 }
             }
+
+            // Same shape the Historical pass reports, so every reader downstream -- the metrics
+            // line, the demo table, the Input Distribution chart -- treats synthetic inflation as
+            // a distribution rather than a single number, with no special case for the mode.
+            let infMin = Infinity, infMax = -Infinity, infLogSum = 0;
+            for (let i = 0; i < synthInflationBank.length; i++) {
+                const v = synthInflationBank[i];
+                if (v < infMin) infMin = v;
+                if (v > infMax) infMax = v;
+                infLogSum += Math.log1p(v);
+            }
+            inflationStats = { min: infMin, cagr: Math.exp(infLogSum / synthInflationBank.length) - 1, max: infMax };
         }
 
         const varResults = [];
@@ -307,7 +343,8 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
                 const returnSeq = new Float64Array(years);
                 for (let y = 0; y < years; y++) {
                     const raw = scenarioBank[p * years + y];
-                    returnSeq[y] = mode === 'bootstrap' ? raw : Math.exp(raw) - 1;
+                    // Only GBM banks a log-space shock -- see worker.js.
+                    returnSeq[y] = mode === 'gbm' ? Math.exp(raw) - 1 : raw;
                 }
 
                 let returnSequencePerAccount = null;
@@ -336,6 +373,11 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
                     inflationSequence = new Float64Array(years);
                     for (let y = 0; y < years; y++) {
                         inflationSequence[y] = multiAssetBank.inflation[p * years + y];
+                    }
+                } else if (synthInflationBank) {
+                    inflationSequence = new Float64Array(years);
+                    for (let y = 0; y < years; y++) {
+                        inflationSequence[y] = synthInflationBank[p * years + y];
                     }
                 }
 
@@ -427,16 +469,17 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
 
         // Build input fan — mirrors worker.js exactly.
         let equityBankForFan;
-        if (mode === 'bootstrap' || mode === 'stress') {
-            equityBankForFan = multiAssetBank.equity;
-        } else {
+        if (mode === 'gbm') {
             equityBankForFan = new Float64Array(numPaths * years);
             for (let i = 0; i < scenarioBank.length; i++) {
                 equityBankForFan[i] = Math.exp(scenarioBank[i]) - 1;
             }
+        } else {
+            equityBankForFan = (mode === 'aam') ? scenarioBank : multiAssetBank.equity;
         }
         const inflationBankForFan = (['bootstrap', 'stress'].includes(mode) && multiAssetBank?.inflation)
-            ? multiAssetBank.inflation : null;
+            ? multiAssetBank.inflation
+            : synthInflationBank;
         const inputFan = computeInputFan(equityBankForFan, inflationBankForFan, numPaths, years);
 
         return {
@@ -456,7 +499,9 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
     const totalWork = willRunStress ? (cfg.numPaths + stressCountEstimate) : cfg.numPaths;
     const mainWeight = stressOnly ? 0 : (willRunStress ? cfg.numPaths / totalWork : 1);
 
-    const main = stressOnly ? null : await runPass(simulationMode === 'bootstrap' ? 'bootstrap' : 'gbm', 0, mainWeight);
+    // Pass the selected mode through -- see worker.js for why the old ternary was wrong.
+    const mainMode = (simulationMode === 'bootstrap' || simulationMode === 'aam') ? simulationMode : 'gbm';
+    const main = stressOnly ? null : await runPass(mainMode, 0, mainWeight);
     if (!stressOnly && main === null) return; // cancelled mid-pass
     // Stress runs against ONLY the current withdrawal strategy (mc_tab.js's runMonteCarlo()
     // builds this), not the full variations sweep — falls back to the full array if missing.
@@ -484,6 +529,7 @@ async function _runMCMainThread(cfg, onProgress, onComplete) {
         variations: main.varResults,
         numPaths: main.numPaths,
         years,
+        simulationMode: mainMode,
         totalMs,
         medianAnnualReturn: main.medianAnnualReturn,
         minAnnualReturn:    main.minAnnualReturn,

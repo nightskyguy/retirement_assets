@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.161A"></a>
+<a id="11.161B"></a>
 
-## 11.161A
+## 11.161B
 
 ### Two Synthetic models, and prices that move
 
@@ -52,7 +52,7 @@ works there for the first time.
 
 **Advanced Parameters** gains three controls for it: persistence, shock size and the correlation
 with returns. Those boxes stay in the advanced panel, but the presets that drive them do not: a new
-**Model presets** row sits under the mode selector where everyone can reach it.
+**Mode presets** row sits under the mode selector where everyone can reach it.
 
 Among them is a **Fixed Inflation** button, which pins inflation to your Assumptions rate for every
 path and every year and so reproduces the pre-change model exactly. That is what to use when

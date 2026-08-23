@@ -3778,3 +3778,10 @@ Browser-verified nerd-OFF end to end: preset row visible with all three buttons,
 every knob offsetParent null; click Fixed Inflation -> auto re-run -> survival 54.8% to 58.4%,
 inflationStats min==cagr==max==3.0%, caption reads "inflation shock sigma 0.0%". The caption is
 what makes an invisible-knob preset legible, which is why it had to land first.
+
+### Addendum 7: "Model presets" -> "Mode presets" (v11.161B)
+
+User: at that point in the page the only name the reader has been taught is "Simulation Mode", so
+"model" arrives unexplained and reads as something unrelated. Renamed on all three surfaces (row
+label, in-page changelog line, changelog file). The rationale is now a comment beside the row so the
+next person does not "correct" it back.

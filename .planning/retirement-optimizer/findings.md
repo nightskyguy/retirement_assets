@@ -2631,3 +2631,120 @@ $6, finalNW -$9,108.
   evidence, one has to be added.
 - **Arm labels renamed 2026-08-21** at the user's request: `fib` -> `brokFirst`, `bnd+fib` ->
   `bnd+brokFirst`. `fib` read as Fibonacci and hid which of the two exclusions was under test.
+
+## P23m: the AR(1) inflation constants, fitted against the in-repo CPI-U record (2026-08-23)
+
+The planned P23 defaults (persistence 0.65, shock sd 1.20%) were guessed. `historical_returns.js`
+already carries BLS CPI-U December-over-December for 1928-2026, so the fit is a repo fact, not a
+literature citation. OLS of `cpi_t` on `cpi_{t-1}`, three windows:
+
+| window | n | persistence | shock sd | implied target | stationary sd | half-life | actual sd |
+|---|---|---|---|---|---|---|---|
+| 1928-2025 | 98 | 0.609 | **3.09%** | 3.21% | 3.89% | 1.40y | 3.89% |
+| 1948-2025 | 78 | 0.670 | **2.12%** | 3.46% | 2.85% | 1.73y | 2.81% |
+| 1990-2025 | 36 | 0.274 | **1.31%** | 2.54% | 1.37% | 0.53y | 1.46% |
+| *planned* | - | *0.650* | *1.20%* | - | *1.58%* | *1.61y* | - |
+
+**The persistence guess was good; the shock sd guess was not.** 0.65 sits between the 1928 and 1948
+fits. 1.20% is roughly half the 1948-2025 residual sd, and the planned stationary sd of 1.58% is
+about 55% of the record's 2.81%.
+
+### Three claims made while planning this, and what the measurement did to them
+
+**1. "The planned AR(1) can never produce a 1970s." False.** 20,000 simulated 40-year paths at the
+planned constants produce a five-year run above 5% inflation in **8.7%** of paths, with a worst-path
+peak of 10.28%. Tame, not impossible. The correct statement is that it is roughly four times too rare
+and never reaches the record's 13.30% peak.
+
+| constants | P(5-yr run >5%) | P(4-yr run) | worst-path peak |
+|---|---|---|---|
+| planned 0.650 / 1.20% | 8.7% | 17.8% | 10.28% |
+| fit 1990-2025 0.274 / 1.31% | 0.1% | 0.9% | 9.42% |
+| **fit 1948-2025 0.670 / 2.12%** | **39.6%** | 57.3% | 16.14% |
+| fit 1928-2025 0.609 / 3.09% | 49.8% | 69.1% | 21.10% |
+
+**2. "Eight consecutive years above 5%." False.** The record's longest such run, 1948-2025, is
+**five** years, and the peak is 13.30%. The 1948-2025 fit's 39.6% is therefore close to right rather
+than excessive: one five-year episode in 78 years means a random 40-year window contains it about 56%
+of the time.
+
+**3. "rho around -0.25 against the equity draw." Not supported as stated.** Equity's correlation with
+the inflation shock is -0.026 (1928-2025), -0.183 (1948-2025), +0.095 (1990-2025) - near zero.
+**Bonds carry the inflation sensitivity**: -0.247, -0.339, -0.384. The synthetic modes draw one
+*blended* portfolio return, so the number rho multiplies is the blend's:
+
+| window | 40/60 | 50/50 | 60/40 | 70/30 | 80/20 |
+|---|---|---|---|---|---|
+| 1928-2025 | -0.164 | -0.129 | -0.100 | -0.075 | -0.055 |
+| 1948-2025 | -0.363 | -0.332 | **-0.296** | -0.262 | -0.231 |
+| 1990-2025 | -0.200 | -0.125 | -0.059 | -0.006 | +0.036 |
+
+-0.25 happens to land near the 1948-2025 60/40 blend, but the reasoning behind it was wrong: the
+correlation lives in the bond sleeve, and it is a function of the user's asset mix, which the
+synthetic modes do not model per account.
+
+### Decision
+
+**Default to the 1948-2025 fit: persistence 0.670, shock sd 2.12%, rho -0.30.** Reasons:
+
+- 1928-2025 is inflated by Depression deflation and WWII price controls, regimes with no forward
+  relevance, and it doubles the shock sd on that basis alone.
+- 1990-2025 is the anchored-expectations era; persistence 0.274 and a 0.53-year half-life make
+  sustained inflation essentially unreachable, which is the failure the whole change exists to fix.
+- 1948-2025 reproduces the record's persistence episodes at close to the right rate, and its
+  persistence is within 0.02 of the value already guessed.
+
+rho is a single blended number standing in for a mix-dependent quantity. Document that limit rather
+than pretending to more precision; a per-account synthetic mode would be the honest fix and is not
+in scope here.
+
+## P23q: GBM against AAM, and what variable inflation actually costs (2026-08-23)
+
+Three runs of the real worker from the browser, default scenario, plan-only scope, 2,000 paths,
+25-year horizon, seed 42, mu 7%, sigma 15%. GBM and AAM consume the same shock stream, so this is a
+paired comparison rather than two samples.
+
+| | GBM | AAM | GBM, inflation shock 0 |
+|---|---|---|---|
+| median annual return reported | **6.051%** | **7.000%** | 6.051% |
+| worst / best single year | -47.06% / +105.71% | -62.47% / +73.26% | -47.06% / +105.71% |
+| survival | 57.55% | 57.35% | **62.35%** |
+| median ruin year | 2042 | 2042 | **2044** |
+| median lifetime tax | $447,808 | $450,750 | $442,494 |
+| median delivered spend | $3,110,501 | $3,110,501 | $3,110,501 |
+| final p50 balance | $620,582 | $583,997 | **$737,629** |
+| inflation | -1.00% to 13.77%, CAGR 3.18% | identical | flat 3.00% |
+
+### The model swap is almost nothing; the inflation change is not
+
+**GBM against AAM: 0.2 points of survival, an identical median ruin year, and identical delivered
+spend to seven figures.** The reported centre moves a full point, from 6.051% to 7.000%, and the
+outcome does not follow it. This is the prediction from the planning table holding up in the engine:
+AAM changes what mu *means*, not what the plan is worth.
+
+AAM in fact finishes slightly *lower* (final p50 $583,997 against $620,582), which is the right
+direction and worth stating because it reads backwards. GBM's arithmetic mean return is
+`e^0.07 - 1 = 7.25%`, above AAM's 7.00%; GBM's *median* draw is the one that sits below. Reporting a
+higher centre and delivering a lower balance is exactly the confusion the two-mode comparison exists
+to make visible.
+
+The tail shapes differ as expected: GBM's lognormal reaches +105.71% in a good year and floors around
+-47%, while AAM's normal is symmetric, -62.47% to +73.26%. Neither hit RETURN_FLOOR at sigma 15%.
+
+**Variable inflation costs 4.8 points of survival, two years of median ruin, and $117,047 of median
+terminal wealth**, against the flat rate the tab used to run. That is more than twenty times the
+GBM/AAM difference. The returns half of this phase is a labeling fix; the inflation half is a
+correction to what the tab was reporting.
+
+Note that delivered spend is identical across all three runs, so this is a clean wealth and tax
+comparison, the same property the P24 stop-year sweep had.
+
+### Verification that the separate inflation PRNG stream works
+
+`medianAnnualReturn`, `minAnnualReturn` and `maxAnnualReturn` are bit-identical between the GBM run
+with default inflation and the GBM run with the shock set to 0. The inflation model cannot move a
+return draw, which is what makes "GBM is unchanged" checkable rather than asserted. A node test
+pins this against a verbatim copy of the pre-P23 bank build.
+
+The simulated inflation range, -1.00% to 13.77%, brackets the real record's 13.30% peak (1979)
+without being tuned to it.

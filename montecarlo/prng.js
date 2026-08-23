@@ -22,6 +22,51 @@ function boxMuller(rng) {
     return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
+// Floor for a synthetic annual return draw. The arithmetic-normal walk (AAM mode) draws on the
+// level rather than in log space, so nothing stops an unlucky tail from going below -100%; -85% is
+// worse than any year in the record (1931, -43.8%) and still a number rather than a negative balance.
+const RETURN_FLOOR = -0.85;
+
+// AR(1) inflation defaults, fitted to HISTORICAL_RETURNS.inflation (BLS CPI-U, December over
+// December) over 1948-2025 by ordinary least squares of cpi_t on cpi_{t-1}. The window is a
+// deliberate choice, not the whole record: 1928-2025 fits a 3.09% shock standard deviation only
+// because it contains Depression deflation and WWII price controls, and 1990-2025 fits a
+// persistence of 0.274, which makes sustained inflation unreachable. The 1948-2025 fit reproduces
+// the record's persistence episodes at close to the right rate - a five-year run above 5% inflation
+// appears in about 40% of simulated 40-year paths, against one such episode in the 78 years of
+// record. See the P23m table in .planning/retirement-optimizer/findings.md; a node test pins these
+// values to a re-run of the fit so they cannot drift away from the data they came from.
+const INFLATION_AR1_PERSISTENCE = 0.67;   // fitted 0.670
+const INFLATION_AR1_SHOCK_SD    = 0.021;  // fitted 2.12%
+
+// Correlation between a synthetic annual return draw and that year's inflation shock. Negative:
+// the years that break a retirement plan are the ones where real returns are poor AND prices rise,
+// and drawing the two independently removes that joint event by construction.
+//
+// One number standing in for something that actually depends on the asset mix. Measured against the
+// AR(1) residual over 1948-2025, equity alone gives -0.183 and bonds -0.339, so a blended portfolio
+// lands between them: -0.363 at 40/60, -0.296 at 60/40, -0.231 at 80/20. -0.30 is the 60/40 blend.
+// The synthetic modes draw a single blended return and have no per-account mix, so this cannot be
+// derived per portfolio the way the Historical mode's per-asset banks can.
+const INFLATION_RETURN_CORR = -0.30;
+
+// One AR(1) step for simulated inflation: revert toward `target` at rate `persistence`
+// (0 = no memory, near 1 = highly persistent), then add a shock.
+//
+// Takes a STANDARD NORMAL `z` rather than an rng, so the caller can hand in a variate already
+// correlated with that year's return draw. Callers that want the two independent pass a fresh
+// boxMuller(rng).
+function computeNextInflation(prev, target, persistence, shockStdDev, z) {
+    const next = target + persistence * (prev - target) + shockStdDev * z;
+    return Math.max(INFLATION_FLOOR, next);
+}
+
+// Splits one standard normal into a second one correlated with it at `rho`, given an independent
+// standard normal `z2`. Cholesky of a 2x2 correlation matrix, which at this size is one line.
+function correlatedNormal(z1, z2, rho) {
+    return rho * z1 + Math.sqrt(1 - rho * rho) * z2;
+}
+
 // Block bootstrap scenario bank from HISTORICAL_RETURNS.equity.
 // Draws overlapping blocks of blockSize years; truncates block if near end of history.
 // Returns Float64Array of fractional returns (not log-space), length numPaths × years.
@@ -138,7 +183,7 @@ function scoreStartYears(sLen) {
 
 // Which historical start years the stress pass runs, for a given mode.
 //
-//   a number       the `count` worst by real CAGR over that one window. The original behaviour.
+//   a number       the `count` worst by real CAGR over that one window. The original behavior.
 //   'combined'     the worst `count` from EVERY window in STRESS_WINDOWS, unioned and deduped.
 //                  The windows overlap heavily, so this is typically far fewer than 5 x count
 //                  (about 23 distinct start years at count 10), and it stops a single window's
@@ -470,7 +515,10 @@ if (typeof module !== 'undefined' && module.exports) {
                        stressOutcomeBand, applyBearStartOverlay, bootstrapMultiAssetBank,
                        scoreStartYears, selectStressStarts, stressWindowsFor, buildBearPool,
                        STRESS_WINDOWS, STRESS_ROLLING_WINDOWS,
-                       BEAR_OVERLAY_WINDOWS, BEAR_OVERLAY_POOL, INFLATION_FLOOR };
+                       BEAR_OVERLAY_WINDOWS, BEAR_OVERLAY_POOL, INFLATION_FLOOR,
+                       RETURN_FLOOR, computeNextInflation, correlatedNormal,
+                       INFLATION_AR1_PERSISTENCE, INFLATION_AR1_SHOCK_SD,
+                       INFLATION_RETURN_CORR };
 } else if (typeof window !== 'undefined') {
     // Keep this list identical to the module.exports above: optimizer_core.tests.js runs against
     // whichever one its host provides, so a name missing here fails only in the browser tier.
@@ -478,5 +526,8 @@ if (typeof module !== 'undefined' && module.exports) {
                       stressOutcomeBand, applyBearStartOverlay, bootstrapMultiAssetBank,
                       scoreStartYears, selectStressStarts, stressWindowsFor, buildBearPool,
                       STRESS_WINDOWS, STRESS_ROLLING_WINDOWS,
-                      BEAR_OVERLAY_WINDOWS, BEAR_OVERLAY_POOL, INFLATION_FLOOR };
+                      BEAR_OVERLAY_WINDOWS, BEAR_OVERLAY_POOL, INFLATION_FLOOR,
+                      RETURN_FLOOR, computeNextInflation, correlatedNormal,
+                      INFLATION_AR1_PERSISTENCE, INFLATION_AR1_SHOCK_SD,
+                      INFLATION_RETURN_CORR };
 }

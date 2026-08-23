@@ -35,6 +35,7 @@ function runMonteCarloJob(cfg) {
         const varsToUse = runVariations || variations;
         let numPaths = cfg.numPaths;
         let scenarioBank, multiAssetBank, medianAnnualReturn, logDrift;
+        let synthInflationBank = null;
         let minAnnualReturn =  Infinity;
         let maxAnnualReturn = -Infinity;
         let assetRanges    = null;
@@ -117,20 +118,63 @@ function runMonteCarloJob(cfg) {
             };
             inflationStats = { min: infMin, cagr: Math.exp(infLogSum / bankLen) - 1, max: infMax };
         } else {
-            // GBM (default): bank[p*years+y] = log-space shock; convert with Math.exp()-1.
+            // Synthetic modes. Both draw exactly one standard normal per path-year, in the same
+            // order, and differ only in how that normal becomes a return:
+            //   'gbm' - lognormal. The bank stores a LOG-SPACE shock, converted with Math.exp()-1
+            //           downstream. mu is the log drift target, so the centre of the yearly return
+            //           distribution lands at exp(mu - sigma^2/2) - 1, below the number typed.
+            //   'aam' - arithmetic. The bank stores the FINAL return, as bootstrap's does. mu is the
+            //           plain average of the yearly returns, so the centre IS the number typed.
+            // Same seed, same shock sequence: the two are a paired comparison, not two independent
+            // samples that happen to share a mean.
             const { mu, sigma } = cfg;
+            const isAAM = (mode === 'aam');
             logDrift = mu - 0.5 * sigma * sigma;
-            medianAnnualReturn = Math.exp(logDrift) - 1;
-            scenarioBank = new Float64Array(numPaths * years);
+            medianAnnualReturn = isAAM ? mu : Math.exp(logDrift) - 1;
+
+            // Inflation draws come from their OWN stream. Sharing the return stream would mean that
+            // turning inflation variation on, or merely retuning it, shifted every return draw after
+            // it, so GBM results would move for a reason having nothing to do with returns. With a
+            // separate stream, GBM's returns are bit-identical to what this file produced before
+            // variable inflation existed, whatever the inflation knobs say.
+            const infRng           = mulberry32((cfg.seed ?? 42) ^ 0x5F356495);
+            const inflationTarget  = cfg.inflationRate ?? 0.03;
+            const inflationPersist = cfg.inflationPersistence ?? INFLATION_AR1_PERSISTENCE;
+            const inflationShockSd = cfg.inflationShockSd     ?? INFLATION_AR1_SHOCK_SD;
+            const inflationCorr    = cfg.inflationReturnCorr  ?? INFLATION_RETURN_CORR;
+
+            scenarioBank       = new Float64Array(numPaths * years);
+            synthInflationBank = new Float64Array(numPaths * years);
             for (let p = 0; p < numPaths; p++) {
+                let prevInflation = inflationTarget;
                 for (let y = 0; y < years; y++) {
-                    const shock = logDrift + sigma * boxMuller(rng);
-                    scenarioBank[p * years + y] = shock;
-                    const r = Math.exp(shock) - 1;
+                    const z1    = boxMuller(rng);
+                    const shock = logDrift + sigma * z1;
+                    const r     = isAAM ? Math.max(RETURN_FLOOR, mu + sigma * z1)
+                                        : Math.exp(shock) - 1;
+                    scenarioBank[p * years + y] = isAAM ? r : shock;
                     if (r < minAnnualReturn) minAnnualReturn = r;
                     if (r > maxAnnualReturn) maxAnnualReturn = r;
+                    // Correlated with THIS year's return draw: poor returns and rising prices in the
+                    // same year is the joint event that breaks a plan, and independent draws erase it.
+                    const zInf = correlatedNormal(z1, boxMuller(infRng), inflationCorr);
+                    prevInflation = computeNextInflation(prevInflation, inflationTarget,
+                                                         inflationPersist, inflationShockSd, zInf);
+                    synthInflationBank[p * years + y] = prevInflation;
                 }
             }
+
+            // Same shape the Historical pass reports, so every reader downstream -- the metrics
+            // line, the demo table, the Input Distribution chart -- treats synthetic inflation as
+            // a distribution rather than a single number, with no special case for the mode.
+            let infMin = Infinity, infMax = -Infinity, infLogSum = 0;
+            for (let i = 0; i < synthInflationBank.length; i++) {
+                const v = synthInflationBank[i];
+                if (v < infMin) infMin = v;
+                if (v > infMax) infMax = v;
+                infLogSum += Math.log1p(v);
+            }
+            inflationStats = { min: infMin, cagr: Math.exp(infLogSum / synthInflationBank.length) - 1, max: infMax };
         }
 
         const varResults = [];
@@ -149,7 +193,12 @@ function runMonteCarloJob(cfg) {
                 const returnSeq = new Float64Array(years);
                 for (let y = 0; y < years; y++) {
                     const raw = scenarioBank[p * years + y];
-                    returnSeq[y] = mode === 'bootstrap' ? raw : Math.exp(raw) - 1;
+                    // Only GBM banks a log-space shock. bootstrap, stress and aam all bank the
+                    // final return. This used to test `mode === 'bootstrap'`, which exponentiated
+                    // stress's already-decimal returns: harmless for balances, since
+                    // returnSequencePerAccount overrides every account, but it fed a wrong
+                    // yr.baseReturn into the log of every stress scenario.
+                    returnSeq[y] = mode === 'gbm' ? Math.exp(raw) - 1 : raw;
                 }
 
                 // Build per-account return sequences from multi-asset bank when available.
@@ -179,6 +228,11 @@ function runMonteCarloJob(cfg) {
                     inflationSequence = new Float64Array(years);
                     for (let y = 0; y < years; y++) {
                         inflationSequence[y] = multiAssetBank.inflation[p * years + y];
+                    }
+                } else if (synthInflationBank) {
+                    inflationSequence = new Float64Array(years);
+                    for (let y = 0; y < years; y++) {
+                        inflationSequence[y] = synthInflationBank[p * years + y];
                     }
                 }
 
@@ -294,16 +348,20 @@ function runMonteCarloJob(cfg) {
         // Build input fan — per-year return/inflation percentile bands across all paths.
         // Bootstrap: equity bank is already decimal returns. GBM: convert log-normal shocks once.
         let equityBankForFan;
-        if (mode === 'bootstrap' || mode === 'stress') {
-            equityBankForFan = multiAssetBank.equity;
-        } else {
+        if (mode === 'gbm') {
+            // GBM alone banks log-space shocks; convert once for the fan.
             equityBankForFan = new Float64Array(numPaths * years);
             for (let i = 0; i < scenarioBank.length; i++) {
                 equityBankForFan[i] = Math.exp(scenarioBank[i]) - 1;
             }
+        } else {
+            equityBankForFan = (mode === 'aam') ? scenarioBank : multiAssetBank.equity;
         }
+        // Both synthetic modes now have a real inflation distribution to show, so the Input
+        // Distribution inflation chart is no longer blank outside Historical mode.
         const inflationBankForFan = (['bootstrap', 'stress'].includes(mode) && multiAssetBank?.inflation)
-            ? multiAssetBank.inflation : null;
+            ? multiAssetBank.inflation
+            : synthInflationBank;
         const inputFan = computeInputFan(equityBankForFan, inflationBankForFan, numPaths, years);
 
         return {
@@ -333,7 +391,11 @@ function runMonteCarloJob(cfg) {
     const totalWork = willRunStress ? (cfg.numPaths + stressCountEstimate) : cfg.numPaths;
     const mainWeight = stressOnly ? 0 : (willRunStress ? cfg.numPaths / totalWork : 1);
 
-    const main = stressOnly ? null : runPass(simulationMode === 'bootstrap' ? 'bootstrap' : 'gbm', 0, mainWeight);
+    // Pass the selected mode straight through. This used to read
+    // `simulationMode === 'bootstrap' ? 'bootstrap' : 'gbm'`, which folded every non-bootstrap mode
+    // into GBM, so a third mode would have silently run as the second one.
+    const mainMode = (simulationMode === 'bootstrap' || simulationMode === 'aam') ? simulationMode : 'gbm';
+    const main = stressOnly ? null : runPass(mainMode, 0, mainWeight);
     // Stress runs against ONLY the current withdrawal strategy (mc_tab.js's runMonteCarlo()
     // builds this), not the full variations sweep — cfg.stressVariations falls back to the full
     // array if missing (e.g. a stale cached page mid-deploy), degrading to the old full-sweep behavior.
@@ -356,6 +418,9 @@ function runMonteCarloJob(cfg) {
         variations: main.varResults,
         numPaths: main.numPaths,
         years,
+        // Which model produced these numbers. The UI labels the reported centre differently for the
+        // two synthetic modes, and cannot infer the mode from the payload.
+        simulationMode: mainMode,
         totalMs:           performance.now() - t0,
         medianAnnualReturn: main.medianAnnualReturn,
         minAnnualReturn:    main.minAnnualReturn,

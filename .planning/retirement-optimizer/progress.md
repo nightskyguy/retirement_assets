@@ -3681,3 +3681,21 @@ invariant: MC_GOLDEN byte-identical or the refactor is wrong. P69a is subsumed b
 should land before P69. No changelog entry when it ships - user-facing only rule.
 
 Session changelog entry renamed 11.160F -> 11.1615; one entry per session held.
+
+### Addendum 2, same session: Input Distributions for everyone (v11.1616)
+
+User: the panel answers a question every mode raises, so it should not be nerd-gated. Shipped:
+shown for all users, folded by default; Min/Max lines start visible (phone users have no hover to
+find the legend toggle); and a caption names the run that built the charts, e.g. "Built from the
+last full run: Synthetic - Arithmetic (AAM) - 500 paths - seed 42 - mu 6.0% - sigma 12.0%"
+(Historical shows bear-start instead of mu/sigma). Mode wording is read from the dropdown option
+itself so caption and selector cannot disagree. Meta is stashed at DISPATCH (_mcFanMeta), so the
+caption describes the run that produced the fan, not whatever the boxes say now.
+
+Trap caught before shipping: non-demo users now get the fan rendered inside a CLOSED <details>,
+where the canvas has no box - the one case Chart.js's resize observer is worst at. The existing
+.mc-fold toggle-resize handler now covers the two fan charts, and the details gained the class.
+
+Browser-verified nerd-OFF: panel visible+folded on plain ?tab=mc, caption correct for aam and
+bootstrap runs, all five datasets visible, canvas 850x200 after fold-open (not the 300x150
+fallback). Console clean. Suites 299 / 61 / 22.

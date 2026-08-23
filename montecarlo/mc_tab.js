@@ -84,8 +84,10 @@ function initMCTab() {
     if (nerdPanel) {
         nerdPanel.style.display = advanced ? '' : 'none';
     }
+    // Input Distributions shows for everyone (folded by default) now that both synthetic modes
+    // have a real inflation distribution; only the parameters panel stays nerd-gated.
     const inputDist = document.getElementById('mc-input-dist');
-    if (inputDist) inputDist.style.display = advanced ? '' : 'none';
+    if (inputDist) inputDist.style.display = '';
 
     // A canvas first laid out inside a CLOSED <details> has no box to measure, so the chart can end
     // up sized against a fallback. Chart.js watches for resizes and usually recovers on its own, but
@@ -98,6 +100,9 @@ function initMCTab() {
             if (!fold.open) return;
             _mcStressChart?.resize();
             _mcChart?.resize();
+            // The Input Distributions fold renders its charts while closed for non-demo users.
+            _inputEquityChart?.resize();
+            _inputInflationChart?.resize();
         });
     });
 }
@@ -133,6 +138,30 @@ function applyMCPessimistic() {
     updateMCGrowthWarning();
     updateMCTimeEstimate();
     mcInputsChanged();
+}
+
+// The run whose inputFan is on screen: {seed, mu, sigma, bearFraction}, written at dispatch.
+let _mcFanMeta = null;
+
+// The dropdown's own wording for a mode value, so the fan caption and the selector can never
+// disagree about what a mode is called.
+function _mcModeLabel(mode) {
+    const opt = document.querySelector(`#mc-sim-mode option[value="${mode}"]`);
+    return opt ? opt.textContent.trim() : String(mode ?? '?');
+}
+
+// One line naming the run that built the Input Distributions: mode, paths, seed, and the
+// parameters that shaped the draws (mu/sigma for synthetic, bear-start for Historical).
+function _fanSourceText(msg, meta) {
+    const bits = [_mcModeLabel(msg.simulationMode), `${msg.numPaths} paths`];
+    if (meta?.seed != null) bits.push(`seed ${meta.seed}`);
+    if (isSyntheticMode(msg.simulationMode)) {
+        if (meta?.mu    != null) bits.push(`μ ${(meta.mu * 100).toFixed(1)}%`);
+        if (meta?.sigma != null) bits.push(`σ ${(meta.sigma * 100).toFixed(1)}%`);
+    } else if (meta?.bearFraction != null) {
+        bits.push(`bear-start ${meta.bearFraction}%`);
+    }
+    return 'Built from the last full run: ' + bits.join(' · ');
 }
 
 // The two synthetic modes share everything except how a normal draw becomes a return, so almost
@@ -419,6 +448,10 @@ function runMonteCarlo(scope) {
         calibrateMCMs({ variations: allVariations, mu, sigma, seed, years, simulationMode });
     }
 
+    // Captured for the Input Distributions caption: the fan must be labeled with the run that
+    // built it, and the input boxes can change between runs.
+    _mcFanMeta = { seed, mu, sigma, bearFraction };
+
     // UI feedback. The count readout is set here, not in renderSurvivalTable, so the cancel bar
     // describes the run in flight rather than whatever the previous run happened to be.
     const _pcBar = document.getElementById('mc-path-count');
@@ -533,7 +566,8 @@ async function runMCExperiment() {
             const det = dist.querySelector('details');
             if (det) det.open = true;
         }
-        renderInputFanCharts(lastMsg.inputFan, lastMsg.years);
+        renderInputFanCharts(lastMsg.inputFan, lastMsg.years,
+            _fanSourceText(lastMsg, { seed: _demoSeeds[_demoSeeds.length - 1], mu, sigma }));
     }
 
     if (btn) { btn.disabled = false; btn.textContent = 'Experiment ↻'; }
@@ -749,7 +783,7 @@ function finishMCRender(msg) {
 
     renderMCChart(msg);
     renderStressChart(msg.stress);
-    if (_mcNerdMode() || _mcDemoMode()) renderInputFanCharts(msg.inputFan, msg.years);
+    renderInputFanCharts(msg.inputFan, msg.years, _fanSourceText(msg, _mcFanMeta));
     syncTableCheckboxes();
 }
 
@@ -1884,13 +1918,18 @@ function updateMCProgress(pct) {
 
 // --- Input Distribution Fan Charts ----------------------------------------
 
-function renderInputFanCharts(inputFan, years) {
+function renderInputFanCharts(inputFan, years, sourceText) {
     if (!inputFan) return;
     const labels = Array.from({ length: years }, (_, i) => _mcStartYear + i);
 
-    // In the ?montecarlo demo the extremes are the teaching point (the widest a single year got),
-    // so the Min/Max lines start visible. Everywhere else they stay a legend-toggle away as before.
-    const showExtremes = _mcDemoMode();
+    // Which run these charts describe. Without it, the fan silently kept showing the previous
+    // run's draws after a mode or parameter change until the next full sweep.
+    const srcEl = document.getElementById('mc-input-dist-src');
+    if (srcEl) srcEl.textContent = sourceText ?? '';
+
+    // Min/Max start visible: the extremes are half the point of the display, and a phone user
+    // has no hover to discover the legend toggle with. One legend click hides them.
+    const showExtremes = true;
 
     function buildDatasets(fan, solidColor, bandColor) {
         return [
@@ -1904,11 +1943,11 @@ function renderInputFanCharts(inputFan, years) {
             { label: 'Median', data: fan.p50, borderColor: solidColor,
               backgroundColor: 'transparent', borderWidth: 2,
               pointRadius: 0, fill: false, tension: 0.3 },
-            // [3] Min — hidden by default (shown in the ?montecarlo demo); click legend to enable
+            // [3] Min — visible by default; click the legend to hide
             { label: 'Min', data: fan.min, borderColor: solidColor, borderDash: [4, 4],
               borderWidth: 1, backgroundColor: 'transparent',
               pointRadius: 0, fill: false, tension: 0.3, hidden: !showExtremes },
-            // [4] Max — hidden by default (shown in the ?montecarlo demo); click legend to enable
+            // [4] Max — visible by default; click the legend to hide
             { label: 'Max', data: fan.max, borderColor: solidColor, borderDash: [4, 4],
               borderWidth: 1, backgroundColor: 'transparent',
               pointRadius: 0, fill: false, tension: 0.3, hidden: !showExtremes },

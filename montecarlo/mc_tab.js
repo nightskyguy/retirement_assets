@@ -103,6 +103,38 @@ function initMCTab() {
 }
 
 // Returns true when NERD_KNOBS is active.
+// Put every Advanced Parameter back to its default. MC_PARAMS is the single source of those
+// defaults, so this cannot drift from what the clamped reads fall back to. mu's real default is
+// "synced from Growth %", a behavior rather than a number, so it goes through the sync afterwards.
+function resetMCParams() {
+    for (const [id, spec] of Object.entries(MC_PARAMS)) {
+        const el = document.getElementById(id);
+        if (el) el.value = spec.dflt;
+    }
+    syncMCMuFromGrowth();
+    updateMCTimeEstimate();
+    mcInputsChanged();
+}
+
+// One-click bad-decade parameter set. Not a prediction: a stress-leaning what-if for the synthetic
+// modes. Growth drops 2 points below the Assumptions rate, volatility rises to 18%, and inflation
+// becomes more persistent (0.75), more volatile (3.1% shock sd - the residual of the full 1928-2025
+// record, the window that includes its worst regimes) and more tightly tied to bad return years
+// (-0.45). Sampling knobs (paths, seed, stress count) are untouched: pessimism is a claim about the
+// world, not about how finely it is sampled. resetMCParams() undoes it.
+function applyMCPessimistic() {
+    const growth = parseFloat(document.getElementById('growth')?.value);
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set('mc-mu', (Number.isFinite(growth) ? Math.max(0, growth - 2) : 5).toFixed(1));
+    set('mc-sigma', 18);
+    set('mc-inflation-persistence', 0.75);
+    set('mc-inflation-shock-sd', 3.1);
+    set('mc-inflation-return-corr', -0.45);
+    updateMCGrowthWarning();
+    updateMCTimeEstimate();
+    mcInputsChanged();
+}
+
 // The two synthetic modes share everything except how a normal draw becomes a return, so almost
 // every test in this file wants "is this synthetic", not "is this GBM".
 function isSyntheticMode(mode) {

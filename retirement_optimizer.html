@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.160F</title>
+    <title>Retirement Optimizer 11.1615</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -470,8 +470,8 @@
 				<label style="font-size:1.1em;font-weight:600;color:#444;" title="Historical: block-bootstrap from real S&amp;P 500 / bond / international returns and real inflation, 1928–2025. The two Synthetic modes build returns from μ and σ instead, and differ only in what μ means. GBM is lognormal, so μ is a log drift and the middle of the yearly return distribution lands BELOW the number you type. AAM is a plain arithmetic average, so the middle IS the number you type. Both draw the same shocks from the same seed, so switching between them compares the two models rather than two different samples. Neither removes the drag volatility puts on compounded growth.">Simulation Mode
 					<select id="mc-sim-mode" style="margin-left:6px;font-size:0.95em;" onchange="onMCModeChange()">
 						<option value="bootstrap" selected>Historical (1928–2025)</option>
-						<option value="gbm">Synthetic – GBM (lognormal)</option>
-						<option value="aam">Synthetic – AAM (arithmetic)</option>
+						<option value="gbm">Synthetic – Lognormal (GBM)</option>
+						<option value="aam">Synthetic – Arithmetic (AAM)</option>
 					</select>
 				</label>
 				<!-- Which historical start years the Stress Test runs. Always visible: it changes
@@ -540,6 +540,8 @@
 			     When hidden, clicking the tab auto-runs with default parameters. -->
 			<div id="mc-nerd-panel" style="display:none;margin-bottom:12px;padding:10px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;">
 				<strong style="font-size:0.9em;color:#555;">Advanced Parameters</strong>
+				<button onclick="resetMCParams()" style="margin-left:12px;font-size:0.78em;padding:2px 8px;cursor:pointer;" title="Put every box in this panel back to its default, so you never have to remember what a value was before you changed it. Synthetic Return μ goes back to tracking the Assumptions Growth %.">Reset to defaults</button>
+				<button onclick="applyMCPessimistic()" style="margin-left:6px;font-size:0.78em;padding:2px 8px;cursor:pointer;" title="A one-click bad-decade parameter set: growth 2 points below your Assumptions rate, volatility raised to 18%, and inflation made more persistent (0.75), more volatile (3.1%, the full 1928–2025 record including its worst regimes) and more tightly tied to bad return years (-0.45). Not a prediction; a stress-leaning what-if. Reset to defaults undoes it.">Pessimistic</button>
 				<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;align-items:center;">
 					<label style="font-size:0.85em;color:#888;">(Mode selector above)</label>
 					<label style="font-size:0.85em;" title="Number of simulated market scenarios PER STRATEGY. The sweep runs this many paths against every withdrawal strategy it compares (about 144 of them on a typical plan), so 500 here is about 72,000 simulations. The running total is shown next to the Run button. More paths = more stable results, slower run.">Paths (per strategy)
@@ -777,7 +779,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-																<li data-flag="behavior"><b>11.160F</b> <strong>The Monte Carlo tab now offers two Synthetic models, and both give every path its own inflation.</strong> <i>Synthetic - GBM</i> is the model that was already there, unchanged. <i>Synthetic - AAM</i> reads the growth rate you type as a plain yearly average, so the median growth it reports is the number you entered rather than one about a point lower. That is a change to what the number means, not to how much money you end up with: volatility drags on compounded growth in both. Both draw the same market shocks from the same seed, so switching between them compares the models rather than two different runs. Synthetic inflation now varies year to year and clusters the way it does in the real record, tuned to US consumer price data for 1948 to 2025, and it leans high in years when returns are poor. Advanced Parameters gains persistence, shock size and correlation controls; a shock size of 0 restores the old fixed rate. Historical mode is unchanged.</li>
+																<li data-flag="behavior"><b>11.1615</b> <strong>The Monte Carlo tab now offers two Synthetic models, and both give every path its own inflation.</strong> <i>Synthetic - GBM</i> is the model that was already there, unchanged. <i>Synthetic - AAM</i> reads the growth rate you type as a plain yearly average, so the median growth it reports is the number you entered rather than one about a point lower. That is a change to what the number means, not to how much money you end up with: volatility drags on compounded growth in both. Both draw the same market shocks from the same seed, so switching between them compares the models rather than two different runs. Synthetic inflation now varies year to year and clusters the way it does in the real record, tuned to US consumer price data for 1948 to 2025, and it leans high in years when returns are poor. Advanced Parameters gains persistence, shock size and correlation controls; a shock size of 0 restores the old fixed rate, and <i>Reset to defaults</i> puts every advanced parameter back without your having to remember what it was. A one-click <i>Pessimistic</i> preset lowers growth, raises volatility and makes inflation more persistent, larger and more tightly tied to bad return years. Historical mode is unchanged.</li>
 																<li><b>11.1601</b> The Optimizer tab has been reorganized. Labels, column names, colors and symbols are now consistent with the rest of the tool, and the table shows the columns the <i>Optimize for</i> goal actually uses. Some were never shown at all: <strong>Final Roth</strong>, <strong>Final IRA</strong> and <strong>Mix Spread</strong> now exist. Optimize for also says what the goal ranks by, and a switch below it shows all columns at once. End Wealth and All Taxes are shown under every goal. Spend Goal and Yrs Funded moved into the row pop-up, and the legend folds out of the way. The saved-scenario list drops its Version column, and a <code>?tab=</code> web address opens the page on a chosen tab. No numbers change.</li>
 				<li data-flag="behavior"><b>11.15e3</b> <strong>When a plan runs out of every other account, it will now spend from the Brokerage account instead of reporting that it could not pay.</strong> The math avoided a possible "tax spiral" where increasing the brokerage draw increased the capital gains which increased the tax, which may also have increased social security taxability, which resulted in a higher tax requiring a greater withdrawal. Testing revealed that no "tax spiral" exists - it settles in two or fewer passes. So now it won't "give up" funding a year when all that remains is Brokerage assets to fund spending. Previously some plans went underfunded in some years due to the "avoided tax spiral". Most affected is "Fill Fed/IRMAA Bracket" with a tier selected. <strong>Behavior change:</strong> such a plan now funds more of its spending and ends with less left over, because the money is now spent, leaving less net worth. Saved scenarios and shared links for those plans will show different numbers. <a href="optimizer_changelog.md#11.15e3" target="_blank" rel="noopener">Details</a></li>
 				<li data-flag="behavior"><b>11.15cf</b> <strong>The IRMAA ceiling now aims at the threshold that will actually apply, two years out, instead of today's.</strong> IRMAA bills this year's premium against the income (MAGI) you reported two years ago, and compares it against the thresholds published for the billing year. The tool charged that correctly but aimed at it wrongly: an "IRMAA Ceil" plan capped income at today's threshold, about 6% below the one it would be judged against at 3% inflation, leaving roughly $13,000 a year of unspent IRA or Roth conversion. The same fix applies to QCD "As Needed". Behavior change: an IRMAA Ceiling plan now converts more, and "as Needed" QCDs draw less. <a href="optimizer_changelog.md#11.15cf" target="_blank" rel="noopener">Details</a></li>
@@ -1413,7 +1415,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
 <script src="montecarlo/prng.js?v=11160f"></script>
 <script src="montecarlo/stats.js?v=111091"></script>
 <script src="montecarlo/mc_controller.js?v=11160f"></script>
-<script src="montecarlo/mc_tab.js?v=11160f"></script>
+<script src="montecarlo/mc_tab.js?v=111615"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

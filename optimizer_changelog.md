@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.160F"></a>
+<a id="11.1615"></a>
 
-## 11.160F
+## 11.1615
 
 ### Two Synthetic models, and prices that move
 
@@ -49,7 +49,16 @@ works there for the first time.
 with returns. Setting the shock size to 0 pins inflation at your Assumptions rate and reproduces the
 old behavior exactly.
 
-Historical mode is untouched, as is the market path Synthetic - GBM produces.
+**Reset to defaults** puts every Advanced Parameter back in one click, so changing a value never
+requires remembering what it was, and a **Pessimistic** button applies a bad-decade parameter set:
+growth two points below the Assumptions rate, volatility at 18%, and inflation more persistent,
+larger and more tightly tied to poor return years. It is a stress-leaning what-if, not a prediction,
+and Reset to defaults undoes it.
+
+In the mode selector, the models now lead with the plain word: **Synthetic - Lognormal (GBM)** and
+**Synthetic - Arithmetic (AAM)**.
+
+Historical mode is untouched, as is the market path Synthetic - Lognormal produces.
 
 ---
 

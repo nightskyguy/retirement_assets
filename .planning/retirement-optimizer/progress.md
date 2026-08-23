@@ -3662,3 +3662,22 @@ on DOM and computed-value assertions rather than on looking at the page.
 **Not done:** P69 and P70 are written up as phases and not started. `.planning` line endings: the
 repo is CRLF except `.githooks/**`, and an early edit put 51 bare LF lines into prng.js before that
 was caught and normalized.
+
+### Addendum, same session: v11.1615 + the P71 refactor plan
+
+User feedback after PR #188 opened, three items. Two shipped, one planned:
+
+1. **Reset to defaults + Pessimistic buttons** in Advanced Parameters (v11.1615, commit 89924df).
+Reset reads MC_PARAMS - the same table the clamped reads fall back to - so it cannot drift from the
+real defaults, and re-syncs mu from Growth %. Pessimistic: growth -2pp, sigma 18%, persistence 0.75,
+shock 3.1% (full-record residual), corr -0.45; sampling knobs untouched. Driven in the browser:
+dirty -> reset -> pessimistic -> reset, all values verified from the DOM.
+2. **Mode labels lead with the plain word:** Synthetic - Lognormal (GBM), Synthetic - Arithmetic
+(AAM). User: acronym-first was unclear.
+3. **P71 written, plan only, per user instruction.** The runPass mirror between worker.js and
+mc_controller.js (~250 lines, six paired edits in the P23 session alone) collapses into a shared
+montecarlo/mc_engine.js with hook-injected yield/cancel/progress. CRN discipline is the safety
+invariant: MC_GOLDEN byte-identical or the refactor is wrong. P69a is subsumed by P71b, so P71
+should land before P69. No changelog entry when it ships - user-facing only rule.
+
+Session changelog entry renamed 11.160F -> 11.1615; one entry per session held.

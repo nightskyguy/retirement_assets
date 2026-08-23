@@ -13,7 +13,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| **O2** | P68 | Changelog brevity pass, deferred by user | `P68a` |
+| **O1** | P71 | Dedup the MC engine: one runPass instead of two mirrors | `P71a` |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P69 | Replay a Monte Carlo path through the main model | `P69a` |
@@ -70,7 +70,8 @@ first task. Every open item in the file now carries one.
 | **O2** | P12 | Retire Optimizer tab -> MC strategy comparison | `P12a` | nothing |
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 299 | - | - |
-| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | nothing |
+| **O1** | P71 | Dedup the MC engine: extract the runPass mirror into montecarlo/mc_engine.js *(new 2026-08-23, plan only, user-requested)* | `P71a` | nothing |
+| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | **P71 first**: P69a is subsumed by P71b |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
@@ -749,6 +750,84 @@ about indexation - re-read it before assuming it settles this.
       means a NOTE; flipped ruin years mean an engine fix. **No default change in this phase.**
 - **Status:** pending
 - **Independent:** no phase dependencies
+
+---
+
+## P71: Dedup the Monte Carlo engine - one runPass instead of two hand-kept mirrors
+**Why:** `mc_controller.js`'s `_runMCMainThread` is a hand-maintained mirror of `worker.js`'s
+`runPass` - its own comment says "Mirrors worker.js logic exactly". About 250 lines each. The P23
+session proved the cost: every substantive edit was applied twice as textually identical hunks (the
+synthetic branch, the returnSeq conversion, the inflationSequence branch, the input fan, the
+inflationStats block, the mode pass-through - six paired edits in one session). The two copies have
+already diverged once before P23 (the controller gained yield/cancel machinery the worker lacks),
+and the P23k footnote flags the synthetic draw loop as triplicated once `calibrateMCMs` is counted.
+A fourth near-copy lives in `optimizer_core.tests.js`: `_p23NewSynth` reimplements the bank build
+because worker.js cannot be loaded in node (it opens with `importScripts` and `self.onmessage`).
+
+**Plan approved as plan-only 2026-08-23; user asked for the design, not the implementation.**
+
+### Design
+
+New file `montecarlo/mc_engine.js`, loadable three ways like prng.js already is (module.exports for
+node, window for the page, bare globals under importScripts). It owns:
+
+- `runPass(cfg, mode, hooks)` - **async**, the single implementation. `hooks` is
+  `{ onProgress, shouldCancel, yieldIfDue }`, all optional and defaulting to no-ops.
+  The worker calls it with defaults (awaiting an already-resolved promise once per path is noise
+  next to a `simulate()` call); the controller supplies its 16ms-frame `yieldIfDue` and the
+  `_mcCancelled` check. Async in a worker is fine; the worker's outer try/catch containment and
+  postMessage shell stay exactly as they are.
+- `buildPathInputs(bank, synthBank, p, years, baseInputs, mode)` - the per-path bundle
+  (returnSeq conversion, returnSequencePerAccount, inflationSequence), extracted verbatim.
+  **This subsumes P69a**, and P69's replay imports it from here.
+- `buildStressMsg(stress)` - moves from worker.js; the controller's return shape stops being a
+  by-hand match.
+- `INFLATION_STREAM_XOR = 0x5F356495` - today that constant appears in worker.js,
+  mc_controller.js and the test file as a bare literal.
+
+`prng.js` gains `drawSyntheticReturn(mode, mu, sigma, logDrift, z)` so `calibrateMCMs` and the
+engine share the one formula the P23k footnote complained about.
+
+Load order: worker adds `mc_engine.js` to its importScripts list after prng.js; the page adds a
+`<script>` tag before mc_controller.js. The file:// fallback improves for free - fallback and
+worker literally run the same code instead of two texts believed identical.
+
+### The invariant that makes it safe
+
+**CRN discipline: the rng call order must not change.** Every seed's entire result set is downstream
+of the exact sequence of `boxMuller(rng)` calls; reordering one draw changes every number. Two
+existing guards catch it: `MC_GOLDEN` in sweep_golden.js pins full MC results, and the P23 suite pins
+GBM's bank against a verbatim copy of the pre-P23 build. The refactor must leave both untouched -
+byte-identical, not approximately equal.
+
+### Sub-items
+
+- [ ] **P71a** - `drawSyntheticReturn()` + `INFLATION_STREAM_XOR` into prng.js; point
+      `calibrateMCMs` and both runPass copies at them. Smallest possible first step, each call site
+      verifiable alone, suites must not move.
+- [ ] **P71b** - create mc_engine.js; move worker.js's `runPass`, `buildStressMsg` and the per-path
+      bundle (as `buildPathInputs`) verbatim; worker.js becomes a shell (onmessage, try/catch,
+      progress weighting, postMessage). MC_GOLDEN byte-identical.
+- [ ] **P71c** - `_runMCMainThread` delegates to the engine with its yield/cancel/progress hooks;
+      delete the ~250-line mirror from mc_controller.js. MC_GOLDEN byte-identical again, and the
+      file:// fallback manually exercised once.
+- [ ] **P71d** - test tier: `require('./montecarlo/mc_engine.js')` directly in
+      optimizer_core.tests.js and run all three modes end-to-end small (~20 paths). Replace
+      `_p23NewSynth` - the hand copy of the NEW code - with calls to the real engine.
+      `_p23OldGbmShocks` **stays** a verbatim copy: being a copy of the old code is its entire point.
+- [ ] **P71e** - wiring: importScripts list, page script tag, `?v=` tokens, `TestTiers.EXPECTED`,
+      `.githooks/README.md`. **No changelog entry** - the changelog is user-facing only and this
+      changes nothing a user can see; version bump in the title only.
+
+### Not in scope, noted
+
+The four version-bump sites are a separate consolidation problem (they span HTML, JS and md; a
+build step is against the repo's no-build ethos). The mc_tab.js chart-rendering overlap between the
+stress chart and the main chart was not measured this session and is not claimed here.
+
+- **Status:** pending - plan approved, implementation not started
+- **Blocks:** P69 should build ON this (P69a subsumed by P71b; P69c's capture plumbing lands in one
+  place instead of two). P70 is independent - it measures the engine, does not restructure it.
 
 ---
 

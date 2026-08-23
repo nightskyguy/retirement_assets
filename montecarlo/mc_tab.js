@@ -534,9 +534,14 @@ async function runMCExperiment() {
     const btn = document.getElementById('mc-demo-run-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
 
-    // Force Synthetic (gbm) and keep mu/sigma synced from the sidebar Growth %.
+    // The Experiment is a statement about SAMPLING noise - the same plan, the same parameters,
+    // different seeds and path counts - so it needs a synthetic mode, where the seed is what varies.
+    // Historical block-bootstraps the record and answers a different question, so switch away from
+    // it. Either synthetic mode is left alone: a reader riffing on Arithmetic should get their
+    // Experiment in Arithmetic, and the demo's point holds identically in both.
     const modeEl = document.getElementById('mc-sim-mode');
-    if (modeEl && modeEl.value !== 'gbm') { modeEl.value = 'gbm'; updateMCModeUI(); }
+    if (modeEl && !isSyntheticMode(modeEl.value)) { modeEl.value = 'gbm'; updateMCModeUI(); }
+    const demoMode = isSyntheticMode(modeEl?.value) ? modeEl.value : 'gbm';
 
     const base   = getInputs();
     const mu     = _mcNum('mc-mu')    / 100;
@@ -554,7 +559,7 @@ async function runMCExperiment() {
             const msg = await _mcRunOnce({
                 variations: [planVar], stressVariations: [planVar],
                 numPaths: paths, mu, sigma, seed, years,
-                simulationMode: 'gbm',
+                simulationMode: demoMode,
                 stressCount: 0, stressWindow: stressWindowMode(), bearFraction: 0,
                 // Same inflation model the main run would use. Without this the worker fell back
                 // to the prng.js defaults, which only coincidentally equal the knob defaults - a

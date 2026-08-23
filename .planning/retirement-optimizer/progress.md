@@ -3715,3 +3715,16 @@ main run.
 Verified live: aam caption carries all eight fields; Historical stays short (bear-start; its
 returns and inflation come from the record and have no other tuning). Version 11.1617 - one past
 the clock hex, same-hour collision with 11.1616, matching the 11.1600->11.1601 precedent.
+
+### Addendum 4: Experiment stops stomping AAM (v11.1618)
+
+User: in ?montecarlo, clicking Experiment reset Simulation Mode to GBM even when the reader was
+riffing on AAM. The guard was written when GBM was the only synthetic mode, so it tested
+value !== 'gbm'. Now it tests !isSyntheticMode(value): Historical still switches away (the
+Experiment is a statement about SAMPLING noise, which needs a mode where the seed is what varies),
+and either synthetic mode is left alone. The run cfg took simulationMode: 'gbm' as a literal, so
+that had to change too or the dropdown would have said AAM while the worker ran GBM.
+
+Browser-verified both branches: AAM stays AAM and the fan caption confirms the run really used it
+('Synthetic - Arithmetic (AAM) - 100 paths - seed 896 ...'); bootstrap still flips to gbm.
+Console clean. No changelog entry, per user. Version 11.1618, title + mc_tab token only.

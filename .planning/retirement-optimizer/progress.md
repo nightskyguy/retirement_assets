@@ -3728,3 +3728,31 @@ that had to change too or the dropdown would have said AAM while the worker ran 
 Browser-verified both branches: AAM stays AAM and the fan caption confirms the run really used it
 ('Synthetic - Arithmetic (AAM) - 100 paths - seed 896 ...'); bootstrap still flips to gbm.
 Console clean. No changelog entry, per user. Version 11.1618, title + mc_tab token only.
+
+### Addendum 5: Fixed Inflation button, and a false changelog claim retracted (v11.1619)
+
+User caught it: the changelog said "Synthetic - GBM is the model that was already there,
+unchanged." Not true. Its RETURN draws are bit-identical, but variable inflation applies to GBM
+too, so picking GBM does not reproduce a pre-v11.160F result. That is the worst place for the claim
+to be wrong, since GBM is exactly the mode a returning user reaches for expecting their old numbers.
+
+Both changelog surfaces corrected to say the market draws are unchanged and the mode as a whole is
+not, and a **Fixed Inflation** button added to Advanced Parameters. Name chosen over "Fix
+Inflation" (reads as repairing a bug) and "Inflation Fixed"; it parallels "Pessimistic" as an
+adjective-preset.
+
+It sets the inflation shock to 0 and touches nothing else. That is exactly enough: the AR(1) step is
+target + persistence*(prev-target) + shockSd*z starting at prev === target, so with no shock the
+middle term is 0 forever. Persistence and correlation go INERT rather than being reset - nothing to
+act on - so the reader keeps their settings for when they turn the shock back on. Verified live:
+dirty persistence/corr, click Fixed Inflation, only the shock moves.
+
+New test 300, "Fixed Inflation reproduces the pre-change Synthetic model exactly" - the composed
+claim in one place, because the composition is what the changelog now promises to users. It runs
+with persistence 0.9 and corr -0.8 deliberately, proving those really are inert. EXPECTED and
+.githooks/README reconciled 299 -> 300.
+
+End-to-end browser proof, 400 paths seed 42: returns bit-identical between the variable and fixed
+runs (median/min/max all equal to the digit); fixed inflation pinned at exactly the 3.0% Assumptions
+rate (min == cagr == max); survival 60% variable against 65% fixed, final p50 65,550 against
+81,608 - the cost of variable inflation, visible in one A/B.

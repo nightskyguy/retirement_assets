@@ -121,6 +121,25 @@ function resetMCParams() {
     mcInputsChanged();
 }
 
+// Reproduce the pre-v11.160F Synthetic model: one flat inflation rate for every path and every
+// year, at whatever the Assumptions section names.
+//
+// Setting the shock to 0 is enough, and exactly enough. The AR(1) step is
+// target + persistence*(prev - target) + shockSd*z, and it starts at prev === target, so with no
+// shock the middle term is 0 forever and the line never leaves the target. Persistence and the
+// return correlation go inert rather than being reset - they have nothing to act on - so the two
+// knobs keep whatever the reader set, ready for when they turn the shock back on.
+//
+// The returns are already bit-identical to the old model whatever the inflation settings say
+// (inflation draws come from a separate PRNG stream), so this button is the whole difference
+// between the current Synthetic modes and the one that shipped before them.
+function applyMCFixedInflation() {
+    const el = document.getElementById('mc-inflation-shock-sd');
+    if (el) el.value = 0;
+    updateMCTimeEstimate();
+    mcInputsChanged();
+}
+
 // One-click bad-decade parameter set. Not a prediction: a stress-leaning what-if for the synthetic
 // modes. Growth drops 2 points below the Assumptions rate, volatility rises to 18%, and inflation
 // becomes more persistent (0.75), more volatile (3.1% shock sd - the residual of the full 1928-2025

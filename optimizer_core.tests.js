@@ -5026,6 +5026,25 @@ test('P23: the shipped AR(1) constants still match a re-fit of the CPI record', 
         `60/40 blend correlates with the inflation shock at ${c.toFixed(3)}, shipped default is ${_mcPrng.INFLATION_RETURN_CORR}`);
 });
 
+test('P23: Fixed Inflation reproduces the pre-change Synthetic model exactly', () => {
+    // The promise the Fixed Inflation button makes to the user, stated once, in one place. Two
+    // separate facts have to hold together for it to be true, and each is asserted above on its
+    // own; this is the composition, because the composition is what the changelog claims.
+    const mu = 0.07, sigma = 0.15, seed = 42, years = 40, rate = 0.025;
+    const fixed = _p23NewSynth('gbm', mu, sigma, seed, years,
+                               { inflationShockSd: 0, inflationRate: rate,
+                                 // Deliberately non-default: with no shock these have nothing to
+                                 // act on, which is why the button leaves them alone.
+                                 inflationPersistence: 0.9, inflationReturnCorr: -0.8 });
+    const oldShocks = _p23OldGbmShocks(mu, sigma, seed, years);
+    for (let y = 0; y < years; y++) {
+        assert(fixed.bank[y] === oldShocks[y],
+            `return draw ${y} differs from the pre-P23 model: ${fixed.bank[y]} vs ${oldShocks[y]}`);
+        assert(fixed.inf[y] === rate,
+            `year ${y} inflation is ${fixed.inf[y]}, not the flat ${rate} the old model used`);
+    }
+});
+
 test('P23: simulated inflation reaches the persistence the record shows', () => {
     // The failure this replaces: a flat rate, where no path ever sees prices run away. The record's
     // longest stretch above 5% is five years (1977-1981), one such episode in 78 years, so a random

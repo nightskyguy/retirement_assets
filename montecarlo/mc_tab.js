@@ -150,14 +150,22 @@ function _mcModeLabel(mode) {
     return opt ? opt.textContent.trim() : String(mode ?? '?');
 }
 
-// One line naming the run that built the Input Distributions: mode, paths, seed, and the
-// parameters that shaped the draws (mu/sigma for synthetic, bear-start for Historical).
+// One line naming the run that built the Input Distributions: mode, paths, seed, and EVERY
+// parameter that shaped the draws - mu/sigma and the four inflation-model numbers for synthetic
+// runs, bear-start for Historical (whose returns and inflation come from the record and have no
+// other tuning). The test is reproducibility: the caption alone should be enough to re-create the
+// run it describes.
 function _fanSourceText(msg, meta) {
+    const pct1 = v => (v * 100).toFixed(1) + '%';
     const bits = [_mcModeLabel(msg.simulationMode), `${msg.numPaths} paths`];
     if (meta?.seed != null) bits.push(`seed ${meta.seed}`);
     if (isSyntheticMode(msg.simulationMode)) {
-        if (meta?.mu    != null) bits.push(`μ ${(meta.mu * 100).toFixed(1)}%`);
-        if (meta?.sigma != null) bits.push(`σ ${(meta.sigma * 100).toFixed(1)}%`);
+        if (meta?.mu    != null) bits.push(`μ ${pct1(meta.mu)}`);
+        if (meta?.sigma != null) bits.push(`σ ${pct1(meta.sigma)}`);
+        if (meta?.inflationRate        != null) bits.push(`inflation target ${pct1(meta.inflationRate)}`);
+        if (meta?.inflationPersistence != null) bits.push(`persistence ${meta.inflationPersistence}`);
+        if (meta?.inflationShockSd     != null) bits.push(`inflation shock σ ${pct1(meta.inflationShockSd)}`);
+        if (meta?.inflationReturnCorr  != null) bits.push(`return corr ${meta.inflationReturnCorr}`);
     } else if (meta?.bearFraction != null) {
         bits.push(`bear-start ${meta.bearFraction}%`);
     }
@@ -449,8 +457,9 @@ function runMonteCarlo(scope) {
     }
 
     // Captured for the Input Distributions caption: the fan must be labeled with the run that
-    // built it, and the input boxes can change between runs.
-    _mcFanMeta = { seed, mu, sigma, bearFraction };
+    // built it, and the input boxes can change between runs. Everything that shaped the draws goes
+    // in - the caption's job is to make the run reproducible from what it says.
+    _mcFanMeta = { seed, mu, sigma, bearFraction, inflationRate: base.inflation, ..._mcInflationCfg() };
 
     // UI feedback. The count readout is set here, not in renderSurvivalTable, so the cancel bar
     // describes the run in flight rather than whatever the previous run happened to be.
@@ -547,7 +556,10 @@ async function runMCExperiment() {
                 numPaths: paths, mu, sigma, seed, years,
                 simulationMode: 'gbm',
                 stressCount: 0, stressWindow: stressWindowMode(), bearFraction: 0,
-                inflationRate: base.inflation,
+                // Same inflation model the main run would use. Without this the worker fell back
+                // to the prng.js defaults, which only coincidentally equal the knob defaults - a
+                // retuned knob would have run the demo on numbers its caption then denied.
+                inflationRate: base.inflation, ..._mcInflationCfg(),
             });
             lastMsg = msg;
             rows.push({ paths, seed, msg });
@@ -567,7 +579,8 @@ async function runMCExperiment() {
             if (det) det.open = true;
         }
         renderInputFanCharts(lastMsg.inputFan, lastMsg.years,
-            _fanSourceText(lastMsg, { seed: _demoSeeds[_demoSeeds.length - 1], mu, sigma }));
+            _fanSourceText(lastMsg, { seed: _demoSeeds[_demoSeeds.length - 1], mu, sigma,
+                                      inflationRate: base.inflation, ..._mcInflationCfg() }));
     }
 
     if (btn) { btn.disabled = false; btn.textContent = 'Experiment ↻'; }

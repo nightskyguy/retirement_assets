@@ -3699,3 +3699,19 @@ where the canvas has no box - the one case Chart.js's resize observer is worst a
 Browser-verified nerd-OFF: panel visible+folded on plain ?tab=mc, caption correct for aam and
 bootstrap runs, all five datasets visible, canvas 850x200 after fold-open (not the 300x150
 fallback). Console clean. Suites 299 / 61 / 22.
+
+### Addendum 3: caption captures EVERY parameter (v11.1617)
+
+User: seed and inflation parameters were missing. Fix: _mcFanMeta stashes the complete dispatch -
+seed, mu, sigma, bear-start, inflation target, persistence, shock sd, return corr - and the
+formatter prints all of it for synthetic runs. Stated test in the code: the caption alone should be
+enough to re-create the run it describes.
+
+Real bug found while fixing: the ?montecarlo demo dispatched WITHOUT the inflation cfg, so it ran
+on the prng.js defaults - which only coincidentally equal the knob defaults. A retuned knob would
+have run the demo on numbers its caption then denied. Demo now spreads _mcInflationCfg() like the
+main run.
+
+Verified live: aam caption carries all eight fields; Historical stays short (bear-start; its
+returns and inflation come from the record and have no other tuning). Version 11.1617 - one past
+the clock hex, same-hour collision with 11.1616, matching the 11.1600->11.1601 precedent.

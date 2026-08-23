@@ -11,9 +11,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1616"></a>
+<a id="11.1617"></a>
 
-## 11.1616
+## 11.1617
 
 ### Two Synthetic models, and prices that move
 
@@ -61,9 +61,11 @@ In the mode selector, the models now lead with the plain word: **Synthetic - Log
 **Input Distributions is no longer an advanced-only panel.** It shows for everyone below the main
 chart, folded by default, because it answers a question every mode raises: what returns and
 inflation did the simulation actually feed each year. The min and max lines start visible instead of
-hiding behind a legend click, and a caption names the run that built the charts - mode, path count,
-seed and the parameters that shaped the draws - so after changing settings there is no guessing
-which run you are looking at.
+hiding behind a legend click, and a caption names the run that built the charts: mode, path count,
+seed, and every parameter that shaped the draws - growth and volatility plus the four
+inflation-model settings for synthetic runs, bear-start for Historical. The caption alone is enough
+to re-create the run it describes, so after changing settings there is no guessing which run you
+are looking at.
 
 Historical mode is untouched, as is the market path Synthetic - Lognormal produces.
 

@@ -78,6 +78,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
 | **O2** | P68 | `optimizer_changelog.md` brevity pass over the recent entries *(new 2026-08-22)* | `P68a` | nothing |
 | **O2** | P72 | First-year stub — year 1 always accrues 12 months of growth, spending, pension and premiums however late in the year the plan starts *(new 2026-08-24)* | `P72a` | nothing |
+| **O2** | P73 | Sorting the Optimizer by **Strategy** sorts the rendered label, symbols and markup included, so the clone rows form blocks and the alphabet is interrupted *(new 2026-08-24, user-raised)* | `P73a` | nothing |
 | **O2** | P65 | Rest of Schedule A — engine itemizes on SALT alone; medical is the piece that likely qualifies *(new 2026-08-19)* | `P65a` (measure first) | nothing |
 | **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
 | **O2** | P28 | "Every voluntary IRA withdrawal is a conversion" - **`P28f`/`g`/`h` SETTLED and SHIPPED v11.162B**: routing flag deleted as measured-inert, `rothGapFill` shipped as a control plus the 🅡 sweep rows. `P28j` is the remainder | `P28j` (needs its own phase) | nothing |
@@ -1015,6 +1016,65 @@ the month, both defaulting to 0:
 - [ ] **P72j** - tests (`startMonth = 1` reproduces a known run exactly; `startMonth = 9` scales growth/spend/pension/dividends by 4/12; RMD and the standard deduction unchanged at `startMonth = 9`; SS claim-year and stub-year fractions compose; `endYear` advances by `f`), then `TestTiers.EXPECTED` across all three suites, the `.githooks/README.md` table, the changelog entry and the four version-bump sites
 - **Status:** pending
 - **Independent:** no phase dependencies
+
+---
+
+## P73: sorting the Optimizer by Strategy sorts the LABEL, not the strategy  *(NEW 2026-08-24, user-raised, O2)*
+
+**Why:** clicking the **Strategy** header sorts on `_strategyLabel`
+(`optimizer_ui.js:1501`, `getSortValue: r => r._strategyLabel`), which is the string the cell
+RENDERS. That string carries every marker the table paints - the modifier prefix from
+`MODIFIER_PREFIX` (`optimizer_core.js`), the `CURRENT_PLAN_MARK`, a trailing `✓`, ` (no conv)`,
+` ⚠️` - and for the cyclic IRA-first arm the prefix is not even a symbol but raw HTML,
+`<span style="color:#cc0000">🗘</span> `. So the comparison is `localeCompare` over markup and
+emoji, and the column does not order by strategy at all.
+
+**Measured on the stock plan, v11.162J, ascending** (block = run of consecutive rows sharing a
+first character):
+
+| block | rows | why it lands there |
+|---|---|---|
+| ⚓ baseline, 📍 your plan | 1, 1 | their own marks |
+| **🗘 cyclic IRA-first** | **28** | label starts `<`, which sorts below every letter and every emoji |
+| **🔄 cyclic brokerage-first** | **28** | emoji codepoint |
+| Fill Bracket, Guyton-Klinger, IRA Draw, IRMAA Ceil, Ordered, Proportional | 8, 1, 20, 6, 9 | the actual alphabet, F through P |
+| **🅡 Roth before Brokerage** | **25** | U+1F161 sorts between "Proportional" and "Reduce" |
+| Reduce | 10 | the alphabet, resumed |
+
+Two things a reader would call wrong. Every clone is torn away from the family it clones, so
+comparing "Fill Bracket" against "🗘 Fill Bracket" means scrolling past 50 unrelated rows. And the
+alphabet is **interrupted**: F, G, I, O, P, then 25 🅡 rows, then R. A sort that stops halfway
+through the alphabet reads as a broken table rather than as a sort by symbol.
+
+Within a family the parameter order is incidental, not sorted: every `Reduce ✓` row has an
+identical label, so `localeCompare` returns 0 and `Array.sort`'s stability leaves them in whatever
+order the sweep emitted. `(no conv)` sorts before `✓` because `(` precedes `✓`, so the baseline
+variants separate from their own family too.
+
+**The material is already on the row.** `_paramSortVal` exists for the Param column, the family is
+recoverable from `_strategy` (with the Fill-Bracket / IRMAA-Ceil split needing the same treatment
+`buildStrategyFamilies` gives it), and the modifier is `cyclicEnabled`/`cyclicOrder`,
+`fundConversionWithCash` and `rothGapFill`. Nothing needs measuring - this is a sort key that reads
+the data instead of the rendering.
+
+**Open design question, for the user:** what SHOULD the order be? Two defensible answers, and they
+are different products:
+1. **Family, then modifier, then parameter** - every clone sits with the family it clones. Reads as
+   "show me this family's arms together".
+2. **Family, then parameter, then modifier** - each parameter's arms sit together. Reads as "show me
+   what the modifiers do at 7%".
+Ascending/descending should reverse the family, not scramble the rest.
+
+**Tasks:**
+- [ ] **P73a** - decide the ordering (question above), then a `getSortValue` for the Strategy column
+      built from `_strategy` + modifier + `_paramSortVal` rather than `_strategyLabel`
+- [ ] **P73b** - the 📍 current-plan and ⚓ baseline rows: decide whether they pin to the top under
+      every sort or take their place in the order. They are pinned today only as an accident of
+      their marks sorting low
+- [ ] **P73c** - tests: sorting by Strategy puts each family's clones adjacent, and no row whose
+      label begins with markup sorts ahead of a row whose label begins with a letter
+- **Status:** not started. No engine change; `optimizer_ui.js` only.
+- **Independent:** no phase dependencies. Touches the same column P67 relabelled.
 
 ---
 

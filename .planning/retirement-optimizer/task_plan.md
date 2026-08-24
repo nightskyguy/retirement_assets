@@ -77,6 +77,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
 | **O2** | P68 | `optimizer_changelog.md` brevity pass over the recent entries *(new 2026-08-22)* | `P68a` | nothing |
+| **O2** | P72 | First-year stub — year 1 always accrues 12 months of growth, spending, pension and premiums however late in the year the plan starts *(new 2026-08-24)* | `P72a` | nothing |
 | **O2** | P65 | Rest of Schedule A — engine itemizes on SALT alone; medical is the piece that likely qualifies *(new 2026-08-19)* | `P65a` (measure first) | nothing |
 | **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
 | **O3** | P28 | "Every voluntary IRA withdrawal is a conversion" — ship decision | `P28f` | nothing |
@@ -892,6 +893,121 @@ stress chart and the main chart was not measured this session and is not claimed
   What remains of P71 is a review pass and a commit.
 - **Blocks:** P69 should build ON this (P69a subsumed by P71b; P69c's capture plumbing lands in one
   place instead of two). P70 is independent - it measures the engine, does not restructure it.
+
+---
+
+## P72: first-year stub - the model always runs a full year 1  *(NEW 2026-08-24, user-raised, full build spec approved, O2)*
+
+**Why:** the first simulated year always accrues **twelve months** of everything, no matter what day
+of the year it is when you open the page. `applyGrowth(balances, growthRates, months)`
+(optimizer_core.js:626) is proportional and already takes a month count, but
+`preMonths = early ? 1 : 11; postMonths = 12 - preMonths` (optimizer_core.js:1168) **always sums to
+12**, in year 0 as in every other year - the 1/11 split only positions the withdrawal before or
+after growth inside the year, it is not a calendar offset. There is no month input anywhere:
+`currentYear = inputs.startInYear || new Date().getFullYear()` (optimizer_core.js:2904), and
+`startInYear` is derived from `startAge` and clamped to `>= this calendar year`
+(optimizer_ui.js:558).
+
+So a plan opened in late August with $1M in Cash at 4% books a full year of interest instead of four
+months - about $27k too much - and the same overstatement applies to portfolio growth, spending,
+pension, dividends and Medicare premiums. It is not a one-year rounding error: it compounds forward
+over the whole run and biases every conversion verdict that depends on terminal wealth.
+
+The only calendar-partial thing modeled today is Social Security claim-year proration by birth
+month, `ssFirstYearFraction(birthMonth)` (optimizer_core.js:693). That helper is the precedent this
+phase generalizes.
+
+### The load-bearing decision: auto-detection lives in the UI, never in the engine
+
+`optimizer_core.js` must stay deterministic. `optimizer_core.tests.js` and `sweep_golden.js` call
+`simulate()` directly with fixed inputs (`startInYear: 2026` in every golden fixture). If the engine
+read `new Date()` the goldens would change value on the first of every month and the suites would
+fail by calendar.
+
+- **Engine contract:** new input `startMonth`, integer 1-12, **defaulting to 1**. `startMonth: 1` is
+  a full 12-month first year, bit-identical to today. No golden regenerated, no fixture edited.
+- **UI contract:** `gatherInputs()` resolves the month and passes an explicit number.
+  - `startInYear === current calendar year` -> auto-detect, `startMonth = new Date().getMonth() + 1`.
+    This is the already-retired case, and it is the case the user asked for: looking up January-1
+    balances by hand is impractical, because the change since January mixes growth, taxable events,
+    withdrawals and deposits.
+  - `startInYear > current calendar year` -> `startMonth = 1` (January), overridable by the input.
+    This is the future-retirement case.
+- **Reproducibility:** the resolved `startMonth` is written to the URL (`sm`) on save or share, so a
+  link opened three months later still reproduces its recorded numbers. Only a fresh load with no
+  `sm` auto-detects.
+
+Stub fraction: `stubMonths = 13 - startMonth`, `f = stubMonths / 12`. `startMonth = 1` gives `f = 1`
+and every formula below collapses to today's arithmetic.
+
+### What prorates and what does not
+
+| Quantity | Year-1 treatment | Where |
+|---|---|---|
+| Portfolio growth, all accounts | **x f** | `preMonths`/`postMonths` scaled to sum to `stubMonths`, not 12 (optimizer_core.js:1168) |
+| Cash interest | **x f** | `yr.taxableInterest = balance.Cash * inputs.cashYield` (optimizer_core.js:1429) - a separate full-year line, NOT covered by `applyGrowth` |
+| Brokerage dividends | **x f** | `yr.taxableDividends` (optimizer_core.js:1430) - same, separate line |
+| Spending goal | **x f** | `yr.targetSpend` (optimizer_core.js:1522) |
+| Pension | **x f** | `yr.pension` (optimizer_core.js:1329) |
+| Social Security | **combined fraction** | see below |
+| Medicare base premium + IRMAA | **x f** | monthly charges: `yr.medicareBase` (optimizer_core.js:1266), `yr.IRMAA` (optimizer_core.js:1258) |
+| **RMD** | **NOT prorated** | the whole year's RMD is due however late in the year the plan starts (optimizer_core.js:1436) |
+| **Standard deduction, brackets, ACA FPL** | **NOT prorated** | annual by statute. A stub year genuinely faces full brackets against partial income - correct, not a bug |
+| **Roth conversion room** | **NOT prorated**, but see the wage caveat | falls out of the two rows above |
+| **Property tax / SALT** | **decision, recommend NOT prorated** | `propTaxFor` (optimizer_core.js:101). It is an annual bill and it feeds the SALT deduction, so halving it quietly shrinks itemization. Whichever way this lands, write the reason down |
+
+**Social Security.** The claim-year fraction and the stub fraction overlap; the months actually paid
+are the intersection of "on or after the claim month" and "on or after the start month". Generalize
+the existing helper rather than adding a second one:
+`monthsPaid = max(0, 12 - max(birthMonth, startMonth - 1))`, over 12. At `startMonth = 1` this is
+identical to today's expression, which is what keeps the existing SS tests green.
+
+**Inflation advance.** `endYear()` (optimizer_core.js:2861) compounds `spendGoal`, `cpiRate`,
+`inflation` and `medicareRate` by a full year. After a stub year it must advance by `(1 + rate)^f`
+only, or year 2's dollars sit a full year ahead of a four-month year 1. `f = 1` leaves the line
+unchanged.
+
+**Horizon.** Row count is unchanged and ages stay integers. A stub means the run covers e.g. 11.67
+elapsed years instead of 12. Do not try to add a row.
+
+### The wage caveat, which is a first-class item and not a footnote
+
+A stub year exists precisely because the user is mid-year, and that year almost always carries
+January-August W-2 or self-employment income plus tax already withheld. The model knows about
+neither. Left alone, the stub year reports a near-empty tax return and therefore invents **a large
+amount of Roth conversion room that does not exist** - the one number in this app people act on.
+Proration without this makes the tool confidently wrong in a new way, so two inputs ship alongside
+the month, both defaulting to 0:
+
+- **Income already received this year** (ordinary, added to year-1 taxable income before brackets).
+- **Federal and state tax already withheld this year** (credited against year-1 tax).
+
+### Blast radius
+
+- **Goldens and node suites: zero change, by construction.** Any drift in `sweep_golden` during
+  implementation is a bug in the default path, not an expected update.
+- **Monte Carlo** needs no special case - `returnSequence[0]` flows through the same proportional
+  `applyGrowth` - but confirm `buildPathInputs` in `montecarlo/mc_engine.js` passes `startMonth`
+  through to every path.
+- **RetirementTaxPlanner handoff** receives a stub year-1 row; check the year-click handoff does not
+  annualize it.
+- **Changelog** must warn that a saved plan will not reproduce its old numbers once a start month is
+  auto-detected, stated as consequence rather than history.
+
+### Sub-items
+
+- [ ] **P72a** - engine input `startMonth` (default 1) and the derived stub fraction, threaded into `sim`
+- [ ] **P72b** - scale `preMonths`/`postMonths` to `stubMonths`; scale the standalone interest and dividend lines
+- [ ] **P72c** - scale spending and pension; leave RMD, brackets and the standard deduction alone
+- [ ] **P72d** - generalize `ssFirstYearFraction` to compose claim month with start month
+- [ ] **P72e** - prorate Medicare base premium and IRMAA; settle the property-tax call and record the reason
+- [ ] **P72f** - `endYear` advances inflation by the stub fraction
+- [ ] **P72g** - income-already-received and tax-already-withheld inputs, and their effect on year-1 tax and conversion room
+- [ ] **P72h** - UI: start-month input, auto-detect on fresh load when the plan starts this calendar year, `sm` URL param, save/share pins the resolved month
+- [ ] **P72i** - Annual Details marks the first row as a partial year and names the months; tooltip says what is and is not prorated
+- [ ] **P72j** - tests (`startMonth = 1` reproduces a known run exactly; `startMonth = 9` scales growth/spend/pension/dividends by 4/12; RMD and the standard deduction unchanged at `startMonth = 9`; SS claim-year and stub-year fractions compose; `endYear` advances by `f`), then `TestTiers.EXPECTED` across all three suites, the `.githooks/README.md` table, the changelog entry and the four version-bump sites
+- **Status:** pending
+- **Independent:** no phase dependencies
 
 ---
 

@@ -2,10 +2,11 @@
 
 Full write-ups of what changed in each release, newest first.
 
-One entry per RELEASE. Work still in development keeps accruing into the entry at the top - edit it
-in place, refresh its version stamp if you like, but do not add a second entry for the next commit.
-Order each entry by what matters to a reader, and leave out how things used to work and anything
-about the internals of the change. See the rule in [CLAUDE.md](CLAUDE.md).
+One entry per BRANCH, written against `main`: what an end user would experience differently, ordered
+by how much it affects them. Work in progress keeps editing the entry at the top - refresh its
+version stamp if you like, but never add a second entry for the next commit. Leave out how things
+used to work and anything about the internals; the commit messages carry that. See the rule in
+[CLAUDE.md](CLAUDE.md).
 
 The Documentation tab inside [retirement_optimizer.html](retirement_optimizer.html) carries a short
 summary of the most recent releases and links here for the detail. Entries marked **behavior

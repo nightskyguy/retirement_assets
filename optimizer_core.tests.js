@@ -133,6 +133,9 @@ const SLOW = new Set();
 // A test earns this tag by having a shipped defect behind it, not by being important-sounding.
 const CRITICAL = new Set();
 
+// A test body may be async: the P71 end-to-end checks drive mc_engine.js's runJob(), which is a
+// promise by construction (the main thread awaits a frame between chunks). The runner awaits every
+// body, so a sync test costs one extra microtask and nothing else.
 // test() REGISTERS rather than runs. Everything below is top-level, and running on registration
 // would mean the browser could only ever get results as a side effect of loading the file, with no
 // way to filter the slow tests or to defer the run past first paint. Registering instead lets
@@ -1340,6 +1343,18 @@ test('stress scoring: 1999 ranks worse than 1929 by real CAGR', () => {
 
 const _mcPrng = IS_NODE ? require('./montecarlo/prng.js') : window.MCPrng;
 const _histRet = IS_NODE ? require('./montecarlo/historical_returns.js') : window.HISTORICAL_RETURNS;
+
+// mc_engine.js is written for the worker, where importScripts() drops prng.js, stats.js and
+// optimizer_core.js into one shared scope and every helper is a bare global. In node they are
+// module exports, so they have to be hoisted onto globalThis before the engine is required or its
+// first call throws ReferenceError. The browser tier needs none of this: the page already loaded
+// all four as plain scripts.
+if (IS_NODE) {
+    Object.assign(globalThis, _mcPrng);
+    Object.assign(globalThis, require('./montecarlo/stats.js'));
+    globalThis.simulate = core.simulate;
+}
+const _mcEngine = IS_NODE ? require('./montecarlo/mc_engine.js') : window.MCEngine;
 
 test('stress bank: default 10yr window picks the documented worst starts', () => {
     const bank = _mcPrng.buildStressBank(10, 40, 10);
@@ -4855,29 +4870,22 @@ function _p23OldGbmShocks(mu, sigma, seed, n) {
     return out;
 }
 
-// Reproduces the patched synthetic bank build (worker.js / mc_controller.js share this shape).
+// The synthetic bank, drawn by the SHIPPING engine. This used to be a hand copy of the bank-build
+// loop, which meant every P23 assertion below was testing the copy rather than the code, and would
+// have stayed green through any drift between them. P71 split buildBanks() out of runPass() partly
+// so this could call the real thing: one path, `years` long, so the draw order is identical to a
+// single path of a real run without paying for a simulate() over 40,000 years.
 function _p23NewSynth(mode, mu, sigma, seed, years, opts) {
     opts = opts || {};
-    const rng    = _mcPrng.mulberry32(seed);
-    const infRng = _mcPrng.mulberry32(seed ^ 0x5F356495);
-    const isAAM  = (mode === 'aam');
-    const logDrift = mu - 0.5 * sigma * sigma;
-    const target  = opts.inflationRate        != null ? opts.inflationRate        : 0.03;
-    const persist = opts.inflationPersistence != null ? opts.inflationPersistence : _mcPrng.INFLATION_AR1_PERSISTENCE;
-    const shockSd = opts.inflationShockSd     != null ? opts.inflationShockSd     : _mcPrng.INFLATION_AR1_SHOCK_SD;
-    const rho     = opts.inflationReturnCorr  != null ? opts.inflationReturnCorr  : _mcPrng.INFLATION_RETURN_CORR;
-    const bank = new Float64Array(years), inf = new Float64Array(years);
-    let prev = target;
-    for (let y = 0; y < years; y++) {
-        const z1 = _mcPrng.boxMuller(rng);
-        const shock = logDrift + sigma * z1;
-        const r = isAAM ? Math.max(_mcPrng.RETURN_FLOOR, mu + sigma * z1) : Math.exp(shock) - 1;
-        bank[y] = isAAM ? r : shock;
-        const zInf = _mcPrng.correlatedNormal(z1, _mcPrng.boxMuller(infRng), rho);
-        prev = _mcPrng.computeNextInflation(prev, target, persist, shockSd, zInf);
-        inf[y] = prev;
-    }
-    return { bank, inf };
+    const banks = _mcEngine.buildBanks({
+        years, numPaths: 1, mu, sigma, seed,
+        // undefined leaves the engine on its own defaults, which is what `opts` omitted means.
+        inflationRate:        opts.inflationRate,
+        inflationPersistence: opts.inflationPersistence,
+        inflationShockSd:     opts.inflationShockSd,
+        inflationReturnCorr:  opts.inflationReturnCorr,
+    }, _mcPrng.mulberry32(seed), mode);
+    return { bank: banks.scenarioBank, inf: banks.synthInflationBank };
 }
 
 function _p23Mean(a) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i]; return s / a.length; }
@@ -4987,7 +4995,7 @@ test('P23: the inflation shock realizes the requested correlation with the retur
     // Poor returns and rising prices in the same year is the joint event that breaks a plan.
     // Independent draws erase it, so this correlation is the point of correlatedNormal().
     for (const rho of [-0.30, -0.60, 0, 0.45]) {
-        const rng = _mcPrng.mulberry32(42), infRng = _mcPrng.mulberry32(42 ^ 0x5F356495);
+        const rng = _mcPrng.mulberry32(42), infRng = _mcPrng.mulberry32(42 ^ _mcPrng.INFLATION_STREAM_XOR);
         const zs = [], zinfs = [];
         for (let i = 0; i < 60000; i++) {
             const z1 = _mcPrng.boxMuller(rng);
@@ -5069,8 +5077,89 @@ test('P23: simulated inflation reaches the persistence the record shows', () => 
         `${(share * 100).toFixed(1)}% of paths contain a five-year run above 5% inflation; the record implies roughly half`);
 });
 
+// ── P71: the engine itself, end to end ───────────────────────────────────────
+// Until P71 there was NO suite coverage of the code that actually runs a Monte Carlo. worker.js
+// opens with importScripts and self.onmessage, mc_controller.js was a page script, and the only
+// draw-related assertions here went through a hand copy of the loop. A refactor could have changed
+// every number on the page with all three suites green. These four drive mc_engine.js directly.
+//
+// Deliberately small - 20 paths, 1 variation, 25 years - because the point is that the whole
+// pipeline runs and reports a coherent shape, not that a 10,000-path run is fast.
+const _p71Base = SWEEP_BASES[Object.keys(SWEEP_BASES)[0]];
+function _p71Cfg(mode, over) {
+    return Object.assign({
+        variations: buildVariations(_p71Base).slice(0, 1),
+        years: 25, numPaths: 20, seed: 42, simulationMode: mode,
+        mu: 0.07, sigma: 0.15, inflationRate: 0.03, stressCount: 5,
+    }, over || {});
+}
+
+test('P71: the engine runs a whole job end to end in all three modes', async () => {
+    for (const mode of ['gbm', 'aam', 'bootstrap']) {
+        const msg = await _mcEngine.runJob(_p71Cfg(mode));
+        assert(msg && !msg.error, `${mode}: ${msg && msg.error}`);
+        assert(msg.simulationMode === mode, `${mode}: message says ${msg.simulationMode}`);
+        assert(msg.numPaths === 20, `${mode}: numPaths ${msg.numPaths}`);
+        assert(msg.variations.length === 1, `${mode}: ${msg.variations.length} variations back`);
+        const v = msg.variations[0];
+        assert(v.percentiles.p50.length === 25, `${mode}: p50 has ${v.percentiles.p50.length} years`);
+        assert(v.survivalRate >= 0 && v.survivalRate <= 1, `${mode}: survival ${v.survivalRate}`);
+        assert(isFinite(msg.inflationStats.cagr), `${mode}: inflation cagr ${msg.inflationStats.cagr}`);
+        assert(msg.inputFan && msg.inputFan.equity, `${mode}: no input fan`);
+        // Stress runs in every mode, and against the same one variation.
+        assert(msg.stress && msg.stress.variations.length === 1, `${mode}: stress pass missing`);
+        // Not a count assertion: stressCount is a floor, and the default 'combined' window unions
+        // the worst starts of every window, so 5 requested came back as 17 selected. What must hold
+        // is that the pass reports as many scenarios as it labeled.
+        assert(msg.stress.numPaths === msg.stress.labels.length,
+            `${mode}: ${msg.stress.numPaths} paths against ${msg.stress.labels.length} labels`);
+        assert(msg.stress.numPaths >= 5, `${mode}: stress ran only ${msg.stress.numPaths} scenarios`);
+    }
+});
+
+test('P71: one seed, one answer - two runs of the same config agree exactly', async () => {
+    // CRN is the property everything else rests on: the whole comparison table is only meaningful
+    // because every variation faces the identical sequence. Two full jobs, compared on the numbers
+    // the UI actually shows.
+    const a = await _mcEngine.runJob(_p71Cfg('gbm'));
+    const b = await _mcEngine.runJob(_p71Cfg('gbm'));
+    assert(JSON.stringify(a.variations[0].percentiles) === JSON.stringify(b.variations[0].percentiles),
+        'the same seed produced different percentile bands');
+    assert(a.variations[0].survivalRate === b.variations[0].survivalRate, 'survival rate moved');
+    assert(a.medianAnnualReturn === b.medianAnnualReturn, 'median annual return moved');
+    // And a different seed must NOT agree, or the first assertion is vacuous.
+    const c = await _mcEngine.runJob(_p71Cfg('gbm', { seed: 43 }));
+    assert(JSON.stringify(a.variations[0].percentiles) !== JSON.stringify(c.variations[0].percentiles),
+        'a different seed produced identical bands, so the seed is not reaching the draw');
+});
+
+test('P71: stress mode banks one path per scenario, not numPaths of them', () => {
+    // numPaths comes BACK from buildBanks for exactly this reason: the stress pass ignores the
+    // requested path count and runs the historical scenarios it selected, however many that is -
+    // which is not stressCount either, since 'combined' unions the worst starts of every window.
+    const cfg = _p71Cfg('bootstrap', { stressCount: 7 });
+    const banks = _mcEngine.buildBanks(cfg, _mcPrng.mulberry32(42), 'stress');
+    const n = banks.multiAssetBank.labels.length;
+    assert(n >= 7, `stressCount 7 selected only ${n} scenarios`);
+    assert(banks.numPaths === n, `banked ${banks.numPaths} paths against ${n} labels`);
+    assert(banks.numPaths !== cfg.numPaths, 'stress used the requested path count instead of its own');
+    assert(banks.scenarioBank.length === n * cfg.years, `bank is ${banks.scenarioBank.length} long`);
+    assert(banks.synthInflationBank === null, 'stress draws inflation from the record, not a model');
+});
+
+test('P71: a cancelled job reports nothing at all', async () => {
+    // The contract the UI depends on: a cancelled run resolves to null, and the caller reporting
+    // nothing is what leaves the previous results on screen instead of blanking them.
+    let calls = 0;
+    const msg = await _mcEngine.runJob(_p71Cfg('gbm'), {
+        shouldCancel: () => { calls++; return calls > 1; },
+    });
+    assert(msg === null, 'a cancelled job returned a results message');
+    assert(calls > 1, 'shouldCancel was never consulted');
+});
+
 // able to stop a test from running in the place that gates commits.
-function runOptimizerCoreTests(opts) {
+async function runOptimizerCoreTests(opts) {
     const skipSlow = !!(opts && opts.skipSlow);
     passed = 0;
     failed = 0;
@@ -5092,12 +5181,12 @@ function runOptimizerCoreTests(opts) {
     const criticalResults = [];
 
     try {
-        TESTS.forEach(([name, fn]) => {
-            if (skipSlow && SLOW.has(name)) { skipped++; return; }
+        for (const [name, fn] of TESTS) {
+            if (skipSlow && SLOW.has(name)) { skipped++; continue; }
             const isCritical = CRITICAL.has(name);
             const tag = isCritical ? '★ CRITICAL  ' : '';
             try {
-                fn();
+                await fn();
                 console.log(`  ✓  ${tag}${name}`);
                 passed++;
                 if (isCritical) criticalResults.push([true, name]);
@@ -5108,7 +5197,7 @@ function runOptimizerCoreTests(opts) {
                 failed++;
                 if (isCritical) criticalResults.push([false, name]);
             }
-        });
+        }
     } finally {
         if (globalThis.performance && realNow) globalThis.performance.now = realNow;
     }
@@ -5142,9 +5231,10 @@ function runOptimizerCoreTests(opts) {
 }
 
 if (IS_NODE) {
-    const r = runOptimizerCoreTests();
-    if (r.failed > 0) process.exitCode = 1;
+    // Exported BEFORE the run, not after: the runner is async now, so `await` inside it yields to
+    // the event loop and anything requiring this file mid-run would otherwise see an empty exports.
     module.exports = { runOptimizerCoreTests, SLOW_COUNT: SLOW.size, TEST_COUNT: TESTS.length };
+    runOptimizerCoreTests().then(r => { if (r.failed > 0) process.exitCode = 1; });
 } else {
     window.runOptimizerCoreTests = runOptimizerCoreTests;
     window.OPTIMIZER_CORE_TEST_COUNT = TESTS.length;

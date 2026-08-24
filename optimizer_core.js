@@ -1976,8 +1976,28 @@ function fillSpendingGap(sim, yr) {
 
         } else {
             // Default: Brokerage + Cash proportional, then Roth fallback.
+            //
+            // P30a research input (no UI, no URL param): `inputs.gapFillWeights` replaces the
+            // [40, 60]. Nobody chose that 40/60 - it has been a bare literal since the branch was
+            // written - and P30 exists to find out whether it is load-bearing at all. The weights
+            // are RELATIVE, normalized by calculateWithdrawals, so [1, 1] and [50, 50] are the same
+            // split; percentages are used here only because that is how the original read.
+            //
+            // Validated to a known SHAPE rather than tested for truthiness, for the reason the
+            // rothGapFill comment above records: a malformed value must mean "leave today's
+            // behavior alone", never "model something else silently". Two finite non-negative
+            // numbers with a positive sum - the sum is the one that matters, because a [0, 0] pair
+            // would divide by zero in the normalizer and put NaN through every downstream balance.
+            //
+            // The ENDPOINTS are legal and meaningful: [0, 100] is all-Cash and [100, 0] is
+            // all-Brokerage, both of which still spill to the other account through the shortfall
+            // cascade rather than stopping short. That is what makes a 0-to-100 sweep a sweep of
+            // this policy rather than of two different policies.
+            const _gfw = inputs.gapFillWeights;
+            const _gfwOK = Array.isArray(_gfw) && _gfw.length === 2
+                && _gfw.every(w => Number.isFinite(w) && w >= 0) && (_gfw[0] + _gfw[1]) > 0;
             yr.withdrawStrategy.order = ['Brokerage', 'Cash'];
-            yr.withdrawStrategy.weight = [40, 60];
+            yr.withdrawStrategy.weight = _gfwOK ? [_gfw[0], _gfw[1]] : [40, 60];
             yr.withdrawStrategy.taxrate = [yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0];
             yr.withdrawals = calculateWithdrawals(yr.curBalances, gap, yr.withdrawStrategy);
             yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, yr.withdrawals]);

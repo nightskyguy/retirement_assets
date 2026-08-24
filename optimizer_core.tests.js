@@ -4282,6 +4282,53 @@ test('rothGapFill: unset is bit-identical, and fillCashThenRoth spends Roth inst
     assert(tot(on, 'Brokerage-') < tot(off, 'Brokerage-'), 'and it must displace a Brokerage draw');
 });
 
+// ── P30a: gapFillWeights, the [40,60] nobody chose ───────────────────────────
+// The weights are a research input with no UI and no URL param. These two tests are the contract
+// the sweep rests on: unset is today, and the endpoints are a real 0-to-100 sweep of ONE policy
+// rather than two different ones.
+const GFW_BASE = {
+    ...BASE, strategy: 'fixed', nYears: 20,
+    IRA1: 900000, Roth: 200000, Brokerage: 600000, BrokerageBasis: 300000, Cash: 250000,
+    spendGoal: 85000, inflation: 0.025, cpi: 0.025, growth: 0.05, cashYield: 0.03, dividendRate: 0.02,
+};
+
+test('gapFillWeights: unset is bit-identical, and anything malformed means unset', () => {
+    const ref = JSON.stringify(simulate(GFW_BASE).log);
+    // The default spelled out, and the same ratio spelled differently: the normalizer divides by the
+    // sum, so [4,6] IS [40,60]. If this ever fails the weights have stopped being relative.
+    for (const v of [undefined, [40, 60], [4, 6]]) {
+        assert(JSON.stringify(simulate({ ...GFW_BASE, gapFillWeights: v }).log) === ref,
+            `gapFillWeights ${JSON.stringify(v)} must reproduce the default exactly`);
+    }
+    // Validated to a shape, not to truthiness. [0,0] is the one that matters: it would divide by
+    // zero in the normalizer and put NaN through every downstream balance.
+    for (const v of ['nope', [40], [40, 60, 80], [0, 0], [-10, 110], [NaN, 60], {}, 40]) {
+        assert(JSON.stringify(simulate({ ...GFW_BASE, gapFillWeights: v }).log) === ref,
+            `malformed gapFillWeights ${JSON.stringify(v)} must leave today's behavior alone`);
+    }
+});
+
+test('gapFillWeights: the split moves monotonically, and both endpoints still spill', () => {
+    const tot = (res, k) => res.log.reduce((s, r) => s + (r[k] ?? 0), 0);
+    const brok = [], cash = [];
+    for (const w of [0, 20, 40, 60, 80, 100]) {
+        const res = simulate({ ...GFW_BASE, gapFillWeights: [w, 100 - w] });
+        brok.push(tot(res, 'Brokerage-'));
+        cash.push(tot(res, 'CashWD'));
+    }
+    for (let i = 1; i < brok.length; i++) {
+        assert(brok[i] > brok[i - 1], `Brokerage draw must rise with the weight (step ${i})`);
+        assert(cash[i] < cash[i - 1], `Cash draw must fall with the weight (step ${i})`);
+    }
+    // w=0 is all-Cash in the gap fill. Not "no Brokerage anywhere" - the third pass has drawn
+    // Brokerage by default since P32 - but the gap fill itself must ask for none.
+    assert(brok[0] === 0, 'at weight 0 the gap fill must draw no Brokerage at all');
+    // w=100 asks for everything from Brokerage, yet Cash is still drawn: that is the shortfall
+    // cascade spilling, which is what keeps the endpoint a point on the same policy curve rather
+    // than a different policy that gives up when one account runs dry.
+    assert(cash[cash.length - 1] > 0, 'at weight 100 the cascade must still spill into Cash');
+});
+
 test('buildStrategyFamilies: the 🅡 pass clones every family except Ordered', () => {
     const b = { ...BASE, Roth: 300000 };
     const plain  = buildStrategyFamilies(b, { grids: OPTIMIZER_GRIDS });

@@ -1444,7 +1444,19 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
 - The unified-conversion reframe — measured inert, 0 money fields moved in 90 cells.
 
 **Tasks:**
-- [ ] **P30a** — `gapFillWeights` research input, default `[40,60]`, no UI, `ordered` excluded
+- [x] **P30a** — **DONE v11.162K 2026-08-24.** `gapFillWeights` research input at the default gap-fill
+      branch, replacing the bare `[40, 60]`. Weights are RELATIVE (the normalizer divides by the sum),
+      so `[4,6]` is `[40,60]`; percentages only because that is how the literal read. Validated to a
+      SHAPE - two finite non-negative numbers with a positive sum - so anything malformed means
+      "leave today's behavior alone", the discipline the `rothGapFill` `|| null` bug bought.
+      `[0,0]` is the one that had to be caught: it divides by zero in the normalizer and puts NaN
+      through every balance. No UI, no URL param, absent from `getInputs()` - confirmed in the
+      browser. `ordered` and the bracket family never reach this branch, so they are excluded by
+      construction rather than by a guard.
+      **Endpoints verified before anything is read into them:** `[0,100]` asks the gap fill for no
+      Brokerage at all, `[100,0]` still spills into Cash through the shortfall cascade, and the split
+      moves monotonically across 0/20/40/60/80/100. That is what makes a 0-to-100 sweep a sweep of
+      one policy rather than of two. Suite 308 -> 310.
 - [x] **P30 re-baseline** — DONE 2026-08-24, `P28_RESULTS.md` section 15. See the block above.
 - [ ] **P30b** — Harness: weight sweep x P28 mix/spend ladder x gap-filling families; predictions
       scored. Include a `thirdPassBrokerage: 'off'` arm to settle the inversion hypothesis
@@ -1453,7 +1465,7 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
 - [ ] **P30e** — Q5: cost the decoupling (new input vs derived), count affected rows, do NOT build yet
 - [ ] **P30f** — Report against P28's zero-predicate: split cells by "did the control ever draw Brokerage"
 - [ ] **P30g** — Decision: change the default, expose a control, decouple, or record that the constant is inert
-- **Status:** re-baseline done (2026-08-24); `P30a` next. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
+- **Status:** re-baseline and `P30a` done (2026-08-24); `P30b` next. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
   new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
   `P28_RESULTS.md` as its reference)
 - **Depends on:** no code dependency. Its *ship* decision was downstream of P28's, which is now

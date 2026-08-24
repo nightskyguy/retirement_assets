@@ -1054,3 +1054,33 @@ table th.empty-column {
         opacity: 0.45;
     }
 }
+
+
+/* Mode preset buttons on the Monte Carlo tab. `aria-pressed` is the state - set by
+   updateMCPresetState() from the parameter values themselves, not from which button was clicked -
+   so the styling and the thing screen readers announce cannot disagree. Green means "these settings
+   are the ones this run is using"; editing any parameter clears it.
+
+   Disabled = the preset describes the synthetic model and Historical mode is selected, which takes
+   its inflation and returns from the real record instead. */
+.mc-preset {
+    font-size: 0.78em;
+    padding: 2px 8px;
+    cursor: pointer;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    background: #f4f4f4;
+    color: #222;
+}
+.mc-preset:hover:not(:disabled) { background: #e9e9e9; }
+.mc-preset[aria-pressed="true"] {
+    background: #2f9e44;
+    border-color: #24803a;
+    color: #fff;
+    font-weight: 600;
+}
+.mc-preset[aria-pressed="true"]:hover { background: #2b8f3e; }
+.mc-preset:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}

@@ -105,6 +105,18 @@ function initMCTab() {
             _inputInflationChart?.resize();
         });
     });
+
+    // Keep the preset buttons honest while the reader edits. Every parameter box gets the listener,
+    // plus Growth % in Assumptions, because both the Default and the Pessimistic tests are stated
+    // relative to it: change Growth and mu's expected value moves with it.
+    [...Object.keys(MC_PARAMS), 'growth'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el || el._mcPresetBound) return;   // initMCTab re-runs whenever nerdknob is toggled
+        el._mcPresetBound = true;
+        el.addEventListener('input',  updateMCPresetState);
+        el.addEventListener('change', updateMCPresetState);
+    });
+    updateMCPresetState();
 }
 
 // Returns true when NERD_KNOBS is active.
@@ -125,6 +137,7 @@ function resetMCParams() {
 // sees nothing change. Re-run for them on the same rule the mode selector already uses - nerd mode
 // means the reader controls when the expensive sweep happens, so there we only mark it stale.
 function _afterMCPreset() {
+    updateMCPresetState();
     updateMCTimeEstimate();
     mcInputsChanged();
     if (!_mcNerdMode() && !document.getElementById('tab-mc')?.classList.contains('hidden')) {
@@ -166,6 +179,76 @@ function applyMCPessimistic() {
     set('mc-inflation-return-corr', -0.45);
     updateMCGrowthWarning();
     _afterMCPreset();
+}
+
+// ── Which preset is in effect ───────────────────────────────────────────────
+// The buttons report STATE, not history. Every answer below is derived from the parameter boxes as
+// they stand right now, never from "which button was clicked last", because the two diverge the
+// moment a reader edits a box in Advanced Parameters - and a button still lit after that would be
+// telling them something false about the run they are looking at.
+//
+// This was reported as: a reader cannot tell which regime they are in without opening Input
+// Distributions and reading numbers they have no way to interpret.
+
+const _MC_PESSIMISTIC = { sigma: 18, persistence: 0.75, shockSd: 3.1, corr: -0.45 };
+
+function _mcParamVal(id) {
+    const el = document.getElementById(id);
+    return el ? parseFloat(el.value) : NaN;
+}
+
+// Float compare with a tolerance, because these values arrive as strings the reader may have typed.
+function _mcParamIs(id, want) {
+    const v = _mcParamVal(id);
+    return Number.isFinite(v) && Number.isFinite(want) && Math.abs(v - want) < 1e-9;
+}
+
+function _mcGrowthPct() { return parseFloat(document.getElementById('growth')?.value); }
+
+// Default: every parameter at its MC_PARAMS default. mu is the exception - its default is the
+// behavior "track Assumptions Growth %", which is what resetMCParams() leaves it doing, so the test
+// is against Growth rather than against a number.
+function _mcIsDefaultState() {
+    for (const [id, spec] of Object.entries(MC_PARAMS)) {
+        if (id === 'mc-mu') continue;
+        if (!_mcParamIs(id, spec.dflt)) return false;
+    }
+    const g = _mcGrowthPct();
+    return Number.isFinite(g) ? _mcParamIs('mc-mu', g) : true;
+}
+
+// Pessimistic: the four fixed values, plus mu two points under Growth - the same rule
+// applyMCPessimistic() writes. Paths, seed and stress count are deliberately not part of it, for
+// the reason that button's comment gives: pessimism is a claim about the world, not about sampling.
+function _mcIsPessimisticState() {
+    const g = _mcGrowthPct();
+    const wantMu = parseFloat((Number.isFinite(g) ? Math.max(0, g - 2) : 5).toFixed(1));
+    return _mcParamIs('mc-mu', wantMu)
+        && _mcParamIs('mc-sigma', _MC_PESSIMISTIC.sigma)
+        && _mcParamIs('mc-inflation-persistence', _MC_PESSIMISTIC.persistence)
+        && _mcParamIs('mc-inflation-shock-sd', _MC_PESSIMISTIC.shockSd)
+        && _mcParamIs('mc-inflation-return-corr', _MC_PESSIMISTIC.corr);
+}
+
+// Fixed Inflation is a property of ONE knob: a zero shock leaves the AR(1) middle term with nothing
+// to act on, so inflation never leaves the target whatever persistence and correlation say. That is
+// why it can be true at the same time as a reader's own settings, and why it is tested alone.
+function _mcIsFixedInflationState() { return _mcParamIs('mc-inflation-shock-sd', 0); }
+
+// Paint the three buttons. Historical mode does not use the synthetic model at all - it samples real
+// inflation out of the record - so Fixed Inflation and Pessimistic are disabled there rather than
+// left clickable with nothing to do. Their knobs are already greyed out in that mode.
+function updateMCPresetState() {
+    const synthetic = document.getElementById('mc-sim-mode')?.value !== 'bootstrap';
+    const set = (id, on, enabled) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.setAttribute('aria-pressed', on ? 'true' : 'false');
+        el.disabled = !enabled;
+    };
+    set('mc-preset-default',     _mcIsDefaultState(),                     true);
+    set('mc-preset-fixed',       synthetic && _mcIsFixedInflationState(), synthetic);
+    set('mc-preset-pessimistic', synthetic && _mcIsPessimisticState(),    synthetic);
 }
 
 // The run whose inputFan is on screen: {seed, mu, sigma, bearFraction}, written at dispatch.
@@ -233,6 +316,10 @@ function syncMCMuFromGrowth() {
     if (!muEl || !growthEl) return;
     muEl.value = growthEl.value;
     updateMCGrowthWarning();
+    // Repaint: mu's default is "whatever Growth says", so until this has run the box still holds the
+    // MC_PARAMS number and the Default button reads false on a page that IS at its defaults. That
+    // was the state on first load, because initMCTab paints before this sync runs.
+    updateMCPresetState();
 }
 
 // Same high/low range warnings as the Assumptions section, shown near mc-mu.
@@ -270,6 +357,7 @@ function updateMCModeUI() {
     if (bearWrap) bearWrap.style.display = mode === 'bootstrap' ? '' : 'none';
     // When switching to GBM, re-sync mu from Assumptions so the two stay aligned.
     if (!isBootstrap) syncMCMuFromGrowth();
+    updateMCPresetState();
 }
 
 // Called by the always-visible mode selector onchange.

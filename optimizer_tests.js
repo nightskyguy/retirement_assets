@@ -2179,6 +2179,52 @@ assertEqual(
 			'no ACA option carries an uncomputed warning triangle');
 	})();
 
+	// ===== Mode presets report state, not history =====
+	// The three buttons on the Monte Carlo tab are lit from the parameter VALUES, so that editing a
+	// box in Advanced Parameters clears them and a preset the reader arrived at by hand still shows.
+	// Reported as: a reader cannot tell which regime they are in without opening Input Distributions.
+	//
+	// The predicates are exercised directly, by writing the boxes, rather than by clicking the
+	// preset functions - those re-run the simulation as a side effect, which a test has no business
+	// doing to someone's page. Every value is put back afterwards.
+	(function mcPresetStateFollowsTheParameters() {
+		if (typeof updateMCPresetState !== 'function' || !document.getElementById('mc-preset-default')) return;
+		const ids = Object.keys(MC_PARAMS);
+		const saved = ids.map(id => [id, document.getElementById(id)?.value]);
+		const put = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+		const growth = parseFloat(document.getElementById('growth')?.value);
+		try {
+			// Defaults, with mu tracking Growth % the way resetMCParams() leaves it.
+			ids.forEach(id => put(id, MC_PARAMS[id].dflt));
+			if (Number.isFinite(growth)) put('mc-mu', growth);
+			assertEqual(_mcIsDefaultState(), true, 'MC presets: every parameter at its default reads as Default');
+			updateMCPresetState();
+			assertEqual(document.getElementById('mc-preset-default').getAttribute('aria-pressed'), 'true',
+				'MC presets: the Default button is lit from that state');
+
+			// One box away from the defaults is no longer the default.
+			put('mc-inflation-persistence', 0.5);
+			assertEqual(_mcIsDefaultState(), false, 'MC presets: editing one parameter clears Default');
+
+			// Fixed Inflation is a property of the shock alone, whatever else is set.
+			put('mc-inflation-shock-sd', 0);
+			assertEqual(_mcIsFixedInflationState(), true, 'MC presets: a zero inflation shock reads as Fixed Inflation');
+
+			// Pessimistic needs all five, including mu two points under Growth.
+			put('mc-mu', Number.isFinite(growth) ? Math.max(0, growth - 2).toFixed(1) : 5);
+			put('mc-sigma', 18);
+			put('mc-inflation-persistence', 0.75);
+			put('mc-inflation-shock-sd', 3.1);
+			put('mc-inflation-return-corr', -0.45);
+			assertEqual(_mcIsPessimisticState(), true, 'MC presets: the five Pessimistic values read as Pessimistic');
+			put('mc-sigma', 17);
+			assertEqual(_mcIsPessimisticState(), false, 'MC presets: changing one of the five clears Pessimistic');
+		} finally {
+			saved.forEach(([id, v]) => { if (v !== undefined) put(id, v); });
+			updateMCPresetState();
+		}
+	})();
+
 	// ===== Annual Details: one cell per column, in every row =====
 	// The header row and the body rows are built from the same key list but used to apply DIFFERENT
 	// filters to it - the body skipped `inflationFactor` and the header did not. From that column

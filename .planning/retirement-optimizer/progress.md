@@ -4234,3 +4234,59 @@ comparison (0 misaligned rows -> 1).
 
 Suites 305 / 61 / 22 unchanged (node), in-page 290, badge green at 675. Version 11.161G -> 11.1628,
 changelog entry in both homes.
+
+
+## Session 2026-08-24 (continued) - Mode presets became stateful, and a load-order bug fell out (v11.162A)
+
+User: a reader cannot tell which regime they are in without opening Input Distributions, and even
+then it is numbers they have no way to read. Make the buttons stateful; rename "Reset to defaults"
+to "Default" and light it too; clear everything when a knob moves away.
+
+**Built as derived state, not a clicked flag.** `updateMCPresetState()` asks the parameter boxes what
+they hold and lights the buttons from that. A click flag would go wrong in both directions: still lit
+after the reader edits a box, and dark for a reader who typed the preset's values by hand. Three
+predicates, each stating what the preset actually means:
+
+- Default: every `MC_PARAMS` entry at its default, with mu tested against Growth % rather than
+  against a number, because mu's default is the behavior "track Growth" that `resetMCParams()` leaves
+  in place.
+- Fixed Inflation: `mc-inflation-shock-sd === 0`, and nothing else. A zero shock leaves the AR(1)
+  middle term with nothing to act on, so this is true whatever persistence and correlation say - it
+  can coexist with a reader's own settings, which is why it is tested alone.
+- Pessimistic: the four fixed values plus mu two points under Growth. Paths, seed and stress count
+  are deliberately excluded, for the reason that button's own comment gives.
+
+Lit via `aria-pressed` with the styling keyed off that attribute, so what is announced and what is
+painted cannot disagree. In Historical mode Fixed Inflation and Pessimistic are DISABLED rather than
+merely dark: that mode samples real inflation and has no synthetic model to tune, so those buttons
+were clickable and inert there. Not asked for; the alternative was lighting a button for a regime the
+run is not in.
+
+**Two bugs found by watching the test count.**
+
+1. First load painted Default as false on a page that WAS at its defaults. `initMCTab()` paints
+   before `syncMCMuFromGrowth()` runs, so mu still held the MC_PARAMS number rather than Growth.
+   `syncMCMuFromGrowth()` now repaints.
+
+2. The six new in-page assertions did not run at all: in-page stayed at 290 when it should have been
+   296. The guard `typeof updateMCPresetState !== 'function'` was returning early - because
+   **the montecarlo scripts loaded AFTER the page's bootstrap block**. Which meant the load order had
+   a live bug of its own: with `?tab=montecarlo` in the URL, `applyTabFromUrl()` reached
+   `mcTabActivated?.()` while that name did not yet exist, and an optional call does not protect an
+   undeclared identifier - ReferenceError, which aborted the rest of the block, which is where the
+   deferred test tier registers. On that one URL the self-check badge sat on its neutral hourglass
+   forever. Confirmed in the console before the fix, gone after.
+
+   The six montecarlo `<script>` tags now load above the bootstrap block. Nothing in them has a
+   load-time side effect. `?tab=montecarlo`, `?montecarlo` (the demo) and a plain load were all
+   checked afterwards.
+
+**Verified in the browser**, per state, not by clicking through and trusting it: fresh load in
+Historical shows Default green with the other two greyed; switching to GBM enables them; Fixed
+Inflation lights only Fixed; Pessimistic lights only Pessimistic; editing persistence clears all
+three; Default lights again after reset. Computed style on the lit button is rgb(47,158,68) on white
+text.
+
+In-page 290 -> 296, node suites unchanged at 305 / 61 / 22, badge green at 681. Version 11.1628 ->
+11.162A; tokens on the CSS (new `.mc-preset` rules), mc_tab.js and optimizer_tests.js. Changelog in
+both homes.

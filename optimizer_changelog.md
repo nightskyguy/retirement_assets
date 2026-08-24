@@ -11,6 +11,39 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.162A"></a>
+
+## 11.162A
+
+### The Mode presets show which one you are in
+
+A preset button is green while its settings are the ones the run is using. Previously the only way
+to know whether you were in Fixed Inflation or Pessimistic was to open Advanced Parameters and read
+the numbers, or to open Input Distributions and read a caption - and neither tells you much unless
+you already know what the defaults are.
+
+The buttons report **state, not history**. They are lit from the parameter values themselves, so:
+
+- change any parameter by hand and the green clears, because the settings are no longer the preset's
+- set a preset's values by hand and it lights anyway, because what matters is what the run will use
+- **Reset to defaults** is now simply **Default**, and it is green whenever the defaults are in effect
+
+In Historical mode, **Fixed Inflation** and **Pessimistic** are greyed out. That mode takes both its
+returns and its inflation from the real record and has no synthetic model to tune, so those two
+buttons had nothing to act on there - they were clickable and inert.
+
+### A stuck badge on one URL
+
+Opening the page with `?tab=montecarlo` left the green self-check badge on its neutral hourglass
+forever. The Monte Carlo scripts were the last thing on the page, so the startup code that opens
+that tab ran while the function it calls was still undefined. The resulting error stopped the rest
+of the startup block, which is where the deferred test suites are scheduled. The scripts now load
+before that block. No other page behavior depended on the old order.
+
+No numbers change.
+
+---
+
 <a id="11.1628"></a>
 
 ## 11.1628

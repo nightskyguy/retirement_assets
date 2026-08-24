@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1628</title>
+    <title>Retirement Optimizer 11.162A</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -45,7 +45,7 @@
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1113d0" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=1115fa">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=11162a">
 	<style>
     .toggle { display: flex !important; }
     .share-panel { display:none; position:fixed; top:60px; right:1.5rem; z-index:800; background:#fff; border:1px solid #27ae60; border-radius:8px; padding:.85rem 1rem; width:min(520px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.2); }
@@ -64,7 +64,7 @@
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
 	<script src="optimizer_ui.js?v=111628"></script>
-	<script src="optimizer_tests.js?v=111628"></script>
+	<script src="optimizer_tests.js?v=11162a"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -494,10 +494,10 @@
 			     tab has taught the reader by this point, so "model" would arrive unexplained. -->
 			<div id="mc-preset-row" style="margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
 				<span style="font-size:0.85em;font-weight:600;color:#444;">Mode presets</span>
-				<button onclick="resetMCParams()" style="font-size:0.78em;padding:2px 8px;cursor:pointer;" title="Put every simulation parameter back to its default: growth and volatility, the inflation model, path count and seed. Use it to undo any of the other presets, or your own edits in Advanced Parameters. Synthetic Return μ goes back to tracking the Assumptions Growth %.">Reset to defaults</button>
-				<button onclick="applyMCFixedInflation()" style="font-size:0.78em;padding:2px 8px;cursor:pointer;" title="Run the Synthetic modes the way they ran before variable inflation existed: one flat rate, from your Assumptions section, for every path and every year. Use this to reproduce a result you recorded from an earlier version of this tool. It works by setting the inflation shock to 0, which is exactly what pins the model to that rate. Reset to defaults brings variable inflation back.">Fixed Inflation</button>
-				<button onclick="applyMCPessimistic()" style="font-size:0.78em;padding:2px 8px;cursor:pointer;" title="A one-click bad-decade parameter set: growth 2 points below your Assumptions rate, volatility raised to 18%, and inflation made more persistent (0.75), more volatile (3.1%, the full 1928–2025 record including its worst regimes) and more tightly tied to bad return years (-0.45). Not a prediction; a stress-leaning what-if. Reset to defaults undoes it.">Pessimistic</button>
-				<span style="font-size:0.78em;color:#888;">Presets set the simulation parameters. The caption under Input Distributions names every value a run used.</span>
+				<button id="mc-preset-default" class="mc-preset" aria-pressed="false" onclick="resetMCParams()" title="Put every simulation parameter back to its default: growth and volatility, the inflation model, path count and seed. Use it to undo any of the other presets, or your own edits in Advanced Parameters. Synthetic Return μ goes back to tracking the Assumptions Growth %. Green when the defaults are what the run is using.">Default</button>
+				<button id="mc-preset-fixed" class="mc-preset" aria-pressed="false" onclick="applyMCFixedInflation()" title="Run the Synthetic modes the way they ran before variable inflation existed: one flat rate, from your Assumptions section, for every path and every year. Use this to reproduce a result you recorded from an earlier version of this tool. It works by setting the inflation shock to 0, which is exactly what pins the model to that rate. Green whenever that shock is 0, however it got there. Default brings variable inflation back. Unavailable in Historical mode, which takes its inflation from the real record.">Fixed Inflation</button>
+				<button id="mc-preset-pessimistic" class="mc-preset" aria-pressed="false" onclick="applyMCPessimistic()" title="A one-click bad-decade parameter set: growth 2 points below your Assumptions rate, volatility raised to 18%, and inflation made more persistent (0.75), more volatile (3.1%, the full 1928–2025 record including its worst regimes) and more tightly tied to bad return years (-0.45). Not a prediction; a stress-leaning what-if. Green while all five of those values are in effect; change any one and it clears. Default undoes it. Unavailable in Historical mode, which does not use the synthetic model.">Pessimistic</button>
+				<span style="font-size:0.78em;color:#888;">A preset is green while its settings are the ones in effect. Change any parameter and it clears.</span>
 			</div>
 
 			<!-- ?montecarlo teaching demo. Hidden unless MONTE_DEMO; revealed and auto-run from the
@@ -793,6 +793,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+																<li><b>11.162A</b> <strong>The Mode presets now show which one you are in.</strong> A preset turns green while its settings are the ones the run is using, so you can see the regime without opening Advanced Parameters or reading the Input Distributions caption. Change any parameter by hand and the green clears; arrive at a preset's settings by hand and it lights anyway, because the buttons report what is set rather than what was last clicked. <i>Reset to defaults</i> is now simply <i>Default</i>, and it is green whenever the defaults are in effect. In Historical mode <i>Fixed Inflation</i> and <i>Pessimistic</i> are greyed out: that mode takes its returns and inflation from the real record and has no synthetic model to tune. Also fixed while wiring this up: opening the page with <code>?tab=montecarlo</code> in the web address left the self-check badge stuck on its neutral hourglass, because the Monte Carlo scripts loaded after the code that opens that tab.</li>
 																<li><b>11.1628</b> <strong>Annual Details was showing one column of numbers under the wrong heading, and its last column was always blank.</strong> The heading row and the rows below it were built from the same list but filtered it differently, so from the internal <code>inflationFactor</code> column rightward every value sat one heading to the left, and <code>loopMs</code> - the rightmost column, visible under <i>Show All</i> - never got a cell at all. Both are internal columns and neither is shown by default, so no figure you would normally read was affected. A test now counts the cells in every row against the headings. <code>loopMs</code> also prints two decimals now: it is the engine's time for one simulated year, a fifth of a millisecond on a normal plan, which whole-number rounding showed as 0.</li>
 																<li><b>11.161G</b> Annual Details gains three columns under <i>Show All</i>: the inflation applied to spending that year, how far prices have risen since the plan started, and that year's market return. They are the same two numbers on every row of an ordinary run, and they only start to say something when a Monte Carlo path is read back, which is why they sit behind <i>Show All</i> for now. Hover over a column name for what it does and does not include. No numbers change.</li>
 																<li data-flag="behavior"><b>11.161B</b> <strong>The Monte Carlo tab now offers two Synthetic models, and both give every path its own inflation.</strong> <i>Synthetic - GBM</i> is the model that was already there, and its market draws are unchanged - but its inflation is not, so a plan will not reproduce an older result until you click <i>Fixed Inflation</i>. <i>Synthetic - AAM</i> reads the growth rate you type as a plain yearly average, so the median growth it reports is the number you entered rather than one about a point lower. That is a change to what the number means, not to how much money you end up with: volatility drags on compounded growth in both. Both draw the same market shocks from the same seed, so switching between them compares the models rather than two different runs. Synthetic inflation now varies year to year and clusters the way it does in the real record, tuned to US consumer price data for 1948 to 2025, and it leans high in years when returns are poor. Advanced Parameters gains persistence, shock size and correlation controls; and a row of <i>Mode presets</i> is visible to everyone: <i>Fixed Inflation</i> pins inflation to your Assumptions rate and reproduces the pre-change model exactly, <i>Reset to defaults</i> puts every parameter back without your having to remember what it was, and <i>Pessimistic</i> lowers growth, raises volatility and makes inflation more persistent, larger and more tightly tied to bad return years. The Input Distributions panel now shows for everyone, folded by default, with the min and max lines visible and a caption naming the run that built it - mode, paths, seed, and every parameter that shaped the draws, enough to re-create the run from the caption alone. Historical mode is unchanged.</li>
@@ -1182,6 +1183,21 @@
     </div>
 </div>
 
+<!-- The Monte Carlo scripts load BEFORE the bootstrap block below, not after it. They used to sit
+     at the very end of the body, which meant the bootstrap's top-level code ran while every name in
+     them was still undefined: `?tab=montecarlo` threw ReferenceError on mcTabActivated (an optional
+     call does not protect an undeclared identifier), and because that throw aborted the rest of the
+     block, the deferred test tier never registered and the self-check badge stayed neutral forever
+     on that one URL. Nothing here has a load-time side effect, so loading earlier is free. -->
+<script src="montecarlo/historical_returns.js?v=11150b"></script>
+<script src="montecarlo/prng.js?v=11161c"></script>
+<script src="montecarlo/stats.js?v=11161f"></script>
+<!-- The Monte Carlo model itself. The worker importScripts() the same file; on file://, where a
+     worker cannot load its scripts, mc_controller.js runs it here on the main thread. -->
+<script src="montecarlo/mc_engine.js?v=11161f"></script>
+<script src="montecarlo/mc_controller.js?v=11161e"></script>
+<script src="montecarlo/mc_tab.js?v=11162a"></script>
+
 <script type="text/javascript">
 function clampIntlInput(intlId, equityPct) {
     const el = document.getElementById(intlId);
@@ -1430,14 +1446,6 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
   // Dollar input attachment moved to main DOMContentLoaded handler (before captureDefaults).
 </script>
 <script src="other_tools.js"></script>
-<script src="montecarlo/historical_returns.js?v=11150b"></script>
-<script src="montecarlo/prng.js?v=11161c"></script>
-<script src="montecarlo/stats.js?v=11161f"></script>
-<!-- The Monte Carlo model itself. The worker importScripts() the same file; on file://, where a
-     worker cannot load its scripts, mc_controller.js runs it here on the main thread. -->
-<script src="montecarlo/mc_engine.js?v=11161f"></script>
-<script src="montecarlo/mc_controller.js?v=11161e"></script>
-<script src="montecarlo/mc_tab.js?v=11161a"></script>
 <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b36ad716dfc143508c15df16ada9f252"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

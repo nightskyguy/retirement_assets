@@ -33,15 +33,17 @@ default off and set by nothing in the UI**: `unifiedConvRouting`, `rothGapFill`,
 > | worst `fillRothThenCash` cell | −$244,689 | −$1,136,213 |
 >
 > **What survives:** `fillCashThenRoth` is still the better of the two positions, still by a wide
-> margin, and the mechanism section still reads the same way — the payoff tracks whether the control
-> arm ever drew Brokerage. **What does not:** the headline "+$3.56M, almost never loses". On today's
-> engine it is a two-sided lever that can cost more than half a million dollars, which is a stronger
-> argument for the P28f decision (sweep it, do not recommend it) than the old numbers were.
+> margin, and the zero-predicate is intact - a control arm that never drew Brokerage still returns
+> exactly $0. **What does not:** the headline "+$3.56M, almost never loses", and, less obviously, the
+> mechanism itself. The payoff no longer tracks the SIZE of the Brokerage draw; the largest draws in
+> the grid now produce the largest losses. See section 15.3. On today's engine this is a two-sided
+> lever that can cost more than half a million dollars, which is a stronger argument for the P28f
+> decision (sweep it, do not recommend it) than the old numbers were.
 >
 > Prediction B was already **BROKEN** at 1/60. It is broken by a much wider margin now.
 >
-> Everything below this box is the 2026-07-30 record, left as written. Re-run the harness for
-> current numbers rather than quoting these.
+> Everything below this box is the 2026-07-30 record, left as written. **Section 15 is the full
+> re-baseline on today's engine** - quote that, not these.
 
 ---
 
@@ -367,3 +369,67 @@ Four of five broke. The broken ones are the output.
   fixtures. Browser reproduces the node figures exactly.
 - The engine is deterministic: two identical browser runs differ only in `loopMs`, a wall-clock
   field. The node harness stubs `performance.now()` so it never appears there.
+
+
+---
+
+## 15. Re-baseline, 2026-08-24 (v11.162J engine)
+
+Everything above is the 2026-07-30 record. This section is the same harness, same 5 mixes x 3 spend
+rates x 6 families, run against today's engine. It exists because P30 was about to reuse the ladder
+above as settled ground, and it is not.
+
+The arm set is 6, not 7: `unifiedConvRouting` was deleted at P28f, so 540 simulations rather than 630.
+
+### 15.1 What moved
+
+| | 2026-07-30 | 2026-08-24 |
+|---|---|---|
+| best `fillCashThenRoth` cell | **+$3,559,596** | **+$470,977** |
+| worst `fillCashThenRoth` cell | −$12,466 | **−$633,605** |
+| cells where it is negative | 1 of 60 | **26 of 60** |
+| worst `fillRothThenCash` cell | −$244,689 | −$1,136,213 |
+| `fillCashThenRoth` >= `fillRothThenCash` | 53 of 60 | 54 of 60 |
+| where it loses to `fillRothThenCash` | 7 of 60, all Proportional | 6 of 60, all Proportional |
+| payoff vs spend rate | peaks at **6%** | **falls monotonically**: best $470,977 / $117,615 / $40,597 at 4 / 6 / 8% |
+
+### 15.2 What still holds
+
+**The zero-predicate.** Both cells whose control arm never drew Brokerage - IRA Draw 6% at 4% spend,
+in the two default mixes - return exactly $0. The rule that a plan with no Brokerage draw has no
+lever survives the engine change intact.
+
+**The ranking.** `fillCashThenRoth` is still the better of the two positions, and still loses only to
+Proportional, where the gap fill is barely the lever at all.
+
+**Ordered is frozen** in every arm, and no arm makes two families indistinguishable.
+
+### 15.3 What does NOT hold, and matters most for P30
+
+**"Roth pays when it displaces a Brokerage draw" no longer predicts the sign.** In the 2026-07-30
+record the payoff tracked the size of the Brokerage draw. It does not now:
+
+| mix | control Brokerage draw | `fillCashThenRoth` payoff |
+|---|---|---|
+| balanced thirds, Fill Bracket, **4%** | $5,434,336 | **+$286,815** |
+| balanced thirds, Fill Bracket, **6%** | $3,187,345 | **−$359,646** |
+| balanced thirds, IRA Draw, **6%** | $2,279,148 | **−$633,605** |
+| brokerage-heavy, Fill Bracket, **4%** | $7,428,416 | **−$146,374** |
+| brokerage-heavy, IRA Draw, **6%** | $7,221,548 | **−$435,271** |
+
+The largest Brokerage draws in the grid now produce the largest LOSSES. What predicts the sign today
+is the pair (spend rate, brokerage share): positive at 4% except in the brokerage-heavy mix, negative
+almost everywhere at 6% and 8%. Guyton-Klinger is the exception, positive in all 15 of its cells.
+
+**Hypothesis, not a finding:** P32 (v11.15e3) let the third pass draw Brokerage by default, so Roth
+spent early in the gap fill is Roth that is no longer there when the third pass would have reached
+for it. That would explain a mechanism that inverts as the plan is strained. It has not been tested -
+the honest way to settle it is to re-run this grid with `thirdPassBrokerage: 'off'` and see whether
+the old shape returns.
+
+### 15.4 Consequence for P30
+
+P30b planned to reuse this ladder and to report against the zero-predicate. The ladder is fine as a
+SCENARIO SET - the mixes and rates still span the space usefully - but no NUMBER above section 15 may
+be carried forward. The zero-predicate may be. The "displaces a Brokerage draw" mechanism may not,
+and a weight sweep must not assume that moving a draw from Brokerage to Cash is directionally good.

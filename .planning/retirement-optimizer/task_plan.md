@@ -1420,24 +1420,40 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
 - **Do not touch `resolveResidualAndForcedIRA` in this phase.** That is P32.
 
 **Already ruled out — do not re-derive:**
-- Roth's position in the gap fill. P28 rounds 2+4, 630 sims, `fillCashThenRoth` established as the
-  better of the two positions, and **shipped 2026-08-24** as a control plus the 🅡 sweep rows.
-  **But re-measure before quoting any P28 figure**: on the v11.162B engine the effect ranges
-  +$470,977 to -$633,605 and is negative in 26 of 60 cells, not the recorded +$3.56M / 1-of-60. The
-  ranking survived the engine change; the magnitudes did not. Assume the same of anything else in
-  `P28_RESULTS.md` that P30 leans on, the zero-predicate included.
+- Roth's position in the gap fill. `fillCashThenRoth` is the better of the two positions and
+  **shipped 2026-08-24** as the *Roth before Brokerage* switch plus the 🅡 sweep rows.
+- **RE-BASELINED 2026-08-24, `P28_RESULTS.md` section 15.** The ladder was re-run on today's engine
+  before P30 was allowed to reuse it. Quote section 15, never the 2026-07-30 tables.
+  - **Still true:** the **zero-predicate** - a control arm that never drew Brokerage returns exactly
+    $0. Both such cells in the grid still do. And the ranking: `fillCashThenRoth` beats
+    `fillRothThenCash` in 54 of 60, losing only on Proportional.
+  - **No longer true, and this is the one that bites P30:** "Roth pays when it displaces a Brokerage
+    draw" **no longer predicts the sign**. The largest Brokerage draws in the grid now produce the
+    largest LOSSES (brokerage-heavy, $7.4M drawn, -$146,374; balanced thirds at 6%, -$633,605),
+    where the same cells used to produce the largest gains. What predicts the sign now is the pair
+    (spend rate, brokerage share). The payoff also FALLS with spend rate (+$470,977 / +$117,615 /
+    +$40,597 at 4/6/8%) where it used to peak at 6%.
+  - **Untested hypothesis:** P32 letting the third pass draw Brokerage means Roth spent early in the
+    gap fill is Roth the third pass can no longer reach. Settle it by re-running the grid with
+    `thirdPassBrokerage: 'off'` and seeing whether the old shape returns. Cheap; do it as part of
+    `P30b` rather than guessing.
+  - **The ladder is still a good SCENARIO SET** - the five mixes and three rates span the space. It
+    is the numbers, and the directional mechanism, that may not be carried forward. **A weight sweep
+    must not assume that moving a draw from Brokerage to Cash is directionally good.**
 - Whether the three shipped `orderedSeq` sequences matter — already swept (`optimizer_ui.js:841`).
 - The unified-conversion reframe — measured inert, 0 money fields moved in 90 cells.
 
 **Tasks:**
 - [ ] **P30a** — `gapFillWeights` research input, default `[40,60]`, no UI, `ordered` excluded
-- [ ] **P30b** — Harness: weight sweep x P28 mix/spend ladder x gap-filling families; predictions scored
+- [x] **P30 re-baseline** — DONE 2026-08-24, `P28_RESULTS.md` section 15. See the block above.
+- [ ] **P30b** — Harness: weight sweep x P28 mix/spend ladder x gap-filling families; predictions
+      scored. Include a `thirdPassBrokerage: 'off'` arm to settle the inversion hypothesis
 - [ ] **P30c** — Q2 arm: bracket-family order Brokerage-before-Cash as an explicit alternative
 - [ ] **P30d** — Q4 arm: the remaining orderings of four accounts, harness-only
 - [ ] **P30e** — Q5: cost the decoupling (new input vs derived), count affected rows, do NOT build yet
 - [ ] **P30f** — Report against P28's zero-predicate: split cells by "did the control ever draw Brokerage"
 - [ ] **P30g** — Decision: change the default, expose a control, decouple, or record that the constant is inert
-- **Status:** not started, research-first. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
+- **Status:** re-baseline done (2026-08-24); `P30a` next. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
   new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
   `P28_RESULTS.md` as its reference)
 - **Depends on:** no code dependency. Its *ship* decision was downstream of P28's, which is now

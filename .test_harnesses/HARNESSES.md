@@ -74,10 +74,11 @@ inert, and its arm (A1) went with it -- an arm setting a flag nothing reads woul
 control and look like a result. `rothGapFill` shipped, as the *Roth before Brokerage* switch and
 the Optimizer's 🅡 rows. The grid is now 6 arms, 540 simulations.
 
-**The recorded numbers no longer reproduce.** Re-running on the v11.162B engine gives a
+**The recorded numbers no longer reproduce.** Re-running on today's engine gives a
 `fillCashThenRoth` range of +$470,977 to -$633,605, negative in 26 of 60 cells, against the
-+$3,559,596 / 1-of-60 below. P32 letting the third pass draw Brokerage is the likely cause, since
-displacing a Brokerage draw is the whole mechanism. See the warning box in `P28_RESULTS.md`.
++$3,559,596 / 1-of-60 below. The mechanism inverted too: the largest Brokerage draws in the grid now
+produce the largest LOSSES, where they used to produce the largest gains. The zero-predicate still
+holds. Full re-baseline in `P28_RESULTS.md` section 15 - quote that, not the 2026-07-30 tables.
 
 Tests a proposed nerdknob (P28): model every **voluntary** (non-RMD) IRA withdrawal as a Roth
 conversion, then spend out of Roth. Runs a 5-mix account ladder (shipped defaults -> balanced thirds

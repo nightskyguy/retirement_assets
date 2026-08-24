@@ -4528,7 +4528,9 @@ test('OPT_GOLDEN: the four gates are actually exercised by the captured scenario
     assert(o.nerdKnobs === true && o.base.Cash === 0, 'the off-grid capture must be nerdknob-on with no Cash');
     assert(!has(o, '💵'), 'Cash 0: the 💵 clones are skipped as bit-identical twins');
     const last = optBaseRows(o.rows)[o.baseRowCount - 1];
-    assertSameList([last[0], last[1]], ['IRA Draw', '9%'], 'the off-grid row');
+    // 14%, not 9%: 9% was off both grids until v11.162J put it ON the Optimizer's, at which point
+    // this scenario silently stopped exercising the gate it was captured for.
+    assertSameList([last[0], last[1]], ['IRA Draw', '14%'], 'the off-grid row');
     assert(o.baseRowCount - a.baseRowCount === 1, 'an off-grid parameter adds exactly one base row');
 });
 
@@ -4577,11 +4579,12 @@ test('buildStrategyFamilies: the options are what separate the two sweeps, nothi
     const mc  = call({ grids: MC_GRIDS });
     const opt = call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true });
     // The Optimizer now has FEWER base rows than MC despite sweeping two extra families: its Reduce
-    // grid is 5 steps against MC's 16. Both counts are pinned so a grid edit has to be deliberate.
-    assert(plain(mc).length === 36 && plain(opt).length === 33,
-        `base rows: MC ${plain(mc).length} (expected 36), Optimizer ${plain(opt).length} (expected 33)`);
+    // grid is 5 steps against MC's 16, and its IRA Draw grid 5 against MC's 5 but not the same five.
+    // Both counts are pinned so a grid edit has to be deliberate.
+    assert(plain(mc).length === 36 && plain(opt).length === 30,
+        `base rows: MC ${plain(mc).length} (expected 36), Optimizer ${plain(opt).length} (expected 30)`);
 
-    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 37,
+    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 34,
         'the ACA family adds 4 rows');
     assert(call({ grids: MC_GRIDS, cashClones: true }).length === 108 * 4 / 3,
         'cashClones clones every un-modified row once more');
@@ -4619,14 +4622,17 @@ test('bothOnMedicareAtStart: AND semantics, single filer, and the missing-input 
     assert(both(0, 65, true, 1952) === false,    'missing inputs are not an assertion of anything');
 });
 
-test('OPT_GOLDEN: the Optimizer sweeps the two families and the wider grid that MC does not', () => {
+test('OPT_GOLDEN: the Optimizer sweeps the two families MC does not, on its own IRA Draw grid', () => {
     // The mirror of the buildVariations divergence test above. Together they declare the gap
     // rather than leaving it accidental, so P35 PR 2 cannot collapse the two sweeps onto one grid
     // without failing one side or the other.
+    //
+    // "Wider" until v11.162J, when the Optimizer's IRA Draw grid was trimmed to odd steps: MC still
+    // tries 6% and 8%, which the Optimizer no longer does, so neither grid contains the other.
     const rows = optBaseRows(OPT_GOLDEN.nerdknob.rows);
     const draws = rows.filter(r => r[3].strategy === 'fixedpct')
                       .map(r => Math.round(r[3].iraWithdrawPct * 100));
-    assertSameList(draws, [5, 6, 7, 8, 10, 12, 15, 20], 'Optimizer IRA Draw grid');
+    assertSameList(draws, [5, 7, 9, 11, 13], 'Optimizer IRA Draw grid');
     const irmaa = rows.filter(r => r[0] === 'IRMAA Ceil');
     assertSameList(irmaa.map(r => r[3].stratIRMAATier), [0, 1, 2, 3, 4], 'IRMAA ceiling tiers');
     // Its Fill Bracket rows pin the tier OFF, which is what keeps the two families apart.

@@ -30,7 +30,7 @@
  *   default                 plain load, no ?nerdknob            _runOptimizerNow(); __send('default')
  *   nerdknob                reload with ?nerdknob               same, __send('nerdknob')
  *   nerdknobACA             startAge 60, birthyear2 1962        so bothOnMedicareAtStart() is false
- *   nerdknobNoCashOffGrid   Cash 0, strategy fixedpct, 9%       DisplayHelpers.setDollarValue('Cash', 0)
+ *   nerdknobNoCashOffGrid   Cash 0, strategy fixedpct, 14%      DisplayHelpers.setDollarValue('Cash', 0)
  *
  * Between them these open and close every gate the enumeration has: NERD_KNOBS (the 💵 clones and
  * the ACA family), bothOnMedicareAtStart (the ACA family again, independently), base.Cash > 0 (the

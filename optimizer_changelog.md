@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.162H"></a>
+<a id="11.162J"></a>
 
-## 11.162H
+## 11.162J
 
 ### Roth can fill a spending shortfall before the brokerage account
 
@@ -37,10 +37,11 @@ For what the tool does and how to use it, see [README.md](README.md).
    rows appear only if you hold Roth. Nothing about a plan predicts which way it lands, which is why
    the switch is swept rather than recommended.
 
-3. **Fewer *Reduce IRA* rows.** The Optimizer tried 16 plan lengths between 2 and 25 years; it now
-   tries **3, 7, 11, 17 and 23**. Neighbouring years differed by very little and *Reduce* was over a
-   third of the table, so a run is now a quarter shorter and the table is easier to read. Your own
-   setting still appears as its own row whichever length you pick.
+3. **Fewer *Reduce IRA* and *IRA Draw* rows.** The Optimizer tried 16 plan lengths between 2 and 25
+   years and 8 draw percentages; it now tries **3, 7, 11, 17 and 23** years and **5, 7, 9, 11 and
+   13%**. Neighbouring steps differed by very little and between them the two families were half the
+   table, so a run is a third shorter and the table is easier to read. Your own setting still appears
+   as its own row whichever length or percentage you pick, including above 13%.
 
 ---
 

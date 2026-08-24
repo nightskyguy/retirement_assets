@@ -4190,7 +4190,12 @@ const OPTIMIZER_GRIDS = {
     // baseline have had it. The endpoints are approximately preserved (3 for 2, 23 for 25), and a
     // user sitting between steps still gets their own value as a row: offGridParamFor adds it.
     fixed:    [3, 7, 11, 17, 23],
-    fixedpct: [5, 6, 7, 8, 10, 12, 15, 20],
+    // Odd steps, 5 through 13. NOT a superset of MC's [5, 6, 7, 8, 10] any more: the Optimizer no
+    // longer tries 6% or 8%, and MC does not try 9%, 11% or 13%. The two sweeps have always
+    // differed on purpose, but this is the first place where each has a value the other lacks, so
+    // an IRA Draw row in one tab may have no twin in the other. A user above 13% still gets scored:
+    // offGridParamFor adds their own percentage as its own row.
+    fixedpct: [5, 7, 9, 11, 13],
     ordered:  ['CBIR', 'RIBC', 'BIRC'],
     irmaaTiers:   [0, 1, 2, 3, 4],
     acaMultiples: [200, 250, 300, 400],

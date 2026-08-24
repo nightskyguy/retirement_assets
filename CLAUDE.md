@@ -42,3 +42,29 @@ form. Noun and adjective forms keep the particle: "the hover-over data", "on hov
 Code identifiers are never rewritten: `:hover`, `mouseover`, `onHover`, `hoverRadius`,
 `hoverBackgroundColor` and friends stay exactly as the language and Chart.js spell them. Internal
 code comments are not user-facing and are not worth churn, but new ones may as well follow the rule.
+
+## One changelog entry per RELEASE, not per commit
+
+Everything built between one release and the next accrues into a **single** entry in
+`optimizer_changelog.md` and its matching `<li>` in the page - across commits, across sessions,
+across days. Edit that entry in place. The version stamp may be refreshed with each change (the
+`<title>` and the entry keep matching), but a refreshed stamp is a new number on the same entry, not
+a second entry.
+
+On 2026-08-24 one unmerged branch carried four entries - 11.161B, 11.161G, 11.1628, 11.162A - one per
+commit. That numbers the development rather than the release, and it buried the two things a reader
+needed under two fixes to code that had never shipped.
+
+**Order by what matters to the reader**, not by build order or by difficulty. New capability first.
+Fixes to things nobody outside the branch ever saw go last, one line each, or not at all.
+
+**Leave out**, always:
+
+| don't write | because |
+|---|---|
+| how it used to work | the reader wants what it does now. One exception: something they must act on, e.g. a saved plan that will not reproduce - then state it as consequence, not history |
+| the internals of the change | function, file and variable names, the mechanism, the defect, test counts, phase IDs. That belongs in the commit message and `progress.md`, which already carry it |
+| an argument for why the change is good | state what it is |
+
+Target for a whole release entry: **about 150 words.** A 954-word entry was rejected once already.
+

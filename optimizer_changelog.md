@@ -2,6 +2,11 @@
 
 Full write-ups of what changed in each release, newest first.
 
+One entry per RELEASE. Work still in development keeps accruing into the entry at the top - edit it
+in place, refresh its version stamp if you like, but do not add a second entry for the next commit.
+Order each entry by what matters to a reader, and leave out how things used to work and anything
+about the internals of the change. See the rule in [CLAUDE.md](CLAUDE.md).
+
 The Documentation tab inside [retirement_optimizer.html](retirement_optimizer.html) carries a short
 summary of the most recent releases and links here for the detail. Entries marked **behavior
 change** alter the numbers an existing plan produces, so a saved scenario or a shared link can give a

@@ -2056,10 +2056,10 @@ function renderOptimizerTable(results) {
     if (perfEl) {
         const perf = OptimizerState.perfStats;
         if (perf) {
-            // Two extra lines, because "1,786 runs" over a 219-row table invites the wrong
-            // conclusion about where the time goes: the passes that search (Optimize Spend,
-            // Optimize Conversions) cost many runs per row, while a table row costs one plus its
-            // counterfactuals. Rows and runs are both shown so the difference is visible.
+            // The breakdown is nerdknob-only. It answers "why was that slow" - which pass, which
+            // family - and that is a question about the tool rather than about the plan; a reader
+            // comparing strategies has no use for it and two dense lines of counts under the timing
+            // read as something they are supposed to act on. The headline stays for everyone.
             const n = v => v.toLocaleString();
             const pairs = o => Object.entries(o).filter(([, v]) => v > 0)
                                      .sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${n(v)}`).join(' · ');
@@ -2068,8 +2068,8 @@ function renderOptimizerTable(results) {
                 .map(([k, v]) => `${k} ${n(v)} (${n(perf.byFamily[k] ?? 0)})`).join(' · ') : '';
             perfEl.innerHTML =
                 `⏱ ${perf.totalMs.toFixed(0)}ms · ${n(perf.runsCount)} runs · ${n(perf.rows ?? 0)} rows`
-                + (fam ? `<div style="font-size:0.85em;opacity:0.8;">Rows by strategy, runs in parens: ${fam}</div>` : '')
-                + (perf.byPhase ? `<div style="font-size:0.85em;opacity:0.8;">Runs by pass: ${pairs(perf.byPhase)}</div>` : '');
+                + (NERD_KNOBS && fam ? `<div style="font-size:0.85em;opacity:0.8;">Rows by strategy, runs in parens: ${fam}</div>` : '')
+                + (NERD_KNOBS && perf.byPhase ? `<div style="font-size:0.85em;opacity:0.8;">Runs by pass: ${pairs(perf.byPhase)}</div>` : '');
             perfEl.style.display = 'block';
         } else {
             perfEl.style.display = 'none';

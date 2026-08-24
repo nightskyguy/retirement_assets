@@ -4316,3 +4316,46 @@ time spent calculating each year of data was rendering incorrectly and has been 
 
 Version 11.162A -> 11.1629, title and the single entry. No `?v=` token moved: nothing but the HTML
 and the changelog file changed. Badge green at 681, in-page 296.
+
+---
+
+## Session: 2026-08-24 (worktree context-ab498f) — P72 filed, first-year stub. No code.
+
+User asked a direct question: with $1M in Cash today, late August, does the Optimizer accrue
+September-December in year 1, or a full year?
+
+**Answer, verified in the engine: a full year.** `applyGrowth` (optimizer_core.js:626) is
+proportional and already takes a month count, but `preMonths = early ? 1 : 11;
+postMonths = 12 - preMonths` (optimizer_core.js:1168) **always sums to 12**, in year 0 as in every
+other year. The 1/11 split positions the withdrawal before or after growth inside the year; it is
+not a calendar offset. No month input exists anywhere in the model, and `startInYear`
+(optimizer_ui.js:558) is derived from `startAge` and clamped to `>= this calendar year`. The only
+calendar-partial thing modeled today is Social Security claim-year proration by birth month,
+`ssFirstYearFraction` (optimizer_core.js:693).
+
+The overstatement is roughly `(1 - monthsRemaining/12) x rate x balance` and it compounds forward
+over the whole run, so it biases every metric that depends on terminal wealth.
+
+**Filed as P72, O2, full build spec** (user chose the build spec over a measure-first item). Two
+decisions came out of the conversation and are what the spec hangs on:
+
+1. **Auto-detect the month, but only in the UI layer.** The user does not want to hand-enter
+   January-1 balances, because the change since January mixes growth, taxable events, withdrawals
+   and deposits. So the page auto-detects when `startInYear` is the current calendar year, and
+   assumes January for a future retirement with the month overridable. The engine never reads
+   `new Date()`: it takes `startMonth`, defaulting to 1, which is bit-identical to today and leaves
+   every golden fixture and node test untouched. The resolved month is pinned into the URL on
+   save/share so a link still reproduces months later.
+2. **The wage caveat is a first-class item, not a footnote.** A stub year exists because the user is
+   mid-year, and that year almost always carries January-August earned income and withheld tax that
+   the model knows nothing about. Prorating income without it would invent Roth conversion room that
+   does not exist - the one number people act on. P72g adds income-already-received and
+   tax-already-withheld inputs for exactly that reason.
+
+The spec also fixes what does NOT prorate: RMD (the whole year's is due however late you start),
+the standard deduction, brackets and the ACA FPL (annual by statute), and, recommended, property tax
+(an annual bill that feeds SALT). `endYear` must advance inflation by the stub fraction too, or year
+2's dollars sit a full year ahead of a four-month year 1.
+
+Files touched: `task_plan.md` (new P72 section after P71, one O2 index row) and this log. No product
+code, no version bump, no changelog entry.

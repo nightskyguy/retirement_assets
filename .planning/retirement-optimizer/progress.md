@@ -4100,3 +4100,30 @@ header. Values check out: 3.00 / 6.00 flat on a deterministic run, and `inflCum%
 **Version** 11.161F -> **11.161G**; tokens on optimizer_core.js, optimizer_ui.js, optimizer_tests.js
 and the tier-2 loader. This one IS user-visible, so it gets a changelog entry in both homes: the
 in-page list and `optimizer_changelog.md`.
+
+
+---
+
+## Session 2026-08-24 - the two map files P71 forgot
+
+User asked whether `ARCHITECTURE.md` and `.planning/FILE_DIRECTORY.md` were missing changes. They
+were. P71 renamed the shape of the whole Monte Carlo layer across four commits and neither map moved,
+so both described a `worker.js` that owns `runPass` and a `mc_controller.js` that keeps a copy of it -
+the exact arrangement the phase existed to end. Nothing automated would have caught this: the suites
+do not read either file, and the doclinks suite only checks that links resolve.
+
+`ARCHITECTURE.md`: `mc_engine.js` added to the module diagram with its real edges (the page loads it,
+the worker `importScripts` it, the controller falls back to it), the worker and controller relabeled
+as shells, and the Monte Carlo flowchart corrected on three counts - it now routes both protocols
+through `runJob`, names all three simulation modes instead of "Synthetic", and shows the stress pass
+running in EVERY mode rather than only Historical, which has been true since v11.152d and was never
+drawn. Three paragraphs added after the flow: one engine with two shells, why a Monte Carlo refactor
+needs the `p71_probe/` harnesses rather than the suites, and the CRN discipline in one place
+(separate inflation stream, correlated shock, and why Fixed Inflation still makes the draw it
+multiplies by zero). File-reference table updated for all five montecarlo files.
+
+`FILE_DIRECTORY.md`: `mc_engine.js` row added, `worker.js` demoted to "shell around mc_engine.js",
+`mc_controller.js` and `prng.js` and `stats.js` rows corrected, and `p71_probe/` documented in the
+planning section.
+
+Docs only - no page asset changed, so no version bump and no changelog entry. Suites 305 / 61 / 22.

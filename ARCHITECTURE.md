@@ -41,9 +41,10 @@ flowchart TD
 
     subgraph mc["montecarlo/"]
         MCTAB["mc_tab.js<br/>initMCTab - tab UI, charts"]
-        MCCTL["mc_controller.js<br/>runMCWorker, cancelMCWorker"]
-        WORKER["worker.js<br/>Web Worker - runs the sweep"]
-        PRNG["prng.js<br/>mulberry32, bootstrapScenarioBank<br/>buildStressBank"]
+        MCCTL["mc_controller.js<br/>runMCWorker, cancelMCWorker<br/>_runMCMainThread - hooks only"]
+        MCENG["mc_engine.js<br/>THE model, one copy<br/>runJob, runPass, buildBanks<br/>buildPathInputs, buildStressMsg"]
+        WORKER["worker.js<br/>Web Worker shell<br/>onmessage, progress, postMessage"]
+        PRNG["prng.js<br/>mulberry32, boxMuller<br/>bootstrapScenarioBank, buildStressBank<br/>drawSyntheticBank, AR(1) inflation"]
         STATS["stats.js<br/>computePercentiles, computeInputFan"]
         HRET["historical_returns.js<br/>HISTORICAL_RETURNS data"]
     end
@@ -66,6 +67,7 @@ flowchart TD
     HTML --> OTHER
     HTML --> MCTAB
     HTML --> MCCTL
+    HTML --> MCENG
     HTML --> PRNG
     HTML --> STATS
     HTML --> HRET
@@ -79,13 +81,17 @@ flowchart TD
     MCTAB --> CORE
     MCTAB -->|getInputs| UI
     MCCTL -->|new Worker| WORKER
-    MCCTL -.->|file:// fallback,<br/>main thread| PRNG
-    MCCTL -.->|file:// fallback| STATS
+    MCCTL -.->|file:// fallback,<br/>main thread + hooks| MCENG
+    WORKER -->|runJob| MCENG
+    MCENG --> CORE
+    MCENG --> PRNG
+    MCENG --> STATS
     WORKER -->|importScripts| TAX
     WORKER -->|importScripts| CORE
     WORKER -->|importScripts| PRNG
     WORKER -->|importScripts| STATS
     WORKER -->|importScripts| HRET
+    WORKER -->|importScripts| MCENG
     CORETEST -->|require| CORE
     CORETEST -->|require| TAX
     CORETEST -->|require| GOLDEN
@@ -249,16 +255,20 @@ flowchart TD
     CFG --> BV["buildVariations base<br/>optimizer_core.js"]
     BV --> CTL["runMCWorker cfg, onProgress, onComplete"]
     CTL --> PROTO{"protocol"}
-    PROTO -->|http / https| W["new Worker montecarlo/worker.js<br/>importScripts taxengine, optimizer_core,<br/>prng, stats, historical_returns"]
-    PROTO -->|file://| FALLBACK["_runMCMainThread<br/>chunked async, same code paths,<br/>needs prng.js + stats.js on the page"]
+    PROTO -->|http / https| W["new Worker montecarlo/worker.js<br/>importScripts taxengine, optimizer_core,<br/>prng, stats, historical_returns, mc_engine"]
+    PROTO -->|file://| FALLBACK["_runMCMainThread<br/>same engine, on the main thread,<br/>with yield / cancel / progress hooks"]
 
-    W --> BANK["build scenario bank - CRN<br/>bootstrapScenarioBank / buildStressBank /<br/>GBM via boxMuller"]
-    FALLBACK --> BANK
+    W --> ENG["mc_engine.js runJob cfg, hooks<br/>ONE implementation - seeds the rng once"]
+    FALLBACK --> ENG
+    ENG --> BANK["buildBanks - CRN<br/>bootstrapScenarioBank / buildStressBank /<br/>drawSyntheticBank + AR(1) inflation"]
     BANK --> MODES{"simulationMode"}
-    MODES -->|Historical| TWO["runPass bootstrap<br/>+ runPass stress - shared progress bar"]
-    MODES -->|Synthetic| ONE["runPass gbm"]
-    TWO --> SWEEP2
-    ONE --> SWEEP2["for each variation x each path:<br/>simulate from optimizer_core.js"]
+    MODES -->|Historical| TWO["runPass bootstrap"]
+    MODES -->|Synthetic - GBM| ONE["runPass gbm"]
+    MODES -->|Synthetic - AAM| ONEA["runPass aam"]
+    TWO --> STRESS
+    ONE --> STRESS
+    ONEA --> STRESS["+ runPass stress - every mode,<br/>shared progress bar"]
+    STRESS --> SWEEP2["for each variation x each path:<br/>buildPathInputs then simulate<br/>from optimizer_core.js"]
     SWEEP2 --> PCT["computePercentiles<br/>computeInputFan"]
     PCT --> POST["postMessage results"]
     POST --> CHARTS["mc_tab.js: main chart + stress chart,<br/>legend isolate, input fan charts"]
@@ -266,6 +276,28 @@ flowchart TD
 
 The worker propagates its own `?v=` cache-bust token to every `importScripts` call, otherwise a
 refreshed worker can pull a stale `optimizer_core.js`.
+
+**One engine, two shells (v11.161F).** `worker.js` and `mc_controller.js` each used to hold a full
+copy of the run, and they had drifted - the controller had per-path progress and cancellation the
+worker never got. Both now call `runJob()` and differ only in the hooks they pass: the worker passes
+a throttled progress callback and nothing else, the main thread passes progress plus `shouldCancel`
+and a 16ms `yieldIfDue`. Nothing about the model can change for one caller and not the other.
+
+**Nothing in any test suite loads `worker.js` or `mc_controller.js`** - one opens with
+`importScripts`, the other is a page script - and `MC_GOLDEN` pins `buildVariations()` enumeration,
+not a single simulated return. A Monte Carlo refactor therefore needs its own evidence:
+`.planning/retirement-optimizer/p71_probe/` loads both files into a `vm` context and hashes a
+fixed-seed run in all three modes, to be run against the working tree and a staged copy of the
+previous commit. The suite does cover `mc_engine.js` directly (end-to-end in all three modes, CRN
+determinism, stress path counts, cancellation).
+
+**CRN discipline.** `runJob` seeds the returns stream once and both passes share it, so `runPass`
+takes the rng as a parameter. Inflation draws come from a *separate* stream keyed by
+`INFLATION_STREAM_XOR`, and each year's inflation shock is correlated with that year's return shock
+through `correlatedNormal` - statistically entangled, but never reading each other's generator, so
+retuning the inflation knobs leaves every return draw bit-identical. Any change that conditionally
+skips a draw desynchronizes the stream from that year on; this is why Fixed Inflation sets the shock
+size to zero and still makes the draw.
 
 ---
 
@@ -284,10 +316,11 @@ refreshed worker can pull a stale `optimizer_core.js`.
 | `other_tools.js` | UI | shared Other Tools widget across all pages |
 | `doclinks.js` | UI | `DocLinks.docHref` - maps `.md` hrefs to the `.html` pages Pages generates |
 | `montecarlo/mc_tab.js` | MC | `initMCTab`, chart rendering, `_mcBase` / `_lastMCHash` |
-| `montecarlo/mc_controller.js` | MC | `runMCWorker`, `cancelMCWorker`, `_runMCMainThread` file:// fallback |
-| `montecarlo/worker.js` | MC | `runPass`, bank build + variation sweep |
-| `montecarlo/prng.js` | MC | `mulberry32`, `boxMuller`, `bootstrapScenarioBank`, `buildStressBank`, `applyBearStartOverlay` |
-| `montecarlo/stats.js` | MC | `computePercentiles`, `computeInputFan` |
+| `montecarlo/mc_controller.js` | MC | `runMCWorker`, `cancelMCWorker`, `_runMCMainThread` (file:// fallback - builds hooks, awaits `runJob`), `estimateMCMs` / `recordMCTiming` |
+| `montecarlo/mc_engine.js` | MC | `runJob`, `runPass`, `buildBanks`, `buildPathInputs`, `buildStressMsg` - the model, shared by the worker and the main-thread fallback |
+| `montecarlo/worker.js` | MC | shell only: `onmessage`, throttled progress, error containment |
+| `montecarlo/prng.js` | MC | `mulberry32`, `boxMuller`, `bootstrapScenarioBank`, `buildStressBank`, `applyBearStartOverlay`, `drawSyntheticBank`, `syntheticReturnFromBank`, `computeNextInflation`, `correlatedNormal`, `INFLATION_STREAM_XOR` |
+| `montecarlo/stats.js` | MC | `computePercentiles`, `computeInputFan` (dual-mode export since P71d) |
 | `montecarlo/historical_returns.js` | MC | `HISTORICAL_RETURNS` |
 | `optimizer_core.tests.js` | test | `node optimizer_core.tests.js` - loads the engine via `require()` against the dual-mode export guards, with `window`/`document`/`performance` stubbed on `globalThis` first (`:23-25`). It has not used `vm.runInContext` since `86e26fa`; the stub comment at `:21` still refers to "the old vm-based harness" |
 | `sweep_golden.js` | test data | `SWEEP_BASES`, `MC_GOLDEN`, `OPT_GOLDEN` - the recorded strategy enumerations both sweeps must keep emitting. Data only, dual-mode export, `require`d by `optimizer_core.tests.js` on every run |

@@ -52,11 +52,12 @@ same stub pattern, just within `standalone/` rather than at root.)
 | `displayhelpers.js` | Shared numeric-input parsing/formatting + tooltip helpers, used across multiple tools. |
 | `other_tools.js` | Shared "Other Tools" cross-link widget (the `TOOLS` list) rendered on multiple pages so each tool can link to the others. |
 | `doclinks.js` | Rewrites `.md` hrefs to the `.html` pages GitHub Pages/Jekyll generates from them, but only when the page is served from a non-local origin, so `file://` and localhost keep opening the real files. Also decorates the Jekyll-rendered doc pages (mermaid captions, back link). |
-| `montecarlo/mc_controller.js` | Main-thread interface to the Monte Carlo run — dispatches to a Web Worker on `http(s)://`, falls back to chunked async on `file://`. |
+| `montecarlo/mc_controller.js` | Main-thread interface to the Monte Carlo run — dispatches to a Web Worker on `http(s)://`, falls back to running `mc_engine.js` on the main thread (chunked, so the page keeps a frame) on `file://`. Also owns the run-time estimator the buttons quote. |
 | `montecarlo/mc_tab.js` | Monte Carlo tab UI controller (charts, tables, strategy selection) in the Optimizer. |
-| `montecarlo/worker.js` | The actual Web Worker: runs all strategy variations against a shared Common-Random-Numbers scenario bank, posts progress + final results. |
-| `montecarlo/prng.js` | Seeded PRNG (mulberry32) + Box-Muller normal sampling used by the Synthetic (GBM) Monte Carlo mode. |
-| `montecarlo/stats.js` | Per-year percentile-band statistics (p5/p25/p50/p75/p95) for Monte Carlo fan charts. |
+| `montecarlo/mc_engine.js` | **The Monte Carlo model itself**, and the only copy of it: bank build, the variation × path sweep, the results message. `runJob`, `runPass`, `buildBanks`, `buildPathInputs`, `buildStressMsg`. Loads three ways (node `require`, page `<script>`, worker `importScripts`) so the worker and the `file://` fallback run the same text rather than two copies believed identical. Callers pass hooks for progress, cancellation and yielding. |
+| `montecarlo/worker.js` | The Web Worker shell around `mc_engine.js`: `importScripts`, one throttled progress callback, `onmessage`, error containment. Holds no model logic. |
+| `montecarlo/prng.js` | Seeded PRNG (mulberry32) + Box-Muller sampling, the historical/stress/bear bank builders, and the shared synthetic draw (`drawSyntheticBank`, `syntheticReturnFromBank`, `INFLATION_STREAM_XOR`) plus the AR(1) inflation model both synthetic modes use. |
+| `montecarlo/stats.js` | Per-year percentile-band statistics (p5/p25/p50/p75/p95) for Monte Carlo fan charts, plus the input-distribution fan. Dual-mode export so node can put both on `globalThis` for `mc_engine.js`. |
 | `montecarlo/historical_returns.js` | Historical annual return/inflation data (Damodaran, MSCI, BLS CPI-U, 1928–2025) backing the Historical Monte Carlo mode and `standalone/RealReturns.html`. |
 | `standalone/real_returns_data.js` | US T-bill historical annual returns (1928–2025), Damodaran source — data-only, used by `standalone/RealReturns.html`. |
 
@@ -98,6 +99,7 @@ same stub pattern, just within `standalone/` rather than at root.)
 | `.planning/task_completed.md` | Archive of fully-completed phases (moved out of `task_plan.md` to keep it scannable). |
 | `.planning/NOTES.md` | Older, more granular dev-session notes (pre-dates the `retirement-optimizer/` split). |
 | `.planning/IRAprojection.spec.txt` | Original spec/requirements notes for the IRA projection logic. |
+| `.planning/retirement-optimizer/p71_probe/` | Two node harnesses that load the real `worker.js` and the real `mc_controller.js` into a `vm` context and hash a fixed-seed Monte Carlo run in all three modes. The A/B evidence that a Monte Carlo refactor changed no number — no test suite executes either file. README in the directory. |
 | `.planning/FILE_DIRECTORY.md` | This file. |
 
 ## Config / misc

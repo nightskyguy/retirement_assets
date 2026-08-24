@@ -1,6 +1,8 @@
 // Compute per-year percentile bands for equity returns and (optionally) inflation.
 // equityBank[p * years + y] = decimal return (e.g. 0.12 for 12%) for path p, year y.
-// inflationBank: same layout, or null (GBM uses fixed inflation — no distribution).
+// inflationBank: same layout, or null. Every mode passes a real bank since P23 gave the synthetic
+// modes their own AR(1) inflation; null remains supported and simply leaves the fan's inflation half
+// empty.
 // Returns { equity: {min,p10,p50,p90,max}, inflation: {min,p10,p50,p90,max} | null }
 function computeInputFan(equityBank, inflationBank, numPaths, years) {
     const col = new Float64Array(numPaths);
@@ -51,4 +53,13 @@ function computePercentiles(paths, years, numPaths) {
         out.p95[y] = col[Math.max(0, Math.floor(numPaths * 0.95) - 1)];
     }
     return out;
+}
+
+// Same three-host tail as prng.js and mc_engine.js. The worker and the page load this file as a
+// plain script and call both functions as bare globals; node needs the names on an object before
+// the test suite can put them on globalThis for mc_engine.js to find.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { computeInputFan, computePercentiles };
+} else if (typeof window !== 'undefined') {
+    window.MCStats = { computeInputFan, computePercentiles };
 }

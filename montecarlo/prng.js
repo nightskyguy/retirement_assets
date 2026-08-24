@@ -67,6 +67,43 @@ function correlatedNormal(z1, z2, rho) {
     return rho * z1 + Math.sqrt(1 - rho * rho) * z2;
 }
 
+// Inflation draws come from their OWN mulberry32 stream, seeded with the run seed XORed by this
+// constant. Sharing the return stream would mean that turning inflation variation on, or merely
+// retuning it, shifted every return draw after it, so GBM results would move for a reason having
+// nothing to do with returns. The value is arbitrary; what matters is that every call site uses the
+// SAME one, which is why it lives here instead of being retyped as a literal in three files.
+const INFLATION_STREAM_XOR = 0x5F356495;
+
+// The one synthetic draw formula, shared by worker.js, mc_controller.js and calibrateMCMs().
+//
+// The two synthetic modes draw exactly one standard normal per path-year, in the same order, and
+// differ only in how that normal becomes a return:
+//   'gbm' - lognormal. The bank stores a LOG-SPACE shock, converted with Math.exp()-1 downstream.
+//           mu is the log drift target, so the center of the yearly return distribution lands at
+//           exp(mu - sigma^2/2) - 1, below the number typed.
+//   'aam' - arithmetic. The bank stores the FINAL return, as bootstrap's bank does. mu is the plain
+//           average of the yearly returns, so the center IS the number typed.
+// Same seed, same shock sequence: the two are a paired comparison, not two independent samples that
+// happen to share a mean.
+//
+// Split in two because the hot loop needs both halves and neither is derivable from the other for
+// free: it banks drawSyntheticBank() and separately needs the return for the min/max scan.
+// `logDrift` is passed in rather than recomputed per year - it is loop-invariant.
+function drawSyntheticBank(mode, mu, sigma, logDrift, z) {
+    return (mode === 'aam') ? Math.max(RETURN_FLOOR, mu + sigma * z)
+                            : logDrift + sigma * z;
+}
+
+// Bank value -> annual return. Identity under 'aam', which banks the return already.
+function syntheticReturnFromBank(mode, banked) {
+    return (mode === 'aam') ? banked : Math.exp(banked) - 1;
+}
+
+// Both halves at once, for callers that want the return and never the bank value.
+function drawSyntheticReturn(mode, mu, sigma, logDrift, z) {
+    return syntheticReturnFromBank(mode, drawSyntheticBank(mode, mu, sigma, logDrift, z));
+}
+
 // Block bootstrap scenario bank from HISTORICAL_RETURNS.equity.
 // Draws overlapping blocks of blockSize years; truncates block if near end of history.
 // Returns Float64Array of fractional returns (not log-space), length numPaths × years.
@@ -517,6 +554,8 @@ if (typeof module !== 'undefined' && module.exports) {
                        STRESS_WINDOWS, STRESS_ROLLING_WINDOWS,
                        BEAR_OVERLAY_WINDOWS, BEAR_OVERLAY_POOL, INFLATION_FLOOR,
                        RETURN_FLOOR, computeNextInflation, correlatedNormal,
+                       INFLATION_STREAM_XOR, drawSyntheticBank, syntheticReturnFromBank,
+                       drawSyntheticReturn,
                        INFLATION_AR1_PERSISTENCE, INFLATION_AR1_SHOCK_SD,
                        INFLATION_RETURN_CORR };
 } else if (typeof window !== 'undefined') {
@@ -528,6 +567,8 @@ if (typeof module !== 'undefined' && module.exports) {
                       STRESS_WINDOWS, STRESS_ROLLING_WINDOWS,
                       BEAR_OVERLAY_WINDOWS, BEAR_OVERLAY_POOL, INFLATION_FLOOR,
                       RETURN_FLOOR, computeNextInflation, correlatedNormal,
+                      INFLATION_STREAM_XOR, drawSyntheticBank, syntheticReturnFromBank,
+                      drawSyntheticReturn,
                       INFLATION_AR1_PERSISTENCE, INFLATION_AR1_SHOCK_SD,
                       INFLATION_RETURN_CORR };
 }

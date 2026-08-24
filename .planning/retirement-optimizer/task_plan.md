@@ -1,6 +1,6 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-23:** **P23 COMPLETE at v11.160F**, uncommitted. The Monte Carlo tab now offers a third mode, Synthetic-AAM, beside Historical and Synthetic-GBM, and both synthetic modes give every path its own AR(1) inflation calibrated to the 1948-2025 CPI record and correlated with returns. GBM's return draws are bit-identical to before. Suites **299 / 61 / 22** (`slowInCore` 3), badge green at 671. P67 shipped v11.1601 in PR #186; P32 in #185; P64/P66 in #182/#183/#184.
+**As of 2026-08-23:** **P23 COMPLETE and MERGED**, plus seven addenda, shipped through **v11.161B** in PR #188; working tree clean, nothing uncommitted. The Monte Carlo tab now offers a third mode, Synthetic-AAM, beside Historical and Synthetic-GBM, and both synthetic modes give every path its own AR(1) inflation calibrated to the 1948-2025 CPI record and correlated with returns. GBM's return draws are bit-identical to before. The addenda added reset-to-defaults, a Pessimistic and a Fixed Inflation preset, Input Distributions for every reader, a fan caption that names every parameter of its run, and moved the preset row out from behind the nerdknob as "Mode presets". Suites **300 / 61 / 22** (`slowInCore` 3), `TestTiers.EXPECTED` pinned to match. P67 shipped v11.1601 in PR #186; P32 in #185; P64/P66 in #182/#183/#184.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -13,7 +13,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| **O1** | P71 | Dedup the MC engine: one runPass instead of two mirrors | `P71a` |
+| **O1** | P71 | Dedup the MC engine: one runPass instead of two mirrors | commit |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P69 | Replay a Monte Carlo path through the main model | `P69a` |
@@ -69,8 +69,8 @@ first task. Every open item in the file now carries one.
 | **O2** | P22 | Export Annual Details to CSV | `P22a` | nothing |
 | **O2** | P12 | Retire Optimizer tab -> MC strategy comparison | `P12a` | nothing |
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
-| ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 299 | - | - |
-| **O1** | P71 | Dedup the MC engine: extract the runPass mirror into montecarlo/mc_engine.js *(new 2026-08-23, plan only, user-requested)* | `P71a` | nothing |
+| ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
+| **O1** | P71 | Dedup the MC engine *(a-e DONE, v11.161C-F; 455+567 lines of mirror -> 42+203 around one engine; suite 300 -> 304)* | review + commit | nothing |
 | **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | **P71 first**: P69a is subsumed by P71b |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
@@ -705,6 +705,14 @@ function calibrateMCMs(cfg) {
 ---
 
 ## P69: Replay - walk one Monte Carlo or Stress sequence through the main model
+
+**Plumbing already in place (2026-08-23, v11.161G, user-requested):** Annual Details now carries
+`infl%`, `inflCum%` and `return%` - the inflation applied to spending, the compounded rise since the
+plan started, and the year's market return before dividends and the per-account mix. They sit behind
+**Show All** (category `Market`, which has no checkbox of its own) because a deterministic run
+repeats the same two numbers on every row. They are what makes a replayed path readable, so P69 does
+not need to add them; it needs to give them something interesting to say.
+
 **Why:** The Monte Carlo and Stress tabs report survival rates, median ruin years and percentile
 bands. There is no way to take one bad sequence and walk it through the Annual Details table and the
 Charts next to your own plan. Design and sub-items are in the approved plan at
@@ -800,24 +808,77 @@ existing guards catch it: `MC_GOLDEN` in sweep_golden.js pins full MC results, a
 GBM's bank against a verbatim copy of the pre-P23 build. The refactor must leave both untouched -
 byte-identical, not approximately equal.
 
+**Correction, 2026-08-23 (P71a).** The paragraph above is wrong about `MC_GOLDEN`. It records
+`buildVariations()` row counts, labels and base-row strategy selections - the sweep ENUMERATION -
+and never a simulated return. The only automated guard on the draw is the P23 suite pinning GBM's
+bank against `_p23OldGbmShocks`, and it reaches that bank through `_p23NewSynth`, a hand copy.
+**No suite executes worker.js or mc_controller.js at all**, so no suite would have noticed if this
+refactor had changed every number on the page.
+
+The replacement guard is `p71_probe/` beside this file: two node harnesses that load the real
+worker.js and the real mc_controller.js into a `vm` context under a shim and hash a fixed-seed run
+in all three modes. Run both against a HEAD staging copy and against the working tree; identical
+hashes is the pass. P71b and P71c must clear it the same way.
+
 ### Sub-items
 
-- [ ] **P71a** - `drawSyntheticReturn()` + `INFLATION_STREAM_XOR` into prng.js; point
-      `calibrateMCMs` and both runPass copies at them. Smallest possible first step, each call site
-      verifiable alone, suites must not move.
-- [ ] **P71b** - create mc_engine.js; move worker.js's `runPass`, `buildStressMsg` and the per-path
-      bundle (as `buildPathInputs`) verbatim; worker.js becomes a shell (onmessage, try/catch,
-      progress weighting, postMessage). MC_GOLDEN byte-identical.
-- [ ] **P71c** - `_runMCMainThread` delegates to the engine with its yield/cancel/progress hooks;
-      delete the ~250-line mirror from mc_controller.js. MC_GOLDEN byte-identical again, and the
-      file:// fallback manually exercised once.
-- [ ] **P71d** - test tier: `require('./montecarlo/mc_engine.js')` directly in
-      optimizer_core.tests.js and run all three modes end-to-end small (~20 paths). Replace
-      `_p23NewSynth` - the hand copy of the NEW code - with calls to the real engine.
-      `_p23OldGbmShocks` **stays** a verbatim copy: being a copy of the old code is its entire point.
-- [ ] **P71e** - wiring: importScripts list, page script tag, `?v=` tokens, `TestTiers.EXPECTED`,
-      `.githooks/README.md`. **No changelog entry** - the changelog is user-facing only and this
-      changes nothing a user can see; version bump in the title only.
+- [x] **P71a** - **DONE v11.161C 2026-08-23.** `INFLATION_STREAM_XOR`, `drawSyntheticBank()`,
+      `syntheticReturnFromBank()` and `drawSyntheticReturn()` now live in prng.js and are exported
+      from both tails; `calibrateMCMs`, both runPass copies and the two test XOR literals point at
+      them. Split in two rather than the single `drawSyntheticReturn()` the design named, because
+      the hot loop needs the bank value AND the return and neither is free from the other; the
+      one-call convenience form is kept for `calibrateMCMs`, which wants only the return.
+      Suites unmoved at 300 / 61 / 22. **Byte-identity measured, not assumed** - see
+      `p71_probe/`, and the correction below about what MC_GOLDEN actually pins.
+- [x] **P71b** - **DONE v11.161D 2026-08-23.** `montecarlo/mc_engine.js` (522 lines) now holds
+      `runPass`, `buildPathInputs`, `buildStressMsg` and, beyond the plan, `runJob` - the whole job:
+      seed the rng once, main pass, stress pass, results message. The job level was duplicated too
+      (mainMode, the progress weights, `stressOnly`, the message shape), and leaving it behind would
+      have left the next model change a paired edit again. worker.js is a **42-line shell**, down
+      from 455: importScripts, one throttled progress callback, onmessage.
+      **Deviations, both forced by merging two copies that had drifted:**
+      (1) `runPass` takes the rng as an argument - both passes of a job draw from ONE stream, and
+      seeding per pass would change every number of the second one.
+      (2) The engine takes the RICHER of the two behaviors, so the worker now reports progress
+      inside a variation (every 16 paths) as the main thread already did. At 10,000 paths x 144
+      variations that would be 90,000 `postMessage` calls, so the shell throttles to one per 60ms,
+      with the terminal update exempt so the bar still reaches full.
+      Byte-identity re-measured with `p71_probe/` (probe made async-aware first, then re-baselined
+      against HEAD): same three hashes as P71a. Suites 300 / 61 / 22, badge green at 669.
+- [x] **P71c** - **DONE v11.161E 2026-08-23.** `_runMCMainThread` is now 30 lines: build the three
+      hooks, `await runJob(cfg, hooks)`, record timing, hand the message back. mc_controller.js went
+      **567 -> 203 lines**; `_buildStressMsg` is gone with the rest of the mirror. mc_engine.js has
+      its `<script>` tag on the page, before mc_controller.js. Both probes byte-identical against
+      the staged HEAD, all three modes, and `probe_controller.js` now skips mc_engine.js when the
+      root predates it so the A/B still runs.
+      **The file:// pass was done by calling `_runMCFallback()` directly over http**, which is the
+      exact function the `location.protocol === 'file:'` branch calls - the preview pane renders a
+      `file://` URL as a static snapshot and cannot run scripts in it. Bootstrap, 50 paths: 60ms,
+      survival 0.82, stress pass present, no error. Untested remainder is the one-line protocol
+      check itself. **Cancel re-verified** end to end: `cancelMCWorker()` mid-run leaves onComplete
+      unfired and reports no error, which is the contract that keeps the previous results on screen.
+- [x] **P71d** - **DONE v11.161F 2026-08-23.** Four new tests drive `mc_engine.js` directly - a
+      whole job end to end in all three modes (20 paths, 1 variation, 25 years), CRN determinism
+      (same seed agrees, different seed does not, so the first half is not vacuous), stress banking
+      one path per selected scenario, and a cancelled job resolving to null. `_p23NewSynth` is now a
+      six-line adapter over the real `buildBanks()`; `_p23OldGbmShocks` stays a verbatim copy, as
+      planned. Suite **300 -> 304**; `TestTiers.EXPECTED` and `.githooks/README.md` updated in the
+      same pass, badge green at 673.
+      **Three things the plan did not anticipate:**
+      (1) `buildBanks(cfg, rng, mode)` had to be split out of `runPass` first. Driving the bank
+      through `runPass` would have meant a `simulate()` over the 40,000-year series two P23 tests
+      use. It is also the better seam: the bank build is where every draw happens.
+      (2) `runOptimizerCoreTests` is **async** now - `runJob` is a promise by construction, and the
+      old runner called `fn()` and ignored the return, so an async body would have "passed" without
+      asserting anything. Both call sites await it (node entry, and the page's tier-2 loader).
+      (3) `montecarlo/stats.js` gained the same three-host export tail as prng.js: node needs
+      `computePercentiles`/`computeInputFan` on globalThis before the engine can be required.
+- [x] **P71e** - **DONE, absorbed by a-d.** importScripts list (`P71b`), page script tag and the
+      mc_engine/mc_controller tokens (`P71c`), stats.js + optimizer_tests.js + tier-2 `V` tokens and
+      both test-count sites (`P71d`). **No changelog entry**, as planned - nothing here is visible to
+      a reader. One token was missed on the first pass and the badge caught it exactly as designed:
+      `optimizer_tests.js` still served a cached copy expecting 300 tests, and the page went red
+      with "304 tests on disk, 300 expected" rather than green-with-a-warning.
 
 ### Not in scope, noted
 
@@ -825,7 +886,10 @@ The four version-bump sites are a separate consolidation problem (they span HTML
 build step is against the repo's no-build ethos). The mc_tab.js chart-rendering overlap between the
 stress chart and the main chart was not measured this session and is not claimed here.
 
-- **Status:** pending - plan approved, implementation not started
+- **Status:** `P71a`-`P71d` shipped 2026-08-23 (v11.161C through v11.161F), all uncommitted.
+  **`P71e` is finished as a side effect**: the importScripts list, the page script tag, every `?v=`
+  token, `TestTiers.EXPECTED` and `.githooks/README.md` all moved with the item that needed them.
+  What remains of P71 is a review pass and a commit.
 - **Blocks:** P69 should build ON this (P69a subsumed by P71b; P69c's capture plumbing lands in one
   place instead of two). P70 is independent - it measures the engine, does not restructure it.
 
@@ -1129,7 +1193,7 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
   `cashYield` taxed as ordinary income, Brokerage realizes LTCG and steps up basis. P28's mechanism
   settles Roth-vs-X and says nothing about Cash-vs-Brokerage.
 - **Q3 (prediction to state up front and score).** P28's "no Brokerage draw, no lever"
-  (`.test_harnesses/README.md:79-81`) predicts the weight is inert wherever Brokerage is never touched.
+  (`.test_harnesses/HARNESSES.md`) predicts the weight is inert wherever Brokerage is never touched.
   If the prediction holds, Q1's answer is conditional, not global.
 - **Q4.** Does any of the 21 unimplemented orderings beat all three shipped ones?
 - **Q5.** How many rows would change if gap-fill order became independent of spend strategy?
@@ -1230,7 +1294,7 @@ level.
 
 **Why:** three observations converge on one place. (1) The user reports Brokerage draws not occurring
 as expected. (2) The repo has already measured that this is load-bearing: every cell whose control arm
-never touched Brokerage returns exactly $0 (`.test_harnesses/README.md:79-81`, findings.md:1057-1062).
+never touched Brokerage returns exactly $0 (`.test_harnesses/HARNESSES.md`, findings.md:1057-1062).
 (3) **Gain harvesting already exists and most users never see it** — the cyclic modifier maxes out the
 LTCG bracket *on purpose* even when spend does not need the money (`optimizer_core.js:1301-1303`, a
 deliberate basis step-up), and its target-bracket knob `cycleLTCGTarget` (default 0.15 = target the 0%
@@ -1330,7 +1394,7 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
         findings.md.
   - [x] **P32d-5 - written up. DONE 2026-08-21.** New Q2 section in
         `.test_harnesses/P32_RESULTS.md` (title, run header, predictions table, Coverage and Scope
-        Limits all updated); `.test_harnesses/README.md` now records that q2 printed SKIPPED for
+        Limits all updated); `.test_harnesses/HARNESSES.md` now records that q2 printed SKIPPED for
         months and why. **P5 RIGHT**, **P6 RIGHT** - P6 named the third-pass arm, so it is scored
         per arm instead of on the pooled total, which had let `brokFirst` print "MIXED" for an arm
         P6 never mentioned. Arm labels renamed at the user's request: `fib` -> `brokFirst`,
@@ -2188,7 +2252,7 @@ as a default.
 - [x] **P36c** — The three reporting tables produced; `conveffect` exclusion stated with its reason.
   GK caveat mandatory when reading them: survivorship (eligible arms 160→37 across spend rates) +
   spend drift (+38%/−12%) inflate every GK number.
-- [x] **P36d** — `.test_harnesses/PHASED_RESULTS.md` + a row in `.test_harnesses/README.md`
+- [x] **P36d** — `.test_harnesses/PHASED_RESULTS.md` + a row in `.test_harnesses/HARNESSES.md`
 - [ ] **P36e** — Decide P35's shipped arm count and `survivorSpendPct` default from the output
   (needs round 2)
 - **Status:** round 1 DONE (2026-08-10); round 2 waits on `P35i`. Runs as P35's PR 7.
@@ -2283,7 +2347,7 @@ The `*.tests.js` suffix is safe precisely because `_tests.js` does not match it.
   `:26`/`:56` and `import.js:95` keep working because `sweep_golden.js` moves alongside.
 - The GENERATED/IMPORTED marker strings (`gen.js:53` vs `sweep_golden.js:118`, `import.js:74` vs
   `:792`) are a **rename** hazard only — a move preserves filenames.
-- `ARCHITECTURE.md:305-318` and `.test_harnesses/README.md:7-10` both state a "where a test file
+- `ARCHITECTURE.md:305-318` and `.test_harnesses/HARNESSES.md` ("What does not belong here") both state a "where a test file
   belongs" rule that the move would repeal. Budget those ~18 lines as design work, not `sed`.
 - Manual browser pass is irreducible: three pages, over both `http://localhost:8767` and `file://`,
   and specifically re-test Escape-closes-modal (`standalone/IncomeTaxPlanner.html:1194`) and the

@@ -2,6 +2,12 @@
 
 Full write-ups of what changed in each release, newest first.
 
+One entry per BRANCH, written against `main`: what an end user would experience differently, ordered
+by how much it affects them. Work in progress keeps editing the entry at the top - refresh its
+version stamp if you like, but never add a second entry for the next commit. Leave out how things
+used to work and anything about the internals; the commit messages carry that. See the rule in
+[CLAUDE.md](CLAUDE.md).
+
 The Documentation tab inside [retirement_optimizer.html](retirement_optimizer.html) carries a short
 summary of the most recent releases and links here for the detail. Entries marked **behavior
 change** alter the numbers an existing plan produces, so a saved scenario or a shared link can give a
@@ -11,79 +17,43 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.161B"></a>
+<a id="11.1629"></a>
 
-## 11.161B
+## 11.1629
 
-### Two Synthetic models, and prices that move
+### Monte Carlo: a second synthetic model, and prices that move
 
-The Monte Carlo tab's Simulation Mode now offers three choices instead of two: Historical,
-**Synthetic - GBM** and **Synthetic - AAM**.
+1. **There is now an arithmetic model.** *Synthetic - AAM* reads the growth rate you type as a plain
+   yearly average, so the median it reports is the number you entered. *Synthetic - GBM* is the model
+   that was already there, reading the same rate as a drift in logarithms, which puts its median a
+   point or so lower. Neither is the more optimistic of the two about how much money you end up with;
+   they differ in what the rate you typed *means*. Both draw the same market shocks from the same
+   seed, so switching between them compares the models rather than two different runs.
 
-GBM is the model that was already there. It reads the growth rate as a drift in logarithms, which
-means the middle of its yearly return distribution sits below the rate you type. Enter 7% with 15%
-volatility and it reports a median growth of 6.05%.
+2. **Both models now vary inflation.** Inflation used to be one rate repeated every year. Each path
+   now lives through its own, tuned to US consumer price data for 1948 to 2025: a bad stretch tends
+   to stay bad rather than reverting next year, and inflation leans high in the years returns are
+   poor - which is the pairing that actually breaks a plan.
 
-**Its market draws are unchanged, but GBM as a whole is not**, because the inflation change below
-applies to it too. Picking GBM will not reproduce a result you recorded from an earlier version
-until you also click **Fixed Inflation** in Advanced Parameters. The returns really are identical
-to the digit; inflation is the only thing that moved.
+3. **The Mode presets set how much inflation moves, and show which setting you are in.** A preset is
+   green while its values are the ones in effect, and clears the moment you change any of them.
+   *Fixed Inflation* holds inflation at your Assumptions rate and reproduces the model that shipped
+   before this release. *Pessimistic* leans the whole model toward a bad decade: lower growth, higher
+   volatility, and inflation that is more persistent, larger and more tightly tied to bad return
+   years. *Default* puts everything back.
 
-AAM reads the same number as a plain yearly average, so it reports 7.00%. That is the whole
-difference. **It is a change to what the number means, not to how much money you end up with**:
-volatility still drags on compounded growth in both models, so the median plan finishes in much the
-same place either way. If your growth assumption came from a source quoting an average annual
-return, AAM is the model that matches it.
+**Behavior change.** A Synthetic plan will not reproduce a result you recorded before this release
+until you click *Fixed Inflation*; the returns are identical to the digit, inflation is what moved.
+Historical mode is unchanged.
 
-Both draw the same market shocks from the same seed, so switching between them compares the two
-models rather than two different runs.
+### Also in this release
 
-### Synthetic inflation is no longer a flat line
-
-Every Synthetic path used to live through identical prices, at whatever rate the Assumptions section
-named. Now each path gets its own inflation, and it behaves the way inflation behaves: a high year
-tends to be followed by another high year, so a plan can run into a stretch of rising prices rather
-than a permanent average of them.
-
-The model is tuned to US consumer price data for 1948 to 2025, and it leans high in years when
-returns are poor, because that pairing is what actually breaks a retirement plan. Reported inflation
-in Synthetic mode is now a range rather than a single number, and the inflation distribution chart
-works there for the first time.
-
-**Advanced Parameters** gains three controls for it: persistence, shock size and the correlation
-with returns. Those boxes stay in the advanced panel, but the presets that drive them do not: a new
-**Mode presets** row sits under the mode selector where everyone can reach it.
-
-Among them is a **Fixed Inflation** button, which pins inflation to your Assumptions rate for every
-path and every year and so reproduces the pre-change model exactly. That is what to use when
-comparing against a number you wrote down before this release. It works by setting the inflation
-shock to 0, which is precisely enough: the model starts each path at your rate and only moves when
-a shock pushes it, so with no shock it never leaves. Persistence and the correlation are left as
-you set them; with no shock to act on, they simply have no effect until you turn the shock back on.
-**Reset to defaults**, in the same row, brings variable inflation back and returns every other
-parameter to its default. **Pessimistic** goes the other way in one click. Clicking any of the three
-re-runs immediately, and the Input Distributions caption then names every value the run used, so a
-preset is never a silent change.
-
-**Reset to defaults** puts every Advanced Parameter back in one click, so changing a value never
-requires remembering what it was, and a **Pessimistic** button applies a bad-decade parameter set:
-growth two points below the Assumptions rate, volatility at 18%, and inflation more persistent,
-larger and more tightly tied to poor return years. It is a stress-leaning what-if, not a prediction,
-and Reset to defaults undoes it.
-
-In the mode selector, the models now lead with the plain word: **Synthetic - Lognormal (GBM)** and
-**Synthetic - Arithmetic (AAM)**.
-
-**Input Distributions is no longer an advanced-only panel.** It shows for everyone below the main
-chart, folded by default, because it answers a question every mode raises: what returns and
-inflation did the simulation actually feed each year. The min and max lines start visible instead of
-hiding behind a legend click, and a caption names the run that built the charts: mode, path count,
-seed, and every parameter that shaped the draws - growth and volatility plus the four
-inflation-model settings for synthetic runs, bear-start for Historical. The caption alone is enough
-to re-create the run it describes, so after changing settings there is no guessing which run you
-are looking at.
-
-Historical mode is untouched, as is the market path Synthetic - Lognormal produces.
+- Annual Details can show each year's inflation, how far prices have risen since the plan started,
+  and that year's market return, under **Show All**.
+- loopMs - the time spent calculating each year of data - was rendering incorrectly and has been
+  fixed.
+- Opening the page with `?tab=montecarlo` in the web address left the self-check badge stuck on its
+  neutral hourglass. Fixed.
 
 ---
 

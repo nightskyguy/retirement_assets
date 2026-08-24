@@ -3785,3 +3785,534 @@ User: at that point in the page the only name the reader has been taught is "Sim
 "model" arrives unexplained and reads as something unrelated. Renamed on all three surfaces (row
 label, in-page changelog line, changelog file). The rationale is now a comment beside the row so the
 next person does not "correct" it back.
+
+---
+
+## Session 2026-08-23 (continued) — `/plan` re-entry, state resync, no code
+
+Context restore only. The three planning files already existed under
+`.planning/retirement-optimizer/` and `.planning/.active_plan` points at that directory, so nothing
+was created. `session-catchup.py` reported no unsynced context.
+
+What was stale, and is now corrected in `task_plan.md`:
+
+| Claim in the header | Reality on disk |
+|---|---|
+| "P23 COMPLETE at v11.160F, **uncommitted**" | committed, and merged in PR #188 |
+| latest version v11.160F | v11.161B — seven addenda landed after P23 proper |
+| suites 299 / 61 / 22 | **300** / 61 / 22, and `TestTiers.EXPECTED` already pins 300 |
+
+Measured, not assumed: all three node suites re-run green (300 / 61 / 22),
+`TestTiers.EXPECTED` reads `{ optimizer_core: 300, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 }`,
+`<title>` reads `Retirement Optimizer 11.161B`, `git status` clean, HEAD `1e274f3` = the PR #188 merge.
+
+The seven post-P23 addenda, from the commit trail: reset-to-defaults + Pessimistic preset and clearer
+mode labels (v11.1615), Input Distributions un-gated and labeled with its run (v11.1616), fan caption
+carrying every parameter (v11.1617), Experiment keeping the reader's synthetic mode (v11.1618), the
+Fixed Inflation button plus a retracted changelog claim (v11.1619), the preset row moved out from
+behind the nerdknob (v11.161A), and the "Model presets" -> "Mode presets" rename (v11.161B).
+
+Nothing else changed. The open queue is untouched: **P35i** is the only O0; P71, P36, P30, P19, P69,
+P70, P34 are the O1s, with P69 explicitly blocked behind P71.
+
+
+---
+
+## Session 2026-08-23 (continued) - P71a, the shared synthetic draw (v11.161C)
+
+You picked P71a off the queue. It is the smallest step of the MC dedup: move the one formula that
+three files each spell out for themselves into prng.js, and change nothing a reader can see.
+
+**What moved.** prng.js gains `INFLATION_STREAM_XOR = 0x5F356495` (previously a bare literal in
+worker.js, mc_controller.js and twice in optimizer_core.tests.js) and three functions:
+`drawSyntheticBank(mode, mu, sigma, logDrift, z)`, `syntheticReturnFromBank(mode, banked)` and
+`drawSyntheticReturn(...)`, the two composed. Both export tails carry all four names.
+
+**Where the design changed.** P71's plan named one function, `drawSyntheticReturn()`. One is not
+enough: the hot loop banks a value AND needs that year's return for the min/max scan, and under
+'gbm' those are different numbers (bank = log-space shock, return = exp(shock) - 1). Deriving one
+from the other inside a single call would have meant returning an object - 400,000 allocations on a
+10,000-path 40-year run. Two functions plus a convenience wrapper costs nothing and reads the same.
+`calibrateMCMs`, which wants only the return, uses the wrapper.
+
+**The guard the plan named does not exist.** P71's "the invariant that makes it safe" section says
+`MC_GOLDEN` in sweep_golden.js "pins full MC results". It does not: `MC_GOLDEN` records
+`buildVariations()` row counts, labels and base-row strategy selections, which is the sweep
+enumeration, and not one simulated return. Worse, **no node suite loads worker.js or
+mc_controller.js at all** - worker.js opens with `importScripts`, mc_controller.js is a page script -
+so the 300 green tests would have stayed green if this refactor had changed every number on screen.
+The one draw-related pin, `_p23OldGbmShocks`, is reached through `_p23NewSynth`, a hand copy of the
+new code rather than the code itself.
+
+**So the evidence was built rather than borrowed.** `p71_probe/` (kept beside the plan, with a
+README) holds two node harnesses that load the REAL worker.js and the REAL mc_controller.js into a
+`vm` context under a minimal shim and hash a fixed-seed 25-path 30-year run in all three modes, every
+number at `toPrecision(17)`. Staged HEAD copies of worker.js, prng.js and mc_controller.js, ran both
+probes against both roots:
+
+    gbm        6c27ec21931ed71ced3968bdd98e7c0a
+    aam        755ab7df0e59624467971c857ec32714
+    bootstrap  58fc7d5cd458bf26ae87fc4f7d1bbfac
+
+Six hashes, all identical before and after. A side result worth having: the worker and the
+controller print the SAME hashes as each other, so the two mirrors really are in sync today, which
+is the premise P71b and P71c rest on.
+
+**Browser.** Page loads at 11.161C with all four new globals present and the arithmetic right
+(`aam` at z=1 gives exactly mu + sigma, `gbm` gives exp(logDrift + sigma) - 1). Ran the real Worker
+from the page, 200 paths x 30 years, both synthetic modes: `gbm` median return 0.06051 = exp(0.05875)
+- 1 as it should be, `aam` median exactly 0.07, and both modes report identical `inflationStats`,
+which is the separate inflation stream doing its job. Tier-1 in-page tests 289/289. The tier-2
+badge could not fetch the node suites, which this entry first blamed on the preview pane's sandbox.
+**Wrong** - see the P71b entry: the preview server had wedged and was refusing new connections.
+Restarted, the badge reads a full green 669 (289 in-page + 380 node).
+
+**Version.** 11.161B -> **11.161C**. The clock-derived minor for this hour is 1619, which is BELOW
+the 161B already shipped today, so the letter was stepped instead. Four sites: title, the tier-2
+loader's `const V`, and the `?v=` tokens on prng.js and mc_controller.js. worker.js needs none (its
+URL falls back to `Date.now()`). **No changelog entry** - P71 changes nothing a user can see, which
+is what P71e's rule already says.
+
+Suites 300 / 61 / 22, unmoved, so `TestTiers.EXPECTED` and `.githooks/README.md` needed no edit.
+Uncommitted. Next: `P71b`, create mc_engine.js and reduce worker.js to a shell.
+
+
+---
+
+## Session 2026-08-23 (continued) - P71b, one engine instead of two mirrors (v11.161D)
+
+`montecarlo/mc_engine.js` is new and holds the model. `montecarlo/worker.js` went from **455 lines
+to 42**: importScripts, a throttled progress callback, onmessage. Nothing a user can see was meant
+to change, and the probe says nothing did.
+
+**The engine took the job level too, which the plan did not ask for.** P71b's brief was `runPass`,
+`buildStressMsg` and the per-path bundle. But reading the two copies side by side, the duplication
+did not stop at `runPass`: `mainMode`, the progress weights, the `stressOnly` early return and the
+whole results-message shape were written out twice as well. Extracting only `runPass` would have
+left the next model change a paired edit, which is the exact thing P71 exists to end. So the engine
+exposes `runJob(cfg, hooks)` - seed the rng once, main pass, stress pass, message - and
+`runPass`/`buildPathInputs`/`buildStressMsg` beside it for P69 and for the tests.
+
+**Two deviations from the design, both forced by the code rather than chosen.**
+
+1. `runPass` takes the rng as an ARGUMENT. The design's `runPass(cfg, mode, hooks)` would have had
+   to seed its own, and both passes of a job draw from ONE stream - the stress pass continues where
+   the main pass stopped. Re-seeding per pass would have changed every stress number.
+
+2. The two copies had drifted more than the plan recorded. A comment-stripped diff of the two
+   `runPass` bodies found the controller carrying **per-path progress** (every 16 paths, so a
+   one-variation run has a moving bar) and **cancellation** that the worker never had. A merged
+   engine has to pick one, and picking the weaker one would be a deliberate regression, so the
+   engine reports progress inside a variation for both callers. That is 90,000 `postMessage` calls
+   on a 10,000-path 144-variation run, so the shell throttles to one per 60ms. First browser run
+   left the bar at 95%: the terminal update had been swallowed by the throttle. The final update is
+   now exempt, and the bar reaches 1.
+
+**Evidence.** The `p71_probe/` harnesses needed one fix first - the worker's `onmessage` is async
+now, so the probe polls for the result message instead of reading it straight after the call.
+Re-baselined the fixed probe against the staged HEAD copy (same three hashes as P71a, so the fix
+changed nothing), then ran it against the working tree:
+
+    gbm        6c27ec21931ed71ced3968bdd98e7c0a
+    aam        755ab7df0e59624467971c857ec32714
+    bootstrap  58fc7d5cd458bf26ae87fc4f7d1bbfac
+
+Identical. Node suites 300 / 61 / 22.
+
+**Browser.** Real Worker, 200 paths x 30 years, all three modes: `gbm` median 0.06051008007643799,
+`aam` exactly 0.07, `bootstrap` min -0.4384 / max 0.5256 - digit-for-digit what the P71a build
+produced, with the stress pass returning its two variations in each. Progress arrives 9-11 times per
+run and ends at exactly 1.
+
+**A correction to the P71a entry.** That entry said the tier-2 badge could not fetch the node suites
+because the preview pane's sandbox blocks `fetch`. It does not. The preview server (a leftover from
+a `--help` invocation that started a real server) had wedged and was refusing new connections, which
+is also why the pane could not navigate at all this session until it was killed. On a fresh server
+the badge reads **green at 669 - 289 in-page + 380 node**, with the 3 slow tests skipped and the 12
+critical regression guards passing.
+
+**Version** 11.161C -> **11.161D**, title only. mc_engine.js is not on the page yet - the controller
+still runs its own copy until `P71c` - so no `?v=` token moved and the tier-2 loader's `V` is
+unchanged. No changelog entry, per P71e.
+
+Uncommitted. Next: `P71c`, delete the controller's ~250-line mirror and delegate to `runJob` with
+its yield/cancel hooks; that is also where mc_engine.js first gets a `<script>` tag and the file://
+fallback needs a manual pass.
+
+
+---
+
+## Session 2026-08-23 (continued) - P71c, the second mirror deleted (v11.161E)
+
+mc_controller.js **567 -> 203 lines**. `_runMCMainThread` is thirty lines that build three hooks and
+await `runJob`; `_buildStressMsg` went with the mirror it belonged to. Counting P71b, the two
+hand-kept copies that were 455 + 567 lines are now 42 + 203 around one 522-line engine.
+
+The hooks are the whole difference between the two callers: `onProgress` forwards to the caller's
+callback, `shouldCancel` reads `_mcCancelled`, and `yieldIfDue` keeps the 16ms frame budget the
+comment has always described. The worker passes none of them and gets no-ops.
+
+`recordMCTiming` stays on this side - it is a main-thread estimator and the worker has its own wall
+clock - and it is still skipped for a stress-only refresh, which would teach the estimator a per-sim
+cost no full run matches.
+
+**Page wiring.** mc_engine.js now has a `<script>` tag ahead of mc_controller.js, so the file://
+fallback and the worker literally run the same text. Tokens: mc_engine.js and mc_controller.js at
+`?v=11161e`; prng.js unchanged at `11161c`; the tier-2 loader's `V` unchanged, no test file moved.
+
+**Evidence.** `probe_controller.js` needed one change - it now skips mc_engine.js when the root does
+not have one, so the staged pre-P71 copy still loads - and then both probes matched the HEAD
+baseline exactly, all three modes:
+
+    gbm        6c27ec21931ed71ced3968bdd98e7c0a
+    aam        755ab7df0e59624467971c857ec32714
+    bootstrap  58fc7d5cd458bf26ae87fc4f7d1bbfac
+
+Node suites 300 / 61 / 22. Badge green at 669.
+
+**Browser.** Worker path, gbm, 200 paths: median 0.06051008007643799, stress pass present - the same
+digits as P71a and P71b. Main-thread path, same config: identical median, 34 progress updates,
+last pct exactly 1.
+
+**The file:// pass, and what it did not cover.** The preview pane renders a `file://` URL as a static
+snapshot and will not run scripts in it, so the branch was exercised the other way: `_runMCFallback()`
+called directly over http, which is precisely what `location.protocol === 'file:'` calls. Bootstrap,
+50 paths, one variation: 60ms, survival 0.82, stress pass present, no error. What remains untested is
+the one-line protocol check itself.
+
+**Cancel, re-verified because the mechanism moved.** Cancellation used to be a `return null` inside
+the controller's own loop; it is now a hook the engine calls. Started a 6-variation 400-path run,
+called `cancelMCWorker()` after 300ms: 32 progress updates, then onComplete never fired and no error
+was reported - the contract that leaves the previous results on screen.
+
+**One measurement worth not misreading.** A main-thread run of 200 paths x 2 variations took 21
+seconds in the pane and 60ms in a foreground tab. That is `setTimeout` clamped to ~1s in a hidden
+tab, not the refactor: the yield points and their 16ms budget are unchanged from before P71.
+
+**Version** 11.161D -> **11.161E**. Title, plus the two `?v=` tokens. No changelog entry, per P71e.
+
+Uncommitted. Next: `P71d`, `require('./montecarlo/mc_engine.js')` in optimizer_core.tests.js and run
+all three modes end to end at ~20 paths, replacing `_p23NewSynth` with calls to the real engine
+(`_p23OldGbmShocks` stays a verbatim copy - being a copy of the OLD code is its whole point). That
+one moves the test count, so `TestTiers.EXPECTED` and `.githooks/README.md` move with it.
+
+
+---
+
+## Session 2026-08-23 (continued) - P71d, the suite finally executes the engine (v11.161F)
+
+Until now no suite ran the Monte Carlo. That is the finding P71a turned up and this item closes:
+four new tests drive `mc_engine.js` directly, and the hand copy that stood in for it is gone.
+
+**What the four cover.** A whole job end to end in all three modes (20 paths, 1 variation, 25 years)
+asserting shape and coherence, not a golden number: mode echoed back, path count, one variation
+returned, 25 percentile years, survival in [0,1], a finite inflation CAGR, an input fan, and a stress
+pass carrying the same single variation. Then CRN determinism - the same seed twice must agree
+exactly AND a different seed must not, or the first half proves nothing. Then stress banking one path
+per selected scenario. Then a cancelled job resolving to `null`, which is the contract that leaves
+the previous results on screen.
+
+**`_p23NewSynth` is a six-line adapter now.** It used to reimplement the bank-build loop, so every
+P23 assertion was testing a copy of the code rather than the code. It calls `buildBanks()` and hands
+back `{bank, inf}`. All ten P23 tests passed unchanged on the first run against the real engine,
+which is the best evidence available that the copy had not drifted.
+
+**Three things the plan did not anticipate.**
+
+1. **`buildBanks(cfg, rng, mode)` had to come out of `runPass` first.** Two P23 tests draw a 40,000
+   long series; routing that through `runPass` would have run `simulate()` over 40,000 years to get
+   at a bank. The bank build is a better seam anyway - it is where every draw happens, and where a
+   test asserting something about the draw should be pointed. Both probes stayed byte-identical
+   across the extraction.
+
+2. **The test runner is async now.** `runJob` is a promise by construction. The old runner called
+   `fn()` and ignored what came back, so an async body would have reported PASS without ever
+   asserting, and a failure would have surfaced as an unhandled rejection. `runOptimizerCoreTests`
+   is `async`, the loop `await`s each body, and both call sites await it: the node entry point (which
+   now exports before running, since the run yields to the event loop) and the page's tier-2 loader.
+
+3. **`montecarlo/stats.js` had no export tail.** It was a plain script for the worker and the page.
+   Node needs `computePercentiles` and `computeInputFan` on globalThis before mc_engine.js can be
+   required, so it got the same three-host tail prng.js and mc_engine.js already carry. While there,
+   corrected a comment that had gone stale at P23: it still said GBM uses fixed inflation and passes
+   a null inflation bank.
+
+**The badge did its job.** First browser check went RED: "optimizer_core: 304 tests on disk, 300
+expected". `optimizer_tests.js`, which holds `TestTiers.EXPECTED`, was still being served from cache
+on its old `?v=11160f` token. That is the fourth version-bump site the repo's own CLAUDE.md warns
+about, missed on the first pass and caught in the one place designed to catch it - red, not
+green-with-a-warning. Token bumped, badge green at **673 (289 in-page + 384 node)**, which confirms
+the four new tests run in the browser tier too.
+
+**Counts.** optimizer_core **300 -> 304**; taxPaymentPlanner 61 and doclinks 22 unchanged;
+`slowInCore` still 3. Both homes updated in this pass: `TestTiers.EXPECTED` and the table in
+`.githooks/README.md`.
+
+**Version** 11.161E -> **11.161F**. Title, the tier-2 loader's `V`, and tokens on optimizer_tests.js,
+stats.js and mc_engine.js.
+
+**P71e is finished too**, without its own release: every wiring item it listed moved with whichever
+of a-d needed it. What is left of P71 is a review pass and a commit - five uncommitted versions,
+v11.161C through v11.161F, touching prng.js, worker.js, mc_controller.js, mc_engine.js, stats.js,
+optimizer_core.tests.js, optimizer_tests.js, .githooks/README.md and the page.
+
+
+---
+
+## Session 2026-08-23 (continued) - P71 committed, then three Annual Details columns (v11.161G)
+
+**P71 is committed** as `b7f8808`, five versions squashed into one commit with the reasoning in the
+message: the two mirrors, what the engine now owns, the deviations, and the probe evidence. The
+pre-commit hook ran all three suites green before it landed.
+
+**Then the user asked for plumbing:** annual inflation, cumulative inflation and market return in
+Annual Details, hidden behind Show All for now.
+
+Three columns, at the far right of the table: `infl%` (the inflation applied to the spending goal
+that year), `inflCum%` (how far the price level has risen since the plan started) and `return%` (the
+year's market return before dividends and before each account's own mix). The engine already had
+both numbers - `yr.yearInflation` and `yr.baseReturn` - and neither reached the log; `inflationFactor`
+was in the log but in no category, so it could never appear.
+
+Two decisions worth recording. Cumulative inflation is reported as the PERCENT risen rather than the
+raw multiplier, so it formats like every other `%` column instead of rounding to "1"; the multiplier
+stays available as `inflationFactor`. And the category is a new `Market` with **no checkbox**, the
+same trick `loopMs`/`Debug` already uses, which is exactly "behind Show All" without inventing a
+control for three columns that say nothing in a deterministic run.
+
+**A break I caused and the page caught.** The `inflCum%` hover-over text contained an apostrophe in
+"today's money" inside a single-quoted string, which broke `optimizer_ui.js` at parse time - so
+`runSimulation`, `showTab` and everything else in that file went undefined and the page was inert.
+All three node suites stayed green throughout: none of them loads optimizer_ui.js. What caught it was
+opening the page. Reworded to avoid the apostrophe, and while fixing it the text now names the real
+control (the **Future $ / Current $** switch above the tabs) instead of a "Current dollars" checkbox
+that does not exist under that name.
+
+**Tests.** One new test: the three columns must echo the sequences a Monte Carlo path actually ran
+on, year by year, with `inflCum%` compounding and agreeing with `inflationFactor` - and a
+deterministic run must fall back to the typed Growth and Inflation rather than to blanks. Suite
+**304 -> 305**, reconciled in `TestTiers.EXPECTED` and `.githooks/README.md`.
+
+**Browser.** Columns present, hidden by default, revealed by Show All, grouped under a new **Market**
+header. Values check out: 3.00 / 6.00 flat on a deterministic run, and `inflCum%` reads 0.00, 12.55,
+75.35 at years 1, 5 and 20, which is 1.03^0, ^4 and ^19. Badge green at **674**.
+
+**Version** 11.161F -> **11.161G**; tokens on optimizer_core.js, optimizer_ui.js, optimizer_tests.js
+and the tier-2 loader. This one IS user-visible, so it gets a changelog entry in both homes: the
+in-page list and `optimizer_changelog.md`.
+
+
+---
+
+## Session 2026-08-24 - the two map files P71 forgot
+
+User asked whether `ARCHITECTURE.md` and `.planning/FILE_DIRECTORY.md` were missing changes. They
+were. P71 renamed the shape of the whole Monte Carlo layer across four commits and neither map moved,
+so both described a `worker.js` that owns `runPass` and a `mc_controller.js` that keeps a copy of it -
+the exact arrangement the phase existed to end. Nothing automated would have caught this: the suites
+do not read either file, and the doclinks suite only checks that links resolve.
+
+`ARCHITECTURE.md`: `mc_engine.js` added to the module diagram with its real edges (the page loads it,
+the worker `importScripts` it, the controller falls back to it), the worker and controller relabeled
+as shells, and the Monte Carlo flowchart corrected on three counts - it now routes both protocols
+through `runJob`, names all three simulation modes instead of "Synthetic", and shows the stress pass
+running in EVERY mode rather than only Historical, which has been true since v11.152d and was never
+drawn. Three paragraphs added after the flow: one engine with two shells, why a Monte Carlo refactor
+needs the `p71_probe/` harnesses rather than the suites, and the CRN discipline in one place
+(separate inflation stream, correlated shock, and why Fixed Inflation still makes the draw it
+multiplies by zero). File-reference table updated for all five montecarlo files.
+
+`FILE_DIRECTORY.md`: `mc_engine.js` row added, `worker.js` demoted to "shell around mc_engine.js",
+`mc_controller.js` and `prng.js` and `stats.js` rows corrected, and `p71_probe/` documented in the
+planning section.
+
+Docs only - no page asset changed, so no version bump and no changelog entry. Suites 305 / 61 / 22.
+
+
+## Session 2026-08-24 (continued) - README staleness, and the harness catalog gets its own name
+
+Three items, all from the user noticing that "README.md" is two different files.
+
+**A correction first.** I said the root README had "no montecarlo references at all". That was a
+claim about source-FILE references (it names only `taxengine.js` and `chart.js`) stated as though it
+were a claim about content - the README discusses Monte Carlo at length. Checked properly, it was
+stale in three places, all from P23:
+
+- "Model variable inflation in the synthetic Monte Carlo" was still under **Features in the Works**,
+  three weeks after it shipped in v11.161B. Moved to Recent Fixes and written out properly: what
+  varying inflation buys, what Synthetic - AAM is for, that GBM's market draws are unchanged, and
+  that Fixed Inflation reproduces the old model.
+- "The other model, Synthetic, is Log-Normal, Geometric Brownian Motion" - there are two synthetic
+  models now. Rewritten to name both and say what the growth rate means in each.
+- The Account Composition paragraph named "Synthetic (Log-Normal / GBM)" as the mode that ignores
+  the per-account mix. Still true, but it now names both synthetic modes.
+
+**`.test_harnesses/README.md` -> `HARNESSES.md`.** It is a catalog of eleven investigative scripts,
+not an introduction, and the name collided with the repo's real README in search and in conversation.
+Renamed with `git mv`, a line at the top records the old name, and every live inbound reference moved
+with it: `ARCHITECTURE.md`, `FILE_DIRECTORY.md`, and five references in `task_plan.md`. Two of those
+carried line numbers (`:79-81`, `:7-10`) that the rename invalidated; rather than re-derive numbers
+that will rot again, they now cite the file and the section heading.
+
+**Left deliberately stale:** the two references in this file's own older entries. progress.md is a
+chronological record and those entries were true when written; rewriting them would be falsifying the
+log to tidy a path.
+
+**Also found:** `ordered_fill_harness.js` had no row in the catalog table. Added one, from the
+harness's own header: it proves the Ordered strategy restarts its account sequence every year and
+shows where the year's leftover surplus is banked.
+
+Docs only. Suites 305 / 61 / 22, no version bump, no changelog entry.
+
+
+## Session 2026-08-24 (continued) - the README paragraph the first sweep missed
+
+User quoted a line from the "Stress Test vs Monte Carlo Analysis" section that still said Synthetic
+"currently does not vary inflation". I had not corrected it, and my "three places" report from an
+hour earlier was therefore wrong - there were four, and the fourth was the one a reader is most
+likely to hit, because it sits in the section that explains the difference between the modes.
+
+**Why the sweep missed it.** I grepped for `Monte Carlo|montecarlo`. The sentence contains neither -
+it opens "Synthetic uses randomized market variations". A grep for the feature name cannot find text
+that describes the feature without naming it, which is most prose. Grepping for `Synthetic` (the
+thing that changed) instead of `Monte Carlo` (the tab it lives in) returns all four hits plus two
+more paragraphs worth checking.
+
+Fixed: that paragraph now says synthetic randomizes inflation as well as returns, describes the
+calibration and the clustering in the author's register rather than the changelog's, and a new
+paragraph after it explains the GBM/AAM split as a difference in what the growth rate you type
+*means* - with the concrete 7% -> 6.05% median - and notes that neither is the more optimistic of the
+two. The "TWO Monte Carlo regimens" sentence above it now says synthetic has two flavors.
+
+**Left alone, deliberately.** The competitor section (~line 1004) criticizes GBM as a "drunk man's
+walk" that lacks the persistence real markets show. That critique still stands against this tool's
+own synthetic RETURNS: P23 gave inflation an AR(1) persistence model, not returns. The paragraph is
+the author's argument and remains factually correct, so it is his call whether to note the asymmetry;
+flagged to him rather than edited. Also related: P14 (regime-switching MC) is the open phase that
+would answer it.
+
+Docs only. Suites 305 / 61 / 22.
+
+
+## Session 2026-08-24 (continued) - loopMs was empty because the table was off by one column (v11.1628)
+
+User: "why is loopMs always empty? (It's been that way for a while)". It is a real defect, and not
+in loopMs.
+
+**What was wrong.** `updateTable()` builds the heading row and the body rows from the same key list
+but applied DIFFERENT filters to it. Header: `if (!key.startsWith('-'))`. Body:
+`if (!key.startsWith('-') && key !== 'inflationFactor')`. So the body emitted one cell fewer than
+there were headings, and from `inflationFactor` rightward every value sat under the heading to its
+left. `loopMs` is the last key in the log record, so it got no cell at all - a heading with nothing
+under it, in every row, forever.
+
+Measured before the fix: 81 headings, 80 cells per row.
+
+**Why nobody caught it.** Both affected columns are internal and hidden by default -
+`inflationFactor` is in no category at all, `loopMs` is category `Debug`, so you only see either
+under **Show All**. And the one visibly wrong cell was as good as invisible: under the
+`inflationFactor` heading, whose expected value in year 1 is 1.0, sat the loopMs timing for that
+year, which also rounds to 1. It dates to at least the P15 file split (`eadb1cc`, 2026-07-10) and
+was carried in from the monolith before that.
+
+**Fix.** One predicate, `isTableColumnKey(key)`, used by the header loop, the body loop and
+`analyzeColumnContent`. The comment above it says what each exclusion means and why the two must
+never diverge again. After: 80 headings, 80 cells, `inflationFactor` no longer emitted as a heading
+at all (its reader-facing form is the new `inflCum%` column).
+
+**And loopMs still was not useful.** With cells rendering it read `0` in every row, because a
+simulated year costs ~0.2ms and the table rounds non-percent columns to whole numbers. It now prints
+two decimals: 0.30, 0.20, 0.00, 0.10 on the default plan.
+
+**Regression guard, and the mistake I nearly shipped in it.** The first version of the in-page test
+read `#main-table` and returned early when it was absent - which is ALWAYS, because `runTests()` runs
+before the page's first `runSimulation()`. It passed by never running: in-page count stayed at 289.
+The test now renders its own table from `simulate(getInputs()).log` and counts cells per row against
+headings; `runSimulation()` rebuilds the table moments later, so nothing is left behind. In-page 289
+-> 290, and I verified it discriminates by deleting one cell in the live DOM and re-running the
+comparison (0 misaligned rows -> 1).
+
+Suites 305 / 61 / 22 unchanged (node), in-page 290, badge green at 675. Version 11.161G -> 11.1628,
+changelog entry in both homes.
+
+
+## Session 2026-08-24 (continued) - Mode presets became stateful, and a load-order bug fell out (v11.162A)
+
+User: a reader cannot tell which regime they are in without opening Input Distributions, and even
+then it is numbers they have no way to read. Make the buttons stateful; rename "Reset to defaults"
+to "Default" and light it too; clear everything when a knob moves away.
+
+**Built as derived state, not a clicked flag.** `updateMCPresetState()` asks the parameter boxes what
+they hold and lights the buttons from that. A click flag would go wrong in both directions: still lit
+after the reader edits a box, and dark for a reader who typed the preset's values by hand. Three
+predicates, each stating what the preset actually means:
+
+- Default: every `MC_PARAMS` entry at its default, with mu tested against Growth % rather than
+  against a number, because mu's default is the behavior "track Growth" that `resetMCParams()` leaves
+  in place.
+- Fixed Inflation: `mc-inflation-shock-sd === 0`, and nothing else. A zero shock leaves the AR(1)
+  middle term with nothing to act on, so this is true whatever persistence and correlation say - it
+  can coexist with a reader's own settings, which is why it is tested alone.
+- Pessimistic: the four fixed values plus mu two points under Growth. Paths, seed and stress count
+  are deliberately excluded, for the reason that button's own comment gives.
+
+Lit via `aria-pressed` with the styling keyed off that attribute, so what is announced and what is
+painted cannot disagree. In Historical mode Fixed Inflation and Pessimistic are DISABLED rather than
+merely dark: that mode samples real inflation and has no synthetic model to tune, so those buttons
+were clickable and inert there. Not asked for; the alternative was lighting a button for a regime the
+run is not in.
+
+**Two bugs found by watching the test count.**
+
+1. First load painted Default as false on a page that WAS at its defaults. `initMCTab()` paints
+   before `syncMCMuFromGrowth()` runs, so mu still held the MC_PARAMS number rather than Growth.
+   `syncMCMuFromGrowth()` now repaints.
+
+2. The six new in-page assertions did not run at all: in-page stayed at 290 when it should have been
+   296. The guard `typeof updateMCPresetState !== 'function'` was returning early - because
+   **the montecarlo scripts loaded AFTER the page's bootstrap block**. Which meant the load order had
+   a live bug of its own: with `?tab=montecarlo` in the URL, `applyTabFromUrl()` reached
+   `mcTabActivated?.()` while that name did not yet exist, and an optional call does not protect an
+   undeclared identifier - ReferenceError, which aborted the rest of the block, which is where the
+   deferred test tier registers. On that one URL the self-check badge sat on its neutral hourglass
+   forever. Confirmed in the console before the fix, gone after.
+
+   The six montecarlo `<script>` tags now load above the bootstrap block. Nothing in them has a
+   load-time side effect. `?tab=montecarlo`, `?montecarlo` (the demo) and a plain load were all
+   checked afterwards.
+
+**Verified in the browser**, per state, not by clicking through and trusting it: fresh load in
+Historical shows Default green with the other two greyed; switching to GBM enables them; Fixed
+Inflation lights only Fixed; Pessimistic lights only Pessimistic; editing persistence clears all
+three; Default lights again after reset. Computed style on the lit button is rgb(47,158,68) on white
+text.
+
+In-page 290 -> 296, node suites unchanged at 305 / 61 / 22, badge green at 681. Version 11.1628 ->
+11.162A; tokens on the CSS (new `.mc-preset` rules), mc_tab.js and optimizer_tests.js. Changelog in
+both homes.
+
+
+## Session 2026-08-24 (continued) - four changelog entries collapse into one (v11.1629)
+
+User: the ordering buries what matters. The end reader cares about the arithmetic model and about
+inflation varying; the preset-button work is part of the SAME change and never shipped separately;
+and giving a never-merged internal fix its own release entry is a mistake.
+
+**11.161B, 11.161G, 11.1628 and 11.162A are now one entry, 11.1629**, in both homes. None of the
+four was ever merged to main - they were four commits on one branch, and numbering them separately
+described the development, not the release. The rule this leaves behind: a changelog entry belongs to
+a RELEASE, and a branch that ships once gets one entry however many versions it passed through on the
+way.
+
+The detailed entry is the three points the user named, in that order, and nothing else: there is an
+arithmetic model; both synthetic models vary inflation; the Mode presets set how much it moves and
+show which setting is in force. The behavior-change warning stays, because a Synthetic plan really
+will not reproduce an older recorded result until Fixed Inflation is clicked.
+
+**Cut deliberately:** the AR(1) persistence / shock / correlation knobs (nothing in the UI varies them
+today - the planned work that will use them can introduce them), the Input Distributions caption
+inventory, and the whole column-alignment write-up. loopMs is one line, in the user's own words: the
+time spent calculating each year of data was rendering incorrectly and has been fixed.
+
+Version 11.162A -> 11.1629, title and the single entry. No `?v=` token moved: nothing but the HTML
+and the changelog file changed. Badge green at 681, in-page 296.

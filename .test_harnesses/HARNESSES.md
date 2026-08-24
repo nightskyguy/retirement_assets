@@ -1,5 +1,9 @@
 # Test harnesses
 
+This file was `README.md` until 2026-08-24. It is a catalog, not an introduction, and the name now
+says so - which also stops it colliding with the repo's real README in search results and in
+conversation.
+
 Investigative / audit scripts for the retirement optimizer engine. These are **not** part of the
 regular unit-test suite (`optimizer_core.tests.js`); they are kept here so a finding can be
 re-derived on demand.
@@ -14,6 +18,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `betr_harness.js` | **node** | Is the Break-Even Tax Rate (BETR) signal trustworthy? |
 | `stopyear_harness.js` | **browser console** | When should a plan stop Roth conversions? |
 | `unifiedconv_harness.js` | **node** | Does modeling every voluntary IRA withdrawal as a Roth conversion change anything? |
+| `ordered_fill_harness.js` | **node** | Ordered strategy: does the account sequence restart from the top every year, and where does the year's leftover surplus get banked? |
 | `brokerage_harness.js` | **node** | Why is Brokerage barely drawn, and is the third-pass exclusion to blame? |
 | `phased_harness.js` | **node** | P36 round 1: which families rank where under every objective, and do any arms never win? |
 | `oracle_harness.js` | **node** | P51: how far below the perfect-foresight ceiling does each family sit, and is it conversions or the split? |

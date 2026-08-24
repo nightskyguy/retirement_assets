@@ -2276,6 +2276,13 @@ const columnCategories = {
     // Debug / performance - only visible under Show All (no checkbox maps to 'Debug')
     'loopMs': ['Debug'],
 
+    // What the market handed this year. No checkbox maps to 'Market' either, so these three are
+    // Show All only for now: in a deterministic run they are the same two numbers on every row,
+    // and they only start saying anything once a Monte Carlo path is being read back.
+    'infl%':    ['Market'],
+    'inflCum%': ['Market'],
+    'return%':  ['Market'],
+
     // Opportunity cost (Phase 20) + BETR signal (Phase 21) + extra conversion (Phase 23)
     'convOC':    ['Opp. Cost'],
     'excessOC':  ['Opp. Cost'],
@@ -2322,6 +2329,7 @@ const columnGroupDefs = {
     'wdRate%': 'Withdrawals',
     'timing': 'Withdrawals',
     'gkSpend': 'Income', 'gkAdj': 'Income',
+    'infl%': 'Market', 'inflCum%': 'Market', 'return%': 'Market',
 };
 
 // Get active categories based on checkbox state
@@ -2361,11 +2369,26 @@ function isColumnVisible(columnKey) {
     return columnCats.some(cat => activeCategories.includes(cat));
 }
 
+// ONE rule for what becomes a column in Annual Details, used by the header row, the body rows and
+// the content scan. It has to be one rule: the header used to emit every key that did not start with
+// '-', while the body ALSO skipped `inflationFactor`, so from that column rightward every body cell
+// sat under the header to its left and the last column had no cell at all. `loopMs` was that last
+// column and read as permanently empty, while the cells under the `inflationFactor` heading were
+// actually loopMs values - plausible enough in year 1, where the factor really is 1, to go unnoticed
+// for months.
+//
+// '-' prefix = internal, chart-only or handoff-only. `inflationFactor` is the cumulative inflation
+// MULTIPLIER, which the current-dollars toggle divides by; the reader-facing form of it is the
+// `inflCum%` column.
+function isTableColumnKey(key) {
+    return !key.startsWith('-') && key !== 'inflationFactor';
+}
+
 // Analyze which columns have content (non-zero, non-empty values)
 function analyzeColumnContent(log) {
     if (!log || log.length === 0) return {};
 
-    const keys = Object.keys(log[0]).filter(key => !key.startsWith('-'));
+    const keys = Object.keys(log[0]).filter(isTableColumnKey);
     const columnStatus = {};
 
     keys.forEach(key => {
@@ -2581,11 +2604,14 @@ function updateTable(log) {
         'netOut': 'Net outflows: portfolio draws funding spending/taxes. Gross outflows minus Roth conversions and reinvested surplus. Zero when Social Security and pension cover everything, since a forced RMD that gets reinvested never leaves the portfolio.',
         'inflows': 'Non-portfolio income applied to spending: Social Security + pension.',
         'wdRate%': 'Withdrawal rate: net outflows ÷ start-of-year portfolio balance, so it measures what actually left the portfolio to fund spending and taxes. Roth conversions and reinvested surplus are excluded. Social Security and pension are NOT subtracted (see the inflows column for those), which is what makes this comparable to the classic "4% rule" target of ~4%.',
+        'infl%': 'Inflation applied to the spending goal for this year. Fixed at your Inflation input in a normal run; under Monte Carlo each path draws its own, so this column is how you see which years the path got expensive. Note that tax brackets and IRMAA thresholds index at the separate CPI input instead, which is why a high-inflation year can raise spending without widening the brackets that spending is taxed in.',
+        'inflCum%': 'How much the price level has risen since the plan started, compounding the infl% column. Divide any nominal dollar figure by 1 + this to read it in current dollars, or flip the Future $ / Current $ switch above the tabs and let every column do it for you.',
+        'return%': 'The market return this year before dividends and before any per-account mix is applied: your Growth input in a normal run, or the year drawn from the Monte Carlo path. The balance columns will not move by exactly this much - each account adds its dividend yield and blends its own stock/bond/international split, and Cash earns its own yield instead.',
         'timing': 'Withdrawal timing auto-selected each year. Early(Conv) = conversion year (withdrawal in 1st quarter, ideally January - maximizes Roth compounding). Late(Spend) = spending-only year (withdrawal in last quarter, ideally December - full portfolio compounds before withdrawal exits, gaining D×r per year).',
     };
 
     keys.forEach(key => {
-        if (!key.startsWith('-')) {
+        if (isTableColumnKey(key)) {
             const th = document.createElement('th');
             const displayKey = key.endsWith('!') ? key.slice(0, -1) : key;
             th.textContent = displayKey;
@@ -2650,7 +2676,7 @@ function updateTable(log) {
         const deathHighlightCols = ['year', 'age1', 'age2', 'status', 'SSincome'];
 
         keys.forEach(key => {
-            if (!key.startsWith('-') && key !== 'inflationFactor') {
+            if (isTableColumnKey(key)) {
                 const td = tr.insertCell();
                 const value = row[key];
 
@@ -2672,6 +2698,11 @@ function updateTable(log) {
                     td.onclick = () => openTaxPlanner(row, i > 0 ? log[i - 1] : null);
                 }
 
+                // Columns whose useful magnitude is below 1, so the whole-number rounding every
+                // other column gets would print 0 forever. loopMs is the engine's time for one
+                // simulated year: ~0.2ms on a normal plan, which read as "0" the moment the column
+                // was fixed enough to render at all.
+                const isFractional = (key === 'loopMs');
                 // Check if key indicates percentage
                 const isPercent = key.toLowerCase().includes('%');
                 const isYear = key.toLowerCase().includes('yr') || key.toLowerCase().includes('year');
@@ -2680,6 +2711,8 @@ function updateTable(log) {
                     if (isPercent) {
                         // Format as percentage (convert from decimal)
                         td.textContent = (value * 100).toFixed(2);
+                    } else if (isFractional) {
+                        td.textContent = value.toFixed(2);
                     } else {
                         // Format as whole number
                         if (isYear) {

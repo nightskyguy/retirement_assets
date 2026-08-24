@@ -1060,6 +1060,15 @@ function buildSimYearLogRecord(p) {
         // Phase 22: Guyton-Klinger
         gkSpend: p.strategy === 'gk' ? p.spendGoal : null,
         gkAdj:   p.strategy === 'gk' ? (p.gkAdjLabel || '—') : null,
+        // What the year was actually handed: this year's inflation, the compounded inflation the
+        // row's nominal dollars carry, and this year's market return. Constant in a deterministic
+        // run and different every year under Monte Carlo, which is the point - a replayed path is
+        // unreadable without them. Cumulative inflation is reported as the PERCENT the price level
+        // has risen since the plan started, not as the raw multiplier, so the column formats like
+        // every other '%' column; inflationFactor below still carries the multiplier itself.
+        'infl%':     p.yearInflation,
+        'inflCum%':  (p.inflation ?? 1) - 1,
+        'return%':   p.baseReturn,
         // Internal
         inflationFactor: p.inflation,
         loopMs: p.loopMs
@@ -2843,7 +2852,8 @@ function logYear(sim, yr) {
         grossOutflows: yr._grossOutflows, netOutflows: yr._netOutflows,
         yearInflows: yr._yearInflows, wdRate: yr._wdRate,
         useEarly: yr._useEarly, timingReason: yr.timingReason,
-        strategy: inputs.strategy, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, inflation: sim.inflation, loopMs: loopMs
+        strategy: inputs.strategy, spendGoal: sim.spendGoal, gkAdjLabel: sim.gkAdjLabel, inflation: sim.inflation,
+        yearInflation: yr.yearInflation, baseReturn: yr.baseReturn, loopMs: loopMs
     }));
     totals.totalTime += log[log.length - 1].loopMs;
 }

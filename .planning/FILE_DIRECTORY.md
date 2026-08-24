@@ -52,11 +52,12 @@ same stub pattern, just within `standalone/` rather than at root.)
 | `displayhelpers.js` | Shared numeric-input parsing/formatting + tooltip helpers, used across multiple tools. |
 | `other_tools.js` | Shared "Other Tools" cross-link widget (the `TOOLS` list) rendered on multiple pages so each tool can link to the others. |
 | `doclinks.js` | Rewrites `.md` hrefs to the `.html` pages GitHub Pages/Jekyll generates from them, but only when the page is served from a non-local origin, so `file://` and localhost keep opening the real files. Also decorates the Jekyll-rendered doc pages (mermaid captions, back link). |
-| `montecarlo/mc_controller.js` | Main-thread interface to the Monte Carlo run — dispatches to a Web Worker on `http(s)://`, falls back to chunked async on `file://`. |
+| `montecarlo/mc_controller.js` | Main-thread interface to the Monte Carlo run — dispatches to a Web Worker on `http(s)://`, falls back to running `mc_engine.js` on the main thread (chunked, so the page keeps a frame) on `file://`. Also owns the run-time estimator the buttons quote. |
 | `montecarlo/mc_tab.js` | Monte Carlo tab UI controller (charts, tables, strategy selection) in the Optimizer. |
-| `montecarlo/worker.js` | The actual Web Worker: runs all strategy variations against a shared Common-Random-Numbers scenario bank, posts progress + final results. |
-| `montecarlo/prng.js` | Seeded PRNG (mulberry32) + Box-Muller normal sampling used by the Synthetic (GBM) Monte Carlo mode. |
-| `montecarlo/stats.js` | Per-year percentile-band statistics (p5/p25/p50/p75/p95) for Monte Carlo fan charts. |
+| `montecarlo/mc_engine.js` | **The Monte Carlo model itself**, and the only copy of it: bank build, the variation × path sweep, the results message. `runJob`, `runPass`, `buildBanks`, `buildPathInputs`, `buildStressMsg`. Loads three ways (node `require`, page `<script>`, worker `importScripts`) so the worker and the `file://` fallback run the same text rather than two copies believed identical. Callers pass hooks for progress, cancellation and yielding. |
+| `montecarlo/worker.js` | The Web Worker shell around `mc_engine.js`: `importScripts`, one throttled progress callback, `onmessage`, error containment. Holds no model logic. |
+| `montecarlo/prng.js` | Seeded PRNG (mulberry32) + Box-Muller sampling, the historical/stress/bear bank builders, and the shared synthetic draw (`drawSyntheticBank`, `syntheticReturnFromBank`, `INFLATION_STREAM_XOR`) plus the AR(1) inflation model both synthetic modes use. |
+| `montecarlo/stats.js` | Per-year percentile-band statistics (p5/p25/p50/p75/p95) for Monte Carlo fan charts, plus the input-distribution fan. Dual-mode export so node can put both on `globalThis` for `mc_engine.js`. |
 | `montecarlo/historical_returns.js` | Historical annual return/inflation data (Damodaran, MSCI, BLS CPI-U, 1928–2025) backing the Historical Monte Carlo mode and `standalone/RealReturns.html`. |
 | `standalone/real_returns_data.js` | US T-bill historical annual returns (1928–2025), Damodaran source — data-only, used by `standalone/RealReturns.html`. |
 
@@ -71,11 +72,11 @@ same stub pattern, just within `standalone/` rather than at root.)
 | `.githooks/pre-commit` | Version-controlled `pre-commit` hook (P39 item 1) — runs all three `node` suites and blocks the commit on a failure, or on a **missing** suite. The three suites never run in the browser, so this is the only automatic gate on them. `git commit --no-verify` is the deliberate escape. |
 | `.githooks/install` | One-time per clone: `sh .githooks/install`. Writes a delegating shim at the already-pinned `core.hooksPath` (absolute, and re-pinned per worktree by `extensions.worktreeConfig`, so a relative `hooksPath` would be silently ignored in every worktree). One install covers the main checkout and all worktrees. |
 | `.githooks/README.md` | Why the shim rather than `core.hooksPath .githooks`, the timing table, and the `eol=lf` requirement. |
-| `.test_harnesses/betr_harness.js` | `node` investigative script — checks whether the displayed Break-Even Tax Rate (BETR) is trustworthy vs. an empirically-derived break-even rate. Not part of the regular suite; kept so the finding can be re-derived on demand. See `.test_harnesses/README.md`. |
+| `.test_harnesses/betr_harness.js` | `node` investigative script — checks whether the displayed Break-Even Tax Rate (BETR) is trustworthy vs. an empirically-derived break-even rate. Not part of the regular suite; kept so the finding can be re-derived on demand. See `.test_harnesses/HARNESSES.md`. |
 | `.test_harnesses/stopyear_harness.js` | Browser-console investigative script — the research harness behind the Stop-Year feature (`bestConversionStopYear()` in `optimizer_core.js` is the production version). |
 | `.test_harnesses/unifiedconv_harness.js` | `node` investigative script for P28 — models every voluntary IRA withdrawal as a Roth conversion across a 630-simulation grid. Findings live in `P28_RESULTS.md`. |
 | `.test_harnesses/P28_RESULTS.md` | The P28 reference write-up: tables, reasoning, and the seven headline findings the harness produced. |
-| `.test_harnesses/README.md` | Index for the harness directory, plus the rule for what belongs there vs. at the repo root (fixtures the suite needs stay at root). |
+| `.test_harnesses/HARNESSES.md` | Index for the harness directory, plus the rule for what belongs there vs. at the repo root (fixtures the suite needs stay at root). Named `README.md` until 2026-08-24; it is a catalog, and the old name collided with the repo's real README. |
 | `sweep_golden.js` | Characterization goldens for the **two** strategy enumerations — Monte Carlo's `buildVariations()` and the Optimizer's sweep in `_runOptimizerNow()`. Both now call the shared `buildStrategyFamilies()` in `optimizer_core.js`; the golden is what proved that extraction byte-identical. Data only, dual-mode export, read by `optimizer_core.tests.js`. Recorded before the P35 PR 2 extraction so it can be shown to preserve behavior. |
 | `sweep_golden.gen.js` | Regenerates the `MC_GOLDEN` half from source (`node sweep_golden.gen.js`). Run only for a **deliberate** `buildVariations()` change, then read the diff. |
 | `sweep_golden.import.js` | Folds a browser capture into the `OPT_GOLDEN` half. The Optimizer's enumeration only runs in a live page, so that half is recorded, not generated — the capture recipe is in this file's header. |
@@ -98,6 +99,7 @@ same stub pattern, just within `standalone/` rather than at root.)
 | `.planning/task_completed.md` | Archive of fully-completed phases (moved out of `task_plan.md` to keep it scannable). |
 | `.planning/NOTES.md` | Older, more granular dev-session notes (pre-dates the `retirement-optimizer/` split). |
 | `.planning/IRAprojection.spec.txt` | Original spec/requirements notes for the IRA projection logic. |
+| `.planning/retirement-optimizer/p71_probe/` | Two node harnesses that load the real `worker.js` and the real `mc_controller.js` into a `vm` context and hash a fixed-seed Monte Carlo run in all three modes. The A/B evidence that a Monte Carlo refactor changed no number — no test suite executes either file. README in the directory. |
 | `.planning/FILE_DIRECTORY.md` | This file. |
 
 ## Config / misc

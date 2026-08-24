@@ -2179,6 +2179,90 @@ assertEqual(
 			'no ACA option carries an uncomputed warning triangle');
 	})();
 
+	// ===== Mode presets report state, not history =====
+	// The three buttons on the Monte Carlo tab are lit from the parameter VALUES, so that editing a
+	// box in Advanced Parameters clears them and a preset the reader arrived at by hand still shows.
+	// Reported as: a reader cannot tell which regime they are in without opening Input Distributions.
+	//
+	// The predicates are exercised directly, by writing the boxes, rather than by clicking the
+	// preset functions - those re-run the simulation as a side effect, which a test has no business
+	// doing to someone's page. Every value is put back afterwards.
+	(function mcPresetStateFollowsTheParameters() {
+		if (typeof updateMCPresetState !== 'function' || !document.getElementById('mc-preset-default')) return;
+		const ids = Object.keys(MC_PARAMS);
+		const saved = ids.map(id => [id, document.getElementById(id)?.value]);
+		const put = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+		const growth = parseFloat(document.getElementById('growth')?.value);
+		try {
+			// Defaults, with mu tracking Growth % the way resetMCParams() leaves it.
+			ids.forEach(id => put(id, MC_PARAMS[id].dflt));
+			if (Number.isFinite(growth)) put('mc-mu', growth);
+			assertEqual(_mcIsDefaultState(), true, 'MC presets: every parameter at its default reads as Default');
+			updateMCPresetState();
+			assertEqual(document.getElementById('mc-preset-default').getAttribute('aria-pressed'), 'true',
+				'MC presets: the Default button is lit from that state');
+
+			// One box away from the defaults is no longer the default.
+			put('mc-inflation-persistence', 0.5);
+			assertEqual(_mcIsDefaultState(), false, 'MC presets: editing one parameter clears Default');
+
+			// Fixed Inflation is a property of the shock alone, whatever else is set.
+			put('mc-inflation-shock-sd', 0);
+			assertEqual(_mcIsFixedInflationState(), true, 'MC presets: a zero inflation shock reads as Fixed Inflation');
+
+			// Pessimistic needs all five, including mu two points under Growth.
+			put('mc-mu', Number.isFinite(growth) ? Math.max(0, growth - 2).toFixed(1) : 5);
+			put('mc-sigma', 18);
+			put('mc-inflation-persistence', 0.75);
+			put('mc-inflation-shock-sd', 3.1);
+			put('mc-inflation-return-corr', -0.45);
+			assertEqual(_mcIsPessimisticState(), true, 'MC presets: the five Pessimistic values read as Pessimistic');
+			put('mc-sigma', 17);
+			assertEqual(_mcIsPessimisticState(), false, 'MC presets: changing one of the five clears Pessimistic');
+		} finally {
+			saved.forEach(([id, v]) => { if (v !== undefined) put(id, v); });
+			updateMCPresetState();
+		}
+	})();
+
+	// ===== Annual Details: one cell per column, in every row =====
+	// The header row and the body rows are built from the same key list but used to apply DIFFERENT
+	// filters to it - the body skipped `inflationFactor` and the header did not. From that column
+	// rightward every cell sat under the heading to its left, and the rightmost column (`loopMs`)
+	// got no cell at all and read as permanently empty. It survived for months because the one
+	// visibly wrong cell, under the `inflationFactor` heading, showed a small number where a
+	// multiplier near 1 was expected.
+	//
+	// A count comparison catches the whole class: any future key filtered in one place and not the
+	// other shifts the table silently, and nothing else in the page would notice.
+	(function annualDetailsCellsAlignWithHeaders() {
+		// The suite runs BEFORE the page's first runSimulation(), so there is no table yet - render
+		// one here from a real log. updateTable() replaces #main-table in place, and runSimulation()
+		// rebuilds it moments later, so this leaves nothing behind. Checking the real render rather
+		// than re-deriving the key list is the point: the bug was two filters disagreeing, and only
+		// the rendered result can show that.
+		if (typeof getInputs !== 'function' || typeof updateTable !== 'function') return;
+		try {
+			updateTable(simulate(getInputs()).log);
+		} catch (e) {
+			assertEqual(String(e.message || e), '', 'Annual Details renders from a live log');
+			return;
+		}
+		const table = document.getElementById('main-table');
+		if (!table) return;
+		const headRows = table.querySelectorAll('thead tr');
+		const headerRow = headRows[headRows.length - 1];
+		if (!headerRow) return;
+		const nCols = headerRow.querySelectorAll('th').length;
+		const bodyRows = [...table.querySelectorAll('tbody tr')];
+		if (!nCols || !bodyRows.length) return;
+		const bad = bodyRows
+			.map((r, i) => (r.cells.length === nCols ? null : `row ${i} has ${r.cells.length}`))
+			.filter(Boolean);
+		assertEqual(bad.slice(0, 3).join(', '), '',
+			`every Annual Details row has one cell per header (${nCols} headers)`);
+	})();
+
 	// ===== An unclosed inline tag in the changelog eats the rest of the page =====
 	// v11.15a2 shipped an <li> whose <strong> was never closed. Nothing threw and nothing looked
 	// wrong in the source, but the HTML parser's recovery re-parented the two entries BELOW it
@@ -2324,7 +2408,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 300, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 305, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

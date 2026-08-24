@@ -4163,3 +4163,32 @@ harness's own header: it proves the Ordered strategy restarts its account sequen
 shows where the year's leftover surplus is banked.
 
 Docs only. Suites 305 / 61 / 22, no version bump, no changelog entry.
+
+
+## Session 2026-08-24 (continued) - the README paragraph the first sweep missed
+
+User quoted a line from the "Stress Test vs Monte Carlo Analysis" section that still said Synthetic
+"currently does not vary inflation". I had not corrected it, and my "three places" report from an
+hour earlier was therefore wrong - there were four, and the fourth was the one a reader is most
+likely to hit, because it sits in the section that explains the difference between the modes.
+
+**Why the sweep missed it.** I grepped for `Monte Carlo|montecarlo`. The sentence contains neither -
+it opens "Synthetic uses randomized market variations". A grep for the feature name cannot find text
+that describes the feature without naming it, which is most prose. Grepping for `Synthetic` (the
+thing that changed) instead of `Monte Carlo` (the tab it lives in) returns all four hits plus two
+more paragraphs worth checking.
+
+Fixed: that paragraph now says synthetic randomizes inflation as well as returns, describes the
+calibration and the clustering in the author's register rather than the changelog's, and a new
+paragraph after it explains the GBM/AAM split as a difference in what the growth rate you type
+*means* - with the concrete 7% -> 6.05% median - and notes that neither is the more optimistic of the
+two. The "TWO Monte Carlo regimens" sentence above it now says synthetic has two flavors.
+
+**Left alone, deliberately.** The competitor section (~line 1004) criticizes GBM as a "drunk man's
+walk" that lacks the persistence real markets show. That critique still stands against this tool's
+own synthetic RETURNS: P23 gave inflation an AR(1) persistence model, not returns. The paragraph is
+the author's argument and remains factually correct, so it is his call whether to note the asymmetry;
+flagged to him rather than edited. Also related: P14 (regime-switching MC) is the open phase that
+would answer it.
+
+Docs only. Suites 305 / 61 / 22.

@@ -485,6 +485,9 @@ function getInputs() {
         STATEname: val('STATEname'),
         strategy: _strategy,
         orderedSeq: val('orderedSeq') || 'CBIR',
+        // '' is the shipped default and means "Roth last". The engine validates against its two
+        // known values rather than for truthiness, so an empty string here leaves today's order.
+        rothGapFill: val('rothGapFill'),
         nYears: +val('nYears'),
         ..._strat,
         hasSpouse: !!valChecked('hasSpouse'),
@@ -973,6 +976,7 @@ function _runOptimizerNow() {
                 gkGuard: inputs.gkGuard, gkAdjPct: inputs.gkAdjPct,
                 cyclicEnabled: !!inputs.cyclicEnabled, cyclicOrder: inputs.cyclicOrder ?? 'ira-first',
                 fundConversionWithCash: !!inputs.fundConversionWithCash,
+                rothGapFill: inputs.rothGapFill ?? '',
             },
             _isSpendOptimized: false,
             _bracketOveragePct: bracketOveragePct,
@@ -1008,6 +1012,11 @@ function _runOptimizerNow() {
         // two identical arms instead of an A/B.
         markCashFunding: NERD_KNOBS,
         cashClones: NERD_KNOBS && base.Cash > 0,
+        // The 🅡 arm is swept for everyone - P28 measured it worth up to +$3.56M and found no
+        // heuristic that predicts when, so the only way to know is to run it. Gated on Roth
+        // because with no Roth to draw the clone is a bit-identical twin, and restricted inside
+        // the builder to the families whose shortfall withdrawals it can reach.
+        rothClones: (base.Roth > 0 || base.Roth2 > 0),
         // The user's own off-grid parameter goes last here, after Guyton-Klinger. MC puts it
         // straight after IRA Draw. Both orders are pinned by sweep_golden.js.
         offGridLast: true,
@@ -1116,6 +1125,10 @@ function _runOptimizerNow() {
             cyclicEnabled: !!userPlan.cyclicEnabled, cyclicOrder: userPlan.cyclicOrder ?? 'ira-first',
             convertExcessToRoth: !!userPlan.convertExcessToRoth,
             fundConversionWithCash: !!userPlan.fundConversionWithCash,
+            // Passed explicitly for the same reason as fundConversionWithCash above: the 🅡 sweep
+            // writes rothGapFill:'' onto every un-cloned row, and this reference row is the user's
+            // actual plan, not a swept arm.
+            rothGapFill: userPlan.rothGapFill ?? '',
             extraConversionAmount: userPlan.extraConversionAmount ?? 0,
             convEndYear: userPlan.convEndYear, convEndMode: userPlan.convEndMode ?? 'all',
         };
@@ -2139,6 +2152,11 @@ function loadOptimizerResult(id) {
     // had - the table showed one plan and clicking it ran another (the PF8 bug class). _selection
     // carries the effective values; guard on it so rows from an older cached run still load.
     if (result._selection) {
+        // Same PF8 class, one dimension later: a 🅡 row that loaded without its Roth position ran
+        // the un-cloned plan. Set unconditionally, including back to '' for the rows that are not
+        // 🅡 clones, or a leftover selection follows the next strategy loaded.
+        const rgEl = document.getElementById('rothGapFill');
+        if (rgEl) rgEl.value = result._selection.rothGapFill ?? '';
         if (result._strategy === 'ordered' && result._selection.orderedSeq) {
             const seqEl = document.getElementById('orderedSeq');
             if (seqEl) seqEl.value = result._selection.orderedSeq;
@@ -4191,6 +4209,10 @@ function toggleStrategyUI() {
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
     document.getElementById('ui-gk').classList.toggle('hidden', m !== 'gk' || !NERD_KNOBS);
+    // Roth position only reaches the strategies that leave a spending gap for the fill to work on.
+    // Same set as ROTH_GAP_FAMILIES in optimizer_core.js; 'minlimit' shares the bracket engine path.
+    const rothGapUsable = (m === 'fixed' || m === 'bracket' || m === 'minlimit' || m === 'fixedpct');
+    document.getElementById('ui-rothgap').classList.toggle('hidden', !rothGapUsable);
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 
@@ -4201,7 +4223,7 @@ function toggleStrategyUI() {
 
 const OPT_LONG_TO_SHORT = {
     spendGoal:'sg', spendChange:'sc', strategy:'str', nYears:'ny',
-    propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os',
+    propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
     convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',

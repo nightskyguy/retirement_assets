@@ -42,7 +42,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SCENARIOS = ['default', 'nerdknob', 'nerdknobACA', 'nerdknobNoCashOffGrid'];
-const CLONE = /🗘|🔄|💵/;
+const CLONE = /🗘|🔄|💵|🅡/;
 
 const dir = process.argv[2];
 if (!dir) {

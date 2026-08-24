@@ -15,6 +15,34 @@ default off and set by nothing in the UI**: `unifiedConvRouting`, `rothGapFill`,
 > three sat near 4.4%. Spend is now a controlled axis (4% / 6% / 8% of total assets) crossed with
 > every mix. Three round-2 conclusions did not survive; they are marked **[CORRECTED]** below.
 
+> ## ⚠ 2026-08-24: the engine moved, and every number below moved with it
+>
+> Re-running the same harness on the v11.162B engine does **not** reproduce the figures in this
+> document. The measurement was not wrong; the engine it measured no longer exists. The largest
+> intervening change is P32 (v11.15e3), which let the third pass draw Brokerage by default —
+> `fillCashThenRoth`'s whole mechanism is displacing a Brokerage draw, so changing when Brokerage is
+> drawn changes the size and the sign of the effect. P64 (SALT) and P66 (IRMAA ceiling) also sit on
+> the same tax path.
+>
+> | | recorded 2026-07-30 | re-run 2026-08-24 |
+> |---|---|---|
+> | best `fillCashThenRoth` cell | **+$3,559,596** | **+$470,977** |
+> | worst `fillCashThenRoth` cell | −$12,466 | **−$633,605** |
+> | cells where it is negative | 1 of 60 | **26 of 60** |
+> | `fillCashThenRoth` ≥ `fillRothThenCash` | 53 of 60 | 54 of 60 |
+> | worst `fillRothThenCash` cell | −$244,689 | −$1,136,213 |
+>
+> **What survives:** `fillCashThenRoth` is still the better of the two positions, still by a wide
+> margin, and the mechanism section still reads the same way — the payoff tracks whether the control
+> arm ever drew Brokerage. **What does not:** the headline "+$3.56M, almost never loses". On today's
+> engine it is a two-sided lever that can cost more than half a million dollars, which is a stronger
+> argument for the P28f decision (sweep it, do not recommend it) than the old numbers were.
+>
+> Prediction B was already **BROKEN** at 1/60. It is broken by a much wider margin now.
+>
+> Everything below this box is the 2026-07-30 record, left as written. Re-run the harness for
+> current numbers rather than quoting these.
+
 ---
 
 ## 1. What was asked

@@ -79,7 +79,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P68 | `optimizer_changelog.md` brevity pass over the recent entries *(new 2026-08-22)* | `P68a` | nothing |
 | **O2** | P65 | Rest of Schedule A — engine itemizes on SALT alone; medical is the piece that likely qualifies *(new 2026-08-19)* | `P65a` (measure first) | nothing |
 | **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
-| **O3** | P28 | "Every voluntary IRA withdrawal is a conversion" — ship decision | `P28f` | nothing |
+| **O2** | P28 | "Every voluntary IRA withdrawal is a conversion" - **`P28f`/`g`/`h` SETTLED and SHIPPED v11.162B**: routing flag deleted as measured-inert, `rothGapFill` shipped as a control plus the 🅡 sweep rows. `P28j` is the remainder | `P28j` (needs its own phase) | nothing |
 | **O3** | P40 | Test-file layout — the `tests/` subfolder move | decision, then the move | nothing |
 | **O3** | P5 | Greedy DP conversion schedule | `P5a` | nothing |
 | **O3** | P6 | Simulation sanity-check tests | `P6a` | nothing |
@@ -1088,7 +1088,24 @@ timing. See `findings.md`, "A log field the next iteration reads is engine state
       at 6% spend rather than growing with Brokerage share, "IRA Draw is unreachable" was
       strain-specific (+$1,200,484 at 6%), and `fillCashThenRoth` DOES have one negative cell. Mechanism
       came out sharper: every cell whose control never drew Brokerage returns exactly $0.
-- **Status:** research complete (4 rounds), feature not started
+- [x] **P28f/g/h SETTLED 2026-08-24, shipped v11.162B.** `unifiedConvRouting` DELETED from the engine
+      (inert in 90 cells; the two-leg view it existed for is already `-iraSpend` + `-iraConvGrossTot`),
+      and its harness arm A1 removed with it so no arm can set a flag nothing reads. `rothGapFill`
+      shipped twice: the *Roth in shortfall withdrawals* control, on the three families whose gap fill
+      it can reach, and a 🅡 clone pass in `buildStrategyFamilies` gated on Roth > 0. Only
+      `fillCashThenRoth` is swept - `fillRothThenCash` is the dominated position. `P28h` needed no
+      code: "the tool has to RUN it" IS the sweep dimension.
+- **⚠ THE 2026-07-30 NUMBERS NO LONGER REPRODUCE.** Re-running the harness on the v11.162B engine
+  gives `fillCashThenRoth` a range of **+$470,977 to -$633,605, negative in 26 of 60 cells**, against
+  the recorded +$3,559,596 / 1-of-60. P32 (v11.15e3) letting the third pass draw Brokerage is the
+  likely cause - displacing a Brokerage draw is the entire mechanism, so changing when Brokerage is
+  drawn changes size and sign. What survives: `fillCashThenRoth` is still the better of the two
+  positions (54 of 60), and the zero-predicate still holds. What does not: "worth $3.56M and almost
+  never loses". Warning box added to `P28_RESULTS.md` and `HARNESSES.md`; the shipped copy quotes the
+  re-run. **The lesson is general: a research document is only true against the engine that produced
+  it, and this repo changes that engine often.**
+- **Status:** research complete (4 rounds); `P28f`/`g`/`h` shipped 2026-08-24. `P28j` still open and
+  still needs its own phase.
 - **Independent:** no phase dependencies
 
 ---
@@ -1215,8 +1232,12 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
 - **Do not touch `resolveResidualAndForcedIRA` in this phase.** That is P32.
 
 **Already ruled out — do not re-derive:**
-- Roth's position in the gap fill. P28 rounds 2+4, 630 sims, `fillCashThenRoth` established. What
-  remains there is a **ship** decision (P28's open checkbox), not research.
+- Roth's position in the gap fill. P28 rounds 2+4, 630 sims, `fillCashThenRoth` established as the
+  better of the two positions, and **shipped 2026-08-24** as a control plus the 🅡 sweep rows.
+  **But re-measure before quoting any P28 figure**: on the v11.162B engine the effect ranges
+  +$470,977 to -$633,605 and is negative in 26 of 60 cells, not the recorded +$3.56M / 1-of-60. The
+  ranking survived the engine change; the magnitudes did not. Assume the same of anything else in
+  `P28_RESULTS.md` that P30 leans on, the zero-predicate included.
 - Whether the three shipped `orderedSeq` sequences matter — already swept (`optimizer_ui.js:841`).
 - The unified-conversion reframe — measured inert, 0 money fields moved in 90 cells.
 
@@ -1231,8 +1252,9 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
 - **Status:** not started, research-first. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
   new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
   `P28_RESULTS.md` as its reference)
-- **Depends on:** no code dependency. Its *ship* decision is downstream of P28's open decision —
-  settle both in one batch or the weight question shifts underneath it.
+- **Depends on:** no code dependency. Its *ship* decision was downstream of P28's, which is now
+  settled and shipped (v11.162B), so P30's research runs against a fixed baseline. The 🅡 rows are
+  part of that baseline: a weight sweep must state which Roth position it holds fixed.
 
 ---
 

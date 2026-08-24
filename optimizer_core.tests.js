@@ -4248,6 +4248,58 @@ test('sameStrategySelection: cyclic and cash-funding modifiers are part of the i
     assert(!sameStrategySelection(p, { ...p, fundConversionWithCash: true }), 'cash-funded twin is a different plan');
 });
 
+test('sameStrategySelection: the Roth gap position is part of the identity, unknown values are not', () => {
+    const p = { strategy: 'fixed', nYears: 20 };
+    assert(!sameStrategySelection(p, { ...p, rothGapFill: 'fillCashThenRoth' }),
+        'a 🅡 clone is a different plan from the row it was cloned from');
+    assert(!sameStrategySelection({ ...p, rothGapFill: 'fillCashThenRoth' },
+                                  { ...p, rothGapFill: 'fillRothThenCash' }), 'the two positions differ');
+    // The engine treats anything it does not recognize as "leave today's behavior alone", so the
+    // identity has to agree. A typo that compared as its own plan would pin a row to a strategy
+    // that never ran.
+    assert(sameStrategySelection(p, { ...p, rothGapFill: 'fillCashThenRother' }),
+        'an unrecognized value is the same plan as unset');
+    assert(sameStrategySelection(p, { ...p, rothGapFill: '' }), 'empty is unset');
+});
+
+test('rothGapFill: unset is bit-identical, and fillCashThenRoth spends Roth instead of Brokerage', () => {
+    // Bracket fills a spending gap from Cash, then Brokerage, then Roth. With a Roth balance and a
+    // gap big enough to reach past Cash, moving Roth ahead of Brokerage has to show up as a smaller
+    // Brokerage draw - that is the whole mechanism P28 measured.
+    const b = { ...BASE, strategy: 'bracket', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0,
+                Roth: 400000, spendGoal: 70000, growth: 0.05 };
+    const off  = simulate(b);
+    const same = simulate({ ...b, rothGapFill: '' });
+    assert(JSON.stringify(off.log) === JSON.stringify(same.log),
+        'an empty rothGapFill must leave every number exactly as it was');
+    const junk = simulate({ ...b, rothGapFill: 'fillCashThenRother' });
+    assert(JSON.stringify(off.log) === JSON.stringify(junk.log),
+        'an unrecognized value must leave every number exactly as it was');
+
+    const on = simulate({ ...b, rothGapFill: 'fillCashThenRoth' });
+    const tot = (res, k) => res.log.reduce((s, r) => s + (r[k] ?? 0), 0);
+    assert(tot(on, 'RothWD') > tot(off, 'RothWD'), 'Roth must actually be drawn');
+    assert(tot(on, 'Brokerage-') < tot(off, 'Brokerage-'), 'and it must displace a Brokerage draw');
+});
+
+test('buildStrategyFamilies: the 🅡 pass clones only the families it can reach', () => {
+    const b = { ...BASE, Roth: 300000 };
+    const plain  = buildStrategyFamilies(b, { grids: OPTIMIZER_GRIDS });
+    const cloned = buildStrategyFamilies(b, { grids: OPTIMIZER_GRIDS, rothClones: true });
+    const roths  = cloned.filter(r => r.modifier === 'rothgap');
+    assert(roths.length > 0, 'the option must add rows');
+    assert(roths.every(r => r.overrides.rothGapFill === 'fillCashThenRoth'), 'each clone carries the position');
+    // Proportional funds spending directly, Guyton-Klinger re-cuts it, Ordered runs the user's own
+    // sequence: cloning any of them would emit a row that cannot differ from the one it clones.
+    assert(roths.every(r => !['propwd', 'gk', 'ordered'].includes(r.overrides.strategy)),
+        'Proportional, Guyton-Klinger and Ordered must not be cloned');
+    // And the rows it clones must not inherit a sidebar setting, or the A/B is two identical arms.
+    assert(cloned.filter(r => r.modifier === null).every(r => r.overrides.rothGapFill === ''),
+        'un-cloned rows are marked, the way markCashFunding marks the 💵 pass');
+    assert(plain.every(r => r.overrides.rothGapFill === undefined),
+        'and with the option off the key is not written at all');
+});
+
 test('sameStrategySelection: finds GK and Ordered users in buildVariations output (the MC regression)', () => {
     const gkBase = { ...BASE, strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 };
     const gkIdx = buildVariations(gkBase).findIndex(v => sameStrategySelection(v, gkBase));
@@ -4393,7 +4445,7 @@ test('buildVariations: the declared divergences from the Optimizer sweep are pin
 // yet, and these tests check the recording itself: that it is internally consistent, and that it
 // actually contains the four gates it was captured to cover. A corrupt or half-imported golden
 // would otherwise sit here looking authoritative until PR 2 "proved" an extraction against it.
-const CLONE_PFX = /🗘|🔄|💵/;
+const CLONE_PFX = /🗘|🔄|💵|🅡/;
 const optBaseRows = rows => rows.filter(r => !CLONE_PFX.test(r[0]));
 
 for (const [name, g] of Object.entries(OPT_GOLDEN)) {
@@ -4403,10 +4455,20 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
             `un-prefixed rows ${optBaseRows(g.rows).length}, baseRowCount ${g.baseRowCount}`);
         assert(g.base && typeof g.base === 'object' && g.base.strategy,
             'the capture must carry the base it was recorded against');
-        // Every base row is cloned by the cyclic pass; 💵 clones the base rows again when the
-        // nerdknob is on AND there is Cash. So the total is 3x or 4x the base count, never else.
-        const mult = g.rowCount / g.baseRowCount;
-        assert(mult === 3 || mult === 4, `row count is ${mult}x the base rows, expected 3x or 4x`);
+        // Every clone pass is accounted for exactly, rather than by a row-count multiple: the 🅡
+        // pass clones only the families whose shortfall withdrawals it can reach, so the total
+        // stopped being a whole multiple of the base count when it landed.
+        const n = pfx => g.rows.filter(r => r[0].includes(pfx)).length;
+        const reachable = optBaseRows(g.rows)
+            .filter(r => ['fixed', 'bracket', 'aca', 'fixedpct'].includes(r[3].strategy)).length;
+        assert(n('🗘') === g.baseRowCount && n('🔄') === g.baseRowCount,
+            `cyclic passes clone every base row: 🗘 ${n('🗘')}, 🔄 ${n('🔄')}, base ${g.baseRowCount}`);
+        assert(n('💵') === (g.nerdKnobs && g.base.Cash > 0 ? g.baseRowCount : 0),
+            `💵 clones are gated on nerdknob AND Cash, got ${n('💵')}`);
+        assert(n('🅡') === ((g.base.Roth > 0 || g.base.Roth2 > 0) ? reachable : 0),
+            `🅡 clones the ${reachable} reachable base rows, got ${n('🅡')}`);
+        assert(g.baseRowCount + n('🗘') + n('🔄') + n('💵') + n('🅡') === g.rowCount,
+            'the four clone passes plus the base rows must account for every row');
     });
 
     test(`OPT_GOLDEN [${name}]: clone rows carry the modifier their prefix claims`, () => {
@@ -4420,8 +4482,12 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
             else if (label.includes('💵'))
                 assert(ov.fundConversionWithCash === true && !ov.cyclicEnabled,
                     `${label}: 💵 must fund with cash and must not be cyclic`);
+            else if (label.includes('🅡'))
+                assert(ov.rothGapFill === 'fillCashThenRoth' && !ov.cyclicEnabled,
+                    `${label}: 🅡 must draw Roth after cash and must not be cyclic`);
             else
-                assert(!ov.cyclicEnabled && ov.fundConversionWithCash !== true,
+                assert(!ov.cyclicEnabled && ov.fundConversionWithCash !== true
+                    && ov.rothGapFill !== 'fillCashThenRoth',
                     `${label}: an un-prefixed row must carry no modifier`);
         }
     });
@@ -4481,6 +4547,9 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
             bracketResetsIRMAATier: true,
             markCashFunding: nerd,
             cashClones: nerd && g.base.Cash > 0,
+            // Not gated on the nerdknob: the 🅡 arm is swept for everyone, so it must reproduce in
+            // the nerdknob-off capture too.
+            rothClones: g.base.Roth > 0 || g.base.Roth2 > 0,
             offGridLast: true,
         });
         // Key ORDER inside an overrides object is an artifact of how the old block happened to

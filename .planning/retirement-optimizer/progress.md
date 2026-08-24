@@ -4290,3 +4290,29 @@ text.
 In-page 290 -> 296, node suites unchanged at 305 / 61 / 22, badge green at 681. Version 11.1628 ->
 11.162A; tokens on the CSS (new `.mc-preset` rules), mc_tab.js and optimizer_tests.js. Changelog in
 both homes.
+
+
+## Session 2026-08-24 (continued) - four changelog entries collapse into one (v11.1629)
+
+User: the ordering buries what matters. The end reader cares about the arithmetic model and about
+inflation varying; the preset-button work is part of the SAME change and never shipped separately;
+and giving a never-merged internal fix its own release entry is a mistake.
+
+**11.161B, 11.161G, 11.1628 and 11.162A are now one entry, 11.1629**, in both homes. None of the
+four was ever merged to main - they were four commits on one branch, and numbering them separately
+described the development, not the release. The rule this leaves behind: a changelog entry belongs to
+a RELEASE, and a branch that ships once gets one entry however many versions it passed through on the
+way.
+
+The detailed entry is the three points the user named, in that order, and nothing else: there is an
+arithmetic model; both synthetic models vary inflation; the Mode presets set how much it moves and
+show which setting is in force. The behavior-change warning stays, because a Synthetic plan really
+will not reproduce an older recorded result until Fixed Inflation is clicked.
+
+**Cut deliberately:** the AR(1) persistence / shock / correlation knobs (nothing in the UI varies them
+today - the planned work that will use them can introduce them), the Input Distributions caption
+inventory, and the whole column-alignment write-up. loopMs is one line, in the user's own words: the
+time spent calculating each year of data was rendering incorrectly and has been fixed.
+
+Version 11.162A -> 11.1629, title and the single entry. No `?v=` token moved: nothing but the HTML
+and the changelog file changed. Badge green at 681, in-page 296.

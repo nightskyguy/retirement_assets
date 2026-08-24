@@ -1458,14 +1458,27 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
       moves monotonically across 0/20/40/60/80/100. That is what makes a 0-to-100 sweep a sweep of
       one policy rather than of two. Suite 308 -> 310.
 - [x] **P30 re-baseline** — DONE 2026-08-24, `P28_RESULTS.md` section 15. See the block above.
-- [ ] **P30b** — Harness: weight sweep x P28 mix/spend ladder x gap-filling families; predictions
-      scored. Include a `thirdPassBrokerage: 'off'` arm to settle the inversion hypothesis
+- [x] **P30b** — **DONE 2026-08-24.** `.test_harnesses/gapfill_harness.js`, 2,430 sims in ~2s, full
+      write-up in `GAPFILL_RESULTS.md`. **Q1 is answered: the constant IS load-bearing and 40 is not
+      the number.** 227 of 360 cells move by more than $1,000 (widest $616,919), and among the 82
+      cells that are clean wealth comparisons - delivered spend unchanged, every weight funding the
+      plan - **w=40 is best in ZERO of them** and w=0 in 65. Blast radius is three families only
+      (Proportional, Reduce, GK); the bracket family and Ordered are bit-identical at every weight
+      across 270 guard runs. **Cash Reserve damps the whole effect by an order of magnitude** (CA
+      widest $534,525 reserve-off vs $33,358 reserve-on) and is the bigger lever; state matters much
+      less. The `thirdPassBrokerage: 'off'` arm came back with the SAME shape, so **P32 does not
+      explain this result** and the separate P28 inversion hypothesis stays open.
 - [ ] **P30c** — Q2 arm: bracket-family order Brokerage-before-Cash as an explicit alternative
 - [ ] **P30d** — Q4 arm: the remaining orderings of four accounts, harness-only
 - [ ] **P30e** — Q5: cost the decoupling (new input vs derived), count affected rows, do NOT build yet
-- [ ] **P30f** — Report against P28's zero-predicate: split cells by "did the control ever draw Brokerage"
+- [x] **P30f** — **DONE 2026-08-24, and it is an honest MISS.** The zero-predicate was scored
+      **VACUOUS**: not one cell in the grid had a control arm that never drew Brokerage, so the
+      prediction could not fire. It is neither confirmed nor refuted here. A prediction that cannot
+      fire on the grid it is written for should be caught when it is written, not when it is scored -
+      if it is wanted, `P30d` or a follow-up needs a low-spend / Cash-rich cell built for it
 - [ ] **P30g** — Decision: change the default, expose a control, decouple, or record that the constant is inert
-- **Status:** re-baseline and `P30a` done (2026-08-24); `P30b` next. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
+- **Status:** re-baseline, `P30a`, `P30b`, `P30f` done (2026-08-24); `P30c` next, and `P30g` now
+  has a real decision in front of it. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
   new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
   `P28_RESULTS.md` as its reference)
 - **Depends on:** no code dependency. Its *ship* decision was downstream of P28's, which is now

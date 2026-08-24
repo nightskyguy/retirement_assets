@@ -18,6 +18,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `betr_harness.js` | **node** | Is the Break-Even Tax Rate (BETR) signal trustworthy? |
 | `stopyear_harness.js` | **browser console** | When should a plan stop Roth conversions? |
 | `unifiedconv_harness.js` | **node** | Does modeling every voluntary IRA withdrawal as a Roth conversion change anything? |
+| `gapfill_harness.js` | **node** | Is the `[40, 60]` Brokerage/Cash split in the default gap fill load-bearing, and is 40 right? |
 | `ordered_fill_harness.js` | **node** | Ordered strategy: does the account sequence restart from the top every year, and where does the year's leftover surplus get banked? |
 | `brokerage_harness.js` | **node** | Why is Brokerage barely drawn, and is the third-pass exclusion to blame? |
 | `phased_harness.js` | **node** | P36 round 1: which families rank where under every objective, and do any arms never win? |
@@ -59,6 +60,39 @@ research harness behind Phase P24; the production version of the search now live
 EV2.reportStopYear();        // per-cutoff table for the current sidebar scenario
 EV2.reportPolicies();        // best amount vs best stop-year vs joint
 ```
+
+## gapfill_harness.js  (node)
+
+```bash
+node .test_harnesses/gapfill_harness.js
+```
+
+**Full results, tables and reasoning live in [`GAPFILL_RESULTS.md`](GAPFILL_RESULTS.md).** This entry
+is the index; that file is the reference.
+
+Sweeps `gapFillWeights` (P30a) over 0/20/40/60/80/100 as Brokerage's share of the default gap-fill
+branch, crossed with P28's 5-mix x 3-spend-rate ladder, 2 states (CA / TX), 2 Cash-Reserve settings
+and both `thirdPassBrokerage` arms, plus 3 guard families = 2,430 simulations in about 2 seconds.
+Scores on `baselineScoreOf` against the w=40 arm of the same cell, at the CONTROL arm's
+`futureIRARate` rather than each arm's own - `unifiedconv_harness.js` used per-arm rates, which
+discounts the two sides of an A/B differently.
+
+Headline findings:
+
+1. **The blast radius is three families.** Proportional, Reduce and Guyton-Klinger. The bracket
+   family and Ordered take their own branches and are **bit-identical at every weight across 270
+   guard runs**.
+2. **The constant is load-bearing.** 227 of 360 cells move by more than $1,000 across the range;
+   the widest moves $616,919.
+3. **40 is not the number.** Among the 82 cells that are clean wealth comparisons - delivered spend
+   unchanged, every weight funding the plan - w=40 is best in **zero**. w=0 is best in 65.
+4. **Cash Reserve damps it by an order of magnitude.** CA's widest cell falls from $534,525 with the
+   reserve off to $33,358 with it on. The reserve is the bigger lever; state matters much less.
+5. **P32 does not explain it.** The weight curve has the same shape with `thirdPassBrokerage` at
+   'bounded' and 'off', so the third pass is not why w=0 wins. The separate P28 inversion hypothesis
+   stays open.
+6. **A prediction that could not fire.** The zero-predicate carried over from P28 was scored
+   VACUOUS: no cell in this grid had a control arm that never drew Brokerage.
 
 ## unifiedconv_harness.js  (node)
 

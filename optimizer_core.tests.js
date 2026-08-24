@@ -4461,7 +4461,7 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
         assert(g.base && typeof g.base === 'object' && g.base.strategy,
             'the capture must carry the base it was recorded against');
         // Every clone pass is accounted for exactly, rather than by a row-count multiple: the 🅡
-        // pass clones only the families whose shortfall withdrawals it can reach, so the total
+        // pass skips Ordered rather than cloning every base row, so the total
         // stopped being a whole multiple of the base count when it landed.
         const n = pfx => g.rows.filter(r => r[0].includes(pfx)).length;
         const reachable = optBaseRows(g.rows).filter(r => r[3].strategy !== 'ordered').length;

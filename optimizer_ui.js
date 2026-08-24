@@ -1017,7 +1017,7 @@ function _runOptimizerNow() {
         // The 🅡 arm is swept for everyone - P28 measured it worth up to +$3.56M and found no
         // heuristic that predicts when, so the only way to know is to run it. Gated on Roth
         // because with no Roth to draw the clone is a bit-identical twin, and restricted inside
-        // the builder to the families whose shortfall withdrawals it can reach.
+        // the builder to every strategy but Ordered, which runs the sequence the user picked.
         rothClones: (base.Roth > 0 || base.Roth2 > 0),
         // The user's own off-grid parameter goes last here, after Guyton-Klinger. MC puts it
         // straight after IRA Draw. Both orders are pinned by sweep_golden.js.

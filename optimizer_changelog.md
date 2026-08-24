@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.162D"></a>
+<a id="11.162E"></a>
 
-## 11.162D
+## 11.162E
 
 ### Roth can fill a spending shortfall before the brokerage account
 
@@ -35,7 +35,7 @@ For what the tool does and how to use it, see [README.md](README.md).
 2. **The Optimizer sweeps both.** Every strategy except *Ordered* appears a second time in the
    table, marked 🅡, so the comparison is in front of you rather than something to run twice. Those
    rows appear only if you hold Roth. Nothing about a plan predicts which way it lands, which is why
-   the setting is swept rather than recommended.
+   the switch is swept rather than recommended.
 
 ---
 

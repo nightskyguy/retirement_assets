@@ -1,6 +1,7 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-23:** **P23 COMPLETE and MERGED**, plus seven addenda, shipped through **v11.161B** in PR #188; working tree clean, nothing uncommitted. The Monte Carlo tab now offers a third mode, Synthetic-AAM, beside Historical and Synthetic-GBM, and both synthetic modes give every path its own AR(1) inflation calibrated to the 1948-2025 CPI record and correlated with returns. GBM's return draws are bit-identical to before. The addenda added reset-to-defaults, a Pessimistic and a Fixed Inflation preset, Input Distributions for every reader, a fan caption that names every parameter of its run, and moved the preset row out from behind the nerdknob as "Mode presets". Suites **300 / 61 / 22** (`slowInCore` 3), `TestTiers.EXPECTED` pinned to match. P67 shipped v11.1601 in PR #186; P32 in #185; P64/P66 in #182/#183/#184.
+**As of 2026-08-24:** **P71 COMPLETE and MERGED** (`b7f8808`) - the Monte Carlo model now lives in one `montecarlo/mc_engine.js` behind a 42-line worker and a 203-line controller, with `ARCHITECTURE.md` and `.planning/FILE_DIRECTORY.md` brought along in `fb6675c`. Shipped through **v11.1629**; PR #188 carried P23, then #189 and #190 merged after it. Working tree clean, nothing uncommitted. Suites **305 / 61 / 22** (`slowInCore` 3), `TestTiers.EXPECTED` pinned to match.
+**P23 COMPLETE and MERGED**, plus seven addenda: the Monte Carlo tab now offers a third mode, Synthetic-AAM, beside Historical and Synthetic-GBM, and both synthetic modes give every path its own AR(1) inflation calibrated to the 1948-2025 CPI record and correlated with returns. GBM's return draws are bit-identical to before. The addenda added reset-to-defaults, a Pessimistic and a Fixed Inflation preset, Input Distributions for every reader, a fan caption that names every parameter of its run, and moved the preset row out from behind the nerdknob as "Mode presets". P67 shipped v11.1601 in PR #186; P32 in #185; P64/P66 in #182/#183/#184.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -13,7 +14,6 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| **O1** | P71 | Dedup the MC engine: one runPass instead of two mirrors | commit |
 | **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P69 | Replay a Monte Carlo path through the main model | `P69a` |
@@ -70,8 +70,8 @@ first task. Every open item in the file now carries one.
 | **O2** | P12 | Retire Optimizer tab -> MC strategy comparison | `P12a` | nothing |
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
-| **O1** | P71 | Dedup the MC engine *(a-e DONE, v11.161C-F; 455+567 lines of mirror -> 42+203 around one engine; suite 300 -> 304)* | review + commit | nothing |
-| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | **P71 first**: P69a is subsumed by P71b |
+| ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
+| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | nothing - P71 shipped; P69a is subsumed by `buildPathInputs()` in `montecarlo/mc_engine.js` |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
@@ -886,12 +886,19 @@ The four version-bump sites are a separate consolidation problem (they span HTML
 build step is against the repo's no-build ethos). The mc_tab.js chart-rendering overlap between the
 stress chart and the main chart was not measured this session and is not claimed here.
 
-- **Status:** `P71a`-`P71d` shipped 2026-08-23 (v11.161C through v11.161F), all uncommitted.
-  **`P71e` is finished as a side effect**: the importScripts list, the page script tag, every `?v=`
+- **Status: COMPLETE.** `P71a`-`P71e` shipped 2026-08-23 as v11.161C through v11.161F, squashed into
+  one commit `b7f8808` with all three suites green from the pre-commit hook, and merged to `main`.
+  **`P71e` finished as a side effect**: the importScripts list, the page script tag, every `?v=`
   token, `TestTiers.EXPECTED` and `.githooks/README.md` all moved with the item that needed them.
-  What remains of P71 is a review pass and a commit.
-- **Blocks:** P69 should build ON this (P69a subsumed by P71b; P69c's capture plumbing lands in one
-  place instead of two). P70 is independent - it measures the engine, does not restructure it.
+  The two maps P71 forgot - `ARCHITECTURE.md` and `.planning/FILE_DIRECTORY.md` - followed in
+  `fb6675c` on 2026-08-24.
+- **Not covered, on the record:** the one-line `location.protocol === 'file:'` check was never run
+  under a real `file://` URL - the preview pane renders such a URL as a static snapshot - though
+  `_runMCFallback()`, the function that branch calls, was verified directly over http. The mc_tab.js
+  chart-rendering overlap was never measured and is not claimed. The four version-bump sites remain
+  a separate consolidation problem.
+- **Blocks:** nothing. P69 is free to build on `buildPathInputs()`; P70 was always independent - it
+  measures the engine, does not restructure it.
 
 ---
 

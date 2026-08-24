@@ -4576,10 +4576,12 @@ test('buildStrategyFamilies: the options are what separate the two sweeps, nothi
 
     const mc  = call({ grids: MC_GRIDS });
     const opt = call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true });
-    assert(plain(mc).length === 36 && plain(opt).length === 44,
-        `base rows: MC ${plain(mc).length} (expected 36), Optimizer ${plain(opt).length} (expected 44)`);
+    // The Optimizer now has FEWER base rows than MC despite sweeping two extra families: its Reduce
+    // grid is 5 steps against MC's 16. Both counts are pinned so a grid edit has to be deliberate.
+    assert(plain(mc).length === 36 && plain(opt).length === 33,
+        `base rows: MC ${plain(mc).length} (expected 36), Optimizer ${plain(opt).length} (expected 33)`);
 
-    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 48,
+    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 37,
         'the ACA family adds 4 rows');
     assert(call({ grids: MC_GRIDS, cashClones: true }).length === 108 * 4 / 3,
         'cashClones clones every un-modified row once more');

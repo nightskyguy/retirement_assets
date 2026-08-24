@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.162E"></a>
+<a id="11.162G"></a>
 
-## 11.162E
+## 11.162G
 
 ### Roth can fill a spending shortfall before the brokerage account
 
@@ -36,6 +36,13 @@ For what the tool does and how to use it, see [README.md](README.md).
    table, marked 🅡, so the comparison is in front of you rather than something to run twice. Those
    rows appear only if you hold Roth. Nothing about a plan predicts which way it lands, which is why
    the switch is swept rather than recommended.
+
+3. **Fewer *Reduce IRA* rows, and the timing line says where the work went.** The Optimizer tried 16
+   plan lengths between 2 and 25 years; it now tries **3, 7, 11, 17 and 23**. Neighbouring years
+   differed by very little and *Reduce* was over a third of the table. Your own setting still appears
+   as its own row whichever length you pick. Under the table, the timing now also reports how many
+   rows each strategy contributed and how many simulations each pass cost, so a slow run says which
+   part was slow: on the stock plan, *Optimize Conversions* is about four fifths of the work.
 
 ---
 

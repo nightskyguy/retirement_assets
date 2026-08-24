@@ -898,10 +898,27 @@ function _runOptimizerNow() {
     OptimizerState.convOptRowsAdded = 0;
     const optimizerStart = performance.now();
 
+    // Where the runs actually go. `simulationCount` is the only honest unit: a table row is one
+    // addResult() but NOT one simulate(), because computeOC fires counterfactuals inside simulate(),
+    // and the Optimize Spend / Optimize Conversions passes run a whole search per row. Counting
+    // rows would therefore understate the cost of exactly the passes that dominate it.
+    //
+    // Phases are attributed by sampling the counter at each pass boundary (nothing between them
+    // simulates), families by measuring the delta around addResult's own simulate().
+    const perfRuns = { phase: {}, family: {}, rows: {} };
+    let _perfPhase = 'Strategy table';
+    let _perfSeen = 0;
+    const perfFlush = () => {
+        const d = simulationCount - _perfSeen;
+        _perfSeen = simulationCount;
+        if (d) perfRuns.phase[_perfPhase] = (perfRuns.phase[_perfPhase] ?? 0) + d;
+    };
+    const perfEnter = (name) => { perfFlush(); _perfPhase = name; };
+
     // strategyOverrides stored separately so the spend optimizer can reuse them
     const strategyOverridesList = [];
 
-    function addResult(strategyLabel, paramLabel, paramSortVal, overrides, noConv = false) {
+    function addResult(strategyLabel, paramLabel, paramSortVal, overrides, noConv = false, familyKey = null) {
         // Nerdknob sweeps fundConversionWithCash as its own dimension (the 💵 rows added after
         // the cyclic pass), so base rows must NOT inherit the sidebar's value - otherwise a user
         // with it already on would get two identical arms instead of an A/B. Outside nerdknob
@@ -916,7 +933,14 @@ function _runOptimizerNow() {
         // sentinel). Measured cost on a 144-row sweep: 78ms -> 152ms, ~+110ms at this table's size,
         // well inside the 2.5s budget. The second counterfactual (excessOC) is separately guarded
         // inside simulate() and fired on 0 of 144 rows.
+        const _runsBefore = simulationCount;
         const res = simulate({ ...inputs, computeOC: true });
+        // Family attribution. The caller passes the enumeration's own family name where it has one,
+        // because 'bracket' covers both Fill Bracket and IRMAA Ceil and the strategy key alone
+        // cannot tell them apart.
+        const _fk = familyKey ?? OPT_FAMILY_OF_STRATEGY[overrides.strategy] ?? (overrides.strategy || '(other)');
+        perfRuns.rows[_fk]   = (perfRuns.rows[_fk]   ?? 0) + 1;
+        perfRuns.family[_fk] = (perfRuns.family[_fk] ?? 0) + (simulationCount - _runsBefore);
         const lastEntry = res.log[res.log.length - 1];
         const totalYears = res.log.length;
         const ovYears = res.log.filter(e => (e['BracketOverage'] ?? 0) > 0).length;
@@ -1024,7 +1048,7 @@ function _runOptimizerNow() {
         offGridLast: true,
     });
     for (const f of families) {
-        addResult(f.strategyLabel, f.paramLabel, f.paramSortVal, f.overrides);
+        addResult(f.strategyLabel, f.paramLabel, f.paramSortVal, f.overrides, false, f.family);
     }
     // The un-modified rows, reused far below for the no-conversion baseline sweep. Deliberately
     // excludes the 🗘/🔄 and 💵 clones: that sweep's whole point is a reference with the Roth and
@@ -1045,6 +1069,7 @@ function _runOptimizerNow() {
     };
 
     // Spend optimizer second pass - only runs when user enabled the toggle
+    perfEnter('Optimize Spend');
     OptimizerState.noSolutionFloor = null;
     if (document.getElementById('optimizeSpend')?.checked) {
         const anySuccess = results.some(r => r.totals.success);
@@ -1137,7 +1162,8 @@ function _runOptimizerNow() {
         // Name it the way the swept rows are named, so the pinned row reads as a peer of the table
         // ("Proportional 7%", "Guyton-Klinger Grd:20 Adj:10") rather than an unlabelled special case.
         const _fam = describeSelection(userPlan);
-        addResult(_fam.family, _fam.paramLabel, _fam.paramSortVal, _curOv);
+        perfEnter('Your plan');
+        addResult(_fam.family, _fam.paramLabel, _fam.paramSortVal, _curOv, false, _fam.family);
         const curRow = results[results.length - 1];
         curRow._isCurrentPlan = true;
         curRow._strategyLabel = CURRENT_PLAN_MARK + curRow._strategyLabel;
@@ -1181,6 +1207,7 @@ function _runOptimizerNow() {
     // extraConversionAmount for the best plan from EACH strategy family (not a flat top-5 by
     // ending wealth, which let one family monopolize every seat while the families that actually
     // benefit from converting ranked just below the cut). Each surviving candidate adds a ⇌ row.
+    perfEnter('Optimize Conversions');
     if (document.getElementById('includeConvOpt')?.checked) {
         const pool = selectConversionCandidates(results, 12);
         OptimizerState.convOptCandidateCount = pool.length;
@@ -1288,9 +1315,10 @@ function _runOptimizerNow() {
     // These rows force conversions off (convertExcessToRoth=false, extraConversionAmount=0) and
     // cyclic brokerage maneuvering off, so the best of them is the honest "do it without
     // Roth or brokerage antics" reference every other strategy is measured against.
+    perfEnter('No-conversion baseline');
     for (const fam of baseFamilies) {
         addResult(fam.strategyLabel, fam.paramLabel, fam.paramSortVal,
-            { ...fam.overrides, convertExcessToRoth: false, cyclicEnabled: false, extraConversionAmount: 0, qcdHHMax: 0 }, true);
+            { ...fam.overrides, convertExcessToRoth: false, cyclicEnabled: false, extraConversionAmount: 0, qcdHHMax: 0 }, true, fam.family);
     }
 
     // Re-score after Phase 23: the ⇌ rows pushed above and the no-conv baseline sweep rows (added
@@ -1310,7 +1338,11 @@ function _runOptimizerNow() {
         updateStats(baseline.totals, baseline.finalNW, baseline.finalNWCurrentDollars);
     }
 
-    OptimizerState.perfStats = { totalMs: performance.now() - optimizerStart, runsCount: simulationCount };
+    perfFlush();
+    OptimizerState.perfStats = {
+        totalMs: performance.now() - optimizerStart, runsCount: simulationCount,
+        rows: results.length, byFamily: perfRuns.family, rowsByFamily: perfRuns.rows, byPhase: perfRuns.phase,
+    };
     OptimizerState.sortState = { colKey: '__objective__', direction: 'desc' };
     renderOptimizerTable(results);
     renderSpendOptimizerBanner(results, base.spendGoal);
@@ -2024,7 +2056,20 @@ function renderOptimizerTable(results) {
     if (perfEl) {
         const perf = OptimizerState.perfStats;
         if (perf) {
-            perfEl.textContent = `⏱ ${perf.totalMs.toFixed(0)}ms · ${perf.runsCount} runs`;
+            // Two extra lines, because "1,786 runs" over a 219-row table invites the wrong
+            // conclusion about where the time goes: the passes that search (Optimize Spend,
+            // Optimize Conversions) cost many runs per row, while a table row costs one plus its
+            // counterfactuals. Rows and runs are both shown so the difference is visible.
+            const n = v => v.toLocaleString();
+            const pairs = o => Object.entries(o).filter(([, v]) => v > 0)
+                                     .sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${n(v)}`).join(' · ');
+            const fam = perf.rowsByFamily ? Object.entries(perf.rowsByFamily)
+                .sort((a, b) => b[1] - a[1])
+                .map(([k, v]) => `${k} ${n(v)} (${n(perf.byFamily[k] ?? 0)})`).join(' · ') : '';
+            perfEl.innerHTML =
+                `⏱ ${perf.totalMs.toFixed(0)}ms · ${n(perf.runsCount)} runs · ${n(perf.rows ?? 0)} rows`
+                + (fam ? `<div style="font-size:0.85em;opacity:0.8;">Rows by strategy, runs in parens: ${fam}</div>` : '')
+                + (perf.byPhase ? `<div style="font-size:0.85em;opacity:0.8;">Runs by pass: ${pairs(perf.byPhase)}</div>` : '');
             perfEl.style.display = 'block';
         } else {
             perfEl.style.display = 'none';
@@ -4202,6 +4247,14 @@ function toggleSpouseUI() {
     document.querySelectorAll('.spouse-field').forEach(el => el.classList.toggle('spouse-disabled', !on));
     if (typeof refreshStratRateOptions === 'function') refreshStratRateOptions();
 }
+
+// Display name per engine strategy key, for the ⏱ run breakdown. 'bracket' is deliberately
+// absent: it serves both Fill Bracket and IRMAA Ceil, which the enumeration distinguishes by its
+// own family name, so those callers pass theirs instead of falling back here.
+const OPT_FAMILY_OF_STRATEGY = {
+    propwd: 'Proportional', fixed: 'Reduce', fixedpct: 'IRA Draw',
+    aca: 'ACA Cliff', ordered: 'Ordered', gk: 'Guyton-Klinger',
+};
 
 function toggleStrategyUI() {
     let m = val('strategy');

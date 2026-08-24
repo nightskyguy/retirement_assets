@@ -4184,7 +4184,12 @@ const MC_GRIDS = {
 };
 const OPTIMIZER_GRIDS = {
     propwd:   [0, 5, 10, 20, 50],
-    fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
+    // Coarser than MC's 16 steps, and deliberately. Reduce was 80 of the Optimizer's 218 rows -
+    // 37% of the table - for a family whose neighbouring years differ by very little, and every
+    // row is paid for four times over once the 🗘/🔄 and 🅡 clone passes and the no-conversion
+    // baseline have had it. The endpoints are approximately preserved (3 for 2, 23 for 25), and a
+    // user sitting between steps still gets their own value as a row: offGridParamFor adds it.
+    fixed:    [3, 7, 11, 17, 23],
     fixedpct: [5, 6, 7, 8, 10, 12, 15, 20],
     ordered:  ['CBIR', 'RIBC', 'BIRC'],
     irmaaTiers:   [0, 1, 2, 3, 4],

@@ -485,9 +485,11 @@ function getInputs() {
         STATEname: val('STATEname'),
         strategy: _strategy,
         orderedSeq: val('orderedSeq') || 'CBIR',
-        // '' is the shipped default and means "Roth last". The engine validates against its two
-        // known values rather than for truthiness, so an empty string here leaves today's order.
-        rothGapFill: val('rothGapFill'),
+        // The switch is two-state, the engine input is a position, so the mapping lives here. ''
+        // is the default and means "Roth last"; the engine validates against its known values
+        // rather than for truthiness, so an empty string leaves today's order. 'fillRothThenCash'
+        // is a third position the engine still accepts for the harnesses and no UI can reach.
+        rothGapFill: valChecked('rothGapFill') ? 'fillCashThenRoth' : '',
         nYears: +val('nYears'),
         ..._strat,
         hasSpouse: !!valChecked('hasSpouse'),
@@ -2153,10 +2155,10 @@ function loadOptimizerResult(id) {
     // carries the effective values; guard on it so rows from an older cached run still load.
     if (result._selection) {
         // Same PF8 class, one dimension later: a 🅡 row that loaded without its Roth position ran
-        // the un-cloned plan. Set unconditionally, including back to '' for the rows that are not
-        // 🅡 clones, or a leftover selection follows the next strategy loaded.
+        // the un-cloned plan. Set unconditionally, including back to off for the rows that are not
+        // 🅡 clones, or a leftover setting follows the next strategy loaded.
         const rgEl = document.getElementById('rothGapFill');
-        if (rgEl) rgEl.value = result._selection.rothGapFill ?? '';
+        if (rgEl) rgEl.checked = (result._selection.rothGapFill === 'fillCashThenRoth');
         if (result._strategy === 'ordered' && result._selection.orderedSeq) {
             const seqEl = document.getElementById('orderedSeq');
             if (seqEl) seqEl.value = result._selection.orderedSeq;
@@ -4209,9 +4211,15 @@ function toggleStrategyUI() {
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
     document.getElementById('ui-gk').classList.toggle('hidden', m !== 'gk' || !NERD_KNOBS);
-    // Roth position reaches every strategy except Ordered, which runs the sequence the user chose.
-    // Same line fillSpendingGap draws, and the same one ROTH_GAP_EXCLUDED draws for the 🅡 rows.
-    document.getElementById('ui-rothgap').classList.toggle('hidden', m === 'ordered');
+    // "Roth before Brokerage" reaches every strategy except Ordered, which runs the sequence the
+    // user chose - the same line fillSpendingGap draws, and the one ROTH_GAP_EXCLUDED draws for the
+    // 🅡 rows. Greyed rather than hidden, and the switch is NOT cleared: switching to Ordered and
+    // back would otherwise silently throw the setting away.
+    const rgLabel = document.getElementById('rothGapFill-label');
+    if (rgLabel) {
+        rgLabel.classList.toggle('knob-na', m === 'ordered');
+        document.getElementById('rothGapFill').disabled = (m === 'ordered');
+    }
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 

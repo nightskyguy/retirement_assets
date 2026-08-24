@@ -1091,8 +1091,9 @@ timing. See `findings.md`, "A log field the next iteration reads is engine state
 - [x] **P28f/g/h SETTLED 2026-08-24, shipped v11.162B.** `unifiedConvRouting` DELETED from the engine
       (inert in 90 cells; the two-leg view it existed for is already `-iraSpend` + `-iraConvGrossTot`),
       and its harness arm A1 removed with it so no arm can set a flag nothing reads. `rothGapFill`
-      shipped twice: the *Roth in shortfall withdrawals* control and a 🅡 clone pass in
-      `buildStrategyFamilies` gated on Roth > 0, both covering every strategy but `ordered`. Only
+      shipped twice: the *Roth before Brokerage* switch (under Cycle Brokerage, greyed under
+      Ordered) and a 🅡 clone pass in `buildStrategyFamilies` gated on Roth > 0, both covering every
+      strategy but `ordered`. Only
       `fillCashThenRoth` is swept - `fillRothThenCash` is the dominated position. `P28h` needed no
       code: "the tool has to RUN it" IS the sweep dimension.
 - **Corrected the same day, before merge.** The first cut shipped an ALLOW-list of four families

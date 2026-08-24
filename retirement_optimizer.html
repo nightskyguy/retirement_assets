@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.162C</title>
+    <title>Retirement Optimizer 11.162D</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -45,7 +45,7 @@
 	     entry's HTML into the LATEST CHANGE banner during parse, and this has to sweep
 	     the document after that copy exists. See doclinks.js. -->
 	<script src="doclinks.js?v=1113d0" defer></script>
-	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=11162a">
+	<link rel="stylesheet" href="optimizer_styles_responsive.css?v=11162d">
 	<style>
     .toggle { display: flex !important; }
     .share-panel { display:none; position:fixed; top:60px; right:1.5rem; z-index:800; background:#fff; border:1px solid #27ae60; border-radius:8px; padding:.85rem 1rem; width:min(520px,calc(100vw - 3rem)); box-shadow:0 8px 32px rgba(0,0,0,.2); }
@@ -59,11 +59,11 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1115ca"></script>
-	<script src="optimizer_core.js?v=11162c"></script>
+	<script src="optimizer_core.js?v=11162d"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=11162c"></script>
+	<script src="optimizer_ui.js?v=11162d"></script>
 	<script src="optimizer_tests.js?v=11162b"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
@@ -125,14 +125,6 @@
 				</select></label>
 			</div>
 
-			<div id="ui-rothgap" class="input-group hidden">
-				<label style="display:block;" title="When a year's spending needs more than the strategy itself withdraws, the shortfall is filled from Cash, then Brokerage, then Roth. Taking Roth ahead of Brokerage avoids realizing capital gains, but it spends the account that grows tax-free, so it cuts both ways: across 60 test plans it gained as much as $471,000 and lost as much as $634,000, and it was negative in 26 of them. Nothing about a plan predicts which side it lands on, so the Optimizer runs both and marks the alternative with 🅡.">Roth in shortfall withdrawals
-				<select id="rothGapFill" style="width:100%;max-width:none;">
-					<option value="">Last resort (default)</option>
-					<option value="fillCashThenRoth">After cash, before brokerage</option>
-				</select></label>
-			</div>
-
 			<div id="ui-gk" class="input-group hidden">
 				<div class="compact-row">
 					<label title="Safety band width: if your withdrawal rate rises above the upper guard, spending is cut by Adj %. If it drops below the lower guard, spending rises. Typical: 10–20%.">Guard ±%
@@ -190,6 +182,12 @@
 					<option value="0.20">15% bracket</option>
 				  </select>
 				</span>
+				<label class="toggle" id="rothGapFill-label" style="margin-top:4px;" title="When a year's spending needs MORE than your strategy itself withdraws, the shortfall is filled from Cash, then Brokerage, then Roth. Turn this on and Roth is taken ahead of Brokerage instead; Cash still comes first either way. Drawing Roth avoids realizing capital gains in the brokerage account, but it spends the account that grows tax-free, so it cuts both ways: across 60 test plans it gained as much as $471,000 and lost as much as $634,000, and it was negative in 26 of them. Nothing about a plan predicts which side it lands on, so the Optimizer runs it both ways and marks the alternative 🅡. The Ordered strategy ignores this - it draws in the account sequence you chose.">
+				  <input type="checkbox" id="rothGapFill">
+				  <span class="toggle-label"></span>
+				  <span class="toggle-switch"></span>
+				  <span>Roth before Brokerage</span>
+				</label>
 			</div>
 			<div class="input-group" id="irmaaMarginMode-wrap" style="display:none;margin-top:4px;">
 				<label style="font-size:0.85em;" title="IRMAA bills this year's premium against the MAGI you reported two years ago, and compares that MAGI against the thresholds published for the premium year. So a ceiling that caps THIS year's MAGI aims at the threshold two years out, not today's - at 3% inflation that is about 6% higher. THE FORWARD PROJECTION ALWAYS APPLIES, including on 'No margin'; this setting only chooses how much extra room to leave BELOW that projected threshold, because an IRMAA tier is a cliff and one dollar over costs the whole surcharge for a year. Practical effect on QCD 'As Needed': income sitting between today's tier floor and the projected one is already under the line that will judge it, so no donation is asked for at all. The two inflation choices leave room a different way, as a share of the PROJECTED INCREASE rather than as dollars: at 3% inflation the thresholds are projected to rise 6.09% over two years, so 'half the projected increase' aims 3.05% above today's and 'less 1 percentage point' aims 5.09% above. Because an inflation forecast error is proportional, so is the room these leave, which is why they hold up over a long plan where a fixed dollar amount does not. Applies to the IRMAA Ceiling strategy ONLY. QCD 'As Needed' aims at the fully projected threshold with no margin at all, because there the margin is bought with money that leaves the household: it was measured donating $82,764 extra to avoid $3,348 of surcharge, about 25 to 1 against.">IRMAA safety margin
@@ -801,7 +799,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
-				<li><b>11.162C</b> <strong>Roth can fill a spending shortfall before the brokerage account.</strong> A new setting, <i>Roth in shortfall withdrawals</i>, appears under every strategy except <i>Ordered</i>, which draws from your accounts in the sequence you chose and so has no shortfall rule to change. <i>Last resort</i> is the default and is what the tool has always done; <i>After cash, before brokerage</i> takes Roth ahead of the brokerage account, which avoids realizing capital gains on the way. It cuts both ways, and not gently: across 60 test plans it gained as much as $471,000 and lost as much as $634,000, and it was negative in 26 of them. Your numbers do not move until you choose it. The Optimizer sweeps both, so every strategy except <i>Ordered</i> appears a second time in the table marked 🅡, whenever you hold Roth. <a href="optimizer_changelog.md#11.162C" target="_blank" rel="noopener">Details</a></li>
+				<li><b>11.162D</b> <strong>Roth can fill a spending shortfall before the brokerage account.</strong> A new switch, <i>Roth before Brokerage</i>, sits under Cycle Brokerage. Off by default, which is what the tool has always done: a year needing more than your strategy withdraws fills the gap from Cash, then Brokerage, then Roth. On, Roth is taken ahead of the brokerage account, with Cash still first either way. <i>Last resort</i> is the default and is what the tool has always done; <i>After cash, before brokerage</i> takes Roth ahead of the brokerage account, which avoids realizing capital gains on the way. It cuts both ways, and not gently: across 60 test plans it gained as much as $471,000 and lost as much as $634,000, and it was negative in 26 of them. Your numbers do not move until you turn it on, and the <i>Ordered</i> strategy greys it out because it draws in the sequence you chose. The Optimizer sweeps both, so every strategy except <i>Ordered</i> appears a second time in the table marked 🅡, whenever you hold Roth. <a href="optimizer_changelog.md#11.162D" target="_blank" rel="noopener">Details</a></li>
 																<li data-flag="behavior"><b>11.1629</b> <strong>Monte Carlo: a second synthetic model, and prices that move.</strong> <i>Synthetic - AAM</i> reads the growth rate you type as a plain yearly average, so the median it reports is the number you entered; <i>Synthetic - GBM</i> is the model that was already there, its market draws unchanged. <strong>Both now vary inflation year to year</strong> instead of repeating one rate - tuned to US price data for 1948 to 2025, and leaning high in the years returns are poor. The <i>Mode presets</i> row sets how much inflation moves and shows which setting you are in: a preset is green while its values are the ones in effect. <i>Fixed Inflation</i> holds inflation at your Assumptions rate and reproduces the older model, <i>Pessimistic</i> leans the whole model toward a bad decade, <i>Default</i> puts everything back. <strong>Behavior change:</strong> a Synthetic plan will not reproduce a result you recorded before this release until you click <i>Fixed Inflation</i>. Historical mode is unchanged. Also: Annual Details can show each year's inflation, the inflation since the plan started and that year's market return, under <i>Show All</i>; and loopMs - the time spent calculating each year of data - was rendering incorrectly and has been fixed. <a href="optimizer_changelog.md#11.1629" target="_blank" rel="noopener">Details</a></li>
 																<li><b>11.1601</b> The Optimizer tab has been reorganized. Labels, column names, colors and symbols are now consistent with the rest of the tool, and the table shows the columns the <i>Optimize for</i> goal actually uses. Some were never shown at all: <strong>Final Roth</strong>, <strong>Final IRA</strong> and <strong>Mix Spread</strong> now exist. Optimize for also says what the goal ranks by, and a switch below it shows all columns at once. End Wealth and All Taxes are shown under every goal. Spend Goal and Yrs Funded moved into the row pop-up, and the legend folds out of the way. The saved-scenario list drops its Version column, and a <code>?tab=</code> web address opens the page on a chosen tab. No numbers change.</li>
 				<li data-flag="behavior"><b>11.15e3</b> <strong>When a plan runs out of every other account, it will now spend from the Brokerage account instead of reporting that it could not pay.</strong> The math avoided a possible "tax spiral" where increasing the brokerage draw increased the capital gains which increased the tax, which may also have increased social security taxability, which resulted in a higher tax requiring a greater withdrawal. Testing revealed that no "tax spiral" exists - it settles in two or fewer passes. So now it won't "give up" funding a year when all that remains is Brokerage assets to fund spending. Previously some plans went underfunded in some years due to the "avoided tax spiral". Most affected is "Fill Fed/IRMAA Bracket" with a tier selected. <strong>Behavior change:</strong> such a plan now funds more of its spending and ends with less left over, because the money is now spent, leaving less net worth. Saved scenarios and shared links for those plans will show different numbers. <a href="optimizer_changelog.md#11.15e3" target="_blank" rel="noopener">Details</a></li>
@@ -1166,7 +1164,7 @@
                     <span title="Reverse-optimized: every strategy failed at your spend, so the highest feasible spend is shown instead.">▼ Reverse-optimized</span>
                     <span title="Cyclic brokerage maneuvering, IRA drawn first."><span style="color:#cc0000;">🗘</span> Cyclic, IRA-first</span>
                     <span title="Cyclic brokerage maneuvering, brokerage drawn first.">🔄 Cyclic, brokerage-first</span>
-                    <span title="Roth drawn after Cash instead of last when a year's spending needs more than the strategy withdraws. Swept as its own dimension, so the strategies it can reach appear both ways. Only shown when you have Roth to draw.">🅡 Roth after cash</span>
+                    <span title="The Roth before Brokerage switch, turned on: when a year's spending needs more than the strategy withdraws, Roth is drawn ahead of the brokerage account rather than last. Cash still comes first. Swept as its own dimension, so every strategy but Ordered appears both ways. Only shown when you have Roth to draw.">🅡 Roth before Brokerage</span>
                     <span title="Optimize Conversions row: swept extra fixed annual Roth conversions ($25k steps) on top of Max Conversions.">⇌ Optimize Conversions</span>
                     <span title="Conversions stop after the year shown. These rows convert only up to that year and then stop, which often beats converting for the rest of the plan. Clicking the row fills in both the amount and the stop year.">⏹2026 Conversions stop after</span>
                     <span title="Plan success - every year of the plan was fully funded.">🟢 Success</span>

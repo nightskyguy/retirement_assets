@@ -1892,8 +1892,8 @@ function fillSpendingGap(sim, yr) {
 
     inspectForErrors({ netSpendable: netSpendable, gap: gap, totalTax: yr.totalTax });
 
-    // Move Roth OUT of last place in the gap fill. Shipped at P28f as the "Roth in shortfall
-    // withdrawals" control and as a sweep dimension (the 🅡 rows); it was a research input first,
+    // Move Roth OUT of last place in the gap fill. Shipped at P28f as the "Roth before Brokerage"
+    // switch and as a sweep dimension (the 🅡 rows); it was a research input first,
     // and the half of the unified-conversion idea that could actually move money. `ordered` is
     // excluded by explicit instruction: its entire meaning is the account sequence the user picked.
     //

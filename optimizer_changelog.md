@@ -17,19 +17,20 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.162C"></a>
+<a id="11.162D"></a>
 
-## 11.162C
+## 11.162D
 
 ### Roth can fill a spending shortfall before the brokerage account
 
-1. **A new setting, *Roth in shortfall withdrawals*.** It appears under every strategy except
-   *Ordered*, which draws from the accounts in the sequence you chose and so has no shortfall rule
-   to change. *Last resort* is the default and is what the tool has always done. *After cash, before brokerage*
-   takes Roth ahead of the brokerage account, which avoids realizing capital gains on the way. It
+1. **A new switch, *Roth before Brokerage*,** under Cycle Brokerage. Off is the default and is what
+   the tool has always done: when a year's spending needs more than your strategy itself withdraws,
+   the shortfall comes from Cash, then Brokerage, then Roth. On, Roth is taken ahead of the brokerage
+   account, and Cash still comes first either way. That avoids realizing capital gains, but it
    cuts both ways, and not gently: across 60 test plans it gained as much as $471,000 and lost as
    much as $634,000, and it was negative in 26 of them. Spending Roth preserves the brokerage
-   account but drains the one that grows tax-free. Your numbers do not move until you choose it.
+   account but drains the one that grows tax-free. Your numbers do not move until you turn it on,
+   and the *Ordered* strategy greys the switch out, because it draws in the sequence you chose.
 
 2. **The Optimizer sweeps both.** Every strategy except *Ordered* appears a second time in the
    table, marked 🅡, so the comparison is in front of you rather than something to run twice. Those

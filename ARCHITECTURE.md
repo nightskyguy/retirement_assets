@@ -332,7 +332,7 @@ size to zero and still makes the draw.
 | `taxPaymentPlanner.js` | engine | `TaxPaymentPlanner.computePaymentPlan`, `getStateInfo`, `dueDateFor`, `restoreDateFor`, holiday/business-day helpers. Same no-DOM contract as the other two engine files |
 | `optimizer_changelog.md` | docs | full release history; the 5 newest entries are duplicated inline in the HTML |
 | `_includes/head-custom.html` | docs | Jekyll theme hook: CSS + `doclinks.js` for rendered `.md` pages |
-| `.test_harnesses/` | research | investigative scripts that are **not** part of any suite - see the note below and that directory's `README.md` |
+| `.test_harnesses/` | research | investigative scripts that are **not** part of any suite - see the note below and that directory's `HARNESSES.md` |
 | `.githooks/pre-commit` | test gate | runs all three `node` suites, blocks the commit on a failure or a missing suite. Install once with `sh .githooks/install` - see below |
 
 ### Where a test file belongs

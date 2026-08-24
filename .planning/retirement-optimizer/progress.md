@@ -4127,3 +4127,39 @@ multiplies by zero). File-reference table updated for all five montecarlo files.
 planning section.
 
 Docs only - no page asset changed, so no version bump and no changelog entry. Suites 305 / 61 / 22.
+
+
+## Session 2026-08-24 (continued) - README staleness, and the harness catalog gets its own name
+
+Three items, all from the user noticing that "README.md" is two different files.
+
+**A correction first.** I said the root README had "no montecarlo references at all". That was a
+claim about source-FILE references (it names only `taxengine.js` and `chart.js`) stated as though it
+were a claim about content - the README discusses Monte Carlo at length. Checked properly, it was
+stale in three places, all from P23:
+
+- "Model variable inflation in the synthetic Monte Carlo" was still under **Features in the Works**,
+  three weeks after it shipped in v11.161B. Moved to Recent Fixes and written out properly: what
+  varying inflation buys, what Synthetic - AAM is for, that GBM's market draws are unchanged, and
+  that Fixed Inflation reproduces the old model.
+- "The other model, Synthetic, is Log-Normal, Geometric Brownian Motion" - there are two synthetic
+  models now. Rewritten to name both and say what the growth rate means in each.
+- The Account Composition paragraph named "Synthetic (Log-Normal / GBM)" as the mode that ignores
+  the per-account mix. Still true, but it now names both synthetic modes.
+
+**`.test_harnesses/README.md` -> `HARNESSES.md`.** It is a catalog of eleven investigative scripts,
+not an introduction, and the name collided with the repo's real README in search and in conversation.
+Renamed with `git mv`, a line at the top records the old name, and every live inbound reference moved
+with it: `ARCHITECTURE.md`, `FILE_DIRECTORY.md`, and five references in `task_plan.md`. Two of those
+carried line numbers (`:79-81`, `:7-10`) that the rename invalidated; rather than re-derive numbers
+that will rot again, they now cite the file and the section heading.
+
+**Left deliberately stale:** the two references in this file's own older entries. progress.md is a
+chronological record and those entries were true when written; rewriting them would be falsifying the
+log to tidy a path.
+
+**Also found:** `ordered_fill_harness.js` had no row in the catalog table. Added one, from the
+harness's own header: it proves the Ordered strategy restarts its account sequence every year and
+shows where the year's leftover surplus is banked.
+
+Docs only. Suites 305 / 61 / 22, no version bump, no changelog entry.

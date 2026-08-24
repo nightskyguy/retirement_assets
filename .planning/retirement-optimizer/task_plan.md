@@ -1193,7 +1193,7 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
   `cashYield` taxed as ordinary income, Brokerage realizes LTCG and steps up basis. P28's mechanism
   settles Roth-vs-X and says nothing about Cash-vs-Brokerage.
 - **Q3 (prediction to state up front and score).** P28's "no Brokerage draw, no lever"
-  (`.test_harnesses/README.md:79-81`) predicts the weight is inert wherever Brokerage is never touched.
+  (`.test_harnesses/HARNESSES.md`) predicts the weight is inert wherever Brokerage is never touched.
   If the prediction holds, Q1's answer is conditional, not global.
 - **Q4.** Does any of the 21 unimplemented orderings beat all three shipped ones?
 - **Q5.** How many rows would change if gap-fill order became independent of spend strategy?
@@ -1294,7 +1294,7 @@ level.
 
 **Why:** three observations converge on one place. (1) The user reports Brokerage draws not occurring
 as expected. (2) The repo has already measured that this is load-bearing: every cell whose control arm
-never touched Brokerage returns exactly $0 (`.test_harnesses/README.md:79-81`, findings.md:1057-1062).
+never touched Brokerage returns exactly $0 (`.test_harnesses/HARNESSES.md`, findings.md:1057-1062).
 (3) **Gain harvesting already exists and most users never see it** — the cyclic modifier maxes out the
 LTCG bracket *on purpose* even when spend does not need the money (`optimizer_core.js:1301-1303`, a
 deliberate basis step-up), and its target-bracket knob `cycleLTCGTarget` (default 0.15 = target the 0%
@@ -1394,7 +1394,7 @@ selected" is whether cyclic ever wins. Splitting them would make each half read 
         findings.md.
   - [x] **P32d-5 - written up. DONE 2026-08-21.** New Q2 section in
         `.test_harnesses/P32_RESULTS.md` (title, run header, predictions table, Coverage and Scope
-        Limits all updated); `.test_harnesses/README.md` now records that q2 printed SKIPPED for
+        Limits all updated); `.test_harnesses/HARNESSES.md` now records that q2 printed SKIPPED for
         months and why. **P5 RIGHT**, **P6 RIGHT** - P6 named the third-pass arm, so it is scored
         per arm instead of on the pooled total, which had let `brokFirst` print "MIXED" for an arm
         P6 never mentioned. Arm labels renamed at the user's request: `fib` -> `brokFirst`,
@@ -2252,7 +2252,7 @@ as a default.
 - [x] **P36c** — The three reporting tables produced; `conveffect` exclusion stated with its reason.
   GK caveat mandatory when reading them: survivorship (eligible arms 160→37 across spend rates) +
   spend drift (+38%/−12%) inflate every GK number.
-- [x] **P36d** — `.test_harnesses/PHASED_RESULTS.md` + a row in `.test_harnesses/README.md`
+- [x] **P36d** — `.test_harnesses/PHASED_RESULTS.md` + a row in `.test_harnesses/HARNESSES.md`
 - [ ] **P36e** — Decide P35's shipped arm count and `survivorSpendPct` default from the output
   (needs round 2)
 - **Status:** round 1 DONE (2026-08-10); round 2 waits on `P35i`. Runs as P35's PR 7.
@@ -2347,7 +2347,7 @@ The `*.tests.js` suffix is safe precisely because `_tests.js` does not match it.
   `:26`/`:56` and `import.js:95` keep working because `sweep_golden.js` moves alongside.
 - The GENERATED/IMPORTED marker strings (`gen.js:53` vs `sweep_golden.js:118`, `import.js:74` vs
   `:792`) are a **rename** hazard only — a move preserves filenames.
-- `ARCHITECTURE.md:305-318` and `.test_harnesses/README.md:7-10` both state a "where a test file
+- `ARCHITECTURE.md:305-318` and `.test_harnesses/HARNESSES.md` ("What does not belong here") both state a "where a test file
   belongs" rule that the move would repeal. Budget those ~18 lines as design work, not `sed`.
 - Manual browser pass is irreducible: three pages, over both `http://localhost:8767` and `file://`,
   and specifically re-test Escape-closes-modal (`standalone/IncomeTaxPlanner.html:1194`) and the

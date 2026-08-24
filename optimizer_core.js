@@ -4204,13 +4204,21 @@ const MODIFIER_PREFIX = {
     'rothgap':         '\u{1F161} ',
 };
 
-// Strategies whose shortfall withdrawals the Roth position can actually reach, so the 🅡 clone
-// pass does not emit rows that are guaranteed twins of the ones they clone. Proportional funds
-// spending inside planPrimaryWithdrawals, so it usually leaves no gap for the fill to work on;
-// Guyton-Klinger re-cuts spending through its guardrails, which makes an A/B against it a
-// comparison of two different spending plans; Ordered runs the user's own sequence and is
-// excluded in fillSpendingGap itself. Measured per family in .test_harnesses/P28_RESULTS.md.
-const ROTH_GAP_FAMILIES = new Set(['fixed', 'bracket', 'aca', 'fixedpct']);
+// Strategies the 🅡 clone pass skips. Exactly one, and it is the one `fillSpendingGap` itself
+// excludes: Ordered runs the account sequence the user chose, so a clone would be a twin.
+//
+// This started life as an allow-list of four families, on the strength of P28g's note that the
+// effect is per-family and that Proportional and Guyton-Klinger are not comparable. That note is
+// about what a RESEARCH cell can be read as, not about whether the lever reaches the strategy, and
+// it should never have become a shipping gate. GK has no ordering logic of its own at all - its
+// only special handling is the spend adjustment above - so it falls into the same default gap-fill
+// branch as everything else, and measurement says it is the family that benefits most reliably:
+// positive in all 15 of its harness cells, +$8,683 to +$195,107. Its gain simply arrives as
+// delivered SPENDING rather than terminal wealth, because the guardrail converts a healthier
+// portfolio into a higher spend - and baselineScoreOf counts that on purpose. Proportional is a
+// weaker case, since planPrimaryWithdrawals usually funds spending directly, but "usually" is not
+// "never": it reached +$11,959 in the larger default mix.
+const ROTH_GAP_EXCLUDED = new Set(['ordered']);
 
 /**
  * Enumerate the strategy arms of a sweep. Pure: no DOM, no simulate(), no TAXData beyond the
@@ -4237,7 +4245,7 @@ const ROTH_GAP_FAMILIES = new Set(['fixed', 'bracket', 'aca', 'fixedpct']);
  *   cashClones       append the 💵 clones. Caller gates on Cash > 0: at $0 Cash the mechanism is a
  *                    hard no-op and the clones would be bit-identical twins, pure wasted runs
  *   rothClones       append the 🅡 clones - the same strategy with Roth drawn after Cash instead of
- *                    last - for the families in ROTH_GAP_FAMILIES only. Also writes rothGapFill:''
+ *                    last - for every family except the ones in ROTH_GAP_EXCLUDED. Also writes rothGapFill:''
  *                    onto every un-cloned row, for the reason markCashFunding exists: a user who
  *                    already set the control would otherwise get two identical arms instead of an
  *                    A/B. Caller gates on Roth > 0. Monte Carlo does NOT pass this - it pays
@@ -4371,7 +4379,7 @@ function buildStrategyFamilies(base, opts = {}) {
         // sweeping it would spend rows on an arm already known to lose. It stays reachable as an
         // input for the harnesses.
         for (const r of unmodified) {
-            if (!ROTH_GAP_FAMILIES.has(r.overrides.strategy)) continue;
+            if (ROTH_GAP_EXCLUDED.has(r.overrides.strategy)) continue;
             rows.push({
                 family: r.family,
                 modifier: 'rothgap',

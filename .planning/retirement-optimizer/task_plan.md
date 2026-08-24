@@ -1091,10 +1091,21 @@ timing. See `findings.md`, "A log field the next iteration reads is engine state
 - [x] **P28f/g/h SETTLED 2026-08-24, shipped v11.162B.** `unifiedConvRouting` DELETED from the engine
       (inert in 90 cells; the two-leg view it existed for is already `-iraSpend` + `-iraConvGrossTot`),
       and its harness arm A1 removed with it so no arm can set a flag nothing reads. `rothGapFill`
-      shipped twice: the *Roth in shortfall withdrawals* control, on the three families whose gap fill
-      it can reach, and a 🅡 clone pass in `buildStrategyFamilies` gated on Roth > 0. Only
+      shipped twice: the *Roth in shortfall withdrawals* control and a 🅡 clone pass in
+      `buildStrategyFamilies` gated on Roth > 0, both covering every strategy but `ordered`. Only
       `fillCashThenRoth` is swept - `fillRothThenCash` is the dominated position. `P28h` needed no
       code: "the tool has to RUN it" IS the sweep dimension.
+- **Corrected the same day, before merge.** The first cut shipped an ALLOW-list of four families
+  (`fixed`/`bracket`/`aca`/`fixedpct`), excluding Proportional and Guyton-Klinger on the strength of
+  P28g's note that neither is comparable. The user asked what in GK already does this. Nothing does:
+  GK's only special handling is the spend adjustment at `optimizer_core.js:1489`, it has no ordering
+  logic, and it falls into the same default gap-fill branch. Measured, it is the family that gains
+  most reliably - positive in **all 15** harness cells, +$8,683 to +$195,107 - and the gain arrives as
+  delivered SPENDING (+$73,080 at balanced-thirds 6%) rather than terminal wealth, which
+  `baselineScoreOf` counts on purpose. Proportional also reached +$11,959. The rule is now the
+  engine's own: exclude `ordered`, nothing else. **The lesson: a note about whether a research cell
+  can be READ cleanly is not a statement about whether the lever REACHES the strategy, and it must
+  not become a shipping gate.**
 - **⚠ THE 2026-07-30 NUMBERS NO LONGER REPRODUCE.** Re-running the harness on the v11.162B engine
   gives `fillCashThenRoth` a range of **+$470,977 to -$633,605, negative in 26 of 60 cells**, against
   the recorded +$3,559,596 / 1-of-60. P32 (v11.15e3) letting the third pass draw Brokerage is the

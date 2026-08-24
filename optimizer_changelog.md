@@ -17,21 +17,21 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.162B"></a>
+<a id="11.162C"></a>
 
-## 11.162B
+## 11.162C
 
 ### Roth can fill a spending shortfall before the brokerage account
 
-1. **A new setting, *Roth in shortfall withdrawals*.** It appears under the three strategies that
-   leave a shortfall for the tool to fill: *Reduce IRA*, *Fill Fed/IRMAA Bracket* and *IRA Draw*.
-   *Last resort* is the default and is what the tool has always done. *After cash, before brokerage*
+1. **A new setting, *Roth in shortfall withdrawals*.** It appears under every strategy except
+   *Ordered*, which draws from the accounts in the sequence you chose and so has no shortfall rule
+   to change. *Last resort* is the default and is what the tool has always done. *After cash, before brokerage*
    takes Roth ahead of the brokerage account, which avoids realizing capital gains on the way. It
    cuts both ways, and not gently: across 60 test plans it gained as much as $471,000 and lost as
    much as $634,000, and it was negative in 26 of them. Spending Roth preserves the brokerage
    account but drains the one that grows tax-free. Your numbers do not move until you choose it.
 
-2. **The Optimizer sweeps both.** Every strategy the setting can reach appears a second time in the
+2. **The Optimizer sweeps both.** Every strategy except *Ordered* appears a second time in the
    table, marked 🅡, so the comparison is in front of you rather than something to run twice. Those
    rows appear only if you hold Roth. Nothing about a plan predicts which way it lands, which is why
    the setting is swept rather than recommended.

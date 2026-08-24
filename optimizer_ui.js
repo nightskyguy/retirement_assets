@@ -4209,10 +4209,9 @@ function toggleStrategyUI() {
     document.getElementById('ui-fixedpct').classList.toggle('hidden', m !== 'fixedpct');
     document.getElementById('ui-ordered').classList.toggle('hidden', m !== 'ordered');
     document.getElementById('ui-gk').classList.toggle('hidden', m !== 'gk' || !NERD_KNOBS);
-    // Roth position only reaches the strategies that leave a spending gap for the fill to work on.
-    // Same set as ROTH_GAP_FAMILIES in optimizer_core.js; 'minlimit' shares the bracket engine path.
-    const rothGapUsable = (m === 'fixed' || m === 'bracket' || m === 'minlimit' || m === 'fixedpct');
-    document.getElementById('ui-rothgap').classList.toggle('hidden', !rothGapUsable);
+    // Roth position reaches every strategy except Ordered, which runs the sequence the user chose.
+    // Same line fillSpendingGap draws, and the same one ROTH_GAP_EXCLUDED draws for the 🅡 rows.
+    document.getElementById('ui-rothgap').classList.toggle('hidden', m === 'ordered');
     // document.getElementById('ui-maximize').classList.toggle('hidden', !(m === 'baseline'));
 }
 

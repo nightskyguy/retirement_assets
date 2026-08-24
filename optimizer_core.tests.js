@@ -4282,17 +4282,22 @@ test('rothGapFill: unset is bit-identical, and fillCashThenRoth spends Roth inst
     assert(tot(on, 'Brokerage-') < tot(off, 'Brokerage-'), 'and it must displace a Brokerage draw');
 });
 
-test('buildStrategyFamilies: the 🅡 pass clones only the families it can reach', () => {
+test('buildStrategyFamilies: the 🅡 pass clones every family except Ordered', () => {
     const b = { ...BASE, Roth: 300000 };
     const plain  = buildStrategyFamilies(b, { grids: OPTIMIZER_GRIDS });
     const cloned = buildStrategyFamilies(b, { grids: OPTIMIZER_GRIDS, rothClones: true });
     const roths  = cloned.filter(r => r.modifier === 'rothgap');
+    const base   = cloned.filter(r => r.modifier === null);
     assert(roths.length > 0, 'the option must add rows');
     assert(roths.every(r => r.overrides.rothGapFill === 'fillCashThenRoth'), 'each clone carries the position');
-    // Proportional funds spending directly, Guyton-Klinger re-cuts it, Ordered runs the user's own
-    // sequence: cloning any of them would emit a row that cannot differ from the one it clones.
-    assert(roths.every(r => !['propwd', 'gk', 'ordered'].includes(r.overrides.strategy)),
-        'Proportional, Guyton-Klinger and Ordered must not be cloned');
+    // Ordered is the only exclusion, and it is the one fillSpendingGap itself makes: the sequence is
+    // the user's. Guyton-Klinger and Proportional were excluded once on a research note about
+    // comparability and it cost GK its clones, which measurement says is the family that gains most.
+    assert(roths.every(r => r.overrides.strategy !== 'ordered'), 'Ordered must not be cloned');
+    assert(roths.some(r => r.overrides.strategy === 'gk'), 'Guyton-Klinger must be cloned');
+    assert(roths.some(r => r.overrides.strategy === 'propwd'), 'Proportional must be cloned');
+    assert(roths.length === base.filter(r => r.overrides.strategy !== 'ordered').length,
+        'and every other base row gets exactly one clone');
     // And the rows it clones must not inherit a sidebar setting, or the A/B is two identical arms.
     assert(cloned.filter(r => r.modifier === null).every(r => r.overrides.rothGapFill === ''),
         'un-cloned rows are marked, the way markCashFunding marks the 💵 pass');
@@ -4459,8 +4464,7 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
         // pass clones only the families whose shortfall withdrawals it can reach, so the total
         // stopped being a whole multiple of the base count when it landed.
         const n = pfx => g.rows.filter(r => r[0].includes(pfx)).length;
-        const reachable = optBaseRows(g.rows)
-            .filter(r => ['fixed', 'bracket', 'aca', 'fixedpct'].includes(r[3].strategy)).length;
+        const reachable = optBaseRows(g.rows).filter(r => r[3].strategy !== 'ordered').length;
         assert(n('🗘') === g.baseRowCount && n('🔄') === g.baseRowCount,
             `cyclic passes clone every base row: 🗘 ${n('🗘')}, 🔄 ${n('🔄')}, base ${g.baseRowCount}`);
         assert(n('💵') === (g.nerdKnobs && g.base.Cash > 0 ? g.baseRowCount : 0),

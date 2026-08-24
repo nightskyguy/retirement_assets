@@ -2179,6 +2179,44 @@ assertEqual(
 			'no ACA option carries an uncomputed warning triangle');
 	})();
 
+	// ===== Annual Details: one cell per column, in every row =====
+	// The header row and the body rows are built from the same key list but used to apply DIFFERENT
+	// filters to it - the body skipped `inflationFactor` and the header did not. From that column
+	// rightward every cell sat under the heading to its left, and the rightmost column (`loopMs`)
+	// got no cell at all and read as permanently empty. It survived for months because the one
+	// visibly wrong cell, under the `inflationFactor` heading, showed a small number where a
+	// multiplier near 1 was expected.
+	//
+	// A count comparison catches the whole class: any future key filtered in one place and not the
+	// other shifts the table silently, and nothing else in the page would notice.
+	(function annualDetailsCellsAlignWithHeaders() {
+		// The suite runs BEFORE the page's first runSimulation(), so there is no table yet - render
+		// one here from a real log. updateTable() replaces #main-table in place, and runSimulation()
+		// rebuilds it moments later, so this leaves nothing behind. Checking the real render rather
+		// than re-deriving the key list is the point: the bug was two filters disagreeing, and only
+		// the rendered result can show that.
+		if (typeof getInputs !== 'function' || typeof updateTable !== 'function') return;
+		try {
+			updateTable(simulate(getInputs()).log);
+		} catch (e) {
+			assertEqual(String(e.message || e), '', 'Annual Details renders from a live log');
+			return;
+		}
+		const table = document.getElementById('main-table');
+		if (!table) return;
+		const headRows = table.querySelectorAll('thead tr');
+		const headerRow = headRows[headRows.length - 1];
+		if (!headerRow) return;
+		const nCols = headerRow.querySelectorAll('th').length;
+		const bodyRows = [...table.querySelectorAll('tbody tr')];
+		if (!nCols || !bodyRows.length) return;
+		const bad = bodyRows
+			.map((r, i) => (r.cells.length === nCols ? null : `row ${i} has ${r.cells.length}`))
+			.filter(Boolean);
+		assertEqual(bad.slice(0, 3).join(', '), '',
+			`every Annual Details row has one cell per header (${nCols} headers)`);
+	})();
+
 	// ===== An unclosed inline tag in the changelog eats the rest of the page =====
 	// v11.15a2 shipped an <li> whose <strong> was never closed. Nothing threw and nothing looked
 	// wrong in the source, but the HTML parser's recovery re-parented the two entries BELOW it

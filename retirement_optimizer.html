@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.161G</title>
+    <title>Retirement Optimizer 11.1628</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -63,8 +63,8 @@
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=11161g"></script>
-	<script src="optimizer_tests.js?v=11161g"></script>
+	<script src="optimizer_ui.js?v=111628"></script>
+	<script src="optimizer_tests.js?v=111628"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -793,6 +793,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+																<li><b>11.1628</b> <strong>Annual Details was showing one column of numbers under the wrong heading, and its last column was always blank.</strong> The heading row and the rows below it were built from the same list but filtered it differently, so from the internal <code>inflationFactor</code> column rightward every value sat one heading to the left, and <code>loopMs</code> - the rightmost column, visible under <i>Show All</i> - never got a cell at all. Both are internal columns and neither is shown by default, so no figure you would normally read was affected. A test now counts the cells in every row against the headings. <code>loopMs</code> also prints two decimals now: it is the engine's time for one simulated year, a fifth of a millisecond on a normal plan, which whole-number rounding showed as 0.</li>
 																<li><b>11.161G</b> Annual Details gains three columns under <i>Show All</i>: the inflation applied to spending that year, how far prices have risen since the plan started, and that year's market return. They are the same two numbers on every row of an ordinary run, and they only start to say something when a Monte Carlo path is read back, which is why they sit behind <i>Show All</i> for now. Hover over a column name for what it does and does not include. No numbers change.</li>
 																<li data-flag="behavior"><b>11.161B</b> <strong>The Monte Carlo tab now offers two Synthetic models, and both give every path its own inflation.</strong> <i>Synthetic - GBM</i> is the model that was already there, and its market draws are unchanged - but its inflation is not, so a plan will not reproduce an older result until you click <i>Fixed Inflation</i>. <i>Synthetic - AAM</i> reads the growth rate you type as a plain yearly average, so the median growth it reports is the number you entered rather than one about a point lower. That is a change to what the number means, not to how much money you end up with: volatility drags on compounded growth in both. Both draw the same market shocks from the same seed, so switching between them compares the models rather than two different runs. Synthetic inflation now varies year to year and clusters the way it does in the real record, tuned to US consumer price data for 1948 to 2025, and it leans high in years when returns are poor. Advanced Parameters gains persistence, shock size and correlation controls; and a row of <i>Mode presets</i> is visible to everyone: <i>Fixed Inflation</i> pins inflation to your Assumptions rate and reproduces the pre-change model exactly, <i>Reset to defaults</i> puts every parameter back without your having to remember what it was, and <i>Pessimistic</i> lowers growth, raises volatility and makes inflation more persistent, larger and more tightly tied to bad return years. The Input Distributions panel now shows for everyone, folded by default, with the min and max lines visible and a caption naming the run that built it - mode, paths, seed, and every parameter that shaped the draws, enough to re-create the run from the caption alone. Historical mode is unchanged.</li>
 																<li><b>11.1601</b> The Optimizer tab has been reorganized. Labels, column names, colors and symbols are now consistent with the rest of the tool, and the table shows the columns the <i>Optimize for</i> goal actually uses. Some were never shown at all: <strong>Final Roth</strong>, <strong>Final IRA</strong> and <strong>Mix Spread</strong> now exist. Optimize for also says what the goal ranks by, and a switch below it shows all columns at once. End Wealth and All Taxes are shown under every goal. Spend Goal and Yrs Funded moved into the row pop-up, and the legend folds out of the way. The saved-scenario list drops its Version column, and a <code>?tab=</code> web address opens the page on a chosen tab. No numbers change.</li>

@@ -11,6 +11,33 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1628"></a>
+
+## 11.1628
+
+### Annual Details had a column of numbers under the wrong heading
+
+The heading row and the rows beneath it were built from the same list of fields but filtered it
+differently: the body skipped the internal `inflationFactor` field and the heading row did not. From
+that column rightward, every value sat one heading to its left, and the rightmost column - `loopMs` -
+never got a cell at all, which is why it read as permanently blank under **Show All**.
+
+Both columns are internal and neither is shown by default, so no figure you would normally read was
+affected. It went unnoticed for months because the one visibly wrong cell sat under a heading whose
+expected value, in the first year of any plan, is 1 - and what it was actually showing, the engine's
+millisecond timing for that year, also rounded to 1.
+
+Fixed by giving the two loops one rule instead of two. A test now renders the table and counts the
+cells in every row against the headings, which catches the whole class rather than this instance.
+
+`loopMs` also prints two decimals now. It is the engine's time for one simulated year, about a fifth
+of a millisecond on a normal plan, so whole-number rounding showed 0 in every row the moment the
+column started rendering at all.
+
+No numbers change.
+
+---
+
 <a id="11.161G"></a>
 
 ## 11.161G

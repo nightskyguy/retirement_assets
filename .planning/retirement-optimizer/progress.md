@@ -4192,3 +4192,45 @@ flagged to him rather than edited. Also related: P14 (regime-switching MC) is th
 would answer it.
 
 Docs only. Suites 305 / 61 / 22.
+
+
+## Session 2026-08-24 (continued) - loopMs was empty because the table was off by one column (v11.1628)
+
+User: "why is loopMs always empty? (It's been that way for a while)". It is a real defect, and not
+in loopMs.
+
+**What was wrong.** `updateTable()` builds the heading row and the body rows from the same key list
+but applied DIFFERENT filters to it. Header: `if (!key.startsWith('-'))`. Body:
+`if (!key.startsWith('-') && key !== 'inflationFactor')`. So the body emitted one cell fewer than
+there were headings, and from `inflationFactor` rightward every value sat under the heading to its
+left. `loopMs` is the last key in the log record, so it got no cell at all - a heading with nothing
+under it, in every row, forever.
+
+Measured before the fix: 81 headings, 80 cells per row.
+
+**Why nobody caught it.** Both affected columns are internal and hidden by default -
+`inflationFactor` is in no category at all, `loopMs` is category `Debug`, so you only see either
+under **Show All**. And the one visibly wrong cell was as good as invisible: under the
+`inflationFactor` heading, whose expected value in year 1 is 1.0, sat the loopMs timing for that
+year, which also rounds to 1. It dates to at least the P15 file split (`eadb1cc`, 2026-07-10) and
+was carried in from the monolith before that.
+
+**Fix.** One predicate, `isTableColumnKey(key)`, used by the header loop, the body loop and
+`analyzeColumnContent`. The comment above it says what each exclusion means and why the two must
+never diverge again. After: 80 headings, 80 cells, `inflationFactor` no longer emitted as a heading
+at all (its reader-facing form is the new `inflCum%` column).
+
+**And loopMs still was not useful.** With cells rendering it read `0` in every row, because a
+simulated year costs ~0.2ms and the table rounds non-percent columns to whole numbers. It now prints
+two decimals: 0.30, 0.20, 0.00, 0.10 on the default plan.
+
+**Regression guard, and the mistake I nearly shipped in it.** The first version of the in-page test
+read `#main-table` and returned early when it was absent - which is ALWAYS, because `runTests()` runs
+before the page's first `runSimulation()`. It passed by never running: in-page count stayed at 289.
+The test now renders its own table from `simulate(getInputs()).log` and counts cells per row against
+headings; `runSimulation()` rebuilds the table moments later, so nothing is left behind. In-page 289
+-> 290, and I verified it discriminates by deleting one cell in the live DOM and re-running the
+comparison (0 misaligned rows -> 1).
+
+Suites 305 / 61 / 22 unchanged (node), in-page 290, badge green at 675. Version 11.161G -> 11.1628,
+changelog entry in both homes.

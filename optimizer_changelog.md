@@ -11,6 +11,36 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.161G"></a>
+
+## 11.161G
+
+### Annual Details can show the year's inflation and market return
+
+Three new columns, all behind **Show All**:
+
+| column | what it is |
+|---|---|
+| `infl%` | the inflation applied to the spending goal that year |
+| `inflCum%` | how far the price level has risen since the plan started |
+| `return%` | the market return that year, before dividends and before each account's own mix |
+
+In an ordinary run the first and third are the Inflation and Growth numbers you typed, repeated on
+every row. They earn their place under Monte Carlo, where each path draws its own: a row that looks
+inexplicable usually turns out to be a year the path handed the plan poor returns and high prices at
+once. Divide any nominal figure by 1 + `inflCum%` to read it in today's money, or flip the **Future $ / Current $**
+switch above the tabs and let the table do it.
+
+Two things worth knowing, both in the hover-over text as well. Spending inflates at the Inflation
+input while tax brackets and IRMAA thresholds index at the separate CPI input, so a high-inflation
+year can raise spending without widening the brackets it is taxed in. And balances will not move by
+exactly `return%`, because each account adds its dividend yield and blends its own stock, bond and
+international split, while Cash earns its own yield instead.
+
+No numbers change.
+
+---
+
 <a id="11.161B"></a>
 
 ## 11.161B

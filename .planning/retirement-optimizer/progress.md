@@ -4055,3 +4055,48 @@ stats.js and mc_engine.js.
 of a-d needed it. What is left of P71 is a review pass and a commit - five uncommitted versions,
 v11.161C through v11.161F, touching prng.js, worker.js, mc_controller.js, mc_engine.js, stats.js,
 optimizer_core.tests.js, optimizer_tests.js, .githooks/README.md and the page.
+
+
+---
+
+## Session 2026-08-23 (continued) - P71 committed, then three Annual Details columns (v11.161G)
+
+**P71 is committed** as `b7f8808`, five versions squashed into one commit with the reasoning in the
+message: the two mirrors, what the engine now owns, the deviations, and the probe evidence. The
+pre-commit hook ran all three suites green before it landed.
+
+**Then the user asked for plumbing:** annual inflation, cumulative inflation and market return in
+Annual Details, hidden behind Show All for now.
+
+Three columns, at the far right of the table: `infl%` (the inflation applied to the spending goal
+that year), `inflCum%` (how far the price level has risen since the plan started) and `return%` (the
+year's market return before dividends and before each account's own mix). The engine already had
+both numbers - `yr.yearInflation` and `yr.baseReturn` - and neither reached the log; `inflationFactor`
+was in the log but in no category, so it could never appear.
+
+Two decisions worth recording. Cumulative inflation is reported as the PERCENT risen rather than the
+raw multiplier, so it formats like every other `%` column instead of rounding to "1"; the multiplier
+stays available as `inflationFactor`. And the category is a new `Market` with **no checkbox**, the
+same trick `loopMs`/`Debug` already uses, which is exactly "behind Show All" without inventing a
+control for three columns that say nothing in a deterministic run.
+
+**A break I caused and the page caught.** The `inflCum%` hover-over text contained an apostrophe in
+"today's money" inside a single-quoted string, which broke `optimizer_ui.js` at parse time - so
+`runSimulation`, `showTab` and everything else in that file went undefined and the page was inert.
+All three node suites stayed green throughout: none of them loads optimizer_ui.js. What caught it was
+opening the page. Reworded to avoid the apostrophe, and while fixing it the text now names the real
+control (the **Future $ / Current $** switch above the tabs) instead of a "Current dollars" checkbox
+that does not exist under that name.
+
+**Tests.** One new test: the three columns must echo the sequences a Monte Carlo path actually ran
+on, year by year, with `inflCum%` compounding and agreeing with `inflationFactor` - and a
+deterministic run must fall back to the typed Growth and Inflation rather than to blanks. Suite
+**304 -> 305**, reconciled in `TestTiers.EXPECTED` and `.githooks/README.md`.
+
+**Browser.** Columns present, hidden by default, revealed by Show All, grouped under a new **Market**
+header. Values check out: 3.00 / 6.00 flat on a deterministic run, and `inflCum%` reads 0.00, 12.55,
+75.35 at years 1, 5 and 20, which is 1.03^0, ^4 and ^19. Badge green at **674**.
+
+**Version** 11.161F -> **11.161G**; tokens on optimizer_core.js, optimizer_ui.js, optimizer_tests.js
+and the tier-2 loader. This one IS user-visible, so it gets a changelog entry in both homes: the
+in-page list and `optimizer_changelog.md`.

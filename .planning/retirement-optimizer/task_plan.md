@@ -705,6 +705,14 @@ function calibrateMCMs(cfg) {
 ---
 
 ## P69: Replay - walk one Monte Carlo or Stress sequence through the main model
+
+**Plumbing already in place (2026-08-23, v11.161G, user-requested):** Annual Details now carries
+`infl%`, `inflCum%` and `return%` - the inflation applied to spending, the compounded rise since the
+plan started, and the year's market return before dividends and the per-account mix. They sit behind
+**Show All** (category `Market`, which has no checkbox of its own) because a deterministic run
+repeats the same two numbers on every row. They are what makes a replayed path readable, so P69 does
+not need to add them; it needs to give them something interesting to say.
+
 **Why:** The Monte Carlo and Stress tabs report survival rates, median ruin years and percentile
 bands. There is no way to take one bad sequence and walk it through the Annual Details table and the
 Charts next to your own plan. Design and sub-items are in the approved plan at

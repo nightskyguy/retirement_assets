@@ -4042,6 +4042,38 @@ test('tax creep: reaches the Optimizer surface (buildVariations + optimizeSpend)
         'optimizeSpend pays more tax under creep');
 });
 
+test('Annual Details reports the inflation and market return each year was handed', () => {
+    // Three columns behind Show All. Under Monte Carlo every path gets its own sequences, so these
+    // have to echo the sequence the year actually ran on - a constant would make a replayed path
+    // unreadable and would hide the very divergence the columns exist to show.
+    const N = 30;
+    const returnSequence   = Array.from({ length: N }, (_, i) => 0.04 + (i % 5) * 0.01);
+    const inflationSequence = Array.from({ length: N }, (_, i) => 0.01 + (i % 3) * 0.01);
+    const res = simulate({ ...CREEP_BASE, returnSequence, inflationSequence });
+
+    let cum = 1;
+    for (let i = 0; i < Math.min(N, res.log.length); i++) {
+        const row = res.log[i];
+        assert(row['infl%'] === inflationSequence[i],
+            `year ${i}: infl% ${row['infl%']} against sequence ${inflationSequence[i]}`);
+        assert(row['return%'] === returnSequence[i],
+            `year ${i}: return% ${row['return%']} against sequence ${returnSequence[i]}`);
+        // Cumulative is reported as the rise SO FAR, so year 0 is 0 and each year compounds the
+        // one before it. Reported as a percent rather than the raw multiplier so it formats like
+        // every other '%' column; inflationFactor still carries the multiplier.
+        assert(Math.abs(row['inflCum%'] - (cum - 1)) < 1e-12,
+            `year ${i}: inflCum% ${row['inflCum%']} against compounded ${cum - 1}`);
+        assert(Math.abs((row.inflationFactor ?? 1) - cum) < 1e-12,
+            `year ${i}: inflationFactor and inflCum% disagree`);
+        cum *= (1 + inflationSequence[i]);
+    }
+
+    // A deterministic run has no sequences and must fall back to the typed inputs, not to blanks.
+    const flat = simulate({ ...CREEP_BASE, growth: 0.055, inflation: 0.025 });
+    assert(flat.log.every(r => r['return%'] === 0.055), 'a deterministic run should report the growth typed');
+    assert(flat.log.every(r => r['infl%'] === 0.025), 'a deterministic run should report the inflation typed');
+});
+
 test('tax creep: reaches Monte Carlo and is path-independent', () => {
     // Replicates worker.js's call shape exactly: simulate({ ...variation, returnSequence, inflationSequence }).
     const withCreep = { ...CREEP_BASE, taxRateCreep: 0.01, taxRateCreepState: 0.01 };

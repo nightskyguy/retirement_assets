@@ -2276,6 +2276,13 @@ const columnCategories = {
     // Debug / performance - only visible under Show All (no checkbox maps to 'Debug')
     'loopMs': ['Debug'],
 
+    // What the market handed this year. No checkbox maps to 'Market' either, so these three are
+    // Show All only for now: in a deterministic run they are the same two numbers on every row,
+    // and they only start saying anything once a Monte Carlo path is being read back.
+    'infl%':    ['Market'],
+    'inflCum%': ['Market'],
+    'return%':  ['Market'],
+
     // Opportunity cost (Phase 20) + BETR signal (Phase 21) + extra conversion (Phase 23)
     'convOC':    ['Opp. Cost'],
     'excessOC':  ['Opp. Cost'],
@@ -2322,6 +2329,7 @@ const columnGroupDefs = {
     'wdRate%': 'Withdrawals',
     'timing': 'Withdrawals',
     'gkSpend': 'Income', 'gkAdj': 'Income',
+    'infl%': 'Market', 'inflCum%': 'Market', 'return%': 'Market',
 };
 
 // Get active categories based on checkbox state
@@ -2581,6 +2589,9 @@ function updateTable(log) {
         'netOut': 'Net outflows: portfolio draws funding spending/taxes. Gross outflows minus Roth conversions and reinvested surplus. Zero when Social Security and pension cover everything, since a forced RMD that gets reinvested never leaves the portfolio.',
         'inflows': 'Non-portfolio income applied to spending: Social Security + pension.',
         'wdRate%': 'Withdrawal rate: net outflows ÷ start-of-year portfolio balance, so it measures what actually left the portfolio to fund spending and taxes. Roth conversions and reinvested surplus are excluded. Social Security and pension are NOT subtracted (see the inflows column for those), which is what makes this comparable to the classic "4% rule" target of ~4%.',
+        'infl%': 'Inflation applied to the spending goal for this year. Fixed at your Inflation input in a normal run; under Monte Carlo each path draws its own, so this column is how you see which years the path got expensive. Note that tax brackets and IRMAA thresholds index at the separate CPI input instead, which is why a high-inflation year can raise spending without widening the brackets that spending is taxed in.',
+        'inflCum%': 'How much the price level has risen since the plan started, compounding the infl% column. Divide any nominal dollar figure by 1 + this to read it in current dollars, or flip the Future $ / Current $ switch above the tabs and let every column do it for you.',
+        'return%': 'The market return this year before dividends and before any per-account mix is applied: your Growth input in a normal run, or the year drawn from the Monte Carlo path. The balance columns will not move by exactly this much - each account adds its dividend yield and blends its own stock/bond/international split, and Cash earns its own yield instead.',
         'timing': 'Withdrawal timing auto-selected each year. Early(Conv) = conversion year (withdrawal in 1st quarter, ideally January - maximizes Roth compounding). Late(Spend) = spending-only year (withdrawal in last quarter, ideally December - full portfolio compounds before withdrawal exits, gaining D×r per year).',
     };
 

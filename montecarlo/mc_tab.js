@@ -2132,8 +2132,11 @@ function renderStressTable(stress, rows) {
         // (an older cached worker's message has none). The row's own click isolates the chart
         // line, so the button stops propagation.
         if (stress?.pathBankRows?.[r.rank]) {
+            // Bare emoji, no button chrome: at table-row size the boxed button squeezed the glyph
+            // into an unreadable smudge (user report). The <button> element stays for keyboard
+            // focus; only its default styling goes.
             swatch.innerHTML += ` <button onclick="event.stopPropagation();replayStressPath(${r.rank})"`
-                + ` style="font-size:0.85em;padding:0 4px;cursor:pointer;vertical-align:middle;"`
+                + ` style="font-size:1.05em;padding:0;border:none;background:none;cursor:pointer;vertical-align:middle;line-height:1;"`
                 + ` title="Walk this historical sequence through Charts and Annual Details, year by year, with your own plan's settings.">🎬</button>`;
         }
         row.appendChild(swatch);

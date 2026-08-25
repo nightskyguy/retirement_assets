@@ -17,11 +17,11 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1640"></a>
+<a id="11.1642"></a>
 
-## 11.1640
+## 11.1642
 
-### Roth can fill a spending shortfall, and Ordered offers three more draw orders
+### Roth can fill a spending shortfall, Ordered offers three more draw orders, and Monte Carlo always runs yours
 
 1. **A new switch, *Roth before Brokerage*,** under Cycle Brokerage. Off is the default and is what
    the tool has always done: when a year's spending needs more than your strategy itself withdraws,
@@ -44,7 +44,16 @@ For what the tool does and how to use it, see [README.md](README.md).
    worth $858,000 more than the best of them. Your own selection is unchanged, and both the Optimizer
    and Monte Carlo now score all six.
 
-4. **Fewer *Reduce IRA* and *IRA Draw* rows.** The Optimizer tried 16 plan lengths between 2 and 25
+4. **Monte Carlo now always runs your own plan, and marks it.** Compare every strategy could leave
+   your plan out of the run and emphasize a different one in the chart. It affected the *Ordered*
+   sequences, *Guyton-Klinger*, and any plan set to an IRMAA tier or an ACA cliff: the chart's
+   📍 marker landed on the wrong row or on none. Your plan is now always in the table, pinned to
+   the top and drawn in the chart, even when it is not one of the strategies the sweep covers - a
+   run with such a plan is one row longer than before. Clicking a row also loads what it says: the
+   sequence, tier, cliff or guardrails now come back with it instead of leaving whatever was in the
+   sidebar.
+
+5. **Fewer *Reduce IRA* and *IRA Draw* rows.** The Optimizer tried 16 plan lengths between 2 and 25
    years and 8 draw percentages; it now tries **3, 7, 11, 17 and 23** years and **5, 7, 9, 11 and
    13%**. Neighboring steps differed by very little and between them the two families were half the
    table, so a run is a third shorter and the table is easier to read. Your own setting still appears

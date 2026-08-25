@@ -11,7 +11,7 @@
 // Loadable three ways, like prng.js: module.exports for node, window for the page, bare globals
 // under importScripts in the worker.
 //
-// Depends on, and does not own: simulate() (optimizer_core.js), computePercentiles() and
+// Depends on, and does not own: simulate() and selectionOf() (optimizer_core.js), computePercentiles() and
 // computeInputFan() (stats.js), and the bank builders in prng.js.
 
 // Everything the caller may hook. All three are optional; the worker supplies only onProgress,
@@ -367,15 +367,16 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             strategyFamily: baseInputs._strategyFamily ?? '',
             paramLabel:     baseInputs._paramLabel     ?? '',
             convertExcessToRoth:    baseInputs.convertExcessToRoth    ?? false,
+            spendGoal:      baseInputs.spendGoal       ?? null,
+            // The whole strategy identity, from the one list optimizer_core.js keeps for it. This
+            // was a hand-written subset and it was missing four fields, so the page could not tell
+            // one Ordered sequence from another, and an IRMAA, ACA or Guyton-Klinger plan matched
+            // no row at all - which is how the chart came to emphasize a strategy nobody picked.
+            ...selectionOf(baseInputs),
+            // Defaults the page reads directly rather than through sameStrategySelection.
             fundConversionWithCash: baseInputs.fundConversionWithCash ?? false,
             cyclicEnabled:  baseInputs.cyclicEnabled   ?? false,
             cyclicOrder:    baseInputs.cyclicOrder     ?? 'ira-first',
-            spendGoal:      baseInputs.spendGoal       ?? null,
-            strategy:       baseInputs.strategy,
-            propWithdraw:   baseInputs.propWithdraw,
-            nYears:         baseInputs.nYears,
-            stratRate:      baseInputs.stratRate,
-            iraWithdrawPct: baseInputs.iraWithdrawPct,
             survivalRate:   (numPaths - ruinCount) / numPaths,
             medianRuinYear,
             medianTax,

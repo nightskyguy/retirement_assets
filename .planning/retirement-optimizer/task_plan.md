@@ -31,6 +31,39 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Fu
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
+## P74: Monte Carlo lost half the strategy identity in transit  *(fixed v11.1642 2026-08-25, user-reported)*
+
+**Symptom, as reported:** run Compare with Ordered CIBR selected; the chart emphasized **CBRI**.
+
+**Cause:** the variation summary `mc_engine.js` posts back to the page carried a HAND-WRITTEN subset
+of the strategy fields - `strategy`, `propWithdraw`, `nYears`, `stratRate`, `iraWithdrawPct`, the
+cyclic pair and `fundConversionWithCash`. `sameStrategySelection()` reads five more:
+`orderedSeq`, `stratIRMAATier`, `stratACAMultiple`, `gkGuard`, `gkAdjPct`. Missing on one side, each
+fell through to its `?? default`, so **every** Ordered row compared equal to CBIR - a CBIR user
+matched whichever Ordered row came first, and anyone else matched none - and every IRMAA, ACA and
+Guyton-Klinger plan matched nothing at all. Nothing threw; the comparison just quietly agreed with
+the wrong row. Pre-existing on `main`; the six-sequence menu only made it visible, by moving CBRI
+to the front of the grid.
+
+**Fix, three parts:**
+1. `selectionOf()` + `STRATEGY_SELECTION_FIELDS` in `optimizer_core.js` - ONE list of the fields the
+   comparison reads. `mc_engine.js` spreads it instead of listing fields by hand.
+2. `loadMCVariation()` restores the sequence, tier, cliff, guardrails and Roth position. It set only
+   the numeric four, so clicking an Ordered row ran whatever the sidebar already held - the same
+   PF8 class the Optimizer's `loadOptimizerResult` was fixed for.
+3. `withCurrentPlan()` in `mc_tab.js` appends the sidebar's own plan to the Compare sweep when no
+   swept row matches it, and the existing pin logic then marks it. MC sweeps no IRMAA ceiling and no
+   ACA cliff at all, and `offGridParamFor` has no case for Ordered or GK, so those plans could not
+   be in the run however the matching behaved. One extra row, only when it is needed.
+
+**Guarded by** two node tests: `selectionOf` round-trips every family and never matches a neighbour,
+and an end-to-end run through `mc_engine.runJob()` asserts each of the six Ordered sequences matches
+exactly its own returned variation. The second fails on the pre-fix engine, naming the wrong row.
+
+**Not addressed:** MC still does not sweep the IRMAA or ACA families, so those plans are a single
+appended row rather than a ladder. That is the sweep's scope, not this defect.
+
+---
 ---
 
 ## Open Task Index — edit the **User Priority** column

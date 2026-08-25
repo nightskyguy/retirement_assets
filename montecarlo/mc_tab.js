@@ -520,6 +520,24 @@ function planOnlyVariations(variations, base) {
         : [{ ...base, _label: 'Current Plan', _strategyFamily: '', _paramLabel: '' }];
 }
 
+// The compare sweep with the sidebar's own plan guaranteed to be in it. buildVariations() covers a
+// GRID, and a plan can sit off it in ways the grid cannot add back: Monte Carlo sweeps no IRMAA
+// ceiling and no ACA cliff at all, offGridParamFor() has no off-grid case for Ordered or
+// Guyton-Klinger, and the Roth-before-Brokerage arm is Optimizer-only. Those plans used to be
+// absent from the run, which left the chart emphasizing whichever strategy won its family instead
+// of the one the user picked. Appended rather than substituted: the ranking is unchanged, it just
+// gains a row that is the plan you came to ask about.
+function withCurrentPlan(variations, base) {
+    if (!base || findCurrentStrategyIdx(variations, base) >= 0) return variations;
+    const d = describeSelection(base);
+    return [...variations, {
+        ...base,
+        _label: `${d.family} ${d.paramLabel}`.trim() + (base.convertExcessToRoth ? ' ✓' : ''),
+        _strategyFamily: d.family,
+        _paramLabel:     d.paramLabel,
+        _paramSortVal:   d.paramSortVal,
+    }];
+}
 // --- Run ------------------------------------------------------------------
 
 // 'compare' runs every strategy and ranks them; 'plan' runs only the sidebar's own plan.
@@ -563,7 +581,7 @@ function runMonteCarlo(scope) {
 
     // In 'plan' scope the main pass runs that same single variation, so the whole run collapses to
     // numPaths simulations instead of numPaths x ~144.
-    const variations = _mcScope === 'plan' ? stressVariations : allVariations;
+    const variations = _mcScope === 'plan' ? stressVariations : withCurrentPlan(allVariations, base);
 
     // Seed the timing model if no real run has been observed yet, so the buttons and the in-flight
     // estimate have something to say. Calibration always uses the full variation list: one variation
@@ -1227,7 +1245,7 @@ function updateMCTimeEstimate() {
 
     const numPaths = _mcNum('mc-num-paths');
     const base     = getInputs();
-    const numVar   = buildVariations(base).length;
+    const numVar   = withCurrentPlan(buildVariations(base), base).length;
 
     // Describes the Compare button alone: the path count is per strategy, so without the multiplier
     // the sweep looks ~144x smaller than it is.
@@ -1424,8 +1442,32 @@ function loadMCVariation(v) {
     document.getElementById('strategy').value = v.strategy;
     if (v.strategy === 'propwd'    && v.propWithdraw   != null) document.getElementById('propWithdraw').value   = Math.round(v.propWithdraw * 100);
     if (v.strategy === 'fixed'     && v.nYears         != null) document.getElementById('nYears').value          = v.nYears;
-    if (v.strategy === 'bracket'   && v.stratRate      != null) document.getElementById('stratRate').value       = Math.round(v.stratRate * 100);
     if (v.strategy === 'fixedpct'  && v.iraWithdrawPct != null) document.getElementById('iraWithdrawPct').value  = Math.round(v.iraWithdrawPct * 100);
+    // The ceiling families and the two the sweep parameterizes by something other than a number.
+    // None of these were restored: clicking an Ordered row set strategy=ordered and left whatever
+    // sequence the sidebar already had, so the table showed one plan and the click ran another.
+    // The same bug was fixed on the Optimizer side (loadOptimizerResult, the PF8 class).
+    // ACA is a strict strategy internally but the UI keeps it as a Fill Bracket sub-option, so it
+    // maps back to the bracket dropdown the way loadOptimizerResult does.
+    const _isACA = v.strategy === 'aca' || (v.stratACAMultiple ?? 0) > 0;
+    if (_isACA) {
+        document.getElementById('strategy').value = 'bracket';
+        document.getElementById('stratRate').value = `aca${v.stratACAMultiple}`;
+    } else if (v.strategy === 'bracket' && (v.stratIRMAATier ?? -1) >= 0) {
+        document.getElementById('stratRate').value = `IRMAA${v.stratIRMAATier}`;
+    } else if (v.strategy === 'bracket' && v.stratRate != null) {
+        document.getElementById('stratRate').value = Math.round(v.stratRate * 100);
+    } else if (v.strategy === 'ordered' && v.orderedSeq) {
+        const seqEl = document.getElementById('orderedSeq');
+        if (seqEl) seqEl.value = v.orderedSeq;
+    } else if (v.strategy === 'gk') {
+        const gEl = document.getElementById('gkGuard'), aEl = document.getElementById('gkAdjPct');
+        if (gEl && v.gkGuard  != null) gEl.value = Math.round(v.gkGuard  * 100);
+        if (aEl && v.gkAdjPct != null) aEl.value = Math.round(v.gkAdjPct * 100);
+    }
+    // Set unconditionally, including back to off, or a leftover follows the next strategy loaded.
+    const rgEl = document.getElementById('rothGapFill');
+    if (rgEl) rgEl.checked = (v.rothGapFill === 'fillCashThenRoth');
     document.getElementById('convertExcessToRoth').checked = !!v.convertExcessToRoth;
     const fccEl = document.getElementById('fundConversionWithCash');
     if (fccEl) fccEl.checked = !!v.fundConversionWithCash;
@@ -2037,7 +2079,7 @@ function setMCRunning(running) {
         const base     = getInputs();
         // A plan-scope run is one variation, so the estimate has to follow the scope in flight or a
         // 0.2s run would announce half a minute.
-        const numVar   = _mcScope === 'plan' ? 1 : buildVariations(base).length;
+        const numVar   = _mcScope === 'plan' ? 1 : withCurrentPlan(buildVariations(base), base).length;
         runEst.textContent = `May take approximately ${_mcDuration(estimateMCMs(numPaths, numVar))} to complete`;
     }
 }

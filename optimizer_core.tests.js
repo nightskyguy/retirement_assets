@@ -111,6 +111,8 @@ const sameStrategySelection = core.sameStrategySelection;
 const resolveOrderedSeq = core.resolveOrderedSeq;
 const ORDERED_SEQS = core.ORDERED_SEQS;
 const strategySortKey = core.strategySortKey;
+const selectionOf = core.selectionOf;
+const STRATEGY_SELECTION_FIELDS = core.STRATEGY_SELECTION_FIELDS;
 const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 // P35 PR 1 characterization goldens — a RECORDING of what the two strategy enumerations emit,
@@ -1356,6 +1358,7 @@ if (IS_NODE) {
     Object.assign(globalThis, _mcPrng);
     Object.assign(globalThis, require('./montecarlo/stats.js'));
     globalThis.simulate = core.simulate;
+    globalThis.selectionOf = core.selectionOf;
 }
 const _mcEngine = IS_NODE ? require('./montecarlo/mc_engine.js') : window.MCEngine;
 
@@ -4360,6 +4363,41 @@ test('resolveOrderedSeq: any permutation resolves, anything else is CBIR', () =>
             `${JSON.stringify(bad)} must still fall back to CBIR`);
 });
 
+test('selectionOf: a plan still identifies as itself after a round trip', () => {
+    // The Monte Carlo worker posts a SUMMARY of each variation back to the page, and the page asks
+    // sameStrategySelection() which summary is the user's own plan. That summary used to be a
+    // hand-written field list, and it was missing orderedSeq, stratIRMAATier, stratACAMultiple and
+    // the two Guyton-Klinger guardrails - so the comparison fell through to the `?? default` on the
+    // missing side and matched the wrong row, or no row. selectionOf() is the one list; this is the
+    // property that broke.
+    const plans = [
+        { strategy: 'propwd',   propWithdraw: 0.2 },
+        { strategy: 'fixed',    nYears: 11 },
+        { strategy: 'fixedpct', iraWithdrawPct: 0.09 },
+        { strategy: 'bracket',  stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 },
+        { strategy: 'bracket',  stratRate: 0, stratIRMAATier: 2, stratACAMultiple: 0 },
+        { strategy: 'aca',      stratRate: 0, stratIRMAATier: -1, stratACAMultiple: 250 },
+        { strategy: 'gk',       gkGuard: 0.15, gkAdjPct: 0.05 },
+        { strategy: 'ordered',  orderedSeq: 'CIBR' },
+        { strategy: 'ordered',  orderedSeq: 'CBRI', cyclicEnabled: true, cyclicOrder: 'brokerage-first' },
+        { strategy: 'propwd',   propWithdraw: 0.2, rothGapFill: 'fillCashThenRoth' },
+    ];
+    for (const p of plans) {
+        assert(sameStrategySelection(selectionOf(p), p),
+            `${JSON.stringify(p)} must still be itself after selectionOf()`);
+        // And it must not match a NEIGHBOUR. Every plan above differs from every other one, so a
+        // key that dropped a field would collapse two of them together here.
+        for (const q of plans) if (q !== p)
+            assert(!sameStrategySelection(selectionOf(p), q),
+                `selectionOf(${JSON.stringify(p)}) must not match ${JSON.stringify(q)}`);
+    }
+    // The list is the contract: every field the comparison reads has to be on it.
+    for (const f of ['strategy', 'orderedSeq', 'stratIRMAATier', 'stratACAMultiple', 'gkGuard',
+                     'gkAdjPct', 'rothGapFill', 'cyclicEnabled', 'cyclicOrder',
+                     'fundConversionWithCash', 'propWithdraw', 'nYears', 'stratRate', 'iraWithdrawPct'])
+        assert(STRATEGY_SELECTION_FIELDS.includes(f), `${f} must be carried`);
+});
+
 test('strategySortKey: families stay contiguous, whatever the label starts with', () => {
     // P73. The Strategy column used to sort the RENDERED label, so a row whose label opened with
     // raw HTML or an emoji sorted before or after the entire alphabet and each family's clones were
@@ -5433,6 +5471,26 @@ test('P71: stress mode banks one path per scenario, not numPaths of them', () =>
     assert(banks.numPaths !== cfg.numPaths, 'stress used the requested path count instead of its own');
     assert(banks.scenarioBank.length === n * cfg.years, `bank is ${banks.scenarioBank.length} long`);
     assert(banks.synthInflationBank === null, 'stress draws inflation from the record, not a model');
+});
+
+test('the worker payload keeps each variation identifiable as a strategy', async () => {
+    // The bug this guards, reported 2026-08-25: with an Ordered sequence selected, Monte Carlo's
+    // chart emphasized a DIFFERENT sequence. The variation summary the engine posts back carried no
+    // orderedSeq, so sameStrategySelection() compared the page's 'CIBR' against a summary that
+    // defaulted to 'CBIR' - it matched the first Ordered row for a CBIR user and nothing at all for
+    // anyone else. An end-to-end assertion because the defect lived in the transport, not in either
+    // side of it: both halves were correct on their own.
+    const ordered = buildVariations({ ...(_p71Base), strategy: 'ordered', orderedSeq: 'CIBR' })
+        .filter(v => v.strategy === 'ordered' && !v.cyclicEnabled && !v.fundConversionWithCash);
+    assert(ordered.length === ORDERED_SEQS.length, `expected one row per sequence, got ${ordered.length}`);
+    const msg = await _mcEngine.runJob(_p71Cfg('gbm', { variations: ordered, numPaths: 4, years: 12 }));
+    assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
+    for (const seq of ORDERED_SEQS) {
+        const plan = { ...(_p71Base), strategy: 'ordered', orderedSeq: seq };
+        const hits = msg.variations.filter(v => sameStrategySelection(v, plan));
+        assert(hits.length === 1, `${seq} matched ${hits.length} returned variations, expected exactly 1`);
+        assert(hits[0].orderedSeq === seq, `${seq} matched the row for ${hits[0].orderedSeq}`);
+    }
 });
 
 test('P71: a cancelled job reports nothing at all', async () => {

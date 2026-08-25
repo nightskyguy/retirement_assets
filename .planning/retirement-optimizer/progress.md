@@ -4418,3 +4418,32 @@ Draw, IRMAA Ceil, Ordered, Proportional, Reduce), each parameter's arms clustere
 then clones, and descending an exact mirror. Suite 315/61/22, badge green at 691. No changelog entry,
 by the user's call. The same commit trims the release entry's Ordered item to name only the three
 NEW sequences.
+
+---
+
+## Session 2026-08-25 (worktree readme-review-updates) - P74, Monte Carlo pinned the wrong strategy (v11.1642)
+
+User: run Compare with Ordered CIBR selected, and the chart emphasizes CBRI.
+
+The transport was the defect. `mc_engine.js` posts a summary of each variation back to the page with
+a hand-written list of strategy fields, and that list was missing the five that identify the
+remaining families - orderedSeq, the IRMAA tier, the ACA multiple, and the two GK guardrails. Both
+sides were individually correct: sameStrategySelection() reads all of them, and the page passes the
+real sidebar plan. But with a field absent on one side the comparison fell through to `?? default`,
+so every Ordered row compared equal to CBIR and every IRMAA, ACA and GK plan matched nothing.
+Pre-existing on main - the six-sequence menu only made it visible by putting CBRI first in the grid.
+
+Fixed as one list rather than a longer hand-written one: `selectionOf()` in optimizer_core.js, which
+mc_engine spreads. `loadMCVariation()` had the mirror-image gap and now restores the sequence, tier,
+cliff, guardrails and Roth position - clicking a row used to run whatever the sidebar already held.
+
+Second half of the request - Monte Carlo should always run YOUR plan - is `withCurrentPlan()`:
+Compare appends the sidebar plan when no swept row matches. That is not only a matching problem, it
+is coverage: MC sweeps no IRMAA ceiling and no ACA cliff at all, so those plans could not be in the
+run however the matching behaved. Verified in the browser: Ordered CIBR pins and draws as itself,
+and an IRMAA Tier 2 plan appears as row 157 of 157, pinned and drawn.
+
+Two node tests, one of which fails on the pre-fix engine and names the wrong row. Suite 317/61/22,
+badge green at 693. One self-inflicted detour: the changelog `<li>` I wrote used <b> for emphasis,
+and an in-page test counts <b> tags to detect a swallowed entry - it caught it, which is the test
+doing its job.

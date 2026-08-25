@@ -170,6 +170,16 @@ h3 {
     pointer-events: none;
 }
 
+/* A knob the current strategy ignores. Greyed rather than hidden, so it does not appear and
+   disappear as the strategy changes - and unlike .spouse-disabled the label keeps its pointer
+   events, because the hover-over is the only thing that says WHY it is greyed. */
+.knob-na {
+    opacity: 0.4;
+}
+.knob-na input {
+    pointer-events: none;
+}
+
 /* ── Compact 3-field profile row (Born / Mo. / Life Exp.) ── */
 .compact-row {
     display: flex;

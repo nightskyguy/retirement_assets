@@ -108,6 +108,11 @@ const bothOnMedicareAtStart = core.bothOnMedicareAtStart;
 const MC_GRIDS = core.MC_GRIDS;
 const OPTIMIZER_GRIDS = core.OPTIMIZER_GRIDS;
 const sameStrategySelection = core.sameStrategySelection;
+const resolveOrderedSeq = core.resolveOrderedSeq;
+const ORDERED_SEQS = core.ORDERED_SEQS;
+const strategySortKey = core.strategySortKey;
+const selectionOf = core.selectionOf;
+const STRATEGY_SELECTION_FIELDS = core.STRATEGY_SELECTION_FIELDS;
 const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 // P35 PR 1 characterization goldens — a RECORDING of what the two strategy enumerations emit,
@@ -1353,6 +1358,7 @@ if (IS_NODE) {
     Object.assign(globalThis, _mcPrng);
     Object.assign(globalThis, require('./montecarlo/stats.js'));
     globalThis.simulate = core.simulate;
+    globalThis.selectionOf = core.selectionOf;
 }
 const _mcEngine = IS_NODE ? require('./montecarlo/mc_engine.js') : window.MCEngine;
 
@@ -4248,6 +4254,270 @@ test('sameStrategySelection: cyclic and cash-funding modifiers are part of the i
     assert(!sameStrategySelection(p, { ...p, fundConversionWithCash: true }), 'cash-funded twin is a different plan');
 });
 
+test('sameStrategySelection: the Roth gap position is part of the identity, unknown values are not', () => {
+    const p = { strategy: 'fixed', nYears: 20 };
+    assert(!sameStrategySelection(p, { ...p, rothGapFill: 'fillCashThenRoth' }),
+        'a 🅡 clone is a different plan from the row it was cloned from');
+    assert(!sameStrategySelection({ ...p, rothGapFill: 'fillCashThenRoth' },
+                                  { ...p, rothGapFill: 'fillRothThenCash' }), 'the two positions differ');
+    // The engine treats anything it does not recognize as "leave today's behavior alone", so the
+    // identity has to agree. A typo that compared as its own plan would pin a row to a strategy
+    // that never ran.
+    assert(sameStrategySelection(p, { ...p, rothGapFill: 'fillCashThenRother' }),
+        'an unrecognized value is the same plan as unset');
+    assert(sameStrategySelection(p, { ...p, rothGapFill: '' }), 'empty is unset');
+});
+
+test('rothGapFill: unset is bit-identical, and fillCashThenRoth spends Roth instead of Brokerage', () => {
+    // Bracket fills a spending gap from Cash, then Brokerage, then Roth. With a Roth balance and a
+    // gap big enough to reach past Cash, moving Roth ahead of Brokerage has to show up as a smaller
+    // Brokerage draw - that is the whole mechanism P28 measured.
+    const b = { ...BASE, strategy: 'bracket', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0,
+                Roth: 400000, spendGoal: 70000, growth: 0.05 };
+    const off  = simulate(b);
+    const same = simulate({ ...b, rothGapFill: '' });
+    assert(JSON.stringify(off.log) === JSON.stringify(same.log),
+        'an empty rothGapFill must leave every number exactly as it was');
+    const junk = simulate({ ...b, rothGapFill: 'fillCashThenRother' });
+    assert(JSON.stringify(off.log) === JSON.stringify(junk.log),
+        'an unrecognized value must leave every number exactly as it was');
+
+    const on = simulate({ ...b, rothGapFill: 'fillCashThenRoth' });
+    const tot = (res, k) => res.log.reduce((s, r) => s + (r[k] ?? 0), 0);
+    assert(tot(on, 'RothWD') > tot(off, 'RothWD'), 'Roth must actually be drawn');
+    assert(tot(on, 'Brokerage-') < tot(off, 'Brokerage-'), 'and it must displace a Brokerage draw');
+});
+
+// ── P30a: gapFillWeights, the [40,60] nobody chose ───────────────────────────
+// The weights are a research input with no UI and no URL param. These two tests are the contract
+// the sweep rests on: unset is today, and the endpoints are a real 0-to-100 sweep of ONE policy
+// rather than two different ones.
+const GFW_BASE = {
+    ...BASE, strategy: 'fixed', nYears: 20,
+    IRA1: 900000, Roth: 200000, Brokerage: 600000, BrokerageBasis: 300000, Cash: 250000,
+    spendGoal: 85000, inflation: 0.025, cpi: 0.025, growth: 0.05, cashYield: 0.03, dividendRate: 0.02,
+};
+
+test('gapFillWeights: unset is bit-identical, and anything malformed means unset', () => {
+    const ref = JSON.stringify(simulate(GFW_BASE).log);
+    // The default spelled out, and the same ratio spelled differently: the normalizer divides by the
+    // sum, so [4,6] IS [40,60]. If this ever fails the weights have stopped being relative.
+    for (const v of [undefined, [40, 60], [4, 6]]) {
+        assert(JSON.stringify(simulate({ ...GFW_BASE, gapFillWeights: v }).log) === ref,
+            `gapFillWeights ${JSON.stringify(v)} must reproduce the default exactly`);
+    }
+    // Validated to a shape, not to truthiness. [0,0] is the one that matters: it would divide by
+    // zero in the normalizer and put NaN through every downstream balance.
+    for (const v of ['nope', [40], [40, 60, 80], [0, 0], [-10, 110], [NaN, 60], {}, 40]) {
+        assert(JSON.stringify(simulate({ ...GFW_BASE, gapFillWeights: v }).log) === ref,
+            `malformed gapFillWeights ${JSON.stringify(v)} must leave today's behavior alone`);
+    }
+});
+
+test('gapFillWeights: the split moves monotonically, and both endpoints still spill', () => {
+    const tot = (res, k) => res.log.reduce((s, r) => s + (r[k] ?? 0), 0);
+    const brok = [], cash = [];
+    for (const w of [0, 20, 40, 60, 80, 100]) {
+        const res = simulate({ ...GFW_BASE, gapFillWeights: [w, 100 - w] });
+        brok.push(tot(res, 'Brokerage-'));
+        cash.push(tot(res, 'CashWD'));
+    }
+    for (let i = 1; i < brok.length; i++) {
+        assert(brok[i] > brok[i - 1], `Brokerage draw must rise with the weight (step ${i})`);
+        assert(cash[i] < cash[i - 1], `Cash draw must fall with the weight (step ${i})`);
+    }
+    // w=0 is all-Cash in the gap fill. Not "no Brokerage anywhere" - the third pass has drawn
+    // Brokerage by default since P32 - but the gap fill itself must ask for none.
+    assert(brok[0] === 0, 'at weight 0 the gap fill must draw no Brokerage at all');
+    // w=100 asks for everything from Brokerage, yet Cash is still drawn: that is the shortfall
+    // cascade spilling, which is what keeps the endpoint a point on the same policy curve rather
+    // than a different policy that gives up when one account runs dry.
+    assert(cash[cash.length - 1] > 0, 'at weight 100 the cascade must still spill into Cash');
+});
+
+test('resolveOrderedSeq: any permutation resolves, anything else is CBIR', () => {
+    // P30d generalized this from a three-entry map to a generator. The three shipped codes must
+    // still produce byte-identical sequences, the other 21 permutations must now mean what they
+    // say, and a typo must still be a no-op rather than a silently different plan.
+    const rates = { capGainsPercentage: 0.5, capitalGainsRate: 0.15, nominalStateTaxAtLimit: 0.09,
+                    nominalTaxRate: 0.22, marginalFedTaxRate: 0.22, marginalStateTaxRate: 0.09 };
+    const names = seq => resolveOrderedSeq(seq, rates).map(pair => pair[0]).join(',');
+    assert(names('CBIR') === 'Cash,Brokerage,IRA,Roth', 'CBIR');
+    assert(names('RIBC') === 'Roth,IRA,Brokerage,Cash', 'RIBC');
+    assert(names('BIRC') === 'Brokerage,IRA,Roth,Cash', 'BIRC');
+    // Previously fell back to CBIR while naming something else; now it means itself.
+    assert(names('CBRI') === 'Cash,Brokerage,Roth,IRA', 'CBRI must no longer be a silent CBIR');
+    // Each account appears exactly once, at its own tax rate, in every permutation.
+    const perms = [];
+    (function walk(acc, rest) {
+        if (!rest.length) return perms.push(acc.join(''));
+        rest.forEach((c, i) => walk([...acc, c], rest.filter((_, j) => j !== i)));
+    })([], ['C', 'B', 'I', 'R']);
+    assert(perms.length === 24, 'the generator must produce 24 permutations');
+    for (const p of perms) {
+        const seq = resolveOrderedSeq(p, rates);
+        assert(seq.length === 4 && new Set(seq.map(x => x[0])).size === 4, `${p} must draw each account once`);
+    }
+    for (const bad of ['nonsense', 'CBI', 'CBIRR', 'CCBI', 'cbir', 'XBIR', undefined, null, 42, ''])
+        assert(names(bad) === 'Cash,Brokerage,IRA,Roth',
+            `${JSON.stringify(bad)} must still fall back to CBIR`);
+});
+
+test('selectionOf: a plan still identifies as itself after a round trip', () => {
+    // The Monte Carlo worker posts a SUMMARY of each variation back to the page, and the page asks
+    // sameStrategySelection() which summary is the user's own plan. That summary used to be a
+    // hand-written field list, and it was missing orderedSeq, stratIRMAATier, stratACAMultiple and
+    // the two Guyton-Klinger guardrails - so the comparison fell through to the `?? default` on the
+    // missing side and matched the wrong row, or no row. selectionOf() is the one list; this is the
+    // property that broke.
+    const plans = [
+        { strategy: 'propwd',   propWithdraw: 0.2 },
+        { strategy: 'fixed',    nYears: 11 },
+        { strategy: 'fixedpct', iraWithdrawPct: 0.09 },
+        { strategy: 'bracket',  stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 },
+        { strategy: 'bracket',  stratRate: 0, stratIRMAATier: 2, stratACAMultiple: 0 },
+        { strategy: 'aca',      stratRate: 0, stratIRMAATier: -1, stratACAMultiple: 250 },
+        { strategy: 'gk',       gkGuard: 0.15, gkAdjPct: 0.05 },
+        { strategy: 'ordered',  orderedSeq: 'CIBR' },
+        { strategy: 'ordered',  orderedSeq: 'CBRI', cyclicEnabled: true, cyclicOrder: 'brokerage-first' },
+        { strategy: 'propwd',   propWithdraw: 0.2, rothGapFill: 'fillCashThenRoth' },
+    ];
+    for (const p of plans) {
+        assert(sameStrategySelection(selectionOf(p), p),
+            `${JSON.stringify(p)} must still be itself after selectionOf()`);
+        // And it must not match a NEIGHBOUR. Every plan above differs from every other one, so a
+        // key that dropped a field would collapse two of them together here.
+        for (const q of plans) if (q !== p)
+            assert(!sameStrategySelection(selectionOf(p), q),
+                `selectionOf(${JSON.stringify(p)}) must not match ${JSON.stringify(q)}`);
+    }
+    // The list is the contract: every field the comparison reads has to be on it.
+    for (const f of ['strategy', 'orderedSeq', 'stratIRMAATier', 'stratACAMultiple', 'gkGuard',
+                     'gkAdjPct', 'rothGapFill', 'cyclicEnabled', 'cyclicOrder',
+                     'fundConversionWithCash', 'propWithdraw', 'nYears', 'stratRate', 'iraWithdrawPct'])
+        assert(STRATEGY_SELECTION_FIELDS.includes(f), `${f} must be carried`);
+});
+
+test('strategySortKey: families stay contiguous, whatever the label starts with', () => {
+    // P73. The Strategy column used to sort the RENDERED label, so a row whose label opened with
+    // raw HTML or an emoji sorted before or after the entire alphabet and each family's clones were
+    // torn away from it. The key must depend on none of that.
+    const row = (family, param, modifier = null, extra = {}) =>
+        ({ _family: family, _paramSortVal: param, _modifier: modifier,
+           _strategyLabel: (modifier ? '<span>Z</span> ' : '') + family, ...extra });
+    const rows = [
+        row('Reduce', 23), row('Fill Bracket', 0.24, 'rothgap'), row('Reduce', 3, 'ira-first'),
+        row('Fill Bracket', 0.1), row('Reduce', 3), row('IRMAA Ceil', -0.5),
+        row('Reduce', 7, 'cash'), row('Fill Bracket', 0.1, 'brokerage-first'), row('Reduce', 3, null, { _isNoConv: true }),
+    ];
+    const sorted = rows.slice().sort((a, b) => { const x = strategySortKey(a), y = strategySortKey(b);
+                                                 return x < y ? -1 : x > y ? 1 : 0; });
+    const fams = sorted.map(r => r._family);
+    // Contiguous: each family appears as exactly one run.
+    const runs = fams.filter((f, i) => f !== fams[i - 1]);
+    assert(runs.length === new Set(fams).size, `families must not repeat as separate blocks: ${fams.join(' | ')}`);
+    assert(runs.join(',') === 'Fill Bracket,IRMAA Ceil,Reduce', `alphabetical by family, got ${runs.join(',')}`);
+    // Inside a family: parameter first, then modifier, then variant. 3 sorts before 23 - the old
+    // label sort compared '3 yrs' against '23 yrs' as text and put 23 first.
+    const reduce = sorted.filter(r => r._family === 'Reduce');
+    assert(reduce.map(r => r._paramSortVal).join(',') === '3,3,3,7,23',
+        `Reduce must order numerically, got ${reduce.map(r => r._paramSortVal).join(',')}`);
+    // Modifier outranks variant, so a derived row stays with the arm it derives from: the plain
+    // row, then the plain row's no-conversion reference, then the clones.
+    assert(reduce[0]._modifier === null && !reduce[0]._isNoConv, 'the plain row leads its parameter');
+    assert(reduce[1]._isNoConv === true, 'then that row\'s no-conversion reference');
+    assert(reduce[2]._modifier === 'ira-first', 'then the modifier clones');
+    // A negative parameter (the lowest IRMAA tier sits at -0.5) must still pad to a sortable key.
+    assert(strategySortKey(row('IRMAA Ceil', -0.5)) < strategySortKey(row('IRMAA Ceil', 0.5)),
+        'a negative parameter must sort below a positive one, not wrap');
+    // String parameters (the Ordered sequences) sort as themselves, as the Param column does.
+    assert(strategySortKey(row('Ordered', 'BCIR')) < strategySortKey(row('Ordered', 'CBIR')),
+        'Ordered sequences sort as strings');
+    // The key must never read the label: two rows differing ONLY in markup are identical to it.
+    assert(strategySortKey({ _family: 'Reduce', _paramSortVal: 3, _strategyLabel: '<span>x</span> Reduce' })
+        === strategySortKey({ _family: 'Reduce', _paramSortVal: 3, _strategyLabel: '\u{1F4CD} Reduce' }),
+        'the rendered label must not reach the sort key at all');
+});
+
+test('ORDERED_SEQS: every offered sequence is a real permutation and both sweeps use the list', () => {
+    // The sidebar dropdown, MC_GRIDS.ordered and OPTIMIZER_GRIDS.ordered are one list on purpose:
+    // a sequence a user can pick must be a sequence the sweeps score. What this guards is the
+    // silent failure - resolveOrderedSeq falls back to CBIR for anything that is not a permutation,
+    // so a typo in the list would add a menu entry and a sweep row that both quietly run CBIR.
+    assert(MC_GRIDS.ordered === ORDERED_SEQS && OPTIMIZER_GRIDS.ordered === ORDERED_SEQS,
+        'both grids must reference the shared list, not a copy that can drift');
+    assert(new Set(ORDERED_SEQS).size === ORDERED_SEQS.length, 'no duplicate sequences');
+    const rates = { capGainsPercentage: 0.5, capitalGainsRate: 0.15, nominalStateTaxAtLimit: 0.09,
+                    nominalTaxRate: 0.22, marginalFedTaxRate: 0.22, marginalStateTaxRate: 0.09 };
+    const LETTER = { Cash: 'C', Brokerage: 'B', IRA: 'I', Roth: 'R' };
+    for (const seq of ORDERED_SEQS)
+        assert(resolveOrderedSeq(seq, rates).map(x => LETTER[x[0]]).join('') === seq,
+            `${seq} must resolve to itself, not to the CBIR fallback`);
+    // CBIR stays the fallback for an unset or malformed sequence, so it has to remain on offer
+    // however the menu is reordered.
+    assert(ORDERED_SEQS.includes('CBIR'), 'the default sequence must be offered');
+});
+
+test('bracketGapOrder: unset is bit-identical, and anything malformed means unset', () => {
+    // The bracket family takes its own sequential branch, so this is a different constant from
+    // gapFillWeights and a bigger one - it serves Fill Bracket, IRMAA Ceiling, ACA Cliff and IRA
+    // Draw. The branch was rewritten from nested ifs into a sequence to make the arm expressible;
+    // this is the guard that the rewrite kept every number where it was.
+    const b = { ...GFW_BASE, strategy: 'bracket', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 };
+    const ref = JSON.stringify(simulate(b).log);
+    for (const v of [undefined, 'cashFirst', 'nonsense', null, 42, '']) {
+        assert(JSON.stringify(simulate({ ...b, bracketGapOrder: v }).log) === ref,
+            `bracketGapOrder ${JSON.stringify(v)} must leave today's behavior alone`);
+    }
+});
+
+test('bracketGapOrder: it moves the bracket family and nothing else', () => {
+    // What is asserted here is the BLAST RADIUS, not the direction. No lifetime total is pinned:
+    // the swap changes which account is drawn first, that feeds back into every later year, and the
+    // sign of the lifetime Cash and Brokerage totals genuinely flips between account mixes -
+    // measured going both ways on two of the harness scenarios. A test that pinned one of them
+    // would be pinning the scenario, not the mechanism.
+    const arm = { bracketGapOrder: 'brokerageFirst' };
+    const moved = { ...GFW_BASE, strategy: 'bracket', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 };
+    assert(JSON.stringify(simulate({ ...moved, ...arm }).log) !== JSON.stringify(simulate(moved).log),
+        'the bracket family must feel it');
+    // Everything that takes another branch must not.
+    const untouched = [
+        { label: 'Proportional', over: { strategy: 'propwd', propWithdraw: 0.10 } },
+        { label: 'Reduce',       over: { strategy: 'fixed', nYears: 20 } },
+        { label: 'Guyton-Klinger', over: { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 } },
+        { label: 'Ordered',      over: { strategy: 'ordered', orderedSeq: 'CBIR' } },
+    ];
+    for (const u of untouched) {
+        const base = { ...GFW_BASE, ...u.over };
+        assert(JSON.stringify(simulate({ ...base, ...arm }).log) === JSON.stringify(simulate(base).log),
+            `${u.label} takes another branch and must be bit-identical`);
+    }
+});
+
+test('buildStrategyFamilies: the 🅡 pass clones every family except Ordered', () => {
+    const b = { ...BASE, Roth: 300000 };
+    const plain  = buildStrategyFamilies(b, { grids: OPTIMIZER_GRIDS });
+    const cloned = buildStrategyFamilies(b, { grids: OPTIMIZER_GRIDS, rothClones: true });
+    const roths  = cloned.filter(r => r.modifier === 'rothgap');
+    const base   = cloned.filter(r => r.modifier === null);
+    assert(roths.length > 0, 'the option must add rows');
+    assert(roths.every(r => r.overrides.rothGapFill === 'fillCashThenRoth'), 'each clone carries the position');
+    // Ordered is the only exclusion, and it is the one fillSpendingGap itself makes: the sequence is
+    // the user's. Guyton-Klinger and Proportional were excluded once on a research note about
+    // comparability and it cost GK its clones, which measurement says is the family that gains most.
+    assert(roths.every(r => r.overrides.strategy !== 'ordered'), 'Ordered must not be cloned');
+    assert(roths.some(r => r.overrides.strategy === 'gk'), 'Guyton-Klinger must be cloned');
+    assert(roths.some(r => r.overrides.strategy === 'propwd'), 'Proportional must be cloned');
+    assert(roths.length === base.filter(r => r.overrides.strategy !== 'ordered').length,
+        'and every other base row gets exactly one clone');
+    // And the rows it clones must not inherit a sidebar setting, or the A/B is two identical arms.
+    assert(cloned.filter(r => r.modifier === null).every(r => r.overrides.rothGapFill === ''),
+        'un-cloned rows are marked, the way markCashFunding marks the 💵 pass');
+    assert(plain.every(r => r.overrides.rothGapFill === undefined),
+        'and with the option off the key is not written at all');
+});
+
 test('sameStrategySelection: finds GK and Ordered users in buildVariations output (the MC regression)', () => {
     const gkBase = { ...BASE, strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 };
     const gkIdx = buildVariations(gkBase).findIndex(v => sameStrategySelection(v, gkBase));
@@ -4393,7 +4663,7 @@ test('buildVariations: the declared divergences from the Optimizer sweep are pin
 // yet, and these tests check the recording itself: that it is internally consistent, and that it
 // actually contains the four gates it was captured to cover. A corrupt or half-imported golden
 // would otherwise sit here looking authoritative until PR 2 "proved" an extraction against it.
-const CLONE_PFX = /🗘|🔄|💵/;
+const CLONE_PFX = /🗘|🔄|💵|🅡/;
 const optBaseRows = rows => rows.filter(r => !CLONE_PFX.test(r[0]));
 
 for (const [name, g] of Object.entries(OPT_GOLDEN)) {
@@ -4403,10 +4673,19 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
             `un-prefixed rows ${optBaseRows(g.rows).length}, baseRowCount ${g.baseRowCount}`);
         assert(g.base && typeof g.base === 'object' && g.base.strategy,
             'the capture must carry the base it was recorded against');
-        // Every base row is cloned by the cyclic pass; 💵 clones the base rows again when the
-        // nerdknob is on AND there is Cash. So the total is 3x or 4x the base count, never else.
-        const mult = g.rowCount / g.baseRowCount;
-        assert(mult === 3 || mult === 4, `row count is ${mult}x the base rows, expected 3x or 4x`);
+        // Every clone pass is accounted for exactly, rather than by a row-count multiple: the 🅡
+        // pass skips Ordered rather than cloning every base row, so the total
+        // stopped being a whole multiple of the base count when it landed.
+        const n = pfx => g.rows.filter(r => r[0].includes(pfx)).length;
+        const reachable = optBaseRows(g.rows).filter(r => r[3].strategy !== 'ordered').length;
+        assert(n('🗘') === g.baseRowCount && n('🔄') === g.baseRowCount,
+            `cyclic passes clone every base row: 🗘 ${n('🗘')}, 🔄 ${n('🔄')}, base ${g.baseRowCount}`);
+        assert(n('💵') === (g.nerdKnobs && g.base.Cash > 0 ? g.baseRowCount : 0),
+            `💵 clones are gated on nerdknob AND Cash, got ${n('💵')}`);
+        assert(n('🅡') === ((g.base.Roth > 0 || g.base.Roth2 > 0) ? reachable : 0),
+            `🅡 clones the ${reachable} reachable base rows, got ${n('🅡')}`);
+        assert(g.baseRowCount + n('🗘') + n('🔄') + n('💵') + n('🅡') === g.rowCount,
+            'the four clone passes plus the base rows must account for every row');
     });
 
     test(`OPT_GOLDEN [${name}]: clone rows carry the modifier their prefix claims`, () => {
@@ -4420,8 +4699,12 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
             else if (label.includes('💵'))
                 assert(ov.fundConversionWithCash === true && !ov.cyclicEnabled,
                     `${label}: 💵 must fund with cash and must not be cyclic`);
+            else if (label.includes('🅡'))
+                assert(ov.rothGapFill === 'fillCashThenRoth' && !ov.cyclicEnabled,
+                    `${label}: 🅡 must draw Roth after cash and must not be cyclic`);
             else
-                assert(!ov.cyclicEnabled && ov.fundConversionWithCash !== true,
+                assert(!ov.cyclicEnabled && ov.fundConversionWithCash !== true
+                    && ov.rothGapFill !== 'fillCashThenRoth',
                     `${label}: an un-prefixed row must carry no modifier`);
         }
     });
@@ -4458,7 +4741,9 @@ test('OPT_GOLDEN: the four gates are actually exercised by the captured scenario
     assert(o.nerdKnobs === true && o.base.Cash === 0, 'the off-grid capture must be nerdknob-on with no Cash');
     assert(!has(o, '💵'), 'Cash 0: the 💵 clones are skipped as bit-identical twins');
     const last = optBaseRows(o.rows)[o.baseRowCount - 1];
-    assertSameList([last[0], last[1]], ['IRA Draw', '9%'], 'the off-grid row');
+    // 14%, not 9%: 9% was off both grids until v11.162J put it ON the Optimizer's, at which point
+    // this scenario silently stopped exercising the gate it was captured for.
+    assertSameList([last[0], last[1]], ['IRA Draw', '14%'], 'the off-grid row');
     assert(o.baseRowCount - a.baseRowCount === 1, 'an off-grid parameter adds exactly one base row');
 });
 
@@ -4481,6 +4766,9 @@ for (const [name, g] of Object.entries(OPT_GOLDEN)) {
             bracketResetsIRMAATier: true,
             markCashFunding: nerd,
             cashClones: nerd && g.base.Cash > 0,
+            // Not gated on the nerdknob: the 🅡 arm is swept for everyone, so it must reproduce in
+            // the nerdknob-off capture too.
+            rothClones: g.base.Roth > 0 || g.base.Roth2 > 0,
             offGridLast: true,
         });
         // Key ORDER inside an overrides object is an artifact of how the old block happened to
@@ -4503,12 +4791,15 @@ test('buildStrategyFamilies: the options are what separate the two sweeps, nothi
 
     const mc  = call({ grids: MC_GRIDS });
     const opt = call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true });
-    assert(plain(mc).length === 36 && plain(opt).length === 44,
-        `base rows: MC ${plain(mc).length} (expected 36), Optimizer ${plain(opt).length} (expected 44)`);
+    // The Optimizer now has FEWER base rows than MC despite sweeping two extra families: its Reduce
+    // grid is 5 steps against MC's 16, and its IRA Draw grid 5 against MC's 5 but not the same five.
+    // Both counts are pinned so a grid edit has to be deliberate.
+    assert(plain(mc).length === 39 && plain(opt).length === 33,
+        `base rows: MC ${plain(mc).length} (expected 39), Optimizer ${plain(opt).length} (expected 33)`);
 
-    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 48,
+    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 37,
         'the ACA family adds 4 rows');
-    assert(call({ grids: MC_GRIDS, cashClones: true }).length === 108 * 4 / 3,
+    assert(call({ grids: MC_GRIDS, cashClones: true }).length === 117 * 4 / 3,
         'cashClones clones every un-modified row once more');
     assert(call({ grids: MC_GRIDS }).every(r => r.overrides.fundConversionWithCash === undefined),
         'without markCashFunding the key is not written at all');
@@ -4544,14 +4835,17 @@ test('bothOnMedicareAtStart: AND semantics, single filer, and the missing-input 
     assert(both(0, 65, true, 1952) === false,    'missing inputs are not an assertion of anything');
 });
 
-test('OPT_GOLDEN: the Optimizer sweeps the two families and the wider grid that MC does not', () => {
+test('OPT_GOLDEN: the Optimizer sweeps the two families MC does not, on its own IRA Draw grid', () => {
     // The mirror of the buildVariations divergence test above. Together they declare the gap
     // rather than leaving it accidental, so P35 PR 2 cannot collapse the two sweeps onto one grid
     // without failing one side or the other.
+    //
+    // "Wider" until v11.162J, when the Optimizer's IRA Draw grid was trimmed to odd steps: MC still
+    // tries 6% and 8%, which the Optimizer no longer does, so neither grid contains the other.
     const rows = optBaseRows(OPT_GOLDEN.nerdknob.rows);
     const draws = rows.filter(r => r[3].strategy === 'fixedpct')
                       .map(r => Math.round(r[3].iraWithdrawPct * 100));
-    assertSameList(draws, [5, 6, 7, 8, 10, 12, 15, 20], 'Optimizer IRA Draw grid');
+    assertSameList(draws, [5, 7, 9, 11, 13], 'Optimizer IRA Draw grid');
     const irmaa = rows.filter(r => r[0] === 'IRMAA Ceil');
     assertSameList(irmaa.map(r => r[3].stratIRMAATier), [0, 1, 2, 3, 4], 'IRMAA ceiling tiers');
     // Its Fill Bracket rows pin the tier OFF, which is what keeps the two families apart.
@@ -5177,6 +5471,26 @@ test('P71: stress mode banks one path per scenario, not numPaths of them', () =>
     assert(banks.numPaths !== cfg.numPaths, 'stress used the requested path count instead of its own');
     assert(banks.scenarioBank.length === n * cfg.years, `bank is ${banks.scenarioBank.length} long`);
     assert(banks.synthInflationBank === null, 'stress draws inflation from the record, not a model');
+});
+
+test('the worker payload keeps each variation identifiable as a strategy', async () => {
+    // The bug this guards, reported 2026-08-25: with an Ordered sequence selected, Monte Carlo's
+    // chart emphasized a DIFFERENT sequence. The variation summary the engine posts back carried no
+    // orderedSeq, so sameStrategySelection() compared the page's 'CIBR' against a summary that
+    // defaulted to 'CBIR' - it matched the first Ordered row for a CBIR user and nothing at all for
+    // anyone else. An end-to-end assertion because the defect lived in the transport, not in either
+    // side of it: both halves were correct on their own.
+    const ordered = buildVariations({ ...(_p71Base), strategy: 'ordered', orderedSeq: 'CIBR' })
+        .filter(v => v.strategy === 'ordered' && !v.cyclicEnabled && !v.fundConversionWithCash);
+    assert(ordered.length === ORDERED_SEQS.length, `expected one row per sequence, got ${ordered.length}`);
+    const msg = await _mcEngine.runJob(_p71Cfg('gbm', { variations: ordered, numPaths: 4, years: 12 }));
+    assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
+    for (const seq of ORDERED_SEQS) {
+        const plan = { ...(_p71Base), strategy: 'ordered', orderedSeq: seq };
+        const hits = msg.variations.filter(v => sameStrategySelection(v, plan));
+        assert(hits.length === 1, `${seq} matched ${hits.length} returned variations, expected exactly 1`);
+        assert(hits[0].orderedSeq === seq, `${seq} matched the row for ${hits[0].orderedSeq}`);
+    }
 });
 
 test('P71: a cancelled job reports nothing at all', async () => {

@@ -883,12 +883,22 @@ function resolveOrderedSeq(seq, rates) {
     const { capGainsPercentage, capitalGainsRate, nominalStateTaxAtLimit, nominalTaxRate, marginalFedTaxRate, marginalStateTaxRate } = rates;
     const taxB = capGainsPercentage * (capitalGainsRate + nominalStateTaxAtLimit);
     const taxI = Math.max(nominalTaxRate, marginalFedTaxRate + marginalStateTaxRate);
-    const map = {
-        CBIR: [['Cash', 0], ['Brokerage', taxB], ['IRA', taxI], ['Roth', 0]],
-        RIBC: [['Roth', 0], ['IRA', taxI], ['Brokerage', taxB], ['Cash', 0]],
-        BIRC: [['Brokerage', taxB], ['IRA', taxI], ['Roth', 0], ['Cash', 0]],
-    };
-    return map[seq] ?? map['CBIR'];
+    // Generated from the letters rather than looked up in a three-entry map (P30d). The map version
+    // resolved CBIR, RIBC and BIRC and fell back to CBIR for everything else - including the other
+    // 21 permutations of the same four accounts, which therefore ran a DIFFERENT sequence from the
+    // one they named, silently. That is fine while nothing produces those strings (the UI offers
+    // three, `grids.ordered` sweeps the same three) but it makes the other 21 unmeasurable, which
+    // is what P30d needed, and it is a trap for anyone who reaches the input another way.
+    //
+    // The three shipped codes generate byte-identical sequences to the map they replace. Anything
+    // that is not a permutation of the four letters still falls back to CBIR, so a typo is still a
+    // no-op rather than a different plan - the same discipline gapFillWeights and rothGapFill use.
+    // Deliberately case-SENSITIVE: 'ribc' fell back to CBIR before and still does.
+    const ACCT = { C: 'Cash', B: 'Brokerage', I: 'IRA', R: 'Roth' };
+    const RATE = { Cash: 0, Brokerage: taxB, IRA: taxI, Roth: 0 };
+    const ok = typeof seq === 'string' && seq.length === 4
+        && new Set(seq).size === 4 && [...seq].every(ch => ACCT[ch]);
+    return [...(ok ? seq : 'CBIR')].map(ch => [ACCT[ch], RATE[ACCT[ch]]]);
 }
 
 function runOrderedWithdrawal(balances, need, seq, accumulate, applyFn) {
@@ -959,16 +969,12 @@ function buildSimYearLogRecord(p) {
         'Brokerage-': p.netWithdrawals.Brokerage,
         'RothWD': (p.netWithdrawals.Roth1 ?? 0) + (p.netWithdrawals.Roth2 ?? 0),
         'CashWD': p.netWithdrawals.Cash,
-        // DO NOT make this the P28 unified figure. `rothConv` is read back out of the log by the
+        // DO NOT write a reframed figure here. `rothConv` is read back out of the log by the
         // NEXT year (beginYear: `log[y-1].rothConv > 1000` picks early-vs-late withdrawal timing),
-        // so it is engine state wearing a display field's clothes. Reporting the reframed number
-        // here flipped IRA Draw 6% from late to early timing and moved 780 money fields. The
-        // reframe gets its own keys below instead.
+        // so it is engine state wearing a display field's clothes. Reporting P28's unified figure
+        // here flipped IRA Draw 6% from late to early timing and moved 780 money fields. A view
+        // that wants the two legs separately has `-iraSpend` and `-iraConvGrossTot` above.
         'rothConv': p.totalConverted,
-        // P28 (research flag): the same year told as "convert the whole voluntary draw, then spend
-        // out of Roth". Hidden ('-' prefix) and never read by the engine.
-        '-unifiedConvGross': p.unifiedConvRouting ? ((p.iraConvGross1 || 0) + (p.iraConvGross2 || 0)) : 0,
-        '-unifiedRothSpend': p.unifiedRothSpend || 0,
         'surplusCash': p.surplus.Cash,
         '-surplusToBrokerage': p.surplusToBrokerage ?? 0,   // Cash Reserve overflow reinvested (hidden)
         '-cashBreach': p.cashBreach ? 1 : 0,                // spending forced a draw into the reserve (hidden)
@@ -1896,11 +1902,10 @@ function fillSpendingGap(sim, yr) {
 
     inspectForErrors({ netSpendable: netSpendable, gap: gap, totalTax: yr.totalTax });
 
-    // P28 research input (no UI, default off): move Roth OUT of last place in the gap fill. This is
-    // the only half of the unified-conversion idea that can move money. Deliberately separate from
-    // unifiedConvRouting so the harness can measure the two independently -- the routing half is
-    // provably balance-neutral, this half is not. `ordered` is excluded by explicit instruction: its
-    // entire meaning is the account sequence the user picked.
+    // Move Roth OUT of last place in the gap fill. Shipped at P28f as the "Roth before Brokerage"
+    // switch and as a sweep dimension (the 🅡 rows); it was a research input first,
+    // and the half of the unified-conversion idea that could actually move money. `ordered` is
+    // excluded by explicit instruction: its entire meaning is the account sequence the user picked.
     //
     //   inputs.rothGapFill
     //     (unset)             -- today: Cash, then Brokerage, then Roth as last resort
@@ -1919,6 +1924,13 @@ function fillSpendingGap(sim, yr) {
     // earns cashYield and pays tax on the interest, so spending Roth to preserve Cash keeps the worse
     // asset. Measured on IRA Draw 6%, whose gap fill only ever touched Cash: $58k of substituted
     // withdrawals cost $137,062 of terminal value.
+    //
+    // Neither position is safe to recommend. Re-measured on the v11.162B engine, 'fillCashThenRoth'
+    // ranges from +$470,977 to -$633,605 and is negative in 26 of 60 cells - a two-sided lever, not
+    // the near-free win the 2026-07-30 run recorded. P32 letting the third pass draw Brokerage is the
+    // likely cause: displacing a Brokerage draw IS this mechanism, so changing when Brokerage is
+    // drawn changes both the size and the sign. That is why it ships as a swept dimension rather
+    // than a default, and why the harness numbers in P28_RESULTS.md carry a re-run warning.
     // Validated against the known values rather than tested for truthiness: with `|| null` a typo
     // like 'fillCashThenRother' fell through to the Roth-first branch and silently modelled the
     // OTHER mode. Anything unrecognized now means "leave today's behavior alone".
@@ -1952,21 +1964,42 @@ function fillSpendingGap(sim, yr) {
         } else if (yr.isBracketStrategy) {
             // Bracket/IRMAA strategies: supplement spending from Cash first, then Brokerage, then Roth.
             // This keeps supplemental draws out of taxable income as much as possible.
-            const cashWd = calculateWithdrawals(yr.curBalances, gap, { order: ['Cash'], weight: [1], taxrate: [0] });
-            yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, cashWd]);
-            applyWithdrawals(yr.curBalances, cashWd);
+            //
+            // P30c research input (no UI, no URL param): `inputs.bracketGapOrder` swaps the first
+            // two. This is the OTHER constant nobody chose - the sibling of the default branch's
+            // [40, 60], and a bigger one, because this branch serves Fill Bracket, IRMAA Ceiling,
+            // ACA Cliff and IRA Draw where the weight reaches only three families.
+            //
+            // The two accounts are not symmetric, which is why the order is a question rather than a
+            // preference. Cash is tax-free to withdraw but earns `cashYield` taxed as ordinary
+            // income; Brokerage realizes capital gains on the way out and steps up its own basis.
+            // "Keep supplemental draws out of taxable income" argues for Cash first and is what the
+            // comment above has always said, but nothing measured it, and P30b found the analogous
+            // constant in the other branch was not merely unchosen but wrong.
+            //
+            // Written as a SEQUENCE rather than nested ifs so the arm is the order of a list. The
+            // control path is bit-identical to the ifs it replaces: each account still draws only
+            // the shortfall the one before it left, the chain still stops at $1, and Roth is still
+            // reached only when both leave something over.
+            const _bgo = inputs.bracketGapOrder === 'brokerageFirst' ? 'brokerageFirst' : 'cashFirst';
+            const _brokRate = yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit);
+            const _bSeq = _bgo === 'brokerageFirst'
+                ? [['Brokerage', _brokRate], ['Cash', 0]]
+                : [['Cash', 0], ['Brokerage', _brokRate]];
+            let _bNeed = gap;
+            for (const [_acct, _rate] of _bSeq) {
+                const wd = calculateWithdrawals(yr.curBalances, _bNeed,
+                    { order: [_acct], weight: [1], taxrate: [_rate] });
+                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, wd]);
+                applyWithdrawals(yr.curBalances, wd);
+                _bNeed = wd.shortfall ?? 0;
+                if (_bNeed <= 1) break;
+            }
 
-            if ((cashWd.shortfall ?? 0) > 1) {
-                const brokerWd = calculateWithdrawals(yr.curBalances, cashWd.shortfall,
-                    { order: ['Brokerage'], weight: [1], taxrate: [yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit)] });
-                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, brokerWd]);
-                applyWithdrawals(yr.curBalances, brokerWd);
-
-                if ((brokerWd.shortfall ?? 0) > 1 && yr.curBalances.Roth > 0) {
-                    const rothWithdrawals = calculateWithdrawals(yr.curBalances, brokerWd.shortfall, { order: ['Roth'], weight: [1], taxrate: [0] });
-                    yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothWithdrawals]);
-                    applyWithdrawals(yr.curBalances, rothWithdrawals);
-                }
+            if (_bNeed > 1 && yr.curBalances.Roth > 0) {
+                const rothWithdrawals = calculateWithdrawals(yr.curBalances, _bNeed, { order: ['Roth'], weight: [1], taxrate: [0] });
+                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothWithdrawals]);
+                applyWithdrawals(yr.curBalances, rothWithdrawals);
             }
         } else if (yr.isOrderedStrategy) {
             const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage: yr.capGainsPercentage, capitalGainsRate: sim.capitalGainsRate, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, nominalTaxRate: sim.nominalTaxRate, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate });
@@ -1974,8 +2007,28 @@ function fillSpendingGap(sim, yr) {
 
         } else {
             // Default: Brokerage + Cash proportional, then Roth fallback.
+            //
+            // P30a research input (no UI, no URL param): `inputs.gapFillWeights` replaces the
+            // [40, 60]. Nobody chose that 40/60 - it has been a bare literal since the branch was
+            // written - and P30 exists to find out whether it is load-bearing at all. The weights
+            // are RELATIVE, normalized by calculateWithdrawals, so [1, 1] and [50, 50] are the same
+            // split; percentages are used here only because that is how the original read.
+            //
+            // Validated to a known SHAPE rather than tested for truthiness, for the reason the
+            // rothGapFill comment above records: a malformed value must mean "leave today's
+            // behavior alone", never "model something else silently". Two finite non-negative
+            // numbers with a positive sum - the sum is the one that matters, because a [0, 0] pair
+            // would divide by zero in the normalizer and put NaN through every downstream balance.
+            //
+            // The ENDPOINTS are legal and meaningful: [0, 100] is all-Cash and [100, 0] is
+            // all-Brokerage, both of which still spill to the other account through the shortfall
+            // cascade rather than stopping short. That is what makes a 0-to-100 sweep a sweep of
+            // this policy rather than of two different policies.
+            const _gfw = inputs.gapFillWeights;
+            const _gfwOK = Array.isArray(_gfw) && _gfw.length === 2
+                && _gfw.every(w => Number.isFinite(w) && w >= 0) && (_gfw[0] + _gfw[1]) > 0;
             yr.withdrawStrategy.order = ['Brokerage', 'Cash'];
-            yr.withdrawStrategy.weight = [40, 60];
+            yr.withdrawStrategy.weight = _gfwOK ? [_gfw[0], _gfw[1]] : [40, 60];
             yr.withdrawStrategy.taxrate = [yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit), 0];
             yr.withdrawals = calculateWithdrawals(yr.curBalances, gap, yr.withdrawStrategy);
             yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, yr.withdrawals]);
@@ -2382,31 +2435,13 @@ function routeSurplusAndConvert(sim, yr) {
     yr.iraVolSpend1 = Math.max(0, (yr.netWithdrawals.IRA1 || 0) - yr.iraConvGross1);
     yr.iraVolSpend2 = Math.max(0, (yr.netWithdrawals.IRA2 || 0) - yr.iraConvGross2);
 
-    // P28 research flag (no UI, default off): model EVERY voluntary IRA dollar as a Roth conversion,
-    // with spending then drawn back out of Roth.
-    //
-    // This re-attributes REPORTING only, and that is not a shortcut -- it is the arithmetic. Draw a
-    // gross X, pay tax T on it, fund spending S: today Roth gains the leftover L = X - T - S. Routed
-    // through Roth, Roth gains (X - T) and immediately gives back S, which is the same L. The round
-    // trip cannot move money and cannot fail (the conversion funding S arrives in the same instant S
-    // leaves), so surplus.Roth1/2 -- the only fields here that reach a balance -- are left exactly as
-    // computed above. What legitimately changes is what the year CALLS its dollars: the whole
-    // voluntary draw is conversion gross, and none of it is a spending draw.
-    //
-    // yr.totalConverted is deliberately NOT reassigned, and neither is the `rothConv` log field it
-    // feeds. Both read as reporting and neither is: beginYear picks next year's withdrawal TIMING
-    // from `log[y-1].rothConv > 1000`. Writing the reframed figure into either one flipped IRA Draw
-    // 6% from late to early timing and moved 780 money fields. The reframe gets its own log keys.
-    if (inputs.unifiedConvRouting) {
-        yr.iraConvGross1 = yr.netWithdrawals.IRA1 || 0;
-        yr.iraConvGross2 = yr.netWithdrawals.IRA2 || 0;
-        yr.iraVolSpend1 = 0;
-        yr.iraVolSpend2 = 0;
-        // The portion that round-tripped straight back out to fund spending. Reported so the
-        // Annual Details reframe can show the two legs instead of a bare net.
-        yr.unifiedRothSpend = Math.max(0,
-            (yr.iraConvGross1 + yr.iraConvGross2) - (yr.surplus.Roth1 + yr.surplus.Roth2));
-    }
+    // `unifiedConvRouting` used to sit here: a P28 research flag that called EVERY voluntary IRA
+    // dollar a Roth conversion and drew spending back out of Roth. It was removed once measured.
+    // The round trip is arithmetic, not a shortcut -- draw gross X, pay tax T, fund spending S, and
+    // Roth gains X - T - S either way -- so it could only ever re-label, and 630 simulations
+    // confirmed it: 0 money fields moved in 90 cells. A view that wants the two legs told
+    // separately does not need an engine flag, because `-iraSpend` and `-iraConvGrossTot` are
+    // already in every log row. Reasoning and measurements: .test_harnesses/P28_RESULTS.md.
 
     // If there is still a surplus, replace any excess Cash withdrawal.
     yr.surplus.Cash = Math.min(yr.surplus.Total, yr.netWithdrawals.Cash);
@@ -2453,8 +2488,8 @@ function routeSurplusAndConvert(sim, yr) {
         // or Brokerage) the chosen sequence draws FIRST, so next year's ordered pass pulls it back
         // first instead of stranding it in an account the sequence won't reach until everything else
         // is gone. Roth and the IRA are contribution-limited and cannot receive an arbitrary after-
-        // tax surplus, so only Cash and Brokerage are candidates. CBIR (Cash first) is unchanged
-        // from the legacy all-to-cash default; RIBC and BIRC (Cash last) now route to Brokerage.
+        // tax surplus, so only Cash and Brokerage are candidates. Any Cash-first sequence is
+        // unchanged from the legacy all-to-cash default; a Brokerage-first one routes there instead.
         // Only the account ORDER from resolveOrderedSeq is used here, so its tax-rate args are
         // placeholders. Brokerage deposits step up basis, the same convention as the Cyclic and
         // Cash-Reserve-overflow paths above.
@@ -2838,7 +2873,6 @@ function logYear(sim, yr) {
         surplus: yr.surplus, totalRMD: yr.totalRMD, qcd1: yr.qcd1, qcd2: yr.qcd2, taxableDividends: yr.taxableDividends, taxableInterest: yr.taxableInterest,
         netWithdrawals: yr.netWithdrawals, rmd1: yr.rmd1, rmd2: yr.rmd2, totalConverted: yr.totalConverted, tax: yr.tax, IRMAA: yr.IRMAA, IRMAATier: yr.IRMAATier, medicareBase: yr.medicareBase, cpiRate: sim.cpiRate,
         iraVolSpend1: yr.iraVolSpend1, iraVolSpend2: yr.iraVolSpend2, iraConvGross1: yr.iraConvGross1, iraConvGross2: yr.iraConvGross2,
-        unifiedConvRouting: !!inputs.unifiedConvRouting,
         totalTax: yr.totalTax, capitalGains: yr.capitalGains, cumulativeTaxes: sim.cumulativeTaxes, bracketTarget: yr.bracketTarget, bracketOverage: yr.bracketOverage, forcedIRA: yr.forcedIRA, acaBreach: yr.acaBreach,
         balance: balance, nominalTaxRate: sim.nominalTaxRate, totalWealth: yr.totalWealth, portfolioBalance: yr.portfolioBalance, guaranteedIncome: yr.guaranteedIncome,
         totalsSpend: totals.spend,
@@ -3841,6 +3875,24 @@ const OPT_OBJECTIVE_METRIC_COLUMN = Object.freeze({
 // _selection can all be compared against each other. Pure.
 // Used by Monte Carlo (to run Stress against the user's actual strategy) and by the Optimizer (to
 // mark the swept row nearest the user's current plan).
+// The fields sameStrategySelection() reads, copied off a plan and nothing else. ONE list, because
+// the identity has to survive a transport: the Monte Carlo worker posts a summary of each variation
+// back to the page, and a hand-kept field list there dropped orderedSeq, the IRMAA tier, the ACA
+// multiple and the Guyton-Klinger guardrails. Nothing failed - the comparison just fell through to
+// the `?? default` on the missing side, so an Ordered plan silently matched whichever sequence the
+// grid happened to list first and every IRMAA, ACA and GK plan matched nothing at all. Pure.
+const STRATEGY_SELECTION_FIELDS = Object.freeze([
+    'strategy', 'cyclicEnabled', 'cyclicOrder', 'fundConversionWithCash', 'rothGapFill',
+    'propWithdraw', 'nYears', 'stratRate', 'stratIRMAATier', 'stratACAMultiple',
+    'iraWithdrawPct', 'orderedSeq', 'gkGuard', 'gkAdjPct',
+]);
+function selectionOf(p) {
+    const o = {};
+    if (!p) return o;
+    for (const k of STRATEGY_SELECTION_FIELDS) if (p[k] !== undefined) o[k] = p[k];
+    return o;
+}
+
 function sameStrategySelection(a, b) {
     if (!a || !b) return false;
     if (a.strategy !== b.strategy) return false;
@@ -3850,6 +3902,11 @@ function sameStrategySelection(a, b) {
     // this a first-match search would pair a cash-funding user with the non-cash-funded twin, a
     // materially different plan.
     if (!!a.fundConversionWithCash !== !!b.fundConversionWithCash) return false;
+    // Same reason for the 🅡 clones: Roth drawn after Cash instead of last is a different plan,
+    // not a different label. Anything the engine does not recognize means "leave today's behavior
+    // alone", so every unrecognized value has to compare equal to unset.
+    const rgf = x => (x === 'fillCashThenRoth' || x === 'fillRothThenCash') ? x : '';
+    if (rgf(a.rothGapFill) !== rgf(b.rothGapFill)) return false;
     const near = (x, y) => Math.abs((x ?? 0) - (y ?? 0)) < 0.001;
     switch (a.strategy) {
         case 'propwd':   return near(a.propWithdraw,   b.propWithdraw);
@@ -3907,6 +3964,44 @@ function offGridParamFor(base, grids = {}) {
         }
         default: return null;
     }
+}
+
+// ── Strategy-column sort key ──────────────────────────────────────────────────────────────────────────
+// Sorting the Strategy column used to sort `_strategyLabel`, the string the cell RENDERS. That
+// string carries the modifier prefix (raw HTML for the cyclic IRA-first arm), the pinned-row marks
+// and the trailing conversion/infeasible markers, so the comparison was localeCompare over markup
+// and emoji: every clone was torn away from the family it clones, and the alphabet stopped halfway
+// through, resumed after a block of symbol-prefixed rows.
+//
+// This reads the DATA instead. Order is family, then parameter, then modifier, then variant - so
+// each family is one contiguous block and each parameter's arms sit together inside it.
+//
+// The key is a fixed-width string compared by CODE POINT, never localeCompare: locale collation
+// treats punctuation and padding as ignorable at primary strength, which is exactly the kind of
+// silent reordering this function exists to remove. Fields are padded rather than delimited for
+// the same reason. Pure.
+const OPT_MODIFIER_SORT = Object.freeze({ 'ira-first': 1, 'brokerage-first': 2, 'cash': 3, 'rothgap': 4 });
+// Variant ranks: the live row first, then the rows derived from it, then the no-conversion
+// reference sweep, which is a different question and reads better as a block of its own.
+const OPT_VARIANT_SORT = Object.freeze({ main: 0, conv: 1, spend: 2, reverse: 3, noconv: 4 });
+function strategySortKey(r) {
+    if (!r) return '';
+    const fam = String(r._family || r._strategy || '').padEnd(18).slice(0, 18);
+    const p = r._paramSortVal;
+    // Numeric parameters are offset and scaled so a negative one (the IRMAA tiers sit on half-steps,
+    // the lowest at -0.5) still pads to a positive fixed-width integer. String parameters (the
+    // Ordered account sequences) sort as themselves, which is what the Param column does with the
+    // same field. A family never mixes the two, so the N/S tag only has to keep them apart.
+    const param = (typeof p === 'number' && Number.isFinite(p))
+        ? 'N' + String(Math.round((p + 1000) * 1000)).padStart(9, '0')
+        : 'S' + String(p ?? '').padEnd(9).slice(0, 9);
+    const mod = OPT_MODIFIER_SORT[r._modifier] ?? 0;
+    const variant = r._isNoConv ? OPT_VARIANT_SORT.noconv
+        : r._isReverseOptimized ? OPT_VARIANT_SORT.reverse
+        : r._isSpendOptimized ? OPT_VARIANT_SORT.spend
+        : r._isConvOptimized ? OPT_VARIANT_SORT.conv
+        : OPT_VARIANT_SORT.main;
+    return fam + param + mod + variant;
 }
 
 // Rank rows best->worst under an objective. Successful rows ALWAYS outrank failed ones (a depleted
@@ -4180,6 +4275,20 @@ function lowestBreakEvenHeirsRate(baseInputs, candidates = [], opts = {}) {
     return best;
 }
 
+// ── Ordered account sequences ────────────────────────────────────────────────────────────────────────
+// The six account sequences the Ordered strategy offers. ONE list, shared by both sweeps and by
+// the sidebar dropdown, in the order the dropdown lists them - so a sequence a user can pick is
+// always a sequence the sweeps score, and vice versa.
+//
+// Four accounts permute 24 ways. These six are the ones that ever came out ahead in the P30d
+// sweep (.test_harnesses/GAPFILL_RESULTS.md sections 10 and 15), ordered by how often each was
+// the best of all 24 and, on a tie, by how much was at stake when it won. CBRI and CIBR win most
+// and were not offered at all before v11.163F. RIBC and BIRC won nothing anywhere in that grid
+// and are kept because they are the Roth-first and brokerage-first stress tests they were added
+// for, not because the sweep argues for them.
+const ORDERED_SEQS = ['CBRI', 'CBIR', 'CIBR', 'BCIR', 'RIBC', 'BIRC'];
+
+
 // ── Strategy enumeration ──────────────────────────────────────────────────────────────────────
 // The two sweeps do NOT sweep the same space, and the difference is deliberate. It is declared
 // here as two pinned grids rather than left to drift between an inline block in the UI and this
@@ -4192,13 +4301,23 @@ const MC_GRIDS = {
     propwd:   [0, 5, 10, 20, 50],
     fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
     fixedpct: [5, 6, 7, 8, 10],
-    ordered:  ['CBIR', 'RIBC', 'BIRC'],
+    ordered:  ORDERED_SEQS,
 };
 const OPTIMIZER_GRIDS = {
     propwd:   [0, 5, 10, 20, 50],
-    fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
-    fixedpct: [5, 6, 7, 8, 10, 12, 15, 20],
-    ordered:  ['CBIR', 'RIBC', 'BIRC'],
+    // Coarser than MC's 16 steps, and deliberately. Reduce was 80 of the Optimizer's 218 rows -
+    // 37% of the table - for a family whose neighbouring years differ by very little, and every
+    // row is paid for four times over once the 🗘/🔄 and 🅡 clone passes and the no-conversion
+    // baseline have had it. The endpoints are approximately preserved (3 for 2, 23 for 25), and a
+    // user sitting between steps still gets their own value as a row: offGridParamFor adds it.
+    fixed:    [3, 7, 11, 17, 23],
+    // Odd steps, 5 through 13. NOT a superset of MC's [5, 6, 7, 8, 10] any more: the Optimizer no
+    // longer tries 6% or 8%, and MC does not try 9%, 11% or 13%. The two sweeps have always
+    // differed on purpose, but this is the first place where each has a value the other lacks, so
+    // an IRA Draw row in one tab may have no twin in the other. A user above 13% still gets scored:
+    // offGridParamFor adds their own percentage as its own row.
+    fixedpct: [5, 7, 9, 11, 13],
+    ordered:  ORDERED_SEQS,
     irmaaTiers:   [0, 1, 2, 3, 4],
     acaMultiples: [200, 250, 300, 400],
 };
@@ -4213,7 +4332,24 @@ const MODIFIER_PREFIX = {
     'ira-first':       '<span style="color:#cc0000">\u{1F5D8}</span> ',
     'brokerage-first': '\u{1F504} ',
     'cash':            '\u{1F4B5} ',
+    'rothgap':         '\u{1F161} ',
 };
+
+// Strategies the 🅡 clone pass skips. Exactly one, and it is the one `fillSpendingGap` itself
+// excludes: Ordered runs the account sequence the user chose, so a clone would be a twin.
+//
+// This started life as an allow-list of four families, on the strength of P28g's note that the
+// effect is per-family and that Proportional and Guyton-Klinger are not comparable. That note is
+// about what a RESEARCH cell can be read as, not about whether the lever reaches the strategy, and
+// it should never have become a shipping gate. GK has no ordering logic of its own at all - its
+// only special handling is the spend adjustment above - so it falls into the same default gap-fill
+// branch as everything else, and measurement says it is the family that benefits most reliably:
+// positive in all 15 of its harness cells, +$8,683 to +$195,107. Its gain simply arrives as
+// delivered SPENDING rather than terminal wealth, because the guardrail converts a healthier
+// portfolio into a higher spend - and baselineScoreOf counts that on purpose. Proportional is a
+// weaker case, since planPrimaryWithdrawals usually funds spending directly, but "usually" is not
+// "never": it reached +$11,959 in the larger default mix.
+const ROTH_GAP_EXCLUDED = new Set(['ordered']);
 
 /**
  * Enumerate the strategy arms of a sweep. Pure: no DOM, no simulate(), no TAXData beyond the
@@ -4239,6 +4375,12 @@ const MODIFIER_PREFIX = {
  *                    arms. Only meaningful when cashClones is also on
  *   cashClones       append the 💵 clones. Caller gates on Cash > 0: at $0 Cash the mechanism is a
  *                    hard no-op and the clones would be bit-identical twins, pure wasted runs
+ *   rothClones       append the 🅡 clones - the same strategy with Roth drawn after Cash instead of
+ *                    last - for every family except the ones in ROTH_GAP_EXCLUDED. Also writes rothGapFill:''
+ *                    onto every un-cloned row, for the reason markCashFunding exists: a user who
+ *                    already set the control would otherwise get two identical arms instead of an
+ *                    A/B. Caller gates on Roth > 0. Monte Carlo does NOT pass this - it pays
+ *                    numPaths x variations, so a dimension is far more expensive there
  *   offGridLast      put the user's own off-grid parameter after Guyton-Klinger (the Optimizer)
  *                    rather than straight after IRA Draw (MC)
  *
@@ -4252,6 +4394,7 @@ function buildStrategyFamilies(base, opts = {}) {
         bracketResetsIRMAATier = false,
         markCashFunding = false,
         cashClones = false,
+        rothClones = false,
         offGridLast = false,
     } = opts;
 
@@ -4260,13 +4403,16 @@ function buildStrategyFamilies(base, opts = {}) {
     const rows = [];
 
     const push = (family, paramLabel, paramSortVal, overrides) => {
+        let ov = overrides;
+        if (markCashFunding) ov = { ...ov, fundConversionWithCash: false };
+        if (rothClones)      ov = { ...ov, rothGapFill: '' };
         rows.push({
             family,
             modifier: null,
             strategyLabel: family,
             paramLabel,
             paramSortVal,
-            overrides: markCashFunding ? { ...overrides, fundConversionWithCash: false } : overrides,
+            overrides: ov,
         });
     };
 
@@ -4357,6 +4503,25 @@ function buildStrategyFamilies(base, opts = {}) {
             });
     }
 
+    if (rothClones) {
+        // Only 'fillCashThenRoth' is swept. The other position the engine accepts, Roth ahead of
+        // everything, is the dominated one: measured on the v11.162B engine it is the worse of the
+        // two in 54 of 60 cells and bottoms out at -$1,136,213 against this one's -$633,605, so
+        // sweeping it would spend rows on an arm already known to lose. It stays reachable as an
+        // input for the harnesses.
+        for (const r of unmodified) {
+            if (ROTH_GAP_EXCLUDED.has(r.overrides.strategy)) continue;
+            rows.push({
+                family: r.family,
+                modifier: 'rothgap',
+                strategyLabel: MODIFIER_PREFIX.rothgap + r.family,
+                paramLabel: r.paramLabel,
+                paramSortVal: r.paramSortVal,
+                overrides: { ...r.overrides, rothGapFill: 'fillCashThenRoth' },
+            });
+        }
+    }
+
     return rows;
 }
 
@@ -4378,7 +4543,9 @@ function buildVariations(base) {
     // MC's label shape: `_strategyFamily` takes the HTML prefix the builder already applied,
     // while `_label` needs the PLAIN-text twin - it is read into chart legends and CSV, where
     // markup would show through.
-    const PLAIN_PREFIX = { 'ira-first': '\u{1F5D8} ', 'brokerage-first': '\u{1F504} ', 'cash': '\u{1F4B5} ' };
+    // 'rothgap' is here even though MC does not ask for those clones: the map is keyed by modifier,
+    // and a modifier missing from it would lose its prefix silently rather than fail.
+    const PLAIN_PREFIX = { 'ira-first': '\u{1F5D8} ', 'brokerage-first': '\u{1F504} ', 'cash': '\u{1F4B5} ', 'rothgap': '\u{1F161} ' };
 
     return families.map(f => ({
         ...base,
@@ -4472,7 +4639,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -4480,7 +4647,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

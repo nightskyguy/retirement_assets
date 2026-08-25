@@ -1,6 +1,7 @@
 # Task Plan: Retirement Optimizer — Remaining Work
 
-**As of 2026-08-23:** **P23 COMPLETE and MERGED**, plus seven addenda, shipped through **v11.161B** in PR #188; working tree clean, nothing uncommitted. The Monte Carlo tab now offers a third mode, Synthetic-AAM, beside Historical and Synthetic-GBM, and both synthetic modes give every path its own AR(1) inflation calibrated to the 1948-2025 CPI record and correlated with returns. GBM's return draws are bit-identical to before. The addenda added reset-to-defaults, a Pessimistic and a Fixed Inflation preset, Input Distributions for every reader, a fan caption that names every parameter of its run, and moved the preset row out from behind the nerdknob as "Mode presets". Suites **300 / 61 / 22** (`slowInCore` 3), `TestTiers.EXPECTED` pinned to match. P67 shipped v11.1601 in PR #186; P32 in #185; P64/P66 in #182/#183/#184.
+**As of 2026-08-24:** **P71 COMPLETE and MERGED** (`b7f8808`) - the Monte Carlo model now lives in one `montecarlo/mc_engine.js` behind a 42-line worker and a 203-line controller, with `ARCHITECTURE.md` and `.planning/FILE_DIRECTORY.md` brought along in `fb6675c`. Shipped through **v11.1629**; PR #188 carried P23, then #189 and #190 merged after it. Working tree clean, nothing uncommitted. Suites **305 / 61 / 22** (`slowInCore` 3), `TestTiers.EXPECTED` pinned to match.
+**P23 COMPLETE and MERGED**, plus seven addenda: the Monte Carlo tab now offers a third mode, Synthetic-AAM, beside Historical and Synthetic-GBM, and both synthetic modes give every path its own AR(1) inflation calibrated to the 1948-2025 CPI record and correlated with returns. GBM's return draws are bit-identical to before. The addenda added reset-to-defaults, a Pessimistic and a Fixed Inflation preset, Input Distributions for every reader, a fan caption that names every parameter of its run, and moved the preset row out from behind the nerdknob as "Mode presets". P67 shipped v11.1601 in PR #186; P32 in #185; P64/P66 in #182/#183/#184.
 Completed phases live in `.planning/task_completed.md`. Full index, ID migration table and
 the recency trail are below, in that order.
 
@@ -13,8 +14,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| **O1** | P71 | Dedup the MC engine: one runPass instead of two mirrors | commit |
-| **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
+| ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy~~ - **COMPLETE v11.163F**, Ordered offers six sequences | - |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P69 | Replay a Monte Carlo path through the main model | `P69a` |
 | **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
@@ -31,6 +31,39 @@ User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Fu
      and `head -50` on every prompt. A line added above here silently drops a table row out
      of that window, with no error. Keep this marker on line 30. -->
 
+## P74: Monte Carlo lost half the strategy identity in transit  *(fixed v11.1642 2026-08-25, user-reported)*
+
+**Symptom, as reported:** run Compare with Ordered CIBR selected; the chart emphasized **CBRI**.
+
+**Cause:** the variation summary `mc_engine.js` posts back to the page carried a HAND-WRITTEN subset
+of the strategy fields - `strategy`, `propWithdraw`, `nYears`, `stratRate`, `iraWithdrawPct`, the
+cyclic pair and `fundConversionWithCash`. `sameStrategySelection()` reads five more:
+`orderedSeq`, `stratIRMAATier`, `stratACAMultiple`, `gkGuard`, `gkAdjPct`. Missing on one side, each
+fell through to its `?? default`, so **every** Ordered row compared equal to CBIR - a CBIR user
+matched whichever Ordered row came first, and anyone else matched none - and every IRMAA, ACA and
+Guyton-Klinger plan matched nothing at all. Nothing threw; the comparison just quietly agreed with
+the wrong row. Pre-existing on `main`; the six-sequence menu only made it visible, by moving CBRI
+to the front of the grid.
+
+**Fix, three parts:**
+1. `selectionOf()` + `STRATEGY_SELECTION_FIELDS` in `optimizer_core.js` - ONE list of the fields the
+   comparison reads. `mc_engine.js` spreads it instead of listing fields by hand.
+2. `loadMCVariation()` restores the sequence, tier, cliff, guardrails and Roth position. It set only
+   the numeric four, so clicking an Ordered row ran whatever the sidebar already held - the same
+   PF8 class the Optimizer's `loadOptimizerResult` was fixed for.
+3. `withCurrentPlan()` in `mc_tab.js` appends the sidebar's own plan to the Compare sweep when no
+   swept row matches it, and the existing pin logic then marks it. MC sweeps no IRMAA ceiling and no
+   ACA cliff at all, and `offGridParamFor` has no case for Ordered or GK, so those plans could not
+   be in the run however the matching behaved. One extra row, only when it is needed.
+
+**Guarded by** two node tests: `selectionOf` round-trips every family and never matches a neighbour,
+and an end-to-end run through `mc_engine.runJob()` asserts each of the six Ordered sequences matches
+exactly its own returned variation. The second fails on the pre-fix engine, naming the wrong row.
+
+**Not addressed:** MC still does not sweep the IRMAA or ACA families, so those plans are a single
+appended row rather than a ladder. That is the sweep's scope, not this defect.
+
+---
 ---
 
 ## Open Task Index — edit the **User Priority** column
@@ -54,7 +87,7 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P67~~ | ~~Optimizer table columns + relative view~~ — **COMPLETE v11.15fd**, PR #186 | — | — |
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
-| **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
+| ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy — the `[40,60]` constants nobody chose~~ - **COMPLETE, `P30a`-`P30g`, v11.163F**; the menu shipped, both constants measured and left alone | - | - |
 | **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only" *(default later flipped by P53f)* | shipped v11.150b | - |
@@ -70,17 +103,18 @@ first task. Every open item in the file now carries one.
 | **O2** | P12 | Retire Optimizer tab -> MC strategy comparison | `P12a` | nothing |
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
-| **O1** | P71 | Dedup the MC engine *(a-e DONE, v11.161C-F; 455+567 lines of mirror -> 42+203 around one engine; suite 300 -> 304)* | review + commit | nothing |
-| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | **P71 first**: P69a is subsumed by P71b |
+| ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
+| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | nothing - P71 shipped; P69a is subsumed by `buildPathInputs()` in `montecarlo/mc_engine.js` |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
 | **O2** | P68 | `optimizer_changelog.md` brevity pass over the recent entries *(new 2026-08-22)* | `P68a` | nothing |
 | **O2** | P72 | First-year stub — year 1 always accrues 12 months of growth, spending, pension and premiums however late in the year the plan starts *(new 2026-08-24)* | `P72a` | nothing |
+| ~~DONE~~ | ~~P73~~ | ~~Sorting the Optimizer by **Strategy** sorts the rendered label~~ - **COMPLETE v11.1640 2026-08-25**, family then parameter then modifier, off the data | - | - |
 | **O2** | P65 | Rest of Schedule A — engine itemizes on SALT alone; medical is the piece that likely qualifies *(new 2026-08-19)* | `P65a` (measure first) | nothing |
 | **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
-| **O3** | P28 | "Every voluntary IRA withdrawal is a conversion" — ship decision | `P28f` | nothing |
+| **O2** | P28 | "Every voluntary IRA withdrawal is a conversion" - **`P28f`/`g`/`h` SETTLED and SHIPPED v11.162B**: routing flag deleted as measured-inert, `rothGapFill` shipped as a control plus the 🅡 sweep rows. `P28j` is the remainder | `P28j` (needs its own phase) | nothing |
 | **O3** | P40 | Test-file layout — the `tests/` subfolder move | decision, then the move | nothing |
 | **O3** | P5 | Greedy DP conversion schedule | `P5a` | nothing |
 | **O3** | P6 | Simulation sanity-check tests | `P6a` | nothing |
@@ -887,12 +921,19 @@ The four version-bump sites are a separate consolidation problem (they span HTML
 build step is against the repo's no-build ethos). The mc_tab.js chart-rendering overlap between the
 stress chart and the main chart was not measured this session and is not claimed here.
 
-- **Status:** `P71a`-`P71d` shipped 2026-08-23 (v11.161C through v11.161F), all uncommitted.
-  **`P71e` is finished as a side effect**: the importScripts list, the page script tag, every `?v=`
+- **Status: COMPLETE.** `P71a`-`P71e` shipped 2026-08-23 as v11.161C through v11.161F, squashed into
+  one commit `b7f8808` with all three suites green from the pre-commit hook, and merged to `main`.
+  **`P71e` finished as a side effect**: the importScripts list, the page script tag, every `?v=`
   token, `TestTiers.EXPECTED` and `.githooks/README.md` all moved with the item that needed them.
-  What remains of P71 is a review pass and a commit.
-- **Blocks:** P69 should build ON this (P69a subsumed by P71b; P69c's capture plumbing lands in one
-  place instead of two). P70 is independent - it measures the engine, does not restructure it.
+  The two maps P71 forgot - `ARCHITECTURE.md` and `.planning/FILE_DIRECTORY.md` - followed in
+  `fb6675c` on 2026-08-24.
+- **Not covered, on the record:** the one-line `location.protocol === 'file:'` check was never run
+  under a real `file://` URL - the preview pane renders such a URL as a static snapshot - though
+  `_runMCFallback()`, the function that branch calls, was verified directly over http. The mc_tab.js
+  chart-rendering overlap was never measured and is not claimed. The four version-bump sites remain
+  a separate consolidation problem.
+- **Blocks:** nothing. P69 is free to build on `buildPathInputs()`; P70 was always independent - it
+  measures the engine, does not restructure it.
 
 ---
 
@@ -1008,6 +1049,77 @@ the month, both defaulting to 0:
 - [ ] **P72j** - tests (`startMonth = 1` reproduces a known run exactly; `startMonth = 9` scales growth/spend/pension/dividends by 4/12; RMD and the standard deduction unchanged at `startMonth = 9`; SS claim-year and stub-year fractions compose; `endYear` advances by `f`), then `TestTiers.EXPECTED` across all three suites, the `.githooks/README.md` table, the changelog entry and the four version-bump sites
 - **Status:** pending
 - **Independent:** no phase dependencies
+
+---
+
+## P73: sorting the Optimizer by Strategy sorts the LABEL, not the strategy  *(NEW 2026-08-24, user-raised, O2)*
+
+**Why:** clicking the **Strategy** header sorts on `_strategyLabel`
+(`optimizer_ui.js:1501`, `getSortValue: r => r._strategyLabel`), which is the string the cell
+RENDERS. That string carries every marker the table paints - the modifier prefix from
+`MODIFIER_PREFIX` (`optimizer_core.js`), the `CURRENT_PLAN_MARK`, a trailing `✓`, ` (no conv)`,
+` ⚠️` - and for the cyclic IRA-first arm the prefix is not even a symbol but raw HTML,
+`<span style="color:#cc0000">🗘</span> `. So the comparison is `localeCompare` over markup and
+emoji, and the column does not order by strategy at all.
+
+**Measured on the stock plan, v11.162J, ascending** (block = run of consecutive rows sharing a
+first character):
+
+| block | rows | why it lands there |
+|---|---|---|
+| ⚓ baseline, 📍 your plan | 1, 1 | their own marks |
+| **🗘 cyclic IRA-first** | **28** | label starts `<`, which sorts below every letter and every emoji |
+| **🔄 cyclic brokerage-first** | **28** | emoji codepoint |
+| Fill Bracket, Guyton-Klinger, IRA Draw, IRMAA Ceil, Ordered, Proportional | 8, 1, 20, 6, 9 | the actual alphabet, F through P |
+| **🅡 Roth before Brokerage** | **25** | U+1F161 sorts between "Proportional" and "Reduce" |
+| Reduce | 10 | the alphabet, resumed |
+
+Two things a reader would call wrong. Every clone is torn away from the family it clones, so
+comparing "Fill Bracket" against "🗘 Fill Bracket" means scrolling past 50 unrelated rows. And the
+alphabet is **interrupted**: F, G, I, O, P, then 25 🅡 rows, then R. A sort that stops halfway
+through the alphabet reads as a broken table rather than as a sort by symbol.
+
+Within a family the parameter order is incidental, not sorted: every `Reduce ✓` row has an
+identical label, so `localeCompare` returns 0 and `Array.sort`'s stability leaves them in whatever
+order the sweep emitted. `(no conv)` sorts before `✓` because `(` precedes `✓`, so the baseline
+variants separate from their own family too.
+
+**The material is already on the row.** `_paramSortVal` exists for the Param column, the family is
+recoverable from `_strategy` (with the Fill-Bracket / IRMAA-Ceil split needing the same treatment
+`buildStrategyFamilies` gives it), and the modifier is `cyclicEnabled`/`cyclicOrder`,
+`fundConversionWithCash` and `rothGapFill`. Nothing needs measuring - this is a sort key that reads
+the data instead of the rendering.
+
+**Open design question, for the user:** what SHOULD the order be? Two defensible answers, and they
+are different products:
+1. **Family, then modifier, then parameter** - every clone sits with the family it clones. Reads as
+   "show me this family's arms together".
+2. **Family, then parameter, then modifier** - each parameter's arms sit together. Reads as "show me
+   what the modifiers do at 7%".
+Ascending/descending should reverse the family, not scramble the rest.
+
+**Tasks:**
+- [x] **P73a** - **DONE v11.1640 2026-08-25.** User chose **family, then parameter**. `strategySortKey()`
+      in `optimizer_core.js` (pure, exported, node-tested) builds a fixed-width key from `_family`,
+      `_paramSortVal`, the modifier and the variant; the Strategy column's `getSortValue` returns it
+      and declares `rawSort: true`, which makes the table comparator compare by CODE POINT instead of
+      `localeCompare` - locale collation treats the key's padding as ignorable and would reorder its
+      own fields. Rows now carry `_family` and `_modifier` as the ENUMERATION named them, set in
+      `addResult` and copied onto the derived rows, so nothing reads the family back off the label.
+      Within a parameter: the plain row, its no-conversion reference, then the clones - a derived row
+      stays with the arm it derives from.
+- [x] **P73b** - **DONE, and it needed no decision.** The question assumed the pinned rows sort to the
+      top by accident of their marks. They do not sort at all: `display` filters out both the
+      ⚓ baseline and the 📍 current plan before the comparator runs, because each is already rendered
+      once, sticky, above the table. Verified in the browser under both directions.
+- [x] **P73c** - **DONE.** `strategySortKey: families stay contiguous, whatever the label starts with`
+      in `optimizer_core.tests.js` (suite 314 -> 315): one run per family, numeric parameters ordered
+      as numbers (3 before 23, which the old text sort got backwards), a negative parameter (IRMAA
+      tier -0.5) that still keys below a positive one, and two rows differing ONLY in label markup
+      producing an identical key.
+- **Status:** **COMPLETE v11.1640.** No engine behavior change - a sort key and the row fields it
+      reads. No changelog entry, by the user's call.
+- **Independent:** no phase dependencies. Touches the same column P67 relabelled.
 
 ---
 
@@ -1197,7 +1309,36 @@ timing. See `findings.md`, "A log field the next iteration reads is engine state
       at 6% spend rather than growing with Brokerage share, "IRA Draw is unreachable" was
       strain-specific (+$1,200,484 at 6%), and `fillCashThenRoth` DOES have one negative cell. Mechanism
       came out sharper: every cell whose control never drew Brokerage returns exactly $0.
-- **Status:** research complete (4 rounds), feature not started
+- [x] **P28f/g/h SETTLED 2026-08-24, shipped v11.162B.** `unifiedConvRouting` DELETED from the engine
+      (inert in 90 cells; the two-leg view it existed for is already `-iraSpend` + `-iraConvGrossTot`),
+      and its harness arm A1 removed with it so no arm can set a flag nothing reads. `rothGapFill`
+      shipped twice: the *Roth before Brokerage* switch (under Cycle Brokerage, greyed under
+      Ordered) and a 🅡 clone pass in `buildStrategyFamilies` gated on Roth > 0, both covering every
+      strategy but `ordered`. Only
+      `fillCashThenRoth` is swept - `fillRothThenCash` is the dominated position. `P28h` needed no
+      code: "the tool has to RUN it" IS the sweep dimension.
+- **Corrected the same day, before merge.** The first cut shipped an ALLOW-list of four families
+  (`fixed`/`bracket`/`aca`/`fixedpct`), excluding Proportional and Guyton-Klinger on the strength of
+  P28g's note that neither is comparable. The user asked what in GK already does this. Nothing does:
+  GK's only special handling is the spend adjustment at `optimizer_core.js:1489`, it has no ordering
+  logic, and it falls into the same default gap-fill branch. Measured, it is the family that gains
+  most reliably - positive in **all 15** harness cells, +$8,683 to +$195,107 - and the gain arrives as
+  delivered SPENDING (+$73,080 at balanced-thirds 6%) rather than terminal wealth, which
+  `baselineScoreOf` counts on purpose. Proportional also reached +$11,959. The rule is now the
+  engine's own: exclude `ordered`, nothing else. **The lesson: a note about whether a research cell
+  can be READ cleanly is not a statement about whether the lever REACHES the strategy, and it must
+  not become a shipping gate.**
+- **⚠ THE 2026-07-30 NUMBERS NO LONGER REPRODUCE.** Re-running the harness on the v11.162B engine
+  gives `fillCashThenRoth` a range of **+$470,977 to -$633,605, negative in 26 of 60 cells**, against
+  the recorded +$3,559,596 / 1-of-60. P32 (v11.15e3) letting the third pass draw Brokerage is the
+  likely cause - displacing a Brokerage draw is the entire mechanism, so changing when Brokerage is
+  drawn changes size and sign. What survives: `fillCashThenRoth` is still the better of the two
+  positions (54 of 60), and the zero-predicate still holds. What does not: "worth $3.56M and almost
+  never loses". Warning box added to `P28_RESULTS.md` and `HARNESSES.md`; the shipped copy quotes the
+  re-run. **The lesson is general: a research document is only true against the engine that produced
+  it, and this repo changes that engine often.**
+- **Status:** research complete (4 rounds); `P28f`/`g`/`h` shipped 2026-08-24. `P28j` still open and
+  still needs its own phase.
 - **Independent:** no phase dependencies
 
 ---
@@ -1324,24 +1465,183 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
 - **Do not touch `resolveResidualAndForcedIRA` in this phase.** That is P32.
 
 **Already ruled out — do not re-derive:**
-- Roth's position in the gap fill. P28 rounds 2+4, 630 sims, `fillCashThenRoth` established. What
-  remains there is a **ship** decision (P28's open checkbox), not research.
+- Roth's position in the gap fill. `fillCashThenRoth` is the better of the two positions and
+  **shipped 2026-08-24** as the *Roth before Brokerage* switch plus the 🅡 sweep rows.
+- **RE-BASELINED 2026-08-24, `P28_RESULTS.md` section 15.** The ladder was re-run on today's engine
+  before P30 was allowed to reuse it. Quote section 15, never the 2026-07-30 tables.
+  - **Still true:** the **zero-predicate** - a control arm that never drew Brokerage returns exactly
+    $0. Both such cells in the grid still do. And the ranking: `fillCashThenRoth` beats
+    `fillRothThenCash` in 54 of 60, losing only on Proportional.
+  - **No longer true, and this is the one that bites P30:** "Roth pays when it displaces a Brokerage
+    draw" **no longer predicts the sign**. The largest Brokerage draws in the grid now produce the
+    largest LOSSES (brokerage-heavy, $7.4M drawn, -$146,374; balanced thirds at 6%, -$633,605),
+    where the same cells used to produce the largest gains. What predicts the sign now is the pair
+    (spend rate, brokerage share). The payoff also FALLS with spend rate (+$470,977 / +$117,615 /
+    +$40,597 at 4/6/8%) where it used to peak at 6%.
+  - **Untested hypothesis:** P32 letting the third pass draw Brokerage means Roth spent early in the
+    gap fill is Roth the third pass can no longer reach. Settle it by re-running the grid with
+    `thirdPassBrokerage: 'off'` and seeing whether the old shape returns. Cheap; do it as part of
+    `P30b` rather than guessing.
+  - **The ladder is still a good SCENARIO SET** - the five mixes and three rates span the space. It
+    is the numbers, and the directional mechanism, that may not be carried forward. **A weight sweep
+    must not assume that moving a draw from Brokerage to Cash is directionally good.**
 - Whether the three shipped `orderedSeq` sequences matter — already swept (`optimizer_ui.js:841`).
 - The unified-conversion reframe — measured inert, 0 money fields moved in 90 cells.
 
 **Tasks:**
-- [ ] **P30a** — `gapFillWeights` research input, default `[40,60]`, no UI, `ordered` excluded
-- [ ] **P30b** — Harness: weight sweep x P28 mix/spend ladder x gap-filling families; predictions scored
-- [ ] **P30c** — Q2 arm: bracket-family order Brokerage-before-Cash as an explicit alternative
-- [ ] **P30d** — Q4 arm: the remaining orderings of four accounts, harness-only
-- [ ] **P30e** — Q5: cost the decoupling (new input vs derived), count affected rows, do NOT build yet
-- [ ] **P30f** — Report against P28's zero-predicate: split cells by "did the control ever draw Brokerage"
-- [ ] **P30g** — Decision: change the default, expose a control, decouple, or record that the constant is inert
-- **Status:** not started, research-first. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
+- [x] **P30a** — **DONE v11.162K 2026-08-24.** `gapFillWeights` research input at the default gap-fill
+      branch, replacing the bare `[40, 60]`. Weights are RELATIVE (the normalizer divides by the sum),
+      so `[4,6]` is `[40,60]`; percentages only because that is how the literal read. Validated to a
+      SHAPE - two finite non-negative numbers with a positive sum - so anything malformed means
+      "leave today's behavior alone", the discipline the `rothGapFill` `|| null` bug bought.
+      `[0,0]` is the one that had to be caught: it divides by zero in the normalizer and puts NaN
+      through every balance. No UI, no URL param, absent from `getInputs()` - confirmed in the
+      browser. `ordered` and the bracket family never reach this branch, so they are excluded by
+      construction rather than by a guard.
+      **Endpoints verified before anything is read into them:** `[0,100]` asks the gap fill for no
+      Brokerage at all, `[100,0]` still spills into Cash through the shortfall cascade, and the split
+      moves monotonically across 0/20/40/60/80/100. That is what makes a 0-to-100 sweep a sweep of
+      one policy rather than of two. Suite 308 -> 310.
+- [x] **P30 re-baseline** — DONE 2026-08-24, `P28_RESULTS.md` section 15. See the block above.
+- [x] **P30b** — **DONE 2026-08-24.** `.test_harnesses/gapfill_harness.js`, 2,430 sims in ~2s, full
+      write-up in `GAPFILL_RESULTS.md`. **Q1 is answered: the constant IS load-bearing and 40 is not
+      the number.** 227 of 360 cells move by more than $1,000 (widest $616,919), and among the 82
+      cells that are clean wealth comparisons - delivered spend unchanged, every weight funding the
+      plan - **w=40 is best in ZERO of them** and w=0 in 65. Blast radius is three families only
+      (Proportional, Reduce, GK); the bracket family and Ordered are bit-identical at every weight
+      across 270 guard runs. **Cash Reserve damps the whole effect by an order of magnitude** (CA
+      widest $534,525 reserve-off vs $33,358 reserve-on) and is the bigger lever; state matters much
+      less. The `thirdPassBrokerage: 'off'` arm came back with the SAME shape, so **P32 does not
+      explain this result** and the separate P28 inversion hypothesis stays open.
+- [x] **P30c** — **DONE v11.1637 2026-08-25. Q2 is answered: today's order is RIGHT.**
+      `bracketGapOrder` research input at the bracket branch, which was rewritten from nested ifs
+      into a sequence so the arm is the order of a list; the control path is bit-identical. Swapping
+      to Brokerage-first **loses in 21 of 23 clean cells**, by up to **$587,970**, and in every cell
+      of the CA / reserve-off slice. Predictions F/G/H all held.
+      **The headline of P30 is now that the two constants DISAGREE and the bracket branch is the one
+      that got it right.** Both results say the same thing - fill a spending gap from Cash before
+      Brokerage - and the bracket branch already does, while the default branch's 40% Brokerage does
+      not. That is the defect, and it is a one-line default change if `P30g` wants it.
+      Caveats on the record: only 23 of 105 live cells are clean; prediction G held on a **5% margin**
+      (CA $587,970 vs TX $561,127), which is not evidence of a state-tax mechanism but of state
+      barely mattering, the same conclusion `P30b` reached; and the lifetime Cash/Brokerage totals
+      move in DIFFERENT directions between mixes, so only the score comparison means anything.
+      Cash Reserve damps this one too - 87 live cells reserve-off vs 18 reserve-on, the third time
+      the reserve has proved the bigger lever. Suite 310 -> 312.
+- [x] **P30d** — **DONE v11.1638 2026-08-25. Q4 is answered: yes, and two shipped codes are dead.**
+      `resolveOrderedSeq` generalized from a three-entry map to a generator over the letters, so a
+      permutation now means what it names instead of silently becoming CBIR. The three shipped codes
+      are byte-identical and nothing ships - `grids.ordered` still sweeps the same three.
+      **RIBC and BIRC never win a single cell of 60.** CBIR wins 14. The outright best is **CBRI**
+      (Cash, Brokerage, Roth, IRA) with 22 wins, and it is not on the menu. An unshipped ordering
+      beats every shipped one in 15 clean cells, widest **+$858,316** (CIBR).
+      **24 orderings are only ~15 plans**: median 21 distinct per cell, minimum 5, because the tail
+      of a sequence past the point the gap is filled is irrelevant and empty accounts are skipped.
+      **And the P30 story stops here.** "Cash before Brokerage" - which `P30b` and `P30c` both found
+      on their own branches - wins exactly **30 of 60** cells under Ordered, a coin flip. A
+      four-account sequence also places the IRA and Roth and those swamp the Brokerage/Cash pair. The
+      narrower "Cash FIRST" does survive, 46 of 60. Recorded as a BROKEN prediction with the narrower
+      reading printed beside it rather than substituted for it. Suite 312 -> 313.
+- [x] **P30e** — **DONE 2026-08-25, design only, nothing built. Recommendation: DO NOT decouple.**
+      Full costing in the "P30e: costing the decoupling" section below.
+- [x] **P30f** — **DONE 2026-08-24, and it is an honest MISS.** The zero-predicate was scored
+      **VACUOUS**: not one cell in the grid had a control arm that never drew Brokerage, so the
+      prediction could not fire. It is neither confirmed nor refuted here. A prediction that cannot
+      fire on the grid it is written for should be caught when it is written, not when it is scored -
+      if it is wanted, `P30d` or a follow-up needs a low-spend / Cash-rich cell built for it
+- [x] **P30g** — **DONE v11.163F 2026-08-25. The MENU changed; neither constant did.**
+      - **Shipped:** `ORDERED_SEQS` - one list shared by the sidebar dropdown, `MC_GRIDS.ordered` and
+        `OPTIMIZER_GRIDS.ordered`, so a sequence a user can pick is always a sequence the sweeps
+        score. Six entries in the order they earned: **CBRI, CBIR, CIBR, BCIR, RIBC, BIRC** - by
+        outright wins, ties broken by summed margin over the best shipped ordering
+        (`GAPFILL_RESULTS.md` section 15: CIBR $1,851,441 over BCIR's $1,666,683 at 8 wins each).
+        CBIR stays the pre-selected option and the resolver fallback. Cost: MC 144 -> 156 rows,
+        Optimizer 117 -> 126.
+      - **NOT shipped, and this is the decision, not an omission:** the default branch's `[40,60]`.
+        `w=0` wins 65 of 82 clean cells and 40 wins none, but that is `baselineScoreOf` only - not
+        the other Optimizer objectives, and not the liquidity cost of a plan left holding no cash,
+        which the harness cannot see. Cash Reserve damps the whole question ~16x, so the people most
+        exposed to a wrong default are the ones with no reserve. Changing it moves every existing
+        Proportional, Reduce and GK plan silently. `gapFillWeights` stays a research input, unset.
+      - **NOT shipped, measured right:** the bracket family's Cash-first (`bracketGapOrder` stays
+        unset - `P30c` found the swap loses 21 of 23 clean cells).
+      - **Follow-up filed, not started:** re-run the weight against every `OPTIMIZER_OBJECTIVES` key
+        and against a liquidity measure before any default change. Until then the answer to "is 40
+        right" is "no, and we are not changing it yet", which is a different thing from inert.
+- **Status:** **PHASE COMPLETE, `P30a`-`P30g` (2026-08-24/25), shipped through v11.163F.** What
+  shipped is the Ordered menu; both `[40,60]`-family constants were measured and deliberately left
+  alone, with the reasons recorded in `P30g` above so they are not re-derived. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
   new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
   `P28_RESULTS.md` as its reference)
-- **Depends on:** no code dependency. Its *ship* decision is downstream of P28's open decision —
-  settle both in one batch or the weight question shifts underneath it.
+- **Depends on:** no code dependency. Its *ship* decision was downstream of P28's, which is now
+  settled and shipped (v11.162B), so P30's research runs against a fixed baseline. The 🅡 rows are
+  part of that baseline: a weight sweep must state which Roth position it holds fixed.
+
+### P30e: costing the decoupling  *(2026-08-25, design only)*
+
+**Q5 asked: should picking a SPEND strategy keep picking a SOURCING policy, and what would it cost
+to separate them? Answer: it should not, in principle, and it is not worth separating now.**
+
+**The coupling is 9 reads, and only 6 of them are about sourcing.** `yr.isBracketStrategy` and
+`yr.isOrderedStrategy` are each set once (`optimizer_core.js:1485-1486`). Classified:
+
+| site | what it decides | sourcing? |
+|---|---|---|
+| `:1518` `targetSpend` | whether the strategy's own ceiling caps spend | **No - spend targeting.** Stays with the strategy under any design |
+| `:1936` | may the Roth pre-draw run (`!ordered`) | yes |
+| `:1954` | the bracket family's sequential Cash->Brokerage->Roth | yes |
+| `:1994` | the Ordered branch | yes |
+| `:2096` | third pass, Ordered branch | yes |
+| `:2176` | P32c Brokerage re-draw excludes Ordered | yes |
+| `:2239` | forced-IRA backstop excludes ACA **and** Ordered | **mixed.** Ordered's half is sourcing; ACA's half is about the income cap, i.e. eligibility |
+| `:2476` | surplus banking follows the draw order | yes, though it is the INVERSE - where surplus goes, not where draws come from |
+
+So a decoupling is not "move nine reads". It is: move six, split one, leave one alone. `:2239` is the
+awkward one and `:2476` is the subtle one - any sourcing policy has to say where surplus is BANKED as
+well as where draws come from, or the two halves disagree and money strands in an account the policy
+will not reach.
+
+**New input vs derived.** Three shapes:
+
+1. **Derived with an override.** `sourcingPolicy` defaults to a pure function of `strategy` - today's
+   mapping, written down - and an input may override it. Unset is bit-identical. Cheapest, and it
+   makes the mapping visible, which is most of what Q5 was complaining about.
+2. **Independent input.** Strategy selects spend targeting only; sourcing is always explicit. This
+   still needs a per-strategy default, so it is shape 1 plus a mandatory UI surface, a URL param, a
+   share/save field, a `sameStrategySelection` term and a sweep dimension.
+3. **Do not decouple.** Expose the constants, not the structure.
+
+**Row cost, measured not guessed** (shipped default scenario, from the current `OPT_GOLDEN` capture:
+**30 base rows, 117 total**; Ordered is 3 of the 30, and is ineligible by definition because the
+sequence IS its policy, leaving **27 eligible**):
+
+| design | optimizer rows | MC variations |
+|---|---|---|
+| today | 117 | 144 |
+| sourcing as a clone pass, 1 extra policy | 144 (+23%) | 177 (+23%) |
+| sourcing as a clone pass, 2 extra policies | 171 (+46%) | 210 (+46%) |
+| sourcing crossed with the existing clone passes | 234 / 351 (+100% / +200%) | worse |
+
+The clone-pass shape is the affordable one; crossing is not. And MC pays `numPaths x variations`, so
++23% there is 23% of a Monte Carlo run, on a tab the user just asked to make faster.
+
+**Recommendation: do not decouple, and close Q5 rather than leaving it open.** Three reasons, in
+order:
+
+1. **The measured defect does not need it.** `P30b` and `P30c` between them found ONE thing wrong -
+   the default branch's 40% Brokerage - and the fix is a one-line default change, not a structure.
+   Decoupling would be building a mechanism to solve a problem that turned out to be a number.
+2. **The blast radius is small and asymmetric.** The weight reaches three families; the bracket
+   order reaches four. A general sourcing policy would be a large, cross-cutting abstraction over
+   two branches that measurement says want the SAME answer (Cash before Brokerage). Converging the
+   two defaults gets most of the benefit for a fraction of the cost.
+3. **Cash Reserve is the bigger lever anyway.** Three separate measurements now say so - it damped
+   the weight by an order of magnitude and the bracket order by ~5x. A user who wants control over
+   sourcing already has a stronger one than any of this.
+
+**If it is ever revisited**, shape 1 is the one to build, and the two traps are recorded above:
+`:2239` needs splitting rather than moving, and `:2476` means a policy has to define surplus banking
+as well as draw order.
 
 ---
 

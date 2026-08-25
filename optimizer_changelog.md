@@ -17,6 +17,50 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1642"></a>
+
+## 11.1642
+
+### Roth can fill a spending shortfall, Ordered offers three more draw orders, and Monte Carlo always runs yours
+
+1. **A new switch, *Roth before Brokerage*,** under Cycle Brokerage. Off is the default and is what
+   the tool has always done: when a year's spending needs more than your strategy itself withdraws,
+   the shortfall comes from Cash, then Brokerage, then Roth. On, Roth is taken ahead of the brokerage
+   account, and Cash still comes first either way. That avoids realizing capital gains, but it
+   cuts both ways, and not gently: across 60 test plans it gained as much as $471,000 and lost as
+   much as $634,000, and it was negative in 26 of them. Spending Roth preserves the brokerage
+   account but drains the one that grows tax-free. Your numbers do not move until you turn it on,
+   and the *Ordered* strategy greys the switch out, because it draws in the sequence you chose.
+
+2. **The Optimizer sweeps both.** Every strategy except *Ordered* appears a second time in the
+   table, marked 🅡, so the comparison is in front of you rather than something to run twice. Those
+   rows appear only if you hold Roth. Nothing about a plan predicts which way it lands, which is why
+   the switch is swept rather than recommended.
+
+3. **Three more draw orders for the *Ordered* strategy.** Added: **Cash→Brok→Roth→IRA**,
+   **Cash→IRA→Brok→Roth** and **Brok→Cash→IRA→Roth**. The list is ordered with the sequences that
+   most often came out ahead in testing at the top. Cash→Brok→Roth→IRA, the new first entry, was the
+   best sequence in more test plans than any of the three previously on offer, and in one plan it was
+   worth $858,000 more than the best of them. Your own selection is unchanged, and both the Optimizer
+   and Monte Carlo now score all six.
+
+4. **Monte Carlo now always runs your own plan, and marks it.** Compare every strategy could leave
+   your plan out of the run and emphasize a different one in the chart. It affected the *Ordered*
+   sequences, *Guyton-Klinger*, and any plan set to an IRMAA tier or an ACA cliff: the chart's
+   📍 marker landed on the wrong row or on none. Your plan is now always in the table, pinned to
+   the top and drawn in the chart, even when it is not one of the strategies the sweep covers - a
+   run with such a plan is one row longer than before. Clicking a row also loads what it says: the
+   sequence, tier, cliff or guardrails now come back with it instead of leaving whatever was in the
+   sidebar.
+
+5. **Fewer *Reduce IRA* and *IRA Draw* rows.** The Optimizer tried 16 plan lengths between 2 and 25
+   years and 8 draw percentages; it now tries **3, 7, 11, 17 and 23** years and **5, 7, 9, 11 and
+   13%**. Neighboring steps differed by very little and between them the two families were half the
+   table, so a run is a third shorter and the table is easier to read. Your own setting still appears
+   as its own row whichever length or percentage you pick, including above 13%.
+
+---
+
 <a id="11.1629"></a>
 
 ## 11.1629

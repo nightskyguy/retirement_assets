@@ -4359,3 +4359,91 @@ the standard deduction, brackets and the ACA FPL (annual by statute), and, recom
 
 Files touched: `task_plan.md` (new P72 section after P71, one O2 index row) and this log. No product
 code, no version bump, no changelog entry.
+
+---
+
+## Session 2026-08-24/25 (worktree readme-review-updates) - P28 shipped, then all of P30 (v11.162B -> v11.163F)
+
+One branch, one changelog entry, six commits. In order: P28's `rothGapFill` shipped as a switch and
+as the circled-R clone pass; `unifiedConvRouting` deleted as provably inert; the Optimizer's Reduce
+and IRA Draw grids cut to five steps each with per-strategy run counts added behind the nerdknob;
+then P30a-g.
+
+**What the research found, and it is not one answer.** `fillSpendingGap` has three branches and they
+disagree. The default branch's `[40,60]` is wrong - `w=0` wins 65 of 82 clean cells, 40 wins none.
+The bracket branch's Cash-first is right - swapping it loses 21 of 23. And under Ordered the story
+collapses: "Cash before Brokerage" is exactly 30/60, a coin flip, because a four-account sequence
+also places the IRA and Roth and that swamps the pair. Full tables in `GAPFILL_RESULTS.md`.
+
+**P30g shipped the menu, not the constants.** Two of the three Ordered codes on offer (RIBC, BIRC)
+win nothing in 60 cells, and the most-often-best sequence, CBRI, was not offered at all. The list is
+now six - CBRI, CBIR, CIBR, BCIR, RIBC, BIRC - ordered by wins with ties broken on dollars at stake,
+and it is ONE constant (`ORDERED_SEQS`) shared by the dropdown and both sweep grids, so a sequence a
+user can pick is always one the sweeps score. The `[40,60]` default was deliberately left alone: the
+win is measured on `baselineScoreOf` only, and "always drain Cash first" has a liquidity cost the
+harness cannot see. That reasoning is written into P30g so it is not re-derived.
+
+**Corrections worth keeping.** P28's 2026-07-30 evidence no longer reproduces on the current engine
+and its mechanism has inverted; the ladder was re-baselined (`P28_RESULTS.md` section 15) before P30
+reused it. `resolveOrderedSeq` was silently resolving all 21 unshipped permutations to CBIR - they
+named one sequence and ran another - which is why P30d had to generalize it before it could measure
+anything. And one prediction was scored VACUOUS rather than quietly dropped: no cell in the grid
+could make it fire.
+
+Suites 314 / 61 / 22, badge green at 690. Both goldens regenerated: MC in node, OPT re-captured in
+the browser (four scenarios), and the diff read row by row rather than accepted.
+
+---
+
+## Session 2026-08-25 (worktree readme-review-updates) - P73, the Strategy column sorts on data now (v11.1640)
+
+User's call on the open design question: **family, then parameter**. So `strategySortKey()` in
+`optimizer_core.js` - pure, exported, node-tested - builds a fixed-width key from `_family`,
+`_paramSortVal`, the modifier and the variant, and the Strategy column returns that instead of the
+rendered label.
+
+Two things this had to get right beyond the ordering itself. The rows had to carry the family and
+modifier the ENUMERATION assigned, not ones parsed back off a label that starts with raw HTML for
+the cyclic IRA-first arm - so `addResult` records `_family`/`_modifier` and the derived rows copy
+them. And the comparator had to stop using `localeCompare` for this column: locale collation treats
+the key's padding and field tags as ignorable at primary strength, which would silently reorder the
+key's own fields. The column declares `rawSort: true` and the comparator compares by code point.
+
+`P73b` dissolved rather than got decided. It asked whether the pinned rows should keep sorting to
+the top; they never sorted at all - `display` filters both out before the comparator runs, because
+each is already rendered sticky above the table.
+
+Browser-verified both directions: one contiguous run per family (Fill Bracket, Guyton-Klinger, IRA
+Draw, IRMAA Ceil, Ordered, Proportional, Reduce), each parameter's arms clustered as plain, no-conv,
+then clones, and descending an exact mirror. Suite 315/61/22, badge green at 691. No changelog entry,
+by the user's call. The same commit trims the release entry's Ordered item to name only the three
+NEW sequences.
+
+---
+
+## Session 2026-08-25 (worktree readme-review-updates) - P74, Monte Carlo pinned the wrong strategy (v11.1642)
+
+User: run Compare with Ordered CIBR selected, and the chart emphasizes CBRI.
+
+The transport was the defect. `mc_engine.js` posts a summary of each variation back to the page with
+a hand-written list of strategy fields, and that list was missing the five that identify the
+remaining families - orderedSeq, the IRMAA tier, the ACA multiple, and the two GK guardrails. Both
+sides were individually correct: sameStrategySelection() reads all of them, and the page passes the
+real sidebar plan. But with a field absent on one side the comparison fell through to `?? default`,
+so every Ordered row compared equal to CBIR and every IRMAA, ACA and GK plan matched nothing.
+Pre-existing on main - the six-sequence menu only made it visible by putting CBRI first in the grid.
+
+Fixed as one list rather than a longer hand-written one: `selectionOf()` in optimizer_core.js, which
+mc_engine spreads. `loadMCVariation()` had the mirror-image gap and now restores the sequence, tier,
+cliff, guardrails and Roth position - clicking a row used to run whatever the sidebar already held.
+
+Second half of the request - Monte Carlo should always run YOUR plan - is `withCurrentPlan()`:
+Compare appends the sidebar plan when no swept row matches. That is not only a matching problem, it
+is coverage: MC sweeps no IRMAA ceiling and no ACA cliff at all, so those plans could not be in the
+run however the matching behaved. Verified in the browser: Ordered CIBR pins and draws as itself,
+and an IRMAA Tier 2 plan appears as row 157 of 157, pinned and drawn.
+
+Two node tests, one of which fails on the pre-fix engine and names the wrong row. Suite 317/61/22,
+badge green at 693. One self-inflicted detour: the changelog `<li>` I wrote used <b> for emphasis,
+and an in-page test counts <b> tags to detect a swallowed entry - it caught it, which is the test
+doing its job.

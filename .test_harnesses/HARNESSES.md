@@ -18,6 +18,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `betr_harness.js` | **node** | Is the Break-Even Tax Rate (BETR) signal trustworthy? |
 | `stopyear_harness.js` | **browser console** | When should a plan stop Roth conversions? |
 | `unifiedconv_harness.js` | **node** | Does modeling every voluntary IRA withdrawal as a Roth conversion change anything? |
+| `gapfill_harness.js` | **node** | Is the `[40, 60]` Brokerage/Cash split in the default gap fill load-bearing, and is 40 right? |
 | `ordered_fill_harness.js` | **node** | Ordered strategy: does the account sequence restart from the top every year, and where does the year's leftover surplus get banked? |
 | `brokerage_harness.js` | **node** | Why is Brokerage barely drawn, and is the third-pass exclusion to blame? |
 | `phased_harness.js` | **node** | P36 round 1: which families rank where under every objective, and do any arms never win? |
@@ -60,6 +61,55 @@ EV2.reportStopYear();        // per-cutoff table for the current sidebar scenari
 EV2.reportPolicies();        // best amount vs best stop-year vs joint
 ```
 
+## gapfill_harness.js  (node)
+
+```bash
+node .test_harnesses/gapfill_harness.js
+```
+
+**Full results, tables and reasoning live in [`GAPFILL_RESULTS.md`](GAPFILL_RESULTS.md).** This entry
+is the index; that file is the reference.
+
+Sweeps `gapFillWeights` (P30a) over 0/20/40/60/80/100 as Brokerage's share of the default gap-fill
+branch, crossed with P28's 5-mix x 3-spend-rate ladder, 2 states (CA / TX), 2 Cash-Reserve settings
+and both `thirdPassBrokerage` arms, plus 3 guard families = 2,430 simulations in about 2 seconds.
+Scores on `baselineScoreOf` against the w=40 arm of the same cell, at the CONTROL arm's
+`futureIRARate` rather than each arm's own - `unifiedconv_harness.js` used per-arm rates, which
+discounts the two sides of an A/B differently.
+
+Headline findings:
+
+1. **The blast radius is three families.** Proportional, Reduce and Guyton-Klinger. The bracket
+   family and Ordered take their own branches and are **bit-identical at every weight across 270
+   guard runs**.
+2. **The constant is load-bearing.** 227 of 360 cells move by more than $1,000 across the range;
+   the widest moves $616,919.
+3. **40 is not the number.** Among the 82 cells that are clean wealth comparisons - delivered spend
+   unchanged, every weight funding the plan - w=40 is best in **zero**. w=0 is best in 65.
+4. **Cash Reserve damps it by an order of magnitude.** CA's widest cell falls from $534,525 with the
+   reserve off to $33,358 with it on. The reserve is the bigger lever; state matters much less.
+5. **P32 does not explain it.** The weight curve has the same shape with `thirdPassBrokerage` at
+   'bounded' and 'off', so the third pass is not why w=0 wins. The separate P28 inversion hypothesis
+   stays open.
+6. **A prediction that could not fire.** The zero-predicate carried over from P28 was scored
+   VACUOUS: no cell in this grid had a control arm that never drew Brokerage.
+7. **The bracket family's constant goes the OTHER way (P30c).** That branch drains Cash before
+   Brokerage, and it is right to: swapping loses in 21 of 23 clean cells, by up to $587,970, and in
+   every cell of the CA / reserve-off slice. So the two constants disagree with each other and the
+   bracket branch is the one that got it right - both results say fill a gap from Cash first.
+8. **Two of the three shipped Ordered codes are dominated (P30d).** Across 60 cells, RIBC and
+   BIRC never win once; CBIR wins 14; the outright best is **CBRI**, which is not offered, winning
+   22. An unshipped ordering beats every shipped one in 15 clean cells, by up to $858,316.
+9. **And the Cash-first story stops at Ordered.** "Cash before Brokerage" wins exactly 30 of 60
+   cells there - a coin flip - because a four-account sequence also places the IRA and Roth, and
+   where those sit swamps the pair that governs the two automatic branches. The narrower "Cash
+   FIRST" does survive, 46 of 60.
+10. **What shipped (P30g, v11.163F).** The menu, not the weight. Ordered now offers six sequences -
+    CBRI, CBIR, CIBR, BCIR, RIBC, BIRC - ordered by wins and, on a tie, by the dollars at stake when
+    that ordering wins (section 15 of the results). `gapFillWeights` and `bracketGapOrder` stay
+    research inputs, unset: the bracket branch is already right, and w=0 has not been checked
+    against the other Optimizer objectives or against the liquidity cost of holding no cash.
+
 ## unifiedconv_harness.js  (node)
 
 ```bash
@@ -69,18 +119,29 @@ node .test_harnesses/unifiedconv_harness.js
 **Full results, tables and reasoning live in [`P28_RESULTS.md`](P28_RESULTS.md).** This entry is the
 index; that file is the reference.
 
+**Settled 2026-08-24 (P28f).** `unifiedConvRouting` was deleted from the engine after it measured
+inert, and its arm (A1) went with it -- an arm setting a flag nothing reads would report as the
+control and look like a result. `rothGapFill` shipped, as the *Roth before Brokerage* switch and
+the Optimizer's 🅡 rows. The grid is now 6 arms, 540 simulations.
+
+**The recorded numbers no longer reproduce.** Re-running on today's engine gives a
+`fillCashThenRoth` range of +$470,977 to -$633,605, negative in 26 of 60 cells, against the
++$3,559,596 / 1-of-60 below. The mechanism inverted too: the largest Brokerage draws in the grid now
+produce the largest LOSSES, where they used to produce the largest gains. The zero-predicate still
+holds. Full re-baseline in `P28_RESULTS.md` section 15 - quote that, not the 2026-07-30 tables.
+
 Tests a proposed nerdknob (P28): model every **voluntary** (non-RMD) IRA withdrawal as a Roth
 conversion, then spend out of Roth. Runs a 5-mix account ladder (shipped defaults -> balanced thirds
--> brokerage-heavy) x 3 spend rates (4/6/8% of total assets) x 6 strategy families x 7 arms = 630
+-> brokerage-heavy) x 3 spend rates (4/6/8% of total assets) x 6 strategy families x 6 arms = 540
 simulations in about a second, and scores its own predictions so a wrong one is visible rather than
 quietly dropped.
 
-Three research inputs on the engine, **all default off, none set by any UI**:
+Research inputs on the engine, **default off, none set by any UI**:
 
 | input | values | what it does |
 |---|---|---|
-| `unifiedConvRouting` | bool | the voluntary draw is CALLED a conversion; spending round-trips through Roth |
-| `rothGapFill` | `'fillCashThenRoth'`, `'fillRothThenCash'` | where Roth sits in the gap fill. Unset = today (Roth last). `ordered` excluded from both |
+| ~~`unifiedConvRouting`~~ | ~~bool~~ | **removed 2026-08-24** -- the voluntary draw was CALLED a conversion; spending round-tripped through Roth |
+| `rothGapFill` | `'fillCashThenRoth'`, `'fillRothThenCash'` | where Roth sits in the gap fill. Unset = today (Roth last). `ordered` excluded. **Now also a UI control**, and `'fillCashThenRoth'` is swept as the 🅡 rows |
 | `forceWithdrawTiming` | `'early'`/`'late'` | pins the month-1 vs month-11 withdrawal rule, which conversions otherwise flip |
 
 Headline findings:
@@ -91,8 +152,9 @@ Headline findings:
    to pick withdrawal timing. Reporting the reframe through it moved 780 money fields.
 3. **The real lever is where Roth sits in the gap fill.** Roth pays when it displaces a *Brokerage*
    draw (avoids realizing gains) and loses when it displaces *Cash* (Roth compounds at growth
-   tax-free; Cash earns cashYield and is taxed). Hence `fillCashThenRoth`, which wins or ties **53 of 60**
-   cells with a worst case of -$12,466, against `fillRothThenCash`'s -$244,689. Worth up to **+$3,559,596**.
+   tax-free; Cash earns cashYield and is taxed). Hence `fillCashThenRoth`, the better of the two
+   positions in **54 of 60** cells. Its own range has since widened to +$470,977 / -$633,605 -- see the
+   re-run warning above; the 2026-07-30 figures were -$12,466 worst and **+$3,559,596** best.
 4. **No Brokerage draw, no lever.** Every cell whose control arm never touched Brokerage returns
    exactly $0. That is a sharper rule than any portfolio-ratio heuristic -- two candidate rankings
    were scored and both failed. The payoff peaks at **6% spend**, not at the highest mix or rate.

@@ -29,7 +29,7 @@ const { SWEEP_BASES } = require(path.join(here, 'sweep_golden.js'));
 // the base object, so recording it would pin the fixture rather than the enumeration.
 const SEL_KEYS = ['strategy', 'propWithdraw', 'nYears', 'stratRate', 'stratIRMAATier',
                   'stratACAMultiple', 'iraWithdrawPct', 'orderedSeq', 'gkGuard', 'gkAdjPct',
-                  'cyclicEnabled', 'cyclicOrder', 'fundConversionWithCash',
+                  'cyclicEnabled', 'cyclicOrder', 'fundConversionWithCash', 'rothGapFill',
                   'convertExcessToRoth', 'extraConversionAmount'];
 
 function selectionOf(v) {

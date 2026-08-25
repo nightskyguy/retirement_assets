@@ -5,9 +5,16 @@
  *
  * Run:  node .test_harnesses/unifiedconv_harness.js
  *
+ * SETTLED 2026-08-24 (P28f). `unifiedConvRouting` was DELETED from the engine once measured -- it
+ * moved 0 money fields in 90 cells, and the two-leg view it existed for is already in every log row
+ * as `-iraSpend` and `-iraConvGrossTot`. Its arm (A1) is gone from this harness with it, because an
+ * arm setting a flag nothing reads would report as the control and look like a finding. The numbers
+ * it produced are kept in P28_RESULTS.md. `rothGapFill` SHIPPED, as the "Roth in shortfall
+ * withdrawals" control and the Optimizer's 🅡 rows.
+ *
  * THE PROPOSAL, AS TWO SEPARABLE ENGINE FLAGS (both default off, no UI sets either)
- *   inputs.unifiedConvRouting -- the voluntary draw is CALLED a conversion and spending round-trips
- *                                through Roth. Provably a relabel; see round 1 below.
+ *   inputs.unifiedConvRouting -- REMOVED, see above. The voluntary draw was CALLED a conversion and
+ *                                spending round-tripped through Roth. Provably a relabel; round 1.
  *   inputs.rothGapFill        -- where Roth sits in the gap fill:
  *                                  'fillRothThenCash' : Roth ahead of everything
  *                                  'fillCashThenRoth' : Cash, then Roth, then Brokerage
@@ -116,7 +123,7 @@ const FAMILIES = [
 
 const ARMS = [
     { key: 'A0', label: 'control',        flags: {} },
-    { key: 'A1', label: 'routing',        flags: { unifiedConvRouting: true } },
+    // A1 ('routing', unifiedConvRouting: true) was removed with the flag itself -- see the header.
     { key: 'RF', label: 'rothThenCash',   flags: { rothGapFill: 'fillRothThenCash' } },
     { key: 'RC', label: 'cashThenRoth',   flags: { rothGapFill: 'fillCashThenRoth' } },
     { key: 'C',  label: 'cash-funded',    flags: { fundConversionWithCash: true } },
@@ -130,7 +137,7 @@ const ARMS = [
 const LABEL_FIELDS = new Set([
     'IRAwd', 'IRA1-', 'IRA2-',
     '-iraVolSpend1', '-iraVolSpend2', '-iraConvGross1', '-iraConvGross2',
-    '-iraSpend', '-iraConvGrossTot', '-unifiedConvGross', '-unifiedRothSpend',
+    '-iraSpend', '-iraConvGrossTot',
 ]);
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────────────────
@@ -215,18 +222,18 @@ for (const s of SCENARIOS) {
 }
 
 // ── 1. Regression guards ────────────────────────────────────────────────────────────────────
-let routingClean = true, orderedClean = true, cellCount = 0;
+// The routing guard that stood here compared A0 against A1 and went with the flag. What it
+// asserted -- routing is label-only in all 90 cells -- is recorded in P28_RESULTS.md, and it can
+// no longer regress because there is no longer any code to regress.
+let orderedClean = true, cellCount = 0;
 for (const s of SCENARIOS) for (const r of SPEND_RATES) for (const f of FAMILIES) {
     cellCount++;
-    const dd = diffFields(g(s.key, r, f.key, 'A0').res.log, g(s.key, r, f.key, 'A1').res.log);
-    if (dd.shapeChange || [...dd.fields.keys()].some(k => !LABEL_FIELDS.has(k))) routingClean = false;
     for (const a of ARMS.slice(1)) {
         const od = diffFields(g(s.key, r, 'ordered', 'A0').res.log, g(s.key, r, 'ordered', a.key).res.log);
         if (od.shapeChange || [...od.fields.keys()].some(k => !LABEL_FIELDS.has(k))) orderedClean = false;
     }
 }
 console.log('\n1. REGRESSION GUARDS across all ' + cellCount + ' mix x rate x family cells\n');
-console.log('   routing (A1) is label-only everywhere : ' + (routingClean ? 'YES' : 'NO -- money moved'));
 console.log('   ordered never moves in any arm        : ' + (orderedClean ? 'YES' : 'NO -- a flag leaked'));
 
 // ── 2. Roth-cashThenRoth payoff, spend rate as its own axis ────────────────────────────────────
@@ -355,8 +362,10 @@ const growsWithSpend = byRate.every((x, i) => i === 0 || x.best >= byRate[i - 1]
 check('C. payoff grows with spend rate', growsWithSpend,
     byRate.map(x => `${pct(x.r)}: best ${money(x.best).trim()}, ${x.live}/${x.n} live`).join('  |  '));
 
-check('D. routing inert / ordered frozen', routingClean && orderedClean,
-    `routing ${routingClean ? 'ok' : 'LEAK'}, ordered ${orderedClean ? 'ok' : 'LEAK'}`);
+// Prediction D was "routing inert AND ordered frozen". Its first half HELD and then took the
+// routing flag out of the engine with it, so what is left to score is the half that still has code
+// behind it.
+check('D. ordered frozen in every arm', orderedClean, orderedClean ? 'ok' : 'LEAK');
 
 const ceLose = ceCells.filter(c => c.dRaw < -1000);
 const ceLoseTimed = ceCells.filter(c => c.dLate < -1000);

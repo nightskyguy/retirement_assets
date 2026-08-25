@@ -677,10 +677,56 @@ function applySuggestIraGoal() {
     runSimulation();
 }
 
+// ── P69: Monte Carlo path replay ────────────────────────────────────────────
+// One injection point, not a second pipeline: when a replay is active, runSimulation() overlays the
+// captured path's return and inflation sequences onto the inputs it just read from the sidebar. The
+// INPUTS are never mutated - the plan under test stays whatever the sidebar says - and the
+// sequences are rebuilt from the shipped bank rows through the engine's own pathInputsFromBankRows,
+// never regenerated from the seed. Exit paths: the banner's button, editing any sidebar input
+// (delegated listener below), or leaving the Charts / Annual Details tabs.
+let _replayState = null;   // { rows, mcMode, label } from mc_tab.js, or null
+let _replayExitHooked = false;
+
+function replayPath(state) {
+    _replayState = state;
+    if (!_replayExitHooked) {
+        // A sidebar edit means the user is back to designing the plan; a replayed chart under an
+        // edited plan would look like the edit's effect. Capture phase, so this runs before the
+        // input's own handler re-simulates.
+        document.querySelector('.sidebar')?.addEventListener('input', () => {
+            if (_replayState) { _replayState = null; syncReplayBanner(); }
+        }, true);
+        _replayExitHooked = true;
+    }
+    runSimulation();
+}
+
+function exitReplay() {
+    _replayState = null;
+    runSimulation();
+}
+
+function syncReplayBanner() {
+    const banner = document.getElementById('replay-banner');
+    if (!banner) return;
+    banner.style.display = _replayState ? 'flex' : 'none';
+    if (_replayState) {
+        const txt = document.getElementById('replay-banner-text');
+        if (txt) txt.textContent = _replayState.label;
+    }
+}
+
 function runSimulation() {
     refreshStratRateOptions();   // keep bracket dropdown labels in sync with CPI + filing status
     // computeOC: single-scenario runs also produce the Opp. Cost counterfactual (Break Even).
     const _simInputs = { ...getInputs(), computeOC: true };
+    if (_replayState) {
+        // planFields first: the run's own strategy and conversion settings (swept rows are not the
+        // raw sidebar plan - conversions are forced on, for one), so the replayed year-by-year
+        // agrees with the survival rate and ruin year the run reported. Then the path's sequences.
+        Object.assign(_simInputs, _replayState.planFields ?? {},
+            MCEngine.pathInputsFromBankRows(_replayState.rows, _simInputs, _replayState.mcMode));
+    }
     let res = simulate(_simInputs);
     lastSimInputs = _simInputs;
     lastSimulationLog = res.log;
@@ -707,6 +753,7 @@ function runSimulation() {
     }
     const spouseBtn = document.getElementById('chartPerson_spouse');
     if (spouseBtn) spouseBtn.style.display = getInputs().hasSpouse ? '' : 'none';
+    syncReplayBanner();
 }
 
 function updateCurrentDollarsView() {
@@ -4086,6 +4133,13 @@ function valChecked(id) { return document.getElementById(id)?.checked; }
 
 
 function showTab(id) {
+    // P69: replay is confined to Charts and Annual Details. Any other destination ends it - the
+    // Optimizer and the Monte Carlo tab run their own sweeps from the sidebar, and a lingering
+    // replay banner over them would claim a relationship that does not exist.
+    if (_replayState && id !== 'tab-chart' && id !== 'tab-tbl') {
+        _replayState = null;
+        syncReplayBanner();
+    }
     // 1. Hide all tab content cards
     document.querySelectorAll('.tab-content, .card').forEach(c => {
         if (c.id.startsWith('tab-')) c.classList.add('hidden');

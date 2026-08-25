@@ -17,6 +17,28 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1645"></a>
+
+## 11.1645
+
+### Walk one Monte Carlo path through your plan
+
+The Monte Carlo tab reports survival rates and percentile bands, but a band is a statistic, not a
+sequence any plan actually lived. Every run now captures ten of its paths - the five worst, plus one
+at each of the 5th, 25th, 50th, 75th and 95th percentiles of the outcome ranking - and the Stress
+Test keeps every one of its historical scenarios.
+
+A 🎬 Replay button on your pinned row in the survival table, and one on each Stress Test row, plays
+that single sequence through Charts and Annual Details. The plan is your own, every setting as the
+sidebar has it; only that path's market returns and inflation are applied, year by year. Annual
+Details shows the year the money runs out, and under Show All the year-by-year inflation and market
+return that caused it. The Current $ toggle deflates by the inflation that path actually lived.
+
+A banner names what is being replayed: its rank in the run, whether it survives, and for a stress
+row the historical start year. Exit with the banner's button; editing any input or leaving Charts
+and Annual Details also returns you to your plan's own projection. Replayed paths are the exact
+sequences the run scored, never re-created approximations.
+
 <a id="11.1642"></a>
 
 ## 11.1642

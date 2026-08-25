@@ -16,7 +16,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy~~ - **COMPLETE v11.163F**, Ordered offers six sequences | - |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69d` |
+| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69e` |
 | **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
@@ -104,7 +104,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
-| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69d` | nothing - `P69a`-`P69c` DONE (v11.1644) |
+| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69e` | nothing - `P69a`-`P69d`,`P69h` DONE (v11.1645) |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
@@ -800,26 +800,35 @@ the engine is `montecarlo/mc_engine.js`.
       exact in all four modes; e2e asserts shipped keys == captured pathIndexes, 36/36 stress
       bundles, and a replayed path's simulate() reproduces the captured metric EXACTLY. Browser:
       plan-scope run through the real worker carries all fields. Seed-regeneration still forbidden.
-- [ ] **P69d** - replay mode in the UI, inputs never mutated. `runSimulation()`
-      (`optimizer_ui.js:680`) takes no argument today and builds `_simInputs` from `getInputs()`;
-      replay needs ONE injection point there for `returnSequence` / `returnSequencePerAccount` /
-      `inflationSequence`, not a parallel copy of the three-renderer pipeline. `loadMCVariation`
-      (`mc_tab.js:1440`) is the shape to follow for the control, and it is also the warning: it was
-      the PF8/P74 bug both times a second path into the sidebar drifted from the first.
-      Banner names rank percentile, ruin year, source sequence and mode. Exit = plain
-      `runSimulation()`. **User decision 2026-08-25:** the control lands on the **stress table AND
-      the main survival table in the same pass**, not stress first - `P69c` ships the captured set
-      for both passes anyway, so splitting them would mean building the banner twice.
+- [x] **P69d** - **DONE v11.1645.** One injection point in `runSimulation()`, no parallel
+      pipeline: an active `_replayState` overlays the run variation's plan fields plus the path's
+      sequences onto the inputs just read from the sidebar; sidebar CONTROLS never touched. Banner
+      under the tab bar names rank, survival/ruin year, mode and seed; `Exit replay` button.
+      Controls: `🎬 Replay worst path` on the plan headline (works in BOTH scopes - plan scope
+      never renders the survival table, which is where the first attempt put it), a pinned-row
+      button in the compare table, and a 🎬 per stress row in the swatch cell. `startReplay()`
+      refuses a replay whose sequence length no longer matches `mcPlanYears(getInputs())`.
+      **Design correction, measured mid-build:** replaying the RAW sidebar put the stress ruin year
+      off by one (2041 vs table 2042) because swept rows are not the raw plan - conversions are
+      forced on. `_replayPlanFields(v)` now injects the run variation's strategy/conversion fields
+      (via `selectionOf`) with the sequences, so the replayed year-by-year agrees with the numbers
+      the run reported. Verified exact: stress balances match the engine trace to the dollar, ruin
+      2042==2042, and a survivor path's replayed after-tax wealth equals the captured metric to the
+      float ($12,125,940.416580342). Original decision stands: control on both tables, one pass.
 - [ ] **P69e** - prev/next across the captured set; the banner is the navigator.
 - [ ] **P69f** - **the headline**: overlay the user's own deterministic plan on the replayed path in
       the balance chart. `lastSimulationLog` (`optimizer_ui.js:3158`) holds it and
       `updateCurrentDollarsView` (`:712`) is the re-render pattern.
 - [ ] **P69g** - Annual Details under replay, ruin year marked. `infl%` / `inflCum%` / `return%`
       already exist behind Show All. Confirm the current-dollars toggle deflates by the PATH's
-      realized inflation, not the fixed rate.
-- [ ] **P69h** - decide what replay does to the Optimizer tab and the Tax Planner handoff. Simplest
-      defensible answer: replay is confined to Annual Details and Charts; leaving the tab or editing
-      an input exits replay.
+      realized inflation, not the fixed rate. *(2026-08-25: replayed log carries per-year inflation
+      - verified varying infl% in the log - and deflation reads the log's own inflationFactor, so
+      most of this is already true; remaining: mark the ruin year visibly in the table.)*
+- [x] **P69h** - **DONE with P69d (v11.1645), the simplest defensible answer as approved:**
+      replay is confined to Charts and Annual Details. `showTab()` to any other tab clears it, a
+      sidebar input event (capture-phase delegated listener) clears it, and the Optimizer and Tax
+      Planner therefore never see a replayed state - they read the sidebar, which replay never
+      writes.
 
 **The percentile trap, restated because it is the one thing that makes this phase wrong if missed:**
 `computePercentiles` (`montecarlo/stats.js:41`) sorts each year independently, so the p50 BAND is an
@@ -832,7 +841,7 @@ earliest ruin, and the sampled ranks land where they claim. Browser - replay a k
 confirm the Annual Details ruin year matches that row's ruin year in the stress table, then confirm
 exiting restores the user's own plan unchanged.
 
-- **Status:** in_progress - `P69a`-`P69c` done, `P69d` next (replay mode in the UI)
+- **Status:** in_progress - `P69a`-`P69d`+`P69h` done, `P69e` next (prev/next in the banner), then `P69f` overlay and the `P69g` ruin-year mark
 - **Independent:** no phase dependencies
 
 ---

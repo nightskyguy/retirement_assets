@@ -850,6 +850,86 @@ function refreshMCStressOnly() {
     );
 }
 
+// --- P69 replay: walk one captured sequence through the main model ---------
+
+// The plan fields the replayed simulation must take from the RUN's variation rather than the
+// sidebar. The sweep's rows are not the raw sidebar plan - most visibly, every swept row forces
+// conversions on - and the survival rate, the ruin year and the chart line all describe the row
+// the run scored. Replaying the raw sidebar against those numbers put the ruin year a year off
+// (measured: stress row said 2042, the replayed table said 2041, convertExcessToRoth true vs
+// false). The sidebar CONTROLS are still never touched; these ride along in the simulation inputs
+// only, exactly like the sequences.
+function _replayPlanFields(v) {
+    return {
+        ...selectionOf(v),
+        convertExcessToRoth: v.convertExcessToRoth ?? false,
+        fundConversionWithCash: v.fundConversionWithCash ?? false,
+        cyclicEnabled: v.cyclicEnabled ?? false,
+        cyclicOrder:   v.cyclicOrder ?? 'ira-first',
+        ...(v.spendGoal != null ? { spendGoal: v.spendGoal } : {}),
+    };
+}
+
+// The captured paths of the run's capture variation (the sidebar's own plan), as ready-to-replay
+// states, worst-first as the engine ranked them. Empty when there is no run yet or a stale cached
+// worker sent no rows.
+function mcReplayList() {
+    const m = _mcResults;
+    if (!m?.capturedBankRows) return [];
+    const v = m.variations?.[m.captureVariationIndex ?? 0];
+    const cap = v?.captured ?? [];
+    return cap.filter(r => m.capturedBankRows[r.pathIndex]).map(r => ({
+        rows:   m.capturedBankRows[r.pathIndex],
+        mcMode: m.simulationMode,
+        planFields: _replayPlanFields(v),
+        label:  `Replaying a Monte Carlo path through your plan: `
+              + (r.rank === 0 ? 'the worst path' : `rank ${r.rankPct}%`)
+              + ` of ${m.numPaths}`
+              + (r.ruinYear ? `, money runs out in ${r.ruinYear}` : ', survives the whole plan')
+              + ` (${_mcModeLabel(m.simulationMode)}, seed ${_mcFanMeta?.seed ?? '?'}).`,
+    }));
+}
+
+// Every stress scenario as a replay state, index-aligned with the stress table's rank column.
+function stressReplayState(rank) {
+    // Same precedence as sortStressTableBy: a nerdknob user can have a stress result with no full
+    // run behind it, in which case the standalone _mcStress is all there is.
+    const s = _mcResults?.stress ?? _mcStress;
+    const rows = s?.pathBankRows?.[rank];
+    if (!rows) return null;
+    const startYear = s.startYears?.[rank];
+    const sv        = s.variations?.[0];
+    const ruinYear  = sv?.ruinYearsPerPath?.[rank] || 0;
+    return {
+        rows,
+        mcMode: 'stress',
+        planFields: _replayPlanFields(sv ?? {}),
+        label:  `Replaying the ${startYear ?? '?'} historical sequence through your plan`
+              + (ruinYear ? `: money runs out in ${ruinYear}.` : ': it survives the whole plan.'),
+    };
+}
+
+// Shared entry: refuse a replay whose sequences no longer fit the plan's horizon - the dates in
+// the sidebar changed since the run, so year y of the sequence would land on a different year of
+// the plan than the one the sweep scored.
+function startReplay(state) {
+    if (!state) return;
+    const needYears = mcPlanYears(getInputs());
+    if (state.rows.scenario.length !== needYears) {
+        const el = document.getElementById('mc-error');
+        if (el) {
+            el.style.display = '';
+            el.textContent = 'The plan’s dates changed since this run. Run Monte Carlo again to replay a path.';
+        }
+        return;
+    }
+    replayPath(state);
+    showTab('tab-chart');
+}
+
+function replayCapturedPath(k) { startReplay(mcReplayList()[k]); }
+function replayStressPath(rank) { startReplay(stressReplayState(rank)); }
+
 // --- Rendering ------------------------------------------------------------
 
 // Returns the index of the variation that matches the user's current strategy settings,
@@ -1205,7 +1285,16 @@ function renderPlanHeadline(msg) {
         + `<div style="font-size:0.92em;color:#333;">Chance of success for <strong>your plan</strong> `
         + `(📍 ${escapeHtml(name)}): it survives ${survived.toLocaleString()} of ${total.toLocaleString()} paths. `
         + `Median ending balance $${fmt(Math.round(finalBal))}. `
-        + `<span style="color:#666;">${modeTxt}.</span></div></div>`;
+        + `<span style="color:#666;">${modeTxt}.</span></div>`
+        // P69: the replay entry point that works in BOTH scopes - plan scope never renders the
+        // survival table, so the headline is the only place the pinned plan reliably appears.
+        // preventDefault too: the headline is a fold handle, and the button must not toggle it.
+        + (mcReplayList().length
+            ? `<button onclick="event.preventDefault();event.stopPropagation();replayCapturedPath(0)"`
+              + ` style="margin-left:auto;white-space:nowrap;font-size:0.8em;padding:2px 8px;cursor:pointer;"`
+              + ` title="Walk this run's worst captured path through Charts and Annual Details, year by year, with your own plan's settings.">🎬 Replay worst path</button>`
+            : '')
+        + `</div>`;
     el.style.display = '';
 }
 
@@ -1391,9 +1480,19 @@ function renderSurvivalTable(variations, numPaths) {
         checkCell.appendChild(cb);
         row.appendChild(checkCell);
 
-        // Data cells
+        // Data cells. The pinned row alone gets the replay control: the engine ships replay
+        // sequences for the sidebar's own plan (captureVariationIndex), so it is the one row whose
+        // captured paths can actually be walked. Inline handler, stopPropagation, or the row's own
+        // click loads the variation into the sidebar instead.
+        const canReplay = isPinned && v._origIdx === (_mcResults?.captureVariationIndex ?? 0)
+                       && mcReplayList().length > 0;
+        const replayBtn = canReplay
+            ? ` <button onclick="event.stopPropagation();replayCapturedPath(0)"`
+              + ` style="font-size:0.85em;padding:0 6px;cursor:pointer;"`
+              + ` title="Walk this run's worst captured path through Charts and Annual Details, year by year, with your own plan's settings.">🎬 Replay</button>`
+            : '';
         [
-            (isPinned ? '📍 ' : '') + v.strategyFamily,
+            (isPinned ? '📍 ' : '') + v.strategyFamily + replayBtn,
             escapeHtml(v.paramLabel),
             ruinTxt,
             '$' + fmt(v.percentiles.p50[v.percentiles.p50.length - 1]),
@@ -2029,6 +2128,14 @@ function renderStressTable(stress, rows) {
             : _stressLineColor(r.band, r.posInBand, r.bandSize);
         swatch.innerHTML = `<span style="display:inline-block;width:18px;height:3px;vertical-align:middle;`
                          + `background:${lineColor};"></span>`;
+        // P69: replay control, per scenario. Only when this run's message shipped the draw rows
+        // (an older cached worker's message has none). The row's own click isolates the chart
+        // line, so the button stops propagation.
+        if (stress?.pathBankRows?.[r.rank]) {
+            swatch.innerHTML += ` <button onclick="event.stopPropagation();replayStressPath(${r.rank})"`
+                + ` style="font-size:0.85em;padding:0 4px;cursor:pointer;vertical-align:middle;"`
+                + ` title="Walk this historical sequence through Charts and Annual Details, year by year, with your own plan's settings.">🎬</button>`;
+        }
         row.appendChild(swatch);
 
         const cellCss = `padding:2px 8px;text-align:right;background:${oc.row};cursor:pointer;white-space:nowrap;`;

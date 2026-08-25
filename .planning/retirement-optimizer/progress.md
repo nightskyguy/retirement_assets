@@ -4526,3 +4526,35 @@ the after-tax terminal wealth equals the captured metric EXACTLY - the shipped r
 not a reconstruction. Round-trip element-exact in all four modes. Browser-verified through the
 real worker: plan run carries captureVariationIndex 0, 10 captured rows, 10 bundles, 36/36 stress
 bundles. Suites 322/61/22, badge green at 698. Still no changelog entry; UI is P69d.
+
+---
+
+## Session 2026-08-25 (worktree mc-path-replay) - P69d+P69h, the replay UI (v11.1645)
+
+Replay is live. One injection point in runSimulation() - no parallel pipeline - overlaying the
+path's sequences onto the inputs just read from the sidebar; the sidebar controls are never
+written. A banner under the tab bar names the path (rank, survival or ruin year, mode, seed) with
+an Exit button. Entry points: "Replay worst path" on the plan headline, a pinned-row button in the
+compare survival table, and a per-row 🎬 on the stress table. Exit: the button, any sidebar input
+event (capture-phase delegated listener), or leaving Charts/Annual Details (P69h, the approved
+simplest answer - Optimizer and Tax Planner read the sidebar, which replay never writes).
+
+Two things the browser found that the plan did not:
+
+1. Plan scope never renders the survival table (it renders the headline and empties the tbody), so
+   the pinned-row control alone was unreachable in the default scope. The headline hosts the
+   button now, in both scopes.
+2. Replaying the RAW sidebar put the stress ruin year one year off (2041 vs the table's 2042).
+   Cause: swept rows are not the raw plan - every sweep row forces conversions on
+   (convertExcessToRoth true vs sidebar false, measured $55 apart by year one). The run's survival
+   rate and ruin year describe the ROW, so _replayPlanFields() now rides the variation's
+   strategy/conversion fields (selectionOf + the four page-read extras + spendGoal) along with the
+   sequences. After the fix: replayed stress balances match the engine trace to the dollar, ruin
+   2042==2042, and a survivor path's replayed after-tax wealth equals its captured metric to the
+   float (12,125,940.416580342).
+
+Also: length guard refuses a replay after the plan's dates change; banner uses inline
+display:flex/none because the .hidden class loses to an inline display. Changelog entry written
+(11.1645, the branch's one entry) and the in-page list trimmed to its documented five-entry
+ceiling. Suites 322/61/22 unchanged, badge green at 698. P69e (prev/next), P69f (overlay), P69g
+(ruin-year mark) remain.

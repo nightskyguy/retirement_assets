@@ -2748,3 +2748,162 @@ pins this against a verbatim copy of the pre-P23 bank build.
 
 The simulated inflation range, -1.00% to 13.77%, brackets the real record's 13.30% peak (1979)
 without being tuned to it.
+
+## P75 prior art: i-ORP, e-ORP, and the LP/MILP retirement-optimization lineage (2026-08-25)
+
+Gathered for P75 (year-by-year withdrawal mix). The point of the list: the LP formulation of
+exactly this problem - per-year withdrawal and conversion amounts as decision variables, taxes as
+piecewise-linear constraints - is proven tractable, ran in production for two decades, and has one
+actively maintained open-source MILP descendant. None of the tools below carry this engine's
+state-tax, ACA or widow fidelity, which is the differentiator and the expensive part. All URLs
+verified 2026-08-25.
+
+### i-ORP (James S. Welch Jr.) - the original. i-orp.com is DEAD (NXDOMAIN); archive-only.
+
+| What | URL |
+|---|---|
+| Site root (last good, Oct 2021) | https://web.archive.org/web/20211015194156/https://i-orp.com/ |
+| Main planner input form | https://web.archive.org/web/20201111233257/https://www.i-orp.com/Spend/extended.html |
+| Docs/papers index | https://web.archive.org/web/20230321202349/https://www.i-orp.com/Spend/articles.html |
+| **ORP Model Description - 2008 overview paper; READ 2026-08-25, see note below: equations NOT included** | https://web.archive.org/web/20200710001724/https://www.i-orp.com/ModelDescription/ModelDescriptionK.pdf |
+| Validating the Optimal Retirement Planner | https://web.archive.org/web/20190131144141/https://www.i-orp.com/ModelDescription/validation.pdf |
+| Full user manual | https://web.archive.org/web/20220330074804/https://i-orp.com/Plans/help/ORPHelp.html |
+
+**Welch papers** (titles from the site's own articles page):
+
+| Paper | Venue | URL / status |
+|---|---|---|
+| Mitigating the Impact of Personal Income Taxes on Retirement Savings Distribution | J. Personal Finance 14(1), 2015 | archive-only: https://web.archive.org/web/20221205051603/http://www.i-orp.com/modeldescription/mitigatedtaxes.pdf |
+| Measuring the Financial Consequences of IRA to Roth IRA Conversions | J. Personal Finance 15(1), 2016, pp.47-55 | archive-only, full issue: https://web.archive.org/web/20200920211020/https://www.i-orp.com/ModelDescription/Vol15Issue1.pdf |
+| A 3-Step Procedure for Computing Sustainable Retirement Savings Withdrawals | J. Financial Planning 30(8), Aug 2017 | LIVE: https://www.onefpa.org/journal/Pages/AUG17-A-3-Step-Procedure-for-Computing-Sustainable-Retirement-Savings-Withdrawals.aspx |
+| A Quantitative Evaluation of Four Retirement Spending Models | J. Personal Finance 14(2), 2015 | archive-only: https://web.archive.org/web/20221205035107/http://www.i-orp.com/modeldescription/4spend.pdf |
+
+### e-ORP - the successor the user had heard of and could not find. FOUND.
+
+https://github.com/dcurrie/e-ORP - Doug Currie. Python + Jupyter, created 2025-07, pushes through
+2026-03: actively maintained. A **genuine MILP re-implementation**, not a mirror or scrape:
+`solver.py` builds a `pyscipopt.Model()` (SCIP) with per-year continuous and binary decision
+variables and maximizes year-0 discretionary spend. README: "Inspired by the now unmaintained
+(and unavailable?) i-ORP by James S. Welch Jr." Covers federal tax MFJ/SGL/HoH, the OBBBA senior
+deduction, IRMAA Part B/D, RMDs, Roth conversions, cap gains, survivor benefits, and smile-curve
+spending. Does NOT cover Monte Carlo, state tax, or the ACA cliff.
+
+### DiLellio & Ostrov - the academic line
+
+| Paper | Venue | URL / status |
+|---|---|---|
+| Optimal Strategies for Traditional versus Roth IRA/401(k) Consumption During Retirement | Decision Sciences 48(2):356-384, 2017, DOI 10.1111/deci.12222 | free PDF, LIVE: https://etfmathguy.com/wp-content/uploads/2022/03/DiLellio-and-Ostrov2017-Optimal-Strategies-Dec-Sci.pdf |
+| Toward constructing tax efficient withdrawal strategies for retirees with traditional 401(k)/IRAs, Roth 401(k)/IRAs, and taxable accounts | Financial Services Review 28(2):67-95, 2020 | open access, LIVE: https://openjournals.libs.uga.edu/fsr/article/view/3419 |
+| Optimal decisions under price dynamics for Roth conversions (DiLellio solo) | Financial Planning Review, 2023, DOI 10.1002/cfp2.1174 | live, bot-blocked; open in a browser |
+
+Predecessor ORP's own paper cites as the only earlier LP retirement calculator, and the closest
+thing to a PUBLISHED equation set in this lineage: Ragsdale, Seila & Little, "An Optimization
+Model for Scheduling Withdrawals from Tax Deferred Retirement Accounts", Financial Services
+Review, March 1994 (author names transcribed from the paper's reference list; its OCR garbles
+them - verify before formal citation). Research-only implementation, never public.
+
+### Adjacent open-source LP/MILP planners
+
+- https://github.com/wscott/fplan - Python LP; README cites Welch directly ("similar to the ideas
+  of James Welch at www.i-orp.com"); active, push 2026-08.
+- https://github.com/mdlacasse/Owl - Python MILP via HiGHS/MOSEK; co-optimizes the Social Security
+  claiming age; the most active of the group, push 2026-08-25.
+- https://github.com/willauld/rplanlib - Go LP library, `willauld/fplan` front-end; stale since
+  2019.
+
+### Honesty notes
+
+- Welch's death is UNCONFIRMED. The Bogleheads thread (July 2022,
+  https://www.bogleheads.org/forum/viewtopic.php?t=379689) says only that he could no longer
+  maintain the site and was seeking a successor. Say "unmaintained/offline since ~2022", nothing
+  stronger.
+- The DiLellio & Ostrov 2020 abstract describes all-years global optimization "in contrast to
+  most previous approaches that chronologically generate a suboptimal strategy" but does not name
+  the technique. Verify inside the PDF before citing it as "DP-based".
+- SSRN, Wiley and bogleheads.org return 403 to automated fetchers but load in a browser; that is
+  bot-blocking, not link rot.
+- ModelDescriptionK.pdf READ in full 2026-08-25 (28 pp, Welch 2008, "Optimal Distributions from
+  Tax-Advantaged Retirement Accounts"). It is the model DESCRIPTION, not the formulation: no
+  decision variables, constraint equations or objective are ever written out (the only equations
+  in the paper are Appendix B's two compound-interest identities). What it does pin down:
+  objective = maximize one level inflation-adjusted after-tax annual spending, with the desired
+  estate as a constraint (dual of this repo's fix-spending-maximize-wealth objective); per-account
+  balance recursions with exact timing in Appendix C (withdraw at start of year, contributions and
+  growth at end, return = rate x (begin - withdrawal)); taxes linearized by splitting income into
+  per-bracket slice variables - Table 6 prints those slices as columns (0/10/15/25%), the clearest
+  evidence of the encoding; RMDs by the recalculation method; brackets inflation-indexed (the 2008
+  model already did what P70 is auditing). The glossary says the system is solved "iteratively" -
+  the only hint at how nonconvex pieces were handled; nothing is elaborated. Scope of the 2008
+  model: no IRMAA, no ACA, no NIIT, no LTCG/basis distinction (After-tax account taxed annually on
+  returns), no state tax in the base scenario; the site's later release directories (IRMAA,
+  GOPtax, APenalty, bequest) show those grew afterward. For explicit formulations use e-ORP's
+  solver.py and Ragsdale/Seila/Little 1994 above.
+
+### Method glossary - the acronyms this entry and P75 use
+
+**LP, linear programming.** Choose continuous variables x to maximize a linear objective c.x
+subject to linear constraints Ax <= b, x >= 0. Solvers (simplex, interior-point) return the
+GLOBAL optimum in polynomial time, and that optimum always sits on a VERTEX of the feasible
+region. "Programming" means schedule, 1940s logistics usage, not source code - Welch's glossary
+makes the same point. In the retirement mapping: variables are per-account per-year withdrawals,
+transfers and per-bracket income slices plus the spending level; constraints are the balance
+recursions, each year's cash requirement, RMD floors, bracket-slice widths and the estate floor.
+
+**Why LP can price graduated brackets without integers.** Split taxable income into one variable
+per bracket, each bounded by that bracket's width, and set tax = sum of rate x slice. Because
+marginal rates never DECREASE, the solver fills the cheap slices first out of self-interest and
+the encoding is exact. This is convexity doing the work, and it is the property Table 6 of the
+2008 paper is printing. It is also what the P75 edge-menu argument rests on: optimum at a vertex
+means optimum at a bracket or threshold boundary.
+
+**Where pure LP breaks.** A cliff is nonconvex - the IRMAA tier edge (one dollar of MAGI buys a
+fixed premium jump), the ACA subsidy cliff, the Social Security taxability hump where the
+marginal rate spikes and then falls back. LP would happily take a fractional "30% crossed" and
+pay 30% of a penalty that reality only sells whole. Two escapes: integer variables (MILP), or
+iterate LPs with the nonconvex piece frozen at each pass - the latter is probably what ORP's
+glossary means by solving "iteratively", though the paper never elaborates.
+
+**MILP, mixed-integer linear program.** An LP in which SOME variables must be integers, usually
+binary 0/1, while the rest stay continuous - "mixed" because both kinds appear in one model.
+Binaries encode discrete logic that LP cannot express: if/then, either/or, which side of a
+threshold. The cliff pattern, with M a large constant, z the binary "crossed" flag and S the
+surcharge:
+
+    MAGI <= threshold + M*z        z = 0 forces MAGI under the edge
+    surcharge = S*z                crossing buys the whole penalty, never a fraction
+
+Cost of the power: LP is polynomial, MILP is NP-hard. Solvers use branch-and-bound - solve the
+LP relaxation with binaries allowed fractional, and when one comes back at 0.4, split into two
+subproblems (z = 0, z = 1), recurse, and prune any subtree whose bound is already worse than the
+best complete solution found. Add cutting planes and it is branch-and-cut. Worst case is
+exponential, but a retirement model - a few dozen years, a few binaries each - is trivial scale;
+modern solvers finish in well under a second. The property that matters: MILP is EXACT, it
+terminates with a proven optimality bound rather than a heuristic's assertion.
+
+**SCIP, Solving Constraint Integer Programs.** A specific solver, not a technique. From Zuse
+Institute Berlin; among the fastest non-commercial MILP solvers, and it also handles constraint
+programming and nonlinear extensions. Academic-license for years, Apache 2.0 since 2022.
+`pyscipopt` is its Python binding, and it is the dependency that proves e-ORP genuinely solves a
+MILP rather than mirroring i-ORP's output.
+
+**Solver landscape**, for orientation: Gurobi and CPLEX are the commercial leaders; SCIP the top
+open academic one; HiGHS is open, used by Owl, and notable here because it ships a WebAssembly
+build that runs in a browser - the only candidate that could live inside this tool without a
+server; CBC is the older COIN-OR workhorse.
+
+**DP, dynamic programming.** Optimize by working BACKWARD from the horizon, computing a value
+function over a discretized state, so each year's decision is scored against the exact optimal
+continuation rather than a guess. Handles nonconvexity natively, unlike LP. Cost is the curse of
+dimensionality - the state grid grows multiplicatively per dimension, which is why the P75 state
+collapse (Roth and Cash factor out, since a dollar in either never touches a future tax) is what
+would make a DP rung feasible at all.
+
+**PWL, piecewise linear.** A function built from straight segments. Bracket tax is PWL and convex
+in ordinary income; a cliff is PWL and NOT convex. The whole method choice in P75 turns on which
+of those two a given tax feature is.
+
+**Relevance to this repo.** P75's main line needs NO solver: the edge menu is the vertex set an LP
+would have landed on, and coordinate descent over it keeps `simulate()`'s nonconvex fidelity -
+cliffs, the Social Security torpedo, the widow transition, the state engine - which an LP cannot
+represent honestly. Only the P75e stretch (convexify the cliffs to get a provable ceiling) would
+pull in a solver, and HiGHS-WASM is then the only browser-compatible candidate.

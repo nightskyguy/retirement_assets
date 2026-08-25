@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.163F"></a>
+<a id="11.1640"></a>
 
-## 11.163F
+## 11.1640
 
 ### Roth can fill a spending shortfall, and Ordered offers three more draw orders
 
@@ -37,13 +37,12 @@ For what the tool does and how to use it, see [README.md](README.md).
    rows appear only if you hold Roth. Nothing about a plan predicts which way it lands, which is why
    the switch is swept rather than recommended.
 
-3. **Three more draw orders for the *Ordered* strategy.** The list now offers six sequences instead
-   of three: Cash→Brok→Roth→IRA, Cash→Brok→IRA→Roth, Cash→IRA→Brok→Roth, Brok→Cash→IRA→Roth,
-   Roth→IRA→Brok→Cash and Brok→IRA→Roth→Cash, with the ones that most often came out ahead in
-   testing at the top. Cash→Brok→Roth→IRA, the new first entry, was the best sequence in more test
-   plans than any of the three previously on offer, and in one plan it was worth $858,000 more than
-   the best of them. Your own selection is unchanged, and both the Optimizer and Monte Carlo now
-   score all six.
+3. **Three more draw orders for the *Ordered* strategy.** Added: **Cash→Brok→Roth→IRA**,
+   **Cash→IRA→Brok→Roth** and **Brok→Cash→IRA→Roth**. The list is ordered with the sequences that
+   most often came out ahead in testing at the top. Cash→Brok→Roth→IRA, the new first entry, was the
+   best sequence in more test plans than any of the three previously on offer, and in one plan it was
+   worth $858,000 more than the best of them. Your own selection is unchanged, and both the Optimizer
+   and Monte Carlo now score all six.
 
 4. **Fewer *Reduce IRA* and *IRA Draw* rows.** The Optimizer tried 16 plan lengths between 2 and 25
    years and 8 draw percentages; it now tries **3, 7, 11, 17 and 23** years and **5, 7, 9, 11 and

@@ -4392,3 +4392,29 @@ could make it fire.
 
 Suites 314 / 61 / 22, badge green at 690. Both goldens regenerated: MC in node, OPT re-captured in
 the browser (four scenarios), and the diff read row by row rather than accepted.
+
+---
+
+## Session 2026-08-25 (worktree readme-review-updates) - P73, the Strategy column sorts on data now (v11.1640)
+
+User's call on the open design question: **family, then parameter**. So `strategySortKey()` in
+`optimizer_core.js` - pure, exported, node-tested - builds a fixed-width key from `_family`,
+`_paramSortVal`, the modifier and the variant, and the Strategy column returns that instead of the
+rendered label.
+
+Two things this had to get right beyond the ordering itself. The rows had to carry the family and
+modifier the ENUMERATION assigned, not ones parsed back off a label that starts with raw HTML for
+the cyclic IRA-first arm - so `addResult` records `_family`/`_modifier` and the derived rows copy
+them. And the comparator had to stop using `localeCompare` for this column: locale collation treats
+the key's padding and field tags as ignorable at primary strength, which would silently reorder the
+key's own fields. The column declares `rawSort: true` and the comparator compares by code point.
+
+`P73b` dissolved rather than got decided. It asked whether the pinned rows should keep sorting to
+the top; they never sorted at all - `display` filters both out before the comparator runs, because
+each is already rendered sticky above the table.
+
+Browser-verified both directions: one contiguous run per family (Fill Bracket, Guyton-Klinger, IRA
+Draw, IRMAA Ceil, Ordered, Proportional, Reduce), each parameter's arms clustered as plain, no-conv,
+then clones, and descending an exact mirror. Suite 315/61/22, badge green at 691. No changelog entry,
+by the user's call. The same commit trims the release entry's Ordered item to name only the three
+NEW sequences.

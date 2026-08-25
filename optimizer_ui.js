@@ -918,7 +918,7 @@ function _runOptimizerNow() {
     // strategyOverrides stored separately so the spend optimizer can reuse them
     const strategyOverridesList = [];
 
-    function addResult(strategyLabel, paramLabel, paramSortVal, overrides, noConv = false, familyKey = null) {
+    function addResult(strategyLabel, paramLabel, paramSortVal, overrides, noConv = false, familyKey = null, modifier = null) {
         // Nerdknob sweeps fundConversionWithCash as its own dimension (the 💵 rows added after
         // the cyclic pass), so base rows must NOT inherit the sidebar's value - otherwise a user
         // with it already on would get two identical arms instead of an A/B. Outside nerdknob
@@ -972,6 +972,11 @@ function _runOptimizerNow() {
             _strategyLabel: strategyLabel + (inputs.convertExcessToRoth ? ' ✓' : '') + (noConv ? ' (no conv)' : '') + ((isBracketInfeasible || isACAUntenable) ? ' ⚠️' : ''),
             _paramLabel: paramLabel,
             _paramSortVal: paramSortVal,
+            // The family and modifier as the ENUMERATION named them, not as the label renders them.
+            // strategySortKey() sorts the Strategy column on these; reading them back off
+            // _strategyLabel is what used to scatter each family's clones across the table.
+            _family: _fk,
+            _modifier: modifier,
             // Record the EFFECTIVE values (base + overrides), not just the overrides: outside
             // nerdknob fundConversionWithCash is inherited from the sidebar rather than set as
             // an override, and loadOptimizerResult() restores from these fields - reading the
@@ -1014,7 +1019,7 @@ function _runOptimizerNow() {
             finalNWCurrentDollars: lastEntry.totalWealth / (lastEntry.inflationFactor || 1)
         };
         results.push(row);
-        strategyOverridesList.push({ strategyLabel, paramLabel, paramSortVal, overrides });
+        strategyOverridesList.push({ strategyLabel, paramLabel, paramSortVal, overrides, family: _fk, modifier });
     }
 
     // The enumeration itself lives in optimizer_core.js (buildStrategyFamilies), shared with Monte
@@ -1048,7 +1053,7 @@ function _runOptimizerNow() {
         offGridLast: true,
     });
     for (const f of families) {
-        addResult(f.strategyLabel, f.paramLabel, f.paramSortVal, f.overrides, false, f.family);
+        addResult(f.strategyLabel, f.paramLabel, f.paramSortVal, f.overrides, false, f.family, f.modifier);
     }
     // The un-modified rows, reused far below for the no-conversion baseline sweep. Deliberately
     // excludes the 🗘/🔄 and 💵 clones: that sweep's whole point is a reference with the Roth and
@@ -1080,7 +1085,7 @@ function _runOptimizerNow() {
             for (let i = 0; i < baselineCount; i++) {
                 const baseRow = results[i];
                 if (!baseRow.totals.success) continue;
-                const { strategyLabel, paramLabel, paramSortVal, overrides } = strategyOverridesList[i];
+                const { strategyLabel, paramLabel, paramSortVal, overrides, family, modifier } = strategyOverridesList[i];
                 const opt = optimizeSpend(base, overrides);
                 if (!opt) continue;
                 const lastEntry = opt.result.log[opt.result.log.length - 1];
@@ -1089,6 +1094,8 @@ function _runOptimizerNow() {
                     _strategyLabel: (strategyLabel + (overrides.convertExcessToRoth ? ' ✓' : '')) + (opt.hitCeiling ? ' ✦+' : ' ✦'),
                     _paramLabel: paramLabel,
                     _paramSortVal: paramSortVal,
+                    _family: family,
+                    _modifier: modifier,
                     _convertExcessToRoth: overrides.convertExcessToRoth,
                     _spendGoal: opt.optimizedSpend,
                     _strategy: overrides.strategy,
@@ -1113,6 +1120,8 @@ function _runOptimizerNow() {
                     _strategyLabel: (opt.strategyLabel + (opt.overrides.convertExcessToRoth ? ' ✓' : '')) + ' ▼',
                     _paramLabel: opt.paramLabel,
                     _paramSortVal: opt.paramSortVal,
+                    _family: opt.family ?? null,
+                    _modifier: opt.modifier ?? null,
                     _convertExcessToRoth: opt.overrides.convertExcessToRoth,
                     _spendGoal: opt.optimizedSpend,
                     _strategy: opt.overrides.strategy,
@@ -1285,6 +1294,8 @@ function _runOptimizerNow() {
                 _strategyLabel: baseRow._strategyLabel + ' ⇌' + (convEndYear != null ? ` ⏹${convEndYear}` : ''),
                 _paramLabel: baseRow._paramLabel,
                 _paramSortVal: baseRow._paramSortVal,
+                _family: baseRow._family ?? null,
+                _modifier: baseRow._modifier ?? null,
                 _convertExcessToRoth: baseRow._convertExcessToRoth,
                 _fundConversionWithCash: baseRow._fundConversionWithCash ?? false,
                 _spendGoal: base.spendGoal,
@@ -1318,7 +1329,7 @@ function _runOptimizerNow() {
     perfEnter('No-conversion baseline');
     for (const fam of baseFamilies) {
         addResult(fam.strategyLabel, fam.paramLabel, fam.paramSortVal,
-            { ...fam.overrides, convertExcessToRoth: false, cyclicEnabled: false, extraConversionAmount: 0, qcdHHMax: 0 }, true, fam.family);
+            { ...fam.overrides, convertExcessToRoth: false, cyclicEnabled: false, extraConversionAmount: 0, qcdHHMax: 0 }, true, fam.family, fam.modifier);
     }
 
     // Re-score after Phase 23: the ⇌ rows pushed above and the no-conv baseline sweep rows (added
@@ -1496,9 +1507,13 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         },
         {
             key: 'strategy', label: 'Strategy',
-            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
+            title: 'Withdrawal strategy. ✓ = Maximize Conversions on. (no conv) = baseline variant with conversions and brokerage cycling off. 🗘/🔄 = cyclic IRA-first / brokerage-first. ⇌ = Optimize Conversions row. ✦ = Optimize Spend. ⚠️ = unreachable target: the bracket/IRMAA/ACA ceiling cannot be hit. Sorting this column groups each family together and orders it by parameter. Click any row to load it, or ⚖ at the start of the row to measure every Δ column against it.',
             getValue: r => r._strategyLabel,
-            getSortValue: r => r._strategyLabel
+            // Family, then parameter, then modifier - NOT the rendered label, which starts with markup
+            // and emoji and scattered every clone away from the family it clones. rawSort compares
+            // the key by code point; see strategySortKey() in optimizer_core.js.
+            getSortValue: r => strategySortKey(r),
+            rawSort: true
         },
         {
             key: 'param', label: 'Param',
@@ -1732,7 +1747,11 @@ function renderOptimizerTable(results) {
             const sa = a.totals.success ? 1 : 0, sb = b.totals.success ? 1 : 0;
             if (sa !== sb) return sb - sa;
             const av = col.getSortValue(a), bv = col.getSortValue(b);
-            const cmp = (typeof av === 'string') ? av.localeCompare(bv) : (av - bv);
+            // rawSort: compare by CODE POINT, not by locale. A column whose sort value is a
+            // constructed key (the Strategy column) needs its padding and field tags compared
+            // literally - localeCompare treats them as ignorable and would reorder the key's fields.
+            const cmp = col.rawSort ? (av < bv ? -1 : av > bv ? 1 : 0)
+                : (typeof av === 'string') ? av.localeCompare(bv) : (av - bv);
             const primary = sortState.direction === 'asc' ? cmp : -cmp;
             // Tiebreakers: NetWealth → Spendable desc; Spendable → NetWealth desc
             if (primary === 0 && sortState.colKey === 'afterTaxNW' && spendCol) {

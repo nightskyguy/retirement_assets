@@ -78,7 +78,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
 | **O2** | P68 | `optimizer_changelog.md` brevity pass over the recent entries *(new 2026-08-22)* | `P68a` | nothing |
 | **O2** | P72 | First-year stub — year 1 always accrues 12 months of growth, spending, pension and premiums however late in the year the plan starts *(new 2026-08-24)* | `P72a` | nothing |
-| **O2** | P73 | Sorting the Optimizer by **Strategy** sorts the rendered label, symbols and markup included, so the clone rows form blocks and the alphabet is interrupted *(new 2026-08-24, user-raised)* | `P73a` | nothing |
+| ~~DONE~~ | ~~P73~~ | ~~Sorting the Optimizer by **Strategy** sorts the rendered label~~ - **COMPLETE v11.1640 2026-08-25**, family then parameter then modifier, off the data | - | - |
 | **O2** | P65 | Rest of Schedule A — engine itemizes on SALT alone; medical is the piece that likely qualifies *(new 2026-08-19)* | `P65a` (measure first) | nothing |
 | **O2** | P55 | MCP server — let an AI run the engine over a customer's scenario *(new 2026-08-16, set priority)* | `P55a` | nothing (engine is DOM-free) |
 | **O2** | P28 | "Every voluntary IRA withdrawal is a conversion" - **`P28f`/`g`/`h` SETTLED and SHIPPED v11.162B**: routing flag deleted as measured-inert, `rothGapFill` shipped as a control plus the 🅡 sweep rows. `P28j` is the remainder | `P28j` (needs its own phase) | nothing |
@@ -1066,14 +1066,26 @@ are different products:
 Ascending/descending should reverse the family, not scramble the rest.
 
 **Tasks:**
-- [ ] **P73a** - decide the ordering (question above), then a `getSortValue` for the Strategy column
-      built from `_strategy` + modifier + `_paramSortVal` rather than `_strategyLabel`
-- [ ] **P73b** - the 📍 current-plan and ⚓ baseline rows: decide whether they pin to the top under
-      every sort or take their place in the order. They are pinned today only as an accident of
-      their marks sorting low
-- [ ] **P73c** - tests: sorting by Strategy puts each family's clones adjacent, and no row whose
-      label begins with markup sorts ahead of a row whose label begins with a letter
-- **Status:** not started. No engine change; `optimizer_ui.js` only.
+- [x] **P73a** - **DONE v11.1640 2026-08-25.** User chose **family, then parameter**. `strategySortKey()`
+      in `optimizer_core.js` (pure, exported, node-tested) builds a fixed-width key from `_family`,
+      `_paramSortVal`, the modifier and the variant; the Strategy column's `getSortValue` returns it
+      and declares `rawSort: true`, which makes the table comparator compare by CODE POINT instead of
+      `localeCompare` - locale collation treats the key's padding as ignorable and would reorder its
+      own fields. Rows now carry `_family` and `_modifier` as the ENUMERATION named them, set in
+      `addResult` and copied onto the derived rows, so nothing reads the family back off the label.
+      Within a parameter: the plain row, its no-conversion reference, then the clones - a derived row
+      stays with the arm it derives from.
+- [x] **P73b** - **DONE, and it needed no decision.** The question assumed the pinned rows sort to the
+      top by accident of their marks. They do not sort at all: `display` filters out both the
+      ⚓ baseline and the 📍 current plan before the comparator runs, because each is already rendered
+      once, sticky, above the table. Verified in the browser under both directions.
+- [x] **P73c** - **DONE.** `strategySortKey: families stay contiguous, whatever the label starts with`
+      in `optimizer_core.tests.js` (suite 314 -> 315): one run per family, numeric parameters ordered
+      as numbers (3 before 23, which the old text sort got backwards), a negative parameter (IRMAA
+      tier -0.5) that still keys below a positive one, and two rows differing ONLY in label markup
+      producing an identical key.
+- **Status:** **COMPLETE v11.1640.** No engine behavior change - a sort key and the row fields it
+      reads. No changelog entry, by the user's call.
 - **Independent:** no phase dependencies. Touches the same column P67 relabelled.
 
 ---

@@ -110,6 +110,7 @@ const OPTIMIZER_GRIDS = core.OPTIMIZER_GRIDS;
 const sameStrategySelection = core.sameStrategySelection;
 const resolveOrderedSeq = core.resolveOrderedSeq;
 const ORDERED_SEQS = core.ORDERED_SEQS;
+const strategySortKey = core.strategySortKey;
 const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 // P35 PR 1 characterization goldens — a RECORDING of what the two strategy enumerations emit,
@@ -4357,6 +4358,47 @@ test('resolveOrderedSeq: any permutation resolves, anything else is CBIR', () =>
     for (const bad of ['nonsense', 'CBI', 'CBIRR', 'CCBI', 'cbir', 'XBIR', undefined, null, 42, ''])
         assert(names(bad) === 'Cash,Brokerage,IRA,Roth',
             `${JSON.stringify(bad)} must still fall back to CBIR`);
+});
+
+test('strategySortKey: families stay contiguous, whatever the label starts with', () => {
+    // P73. The Strategy column used to sort the RENDERED label, so a row whose label opened with
+    // raw HTML or an emoji sorted before or after the entire alphabet and each family's clones were
+    // torn away from it. The key must depend on none of that.
+    const row = (family, param, modifier = null, extra = {}) =>
+        ({ _family: family, _paramSortVal: param, _modifier: modifier,
+           _strategyLabel: (modifier ? '<span>Z</span> ' : '') + family, ...extra });
+    const rows = [
+        row('Reduce', 23), row('Fill Bracket', 0.24, 'rothgap'), row('Reduce', 3, 'ira-first'),
+        row('Fill Bracket', 0.1), row('Reduce', 3), row('IRMAA Ceil', -0.5),
+        row('Reduce', 7, 'cash'), row('Fill Bracket', 0.1, 'brokerage-first'), row('Reduce', 3, null, { _isNoConv: true }),
+    ];
+    const sorted = rows.slice().sort((a, b) => { const x = strategySortKey(a), y = strategySortKey(b);
+                                                 return x < y ? -1 : x > y ? 1 : 0; });
+    const fams = sorted.map(r => r._family);
+    // Contiguous: each family appears as exactly one run.
+    const runs = fams.filter((f, i) => f !== fams[i - 1]);
+    assert(runs.length === new Set(fams).size, `families must not repeat as separate blocks: ${fams.join(' | ')}`);
+    assert(runs.join(',') === 'Fill Bracket,IRMAA Ceil,Reduce', `alphabetical by family, got ${runs.join(',')}`);
+    // Inside a family: parameter first, then modifier, then variant. 3 sorts before 23 - the old
+    // label sort compared '3 yrs' against '23 yrs' as text and put 23 first.
+    const reduce = sorted.filter(r => r._family === 'Reduce');
+    assert(reduce.map(r => r._paramSortVal).join(',') === '3,3,3,7,23',
+        `Reduce must order numerically, got ${reduce.map(r => r._paramSortVal).join(',')}`);
+    // Modifier outranks variant, so a derived row stays with the arm it derives from: the plain
+    // row, then the plain row's no-conversion reference, then the clones.
+    assert(reduce[0]._modifier === null && !reduce[0]._isNoConv, 'the plain row leads its parameter');
+    assert(reduce[1]._isNoConv === true, 'then that row\'s no-conversion reference');
+    assert(reduce[2]._modifier === 'ira-first', 'then the modifier clones');
+    // A negative parameter (the lowest IRMAA tier sits at -0.5) must still pad to a sortable key.
+    assert(strategySortKey(row('IRMAA Ceil', -0.5)) < strategySortKey(row('IRMAA Ceil', 0.5)),
+        'a negative parameter must sort below a positive one, not wrap');
+    // String parameters (the Ordered sequences) sort as themselves, as the Param column does.
+    assert(strategySortKey(row('Ordered', 'BCIR')) < strategySortKey(row('Ordered', 'CBIR')),
+        'Ordered sequences sort as strings');
+    // The key must never read the label: two rows differing ONLY in markup are identical to it.
+    assert(strategySortKey({ _family: 'Reduce', _paramSortVal: 3, _strategyLabel: '<span>x</span> Reduce' })
+        === strategySortKey({ _family: 'Reduce', _paramSortVal: 3, _strategyLabel: '\u{1F4CD} Reduce' }),
+        'the rendered label must not reach the sort key at all');
 });
 
 test('ORDERED_SEQS: every offered sequence is a real permutation and both sweeps use the list', () => {

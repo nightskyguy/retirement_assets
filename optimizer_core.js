@@ -3948,6 +3948,44 @@ function offGridParamFor(base, grids = {}) {
     }
 }
 
+// ── Strategy-column sort key ──────────────────────────────────────────────────────────────────────────
+// Sorting the Strategy column used to sort `_strategyLabel`, the string the cell RENDERS. That
+// string carries the modifier prefix (raw HTML for the cyclic IRA-first arm), the pinned-row marks
+// and the trailing conversion/infeasible markers, so the comparison was localeCompare over markup
+// and emoji: every clone was torn away from the family it clones, and the alphabet stopped halfway
+// through, resumed after a block of symbol-prefixed rows.
+//
+// This reads the DATA instead. Order is family, then parameter, then modifier, then variant - so
+// each family is one contiguous block and each parameter's arms sit together inside it.
+//
+// The key is a fixed-width string compared by CODE POINT, never localeCompare: locale collation
+// treats punctuation and padding as ignorable at primary strength, which is exactly the kind of
+// silent reordering this function exists to remove. Fields are padded rather than delimited for
+// the same reason. Pure.
+const OPT_MODIFIER_SORT = Object.freeze({ 'ira-first': 1, 'brokerage-first': 2, 'cash': 3, 'rothgap': 4 });
+// Variant ranks: the live row first, then the rows derived from it, then the no-conversion
+// reference sweep, which is a different question and reads better as a block of its own.
+const OPT_VARIANT_SORT = Object.freeze({ main: 0, conv: 1, spend: 2, reverse: 3, noconv: 4 });
+function strategySortKey(r) {
+    if (!r) return '';
+    const fam = String(r._family || r._strategy || '').padEnd(18).slice(0, 18);
+    const p = r._paramSortVal;
+    // Numeric parameters are offset and scaled so a negative one (the IRMAA tiers sit on half-steps,
+    // the lowest at -0.5) still pads to a positive fixed-width integer. String parameters (the
+    // Ordered account sequences) sort as themselves, which is what the Param column does with the
+    // same field. A family never mixes the two, so the N/S tag only has to keep them apart.
+    const param = (typeof p === 'number' && Number.isFinite(p))
+        ? 'N' + String(Math.round((p + 1000) * 1000)).padStart(9, '0')
+        : 'S' + String(p ?? '').padEnd(9).slice(0, 9);
+    const mod = OPT_MODIFIER_SORT[r._modifier] ?? 0;
+    const variant = r._isNoConv ? OPT_VARIANT_SORT.noconv
+        : r._isReverseOptimized ? OPT_VARIANT_SORT.reverse
+        : r._isSpendOptimized ? OPT_VARIANT_SORT.spend
+        : r._isConvOptimized ? OPT_VARIANT_SORT.conv
+        : OPT_VARIANT_SORT.main;
+    return fam + param + mod + variant;
+}
+
 // Rank rows best->worst under an objective. Successful rows ALWAYS outrank failed ones (a depleted
 // plan can show inflated terminal wealth), then the objective's own order. Pure.
 function rankRowsByObjective(rows, objKey, rate = 0) {
@@ -4583,7 +4621,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, sameStrategySelection, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -4591,7 +4629,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, sameStrategySelection, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

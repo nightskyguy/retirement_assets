@@ -16,7 +16,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy~~ - **COMPLETE v11.163F**, Ordered offers six sequences | - |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69c` |
+| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69d` |
 | **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
@@ -104,7 +104,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
-| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69c` | nothing - `P69a` (via P71) and `P69b` (v11.1643) DONE |
+| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69d` | nothing - `P69a`-`P69c` DONE (v11.1644) |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
@@ -790,11 +790,16 @@ the engine is `montecarlo/mc_engine.js`.
   - **User decision 2026-08-25:** capture the **worst 5 plus ranks 5/25/50/75/95** = 10 rows. A row
     that is both (a worst-5 path that also lands on a sampled rank) appears once, and the list stays
     ordered worst-first so prev/next reads as a walk from failure to success.
-- [ ] **P69c** - ship the captured set in the results message for both passes. `buildStressMsg`
-      (`mc_engine.js:436`) deliberately strips the four big banks; the captured set is
-      ~10 x years x 4 x 8B and does not fall under that reasoning. Stress rows carry `startYear` /
-      `nominatedBy` (`mc_tab.js:1853-1880`); carry them through so a replayed stress row still names
-      its decade. **Do NOT regenerate from the seed on the main thread.**
+- [x] **P69c** - **DONE v11.1644.** `sliceBankRowsForPath()` / `pathInputsFromBankRows()` in
+      `mc_engine.js` - one path's draws out as plain arrays (~2KB), back in through the SAME
+      `buildPathInputs`, so replayed inputs cannot drift from the run's. Main pass ships rows for
+      the captured paths of ONE variation - the sidebar plan, `cfg.captureVariationIndex`, computed
+      in `runMonteCarlo()` via `findCurrentStrategyIdx` (withCurrentPlan guarantees a match) - NOT
+      the union across ~150 Compare variations. Stress msg ships `pathBankRows` for every path,
+      index-aligned with `labels`/`startYears` which were already in the message. Node: round-trip
+      exact in all four modes; e2e asserts shipped keys == captured pathIndexes, 36/36 stress
+      bundles, and a replayed path's simulate() reproduces the captured metric EXACTLY. Browser:
+      plan-scope run through the real worker carries all fields. Seed-regeneration still forbidden.
 - [ ] **P69d** - replay mode in the UI, inputs never mutated. `runSimulation()`
       (`optimizer_ui.js:680`) takes no argument today and builds `_simInputs` from `getInputs()`;
       replay needs ONE injection point there for `returnSequence` / `returnSequencePerAccount` /
@@ -827,7 +832,7 @@ earliest ruin, and the sampled ranks land where they claim. Browser - replay a k
 confirm the Annual Details ruin year matches that row's ruin year in the stress table, then confirm
 exiting restores the user's own plan unchanged.
 
-- **Status:** in_progress - `P69a`+`P69b` done, `P69c` next (transport: sequences for the replayed variation)
+- **Status:** in_progress - `P69a`-`P69c` done, `P69d` next (replay mode in the UI)
 - **Independent:** no phase dependencies
 
 ---

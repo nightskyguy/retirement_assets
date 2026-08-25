@@ -583,6 +583,13 @@ function runMonteCarlo(scope) {
     // numPaths simulations instead of numPaths x ~144.
     const variations = _mcScope === 'plan' ? stressVariations : withCurrentPlan(allVariations, base);
 
+    // P69: which variation the engine ships replay sequences for - the sidebar's own plan. In plan
+    // scope that is the sole variation; in compare scope withCurrentPlan() guarantees a match
+    // exists, but keep the max() so a synthetic fallback row (idx -1) degrades to 0 rather than
+    // handing the engine a nonsense index.
+    const captureVariationIndex = _mcScope === 'plan'
+        ? 0 : Math.max(0, findCurrentStrategyIdx(variations, base));
+
     // Seed the timing model if no real run has been observed yet, so the buttons and the in-flight
     // estimate have something to say. Calibration always uses the full variation list: one variation
     // is too small a sample to measure throughput from.
@@ -603,7 +610,8 @@ function runMonteCarlo(scope) {
 
     runMCWorker(
         { variations, stressVariations, numPaths, mu, sigma, seed, years, simulationMode, stressCount,
-          stressWindow, bearFraction, inflationRate: base.inflation, ..._mcInflationCfg() },
+          stressWindow, bearFraction, captureVariationIndex,
+          inflationRate: base.inflation, ..._mcInflationCfg() },
         (pct) => updateMCProgress(pct),
         (msg) => {
             setMCRunning(false);

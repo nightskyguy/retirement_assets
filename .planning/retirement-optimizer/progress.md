@@ -4501,3 +4501,28 @@ an e2e runJob asserting every variation of both passes carries in-range capture 
 row agrees with survivalRate. Suites 320/61/22, badge green at 696. No changelog entry - nothing
 user-visible until the replay UI; title bumped to 11.1643, first <li> stays 11.1642 deliberately
 (that entry belongs to a merged branch; this branch writes its own entry when the UI ships).
+
+---
+
+## Session 2026-08-25 (worktree mc-path-replay) - P69c, replay transport (v11.1644)
+
+Two helpers in mc_engine.js, deliberately symmetric: `sliceBankRowsForPath()` pulls one path's
+draws out of the banks as plain arrays (~2KB - scenario row plus the four asset rows for
+bootstrap/stress, scenario plus synthInflation for the synthetic modes), and
+`pathInputsFromBankRows()` wraps them as a single-path bank and calls the same `buildPathInputs`
+the run itself used. No second copy of the blending code, so replayed inputs cannot drift.
+
+Scope decision worth recording: the main pass ships rows for the captured paths of ONE variation,
+the sidebar's own plan, not the union across variations. A Compare run has ~150 variations whose
+capture sets need not overlap; the union is unbounded in the wrong direction, and replay always
+runs the user's plan anyway (P69d injects sequences, never mutates inputs). The page names that
+variation via `cfg.captureVariationIndex`, computed in `runMonteCarlo()` with
+`findCurrentStrategyIdx` - `withCurrentPlan()` (P74) guarantees the match exists. The stress pass
+ships `pathBankRows` for every path, index-aligned with the labels/startYears already in the
+message, so any stress row can be replayed and still name its decade.
+
+The test that matters: rebuild a captured path's inputs from the shipped rows, run simulate(), and
+the after-tax terminal wealth equals the captured metric EXACTLY - the shipped rows are the run,
+not a reconstruction. Round-trip element-exact in all four modes. Browser-verified through the
+real worker: plan run carries captureVariationIndex 0, 10 captured rows, 10 bundles, 36/36 stress
+bundles. Suites 322/61/22, badge green at 698. Still no changelog entry; UI is P69d.

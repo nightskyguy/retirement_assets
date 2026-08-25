@@ -93,6 +93,50 @@ function buildPathInputs(banks, p, years, baseInputs, mode) {
     return { returnSequence, returnSequencePerAccount, inflationSequence };
 }
 
+// ── P69 replay: transport for one path's draws ───────────────────────────────────────────────────
+//
+// Replay re-runs simulate() on the main thread with a captured path's sequences injected. The
+// sequences are NOT regenerated from the seed there - that works today and breaks silently the
+// first time bank-build code changes - and the full banks are NOT shipped either (numPaths x years
+// x 4 Float64Arrays, the one expensive clone this pipeline avoids on purpose). Instead these two
+// helpers slice out one path's rows as plain arrays (~2KB per path) and rebuild the simulate()
+// inputs from them, through the SAME buildPathInputs the run itself used, so the replayed inputs
+// cannot drift from the run's.
+
+// One path's rows from the banks, as plain arrays that survive JSON and structured clone. Only the
+// arrays the mode actually has: gbm/aam ship scenario + synthInflation, bootstrap/stress ship
+// scenario + the four asset rows.
+function sliceBankRowsForPath(banks, p, years, mode) {
+    const { scenarioBank, multiAssetBank, synthInflationBank } = banks;
+    const row = (bank) => Array.from(bank.subarray(p * years, (p + 1) * years));
+    const rows = { scenario: row(scenarioBank) };
+    if ((mode === 'bootstrap' || mode === 'stress') && multiAssetBank) {
+        rows.equity = row(multiAssetBank.equity);
+        rows.intl   = row(multiAssetBank.intl);
+        rows.bonds  = row(multiAssetBank.bonds);
+        if (multiAssetBank.inflation) rows.inflation = row(multiAssetBank.inflation);
+    }
+    if (synthInflationBank) rows.synthInflation = row(synthInflationBank);
+    return rows;
+}
+
+// The inverse: wrap one path's rows as a single-path bank and hand it to buildPathInputs at p=0.
+// Returns exactly what the run's own call returned for that path - the round-trip is node-tested.
+function pathInputsFromBankRows(rows, baseInputs, mode) {
+    const years = rows.scenario.length;
+    const banks = {
+        scenarioBank: Float64Array.from(rows.scenario),
+        multiAssetBank: rows.equity ? {
+            equity:    Float64Array.from(rows.equity),
+            intl:      Float64Array.from(rows.intl),
+            bonds:     Float64Array.from(rows.bonds),
+            inflation: rows.inflation ? Float64Array.from(rows.inflation) : null,
+        } : null,
+        synthInflationBank: rows.synthInflation ? Float64Array.from(rows.synthInflation) : null,
+    };
+    return buildPathInputs(banks, 0, years, baseInputs, mode);
+}
+
 // ── P69 replay: which paths are worth walking through the main model ─────────────────────────────
 //
 // The capture set is the worst CAPTURE_WORST_N paths plus one sample at each rank percentile in
@@ -476,9 +520,28 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
         : synthInflationBank;
     const inputFan = computeInputFan(equityBankForFan, inflationBankForFan, numPaths, years);
 
+    // P69 transport. Main pass: the draw rows for the captured paths of ONE variation - the
+    // sidebar's own plan (cfg.captureVariationIndex, computed by the page; after P74's
+    // withCurrentPlan() that variation is always in the run). Not the union across variations: a
+    // Compare run has ~150 of them, replay always runs the user's plan, and the whole point of
+    // shipping rows instead of banks is staying at ~10 paths x ~2KB. Stress pass: rows for every
+    // path - there are at most a few dozen, the table offers replay on each, and the labels that
+    // name them are already in the message.
+    let capturedBankRows = null, pathBankRows = null;
+    if (mode === 'stress') {
+        pathBankRows = Array.from({ length: numPaths },
+            (_, p) => sliceBankRowsForPath(banks, p, years, mode));
+    } else {
+        const captureVi = Math.min(Math.max(cfg.captureVariationIndex ?? 0, 0), varResults.length - 1);
+        capturedBankRows = {};
+        for (const r of varResults[captureVi]?.captured ?? []) {
+            capturedBankRows[r.pathIndex] = sliceBankRowsForPath(banks, r.pathIndex, years, mode);
+        }
+    }
+
     return {
         varResults, numPaths, medianAnnualReturn, minAnnualReturn, maxAnnualReturn,
-        assetRanges, inflationStats, inputFan,
+        assetRanges, inflationStats, inputFan, capturedBankRows, pathBankRows,
         // Everything above is measured over the WHOLE plan horizon on the sequence each scenario
         // actually lived through, not over the ranking window: 'combined' has five windows and
         // 'all' has none, so a window-scoped figure has nothing to be scoped to.
@@ -497,6 +560,10 @@ function buildStressMsg(stress) {
         numPaths:       stress.numPaths,
         assetRanges:    stress.assetRanges,
         inflationStats: stress.inflationStats,
+        // P69: one bundle of draw rows per stress path, index-aligned with labels/startYears, so
+        // any stress row can be replayed. ~2KB x at most a few dozen paths; the four big banks
+        // below still stay behind.
+        pathBankRows:   stress.pathBankRows ?? null,
         labels:         b?.labels      ?? null,
         startYears:     b?.startYears  ?? null,
         realYears:      b?.realYears   ?? null,
@@ -584,6 +651,11 @@ async function runJob(cfg, hooks) {
         assetRanges:       main.assetRanges,
         inflationStats:    main.inflationStats,
         inputFan:          main.inputFan,
+        // P69: draw rows for the captured paths of the capture variation (the sidebar's plan), and
+        // which variation that was, so the page pairs the rows with the right `captured` metadata.
+        capturedBankRows:       main.capturedBankRows,
+        captureVariationIndex:  Math.min(Math.max(cfg.captureVariationIndex ?? 0, 0),
+                                         main.varResults.length - 1),
         stress: buildStressMsg(stress),
     };
 }
@@ -591,7 +663,7 @@ async function runJob(cfg, hooks) {
 // Same three-host tail as prng.js. Keep the two lists identical: a name missing from one of them
 // fails only in that host, which is exactly the kind of drift this file exists to end.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, selectCapturePaths, CAPTURE_WORST_N, CAPTURE_RANK_PCTS, MC_NO_HOOKS };
+    module.exports = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, selectCapturePaths, sliceBankRowsForPath, pathInputsFromBankRows, CAPTURE_WORST_N, CAPTURE_RANK_PCTS, MC_NO_HOOKS };
 } else if (typeof window !== 'undefined') {
-    window.MCEngine = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, selectCapturePaths, CAPTURE_WORST_N, CAPTURE_RANK_PCTS, MC_NO_HOOKS };
+    window.MCEngine = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, selectCapturePaths, sliceBankRowsForPath, pathInputsFromBankRows, CAPTURE_WORST_N, CAPTURE_RANK_PCTS, MC_NO_HOOKS };
 }

@@ -5561,6 +5561,69 @@ test('P69: every variation of a real run carries its capture rows', async () => 
     }
 });
 
+test('P69: sliced bank rows rebuild the exact per-path inputs, every mode', () => {
+    // The replay contract: pathInputsFromBankRows(sliceBankRowsForPath(...)) must return exactly
+    // what the run's own buildPathInputs returned for that path - same numbers, same nulls - or a
+    // replayed year is a different year than the one the sweep lived.
+    const base = _p71Base;
+    for (const mode of ['gbm', 'aam', 'bootstrap', 'stress']) {
+        const cfg = _p71Cfg(mode === 'stress' ? 'bootstrap' : mode);
+        const banks = _mcEngine.buildBanks(cfg, _mcPrng.mulberry32(7), mode);
+        const p = Math.min(3, banks.numPaths - 1);
+        const direct = _mcEngine.buildPathInputs(banks, p, cfg.years, base, mode);
+        const rows   = _mcEngine.sliceBankRowsForPath(banks, p, cfg.years, mode);
+        // Rows must be plain arrays: they cross the worker boundary and may get JSON-serialized.
+        assert(Array.isArray(rows.scenario), `${mode}: scenario row is not a plain array`);
+        const rebuilt = _mcEngine.pathInputsFromBankRows(rows, base, mode);
+        const sameSeq = (a, b, what) => {
+            assert((a === null) === (b === null), `${mode}: ${what} null-ness differs`);
+            if (a) for (let y = 0; y < cfg.years; y++) {
+                assert(a[y] === b[y], `${mode}: ${what}[${y}] ${a[y]} !== ${b[y]}`);
+            }
+        };
+        sameSeq(direct.returnSequence, rebuilt.returnSequence, 'returnSequence');
+        sameSeq(direct.inflationSequence, rebuilt.inflationSequence, 'inflationSequence');
+        assert((direct.returnSequencePerAccount === null) === (rebuilt.returnSequencePerAccount === null),
+            `${mode}: per-account null-ness differs`);
+        if (direct.returnSequencePerAccount) {
+            for (const acct of Object.keys(direct.returnSequencePerAccount)) {
+                sameSeq(direct.returnSequencePerAccount[acct], rebuilt.returnSequencePerAccount[acct],
+                    `perAccount.${acct}`);
+            }
+        }
+    }
+});
+
+test('P69: the message ships replay rows, and a replayed path reproduces the run exactly', async () => {
+    const cfg = _p71Cfg('gbm', { captureVariationIndex: 0 });
+    const msg = await _mcEngine.runJob(cfg);
+    assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
+    assert(msg.captureVariationIndex === 0, `capture index echoed as ${msg.captureVariationIndex}`);
+    // Main pass: one bundle of rows per captured path of the capture variation, keys matching the
+    // captured metadata exactly - no missing path, no stowaway.
+    const cap = msg.variations[0].captured;
+    const shippedKeys = Object.keys(msg.capturedBankRows).map(Number).sort((a, b) => a - b);
+    const capKeys = [...new Set(cap.map(r => r.pathIndex))].sort((a, b) => a - b);
+    assert(JSON.stringify(shippedKeys) === JSON.stringify(capKeys),
+        `shipped rows for paths [${shippedKeys}], captured [${capKeys}]`);
+    // Stress pass: one bundle per path, index-aligned with the labels.
+    assert(Array.isArray(msg.stress.pathBankRows), 'stress message has no pathBankRows');
+    assert(msg.stress.pathBankRows.length === msg.stress.numPaths,
+        `${msg.stress.pathBankRows.length} stress row bundles against ${msg.stress.numPaths} paths`);
+    // The cross-check that the shipped rows ARE the run: rebuild a captured path's inputs, run
+    // simulate() the way replay will, and the outcome metric must equal the captured one exactly.
+    const baseInputs = cfg.variations[0];
+    for (const r of [cap[0], cap[cap.length - 1]]) {
+        const inputs = _mcEngine.pathInputsFromBankRows(
+            msg.capturedBankRows[r.pathIndex], baseInputs, msg.simulationMode);
+        const res = core.simulate({ ...baseInputs, ...inputs });
+        const replayMetric = core.afterTaxWealthOfLogRow(
+            res.log[res.log.length - 1], baseInputs.futureIRATaxRate);
+        assert(replayMetric === r.metric,
+            `path ${r.pathIndex}: replay metric ${replayMetric} !== captured ${r.metric}`);
+    }
+});
+
 test('P71: a cancelled job reports nothing at all', async () => {
     // The contract the UI depends on: a cancelled run resolves to null, and the caller reporting
     // nothing is what leaves the previous results on screen instead of blanking them.

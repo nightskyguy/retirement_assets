@@ -1170,7 +1170,9 @@ some regime (likely candidate: big IRA + ACA years + widow transition) -> names 
 family.
 
 **Prior art:** findings.md:2752 - i-ORP (Welch) ran this as LP in production for two decades; the
-archived ModelDescriptionK.pdf is the formulation. e-ORP (github.com/dcurrie/e-ORP,
+archived ModelDescriptionK.pdf describes the model (read 2026-08-25: equations NOT included -
+e-ORP's solver.py and Ragsdale/Seila/Little 1994 carry explicit formulations). e-ORP
+(github.com/dcurrie/e-ORP,
 findings.md:2781) is the living MILP re-implementation. DiLellio & Ostrov the academic line;
 wscott/fplan and mdlacasse/Owl adjacent open-source MILP planners. None carry this engine's
 state-tax/ACA/widow fidelity - the expensive part is already built here.

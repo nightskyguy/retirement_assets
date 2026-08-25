@@ -4476,4 +4476,12 @@ Priority O1, user's call via question. Files touched: findings.md (P75 reference
 task_plan.md (P75 section after P73, NOW row, index row), and this log. No product code, no
 version bump, no changelog entry.
 
+Addendum, same session: downloaded and read ModelDescriptionK.pdf in full (28 pp; archive.org
+truncated the first attempt at 13KB, the id_ raw-bytes URL delivered all 210,648). It is the model
+description, not the equation set - I had over-labeled it "the LP formulation" in findings.md, now
+corrected there, in the P75 spec, and in memory. What the paper does pin down (objective =
+maximize level real spending with estate as constraint, Appendix C timing, per-bracket income
+slices in Table 6, "iteratively" as the only nonconvexity hint) is recorded in the findings entry;
+Ragsdale/Seila/Little 1994 added as the published predecessor formulation.
+
 ---

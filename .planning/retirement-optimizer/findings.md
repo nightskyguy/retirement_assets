@@ -2765,7 +2765,7 @@ verified 2026-08-25.
 | Site root (last good, Oct 2021) | https://web.archive.org/web/20211015194156/https://i-orp.com/ |
 | Main planner input form | https://web.archive.org/web/20201111233257/https://www.i-orp.com/Spend/extended.html |
 | Docs/papers index | https://web.archive.org/web/20230321202349/https://www.i-orp.com/Spend/articles.html |
-| **ORP Model Description - the LP formulation, the key artifact** | https://web.archive.org/web/20200710001724/https://www.i-orp.com/ModelDescription/ModelDescriptionK.pdf |
+| **ORP Model Description - 2008 overview paper; READ 2026-08-25, see note below: equations NOT included** | https://web.archive.org/web/20200710001724/https://www.i-orp.com/ModelDescription/ModelDescriptionK.pdf |
 | Validating the Optimal Retirement Planner | https://web.archive.org/web/20190131144141/https://www.i-orp.com/ModelDescription/validation.pdf |
 | Full user manual | https://web.archive.org/web/20220330074804/https://i-orp.com/Plans/help/ORPHelp.html |
 
@@ -2796,6 +2796,12 @@ spending. Does NOT cover Monte Carlo, state tax, or the ACA cliff.
 | Toward constructing tax efficient withdrawal strategies for retirees with traditional 401(k)/IRAs, Roth 401(k)/IRAs, and taxable accounts | Financial Services Review 28(2):67-95, 2020 | open access, LIVE: https://openjournals.libs.uga.edu/fsr/article/view/3419 |
 | Optimal decisions under price dynamics for Roth conversions (DiLellio solo) | Financial Planning Review, 2023, DOI 10.1002/cfp2.1174 | live, bot-blocked; open in a browser |
 
+Predecessor ORP's own paper cites as the only earlier LP retirement calculator, and the closest
+thing to a PUBLISHED equation set in this lineage: Ragsdale, Seila & Little, "An Optimization
+Model for Scheduling Withdrawals from Tax Deferred Retirement Accounts", Financial Services
+Review, March 1994 (author names transcribed from the paper's reference list; its OCR garbles
+them - verify before formal citation). Research-only implementation, never public.
+
 ### Adjacent open-source LP/MILP planners
 
 - https://github.com/wscott/fplan - Python LP; README cites Welch directly ("similar to the ideas
@@ -2816,3 +2822,19 @@ spending. Does NOT cover Monte Carlo, state tax, or the ACA cliff.
   the technique. Verify inside the PDF before citing it as "DP-based".
 - SSRN, Wiley and bogleheads.org return 403 to automated fetchers but load in a browser; that is
   bot-blocking, not link rot.
+- ModelDescriptionK.pdf READ in full 2026-08-25 (28 pp, Welch 2008, "Optimal Distributions from
+  Tax-Advantaged Retirement Accounts"). It is the model DESCRIPTION, not the formulation: no
+  decision variables, constraint equations or objective are ever written out (the only equations
+  in the paper are Appendix B's two compound-interest identities). What it does pin down:
+  objective = maximize one level inflation-adjusted after-tax annual spending, with the desired
+  estate as a constraint (dual of this repo's fix-spending-maximize-wealth objective); per-account
+  balance recursions with exact timing in Appendix C (withdraw at start of year, contributions and
+  growth at end, return = rate x (begin - withdrawal)); taxes linearized by splitting income into
+  per-bracket slice variables - Table 6 prints those slices as columns (0/10/15/25%), the clearest
+  evidence of the encoding; RMDs by the recalculation method; brackets inflation-indexed (the 2008
+  model already did what P70 is auditing). The glossary says the system is solved "iteratively" -
+  the only hint at how nonconvex pieces were handled; nothing is elaborated. Scope of the 2008
+  model: no IRMAA, no ACA, no NIIT, no LTCG/basis distinction (After-tax account taxed annually on
+  returns), no state tax in the base scenario; the site's later release directories (IRMAA,
+  GOPtax, APenalty, bequest) show those grew afterward. For explicit formulations use e-ORP's
+  solver.py and Ragsdale/Seila/Little 1994 above.

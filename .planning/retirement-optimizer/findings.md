@@ -2838,3 +2838,72 @@ them - verify before formal citation). Research-only implementation, never publi
   returns), no state tax in the base scenario; the site's later release directories (IRMAA,
   GOPtax, APenalty, bequest) show those grew afterward. For explicit formulations use e-ORP's
   solver.py and Ragsdale/Seila/Little 1994 above.
+
+### Method glossary - the acronyms this entry and P75 use
+
+**LP, linear programming.** Choose continuous variables x to maximize a linear objective c.x
+subject to linear constraints Ax <= b, x >= 0. Solvers (simplex, interior-point) return the
+GLOBAL optimum in polynomial time, and that optimum always sits on a VERTEX of the feasible
+region. "Programming" means schedule, 1940s logistics usage, not source code - Welch's glossary
+makes the same point. In the retirement mapping: variables are per-account per-year withdrawals,
+transfers and per-bracket income slices plus the spending level; constraints are the balance
+recursions, each year's cash requirement, RMD floors, bracket-slice widths and the estate floor.
+
+**Why LP can price graduated brackets without integers.** Split taxable income into one variable
+per bracket, each bounded by that bracket's width, and set tax = sum of rate x slice. Because
+marginal rates never DECREASE, the solver fills the cheap slices first out of self-interest and
+the encoding is exact. This is convexity doing the work, and it is the property Table 6 of the
+2008 paper is printing. It is also what the P75 edge-menu argument rests on: optimum at a vertex
+means optimum at a bracket or threshold boundary.
+
+**Where pure LP breaks.** A cliff is nonconvex - the IRMAA tier edge (one dollar of MAGI buys a
+fixed premium jump), the ACA subsidy cliff, the Social Security taxability hump where the
+marginal rate spikes and then falls back. LP would happily take a fractional "30% crossed" and
+pay 30% of a penalty that reality only sells whole. Two escapes: integer variables (MILP), or
+iterate LPs with the nonconvex piece frozen at each pass - the latter is probably what ORP's
+glossary means by solving "iteratively", though the paper never elaborates.
+
+**MILP, mixed-integer linear program.** An LP in which SOME variables must be integers, usually
+binary 0/1, while the rest stay continuous - "mixed" because both kinds appear in one model.
+Binaries encode discrete logic that LP cannot express: if/then, either/or, which side of a
+threshold. The cliff pattern, with M a large constant, z the binary "crossed" flag and S the
+surcharge:
+
+    MAGI <= threshold + M*z        z = 0 forces MAGI under the edge
+    surcharge = S*z                crossing buys the whole penalty, never a fraction
+
+Cost of the power: LP is polynomial, MILP is NP-hard. Solvers use branch-and-bound - solve the
+LP relaxation with binaries allowed fractional, and when one comes back at 0.4, split into two
+subproblems (z = 0, z = 1), recurse, and prune any subtree whose bound is already worse than the
+best complete solution found. Add cutting planes and it is branch-and-cut. Worst case is
+exponential, but a retirement model - a few dozen years, a few binaries each - is trivial scale;
+modern solvers finish in well under a second. The property that matters: MILP is EXACT, it
+terminates with a proven optimality bound rather than a heuristic's assertion.
+
+**SCIP, Solving Constraint Integer Programs.** A specific solver, not a technique. From Zuse
+Institute Berlin; among the fastest non-commercial MILP solvers, and it also handles constraint
+programming and nonlinear extensions. Academic-license for years, Apache 2.0 since 2022.
+`pyscipopt` is its Python binding, and it is the dependency that proves e-ORP genuinely solves a
+MILP rather than mirroring i-ORP's output.
+
+**Solver landscape**, for orientation: Gurobi and CPLEX are the commercial leaders; SCIP the top
+open academic one; HiGHS is open, used by Owl, and notable here because it ships a WebAssembly
+build that runs in a browser - the only candidate that could live inside this tool without a
+server; CBC is the older COIN-OR workhorse.
+
+**DP, dynamic programming.** Optimize by working BACKWARD from the horizon, computing a value
+function over a discretized state, so each year's decision is scored against the exact optimal
+continuation rather than a guess. Handles nonconvexity natively, unlike LP. Cost is the curse of
+dimensionality - the state grid grows multiplicatively per dimension, which is why the P75 state
+collapse (Roth and Cash factor out, since a dollar in either never touches a future tax) is what
+would make a DP rung feasible at all.
+
+**PWL, piecewise linear.** A function built from straight segments. Bracket tax is PWL and convex
+in ordinary income; a cliff is PWL and NOT convex. The whole method choice in P75 turns on which
+of those two a given tax feature is.
+
+**Relevance to this repo.** P75's main line needs NO solver: the edge menu is the vertex set an LP
+would have landed on, and coordinate descent over it keeps `simulate()`'s nonconvex fidelity -
+cliffs, the Social Security torpedo, the widow transition, the state engine - which an LP cannot
+represent honestly. Only the P75e stretch (convexify the cliffs to get a provable ceiling) would
+pull in a solver, and HiGHS-WASM is then the only browser-compatible candidate.

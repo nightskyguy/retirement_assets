@@ -1175,7 +1175,9 @@ e-ORP's solver.py and Ragsdale/Seila/Little 1994 carry explicit formulations). e
 (github.com/dcurrie/e-ORP,
 findings.md:2781) is the living MILP re-implementation. DiLellio & Ostrov the academic line;
 wscott/fplan and mdlacasse/Owl adjacent open-source MILP planners. None carry this engine's
-state-tax/ACA/widow fidelity - the expensive part is already built here.
+state-tax/ACA/widow fidelity - the expensive part is already built here. **LP, MILP, SCIP, DP and
+PWL are defined at findings.md:2842**, with the cliff-as-binary encoding and why this phase needs
+no solver.
 
 **Falsifiable questions:**
 - **Q1.** Do the best swept rows' realized MAGIs already sit on edge-menu points? If mostly

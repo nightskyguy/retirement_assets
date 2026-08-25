@@ -6,7 +6,7 @@ Reference record for `gapfill_harness.js`. Reproducible with:
 node .test_harnesses/gapfill_harness.js
 ```
 
-2026-08-25, engine v11.1638. 4,230 simulations, ~3.5s. Two research inputs, both default off and set
+2026-08-25, engine v11.1638 (P30g shipped the section-10 result in v11.163F). 4,230 simulations, ~3.5s. Two research inputs, both default off and set
 by nothing in the UI: `gapFillWeights` (P30a, sections 1-8) and `bracketGapOrder` (P30c, section 9);
 plus the 24 Ordered permutations (P30d, section 10), which need no input because `resolveOrderedSeq`
 now generates a sequence from its letters. `fillSpendingGap` has three branches and they are three
@@ -180,7 +180,8 @@ Ordered runs the account sequence the user picks, and the UI offers three of the
 CBIR, RIBC, BIRC. `resolveOrderedSeq` used to look the code up in a three-entry map and fall back to
 CBIR for everything else, so the other 21 named one sequence and silently ran another. P30d
 generalized the resolver to build the sequence from its letters — the three shipped codes are
-byte-identical, and nothing ships, since `grids.ordered` still sweeps the same three. 1,440
+byte-identical. Three of the 21 became menu entries
+afterwards, in P30g (section 12); the sweep below is what chose them. 1,440
 simulations: 24 permutations x 5 mixes x 3 rates x 2 states x 2 reserve settings.
 
 ### 24 orderings are not 24 plans
@@ -216,6 +217,27 @@ Outright winner counts across all 60 cells:
 offered. That is shipping-relevant, not a research curiosity: two thirds of the menu is never the
 right answer anywhere in this grid, and the most frequently-best sequence is absent from it.
 
+### What each ordering is worth when it wins (section 15)
+
+Outright wins alone leave ties - BCIR and CIBR both win 8 - and a menu needs a total order, so the
+harness also reports how much was at stake. `$ won by` sums, over the cells that ordering wins, the
+margin over the best SHIPPED ordering in that cell.
+
+| ordering | wins | clean | $ won by | was offered |
+|---|---|---|---|---|
+| CBRI | 22 | 5 | $6,240,965 | no |
+| CBIR | 14 | 0 | $0 | yes |
+| CIBR | 8 | 6 | $1,851,441 | no |
+| BCIR | 8 | 3 | $1,666,683 | no |
+| BCRI | 5 | 0 | $483,522 | no |
+| CRIB | 2 | 0 | $0 | no |
+| BRCI | 1 | 1 | $380,933 | no |
+| RIBC | 0 | 0 | - | yes |
+| BIRC | 0 | 0 | - | yes |
+
+CBIR's $0 is not a defect: it is the best shipped ordering in every cell it wins, so its margin over
+the best shipped ordering is zero by construction. Same for CRIB, which wins only cells no ordering
+clears by $1,000.
 ### Scored predictions
 
 | | prediction | outcome |
@@ -249,3 +271,40 @@ two-account split, and P30's story stops at that boundary.
   interaction in §6 is the same warning from the other side.
 - **Nothing about Ordered's 24 permutations**, which is P30d.
 - **Nothing at monthly resolution or under Monte Carlo.** Deterministic single path, as P28 was.
+
+## 12. P30g - the decision
+
+Three constants were measured and they do not get the same answer. Recorded here so none of it is
+re-derived.
+
+| branch | measured | shipped in v11.163F |
+|---|---|---|
+| Ordered's menu | two of three offered codes win nothing; the most-often-best sequence was not offered | **changed.** Six sequences, ordered by wins then by dollars at stake: CBRI, CBIR, CIBR, BCIR, RIBC, BIRC |
+| bracket family's Cash-first | right, 21 of 23 clean cells (section 9) | **unchanged**, deliberately |
+| default branch's `[40, 60]` | wrong: `w=0` wins 65 of 82 clean cells, 40 wins none | **unchanged**, see below |
+
+### Why the menu changed and the weight did not
+
+The menu is a **choice a user makes**, and the evidence is about which choices exist. Offering CBRI,
+CIBR and BCIR costs three sweep rows per tab and takes nothing away: RIBC and BIRC stay for the
+Roth-first and brokerage-first stress tests they were added for, and CBIR stays selected by default,
+since it is also the fallback for an unset or malformed sequence. The dropdown, `MC_GRIDS.ordered`
+and `OPTIMIZER_GRIDS.ordered` are now literally one list (`ORDERED_SEQS`), so a sequence a user can
+pick is always a sequence the sweeps score.
+
+The weight is a **default applied to people who never asked**, and section 11 lists what the sweep
+did not check: `w=0` wins on `baselineScoreOf` alone, it has not been run against the other
+Optimizer objectives, and "always drain Cash first" carries a liquidity cost this harness cannot
+see - a plan holding no cash buffer is more fragile than its score. Cash Reserve damps the whole
+question by an order of magnitude (section 6), so the users most exposed to the wrong default are
+the ones who never set a reserve. Changing it would move every existing Proportional, Reduce and
+Guyton-Klinger plan silently. `gapFillWeights` stays a research input, unset, until that check is
+done; the finding is not lost, it is filed.
+
+### Cost of the menu change
+
+Monte Carlo pays `numPaths x variations`, so its rows are the expensive ones: the stock capture goes
+from 144 to 156 rows (+8%), the Optimizer's from 117 to 126. If that ever needs trimming, the
+evidence names the candidates - RIBC and BIRC are best nowhere in 60 cells, so dropping them from
+the SWEEP while keeping them in the menu costs nothing measured. That is not done here: it would
+break the one-list invariant, which is worth more than 6 rows.

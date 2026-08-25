@@ -2488,8 +2488,8 @@ function routeSurplusAndConvert(sim, yr) {
         // or Brokerage) the chosen sequence draws FIRST, so next year's ordered pass pulls it back
         // first instead of stranding it in an account the sequence won't reach until everything else
         // is gone. Roth and the IRA are contribution-limited and cannot receive an arbitrary after-
-        // tax surplus, so only Cash and Brokerage are candidates. CBIR (Cash first) is unchanged
-        // from the legacy all-to-cash default; RIBC and BIRC (Cash last) now route to Brokerage.
+        // tax surplus, so only Cash and Brokerage are candidates. Any Cash-first sequence is
+        // unchanged from the legacy all-to-cash default; a Brokerage-first one routes there instead.
         // Only the account ORDER from resolveOrderedSeq is used here, so its tax-rate args are
         // placeholders. Brokerage deposits step up basis, the same convention as the Cyclic and
         // Cash-Reserve-overflow paths above.
@@ -4219,6 +4219,20 @@ function lowestBreakEvenHeirsRate(baseInputs, candidates = [], opts = {}) {
     return best;
 }
 
+// ── Ordered account sequences ────────────────────────────────────────────────────────────────────────
+// The six account sequences the Ordered strategy offers. ONE list, shared by both sweeps and by
+// the sidebar dropdown, in the order the dropdown lists them - so a sequence a user can pick is
+// always a sequence the sweeps score, and vice versa.
+//
+// Four accounts permute 24 ways. These six are the ones that ever came out ahead in the P30d
+// sweep (.test_harnesses/GAPFILL_RESULTS.md sections 10 and 15), ordered by how often each was
+// the best of all 24 and, on a tie, by how much was at stake when it won. CBRI and CIBR win most
+// and were not offered at all before v11.163F. RIBC and BIRC won nothing anywhere in that grid
+// and are kept because they are the Roth-first and brokerage-first stress tests they were added
+// for, not because the sweep argues for them.
+const ORDERED_SEQS = ['CBRI', 'CBIR', 'CIBR', 'BCIR', 'RIBC', 'BIRC'];
+
+
 // ── Strategy enumeration ──────────────────────────────────────────────────────────────────────
 // The two sweeps do NOT sweep the same space, and the difference is deliberate. It is declared
 // here as two pinned grids rather than left to drift between an inline block in the UI and this
@@ -4231,7 +4245,7 @@ const MC_GRIDS = {
     propwd:   [0, 5, 10, 20, 50],
     fixed:    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 25],
     fixedpct: [5, 6, 7, 8, 10],
-    ordered:  ['CBIR', 'RIBC', 'BIRC'],
+    ordered:  ORDERED_SEQS,
 };
 const OPTIMIZER_GRIDS = {
     propwd:   [0, 5, 10, 20, 50],
@@ -4247,7 +4261,7 @@ const OPTIMIZER_GRIDS = {
     // an IRA Draw row in one tab may have no twin in the other. A user above 13% still gets scored:
     // offGridParamFor adds their own percentage as its own row.
     fixedpct: [5, 7, 9, 11, 13],
-    ordered:  ['CBIR', 'RIBC', 'BIRC'],
+    ordered:  ORDERED_SEQS,
     irmaaTiers:   [0, 1, 2, 3, 4],
     acaMultiples: [200, 250, 300, 400],
 };
@@ -4569,7 +4583,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, sameStrategySelection, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -4577,7 +4591,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, sameStrategySelection, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, sameStrategySelection, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

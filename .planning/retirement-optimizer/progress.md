@@ -4359,3 +4359,36 @@ the standard deduction, brackets and the ACA FPL (annual by statute), and, recom
 
 Files touched: `task_plan.md` (new P72 section after P71, one O2 index row) and this log. No product
 code, no version bump, no changelog entry.
+
+---
+
+## Session 2026-08-24/25 (worktree readme-review-updates) - P28 shipped, then all of P30 (v11.162B -> v11.163F)
+
+One branch, one changelog entry, six commits. In order: P28's `rothGapFill` shipped as a switch and
+as the circled-R clone pass; `unifiedConvRouting` deleted as provably inert; the Optimizer's Reduce
+and IRA Draw grids cut to five steps each with per-strategy run counts added behind the nerdknob;
+then P30a-g.
+
+**What the research found, and it is not one answer.** `fillSpendingGap` has three branches and they
+disagree. The default branch's `[40,60]` is wrong - `w=0` wins 65 of 82 clean cells, 40 wins none.
+The bracket branch's Cash-first is right - swapping it loses 21 of 23. And under Ordered the story
+collapses: "Cash before Brokerage" is exactly 30/60, a coin flip, because a four-account sequence
+also places the IRA and Roth and that swamps the pair. Full tables in `GAPFILL_RESULTS.md`.
+
+**P30g shipped the menu, not the constants.** Two of the three Ordered codes on offer (RIBC, BIRC)
+win nothing in 60 cells, and the most-often-best sequence, CBRI, was not offered at all. The list is
+now six - CBRI, CBIR, CIBR, BCIR, RIBC, BIRC - ordered by wins with ties broken on dollars at stake,
+and it is ONE constant (`ORDERED_SEQS`) shared by the dropdown and both sweep grids, so a sequence a
+user can pick is always one the sweeps score. The `[40,60]` default was deliberately left alone: the
+win is measured on `baselineScoreOf` only, and "always drain Cash first" has a liquidity cost the
+harness cannot see. That reasoning is written into P30g so it is not re-derived.
+
+**Corrections worth keeping.** P28's 2026-07-30 evidence no longer reproduces on the current engine
+and its mechanism has inverted; the ladder was re-baselined (`P28_RESULTS.md` section 15) before P30
+reused it. `resolveOrderedSeq` was silently resolving all 21 unshipped permutations to CBIR - they
+named one sequence and ran another - which is why P30d had to generalize it before it could measure
+anything. And one prediction was scored VACUOUS rather than quietly dropped: no cell in the grid
+could make it fire.
+
+Suites 314 / 61 / 22, badge green at 690. Both goldens regenerated: MC in node, OPT re-captured in
+the browser (four scenarios), and the diff read row by row rather than accepted.

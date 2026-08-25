@@ -575,3 +575,28 @@ console.log(`    shipped codes never best       : `
     + `${SHIPPED.filter(sq => !(winners[sq] > 0)).join(', ') || 'none'}`);
 
 console.log('');
+// ── 15. Menu ranking ──────────────────────────────────────────────────────────────────────────
+// P30g needs an ORDER for the dropdown, and outright wins alone leave ties (BCIR and CIBR both
+// win 8). Three columns, and they are reported together because they disagree at the margin:
+//   wins      outright best of all 24 in that cell
+//   clean     of those, cells where spending was unchanged and every arm funded the plan
+//   $ won by  summed gain over the best SHIPPED ordering across the cells it wins - how much is
+//             actually at stake when it is the answer, which is what a menu entry earns its slot on
+console.log('\n15. MENU RANKING -- what an ordering is worth when it wins\n');
+const menu = {};
+for (const c of oCells) {
+    const sq = c.best.seq;
+    const m = menu[sq] ?? (menu[sq] = { wins: 0, clean: 0, gain: 0 });
+    m.wins++;
+    m.gain += Math.max(0, c.gain);
+    if (c.best.success && c.bestShipped.success && Math.abs(c.best.spend - c.bestShipped.spend) <= 1
+        && c.gain > LIVE_CUT) m.clean++;
+}
+console.log(pad('ordering', 12) + pad('wins', 8) + pad('clean', 8) + pad('$ won by', 16) + 'shipped');
+Object.entries(menu)
+    .sort((a, b) => (b[1].wins - a[1].wins) || (b[1].gain - a[1].gain))
+    .forEach(([sq, m]) => console.log(pad(sq, 12) + pad(String(m.wins), 8) + pad(String(m.clean), 8)
+        + pad(money(m.gain).trim(), 16) + (SHIPPED.includes(sq) ? 'yes' : 'no')));
+for (const sq of PERMS) if (!menu[sq] && SHIPPED.includes(sq))
+    console.log(pad(sq, 12) + pad('0', 8) + pad('0', 8) + pad('-', 16) + 'yes');
+console.log('');

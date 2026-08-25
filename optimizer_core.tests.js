@@ -109,6 +109,7 @@ const MC_GRIDS = core.MC_GRIDS;
 const OPTIMIZER_GRIDS = core.OPTIMIZER_GRIDS;
 const sameStrategySelection = core.sameStrategySelection;
 const resolveOrderedSeq = core.resolveOrderedSeq;
+const ORDERED_SEQS = core.ORDERED_SEQS;
 const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 // P35 PR 1 characterization goldens — a RECORDING of what the two strategy enumerations emit,
@@ -4358,6 +4359,25 @@ test('resolveOrderedSeq: any permutation resolves, anything else is CBIR', () =>
             `${JSON.stringify(bad)} must still fall back to CBIR`);
 });
 
+test('ORDERED_SEQS: every offered sequence is a real permutation and both sweeps use the list', () => {
+    // The sidebar dropdown, MC_GRIDS.ordered and OPTIMIZER_GRIDS.ordered are one list on purpose:
+    // a sequence a user can pick must be a sequence the sweeps score. What this guards is the
+    // silent failure - resolveOrderedSeq falls back to CBIR for anything that is not a permutation,
+    // so a typo in the list would add a menu entry and a sweep row that both quietly run CBIR.
+    assert(MC_GRIDS.ordered === ORDERED_SEQS && OPTIMIZER_GRIDS.ordered === ORDERED_SEQS,
+        'both grids must reference the shared list, not a copy that can drift');
+    assert(new Set(ORDERED_SEQS).size === ORDERED_SEQS.length, 'no duplicate sequences');
+    const rates = { capGainsPercentage: 0.5, capitalGainsRate: 0.15, nominalStateTaxAtLimit: 0.09,
+                    nominalTaxRate: 0.22, marginalFedTaxRate: 0.22, marginalStateTaxRate: 0.09 };
+    const LETTER = { Cash: 'C', Brokerage: 'B', IRA: 'I', Roth: 'R' };
+    for (const seq of ORDERED_SEQS)
+        assert(resolveOrderedSeq(seq, rates).map(x => LETTER[x[0]]).join('') === seq,
+            `${seq} must resolve to itself, not to the CBIR fallback`);
+    // CBIR stays the fallback for an unset or malformed sequence, so it has to remain on offer
+    // however the menu is reordered.
+    assert(ORDERED_SEQS.includes('CBIR'), 'the default sequence must be offered');
+});
+
 test('bracketGapOrder: unset is bit-identical, and anything malformed means unset', () => {
     // The bracket family takes its own sequential branch, so this is a different constant from
     // gapFillWeights and a bigger one - it serves Fill Bracket, IRMAA Ceiling, ACA Cliff and IRA
@@ -4694,12 +4714,12 @@ test('buildStrategyFamilies: the options are what separate the two sweeps, nothi
     // The Optimizer now has FEWER base rows than MC despite sweeping two extra families: its Reduce
     // grid is 5 steps against MC's 16, and its IRA Draw grid 5 against MC's 5 but not the same five.
     // Both counts are pinned so a grid edit has to be deliberate.
-    assert(plain(mc).length === 36 && plain(opt).length === 30,
-        `base rows: MC ${plain(mc).length} (expected 36), Optimizer ${plain(opt).length} (expected 30)`);
+    assert(plain(mc).length === 39 && plain(opt).length === 33,
+        `base rows: MC ${plain(mc).length} (expected 39), Optimizer ${plain(opt).length} (expected 33)`);
 
-    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 34,
+    assert(plain(call({ grids: OPTIMIZER_GRIDS, irmaaFamily: true, acaFamily: true })).length === 37,
         'the ACA family adds 4 rows');
-    assert(call({ grids: MC_GRIDS, cashClones: true }).length === 108 * 4 / 3,
+    assert(call({ grids: MC_GRIDS, cashClones: true }).length === 117 * 4 / 3,
         'cashClones clones every un-modified row once more');
     assert(call({ grids: MC_GRIDS }).every(r => r.overrides.fundConversionWithCash === undefined),
         'without markCashFunding the key is not written at all');

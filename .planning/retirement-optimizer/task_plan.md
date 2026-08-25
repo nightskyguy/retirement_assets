@@ -14,7 +14,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| **O1** | P30 | Withdrawal policy, the `[40,60]` constants nobody chose | `P30a` |
+| ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy~~ - **COMPLETE v11.163F**, Ordered offers six sequences | - |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P69 | Replay a Monte Carlo path through the main model | `P69a` |
 | **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
@@ -54,7 +54,7 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P67~~ | ~~Optimizer table columns + relative view~~ — **COMPLETE v11.15fd**, PR #186 | — | — |
 | **O1** | P36 | Phased efficiency study — **round 1 DONE 2026-08-10** | `P36b` round 2 | `P35i` |
 | **O1** | P51 | Perfect-foresight oracle — **a-c,e-g DONE 2026-08-10**, gap table delivered | `P51d` cross-check | nothing |
-| **O1** | P30 | Withdrawal policy — the `[40,60]` constants nobody chose | `P30a` | nothing |
+| ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy — the `[40,60]` constants nobody chose~~ - **COMPLETE, `P30a`-`P30g`, v11.163F**; the menu shipped, both constants measured and left alone | - | - |
 | **O1** | P19 | taxengine.js — 13 of 51 jurisdictions still uncoded | `P19f` | nothing |
 | **O1** | P34 | Cost of finding a profitable conversion; worker + per-row memo | `P34a` | nothing |
 | **DONE** | P52 | MC run scope: nerdknob "Run My Plan Only" *(default later flipped by P53f)* | shipped v11.150b | - |
@@ -1504,9 +1504,28 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
       prediction could not fire. It is neither confirmed nor refuted here. A prediction that cannot
       fire on the grid it is written for should be caught when it is written, not when it is scored -
       if it is wanted, `P30d` or a follow-up needs a low-spend / Cash-rich cell built for it
-- [ ] **P30g** — Decision: change the default, expose a control, decouple, or record that the constant is inert
-- **Status:** `P30a`-`P30f` ALL DONE (2026-08-24/25). **Only `P30g`, the decision, remains**, and
-  it now has three measured questions in front of it rather than one. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
+- [x] **P30g** — **DONE v11.163F 2026-08-25. The MENU changed; neither constant did.**
+      - **Shipped:** `ORDERED_SEQS` - one list shared by the sidebar dropdown, `MC_GRIDS.ordered` and
+        `OPTIMIZER_GRIDS.ordered`, so a sequence a user can pick is always a sequence the sweeps
+        score. Six entries in the order they earned: **CBRI, CBIR, CIBR, BCIR, RIBC, BIRC** - by
+        outright wins, ties broken by summed margin over the best shipped ordering
+        (`GAPFILL_RESULTS.md` section 15: CIBR $1,851,441 over BCIR's $1,666,683 at 8 wins each).
+        CBIR stays the pre-selected option and the resolver fallback. Cost: MC 144 -> 156 rows,
+        Optimizer 117 -> 126.
+      - **NOT shipped, and this is the decision, not an omission:** the default branch's `[40,60]`.
+        `w=0` wins 65 of 82 clean cells and 40 wins none, but that is `baselineScoreOf` only - not
+        the other Optimizer objectives, and not the liquidity cost of a plan left holding no cash,
+        which the harness cannot see. Cash Reserve damps the whole question ~16x, so the people most
+        exposed to a wrong default are the ones with no reserve. Changing it moves every existing
+        Proportional, Reduce and GK plan silently. `gapFillWeights` stays a research input, unset.
+      - **NOT shipped, measured right:** the bracket family's Cash-first (`bracketGapOrder` stays
+        unset - `P30c` found the swap loses 21 of 23 clean cells).
+      - **Follow-up filed, not started:** re-run the weight against every `OPTIMIZER_OBJECTIVES` key
+        and against a liquidity measure before any default change. Until then the answer to "is 40
+        right" is "no, and we are not changing it yet", which is a different thing from inert.
+- **Status:** **PHASE COMPLETE, `P30a`-`P30g` (2026-08-24/25), shipped through v11.163F.** What
+  shipped is the Ordered menu; both `[40,60]`-family constants were measured and deliberately left
+  alone, with the reasons recorded in `P30g` above so they are not re-derived. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
   new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
   `P28_RESULTS.md` as its reference)
 - **Depends on:** no code dependency. Its *ship* decision was downstream of P28's, which is now

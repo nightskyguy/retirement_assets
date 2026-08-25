@@ -1502,7 +1502,7 @@ function getOptimizerColumns(showAll = !!OptimizerState.showAllColumns) {
         },
         {
             key: 'param', label: 'Param',
-            title: 'The strategy parameter: bracket/IRMAA/ACA ceiling, IRA draw %, amortization years, proportional boost %, or account order (CBIR/RIBC/BIRC).',
+            title: 'The strategy parameter: bracket/IRMAA/ACA ceiling, IRA draw %, amortization years, proportional boost %, or the Ordered account sequence (CBIR, CBRI, ...).',
             getValue: r => r._paramLabel,
             getSortValue: r => r._paramSortVal
         },

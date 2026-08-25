@@ -104,6 +104,11 @@ Headline findings:
    cells there - a coin flip - because a four-account sequence also places the IRA and Roth, and
    where those sit swamps the pair that governs the two automatic branches. The narrower "Cash
    FIRST" does survive, 46 of 60.
+10. **What shipped (P30g, v11.163F).** The menu, not the weight. Ordered now offers six sequences -
+    CBRI, CBIR, CIBR, BCIR, RIBC, BIRC - ordered by wins and, on a tie, by the dollars at stake when
+    that ordering wins (section 15 of the results). `gapFillWeights` and `bracketGapOrder` stay
+    research inputs, unset: the bracket branch is already right, and w=0 has not been checked
+    against the other Optimizer objectives or against the liquidity cost of holding no cash.
 
 ## unifiedconv_harness.js  (node)
 

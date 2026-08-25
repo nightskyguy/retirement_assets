@@ -17,11 +17,11 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.162J"></a>
+<a id="11.163F"></a>
 
-## 11.162J
+## 11.163F
 
-### Roth can fill a spending shortfall before the brokerage account
+### Roth can fill a spending shortfall, and Ordered offers three more draw orders
 
 1. **A new switch, *Roth before Brokerage*,** under Cycle Brokerage. Off is the default and is what
    the tool has always done: when a year's spending needs more than your strategy itself withdraws,
@@ -37,9 +37,17 @@ For what the tool does and how to use it, see [README.md](README.md).
    rows appear only if you hold Roth. Nothing about a plan predicts which way it lands, which is why
    the switch is swept rather than recommended.
 
-3. **Fewer *Reduce IRA* and *IRA Draw* rows.** The Optimizer tried 16 plan lengths between 2 and 25
+3. **Three more draw orders for the *Ordered* strategy.** The list now offers six sequences instead
+   of three: Cash→Brok→Roth→IRA, Cash→Brok→IRA→Roth, Cash→IRA→Brok→Roth, Brok→Cash→IRA→Roth,
+   Roth→IRA→Brok→Cash and Brok→IRA→Roth→Cash, with the ones that most often came out ahead in
+   testing at the top. Cash→Brok→Roth→IRA, the new first entry, was the best sequence in more test
+   plans than any of the three previously on offer, and in one plan it was worth $858,000 more than
+   the best of them. Your own selection is unchanged, and both the Optimizer and Monte Carlo now
+   score all six.
+
+4. **Fewer *Reduce IRA* and *IRA Draw* rows.** The Optimizer tried 16 plan lengths between 2 and 25
    years and 8 draw percentages; it now tries **3, 7, 11, 17 and 23** years and **5, 7, 9, 11 and
-   13%**. Neighbouring steps differed by very little and between them the two families were half the
+   13%**. Neighboring steps differed by very little and between them the two families were half the
    table, so a run is a third shorter and the table is easier to read. Your own setting still appears
    as its own row whichever length or percentage you pick, including above 13%.
 

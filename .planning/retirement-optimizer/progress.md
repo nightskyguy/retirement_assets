@@ -4447,3 +4447,57 @@ Two node tests, one of which fails on the pre-fix engine and names the wrong row
 badge green at 693. One self-inflicted detour: the changelog `<li>` I wrote used <b> for emphasis,
 and an in-page test counts <b> tags to detect a swallowed entry - it caught it, which is the test
 doing its job.
+
+
+---
+
+## Session 2026-08-25 (worktree mc-path-replay) - P69 planning, no code yet
+
+Fresh worktree `mc-path-replay` off `f29b40a`, which is `origin/main` exactly. Target chosen by the
+user: **P69**, replay one Monte Carlo or Stress sequence through the main model.
+
+Re-anchored the approved design (`~/.claude/plans/cryptic-wondering-wren.md`) on the code as it
+stands after P71 and P74, because both moved every line that plan cites. Three things the read
+settled before any code:
+
+- **P69a is already done.** P71 extracted the per-path bundle as `buildPathInputs()` in
+  `montecarlo/mc_engine.js:44`, exported at `:538`, and there is no inline block left in
+  `worker.js` to extract - the worker is 42 lines. Marked complete, next item is `P69b`.
+- **`ruinYears` already survives for stress** as `ruinYearsPerPath` (`mc_engine.js:395`, kept by
+  P53). The main pass still collapses it to `medianRuinYear`. So P69b is a smaller change than the
+  plan assumed: keep the array, add the ranking metric, add the selector.
+- **`runSimulation()` has no injection point** (`optimizer_ui.js:680`) - it builds its inputs from
+  `getInputs()` and takes no argument. Replay needs exactly one, not a parallel copy of the
+  updateTable/updateStats/updateCharts pipeline. That is the P69d design constraint.
+
+Ranking metric settled as `afterTaxWealthOfLogRow` of the last log row - the basis Break Even and
+the stop-year search already score on - with ruined paths below every survivor, earliest ruin worst.
+One total order, so a rank percentile is unambiguous.
+
+Open for the user: how many paths to capture and at which ranks. Straw man is worst 5 plus ranks
+5/25/50/75/95.
+
+---
+
+## Session 2026-08-25 (worktree mc-path-replay) - P69b, the capture selector (v11.1643)
+
+User decisions first: capture worst 5 plus ranks 5/25/50/75/95 (10 rows, deduped, worst-first), and
+the replay control lands on the stress table and the main survival table in the same pass.
+
+`selectCapturePaths()` in `mc_engine.js`, pure and exported, with the count and ranks as the two
+named constants beside it. Total order: ruined below all survivors, earliest ruin worst, survivors
+by ascending after-tax terminal wealth (`afterTaxWealthOfLogRow` of the last log row - the Break
+Even basis), path index as the deterministic tie-break. `runPass` computes `metricPerPath` off the
+row it already holds - one function call per path, no second simulate - and every varResult in both
+passes now ships `captured` rows (metadata only, ~10 small objects; sequences are P69c's transport
+problem). `buildStressMsg` passes varResults through whole, so stress rows got it for free.
+
+Engine gained a dependency: `afterTaxWealthOfLogRow` from optimizer_core, hoisted onto globalThis
+in the node test shim beside simulate/selectionOf, already global in page and worker scopes.
+
+Three node tests: hand-built 10-path array where the right order is checkable by eye (ruin-year
+ordering, dedup to 8 rows, rankPct 0..100 honest), a 100-survivor run plus a 3-path dedup edge, and
+an e2e runJob asserting every variation of both passes carries in-range capture rows whose worst
+row agrees with survivalRate. Suites 320/61/22, badge green at 696. No changelog entry - nothing
+user-visible until the replay UI; title bumped to 11.1643, first <li> stays 11.1642 deliberately
+(that entry belongs to a merged branch; this branch writes its own entry when the UI ships).

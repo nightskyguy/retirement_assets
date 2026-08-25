@@ -1359,6 +1359,7 @@ if (IS_NODE) {
     Object.assign(globalThis, require('./montecarlo/stats.js'));
     globalThis.simulate = core.simulate;
     globalThis.selectionOf = core.selectionOf;
+    globalThis.afterTaxWealthOfLogRow = core.afterTaxWealthOfLogRow;
 }
 const _mcEngine = IS_NODE ? require('./montecarlo/mc_engine.js') : window.MCEngine;
 
@@ -5490,6 +5491,73 @@ test('the worker payload keeps each variation identifiable as a strategy', async
         const hits = msg.variations.filter(v => sameStrategySelection(v, plan));
         assert(hits.length === 1, `${seq} matched ${hits.length} returned variations, expected exactly 1`);
         assert(hits[0].orderedSeq === seq, `${seq} matched the row for ${hits[0].orderedSeq}`);
+    }
+});
+
+// ── P69: the replay capture selector ─────────────────────────────────────────
+// The percentile bands are envelopes, not paths (computePercentiles sorts each year on its own),
+// so "the path at rank X" has to come from ONE whole-run ordering. These pin that ordering and the
+// selection against hand-built arrays where the right answer is checkable by eye.
+
+test('P69: capture selector ranks ruined-earliest first, then survivors by wealth', () => {
+    // 10 paths: 3 ruined (2035, 2031, 2040), 7 survivors with distinct wealth. The worst path must
+    // be the 2031 ruin regardless of its metric, and the best the richest survivor.
+    const metric = Float64Array.from([900, -1, 500, -1, 100, 300, -1, 700, 200, 400]);
+    const ruin   = Uint16Array.from( [  0, 2035, 0, 2031,  0,   0, 2040, 0,   0,   0]);
+    const rows = _mcEngine.selectCapturePaths(metric, ruin, 10);
+    // Worst 5 = ranks 0-4; sampled pcts 5/25/50/75/95 of 9 -> ranks 0,2,5,7,9 (round). Dedup:
+    // {0,1,2,3,4,5,7,9} = 8 rows.
+    assert(rows.length === 8, `expected 8 deduped rows, got ${rows.length}`);
+    assert(rows[0].pathIndex === 3 && rows[0].ruinYear === 2031,
+        `worst row is path ${rows[0].pathIndex} ruin ${rows[0].ruinYear}, expected path 3 ruin 2031`);
+    assert(rows[1].pathIndex === 1 && rows[2].pathIndex === 6, 'ruined paths not in ruin-year order');
+    // Ranks 3+ are survivors in ascending wealth: 100(p4), 200(p8), 300(p5), 400(p9), 500(p2),
+    // 700(p7), 900(p0).
+    assert(rows[3].pathIndex === 4 && rows[3].ruinYear === null, 'first survivor should be the poorest');
+    const lastRow = rows[rows.length - 1];
+    assert(lastRow.pathIndex === 0 && lastRow.metric === 900, 'rank 9 should be the richest survivor');
+    // Worst-first order and honest labels: ranks strictly ascend, rankPct matches rank/(n-1).
+    for (let i = 1; i < rows.length; i++) {
+        assert(rows[i].rank > rows[i - 1].rank, 'rows are not in ascending rank order');
+    }
+    assert(rows[0].rankPct === 0 && lastRow.rankPct === 100,
+        `rank percentiles mislabeled: ${rows[0].rankPct}..${lastRow.rankPct}`);
+});
+
+test('P69: capture selector on an all-survivor run and a tiny run', () => {
+    // No failures: pure wealth ordering, no ruinYear anywhere in the capture.
+    const metric = Float64Array.from({ length: 100 }, (_, i) => (i * 37) % 100);  // shuffled 0..99
+    const ruin   = new Uint16Array(100);
+    const rows = _mcEngine.selectCapturePaths(metric, ruin, 100);
+    // Worst 5 + pcts of 99 -> ranks {0..4, 5, 25, 50, 74, 94}: 10 rows, none ruined.
+    assert(rows.length === 10, `expected 10 rows, got ${rows.length}`);
+    assert(rows.every(r => r.ruinYear === null), 'a survivor-only run reported a ruin year');
+    // The sampled ranks land where they claim: the metric at rank 50 of 0..99 shuffled is 50.
+    const r50 = rows.find(r => r.rank === 50);
+    assert(r50 && r50.metric === 50, `rank 50 carries metric ${r50 && r50.metric}, expected 50`);
+    // 3 paths: every rank collides with the worst-N set; the set stays deduped and in range.
+    const tiny = _mcEngine.selectCapturePaths(Float64Array.from([5, 1, 9]), new Uint16Array(3), 3);
+    assert(tiny.length === 3, `3 paths captured ${tiny.length} rows`);
+    assert(tiny.map(r => r.pathIndex).join(',') === '1,0,2', 'tiny run not in wealth order');
+});
+
+test('P69: every variation of a real run carries its capture rows', async () => {
+    const msg = await _mcEngine.runJob(_p71Cfg('gbm'));
+    assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
+    for (const src of [msg.variations, msg.stress.variations]) {
+        for (const v of src) {
+            assert(Array.isArray(v.captured) && v.captured.length > 0, 'a variation has no capture rows');
+            const n = src === msg.variations ? msg.numPaths : msg.stress.numPaths;
+            for (const r of v.captured) {
+                assert(r.pathIndex >= 0 && r.pathIndex < n, `pathIndex ${r.pathIndex} out of range`);
+                assert(r.rankPct >= 0 && r.rankPct <= 100, `rankPct ${r.rankPct} out of range`);
+            }
+            // The capture agrees with the headline the UI already shows: if any path was ruined,
+            // the worst capture row is ruined too, and vice versa.
+            const anyRuin = v.survivalRate < 1;
+            assert((v.captured[0].ruinYear != null) === anyRuin,
+                `survival ${v.survivalRate} but worst capture row ruinYear ${v.captured[0].ruinYear}`);
+        }
     }
 });
 

@@ -16,7 +16,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy~~ - **COMPLETE v11.163F**, Ordered offers six sequences | - |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69a` |
+| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69c` |
 | **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
@@ -104,7 +104,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
-| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | nothing - P71 shipped; P69a is subsumed by `buildPathInputs()` in `montecarlo/mc_engine.js` |
+| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69c` | nothing - `P69a` (via P71) and `P69b` (v11.1643) DONE |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
@@ -763,15 +763,71 @@ Charts next to your own plan. Design and sub-items are in the approved plan at
   time bank-build code changes.
 - User decision 2026-08-23: capture a SPREAD, not only failures, and the headline is the overlay
   against the user's own plan. Year-by-year scrubbing inside a path is out of scope.
-- [ ] **P69a** - extract worker.js's per-path input bundle into a shared helper
-- [ ] **P69b** - keep `ruinYears` in the main pass; capture worst-N plus samples across the ranking
-- [ ] **P69c** - ship the captured set for both the main and stress passes
-- [ ] **P69d** - replay mode in the UI, inputs never mutated
-- [ ] **P69e** - prev/next across the captured set
-- [ ] **P69f** - overlay the user's own plan on the replayed path
-- [ ] **P69g** - Annual Details under replay, ruin year marked
-- [ ] **P69h** - decide what replay does to the Optimizer tab and the Tax Planner handoff
-- **Status:** pending
+### Plan of record 2026-08-25 (fresh worktree `mc-path-replay`, branched at `f29b40a`)
+
+Design is the approved plan at `C:/Users/starc/.claude/plans/cryptic-wondering-wren.md`; the items
+below are that design re-anchored on the code as it stands AFTER P71 and P74, which moved every
+line the original plan cited. `montecarlo/worker.js` is 42 lines now and holds nothing to extract;
+the engine is `montecarlo/mc_engine.js`.
+
+- [x] **P69a** - shared per-path input bundle. **DONE, no work left**: `buildPathInputs(banks, p,
+      years, baseInputs, mode)` at `montecarlo/mc_engine.js:44`, called from the one `runPass` at
+      `:294` and exported at `:538`. Shipped as part of P71 (v11.161C-F, `b7f8808`).
+- [x] **P69b** - **DONE v11.1643** - `selectCapturePaths()` + `CAPTURE_WORST_N`/`CAPTURE_RANK_PCTS`
+      in `mc_engine.js`, exported; `metricPerPath` computed in the path loop off the row the loop
+      already holds; every varResult (main AND stress pass) now carries `captured` rows
+      `{ pathIndex, rank, rankPct, ruinYear, metric }`, worst-first, no sequences. Three node tests.
+      Suites 320/61/22, badge green at 696. Original notes: `ruinYears` is already computed in EVERY mode
+      (`mc_engine.js:273`) and already survives for stress as `ruinYearsPerPath` (`:395`); the main
+      pass discards it at the collapse to `medianRuinYear` (`:344`). Keep it, and rank every path on
+      **one** whole-run metric so a percentile sample is unambiguous.
+  - Metric: `afterTaxWealthOfLogRow(log[log.length-1], futureIRATaxRate)` (`optimizer_core.js:3271`),
+    the same basis Break Even and the stop-year search score on. Ruined paths sort below all
+    survivors, ordered earliest-ruin-worst. Read it off `result` in the existing path loop
+    (`mc_engine.js:296-336`) - it is one call per path, no second simulate.
+  - Returns `{ pathIndex, ruinYear, rankPct, metric, sequences }`. Count and the sampled ranks are
+    constants in ONE place, named, not scattered literals - the `[40,60]` complaint from P30.
+  - **User decision 2026-08-25:** capture the **worst 5 plus ranks 5/25/50/75/95** = 10 rows. A row
+    that is both (a worst-5 path that also lands on a sampled rank) appears once, and the list stays
+    ordered worst-first so prev/next reads as a walk from failure to success.
+- [ ] **P69c** - ship the captured set in the results message for both passes. `buildStressMsg`
+      (`mc_engine.js:436`) deliberately strips the four big banks; the captured set is
+      ~10 x years x 4 x 8B and does not fall under that reasoning. Stress rows carry `startYear` /
+      `nominatedBy` (`mc_tab.js:1853-1880`); carry them through so a replayed stress row still names
+      its decade. **Do NOT regenerate from the seed on the main thread.**
+- [ ] **P69d** - replay mode in the UI, inputs never mutated. `runSimulation()`
+      (`optimizer_ui.js:680`) takes no argument today and builds `_simInputs` from `getInputs()`;
+      replay needs ONE injection point there for `returnSequence` / `returnSequencePerAccount` /
+      `inflationSequence`, not a parallel copy of the three-renderer pipeline. `loadMCVariation`
+      (`mc_tab.js:1440`) is the shape to follow for the control, and it is also the warning: it was
+      the PF8/P74 bug both times a second path into the sidebar drifted from the first.
+      Banner names rank percentile, ruin year, source sequence and mode. Exit = plain
+      `runSimulation()`. **User decision 2026-08-25:** the control lands on the **stress table AND
+      the main survival table in the same pass**, not stress first - `P69c` ships the captured set
+      for both passes anyway, so splitting them would mean building the banner twice.
+- [ ] **P69e** - prev/next across the captured set; the banner is the navigator.
+- [ ] **P69f** - **the headline**: overlay the user's own deterministic plan on the replayed path in
+      the balance chart. `lastSimulationLog` (`optimizer_ui.js:3158`) holds it and
+      `updateCurrentDollarsView` (`:712`) is the re-render pattern.
+- [ ] **P69g** - Annual Details under replay, ruin year marked. `infl%` / `inflCum%` / `return%`
+      already exist behind Show All. Confirm the current-dollars toggle deflates by the PATH's
+      realized inflation, not the fixed rate.
+- [ ] **P69h** - decide what replay does to the Optimizer tab and the Tax Planner handoff. Simplest
+      defensible answer: replay is confined to Annual Details and Charts; leaving the tab or editing
+      an input exits replay.
+
+**The percentile trap, restated because it is the one thing that makes this phase wrong if missed:**
+`computePercentiles` (`montecarlo/stats.js:41`) sorts each year independently, so the p50 BAND is an
+envelope no path ever lived. Captured rows are labeled by their **rank percentile**, never "the p50
+path".
+
+**Verification** (from the approved plan): node - `buildPathInputs` reproduces the inline result for
+a fixed bank and path index; the selector returns the requested count, the worst path really is the
+earliest ruin, and the sampled ranks land where they claim. Browser - replay a known stress row and
+confirm the Annual Details ruin year matches that row's ruin year in the stress table, then confirm
+exiting restores the user's own plan unchanged.
+
+- **Status:** in_progress - `P69a`+`P69b` done, `P69c` next (transport: sequences for the replayed variation)
 - **Independent:** no phase dependencies
 
 ---

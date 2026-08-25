@@ -4447,3 +4447,33 @@ Two node tests, one of which fails on the pre-fix engine and names the wrong row
 badge green at 693. One self-inflicted detour: the changelog `<li>` I wrote used <b> for emphasis,
 and an in-page test counts <b> tags to detect a swallowed entry - it caught it, which is the test
 doing its job.
+
+---
+
+## Session 2026-08-25 (worktree retirement-optimizer-asset-allocation) - filed P75, year-by-year withdrawal mix; found e-ORP
+
+User asked how to find the IDEAL year-by-year asset-spending mix, beyond one-rule-per-horizon
+strategy families. The design worked out in conversation is now the P75 spec: reframe the control
+from "which account" to two income targets per year (ordinary realized, LTCG realized); within a
+regime tax is piecewise-linear convex so optima sit on a ~12-item per-year edge menu (bracket
+tops, IRMAA tier edges, ACA cliff, 0% LTCG top, RMD/spend floors); search by coordinate descent
+over that menu seeded from the best swept row, DP as a later rung; deterministic plan plus annual
+re-solve rather than a feedback policy; the descent-vs-best-family gap is the number P36 wants.
+P75a is a measure-first gate: if the best rows' realized MAGIs do not already sit on edges, the
+vertex argument misses an engine coupling and the phase stops for redesign.
+
+Second half of the request: references. i-orp.com is dead (NXDOMAIN); recovered the site, the
+papers, and crucially ModelDescriptionK.pdf - the actual LP formulation - via archive.org. Found
+e-ORP, which the user had heard of but could not locate: github.com/dcurrie/e-ORP, Doug Currie's
+actively maintained MILP re-implementation (pyscipopt/SCIP). Logged DiLellio & Ostrov and three
+adjacent open-source planners (fplan, Owl, rplanlib) beside it in findings.md:2752. Two honesty
+notes made it into the record: Welch's death is unconfirmed (the Bogleheads thread says only that
+he sought a successor), and the DiLellio & Ostrov 2020 abstract does not actually name its
+technique - verify before citing it as DP.
+
+NOW table: dropped the done ~~P30~~ row for the P75 row, so the line-30 marker stays on line 30.
+Priority O1, user's call via question. Files touched: findings.md (P75 references entry),
+task_plan.md (P75 section after P73, NOW row, index row), and this log. No product code, no
+version bump, no changelog entry.
+
+---

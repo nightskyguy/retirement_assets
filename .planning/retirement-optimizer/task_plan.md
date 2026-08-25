@@ -14,7 +14,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy~~ - **COMPLETE v11.163F**, Ordered offers six sequences | - |
+| **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P69 | Replay a Monte Carlo path through the main model | `P69a` |
 | **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
@@ -106,6 +106,7 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
 | **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | nothing - P71 shipped; P69a is subsumed by `buildPathInputs()` in `montecarlo/mc_engine.js` |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
+| **O1** | P75 | Year-by-year withdrawal/conversion optimization - income-target reframe, edge menu, coordinate descent *(new 2026-08-25)* | `P75a` (measure first, gates the phase) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
@@ -1120,6 +1121,92 @@ Ascending/descending should reverse the family, not scramble the rest.
 - **Status:** **COMPLETE v11.1640.** No engine behavior change - a sort key and the row fields it
       reads. No changelog entry, by the user's call.
 - **Independent:** no phase dependencies. Touches the same column P67 relabelled.
+
+---
+
+## P75: Year-by-year withdrawal mix - income-target optimization  *(NEW 2026-08-25, user-raised, O1)*
+
+**Why:** every strategy family picks ONE rule and holds it for the whole horizon; the true optimum
+is a per-year schedule. The engine's own evidence says analytic shortcuts fail here (BETR wrong in
+both regimes, findings.md:1544; Break Even boundary year off by 12 years and $662k from the
+searched optimum, findings.md:1405), so this phase treats it as numerical optimal control over
+full simulations, gated by a cheap measurement (P75a) before anything expensive is built.
+
+**The reframe.** The control is not "which account each year" (4 accounts x horizon, intractable);
+it is TWO numbers per year: ordinary income realized (IRA withdrawal + conversion) and LTCG
+realized. Spending is funded by whatever mix hits those targets; Roth and Cash are tax-transparent
+residuals. The engine already half-thinks this way: `computeBracketCeiling`
+(optimizer_core.js:805) returns MAGI ceilings for its three modes (federal-bracket top, IRMAA tier
+via `cpiRate * irmaaFwdFactor`, ACA FPL multiple - `FPL_2025` hardcoded at optimizer_core.js:842).
+The per-year schedule generalizes one global ceiling to one ceiling per year.
+
+**Time value of money:** final after-tax wealth from a full simulation embodies TVM endogenously -
+each tax dollar's foregone compounded growth is charged by the sim itself. No explicit
+discounting; adding one would double-count.
+
+**Edge/vertex structure.** Within a tax regime, tax is piecewise-linear and convex in ordinary
+income, so optima sit at vertices; cliffs are concave drops - never optimal to sit just above one.
+Candidate menu per year (~12): std-deduction top, 10/12/22/24/32 bracket tops
+(`TAXData.FEDERAL.*.brackets`, taxengine.js:36-58), IRMAA tier edges (taxengine.js:85-101, MAGI
+basis, 2-year lookback), ACA cliff, RMD floor, spend-need floor, zero-extra; for LTCG the 0%-stack
+top (`getLTCGBracketRoom`, optimizer_core.js:775). **No unified edge list exists today** - each
+mode inflates its own threshold at its own call site with its own factor (IRMAA uses
+`cpiRate * irmaaFwdFactor`, federal plain `cpiRate`). First engine artifact:
+`magiEdgesForYear(inputs, year)`.
+
+**State collapse (DP rung only):** a dollar in Roth or Cash never touches future taxes - its
+marginal value is a year-indexed constant, so both factor out of DP state. Remaining state is
+roughly (year, IRA, Brokerage, basis ratio, IRMAA lookback tier, filing/widow flag). Note: no
+one-year step API exists; the yearly loop is inlined in `simulate()` (optimizer_core.js:3053-3073)
+over 15 non-exported phase functions - the DP rung would need either an extracted step or
+memoized-prefix full sims. Coordinate descent (P75b) needs neither.
+
+**Stochastic layer:** optimize the deterministic path, re-solve annually (receding horizon) - not
+a feedback policy. Robustness via P69 path replay when it lands, plus cliff-margin pricing (P75c).
+
+**Certification payoff:** descent/DP optimum minus best family row = the gap P36 exists to
+measure. Gap near 0 across the scenario battery -> families are effectively complete. Fat gap in
+some regime (likely candidate: big IRA + ACA years + widow transition) -> names the missing
+family.
+
+**Prior art:** findings.md:2752 - i-ORP (Welch) ran this as LP in production for two decades; the
+archived ModelDescriptionK.pdf is the formulation. e-ORP (github.com/dcurrie/e-ORP,
+findings.md:2781) is the living MILP re-implementation. DiLellio & Ostrov the academic line;
+wscott/fplan and mdlacasse/Owl adjacent open-source MILP planners. None carry this engine's
+state-tax/ACA/widow fidelity - the expensive part is already built here.
+
+**Falsifiable questions:**
+- **Q1.** Do the best swept rows' realized MAGIs already sit on edge-menu points? If mostly
+  interior, the vertex argument misses an engine coupling (IRMAA lookback, SS-torpedo interior
+  kinks) and the phase stops for redesign before any optimizer is built.
+- **Q2.** Does per-year freedom beat the best one-rule family by more than noise? Gap in $ and %,
+  per scenario.
+- **Q3.** Is the knife-edge plan fragile? Price the safety margin below each binding cliff; does
+  the margin-hardened plan still win?
+
+**Tasks:**
+- [ ] **P75a** - measure first, log side only: dump realized MAGI + CapGains per year for top-N
+      sweep rows (MAGI is on the log row, optimizer_core.js:1009; ordinary income is NOT logged,
+      and MAGI is the edge-relevant variable anyway - IRMAA and ACA key on it). Build
+      `magiEdgesForYear()` in a `.test_harnesses/` harness; classify each year-row as on-edge /
+      interior / just-above-cliff; report residency rates. **GATE for the rest of the phase.**
+- [ ] **P75b** - coordinate-descent harness: seed with the best family row's realized MAGI path;
+      loop years x edge menu, one full `simulate()` per trial (~12 x horizon x passes, 1-2k sims
+      per scenario - same order as one optimizer sweep), score `afterTaxWealthOfLogRow` of the
+      last row (optimizer_core.js:3271), multi-seed from the top-5 rows. Non-unimodality
+      precedent: `bestConversionStopYear` header (optimizer_core.js:3278-3304) - exhaustive scan
+      only, no bisection.
+- [ ] **P75c** - fragility pricing: re-run the optimum with $1-5k margins below each binding
+      cliff; report the cost-of-margin curve.
+- [ ] **P75d** *(contingent on a material P75b gap)* - product surface: the per-year plan needs a
+      carrier. Extra conversions already accept per-year arrays (`_extraConvAmountFor`,
+      optimizer_core.js:2371); withdrawals do not. Worker via the `montecarlo/worker.js`
+      importScripts pattern; P34 shares that groundwork.
+- [ ] **P75e** *(stretch)* - LP-relaxation upper bound (convexify the cliffs) -> "best family is
+      within X% of the ceiling" certificate; feeds P36 directly.
+- **Status:** pending; P75a is the gate
+- **Independent:** no phase dependencies; results feed P36 (the gap) and use P69 (replay) when it
+      lands
 
 ---
 

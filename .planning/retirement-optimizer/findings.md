@@ -2748,3 +2748,71 @@ pins this against a verbatim copy of the pre-P23 bank build.
 
 The simulated inflation range, -1.00% to 13.77%, brackets the real record's 13.30% peak (1979)
 without being tuned to it.
+
+## P75 prior art: i-ORP, e-ORP, and the LP/MILP retirement-optimization lineage (2026-08-25)
+
+Gathered for P75 (year-by-year withdrawal mix). The point of the list: the LP formulation of
+exactly this problem - per-year withdrawal and conversion amounts as decision variables, taxes as
+piecewise-linear constraints - is proven tractable, ran in production for two decades, and has one
+actively maintained open-source MILP descendant. None of the tools below carry this engine's
+state-tax, ACA or widow fidelity, which is the differentiator and the expensive part. All URLs
+verified 2026-08-25.
+
+### i-ORP (James S. Welch Jr.) - the original. i-orp.com is DEAD (NXDOMAIN); archive-only.
+
+| What | URL |
+|---|---|
+| Site root (last good, Oct 2021) | https://web.archive.org/web/20211015194156/https://i-orp.com/ |
+| Main planner input form | https://web.archive.org/web/20201111233257/https://www.i-orp.com/Spend/extended.html |
+| Docs/papers index | https://web.archive.org/web/20230321202349/https://www.i-orp.com/Spend/articles.html |
+| **ORP Model Description - the LP formulation, the key artifact** | https://web.archive.org/web/20200710001724/https://www.i-orp.com/ModelDescription/ModelDescriptionK.pdf |
+| Validating the Optimal Retirement Planner | https://web.archive.org/web/20190131144141/https://www.i-orp.com/ModelDescription/validation.pdf |
+| Full user manual | https://web.archive.org/web/20220330074804/https://i-orp.com/Plans/help/ORPHelp.html |
+
+**Welch papers** (titles from the site's own articles page):
+
+| Paper | Venue | URL / status |
+|---|---|---|
+| Mitigating the Impact of Personal Income Taxes on Retirement Savings Distribution | J. Personal Finance 14(1), 2015 | archive-only: https://web.archive.org/web/20221205051603/http://www.i-orp.com/modeldescription/mitigatedtaxes.pdf |
+| Measuring the Financial Consequences of IRA to Roth IRA Conversions | J. Personal Finance 15(1), 2016, pp.47-55 | archive-only, full issue: https://web.archive.org/web/20200920211020/https://www.i-orp.com/ModelDescription/Vol15Issue1.pdf |
+| A 3-Step Procedure for Computing Sustainable Retirement Savings Withdrawals | J. Financial Planning 30(8), Aug 2017 | LIVE: https://www.onefpa.org/journal/Pages/AUG17-A-3-Step-Procedure-for-Computing-Sustainable-Retirement-Savings-Withdrawals.aspx |
+| A Quantitative Evaluation of Four Retirement Spending Models | J. Personal Finance 14(2), 2015 | archive-only: https://web.archive.org/web/20221205035107/http://www.i-orp.com/modeldescription/4spend.pdf |
+
+### e-ORP - the successor the user had heard of and could not find. FOUND.
+
+https://github.com/dcurrie/e-ORP - Doug Currie. Python + Jupyter, created 2025-07, pushes through
+2026-03: actively maintained. A **genuine MILP re-implementation**, not a mirror or scrape:
+`solver.py` builds a `pyscipopt.Model()` (SCIP) with per-year continuous and binary decision
+variables and maximizes year-0 discretionary spend. README: "Inspired by the now unmaintained
+(and unavailable?) i-ORP by James S. Welch Jr." Covers federal tax MFJ/SGL/HoH, the OBBBA senior
+deduction, IRMAA Part B/D, RMDs, Roth conversions, cap gains, survivor benefits, and smile-curve
+spending. Does NOT cover Monte Carlo, state tax, or the ACA cliff.
+
+### DiLellio & Ostrov - the academic line
+
+| Paper | Venue | URL / status |
+|---|---|---|
+| Optimal Strategies for Traditional versus Roth IRA/401(k) Consumption During Retirement | Decision Sciences 48(2):356-384, 2017, DOI 10.1111/deci.12222 | free PDF, LIVE: https://etfmathguy.com/wp-content/uploads/2022/03/DiLellio-and-Ostrov2017-Optimal-Strategies-Dec-Sci.pdf |
+| Toward constructing tax efficient withdrawal strategies for retirees with traditional 401(k)/IRAs, Roth 401(k)/IRAs, and taxable accounts | Financial Services Review 28(2):67-95, 2020 | open access, LIVE: https://openjournals.libs.uga.edu/fsr/article/view/3419 |
+| Optimal decisions under price dynamics for Roth conversions (DiLellio solo) | Financial Planning Review, 2023, DOI 10.1002/cfp2.1174 | live, bot-blocked; open in a browser |
+
+### Adjacent open-source LP/MILP planners
+
+- https://github.com/wscott/fplan - Python LP; README cites Welch directly ("similar to the ideas
+  of James Welch at www.i-orp.com"); active, push 2026-08.
+- https://github.com/mdlacasse/Owl - Python MILP via HiGHS/MOSEK; co-optimizes the Social Security
+  claiming age; the most active of the group, push 2026-08-25.
+- https://github.com/willauld/rplanlib - Go LP library, `willauld/fplan` front-end; stale since
+  2019.
+
+### Honesty notes
+
+- Welch's death is UNCONFIRMED. The Bogleheads thread (July 2022,
+  https://www.bogleheads.org/forum/viewtopic.php?t=379689) says only that he could no longer
+  maintain the site and was seeking a successor. Say "unmaintained/offline since ~2022", nothing
+  stronger.
+- The DiLellio & Ostrov 2020 abstract describes all-years global optimization "in contrast to
+  most previous approaches that chronologically generate a suboptimal strategy" but does not name
+  the technique. Verify inside the PDF before citing it as "DP-based".
+- SSRN, Wiley and bogleheads.org return 403 to automated fetchers but load in a browser; that is
+  bot-blocking, not link rot.

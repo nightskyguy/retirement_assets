@@ -878,17 +878,30 @@ function mcReplayList() {
     if (!m?.capturedBankRows) return [];
     const v = m.variations?.[m.captureVariationIndex ?? 0];
     const cap = v?.captured ?? [];
-    return cap.filter(r => m.capturedBankRows[r.pathIndex]).map(r => ({
-        rows:   m.capturedBankRows[r.pathIndex],
-        mcMode: m.simulationMode,
-        planFields: _replayPlanFields(v),
-        label:  `Replaying a Monte Carlo path through your plan: `
-              + (r.rank === 0 ? 'the worst path' : `rank ${r.rankPct}%`)
-              + ` of ${m.numPaths}`
-              + (r.ruinYear ? `, money runs out in ${r.ruinYear}` : ', survives the whole plan')
-              + ` (${_mcModeLabel(m.simulationMode)}, seed ${_mcFanMeta?.seed ?? '?'}).`,
-    }));
+    return cap.filter(r => m.capturedBankRows[r.pathIndex]).map(r => {
+        // Two vocabularies on purpose: the worst-N block is counted (#1..#5), the percentile
+        // samples are named by rank, and the picker and the banner use the same words.
+        const who = r.rank < CAPTURE_WORST_N_LOCAL
+            ? (r.rank === 0 ? 'the worst path' : `the #${r.rank + 1} worst path`)
+            : `the rank ${Math.round(r.rankPct)}% path`;
+        const outcome = r.ruinYear ? `money runs out in ${r.ruinYear}` : 'survives the whole plan';
+        return {
+            rows:   m.capturedBankRows[r.pathIndex],
+            mcMode: m.simulationMode,
+            planFields: _replayPlanFields(v),
+            short:  (r.rank < CAPTURE_WORST_N_LOCAL
+                        ? (r.rank === 0 ? 'Worst path' : `#${r.rank + 1} worst`)
+                        : `Rank ${Math.round(r.rankPct)}%`)
+                  + ' · ' + (r.ruinYear ? `ruin ${r.ruinYear}` : 'survives'),
+            label:  `Replaying ${who} of ${m.numPaths} through your plan: ${outcome}`
+                  + ` (${_mcModeLabel(m.simulationMode)}, seed ${_mcFanMeta?.seed ?? '?'}).`,
+        };
+    });
 }
+
+// The engine's CAPTURE_WORST_N, read off the loaded engine rather than duplicated. Falls back to 5
+// (the shipped value) if an old cached engine predates the export.
+const CAPTURE_WORST_N_LOCAL = (typeof MCEngine !== 'undefined' && MCEngine.CAPTURE_WORST_N) || 5;
 
 // Every stress scenario as a replay state, index-aligned with the stress table's rank column.
 function stressReplayState(rank) {
@@ -927,8 +940,48 @@ function startReplay(state) {
     showTab('tab-chart');
 }
 
-function replayCapturedPath(k) { startReplay(mcReplayList()[k]); }
-function replayStressPath(rank) { startReplay(stressReplayState(rank)); }
+function replayCapturedPath(k) {
+    const st = mcReplayList()[k];
+    if (st) st.nav = { kind: 'mc', idx: k };
+    startReplay(st);
+}
+function replayStressPath(rank) {
+    const st = stressReplayState(rank);
+    if (st) st.nav = { kind: 'stress', rank };
+    startReplay(st);
+}
+
+// P69e: the banner is the navigator. Ordering: captured Monte Carlo paths step worst-to-best as
+// the engine ranked them; stress scenarios step in the stress table's CURRENT display order, so
+// prev/next walks the same list the reader is looking at.
+function _stressDisplayRanks() {
+    const s = _mcResults?.stress ?? _mcStress;
+    return sortStressRows(buildStressRows(s)).map(r => r.rank);
+}
+
+function replayNavState() {
+    const nav = _replayState?.nav;
+    if (!nav) return null;
+    if (nav.kind === 'mc') {
+        const n = mcReplayList().length;
+        return { hasPrev: nav.idx > 0, hasNext: nav.idx < n - 1 };
+    }
+    const order = _stressDisplayRanks();
+    const at = order.indexOf(nav.rank);
+    return { hasPrev: at > 0, hasNext: at >= 0 && at < order.length - 1 };
+}
+
+function replayStep(dir) {
+    const nav = _replayState?.nav;
+    if (!nav) return;
+    if (nav.kind === 'mc') {
+        replayCapturedPath(nav.idx + dir);
+        return;
+    }
+    const order = _stressDisplayRanks();
+    const at = order.indexOf(nav.rank);
+    if (at >= 0 && order[at + dir] !== undefined) replayStressPath(order[at + dir]);
+}
 
 // --- Rendering ------------------------------------------------------------
 
@@ -1287,15 +1340,28 @@ function renderPlanHeadline(msg) {
         + `Median ending balance $${fmt(Math.round(finalBal))}. `
         + `<span style="color:#666;">${modeTxt}.</span></div>`
         // P69: the replay entry point that works in BOTH scopes - plan scope never renders the
-        // survival table, so the headline is the only place the pinned plan reliably appears.
-        // preventDefault too: the headline is a fold handle, and the button must not toggle it.
+        // survival table, so the headline is the only place the pinned plan reliably appears. A
+        // picker rather than a button: the capture spans worst-to-best, and the worst path alone
+        // is not the point. stopPropagation on click too - the headline is a fold handle.
         + (mcReplayList().length
-            ? `<button onclick="event.preventDefault();event.stopPropagation();replayCapturedPath(0)"`
-              + ` style="margin-left:auto;white-space:nowrap;font-size:0.8em;padding:2px 8px;cursor:pointer;"`
-              + ` title="Walk this run's worst captured path through Charts and Annual Details, year by year, with your own plan's settings.">🎬 Replay worst path</button>`
+            ? `<select onclick="event.stopPropagation()" onchange="replayPickerChanged(this)"`
+              + ` style="margin-left:auto;font-size:0.8em;max-width:180px;cursor:pointer;"`
+              + ` title="Walk one of this run's captured paths through Charts and Annual Details, year by year, with your own plan's settings. Paths span the whole outcome range, worst to best.">`
+              + `<option value="">▶️ Replay a path…</option>`
+              + mcReplayList().map((e, k) =>
+                    `<option value="${k}">${escapeHtml(e.short)}</option>`).join('')
+              + `</select>`
             : '')
         + `</div>`;
     el.style.display = '';
+}
+
+// The headline picker: replay the chosen captured path, then snap back to the placeholder so the
+// same entry can be picked again later (a <select> swallows a re-selection of its current value).
+function replayPickerChanged(sel) {
+    const k = sel.value;
+    sel.value = '';
+    if (k !== '') replayCapturedPath(parseInt(k, 10));
 }
 
 // Summary-bar tile. Visible on EVERY tab, which is the point: after the stress pass started
@@ -1480,19 +1546,11 @@ function renderSurvivalTable(variations, numPaths) {
         checkCell.appendChild(cb);
         row.appendChild(checkCell);
 
-        // Data cells. The pinned row alone gets the replay control: the engine ships replay
-        // sequences for the sidebar's own plan (captureVariationIndex), so it is the one row whose
-        // captured paths can actually be walked. Inline handler, stopPropagation, or the row's own
-        // click loads the variation into the sidebar instead.
-        const canReplay = isPinned && v._origIdx === (_mcResults?.captureVariationIndex ?? 0)
-                       && mcReplayList().length > 0;
-        const replayBtn = canReplay
-            ? ` <button onclick="event.stopPropagation();replayCapturedPath(0)"`
-              + ` style="font-size:0.85em;padding:0 6px;cursor:pointer;"`
-              + ` title="Walk this run's worst captured path through Charts and Annual Details, year by year, with your own plan's settings.">🎬 Replay</button>`
-            : '';
+        // Data cells. No replay control here: the headline's picker is the one entry point for the
+        // captured paths (it renders in BOTH scopes and offers the whole spread, not one path), and
+        // a duplicate button on the pinned row was table clutter.
         [
-            (isPinned ? '📍 ' : '') + v.strategyFamily + replayBtn,
+            (isPinned ? '📍 ' : '') + v.strategyFamily,
             escapeHtml(v.paramLabel),
             ruinTxt,
             '$' + fmt(v.percentiles.p50[v.percentiles.p50.length - 1]),
@@ -2137,7 +2195,7 @@ function renderStressTable(stress, rows) {
             // focus; only its default styling goes.
             swatch.innerHTML += ` <button onclick="event.stopPropagation();replayStressPath(${r.rank})"`
                 + ` style="font-size:1.05em;padding:0;border:none;background:none;cursor:pointer;vertical-align:middle;line-height:1;"`
-                + ` title="Walk this historical sequence through Charts and Annual Details, year by year, with your own plan's settings.">🎬</button>`;
+                + ` title="Walk this historical sequence through Charts and Annual Details, year by year, with your own plan's settings.">▶️</button>`;
         }
         row.appendChild(swatch);
 

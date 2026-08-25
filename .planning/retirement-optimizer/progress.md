@@ -4558,3 +4558,23 @@ display:flex/none because the .hidden class loses to an inline display. Changelo
 (11.1645, the branch's one entry) and the in-page list trimmed to its documented five-entry
 ceiling. Suites 322/61/22 unchanged, badge green at 698. P69e (prev/next), P69f (overlay), P69g
 (ruin-year mark) remain.
+
+---
+
+## Session 2026-08-25 (worktree mc-path-replay) - P69e + replay control rework (v11.1645 refreshed)
+
+User feedback drove both halves. The boxed 🎬 buttons were unreadable at table size, and "worst
+path" alone is not the goal - the capture exists to span the spread. So: ▶️ replaces 🎬
+everywhere; the headline button became a compact picker listing all ten captured paths by outcome
+("Worst path · ruin 2035" ... "Rank 95% · survives", rankPct rounded for display); the stress
+rows keep a bare borderless ▶️; the pinned-row duplicate button is gone.
+
+P69e shipped in the same pass: ◀ ▶ in the banner. Captured paths step worst-to-best as the engine
+ranked them; stress scenarios step in the stress table's CURRENT display order, rebuilt at step
+time from sortStressRows(buildStressRows()), so prev/next walks exactly the list on screen. Ends
+disable their button. The picker snaps back to its placeholder after each choice so the same path
+can be picked twice.
+
+Browser-verified: pick worst (prev disabled) -> #2 worst -> ... -> rank 95% (next disabled);
+stress walk 1973 -> 1969 matches the table; badge green at 698. Changelog li and md entry
+reworded for the picker and the arrows.

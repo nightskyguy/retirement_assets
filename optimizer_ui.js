@@ -713,6 +713,12 @@ function syncReplayBanner() {
     if (_replayState) {
         const txt = document.getElementById('replay-banner-text');
         if (txt) txt.textContent = _replayState.label;
+        // Prev/next enablement comes from mc_tab.js, which owns the lists and their order.
+        const nav = (typeof replayNavState === 'function') ? replayNavState() : null;
+        const prev = document.getElementById('replay-prev');
+        const next = document.getElementById('replay-next');
+        if (prev) { prev.style.display = nav ? '' : 'none'; prev.disabled = !nav?.hasPrev; }
+        if (next) { next.style.display = nav ? '' : 'none'; next.disabled = !nav?.hasNext; }
     }
 }
 

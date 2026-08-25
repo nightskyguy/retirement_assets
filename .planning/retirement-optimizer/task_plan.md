@@ -16,7 +16,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy~~ - **COMPLETE v11.163F**, Ordered offers six sequences | - |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69e` |
+| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69f` |
 | **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
@@ -104,7 +104,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
-| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69e` | nothing - `P69a`-`P69d`,`P69h` DONE (v11.1645) |
+| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69f` | nothing - `P69a`-`P69e`,`P69h` DONE (v11.1645) |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
@@ -815,7 +815,13 @@ the engine is `montecarlo/mc_engine.js`.
       the run reported. Verified exact: stress balances match the engine trace to the dollar, ruin
       2042==2042, and a survivor path's replayed after-tax wealth equals the captured metric to the
       float ($12,125,940.416580342). Original decision stands: control on both tables, one pass.
-- [ ] **P69e** - prev/next across the captured set; the banner is the navigator.
+- [x] **P69e** - **DONE (same session as P69d).** ◀ ▶ in the banner; captured paths step in the
+      engine's worst-to-best order, stress scenarios step in the stress table's CURRENT display
+      order (rebuilt via `sortStressRows(buildStressRows())` at step time, so the walk matches
+      what the reader sees). Ends disable. Entry control became a **picker** (user call: worst
+      alone is not the goal, and the boxed 🎬 buttons were unreadable) - a compact `<select>` on
+      the headline listing all ten captured paths by outcome, ▶️ everywhere instead of 🎬, and
+      the pinned-row duplicate button removed as clutter.
 - [ ] **P69f** - **the headline**: overlay the user's own deterministic plan on the replayed path in
       the balance chart. `lastSimulationLog` (`optimizer_ui.js:3158`) holds it and
       `updateCurrentDollarsView` (`:712`) is the re-render pattern.
@@ -841,7 +847,7 @@ earliest ruin, and the sampled ranks land where they claim. Browser - replay a k
 confirm the Annual Details ruin year matches that row's ruin year in the stress table, then confirm
 exiting restores the user's own plan unchanged.
 
-- **Status:** in_progress - `P69a`-`P69d`+`P69h` done, `P69e` next (prev/next in the banner), then `P69f` overlay and the `P69g` ruin-year mark
+- **Status:** in_progress - `P69a`-`P69e`+`P69h` done; `P69f` (overlay your plan on the replayed chart) next, then the `P69g` ruin-year mark
 - **Independent:** no phase dependencies
 
 ---

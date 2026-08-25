@@ -1484,20 +1484,87 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
       Cash Reserve damps this one too - 87 live cells reserve-off vs 18 reserve-on, the third time
       the reserve has proved the bigger lever. Suite 310 -> 312.
 - [ ] **P30d** — Q4 arm: the remaining orderings of four accounts, harness-only
-- [ ] **P30e** — Q5: cost the decoupling (new input vs derived), count affected rows, do NOT build yet
+- [x] **P30e** — **DONE 2026-08-25, design only, nothing built. Recommendation: DO NOT decouple.**
+      Full costing in the "P30e: costing the decoupling" section below.
 - [x] **P30f** — **DONE 2026-08-24, and it is an honest MISS.** The zero-predicate was scored
       **VACUOUS**: not one cell in the grid had a control arm that never drew Brokerage, so the
       prediction could not fire. It is neither confirmed nor refuted here. A prediction that cannot
       fire on the grid it is written for should be caught when it is written, not when it is scored -
       if it is wanted, `P30d` or a follow-up needs a low-spend / Cash-rich cell built for it
 - [ ] **P30g** — Decision: change the default, expose a control, decouple, or record that the constant is inert
-- **Status:** re-baseline, `P30a`, `P30b`, `P30c`, `P30f` done (2026-08-24/25); `P30d` and `P30e`
-  remain, and `P30g` now has a concrete, measured decision in front of it. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
+- **Status:** re-baseline, `P30a`, `P30b`, `P30c`, `P30e`, `P30f` done (2026-08-24/25); `P30d`
+  remains, and `P30g` now has a concrete, measured decision in front of it. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
   new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
   `P28_RESULTS.md` as its reference)
 - **Depends on:** no code dependency. Its *ship* decision was downstream of P28's, which is now
   settled and shipped (v11.162B), so P30's research runs against a fixed baseline. The 🅡 rows are
   part of that baseline: a weight sweep must state which Roth position it holds fixed.
+
+### P30e: costing the decoupling  *(2026-08-25, design only)*
+
+**Q5 asked: should picking a SPEND strategy keep picking a SOURCING policy, and what would it cost
+to separate them? Answer: it should not, in principle, and it is not worth separating now.**
+
+**The coupling is 9 reads, and only 6 of them are about sourcing.** `yr.isBracketStrategy` and
+`yr.isOrderedStrategy` are each set once (`optimizer_core.js:1485-1486`). Classified:
+
+| site | what it decides | sourcing? |
+|---|---|---|
+| `:1518` `targetSpend` | whether the strategy's own ceiling caps spend | **No - spend targeting.** Stays with the strategy under any design |
+| `:1936` | may the Roth pre-draw run (`!ordered`) | yes |
+| `:1954` | the bracket family's sequential Cash->Brokerage->Roth | yes |
+| `:1994` | the Ordered branch | yes |
+| `:2096` | third pass, Ordered branch | yes |
+| `:2176` | P32c Brokerage re-draw excludes Ordered | yes |
+| `:2239` | forced-IRA backstop excludes ACA **and** Ordered | **mixed.** Ordered's half is sourcing; ACA's half is about the income cap, i.e. eligibility |
+| `:2476` | surplus banking follows the draw order | yes, though it is the INVERSE - where surplus goes, not where draws come from |
+
+So a decoupling is not "move nine reads". It is: move six, split one, leave one alone. `:2239` is the
+awkward one and `:2476` is the subtle one - any sourcing policy has to say where surplus is BANKED as
+well as where draws come from, or the two halves disagree and money strands in an account the policy
+will not reach.
+
+**New input vs derived.** Three shapes:
+
+1. **Derived with an override.** `sourcingPolicy` defaults to a pure function of `strategy` - today's
+   mapping, written down - and an input may override it. Unset is bit-identical. Cheapest, and it
+   makes the mapping visible, which is most of what Q5 was complaining about.
+2. **Independent input.** Strategy selects spend targeting only; sourcing is always explicit. This
+   still needs a per-strategy default, so it is shape 1 plus a mandatory UI surface, a URL param, a
+   share/save field, a `sameStrategySelection` term and a sweep dimension.
+3. **Do not decouple.** Expose the constants, not the structure.
+
+**Row cost, measured not guessed** (shipped default scenario, from the current `OPT_GOLDEN` capture:
+**30 base rows, 117 total**; Ordered is 3 of the 30, and is ineligible by definition because the
+sequence IS its policy, leaving **27 eligible**):
+
+| design | optimizer rows | MC variations |
+|---|---|---|
+| today | 117 | 144 |
+| sourcing as a clone pass, 1 extra policy | 144 (+23%) | 177 (+23%) |
+| sourcing as a clone pass, 2 extra policies | 171 (+46%) | 210 (+46%) |
+| sourcing crossed with the existing clone passes | 234 / 351 (+100% / +200%) | worse |
+
+The clone-pass shape is the affordable one; crossing is not. And MC pays `numPaths x variations`, so
++23% there is 23% of a Monte Carlo run, on a tab the user just asked to make faster.
+
+**Recommendation: do not decouple, and close Q5 rather than leaving it open.** Three reasons, in
+order:
+
+1. **The measured defect does not need it.** `P30b` and `P30c` between them found ONE thing wrong -
+   the default branch's 40% Brokerage - and the fix is a one-line default change, not a structure.
+   Decoupling would be building a mechanism to solve a problem that turned out to be a number.
+2. **The blast radius is small and asymmetric.** The weight reaches three families; the bracket
+   order reaches four. A general sourcing policy would be a large, cross-cutting abstraction over
+   two branches that measurement says want the SAME answer (Cash before Brokerage). Converging the
+   two defaults gets most of the benefit for a fraction of the cost.
+3. **Cash Reserve is the bigger lever anyway.** Three separate measurements now say so - it damped
+   the weight by an order of magnitude and the bracket order by ~5x. A user who wants control over
+   sourcing already has a stronger one than any of this.
+
+**If it is ever revisited**, shape 1 is the one to build, and the two traps are recorded above:
+`:2239` needs splitting rather than moving, and `:2476` means a policy has to define surplus banking
+as well as draw order.
 
 ---
 

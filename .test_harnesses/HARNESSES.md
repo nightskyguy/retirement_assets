@@ -97,6 +97,13 @@ Headline findings:
    Brokerage, and it is right to: swapping loses in 21 of 23 clean cells, by up to $587,970, and in
    every cell of the CA / reserve-off slice. So the two constants disagree with each other and the
    bracket branch is the one that got it right - both results say fill a gap from Cash first.
+8. **Two of the three shipped Ordered codes are dominated (P30d).** Across 60 cells, RIBC and
+   BIRC never win once; CBIR wins 14; the outright best is **CBRI**, which is not offered, winning
+   22. An unshipped ordering beats every shipped one in 15 clean cells, by up to $858,316.
+9. **And the Cash-first story stops at Ordered.** "Cash before Brokerage" wins exactly 30 of 60
+   cells there - a coin flip - because a four-account sequence also places the IRA and Roth, and
+   where those sit swamps the pair that governs the two automatic branches. The narrower "Cash
+   FIRST" does survive, 46 of 60.
 
 ## unifiedconv_harness.js  (node)
 

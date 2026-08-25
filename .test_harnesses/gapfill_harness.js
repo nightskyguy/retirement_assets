@@ -445,4 +445,133 @@ const liveIn = (r) => cCells.filter(c => c.rsv === r && Math.abs(c.delta) > LIVE
 check('H. Cash Reserve damps it', liveIn('on') < liveIn('off'),
     `live cells: reserve off ${liveIn('off')}, reserve on ${liveIn('on')}`);
 
+// ══ P30d: the 21 orderings that were never shipped ═══════════════════════════════════════════
+// Ordered runs the account sequence the user picked, and the UI offers three: CBIR, RIBC, BIRC.
+// Twenty-four permutations of four accounts exist. `resolveOrderedSeq` used to look the code up in
+// a three-entry map and fall back to CBIR for everything else, so the other 21 named a sequence and
+// silently ran a different one - unmeasurable by construction. P30d generalized the resolver to
+// build the sequence from the letters, which leaves the three shipped codes byte-identical and
+// makes the rest reachable. Nothing ships: `grids.ordered` still sweeps the same three.
+//
+// PREDICTIONS, stated before the sweep:
+//   I. At least one unshipped ordering beats all three shipped ones somewhere. This is Q4.
+//   J. The three shipped codes are not dominated - each wins somewhere.
+//   K. Orderings that reach Cash before Brokerage beat orderings that do the reverse, which is what
+//      P30b and P30c both found on their own branches. If P30 has one story, this is where it
+//      either generalizes or stops.
+const PERMS = (() => {
+    const out = [];
+    const walk = (acc, rest) => rest.length ? rest.forEach((c, i) =>
+        walk([...acc, c], rest.filter((_, j) => j !== i))) : out.push(acc.join(''));
+    walk([], ['C', 'B', 'I', 'R']);
+    return out;
+})();
+const SHIPPED = ['CBIR', 'RIBC', 'BIRC'];
+
+const O = new Map();
+let oCount = 0;
+for (const s of SCENARIOS) for (const rate of SPEND_RATES) for (const st of STATES)
+    for (const rsv of RESERVES) {
+        let cellRate = null;
+        for (const seq of PERMS) {
+            const res = simulate({
+                ...COMMON, ...s.over, STATEname: st, spendGoal: spendFor(s, rate),
+                strategy: 'ordered', orderedSeq: seq, CashReserve: rsv.value,
+            });
+            oCount++;
+            if (cellRate === null) cellRate = res.totals.futureIRARate ?? 0;
+            O.set(k(s.key, rate, st, rsv.key, seq), {
+                score: baselineScoreOf(res, cellRate),
+                spend: res.totals.spendCurrentDollars ?? 0,
+                success: res.totals.success,
+                shape: JSON.stringify(res.log),
+            });
+        }
+    }
+
+const oCells = [];
+for (const s of SCENARIOS) for (const rate of SPEND_RATES) for (const st of STATES)
+    for (const rsv of RESERVES) {
+        const rows = PERMS.map(seq => ({ seq, ...O.get(k(s.key, rate, st, rsv.key, seq)) }));
+        const best = rows.reduce((a, b) => b.score > a.score ? b : a);
+        const bestShipped = rows.filter(r => SHIPPED.includes(r.seq))
+            .reduce((a, b) => b.score > a.score ? b : a);
+        oCells.push({ s: s.key, sLabel: s.label, rate, st, rsv: rsv.key, rows, best, bestShipped,
+                      gain: best.score - bestShipped.score,
+                      distinct: new Set(rows.map(r => r.shape)).size });
+    }
+
+console.log('\n' + '='.repeat(112));
+console.log('P30d -- the 21 orderings of four accounts that were never shipped');
+console.log('='.repeat(112));
+console.log('');
+console.log(`Grid: ${PERMS.length} permutations x ${SCENARIOS.length} mixes x ${SPEND_RATES.length} rates x `
+    + `${STATES.length} states x ${RESERVES.length} reserve settings = ${oCount} simulations.`);
+console.log(`Shipped today: ${SHIPPED.join(', ')}. "gain" is the best permutation MINUS the best shipped one.`);
+console.log('');
+
+console.log('11. HOW MANY ORDERINGS ARE REALLY DISTINCT\n');
+const distincts = oCells.map(c => c.distinct);
+console.log(`   distinct plans per cell, out of ${PERMS.length} permutations : `
+    + `min ${Math.min(...distincts)}, max ${Math.max(...distincts)}, `
+    + `median ${distincts.slice().sort((a, b) => a - b)[Math.floor(distincts.length / 2)]}`);
+console.log('   The sequence only matters up to the point the gap is filled, and an account with no');
+console.log('   balance is skipped, so the tail of the order is frequently irrelevant.');
+
+console.log('\n12. DOES AN UNSHIPPED ORDERING EVER WIN?\n');
+const oWin = oCells.filter(c => c.gain > LIVE_CUT);
+const oClean = oWin.filter(c => c.best.success && c.bestShipped.success
+    && Math.abs(c.best.spend - c.bestShipped.spend) <= 1);
+console.log(`   cells where the best permutation beats the best shipped one by >$${LIVE_CUT.toLocaleString()} : `
+    + `${oWin.length}/${oCells.length}`);
+console.log(`   of those, clean wealth comparisons                                : ${oClean.length}`);
+if (oWin.length) {
+    const top = oWin.reduce((a, b) => b.gain > a.gain ? b : a);
+    console.log(`   widest gain                                                      : ${money(top.gain).trim()}`
+        + `  with ${top.best.seq}  (${top.s} ${pct(top.rate)} ${top.st} ${top.rsv}, best shipped ${top.bestShipped.seq})`);
+}
+const winners = {};
+oCells.forEach(c => { winners[c.best.seq] = (winners[c.best.seq] ?? 0) + 1; });
+console.log('\n   how often each ordering is the outright best of all 24:');
+Object.entries(winners).sort((a, b) => b[1] - a[1]).forEach(([seq, n]) =>
+    console.log(`     ${seq}${SHIPPED.includes(seq) ? ' (shipped)' : '          '}  ${n}`));
+
+console.log('\n13. BEST ORDERING, sliced to CA / reserve off\n');
+console.log(pad('mix', 30) + pad('rate', 8) + pad('best of 24', 14) + pad('best shipped', 16)
+    + pad('gain', 16) + pad('distinct', 10));
+for (const s of SCENARIOS) for (const rate of SPEND_RATES) {
+    const c = oCells.find(x => x.s === s.key && x.rate === rate && x.st === 'CA' && x.rsv === 'off');
+    console.log(pad(s.label, 30) + pad(pct(rate), 8) + pad(c.best.seq, 14) + pad(c.bestShipped.seq, 16)
+        + pad(c.gain > 1 ? money(c.gain).trim() : '-', 16) + pad(String(c.distinct), 10));
+}
+
+console.log('\n14. P30d PREDICTIONS vs OUTCOME\n');
+check('I. an unshipped ordering wins somewhere', oClean.length > 0,
+    `${oClean.length} clean cells where an unshipped ordering beats every shipped one`);
+const shippedWins = SHIPPED.filter(sq => (winners[sq] ?? 0) > 0);
+check('J. no shipped code is dominated', shippedWins.length === SHIPPED.length,
+    `shipped codes that win at least one cell: ${shippedWins.join(', ') || 'none'}`);
+// Cash-before-Brokerage across the whole field, not just the winner: compare the mean score of the
+// 12 permutations with C before B against the 12 with B before C, cell by cell.
+const cBeforeB = (sq) => sq.indexOf('C') < sq.indexOf('B');
+let cbWins = 0;
+for (const c of oCells) {
+    const mean = (f) => { const v = c.rows.filter(r => f(r.seq)).map(r => r.score);
+                          return v.reduce((a, b) => a + b, 0) / v.length; };
+    if (mean(cBeforeB) > mean(sq => !cBeforeB(sq))) cbWins++;
+}
+check('K. Cash before Brokerage beats the reverse', cbWins > oCells.length / 2,
+    `${cbWins}/${oCells.length} cells where the C-before-B half scores higher on average`);
+
+// K broke as a PAIRWISE test, which averages over where I and R sit and washes the signal out.
+// The narrower claim - Cash FIRST - is reported alongside it rather than quietly substituted for
+// it, because rewriting a prediction after seeing the data is how a broken one gets laundered.
+const cashFirstBest = oCells.filter(c => c.best.seq[0] === 'C').length;
+const iraLastBest = oCells.filter(c => c.best.seq[3] === 'I').length;
+console.log(`\n  Narrower readings, reported because K broke and these are what the winners show:`);
+console.log(`    best ordering starts with Cash : ${cashFirstBest}/${oCells.length}`);
+console.log(`    best ordering ends with IRA    : ${iraLastBest}/${oCells.length}`);
+console.log(`    shipped codes never best       : `
+    + `${SHIPPED.filter(sq => !(winners[sq] > 0)).join(', ') || 'none'}`);
+
 console.log('');

@@ -6,9 +6,11 @@ Reference record for `gapfill_harness.js`. Reproducible with:
 node .test_harnesses/gapfill_harness.js
 ```
 
-2026-08-25, engine v11.1637. 2,790 simulations, ~3s. Two research inputs, both default off and set
-by nothing in the UI: `gapFillWeights` (P30a, sections 1-8) and `bracketGapOrder` (P30c, section 9).
-They govern two DIFFERENT branches of the same function and are measured separately.
+2026-08-25, engine v11.1638. 4,230 simulations, ~3.5s. Two research inputs, both default off and set
+by nothing in the UI: `gapFillWeights` (P30a, sections 1-8) and `bracketGapOrder` (P30c, section 9);
+plus the 24 Ordered permutations (P30d, section 10), which need no input because `resolveOrderedSeq`
+now generates a sequence from its letters. `fillSpendingGap` has three branches and they are three
+separate policies, so they are measured separately and do not turn out to agree.
 
 ---
 
@@ -172,7 +174,73 @@ already does it. The default branch does not, and that is the defect.
   account early feeds back into every later year. Only the score comparison is meaningful; a test
   that pinned a lifetime total would be pinning the scenario.
 
-## 10. What this does NOT establish
+## 10. P30d — the 21 orderings that were never shipped
+
+Ordered runs the account sequence the user picks, and the UI offers three of the 24 permutations:
+CBIR, RIBC, BIRC. `resolveOrderedSeq` used to look the code up in a three-entry map and fall back to
+CBIR for everything else, so the other 21 named one sequence and silently ran another. P30d
+generalized the resolver to build the sequence from its letters — the three shipped codes are
+byte-identical, and nothing ships, since `grids.ordered` still sweeps the same three. 1,440
+simulations: 24 permutations x 5 mixes x 3 rates x 2 states x 2 reserve settings.
+
+### 24 orderings are not 24 plans
+
+Distinct plans per cell, out of 24: **min 5, max 24, median 21**. The sequence only matters up to the
+point the gap is filled, and an account with no balance is skipped, so the tail is often irrelevant.
+In the most collapsed cell the 24 codes produce only 5 different runs.
+
+### An unshipped ordering wins, often
+
+| | |
+|---|---|
+| cells where the best permutation beats the best SHIPPED one by >$1,000 | 43 / 60 |
+| of those, clean wealth comparisons | 15 |
+| widest gain | **$858,316** with **CIBR** (round-1, 4%, CA, reserve off — best shipped was BIRC) |
+
+Outright winner counts across all 60 cells:
+
+| ordering | wins | shipped? |
+|---|---|---|
+| **CBRI** | **22** | no |
+| CBIR | 14 | yes |
+| BCIR | 8 | no |
+| CIBR | 8 | no |
+| BCRI | 5 | no |
+| CRIB | 2 | no |
+| BRCI | 1 | no |
+
+### Two of the three shipped codes are dominated
+
+**RIBC and BIRC never win a single cell of the 60.** CBIR wins 14. The best ordering overall is
+**CBRI** — CBIR with the last two swapped, taking Roth before the IRA — which wins 22 and is not
+offered. That is shipping-relevant, not a research curiosity: two thirds of the menu is never the
+right answer anywhere in this grid, and the most frequently-best sequence is absent from it.
+
+### Scored predictions
+
+| | prediction | outcome |
+|---|---|---|
+| I | an unshipped ordering wins somewhere | **HELD.** 15 clean cells. |
+| J | no shipped code is dominated | **BROKEN.** RIBC and BIRC win nothing. |
+| K | Cash before Brokerage beats the reverse | **BROKEN.** Exactly 30/60 — a coin flip. |
+
+**K breaking is the most useful result here.** P30b and P30c both found Cash-before-Brokerage on
+their own branches, and the obvious next step was to call that "the P30 story". It does not
+generalize to Ordered: averaged pairwise over all 24 permutations, the C-before-B half wins exactly
+half the cells.
+
+Narrower readings, reported alongside the broken prediction rather than substituted for it —
+rewriting a prediction after seeing the data is how a broken one gets laundered:
+
+- best ordering **starts with Cash**: **46 / 60**
+- best ordering **ends with the IRA**: 28 / 60
+
+So "Cash first" survives and "Cash before Brokerage" does not. The difference is that Ordered's
+sequence also places the IRA and Roth, and where those sit swamps the Brokerage/Cash pair that
+governs the two automatic branches. A four-account sequence is a different problem from a
+two-account split, and P30's story stops at that boundary.
+
+## 11. What this does NOT establish
 
 - **Nothing about a default change yet.** `w=0` wins on `baselineScoreOf`, which weighs terminal
   after-tax wealth plus spendable. It has not been checked against the other objectives the

@@ -1483,7 +1483,20 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
       move in DIFFERENT directions between mixes, so only the score comparison means anything.
       Cash Reserve damps this one too - 87 live cells reserve-off vs 18 reserve-on, the third time
       the reserve has proved the bigger lever. Suite 310 -> 312.
-- [ ] **P30d** — Q4 arm: the remaining orderings of four accounts, harness-only
+- [x] **P30d** — **DONE v11.1638 2026-08-25. Q4 is answered: yes, and two shipped codes are dead.**
+      `resolveOrderedSeq` generalized from a three-entry map to a generator over the letters, so a
+      permutation now means what it names instead of silently becoming CBIR. The three shipped codes
+      are byte-identical and nothing ships - `grids.ordered` still sweeps the same three.
+      **RIBC and BIRC never win a single cell of 60.** CBIR wins 14. The outright best is **CBRI**
+      (Cash, Brokerage, Roth, IRA) with 22 wins, and it is not on the menu. An unshipped ordering
+      beats every shipped one in 15 clean cells, widest **+$858,316** (CIBR).
+      **24 orderings are only ~15 plans**: median 21 distinct per cell, minimum 5, because the tail
+      of a sequence past the point the gap is filled is irrelevant and empty accounts are skipped.
+      **And the P30 story stops here.** "Cash before Brokerage" - which `P30b` and `P30c` both found
+      on their own branches - wins exactly **30 of 60** cells under Ordered, a coin flip. A
+      four-account sequence also places the IRA and Roth and those swamp the Brokerage/Cash pair. The
+      narrower "Cash FIRST" does survive, 46 of 60. Recorded as a BROKEN prediction with the narrower
+      reading printed beside it rather than substituted for it. Suite 312 -> 313.
 - [x] **P30e** — **DONE 2026-08-25, design only, nothing built. Recommendation: DO NOT decouple.**
       Full costing in the "P30e: costing the decoupling" section below.
 - [x] **P30f** — **DONE 2026-08-24, and it is an honest MISS.** The zero-predicate was scored
@@ -1492,8 +1505,8 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
       fire on the grid it is written for should be caught when it is written, not when it is scored -
       if it is wanted, `P30d` or a follow-up needs a low-spend / Cash-rich cell built for it
 - [ ] **P30g** — Decision: change the default, expose a control, decouple, or record that the constant is inert
-- **Status:** re-baseline, `P30a`, `P30b`, `P30c`, `P30e`, `P30f` done (2026-08-24/25); `P30d`
-  remains, and `P30g` now has a concrete, measured decision in front of it. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
+- **Status:** `P30a`-`P30f` ALL DONE (2026-08-24/25). **Only `P30g`, the decision, remains**, and
+  it now has three measured questions in front of it rather than one. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
   new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
   `P28_RESULTS.md` as its reference)
 - **Depends on:** no code dependency. Its *ship* decision was downstream of P28's, which is now

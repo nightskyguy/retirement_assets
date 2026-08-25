@@ -108,6 +108,7 @@ const bothOnMedicareAtStart = core.bothOnMedicareAtStart;
 const MC_GRIDS = core.MC_GRIDS;
 const OPTIMIZER_GRIDS = core.OPTIMIZER_GRIDS;
 const sameStrategySelection = core.sameStrategySelection;
+const resolveOrderedSeq = core.resolveOrderedSeq;
 const offGridParamFor = core.offGridParamFor;
 const parseShorthand = globalThis.window.DisplayHelpers.parseShorthand;
 // P35 PR 1 characterization goldens — a RECORDING of what the two strategy enumerations emit,
@@ -4327,6 +4328,34 @@ test('gapFillWeights: the split moves monotonically, and both endpoints still sp
     // cascade spilling, which is what keeps the endpoint a point on the same policy curve rather
     // than a different policy that gives up when one account runs dry.
     assert(cash[cash.length - 1] > 0, 'at weight 100 the cascade must still spill into Cash');
+});
+
+test('resolveOrderedSeq: any permutation resolves, anything else is CBIR', () => {
+    // P30d generalized this from a three-entry map to a generator. The three shipped codes must
+    // still produce byte-identical sequences, the other 21 permutations must now mean what they
+    // say, and a typo must still be a no-op rather than a silently different plan.
+    const rates = { capGainsPercentage: 0.5, capitalGainsRate: 0.15, nominalStateTaxAtLimit: 0.09,
+                    nominalTaxRate: 0.22, marginalFedTaxRate: 0.22, marginalStateTaxRate: 0.09 };
+    const names = seq => resolveOrderedSeq(seq, rates).map(pair => pair[0]).join(',');
+    assert(names('CBIR') === 'Cash,Brokerage,IRA,Roth', 'CBIR');
+    assert(names('RIBC') === 'Roth,IRA,Brokerage,Cash', 'RIBC');
+    assert(names('BIRC') === 'Brokerage,IRA,Roth,Cash', 'BIRC');
+    // Previously fell back to CBIR while naming something else; now it means itself.
+    assert(names('CBRI') === 'Cash,Brokerage,Roth,IRA', 'CBRI must no longer be a silent CBIR');
+    // Each account appears exactly once, at its own tax rate, in every permutation.
+    const perms = [];
+    (function walk(acc, rest) {
+        if (!rest.length) return perms.push(acc.join(''));
+        rest.forEach((c, i) => walk([...acc, c], rest.filter((_, j) => j !== i)));
+    })([], ['C', 'B', 'I', 'R']);
+    assert(perms.length === 24, 'the generator must produce 24 permutations');
+    for (const p of perms) {
+        const seq = resolveOrderedSeq(p, rates);
+        assert(seq.length === 4 && new Set(seq.map(x => x[0])).size === 4, `${p} must draw each account once`);
+    }
+    for (const bad of ['nonsense', 'CBI', 'CBIRR', 'CCBI', 'cbir', 'XBIR', undefined, null, 42, ''])
+        assert(names(bad) === 'Cash,Brokerage,IRA,Roth',
+            `${JSON.stringify(bad)} must still fall back to CBIR`);
 });
 
 test('bracketGapOrder: unset is bit-identical, and anything malformed means unset', () => {

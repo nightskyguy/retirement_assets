@@ -4329,6 +4329,43 @@ test('gapFillWeights: the split moves monotonically, and both endpoints still sp
     assert(cash[cash.length - 1] > 0, 'at weight 100 the cascade must still spill into Cash');
 });
 
+test('bracketGapOrder: unset is bit-identical, and anything malformed means unset', () => {
+    // The bracket family takes its own sequential branch, so this is a different constant from
+    // gapFillWeights and a bigger one - it serves Fill Bracket, IRMAA Ceiling, ACA Cliff and IRA
+    // Draw. The branch was rewritten from nested ifs into a sequence to make the arm expressible;
+    // this is the guard that the rewrite kept every number where it was.
+    const b = { ...GFW_BASE, strategy: 'bracket', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 };
+    const ref = JSON.stringify(simulate(b).log);
+    for (const v of [undefined, 'cashFirst', 'nonsense', null, 42, '']) {
+        assert(JSON.stringify(simulate({ ...b, bracketGapOrder: v }).log) === ref,
+            `bracketGapOrder ${JSON.stringify(v)} must leave today's behavior alone`);
+    }
+});
+
+test('bracketGapOrder: it moves the bracket family and nothing else', () => {
+    // What is asserted here is the BLAST RADIUS, not the direction. No lifetime total is pinned:
+    // the swap changes which account is drawn first, that feeds back into every later year, and the
+    // sign of the lifetime Cash and Brokerage totals genuinely flips between account mixes -
+    // measured going both ways on two of the harness scenarios. A test that pinned one of them
+    // would be pinning the scenario, not the mechanism.
+    const arm = { bracketGapOrder: 'brokerageFirst' };
+    const moved = { ...GFW_BASE, strategy: 'bracket', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 };
+    assert(JSON.stringify(simulate({ ...moved, ...arm }).log) !== JSON.stringify(simulate(moved).log),
+        'the bracket family must feel it');
+    // Everything that takes another branch must not.
+    const untouched = [
+        { label: 'Proportional', over: { strategy: 'propwd', propWithdraw: 0.10 } },
+        { label: 'Reduce',       over: { strategy: 'fixed', nYears: 20 } },
+        { label: 'Guyton-Klinger', over: { strategy: 'gk', gkGuard: 0.20, gkAdjPct: 0.10 } },
+        { label: 'Ordered',      over: { strategy: 'ordered', orderedSeq: 'CBIR' } },
+    ];
+    for (const u of untouched) {
+        const base = { ...GFW_BASE, ...u.over };
+        assert(JSON.stringify(simulate({ ...base, ...arm }).log) === JSON.stringify(simulate(base).log),
+            `${u.label} takes another branch and must be bit-identical`);
+    }
+});
+
 test('buildStrategyFamilies: the 🅡 pass clones every family except Ordered', () => {
     const b = { ...BASE, Roth: 300000 };
     const plain  = buildStrategyFamilies(b, { grids: OPTIMIZER_GRIDS });

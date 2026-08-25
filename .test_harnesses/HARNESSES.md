@@ -93,6 +93,10 @@ Headline findings:
    stays open.
 6. **A prediction that could not fire.** The zero-predicate carried over from P28 was scored
    VACUOUS: no cell in this grid had a control arm that never drew Brokerage.
+7. **The bracket family's constant goes the OTHER way (P30c).** That branch drains Cash before
+   Brokerage, and it is right to: swapping loses in 21 of 23 clean cells, by up to $587,970, and in
+   every cell of the CA / reserve-off slice. So the two constants disagree with each other and the
+   bracket branch is the one that got it right - both results say fill a gap from Cash first.
 
 ## unifiedconv_harness.js  (node)
 

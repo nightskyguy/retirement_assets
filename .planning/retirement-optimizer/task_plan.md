@@ -1468,7 +1468,21 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
       widest $534,525 reserve-off vs $33,358 reserve-on) and is the bigger lever; state matters much
       less. The `thirdPassBrokerage: 'off'` arm came back with the SAME shape, so **P32 does not
       explain this result** and the separate P28 inversion hypothesis stays open.
-- [ ] **P30c** — Q2 arm: bracket-family order Brokerage-before-Cash as an explicit alternative
+- [x] **P30c** — **DONE v11.1637 2026-08-25. Q2 is answered: today's order is RIGHT.**
+      `bracketGapOrder` research input at the bracket branch, which was rewritten from nested ifs
+      into a sequence so the arm is the order of a list; the control path is bit-identical. Swapping
+      to Brokerage-first **loses in 21 of 23 clean cells**, by up to **$587,970**, and in every cell
+      of the CA / reserve-off slice. Predictions F/G/H all held.
+      **The headline of P30 is now that the two constants DISAGREE and the bracket branch is the one
+      that got it right.** Both results say the same thing - fill a spending gap from Cash before
+      Brokerage - and the bracket branch already does, while the default branch's 40% Brokerage does
+      not. That is the defect, and it is a one-line default change if `P30g` wants it.
+      Caveats on the record: only 23 of 105 live cells are clean; prediction G held on a **5% margin**
+      (CA $587,970 vs TX $561,127), which is not evidence of a state-tax mechanism but of state
+      barely mattering, the same conclusion `P30b` reached; and the lifetime Cash/Brokerage totals
+      move in DIFFERENT directions between mixes, so only the score comparison means anything.
+      Cash Reserve damps this one too - 87 live cells reserve-off vs 18 reserve-on, the third time
+      the reserve has proved the bigger lever. Suite 310 -> 312.
 - [ ] **P30d** — Q4 arm: the remaining orderings of four accounts, harness-only
 - [ ] **P30e** — Q5: cost the decoupling (new input vs derived), count affected rows, do NOT build yet
 - [x] **P30f** — **DONE 2026-08-24, and it is an honest MISS.** The zero-predicate was scored
@@ -1477,8 +1491,8 @@ to zero before touching Brokerage. Both constants sit directly on the code path 
       fire on the grid it is written for should be caught when it is written, not when it is scored -
       if it is wanted, `P30d` or a follow-up needs a low-spend / Cash-rich cell built for it
 - [ ] **P30g** — Decision: change the default, expose a control, decouple, or record that the constant is inert
-- **Status:** re-baseline, `P30a`, `P30b`, `P30f` done (2026-08-24); `P30c` next, and `P30g` now
-  has a real decision in front of it. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
+- **Status:** re-baseline, `P30a`, `P30b`, `P30c`, `P30f` done (2026-08-24/25); `P30d` and `P30e`
+  remain, and `P30g` now has a concrete, measured decision in front of it. **Harness:** `.test_harnesses/gapfill_harness.js` (node — a
   new file, NOT an extension of `unifiedconv_harness.js`, which is already a four-round document with
   `P28_RESULTS.md` as its reference)
 - **Depends on:** no code dependency. Its *ship* decision was downstream of P28's, which is now

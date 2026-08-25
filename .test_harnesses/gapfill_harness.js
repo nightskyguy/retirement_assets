@@ -337,4 +337,112 @@ const propLive = propCells.filter(c => c.range > LIVE_CUT);
 check('E. Proportional stays near zero', propLive.length === 0,
     `${propLive.length}/${propCells.length} Proportional cells move more than $${LIVE_CUT.toLocaleString()}`);
 
+// ══ P30c: the OTHER constant nobody chose ════════════════════════════════════════════════════
+// The bracket family takes its own branch and drains Cash to zero before touching Brokerage, in a
+// strict sequence. Nothing measured that either; the comment above it has always just asserted that
+// it "keeps supplemental draws out of taxable income". This sweeps the swap.
+//
+// Bigger blast radius than the weight: this branch serves Fill Bracket, IRMAA Ceiling, ACA Cliff and
+// IRA Draw, where the weight reaches only Proportional, Reduce and Guyton-Klinger. ACA is left out
+// of the grid rather than the branch - its rows go untenable when the cap cannot fund spending, and
+// an untenable row's delta is noise rather than signal.
+//
+// PREDICTIONS, stated before the sweep. One cell of Fill Bracket and one of IRA Draw were spot-
+// checked first to confirm the arm bites at all, so these are chosen to be undetermined by that:
+//   F. cashFirst (today) beats brokerageFirst in most cells - the standing rationale.
+//   G. The effect is LARGER in CA than in TX. If this is a tax trade, the state tax that rides on
+//      the Brokerage leg's rate should be visible.
+//   H. Cash Reserve damps it, the way it damped the weight in section 4.
+const BRACKET_FAMILIES = [
+    { key: 'bracket', label: 'Fill Bracket 24%', over: { strategy: 'bracket', stratRate: 0.24, stratIRMAATier: -1, stratACAMultiple: 0 } },
+    { key: 'irmaa',   label: 'IRMAA Ceil t2',    over: { strategy: 'bracket', stratRate: 0, stratIRMAATier: 2, stratACAMultiple: 0 } },
+    { key: 'draw',    label: 'IRA Draw 6%',      over: { strategy: 'fixedpct', iraWithdrawPct: 0.06 } },
+];
+const ORDERS = ['cashFirst', 'brokerageFirst'];
+
+const C = new Map();
+let cCount = 0;
+for (const s of SCENARIOS) for (const rate of SPEND_RATES) for (const st of STATES)
+    for (const rsv of RESERVES) for (const f of BRACKET_FAMILIES) {
+        let cellRate = null;
+        for (const ord of ORDERS) {
+            const res = simulate({
+                ...COMMON, ...s.over, STATEname: st, spendGoal: spendFor(s, rate), ...f.over,
+                CashReserve: rsv.value, bracketGapOrder: ord,
+            });
+            cCount++;
+            if (cellRate === null) cellRate = res.totals.futureIRARate ?? 0;
+            C.set(k(s.key, rate, st, rsv.key, f.key, ord), {
+                score: baselineScoreOf(res, cellRate),
+                spend: res.totals.spendCurrentDollars ?? 0,
+                success: res.totals.success,
+            });
+        }
+    }
+
+const cCells = [];
+for (const s of SCENARIOS) for (const rate of SPEND_RATES) for (const st of STATES)
+    for (const rsv of RESERVES) for (const f of BRACKET_FAMILIES) {
+        const a = C.get(k(s.key, rate, st, rsv.key, f.key, 'cashFirst'));
+        const b = C.get(k(s.key, rate, st, rsv.key, f.key, 'brokerageFirst'));
+        cCells.push({ s: s.key, sLabel: s.label, rate, st, rsv: rsv.key, f: f.key, fLabel: f.label,
+                      delta: b.score - a.score, spendMoved: Math.abs(b.spend - a.spend) > 1,
+                      allOK: a.success && b.success });
+    }
+
+console.log('\n' + '='.repeat(112));
+console.log('P30c -- the bracket family drains Cash before Brokerage. Should it?');
+console.log('='.repeat(112));
+console.log('');
+console.log(`Grid: ${BRACKET_FAMILIES.length} bracket families x ${SCENARIOS.length} mixes x ${SPEND_RATES.length} rates x `
+    + `${STATES.length} states x ${RESERVES.length} reserve settings x ${ORDERS.length} orders = ${cCount} simulations.`);
+console.log('Delta is brokerageFirst MINUS cashFirst (today), so a POSITIVE number means the swap wins.');
+console.log('');
+
+const cLive = cCells.filter(c => Math.abs(c.delta) > LIVE_CUT);
+const cClean = cLive.filter(c => !c.spendMoved && c.allOK);
+console.log('7. HEADLINE, ALL ' + cCells.length + ' CELLS\n');
+console.log(`   cells where the swap moves more than $${LIVE_CUT.toLocaleString()} : ${cLive.length}/${cCells.length}`);
+console.log(`   of those, clean wealth comparisons                : ${cClean.length}`);
+console.log(`   swap WINS (clean cells only)                      : ${cClean.filter(c => c.delta > 0).length}/${cClean.length}`);
+const cWorst = cCells.reduce((a, b) => Math.abs(b.delta) > Math.abs(a.delta) ? b : a, { delta: 0 });
+console.log(`   widest cell                                       : ${money(cWorst.delta).trim()}`
+    + `  (${cWorst.s} ${pct(cWorst.rate)} ${cWorst.st} ${cWorst.rsv} ${cWorst.f})`);
+
+console.log('\n8. THE SWAP, sliced to CA / reserve off\n');
+console.log('   "!" = delivered spending moved too. "x" = a plan failed under one of the orders.\n');
+console.log(pad('mix', 30) + pad('family', 20) + SPEND_RATES.map(r => pad(pct(r), 18)).join(''));
+for (const s of SCENARIOS) for (const f of BRACKET_FAMILIES) {
+    const row = SPEND_RATES.map(rate => {
+        const c = cCells.find(x => x.s === s.key && x.rate === rate && x.st === 'CA'
+            && x.rsv === 'off' && x.f === f.key);
+        if (Math.abs(c.delta) <= 1) return pad('.', 18);
+        return pad(money(c.delta).trim() + (c.spendMoved ? ' !' : '') + (c.allOK ? '' : ' x'), 18);
+    });
+    if (row.every(v => v.trim() === '.')) continue;
+    console.log(pad(s.label, 30) + pad(f.label, 20) + row.join(''));
+}
+
+console.log('\n9. STATE AND RESERVE\n');
+console.log(pad('slice', 28) + pad('live cells', 12) + pad('swap wins', 12) + pad('widest', 16));
+for (const st of STATES) for (const rsv of RESERVES) {
+    const sub = cCells.filter(c => c.st === st && c.rsv === rsv.key);
+    const l = sub.filter(c => Math.abs(c.delta) > LIVE_CUT);
+    const wide = sub.reduce((a, b) => Math.abs(b.delta) > Math.abs(a.delta) ? b : a, { delta: 0 });
+    console.log(pad(`${st} / ${rsv.label}`, 28) + pad(`${l.length}/${sub.length}`, 12)
+        + pad(`${l.filter(c => c.delta > 0).length}/${l.length}`, 12) + pad(money(wide.delta).trim(), 16));
+}
+
+console.log('\n10. P30c PREDICTIONS vs OUTCOME\n');
+const cashWins = cClean.filter(c => c.delta < 0).length;
+check('F. cashFirst (today) beats the swap', cClean.length > 0 && cashWins > cClean.length / 2,
+    `cashFirst wins ${cashWins}/${cClean.length} clean cells`);
+const widestIn = (st) => cCells.filter(c => c.st === st)
+    .reduce((a, b) => Math.abs(b.delta) > a ? Math.abs(b.delta) : a, 0);
+check('G. the effect is larger in CA than TX', widestIn('CA') > widestIn('TX'),
+    `widest CA ${money(widestIn('CA')).trim()} vs TX ${money(widestIn('TX')).trim()}`);
+const liveIn = (r) => cCells.filter(c => c.rsv === r && Math.abs(c.delta) > LIVE_CUT).length;
+check('H. Cash Reserve damps it', liveIn('on') < liveIn('off'),
+    `live cells: reserve off ${liveIn('off')}, reserve on ${liveIn('on')}`);
+
 console.log('');

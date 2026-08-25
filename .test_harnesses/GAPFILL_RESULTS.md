@@ -6,15 +6,20 @@ Reference record for `gapfill_harness.js`. Reproducible with:
 node .test_harnesses/gapfill_harness.js
 ```
 
-2026-08-24, engine v11.162K. 2,430 simulations, ~2s. One research input, `gapFillWeights`
-(P30a), default off and set by nothing in the UI.
+2026-08-25, engine v11.1637. 2,790 simulations, ~3s. Two research inputs, both default off and set
+by nothing in the UI: `gapFillWeights` (P30a, sections 1-8) and `bracketGapOrder` (P30c, section 9).
+They govern two DIFFERENT branches of the same function and are measured separately.
 
 ---
 
 ## 1. The question
 
 When a year's spending needs more than the strategy itself withdraws, `fillSpendingGap` fills the
-shortfall. Most strategies land in a default branch that draws **Brokerage and Cash proportionally
+shortfall, and it does so **two different ways depending on the strategy**. Sections 1-8 are the
+default branch; section 9 is the bracket branch. Neither constant was ever chosen and they turn out
+to disagree with each other.
+
+Most strategies land in a default branch that draws **Brokerage and Cash proportionally
 at a bare `[40, 60]`**, then falls back to Roth. Nobody chose that 40. P30 asks whether it is
 load-bearing, and if so whether 40 is right.
 
@@ -30,7 +35,7 @@ policy rather than three (verified in P30a before this sweep was allowed to read
 | Is the constant load-bearing? | **Yes.** 227 of 360 cells move by more than $1,000 across the range; the widest moves **$616,919**. |
 | Is 40 the right number? | **No, and it is not close.** Among the 82 cells that are clean wealth comparisons, `w=40` is best in **zero** of them. |
 | What is better? | **`w=0`** — fill the gap from Cash and leave the brokerage account alone. Best in 65 of the 82 clean cells, and in 178 of all 227 live cells. |
-| Is that a shipping recommendation? | **Not yet.** See §7. |
+| Is that a shipping recommendation? | **Not yet.** See §10. |
 
 ## 3. The grid
 
@@ -120,14 +125,59 @@ Two of five broke, and the broken ones are the output. A is worth restating as a
 grid could not test it, and a prediction that cannot fire should have been noticed when it was
 written rather than when it was scored.
 
-## 9. What this does NOT establish
+## 9. P30c — the other constant, and it goes the other way
+
+The bracket family (Fill Bracket, IRMAA Ceiling, ACA Cliff, IRA Draw) takes a separate branch that
+drains **Cash to zero before touching Brokerage**, in a strict sequence. Nothing measured that
+either; the comment above it asserts that it "keeps supplemental draws out of taxable income".
+`bracketGapOrder` (P30c) makes the swap expressible. 360 simulations, 3 bracket families x 5 mixes x
+3 rates x 2 states x 2 reserve settings x 2 orders. Delta below is **brokerageFirst minus cashFirst**,
+so a positive number means today's order is wrong.
+
+| | |
+|---|---|
+| cells moving more than $1,000 | 105 / 180 |
+| of those, clean wealth comparisons | 23 |
+| the swap wins, clean cells | **2 / 23** |
+| widest cell | **−$587,970** (round-1, 4%, CA, reserve off, IRA Draw) |
+
+**Today's order is right.** In the CA / reserve-off slice every single cell is negative — swapping to
+Brokerage-first loses in all fifteen, by $8,863 to $587,970. Predictions F, G and H all held.
+
+### The two constants disagree with each other, and this one is the one that got it right
+
+Read together with §5, the story is one story:
+
+| branch | serves | today | measured best |
+|---|---|---|---|
+| default (proportional) | Proportional, Reduce, Guyton-Klinger | **40% Brokerage** / 60% Cash | **0% Brokerage** — all Cash |
+| bracket (sequential) | Fill Bracket, IRMAA Ceil, ACA Cliff, IRA Draw | **Cash first**, then Brokerage | Cash first — unchanged |
+
+Both say the same thing: **fill a spending gap from Cash before Brokerage.** The bracket branch
+already does it. The default branch does not, and that is the defect.
+
+### Caveats on P30c specifically
+
+- **Only 23 of 105 live cells are clean.** Most carry a delivered-spending change, a failed plan
+  under one order, or both — the `!` and `x` flags in section 8 of the harness output. The headline
+  rests on the clean 23; the other 82 point the same way but are not like-for-like.
+- **Prediction G held on a technicality.** CA's widest cell is $587,970 against TX's $561,127 — a
+  5% gap. That is not evidence of a state-tax mechanism; it is evidence that state barely matters
+  here, the same conclusion §6 reached for the weight. Recorded as HELD because that is what the
+  test asked, but it should not be read as support for the tax story.
+- **Cash Reserve damps this one too**, and harder: 87 live cells with the reserve off against 18
+  with it on. Third time the reserve has turned out to be the bigger lever.
+- **The lifetime direction is not stable.** Drawing Brokerage first does not reliably raise the
+  lifetime Brokerage total: it does in one mix and falls in another, because spending a different
+  account early feeds back into every later year. Only the score comparison is meaningful; a test
+  that pinned a lifetime total would be pinning the scenario.
+
+## 10. What this does NOT establish
 
 - **Nothing about a default change yet.** `w=0` wins on `baselineScoreOf`, which weighs terminal
   after-tax wealth plus spendable. It has not been checked against the other objectives the
   Optimizer ranks by, and "always drain Cash first" has a liquidity story this harness does not
   model — a plan with no Cash buffer left is more fragile than its score says. The Cash Reserve
   interaction in §6 is the same warning from the other side.
-- **Nothing about the bracket family**, which is P30c's question (Cash before Brokerage in the
-  sequential branch) and is untouched here.
 - **Nothing about Ordered's 24 permutations**, which is P30d.
 - **Nothing at monthly resolution or under Monte Carlo.** Deterministic single path, as P28 was.

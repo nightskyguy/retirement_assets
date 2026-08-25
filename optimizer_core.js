@@ -1954,21 +1954,42 @@ function fillSpendingGap(sim, yr) {
         } else if (yr.isBracketStrategy) {
             // Bracket/IRMAA strategies: supplement spending from Cash first, then Brokerage, then Roth.
             // This keeps supplemental draws out of taxable income as much as possible.
-            const cashWd = calculateWithdrawals(yr.curBalances, gap, { order: ['Cash'], weight: [1], taxrate: [0] });
-            yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, cashWd]);
-            applyWithdrawals(yr.curBalances, cashWd);
+            //
+            // P30c research input (no UI, no URL param): `inputs.bracketGapOrder` swaps the first
+            // two. This is the OTHER constant nobody chose - the sibling of the default branch's
+            // [40, 60], and a bigger one, because this branch serves Fill Bracket, IRMAA Ceiling,
+            // ACA Cliff and IRA Draw where the weight reaches only three families.
+            //
+            // The two accounts are not symmetric, which is why the order is a question rather than a
+            // preference. Cash is tax-free to withdraw but earns `cashYield` taxed as ordinary
+            // income; Brokerage realizes capital gains on the way out and steps up its own basis.
+            // "Keep supplemental draws out of taxable income" argues for Cash first and is what the
+            // comment above has always said, but nothing measured it, and P30b found the analogous
+            // constant in the other branch was not merely unchosen but wrong.
+            //
+            // Written as a SEQUENCE rather than nested ifs so the arm is the order of a list. The
+            // control path is bit-identical to the ifs it replaces: each account still draws only
+            // the shortfall the one before it left, the chain still stops at $1, and Roth is still
+            // reached only when both leave something over.
+            const _bgo = inputs.bracketGapOrder === 'brokerageFirst' ? 'brokerageFirst' : 'cashFirst';
+            const _brokRate = yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit);
+            const _bSeq = _bgo === 'brokerageFirst'
+                ? [['Brokerage', _brokRate], ['Cash', 0]]
+                : [['Cash', 0], ['Brokerage', _brokRate]];
+            let _bNeed = gap;
+            for (const [_acct, _rate] of _bSeq) {
+                const wd = calculateWithdrawals(yr.curBalances, _bNeed,
+                    { order: [_acct], weight: [1], taxrate: [_rate] });
+                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, wd]);
+                applyWithdrawals(yr.curBalances, wd);
+                _bNeed = wd.shortfall ?? 0;
+                if (_bNeed <= 1) break;
+            }
 
-            if ((cashWd.shortfall ?? 0) > 1) {
-                const brokerWd = calculateWithdrawals(yr.curBalances, cashWd.shortfall,
-                    { order: ['Brokerage'], weight: [1], taxrate: [yr.capGainsPercentage * (sim.capitalGainsRate + yr.nominalStateTaxAtLimit)] });
-                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, brokerWd]);
-                applyWithdrawals(yr.curBalances, brokerWd);
-
-                if ((brokerWd.shortfall ?? 0) > 1 && yr.curBalances.Roth > 0) {
-                    const rothWithdrawals = calculateWithdrawals(yr.curBalances, brokerWd.shortfall, { order: ['Roth'], weight: [1], taxrate: [0] });
-                    yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothWithdrawals]);
-                    applyWithdrawals(yr.curBalances, rothWithdrawals);
-                }
+            if (_bNeed > 1 && yr.curBalances.Roth > 0) {
+                const rothWithdrawals = calculateWithdrawals(yr.curBalances, _bNeed, { order: ['Roth'], weight: [1], taxrate: [0] });
+                yr.netWithdrawals = accumulateWithdrawals([yr.netWithdrawals, rothWithdrawals]);
+                applyWithdrawals(yr.curBalances, rothWithdrawals);
             }
         } else if (yr.isOrderedStrategy) {
             const seq = resolveOrderedSeq(inputs.orderedSeq, { capGainsPercentage: yr.capGainsPercentage, capitalGainsRate: sim.capitalGainsRate, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, nominalTaxRate: sim.nominalTaxRate, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate });

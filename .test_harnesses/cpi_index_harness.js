@@ -25,7 +25,7 @@
  * assumed CPI, re-bill under a realized one -- and explicitly dropped feedback as second-order. Here
  * feedback IS the question. Creep moves the bracket ceiling, which moves the withdrawal, which moves
  * the balance, which moves the ruin year. Nothing outside the loop can see that. So optimizer_core.js
- * gained ONE optional input, `cpiFollowsPath`, default OFF, and this harness runs both arms.
+ * gained `fixedTaxIndexing` (default OFF, i.e. path-following), and this harness runs both arms.
  *
  * WHAT THE FLAG DOES NOT TOUCH, AND WHY IT IS CORRECT NOT TO
  *   - gapYears pre-compounding: those years precede the simulation. No path exists there.
@@ -139,6 +139,9 @@ const SHAPES = [
               ss1Age: 70, ss2Age: 70 } },
 ];
 const ASSUMED_CPIS = [0.02, 0.025, 0.03];
+// Felt inflation runs ABOVE the statutory index; the shipped defaults are 3.0 vs 2.8. Every
+// plan below carries that gap, so the statutory clock is the path LESS this, not the path.
+const DEFAULT_SPREAD = 0.002;
 
 const PLANS = [];
 for (const shape of SHAPES)
@@ -147,7 +150,12 @@ for (const shape of SHAPES)
             PLANS.push({
                 key: `${shape.key} ${ceilKey} @${(cpi * 100).toFixed(1)}%`,
                 shape: shape.key, ceiling: ceilKey, cpi,
-                inputs: { ...BASE, ...shape.over, ...CEILINGS[ceilKey], cpi, inflation: cpi },
+                // inflation is NOT set equal to cpi. The two are separate inputs on purpose and
+                // the shipped defaults differ by 0.2 points (inflation 3.0 / cpi 2.8); an earlier
+                // round of this harness set them equal, which silently measured a configuration
+                // no default user runs and hid the spread from the result.
+                inputs: { ...BASE, ...shape.over, ...CEILINGS[ceilKey], cpi,
+                          inflation: cpi + DEFAULT_SPREAD },
             });
 
 // A plan that outlives the bank is the quietest trap here. simulate() runs
@@ -169,8 +177,8 @@ const banks = { scenarioBank: bank.equity, multiAssetBank: bank, synthInflationB
 const nSeq = bank.startYears.length;
 
 // -- One run -------------------------------------------------------------------------------------
-function runOne(planInputs, pathInputs, follows) {
-    const r = simulate({ ...planInputs, ...pathInputs, cpiFollowsPath: follows });
+function runOne(planInputs, pathInputs, fixed) {
+    const r = simulate({ ...planInputs, ...pathInputs, fixedTaxIndexing: fixed });
     const rows = r.log.filter(e => e.year !== undefined);
     const last = r.log[r.log.length - 1];
 
@@ -204,8 +212,8 @@ const t0 = Date.now();
 for (const plan of PLANS) {
     for (let p = 0; p < nSeq; p++) {
         const pathInputs = buildPathInputs(banks, p, YEARS, plan.inputs, 'stress');
-        const control = runOne(plan.inputs, pathInputs, false);
-        const test    = runOne(plan.inputs, pathInputs, true);
+        const control = runOne(plan.inputs, pathInputs, true);    // fixed indexation: today
+        const test    = runOne(plan.inputs, pathInputs, false);   // path-following, less the spread
         // Fail loudly. A degenerate strategy config returns NaN totals rather than throwing (see
         // the note on BASE), and a NaN quietly sorts to one end of every table below and reads as
         // a finding. Nothing here should ever be non-finite.

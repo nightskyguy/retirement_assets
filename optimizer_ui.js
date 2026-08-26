@@ -145,6 +145,11 @@ function applyNerdKnobVisibility() {
     // (.test_harnesses/IRMAA_MARGIN_RESULTS.md). The FORWARD PROJECTION it sits on is NOT gated:
     // that is a correctness fix and applies to every user. Only the choice of margin is hidden,
     // and hiding it leaves the default (IRMAA_MARGIN_DEFAULT, 'halfcpi') in force, not "no margin".
+    // P70e. Fixed tax indexing - a DIAGNOSTIC, not a modeling choice, so it stays behind the knob.
+    // Leaving it hidden leaves it OFF, which is the correct model (the tax code follows realized
+    // inflation, as the IRS and SSA do), not a fallback.
+    const fixedIdxWrap = document.getElementById('fixedTaxIndexing-wrap');
+    if (fixedIdxWrap) fixedIdxWrap.style.display = NERD_KNOBS ? '' : 'none';
     const irmaaMarginWrap = document.getElementById('irmaaMarginMode-wrap');
     if (irmaaMarginWrap) irmaaMarginWrap.style.display = NERD_KNOBS ? '' : 'none';
     // 💵 legend - only meaningful once nerdknob is sweeping the cash-funded arm
@@ -573,6 +578,7 @@ function getInputs() {
         cyclicOrder:   val('cyclicOrder') ?? 'ira-first',
         cycleLTCGTarget: +(val('cycleLTCGTarget') ?? 0.15),
         irmaaMarginMode: val('irmaaMarginMode') || IRMAA_MARGIN_DEFAULT,
+        fixedTaxIndexing: !!valChecked('fixedTaxIndexing'),
         // Account Composition (equity/bond ratio selects + intl equity % inputs)
         comp_IRA1_ratio: +val('comp_IRA1_ratio'),
         comp_IRA1_intl: +val('comp_IRA1_intl'),
@@ -4478,7 +4484,7 @@ const OPT_LONG_TO_SHORT = {
     spendGoal:'sg', spendChange:'sc', strategy:'str', nYears:'ny',
     propWithdraw:'pw', stratRate:'sr', iraWithdrawPct:'iwp', orderedSeq:'os', rothGapFill:'rgf',
     convertExcessToRoth:'mc', fundConversionWithCash:'fcc', extraConversionAmount:'eca', iraBaseGoal:'ibg',
-    convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm',
+    convEndYear:'cey', convEndMode:'cem', irmaaMarginMode:'imm', fixedTaxIndexing:'fti',
     birthyear1:'by1', birthmonth1:'bm1', die1:'d1', startAge:'sa',
     birthyear2:'by2', birthmonth2:'bm2', die2:'d2', hasSpouse:'hs',
     IRA1:'i1', IRA2:'i2', Roth:'ro', Roth2:'ro2',
@@ -4933,7 +4939,7 @@ function applyScenario(data) {
                 // the highest real ceiling rather than sitting on an option the menu disables.
                 clampStratRateSelection(element);
             } else {
-                if (['convertExcessToRoth', 'fundConversionWithCash', 'pensionCola', 'dividendReinvest', 'cyclicEnabled'].includes(key)) {
+                if (['convertExcessToRoth', 'fundConversionWithCash', 'pensionCola', 'dividendReinvest', 'cyclicEnabled', 'fixedTaxIndexing'].includes(key)) {
                     element.checked = !!value;
                 } else if (DOLLAR_INPUT_IDS.has(key)) {
                     DisplayHelpers.setDollarValue(key, value);
@@ -4968,6 +4974,7 @@ function applyScenario(data) {
     // programmatically does NOT fire those handlers, so the "Real Growth" line, age/RMD readouts,
     // bracket dropdown, and other hints would otherwise show stale values after a scenario load.
     if (typeof updateGrowthDisplay === 'function') updateGrowthDisplay();      // Real Growth under Growth field (uses growth, inflation, dividendRate)
+    if (typeof updateCpiSpreadDisplay === 'function') updateCpiSpreadDisplay(); // CPI/Inflation spread under the two rate fields
     if (typeof syncMCMuFromGrowth === 'function') syncMCMuFromGrowth();        // MC μ tracks Growth
     if (typeof updateProfileAgeDisplay === 'function') updateProfileAgeDisplay(); // ages / RMD start / projected RMD
     if (typeof refreshStratRateOptions === 'function') refreshStratRateOptions(); // bracket/IRMAA labels (CPI + filing status)
@@ -5385,6 +5392,37 @@ function updateGrowthDisplay() {
     }
 
     el.innerHTML = html;
+}
+
+/**
+ * P70. Shows the gap between the two rate inputs, because that gap IS the inflation model and
+ * nothing on the page said so.
+ *
+ * CPI and Inflation are separate fields on purpose: the statutory index (CPI-W for Social Security,
+ * chained CPI-U for brackets) runs below felt inflation, and for a retired household the difference
+ * is largely medical weighting. Under Monte Carlo the drawn path supplies general inflation and the
+ * tax code is indexed at that path LESS this spread, so a reader who never notices the gap cannot
+ * account for why their brackets creep in real terms.
+ *
+ * Names the direction, not just the number - "0.20 pts" alone does not say which way. Handles the
+ * sign both ways; entering a CPI above Inflation is legal and someone testing a scenario will do it.
+ */
+function updateCpiSpreadDisplay() {
+    const el = document.getElementById('cpi-spread-info');
+    if (!el) return;
+    const inflation = parseFloat(document.getElementById('inflation')?.value);
+    const cpi       = parseFloat(document.getElementById('cpi')?.value);
+    if (isNaN(inflation) || isNaN(cpi)) { el.innerHTML = ''; return; }
+
+    const gap = Math.abs(cpi - inflation).toFixed(2);
+    const rel = cpi < inflation ? 'below' : cpi > inflation ? 'above' : null;
+    const lead = rel === null
+        ? `CPI and Inflation are equal, so the tax code is indexed at the same rate prices rise.`
+        : `CPI runs <strong>${gap} pts ${rel}</strong> Inflation.`;
+    el.innerHTML = lead
+        + ` <span style="color:#888;">Brackets, IRMAA tiers and Social Security follow CPI;`
+        + ` spending follows Inflation. Under Monte Carlo the tax code is indexed at each path's own`
+        + ` inflation, carrying this same gap.</span>`;
 }
 
 /**

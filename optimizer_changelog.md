@@ -17,26 +17,32 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.165B"></a>
+<a id="11.165D"></a>
 
-## 11.165B
+## 11.165D
 
-### Fill Bracket plans load as the plan you saved
+### Taxes now follow the inflation your plan actually gets
 
-**Behavior change.** A saved plan or shared link using **Fill Bracket** came back with its ceiling
-reset to "Below IRMAA" instead of the bracket it was saved with, so it ran a different strategy
-than the one on screen when it was saved. Reload any such plan to get your own ceiling back, and
-expect different numbers from the ones the reset plan was producing.
+**Behavior change. Every Monte Carlo and Stress Test result moves, and your saved plan will not
+reproduce the numbers it showed before.**
 
-Choosing the top federal bracket as the ceiling also produced no plan at all: every figure on the
-page read `$NaN`. That bracket has no upper limit, so there was nothing for the strategy to fill
-up to.
+Each Monte Carlo path has always given your spending its own inflation, but the tax code stayed
+frozen at the CPI you typed, so a path running hot pushed your income through brackets that never
+moved. Brackets, IRMAA tiers, the ACA cap, the QCD limit and Social Security COLA now follow each
+path, indexed one year behind the inflation that sets them, the way the IRS and Social Security
+actually do it. Plans that showed money running out in a high-inflation path may now survive it.
 
-The ceiling menu now ends at the highest bracket that has a top. The top federal bracket stays in
-the list, greyed and not selectable, showing the income where it begins rather than a limit it does
-not have: "37% Fed - $790,225+". The top IRMAA tier is listed the same way, so the point where the
-IRMAA ladder runs out is visible beside the tiers you can aim at. A plan saved on the top bracket
-loads at the highest real ceiling below it.
+CPI and Inflation stay separate, and the gap between them now does real work: the tax code is
+indexed at each path's inflation less that gap. A new line under the two fields names it, so you
+can see which way it runs and by how much. A pension COLA now follows CPI, as Social Security
+already did.
+
+Also fixed: choosing **Fill Bracket** at the top federal bracket produced no plan at all, with every
+figure reading `$NaN`. That bracket has no upper limit, so there was nothing to fill up to. The
+ceiling menu now ends at the highest bracket that has a top; the top federal bracket and the top
+IRMAA tier stay listed, greyed, showing the income where they begin. And a saved plan using Fill
+Bracket came back with its ceiling reset to "Below IRMAA" instead of the bracket you chose, so it
+ran a different strategy than the one you saved. Reload any such plan to get your own ceiling back.
 
 ---
 

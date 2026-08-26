@@ -4162,65 +4162,154 @@ test('unbounded ceilings simulate instead of returning NaN', () => {
         assert(finiteOf({ stratRate: 0, stratIRMAATier: t }), `IRMAA tier ${t} still simulates`);
 });
 
-// ── P70: cpiFollowsPath, the opt-in path-following bracket indexation ─────────
-// The flag exists so cpi_index_harness.js can measure whether fixed indexation overstates tax on
-// high-inflation paths. It is OFF everywhere in the product, so the first test is the one that
-// matters most: it must be impossible for the flag to have changed anything by default.
+// ── P70: the inflation model - two clocks, an offset, and a one-year lag ──────
 //
-// CREEP_BASE cannot be used directly: it inherits BASE's cpi of 0 and ss1 of 0, which would make
-// the indexation clock a constant 1 and leave the SS assertion below with nothing to measure.
-const CPIIDX_BASE = { ...CREEP_BASE, cpi: 0.02, inflation: 0.02, ss1: 40000, ss1Age: 67, die1: 95 };
-const CPIIDX_N = 40;
-const CPIIDX_RETURNS = Array.from({ length: CPIIDX_N }, (_, i) => 0.04 + (i % 5) * 0.01);
-// Deliberately far above the typed 2%, so anything reading the wrong clock diverges visibly.
-const CPIIDX_INFL = Array.from({ length: CPIIDX_N }, (_, i) => 0.06 + (i % 4) * 0.02);
+// CPI and Inflation are separate inputs ON PURPOSE. The statutory index (CPI-W for COLA, chained
+// CPI-U for brackets) runs below felt inflation; defaults are inflation 3.0 / cpi 2.8. So a Monte
+// Carlo path supplies GENERAL inflation and the statutory index is that path less the typed spread.
+//
+// CREEP_BASE inherits BASE's cpi 0 / ss1 0, which would make every factor a constant 1 and leave the
+// SS assertions with nothing to measure.
+const CLOCK_BASE = { ...CREEP_BASE, cpi: 0.028, inflation: 0.030, ss1: 40000, ss1Age: 67, die1: 95 };
+const CLOCK_N    = 40;
+const CLOCK_RET  = Array.from({ length: CLOCK_N }, (_, i) => 0.04 + (i % 5) * 0.01);
+// Lumpy on purpose: 1% to 13%, so a wrong clock cannot hide behind a smooth series.
+const CLOCK_INFL = Array.from({ length: CLOCK_N }, (_, i) => 0.01 + ((i * 7) % 11) * 0.012);
+const clockRows  = res => res.log.filter(e => e.year !== undefined);
 
-test('cpiFollowsPath: off by default, and an explicit false is byte-identical (regression guard)', () => {
-    const returnSequence = CPIIDX_RETURNS, inflationSequence = CPIIDX_INFL;
-    const bare     = simulate({ ...CPIIDX_BASE, returnSequence, inflationSequence });
-    const explicit = simulate({ ...CPIIDX_BASE, returnSequence, inflationSequence, cpiFollowsPath: false });
-    assert(JSON.stringify(bare.log) === JSON.stringify(explicit.log),
-        'an explicit cpiFollowsPath:false must produce the exact same log as omitting the field');
-    assert(JSON.stringify(bare.totals) === JSON.stringify(explicit.totals),
-        'an explicit cpiFollowsPath:false must produce the exact same totals as omitting the field');
-    // And with the flag off the indexation clock ignores the path entirely: every year's cpiFactor
-    // is the typed cpi compounded, whatever the path did.
-    let cum = 1;
-    for (const r of bare.log.filter(e => e.year !== undefined)) {
-        assertNear(r['-cpiFactor'], cum, 'cpiFactor tracks the typed cpi when the flag is off', 1e-9);
-        cum *= (1 + CPIIDX_BASE.cpi);
+test('P70: a deterministic run is inert under the spread model, at any (cpi, inflation)', () => {
+    // THE load-bearing property. With no inflationSequence the drawn inflation IS inputs.inflation,
+    // so cpi_t = inputs.inflation + (cpi - inflation) = inputs.cpi exactly. Every deterministic plan
+    // must therefore be untouched, with no special case - and fixedTaxIndexing must be a no-op there
+    // rather than a second code path that happens to agree.
+    for (const [inflation, cpi] of [[0.030, 0.028], [0.025, 0.025], [0.020, 0.035], [0.050, 0.020]]) {
+        const args = { ...CLOCK_BASE, inflation, cpi };
+        const bare  = simulate({ ...args });
+        const onFix = simulate({ ...args, fixedTaxIndexing: true });
+        const offFix= simulate({ ...args, fixedTaxIndexing: false });
+        const tag = `inflation ${inflation} / cpi ${cpi}`;
+        assert(JSON.stringify(bare.log) === JSON.stringify(onFix.log),
+            `${tag}: fixedTaxIndexing:true must not move a deterministic run`);
+        assert(JSON.stringify(bare.log) === JSON.stringify(offFix.log),
+            `${tag}: fixedTaxIndexing:false must not move a deterministic run`);
+        // And the index really is the typed cpi compounded, not the typed inflation.
+        let cum = 1;
+        for (const r of clockRows(bare)) {
+            assertNear(r['-cpiFactor'], cum, `${tag}: cpiFactor tracks the typed cpi`, 1e-9);
+            cum *= (1 + cpi);
+        }
     }
 });
 
-test('cpiFollowsPath: on, the tax code is indexed by the path, not by the typed rate', () => {
-    const returnSequence = CPIIDX_RETURNS, inflationSequence = CPIIDX_INFL;
-    const args = { ...CPIIDX_BASE, returnSequence, inflationSequence };
-    const fixed = simulate({ ...args });
-    const path  = simulate({ ...args, cpiFollowsPath: true });
+test('P70: under a path the index follows inflation MINUS the spread, never the bare path', () => {
+    const inflation = 0.030, cpi = 0.028, spread = cpi - inflation;
+    const res = simulate({ ...CLOCK_BASE, inflation, cpi,
+                           returnSequence: CLOCK_RET, inflationSequence: CLOCK_INFL });
+    const rows = clockRows(res);
 
-    const fRows = fixed.log.filter(e => e.year !== undefined);
-    const pRows = path.log.filter(e => e.year !== undefined);
-
-    // The path inflates at 6-10% against a typed 2%, so the indexation clock must run well ahead.
-    const lastF = fRows[fRows.length - 1], lastP = pRows[pRows.length - 1];
-    assert(lastP['-cpiFactor'] > lastF['-cpiFactor'] * 2,
-        `path indexation should run far ahead: ${lastP['-cpiFactor']} vs ${lastF['-cpiFactor']}`);
-    // cpiFactor must equal the compounded PATH, year for year.
-    let cum = 1;
-    for (let i = 0; i < pRows.length; i++) {
-        assertNear(pRows[i]['-cpiFactor'], cum, `year ${i}: cpiFactor tracks the path`, 1e-9);
-        cum *= (1 + inflationSequence[i]);
+    let want = 1, bare = 1;
+    for (let i = 0; i < rows.length; i++) {
+        assertNear(rows[i]['-cpiFactor'], want, `year ${i}: cpiFactor is the path plus the spread`, 1e-9);
+        want *= (1 + CLOCK_INFL[i] + spread);
+        bare *= (1 + CLOCK_INFL[i]);
     }
-    // The point of it: the bracket ceiling the plan aims at rises with the path rather than
-    // standing still in real terms. Checked on the last year, where the two clocks are furthest apart.
-    assert(lastP.goalFedBracketLimit === undefined || lastP.goalFedBracketLimit >= lastF.goalFedBracketLimit,
-        'the federal bracket limit must not be lower under path-following indexation');
-    // Social Security rides the same clock, so it rises too - that is the offset the study measures.
-    assert(sumCol(path, 'SSincome') > sumCol(fixed, 'SSincome'),
-        'SS COLA follows cpiRate, so path-following must pay more nominal SS');
-    // The flag is not inert: something in the tax outcome moved.
+    // The spread must SURVIVE. An earlier flag set the index to the bare path, which silently threw
+    // away the CPI/inflation gap and handed every plan higher thresholds as an artifact.
+    assert(Math.abs(rows[rows.length - 1]['-cpiFactor'] - bare) > 1e-6,
+        'the index must not collapse onto the bare path - that discards the typed spread');
+    assert(rows[rows.length - 1]['-cpiFactor'] < bare,
+        'with cpi below inflation the index must run BELOW the price level');
+});
+
+test('P70: the indexation lag - year t+1 is set from year t inflation', () => {
+    // Not incidental. The IRS sets a year's brackets from a 12-month average ending the PREVIOUS
+    // August, and SSA from the previous Q3. Compounding at the top of the year instead of the bottom
+    // would hand the tax code a year of foresight, and nothing else here would notice.
+    const inflation = 0.030, cpi = 0.028, spread = cpi - inflation;
+    const rows = clockRows(simulate({ ...CLOCK_BASE, inflation, cpi,
+                                      returnSequence: CLOCK_RET, inflationSequence: CLOCK_INFL }));
+    assertNear(rows[0]['-cpiFactor'], 1, 'year 0 runs on unindexed, present-day brackets', 1e-12);
+    for (let t = 0; t + 1 < rows.length; t++) {
+        assertNear(rows[t + 1]['-cpiFactor'], rows[t]['-cpiFactor'] * (1 + CLOCK_INFL[t] + spread),
+            `year ${t + 1} is indexed by year ${t}'s inflation, not its own`, 1e-9);
+    }
+});
+
+test('P70: fixedTaxIndexing pins the tax code while spending still follows the path', () => {
+    const args = { ...CLOCK_BASE, returnSequence: CLOCK_RET, inflationSequence: CLOCK_INFL };
+    const path  = simulate({ ...args });
+    const fixed = simulate({ ...args, fixedTaxIndexing: true });
+    const pr = clockRows(path), fr = clockRows(fixed);
+
+    // Frozen: the index is the typed cpi compounded, whatever the path did.
+    let cum = 1;
+    for (const r of fr) { assertNear(r['-cpiFactor'], cum, 'fixed mode pins the index', 1e-9); cum *= (1 + CLOCK_BASE.cpi); }
+    // Not frozen: spending rides the path in BOTH arms, so the two runs share an inflation history.
+    for (let i = 0; i < Math.min(pr.length, fr.length); i++) {
+        assert(pr[i]['infl%'] === fr[i]['infl%'] && pr[i]['infl%'] === CLOCK_INFL[i],
+            `year ${i}: spending inflation follows the path in both arms`);
+        assertNear(pr[i].inflationFactor, fr[i].inflationFactor, `year ${i}: the price level is untouched by the mode`, 1e-9);
+    }
+    // And it is a real diagnostic, not a no-op: the tax outcome moves.
     assert(sumCol(path, 'totalTax') !== sumCol(fixed, 'totalTax'),
-        'path-following indexation must change the tax actually paid');
+        'pinning the tax code must change the tax paid under a variable path');
+});
+
+test('P70: every indexed quantity tracks its declared clock', () => {
+    // The guard for the whole class. Each quantity below is on the STATUTORY clock or the PRICE
+    // LEVEL, and the way to tell them apart is to run two plans whose typed rates differ and check
+    // which number moved. Without this the next quantity added picks a clock by whatever is in
+    // scope, which is how every defect in this phase arrived.
+    const base = { ...CLOCK_BASE, IRA1: 2000000, spendGoal: 120000,
+                   pensionAnnual: 30000, pensionCola: true, pensionStartAge: 60,
+                   CashReserve: 50000, propTax: 12000, qcdHHMax: 20000 };
+    // Same felt inflation, different statutory index. Anything that moves is on cpiRate.
+    const lowCpi  = simulate({ ...base, inflation: 0.03, cpi: 0.01 });
+    const highCpi = simulate({ ...base, inflation: 0.03, cpi: 0.05 });
+    // Same statutory index, different felt inflation. Anything that moves is on sim.inflation.
+    const lowInf  = simulate({ ...base, inflation: 0.01, cpi: 0.03 });
+    const highInf = simulate({ ...base, inflation: 0.05, cpi: 0.03 });
+
+    const last = res => clockRows(res)[clockRows(res).length - 1];
+    const movesWithCpi  = f => f(last(lowCpi))  !== f(last(highCpi));
+    const movesWithInfl = f => f(last(lowInf))  !== f(last(highInf));
+
+    // ── statutory clock ──
+    assert(movesWithCpi(r => r['-cpiFactor']), 'the index itself moves with CPI');
+    assert(!movesWithInfl(r => r['-cpiFactor']),
+        'the index must NOT move with felt inflation - that is the two-clock defect');
+    assert(movesWithCpi(r => r.SSincome), 'Social Security COLA is on CPI');
+    assert(!movesWithInfl(r => r.SSincome), 'Social Security COLA is NOT on felt inflation');
+    assert(movesWithCpi(r => r.pension), 'a pension COLA is on CPI');
+    assert(!movesWithInfl(r => r.pension),
+        'a pension COLA must not ride felt inflation - Social Security does not');
+
+    // The bracket ceiling needs a strategy that computes one; CLOCK_BASE inherits 'fixed'. Read
+    // BracketTarget, the ceiling the strategy actually aims at - goalFedBracketLimit is a `yr`
+    // object and never reaches the log, so asserting on it compares undefined to undefined and
+    // passes for the wrong reason.
+    const brk = o => {
+        const rows = clockRows(simulate({ ...base, strategy: 'bracket', stratRate: 0.22,
+                                          stratIRMAATier: -1, stratACAMultiple: 0, ...o }));
+        return rows[rows.length - 1].BracketTarget;
+    };
+    const brkLowCpi = brk({ inflation: 0.03, cpi: 0.01 });
+    assert(Number.isFinite(brkLowCpi) && brkLowCpi > 0, 'the bracket-strategy fixture must actually report a ceiling');
+    assert(brkLowCpi !== brk({ inflation: 0.03, cpi: 0.05 }), 'bracket limits are on CPI');
+    assert(brk({ inflation: 0.01, cpi: 0.03 }) === brk({ inflation: 0.05, cpi: 0.03 }),
+        'bracket limits must NOT move with felt inflation - that is the two-clock defect');
+
+    // ── both clocks, by design ──
+    // The sidebar tooltip promises Medicare/IRMAA dollars grow at "CPI + Inflation combined, not
+    // CPI alone", so this is the one quantity that must respond to each of them.
+    assert(movesWithCpi(r => r.Medicare) && movesWithInfl(r => r.Medicare),
+        'Medicare premium growth rides CPI + Inflation together');
+
+    // ── price level ──
+    assert(movesWithInfl(r => r.spendGoal), 'the spending goal is on felt inflation');
+    assert(!movesWithCpi(r => r.spendGoal), 'the spending goal is NOT on CPI');
+    assert(movesWithInfl(r => r.inflationFactor), 'the price level is on felt inflation');
+    assert(!movesWithCpi(r => r.inflationFactor), 'the price level is NOT on CPI');
 });
 
 // ── PR1: break-even heirs rate + time-limited conversions ─────────────────────

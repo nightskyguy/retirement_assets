@@ -154,3 +154,35 @@ a log full of nulls, silently. The first version of this harness inherited that 
 with a tier - and produced a full page of plausible-looking zero deltas before the NaN was spotted.
 The harness now asserts every arm's totals are finite. The engine behavior is unchanged and out of
 scope for P70.
+
+## RE-RUN 2026-08-26, carrying the default CPI spread
+
+The first round set `inflation: cpi` in every plan, which zeroed the CPI/inflation gap. That is a
+configuration no default user runs: the two are separate inputs on purpose and the shipped defaults
+differ by 0.2 points (inflation 3.0 / cpi 2.8), with the statutory index BELOW felt inflation. Every
+plan now carries that gap, and the statutory clock is the drawn path LESS it.
+
+| | first round (no spread) | with the 0.2 pt spread |
+|---|---|---|
+| lifetime tax, all 780 pairs | -8.32% | **-5.72%** |
+| ruined -> survives | 38 | **36** |
+| survives -> ruined | 0 | **0** |
+| IRMAA surcharge years | -10.56% | **-9.15%** |
+| IRMAA dollars | -6.51% | **+29.05%** |
+
+The tax effect damps by about a third, as it must: the index now rises more slowly than the price
+level, so thresholds move up less. The direction and the asymmetry are unchanged - fixed indexation
+still invents plan failures and never prevents one.
+
+**The IRMAA dollar figure REVERSES, and that is the finding to carry forward.** Surcharge years still
+fall, but the dollars rise 29%. `medicareRate` compounds `cpi_t + i_t` and both terms now follow the
+path, so in a high-inflation window the premium each remaining surcharge is priced against inflates
+far faster than it did against two fixed scalars. Fewer surcharged years, each much more expensive.
+
+This follows the sidebar tooltip literally ("Medicare/IRMAA dollar amounts grow at CPI + Inflation
+combined"), but it is worth stating what that means under a path: the `+ Inflation` term was
+calibrated as roughly 3 points of excess medical cost on top of a ~3% CPI, and making it
+proportional turns a 12% inflation year into ~24% premium growth. An alternative reading -
+`cpi_t + inputs.inflation`, path CPI plus a FIXED excess-medical spread - would keep the excess at
+3 points and is arguably the more defensible model. It is a one-line change and has not been made;
+the literal reading is what shipped.

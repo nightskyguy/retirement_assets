@@ -98,13 +98,24 @@ function taxCreepFactor(rate, currentYear, startYear) {
 //   'custom'              - an explicit rate, as a FRACTION like every other rate in this file. This is
 //                           the California Proposition 13 case (2% assessment cap) and the
 //                           reassessment-heavy case, neither of which is general inflation.
-function propTaxFor(inputs, currentYear, baseYear) {
+// P70d. `inflationFactor` is sim.inflation - the REALIZED price level, already compounded from the
+// real current year (its gapYears seed uses the same base as propTaxBaseYear, so the two anchors
+// agree). The 'inflation' mode reads it directly instead of re-raising inputs.inflation to a power,
+// which is what left property tax on a fixed rate while spendGoal - the other today's-dollars input,
+// escalated by the same idea - followed the Monte Carlo path.
+//
+// 'flat' and 'custom' still compound from the base year, and must: they are user POLICY rates (a
+// nominal-constant bill, or a Proposition 13 assessment cap), not the price level, so a path has
+// nothing to say about them.
+function propTaxFor(inputs, currentYear, baseYear, inflationFactor = null) {
     const base = +inputs.propTax || 0;
     if (base <= 0) return 0;                      // the default, and a guaranteed no-op
     const mode = inputs.propTaxGrowthMode || 'inflation';
-    const g = mode === 'flat'   ? 0
-            : mode === 'custom' ? (+inputs.propTaxGrowthRate || 0)
-            :                     (+inputs.inflation || 0);
+    if (mode !== 'flat' && mode !== 'custom') {
+        return base * (inflationFactor ?? Math.pow(1 + (+inputs.inflation || 0),
+                                                   Math.max(0, currentYear - baseYear)));
+    }
+    const g = mode === 'flat' ? 0 : (+inputs.propTaxGrowthRate || 0);
     return base * Math.pow(1 + g, Math.max(0, currentYear - baseYear));
 }
 
@@ -834,7 +845,24 @@ function nominalRateAtLimit(entity, status, limit, inflation, rateCreep = 1) {
     return calculateProgressive(entity, status, limit, inflation, rateCreep).cumulative / limit;
 }
 
-function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1) {
+// P70b. This took a fourth argument, `inflation`, and handed it to the average-rate lookups while
+// the ceiling itself was placed with `cpiRate`. Both index the SAME bracket table, and the callers
+// passed `sim.inflation` for one and `sim.cpiRate` for the other - so the strategy priced its
+// accounts against brackets sitting where the SPENDING clock put them, then paid tax on brackets
+// sitting where the STATUTORY clock put them.
+//
+// Invisible whenever the two typed rates are equal, which is why it survived. They are separate
+// inputs on purpose and the shipped defaults already differ (inflation 3.0 / cpi 2.8), so it was
+// live for everyone: about -1.1% federal and -1.4% state on the average rate at a 24% ceiling by
+// year 30, growing with the gap.
+//
+// The parameter is GONE rather than renamed. A bracket table has exactly one correct index, so a
+// second one to pass is a second chance to pass the wrong one.
+//
+// The invariant that catches this whole class, and the test that pins it: the average rate at a
+// fixed ceiling is INVARIANT ACROSS YEARS. A ceiling names the same real position in the table
+// every year, so its average rate cannot drift. It drifts only when two clocks disagree.
+function computeBracketCeiling(inputs, status, cpiRate, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1) {
     let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
 
     if ((inputs.stratIRMAATier ?? -1) >= 0) {
@@ -858,10 +886,10 @@ function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, ag
         // findUpperLimitByAmount reads the statutory rate straight off the bracket table and never
         // passes through calculateProgressive, so the creep has to be applied here by hand.
         marginalFedTaxRate = fedAtLimit.rate * fedRateCreep;
-        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, inflation, fedRateCreep);
+        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, cpiRate, fedRateCreep);
         const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
         marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
-        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, inflation, stateRateCreep);
+        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
     } else if ((inputs.stratACAMultiple ?? 0) > 0) {
         // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
         // NO AGE TEST HERE, ON PURPOSE. The IRMAA branch above can degrade in place (drop the tier
@@ -875,23 +903,23 @@ function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, ag
         limit = Math.round(FPL_2025 * inputs.stratACAMultiple / 100 * cpiRate * (1 + inputs.cpi)) - 1;
         const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
         marginalFedTaxRate = fedAtLimit.rate * fedRateCreep;
-        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, inflation, fedRateCreep);
+        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, cpiRate, fedRateCreep);
         const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
         marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
-        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, inflation, stateRateCreep);
+        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
     } else {
         // Federal bracket ceiling mode (original logic)
         // stratRate names a bracket ("fill the 22% bracket"), which is a threshold concept - the
         // lookup stays on statutory rates so the ceiling doesn't move when rates creep.
         let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
         limit = fedLimit.limit;
-        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, inflation, fedRateCreep);
+        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, cpiRate, fedRateCreep);
         marginalFedTaxRate = fedLimit.rate * fedRateCreep;
 
         let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
         marginalStateTaxRate = stLimit.rate * stateRateCreep;
         stateLimit = stLimit.limit;
-        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, inflation, stateRateCreep);
+        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, cpiRate, stateRateCreep);
 
         limit = Math.min(stateLimit, limit);
 
@@ -1155,8 +1183,15 @@ function beginYear(sim, yr) {
     }
     // IRA Goal is entered in today's dollars (matches the today's-dollar "Suggested IRA Goal"
     // hint and the inflation-indexed tax/IRMAA/ACA thresholds the goal is meant to manage).
-    // Inflate it to this year's nominal dollars with cpiRate = (1+cpi)^(gapYears+y), the same
-    // factor the bracket/IRMAA/ACA ceilings use, before comparing against nominal IRA balances.
+    // Inflate it to this year's nominal dollars with cpiRate, the same factor the bracket/IRMAA/ACA
+    // ceilings use, before comparing against nominal IRA balances.
+    //
+    // P70d re-examined which clock this belongs on and DELIBERATELY LEFT IT on cpiRate, so the next
+    // reader does not have to guess whether that was considered. The argument for the spending clock
+    // is that a balance target is wealth, not a tax threshold. The argument that wins is purpose:
+    // this goal exists to keep the IRA small enough that its RMDs clear under a bracket, an IRMAA
+    // tier or an ACA cap - all of which move on cpiRate. Indexing the goal on a faster clock than
+    // the ceilings it is aimed at would make it drift out from under them.
     yr.iraGoalNominal = inputs.iraBaseGoal * sim.cpiRate;
     sim.fixedWithdrawal = calculateAmortizedWithdrawal(balance.IRA1 + balance.IRA2, yr.iraGoalNominal, amortYears, inputs.growth)
 
@@ -1245,7 +1280,7 @@ function resolveHousehold(sim, yr) {
     yr.saltHigh = sim.currentYear <= TAXData.OBBBA.SALT.sunsetYear;
     // Same failure mode, same fix: propTax is the third parameter calculateTaxes accepts and no
     // caller here supplied. Zero by default, so a plan that does not enter one is unchanged.
-    yr.propTax  = propTaxFor(inputs, sim.currentYear, sim.propTaxBaseYear);
+    yr.propTax  = propTaxFor(inputs, sim.currentYear, sim.propTaxBaseYear, sim.inflation);
     // P64d. The SALT cap and its phase-out threshold step up 1%/yr from a 2025 base, so the engine
     // has to know which tax year it is pricing. Without it every year silently gets the 2025 figures.
     yr.taxYear  = sim.currentYear;
@@ -1364,7 +1399,10 @@ function computeIncome(sim, yr) {
     yr.s1 = yr.alive1 ? potentialS1 : 0;
     yr.s2 = yr.alive2 ? potentialS2 : 0;
     yr.pension = (yr.age1 >= (inputs.pensionStartAge || 0))
-        ? inputs.pensionAnnual * (inputs.pensionCola ? sim.inflation : 1)
+        // P70d. sim.cpiRate, not sim.inflation. A COLA is an adjustment tied to a PUBLISHED
+        // index, which is what the CPI input represents here - and Social Security, the other
+        // COLA in this plan, has always ridden cpiRate. Two COLAs on two clocks had no reason.
+        ? inputs.pensionAnnual * (inputs.pensionCola ? sim.cpiRate : 1)
         : 0;
 
     // One is deceased (if both decease, it won't get here)
@@ -1477,7 +1515,11 @@ function computeIncome(sim, yr) {
 
     // QCDs: leave IRA tax-free to charity (age 70.5+). Satisfy RMDs without adding to taxable income/MAGI.
     // Provisional MAGI estimate (IRA withdrawals unknown here; uses pension+RMD+SS+interest/divs).
-    const qcdLimit = getQCDLimit(sim.currentYear, inputs.cpi);
+    // P70d. sim.cpiRate (a FACTOR), not inputs.cpi (a rate) re-raised to a power inside the
+    // helper. TAXData.QCD.AMOUNT is stated in QCD.YEAR dollars and cpiRate is anchored at the
+    // same real current year, so this is the identical exponent under a fixed rate and the only
+    // correct one under a path. Same convention as every bracket lookup (`b.l * cpiRate`).
+    const qcdLimit = getQCDLimit(sim.cpiRate);
     const provisionalMAGI = yr.taxableInc + yr.rmd1 + yr.rmd2 + 0.85 * (yr.s1 + yr.s2) + yr.taxableInterest + yr.taxableDividends;
     const _qcds = computeAnnualQCDs(inputs, balance, sim.currentYear, qcdLimit, provisionalMAGI, sim.cpiRate, yr.alive1, yr.alive2, yr.status);
     yr.qcd1 = _qcds.qcd1;
@@ -1737,7 +1779,7 @@ function planPrimaryWithdrawals(sim, yr) {
                 // year, so compute it fresh here rather than reading a stale/undefined `limit`.
                 // yr.isACAStrategy, not inputs.strategy: a lapsed ACA year has no ceiling to
                 // respect, and computeBracketCeiling would still hand back the FPL cap if asked.
-                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate).limit;
+                const _ceil = computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate).limit;
                 _room = Math.min(_room, Math.max(0, _ceil - ordFloor));
             }
             return Math.max(yr.additionalSpendNeeded, _room * (1 - yr.capGainsPercentage * sim.capitalGainsRate));
@@ -1749,7 +1791,7 @@ function planPrimaryWithdrawals(sim, yr) {
                 // Same ceiling call and field assignments as the family's own branch below, so a
                 // coexist harvest year looks to downstream passes like the family branch ran.
                 ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate));
+                    computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate));
                 yr.bracketTarget = yr.limit;
                 let _iraRoom = Math.max(0, yr.limit - _baseOrdinaryInc);
                 const _magiShaped = (inputs.stratIRMAATier ?? -1) >= 0
@@ -1816,7 +1858,7 @@ function planPrimaryWithdrawals(sim, yr) {
     // to the baseline `else` below - Proportional 0%, which is the intended successor.
     } else if (inputs.strategy === 'bracket' || inputs.strategy === 'minlimit' || yr.isACAStrategy) {
         ({ limit: yr.limit, marginalFedTaxRate: yr.marginalFedTaxRate, marginalStateTaxRate: yr.marginalStateTaxRate, nominalFedTaxRateAtLimit: yr.nominalFedTaxRateAtLimit, nominalStateTaxAtLimit: yr.nominalStateTaxAtLimit, stateLimit: yr.stateLimit } =
-            computeBracketCeiling(inputs, yr.status, sim.cpiRate, sim.inflation, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate));
+            computeBracketCeiling(inputs, yr.status, sim.cpiRate, STATEname, yr.age1, yr.age2, yr.alive1, yr.alive2, yr.IRMAALimit, yr.fedRateCreep, yr.stateRateCreep, sim.medicareRate));
 
         yr.bracketTarget = yr.limit;
 
@@ -2942,38 +2984,62 @@ function endYear(sim, yr) {
 
     sim.currentYear += 1;
 
-    // Adjust inflation rates for subsequent rounds.
+    // Advance the two clocks for the following year. THIS is where P70's one-year indexation lag
+    // comes from, and it is not incidental: brackets for year t+1 are set from the inflation
+    // realized in year t, which is what the IRS and SSA actually do (a 12-month average ending
+    // August for brackets, Q3 CPI-W for COLA). Moving either line to the top of the year would
+    // silently give the tax code a year of foresight.
     //
-    // P70. Two clocks, and which one indexes the tax code is the question this flag exists to
-    // measure. `sim.inflation` has always followed the PATH (inputs.inflationSequence, per Monte
-    // Carlo path); `sim.cpiRate` - which indexes federal and state bracket limits, the LTCG
-    // brackets, IRMAA thresholds, the ACA FPL multiple, the IRA goal, QCD sizing and Social
-    // Security COLA - has always advanced at the FIXED inputs.cpi. So a path escalating spending
-    // at 11% indexes its brackets at 2.5%: artificial real bracket creep, in exactly the paths
-    // that decide a plan's fate. The SS side of cpiRate pushes the other way (that path also
-    // understates SS income), so the net sign is not obvious, which is why P70a measures before
-    // anything changes by default.
+    // TWO clocks, and they mean different things ON PURPOSE - the sidebar has both as inputs and
+    // the tooltips say so:
     //
-    // cpiFollowsPath is OFF by default: every existing run stays byte-identical. Real-world note
-    // for whoever decides the default - the IRS indexes brackets by realized chained CPI and SSA
-    // indexes COLA by realized CPI-W, so path-following is the realistic model, not the exotic one.
+    //   sim.inflation  general/felt price inflation. Escalates spending.
+    //   sim.cpiRate    the STATUTORY index. Places federal and state bracket limits, the standard
+    //                  deduction, LTCG brackets, IRMAA thresholds, the ACA FPL multiple, the QCD
+    //                  limit, Social Security COLA and a pension COLA.
     //
-    // NOT covered by this flag, deliberately:
-    //   - the gapYears pre-compounding in simulate(). Those years precede the simulation; no path
-    //     exists there.
-    //   - irmaaFwdFactor() and the ACA one-year lookahead in computeBracketCeiling(). Those are the
-    //     plan FORECASTING an index it cannot know. Path-aware indexation does not hand a plan
-    //     clairvoyance about next year's CPI, so they stay on inputs.cpi under both arms.
-    //   - taxCreepFactor(), which is a function of the calendar year only, by design.
-    //   - propTax, which tracks inputs.inflation rather than cpi.
+    // The statutory index runs BELOW felt inflation - CPI-W for COLA, chained CPI-U for brackets
+    // since TCJA - and for a senior household the gap is largely medical weighting, the thing
+    // CPI-E was invented to track. Defaults are inflation 3.0 / cpi 2.8.
     //
-    // medicareRate follows the same rate, keeping inputs.inflation as the fixed excess-medical
-    // spread: Part B premiums track realized costs, and freezing the premium clock while MAGI runs
-    // would mix two indexation regimes inside one run.
-    const idxRate = inputs.cpiFollowsPath ? yr.yearInflation : inputs.cpi;
-    sim.cpiRate *= (1 + idxRate);
-    sim.inflation *= (1 + yr.yearInflation);
-    sim.medicareRate *= (1 + idxRate + inputs.inflation)
+    // So the model is an OFFSET, not a second draw. A Monte Carlo path supplies general inflation;
+    // the statutory index is that path less the spread the user typed:
+    //
+    //     spread = inputs.cpi - inputs.inflation      (a policy assumption, held constant)
+    //     cpi_t  = i_t + spread
+    //
+    // Additive, because the two input boxes mean a POINT gap and the tooltips describe one. The
+    // chained-CPI substitution effect is arguably proportional instead (in a 12% year: 11.8% vs
+    // 11.2% under a ratio), and that was considered and not chosen - it would not match the UI.
+    //
+    // The property that makes this safe: with no inflationSequence, i_t IS inputs.inflation, so
+    // cpi_t is inputs.cpi EXACTLY. Every deterministic run is byte-identical to the fixed-rate
+    // engine by construction, with no special case. A diff there means this is implemented wrong.
+    //
+    // Medicare/IRMAA premium dollars grow at cpi_t + i_t, the path version of the tooltip's
+    // promise that they grow at 'CPI + Inflation combined, not CPI alone'.
+    //
+    // NOT on either clock, deliberately:
+    //   - the gapYears pre-compounding in simulate(). Those years precede the simulation, so no
+    //     path exists for them to follow.
+    //   - irmaaFwdFactor() and the ACA one-year lookahead. Those are the plan FORECASTING an index
+    //     it cannot see. Path-aware indexation is not clairvoyance, so they stay on inputs.cpi.
+    //     Under a fixed CPI a forward projection is exact by construction, which is the whole
+    //     reason the IRMAA safety margin has always measured as worthless - see P70e.
+    //   - taxCreepFactor(), a function of the calendar year only, by design.
+    //
+    // fixedTaxIndexing pins BOTH statutory clocks to the typed rates while spending still follows
+    // the path. It is the nerdknob's diagnostic mode: the difference between a run with it on and
+    // one with it off is what variable inflation costs in tax alone. Freezing medicareRate too is
+    // deliberate - leaving premiums inflating against frozen thresholds would mix two effects, and
+    // those two are known to diverge (P70a: tier-years -10.6% against IRMAA dollars -6.5%).
+    const i_t    = inputs.fixedTaxIndexing ? inputs.inflation : yr.yearInflation;
+    const spread = inputs.cpi - inputs.inflation;
+    const cpi_t  = i_t + spread;
+
+    sim.inflation    *= (1 + yr.yearInflation);   // spending always follows the path
+    sim.cpiRate      *= (1 + cpi_t);
+    sim.medicareRate *= (1 + cpi_t + i_t);
 }
 
 /** SIMULATION ENGINE **/

@@ -3016,8 +3016,17 @@ function endYear(sim, yr) {
     // cpi_t is inputs.cpi EXACTLY. Every deterministic run is byte-identical to the fixed-rate
     // engine by construction, with no special case. A diff there means this is implemented wrong.
     //
-    // Medicare/IRMAA premium dollars grow at cpi_t + i_t, the path version of the tooltip's
-    // promise that they grow at 'CPI + Inflation combined, not CPI alone'.
+    // Medicare/IRMAA premium dollars grow at the statutory index PLUS a fixed excess-medical
+    // spread: cpi_t + inputs.inflation. The tooltip's 'CPI + Inflation combined' describes the
+    // fixed-rate case, where cpi 2.8 + inflation 3.0 puts Medicare at 5.8% - i.e. about 3 points
+    // of excess medical cost ON TOP of the index. Keeping `inputs.inflation` here holds that
+    // excess at 3 points whatever the path does. Making BOTH terms path-following instead was
+    // tried and rejected: it turns a 12% inflation year into ~24% premium growth, which implies
+    // 12 points of excess medical cost in that year, and it swung measured IRMAA dollars from
+    // -6.5% to +29% (.test_harnesses/CPI_INDEX_RESULTS.md).
+    //
+    // Written as cpi_t + inputs.inflation because that is the INTENT - index plus a fixed excess.
+    // It reduces algebraically to i_t + inputs.cpi, which is the same thing and reads as less.
     //
     // NOT on either clock, deliberately:
     //   - the gapYears pre-compounding in simulate(). Those years precede the simulation, so no
@@ -3039,7 +3048,7 @@ function endYear(sim, yr) {
 
     sim.inflation    *= (1 + yr.yearInflation);   // spending always follows the path
     sim.cpiRate      *= (1 + cpi_t);
-    sim.medicareRate *= (1 + cpi_t + i_t);
+    sim.medicareRate *= (1 + cpi_t + inputs.inflation);
 }
 
 /** SIMULATION ENGINE **/

@@ -272,9 +272,9 @@ second-order, this one needs the flag inside the loop: creep moves the bracket c
 the withdrawal, which moves the balance, which moves the ruin year.
 
 Headline (2026-08-26, re-run carrying the default 0.2 pt CPI spread): **fixed indexation
-overstates tax on high-inflation paths, and invents plan failures.** Lifetime tax across 780 plan-scenario pairs is 5.72% lower under path-following; 36
+overstates tax on high-inflation paths, and invents plan failures.** Lifetime tax across 780 plan-scenario pairs is 7.80% lower under path-following; 36
 scenarios go from ruined to surviving and **none** goes the other way. The sign tracks
 realized-minus-assumed CPI monotonically (+1.5% when the path came in cold, -8.1% when it ran more
 than 3 points hot), and the lower the CPI the user types, the worse the distortion. Two surprises:
-IRMAA dollars RISE 29% even as surcharge years fall 9% (the premium clock follows the path too),
+IRMAA surcharge YEARS move further than surcharge DOLLARS (-9.2% against -6.1%),
 and the ACA effect shows up as a moved ceiling with zero breaches in either arm.

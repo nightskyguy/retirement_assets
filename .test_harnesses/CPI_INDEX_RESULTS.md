@@ -155,34 +155,41 @@ with a tier - and produced a full page of plausible-looking zero deltas before t
 The harness now asserts every arm's totals are finite. The engine behavior is unchanged and out of
 scope for P70.
 
-## RE-RUN 2026-08-26, carrying the default CPI spread
+## RE-RUN 2026-08-26: the default CPI spread, and a fixed excess-medical spread
 
-The first round set `inflation: cpi` in every plan, which zeroed the CPI/inflation gap. That is a
-configuration no default user runs: the two are separate inputs on purpose and the shipped defaults
+The first round set `inflation: cpi` in every plan, which zeroed the CPI/inflation gap - a
+configuration no default user runs. The two are separate inputs on purpose and the shipped defaults
 differ by 0.2 points (inflation 3.0 / cpi 2.8), with the statutory index BELOW felt inflation. Every
 plan now carries that gap, and the statutory clock is the drawn path LESS it.
 
-| | first round (no spread) | with the 0.2 pt spread |
-|---|---|---|
-| lifetime tax, all 780 pairs | -8.32% | **-5.72%** |
-| ruined -> survives | 38 | **36** |
-| survives -> ruined | 0 | **0** |
-| IRMAA surcharge years | -10.56% | **-9.15%** |
-| IRMAA dollars | -6.51% | **+29.05%** |
+A second question surfaced from the first re-run and was decided: what `medicareRate` does under a
+path. Three arms were measured.
 
-The tax effect damps by about a third, as it must: the index now rises more slowly than the price
-level, so thresholds move up less. The direction and the asymmetry are unchanged - fixed indexation
-still invents plan failures and never prevents one.
+| | no spread (round 1) | spread, doubled Medicare | **spread, fixed excess (SHIPPED)** |
+|---|---|---|---|
+| lifetime tax, 780 pairs | -8.32% | -5.72% | **-7.80%** |
+| ruined -> survives | 38 | 36 | **36** |
+| survives -> ruined | 0 | 0 | **0** |
+| IRMAA surcharge years | -10.56% | -9.15% | **-9.21%** |
+| IRMAA dollars | -6.51% | **+29.05%** | **-6.06%** |
 
-**The IRMAA dollar figure REVERSES, and that is the finding to carry forward.** Surcharge years still
-fall, but the dollars rise 29%. `medicareRate` compounds `cpi_t + i_t` and both terms now follow the
-path, so in a high-inflation window the premium each remaining surcharge is priced against inflates
-far faster than it did against two fixed scalars. Fewer surcharged years, each much more expensive.
+The direction and the asymmetry never move: fixed indexation still invents plan failures and never
+prevents one. What the middle column shows is a modeling choice going wrong in a way worth recording.
 
-This follows the sidebar tooltip literally ("Medicare/IRMAA dollar amounts grow at CPI + Inflation
-combined"), but it is worth stating what that means under a path: the `+ Inflation` term was
-calibrated as roughly 3 points of excess medical cost on top of a ~3% CPI, and making it
-proportional turns a 12% inflation year into ~24% premium growth. An alternative reading -
-`cpi_t + inputs.inflation`, path CPI plus a FIXED excess-medical spread - would keep the excess at
-3 points and is arguably the more defensible model. It is a one-line change and has not been made;
-the literal reading is what shipped.
+**Why the middle column reverses.** `medicareRate` compounded `cpi_t + i_t`, so BOTH terms followed
+the path. That reads the sidebar tooltip literally ("Medicare/IRMAA dollar amounts grow at CPI +
+Inflation combined"), but that phrasing describes the FIXED-rate case: cpi 2.8 + inflation 3.0 puts
+Medicare at 5.8%, which is about 3 points of excess medical cost on top of the index. Making the
+excess proportional turns a 12% inflation year into ~24% premium growth - implying 12 points of
+excess in that year - and the premium each remaining surcharge is priced against then inflates
+faster than the thresholds rise. Fewer surcharged years, each far more expensive, net +29%.
+
+**What shipped** is `cpi_t + inputs.inflation`: the statutory index plus a CONSTANT excess spread,
+holding the excess at the ~3 points the fixed-rate model always implied. IRMAA dollars go back to
+falling (-6.06%), and the original P3 reading is restored: surcharge YEARS move further than
+surcharge DOLLARS (-9.21% against -6.06%), because thresholds rising lift years off the ladder while
+the premiums themselves still grow. That reading is pinned by a test, so the two-path-terms form
+cannot come back as a simplification.
+
+The tax effect lands at -7.80%, between the two: the CPI spread damps it relative to round 1,
+and holding Medicare to a fixed excess gives back most of what the doubled form had taken away.

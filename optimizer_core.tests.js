@@ -4255,6 +4255,34 @@ test('P70: fixedTaxIndexing pins the tax code while spending still follows the p
         'pinning the tax code must change the tax paid under a variable path');
 });
 
+test('P70: Medicare premium growth is the index plus a FIXED excess, not a doubled path', () => {
+    // A deliberate modeling choice, pinned so it cannot be "simplified" back. Medicare grows at
+    // cpi_t + inputs.inflation: the statutory index plus a constant excess-medical spread. At the
+    // shipped defaults that is 2.8 + 3.0 = 5.8%, i.e. about 3 points of excess over the index.
+    //
+    // Making the excess path-following too (cpi_t + i_t) reads the tooltip literally but implies
+    // 12 points of excess medical cost in a 12% inflation year, and swung measured IRMAA dollars
+    // from -6.5% to +29%.
+    const inflation = 0.030, cpi = 0.028;
+    const flat = 0.12;                                   // a steady 12% path, so the arithmetic is checkable by hand
+    const seq  = Array.from({ length: CLOCK_N }, () => flat);
+    const rows = clockRows(simulate({ ...CLOCK_BASE, inflation, cpi,
+                                      returnSequence: CLOCK_RET, inflationSequence: seq }));
+    // Medicare is logged as onMedicare * (standard premiums) * 12 * medicareRate, so consecutive
+    // years give the growth rate directly once both are on Medicare.
+    const med = rows.map(r => r.Medicare).filter(v => v > 0);
+    assert(med.length > 3, 'the fixture must actually reach Medicare age');
+    const cpi_t    = flat + (cpi - inflation);           // the index under this path
+    const expected = 1 + cpi_t + inflation;              // index + FIXED excess
+    const doubled  = 1 + cpi_t + flat;                   // the rejected reading
+    for (let i = 1; i < med.length; i++) {
+        assertNear(med[i] / med[i - 1], expected,
+            `year ${i}: Medicare grows at the index plus a fixed excess`, 1e-9);
+    }
+    assert(Math.abs(expected - doubled) > 0.05,
+        'the two readings must be far enough apart that this test can tell them apart');
+});
+
 test('P70: every indexed quantity tracks its declared clock', () => {
     // The guard for the whole class. Each quantity below is on the STATUTORY clock or the PRICE
     // LEVEL, and the way to tell them apart is to run two plans whose typed rates differ and check

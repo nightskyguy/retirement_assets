@@ -11,13 +11,13 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
-| ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy~~ - **COMPLETE v11.163F**, Ordered offers six sequences | - |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| ~~DONE~~ | ~~P69~~ | ~~Replay a Monte Carlo path through the main model~~ - **COMPLETE v11.1657**, branch unmerged | - |
-| **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
+| **O1** | P70 | Bracket indexation under variable inflation - **user-confirmed interest 2026-08-26** | `P70a` |
+| **O1** | P75 | Edit the plan against a pinned replay path *(planned 2026-08-26)* | `P75a` |
+| **O1** | P76 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P76a` |
+| **O1** | P77 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P77a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
 **P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral that justified keeping Brokerage out of the
@@ -860,6 +860,77 @@ exiting restores the user's own plan unchanged.
 
 ---
 
+## P75: Edit the plan against a pinned replay path  *(planned 2026-08-26, build later)*
+
+**Ask:** someone replaying a bad sequence wants to change their plan and see whether the change
+survives THAT sequence, not exit replay and lose the path.
+
+**Design:**
+- A banner control, "Keep path while editing" (off by default). While on, the sidebar-edit
+  auto-exit (`optimizer_ui.js`, the capture-phase `.sidebar` listener) is suppressed; every edit
+  re-runs `runSimulation()` with the sequences still injected.
+- **planFields are DROPPED the moment the first locked edit lands.** They exist to reproduce the
+  run's row; once the user edits, THEIR settings are the plan, and planFields silently overriding
+  the strategy fields they just changed would be the PF8/P74 class again from the other side.
+  Practical shape: on the first locked edit, write the planFields into the sidebar controls once
+  (the loadMCVariation pattern) so what runs is what the sidebar shows, then stop injecting them.
+- **The banner must stop claiming the run's outcome.** "Rank 5%, ruined 2035" described the run's
+  row; a modified plan has neither. Relabel to name only the path identity ("the worst captured
+  path's sequence", "the 1973 sequence") plus "modified plan". The dashed baseline recomputes per
+  edit (drop `baselineLog` on each locked re-run) so overlay = current plan on steady assumptions.
+- Date edits still force an exit via the existing length guard in `startReplay`/`runSimulation`.
+- [ ] **P75a** - banner control + suppressed auto-exit + planFields handoff-then-drop
+- [ ] **P75b** - banner relabel under modification; ruin mark recomputes (it already reads the log)
+- [ ] **P75c** - baseline invalidation per locked edit; verify overlay tracks the edited plan
+- [ ] **P75d** - browser matrix: edit spend, edit strategy, edit dates (forced exit), then unlock
+- **Status:** pending
+- **Independent:** builds on P69 (merged branch or same worktree)
+
+---
+
+## P76: Draw the 10 captured paths on the survival chart  *(planned 2026-08-26, build later)*
+
+**Ask:** cost of drawing the captured paths on the Historical/Synthetic survival chart.
+
+**Cost answer: small.** Transport: the engine's `runPass` already holds the full `paths`
+Float64Array; slicing the capture variation's 10 traces is 10 x years x 8B (~3KB) into its
+varResult (`capturedTraces`), same shape `stressPaths` already uses for stress. Chart: 10 extra
+thin line datasets on `renderMCChart` (~40 points each) - rendering cost negligible; the REAL cost
+is legend/tooltip clutter, so they ship with no legend entries, no points, low alpha, and a single
+tooltip label of their rank ("Rank 25% path"). Worst-block paths red-tinted, sampled ranks gray.
+- [ ] **P76a** - engine: `capturedTraces` on the capture variation's varResult; ship both passes
+- [ ] **P76b** - `renderMCChart`: draw them for the pinned variation behind a small toggle
+      (default on for plan scope, off for compare - 150 variations x 10 lines is noise)
+- [ ] **P76c** - click a drawn trace replays that path (the capture list already knows its index)
+- **Status:** pending
+- **Independent:** transport rides P69's capture plumbing
+
+---
+
+## P77: Nerdknob - the historical years behind each bootstrap block  *(planned 2026-08-26, build later)*
+
+**Ask:** for the Historical (bootstrap) survival run, show which historical years each block of a
+path was drawn from.
+
+**Mechanism:** Historical mode is a block bootstrap - `bootstrapMultiAssetBank` (`prng.js:515`)
+draws 3-year contiguous blocks at random start indices from the 1928-2025 record. The bank stores
+only the VALUES; the source indices are known at draw time and thrown away. Record them: a
+parallel `srcYears` Int16Array (1928+idx per cell) built in the same loop - **no new rng draws, so
+CRN and every existing output stay byte-identical; assert that**. Thread through `buildBanks`,
+ship per captured path via `sliceBankRowsForPath` (+~80B/path), and for stress paths the start
+years are already labels.
+- [ ] **P77a** - `srcYears` in `bootstrapMultiAssetBank` + regression test (outputs unchanged)
+- [ ] **P77b** - ship with captured rows; decide the surface, nerdknob-gated: leading candidates
+      are the Market chart tooltip title ("2031 - drawn from 1974") and a segments line in the
+      replay banner tooltip ("1973-75, 1929-31, ..."). Annual Details column is the fallback.
+- [ ] **P77c** - decide whether `bootstrapScenarioBank` (drives `yr.baseReturn` only) needs the
+      same treatment or whether the multi-asset bank's years are the honest answer (per-account
+      returns come from it; baseReturn is display). Document whichever way it lands.
+- **Status:** pending
+- **Independent:** Historical mode only; synthetic paths have no source years
+
+---
+
 ## P70: Do high-inflation paths overstate tax?
 **Why:** `sim.inflation` advances at the per-path `yr.yearInflation`, but `sim.cpiRate` - which
 indexes federal and state brackets, IRMAA thresholds, the ACA FPL multiple and the IRA goal -
@@ -871,6 +942,20 @@ the paths that matter.
 v11.160F extends it to both synthetic modes. optimizer_core.js:73 documents a deliberate "tax policy
 must not differ per path" rule, but that comment was written about the IRMAA lookback factor, not
 about indexation - re-read it before assuming it settles this.
+
+**Verified again 2026-08-26 (user asked directly whether brackets follow cumulative path
+inflation):** they do not. `sim.cpiRate *= (1 + inputs.cpi)` at `optimizer_core.js:2915` while
+`sim.inflation *= (1 + yr.yearInflation)` tracks the path. Everything bracket-shaped rides
+`cpiRate`: federal and state bracket limits, the LTCG brackets, IRMAA thresholds and tiers, the
+ACA FPL multiple, the IRA goal, QCD sizing - AND Social Security COLA (`inputs.ss1 * sim.cpiRate`,
+`:1331`), so a high-inflation path understates SS income too, which partially offsets the
+overstated bracket creep. Real-world note for the eventual default decision: the IRS indexes
+brackets annually by realized chained CPI and SSA indexes COLA by realized CPI-W, so
+path-following is the realistic model, not the exotic one. `taxCreepFactor`'s "tax policy must not
+differ per path" comment (`:71-74`) is about RATE creep, not indexation - it does not settle this.
+P70a stays measure-first: stress scenarios with `cpiRate` (and therefore SS) following realized
+inflation vs today's fixed rate; per-scenario lifetime-tax and ruin-year deltas; no default change
+in the measuring phase.
 
 - [ ] **P70a** - run the existing stress scenarios with `cpiRate` following realized inflation
       against today's fixed rate; report lifetime-tax and ruin-year deltas per scenario. Small effect

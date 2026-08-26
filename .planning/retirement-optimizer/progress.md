@@ -4620,3 +4620,25 @@ equals the captured ruinYear, tooltip carries both messages, zero marks after ex
 
 That closes P69 - a through h all shipped. Branch worktree-mc-path-replay holds nine commits,
 suites 322/61/22, badge green at 698. Ready for a PR.
+
+---
+
+## Session 2026-08-26 (worktree mc-path-replay) - buying power line, P70 confirmed, P75-P77 planned
+
+Five user asks. Built: the Market view's third series - what day-one $10,000 still buys
+(10000/inflationFactor), dashed on its own right-hand dollar axis, dollar tooltip while the rate
+series keep percents. Verified $4,919 at 3%/25yr and $2,960 on the worst replayed path.
+
+Investigated: brackets do NOT follow path inflation - sim.cpiRate compounds the fixed inputs.cpi
+(optimizer_core.js:2915) while spending follows the path. That is P70, now user-confirmed
+interest, and the section gained today's anchors plus a new nuance: Social Security COLA also
+rides cpiRate, so high-inflation paths understate SS too - a partial offset to the overstated
+bracket creep. Also noted: IRS/SSA index by REALIZED inflation in the real world, so
+path-following is the realistic model. P70a stays measure-first.
+
+Planned, not built: P75 (edit the plan against a pinned path - banner lock, planFields
+handed off to the sidebar then dropped, banner stops claiming the run's outcome), P76 (draw the
+10 captured paths on the survival chart - cost answer: ~3KB transport plus legend hygiene, so
+cheap), P77 (nerdknob: record the source years of each bootstrap block - parallel srcYears bank,
+no new rng draws so CRN is untouched, byte-identical regression asserted). NOW table cleaned:
+struck rows dropped, three new O1 rows added, marker still on line 30.

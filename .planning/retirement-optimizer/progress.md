@@ -4854,4 +4854,35 @@ fixes in the engine. Counts: optimizer_core **330**, page 761.
 
 **Remaining on this branch: P70e only** - re-run `irmaa_default_harness.js` under path-following and
 revisit `IRMAA_MARGIN_DEFAULT`, which was chosen when a forward projection was exact by construction
-and the margin measured as worthless.
+and the margin measured as worthless.
+
+**USER-REPORTED REGRESSION, fixed `fd65644`. Entirely mine, and the diagnosis went the long way.**
+
+Three reports, one cause: default strategy showed Fill/Below IRMAA instead of Proportional 20%;
+birth years and retirement age were not the defaults; and the default plan now faced ruin.
+
+The in-page ceiling test added in 11.165B calls `applyScenario()` to prove a saved Fill Bracket plan
+reloads at its own ceiling. **`applyScenario()` writes the WHOLE sidebar and does not put it back,
+and `runTests()` runs at page load** - so every load left the reader looking at the test fixture.
+Its `finally` restored only the stratRate selection, which was the part I had been thinking about.
+
+The tell was `birthyear1: 1958 / birthyear2: 1959`, values that appear nowhere in the HTML. They are
+the fixture. Once I diffed the live DOM against the markup defaults instead of chasing the
+mechanism, it was immediate.
+
+**Diagnostic path worth not repeating.** I spent several rounds on the wrong layer: grepping for
+writes to `#strategy`, checking `loadScenarioByName`, then installing a `defineProperty` trap on the
+select. The trap never fired and reported itself uninstalled, which was confusing rather than
+informative. What settled it in one command was serving `main` from a detached worktree on a second
+port and comparing a fresh tab against a fresh tab - and then diffing the HTML `value=` attributes,
+which were byte-identical, proving the markup was innocent and the runtime was not.
+**Compare against a known-good build EARLY; it is one `git worktree add` away.**
+
+Also: I twice reported browser findings from a tab whose page predated the file on disk. Between
+that and this, the rule is the same - **the page is not the file, and a fresh tab is not a reload.**
+
+The plan "facing ruin" was the fixture running, not a modeling change. Restored, the default plan on
+this branch is identical to main to the dollar: tax 551,192, final NW 637,024, 25 years funded, no
+ruin - exactly what the byte-identity property predicts for a deterministic run. The test now
+snapshots every input/select/textarea (including `dataset.numVal`, which the dollar fields read
+instead of `.value`) and restores them, the way the MC preset test already does for its parameters.

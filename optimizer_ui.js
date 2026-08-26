@@ -3776,9 +3776,11 @@ function setChartPersonView(v) {
 // #8 - which view the lower (Income & Expenses) chart shows.
 let incomeChartView = 'combined';
 
-function setIncomeChartView(v) {
-    incomeChartView = v;
-    ['combined', 'tax', 'net', 'flows', 'assetflows'].forEach(k => {
+// DOM half of the view switch, split out so replay can flip the view without rendering the stale
+// pre-replay log (its runSimulation() paints once, in the right view, right after).
+function syncIncomeViewControls() {
+    const v = incomeChartView;
+    ['combined', 'tax', 'net', 'flows', 'assetflows', 'market'].forEach(k => {
         const btn = document.getElementById(`chartView_${k}`);
         if (btn) btn.classList.toggle('active', k === v);
     });
@@ -3789,6 +3791,11 @@ function setIncomeChartView(v) {
     // only view where income-source bars are scaled down by the year's effective tax rate.
     const aftertaxNote = document.getElementById('income-aftertax-note');
     if (aftertaxNote) aftertaxNote.style.display = v === 'combined' ? '' : 'none';
+}
+
+function setIncomeChartView(v) {
+    incomeChartView = v;
+    syncIncomeViewControls();
     if (lastSimulationLog) updateCharts(lastSimulationLog);
 }
 
@@ -3938,6 +3945,32 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
             options: { ...sharedTooltip,
                 scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
                 plugins: { ...sharedTooltip.plugins, legend: (() => { const li = makeChartLegendInteraction(); return { labels: legendLabels, onHover: li.onHover, onLeave: li.onLeave, onClick: li.onClick }; })() } }
+        });
+    } else if (incomeChartView === 'market') {
+        // The rates the projection was handed, in percent - NO adj(): these are not dollars, so
+        // the Current $ toggle must not touch them. On a deterministic run both series are flat,
+        // which is itself informative next to a replayed path's jagged sequence.
+        const pctRet = log.map(r => (r['return%'] ?? 0) * 100);
+        incomeChart = new Chart(ctxI, {
+            type: 'bar',
+            data: { labels, datasets: [
+                { label: 'Market return', type: 'bar', order: 2,
+                  backgroundColor: pctRet.map(v => v >= 0 ? '#27ae60B0' : '#c0392bC0'),
+                  data: pctRet },
+                { ...mkLine('Inflation', '#e67e22', r => (r['infl%'] ?? 0) * 100),
+                  type: 'line', order: 1, pointRadius: 0, borderWidth: 2.5 },
+            ]},
+            options: { ...sharedTooltip,
+                scales: { y: { ticks: { callback: v => v + '%' } } },
+                plugins: { ...sharedTooltip.plugins,
+                    tooltip: { ...sharedTooltip.plugins.tooltip,
+                        callbacks: { ...sharedTooltip.plugins.tooltip.callbacks,
+                            // The shared callback rounds to whole dollars; these are small percents
+                            // ("Inflation: 3" is useless), so one decimal and a % sign.
+                            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
+                    // Plain legend: the hover-dim helper cannot dim the bars' per-point color
+                    // ARRAY, so with two series the default toggle-hide legend is the honest one.
+                    legend: { labels: legendLabels } } }
         });
     }
 }

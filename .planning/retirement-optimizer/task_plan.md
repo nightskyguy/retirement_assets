@@ -13,17 +13,17 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 |---|---|---|---|
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
+| **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
 | **O1** | P70 | Bracket indexation under variable inflation - **user-confirmed interest 2026-08-26** | `P70a` |
-| **O1** | P75 | Edit the plan against a pinned replay path *(planned 2026-08-26)* | `P75a` |
-| **O1** | P76 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P76a` |
-| **O1** | P77 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P77a` |
+| **O1** | P78 | Edit the plan against a pinned replay path *(planned 2026-08-26, was briefly numbered P75)* | `P78a` |
+| **O1** | P79 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P79a` |
+| **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral that justified keeping Brokerage out of the
-third pass measured **0 capped years in 3,960 armed runs**; the exclusion cost $372,455 of unpayable spending to
-save $1,711. Default flipped, old tripwire kept as a regression guard. `forcedIRAAllowBrokerage` measured and
-**rejected**. Open call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
+**P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed
+runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote
+prints an absolute cost, not extra-vs-Plan-Q.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 
@@ -106,6 +106,10 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
 | ~~DONE~~ | ~~P69~~ | ~~Replay: walk one MC or Stress sequence through the main model~~ - **COMPLETE 2026-08-26, v11.1657**, all of `P69a`-`P69h` | - | - |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
+| **O1** | P75 | Year-by-year withdrawal/conversion optimization - income-target reframe, edge menu, coordinate descent *(new 2026-08-25)* | `P75a` (measure first, gates the phase) | nothing |
+| **O1** | P78 | Edit the plan against a pinned replay path *(new 2026-08-26; renumbered from a colliding P75)* | `P78a` | P69 (PR #194) |
+| **O1** | P79 | Draw the 10 captured paths on the survival chart *(new 2026-08-26)* | `P79a` | P69 (PR #194) |
+| **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(new 2026-08-26)* | `P80a` | P69 (PR #194) |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
@@ -860,7 +864,7 @@ exiting restores the user's own plan unchanged.
 
 ---
 
-## P75: Edit the plan against a pinned replay path  *(planned 2026-08-26, build later)*
+## P78: Edit the plan against a pinned replay path  *(planned 2026-08-26, build later)*
 
 **Ask:** someone replaying a bad sequence wants to change their plan and see whether the change
 survives THAT sequence, not exit replay and lose the path.
@@ -879,16 +883,16 @@ survives THAT sequence, not exit replay and lose the path.
   path's sequence", "the 1973 sequence") plus "modified plan". The dashed baseline recomputes per
   edit (drop `baselineLog` on each locked re-run) so overlay = current plan on steady assumptions.
 - Date edits still force an exit via the existing length guard in `startReplay`/`runSimulation`.
-- [ ] **P75a** - banner control + suppressed auto-exit + planFields handoff-then-drop
-- [ ] **P75b** - banner relabel under modification; ruin mark recomputes (it already reads the log)
-- [ ] **P75c** - baseline invalidation per locked edit; verify overlay tracks the edited plan
-- [ ] **P75d** - browser matrix: edit spend, edit strategy, edit dates (forced exit), then unlock
+- [ ] **P78a** - banner control + suppressed auto-exit + planFields handoff-then-drop
+- [ ] **P78b** - banner relabel under modification; ruin mark recomputes (it already reads the log)
+- [ ] **P78c** - baseline invalidation per locked edit; verify overlay tracks the edited plan
+- [ ] **P78d** - browser matrix: edit spend, edit strategy, edit dates (forced exit), then unlock
 - **Status:** pending
 - **Independent:** builds on P69 (merged branch or same worktree)
 
 ---
 
-## P76: Draw the 10 captured paths on the survival chart  *(planned 2026-08-26, build later)*
+## P79: Draw the 10 captured paths on the survival chart  *(planned 2026-08-26, build later)*
 
 **Ask:** cost of drawing the captured paths on the Historical/Synthetic survival chart.
 
@@ -898,16 +902,16 @@ varResult (`capturedTraces`), same shape `stressPaths` already uses for stress. 
 thin line datasets on `renderMCChart` (~40 points each) - rendering cost negligible; the REAL cost
 is legend/tooltip clutter, so they ship with no legend entries, no points, low alpha, and a single
 tooltip label of their rank ("Rank 25% path"). Worst-block paths red-tinted, sampled ranks gray.
-- [ ] **P76a** - engine: `capturedTraces` on the capture variation's varResult; ship both passes
-- [ ] **P76b** - `renderMCChart`: draw them for the pinned variation behind a small toggle
+- [ ] **P79a** - engine: `capturedTraces` on the capture variation's varResult; ship both passes
+- [ ] **P79b** - `renderMCChart`: draw them for the pinned variation behind a small toggle
       (default on for plan scope, off for compare - 150 variations x 10 lines is noise)
-- [ ] **P76c** - click a drawn trace replays that path (the capture list already knows its index)
+- [ ] **P79c** - click a drawn trace replays that path (the capture list already knows its index)
 - **Status:** pending
 - **Independent:** transport rides P69's capture plumbing
 
 ---
 
-## P77: Nerdknob - the historical years behind each bootstrap block  *(planned 2026-08-26, build later)*
+## P80: Nerdknob - the historical years behind each bootstrap block  *(planned 2026-08-26, build later)*
 
 **Ask:** for the Historical (bootstrap) survival run, show which historical years each block of a
 path was drawn from.
@@ -919,11 +923,11 @@ parallel `srcYears` Int16Array (1928+idx per cell) built in the same loop - **no
 CRN and every existing output stay byte-identical; assert that**. Thread through `buildBanks`,
 ship per captured path via `sliceBankRowsForPath` (+~80B/path), and for stress paths the start
 years are already labels.
-- [ ] **P77a** - `srcYears` in `bootstrapMultiAssetBank` + regression test (outputs unchanged)
-- [ ] **P77b** - ship with captured rows; decide the surface, nerdknob-gated: leading candidates
+- [ ] **P80a** - `srcYears` in `bootstrapMultiAssetBank` + regression test (outputs unchanged)
+- [ ] **P80b** - ship with captured rows; decide the surface, nerdknob-gated: leading candidates
       are the Market chart tooltip title ("2031 - drawn from 1974") and a segments line in the
       replay banner tooltip ("1973-75, 1929-31, ..."). Annual Details column is the fallback.
-- [ ] **P77c** - decide whether `bootstrapScenarioBank` (drives `yr.baseReturn` only) needs the
+- [ ] **P80c** - decide whether `bootstrapScenarioBank` (drives `yr.baseReturn` only) needs the
       same treatment or whether the multi-asset bank's years are the honest answer (per-account
       returns come from it; baseReturn is display). Document whichever way it lands.
 - **Status:** pending
@@ -1289,6 +1293,96 @@ Ascending/descending should reverse the family, not scramble the rest.
 - **Status:** **COMPLETE v11.1640.** No engine behavior change - a sort key and the row fields it
       reads. No changelog entry, by the user's call.
 - **Independent:** no phase dependencies. Touches the same column P67 relabelled.
+
+---
+
+## P75: Year-by-year withdrawal mix - income-target optimization  *(NEW 2026-08-25, user-raised, O1)*
+
+**Why:** every strategy family picks ONE rule and holds it for the whole horizon; the true optimum
+is a per-year schedule. The engine's own evidence says analytic shortcuts fail here (BETR wrong in
+both regimes, findings.md:1544; Break Even boundary year off by 12 years and $662k from the
+searched optimum, findings.md:1405), so this phase treats it as numerical optimal control over
+full simulations, gated by a cheap measurement (P75a) before anything expensive is built.
+
+**The reframe.** The control is not "which account each year" (4 accounts x horizon, intractable);
+it is TWO numbers per year: ordinary income realized (IRA withdrawal + conversion) and LTCG
+realized. Spending is funded by whatever mix hits those targets; Roth and Cash are tax-transparent
+residuals. The engine already half-thinks this way: `computeBracketCeiling`
+(optimizer_core.js:805) returns MAGI ceilings for its three modes (federal-bracket top, IRMAA tier
+via `cpiRate * irmaaFwdFactor`, ACA FPL multiple - `FPL_2025` hardcoded at optimizer_core.js:842).
+The per-year schedule generalizes one global ceiling to one ceiling per year.
+
+**Time value of money:** final after-tax wealth from a full simulation embodies TVM endogenously -
+each tax dollar's foregone compounded growth is charged by the sim itself. No explicit
+discounting; adding one would double-count.
+
+**Edge/vertex structure.** Within a tax regime, tax is piecewise-linear and convex in ordinary
+income, so optima sit at vertices; cliffs are concave drops - never optimal to sit just above one.
+Candidate menu per year (~12): std-deduction top, 10/12/22/24/32 bracket tops
+(`TAXData.FEDERAL.*.brackets`, taxengine.js:36-58), IRMAA tier edges (taxengine.js:85-101, MAGI
+basis, 2-year lookback), ACA cliff, RMD floor, spend-need floor, zero-extra; for LTCG the 0%-stack
+top (`getLTCGBracketRoom`, optimizer_core.js:775). **No unified edge list exists today** - each
+mode inflates its own threshold at its own call site with its own factor (IRMAA uses
+`cpiRate * irmaaFwdFactor`, federal plain `cpiRate`). First engine artifact:
+`magiEdgesForYear(inputs, year)`.
+
+**State collapse (DP rung only):** a dollar in Roth or Cash never touches future taxes - its
+marginal value is a year-indexed constant, so both factor out of DP state. Remaining state is
+roughly (year, IRA, Brokerage, basis ratio, IRMAA lookback tier, filing/widow flag). Note: no
+one-year step API exists; the yearly loop is inlined in `simulate()` (optimizer_core.js:3053-3073)
+over 15 non-exported phase functions - the DP rung would need either an extracted step or
+memoized-prefix full sims. Coordinate descent (P75b) needs neither.
+
+**Stochastic layer:** optimize the deterministic path, re-solve annually (receding horizon) - not
+a feedback policy. Robustness via P69 path replay when it lands, plus cliff-margin pricing (P75c).
+
+**Certification payoff:** descent/DP optimum minus best family row = the gap P36 exists to
+measure. Gap near 0 across the scenario battery -> families are effectively complete. Fat gap in
+some regime (likely candidate: big IRA + ACA years + widow transition) -> names the missing
+family.
+
+**Prior art:** findings.md:2752 - i-ORP (Welch) ran this as LP in production for two decades; the
+archived ModelDescriptionK.pdf describes the model (read 2026-08-25: equations NOT included -
+e-ORP's solver.py and Ragsdale/Seila/Little 1994 carry explicit formulations). e-ORP
+(github.com/dcurrie/e-ORP,
+findings.md:2781) is the living MILP re-implementation. DiLellio & Ostrov the academic line;
+wscott/fplan and mdlacasse/Owl adjacent open-source MILP planners. None carry this engine's
+state-tax/ACA/widow fidelity - the expensive part is already built here. **LP, MILP, SCIP, DP and
+PWL are defined at findings.md:2842**, with the cliff-as-binary encoding and why this phase needs
+no solver.
+
+**Falsifiable questions:**
+- **Q1.** Do the best swept rows' realized MAGIs already sit on edge-menu points? If mostly
+  interior, the vertex argument misses an engine coupling (IRMAA lookback, SS-torpedo interior
+  kinks) and the phase stops for redesign before any optimizer is built.
+- **Q2.** Does per-year freedom beat the best one-rule family by more than noise? Gap in $ and %,
+  per scenario.
+- **Q3.** Is the knife-edge plan fragile? Price the safety margin below each binding cliff; does
+  the margin-hardened plan still win?
+
+**Tasks:**
+- [ ] **P75a** - measure first, log side only: dump realized MAGI + CapGains per year for top-N
+      sweep rows (MAGI is on the log row, optimizer_core.js:1009; ordinary income is NOT logged,
+      and MAGI is the edge-relevant variable anyway - IRMAA and ACA key on it). Build
+      `magiEdgesForYear()` in a `.test_harnesses/` harness; classify each year-row as on-edge /
+      interior / just-above-cliff; report residency rates. **GATE for the rest of the phase.**
+- [ ] **P75b** - coordinate-descent harness: seed with the best family row's realized MAGI path;
+      loop years x edge menu, one full `simulate()` per trial (~12 x horizon x passes, 1-2k sims
+      per scenario - same order as one optimizer sweep), score `afterTaxWealthOfLogRow` of the
+      last row (optimizer_core.js:3271), multi-seed from the top-5 rows. Non-unimodality
+      precedent: `bestConversionStopYear` header (optimizer_core.js:3278-3304) - exhaustive scan
+      only, no bisection.
+- [ ] **P75c** - fragility pricing: re-run the optimum with $1-5k margins below each binding
+      cliff; report the cost-of-margin curve.
+- [ ] **P75d** *(contingent on a material P75b gap)* - product surface: the per-year plan needs a
+      carrier. Extra conversions already accept per-year arrays (`_extraConvAmountFor`,
+      optimizer_core.js:2371); withdrawals do not. Worker via the `montecarlo/worker.js`
+      importScripts pattern; P34 shares that groundwork.
+- [ ] **P75e** *(stretch)* - LP-relaxation upper bound (convexify the cliffs) -> "best family is
+      within X% of the ceiling" certificate; feeds P36 directly.
+- **Status:** pending; P75a is the gate
+- **Independent:** no phase dependencies; results feed P36 (the gap) and use P69 (replay) when it
+      lands
 
 ---
 

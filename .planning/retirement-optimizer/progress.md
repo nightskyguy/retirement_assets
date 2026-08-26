@@ -4623,7 +4623,7 @@ suites 322/61/22, badge green at 698. Ready for a PR.
 
 ---
 
-## Session 2026-08-26 (worktree mc-path-replay) - buying power line, P70 confirmed, P75-P77 planned
+## Session 2026-08-26 (worktree mc-path-replay) - buying power line, P70 confirmed, P78-P80 planned (filed as P75-P77, renumbered in the PR #194 merge: main had already taken P75 for the withdrawal-mix phase)
 
 Five user asks. Built: the Market view's third series - what day-one $10,000 still buys
 (10000/inflationFactor), dashed on its own right-hand dollar axis, dollar tooltip while the rate
@@ -4636,11 +4636,48 @@ rides cpiRate, so high-inflation paths understate SS too - a partial offset to t
 bracket creep. Also noted: IRS/SSA index by REALIZED inflation in the real world, so
 path-following is the realistic model. P70a stays measure-first.
 
-Planned, not built: P75 (edit the plan against a pinned path - banner lock, planFields
-handed off to the sidebar then dropped, banner stops claiming the run's outcome), P76 (draw the
+Planned, not built: P78 (edit the plan against a pinned path - banner lock, planFields
+handed off to the sidebar then dropped, banner stops claiming the run's outcome), P79 (draw the
 10 captured paths on the survival chart - cost answer: ~3KB transport plus legend hygiene, so
-cheap), P77 (nerdknob: record the source years of each bootstrap block - parallel srcYears bank,
+cheap), P80 (nerdknob: record the source years of each bootstrap block - parallel srcYears bank,
 no new rng draws so CRN is untouched, byte-identical regression asserted). NOW table cleaned:
 struck rows dropped, three new O1 rows added, marker still on line 30.
 
-**PR #194 opened 2026-08-26** (worktree-mc-path-replay -> main): the whole replay feature, 12 commits, plus the variable-inflation caveat in the changelog. P75/P76/P77 plans ride along in .planning.
+**PR #194 opened 2026-08-26** (worktree-mc-path-replay -> main): the whole replay feature, 12 commits, plus the variable-inflation caveat in the changelog. P78/P79/P80 plans ride along in .planning (renumbered from P75-P77 at merge time).
+---
+
+## Session 2026-08-25 (worktree retirement-optimizer-asset-allocation) - filed P75, year-by-year withdrawal mix; found e-ORP
+
+User asked how to find the IDEAL year-by-year asset-spending mix, beyond one-rule-per-horizon
+strategy families. The design worked out in conversation is now the P75 spec: reframe the control
+from "which account" to two income targets per year (ordinary realized, LTCG realized); within a
+regime tax is piecewise-linear convex so optima sit on a ~12-item per-year edge menu (bracket
+tops, IRMAA tier edges, ACA cliff, 0% LTCG top, RMD/spend floors); search by coordinate descent
+over that menu seeded from the best swept row, DP as a later rung; deterministic plan plus annual
+re-solve rather than a feedback policy; the descent-vs-best-family gap is the number P36 wants.
+P75a is a measure-first gate: if the best rows' realized MAGIs do not already sit on edges, the
+vertex argument misses an engine coupling and the phase stops for redesign.
+
+Second half of the request: references. i-orp.com is dead (NXDOMAIN); recovered the site, the
+papers, and crucially ModelDescriptionK.pdf - the actual LP formulation - via archive.org. Found
+e-ORP, which the user had heard of but could not locate: github.com/dcurrie/e-ORP, Doug Currie's
+actively maintained MILP re-implementation (pyscipopt/SCIP). Logged DiLellio & Ostrov and three
+adjacent open-source planners (fplan, Owl, rplanlib) beside it in findings.md:2752. Two honesty
+notes made it into the record: Welch's death is unconfirmed (the Bogleheads thread says only that
+he sought a successor), and the DiLellio & Ostrov 2020 abstract does not actually name its
+technique - verify before citing it as DP.
+
+NOW table: dropped the done ~~P30~~ row for the P75 row, so the line-30 marker stays on line 30.
+Priority O1, user's call via question. Files touched: findings.md (P75 references entry),
+task_plan.md (P75 section after P73, NOW row, index row), and this log. No product code, no
+version bump, no changelog entry.
+
+Addendum, same session: downloaded and read ModelDescriptionK.pdf in full (28 pp; archive.org
+truncated the first attempt at 13KB, the id_ raw-bytes URL delivered all 210,648). It is the model
+description, not the equation set - I had over-labeled it "the LP formulation" in findings.md, now
+corrected there, in the P75 spec, and in memory. What the paper does pin down (objective =
+maximize level real spending with estate as constraint, Appendix C timing, per-bracket income
+slices in Table 6, "iteratively" as the only nonconvexity hint) is recorded in the findings entry;
+Ragsdale/Seila/Little 1994 added as the published predecessor formulation.
+
+---

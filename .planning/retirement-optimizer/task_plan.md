@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O0** | P70 | Bracket indexation: **P70a measured 2026-08-26, fixed indexation invents plan failures** | `P70b` decide default |
+| **O0** | P70 | Inflation indexing: **P70a measured; P70b is a shipped two-clock bug, no MC needed** | `P70b` |
 | **O1** | P78 | Edit the plan against a pinned replay path *(planned 2026-08-26, was briefly numbered P75)* | `P78a` |
 | **O1** | P79 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P79a` |
 | **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
@@ -984,12 +984,101 @@ in the measuring phase.
       Forecasting (`irmaaFwdFactor`, the ACA one-year lookahead) stayed on `inputs.cpi` in BOTH arms
       and is a separate question: a plan cannot know next year's CPI.
       Suites 324 / 61 / 22 (`slowInCore` 3); `TestTiers.EXPECTED` and `.githooks/README.md` updated.
-- [ ] **P70b** - decide the default. The measurement says path-following, and the real world agrees
-      (IRS indexes by realized chained CPI, SSA by realized CPI-W). Open calls: whether `medicareRate`
-      keeps following it (see 2 above), whether the flag reaches the UI at all or the behavior just
-      changes, and what a saved plan does - **every Monte Carlo and Stress result moves**, so this is a
-      changelog entry with a "your saved plan will not reproduce" consequence line.
-- [x] **P70c ANSWERED 2026-08-26, and the answer is a trap for P70b.** A deterministic run has no
+### The frame: THREE clocks, and every defect is a quantity reading the wrong one
+
+The audit (2026-08-26) found the bug class is not "inflation is fixed". It is that the engine has
+three distinct time-varying factors and no vocabulary separating them, so quantities read whichever
+was in scope.
+
+| clock | what it is | what rides it | should follow |
+|---|---|---|---|
+| `sim.cpiRate` | the **statutory index** | federal + state bracket limits, standard deduction, LTCG brackets, IRMAA thresholds, ACA FPL multiple, QCD limit, Social Security COLA | REALIZED inflation. IRS indexes by realized chained CPI; SSA by realized CPI-W |
+| `sim.inflation` | the **price level** | spendGoal, Cash Reserve, property tax, pension COLA, deflation to today's dollars | REALIZED inflation. Already does |
+| forecast factors | the plan's **assumption about a year it cannot see** | `irmaaFwdFactor` (2 years forward), the ACA one-year lookahead, `gapYears` pre-compounding | `inputs.cpi`, permanently. A plan does not get clairvoyance |
+
+The third row is the user's caveat, and it is the one that must NOT be "fixed". Under fixed
+inflation a forward projection is exact by construction, so today it is always right and looks like
+realized indexation. Under a variable path it is a genuine forecast that can miss in both
+directions. That is correct behavior, but it changes what the IRMAA safety margin is for (P70e).
+
+**Rule for the whole phase:** anything doing `Math.pow(1 + <a rate>, <years>)` inside the loop is
+suspect, because a compounding factor already exists for every clock and recomputing one from a
+scalar rate is exactly how a quantity ends up on the wrong clock, or on no path at all.
+
+Deliberately OUT of scope, each for a stated reason: `taxCreepFactor` (calendar-year tax POLICY, not
+indexation - its own comment says so); `saltIndex` in taxengine (a statutory 1%/yr step-up written
+into the law, not CPI); `computeBETR` and the amortization helpers (returns, not indexation).
+
+- [ ] **P70b - the two clocks on ONE bracket table. Shipped, deterministic, no Monte Carlo needed.**
+      `computeBracketCeiling` is handed `sim.inflation` as its `inflation` argument
+      (`optimizer_core.js:1740`, `:1752`, `:1819`) and passes it to `calculateProgressive`, which
+      indexes bracket limits with it. The ACTUAL tax call passes `sim.cpiRate` for the same purpose.
+      So the strategy prices its accounts against brackets placed on the spending clock and is then
+      taxed on brackets placed on the statutory clock.
+
+      Invisible whenever `cpi === inflation`, which is why it survived. Both are free-text sidebar
+      fields and differing values are ordinary. Measured, average rate at a 24% ceiling:
+
+      | typed | year | correct | shipped | error |
+      |---|---|---|---|---|
+      | cpi 2.0 / infl 5.0 | 30 | fed 0.20332 | 0.15747 | **-23%** |
+      | cpi 2.0 / infl 5.0 | 30 | state 0.07586 | 0.05211 | **-31%** |
+      | cpi 4.0 / infl 2.0 | 30 | fed 0.20332 | 0.26356 | **+30%** |
+
+      The correct column is constant across every year, which is the proof: the ceiling is the same
+      REAL position in the bracket table every year, so its average rate cannot drift. The shipped
+      column drifts only because the two clocks disagree.
+
+      Fix: pass `sim.cpiRate` at all three call sites; rename the parameter so the next reader cannot
+      repeat it; add a test asserting the average rate at a fixed ceiling is invariant across years
+      for any (cpi, inflation) pair. That one invariant catches the whole class.
+
+- [ ] **P70c - flip `cpiFollowsPath` on, and decide the no-sequence fallback.** P70a measured the
+      case: -8.32% lifetime tax over 780 pairs, 38 scenarios rescued from ruin, 0 broken. The
+      fallback is the trap recorded below: with no `inflationSequence`, `yr.yearInflation` falls back
+      to `inputs.inflation`, NOT `inputs.cpi`, so flipping the default silently reindexes every
+      deterministic plan whose two rates differ. **Recommend `inputs.cpi` as the no-sequence
+      fallback** - `cpi` is the user's stated indexation rate, `inflation` is their spending rate -
+      which confines the change to paths and leaves P70b as the only thing that moves a deterministic
+      plan. Decide explicitly; do not patch it quietly.
+
+- [ ] **P70d - the three quantities recomputing a factor from a scalar rate.**
+      - `propTaxFor` (`:108`) does `base * Math.pow(1 + inputs.inflation, years)`. Property tax is a
+        today's-dollars input like spendGoal, and spendGoal follows the path; this does not. Should
+        read `sim.inflation`. Its `flat` and `custom` growth modes are user policy and stay.
+      - `getQCDLimit(sim.currentYear, inputs.cpi)` (`taxengine.js:1598`) does
+        `AMOUNT * Math.pow(1 + cpi, simYear - YEAR)` instead of reading `sim.cpiRate`. Its parameter
+        is NAMED `cpiRate` but receives a RATE, while `cpiRate` everywhere else in this codebase is a
+        cumulative FACTOR. The arithmetic is right today and the name is a live trap; fix both.
+      - `yr.iraGoalNominal = inputs.iraBaseGoal * sim.cpiRate` (`:1160`). The IRA Goal is a WEALTH
+        target in today's dollars, not a tax threshold. Its comment justifies the statutory clock on
+        the grounds that the goal exists to manage indexed thresholds, which is arguable. Decide it
+        explicitly rather than leaving it implicit; if it stays on `cpiRate`, say why.
+
+- [ ] **P70e - name the forecast boundary, and re-open the IRMAA margin default.** `irmaaFwdFactor`
+      and the ACA lookahead stay on `inputs.cpi`. But once indexation follows the path, the plan's
+      two-year forward projection stops being exact, and that changes a decision already taken:
+      `irmaa_margin_harness.js` measured the margin's benefit as **exactly zero**, correctly, because
+      under a constant CPI the engine hits its ceiling to the dollar and there is no error to absorb.
+      `irmaa_cpi_risk_harness.js` then showed the answer REVERSES once realized CPI can differ: only
+      undershoots breach, overshoots are free, and the rate-shaped modes (`halfcpi`, `cpiminus1`)
+      beat the dollar-shaped ones. **The current default was chosen in the regime where the margin
+      could not matter.** Re-run `irmaa_default_harness.js` with `cpiFollowsPath` on and revisit
+      `IRMAA_MARGIN_DEFAULT`. This is the concrete consequence of the caveat the user raised.
+
+- [ ] **P70f - one guard test for the whole class.** A single test that, for several (cpi, inflation)
+      pairs including unequal ones, asserts each indexed quantity tracks its declared clock: bracket
+      limits, standard deduction, IRMAA thresholds, ACA multiple, QCD limit and SS COLA move with
+      `cpiRate`; spendGoal, Cash Reserve, property tax and pension COLA move with `inflation`;
+      forecast factors move with neither. The clock table above is the specification. Without it the
+      next quantity added picks a clock by whatever is in scope, which is how every defect here
+      arrived.
+
+- [ ] **P70g - release.** Behavior change touching every plan: changelog entry with a "your saved
+      plan will not reproduce" consequence line, and the README caveat added in v11.1657 ("taxes and
+      Social Security are not yet adjusted for variable inflation") retired, since it stops being
+      true.
+- [x] **The no-sequence fallback, measured 2026-08-26. This is what P70c must decide.** A deterministic run has no
       `inflationSequence`, so `yr.yearInflation` falls back to `inputs.inflation` - **not** to
       `inputs.cpi`. Measured on a plain sidebar run with no path at all:
 
@@ -1005,7 +1094,7 @@ in the measuring phase.
       today) or `inputs.cpi` (which would leave deterministic plans untouched and confine the change
       to paths). The second is probably right - `cpi` is the user's stated indexation rate and
       `inflation` is their spending rate - but it is a decision, not an oversight to patch quietly.
-- **Status:** P70a done; P70b is the next decision, and it is a default change
+- **Status:** P70a done and committed (89c26d7). P70b..P70g planned 2026-08-26 from a full audit of every inflation-linked quantity. **P70b is a shipped bug needing no Monte Carlo and can ship on its own.**
 - **Independent:** no phase dependencies
 
 ---

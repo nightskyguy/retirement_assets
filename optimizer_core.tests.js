@@ -4108,6 +4108,67 @@ test('tax creep: reaches Monte Carlo and is path-independent', () => {
     assert(sumCol(pathA, 'StateTax') > sumCol(flat, 'StateTax'), 'MC path pays the state creep');
 });
 
+// ── P70: cpiFollowsPath, the opt-in path-following bracket indexation ─────────
+// The flag exists so cpi_index_harness.js can measure whether fixed indexation overstates tax on
+// high-inflation paths. It is OFF everywhere in the product, so the first test is the one that
+// matters most: it must be impossible for the flag to have changed anything by default.
+//
+// CREEP_BASE cannot be used directly: it inherits BASE's cpi of 0 and ss1 of 0, which would make
+// the indexation clock a constant 1 and leave the SS assertion below with nothing to measure.
+const CPIIDX_BASE = { ...CREEP_BASE, cpi: 0.02, inflation: 0.02, ss1: 40000, ss1Age: 67, die1: 95 };
+const CPIIDX_N = 40;
+const CPIIDX_RETURNS = Array.from({ length: CPIIDX_N }, (_, i) => 0.04 + (i % 5) * 0.01);
+// Deliberately far above the typed 2%, so anything reading the wrong clock diverges visibly.
+const CPIIDX_INFL = Array.from({ length: CPIIDX_N }, (_, i) => 0.06 + (i % 4) * 0.02);
+
+test('cpiFollowsPath: off by default, and an explicit false is byte-identical (regression guard)', () => {
+    const returnSequence = CPIIDX_RETURNS, inflationSequence = CPIIDX_INFL;
+    const bare     = simulate({ ...CPIIDX_BASE, returnSequence, inflationSequence });
+    const explicit = simulate({ ...CPIIDX_BASE, returnSequence, inflationSequence, cpiFollowsPath: false });
+    assert(JSON.stringify(bare.log) === JSON.stringify(explicit.log),
+        'an explicit cpiFollowsPath:false must produce the exact same log as omitting the field');
+    assert(JSON.stringify(bare.totals) === JSON.stringify(explicit.totals),
+        'an explicit cpiFollowsPath:false must produce the exact same totals as omitting the field');
+    // And with the flag off the indexation clock ignores the path entirely: every year's cpiFactor
+    // is the typed cpi compounded, whatever the path did.
+    let cum = 1;
+    for (const r of bare.log.filter(e => e.year !== undefined)) {
+        assertNear(r['-cpiFactor'], cum, 'cpiFactor tracks the typed cpi when the flag is off', 1e-9);
+        cum *= (1 + CPIIDX_BASE.cpi);
+    }
+});
+
+test('cpiFollowsPath: on, the tax code is indexed by the path, not by the typed rate', () => {
+    const returnSequence = CPIIDX_RETURNS, inflationSequence = CPIIDX_INFL;
+    const args = { ...CPIIDX_BASE, returnSequence, inflationSequence };
+    const fixed = simulate({ ...args });
+    const path  = simulate({ ...args, cpiFollowsPath: true });
+
+    const fRows = fixed.log.filter(e => e.year !== undefined);
+    const pRows = path.log.filter(e => e.year !== undefined);
+
+    // The path inflates at 6-10% against a typed 2%, so the indexation clock must run well ahead.
+    const lastF = fRows[fRows.length - 1], lastP = pRows[pRows.length - 1];
+    assert(lastP['-cpiFactor'] > lastF['-cpiFactor'] * 2,
+        `path indexation should run far ahead: ${lastP['-cpiFactor']} vs ${lastF['-cpiFactor']}`);
+    // cpiFactor must equal the compounded PATH, year for year.
+    let cum = 1;
+    for (let i = 0; i < pRows.length; i++) {
+        assertNear(pRows[i]['-cpiFactor'], cum, `year ${i}: cpiFactor tracks the path`, 1e-9);
+        cum *= (1 + inflationSequence[i]);
+    }
+    // The point of it: the bracket ceiling the plan aims at rises with the path rather than
+    // standing still in real terms. Checked on the last year, where the two clocks are furthest apart.
+    assert(lastP.goalFedBracketLimit === undefined || lastP.goalFedBracketLimit >= lastF.goalFedBracketLimit,
+        'the federal bracket limit must not be lower under path-following indexation');
+    // Social Security rides the same clock, so it rises too - that is the offset the study measures.
+    assert(sumCol(path, 'SSincome') > sumCol(fixed, 'SSincome'),
+        'SS COLA follows cpiRate, so path-following must pay more nominal SS');
+    // The flag is not inert: something in the tax outcome moved.
+    assert(sumCol(path, 'totalTax') !== sumCol(fixed, 'totalTax'),
+        'path-following indexation must change the tax actually paid');
+});
+
 // ── PR1: break-even heirs rate + time-limited conversions ─────────────────────
 // All expected values below were captured from the real engine before being pinned here.
 const CONV_BASE = { ...BASE, IRA1: 1500000, spendGoal: 90000,

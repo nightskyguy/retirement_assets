@@ -27,6 +27,7 @@ at load time — they are fixtures, not studies. The rule and the reasoning are 
 | `irmaa_margin_harness.js` | **node** | Does an explicit IRMAA safety margin buy anything, now that the tier ceiling is projected forward? |
 | `irmaa_cpi_risk_harness.js` | **node** | Same question with the CPI allowed to come out different from the one the plan assumed. Reverses the answer. |
 | `irmaa_default_harness.js` | **node** | Which margin setting should be the DEFAULT, and which of the six can be deleted. Separates the IRMAA effect from the conversion-sizing side effect that dwarfs it. |
+| `cpi_index_harness.js` | **node** | P70a: does indexing the tax code at a FIXED CPI, while spending follows the path, overstate tax on high-inflation paths? Yes, by 8% overall, and it invents plan failures. |
 
 ## betr_harness.js  (node)
 
@@ -252,3 +253,28 @@ identical to `unbounded` everywhere), and as of 2026-08-10 q3/q4 over the Stage-
 3. **Harvest years leave real money on the table** (descriptive): ~$111,700 of forgone IRA draw
    per harvest year; median row forgoes 57% of its lifetime voluntary IRA draws. Stage 2's q6()
    (`cycleCoexist`) measures the causal value of reclaiming it.
+
+## cpi_index_harness.js  (node)
+
+```bash
+node .test_harnesses/cpi_index_harness.js
+```
+
+**Full results, tables and predictions live in [`CPI_INDEX_RESULTS.md`](CPI_INDEX_RESULTS.md).**
+
+P70a. `sim.inflation` follows the path; `sim.cpiRate` - which indexes federal and state brackets,
+the LTCG brackets, IRMAA thresholds, the ACA FPL multiple, the IRA goal and Social Security COLA -
+advances at the fixed `inputs.cpi`. This harness runs the Stress Test's own scenario set through
+both regimes, using the opt-in `cpiFollowsPath` input (default OFF, so the product is unchanged).
+
+Unlike `irmaa_cpi_risk_harness.js`, which re-bills decisions in post and drops feedback as
+second-order, this one needs the flag inside the loop: creep moves the bracket ceiling, which moves
+the withdrawal, which moves the balance, which moves the ruin year.
+
+Headline (2026-08-26): **fixed indexation overstates tax on high-inflation paths, and invents plan
+failures.** Lifetime tax across 780 plan-scenario pairs is 8.32% lower under path-following; 38
+scenarios go from ruined to surviving and **none** goes the other way. The sign tracks
+realized-minus-assumed CPI monotonically (+1.4% when the path came in cold, -11.9% when it ran more
+than 3 points hot), and the lower the CPI the user types, the worse the distortion. Two surprises:
+IRMAA dollars move only half as far as IRMAA tier-years (the premium clock follows the same rate),
+and the ACA effect shows up as a moved ceiling with zero breaches in either arm.

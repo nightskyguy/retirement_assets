@@ -4681,3 +4681,67 @@ slices in Table 6, "iteratively" as the only nonconvexity hint) is recorded in t
 Ragsdale/Seila/Little 1994 added as the published predecessor formulation.
 
 ---
+
+---
+
+## Session 2026-08-26 (worktree-p70-cpi-indexation) - P70a measured: fixed bracket indexation invents plan failures
+
+Branch off main. One engine change, one harness, two tests, one results doc.
+
+**The change.** `advanceYear` gained `cpiFollowsPath`, an opt-in input, default OFF. It picks the
+rate that advances `sim.cpiRate` (and `sim.medicareRate`): the fixed `inputs.cpi` as today, or the
+path's `yr.yearInflation`. Deliberately left alone, with a comment saying why: the gapYears
+pre-compounding (those years precede the simulation), `irmaaFwdFactor()` and the ACA one-year
+lookahead (a plan forecasting an index it cannot know - path-aware indexation is not clairvoyance),
+`taxCreepFactor` (calendar-year by design) and `propTax` (rides `inputs.inflation`).
+
+**The harness.** `.test_harnesses/cpi_index_harness.js`. Scenarios come from `buildStressBank` and
+`buildPathInputs` rather than a second copy - that is the Stress tab's own set. 30 plans (4 household
+shapes x 2 ceilings, plus an early-retiree shape x brk/ACA, crossed with assumed cpi 2.0/2.5/3.0) x
+26 stress windows x 2 arms = 1,560 sims in about a second.
+
+**The answer, and it opened the gate the phase spec set.** Lifetime tax is **8.32% lower** under
+path-following across 780 pairs. **38 scenarios go from ruined to surviving; 0 go the other way.**
+Worst single scenario -36.7%. The sign tracks realized-minus-assumed CPI monotonically over five
+buckets (+1.4% when the path came in cold, -11.9% when it ran >3pt hot; 107 of 110 cheaper in that
+tail). Mechanism visible in the drift: a 1966 start reaches cpiFactor 4.70 on the path against 1.78
+fixed - every threshold sitting at 38% of where the path's own price level put it. So P70 is an
+engine fix, not a NOTE. Full tables in `.test_harnesses/CPI_INDEX_RESULTS.md`.
+
+**Three things the write-up carries into P70b.** (1) The lower the CPI a user types, the worse the
+distortion - every family's delta shrinks monotonically 2.0% -> 3.0%, so typing a conservative rate
+buys the most distorted answer. (2) IRMAA dollars moved only half as far as IRMAA tier-years (-6.5%
+vs -10.6%), because `medicareRate` follows the same clock and reprices the surcharges that remain;
+do not quote the tier-year saving as a dollar saving. (3) Zero ACA breaches in either arm across 78
+ACA-capped runs, and those plans still carry the largest mean delta (-12.3%) - the ACA effect is a
+moved ceiling, not a breach count. A study reporting only breaches would have concluded the opposite.
+
+**P70c answered early, and it is the trap for P70b.** A deterministic run has no
+`inflationSequence`, so `yearInflation` falls back to `inputs.inflation`, NOT `inputs.cpi`. With the
+flag on and the two typed differently - ordinary, legal sidebar state - lifetime tax moves 9.1% one
+way and 6.2% the other on a plain run with no path at all. Flipping the default would silently
+reindex those plans too. Whether the no-sequence fallback should be `inflation` or `cpi` is now an
+explicit P70b decision.
+
+**Three corrections made mid-session, all mine.** (1) The first ladder inherited
+`stratRate: 0` from `irmaa_cpi_risk_harness.js`'s BASE, which is a degenerate config - no IRMAA
+tier, no ACA multiple, no rate for `computeBracketCeiling` to find a limit for. The engine returns
+NaN totals and a log of nulls rather than throwing, and my `control.taxReal ? ... : 0` guard turned
+every NaN into a 0.00% delta, so the harness printed a full page of plausible zeros. It now asserts
+every arm's totals are finite. (2) The ACA column could only ever print zero: every household
+started at 70/71, past Medicare, where `acaCapLapsed` retires the cap. Added an early-retiree shape.
+(3) Ruin-year deltas mixed survivors in, printing "-2046" for a rescue; split into RESCUED / BROKEN /
+MOVED.
+
+**Counts.** optimizer_core 322 -> **324** (two `cpiFollowsPath` tests: byte-identity with the flag
+off, and the indexation/SS/bracket-limit assertions with it on). `TestTiers.EXPECTED` and the
+`.githooks/README.md` suite table both updated in the same commit. taxPaymentPlanner 61, doclinks 22,
+`slowInCore` 3, all unchanged. Verified the control arm is genuinely inert: both arms flag-off gives
+exactly 0.00% on every aggregate.
+
+**No changelog entry, no version bump.** The flag defaults off and reaches no UI, so nothing in
+`git diff main...HEAD` is visible to a user. That changes with P70b, which will need a "your saved
+plan will not reproduce" consequence line - every Monte Carlo and Stress result moves.
+
+Note: the task_plan header still said suites 305/61/22; the real baseline was 322. Left the header
+alone rather than editing history above the line-30 marker.

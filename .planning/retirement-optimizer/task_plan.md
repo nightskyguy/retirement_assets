@@ -15,7 +15,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O1** | P70 | Bracket indexation under variable inflation - **user-confirmed interest 2026-08-26** | `P70a` |
+| **O0** | P70 | Bracket indexation: **P70a measured 2026-08-26, fixed indexation invents plan failures** | `P70b` decide default |
 | **O1** | P78 | Edit the plan against a pinned replay path *(planned 2026-08-26, was briefly numbered P75)* | `P78a` |
 | **O1** | P79 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P79a` |
 | **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
@@ -105,7 +105,7 @@ first task. Every open item in the file now carries one.
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
 | ~~DONE~~ | ~~P69~~ | ~~Replay: walk one MC or Stress sequence through the main model~~ - **COMPLETE 2026-08-26, v11.1657**, all of `P69a`-`P69h` | - | - |
-| **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
+| **O0** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path. **Measured 2026-08-26: yes, -8.3% lifetime tax and 38 invented failures** | `P70b` (decide the default) | nothing |
 | **O1** | P75 | Year-by-year withdrawal/conversion optimization - income-target reframe, edge menu, coordinate descent *(new 2026-08-25)* | `P75a` (measure first, gates the phase) | nothing |
 | **O1** | P78 | Edit the plan against a pinned replay path *(new 2026-08-26; renumbered from a colliding P75)* | `P78a` | P69 (PR #194) |
 | **O1** | P79 | Draw the 10 captured paths on the survival chart *(new 2026-08-26)* | `P79a` | P69 (PR #194) |
@@ -961,10 +961,51 @@ P70a stays measure-first: stress scenarios with `cpiRate` (and therefore SS) fol
 inflation vs today's fixed rate; per-scenario lifetime-tax and ruin-year deltas; no default change
 in the measuring phase.
 
-- [ ] **P70a** - run the existing stress scenarios with `cpiRate` following realized inflation
-      against today's fixed rate; report lifetime-tax and ruin-year deltas per scenario. Small effect
-      means a NOTE; flipped ruin years mean an engine fix. **No default change in this phase.**
-- **Status:** pending
+- [x] **P70a DONE 2026-08-26** - measured. `cpiFollowsPath` (opt-in input, default OFF, in
+      `advanceYear`) plus `.test_harnesses/cpi_index_harness.js`: the Stress Test's own scenario set
+      (`buildStressBank` + `buildPathInputs`, not a new one), 30 plans x 26 scenarios x 2 arms.
+      Full tables in [`CPI_INDEX_RESULTS.md`](../../.test_harnesses/CPI_INDEX_RESULTS.md).
+
+      **The gate opened: this is an engine fix, not a NOTE.** Lifetime tax is **8.32% lower** under
+      path-following across 780 pairs; **38 scenarios go from ruined to surviving and 0 go the other
+      way**. Worst single scenario -36.7%. The sign tracks realized-minus-assumed CPI monotonically
+      over five buckets (+1.4% cold, -11.9% when the path ran >3pt hot), and the drift is the
+      mechanism: a 1966 start reaches cpiFactor 4.70 on the path against 1.78 fixed, 2.65x.
+
+      Three things worth carrying into P70b:
+      1. **The lower the CPI a user types, the worse the distortion** - every family's delta shrinks
+         monotonically from cpi 2.0% to 3.0%. Typing a conservative rate buys the most distorted answer.
+      2. **IRMAA dollars moved only half as far as IRMAA tier-years** (-6.5% vs -10.6%), because
+         `medicareRate` follows the same clock in the test arm and reprices the surcharges that remain.
+         Do not quote the tier-year saving as a dollar saving.
+      3. **Zero ACA breaches in either arm** across 78 ACA-capped runs, and those plans still carry the
+         largest mean delta (-12.3%). The ACA effect is a moved ceiling, not a breach count.
+
+      Forecasting (`irmaaFwdFactor`, the ACA one-year lookahead) stayed on `inputs.cpi` in BOTH arms
+      and is a separate question: a plan cannot know next year's CPI.
+      Suites 324 / 61 / 22 (`slowInCore` 3); `TestTiers.EXPECTED` and `.githooks/README.md` updated.
+- [ ] **P70b** - decide the default. The measurement says path-following, and the real world agrees
+      (IRS indexes by realized chained CPI, SSA by realized CPI-W). Open calls: whether `medicareRate`
+      keeps following it (see 2 above), whether the flag reaches the UI at all or the behavior just
+      changes, and what a saved plan does - **every Monte Carlo and Stress result moves**, so this is a
+      changelog entry with a "your saved plan will not reproduce" consequence line.
+- [x] **P70c ANSWERED 2026-08-26, and the answer is a trap for P70b.** A deterministic run has no
+      `inflationSequence`, so `yr.yearInflation` falls back to `inputs.inflation` - **not** to
+      `inputs.cpi`. Measured on a plain sidebar run with no path at all:
+
+      | typed rates | flag on vs off | lifetime tax |
+      |---|---|---|
+      | cpi 2.5% = inflation 2.5% | byte-identical | 1,641,473 both |
+      | cpi 2.0% < inflation 3.5% | **differs** | 1,832,405 -> 1,665,452 (-9.1%) |
+      | cpi 3.5% > inflation 2.0% | **differs** | 1,535,319 -> 1,630,461 (+6.2%) |
+
+      Different CPI and inflation rates is a legal, ordinary sidebar state. So flipping the default
+      would silently reindex every such deterministic plan, not only Monte Carlo runs. P70b must
+      decide explicitly whether the no-sequence fallback is `inputs.inflation` (what the flag does
+      today) or `inputs.cpi` (which would leave deterministic plans untouched and confine the change
+      to paths). The second is probably right - `cpi` is the user's stated indexation rate and
+      `inflation` is their spending rate - but it is a decision, not an oversight to patch quietly.
+- **Status:** P70a done; P70b is the next decision, and it is a default change
 - **Independent:** no phase dependencies
 
 ---

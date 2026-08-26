@@ -2912,9 +2912,37 @@ function endYear(sim, yr) {
     sim.currentYear += 1;
 
     // Adjust inflation rates for subsequent rounds.
-    sim.cpiRate *= (1 + inputs.cpi);
+    //
+    // P70. Two clocks, and which one indexes the tax code is the question this flag exists to
+    // measure. `sim.inflation` has always followed the PATH (inputs.inflationSequence, per Monte
+    // Carlo path); `sim.cpiRate` - which indexes federal and state bracket limits, the LTCG
+    // brackets, IRMAA thresholds, the ACA FPL multiple, the IRA goal, QCD sizing and Social
+    // Security COLA - has always advanced at the FIXED inputs.cpi. So a path escalating spending
+    // at 11% indexes its brackets at 2.5%: artificial real bracket creep, in exactly the paths
+    // that decide a plan's fate. The SS side of cpiRate pushes the other way (that path also
+    // understates SS income), so the net sign is not obvious, which is why P70a measures before
+    // anything changes by default.
+    //
+    // cpiFollowsPath is OFF by default: every existing run stays byte-identical. Real-world note
+    // for whoever decides the default - the IRS indexes brackets by realized chained CPI and SSA
+    // indexes COLA by realized CPI-W, so path-following is the realistic model, not the exotic one.
+    //
+    // NOT covered by this flag, deliberately:
+    //   - the gapYears pre-compounding in simulate(). Those years precede the simulation; no path
+    //     exists there.
+    //   - irmaaFwdFactor() and the ACA one-year lookahead in computeBracketCeiling(). Those are the
+    //     plan FORECASTING an index it cannot know. Path-aware indexation does not hand a plan
+    //     clairvoyance about next year's CPI, so they stay on inputs.cpi under both arms.
+    //   - taxCreepFactor(), which is a function of the calendar year only, by design.
+    //   - propTax, which tracks inputs.inflation rather than cpi.
+    //
+    // medicareRate follows the same rate, keeping inputs.inflation as the fixed excess-medical
+    // spread: Part B premiums track realized costs, and freezing the premium clock while MAGI runs
+    // would mix two indexation regimes inside one run.
+    const idxRate = inputs.cpiFollowsPath ? yr.yearInflation : inputs.cpi;
+    sim.cpiRate *= (1 + idxRate);
     sim.inflation *= (1 + yr.yearInflation);
-    sim.medicareRate *= (1 + inputs.cpi + inputs.inflation)
+    sim.medicareRate *= (1 + idxRate + inputs.inflation)
 }
 
 /** SIMULATION ENGINE **/

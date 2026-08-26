@@ -4829,3 +4829,29 @@ JSON blob.** And the in-page changelog guard caught a real convention break: `<b
 the version stamp, and a second `<b>` for emphasis breaks the li/stamp count test.
 
 Counts: optimizer_core 326 -> **329**, page reports 760 passed.
+
+**Medicare excess spread RESOLVED, commit `20c1280`.** User chose `cpi_t + inputs.inflation` - the
+statutory index plus a CONSTANT excess-medical spread - over the doubled `cpi_t + i_t`. Three arms,
+all measured:
+
+| | no spread | doubled Medicare | fixed excess (shipped) |
+|---|---|---|---|
+| lifetime tax | -8.32% | -5.72% | **-7.80%** |
+| rescued / broken | 38 / 0 | 36 / 0 | **36 / 0** |
+| IRMAA surcharge years | -10.56% | -9.15% | **-9.21%** |
+| IRMAA dollars | -6.51% | **+29.05%** | **-6.06%** |
+
+Dollars fall again and the original P3 reading is restored: surcharge YEARS move further than
+surcharge DOLLARS, because rising thresholds lift years off the ladder while premiums still grow.
+Direction and asymmetry never moved across any arm. Pinned by a test that walks Medicare year-over-
+year growth on a steady 12% path, so the doubled form cannot return as a simplification. Written as
+`cpi_t + inputs.inflation` for intent; it reduces to `i_t + inputs.cpi`, same number, reads as less.
+
+README revisions by the repo owner included in the same commit - notably a new paragraph on what
+happens when a tool models fixed inflation but not bracket indexation (a 9% year against an assumed
+3% misplaces the 22% bracket top by ~$6.4k and compounds), which is the same defect this branch
+fixes in the engine. Counts: optimizer_core **330**, page 761.
+
+**Remaining on this branch: P70e only** - re-run `irmaa_default_harness.js` under path-following and
+revisit `IRMAA_MARGIN_DEFAULT`, which was chosen when a forward projection was exact by construction
+and the margin measured as worthless.

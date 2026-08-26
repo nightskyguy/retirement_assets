@@ -33,8 +33,9 @@ each Stress Test row has its own ▶️. The chosen sequence plays through Chart
 and the balance chart overlays a dashed "Plan (steady assumptions)" line - the same plan run at
 your flat growth and inflation assumptions - so the point where the path pulls away from the
 expected trajectory is visible rather than remembered. A new Market view in the chart row below
-draws each year's market return as bars with inflation as a line; replay switches to it
-automatically, and it is available for ordinary projections too. The Current $ toggle deflates the
+draws each year's market return as bars with inflation as a line, plus what day-one $10,000 still
+buys on its own dollar scale; replay switches to it automatically, and it is available for
+ordinary projections too. The Current $ toggle deflates the
 replayed numbers by the inflation that path actually lived, and the dashed line by its own steady
 assumptions. The plan is your own, every setting as the
 sidebar has it; only that path's market returns and inflation are applied, year by year. Annual

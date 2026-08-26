@@ -4007,17 +4007,30 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                   data: pctRet },
                 { ...mkLine('Inflation', '#e67e22', r => (r['infl%'] ?? 0) * 100),
                   type: 'line', order: 1, pointRadius: 0, borderWidth: 2.5 },
+                // Cumulative inflation as a dollar figure rather than a percent: what day-one
+                // $10,000 still buys, on its own right-hand scale. A percent line climbing to 200%
+                // would crush the +-15% axis the other two series live on.
+                { ...mkLine('What $10,000 buys', '#8e44ad', r => 10000 / (r.inflationFactor || 1)),
+                  type: 'line', order: 0, pointRadius: 0, borderWidth: 2, borderDash: [4, 3],
+                  yAxisID: 'y1' },
             ]},
             options: { ...sharedTooltip,
-                scales: { y: { ticks: { callback: v => v + '%' } } },
+                scales: {
+                    y:  { position: 'left', ticks: { callback: v => v + '%' } },
+                    y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },
+                          title: { display: true, text: 'Buying power ($)' }, ticks: dollarTicks },
+                },
                 plugins: { ...sharedTooltip.plugins,
                     tooltip: { ...sharedTooltip.plugins.tooltip,
                         callbacks: { ...sharedTooltip.plugins.tooltip.callbacks,
-                            // The shared callback rounds to whole dollars; these are small percents
-                            // ("Inflation: 3" is useless), so one decimal and a % sign.
-                            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
+                            // The shared callback rounds to whole dollars; the two rate series are
+                            // small percents ("Inflation: 3" is useless), so one decimal and a %
+                            // sign - except the buying-power line, which really is dollars.
+                            label: ctx => ctx.dataset.yAxisID === 'y1'
+                                ? `${ctx.dataset.label}: $${Math.round(ctx.parsed.y).toLocaleString()}`
+                                : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
                     // Plain legend: the hover-dim helper cannot dim the bars' per-point color
-                    // ARRAY, so with two series the default toggle-hide legend is the honest one.
+                    // ARRAY, so with three series the default toggle-hide legend is the honest one.
                     legend: { labels: legendLabels } } }
         });
     }

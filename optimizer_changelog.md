@@ -37,7 +37,12 @@ draws each year's market return as bars with inflation as a line, plus what day-
 buys on its own dollar scale; replay switches to it automatically, and it is available for
 ordinary projections too. The Current $ toggle deflates the
 replayed numbers by the inflation that path actually lived, and the dashed line by its own steady
-assumptions. The plan is your own, every setting as the
+assumptions.
+
+One caveat to read replays with: taxes and Social Security are not yet adjusted for variable
+inflation. Tax brackets, IRMAA tiers, the ACA income cap, and the Social Security COLA all index
+at the fixed CPI input even while a path's spending inflates at its own drawn rates, so a
+high-inflation path overstates tax and understates Social Security income. The plan is your own, every setting as the
 sidebar has it; only that path's market returns and inflation are applied, year by year. Annual
 Details marks the year the money runs out with a dark red line across its row, and under Show All
 shows the year-by-year inflation and market return that caused it. The Current $ toggle deflates by the inflation that path actually lived.

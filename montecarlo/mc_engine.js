@@ -11,8 +11,9 @@
 // Loadable three ways, like prng.js: module.exports for node, window for the page, bare globals
 // under importScripts in the worker.
 //
-// Depends on, and does not own: simulate() and selectionOf() (optimizer_core.js), computePercentiles() and
-// computeInputFan() (stats.js), and the bank builders in prng.js.
+// Depends on, and does not own: simulate(), selectionOf() and afterTaxWealthOfLogRow()
+// (optimizer_core.js), computePercentiles() and computeInputFan() (stats.js), and the bank
+// builders in prng.js.
 
 // Everything the caller may hook. All three are optional; the worker supplies only onProgress,
 // which is why they default to no-ops rather than being required.
@@ -90,6 +91,93 @@ function buildPathInputs(banks, p, years, baseInputs, mode) {
     }
 
     return { returnSequence, returnSequencePerAccount, inflationSequence };
+}
+
+// ── P69 replay: transport for one path's draws ───────────────────────────────────────────────────
+//
+// Replay re-runs simulate() on the main thread with a captured path's sequences injected. The
+// sequences are NOT regenerated from the seed there - that works today and breaks silently the
+// first time bank-build code changes - and the full banks are NOT shipped either (numPaths x years
+// x 4 Float64Arrays, the one expensive clone this pipeline avoids on purpose). Instead these two
+// helpers slice out one path's rows as plain arrays (~2KB per path) and rebuild the simulate()
+// inputs from them, through the SAME buildPathInputs the run itself used, so the replayed inputs
+// cannot drift from the run's.
+
+// One path's rows from the banks, as plain arrays that survive JSON and structured clone. Only the
+// arrays the mode actually has: gbm/aam ship scenario + synthInflation, bootstrap/stress ship
+// scenario + the four asset rows.
+function sliceBankRowsForPath(banks, p, years, mode) {
+    const { scenarioBank, multiAssetBank, synthInflationBank } = banks;
+    const row = (bank) => Array.from(bank.subarray(p * years, (p + 1) * years));
+    const rows = { scenario: row(scenarioBank) };
+    if ((mode === 'bootstrap' || mode === 'stress') && multiAssetBank) {
+        rows.equity = row(multiAssetBank.equity);
+        rows.intl   = row(multiAssetBank.intl);
+        rows.bonds  = row(multiAssetBank.bonds);
+        if (multiAssetBank.inflation) rows.inflation = row(multiAssetBank.inflation);
+    }
+    if (synthInflationBank) rows.synthInflation = row(synthInflationBank);
+    return rows;
+}
+
+// The inverse: wrap one path's rows as a single-path bank and hand it to buildPathInputs at p=0.
+// Returns exactly what the run's own call returned for that path - the round-trip is node-tested.
+function pathInputsFromBankRows(rows, baseInputs, mode) {
+    const years = rows.scenario.length;
+    const banks = {
+        scenarioBank: Float64Array.from(rows.scenario),
+        multiAssetBank: rows.equity ? {
+            equity:    Float64Array.from(rows.equity),
+            intl:      Float64Array.from(rows.intl),
+            bonds:     Float64Array.from(rows.bonds),
+            inflation: rows.inflation ? Float64Array.from(rows.inflation) : null,
+        } : null,
+        synthInflationBank: rows.synthInflation ? Float64Array.from(rows.synthInflation) : null,
+    };
+    return buildPathInputs(banks, 0, years, baseInputs, mode);
+}
+
+// ── P69 replay: which paths are worth walking through the main model ─────────────────────────────
+//
+// The capture set is the worst CAPTURE_WORST_N paths plus one sample at each rank percentile in
+// CAPTURE_RANK_PCTS, so the set spans failure through success rather than only failures. These two
+// constants are the ONE place the count and the sampled ranks live.
+const CAPTURE_WORST_N   = 5;
+const CAPTURE_RANK_PCTS = [5, 25, 50, 75, 95];
+
+// Ranks every path of one variation on ONE whole-run outcome and returns the capture rows,
+// worst-first. The total order: ruined paths below all survivors, earliest ruin worst; survivors by
+// ascending metric (after-tax terminal wealth); path index as the deterministic tie-break.
+//
+// This exists because the percentile BANDS are not paths: computePercentiles() sorts each year
+// independently, so the p50 line is an envelope no simulation ever lived. A "p50 sample" is only
+// well-defined as the path at that rank of a whole-run ordering - which is what rankPct labels.
+// Rows are labeled by rank percentile, never as "the p50 path".
+//
+// Pure: takes the per-path arrays runPass() already computes, returns
+// [{ pathIndex, rank, rankPct, ruinYear, metric }] with no sequences attached - shipping the
+// sequences is transport, not selection. Ranks that coincide (a worst-N path that also lands on a
+// sampled percentile, inevitable at small numPaths) appear once.
+function selectCapturePaths(metricPerPath, ruinYears, numPaths, worstN, rankPcts) {
+    worstN   = worstN   ?? CAPTURE_WORST_N;
+    rankPcts = rankPcts ?? CAPTURE_RANK_PCTS;
+    const order = Array.from({ length: numPaths }, (_, p) => p).sort((a, b) => {
+        const ruinedA = ruinYears[a] > 0, ruinedB = ruinYears[b] > 0;
+        if (ruinedA !== ruinedB) return ruinedA ? -1 : 1;
+        if (ruinedA && ruinYears[a] !== ruinYears[b]) return ruinYears[a] - ruinYears[b];
+        if (metricPerPath[a] !== metricPerPath[b]) return metricPerPath[a] - metricPerPath[b];
+        return a - b;
+    });
+    const ranks = new Set();
+    for (let i = 0; i < Math.min(worstN, numPaths); i++) ranks.add(i);
+    for (const pct of rankPcts) ranks.add(Math.round(pct / 100 * (numPaths - 1)));
+    return [...ranks].sort((x, y) => x - y).map(rank => ({
+        pathIndex: order[rank],
+        rank,
+        rankPct:   numPaths > 1 ? +(100 * rank / (numPaths - 1)).toFixed(1) : 0,
+        ruinYear:  ruinYears[order[rank]] || null,
+        metric:    metricPerPath[order[rank]],
+    }));
 }
 
 // Builds the return and inflation banks for one mode, plus the headline statistics the UI reports
@@ -273,6 +361,9 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
         const ruinYears    = new Uint16Array(numPaths);    // 0 = survived to end of plan
         const taxPerPath   = new Float64Array(numPaths);   // lifetime taxes for each path
         const spendPerPath = new Float64Array(numPaths);   // lifetime real (current-$) delivered spend
+        // P69: one whole-run outcome per path, so the capture selector has a total order to rank
+        // on. After-tax terminal wealth, the same basis Break Even and the stop-year search score.
+        const metricPerPath = new Float64Array(numPaths);
         let ruinCount = 0;
 
         for (let p = 0; p < numPaths; p++) {
@@ -299,6 +390,7 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             } catch (e) {
                 // Treat a crashed simulation as immediate ruin
                 ruinYears[p] = baseInputs.startYear ?? 2026;
+                metricPerPath[p] = -Infinity;
                 ruinCount++;
                 continue;
             }
@@ -306,6 +398,10 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             taxPerPath[p]   = result.totals.tax ?? 0;
             spendPerPath[p] = result.totals.spendCurrentDollars ?? 0;
             const log = result.log;
+            const lastRow = log[log.length - 1];
+            metricPerPath[p] = lastRow
+                ? afterTaxWealthOfLogRow(lastRow, baseInputs.futureIRATaxRate)
+                : -Infinity;
             let ruined = false;
 
             for (let y = 0; y < years; y++) {
@@ -393,6 +489,10 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
             // previously collapsed to medianRuinYear and discarded; the stress table needs the
             // individual years to color and sort by. At <= 20 entries the transfer is free.
             ruinYearsPerPath: mode === 'stress' ? Array.from(ruinYears) : null,
+            // P69: the replay capture rows - worst-N plus rank-percentile samples, worst-first,
+            // ~10 small objects per variation. Sequences are NOT attached here; the replay UI
+            // gets them separately, for the one variation being replayed, not all of them.
+            captured: selectCapturePaths(metricPerPath, ruinYears, numPaths),
         });
 
         // Progress update every 5 variations and on the last one.
@@ -420,9 +520,28 @@ async function runPass(cfg, rng, mode, progressOffset, progressWeight, runVariat
         : synthInflationBank;
     const inputFan = computeInputFan(equityBankForFan, inflationBankForFan, numPaths, years);
 
+    // P69 transport. Main pass: the draw rows for the captured paths of ONE variation - the
+    // sidebar's own plan (cfg.captureVariationIndex, computed by the page; after P74's
+    // withCurrentPlan() that variation is always in the run). Not the union across variations: a
+    // Compare run has ~150 of them, replay always runs the user's plan, and the whole point of
+    // shipping rows instead of banks is staying at ~10 paths x ~2KB. Stress pass: rows for every
+    // path - there are at most a few dozen, the table offers replay on each, and the labels that
+    // name them are already in the message.
+    let capturedBankRows = null, pathBankRows = null;
+    if (mode === 'stress') {
+        pathBankRows = Array.from({ length: numPaths },
+            (_, p) => sliceBankRowsForPath(banks, p, years, mode));
+    } else {
+        const captureVi = Math.min(Math.max(cfg.captureVariationIndex ?? 0, 0), varResults.length - 1);
+        capturedBankRows = {};
+        for (const r of varResults[captureVi]?.captured ?? []) {
+            capturedBankRows[r.pathIndex] = sliceBankRowsForPath(banks, r.pathIndex, years, mode);
+        }
+    }
+
     return {
         varResults, numPaths, medianAnnualReturn, minAnnualReturn, maxAnnualReturn,
-        assetRanges, inflationStats, inputFan,
+        assetRanges, inflationStats, inputFan, capturedBankRows, pathBankRows,
         // Everything above is measured over the WHOLE plan horizon on the sequence each scenario
         // actually lived through, not over the ranking window: 'combined' has five windows and
         // 'all' has none, so a window-scoped figure has nothing to be scoped to.
@@ -441,6 +560,10 @@ function buildStressMsg(stress) {
         numPaths:       stress.numPaths,
         assetRanges:    stress.assetRanges,
         inflationStats: stress.inflationStats,
+        // P69: one bundle of draw rows per stress path, index-aligned with labels/startYears, so
+        // any stress row can be replayed. ~2KB x at most a few dozen paths; the four big banks
+        // below still stay behind.
+        pathBankRows:   stress.pathBankRows ?? null,
         labels:         b?.labels      ?? null,
         startYears:     b?.startYears  ?? null,
         realYears:      b?.realYears   ?? null,
@@ -528,6 +651,11 @@ async function runJob(cfg, hooks) {
         assetRanges:       main.assetRanges,
         inflationStats:    main.inflationStats,
         inputFan:          main.inputFan,
+        // P69: draw rows for the captured paths of the capture variation (the sidebar's plan), and
+        // which variation that was, so the page pairs the rows with the right `captured` metadata.
+        capturedBankRows:       main.capturedBankRows,
+        captureVariationIndex:  Math.min(Math.max(cfg.captureVariationIndex ?? 0, 0),
+                                         main.varResults.length - 1),
         stress: buildStressMsg(stress),
     };
 }
@@ -535,7 +663,7 @@ async function runJob(cfg, hooks) {
 // Same three-host tail as prng.js. Keep the two lists identical: a name missing from one of them
 // fails only in that host, which is exactly the kind of drift this file exists to end.
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, MC_NO_HOOKS };
+    module.exports = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, selectCapturePaths, sliceBankRowsForPath, pathInputsFromBankRows, CAPTURE_WORST_N, CAPTURE_RANK_PCTS, MC_NO_HOOKS };
 } else if (typeof window !== 'undefined') {
-    window.MCEngine = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, MC_NO_HOOKS };
+    window.MCEngine = { runJob, runPass, buildBanks, buildPathInputs, buildStressMsg, selectCapturePaths, sliceBankRowsForPath, pathInputsFromBankRows, CAPTURE_WORST_N, CAPTURE_RANK_PCTS, MC_NO_HOOKS };
 }

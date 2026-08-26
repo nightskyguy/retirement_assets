@@ -1359,6 +1359,7 @@ if (IS_NODE) {
     Object.assign(globalThis, require('./montecarlo/stats.js'));
     globalThis.simulate = core.simulate;
     globalThis.selectionOf = core.selectionOf;
+    globalThis.afterTaxWealthOfLogRow = core.afterTaxWealthOfLogRow;
 }
 const _mcEngine = IS_NODE ? require('./montecarlo/mc_engine.js') : window.MCEngine;
 
@@ -5490,6 +5491,136 @@ test('the worker payload keeps each variation identifiable as a strategy', async
         const hits = msg.variations.filter(v => sameStrategySelection(v, plan));
         assert(hits.length === 1, `${seq} matched ${hits.length} returned variations, expected exactly 1`);
         assert(hits[0].orderedSeq === seq, `${seq} matched the row for ${hits[0].orderedSeq}`);
+    }
+});
+
+// ── P69: the replay capture selector ─────────────────────────────────────────
+// The percentile bands are envelopes, not paths (computePercentiles sorts each year on its own),
+// so "the path at rank X" has to come from ONE whole-run ordering. These pin that ordering and the
+// selection against hand-built arrays where the right answer is checkable by eye.
+
+test('P69: capture selector ranks ruined-earliest first, then survivors by wealth', () => {
+    // 10 paths: 3 ruined (2035, 2031, 2040), 7 survivors with distinct wealth. The worst path must
+    // be the 2031 ruin regardless of its metric, and the best the richest survivor.
+    const metric = Float64Array.from([900, -1, 500, -1, 100, 300, -1, 700, 200, 400]);
+    const ruin   = Uint16Array.from( [  0, 2035, 0, 2031,  0,   0, 2040, 0,   0,   0]);
+    const rows = _mcEngine.selectCapturePaths(metric, ruin, 10);
+    // Worst 5 = ranks 0-4; sampled pcts 5/25/50/75/95 of 9 -> ranks 0,2,5,7,9 (round). Dedup:
+    // {0,1,2,3,4,5,7,9} = 8 rows.
+    assert(rows.length === 8, `expected 8 deduped rows, got ${rows.length}`);
+    assert(rows[0].pathIndex === 3 && rows[0].ruinYear === 2031,
+        `worst row is path ${rows[0].pathIndex} ruin ${rows[0].ruinYear}, expected path 3 ruin 2031`);
+    assert(rows[1].pathIndex === 1 && rows[2].pathIndex === 6, 'ruined paths not in ruin-year order');
+    // Ranks 3+ are survivors in ascending wealth: 100(p4), 200(p8), 300(p5), 400(p9), 500(p2),
+    // 700(p7), 900(p0).
+    assert(rows[3].pathIndex === 4 && rows[3].ruinYear === null, 'first survivor should be the poorest');
+    const lastRow = rows[rows.length - 1];
+    assert(lastRow.pathIndex === 0 && lastRow.metric === 900, 'rank 9 should be the richest survivor');
+    // Worst-first order and honest labels: ranks strictly ascend, rankPct matches rank/(n-1).
+    for (let i = 1; i < rows.length; i++) {
+        assert(rows[i].rank > rows[i - 1].rank, 'rows are not in ascending rank order');
+    }
+    assert(rows[0].rankPct === 0 && lastRow.rankPct === 100,
+        `rank percentiles mislabeled: ${rows[0].rankPct}..${lastRow.rankPct}`);
+});
+
+test('P69: capture selector on an all-survivor run and a tiny run', () => {
+    // No failures: pure wealth ordering, no ruinYear anywhere in the capture.
+    const metric = Float64Array.from({ length: 100 }, (_, i) => (i * 37) % 100);  // shuffled 0..99
+    const ruin   = new Uint16Array(100);
+    const rows = _mcEngine.selectCapturePaths(metric, ruin, 100);
+    // Worst 5 + pcts of 99 -> ranks {0..4, 5, 25, 50, 74, 94}: 10 rows, none ruined.
+    assert(rows.length === 10, `expected 10 rows, got ${rows.length}`);
+    assert(rows.every(r => r.ruinYear === null), 'a survivor-only run reported a ruin year');
+    // The sampled ranks land where they claim: the metric at rank 50 of 0..99 shuffled is 50.
+    const r50 = rows.find(r => r.rank === 50);
+    assert(r50 && r50.metric === 50, `rank 50 carries metric ${r50 && r50.metric}, expected 50`);
+    // 3 paths: every rank collides with the worst-N set; the set stays deduped and in range.
+    const tiny = _mcEngine.selectCapturePaths(Float64Array.from([5, 1, 9]), new Uint16Array(3), 3);
+    assert(tiny.length === 3, `3 paths captured ${tiny.length} rows`);
+    assert(tiny.map(r => r.pathIndex).join(',') === '1,0,2', 'tiny run not in wealth order');
+});
+
+test('P69: every variation of a real run carries its capture rows', async () => {
+    const msg = await _mcEngine.runJob(_p71Cfg('gbm'));
+    assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
+    for (const src of [msg.variations, msg.stress.variations]) {
+        for (const v of src) {
+            assert(Array.isArray(v.captured) && v.captured.length > 0, 'a variation has no capture rows');
+            const n = src === msg.variations ? msg.numPaths : msg.stress.numPaths;
+            for (const r of v.captured) {
+                assert(r.pathIndex >= 0 && r.pathIndex < n, `pathIndex ${r.pathIndex} out of range`);
+                assert(r.rankPct >= 0 && r.rankPct <= 100, `rankPct ${r.rankPct} out of range`);
+            }
+            // The capture agrees with the headline the UI already shows: if any path was ruined,
+            // the worst capture row is ruined too, and vice versa.
+            const anyRuin = v.survivalRate < 1;
+            assert((v.captured[0].ruinYear != null) === anyRuin,
+                `survival ${v.survivalRate} but worst capture row ruinYear ${v.captured[0].ruinYear}`);
+        }
+    }
+});
+
+test('P69: sliced bank rows rebuild the exact per-path inputs, every mode', () => {
+    // The replay contract: pathInputsFromBankRows(sliceBankRowsForPath(...)) must return exactly
+    // what the run's own buildPathInputs returned for that path - same numbers, same nulls - or a
+    // replayed year is a different year than the one the sweep lived.
+    const base = _p71Base;
+    for (const mode of ['gbm', 'aam', 'bootstrap', 'stress']) {
+        const cfg = _p71Cfg(mode === 'stress' ? 'bootstrap' : mode);
+        const banks = _mcEngine.buildBanks(cfg, _mcPrng.mulberry32(7), mode);
+        const p = Math.min(3, banks.numPaths - 1);
+        const direct = _mcEngine.buildPathInputs(banks, p, cfg.years, base, mode);
+        const rows   = _mcEngine.sliceBankRowsForPath(banks, p, cfg.years, mode);
+        // Rows must be plain arrays: they cross the worker boundary and may get JSON-serialized.
+        assert(Array.isArray(rows.scenario), `${mode}: scenario row is not a plain array`);
+        const rebuilt = _mcEngine.pathInputsFromBankRows(rows, base, mode);
+        const sameSeq = (a, b, what) => {
+            assert((a === null) === (b === null), `${mode}: ${what} null-ness differs`);
+            if (a) for (let y = 0; y < cfg.years; y++) {
+                assert(a[y] === b[y], `${mode}: ${what}[${y}] ${a[y]} !== ${b[y]}`);
+            }
+        };
+        sameSeq(direct.returnSequence, rebuilt.returnSequence, 'returnSequence');
+        sameSeq(direct.inflationSequence, rebuilt.inflationSequence, 'inflationSequence');
+        assert((direct.returnSequencePerAccount === null) === (rebuilt.returnSequencePerAccount === null),
+            `${mode}: per-account null-ness differs`);
+        if (direct.returnSequencePerAccount) {
+            for (const acct of Object.keys(direct.returnSequencePerAccount)) {
+                sameSeq(direct.returnSequencePerAccount[acct], rebuilt.returnSequencePerAccount[acct],
+                    `perAccount.${acct}`);
+            }
+        }
+    }
+});
+
+test('P69: the message ships replay rows, and a replayed path reproduces the run exactly', async () => {
+    const cfg = _p71Cfg('gbm', { captureVariationIndex: 0 });
+    const msg = await _mcEngine.runJob(cfg);
+    assert(msg && !msg.error, `job failed: ${msg && msg.error}`);
+    assert(msg.captureVariationIndex === 0, `capture index echoed as ${msg.captureVariationIndex}`);
+    // Main pass: one bundle of rows per captured path of the capture variation, keys matching the
+    // captured metadata exactly - no missing path, no stowaway.
+    const cap = msg.variations[0].captured;
+    const shippedKeys = Object.keys(msg.capturedBankRows).map(Number).sort((a, b) => a - b);
+    const capKeys = [...new Set(cap.map(r => r.pathIndex))].sort((a, b) => a - b);
+    assert(JSON.stringify(shippedKeys) === JSON.stringify(capKeys),
+        `shipped rows for paths [${shippedKeys}], captured [${capKeys}]`);
+    // Stress pass: one bundle per path, index-aligned with the labels.
+    assert(Array.isArray(msg.stress.pathBankRows), 'stress message has no pathBankRows');
+    assert(msg.stress.pathBankRows.length === msg.stress.numPaths,
+        `${msg.stress.pathBankRows.length} stress row bundles against ${msg.stress.numPaths} paths`);
+    // The cross-check that the shipped rows ARE the run: rebuild a captured path's inputs, run
+    // simulate() the way replay will, and the outcome metric must equal the captured one exactly.
+    const baseInputs = cfg.variations[0];
+    for (const r of [cap[0], cap[cap.length - 1]]) {
+        const inputs = _mcEngine.pathInputsFromBankRows(
+            msg.capturedBankRows[r.pathIndex], baseInputs, msg.simulationMode);
+        const res = core.simulate({ ...baseInputs, ...inputs });
+        const replayMetric = core.afterTaxWealthOfLogRow(
+            res.log[res.log.length - 1], baseInputs.futureIRATaxRate);
+        assert(replayMetric === r.metric,
+            `path ${r.pathIndex}: replay metric ${replayMetric} !== captured ${r.metric}`);
     }
 });
 

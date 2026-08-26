@@ -4448,6 +4448,202 @@ badge green at 693. One self-inflicted detour: the changelog `<li>` I wrote used
 and an in-page test counts <b> tags to detect a swallowed entry - it caught it, which is the test
 doing its job.
 
+
+---
+
+## Session 2026-08-25 (worktree mc-path-replay) - P69 planning, no code yet
+
+Fresh worktree `mc-path-replay` off `f29b40a`, which is `origin/main` exactly. Target chosen by the
+user: **P69**, replay one Monte Carlo or Stress sequence through the main model.
+
+Re-anchored the approved design (`~/.claude/plans/cryptic-wondering-wren.md`) on the code as it
+stands after P71 and P74, because both moved every line that plan cites. Three things the read
+settled before any code:
+
+- **P69a is already done.** P71 extracted the per-path bundle as `buildPathInputs()` in
+  `montecarlo/mc_engine.js:44`, exported at `:538`, and there is no inline block left in
+  `worker.js` to extract - the worker is 42 lines. Marked complete, next item is `P69b`.
+- **`ruinYears` already survives for stress** as `ruinYearsPerPath` (`mc_engine.js:395`, kept by
+  P53). The main pass still collapses it to `medianRuinYear`. So P69b is a smaller change than the
+  plan assumed: keep the array, add the ranking metric, add the selector.
+- **`runSimulation()` has no injection point** (`optimizer_ui.js:680`) - it builds its inputs from
+  `getInputs()` and takes no argument. Replay needs exactly one, not a parallel copy of the
+  updateTable/updateStats/updateCharts pipeline. That is the P69d design constraint.
+
+Ranking metric settled as `afterTaxWealthOfLogRow` of the last log row - the basis Break Even and
+the stop-year search already score on - with ruined paths below every survivor, earliest ruin worst.
+One total order, so a rank percentile is unambiguous.
+
+Open for the user: how many paths to capture and at which ranks. Straw man is worst 5 plus ranks
+5/25/50/75/95.
+
+---
+
+## Session 2026-08-25 (worktree mc-path-replay) - P69b, the capture selector (v11.1643)
+
+User decisions first: capture worst 5 plus ranks 5/25/50/75/95 (10 rows, deduped, worst-first), and
+the replay control lands on the stress table and the main survival table in the same pass.
+
+`selectCapturePaths()` in `mc_engine.js`, pure and exported, with the count and ranks as the two
+named constants beside it. Total order: ruined below all survivors, earliest ruin worst, survivors
+by ascending after-tax terminal wealth (`afterTaxWealthOfLogRow` of the last log row - the Break
+Even basis), path index as the deterministic tie-break. `runPass` computes `metricPerPath` off the
+row it already holds - one function call per path, no second simulate - and every varResult in both
+passes now ships `captured` rows (metadata only, ~10 small objects; sequences are P69c's transport
+problem). `buildStressMsg` passes varResults through whole, so stress rows got it for free.
+
+Engine gained a dependency: `afterTaxWealthOfLogRow` from optimizer_core, hoisted onto globalThis
+in the node test shim beside simulate/selectionOf, already global in page and worker scopes.
+
+Three node tests: hand-built 10-path array where the right order is checkable by eye (ruin-year
+ordering, dedup to 8 rows, rankPct 0..100 honest), a 100-survivor run plus a 3-path dedup edge, and
+an e2e runJob asserting every variation of both passes carries in-range capture rows whose worst
+row agrees with survivalRate. Suites 320/61/22, badge green at 696. No changelog entry - nothing
+user-visible until the replay UI; title bumped to 11.1643, first <li> stays 11.1642 deliberately
+(that entry belongs to a merged branch; this branch writes its own entry when the UI ships).
+
+---
+
+## Session 2026-08-25 (worktree mc-path-replay) - P69c, replay transport (v11.1644)
+
+Two helpers in mc_engine.js, deliberately symmetric: `sliceBankRowsForPath()` pulls one path's
+draws out of the banks as plain arrays (~2KB - scenario row plus the four asset rows for
+bootstrap/stress, scenario plus synthInflation for the synthetic modes), and
+`pathInputsFromBankRows()` wraps them as a single-path bank and calls the same `buildPathInputs`
+the run itself used. No second copy of the blending code, so replayed inputs cannot drift.
+
+Scope decision worth recording: the main pass ships rows for the captured paths of ONE variation,
+the sidebar's own plan, not the union across variations. A Compare run has ~150 variations whose
+capture sets need not overlap; the union is unbounded in the wrong direction, and replay always
+runs the user's plan anyway (P69d injects sequences, never mutates inputs). The page names that
+variation via `cfg.captureVariationIndex`, computed in `runMonteCarlo()` with
+`findCurrentStrategyIdx` - `withCurrentPlan()` (P74) guarantees the match exists. The stress pass
+ships `pathBankRows` for every path, index-aligned with the labels/startYears already in the
+message, so any stress row can be replayed and still name its decade.
+
+The test that matters: rebuild a captured path's inputs from the shipped rows, run simulate(), and
+the after-tax terminal wealth equals the captured metric EXACTLY - the shipped rows are the run,
+not a reconstruction. Round-trip element-exact in all four modes. Browser-verified through the
+real worker: plan run carries captureVariationIndex 0, 10 captured rows, 10 bundles, 36/36 stress
+bundles. Suites 322/61/22, badge green at 698. Still no changelog entry; UI is P69d.
+
+---
+
+## Session 2026-08-25 (worktree mc-path-replay) - P69d+P69h, the replay UI (v11.1645)
+
+Replay is live. One injection point in runSimulation() - no parallel pipeline - overlaying the
+path's sequences onto the inputs just read from the sidebar; the sidebar controls are never
+written. A banner under the tab bar names the path (rank, survival or ruin year, mode, seed) with
+an Exit button. Entry points: "Replay worst path" on the plan headline, a pinned-row button in the
+compare survival table, and a per-row 🎬 on the stress table. Exit: the button, any sidebar input
+event (capture-phase delegated listener), or leaving Charts/Annual Details (P69h, the approved
+simplest answer - Optimizer and Tax Planner read the sidebar, which replay never writes).
+
+Two things the browser found that the plan did not:
+
+1. Plan scope never renders the survival table (it renders the headline and empties the tbody), so
+   the pinned-row control alone was unreachable in the default scope. The headline hosts the
+   button now, in both scopes.
+2. Replaying the RAW sidebar put the stress ruin year one year off (2041 vs the table's 2042).
+   Cause: swept rows are not the raw plan - every sweep row forces conversions on
+   (convertExcessToRoth true vs sidebar false, measured $55 apart by year one). The run's survival
+   rate and ruin year describe the ROW, so _replayPlanFields() now rides the variation's
+   strategy/conversion fields (selectionOf + the four page-read extras + spendGoal) along with the
+   sequences. After the fix: replayed stress balances match the engine trace to the dollar, ruin
+   2042==2042, and a survivor path's replayed after-tax wealth equals its captured metric to the
+   float (12,125,940.416580342).
+
+Also: length guard refuses a replay after the plan's dates change; banner uses inline
+display:flex/none because the .hidden class loses to an inline display. Changelog entry written
+(11.1645, the branch's one entry) and the in-page list trimmed to its documented five-entry
+ceiling. Suites 322/61/22 unchanged, badge green at 698. P69e (prev/next), P69f (overlay), P69g
+(ruin-year mark) remain.
+
+---
+
+## Session 2026-08-25 (worktree mc-path-replay) - P69e + replay control rework (v11.1645 refreshed)
+
+User feedback drove both halves. The boxed 🎬 buttons were unreadable at table size, and "worst
+path" alone is not the goal - the capture exists to span the spread. So: ▶️ replaces 🎬
+everywhere; the headline button became a compact picker listing all ten captured paths by outcome
+("Worst path · ruin 2035" ... "Rank 95% · survives", rankPct rounded for display); the stress
+rows keep a bare borderless ▶️; the pinned-row duplicate button is gone.
+
+P69e shipped in the same pass: ◀ ▶ in the banner. Captured paths step worst-to-best as the engine
+ranked them; stress scenarios step in the stress table's CURRENT display order, rebuilt at step
+time from sortStressRows(buildStressRows()), so prev/next walks exactly the list on screen. Ends
+disable their button. The picker snaps back to its placeholder after each choice so the same path
+can be picked twice.
+
+Browser-verified: pick worst (prev disabled) -> #2 worst -> ... -> rank 95% (next disabled);
+stress walk 1973 -> 1969 matches the table; badge green at 698. Changelog li and md entry
+reworded for the picker and the arrows.
+
+---
+
+## Session 2026-08-26 (worktree mc-path-replay) - P69f + Market view + stress compaction (v11.1657)
+
+Three user asks, planned in plan mode (approved design at
+~/.claude/plans/propose-how-to-overlay-serene-cocke.md), shipped as four commits.
+
+The overlay: ONE dashed gray "Plan (steady assumptions)" line on the replayed balance chart - the
+user chose it over a full second set for readability. Baseline is the SAME plan the replay runs
+(sidebar + planFields), deterministically, cached on _replayState so every fresh state or exit
+invalidates it for free. Under Current $ it deflates by its own steady inflationFactor, never the
+path's - deflating by the path's would smuggle the path back into the "expected" line. Verified:
+worst path draws expected $793k against replayed $0.
+
+The Market view: new button in the income-chart row - each year's market return as green/red bars,
+inflation as a line, percent axis, tooltip overridden to one decimal (the shared callback rounds
+to integers). adj() deliberately unused: rates are not dollars, Current $ must not touch them.
+Replay auto-switches to it on entry only (prev/next preserves a mid-replay view choice) and every
+exit restores the prior view. The tab-leave exit now also re-renders, closing the pre-existing
+quirk where replayed lines lingered bannerless.
+
+Stress table: swatch cell went display:flex with a 4px gap (the inline gap was the user's "wasted
+space", round two) and the 46px section indent dropped to 14px.
+
+Suites 322/61/22 (UI only), badge green. Version 11.1657; the branch's one changelog entry
+refreshed in place. P69 remainder: only P69g's visible ruin-year mark in Annual Details.
+
+---
+
+## Session 2026-08-26 (worktree mc-path-replay) - P69g, ruin year marked; P69 COMPLETE (v11.1657)
+
+Small and final: under replay, the first year the portfolio cannot cover its required draw - the
+same rule the engine's path loop scores ruin by, already the trigger for the pink underfunded
+shading - now gets a 2px dark red line across its row. One row only, so the year the banner names
+stands out from the pink wreckage after it. One catch the browser found: the year cell's tooltip
+was being overwritten by the Tax Planner click-handoff title set LATER in the same cell loop, so
+the ruin explanation is folded into that title and applied after it. Verified: marked row 2035
+equals the captured ruinYear, tooltip carries both messages, zero marks after exit.
+
+That closes P69 - a through h all shipped. Branch worktree-mc-path-replay holds nine commits,
+suites 322/61/22, badge green at 698. Ready for a PR.
+
+---
+
+## Session 2026-08-26 (worktree mc-path-replay) - buying power line, P70 confirmed, P78-P80 planned (filed as P75-P77, renumbered in the PR #194 merge: main had already taken P75 for the withdrawal-mix phase)
+
+Five user asks. Built: the Market view's third series - what day-one $10,000 still buys
+(10000/inflationFactor), dashed on its own right-hand dollar axis, dollar tooltip while the rate
+series keep percents. Verified $4,919 at 3%/25yr and $2,960 on the worst replayed path.
+
+Investigated: brackets do NOT follow path inflation - sim.cpiRate compounds the fixed inputs.cpi
+(optimizer_core.js:2915) while spending follows the path. That is P70, now user-confirmed
+interest, and the section gained today's anchors plus a new nuance: Social Security COLA also
+rides cpiRate, so high-inflation paths understate SS too - a partial offset to the overstated
+bracket creep. Also noted: IRS/SSA index by REALIZED inflation in the real world, so
+path-following is the realistic model. P70a stays measure-first.
+
+Planned, not built: P78 (edit the plan against a pinned path - banner lock, planFields
+handed off to the sidebar then dropped, banner stops claiming the run's outcome), P79 (draw the
+10 captured paths on the survival chart - cost answer: ~3KB transport plus legend hygiene, so
+cheap), P80 (nerdknob: record the source years of each bootstrap block - parallel srcYears bank,
+no new rng draws so CRN is untouched, byte-identical regression asserted). NOW table cleaned:
+struck rows dropped, three new O1 rows added, marker still on line 30.
+
+**PR #194 opened 2026-08-26** (worktree-mc-path-replay -> main): the whole replay feature, 12 commits, plus the variable-inflation caveat in the changelog. P78/P79/P80 plans ride along in .planning (renumbered from P75-P77 at merge time).
 ---
 
 ## Session 2026-08-25 (worktree retirement-optimizer-asset-allocation) - filed P75, year-by-year withdrawal mix; found e-ORP

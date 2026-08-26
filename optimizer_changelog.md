@@ -17,6 +17,43 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.1657"></a>
+
+## 11.1657
+
+### Walk one Monte Carlo path through your plan
+
+The Monte Carlo tab reports survival rates and percentile bands, but a band is a statistic, not a
+sequence any plan actually lived. Every run now captures ten of its paths - the five worst, plus one
+at each of the 5th, 25th, 50th, 75th and 95th percentiles of the outcome ranking - and the Stress
+Test keeps every one of its historical scenarios.
+
+A ▶️ Replay picker beside the survival headline offers every captured path, worst to best, and
+each Stress Test row has its own ▶️. The chosen sequence plays through Charts and Annual Details,
+and the balance chart overlays a dashed "Plan (steady assumptions)" line - the same plan run at
+your flat growth and inflation assumptions - so the point where the path pulls away from the
+expected trajectory is visible rather than remembered. A new Market view in the chart row below
+draws each year's market return as bars with inflation as a line, plus what day-one $10,000 still
+buys on its own dollar scale; replay switches to it automatically, and it is available for
+ordinary projections too. The Current $ toggle deflates the
+replayed numbers by the inflation that path actually lived, and the dashed line by its own steady
+assumptions.
+
+One caveat to read replays with: taxes and Social Security are not yet adjusted for variable
+inflation. Tax brackets, IRMAA tiers, the ACA income cap, and the Social Security COLA all index
+at the fixed CPI input even while a path's spending inflates at its own drawn rates, so a
+high-inflation path overstates tax and understates Social Security income. The plan is your own, every setting as the
+sidebar has it; only that path's market returns and inflation are applied, year by year. Annual
+Details marks the year the money runs out with a dark red line across its row, and under Show All
+shows the year-by-year inflation and market return that caused it. The Current $ toggle deflates by the inflation that path actually lived.
+
+A banner names what is being replayed: its rank in the run, whether it survives, and for a stress
+row the historical start year. Its ◀ ▶ buttons step to the previous or next path - captured paths
+in outcome order, stress scenarios in the stress table's current order. Exit with the banner's
+button; editing any input or leaving Charts
+and Annual Details also returns you to your plan's own projection. Replayed paths are the exact
+sequences the run scored, never re-created approximations.
+
 <a id="11.1642"></a>
 
 ## 11.1642

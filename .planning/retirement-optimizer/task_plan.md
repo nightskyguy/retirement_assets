@@ -11,19 +11,19 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 
 | Pri | ID | Task | Next item |
 |---|---|---|---|
-| **O2** | P65 | Schedule A beyond SALT; medical is the piece likely to qualify | `P65a` |
 | **O1** | P36 | Phased efficiency study, round 2 | `P36b` |
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | **O1** | P75 | Year-by-year withdrawal mix; measure edge residency first | `P75a` |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69a` |
-| **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
+| **O1** | P70 | Bracket indexation under variable inflation - **user-confirmed interest 2026-08-26** | `P70a` |
+| **O1** | P78 | Edit the plan against a pinned replay path *(planned 2026-08-26, was briefly numbered P75)* | `P78a` |
+| **O1** | P79 | Draw the 10 captured paths on the survival chart *(planned 2026-08-26)* | `P79a` |
+| **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(planned 2026-08-26)* | `P80a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
-**P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral that justified keeping Brokerage out of the
-third pass measured **0 capped years in 3,960 armed runs**; the exclusion cost $372,455 of unpayable spending to
-save $1,711. Default flipped, old tripwire kept as a regression guard. `forcedIRAAllowBrokerage` measured and
-**rejected**. Open call, still in P56: the brokerage footnote prints an absolute cost, not extra-vs-Plan-Q.
+**P32 COMPLETE, v11.15e3, MERGED in PR #185.** The cap-gains spiral measured 0 capped years in 3,960 armed
+runs; exclusion re-scoped, `forcedIRAAllowBrokerage` rejected. Open call in P56: the brokerage footnote
+prints an absolute cost, not extra-vs-Plan-Q.
 
 User 2026-08-07: P28 and P40 demoted to **O3**, P37 and P48 raised to **O2**. Full index next.
 
@@ -104,9 +104,12 @@ first task. Every open item in the file now carries one.
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
-| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69a` | nothing - P71 shipped; P69a is subsumed by `buildPathInputs()` in `montecarlo/mc_engine.js` |
+| ~~DONE~~ | ~~P69~~ | ~~Replay: walk one MC or Stress sequence through the main model~~ - **COMPLETE 2026-08-26, v11.1657**, all of `P69a`-`P69h` | - | - |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O1** | P75 | Year-by-year withdrawal/conversion optimization - income-target reframe, edge menu, coordinate descent *(new 2026-08-25)* | `P75a` (measure first, gates the phase) | nothing |
+| **O1** | P78 | Edit the plan against a pinned replay path *(new 2026-08-26; renumbered from a colliding P75)* | `P78a` | P69 (PR #194) |
+| **O1** | P79 | Draw the 10 captured paths on the survival chart *(new 2026-08-26)* | `P79a` | P69 (PR #194) |
+| **O1** | P80 | Nerdknob: the historical years behind each bootstrap block *(new 2026-08-26)* | `P80a` | P69 (PR #194) |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
 | **O2** | P63 | State safe harbor generically — DEFERRED, but it exposed two live bugs *(section existed since 2026-08-18 with no index row)* | `P63a` (dead pro-rata flag) | `P63b` blocked on P63 proper |
@@ -764,16 +767,171 @@ Charts next to your own plan. Design and sub-items are in the approved plan at
   time bank-build code changes.
 - User decision 2026-08-23: capture a SPREAD, not only failures, and the headline is the overlay
   against the user's own plan. Year-by-year scrubbing inside a path is out of scope.
-- [ ] **P69a** - extract worker.js's per-path input bundle into a shared helper
-- [ ] **P69b** - keep `ruinYears` in the main pass; capture worst-N plus samples across the ranking
-- [ ] **P69c** - ship the captured set for both the main and stress passes
-- [ ] **P69d** - replay mode in the UI, inputs never mutated
-- [ ] **P69e** - prev/next across the captured set
-- [ ] **P69f** - overlay the user's own plan on the replayed path
-- [ ] **P69g** - Annual Details under replay, ruin year marked
-- [ ] **P69h** - decide what replay does to the Optimizer tab and the Tax Planner handoff
-- **Status:** pending
+### Plan of record 2026-08-25 (fresh worktree `mc-path-replay`, branched at `f29b40a`)
+
+Design is the approved plan at `C:/Users/starc/.claude/plans/cryptic-wondering-wren.md`; the items
+below are that design re-anchored on the code as it stands AFTER P71 and P74, which moved every
+line the original plan cited. `montecarlo/worker.js` is 42 lines now and holds nothing to extract;
+the engine is `montecarlo/mc_engine.js`.
+
+- [x] **P69a** - shared per-path input bundle. **DONE, no work left**: `buildPathInputs(banks, p,
+      years, baseInputs, mode)` at `montecarlo/mc_engine.js:44`, called from the one `runPass` at
+      `:294` and exported at `:538`. Shipped as part of P71 (v11.161C-F, `b7f8808`).
+- [x] **P69b** - **DONE v11.1643** - `selectCapturePaths()` + `CAPTURE_WORST_N`/`CAPTURE_RANK_PCTS`
+      in `mc_engine.js`, exported; `metricPerPath` computed in the path loop off the row the loop
+      already holds; every varResult (main AND stress pass) now carries `captured` rows
+      `{ pathIndex, rank, rankPct, ruinYear, metric }`, worst-first, no sequences. Three node tests.
+      Suites 320/61/22, badge green at 696. Original notes: `ruinYears` is already computed in EVERY mode
+      (`mc_engine.js:273`) and already survives for stress as `ruinYearsPerPath` (`:395`); the main
+      pass discards it at the collapse to `medianRuinYear` (`:344`). Keep it, and rank every path on
+      **one** whole-run metric so a percentile sample is unambiguous.
+  - Metric: `afterTaxWealthOfLogRow(log[log.length-1], futureIRATaxRate)` (`optimizer_core.js:3271`),
+    the same basis Break Even and the stop-year search score on. Ruined paths sort below all
+    survivors, ordered earliest-ruin-worst. Read it off `result` in the existing path loop
+    (`mc_engine.js:296-336`) - it is one call per path, no second simulate.
+  - Returns `{ pathIndex, ruinYear, rankPct, metric, sequences }`. Count and the sampled ranks are
+    constants in ONE place, named, not scattered literals - the `[40,60]` complaint from P30.
+  - **User decision 2026-08-25:** capture the **worst 5 plus ranks 5/25/50/75/95** = 10 rows. A row
+    that is both (a worst-5 path that also lands on a sampled rank) appears once, and the list stays
+    ordered worst-first so prev/next reads as a walk from failure to success.
+- [x] **P69c** - **DONE v11.1644.** `sliceBankRowsForPath()` / `pathInputsFromBankRows()` in
+      `mc_engine.js` - one path's draws out as plain arrays (~2KB), back in through the SAME
+      `buildPathInputs`, so replayed inputs cannot drift from the run's. Main pass ships rows for
+      the captured paths of ONE variation - the sidebar plan, `cfg.captureVariationIndex`, computed
+      in `runMonteCarlo()` via `findCurrentStrategyIdx` (withCurrentPlan guarantees a match) - NOT
+      the union across ~150 Compare variations. Stress msg ships `pathBankRows` for every path,
+      index-aligned with `labels`/`startYears` which were already in the message. Node: round-trip
+      exact in all four modes; e2e asserts shipped keys == captured pathIndexes, 36/36 stress
+      bundles, and a replayed path's simulate() reproduces the captured metric EXACTLY. Browser:
+      plan-scope run through the real worker carries all fields. Seed-regeneration still forbidden.
+- [x] **P69d** - **DONE v11.1645.** One injection point in `runSimulation()`, no parallel
+      pipeline: an active `_replayState` overlays the run variation's plan fields plus the path's
+      sequences onto the inputs just read from the sidebar; sidebar CONTROLS never touched. Banner
+      under the tab bar names rank, survival/ruin year, mode and seed; `Exit replay` button.
+      Controls: `🎬 Replay worst path` on the plan headline (works in BOTH scopes - plan scope
+      never renders the survival table, which is where the first attempt put it), a pinned-row
+      button in the compare table, and a 🎬 per stress row in the swatch cell. `startReplay()`
+      refuses a replay whose sequence length no longer matches `mcPlanYears(getInputs())`.
+      **Design correction, measured mid-build:** replaying the RAW sidebar put the stress ruin year
+      off by one (2041 vs table 2042) because swept rows are not the raw plan - conversions are
+      forced on. `_replayPlanFields(v)` now injects the run variation's strategy/conversion fields
+      (via `selectionOf`) with the sequences, so the replayed year-by-year agrees with the numbers
+      the run reported. Verified exact: stress balances match the engine trace to the dollar, ruin
+      2042==2042, and a survivor path's replayed after-tax wealth equals the captured metric to the
+      float ($12,125,940.416580342). Original decision stands: control on both tables, one pass.
+- [x] **P69e** - **DONE (same session as P69d).** ◀ ▶ in the banner; captured paths step in the
+      engine's worst-to-best order, stress scenarios step in the stress table's CURRENT display
+      order (rebuilt via `sortStressRows(buildStressRows())` at step time, so the walk matches
+      what the reader sees). Ends disable. Entry control became a **picker** (user call: worst
+      alone is not the goal, and the boxed 🎬 buttons were unreadable) - a compact `<select>` on
+      the headline listing all ten captured paths by outcome, ▶️ everywhere instead of 🎬, and
+      the pinned-row duplicate button removed as clutter.
+- [x] **P69f** - **DONE v11.1657.** One dashed gray "Plan (steady assumptions)" Total Wealth line
+      (user's readability call: not a second full set). Baseline = the SAME plan the replay runs
+      (sidebar + planFields) on flat assumptions, so the gap is purely the path's market story;
+      cached on `_replayState` itself, so prev/next and every exit invalidate it for free. Under
+      Current $ it deflates by its OWN fixed-inflation factors, never the path's. Same commit: new
+      **Market** income-chart view (return bars + inflation line, percent axis, Current-$-immune),
+      auto-shown on replay entry with the prior view restored on every exit; the tab-leave exit now
+      re-renders, closing the stale-bannerless-chart quirk. Stress swatch cell went flex/tight and
+      the 46px indent dropped to 14px (second round of the space complaint).
+- [x] **P69g** - **DONE v11.1657.** Under replay the FIRST year the portfolio cannot cover its
+      required draw - the engine's own ruin rule - gets a dark red line across its row, one row
+      only, with the ruin-year explanation folded into the year cell's Tax Planner tooltip (which
+      would otherwise overwrite it, set later in the same loop). Later underfunded years keep their
+      pink; the mark distinguishes the year the banner names. Deflation already read the log's own
+      inflationFactor and infl%/return% already sat behind Show All, verified 2026-08-25. Browser:
+      marked row = 2035 = the captured ruinYear, zero marks after exit.
+- [x] **P69h** - **DONE with P69d (v11.1645), the simplest defensible answer as approved:**
+      replay is confined to Charts and Annual Details. `showTab()` to any other tab clears it, a
+      sidebar input event (capture-phase delegated listener) clears it, and the Optimizer and Tax
+      Planner therefore never see a replayed state - they read the sidebar, which replay never
+      writes.
+
+**The percentile trap, restated because it is the one thing that makes this phase wrong if missed:**
+`computePercentiles` (`montecarlo/stats.js:41`) sorts each year independently, so the p50 BAND is an
+envelope no path ever lived. Captured rows are labeled by their **rank percentile**, never "the p50
+path".
+
+**Verification** (from the approved plan): node - `buildPathInputs` reproduces the inline result for
+a fixed bank and path index; the selector returns the requested count, the worst path really is the
+earliest ruin, and the sampled ranks land where they claim. Browser - replay a known stress row and
+confirm the Annual Details ruin year matches that row's ruin year in the stress table, then confirm
+exiting restores the user's own plan unchanged.
+
+- **Status:** **COMPLETE 2026-08-26, v11.1657** - all eight sub-items shipped on branch `worktree-mc-path-replay`
 - **Independent:** no phase dependencies
+
+---
+
+## P78: Edit the plan against a pinned replay path  *(planned 2026-08-26, build later)*
+
+**Ask:** someone replaying a bad sequence wants to change their plan and see whether the change
+survives THAT sequence, not exit replay and lose the path.
+
+**Design:**
+- A banner control, "Keep path while editing" (off by default). While on, the sidebar-edit
+  auto-exit (`optimizer_ui.js`, the capture-phase `.sidebar` listener) is suppressed; every edit
+  re-runs `runSimulation()` with the sequences still injected.
+- **planFields are DROPPED the moment the first locked edit lands.** They exist to reproduce the
+  run's row; once the user edits, THEIR settings are the plan, and planFields silently overriding
+  the strategy fields they just changed would be the PF8/P74 class again from the other side.
+  Practical shape: on the first locked edit, write the planFields into the sidebar controls once
+  (the loadMCVariation pattern) so what runs is what the sidebar shows, then stop injecting them.
+- **The banner must stop claiming the run's outcome.** "Rank 5%, ruined 2035" described the run's
+  row; a modified plan has neither. Relabel to name only the path identity ("the worst captured
+  path's sequence", "the 1973 sequence") plus "modified plan". The dashed baseline recomputes per
+  edit (drop `baselineLog` on each locked re-run) so overlay = current plan on steady assumptions.
+- Date edits still force an exit via the existing length guard in `startReplay`/`runSimulation`.
+- [ ] **P78a** - banner control + suppressed auto-exit + planFields handoff-then-drop
+- [ ] **P78b** - banner relabel under modification; ruin mark recomputes (it already reads the log)
+- [ ] **P78c** - baseline invalidation per locked edit; verify overlay tracks the edited plan
+- [ ] **P78d** - browser matrix: edit spend, edit strategy, edit dates (forced exit), then unlock
+- **Status:** pending
+- **Independent:** builds on P69 (merged branch or same worktree)
+
+---
+
+## P79: Draw the 10 captured paths on the survival chart  *(planned 2026-08-26, build later)*
+
+**Ask:** cost of drawing the captured paths on the Historical/Synthetic survival chart.
+
+**Cost answer: small.** Transport: the engine's `runPass` already holds the full `paths`
+Float64Array; slicing the capture variation's 10 traces is 10 x years x 8B (~3KB) into its
+varResult (`capturedTraces`), same shape `stressPaths` already uses for stress. Chart: 10 extra
+thin line datasets on `renderMCChart` (~40 points each) - rendering cost negligible; the REAL cost
+is legend/tooltip clutter, so they ship with no legend entries, no points, low alpha, and a single
+tooltip label of their rank ("Rank 25% path"). Worst-block paths red-tinted, sampled ranks gray.
+- [ ] **P79a** - engine: `capturedTraces` on the capture variation's varResult; ship both passes
+- [ ] **P79b** - `renderMCChart`: draw them for the pinned variation behind a small toggle
+      (default on for plan scope, off for compare - 150 variations x 10 lines is noise)
+- [ ] **P79c** - click a drawn trace replays that path (the capture list already knows its index)
+- **Status:** pending
+- **Independent:** transport rides P69's capture plumbing
+
+---
+
+## P80: Nerdknob - the historical years behind each bootstrap block  *(planned 2026-08-26, build later)*
+
+**Ask:** for the Historical (bootstrap) survival run, show which historical years each block of a
+path was drawn from.
+
+**Mechanism:** Historical mode is a block bootstrap - `bootstrapMultiAssetBank` (`prng.js:515`)
+draws 3-year contiguous blocks at random start indices from the 1928-2025 record. The bank stores
+only the VALUES; the source indices are known at draw time and thrown away. Record them: a
+parallel `srcYears` Int16Array (1928+idx per cell) built in the same loop - **no new rng draws, so
+CRN and every existing output stay byte-identical; assert that**. Thread through `buildBanks`,
+ship per captured path via `sliceBankRowsForPath` (+~80B/path), and for stress paths the start
+years are already labels.
+- [ ] **P80a** - `srcYears` in `bootstrapMultiAssetBank` + regression test (outputs unchanged)
+- [ ] **P80b** - ship with captured rows; decide the surface, nerdknob-gated: leading candidates
+      are the Market chart tooltip title ("2031 - drawn from 1974") and a segments line in the
+      replay banner tooltip ("1973-75, 1929-31, ..."). Annual Details column is the fallback.
+- [ ] **P80c** - decide whether `bootstrapScenarioBank` (drives `yr.baseReturn` only) needs the
+      same treatment or whether the multi-asset bank's years are the honest answer (per-account
+      returns come from it; baseReturn is display). Document whichever way it lands.
+- **Status:** pending
+- **Independent:** Historical mode only; synthetic paths have no source years
 
 ---
 
@@ -788,6 +946,20 @@ the paths that matter.
 v11.160F extends it to both synthetic modes. optimizer_core.js:73 documents a deliberate "tax policy
 must not differ per path" rule, but that comment was written about the IRMAA lookback factor, not
 about indexation - re-read it before assuming it settles this.
+
+**Verified again 2026-08-26 (user asked directly whether brackets follow cumulative path
+inflation):** they do not. `sim.cpiRate *= (1 + inputs.cpi)` at `optimizer_core.js:2915` while
+`sim.inflation *= (1 + yr.yearInflation)` tracks the path. Everything bracket-shaped rides
+`cpiRate`: federal and state bracket limits, the LTCG brackets, IRMAA thresholds and tiers, the
+ACA FPL multiple, the IRA goal, QCD sizing - AND Social Security COLA (`inputs.ss1 * sim.cpiRate`,
+`:1331`), so a high-inflation path understates SS income too, which partially offsets the
+overstated bracket creep. Real-world note for the eventual default decision: the IRS indexes
+brackets annually by realized chained CPI and SSA indexes COLA by realized CPI-W, so
+path-following is the realistic model, not the exotic one. `taxCreepFactor`'s "tax policy must not
+differ per path" comment (`:71-74`) is about RATE creep, not indexation - it does not settle this.
+P70a stays measure-first: stress scenarios with `cpiRate` (and therefore SS) following realized
+inflation vs today's fixed rate; per-scenario lifetime-tax and ruin-year deltas; no default change
+in the measuring phase.
 
 - [ ] **P70a** - run the existing stress scenarios with `cpiRate` following realized inflation
       against today's fixed rate; report lifetime-tax and ruin-year deltas per scenario. Small effect

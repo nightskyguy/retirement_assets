@@ -677,10 +677,92 @@ function applySuggestIraGoal() {
     runSimulation();
 }
 
+// ── P69: Monte Carlo path replay ────────────────────────────────────────────
+// One injection point, not a second pipeline: when a replay is active, runSimulation() overlays the
+// captured path's return and inflation sequences onto the inputs it just read from the sidebar. The
+// INPUTS are never mutated - the plan under test stays whatever the sidebar says - and the
+// sequences are rebuilt from the shipped bank rows through the engine's own pathInputsFromBankRows,
+// never regenerated from the seed. Exit paths: the banner's button, editing any sidebar input
+// (delegated listener below), or leaving the Charts / Annual Details tabs.
+let _replayState = null;   // { rows, mcMode, planFields, label, nav } from mc_tab.js, or null
+let _replayExitHooked = false;
+let _preReplayIncomeView = null;   // income-chart view to restore when replay ends
+
+function replayPath(state) {
+    // Only the normal->replay transition force-switches the lower chart to the Market view (the
+    // path's return/inflation story). Prev/next re-enters here with replay already active, so a
+    // view the user picked mid-replay is preserved.
+    if (!_replayState) {
+        _preReplayIncomeView = incomeChartView;
+        incomeChartView = 'market';
+        syncIncomeViewControls();
+    }
+    _replayState = state;
+    if (!_replayExitHooked) {
+        // A sidebar edit means the user is back to designing the plan; a replayed chart under an
+        // edited plan would look like the edit's effect. Capture phase, so this runs before the
+        // input's own handler re-simulates.
+        document.querySelector('.sidebar')?.addEventListener('input', () => {
+            if (_replayState) { _clearReplay(); syncReplayBanner(); }
+        }, true);
+        _replayExitHooked = true;
+    }
+    runSimulation();
+}
+
+// The one place replay ends: drops the state (and the baseline log cached on it) and restores the
+// income-chart view the user was on before the replay switched it to Market.
+function _clearReplay() {
+    _replayState = null;
+    if (_preReplayIncomeView != null) {
+        incomeChartView = _preReplayIncomeView;
+        _preReplayIncomeView = null;
+        syncIncomeViewControls();
+    }
+}
+
+function exitReplay() {
+    _clearReplay();
+    runSimulation();
+}
+
+function syncReplayBanner() {
+    const banner = document.getElementById('replay-banner');
+    if (!banner) return;
+    banner.style.display = _replayState ? 'flex' : 'none';
+    if (_replayState) {
+        const txt = document.getElementById('replay-banner-text');
+        if (txt) txt.textContent = _replayState.label;
+        // Prev/next enablement comes from mc_tab.js, which owns the lists and their order.
+        const nav = (typeof replayNavState === 'function') ? replayNavState() : null;
+        const prev = document.getElementById('replay-prev');
+        const next = document.getElementById('replay-next');
+        if (prev) { prev.style.display = nav ? '' : 'none'; prev.disabled = !nav?.hasPrev; }
+        if (next) { next.style.display = nav ? '' : 'none'; next.disabled = !nav?.hasNext; }
+    }
+}
+
 function runSimulation() {
     refreshStratRateOptions();   // keep bracket dropdown labels in sync with CPI + filing status
     // computeOC: single-scenario runs also produce the Opp. Cost counterfactual (Break Even).
-    const _simInputs = { ...getInputs(), computeOC: true };
+    const _base = getInputs();
+    const _simInputs = { ..._base, computeOC: true };
+    if (_replayState) {
+        // Baseline for the chart overlay: the SAME plan the replay runs (sidebar + planFields),
+        // deterministically - no sequences, so growth and inflation stay the sidebar's flat
+        // assumptions and the solid-vs-dashed gap is purely the path's market story. Cached on the
+        // state object: every replay start and prev/next step builds a fresh state, so the cache
+        // invalidates itself and dies with the state on exit. No computeOC - its fields go unused.
+        if (!_replayState.baselineLog) {
+            _replayState.baselineLog =
+                simulate({ ..._base, ...(_replayState.planFields ?? {}) }).log;
+        }
+        // planFields first: the run's own strategy and conversion settings (swept rows are not the
+        // raw sidebar plan - conversions are forced on, for one), so the replayed year-by-year
+        // agrees with the survival rate and ruin year the run reported. Then the path's sequences.
+        Object.assign(_simInputs, _replayState.planFields ?? {},
+            MCEngine.pathInputsFromBankRows(_replayState.rows, _simInputs, _replayState.mcMode));
+    }
     let res = simulate(_simInputs);
     lastSimInputs = _simInputs;
     lastSimulationLog = res.log;
@@ -707,6 +789,7 @@ function runSimulation() {
     }
     const spouseBtn = document.getElementById('chartPerson_spouse');
     if (spouseBtn) spouseBtn.style.display = getInputs().hasSpouse ? '' : 'none';
+    syncReplayBanner();
 }
 
 function updateCurrentDollarsView() {
@@ -2639,7 +2722,7 @@ function updateTable(log) {
     const medAge = TAXData.IRMAA.ELIGIBILITY_AGE;
 
     const tooltips = {
-        'year': 'When yellow, it indicates a single survivor. If the rest of the row is pink, it means the year was underfunded.',
+        'year': 'When yellow, it indicates a single survivor. If the rest of the row is pink, it means the year was underfunded. During a path replay, the dark red line across a row marks the year the money runs out.',
         'age1': 'Age at end of year (Dec 31). Used for RMD eligibility. May differ from current age shown in Profile & Ages if birthday falls late in the year.',
         'age2': 'Spouse age at end of year (Dec 31). Used for RMD eligibility. May differ from current age shown in Profile & Ages if birthday falls late in the year.',
         'RMDwd': 'Total of all Required Minimum Distributions (RMDs)',
@@ -2725,8 +2808,17 @@ function updateTable(log) {
     // Create body
     const tbody = table.createTBody();
     let maritalStatus = 'MFJ';
+    // P69g: under replay, the FIRST year the portfolio cannot cover its required draw is the ruin
+    // year the Monte Carlo run scored - the same rule the engine's path loop applies. Later years
+    // also shade pink (underfunded), so without this mark the one year that defines "ruin 2035"
+    // in the banner would be indistinguishable from the wreckage after it.
+    const _ruinYear = (typeof _replayState !== 'undefined' && _replayState)
+        ? (log.find(r => ((r.portfolioBalance ?? 0) <
+              Math.max(0, (r.spendGoal ?? 0) - (r.guaranteedIncome ?? 0))))?.year ?? null)
+        : null;
     log.forEach((row, i) => {
         const tr = tbody.insertRow();
+        const _isRuinRow = _ruinYear != null && row.year === _ruinYear;
 
         // Check conditions for highlighting
         const spendGoal = row['SpendGoal'] ?? row['spendGoal'];
@@ -2780,6 +2872,15 @@ function updateTable(log) {
                     td.style.textDecoration = 'underline dotted';
                     td.title = 'Click to open Tax Payment Planner for this year';
                     td.onclick = () => openTaxPlanner(row, i > 0 ? log[i - 1] : null);
+                }
+                // After the Tax Planner title above, which would otherwise overwrite this one.
+                if (_isRuinRow) {
+                    td.style.borderTop = '2px solid #c0392b';
+                    if (key === 'year') {
+                        td.title = 'Money runs out this year: the portfolio can no longer cover '
+                                 + 'required spending - the ruin year the Monte Carlo run reported '
+                                 + 'for this path. Click to open Tax Payment Planner for this year.';
+                    }
                 }
 
                 // Columns whose useful magnitude is below 1, so the whole-number rounding every
@@ -3723,9 +3824,11 @@ function setChartPersonView(v) {
 // #8 - which view the lower (Income & Expenses) chart shows.
 let incomeChartView = 'combined';
 
-function setIncomeChartView(v) {
-    incomeChartView = v;
-    ['combined', 'tax', 'net', 'flows', 'assetflows'].forEach(k => {
+// DOM half of the view switch, split out so replay can flip the view without rendering the stale
+// pre-replay log (its runSimulation() paints once, in the right view, right after).
+function syncIncomeViewControls() {
+    const v = incomeChartView;
+    ['combined', 'tax', 'net', 'flows', 'assetflows', 'market'].forEach(k => {
         const btn = document.getElementById(`chartView_${k}`);
         if (btn) btn.classList.toggle('active', k === v);
     });
@@ -3736,6 +3839,11 @@ function setIncomeChartView(v) {
     // only view where income-source bars are scaled down by the year's effective tax rate.
     const aftertaxNote = document.getElementById('income-aftertax-note');
     if (aftertaxNote) aftertaxNote.style.display = v === 'combined' ? '' : 'none';
+}
+
+function setIncomeChartView(v) {
+    incomeChartView = v;
+    syncIncomeViewControls();
     if (lastSimulationLog) updateCharts(lastSimulationLog);
 }
 
@@ -3886,6 +3994,45 @@ function buildAltIncomeChart(ctxI, log, adj, sharedTooltip, mkLine, visibleSum) 
                 scales: { x: { stacked: true }, y: { stacked: true, ticks: dollarTicks } },
                 plugins: { ...sharedTooltip.plugins, legend: (() => { const li = makeChartLegendInteraction(); return { labels: legendLabels, onHover: li.onHover, onLeave: li.onLeave, onClick: li.onClick }; })() } }
         });
+    } else if (incomeChartView === 'market') {
+        // The rates the projection was handed, in percent - NO adj(): these are not dollars, so
+        // the Current $ toggle must not touch them. On a deterministic run both series are flat,
+        // which is itself informative next to a replayed path's jagged sequence.
+        const pctRet = log.map(r => (r['return%'] ?? 0) * 100);
+        incomeChart = new Chart(ctxI, {
+            type: 'bar',
+            data: { labels, datasets: [
+                { label: 'Market return', type: 'bar', order: 2,
+                  backgroundColor: pctRet.map(v => v >= 0 ? '#27ae60B0' : '#c0392bC0'),
+                  data: pctRet },
+                { ...mkLine('Inflation', '#e67e22', r => (r['infl%'] ?? 0) * 100),
+                  type: 'line', order: 1, pointRadius: 0, borderWidth: 2.5 },
+                // Cumulative inflation as a dollar figure rather than a percent: what day-one
+                // $10,000 still buys, on its own right-hand scale. A percent line climbing to 200%
+                // would crush the +-15% axis the other two series live on.
+                { ...mkLine('What $10,000 buys', '#8e44ad', r => 10000 / (r.inflationFactor || 1)),
+                  type: 'line', order: 0, pointRadius: 0, borderWidth: 2, borderDash: [4, 3],
+                  yAxisID: 'y1' },
+            ]},
+            options: { ...sharedTooltip,
+                scales: {
+                    y:  { position: 'left', ticks: { callback: v => v + '%' } },
+                    y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },
+                          title: { display: true, text: 'Buying power ($)' }, ticks: dollarTicks },
+                },
+                plugins: { ...sharedTooltip.plugins,
+                    tooltip: { ...sharedTooltip.plugins.tooltip,
+                        callbacks: { ...sharedTooltip.plugins.tooltip.callbacks,
+                            // The shared callback rounds to whole dollars; the two rate series are
+                            // small percents ("Inflation: 3" is useless), so one decimal and a %
+                            // sign - except the buying-power line, which really is dollars.
+                            label: ctx => ctx.dataset.yAxisID === 'y1'
+                                ? `${ctx.dataset.label}: $${Math.round(ctx.parsed.y).toLocaleString()}`
+                                : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } },
+                    // Plain legend: the hover-dim helper cannot dim the bars' per-point color
+                    // ARRAY, so with three series the default toggle-hide legend is the honest one.
+                    legend: { labels: legendLabels } } }
+        });
     }
 }
 
@@ -3939,7 +4086,21 @@ function updateCharts(log) {
                 mkLine(rothLabel,     '#8e44ad', rothData),
                 mkLine('Brokerage',   '#4F4FDC', r => r.Brokerage   * adj(r)),
                 mkLine('Cash',        '#27ae60', r => r.Cash        * adj(r)),
-                mkLine('TotalWealth', '#555555', r => r.totalWealth * adj(r))
+                mkLine('TotalWealth', '#555555', r => r.totalWealth * adj(r)),
+                // P69 replay overlay: the same plan run on steady assumptions, one dashed total.
+                // Deflated by ITS OWN inflationFactor (fixed-inflation compounding) - deflating by
+                // the path's factors would smuggle the path back into the "expected" line. It
+                // cannot use mkLine/adj, which both close over the replayed log. Appended last so
+                // it draws behind the five solid lines; person views keep it as-is because the
+                // solid TotalWealth line is person-agnostic too.
+                ...(_replayState?.baselineLog ? [{
+                    label: 'Plan (steady assumptions)',
+                    data: _replayState.baselineLog.map(r =>
+                        r.totalWealth * (inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1)),
+                    borderColor: '#888888', backgroundColor: '#888888',
+                    pointBackgroundColor: '#888888',
+                    fill: false, borderDash: [6, 4], pointRadius: 0, borderWidth: 2, spanGaps: true,
+                }] : []),
             ]
         },
         options: {
@@ -4086,6 +4247,15 @@ function valChecked(id) { return document.getElementById(id)?.checked; }
 
 
 function showTab(id) {
+    // P69: replay is confined to Charts and Annual Details. Any other destination ends it - the
+    // Optimizer and the Monte Carlo tab run their own sweeps from the sidebar, and a lingering
+    // replay banner over them would claim a relationship that does not exist. The re-run matters:
+    // without it, coming back to Charts showed the replayed lines with no banner over them.
+    if (_replayState && id !== 'tab-chart' && id !== 'tab-tbl') {
+        _clearReplay();
+        syncReplayBanner();
+        runSimulation();
+    }
     // 1. Hide all tab content cards
     document.querySelectorAll('.tab-content, .card').forEach(c => {
         if (c.id.startsWith('tab-')) c.classList.add('hidden');

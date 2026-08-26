@@ -16,7 +16,7 @@ Priority buckets are **O0..O3** so they cannot be mistaken for phase IDs, which 
 | **O0** | P35 | Phased strategy; **step-up SHIPPED**, engine work remains | `P35i` |
 | ~~DONE~~ | ~~P30~~ | ~~Withdrawal policy~~ - **COMPLETE v11.163F**, Ordered offers six sequences | - |
 | **O1** | P19 | taxengine.js, 13 of 51 jurisdictions still uncoded | `P19f` |
-| **O1** | P69 | Replay a Monte Carlo path through the main model | `P69g` |
+| ~~DONE~~ | ~~P69~~ | ~~Replay a Monte Carlo path through the main model~~ - **COMPLETE v11.1657**, branch unmerged | - |
 | **O1** | P70 | Bracket indexation under variable inflation, measure first | `P70a` |
 | **O1** | P34 | Conversion-search cost, worker + per-row memo | `P34a` |
 
@@ -104,7 +104,7 @@ first task. Every open item in the file now carries one.
 | **O2** | P13 | Multi-Strategy Segment Optimizer — **retire this if P35 ships** | `P13a` | P35 outcome |
 | ~~DONE~~ | ~~P23~~ | ~~MC arithmetic-mean returns + AR(1) variable inflation~~ - **COMPLETE 2026-08-23, v11.160F, merged with 7 addenda through v11.161B in PR #188.** Shipped as a THIRD mode (Synthetic-AAM) rather than a GBM replacement, both synthetic modes given calibrated AR(1) inflation correlated with returns. Suite 300 | - | - |
 | ~~DONE~~ | ~~P71~~ | ~~Dedup the MC engine: one runPass instead of two mirrors~~ - **COMPLETE 2026-08-23, v11.161C-F, committed `b7f8808` and merged.** 455+567 lines of mirror -> 42+203 lines of shell around one `mc_engine.js`; suite 300 -> 304. Maps caught up in `fb6675c` | - | - |
-| **O1** | P69 | Replay: walk one Monte Carlo or Stress sequence through the main model's charts and tables *(new 2026-08-23)* | `P69g` | nothing - only the ruin-year mark remains (v11.1657) |
+| ~~DONE~~ | ~~P69~~ | ~~Replay: walk one MC or Stress sequence through the main model~~ - **COMPLETE 2026-08-26, v11.1657**, all of `P69a`-`P69h` | - | - |
 | **O1** | P70 | Do high-inflation paths overstate tax? Brackets index at the fixed CPI rate while spending inflates per path *(new 2026-08-23)* | `P70a` (measure first) | nothing |
 | **O2** | P37 | LEGACY / heir 10-year drawdown | — | **deferred by you** |
 | **O2** | P48 | README caveats backlog | — | **deferred by you** |
@@ -831,11 +831,13 @@ the engine is `montecarlo/mc_engine.js`.
       auto-shown on replay entry with the prior view restored on every exit; the tab-leave exit now
       re-renders, closing the stale-bannerless-chart quirk. Stress swatch cell went flex/tight and
       the 46px indent dropped to 14px (second round of the space complaint).
-- [ ] **P69g** - Annual Details under replay, ruin year marked. `infl%` / `inflCum%` / `return%`
-      already exist behind Show All. Confirm the current-dollars toggle deflates by the PATH's
-      realized inflation, not the fixed rate. *(2026-08-25: replayed log carries per-year inflation
-      - verified varying infl% in the log - and deflation reads the log's own inflationFactor, so
-      most of this is already true; remaining: mark the ruin year visibly in the table.)*
+- [x] **P69g** - **DONE v11.1657.** Under replay the FIRST year the portfolio cannot cover its
+      required draw - the engine's own ruin rule - gets a dark red line across its row, one row
+      only, with the ruin-year explanation folded into the year cell's Tax Planner tooltip (which
+      would otherwise overwrite it, set later in the same loop). Later underfunded years keep their
+      pink; the mark distinguishes the year the banner names. Deflation already read the log's own
+      inflationFactor and infl%/return% already sat behind Show All, verified 2026-08-25. Browser:
+      marked row = 2035 = the captured ruinYear, zero marks after exit.
 - [x] **P69h** - **DONE with P69d (v11.1645), the simplest defensible answer as approved:**
       replay is confined to Charts and Annual Details. `showTab()` to any other tab clears it, a
       sidebar input event (capture-phase delegated listener) clears it, and the Optimizer and Tax
@@ -853,7 +855,7 @@ earliest ruin, and the sampled ranks land where they claim. Browser - replay a k
 confirm the Annual Details ruin year matches that row's ruin year in the stress table, then confirm
 exiting restores the user's own plan unchanged.
 
-- **Status:** in_progress - `P69a`-`P69f`+`P69h` done; `P69g` remainder is only the visible ruin-year mark in Annual Details
+- **Status:** **COMPLETE 2026-08-26, v11.1657** - all eight sub-items shipped on branch `worktree-mc-path-replay`
 - **Independent:** no phase dependencies
 
 ---

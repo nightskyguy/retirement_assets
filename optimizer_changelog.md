@@ -38,8 +38,8 @@ automatically, and it is available for ordinary projections too. The Current $ t
 replayed numbers by the inflation that path actually lived, and the dashed line by its own steady
 assumptions. The plan is your own, every setting as the
 sidebar has it; only that path's market returns and inflation are applied, year by year. Annual
-Details shows the year the money runs out, and under Show All the year-by-year inflation and market
-return that caused it. The Current $ toggle deflates by the inflation that path actually lived.
+Details marks the year the money runs out with a dark red line across its row, and under Show All
+shows the year-by-year inflation and market return that caused it. The Current $ toggle deflates by the inflation that path actually lived.
 
 A banner names what is being replayed: its rank in the run, whether it survives, and for a stress
 row the historical start year. Its ◀ ▶ buttons step to the previous or next path - captured paths

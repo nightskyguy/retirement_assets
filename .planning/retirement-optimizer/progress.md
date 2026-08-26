@@ -4605,3 +4605,18 @@ space", round two) and the 46px section indent dropped to 14px.
 
 Suites 322/61/22 (UI only), badge green. Version 11.1657; the branch's one changelog entry
 refreshed in place. P69 remainder: only P69g's visible ruin-year mark in Annual Details.
+
+---
+
+## Session 2026-08-26 (worktree mc-path-replay) - P69g, ruin year marked; P69 COMPLETE (v11.1657)
+
+Small and final: under replay, the first year the portfolio cannot cover its required draw - the
+same rule the engine's path loop scores ruin by, already the trigger for the pink underfunded
+shading - now gets a 2px dark red line across its row. One row only, so the year the banner names
+stands out from the pink wreckage after it. One catch the browser found: the year cell's tooltip
+was being overwritten by the Tax Planner click-handoff title set LATER in the same cell loop, so
+the ruin explanation is folded into that title and applied after it. Verified: marked row 2035
+equals the captured ruinYear, tooltip carries both messages, zero marks after exit.
+
+That closes P69 - a through h all shipped. Branch worktree-mc-path-replay holds nine commits,
+suites 322/61/22, badge green at 698. Ready for a PR.

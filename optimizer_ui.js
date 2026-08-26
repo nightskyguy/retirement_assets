@@ -2722,7 +2722,7 @@ function updateTable(log) {
     const medAge = TAXData.IRMAA.ELIGIBILITY_AGE;
 
     const tooltips = {
-        'year': 'When yellow, it indicates a single survivor. If the rest of the row is pink, it means the year was underfunded.',
+        'year': 'When yellow, it indicates a single survivor. If the rest of the row is pink, it means the year was underfunded. During a path replay, the dark red line across a row marks the year the money runs out.',
         'age1': 'Age at end of year (Dec 31). Used for RMD eligibility. May differ from current age shown in Profile & Ages if birthday falls late in the year.',
         'age2': 'Spouse age at end of year (Dec 31). Used for RMD eligibility. May differ from current age shown in Profile & Ages if birthday falls late in the year.',
         'RMDwd': 'Total of all Required Minimum Distributions (RMDs)',
@@ -2808,8 +2808,17 @@ function updateTable(log) {
     // Create body
     const tbody = table.createTBody();
     let maritalStatus = 'MFJ';
+    // P69g: under replay, the FIRST year the portfolio cannot cover its required draw is the ruin
+    // year the Monte Carlo run scored - the same rule the engine's path loop applies. Later years
+    // also shade pink (underfunded), so without this mark the one year that defines "ruin 2035"
+    // in the banner would be indistinguishable from the wreckage after it.
+    const _ruinYear = (typeof _replayState !== 'undefined' && _replayState)
+        ? (log.find(r => ((r.portfolioBalance ?? 0) <
+              Math.max(0, (r.spendGoal ?? 0) - (r.guaranteedIncome ?? 0))))?.year ?? null)
+        : null;
     log.forEach((row, i) => {
         const tr = tbody.insertRow();
+        const _isRuinRow = _ruinYear != null && row.year === _ruinYear;
 
         // Check conditions for highlighting
         const spendGoal = row['SpendGoal'] ?? row['spendGoal'];
@@ -2863,6 +2872,15 @@ function updateTable(log) {
                     td.style.textDecoration = 'underline dotted';
                     td.title = 'Click to open Tax Payment Planner for this year';
                     td.onclick = () => openTaxPlanner(row, i > 0 ? log[i - 1] : null);
+                }
+                // After the Tax Planner title above, which would otherwise overwrite this one.
+                if (_isRuinRow) {
+                    td.style.borderTop = '2px solid #c0392b';
+                    if (key === 'year') {
+                        td.title = 'Money runs out this year: the portfolio can no longer cover '
+                                 + 'required spending - the ruin year the Monte Carlo run reported '
+                                 + 'for this path. Click to open Tax Payment Planner for this year.';
+                    }
                 }
 
                 // Columns whose useful magnitude is below 1, so the whole-number rounding every

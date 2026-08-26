@@ -2239,7 +2239,15 @@ assertEqual(
 		const sel = document.getElementById('stratRate');
 		if (!sel || typeof refreshStratRateOptions !== 'function'
 		         || typeof clampStratRateSelection !== 'function') return;
-		const restore = sel.value;
+		// applyScenario() below writes the WHOLE sidebar and does not put it back. runTests()
+		// runs at page load, so a test that leaves its fixture behind hands the reader a plan
+		// they never entered - reported as "the defaults changed and now my plan runs out of
+		// money". Snapshot every control first and restore it in the finally, the way the MC
+		// preset test already does for its own parameters.
+		const controls = [...document.querySelectorAll('input, select, textarea')];
+		const snapshot = controls.map(el => [el, el.type === 'checkbox' || el.type === 'radio'
+		                                          ? el.checked : el.value,
+		                                      el.dataset ? el.dataset.numVal : undefined]);
 		try {
 			refreshStratRateOptions();
 			const opts = [...sel.options];
@@ -2297,9 +2305,25 @@ assertEqual(
 					'a saved plan on the unbounded top bracket reloads at the highest real ceiling');
 			}
 		} finally {
+			for (const [el, val, numVal] of snapshot) {
+				if (el.type === 'checkbox' || el.type === 'radio') el.checked = val;
+				else el.value = val;
+				if (el.dataset) {
+					if (numVal === undefined) delete el.dataset.numVal;
+					else el.dataset.numVal = numVal;
+				}
+			}
+			// The dropdown's OPTIONS were rebuilt too, so put the list back before restoring
+			// the selection - and rebuild the derived readouts applyScenario() recomputed.
 			refreshStratRateOptions();
-			if ([...sel.options].some(o => o.value === restore)) sel.value = restore;
-			clampStratRateSelection(sel);
+			for (const [el, val] of snapshot) {
+				if (el.id === 'stratRate' && [...el.options].some(o => o.value === val)) el.value = val;
+			}
+			toggleStrategyUI?.();
+			updateGrowthDisplay?.();
+			updateCpiSpreadDisplay?.();
+			updateProfileAgeDisplay?.();
+			updateBracketFeedback?.();
 		}
 	})();
 

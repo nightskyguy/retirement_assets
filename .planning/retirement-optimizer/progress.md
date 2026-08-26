@@ -4885,4 +4885,33 @@ The plan "facing ruin" was the fixture running, not a modeling change. Restored,
 this branch is identical to main to the dollar: tax 551,192, final NW 637,024, 25 years funded, no
 ruin - exactly what the byte-identity property predicts for a deterministic run. The test now
 snapshots every input/select/textarea (including `dataset.numVal`, which the dollar fields read
-instead of `.value`) and restores them, the way the MC preset test already does for its parameters.
+instead of `.value`) and restores them, the way the MC preset test already does for its parameters.
+
+**Unsafe in-page tests gated, `c877f63`.** User's call after the fixture leak: any test that writes
+live page state is opt-in behind `?runtests`, marked in source, and counted when skipped.
+
+The reason is boot ORDER, and it is worse than "a test left a mess". `runTests?.()` is called at TOP
+LEVEL in retirement_optimizer.html (the DOMContentLoaded registration beside it is commented out),
+so the in-page suite runs BEFORE `captureDefaults()`, `loadScenarioByName('default')` and
+`loadFromURL()`. A mutating test therefore poisons the snapshot Share uses to decide which fields it
+may OMIT from a link, and any field an incoming scenario or URL does not mention keeps the test's
+value.
+
+| suite | mutates |
+|---|---|
+| `acaOptionsUngated` | the `#stratRate` option list, rebuilt, and the selection with it |
+| `mcPresetStateFollowsTheParameters` | every Monte Carlo parameter input |
+| `ceilingDropdownEndsAtTheLastRealCeiling` | the ENTIRE sidebar, via `applyScenario()` |
+| `annualDetailsCellsAlignWithHeaders` | `#main-table`, replaced by `updateTable()` |
+| `objectiveColumnSets` | the live `OptimizerState` |
+
+Each carries a `⚠ UNSAFE - MUTATES:` banner naming what it touches plus a one-line
+`if (!unsafeTest('name')) return;` guard. Gated: 246 passed / 5 skipped. `?runtests`: 351 passed.
+Badge title states the skip count so the drop is explained rather than reading as missing tests.
+
+**Method note, and it cost a detour again.** Mid-verification the gated build appeared to make the
+default plan FAIL. It did not: my cache-busting URL param was `?g=1`, and **`g` is the share-URL key
+for Growth** - I was setting growth to 1%, then 2%. `s` is State, similarly exposed. The earlier
+probes (`?clean=1`, `?fix=1`, `?t=2`) did not collide, so the fixture finding stands. Rule:
+**never cache-bust this page with a short query param; the share scheme owns the short names.**
+Measuring the field directly found it in one step after grepping had found nothing.

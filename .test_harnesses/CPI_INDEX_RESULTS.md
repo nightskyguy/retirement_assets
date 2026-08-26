@@ -3,6 +3,13 @@
 Harness: [`cpi_index_harness.js`](cpi_index_harness.js). Run `node .test_harnesses/cpi_index_harness.js`.
 Measured 2026-08-26. 30 plans x 26 stress scenarios x 2 arms = 1,560 simulations, about 1 second.
 
+> **The figures in the next three sections are ROUND ONE**, measured with `inflation` set equal to
+> `cpi` in every plan and with Medicare growth following the path in both terms. Neither is what
+> shipped. The direction and the asymmetry held across every arm, but for current magnitudes read
+> **RE-RUN 2026-08-26** at the bottom: lifetime tax -7.80%, 36 scenarios rescued, IRMAA dollars
+> -6.06%. Round one is kept because the three arms together are the evidence for the model that
+> shipped.
+
 ## The question
 
 `simulate()` runs two inflation clocks:

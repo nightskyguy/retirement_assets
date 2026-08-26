@@ -26,11 +26,18 @@ For what the tool does and how to use it, see [README.md](README.md).
 **Behavior change. Every Monte Carlo and Stress Test result moves, and your saved plan will not
 reproduce the numbers it showed before.**
 
-Each Monte Carlo path has always given your spending its own inflation, but the tax code stayed
-frozen at the CPI you typed, so a path running hot pushed your income through brackets that never
-moved. Brackets, IRMAA tiers, the ACA cap, the QCD limit and Social Security COLA now follow each
-path, indexed one year behind the inflation that sets them, the way the IRS and Social Security
-actually do it. Plans that showed money running out in a high-inflation path may now survive it.
+Each Monte Carlo and Stress Test path has always given your spending its own inflation, but the tax
+code stayed frozen at the CPI you typed. On a path whose inflation ran ABOVE that figure, your
+income climbed while the brackets stood still, so the plan paid tax at rates it would not really
+have faced. On a path BELOW it the error ran the other way: brackets kept climbing past prices, and
+the plan looked less taxed than it would have been.
+
+Brackets, IRMAA tiers, the ACA cap, the QCD limit and Social Security COLA now follow each path,
+indexed one year behind the inflation that sets them, the way the IRS and Social Security actually
+do it. Both errors were real, and neither was small. What changes most are the high-inflation paths,
+because history hands them inflation far above any CPI you would type while rarely handing them
+inflation far below it, and those are the paths where a plan runs out of money. Plans that showed
+money running out in a high-inflation path may now survive it.
 
 CPI and Inflation stay separate, and the gap between them now does real work: the tax code is
 indexed at each path's inflation less that gap. A new line under the two fields names it, so you

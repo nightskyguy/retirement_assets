@@ -992,7 +992,7 @@ was in scope.
 
 | clock | what it is | what rides it | should follow |
 |---|---|---|---|
-| `sim.cpiRate` | the **statutory index** | federal + state bracket limits, standard deduction, LTCG brackets, IRMAA thresholds, ACA FPL multiple, QCD limit, Social Security COLA | REALIZED inflation. IRS indexes by realized chained CPI; SSA by realized CPI-W |
+| `sim.cpiRate` | the **statutory index** | federal + state bracket limits, standard deduction, LTCG brackets, IRMAA thresholds, ACA FPL multiple, QCD limit, Social Security COLA | REALIZED inflation MINUS the CPI spread - see P70h. IRS indexes by realized chained CPI, SSA by CPI-W, and both run BELOW felt inflation |
 | `sim.inflation` | the **price level** | spendGoal, Cash Reserve, property tax, pension COLA, deflation to today's dollars | REALIZED inflation. Already does |
 | forecast factors | the plan's **assumption about a year it cannot see** | `irmaaFwdFactor` (2 years forward), the ACA one-year lookahead, `gapYears` pre-compounding | `inputs.cpi`, permanently. A plan does not get clairvoyance |
 
@@ -1016,19 +1016,25 @@ into the law, not CPI); `computeBETR` and the amortization helpers (returns, not
       So the strategy prices its accounts against brackets placed on the spending clock and is then
       taxed on brackets placed on the statutory clock.
 
-      Invisible whenever `cpi === inflation`, which is why it survived. Both are free-text sidebar
-      fields and differing values are ordinary. Measured, average rate at a 24% ceiling:
+      Invisible whenever `cpi === inflation`, which is why it survived. But the two are separate BY
+      DESIGN (user, 2026-08-26): CPI-W/chained-CPI indexes brackets and SS COLA and runs BELOW felt
+      inflation, which for seniors carries medical weight CPI-E was invented to track. Defaults are
+      inflation 3.0 / cpi 2.8, so the gap is live for EVERY user, not only those who edit the fields.
 
-      | typed | year | correct | shipped | error |
-      |---|---|---|---|---|
-      | cpi 2.0 / infl 5.0 | 30 | fed 0.20332 | 0.15747 | **-23%** |
-      | cpi 2.0 / infl 5.0 | 30 | state 0.07586 | 0.05211 | **-31%** |
-      | cpi 4.0 / infl 2.0 | 30 | fed 0.20332 | 0.26356 | **+30%** |
+      **Corrected 2026-08-26.** An earlier draft of this entry quoted -31%, measured at cpi 2.0 /
+      inflation 5.0 - a 3-point gap nobody types. At the SHIPPED DEFAULTS the average rate at a 24%
+      ceiling is off by:
 
-      The correct column is constant across every year, which is the proof: the ceiling is the same
-      REAL position in the bracket table every year, so its average rate cannot drift. The shipped
-      column drifts only because the two clocks disagree.
+      | year | correct | shipped | error |
+      |---|---|---|---|
+      | 10 | fed 0.20332 | 0.20260 | -0.35% |
+      | 30 | fed 0.20332 | 0.20111 | **-1.08%** |
+      | 30 | state 0.07586 | 0.07483 | **-1.36%** |
 
+      So: a real defect, monotone and one-directional, but a correctness cleanup at ~1% rather than
+      an emergency. The correct column is constant across every year, which is the proof - a fixed
+      ceiling is the same REAL position in the bracket table every year, so its average rate cannot
+      drift. The shipped column drifts only because the two clocks disagree.
       Fix: pass `sim.cpiRate` at all three call sites; rename the parameter so the next reader cannot
       repeat it; add a test asserting the average rate at a fixed ceiling is invariant across years
       for any (cpi, inflation) pair. That one invariant catches the whole class.
@@ -1078,6 +1084,64 @@ into the law, not CPI); `computeBETR` and the amortization helpers (returns, not
       plan will not reproduce" consequence line, and the README caveat added in v11.1657 ("taxes and
       Social Security are not yet adjusted for variable inflation") retired, since it stops being
       true.
+
+### P70h - the CPI/inflation SPREAD is the model, not a discrepancy  *(user, 2026-08-26; supersedes how P70a's flag works)*
+
+CPI and Inflation are two inputs on purpose, and the tooltips already say so:
+
+> Cost-of-living index. Drives federal & IRMAA bracket indexing and Social Security COLA
+> adjustments. Often differs from general inflation, so it is entered separately. **Medicare/IRMAA
+> dollar amounts grow at CPI + Inflation combined, not CPI alone.**
+
+The statutory index (CPI-W for COLA, chained CPI-U for brackets since TCJA) runs BELOW felt
+inflation, and for a senior household the gap is mostly medical weighting - the thing CPI-E was
+invented to track. Defaults are `inflation 3.0` / `cpi 2.8`. The user expects the drift to widen
+under current congressional plans.
+
+**This breaks `cpiFollowsPath` as P70a wrote it.** That flag sets `idxRate = yr.yearInflation`,
+collapsing the spread to zero, which would hand a default user thresholds about 6% higher by year 30
+- `(1.03/1.028)^30` - purely as an artifact, in the SAME direction as the effect being measured.
+P70a's published numbers survive only because its harness set `inflation: cpi` in every plan, so the
+spread was zero by construction there. That is a configuration no default user runs, so **P70a must
+be re-run carrying the 0.2 point gap** before its -8.32% is quoted again.
+
+**The formulation to build instead:**
+
+```
+spread = inputs.cpi - inputs.inflation      // -0.002 by default; a POLICY assumption, not a draw
+i_t    = the drawn general inflation for year t
+cpi_t  = i_t + spread
+
+sim.inflation    *= (1 + i_t)
+sim.cpiRate      *= (1 + cpi_t)
+sim.medicareRate *= (1 + cpi_t + i_t)       // matches the tooltip exactly
+```
+
+The property that settles it: in a deterministic run `i_t = inputs.inflation`, so
+`cpi_t = inputs.cpi` **exactly**. Byte-identical by construction, with no special case. That
+dissolves P70c's fallback fork entirely - the `inputs.cpi` vs `inputs.inflation` question was a
+symptom of the wrong model, not a real decision.
+
+**Three open details, each a deliberate call rather than a detail to discover later:**
+
+1. **Provenance.** `historical_returns.js:3` says the series is BLS **CPI-U**, Dec-over-Dec
+   1928-2025, and the AR(1) synthetic is calibrated to it. So the drawn path IS CPI-U, not general
+   felt inflation. Anchoring the offset at `inputs.inflation` declares the drawn CPI-U series to be
+   the felt path, which misplaces both ends: felt senior inflation sits above CPI-U, chained CPI-U
+   sits below it. Three real series, two inputs. Not worth a third input - the CPI-U/CPI-E gap is
+   well under a 30-year bootstrap's sampling noise - but it must be DOCUMENTED that way rather than
+   implying CPI-E is modeled.
+2. **Additive vs multiplicative.** Additive preserves the point gap the two boxes literally mean and
+   the tooltips describe. Multiplicative (`i_t * 0.9333`) preserves the proportion, which better
+   matches the chained-CPI substitution effect (it bites harder when prices move more): in a 12%
+   year, 11.8% vs 11.2%. Recommend additive; record that the choice was made.
+3. **Floor.** Drawn inflation is already clamped at `INFLATION_FLOOR = -0.01`, and the record itself
+   reaches -10.3%. Decide whether the spread applies before or after that clamp. Only matters in
+   deflation years, but should be deliberate.
+
+**Follow-on worth considering:** make `spread` a visible input rather than the silent difference of
+two boxes. Someone who believes chained-CPI drift will widen currently has no way to say so except
+by nudging two fields in opposite directions and hoping they remember why.
 - [x] **The no-sequence fallback, measured 2026-08-26. This is what P70c must decide.** A deterministic run has no
       `inflationSequence`, so `yr.yearInflation` falls back to `inputs.inflation` - **not** to
       `inputs.cpi`. Measured on a plain sidebar run with no path at all:

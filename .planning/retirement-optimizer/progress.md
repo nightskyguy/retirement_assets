@@ -4642,3 +4642,5 @@ handed off to the sidebar then dropped, banner stops claiming the run's outcome)
 cheap), P77 (nerdknob: record the source years of each bootstrap block - parallel srcYears bank,
 no new rng draws so CRN is untouched, byte-identical regression asserted). NOW table cleaned:
 struck rows dropped, three new O1 rows added, marker still on line 30.
+
+**PR #194 opened 2026-08-26** (worktree-mc-path-replay -> main): the whole replay feature, 12 commits, plus the variable-inflation caveat in the changelog. P75/P76/P77 plans ride along in .planning.

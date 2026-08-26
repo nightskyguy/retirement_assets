@@ -19,7 +19,7 @@
          body script runs, so the version must be hardcoded here - do not let JS set it. The
          Version stat in the Summary Header reads it back out of this tag at runtime instead of
          duplicating the number a third time. -->
-    <title>Retirement Optimizer 11.1657</title>
+    <title>Retirement Optimizer 11.165B</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         // Global Chart.js tooltip defaults - applied to every chart so individual
@@ -59,12 +59,12 @@
 	</style>
 	<base target="_blank">	
 	<script src="taxengine.js?v=1115ca"></script>
-	<script src="optimizer_core.js?v=111642"></script>
+	<script src="optimizer_core.js?v=11165b"></script>
 	<!-- Second build within the same version hour (the minor is hex(dayOfYear*24+hour), so a
 	     same-hour rebuild collides): the token gets a letter suffix so caches still see a new URL.
 	     Keep the plain hex form on the next version bump. -->
-	<script src="optimizer_ui.js?v=111657"></script>
-	<script src="optimizer_tests.js?v=111642"></script>
+	<script src="optimizer_ui.js?v=11165b"></script>
+	<script src="optimizer_tests.js?v=11165b"></script>
 	<script src="optimizer_text.js?v=1111f3"></script>
 </head>
 <body>
@@ -813,6 +813,7 @@
 				     entries short is what keeps the banner short. -->
 
 				<ul id="changelog-list">
+				<li data-flag="behavior"><b>11.165B</b> <strong>Fill Bracket plans load as the plan you saved.</strong> A saved plan or shared link using <i>Fill Bracket</i> came back with its ceiling reset to "Below IRMAA" instead of the bracket it was saved with, so it ran a different strategy than the one on screen when it was saved. Reload any such plan to get your own ceiling back. Choosing the top federal bracket as the ceiling also produced no plan at all: every figure read <code>$NaN</code>, because that bracket has no upper limit and there was nothing to fill up to. The ceiling menu now ends at the highest bracket that has a top. The top federal bracket stays in the list, greyed and not selectable, showing the income where it begins rather than a limit it does not have ("37% Fed - $790,225+"), and the top IRMAA tier is listed the same way. A plan saved on the top bracket loads at the highest real ceiling below it. <a href="optimizer_changelog.md#11.165B" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1657</b> <strong>Walk one Monte Carlo path through your plan.</strong> Every Monte Carlo run now captures ten of its paths, from the worst outcome to the best, and the Stress Test keeps every scenario. A ▶️ Replay picker beside the survival headline lets you choose any captured path, and each Stress Test row has its own ▶️. The chosen sequence plays through Charts and Annual Details: your own plan and settings, but that path's market returns and inflation applied year by year. The balance chart overlays a dashed "Plan (steady assumptions)" line so you can see where the path pulls away from the plan's expected trajectory, and a new Market chart view shows the year-by-year returns and inflation behind it, with what day-one $10,000 still buys. A banner names what is playing and steps to the previous or next path with ◀ ▶. Exit with the banner's button; editing any input or leaving Charts and Annual Details also returns you to your plan's own projection. Note: taxes and Social Security are not yet adjusted for variable inflation - tax brackets, IRMAA tiers, and the Social Security COLA all still index at the fixed CPI input, so a high-inflation path overstates tax and understates Social Security income. <a href="optimizer_changelog.md#11.1657" target="_blank" rel="noopener">Details</a></li>
 				<li><b>11.1642</b> <strong>Roth can fill a spending shortfall, Ordered offers three more draw orders, and Monte Carlo always runs yours.</strong> A new switch, <i>Roth before Brokerage</i>, sits under Cycle Brokerage. Off by default, which is what the tool has always done: a year needing more than your strategy withdraws fills the gap from Cash, then Brokerage, then Roth. On, Roth is taken ahead of the brokerage account, with Cash still first either way. That avoids realizing capital gains but spends the account that grows tax-free, and it cuts both ways: across 60 test plans it gained as much as $471,000 and lost as much as $634,000, and it was negative in 26 of them. Your numbers do not move until you turn it on, and the <i>Ordered</i> strategy greys it out because it draws in the sequence you chose. The Optimizer sweeps both, so every strategy except <i>Ordered</i> appears a second time in the table marked 🅡, whenever you hold Roth. The <i>Ordered</i> strategy adds three draw sequences - <i>Cash→Brok→Roth→IRA</i>, <i>Cash→IRA→Brok→Roth</i> and <i>Brok→Cash→IRA→Roth</i> - and lists the six with the ones that most often came out ahead in testing first; Cash→Brok→Roth→IRA was the best sequence in more test plans than any of the three previously on offer, and in one plan it was worth $858,000 more than the best of them. <i>Monte Carlo</i> now always runs your own plan and marks it: <i>Compare every strategy</i> could leave it out of the run and emphasize a different one in the chart, which affected the <i>Ordered</i> sequences, <i>Guyton-Klinger</i>, and any plan set to an IRMAA tier or an ACA cliff. Your plan is now always in the table, pinned to the top and drawn in the chart, even when the sweep does not cover that strategy, and clicking a row loads what the row says. Separately, the Optimizer now tries five <i>Reduce IRA</i> lengths (3, 7, 11, 17 and 23 years) instead of sixteen and five <i>IRA Draw</i> percentages (5, 7, 9, 11 and 13%) instead of eight, which makes a run about a third shorter and the table easier to read; your own setting is still scored whichever you pick. <a href="optimizer_changelog.md#11.1642" target="_blank" rel="noopener">Details</a></li>
 																<li data-flag="behavior"><b>11.1629</b> <strong>Monte Carlo: a second synthetic model, and prices that move.</strong> <i>Synthetic - AAM</i> reads the growth rate you type as a plain yearly average, so the median it reports is the number you entered; <i>Synthetic - GBM</i> is the model that was already there, its market draws unchanged. <strong>Both now vary inflation year to year</strong> instead of repeating one rate - tuned to US price data for 1948 to 2025, and leaning high in the years returns are poor. The <i>Mode presets</i> row sets how much inflation moves and shows which setting you are in: a preset is green while its values are the ones in effect. <i>Fixed Inflation</i> holds inflation at your Assumptions rate and reproduces the older model, <i>Pessimistic</i> leans the whole model toward a bad decade, <i>Default</i> puts everything back. <strong>Behavior change:</strong> a Synthetic plan will not reproduce a result you recorded before this release until you click <i>Fixed Inflation</i>. Historical mode is unchanged. Also: Annual Details can show each year's inflation, the inflation since the plan started and that year's market return, under <i>Show All</i>; and loopMs - the time spent calculating each year of data - was rendering incorrectly and has been fixed. <a href="optimizer_changelog.md#11.1629" target="_blank" rel="noopener">Details</a></li>
@@ -1407,7 +1408,7 @@ if (typeof MONTE_DEMO === 'undefined' || !MONTE_DEMO) applyTabFromUrl?.();
     // Bump with the suites, not with the page: these five are fetched by URL, so a stale token
     // serves a cached copy of a test file that has since changed and the badge reports on code that
     // is no longer on disk.
-    const V = '?v=111657';
+    const V = '?v=11165b';
     // sweep_golden.js is a fixture optimizer_core.tests.js requires; taxPaymentPlanner.js is the
     // engine its suite covers and the optimizer page does not otherwise load it.
     const SCRIPTS = ['sweep_golden.js', 'taxPaymentPlanner.js',

@@ -802,6 +802,38 @@ function getLTCGBracketTopRate(ordinaryIncome, totalGains, status, cpiRate) {
 // fedRateCreep/stateRateCreep scale the RATES this function reports (the seeds that drive
 // withdrawal ordering) so they match what calculateTaxes() will actually charge. The bracket
 // LIMITS are deliberately left alone - creep raises rates, not thresholds.
+// The AVERAGE ("nominal") rate a jurisdiction charges at `limit` dollars of income: tax(limit)/limit.
+// Used to price one account against another, so it has to return a rate at every limit the bracket
+// ceiling can produce - and the bare division does not.
+//
+// Both ends of a bracket table break it, and both were reachable:
+//   limit <= 0   0/0. The top federal bracket carries `l: Infinity`, and for a state whose table
+//                runs out first, `Math.min(stateLimit, limit)` then collapses the ceiling to 0.
+//                That is the shipped path behind "37% Fed", which rendered $NaN across the page.
+//   limit = Inf  Infinity/Infinity. The IRMAA branch has no state-min step, so an unbounded tier
+//                ceiling (asking to fill the TOP tier, whose ceiling is the Infinity sentinel row)
+//                stays infinite and lands here instead.
+// Neither is an invalid input. "The top of the 0% federal bracket is $0" and "a no-tax state
+// imposes no ceiling" are both correct answers; only the ratio taken from them was undefined.
+//
+// The values returned:
+//   limit <= 0   0. No income, no tax. Matches what `/(limit || 1)` already gave two of the three
+//                branches, so this is not a behavior change for them.
+//   limit = Inf  the jurisdiction's top marginal rate, which tax(x)/x converges to as x grows.
+//                0 for a no-tax jurisdiction, whose single-row table has no rate to read.
+//   otherwise    the original division, unchanged to the bit.
+//
+// One definition for all three branches of computeBracketCeiling, which previously had two
+// different answers to this between them and no answer at all in the third.
+function nominalRateAtLimit(entity, status, limit, inflation, rateCreep = 1) {
+    if (!(limit > 0)) return 0;
+    if (!isFinite(limit)) {
+        const brks = getRateBracket(entity, status);
+        return (brks[brks.length - 1]?.r ?? 0) * rateCreep;
+    }
+    return calculateProgressive(entity, status, limit, inflation, rateCreep).cumulative / limit;
+}
+
 function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, age1, age2, alive1, alive2, IRMAALimit, fedRateCreep = 1, stateRateCreep = 1, medicareRate = 1) {
     let limit, marginalFedTaxRate, marginalStateTaxRate, nominalFedTaxRateAtLimit, nominalStateTaxAtLimit, stateLimit;
 
@@ -826,10 +858,10 @@ function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, ag
         // findUpperLimitByAmount reads the statutory rate straight off the bracket table and never
         // passes through calculateProgressive, so the creep has to be applied here by hand.
         marginalFedTaxRate = fedAtLimit.rate * fedRateCreep;
-        nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation, fedRateCreep).cumulative / (limit || 1);
+        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, inflation, fedRateCreep);
         const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
         marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
-        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation, stateRateCreep).cumulative / (limit || 1);
+        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, inflation, stateRateCreep);
     } else if ((inputs.stratACAMultiple ?? 0) > 0) {
         // ACA FPL cliff mode: fill MAGI up to a multiple of the Federal Poverty Level.
         // NO AGE TEST HERE, ON PURPOSE. The IRMAA branch above can degrade in place (drop the tier
@@ -843,24 +875,23 @@ function computeBracketCeiling(inputs, status, cpiRate, inflation, STATEname, ag
         limit = Math.round(FPL_2025 * inputs.stratACAMultiple / 100 * cpiRate * (1 + inputs.cpi)) - 1;
         const fedAtLimit = findUpperLimitByAmount('FEDERAL', status, limit, cpiRate);
         marginalFedTaxRate = fedAtLimit.rate * fedRateCreep;
-        nominalFedTaxRateAtLimit = calculateProgressive('FEDERAL', status, limit, inflation, fedRateCreep).cumulative / (limit || 1);
+        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, inflation, fedRateCreep);
         const stAtLimit = findUpperLimitByAmount(STATEname, status, limit, cpiRate);
         marginalStateTaxRate = stAtLimit.rate * stateRateCreep;
-        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation, stateRateCreep).cumulative / (limit || 1);
+        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, inflation, stateRateCreep);
     } else {
         // Federal bracket ceiling mode (original logic)
         // stratRate names a bracket ("fill the 22% bracket"), which is a threshold concept - the
         // lookup stays on statutory rates so the ceiling doesn't move when rates creep.
         let fedLimit = findLimitByRate('FEDERAL', status, inputs.stratRate, cpiRate);
         limit = fedLimit.limit;
-        let fedTaxAtLimit = calculateProgressive('FEDERAL', status, limit, inflation, fedRateCreep);
-        nominalFedTaxRateAtLimit = fedTaxAtLimit.cumulative / limit;
+        nominalFedTaxRateAtLimit = nominalRateAtLimit('FEDERAL', status, limit, inflation, fedRateCreep);
         marginalFedTaxRate = fedLimit.rate * fedRateCreep;
 
         let stLimit = findUpperLimitByAmount(STATEname, status, fedLimit.limit, cpiRate);
         marginalStateTaxRate = stLimit.rate * stateRateCreep;
         stateLimit = stLimit.limit;
-        nominalStateTaxAtLimit = calculateProgressive(STATEname, status, limit, inflation, stateRateCreep).cumulative / limit;
+        nominalStateTaxAtLimit = nominalRateAtLimit(STATEname, status, limit, inflation, stateRateCreep);
 
         limit = Math.min(stateLimit, limit);
 
@@ -4667,7 +4698,7 @@ function compactNum(numStr) {
 // ============================================================================
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    module.exports = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 } else if (typeof window !== 'undefined') {
     // Same list, for the browser tier of the test suite. The page does not need it - the engine
     // is a classic script and the page calls these as bare globals. But that reachability is
@@ -4675,7 +4706,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // while `const MC_GRIDS` and `const OPTIMIZER_GRIDS` are global LEXICAL bindings and are not.
     // A test reading them off globalThis would get undefined and fail somewhere downstream
     // instead of at the mistake. One namespace object removes the guesswork.
-    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
+    window.OptimizerCore = { simulate, optimizeSpend, suggestSustainableSpend, suggestSpendMenu, bengenRate, SUGGEST_BUFFER_YEARS, SUGGEST_RISKY_BUFFER_YEARS, SUGGEST_MIDDLE_KEEP_REAL, getLTCGBracketRoom, nominalRateAtLimit, compactNum, afterTaxNetWorth, afterTaxWealthOfLogRow, computeBETR, diagnoseConvBreakEvenFailure, bestConversionStopYear, optimizeConversionAmount, breakEvenHeirsRate, lowestBreakEvenHeirsRate, bestTimeLimitedConversion, baselineScoreOf, selectConversionCandidates, SPENDABLE_WEIGHT, OPTIMIZER_OBJECTIVES, rankRowsByObjective, afterTaxBucketSpread, OPT_DELTA_COLUMNS, OPT_BASELINE_REQUIRES, OPT_OBJECTIVE_BLURB, OPT_OBJECTIVE_METRIC_COLUMN, OPT_OBJECTIVE_COLUMNS, OPT_COLUMNS_PINNED, OPT_COLUMN_KEYS, bothOnMedicareAtStart, taxCreepFactor, IRMAA_MARGIN_MODES, IRMAA_MARGIN_DEFAULT, irmaaMarginModeOf, irmaaFwdFactor, irmaaMarginDollars, onMedicareAtCharge, buildVariations, buildStrategyFamilies, MC_GRIDS, OPTIMIZER_GRIDS, ORDERED_SEQS, strategySortKey, sameStrategySelection, selectionOf, STRATEGY_SELECTION_FIELDS, offGridParamFor, resolveOrderedSeq, ssFirstYearFraction, fraMonthsForBirthYear, calculateSurvivorBenefit };
 }
 
 

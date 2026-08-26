@@ -2225,6 +2225,84 @@ assertEqual(
 		}
 	})();
 
+	// ===== The ceiling dropdown: unbounded bands are markers, and a saved rate lands on itself =====
+	// Two defects, both of which left a plan running a strategy nobody chose.
+	//
+	// The top federal bracket was offered as a fill target. It has no upper limit, so there was no
+	// ceiling to fill to, and every figure on the page came out $NaN. It is now listed disabled at
+	// the income where it BEGINS, as is the top IRMAA tier, which is unbounded for the same reason.
+	//
+	// And a saved plan's stratRate was written to the <select> as "24.000" while the option values
+	// are whole percents, so it matched nothing, the select cleared, and the rebuild landed on its
+	// default. Every saved Fill Bracket plan reloaded as "Below IRMAA".
+	(function ceilingDropdownEndsAtTheLastRealCeiling() {
+		const sel = document.getElementById('stratRate');
+		if (!sel || typeof refreshStratRateOptions !== 'function'
+		         || typeof clampStratRateSelection !== 'function') return;
+		const restore = sel.value;
+		try {
+			refreshStratRateOptions();
+			const opts = [...sel.options];
+
+			// Exactly two reference-only entries: the top federal bracket and the top IRMAA tier.
+			const off = opts.filter(o => o.disabled);
+			assertEqual(off.length, 2, 'two unbounded bands are listed but not selectable');
+			assertEqual(off.every(o => /\+$/.test(o.textContent.trim())), true,
+				'a reference-only entry names the income where it begins, with a trailing +');
+			assertEqual(off.some(o => o.value === '37') && off.some(o => o.value.startsWith('IRMAA')), true,
+				'the two are the top federal bracket and the top IRMAA tier');
+			// No entry may still claim to have no limit; that was the label that read as a target.
+			assertEqual(opts.some(o => /no limit/i.test(o.textContent)), false,
+				'no entry is labelled "no limit"');
+
+			// Each reference entry sorts directly above the ceiling it succeeds, and shows that
+			// ceiling plus a dollar - so the ladder reads continuously.
+			for (const o of off) {
+				const prev = opts[opts.indexOf(o) - 1];
+				assertEqual(!!prev && !prev.disabled, true, 'a reference entry follows a selectable ceiling');
+				const dollars = t => +(String(t).match(/\$([\d,]+)/) || [0, '0'])[1].replace(/,/g, '');
+				assertEqual(dollars(o.textContent), dollars(prev.textContent) + 1,
+					'a reference entry begins one dollar above the ceiling below it');
+			}
+
+			// The clamp: a value the menu disables drops to the nearest ceiling BELOW it, not to
+			// the bottom of the list. A selectable value is left exactly where it is.
+			for (const o of off) {
+				sel.value = o.value;
+				assertEqual(clampStratRateSelection(sel), true, `${o.value} is clamped off`);
+				assertEqual(sel.value, opts[opts.indexOf(o) - 1].value,
+					`${o.value} clamps to the ceiling directly below it`);
+			}
+			for (const o of opts.filter(x => !x.disabled)) {
+				sel.value = o.value;
+				assertEqual(clampStratRateSelection(sel), false, `${o.value} is left alone`);
+				assertEqual(sel.value, o.value, `${o.value} stays selected`);
+			}
+
+			// A saved plan's rate has to land on its own option. This is the "24.000" defect.
+			if (typeof applyScenario === 'function' && typeof getInputs === 'function') {
+				const scen = { strategy: 'bracket', stratIRMAATier: -1, stratACAMultiple: 0,
+				               hasSpouse: true, birthyear1: 1958, birthyear2: 1959 };
+				for (const o of opts.filter(x => !x.disabled && /^\d+$/.test(x.value))) {
+					const rate = +o.value / 100;
+					applyScenario({ ...scen, stratRate: rate });
+					assertEqual(sel.value, o.value, `a saved plan at ${o.value}% reloads at ${o.value}%`);
+					assertEqual(getInputs().stratRate, rate, `and the engine is handed ${rate}`);
+				}
+				// A saved plan on the unbounded bracket lands on the highest real ceiling.
+				const topFed = off.find(o => o.value === '37');
+				const below  = opts[opts.indexOf(topFed) - 1];
+				applyScenario({ ...scen, stratRate: +topFed.value / 100 });
+				assertEqual(sel.value, below.value,
+					'a saved plan on the unbounded top bracket reloads at the highest real ceiling');
+			}
+		} finally {
+			refreshStratRateOptions();
+			if ([...sel.options].some(o => o.value === restore)) sel.value = restore;
+			clampStratRateSelection(sel);
+		}
+	})();
+
 	// ===== Annual Details: one cell per column, in every row =====
 	// The header row and the body rows are built from the same key list but used to apply DIFFERENT
 	// filters to it - the body skipped `inflationFactor` and the header did not. From that column
@@ -2408,7 +2486,7 @@ window.TestTiers = {
     // Planner release added 2 tests to its own suite, left this line at 32, and reddened the badge on
     // the Optimizer - a page it had not touched. Re-run all three suites and reconcile every entry.
     // Second home for the same counts: the suite table in .githooks/README.md. Update it too.
-    EXPECTED: { optimizer_core: 324, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
+    EXPECTED: { optimizer_core: 326, taxPaymentPlanner: 61, doclinks: 22, slowInCore: 3 },
 
     checkCounts(results) {
         const drift = [];

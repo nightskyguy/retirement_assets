@@ -17,6 +17,29 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
+<a id="11.165B"></a>
+
+## 11.165B
+
+### Fill Bracket plans load as the plan you saved
+
+**Behavior change.** A saved plan or shared link using **Fill Bracket** came back with its ceiling
+reset to "Below IRMAA" instead of the bracket it was saved with, so it ran a different strategy
+than the one on screen when it was saved. Reload any such plan to get your own ceiling back, and
+expect different numbers from the ones the reset plan was producing.
+
+Choosing the top federal bracket as the ceiling also produced no plan at all: every figure on the
+page read `$NaN`. That bracket has no upper limit, so there was nothing for the strategy to fill
+up to.
+
+The ceiling menu now ends at the highest bracket that has a top. The top federal bracket stays in
+the list, greyed and not selectable, showing the income where it begins rather than a limit it does
+not have: "37% Fed - $790,225+". The top IRMAA tier is listed the same way, so the point where the
+IRMAA ladder runs out is visible beside the tiers you can aim at. A plan saved on the top bracket
+loads at the highest real ceiling below it.
+
+---
+
 <a id="11.1657"></a>
 
 ## 11.1657

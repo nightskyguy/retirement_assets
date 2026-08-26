@@ -2290,6 +2290,10 @@ function loadOptimizerResult(id) {
         document.getElementById('stratRate').value = `IRMAA${result._stratIRMAATier}`;
     } else if (result._strategy === 'bracket' && result._stratRate != null) {
         document.getElementById('stratRate').value = Math.round(result._stratRate * 100);
+        // A cached row from before the top bracket was disabled can still carry 0.37, and setting
+        // .value to a disabled <option> in code succeeds. Drop it to the highest real ceiling
+        // rather than running a plan the dropdown says is unavailable.
+        clampStratRateSelection(document.getElementById('stratRate'));
     } else if (result._strategy === 'propwd' && result._propWithdraw != null) {
         document.getElementById('propWithdraw').value = Math.round(result._propWithdraw * 100);
     } else if (result._strategy === 'fixedpct' && result._iraWithdrawPct != null) {
@@ -4919,7 +4923,15 @@ function applyScenario(data) {
             } else if (key === 'stratRate' && ((data.stratIRMAATier ?? -1) >= 0 || (data.stratACAMultiple ?? 0) > 0)) {
                 // Already set the dropdown above (IRMAA or ACA); skip numeric override
             } else if (key === 'stratRate') {
-                element.value = (value * 100).toFixed(3);
+                // NOT .toFixed(3), which is what the percent fields above need. This one is a
+                // <select>, and its option values are whole percents ("24"). Writing "24.000"
+                // matched no option, so the select cleared, and the rebuild in
+                // refreshStratRateOptions() then landed on its default "Below IRMAA" - every saved
+                // Fill Bracket plan quietly reloaded as a different strategy than it was saved as.
+                element.value = String(Math.round(value * 100));
+                // And if that rate is one of the reference-only entries (the top bracket), drop to
+                // the highest real ceiling rather than sitting on an option the menu disables.
+                clampStratRateSelection(element);
             } else {
                 if (['convertExcessToRoth', 'fundConversionWithCash', 'pensionCola', 'dividendReinvest', 'cyclicEnabled'].includes(key)) {
                     element.checked = !!value;
@@ -5503,6 +5515,35 @@ function applySuggestSpend() {
 }
 
 /**
+ * Moves the ceiling dropdown off an option it must not sit on, to the nearest CHOOSABLE ceiling
+ * below it. Returns true if it moved anything.
+ *
+ * There are two ways to land on one. A saved plan or a shared URL from before the top bracket was
+ * disabled still carries stratRate 0.37, and setting `.value` to a disabled <option>
+ * programmatically succeeds - the browser only blocks a person picking it. And an option can be
+ * disabled after the fact, which is what updateACAWarning() does to the ACA entries once everyone
+ * is on Medicare.
+ *
+ * Nearest ceiling BELOW, not the first enabled option in the list: those plans were aiming as high
+ * as the ladder went, and the entry directly under an unbounded top band is the highest real
+ * ceiling there is. Dropping them to the bottom of the list would quietly re-plan them at 10%.
+ */
+function clampStratRateSelection(sel) {
+    if (!sel) return false;
+    const opts = [...sel.options];
+    const cur  = opts.find(o => o.value === sel.value);
+    if (cur && !cur.disabled) return false;
+    const idx  = cur ? opts.indexOf(cur) : opts.length;
+    // The list is sorted by income limit, so walking back is walking down the ladder.
+    for (let i = idx - 1; i >= 0; i--) {
+        if (!opts[i].disabled) { sel.value = opts[i].value; return true; }
+    }
+    const first = opts.find(o => !o.disabled);
+    if (first) { sel.value = first.value; return true; }
+    return false;
+}
+
+/**
  * Rebuilds the stratRate dropdown preserving the current selection.
  * Should be called whenever CPI or marital-status inputs change.
  */
@@ -5515,6 +5556,7 @@ function refreshStratRateOptions() {
     if (saved && [...sel.options].some(o => o.value === saved)) {
         sel.value = saved;
     }
+    clampStratRateSelection(sel);
     updateBracketFeedback(); // Update feedback after options change
     updateACAWarning();
 }
@@ -5616,39 +5658,75 @@ function generateStratRateOptions() {
 
     const options = [];
 
-    // ── Federal brackets (skip the top/Infinity bracket) ──────────────────────
+    // ── Federal brackets ──────────────────────────────────────────────────────
+    // Every entry names a CEILING to fill up to, so the top bracket cannot be one of them: its
+    // `l` is the Infinity sentinel, meaning "nothing above this". It used to be offered anyway,
+    // labelled "no limit", and selecting it produced $NaN for the whole plan - there is no rate
+    // at a ceiling that is nowhere.
+    //
+    // It stays in the list, disabled, showing the income where it BEGINS rather than a ceiling it
+    // does not have, because that is the one thing a reader wants from it: where the ladder they
+    // are choosing from runs out. Same treatment as the top IRMAA tier below.
     const fedBrks = isMFJ
         ? TAXData.FEDERAL.MFJ.brackets
         : TAXData.FEDERAL.SGL.brackets;
+    let prevFedLimit = 0;
     for (let i = 0; i < fedBrks.length; i++) {
         const ratePct = Math.round(fedBrks[i].r * 100);
-        const isTop   = !isFinite(fedBrks[i].l);   // 37% bracket - unbounded, shown for reference
-        const limit   = isTop ? Infinity : Math.round(fedBrks[i].l * cpiAdj);
+        const isTop   = !isFinite(fedBrks[i].l);
+        if (isTop) {
+            // Sorts immediately after the bracket below it, which is where it belongs on an
+            // income ladder - Infinity would have parked it past the ACA and IRMAA entries.
+            const floor = prevFedLimit + 1;
+            options.push({
+                value: String(ratePct),
+                label: `${ratePct}% Fed  ·  $${floor.toLocaleString()}+`,
+                limit: floor,
+                disabled: true,
+            });
+            continue;
+        }
+        const limit = Math.round(fedBrks[i].l * cpiAdj);
+        prevFedLimit = limit;
         options.push({
             value: String(ratePct),
-            label: isTop ? `${ratePct}% Fed  ·  no limit` : `${ratePct}% Fed  ·  $${limit.toLocaleString()}`,
+            label: `${ratePct}% Fed  ·  $${limit.toLocaleString()}`,
             limit,
             defaultSelected: false
         });
     }
 
-    // ── IRMAA tier ceilings (tiers 0-4) ───────────────────────────────────────
-    // Ceiling = start of NEXT tier - 1. IRMAA thresholds also grow at CPI.
+    // ── IRMAA tier ceilings ───────────────────────────────────────────────────
+    // Ceiling = start of NEXT tier - 1. IRMAA thresholds also grow at CPI. So "IRMAA Tier 4" means
+    // keep MAGI INSIDE tier 4, and its ceiling is where tier 5 begins.
+    //
+    // Which is why the ladder of selectable entries stops at tier 4: tier 5 is the top band, so
+    // its ceiling would be the Infinity sentinel row, exactly the unbounded case the top federal
+    // bracket hits. It is listed disabled at its FLOOR for the same reason - a reader sizing a
+    // plan against the ladder wants to see where it ends.
     const IRMAABrks = isMFJ
         ? TAXData.IRMAA.MFJ.brackets
         : TAXData.IRMAA.SGL.brackets;
-    const IRMAALabels = [
-        'Below IRMAA',
-        'IRMAA Tier 1',
-        'IRMAA Tier 2',
-        'IRMAA Tier 3',
-        'IRMAA Tier 4'
-    ];
-    for (let i = 0; i < 5; i++) {
+    // The last row is the `l: Infinity` sentinel, so the last REAL tier is the one before it, and
+    // the last tier with a ceiling is the one before that. Derived rather than hardcoded at 5: the
+    // list used to be a fixed five labels, which would silently drop a tier if the table gained one.
+    const topTier = IRMAABrks.length - 2;
+    for (let i = 0; i <= topTier; i++) {
+        const label = i === 0 ? 'Below IRMAA' : `IRMAA Tier ${i}`;
+        if (i === topTier) {
+            const floor = Math.round(IRMAABrks[i].l * cpiAdj);
+            options.push({
+                value: `IRMAA${i}`,
+                label: `${label}  ·  $${floor.toLocaleString()}+`,
+                limit: floor,
+                disabled: true,
+            });
+            continue;
+        }
         const limit = Math.round((IRMAABrks[i + 1].l - 1) * cpiAdj);
         options.push({
             value: `IRMAA${i}`,
-            label: `${IRMAALabels[i]}  ·  $${limit.toLocaleString()}`,
+            label: `${label}  ·  $${limit.toLocaleString()}`,
             limit,
             defaultSelected: i === 0
         });
@@ -5691,7 +5769,10 @@ function generateStratRateOptions() {
     let html = `<optgroup label="${statusLabel} · ${cpiLabel}${yearLabel}">`;
     for (const opt of options) {
         const selected = opt.defaultSelected ? ' selected' : '';
-        html += `<option value="${opt.value}"${selected}>${opt.label}</option>\n`;
+        // Greyed the same way updateACAWarning() greys a lapsed ACA entry, so "listed but not
+        // choosable" looks like one thing in this control rather than two.
+        const off = opt.disabled ? ' disabled style="color:#aaa"' : '';
+        html += `<option value="${opt.value}"${selected}${off}>${opt.label}</option>\n`;
     }
     html += '</optgroup>';
 

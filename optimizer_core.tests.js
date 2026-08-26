@@ -74,6 +74,7 @@ const findUpperLimitByAmount = taxengine.findUpperLimitByAmount;
 const getRateBracket = taxengine.getRateBracket;
 const TAXData = taxengine.TAXData;
 const getLTCGBracketRoom = core.getLTCGBracketRoom;
+const nominalRateAtLimit = core.nominalRateAtLimit;
 const compactNum = core.compactNum;
 const diagnoseConvBreakEvenFailure = core.diagnoseConvBreakEvenFailure;
 const bestConversionStopYear = core.bestConversionStopYear;
@@ -4106,6 +4107,59 @@ test('tax creep: reaches Monte Carlo and is path-independent', () => {
         'different inflation paths should still produce different tax totals');
     assert(sumCol(pathA, 'FedTax') > sumCol(flat, 'FedTax'), 'MC path pays the federal creep');
     assert(sumCol(pathA, 'StateTax') > sumCol(flat, 'StateTax'), 'MC path pays the state creep');
+});
+
+// ── An unbounded ceiling must not produce NaN ─────────────────────────────────
+// "Fill Bracket" at the top federal bracket rendered $NaN across the whole page. Every field
+// computeBracketCeiling returns is a quantity measured AT the ceiling, and the top bracket's `l` is
+// the Infinity sentinel, so the average-rate divisions came out 0/0 or Infinity/Infinity. The top
+// bracket is no longer selectable, but the engine has to hold up on its own: a saved plan, a shared
+// URL and a programmatic caller can all still hand it that rate.
+
+test('nominalRateAtLimit: defined at both ends of a bracket table', () => {
+    assert(nominalRateAtLimit('FEDERAL', 'MFJ', 0, 1, 1) === 0, 'no income means no average rate, not 0/0');
+    assert(nominalRateAtLimit('FEDERAL', 'MFJ', -5, 1, 1) === 0, 'a negative ceiling is treated as no income');
+    // As income grows without bound, tax/income converges on the top marginal rate.
+    const fedBrks = getRateBracket('FEDERAL', 'MFJ');
+    const topRate = fedBrks[fedBrks.length - 1].r;
+    assertNear(nominalRateAtLimit('FEDERAL', 'MFJ', Infinity, 1, 1), topRate,
+        'an unbounded ceiling reports the top marginal rate', 1e-12);
+    assertNear(nominalRateAtLimit('FEDERAL', 'MFJ', Infinity, 1, 1.5), topRate * 1.5,
+        'rate creep applies to the unbounded answer too', 1e-12);
+    // A no-tax state's table is a single Infinity row with no rate at all.
+    assert(nominalRateAtLimit('TX', 'MFJ', Infinity, 1, 1) === 0,
+        'a no-tax state charges nothing, at any ceiling');
+    // The ordinary case is the plain division, untouched.
+    const lim = 400000;
+    assertNear(nominalRateAtLimit('FEDERAL', 'MFJ', lim, 1, 1),
+        calculateProgressive('FEDERAL', 'MFJ', lim, 1, 1).cumulative / lim,
+        'a finite ceiling still reports tax/limit exactly', 1e-12);
+});
+
+test('unbounded ceilings simulate instead of returning NaN', () => {
+    const base = { ...CREEP_BASE, IRA1: 2000000, spendGoal: 120000,
+                   strategy: 'bracket', stratACAMultiple: 0, stratIRMAATier: -1 };
+    const finiteOf = o => {
+        const r = simulate({ ...base, ...o });
+        return Number.isFinite(r.totals.tax) && Number.isFinite(r.finalNW)
+            && r.log.every(e => e.year === undefined || Number.isFinite(e.totalTax));
+    };
+    // The top FEDERAL bracket: l is Infinity, and for a state whose table runs out first the
+    // Math.min then collapses the ceiling to 0. Both routes used to end in NaN.
+    assert(finiteOf({ stratRate: 0.37 }), 'the top federal bracket must not produce NaN (CA)');
+    assert(finiteOf({ stratRate: 0.37, STATEname: 'TX' }), 'the top federal bracket must not produce NaN (no-tax state)');
+    // Below every bracket in the table. No UI offers it; a programmatic caller can still ask.
+    assert(finiteOf({ stratRate: 0 }), 'a ceiling below the lowest bracket must not produce NaN');
+    // The top IRMAA tier, whose ceiling is the Infinity sentinel row. The IRMAA branch has no
+    // state-min step, so this one stays infinite rather than collapsing to zero.
+    const topTier = getRateBracket('IRMAA', 'MFJ').length - 2;
+    assert(finiteOf({ stratRate: 0, stratIRMAATier: topTier }),
+        `the top IRMAA tier (${topTier}) must not produce NaN`);
+    // Every bounded ceiling the dropdown offers still works, which is the regression half.
+    for (const rate of [0.10, 0.12, 0.22, 0.24, 0.32, 0.35])
+        assert(finiteOf({ stratRate: rate }), `bracket ${rate} still simulates`);
+    for (let t = 0; t < topTier; t++)
+        assert(finiteOf({ stratRate: 0, stratIRMAATier: t }), `IRMAA tier ${t} still simulates`);
 });
 
 // ── P70: cpiFollowsPath, the opt-in path-following bracket indexation ─────────

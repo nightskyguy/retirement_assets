@@ -4784,3 +4784,48 @@ Counts: optimizer_core 324 -> **326**, in-page 296 -> 351 (one new section: menu
 behavior, saved-plan round trip for every selectable rate). `TestTiers.EXPECTED` and
 `.githooks/README.md` updated. Page reports 757 passed. P70a's harness numbers are unchanged by
 this - its plans all use bounded ceilings.
+
+**P70b-P70g BUILT, v11.165D, commit `d0f27d0`.** The user's A-E spec, evaluated and implemented.
+
+Two items of A-E turned out to be already true and are now PINNED rather than written: spending has
+always ridden `sim.inflation` (A), and the one-year indexation lag (C) was already structural,
+because `advanceYear` compounds at the END of the year. That lag was one line from being silently
+lost and nothing would have caught it; there is now a test walking the whole trajectory.
+
+Shipped: the offset model (`cpi_t = i_t + spread`, additive, spread held as policy); the
+two-clock fix (`computeBracketCeiling` lost its `inflation` parameter outright - deleted rather than
+renamed, since one bracket table has one correct index); `propTaxFor`, `getQCDLimit` and the pension
+COLA moved onto the clocks they belong on; the spread readout under the two inputs (`#cpi` had no
+`oninput` handler at all); and the `fixedTaxIndexing` nerdknob, which freezes BOTH statutory clocks.
+
+**The byte-identity property is the thing to remember.** With no `inflationSequence`, `i_t` IS
+`inputs.inflation`, so `cpi_t` is `inputs.cpi` exactly - every deterministic run is unchanged by
+construction, no special case. It also dissolved the fallback fork the earlier plan was going to
+make the user decide.
+
+**Two corrections to my own earlier work, both mine to own.** P70a's `cpiFollowsPath` set the index
+to the BARE path, collapsing the deliberate CPI/inflation spread - about 6% higher thresholds by
+year 30 as a pure artifact, in the same direction as the effect being measured. Its numbers survived
+only because the harness set `inflation: cpi` in every plan. Re-run carrying the default 0.2 pt gap:
+lifetime tax **-5.72%** (was -8.32%), **36** rescued (was 38), 0 broken. And I had overstated the
+two-clock bug at -31%; that was a 3-point gap nobody types. At the shipped defaults it is -1.1% fed
+/ -1.4% state by year 30.
+
+**OPEN, and the user's call: IRMAA dollars REVERSED sign, -6.5% -> +29%.** Surcharge years still
+fall 9%, but `medicareRate` compounds `cpi_t + i_t` and both terms now follow the path, so a
+high-inflation window inflates the premium each remaining surcharge is priced against far faster.
+That is the tooltip read literally ("CPI + Inflation combined"), but the `+ Inflation` term was
+calibrated as ~3 points of excess medical cost on a ~3% CPI; proportional turns a 12% year into ~24%
+premium growth. `cpi_t + inputs.inflation` would hold the excess at 3 points. One line, NOT taken.
+
+**Still open: P70e.** `IRMAA_MARGIN_DEFAULT` was chosen when a forward projection was exact by
+construction and the margin measured as worthless. Under path-following the projection is a real
+forecast, and `irmaa_cpi_risk_harness.js` already showed the answer reverses. `irmaa_default_harness.js`
+needs re-running before that default can be trusted.
+
+Two method notes worth keeping. A browser byte-identity check reported the model NOT inert; the only
+differing field was `loopMs`, wall-clock timing, which node stubs to 0 - **diff the fields, not the
+JSON blob.** And the in-page changelog guard caught a real convention break: `<b>` is reserved for
+the version stamp, and a second `<b>` for emphasis breaks the li/stamp count test.
+
+Counts: optimizer_core 326 -> **329**, page reports 760 passed.

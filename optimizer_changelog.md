@@ -17,9 +17,9 @@ For what the tool does and how to use it, see [README.md](README.md).
 
 ---
 
-<a id="11.1645"></a>
+<a id="11.1657"></a>
 
-## 11.1645
+## 11.1657
 
 ### Walk one Monte Carlo path through your plan
 
@@ -29,7 +29,14 @@ at each of the 5th, 25th, 50th, 75th and 95th percentiles of the outcome ranking
 Test keeps every one of its historical scenarios.
 
 A ▶️ Replay picker beside the survival headline offers every captured path, worst to best, and
-each Stress Test row has its own ▶️. The chosen sequence plays through Charts and Annual Details. The plan is your own, every setting as the
+each Stress Test row has its own ▶️. The chosen sequence plays through Charts and Annual Details,
+and the balance chart overlays a dashed "Plan (steady assumptions)" line - the same plan run at
+your flat growth and inflation assumptions - so the point where the path pulls away from the
+expected trajectory is visible rather than remembered. A new Market view in the chart row below
+draws each year's market return as bars with inflation as a line; replay switches to it
+automatically, and it is available for ordinary projections too. The Current $ toggle deflates the
+replayed numbers by the inflation that path actually lived, and the dashed line by its own steady
+assumptions. The plan is your own, every setting as the
 sidebar has it; only that path's market returns and inflation are applied, year by year. Annual
 Details shows the year the money runs out, and under Show All the year-by-year inflation and market
 return that caused it. The Current $ toggle deflates by the inflation that path actually lived.

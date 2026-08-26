@@ -4578,3 +4578,30 @@ can be picked twice.
 Browser-verified: pick worst (prev disabled) -> #2 worst -> ... -> rank 95% (next disabled);
 stress walk 1973 -> 1969 matches the table; badge green at 698. Changelog li and md entry
 reworded for the picker and the arrows.
+
+---
+
+## Session 2026-08-26 (worktree mc-path-replay) - P69f + Market view + stress compaction (v11.1657)
+
+Three user asks, planned in plan mode (approved design at
+~/.claude/plans/propose-how-to-overlay-serene-cocke.md), shipped as four commits.
+
+The overlay: ONE dashed gray "Plan (steady assumptions)" line on the replayed balance chart - the
+user chose it over a full second set for readability. Baseline is the SAME plan the replay runs
+(sidebar + planFields), deterministically, cached on _replayState so every fresh state or exit
+invalidates it for free. Under Current $ it deflates by its own steady inflationFactor, never the
+path's - deflating by the path's would smuggle the path back into the "expected" line. Verified:
+worst path draws expected $793k against replayed $0.
+
+The Market view: new button in the income-chart row - each year's market return as green/red bars,
+inflation as a line, percent axis, tooltip overridden to one decimal (the shared callback rounds
+to integers). adj() deliberately unused: rates are not dollars, Current $ must not touch them.
+Replay auto-switches to it on entry only (prev/next preserves a mid-replay view choice) and every
+exit restores the prior view. The tab-leave exit now also re-renders, closing the pre-existing
+quirk where replayed lines lingered bannerless.
+
+Stress table: swatch cell went display:flex with a 4px gap (the inline gap was the user's "wasted
+space", round two) and the 46px section indent dropped to 14px.
+
+Suites 322/61/22 (UI only), badge green. Version 11.1657; the branch's one changelog entry
+refreshed in place. P69 remainder: only P69g's visible ruin-year mark in Annual Details.

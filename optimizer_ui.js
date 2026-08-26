@@ -684,25 +684,45 @@ function applySuggestIraGoal() {
 // sequences are rebuilt from the shipped bank rows through the engine's own pathInputsFromBankRows,
 // never regenerated from the seed. Exit paths: the banner's button, editing any sidebar input
 // (delegated listener below), or leaving the Charts / Annual Details tabs.
-let _replayState = null;   // { rows, mcMode, label } from mc_tab.js, or null
+let _replayState = null;   // { rows, mcMode, planFields, label, nav } from mc_tab.js, or null
 let _replayExitHooked = false;
+let _preReplayIncomeView = null;   // income-chart view to restore when replay ends
 
 function replayPath(state) {
+    // Only the normal->replay transition force-switches the lower chart to the Market view (the
+    // path's return/inflation story). Prev/next re-enters here with replay already active, so a
+    // view the user picked mid-replay is preserved.
+    if (!_replayState) {
+        _preReplayIncomeView = incomeChartView;
+        incomeChartView = 'market';
+        syncIncomeViewControls();
+    }
     _replayState = state;
     if (!_replayExitHooked) {
         // A sidebar edit means the user is back to designing the plan; a replayed chart under an
         // edited plan would look like the edit's effect. Capture phase, so this runs before the
         // input's own handler re-simulates.
         document.querySelector('.sidebar')?.addEventListener('input', () => {
-            if (_replayState) { _replayState = null; syncReplayBanner(); }
+            if (_replayState) { _clearReplay(); syncReplayBanner(); }
         }, true);
         _replayExitHooked = true;
     }
     runSimulation();
 }
 
-function exitReplay() {
+// The one place replay ends: drops the state (and the baseline log cached on it) and restores the
+// income-chart view the user was on before the replay switched it to Market.
+function _clearReplay() {
     _replayState = null;
+    if (_preReplayIncomeView != null) {
+        incomeChartView = _preReplayIncomeView;
+        _preReplayIncomeView = null;
+        syncIncomeViewControls();
+    }
+}
+
+function exitReplay() {
+    _clearReplay();
     runSimulation();
 }
 
@@ -725,8 +745,18 @@ function syncReplayBanner() {
 function runSimulation() {
     refreshStratRateOptions();   // keep bracket dropdown labels in sync with CPI + filing status
     // computeOC: single-scenario runs also produce the Opp. Cost counterfactual (Break Even).
-    const _simInputs = { ...getInputs(), computeOC: true };
+    const _base = getInputs();
+    const _simInputs = { ..._base, computeOC: true };
     if (_replayState) {
+        // Baseline for the chart overlay: the SAME plan the replay runs (sidebar + planFields),
+        // deterministically - no sequences, so growth and inflation stay the sidebar's flat
+        // assumptions and the solid-vs-dashed gap is purely the path's market story. Cached on the
+        // state object: every replay start and prev/next step builds a fresh state, so the cache
+        // invalidates itself and dies with the state on exit. No computeOC - its fields go unused.
+        if (!_replayState.baselineLog) {
+            _replayState.baselineLog =
+                simulate({ ..._base, ...(_replayState.planFields ?? {}) }).log;
+        }
         // planFields first: the run's own strategy and conversion settings (swept rows are not the
         // raw sidebar plan - conversions are forced on, for one), so the replayed year-by-year
         // agrees with the survival rate and ruin year the run reported. Then the path's sequences.
@@ -4025,7 +4055,21 @@ function updateCharts(log) {
                 mkLine(rothLabel,     '#8e44ad', rothData),
                 mkLine('Brokerage',   '#4F4FDC', r => r.Brokerage   * adj(r)),
                 mkLine('Cash',        '#27ae60', r => r.Cash        * adj(r)),
-                mkLine('TotalWealth', '#555555', r => r.totalWealth * adj(r))
+                mkLine('TotalWealth', '#555555', r => r.totalWealth * adj(r)),
+                // P69 replay overlay: the same plan run on steady assumptions, one dashed total.
+                // Deflated by ITS OWN inflationFactor (fixed-inflation compounding) - deflating by
+                // the path's factors would smuggle the path back into the "expected" line. It
+                // cannot use mkLine/adj, which both close over the replayed log. Appended last so
+                // it draws behind the five solid lines; person views keep it as-is because the
+                // solid TotalWealth line is person-agnostic too.
+                ...(_replayState?.baselineLog ? [{
+                    label: 'Plan (steady assumptions)',
+                    data: _replayState.baselineLog.map(r =>
+                        r.totalWealth * (inCurrentDollars ? 1 / (r.inflationFactor || 1) : 1)),
+                    borderColor: '#888888', backgroundColor: '#888888',
+                    pointBackgroundColor: '#888888',
+                    fill: false, borderDash: [6, 4], pointRadius: 0, borderWidth: 2, spanGaps: true,
+                }] : []),
             ]
         },
         options: {
@@ -4174,10 +4218,12 @@ function valChecked(id) { return document.getElementById(id)?.checked; }
 function showTab(id) {
     // P69: replay is confined to Charts and Annual Details. Any other destination ends it - the
     // Optimizer and the Monte Carlo tab run their own sweeps from the sidebar, and a lingering
-    // replay banner over them would claim a relationship that does not exist.
+    // replay banner over them would claim a relationship that does not exist. The re-run matters:
+    // without it, coming back to Charts showed the replayed lines with no banner over them.
     if (_replayState && id !== 'tab-chart' && id !== 'tab-tbl') {
-        _replayState = null;
+        _clearReplay();
         syncReplayBanner();
+        runSimulation();
     }
     // 1. Hide all tab content cards
     document.querySelectorAll('.tab-content, .card').forEach(c => {

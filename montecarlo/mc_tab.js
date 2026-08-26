@@ -2178,23 +2178,25 @@ function renderStressTable(stress, rows) {
 
         // Color chip in the leading cell, drawn in this line's exact color, so a line on the chart
         // and its row here are paired without counting legend entries.
+        // Flex, tight: chip and ▶️ sit 4px apart and the cell carries no dead width - the old
+        // inline layout (literal space + vertical-align) left a gap the user flagged as waste.
         const swatch = document.createElement('div');
-        swatch.style.cssText = `padding:2px 6px 2px 8px;background:${oc.row};border-right:2px solid #dee2e6;cursor:pointer;`;
+        swatch.style.cssText = `display:flex;align-items:center;gap:4px;padding:2px 6px;`
+                             + `background:${oc.row};border-right:2px solid #dee2e6;cursor:pointer;`;
         // Must match the line exactly, dense palette included, or the swatch stops being a key.
         const lineColor = rows.length > STRESS_DENSE_THRESHOLD
             ? (STRESS_DENSE_STYLE[r.band] ?? STRESS_DENSE_STYLE['survive']).color
             : _stressLineColor(r.band, r.posInBand, r.bandSize);
-        swatch.innerHTML = `<span style="display:inline-block;width:18px;height:3px;vertical-align:middle;`
+        swatch.innerHTML = `<span style="display:inline-block;width:18px;height:3px;`
                          + `background:${lineColor};"></span>`;
         // P69: replay control, per scenario. Only when this run's message shipped the draw rows
         // (an older cached worker's message has none). The row's own click isolates the chart
-        // line, so the button stops propagation.
+        // line, so the button stops propagation. Bare emoji, no button chrome: at table-row size
+        // the boxed button squeezed the glyph into an unreadable smudge (user report). The
+        // <button> element stays for keyboard focus; only its default styling goes.
         if (stress?.pathBankRows?.[r.rank]) {
-            // Bare emoji, no button chrome: at table-row size the boxed button squeezed the glyph
-            // into an unreadable smudge (user report). The <button> element stays for keyboard
-            // focus; only its default styling goes.
-            swatch.innerHTML += ` <button onclick="event.stopPropagation();replayStressPath(${r.rank})"`
-                + ` style="font-size:1.05em;padding:0;border:none;background:none;cursor:pointer;vertical-align:middle;line-height:1;"`
+            swatch.innerHTML += `<button onclick="event.stopPropagation();replayStressPath(${r.rank})"`
+                + ` style="font-size:1.05em;padding:0;border:none;background:none;cursor:pointer;line-height:1;"`
                 + ` title="Walk this historical sequence through Charts and Annual Details, year by year, with your own plan's settings.">▶️</button>`;
         }
         row.appendChild(swatch);

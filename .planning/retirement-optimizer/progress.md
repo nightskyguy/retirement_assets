@@ -4745,3 +4745,42 @@ plan will not reproduce" consequence line - every Monte Carlo and Stress result 
 
 Note: the task_plan header still said suites 305/61/22; the real baseline was 322. Left the header
 alone rather than editing history above the line-30 marker.
+
+**Addendum, same session: the NaN turned out to be shipped, and it was hiding a second defect.**
+v11.165B, commit `7c9a7fc`, folded into this branch at the user's direction.
+
+The `stratRate: 0` NaN I filed as a background task was programmatic-only, exactly as the user said
+- the dropdown is built from `fedBrks[i].r` (lowest 10%) and `bracketRates` from the same table, and
+the IRMAA family always pairs `stratRate: 0` with a tier. The user also rejected "throw": `limit: 0`
+for the top of the 0% bracket and `limit: Infinity` for a no-tax state are both correct answers. Both
+points stood up. But the same unguarded division is reachable from the sidebar at the OTHER end of
+the table, and that one is on `main`: pick Fill Bracket + "37% Fed - no limit" and the stat tiles
+render `$NaN`. `l` is the Infinity sentinel, so the average-rate divisions came out
+`Infinity/Infinity`, or `0/0` once `Math.min(stateLimit, limit)` collapsed the ceiling to zero.
+`nominalStateTaxAtLimit` carried it into the Brokerage draw price and out to every number.
+
+Then, testing the clamp the user asked for, a bigger one: the restore loop writes stratRate as
+`(value*100).toFixed(3)` = `"24.000"` while option values are whole percents, so it matched nothing,
+the select cleared, and the rebuild landed on its default. **Every saved or shared Fill Bracket plan
+reloaded as "Below IRMAA" and ran that instead.** Pre-existing on `main`, untouched by this branch,
+and it blocked the clamp - so it was in scope rather than a separate filing. It leads the changelog
+entry: it affects far more people than the 37% row.
+
+Shipped: menu ends at the highest bracket with a top; both unbounded bands stay listed, disabled and
+greyed, labelled at their FLOOR ("37% Fed - $790,225+", "IRMAA Tier 5 - $771,000+") per the user's
+spec, a dollar above the ceiling below them. `clampStratRateSelection()` moves off a disabled option
+to the nearest ceiling BELOW, never to the first enabled entry - those plans were aiming high and
+dropping them to 10% would be a quiet re-plan. `nominalRateAtLimit()` in the engine as defense in
+depth, one definition replacing three (two had `/(limit || 1)`, which handles 0/0 but not
+Infinity/Infinity; the third had neither). IRMAA's top tier is now derived from table length instead
+of five hardcoded labels.
+
+Method note worth keeping: three browser probes mid-session ran against a prototype still loaded in
+the page after I had reverted the file on disk, and produced a confident wrong finding ("IRMAA tier
+5 works"). A reload reversed it. **Check what the page actually has loaded before reading a browser
+measurement as evidence** - the page does not reload when the file does.
+
+Counts: optimizer_core 324 -> **326**, in-page 296 -> 351 (one new section: menu shape, clamp
+behavior, saved-plan round trip for every selectable rate). `TestTiers.EXPECTED` and
+`.githooks/README.md` updated. Page reports 757 passed. P70a's harness numbers are unchanged by
+this - its plans all use bounded ceilings.
